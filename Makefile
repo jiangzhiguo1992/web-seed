@@ -3,11 +3,12 @@ SHELL := /bin/bash
 
 APP_API := apps/api
 
-.PHONY: help build build-api build-web test test-api test-web lint lint-api typecheck \
-        gen dev api-dev web-dev compose-up compose-down doctor derive check-docs
+.PHONY: help build build-api build-web test test-api test-web test-e2e lint lint-api typecheck \
+        gen gen-openapi gen-db gen-graph gen-client contract-graph contract-impact contract-compat db-verify \
+        dev api-dev web-dev compose-up compose-down doctor derive check-docs
 
 help: ## 显示可用目标
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 build: build-api build-web ## 构建全部
 
@@ -33,8 +34,44 @@ lint-api: ## Go vet + 格式检查
 typecheck: ## 前端类型检查
 	pnpm -r --if-present typecheck
 
-gen: ## 重新生成契约产物（P2 实现）
-	@echo "gen: 尚未实现（P2）。计划：openapi / sqlc / error-codes / tokens / env"
+gen: ## 重新生成全部契约产物（P2 实现）
+	@echo "gen: 尚未实现（P2）。子命令：gen-openapi / gen-db / gen-graph / gen-client / gen-env"
+	@exit 1
+
+gen-openapi: ## 合并 capabilities/http/* + apps/* → generated/openapi（P2）
+	@echo "gen-openapi: 尚未实现（P2）"
+	@exit 1
+
+gen-db: ## data/tables/* → schema.sql + migrations（P2）
+	@echo "gen-db: 尚未实现（P2）"
+	@exit 1
+
+gen-graph: ## refs → generated/{manifest.json,graph.json,lineage.md}（P2）
+	@echo "gen-graph: 尚未实现（P2）"
+	@exit 1
+
+gen-client: ## 合并 spec → packages/api-client（P2）
+	@echo "gen-client: 尚未实现（P2）"
+	@exit 1
+
+contract-graph: ## 锚点图校验：重复/悬空/越层/循环/孤儿（P2）
+	@echo "contract-graph: 尚未实现（P2）"
+	@exit 1
+
+contract-impact: ## 影响面分析：make contract-impact id=<id>（P2）
+	@echo "contract-impact: 尚未实现（P2）"
+	@exit 1
+
+contract-compat: ## oasdiff 破坏性变更检测（P5）
+	@echo "contract-compat: 尚未实现（P5）"
+	@exit 1
+
+db-verify: ## 空库重放迁移并与契约目标态比对（P5）
+	@echo "db-verify: 尚未实现（P5）"
+	@exit 1
+
+test-e2e: ## Playwright 端到端（P4）
+	@echo "test-e2e: 尚未实现（P4）"
 	@exit 1
 
 dev: ## 本地开发说明（P3 串接）

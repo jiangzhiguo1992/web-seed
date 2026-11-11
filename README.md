@@ -4,7 +4,7 @@
 
 后端 Go · 前端 Vue 3 · 单仓库多应用 · 契约优先。
 
-> 当前进度：**P0 技术验证、P1 仓库骨架已完成**；P2 契约生成链进行中。
+> 当前进度：**P0 技术验证、P1 仓库骨架、契约层五组重构已完成**；P2 生成器进行中。
 > 完整设计与实施清单见 [`docs/guides/architecture.md`](docs/guides/architecture.md)，AI 入口见 [`docs/index.md`](docs/index.md)。
 
 ---
@@ -15,7 +15,7 @@
    API、数据库、配置、错误码、权限点、设计令牌都有唯一真相源，代码从契约生成；实现必须通过探测证明自己符合契约。
 
 2. **可执行规约 > 散文文档**
-   分层规则交给架构 linter，API 形状交给 OpenAPI，表结构交给 migrations。文档只解释"为什么"。
+   分层规则交给架构 linter，API 形状交给 OpenAPI，表结构交给契约生成 migrations。文档只解释"为什么"。
 
 3. **可摘除设计**
    可选模块在任何地方都不被引用，只通过一处显式注册表接入。删除 = 删目录 + 删一行注册。
@@ -29,7 +29,7 @@
 |---|---|
 | 保真 | 类型由契约生成，不符合即编译失败 |
 | 防漂移 | 生成物 diff + 路由集合比对 + 响应 schema 校验 |
-| 防幻想 | 禁止手改 `gen/`、playbook 强制查证、依赖准入 |
+| 防幻想 | 禁止手改 `generated/`、playbook 强制查证、依赖准入 |
 | 防扩散 | 范围条款 + 一任务一 playbook + PR 改动清单 |
 
 ---
@@ -53,7 +53,7 @@ web-seed/
 │   ├── index.yaml               #   契约地图（AI 唯一入口，只放摘要）
 │   ├── project.yaml             #   项目元信息（derive 唯一输入）
 │   ├── data/                    #   ① 数据：tables（真相源）/ enums / queries / seeds / policy
-│   ├── capabilities/            #   ② 能力：http / async / internal
+│   ├── capabilities/            #   ② 能力：http / async / internal / apps
 │   ├── domain/                  #   ③ 领域：entities / states / rules / flows / events / glossary
 │   ├── features/                #   ④ 功能：routes / pages / flows
 │   ├── platform/                #   ⑤ 平台：环境/版本/错误/HTTP/质量/配置/架构/设计/观测/埋点/安全
@@ -73,7 +73,7 @@ web-seed/
 │   │   │   ├── platform/        #   基础设施：config、httpserver（P3 扩 database/observability/security）
 │   │   │   ├── modules/         [P] 业务模块：service + repo，不依赖 HTTP
 │   │   │   ├── composition/adminapi/ #   应用装配 + handlers/[P] 契约适配器
-│   │   │   └── generated/       [P] 生成物（OpenAPI/sqlc/常量）
+│   │   │   └── generated/       [P] 生成物（openapi / db / domain / features / 常量）
 │   │   ├── migrations/          [P]
 │   │   ├── queries/             [P]
 │   │   └── go.mod  Dockerfile
@@ -96,7 +96,7 @@ web-seed/
 ├── infra/compose.yaml           [C] 本地依赖（PG，profiles: core）
 ├── scripts/                     [C] derive / doctor / check-docs / gen-env
 ├── .opencode/skills/            [P] AI 适配层（由 playbook 生成，P7）
-└── .github/                     [C] CI（api/web/docs）+ PR 模板
+└── .github/                     [C] CI（contract/api/web/e2e/docs/self）+ PR 模板
 ```
 
 ### 各层职责
@@ -120,12 +120,14 @@ web-seed/
 |---|---|---|
 | 后端语言 | Go 1.27 | 已用 |
 | HTTP | chi + net/http | 已用 |
-| 契约生成 | oapi-codegen（`strict-server`） | P2 |
+| 契约生成 | 6 个生成器：openapi / db / domain / features / platform / graph | P2 |
+| 接口生成 | oapi-codegen（`strict-server`）+ openapi-typescript | P2 |
 | 数据访问 | pgx + sqlc | P2 |
 | 迁移 | goose | P2 |
 | 日志 | slog（JSON） | 已用 |
 | 前端 | Vue 3.5 + Vite 7 + TypeScript 5.9 | 已用 |
-| 样式 | Tailwind v4（CSS-first）+ shadcn-vue | 已用 / P3 |
+| 样式 | Tailwind v4（CSS-first） | 已用 |
+| 组件 | shadcn-vue（primitives 落在 `packages/ui-kit`） | P3 |
 | 状态与数据 | Pinia + TanStack Query | P3 |
 | 包管理 | pnpm 12 workspace | 已用 |
 | 测试 | Go testing / Vitest / Playwright | P4/P7 |
@@ -175,7 +177,12 @@ make build-web        # apps/web/admin/dist
 | `make build` | 构建 Go + 前端 |
 | `make lint` | 静态检查 |
 | `make test` | 运行测试（P1 仅 Go） |
-| `make gen` | 重新生成契约产物（P2 实现，当前会失败） |
+| `make gen` | 重新生成全部契约产物（P2 实现，当前会失败） |
+| `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 分项生成（P2） |
+| `make contract-graph` | 锚点图校验（P2） |
+| `make contract-impact id=<id>` | 影响面分析（P2） |
+| `make contract-compat` | 破坏性变更检测（P5） |
+| `make db-verify` | 迁移与契约目标态比对（P5） |
 | `make doctor` | 编译、格式、文档、生成物健康检查 |
 | `make check-docs` | 校验文档关键路径与相对链接 |
 | `make compose-up` / `down` | 本地 PG |
@@ -214,12 +221,13 @@ make build-web        # apps/web/admin/dist
 `make derive` 尚未实现（P7）。当前手工步骤：
 
 1. 复制仓库，删除 `.git` 后重新 `git init`
-2. 替换 Go module：`github.com/yourorg/web-seed/apps/api` → 你的 module
-3. 替换前端 scope：`@webseed/*` → 你的 scope
-4. 更新 `README.md`、`package.json`、`apps/web/admin/index.html`
-5. 删除示例模块与页面（P2 后出现）
-6. 删除 `.opencode/opencode.json` 中的本地 MCP 配置
-7. 创建 `.env.local`，参考 `.env.example`（P2 生成）
+2. 修改 `contracts/project.yaml`（项目名 / module / scope / 端口）——**唯一输入**
+3. 手工同步替换（`derive.sh` 落地前）：
+   - Go module：`github.com/yourorg/web-seed/apps/api` → 你的 module
+   - 前端 scope：`@webseed/*` → 你的 scope
+4. 删除示例契约与实现：`data/tables/notes.yaml`、`capabilities/http/notes.yaml`、`domain/**/note*.yaml`、`features/pages/note_*.yaml` 及对应代码
+5. 删除 `.opencode/opencode.json`（含本地 MCP 配置）
+6. 创建 `.env.local`，参考 `.env.example`（P2 生成）
 
 ---
 
@@ -231,7 +239,8 @@ make build-web        # apps/web/admin/dist
 | [`docs/guides/architecture.md`](docs/guides/architecture.md) | 架构、契约体系、实施进度 |
 | [`contracts/README.md`](contracts/README.md) | 改契约前 |
 | [`contracts/data/README.md`](contracts/data/README.md) | 加表 / 写查询前 |
-| `docs/playbooks/` | 执行具体任务时（P7） |
+| [`docs/playbooks/contract-change.md`](docs/playbooks/contract-change.md) | 改任何契约前（**已就绪**） |
+| `docs/playbooks/` 其余 | 新增端点 / 表 / 应用 / 页面（P7） |
 | `docs/adr/` | 想改架构前（P7） |
 
 文档与契约的分工：

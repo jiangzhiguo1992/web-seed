@@ -39,21 +39,49 @@ entries:
   - { id: project, path: project.yaml, summary: 项目元信息与 derive 输入, consumers: [ops, tools], enforcement: generated, stability: stable }
 
   # ---------- data ----------
-  - { id: data.table.notes, path: data/tables/notes.yaml, summary: 笔记主表结构, consumers: [api], enforcement: generated+tested, stability: stable }
+  - id: data.table.notes
+    path: data/tables/notes.yaml
+    summary: 笔记主表结构
+    consumers: [api]
+    enforcement: generated+tested
+    stability: stable
+    common_mistakes:
+      - 手写 migrations 而不是改本文件
+      - 忘记软删过滤（deleted_at IS NULL）
+      - 唯一索引用普通 CREATE UNIQUE INDEX，导致软删后无法重建同值
   - { id: data.enum.note_status, path: data/enums.yaml, summary: 跨端枚举集合, consumers: [api, web/admin], enforcement: generated, stability: stable }
   - { id: data.query.notes, path: data/queries/notes.yaml, summary: 笔记查询集, consumers: [api], enforcement: generated+tested, stability: stable }
   - { id: data.seed.roles, path: data/seeds/roles.yaml, summary: 系统必需角色数据, consumers: [api, ops], enforcement: generated+tested, stability: stable }
   - { id: data.policy.migrations, path: data/migrations-policy.yaml, summary: 迁移策略与禁止操作, consumers: [ops, tools], enforcement: generated, stability: stable }
 
   # ---------- capabilities ----------
+  - { id: cap.app.admin, path: capabilities/apps/admin.yaml, summary: admin API 能力组合清单, consumers: [tools, api], enforcement: generated, stability: stable }
   - { id: cap.http.shared, path: capabilities/http/shared.yaml, summary: HTTP 共享组件, consumers: [api, web/admin], enforcement: generated, stability: stable }
-  - { id: cap.http.notes, path: capabilities/http/notes.yaml, summary: 笔记 HTTP 接口, consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - id: cap.http.notes
+    path: capabilities/http/notes.yaml
+    summary: 笔记 HTTP 接口
+    consumers: [api, web/admin]
+    enforcement: generated+tested
+    stability: stable
+    common_mistakes:
+      - 在 handler 里直接读 r.URL.Query() 而不用生成参数
+      - 逐接口重复声明 4xx/5xx 响应（已由 default_error_responses 注入）
+      - 响应 schema 缺少 additionalProperties: false
   - { id: cap.async.notes_cleanup, path: capabilities/async/notes_cleanup.yaml, summary: 过期笔记清理任务, consumers: [worker], enforcement: generated+tested, stability: draft }
   - { id: cap.internal.notes, path: capabilities/internal/notes.yaml, summary: 笔记跨模块 service 接口, consumers: [api], enforcement: generated+tested, stability: stable }
 
   # ---------- domain ----------
   - { id: domain.entity.note, path: domain/entities/note.yaml, summary: 笔记实体与不变量, consumers: [api], enforcement: generated+tested, stability: stable }
-  - { id: domain.state.note, path: domain/states/note.yaml, summary: 笔记状态机, consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - id: domain.state.note
+    path: domain/states/note.yaml
+    summary: 笔记状态机
+    consumers: [api, web/admin]
+    enforcement: generated+tested
+    stability: stable
+    common_mistakes:
+      - 在 handler/service 手写 status 判断
+      - 新增状态却不加转换
+      - 把 archived 与 deleted 混用
   - { id: domain.rule.note, path: domain/rules/note.yaml, summary: 笔记业务规则集, consumers: [api], enforcement: tested, stability: stable }
   - { id: domain.flow.note_publish, path: domain/flows/note_publish.yaml, summary: 笔记发布业务流程, consumers: [api], enforcement: tested, stability: draft }
   - { id: domain.event.note, path: domain/events/note.yaml, summary: 笔记领域事件, consumers: [api, worker], enforcement: generated+tested, stability: stable }
@@ -61,7 +89,16 @@ entries:
 
   # ---------- features ----------
   - { id: feature.routes, path: features/routes.yaml, summary: 路由与菜单, consumers: [web/admin], enforcement: generated, stability: stable }
-  - { id: feature.page.note_list, path: features/pages/note_list.yaml, summary: 笔记列表页, consumers: [web/admin], enforcement: generated+tested, stability: stable }
+  - id: feature.page.note_list
+    path: features/pages/note_list.yaml
+    summary: 笔记列表页
+    consumers: [web/admin]
+    enforcement: generated+tested
+    stability: stable
+    common_mistakes:
+      - 手写 /v1/notes 而不是引用 capability
+      - 漏掉 forbidden 态
+      - 在页面里直接引用 data.*
   - { id: feature.page.note_detail, path: features/pages/note_detail.yaml, summary: 笔记详情页, consumers: [web/admin], enforcement: generated+tested, stability: stable }
   - { id: feature.page.login, path: features/pages/login.yaml, summary: 登录页, consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.page.not_found, path: features/pages/not_found.yaml, summary: 404 页, consumers: [web/admin], enforcement: generated, stability: stable }

@@ -6,6 +6,22 @@
 
 ---
 
+## 0. 本文件的范围
+
+本文件只写**契约的元规则**：怎么定义、怎么引用、怎么校验、怎么演进、什么不能做。
+它不是教程，也不是操作手册。
+
+| 内容 | 写在哪 | 理由 |
+|---|---|---|
+| 契约元规则、ID、分层、拆分、盲区 | **本文件** | 改契约的人与 AI 必读 |
+| 具体任务的步骤与命令序列 | `docs/playbooks/contract-change.md` | 会随工具变化，本文件应稳定 |
+| 为什么这样设计、否决了什么 | `docs/adr/` | 决策历史，不是规范 |
+| AI 跨任务硬约束（禁止手改 gen、先改契约再实现） | 根 `AGENTS.md` | 需在每次会话生效 |
+| 某条契约的字段与取值 | 各契约文件自身 | 就近，避免二次跳转 |
+**判断新内容该不该写进本文件**：它是"所有契约都要遵守的规则"吗？是 → 写；只对某一类契约适用 → 写到该组 README 或文件头。
+
+---
+
 ## 1. 核心原则
 
 ### 1.1 契约大于一切
@@ -37,6 +53,21 @@
 
 **没有 `enforcement` 声明的文件不算契约。**
 
+### 1.4 契约能保证什么、不能保证什么
+
+| 契约 + 闸门能保证 | 契约无法保证 | 靠什么补 |
+|---|---|---|
+| 接口形状不漂移 | 字段语义是否被正确理解 | `domain/glossary.md` + review |
+| 状态转换穷举 | 业务规则是否被正确实现 | `domain/rules` 的可执行用例 |
+| 表结构与迁移一致 | 事务边界与并发是否正确 | 集成测试 + race |
+| 前后端类型一致 | 性能是否退化 | 基准测试 |
+| 枚举、权限、错误码一致 | 契约本身是否写错 | review + 真实用例回归 |
+| 引用关系不越层 | 时序与重试的真实行为 | `idempotency` 声明 + 测试 |
+
+**结论**：契约决定"能编译什么"，闸门决定"能合入什么"，流程决定"AI 会先做什么"。三者缺一，一致性只是口号。
+
+不要指望契约替代测试，也不要因为"契约没覆盖"就放弃契约化——先问能不能扩展契约表达力。
+
 ---
 
 ## 2. 目录结构与五组契约
@@ -57,7 +88,8 @@ contracts/
 ├── capabilities/             # ② 能力契约
 │   ├── http/<module>.yaml    #   OpenAPI，按业务模块拆
 │   ├── async/<job>.yaml      #   定时任务 / 消息消费者 / webhook
-│   └── internal/<module>.yaml#   跨模块 service 接口
+│   ├── internal/<module>.yaml#   跨模块 service 接口
+│   └── apps/<app>.yaml       #   应用组合清单：包含哪些能力
 │
 ├── domain/                   # ③ 领域契约
 │   ├── entities/<entity>.yaml#   实体、不变量、生命周期
@@ -165,10 +197,39 @@ make contract-impact id=data.table.notes.col.title
 
 ```
 feature.page.note_list
-  └─ cap.http.notes.list ──> data.query.notes.list ──> data.table.notes
-  └─ cap.http.notes.create ─> data.table.notes ──> domain.entity.note
-                                                      └─ domain.state.note
+  ├─ cap.http.notes.list ──> data.query.notes.list ──> data.table.notes
+  └─ cap.http.notes.create ─> data.table.notes ──> domain.entity.note ─> domain.state.note
 ```
+
+### 3.4 契约变更流程
+
+改任何契约前必须回答四问：
+
+1. 是否破坏兼容？是 → 升版本或走弃用流程
+2. 是否需要新版本？URL major（`/v1` → `/v2`）
+3. 是否需要数据迁移？先改 `data/tables`，再生成迁移
+4. 影响面是什么？`make contract-impact id=<id>` 输出受影响的 API、页面、测试、生成物
+
+**变更必须原子**：一个 PR 内同时包含 契约 + 生成物 + 实现 + 测试。
+禁止"先合契约、实现下个 PR 补"——那会让 CI 长期红，闸门失效。
+
+评审分级：
+
+| 变更类型 | 要求 |
+|---|---|
+| 改 ID、删字段、改枚举值、改错误码含义 | 额外 review + 影响面报告 |
+| 新增可选字段 / 新端点 / 新契约文件 | 常规 review；新文件必须同步 `index.yaml` |
+| 修改 `do_not`、`summary`、注释 | 无需额外 review |
+
+### 3.5 演进规则
+
+| 规则 | 说明 |
+|---|---|
+| ID 不可改名 | 改名 = 新 ID + 旧 ID 标 `deprecated` |
+| `schema_version` | 每个契约文件带版本；格式升级写批量迁移脚本，禁止新旧格式长期共存 |
+| 废弃窗口 | API 字段 ≥90 天；契约条目 ≥1 个发布版本 |
+| 契约总量 | 业务契约 ≤60 个文件；超出说明拆太细或范围失控 |
+| 只增不改 | `additive_only`：加字段 / 加端点合法，改语义不合法 |
 
 ---
 
@@ -213,6 +274,29 @@ feature.page.note_list
 
 拆完每个文件 < 20 行，或必须同时读 5 个以上文件才能理解一个概念 → 合并。
 
+### 4.4 示例必填
+
+每个契约至少提供：
+
+- **1 个正例**：合法输入 + 期望输出
+- **1 个反例**：最容易被 AI 写错的用法
+
+没有示例的契约视为不完整——AI 会自行编造"合理但错误"的用法。
+反例写在文件头 `do_not`，或字段级 `example_bad`。
+
+### 4.5 人读视图自动生成
+
+`docs/reference/generated/` 由契约生成，**禁止手写**：
+
+| 文件 | 来源 |
+|---|---|
+| `errors.md` | `platform/errors.yaml` |
+| `permissions.md` | `platform/security/permissions.yaml` |
+| `data.md` | `data/tables/*.yaml` |
+| `lineage.md` | `generated/graph.json` |
+
+AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
+
 ---
 
 ## 5. AI 工作流
@@ -244,6 +328,25 @@ feature.page.note_list
 
 超过 6 个，维护成本会超过收益。
 
+### 5.3 反例优先
+
+AI 对负向约束的敏感度高于正向描述。
+
+- 每个契约必须写 `do_not`
+- **优先记录已经发生过的错误**，而不是想象出来的风险
+- `index.yaml` 的 `common_mistakes` 是跨文件反例索引，AI 可先扫这一层
+
+### 5.4 漂移回归
+
+每次发现 AI 写错（绕过 API 直接查表、手写状态判断、改生成物、用未登记错误码），必须做且只做其中一件：
+
+1. 在对应契约的 `do_not` 加一条
+2. 或新增一条能失败的测试断言
+
+并在 PR 描述里注明"本次沉淀了哪条约束"。
+
+**契约要随事故变强**，而不是靠人一次写全。
+
 ---
 
 ## 6. 数据契约的特殊说明
@@ -267,7 +370,7 @@ data/tables/*.yaml ──> schema.sql（目标态）
 
 ---
 
-## 7. 不设契约（一次性 / 底座实现）
+## 7. 不设契约与按需扩展
 
 | 对象 | 理由 |
 |---|---|
@@ -279,22 +382,19 @@ data/tables/*.yaml ──> schema.sql（目标态）
 | 算法、并发实现 | 技术决策；影响行为的（乐观锁、事务语义）已进 tables / rules |
 | 日志格式实现 | 字段名进契约，格式不进 |
 
----
-
-## 8. 按需扩展（有真实需求再建）
-
-`capabilities/integrations.yaml`（第三方服务）、`platform/compliance.yaml`（PII / 保留期）、`platform/features.yaml`（feature flags）、`features/i18n.yaml`、`platform/storage.yaml`、`platform/notifications.yaml`。
+按需扩展（有真实需求再建）：`capabilities/integrations.yaml`、`platform/compliance.yaml`、`platform/features.yaml`、`features/i18n.yaml`、`platform/storage.yaml`、`platform/notifications.yaml`。
 
 ---
 
-## 9. 当前状态
+## 8. 当前状态
 
 P2 阶段：目录与最小示例（`notes`）已落盘，生成器待实现。
 
 | 组 | 已建 | 待建 |
 |---|---|---|
 | data | tables/notes、enums、queries/notes、seeds/roles、migrations-policy | 其余业务表 |
-| capabilities | http/notes、async/notes_cleanup、internal/notes | 其余模块 |
-| domain | entities/note、states/note、rules/note、flows/note_publish、glossary | 其余领域 |
-| features | routes、pages/note_list、flows/note_create | 其余页面 |
+| capabilities | http/{shared,notes}、async/notes_cleanup、internal/notes | 其余模块、auth |
+| domain | entities/note、states/note、rules/note、flows/note_publish、events/note、glossary | 其余领域 |
+| features | routes、pages/{note_list,note_detail,login,not_found}、flows/note_create | 其余页面 |
+| platform | 15 个文件（环境/版本/错误/HTTP/质量/配置/架构/设计/观测/埋点/安全） | — |
 | platform | environments、versioning、errors、http-conventions、quality、config、architecture、design、observability、analytics、security | — |

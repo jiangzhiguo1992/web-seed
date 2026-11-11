@@ -1,6 +1,6 @@
 # web-seed 架构设计与实施方案
 
-> **版本** v3.1 · **状态** 草案（P0 已实测，P1+ 待落盘） · **更新** 2026-11-11
+> **版本** v3.2 · **状态** P0/P1 完成；契约层已重构为五组；P2 进行中 · **更新** 2026-11-11
 > **已定决策**：目录形态 `1A`（`apps/api` + `apps/web`）· UI `2A`（Tailwind + shadcn-vue）· 能力档 `3C`（全家桶，默认关闭）
 >
 > 本文是模板种子工程自身的架构设计与实施计划，不是派生项目的业务文档。
@@ -25,7 +25,7 @@
 |---|---|---|---|
 | P0 | 技术验证（Spike） | 5 项假设全部有实测结论 | `[x]` 见 0.4 |
 | P1 | 仓库骨架 | `make help`/`build`/`lint`/`doctor` 全通过 | `[x]` |
-| P2 | 契约生成链 | `make gen` 幂等、CI diff 通过 | `[ ]` |
+| P2 | 契约生成链 | `make gen` 幂等、CI diff 通过 | `[~]` 契约层已落盘，生成器待实现 |
 | P3 | 后端地基 | platform 六件套可用 | `[ ]` |
 | P4 | 最小纵切 | notes 全链路跑通（DB→API→页面） | `[ ]` |
 | P5 | 一致性闸门 | 七道闸门全部生效 | `[~]` 闸门 1–3 原型已验证 |
@@ -73,8 +73,8 @@
 
 | # | 假设 | 风险 | 验证时机 |
 |---|---|---|---|
-| A1 | oapi-codegen 支持跨文件 `$ref`（`openapi/shared/*.yaml`） | 共享 schema 被迫内联，导致重复 | P2 首个 spec |
-| A2 | 两个 API spec 可用 `import-mapping` 共享一份 models | 否则 Problem/分页类型重复且不可互转 | P2 |
+| A1 | ~~oapi-codegen 跨文件 `$ref`~~ | 已规避：生成前先合并 `shared.yaml` + 模块文件为单 spec | 已验证策略 |
+| A2 | 合并后的 spec 能被 oapi-codegen 与 openapi-typescript 同时消费 | 任一工具不兼容则需调整合并粒度 | P2 |
 | A3 | Tailwind `@source` 在被 `@import` 的包内 CSS 中仍生效 | 不生效则退回 app 内写相对路径 | P1 前端骨架 |
 | A4 | pnpm `-r build` 严格按拓扑先构建 tokens/ui | 否则 app 构建拿不到 theme.css | P1 |
 | A5 | `golang:1.27-alpine` / `node:26-alpine` 镜像 tag 可用 | 镜像构建失败 | P3 真实 Docker |
@@ -85,23 +85,28 @@
 
 - [x] 根文件：`Makefile` `lefthook.yml` `.editorconfig` `.gitattributes` `.nvmrc` `pnpm-workspace.yaml` `package.json`
 - [x] `docs/{index.md,adr/,playbooks/,guides/,reference/}`
-- [x] `contracts/` 九类目录 + `README.md`（变更三问）
+- [x] `contracts/` 五组目录 + `index.yaml` + `project.yaml` + `README.md`
 - [x] `apps/api` 骨架（`cmd/` `internal/{platform,modules,composition,generated}`、`composition/<app>/handlers/`、`migrations/` `queries/`）
 - [x] `apps/web/admin` 骨架（`src/{app,pages,features,shared}`）
-- [x] `packages/{api-client,ui,design-tokens,tsconfig,eslint-config}`
+- [x] `packages/{api-client,ui-kit,design-tokens,tsconfig,eslint-config}`
 - [x] `infra/compose.yaml`（profiles: core/data/mail/object/observability）
 - [x] `scripts/{derive,doctor,check-docs,gen-env}.sh` 空壳 + `make help`
 - [x] `Makefile` 预留 `gen` target（P2 实现），空跑时提示未配置
 
 #### P2 契约生成链
 
-- [ ] `contracts/capabilities/http/notes.yaml` → Go server 类型
-- [ ] 同上 → `packages/api-client` TS 类型（`openapi-typescript` + `openapi-fetch`）
-- [ ] `contracts/platform/config/env.schema.json` → `.env.example`（`gen-env.sh`）
-- [ ] `contracts/platform/errors.yaml` → Go 常量 + TS union
-- [ ] `contracts/data/enums.yaml` → 同上（只收跨端枚举）
-- [ ] `contracts/platform/design/tokens.json` → CSS variables（`@theme`）
-- [ ] `contracts/platform/security/permissions.yaml` → Go/TS 常量
+- [ ] `capabilities/http/*.yaml` + `shared.yaml` → 合并为 `generated/openapi/admin.yaml`
+- [ ] 合并 spec → Go server 类型（`oapi-codegen strict-server`）
+- [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
+- [ ] `data/tables/*.yaml` → `schema.sql` + 增量 `migrations/*.sql`
+- [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
+- [ ] `data/enums.yaml` → Go 常量 + TS union + DB check
+- [ ] `platform/errors.yaml` + `platform/security/permissions.yaml` → 两端常量
+- [ ] `platform/config/env.schema.json` → `.env.example`（`gen-env.sh`）
+- [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
+- [ ] `domain/**` → 状态机常量 + 断言 + 测试骨架
+- [ ] `features/**` → 路由表 + 页面骨架 + 类型
+- [ ] 全部 `refs` → `generated/{manifest.json,graph.json,lineage.md}`
 - [ ] `make gen` 幂等：连续两次生成结果一致
 
 #### P3 后端地基（`internal/platform`）
@@ -117,22 +122,23 @@
 
 #### P4 最小纵切（示例模块 notes）
 
-- [ ] 迁移：`notes` 表（含审计列、软删、乐观锁、部分唯一索引示例）
-- [ ] `queries/notes.sql` + sqlc 生成
-- [ ] `internal/modules/notes`（handler/service/repo 三段）
-- [ ] `contracts/capabilities/http/notes.yaml` 补 notes 端点
-- [ ] `internal/composition/adminapi` 装配 + `routes_test.go`
-- [ ] `apps/web/admin`：列表/详情/创建三态页面
-- [ ] Playwright 跑通一条关键路径
+- [ ] 由 `data/tables/notes.yaml` 生成 schema 与迁移（含软删、乐观锁、部分唯一索引）
+- [ ] 由 `data/queries/notes.yaml` 生成 `.sql` 并跑 sqlc
+- [ ] `internal/modules/notes`（service + repo，不含 HTTP）
+- [ ] `internal/composition/adminapi/handlers`（实现 StrictServerInterface）
+- [ ] `routes_test.go`：路由集合 == 契约集合 + 响应 schema 校验
+- [ ] 由 `features/**` 生成路由与页面骨架，补齐四态
+- [ ] Playwright 跑通 `feature.flow.note_create`
 
 #### P5 一致性闸门（详见附录 A）
 
+- [x] 闸门 0：锚点图校验（重复 ID / 悬空 / 越层 / 循环）——原型脚本已跑通
 - [x] 闸门 1：`make gen && git diff --exit-code`（生成确定性已在 S1 验证）
 - [x] 闸门 2：路由集合 == 契约集合（含负向用例）
 - [x] 闸门 3：响应 schema 校验（含注入字段负向用例）
 - [ ] 闸门 4：`oasdiff` breaking change 检测
 - [ ] 闸门 5：前端 client 方法覆盖断言
-- [ ] 闸门 6：禁止手改 `gen/`（文件头 + lint）
+- [ ] 闸门 6：禁止手改 `generated/`（文件头 + lint）
 - [ ] 闸门 7：禁止绕过 client 直连（`no-restricted-imports`）
 
 #### P6 可选模块（默认非自动生成）
@@ -140,7 +146,7 @@
 - [ ] `auth`：注册/登录/刷新/登出/会话吊销（audience = admin，未来按需扩展）
 - [ ] `rbac`：角色/权限点 + `usePermission()`
 - [ ] `audit`：who/what/when/before/after
-- [ ] `user`：资料与偏好（与 auth 分离）
+- [ ] `user`：资料与偏好（与 auth 分离；模板默认不装，派生按需）
 - [ ] `upload`：S3 接口抽象 + 预签名（默认不装）
 - [ ] `notification`：站内信 + 邮件（默认不装）
 - [ ] `webhook`：收/发/签名/重试（默认不装）
@@ -152,7 +158,7 @@
 - [ ] `scripts/check-docs.sh`：文档内路径/链接有效性
 - [ ] CI：api / web / e2e / docs / self 五路并行，目标 < 5 分钟
 - [ ] ADR 六篇（见第 9 节）
-- [ ] playbooks：`add-app` `add-endpoint` `add-table` `add-feature` `rename-project`
+- [ ] playbooks：`contract-change` `add-app` `add-endpoint` `add-table` `add-feature` `rename-project`
 - [ ] `.opencode/skills/`：`contract-change` `add-endpoint` `add-table` `add-app` `verify`（薄封装，见第 10 节）
 - [ ] `AGENTS.md`（根 + `apps/api` + `apps/web`）
 
@@ -169,13 +175,13 @@
 ### 1.2 三条纲领
 
 1. **可执行规约 > 散文文档**
-   每条约束尽量落到机器可校验处：分层 → 架构 linter；API 形状 → 生成；表结构 → migrations；配置 → schema。
+   每条约束尽量落到机器可校验处：分层 → 架构 linter；API 形状 → 生成；表结构 → 契约生成 migrations；配置 → schema。
 
 2. **可摘除设计（removable by construction）**
    可选能力在任何地方都不被引用，只通过一处显式注册表接入。删除 = 删目录 + 删一行注册。
 
-3. **薄校验优先于重生成**
-   能用测试/脚本比对的，不写代码生成器。只有四类保留生成：OpenAPI 类型、sqlc、错误码/权限常量、CSS 变量。
+3. **薄校验优先，生成器克制**
+   能用测试/脚本比对的，不写代码生成器。生成器上限 **6 个**：openapi、db、domain、features、platform、graph。超过则维护成本压过收益。
 
 ### 1.3 四防目标
 
@@ -183,7 +189,7 @@
 |---|---|---|
 | 保真 | AI 凭记忆实现，与契约不符 | 类型由契约生成，不符合即编译失败 |
 | 防漂移 | 文档/生成物/实现三者不一致 | 生成物 diff + 文档路径校验 + 路由比对 |
-| 防幻想 | 编造字段/函数/已实现功能 | 禁止手改 `gen/`、playbook 强制 `grep` 现状、依赖准入 |
+| 防幻想 | 编造字段/函数/已实现功能 | 禁止手改 `generated/`、playbook 强制查证现状、依赖准入 |
 | 防扩散 | 顺手重构、越界改文件 | 范围条款 + 一任务一 playbook + PR 改动清单 |
 
 **硬规则**：任何 AI 会话要做的任务，必须存在对应 playbook；没有就先写 playbook 再动手。
@@ -243,6 +249,10 @@ platform/** ──> 配置校验 / 常量 / CSS 变量
 - 图校验：重复 ID / 悬空引用 / 越层 / 循环 / 孤儿
 - 影响面：`make contract-impact id=<id>`
 
+**引用必须写在结构化字段里**（`ref` / `refs` / `capability` / `use` / `emits` / `page` / `route` / `x-*`）。
+写在注释或 `description` 里的 ID 不参与校验——那不是引用，只是文字。
+这条规则决定了图校验能否真正生效。
+
 ---
 
 ## 3. 目录结构
@@ -256,7 +266,15 @@ web-seed/
 ├── pnpm-workspace.yaml  package.json
 ├── .env.example                      # 生成物，禁止手改
 │
-├── contracts/                        [C] 九类契约
+├── contracts/                        [C] 五组契约（唯一真相源）
+│   ├── index.yaml                    #   契约地图（AI 入口）
+│   ├── project.yaml                  #   项目元信息（derive 输入）
+│   ├── data/                         #   tables / enums / queries / seeds / policy
+│   ├── capabilities/                 #   http / async / internal / apps
+│   ├── domain/                       #   entities / states / rules / flows / events / glossary
+│   ├── features/                     #   routes / pages / flows
+│   ├── platform/                     #   环境/版本/错误/HTTP/质量/配置/架构/设计/观测/埋点/安全
+│   └── generated/                    #   manifest / graph / lineage
 ├── docs/
 │   ├── index.md                      # 唯一地图（AI 入口）
 │   ├── adr/                          # 决策记录（含 Rejected alternatives）
@@ -274,7 +292,8 @@ web-seed/
 │   │   │   │   └── registry.go       # 唯一注册表
 │   │   │   ├── composition/adminapi/  # app.go / routes.go / routes_test.go
 │   │   │   └── generated/            # 生成物入库
-│   │   ├── migrations/  queries/  seeds/  sqlc.yaml  codegen/  Dockerfile
+│   │   ├── migrations/  queries/      # 生成物：来自 contracts/data
+│   │   ├── sqlc.yaml  codegen/  Dockerfile
 │   │   └── ...
 │   └── web/
 │       └── admin/                    [C] 模板默认端
@@ -307,18 +326,32 @@ internal/platform/             与业务无关的基础设施
 
 1. `cmd/*` 只能 import `internal/composition/*`，不许直接碰 `modules`
 2. `modules/*` 之间禁止横向 import，跨模块走 service 接口或事件
-3. `apps/*` 只允许"选择 + 组装 + 配置"，出现 `if/for` 业务分支即违规
+3. `composition/*` 只允许"选择 + 组装 + 配置"，出现 `if/for` 业务分支即违规
 4. `apps/web/*` 之间禁止互相 import，共享只能走 `packages/*`
-5. `modules/*` 禁止 import `internal/generated/*`；HTTP 契约产物只允许出现在 `apps/*/handlers`
+5. `modules/*` 禁止 import `internal/generated/*`；HTTP 契约产物只允许出现在 `composition/*/handlers`
 
 ### 4.3 装配方式
 
 - 模块构造全显式手写，禁止 `init()` 自注册
 - 禁止 wire / fx（此规模属过度）
-- `StrictServerInterface` 由 `apps/<app>/handlers` 聚合实现；模块只暴露 service
+- `StrictServerInterface` 由 `composition/<app>/handlers` 聚合实现；模块只暴露 service
 - 加一个 API 应用 = 契约 + `internal/composition/newapp/` + `cmd/newapp/`，业务模块零改动
 
-### 4.4 多应用待决问题
+### 4.4 每应用一组契约
+
+业务契约按模块拆分，与 API 应用解耦；应用只声明"我包含哪些模块"：
+
+```yaml
+# contracts/capabilities/apps/admin.yaml
+id: cap.app.admin
+app: admin
+includes: [cap.http.shared, cap.http.notes]
+```
+
+生成器按该清单合并出 `generated/openapi/admin.yaml`，供 oapi-codegen 与文档站使用。
+新增应用 = 新增组合清单 + `composition/<app>/` + `cmd/<app>/`，业务模块与模块契约零改动。
+
+### 4.5 多应用待决问题
 
 | 问题 | 影响 | 倾向 |
 |---|---|---|
@@ -347,12 +380,12 @@ internal/platform/             与业务无关的基础设施
 - 请求校验单独挂 `OapiRequestValidatorWithOptions`（strict 只 decode，不校验 `minLength`/`format`）
 - 错误统一走 `StrictHTTPServerOptions` 的两个 handler，输出 RFC 9457
 - 生成物入库；CI 用 `make gen && git diff --exit-code` 保证同步
-- handler 落在 `apps/<app>/handlers/`，模块只提供 service——避免模块耦合 HTTP，也让多应用不同 spec 无需改模块
+- handler 落在 `composition/<app>/handlers/`，模块只提供 service——避免模块耦合 HTTP，也让多应用不同 spec 无需改模块
 
 ### 5.2 错误处理
 
 - HTTP 层用 RFC 9457 `application/problem+json`：`{type,title,status,detail,instance,code,errors[]}`
-- 业务错误码与 HTTP 状态解耦，映射表在 `error-codes.yaml`
+- 业务错误码与 HTTP 状态解耦，映射表在 `platform/errors.yaml`
 - 不返回的 error 必须记录（含栈 + 上下文）
 
 ### 5.3 事务边界
@@ -395,7 +428,7 @@ src/
 ├── pages/      路由级视图
 ├── features/   用户动作，可独立删
 └── shared/
-    ├── ui/          primitives + 三态组件（loading/empty/error）
+    ├── ui/          primitives + 四态组件（loading/empty/error/forbidden）
     ├── api/         api-client 封装、拦截器、错误码→文案映射
     ├── lib/         datetime / money / id / storage / analytics
     ├── composables/ usePermission / useQueryState
@@ -406,9 +439,11 @@ src/
 ### 6.2 约定
 
 - 类型只能来自 `packages/api-client`，禁止手写 API 类型
+- 页面只能通过 `capability` 引用接口，禁止直接写 URL，更禁止引用 `data.*`
 - 禁止绕过 client 直连 `fetch`
 - 时间统一 UTC 传输、本地展示；金额整数分 + 币种
-- 三态（loading/empty/error）使用共享组件，禁止各页自造
+- 四态（loading/empty/error/forbidden）使用共享组件，禁止各页自造
+- 路由与页面骨架由 `features/**` 契约生成，禁止手写路由表
 - 运行时配置由 `public/config.js` 注入，前端启动时 zod 校验 → 同一镜像多环境
 - 主题走 CSS 变量，暗色模式为 token 的第二组值
 - **Tailwind v4 不自动扫描 workspace 共享包**：由 `packages/ui-kit` 自备 `styles.css`（内含 `@source "./src"`），app 只 `@import "@webseed/ui-kit/styles.css"`，避免路径耦合；`@theme` 变量默认只输出被使用的
@@ -417,8 +452,8 @@ src/
 
 | 层 | 载体 | 默认 |
 |---|---|---|
-| 前端行为 | `analytics/events.yaml` → TS 类型；`track()` provider 可插拔 | noop |
-| 后端指标 | `observability/metrics.yaml` | 注册不导出 |
+| 前端行为 | `platform/analytics/events.yaml` → TS 类型；`track()` provider 可插拔 | noop |
+| 后端指标 | `platform/observability/metrics.yaml` | 注册不导出 |
 | 审计 | `audit` 模块 | 开启 |
 
 规则：事件名 `<domain>.<past_tense>`；属性 snake_case；`pii: true` 字段生成时剔除；未登记事件编译失败。
@@ -445,11 +480,12 @@ src/
 五路并行，目标 < 5 分钟：
 
 ```
-api:    lint → arch-lint → test → build → gen-diff
-web:    lint → typecheck → test → build → gen-diff
-e2e:    compose up → playwright
-docs:   check-docs
-self:   doctor（模板自身健康）
+contract: gen-diff → contract-graph → oasdiff
+api:      lint → arch-lint → test → build → schema-verify
+web:      lint → typecheck → test → build → client-coverage
+e2e:      compose up → playwright
+docs:     check-docs
+self:     doctor（模板自身健康）
 ```
 
 ### 7.3 模板治理
@@ -476,12 +512,15 @@ self:   doctor（模板自身健康）
 
 | 编号 | 决策 |
 |---|---|
-| 0001 | 采用 ADR 记录架构决策 |
-| 0002 | OpenAPI 作为接口唯一真相源（design-first） |
-| 0003 | 模块化单体 + 多应用装配层 |
-| 0004 | copy-on-derive，不承诺上游同步 |
-| 0005 | 薄校验优先于重生成 |
-| 0006 | SPA 而非 SSR（记录 SEO 代价） |
+| 0001 | 采用 ADR 记录架构决策（含 Rejected alternatives） |
+| 0002 | **契约层为唯一真相源**：migrations / queries / 类型 / 路由均由契约生成 |
+| 0003 | 五组契约模型：`data / capabilities / domain / features / platform` |
+| 0004 | 锚点机制：全局 ID + 结构化引用 + 分层约束 + 图校验 |
+| 0005 | 模块化单体 + 多应用装配层 + 每应用契约组合 |
+| 0006 | copy-on-derive，不承诺上游同步 |
+| 0007 | 薄校验优先，生成器上限 6 个 |
+| 0008 | SPA 而非 SSR（记录 SEO 代价） |
+| 0009 | 模板默认 admin 端；user 端派生时按需新增 |
 
 ---
 
@@ -575,16 +614,17 @@ description: 新增 API 端点的完整流程
 
 生成解决"实现不知道契约变了"，探测解决"契约不知道实现变了"。
 
-### A.2 七道闸门
+### A.2 八道闸门
 
 | # | 闸门 | 检测的漂移 | 时机 | 成本 | 强度 |
 |---|---|---|---|---|---|
+| 0 | **锚点图校验**（`make contract-graph`） | 悬空引用、越层引用、重复 ID、孤儿契约 | CI | 低 | 100% |
 | 1 | `make gen && git diff --exit-code` | 契约改了，生成物没更新 | CI | 极低 | 100% |
 | 2 | **路由集合 == 契约集合**（Go 测试枚举 chi 路由树，与 OpenAPI `paths` 求对称差） | 新增/删除端点两边不同步 | 单测 | 低 | 100% |
 | 3 | **响应 schema 校验**（`openapi3filter` 挂测试中间件，实际响应必须过契约） | 多返回字段、类型变、必填缺失 | 单测 | 中 | 高 |
 | 4 | `oasdiff` 对比基线分支 | 破坏性变更未走版本/弃用流程 | CI | 极低 | 100% |
 | 5 | **前端 client 覆盖断言**（契约 operation ↔ client 方法一一对应） | 前端漏接新端点 | 单测 | 低 | 100% |
-| 6 | 禁止手改 `gen/`（文件头 + lint + 重新生成 diff） | AI 直接改生成物而非改契约 | CI | 低 | 100% |
+| 6 | 禁止手改 `generated/`（文件头 + lint + 重新生成 diff） | AI 直接改生成物而非改契约 | CI | 低 | 100% |
 | 7 | 禁止绕过 client 直连（`no-restricted-imports` 禁 `fetch`/`axios`） | 前端自造请求，逃逸类型检查 | 编译 | 低 | 100% |
 
 **闸门 2 是性价比最高的一道**：一个测试函数即可覆盖"新增端点没写契约"和"契约加了端点没实现"两个方向。实现要点：
@@ -605,6 +645,9 @@ description: 新增 API 端点的完整流程
 
 **闸门 3 依赖契约纪律**：响应 schema 必须 `additionalProperties: false`，否则多字段检测不到。
 
+**不要用契约生成的 mock 做一致性测试**：mock 永远符合契约，测试永远通过，真实 handler 可能早已违背。
+闸门 3 必须挂**真实 handler** + `httptest`；MSW mock 只用于开发期解耦，e2e 必须打真实后端。
+
 ### A.3 检测矩阵
 
 | 漂移形态 | 谁会失败 |
@@ -617,7 +660,8 @@ description: 新增 API 端点的完整流程
 | 前端用未定义字段 | **TS 编译失败**（类型来自契约） |
 | 前端自己 fetch | 闸门 7 |
 | 契约破坏兼容 | 闸门 4 |
-| 改了 `gen/` 手写补丁 | 闸门 6 + 闸门 1 |
+| 改了 `generated/` 手写补丁 | 闸门 6 + 闸门 1 |
+| 契约引用悬空或越层 | 闸门 0（图校验） |
 
 ### A.4 非 API 契约的一致性
 
@@ -628,27 +672,32 @@ description: 新增 API 端点的完整流程
 | 权限点 | 生成常量 + lint 禁止裸字符串 |
 | design tokens | 生成 CSS 变量 + stylelint 禁止裸色值 |
 | 埋点事件 | 生成 TS 类型，未登记事件编译失败 |
+| 页面契约 | 数据源必须指向 capability；四态缺一即校验失败 |
 | 架构分层 | linter 本身 |
-| 数据库 | 迁移可重放 + sqlc 与 schema 同源 |
+| 数据库 | 迁移由 `data/tables` 生成；空库重放后 dump 必须等于契约目标态 |
+| 锚点关系 | 图校验：ID 唯一、引用可解析、分层合法、无孤儿 |
 
 ### A.5 流程约束（针对 AI）
 
 技术闸门之外，必须有行为约束，写进根 `AGENTS.md`：
 
-1. **改 API 行为前先改契约**，禁止"先写代码后补契约"
-2. **禁止手改 `gen/`**，只允许 `make gen` 重建
+1. **改行为前先改契约**，禁止"先写代码后补契约"
+2. **禁止手改 `generated/` 与 `migrations/`**，只允许 `make gen` 重建
 3. **禁止在 handler 里直接读 `r.URL.Query()` / `r.Header.Get()`**，只能用生成的参数结构体
-4. **新增依赖必须说明**"标准库/现有依赖为何不够"，记入 `docs/reference/dependencies.md`
-5. **任何契约改动必须走 `add-endpoint` playbook**，含"改契约 → gen → 修编译 → 跑闸门"四步
-6. **PR 必须列出改动文件清单**，超出任务范围需说明
+4. **禁止在页面契约里引用 `data.*`**，必须走 capability
+5. **禁止凭记忆写契约 ID 或字段**，必须读 `index.yaml` 与目标文件
+6. **新增依赖必须说明**"标准库/现有依赖为何不够"，记入 `docs/reference/dependencies.md`
+7. **任何契约改动必须走 `contract-change` playbook**：改契约 → gen → 修编译 → 图校验 → 影响面报告
+8. **PR 必须列出改动文件清单**，超出任务范围需说明
 
 ### A.6 落地优先级
 
 先做三件，覆盖约 80% 漂移：
 
 1. `make gen` + CI diff（1 小时）
-2. 路由集合比对（半天）
-3. 响应 schema 校验（半天）
+2. 锚点图校验（半天）
+3. 路由集合比对（半天）
+4. 响应 schema 校验（半天）
 
 再加：`oasdiff`（1 小时）、前端覆盖断言（2 小时）、两道 lint（各 1 小时）。
 
