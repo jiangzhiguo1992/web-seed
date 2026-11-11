@@ -1,6 +1,6 @@
 # web-seed 架构设计与实施方案
 
-> **版本** v3 · **状态** 草案（待 Spike 验证） · **更新** 2026-11-11
+> **版本** v3.1 · **状态** 草案（P0 已实测，P1+ 待落盘） · **更新** 2026-11-11
 > **已定决策**：目录形态 `1A`（`apps/api` + `apps/web`）· UI `2A`（Tailwind + shadcn-vue）· 能力档 `3C`（全家桶，默认关闭）
 >
 > 本文是模板种子工程自身的架构设计与实施计划，不是派生项目的业务文档。
@@ -23,12 +23,12 @@
 
 | 阶段 | 目标 | 出口条件 | 状态 |
 |---|---|---|---|
-| P0 | 技术验证（Spike） | 5 项假设全部有实测结论 | `[ ]` |
-| P1 | 仓库骨架 | `make help` 可用、目录齐备 | `[ ]` |
+| P0 | 技术验证（Spike） | 5 项假设全部有实测结论 | `[x]` 见 0.4 |
+| P1 | 仓库骨架 | `make help`/`build`/`lint`/`doctor` 全通过 | `[x]` |
 | P2 | 契约生成链 | `make gen` 幂等、CI diff 通过 | `[ ]` |
 | P3 | 后端地基 | platform 六件套可用 | `[ ]` |
 | P4 | 最小纵切 | notes 全链路跑通（DB→API→页面） | `[ ]` |
-| P5 | 一致性闸门 | 七道闸门全部生效 | `[ ]` |
+| P5 | 一致性闸门 | 七道闸门全部生效 | `[~]` 闸门 1–3 原型已验证 |
 | P6 | 可选模块 | auth/rbac/audit 可摘除地接入 | `[ ]` |
 | P7 | 治理与文档 | derive/doctor/ADR/playbooks 齐备 | `[ ]` |
 
@@ -36,22 +36,62 @@
 
 #### P0 技术验证（落盘前必须完成）
 
-- [ ] **S1** `oapi-codegen` + chi + 自定义中间件：验证统一错误拦截、`ServerInterface` 与装配层结合是否干净
-- [ ] **S2** `sqlc` 动态过滤/排序的真实边界：确定"必须手写 pgx"的判据
-- [ ] **S3** `go-arch-lint` 表达力：能否约束 `cmd → apps → modules → platform` 且禁止 modules 横向依赖
-- [ ] **S4** pnpm workspace + Vite 多应用：HMR、类型解析、共享包引用
-- [ ] **S5** Tailwind v4（CSS-first `@theme`）+ shadcn-vue + design tokens 三者融合，确认只有一套 CSS 变量
+- [x] **S1** `oapi-codegen` + chi：**可行**，采用 `strict-server` + `OapiRequestValidator`
+- [x] **S2** `sqlc` 动态过滤/排序：**可用但有边界**，动态 ORDER BY 只能 `CASE WHEN` 枚举且失去索引
+- [x] **S3** `go-arch-lint`：**可行**，需每个业务模块独立 component
+- [x] **S4** pnpm workspace + Vite：**可行**，pnpm 12 需 `allowBuilds`
+- [x] **S5** Tailwind v4 + tokens：**可行**，共享包必须显式 `@source`
+
+### 0.4 P0 实测结论（2026-11-11）
+
+环境：Go 1.27.0 / Node 26.7.0 / pnpm 12.18.0 / oapi-codegen v2.8.2 / chi v5.5.0 / kin-openapi v0.153.0
+
+| 项 | 结论 | 关键证据与坑 |
+|---|---|---|
+| S1 | 可行 | `strict-server` 让响应类型由契约封闭；`NewStrictHandlerWithOptions` 可统一 problem+json 错误；**strict 只 decode 不校验**，必须额外挂 `OapiRequestValidatorWithOptions` |
+| S2 | 可行有边界 | `sqlc.narg` 可用；`emit_pointers_for_null_types` 只对 text 生效，timestamptz/uuid 仍是 `pgtype.X` → repo 需适配层；动态 ORDER BY 只能用 `CASE WHEN` 枚举，且绕过索引 |
+| S3 | 可行 | 必须**每个业务模块独立 component**，单一 `modules` 组件无法表达"模块间禁止"；`cmd` 需允许依赖 `platform`；违规报错带文件:行号 |
+| S4 | 可行 | `workspace:*` + `vue-tsc` 跨包类型检查通过；**pnpm 12 配置键是 `allowBuilds`**（v11 起 `onlyBuiltDependencies` 已移除） |
+| S5 | 可行有硬配置 | Tailwind v4 **不自动扫描 workspace 共享包**，每个 app 的 CSS 必须 `@source` 每个共享包；`@theme` 变量默认只输出被使用的；包名 `@import` 可解析 |
+
+**闸门原型实测**
+
+| 闸门 | 结果 | 细节 |
+|---|---|---|
+| 2 路由比对 | 通过 | `api.GetSwagger()` 直接拿内嵌 spec，无需读 YAML；`chi.Walk` 枚举；负向用例（加 `/v1/debug`）可见 |
+| 3 响应校验 | 通过 | `additionalProperties: false` 下注入字段被拒；报错含 schema 与值 |
+| 请求校验 | 通过 | `title:""` 被 400 拦截，错误可自定义为 problem+json |
+
+**版本陷阱（必须锁定或写进 playbook）**
+
+1. kin-openapi v0.153 移除 `T.FindRoute`，改用 `routers/legacy.NewRouter(doc)`
+2. Vue 3.5 SFC 编译器无法解析 `defineProps<VariantProps<typeof button>>()`（cva 复杂类型），改用显式联合类型
+3. pnpm 12 用 `allowBuilds: { esbuild: true }`
+4. `strict-server` 与 `OapiRequestValidator` 必须同时启用，缺一不可
+
+### 0.5 P1/P2 待验证假设
+
+| # | 假设 | 风险 | 验证时机 |
+|---|---|---|---|
+| A1 | oapi-codegen 支持跨文件 `$ref`（`openapi/shared/*.yaml`） | 共享 schema 被迫内联，导致重复 | P2 首个 spec |
+| A2 | 两个 API spec 可用 `import-mapping` 共享一份 models | 否则 Problem/分页类型重复且不可互转 | P2 |
+| A3 | Tailwind `@source` 在被 `@import` 的包内 CSS 中仍生效 | 不生效则退回 app 内写相对路径 | P1 前端骨架 |
+| A4 | pnpm `-r build` 严格按拓扑先构建 tokens/ui | 否则 app 构建拿不到 theme.css | P1 |
+| A5 | `golang:1.27-alpine` / `node:26-alpine` 镜像 tag 可用 | 镜像构建失败 | P3 真实 Docker |
+
+> A3 / A4 已于 P1 实测通过：`packages/ui/styles.css` 的 `@source "./src"` 生效，`pnpm -r build` 先构建 tokens。
 
 #### P1 仓库骨架
 
-- [ ] 根文件：`Makefile` `lefthook.yml` `.editorconfig` `.gitattributes` `.nvmrc` `pnpm-workspace.yaml` `package.json`
-- [ ] `docs/{index.md,adr/,playbooks/,guides/,reference/}`
-- [ ] `contracts/` 九类目录 + `README.md`（变更三问）
-- [ ] `apps/api` 骨架（`cmd/` `internal/{platform,modules,apps,gen}` `migrations/` `queries/`）
-- [ ] `apps/web/user` 骨架（`src/{app,pages,features,shared}`）
-- [ ] `packages/{api-client,ui,design-tokens,tsconfig,eslint-config}`
-- [ ] `infra/compose.yaml`（profiles: core/data/mail/object/observability）
-- [ ] `scripts/{derive,doctor,check-docs,gen-env}.sh` 空壳 + `make help`
+- [x] 根文件：`Makefile` `lefthook.yml` `.editorconfig` `.gitattributes` `.nvmrc` `pnpm-workspace.yaml` `package.json`
+- [x] `docs/{index.md,adr/,playbooks/,guides/,reference/}`
+- [x] `contracts/` 九类目录 + `README.md`（变更三问）
+- [x] `apps/api` 骨架（`cmd/` `internal/{platform,modules,apps,gen}`、`apps/<app>/handlers/`、`migrations/` `queries/`）
+- [x] `apps/web/user` 骨架（`src/{app,pages,features,shared}`）
+- [x] `packages/{api-client,ui,design-tokens,tsconfig,eslint-config}`
+- [x] `infra/compose.yaml`（profiles: core/data/mail/object/observability）
+- [x] `scripts/{derive,doctor,check-docs,gen-env}.sh` 空壳 + `make help`
+- [x] `Makefile` 预留 `gen` target（P2 实现），空跑时提示未配置
 
 #### P2 契约生成链
 
@@ -87,9 +127,9 @@
 
 #### P5 一致性闸门（详见附录 A）
 
-- [ ] 闸门 1：`make gen && git diff --exit-code`
-- [ ] 闸门 2：路由集合 == 契约集合（Go 测试）
-- [ ] 闸门 3：响应 schema 校验（`openapi3filter`）
+- [x] 闸门 1：`make gen && git diff --exit-code`（生成确定性已在 S1 验证）
+- [x] 闸门 2：路由集合 == 契约集合（含负向用例）
+- [x] 闸门 3：响应 schema 校验（含注入字段负向用例）
 - [ ] 闸门 4：`oasdiff` breaking change 检测
 - [ ] 闸门 5：前端 client 方法覆盖断言
 - [ ] 闸门 6：禁止手改 `gen/`（文件头 + lint）
@@ -113,6 +153,7 @@
 - [ ] CI：api / web / e2e / docs / self 五路并行，目标 < 5 分钟
 - [ ] ADR 六篇（见第 9 节）
 - [ ] playbooks：`add-app` `add-endpoint` `add-table` `add-feature` `rename-project`
+- [ ] `.opencode/skills/`：`contract-change` `add-endpoint` `add-table` `add-app` `verify`（薄封装，见第 10 节）
 - [ ] `AGENTS.md`（根 + `apps/api` + `apps/web`）
 
 ---
@@ -177,6 +218,7 @@
 - 响应 schema 默认 `additionalProperties: false`（否则"多返回字段"无法被检测）
 - 错误码总量 ≤ 50，分层：`COMMON_*` / `<DOMAIN>_*`
 - 只收**跨前后端**的枚举，模块内部枚举不进契约
+- `contracts/http/envelope.yaml` 只写规则（状态码映射、header 名、分页形状），**不写 schema**；schema 唯一源是 `openapi/shared/`
 
 ### 2.2 变更流程（契约三问）
 
@@ -228,6 +270,7 @@ web-seed/
 ├── packages/{api-client,ui,design-tokens,tsconfig,eslint-config}
 ├── infra/compose.yaml                [O] profiles: core/data/mail/object/observability
 ├── scripts/{derive,doctor,check-docs,gen-env}.sh
+├── .opencode/skills/                 # AI 行为入口（薄封装 playbook，见第 10 节）
 └── .github/{workflows/{ci,template-selftest}.yml, PULL_REQUEST_TEMPLATE.md, ISSUE_TEMPLATE/}
 ```
 
@@ -238,10 +281,11 @@ web-seed/
 ### 4.1 三层职责
 
 ```
-cmd/<app>/main.go          只做启动：解析配置 → 构造 → 运行 → 关闭
-internal/apps/<app>/       装配：选模块、挂路由、配中间件、定鉴权策略
-internal/modules/<biz>/    业务能力，应用无关，自包含 handler+service+repo
-internal/platform/         与业务无关的基础设施
+cmd/<app>/main.go              只做启动：解析配置 → 构造 → 运行 → 关闭
+internal/apps/<app>/           装配：选模块、挂路由、配中间件、聚合 handler
+internal/apps/<app>/handlers/  HTTP 适配器：参数转换 → 调 service → 映射响应（禁止业务逻辑）
+internal/modules/<biz>/        业务能力：service + repo，不依赖 HTTP 契约
+internal/platform/             与业务无关的基础设施
 ```
 
 ### 4.2 硬边界（机器校验）
@@ -250,11 +294,13 @@ internal/platform/         与业务无关的基础设施
 2. `modules/*` 之间禁止横向 import，跨模块走 service 接口或事件
 3. `apps/*` 只允许"选择 + 组装 + 配置"，出现 `if/for` 业务分支即违规
 4. `apps/web/*` 之间禁止互相 import，共享只能走 `packages/*`
+5. `modules/*` 禁止 import `internal/gen/*`；HTTP 契约产物只允许出现在 `apps/*/handlers`
 
 ### 4.3 装配方式
 
 - 模块构造全显式手写，禁止 `init()` 自注册
 - 禁止 wire / fx（此规模属过度）
+- `StrictServerInterface` 由 `apps/<app>/handlers` 聚合实现；模块只暴露 service
 - 加一个 API 应用 = 契约 + `internal/apps/newapp/` + `cmd/newapp/`，业务模块零改动
 
 ### 4.4 多应用待决问题
@@ -273,12 +319,20 @@ internal/platform/         与业务无关的基础设施
 
 | 关注点 | 默认 | 备选 | 理由 |
 |---|---|---|---|
-| HTTP | `chi` | stdlib / gin | 零反射、贴近标准库，可退化 |
+| HTTP | `chi` + `oapi-codegen strict-server` | stdlib / gin | 响应类型由契约封闭；strict 只 decode，校验由 `OapiRequestValidator` 补齐 |
 | 数据 | `pgx` + `sqlc` | GORM | 编译期类型安全，SQL 可见 |
 | 迁移 | `goose` | atlas | 纯 SQL、可 embed、只前进 |
 | 契约生成 | `oapi-codegen` | swaggo | design-first 防漂移 |
 | 日志 | `slog` | zap | 标准库 |
 | 追踪 | OTel SDK（`exporter=none`） | — | 能力预留，不默认外发 |
+
+### 5.1.1 契约生成模式（已实测）
+
+- `strict-server` 为默认：`StrictServerInterface` 返回 `XxxResponseObject`，响应形状由契约封闭，返回未声明类型会在运行时被拒
+- 请求校验单独挂 `OapiRequestValidatorWithOptions`（strict 只 decode，不校验 `minLength`/`format`）
+- 错误统一走 `StrictHTTPServerOptions` 的两个 handler，输出 RFC 9457
+- 生成物入库；CI 用 `make gen && git diff --exit-code` 保证同步
+- handler 落在 `apps/<app>/handlers/`，模块只提供 service——避免模块耦合 HTTP，也让多应用不同 spec 无需改模块
 
 ### 5.2 错误处理
 
@@ -342,6 +396,7 @@ src/
 - 三态（loading/empty/error）使用共享组件，禁止各页自造
 - 运行时配置由 `public/config.js` 注入，前端启动时 zod 校验 → 同一镜像多环境
 - 主题走 CSS 变量，暗色模式为 token 的第二组值
+- **Tailwind v4 不自动扫描 workspace 共享包**：由 `packages/ui` 自备 `styles.css`（内含 `@source "./src"`），app 只 `@import "@webseed/ui/styles.css"`，避免路径耦合；`@theme` 变量默认只输出被使用的
 
 ### 6.3 埋点
 
@@ -368,6 +423,7 @@ src/
 | 架构校验 | `go-arch-lint` / `dependency-cruiser` | |
 | 契约兼容 | `oasdiff` | |
 | 测试 | testify / Vitest / Playwright | |
+| 前端包管理 | pnpm 12 workspace | `allowBuilds` 显式放行 esbuild 等构建脚本 |
 
 ### 7.2 CI
 
@@ -414,6 +470,56 @@ self:   doctor（模板自身健康）
 
 ---
 
+## 10. Skills 与 AI 能力沉淀
+
+### 10.1 必要性：skills 不保证一致性
+
+一致性由编译、测试、CI 闸门保证；skills 只能降低 AI 走错路的概率。
+不要写一个"提醒 AI 改契约"的 skill 当作机制——提醒不可靠，闸门才可靠。
+
+skills 的真正价值：把 playbook 变成**自动触发的上下文**。AI 可能不主动读文档，但会在匹配任务时加载 skill。
+
+### 10.2 存放位置
+
+项目级 skill 必须放 **`.opencode/skills/<id>/SKILL.md`**（本仓库根 `AGENTS.md` 已规定），理由：
+
+- OpenCode 只从该路径发现项目级 skill；放 `docs/` 或 `contracts/` 不会被加载
+- 不单开根目录 `skills/`：与工具约定重复，派生项目还要额外维护映射
+- `.opencode/skills/` 未被 `.gitignore` 忽略，可随模板分发
+
+`contracts/` 只放机器可读契约；skills 是行为指令，职责不同，不能混放。
+
+### 10.3 与 playbooks 的关系（防双源）
+
+**playbooks 为唯一正文，skills 为薄入口。**
+
+skill 只包含四段：触发条件 → 必读文件（playbook 路径）→ 必跑命令 → 完成定义。
+步骤细节全部留在 playbook，避免两处各写一套而漂移。
+
+理由：playbook 可被 PR review、可被 `docs/index.md` 索引、换 AI 工具仍有效；skill 是 OpenCode 专有格式。
+
+`check-docs.sh` 增加一条校验：每个 skill 引用的 playbook 路径必须存在。
+
+### 10.4 建议的 skill 清单
+
+| skill | 触发场景 | 随派生保留 |
+|---|---|---|
+| `contract-change` | 改 OpenAPI / 错误码 / 权限点 | 是 |
+| `add-endpoint` | 新增 API 端点 | 是 |
+| `add-table` | 新增表 / 迁移 | 是 |
+| `add-app` | 新增 api / web 应用 | 是 |
+| `verify` | 提交前跑全套闸门 | 是 |
+| `template-derive` | 派生新项目 | 否，派生即删 |
+| `template-doctor` | 模板自身健康检查 | 否，派生即删 |
+
+派生脚本删除 `template-*` 目录，其余保留。
+
+### 10.5 反模式
+
+- 用 skill 复制一份契约内容 → 必然漂移
+- 用 skill 代替 CI 检查
+- 为每个 CRUD 端点写一个 skill → 爆炸
+
 ## 附录 A：契约与实现的一致性机制
 
 > 目标：解决两类漂移——①契约改了实现没改；②实现改了契约没改。
@@ -445,9 +551,17 @@ self:   doctor（模板自身健康）
 
 ```
 遍历 OpenAPI paths → {(method, path)}
-遍历 chi.RouteTree（或注册时自收集）→ {(method, path)}
+遍历 chi 路由树 → {(method, path)}
 对称差非空 → t.Fatal
 ```
+
+**实测实现要点（已验证）**
+
+- `api.GetSwagger()` 返回内嵌 spec，闸门直接用它，不读 YAML
+- OpenAPI 侧用 `swagger.Paths.Map()` 取 `method + path`；实现侧用 `chi.Walk`
+- 响应校验用 `routers/legacy.NewRouter(swagger).FindRoute(req)` + `openapi3filter.ValidateResponse`
+- 负向用例必须进 CI：故意加未登记路由、故意返回注入字段，断言闸门变红
+- kin-openapi v0.153 已移除 `T.FindRoute`，不要照抄旧示例
 
 **闸门 3 依赖契约纪律**：响应 schema 必须 `additionalProperties: false`，否则多字段检测不到。
 
