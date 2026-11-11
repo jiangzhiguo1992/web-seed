@@ -1,45 +1,97 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
+# ============================================================
+# Go
+# ============================================================
+
+# 二进制与插件
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
 
-# Test binary, built with `go test -c`
+# go test -c 产物
 *.test
 
-# Code coverage profiles and other test artifacts
+# 覆盖率与性能分析
 *.out
 coverage.*
 !coverage.go
 *.coverprofile
 profile.cov
+*.prof
+*.trace
 
-# Dependency directories (remove the comment below to include it)
+# 调试器与热重载
+__debug_bin*
+apps/api/bin/
+apps/api/tmp/
+
+# 依赖目录（需要 vendor 时删除下一行注释）
 # vendor/
 
-# Go workspace file
+# Go workspace
 go.work
 go.work.sum
 
-# env file
+# ============================================================
+# Node / 前端
+# ============================================================
+
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+*.log
+pnpm-debug.log*
+.eslintcache
+.stylelintcache
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+.pnpm-store/
+*.pid
+
+# ============================================================
+# 环境变量
+# ============================================================
+
 .env
 .env.*
 !.env.example
+.envrc
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# ============================================================
+# 编辑器 / IDE
+# ============================================================
 
-.idea
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.fleet/
+.history/
+*.swp
+*.swo
+*~
 
-# Node
-node_modules/
-dist/
-*.tsbuildinfo
+# ============================================================
+# 操作系统
+# ============================================================
 
-# OS
 .DS_Store
+._*
+Thumbs.db
+Desktop.ini
+.Spotlight-V100
+.Trashes
+
+# ============================================================
+# 本地临时产物
+# ============================================================
+
+tmp/
+temp/
+.cache/

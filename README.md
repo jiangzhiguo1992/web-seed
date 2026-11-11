@@ -59,7 +59,7 @@ web-seed/
 │   ├── observability/           [P] 日志字段、指标名
 │   ├── analytics/               [P] 埋点事件
 │   ├── security/                [P] 权限点
-│   ├── db/conventions.md        [C] 数据规范
+│   ├── db/README.md        [C] 数据规范
 │   └── events/README.md         [C] 异步事件预留形状
 │
 ├── docs/                        [C] 文档层（面向 AI + 人）
@@ -75,8 +75,8 @@ web-seed/
 │   │   ├── internal/
 │   │   │   ├── platform/        #   基础设施：config、httpserver（P3 扩 database/observability/security）
 │   │   │   ├── modules/         [P] 业务模块：service + repo，不依赖 HTTP
-│   │   │   ├── apps/userapi/    #   应用装配 + handlers/[P] 契约适配器
-│   │   │   └── gen/             [P] 生成物（OpenAPI/sqlc/常量）
+│   │   │   ├── composition/userapi/ #   应用装配 + handlers/[P] 契约适配器
+│   │   │   └── generated/       [P] 生成物（OpenAPI/sqlc/常量）
 │   │   ├── migrations/          [P]
 │   │   ├── queries/             [P]
 │   │   └── go.mod  Dockerfile
@@ -91,14 +91,14 @@ web-seed/
 │
 ├── packages/                    [C] 前端共享包
 │   ├── api-client/              [C] 契约生成的客户端（P2 填充）
-│   ├── ui/                      [C] primitives（Button、cn、styles）
+│   ├── ui-kit/                  [C] primitives（Button、cn、styles）
 │   ├── design-tokens/           [C] tokens.json → theme.css 生成器与产物
 │   ├── tsconfig/                [C] 共享 TS 配置
 │   └── eslint-config/           [P] ESLint flat config（P7 接入）
 │
 ├── infra/compose.yaml           [C] 本地依赖（PG，profiles: core）
 ├── scripts/                     [C] derive / doctor / check-docs / gen-env
-├── .opencode/skills/            [P] AI 行为入口（薄封装 playbook，P7）
+├── .opencode/skills/            [P] AI 适配层（由 playbook 生成，P7）
 └── .github/                     [C] CI（api/web/docs）+ PR 模板
 ```
 
@@ -109,11 +109,11 @@ web-seed/
 | `contracts/` | 唯一真相源 | 写实现细节、散文 |
 | `docs/` | 解释为什么、怎么做 | 与契约冲突 |
 | `apps/api/cmd` | 启动与关闭 | 业务逻辑 |
-| `apps/api/internal/apps` | 选模块、挂路由、聚合 handler | 业务分支、直接访问 DB |
+| `apps/api/internal/composition` | 选模块、挂路由、聚合 handler | 业务分支、直接访问 DB |
 | `apps/api/internal/modules` | 业务能力 | 依赖 HTTP 契约、跨模块横向 import |
 | `apps/api/internal/platform` | 基础设施 | 依赖业务 |
 | `apps/web/*/src/app` | 应用装配 | 业务规则 |
-| `packages/ui` | 无业务的基础组件 | 业务组件、请求 |
+| `packages/ui-kit` | 无业务的基础组件 | 业务组件、请求 |
 
 ---
 
@@ -230,9 +230,17 @@ make build-web        # apps/web/user/dist
 | [`docs/index.md`](docs/index.md) | AI 进入仓库的第一站 |
 | [`docs/guides/architecture.md`](docs/guides/architecture.md) | 架构、契约体系、实施进度 |
 | [`contracts/README.md`](contracts/README.md) | 改契约前 |
-| [`contracts/db/conventions.md`](contracts/db/conventions.md) | 加表 / 写查询前 |
+| [`contracts/db/README.md`](contracts/db/README.md) | 加表 / 写查询前 |
 | `docs/playbooks/` | 执行具体任务时（P7） |
 | `docs/adr/` | 想改架构前（P7） |
+
+文档与契约的分工：
+
+| 维度 | `contracts/` | `docs/` |
+|---|---|---|
+| 内容 | schema、配置、规则常量 | why、流程、决策、术语 |
+| 读者 | 工具链 + 人 | 人 + AI |
+| 是否真相源 | 是 | 否，只引用 |
 
 文档冲突时的优先级：
 
