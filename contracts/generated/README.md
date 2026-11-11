@@ -1,6 +1,7 @@
 # 生成物索引（generated）
 
 > 本目录全部是**产物**，禁止手改。删除后可 `make gen` 重建。
+> 契约工具链（schema / templates / scaffold / check）在 `contracts/_meta/`，**不在本目录**。
 
 ---
 

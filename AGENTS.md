@@ -40,6 +40,12 @@
 
 核心逻辑：**先保证能用（正确性）→ 再保证好用（性能优化）→ 最后保证耐用（鲁棒性）**。
 
+### 契约工具链（强制）
+
+- 新建/修改 `contracts/` 前，先读 `contracts/_meta/README.md` 与对应 `_meta/schema/<type>.yaml`；不要凭字段名猜语义。
+- 新建契约用 `make contract-new`；改完跑 `make contract-check`；`make gen` 只负责契约 → 产物。
+- `contracts/generated/` 只放产物；schema / 模板 / 脚本在 `contracts/_meta/` 与 `scripts/contract/`。
+
 ### 阶段路由
 
 根据任务类型，从对应阶段开始执行：

@@ -3,6 +3,7 @@
 > **`data/tables/*.yaml` 是表结构的唯一真相源。**
 > `apps/api/migrations/*.sql` 与 `apps/api/internal/generated/db/schema.sql` 都是生成物。
 > 禁止手写迁移；改表先改契约，再 `make gen-db`。
+> 字段语义与生成行为见 `contracts/_meta/schema/data.tables.yaml` / `data.enums.yaml`；新建表用 `make contract-new`，改完跑 `make contract-check`。
 
 ---
 
@@ -83,7 +84,7 @@ data/storage.yaml ────> 配置校验 + 运维约束
 6. **枚举用 `text + check`**，不用 PostgreSQL enum；枚举值只能追加。
 7. **索引必须写 `reason`**；表达式索引用 `expression`，大表用 `concurrently: auto`。
 8. **主键默认由应用层生成 UUIDv7**（`generated_by: application`），数据库不设 default。
-9. **`owner_module` 是写归属**：只有该模块的 `cap.services` 可以写表，其他模块只能经 service 读。
+9. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表，其他模块只能经 service 读。
 10. **禁止未结构化 DDL 字段**：分区、表达式索引、CONCURRENTLY 必须用结构化字段表达（`table.partition`、`indexes[].expression`、`indexes[].concurrently`），不要塞原生 SQL。
 11. **`used_by` 是生成物**：由 `make gen-graph` 写入，禁止手改；结构固定为 `entities` / `queries` / `capabilities` 三个列表，只记**直接入边**。完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
 

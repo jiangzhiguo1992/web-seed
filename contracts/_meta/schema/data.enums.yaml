@@ -1,0 +1,42 @@
+# data.enums 类型的字段字典与生成规则。
+#
+# 集合契约：文件 id 为 data.enums；每个枚举项 id 为 data.enums.<name>。
+
+id: meta.data.enums
+type: data.enums
+title: 跨端枚举契约
+targets:
+  file: contracts/data/enums.yaml
+  id: data.enums
+  naming: "文件固定为 data/enums.yaml；枚举项用显式 id data.enums.<name>"
+
+fields:
+  - { name: schema_version, type: integer, required: true, const: 1 }
+  - { name: id, type: string, required: true, const: data.enums, semantics: 集合文件 ID }
+  - { name: summary, type: string, required: true }
+  - { name: stability, type: string, required: true, enum: [stable, draft, deprecated] }
+  - name: enums
+    type: list<object>
+    required: true
+    semantics: 跨前后端枚举；模块内部枚举不进本文件
+    generates: Go 常量 + TS union + DB CHECK
+    ai_mistake: 不要收只在一个模块内部使用的枚举
+    item_fields:
+      - { name: id, type: string, required: true, pattern: '^data\.enums\.[a-z][a-z0-9_]*$' }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$' }
+      - { name: description, type: string, required: false }
+      - { name: db_type, type: string, required: true, const: text }
+      - { name: go_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$' }
+      - { name: ts_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$' }
+      - name: values
+        type: list<object>
+        required: true
+        item_fields:
+          - { name: value, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$' }
+          - { name: description, type: string, required: false }
+
+rules:
+  - { id: enum-id-matches-name, text: "item.id 必须等于 data.enums.<item.name>" }
+  - { id: enum-values-unique, text: "同一枚举的 values 不得重复" }
+  - { id: enum-db-type-text, text: "db_type 固定 text；不用 PostgreSQL enum" }
+  - { id: enum-append-only, text: "枚举值只能追加，禁止改名或删除" }

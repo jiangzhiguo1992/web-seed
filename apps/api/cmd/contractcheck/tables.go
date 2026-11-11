@@ -1,0 +1,305 @@
+// tables.go 校验 data.tables：基类、列、约束、索引与物理表名。
+package main
+
+import (
+	"fmt"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map[string]bool) {
+	files, _ := filepath.Glob(filepath.Join(c.root, "contracts/data/tables/*.yaml"))
+	sort.Strings(files)
+	tableIDs := map[string]string{}
+	cols := map[string]map[string]bool{}
+	physicalNames := map[string]string{}
+	for _, file := range files {
+		rel := relPath(c.root, file)
+		doc, err := loadYAML(file)
+		if err != nil {
+			c.errf("%s: %v", rel, err)
+			continue
+		}
+		id, _ := doc["id"].(string)
+		if id == "" {
+			c.errf("%s: missing id", rel)
+			continue
+		}
+		if prev, ok := tableIDs[id]; ok {
+			c.errf("%s: duplicate table id %s (also %s)", rel, id, prev)
+		}
+		tableIDs[id] = rel
+
+		if doc["kind"] == "base" {
+			c.checkBaseTable(doc, schema, rel)
+		} else {
+			c.validateDoc(doc, schema.Fields, rel)
+			c.checkTableRules(doc, rel, schema)
+			phys := strings.TrimSuffix(filepath.Base(rel), ".yaml")
+			if table, _ := asMap(doc["table"]); table != nil {
+				if n, ok := table["name"].(string); ok && n != "" {
+					phys = n
+				}
+			}
+			if prev, ok := physicalNames[phys]; ok {
+				c.errf("%s: physical table %q already declared by %s", rel, phys, prev)
+			} else {
+				physicalNames[phys] = rel
+			}
+		}
+
+		set := map[string]bool{}
+		for _, name := range baseColumns {
+			set[name] = true
+		}
+		for _, raw := range asList(doc["columns"]) {
+			m, ok := asMap(raw)
+			if !ok {
+				continue
+			}
+			if n, ok := m["name"].(string); ok {
+				set[n] = true
+			}
+		}
+		cols[id] = set
+	}
+	if _, ok := tableIDs["data.tables.base"]; !ok {
+		c.errf("contracts/data/tables/_base.yaml: missing data.tables.base")
+	}
+	return tableIDs, cols
+}
+
+func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
+	allowed := map[string]bool{
+		"schema_version": true, "id": true, "kind": true, "summary": true,
+		"stability": true, "do_not": true, "columns": true,
+	}
+	c.validateDoc(doc, filterFields(schema.Fields, allowed), rel)
+	if s, ok := doc["summary"].(string); ok && s == "" {
+		c.errf("%s: summary must not be empty", rel)
+	}
+	if doc["kind"] != "base" {
+		c.errf("%s: base table kind must be base", rel)
+	}
+	if doc["id"] != "data.tables.base" {
+		c.errf("%s: base table id must be data.tables.base", rel)
+	}
+	names := []string{}
+	for _, raw := range asList(doc["columns"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			c.errf("%s: columns must be objects", rel)
+			continue
+		}
+		if n, ok := m["name"].(string); ok {
+			names = append(names, n)
+		}
+	}
+	want := append([]string(nil), baseColumns...)
+	sort.Strings(names)
+	sort.Strings(want)
+	if strings.Join(names, ",") != strings.Join(want, ",") {
+		c.errf("%s: base columns must be %v, got %v", rel, want, names)
+	}
+}
+
+func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema) {
+	id, _ := doc["id"].(string)
+	if s, ok := doc["summary"].(string); ok && s == "" {
+		c.errf("%s: summary must not be empty", rel)
+	}
+	stem := strings.TrimSuffix(filepath.Base(rel), ".yaml")
+	if want := "data.tables." + stem; id != want {
+		c.errf("%s: id must be %s, got %s (file name is the source)", rel, want, id)
+	}
+	ext := asList(doc["extends"])
+	if len(ext) != 1 || ext[0] != "data.tables.base" {
+		c.errf("%s: extends must be [data.tables.base]", rel)
+	}
+	table, _ := asMap(doc["table"])
+	if table != nil {
+		if n, ok := table["name"].(string); ok && n == "" {
+			c.errf("%s: table.name must not be empty", rel)
+		}
+		if _, ok := table["comment"]; ok && !hasNonEmptyString(table, "comment") {
+			c.errf("%s: table.comment must not be empty", rel)
+		}
+		if r, ok := asMap(table["retention"]); ok {
+			for k, v := range r {
+				if i, ok := toInt(v); ok && i < 1 {
+					c.errf("%s: table.retention.%s must be >= 1", rel, k)
+				}
+			}
+		}
+	}
+
+	columns := asList(doc["columns"])
+	if len(columns) == 0 {
+		c.errf("%s: columns must not be empty", rel)
+	}
+	colNames := map[string]bool{}
+	allCols := map[string]bool{}
+	for _, name := range baseColumns {
+		allCols[name] = true
+	}
+	for i, raw := range columns {
+		m, ok := asMap(raw)
+		if !ok {
+			c.errf("%s: columns[%d] must be an object", rel, i)
+			continue
+		}
+		name, _ := m["name"].(string)
+		if colNames[name] {
+			c.errf("%s: columns[%d]: duplicate column %q", rel, i, name)
+		}
+		colNames[name] = true
+		allCols[name] = true
+		switch name {
+		case "id", "created_at", "updated_at", "deleted_at":
+			c.errf("%s: columns[%d]: base column %q must not be redeclared", rel, i, name)
+		case "status":
+			t, _ := m["type"].(string)
+			if !strings.HasPrefix(t, "data.enums.") {
+				c.errf("%s: columns[%d]: status must reference data.enums.*, got %q", rel, i, t)
+			}
+		}
+		if _, ok := m["default"]; ok {
+			if _, ok2 := m["default_sql"]; ok2 {
+				c.errf("%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, name)
+			}
+		}
+		if a, ok := toInt(m["min_length"]); ok {
+			if b, ok2 := toInt(m["max_length"]); ok2 && a > b {
+				c.errf("%s: columns[%d] (%s): min_length > max_length", rel, i, name)
+			}
+		}
+		if a, ok := toFloat(m["min"]); ok {
+			if b, ok2 := toFloat(m["max"]); ok2 && a > b {
+				c.errf("%s: columns[%d] (%s): min > max", rel, i, name)
+			}
+		}
+		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes) {
+			c.errf("%s: columns[%d] (%s): unsupported type %q (builtin %v or refs %v)", rel, i, name, t, schema.ColumnTypes.Builtin, schema.ColumnTypes.Refs)
+		}
+	}
+	if !colNames["status"] {
+		c.errf("%s: status column must be declared and reference data.enums.*", rel)
+	}
+
+	checkCols := func(where string, list []any) {
+		for _, x := range list {
+			s, ok := x.(string)
+			if !ok {
+				c.errf("%s: column name must be string", where)
+				continue
+			}
+			if !allCols[s] {
+				c.errf("%s: unknown column %q", where, s)
+			}
+		}
+	}
+	if table != nil {
+		if p, ok := asMap(table["partition"]); ok {
+			checkCols(fmt.Sprintf("%s: table.partition", rel), asList(p["columns"]))
+		}
+	}
+
+	constraintNames := map[string]bool{}
+	for i, raw := range asList(doc["constraints"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			c.errf("%s: constraints[%d] must be an object", rel, i)
+			continue
+		}
+		name, _ := m["name"].(string)
+		if !constraintNames[name] {
+			constraintNames[name] = true
+		} else {
+			c.errf("%s: constraints[%d]: duplicate constraint %q", rel, i, name)
+		}
+		typ, _ := m["type"].(string)
+		switch typ {
+		case "check":
+			if !hasNonEmptyString(m, "expr") {
+				c.errf("%s: constraints[%d] (%s): check requires expr", rel, i, name)
+			}
+			if !strings.HasPrefix(name, "ck_") {
+				c.errf("%s: constraints[%d]: check name must start with ck_", rel, i)
+			}
+		case "enum":
+			if !hasNonEmptyString(m, "column") || !hasNonEmptyString(m, "enum") {
+				c.errf("%s: constraints[%d] (%s): enum requires column and enum", rel, i, name)
+			} else if col, _ := m["column"].(string); !allCols[col] {
+				c.errf("%s: constraints[%d] (%s): unknown column %q", rel, i, name, col)
+			}
+			if !strings.HasPrefix(name, "ck_") {
+				c.errf("%s: constraints[%d]: enum name must start with ck_", rel, i)
+			}
+		case "foreign_key":
+			if len(asList(m["columns"])) == 0 || !hasNonEmptyString(m, "references") {
+				c.errf("%s: constraints[%d] (%s): foreign_key requires columns and references", rel, i, name)
+			}
+			checkCols(fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, name), asList(m["columns"]))
+			if !strings.HasPrefix(name, "fk_") {
+				c.errf("%s: constraints[%d]: foreign_key name must start with fk_", rel, i)
+			}
+		case "unique":
+			if len(asList(m["columns"])) == 0 {
+				c.errf("%s: constraints[%d] (%s): unique requires columns", rel, i, name)
+			}
+			checkCols(fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, name), asList(m["columns"]))
+			if !strings.HasPrefix(name, "uq_") {
+				c.errf("%s: constraints[%d]: unique name must start with uq_", rel, i)
+			}
+		case "exclude":
+			if !hasNonEmptyString(m, "expr") {
+				c.errf("%s: constraints[%d] (%s): exclude requires expr", rel, i, name)
+			}
+			if !strings.HasPrefix(name, "ex_") {
+				c.errf("%s: constraints[%d]: exclude name must start with ex_", rel, i)
+			}
+		default:
+			c.errf("%s: constraints[%d] (%s): unknown type %q", rel, i, name, typ)
+		}
+	}
+
+	indexNames := map[string]bool{}
+	for i, raw := range asList(doc["indexes"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			c.errf("%s: indexes[%d] must be an object", rel, i)
+			continue
+		}
+		name, _ := m["name"].(string)
+		if !indexNames[name] {
+			indexNames[name] = true
+		} else {
+			c.errf("%s: indexes[%d]: duplicate index %q", rel, i, name)
+		}
+		if _, ok := m["reason"]; ok && !hasNonEmptyString(m, "reason") {
+			c.errf("%s: indexes[%d] (%s): reason must not be empty", rel, i, name)
+		}
+		hasCols := len(asList(m["columns"])) > 0
+		hasExpr := hasNonEmptyString(m, "expression")
+		if hasCols == hasExpr {
+			c.errf("%s: indexes[%d] (%s): exactly one of columns/expression is required", rel, i, name)
+		}
+		if hasCols {
+			checkCols(fmt.Sprintf("%s: indexes[%d] (%s)", rel, i, name), asList(m["columns"]))
+		}
+		checkCols(fmt.Sprintf("%s: indexes[%d] (%s).include", rel, i, name), asList(m["include"]))
+		unique, _ := m["unique"].(bool)
+		if unique {
+			if !strings.HasPrefix(name, "uq_") {
+				c.errf("%s: indexes[%d]: unique name must start with uq_", rel, i)
+			}
+			where, _ := m["where"].(string)
+			if !strings.Contains(where, "deleted_at IS NULL") {
+				c.errf("%s: indexes[%d] (%s): unique index must filter deleted_at IS NULL", rel, i, name)
+			}
+		} else if !strings.HasPrefix(name, "idx_") {
+			c.errf("%s: indexes[%d]: non-unique name must start with idx_", rel, i)
+		}
+	}
+}

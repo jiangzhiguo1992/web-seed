@@ -1,0 +1,221 @@
+# data.tables 类型的字段字典与生成规则。
+#
+# 这是契约的元规范（meta），不是业务契约，不登记在 index.yaml。
+# - semantics 给 AI 读
+# - generates 给生成器读
+# - ai_mistake 给 guide/审查读
+# - contract-check 校验 required/type/enum/const/allowed/pattern + 跨字段规则
+
+id: meta.data.tables
+type: data.tables
+title: 物理表契约
+targets:
+  dir: contracts/data/tables
+  glob: "*.yaml"
+  id: "data.tables.<file>"
+  naming: "文件名单数 snake_case；物理表名默认同名，复数表用 table.name 覆盖"
+  exception: "_base.yaml 的 ID 为 data.tables.base"
+
+column_types:
+  builtin: [text, uuid, timestamptz, integer, bigint, boolean, jsonb, numeric, date, time, bytea, inet]
+  refs: ["data.enums.", "data.tables."]
+
+fields:
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    semantics: 契约格式版本；当前固定 1
+    generates: 无
+    ai_mistake: 不要写字符串 "1"
+
+  - name: id
+    type: string
+    required: true
+    pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
+    semantics: 由文件路径派生；文件名单数
+    generates: 契约 ID、图节点
+    ai_mistake: 不要写 data.table.*；不要用物理表名复数当文件名
+
+  - name: summary
+    type: string
+    required: true
+    semantics: 一句话说明这张表是什么
+    generates: index 摘要
+    ai_mistake: 不要写字段清单
+
+  - name: stability
+    type: string
+    required: true
+    enum: [stable, draft, deprecated]
+    semantics: 契约稳定度
+    generates: index 摘要
+    ai_mistake: 不要自定义取值
+
+  - name: kind
+    type: string
+    required: false
+    enum: [base]
+    semantics: 仅 _base.yaml 使用；物理表不写
+    generates: 生成器跳过 DDL
+    ai_mistake: 不要把普通表标成 base
+
+  - name: owner_module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    semantics: 唯一写归属模块；只有该模块的 cap.services/cap.async 可以写表
+    generates: 模块归属校验、repo 目录
+    ai_mistake: 不是文件路径；不是 owner user
+
+  - name: extends
+    type: list<string>
+    required: true
+    allowed: [data.tables.base]
+    unique: true
+    semantics: 契约层继承基类 5 列；生成器把基类列展开到物理表
+    generates: expand_base_columns
+    ai_mistake: 不是 PostgreSQL INHERITS、外键或组合；不要写其他表
+
+  - name: do_not
+    type: list<string>
+    required: false
+    semantics: 实例级负向约束；每条必须含本表的具体标识
+    generates: AI 反例索引
+    ai_mistake: 不要把通用规则复制到这里（通用规则在 _types.yaml）
+
+  - name: table
+    type: object
+    required: true
+    semantics: 物理表元数据
+    generates: DDL 表名、注释、保留期、分区
+    ai_mistake: 不是契约 ID；物理表名可复数
+    fields:
+      - name: name
+        type: string
+        required: false
+        pattern: '^[a-z][a-z0-9_]*$'
+        semantics: 物理表名；默认等于文件段，复数表显式覆盖
+        generates: DDL 表名、SQL FROM 目标
+        ai_mistake: 不是契约 ID；不要默认写 accounts
+      - name: comment
+        type: string
+        required: true
+        semantics: 写入 PostgreSQL COMMENT
+        generates: DDL COMMENT
+        ai_mistake: 不要和 summary 重复
+      - name: size_class
+        type: string
+        required: true
+        enum: [small, large]
+        semantics: 表量级；large 决定索引默认 CONCURRENTLY
+        generates: index_concurrently_policy
+        ai_mistake: 不是性能承诺；不要按当前数据量随意写
+      - name: retention
+        type: object
+        required: false
+        semantics: 数据保留与清理策略；cleanup 任务的唯一来源
+        generates: cleanup_job_policy
+        ai_mistake: 不是数据库 TTL
+        fields:
+          - { name: pending_days, type: integer, required: false }
+          - { name: soft_delete_days, type: integer, required: false }
+          - { name: hard_delete_days, type: integer, required: false }
+          - { name: expired_days, type: integer, required: false }
+      - name: partition
+        type: object
+        required: false
+        semantics: 分区策略；替代 ddl_ext
+        generates: DDL PARTITION BY
+        ai_mistake: 不要用原生 SQL 字段
+        fields:
+          - { name: strategy, type: string, required: true, enum: [range, list, hash] }
+          - { name: columns, type: list<string>, required: true }
+          - { name: interval, type: string, required: false }
+
+  - name: columns
+    type: list<object>
+    required: true
+    semantics: 物理列；基类列不重复声明
+    generates: DDL 列、sqlc 输入、Go 类型
+    ai_mistake: 不要声明 id/created_at/updated_at/deleted_at；status 可覆盖为枚举
+    item_fields:
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$' }
+      - { name: type, type: string, required: true }
+      - { name: nullable, type: boolean, required: false }
+      - { name: primary_key, type: boolean, required: false }
+      - { name: generated_by, type: string, required: false, enum: [application, database] }
+      - { name: default, type: any, required: false }
+      - { name: default_sql, type: string, required: false }
+      - { name: min_length, type: integer, required: false }
+      - { name: max_length, type: integer, required: false }
+      - { name: length_hint, type: integer, required: false }
+      - { name: min, type: number, required: false }
+      - { name: max, type: number, required: false }
+      - { name: pattern, type: string, required: false }
+      - { name: normalize, type: string, required: false, enum: [lower, upper] }
+      - { name: pii, type: boolean, required: false }
+      - { name: never_expose, type: boolean, required: false }
+      - { name: managed_by, type: string, required: false, enum: [application, database] }
+      - { name: comment, type: string, required: false }
+
+  - name: constraints
+    type: list<object>
+    required: false
+    semantics: 数据库能表达的 DDL 约束
+    generates: DDL CHECK/FK/UNIQUE/EXCLUDE
+    ai_mistake: 业务不变量不要写在这里；去 entities.validation 或 business.rules
+    item_fields:
+      - { name: name, type: string, required: true, pattern: '^(ck|fk|uq|ex)_[a-z][a-z0-9_]*$' }
+      - { name: type, type: string, required: true, enum: [check, unique, foreign_key, enum, exclude] }
+      - { name: expr, type: string, required: false }
+      - { name: column, type: string, required: false }
+      - { name: enum, type: string, required: false }
+      - { name: columns, type: list<string>, required: false }
+      - { name: references, type: string, required: false }
+      - { name: on_delete, type: string, required: false, enum: [cascade, restrict, no_action, set_null, set_default] }
+      - { name: on_update, type: string, required: false, enum: [cascade, restrict, no_action, set_null, set_default] }
+
+  - name: indexes
+    type: list<object>
+    required: false
+    semantics: 索引；每条必须有 reason
+    generates: DDL INDEX
+    ai_mistake: 不要写无理由索引；唯一索引必须带软删过滤
+    item_fields:
+      - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$' }
+      - { name: columns, type: list<string>, required: false }
+      - { name: expression, type: string, required: false }
+      - { name: unique, type: boolean, required: false }
+      - { name: where, type: string, required: false }
+      - { name: order, type: list<string>, required: false }
+      - { name: reason, type: string, required: true }
+      - { name: method, type: string, required: false, enum: [btree, hash, gin, gist, brin] }
+      - { name: concurrently, type: string, required: false, enum: [auto, "true", "false"] }
+      - { name: include, type: list<string>, required: false }
+
+  - name: used_by
+    type: object
+    required: true
+    generated: true
+    write: forbidden
+    semantics: 反向索引；只记直接入边
+    generates: used_by / generated/inbound.yaml
+    ai_mistake: 禁止手改；不是业务字段
+    fields:
+      - { name: entities, type: list<string>, required: true, unique: true }
+      - { name: queries, type: list<string>, required: true, unique: true }
+      - { name: capabilities, type: list<string>, required: true, unique: true }
+
+rules:
+  - { id: base-only, text: "extends 只能是 [data.tables.base]" }
+  - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 可覆盖" }
+  - { id: status-enum, text: "物理表必须声明 status，且 status 列必须引用 data.enums.*" }
+  - { id: default-vs-default-sql, text: "default 与 default_sql 互斥" }
+  - { id: column-type, text: "列类型只能是 column_types.builtin 或 column_types.refs 声明的类型" }
+  - { id: unique-soft-delete, text: "唯一索引必须带 WHERE deleted_at IS NULL" }
+  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，contract-check 校验它等于实际入边" }
+  - { id: id-from-file, text: "id 必须等于 data.tables.<file stem>；_base.yaml 例外为 data.tables.base" }
+  - { id: unique-names, text: "列 / 约束 / 索引名在同一表内唯一" }
+  - { id: physical-name-unique, text: "物理表名全局唯一" }
+  - { id: retention-positive, text: "table.retention 的值必须是 >= 1 的整数" }

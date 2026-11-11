@@ -7,6 +7,9 @@ pre-commit:
     govet:
       glob: "apps/api/**/*.go"
       run: cd apps/api && go vet ./...
+    contracts:
+      glob: "contracts/**/*.yaml"
+      run: make contract-check
     docs:
       glob: "docs/**/*.md"
       run: ./scripts/check-docs.sh

@@ -75,6 +75,10 @@ contracts/
 ├── README.md                 # 本文件：规范正文
 ├── index.yaml                # 契约地图：所有条目的 ID / 路径 / 消费者 / 强度
 ├── _types.yaml               # 每类契约的默认元数据（enforcement / consumers / 通用 do_not）
+├── _meta/                    # 契约元规范（非业务契约，不登记 index）
+│   ├── README.md             #   AI 入口：写前读什么、写后跑什么
+│   ├── schema/               #   字段字典 + 生成规则 + AI 易错点（单一源）
+│   └── templates/            #   contract-new 骨架
 ├── project.yaml              # 项目元信息 + 应用组合（derive 的唯一输入）
 │
 ├── data/                     # ① 数据契约（不感知业务）
@@ -270,6 +274,8 @@ business.states.account ─subject→ data.entities.account ─table→ data.tab
 `index.yaml` 中的 `path` **相对 `contracts/` 目录**，例如 `data/tables/account.yaml`。
 生成器与校验器统一按此规则拼接，避免仓库绝对路径进入契约。
 
+`_meta/` 是契约工具链（schema / templates / scripts），不登记 `index.yaml`；`generated/` 只放产物，也不登记为业务契约。
+
 ### 4.1 文件结构（三层）
 
 | 层 | 位置 | 内容 |
@@ -383,12 +389,18 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 ```
 1. 读 docs/index.md                 获取地图
 2. 读对应 playbook                  获取本任务必读契约 ID 列表
-3. 读 index.yaml 相关条目           只看 summary，不读正文
-4. 读 2–5 个契约文件                含 do_not / examples
-5. 契约不足 → 先改契约，再实现       禁止"先写代码后补契约"
-6. make gen && make verify          生成 + 锚点图 + 测试
-7. PR 附 make contract-impact 报告
+3. 写/改契约时读 _meta/README.md    字段语义、生成行为、易错点
+   并读 _meta/schema/<type>.yaml
+4. 读 index.yaml 相关条目           只看 summary，不读正文
+5. 读 2–5 个契约文件                含 do_not / examples
+6. 新建契约：make contract-new ...  生成骨架，替换占位符
+7. 改完契约：make contract-check    结构 / ID / used_by
+8. make gen && make verify          生成 + 锚点图 + 测试
+9. PR 附 make contract-impact 报告
 ```
+
+契约不足 → 先改契约，再实现；禁止"先写代码后补契约"。
+`make gen` 是契约 → 产物，不是生成契约；新建契约用 `make contract-new`。
 
 ### 5.1 读取预算
 
@@ -420,7 +432,7 @@ AI 对负向约束的敏感度高于正向描述。
 每次发现 AI 写错（绕过 API 直接查表、手写状态判断、改生成物、用未登记错误码），必须做且只做其中一件：
 
 1. 在对应契约的 `do_not` 加一条
-2. 或新增一条能失败的测试断言
+2. 或新增一条能失败的测试断言 / `contract-check` 规则
 
 并在 PR 描述里注明"本次沉淀了哪条约束"。
 
@@ -467,12 +479,13 @@ data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 
 ## 8. 当前状态
 
-P2：目录与最小示例已落盘，生成器待实现。
+P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器待实现。
 
-- **data**：`tables/_base` + `accounts` / `tokens` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{accounts,auth}`、`storage`、`_policy`
+- **_meta**：`schema/{data.tables,data.enums}` + `templates/*` + `make contract-new` + `make contract-check`（试点；其余类型待补）
+- **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{account,auth}`、`storage`、`_policy`
 - **capabilities**：`http/{shared,account,auth}`、`async/account_cleanup`、`services/{account,auth}`（其余模块待建）
 - **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件
 
-> P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。
+> P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`contract-check` 目前只覆盖 data.tables / data.enums / used_by，`gen` 与其余类型 schema 待补。`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。
 
 `_types.yaml` 是类型默认值，不是实例契约，不登记在 `index.yaml`。

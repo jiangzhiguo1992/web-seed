@@ -39,3 +39,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./scripts/check-docs.sh
+
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+      - run: make contract-check

@@ -10,7 +10,7 @@
 |---|---|---|---|
 | `http/<module>.yaml` | HTTP 请求 | OpenAPI 3.1 片段 | Go server 类型、TS client、组合后的完整 spec |
 | `async/<job>.yaml` | 定时 / 消息 / webhook | 自定义 YAML | job 注册、消费者骨架、重试与死信策略 |
-| `internal/<module>.yaml` | 进程内跨模块调用 | 自定义 YAML | Go interface、mock、实现断言 |
+| `services/<module>.yaml` | 进程内跨模块调用 | 自定义 YAML | Go interface、mock、实现断言 |
 
 模块内部私有函数**不进契约**——Go 编译器已能完全约束。
 
@@ -18,7 +18,7 @@
 
 capabilities 是 business 的实现，**契约里不出现 `business.*`**：
 
-- 返回类型用 `data.tables.*.row`，不用 `data.entities.*`
+- 返回类型用 `data.entities.*`，不用 `data.tables.*.row`
 - 事件由 `business/events` 的 `emitted_by` 声明
 - 规则由 `business/rules` 的 `implemented_by` 声明
 
@@ -46,7 +46,7 @@ contracts/capabilities/http/
 | `x-idempotent` | 是否幂等，配合 `Idempotency-Key` | 重试可能重复写入 |
 | `x-timeout-ms` | 服务端处理超时 | 使用全局默认 |
 | `x-rate-limit` | 限流策略 | 无限流 |
-| `x-preconditions` | 前置条件，引用 `business.rules.*` | 条件散落在代码里 |
+| `x-preconditions` | 前置条件，引用 `platform.security.permissions.*` | 条件散落在代码里 |
 | `x-side-effects` | 副作用（发事件、写审计） | AI 不知道会触发什么 |
 | `x-audit` | 是否写审计日志 | 漏审计 |
 
@@ -69,7 +69,7 @@ retry:      { max_attempts, backoff, dead_letter }
 
 缺任一项即校验失败——这是定时任务和消费者最容易漂移的地方。
 
-## 4. internal：跨模块 service
+## 4. services：跨模块 service
 
 只登记**跨模块调用**的方法。声明方法名、入参、返回、错误、事务语义，生成 Go interface 与 mock。
 模块内部方法不进契约。

@@ -21,6 +21,9 @@ types:
     enforcement: generated+tested
     consumers: [api]
     generates: [schema_sql, migrations, sqlc]
+    schema: _meta/schema/data.tables.yaml
+    template: _meta/templates/data.tables.yaml
+    check: make contract-check
     do_not:
       - 不要手写 migrations，改本文件后运行 make gen-db
       - "物理表必须 extends: [data.tables.base]，不得重复声明基类 5 列"
@@ -28,7 +31,7 @@ types:
       - 唯一约束必须带 WHERE deleted_at IS NULL
       - 不要用未结构化字段塞原生 DDL；分区用 table.partition，表达式索引用 indexes[].expression
       - used_by 是生成物，禁止手改
-      - 只有 owner_module 对应的 cap.services 可以写表
+      - 只有 owner_module 对应的 cap.services/cap.async 可以写表
       - never_expose 列禁止进入普通 OpenAPI/TS/事件/普通 entity；认证 query 与 x-auth-response 是唯一例外
 
   data.queries:
@@ -57,6 +60,9 @@ types:
     enforcement: generated
     consumers: [api, web/admin, worker]
     generates: [go_constants, ts_union, db_check]
+    schema: _meta/schema/data.enums.yaml
+    template: _meta/templates/data.enums.item.yaml
+    check: make contract-check
     do_not:
       - 枚举值只能追加，禁止改名或删除
       - 每个枚举项必须有显式 id：data.enums.<name>

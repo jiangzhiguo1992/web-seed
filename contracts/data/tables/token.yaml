@@ -10,7 +10,7 @@ do_not:
   - access_token_hash / refresh_token_hash 禁止出现在普通响应、日志、事件；仅 /auth/login 与 /auth/refresh 的 TokenPair 返回原文一次
   - 数据库只存哈希；禁止存 token 原文；哈希必须使用平台统一的 SHA-256/HMAC
   - 唯一索引必须带 WHERE deleted_at IS NULL
-  - 只有 owner_module 对应的 cap.services 可以写本表，其他模块只能经 service 读
+  - 只有 owner_module 对应的 cap.services/cap.async 可以写本表，其他模块只能经 service 读
   - used_by 由 make gen-graph 生成，禁止手改
 
 table:

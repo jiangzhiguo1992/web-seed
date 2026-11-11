@@ -4,7 +4,7 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-web test-e2e lint lint-api typecheck \
-        gen gen-openapi gen-db gen-graph gen-client contract-graph contract-impact contract-compat db-verify \
+        gen gen-openapi gen-db gen-graph gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
         dev api-dev web-dev compose-up compose-down doctor derive check-docs
 
 help: ## 显示可用目标
@@ -56,6 +56,12 @@ gen-graph: ## refs → generated/{manifest.json,graph.json,lineage.md}（P2）
 gen-client: ## 合并 spec → packages/api-client（P2）
 	@echo "gen-client: 尚未实现（P2）"
 	@exit 1
+
+contract-new: ## 从 _meta 模板生成契约骨架（type=data.tables name=note module=notes）
+	@./scripts/contract/scaffold.sh "$(type)" "$(name)" "$(module)" "$(summary)"
+
+contract-check: ## 校验契约结构与 used_by（试点：data.tables/data.enums）
+	@./scripts/contract/validate.sh
 
 contract-lint: ## 契约 lint：do_not 重复、缺字段、YAML 引号（P2）
 	@echo "contract-lint: 尚未实现（P2）。检查项：do_not 与 _types 重复、缺具体标识、未引号的冒号值"

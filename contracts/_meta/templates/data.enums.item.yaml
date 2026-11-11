@@ -1,0 +1,11 @@
+# 追加到 contracts/data/enums.yaml 的 enums 列表。
+# 使用 make contract-new type=data.enums name=<name> 生成。
+
+- id: data.enums.<name>
+  name: <name>
+  description: <description>
+  db_type: text
+  go_type: <PascalCase>
+  ts_type: <PascalCase>
+  values:
+    - { value: <value>, description: <description> }

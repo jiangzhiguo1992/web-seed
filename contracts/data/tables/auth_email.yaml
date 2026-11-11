@@ -10,7 +10,7 @@ extends: [data.tables.base]
 do_not:
   - (username, domain) 唯一索引必须带 WHERE deleted_at IS NULL
   - domain 必须小写归一后再存储
-  - 只有 owner_module 对应的 cap.services 可以写本表，其他模块只能经 service 读
+  - 只有 owner_module 对应的 cap.services/cap.async 可以写本表，其他模块只能经 service 读
   - used_by 由 make gen-graph 生成，禁止手改
 
 table:

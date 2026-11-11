@@ -9,7 +9,7 @@ targets: [opencode, claude, cursor]
 > 适用：任何对 `contracts/` 的改动。
 > 不适用：只改文档、只改实现（后者本身违规，见文末）。
 >
-> 状态：P2 生成器落地前，`make gen` 会失败；流程本身已生效。
+> 状态：P2 生成器待落地；`make contract-check` 试点可用（data.tables / data.enums / used_by）。
 
 ---
 
@@ -18,6 +18,7 @@ targets: [opencode, claude, cursor]
 1. **契约是唯一真相源**，实现是投影。改行为 = 改契约，不是改代码。
 2. **一个 PR 内闭环**：契约 + 生成物 + 实现 + 测试。禁止"先合契约、实现下个 PR 补"。
 3. **单次最多改 5 个契约文件**。超过说明任务粒度太大，先拆任务。
+4. **写/改前读 `contracts/_meta/README.md` + `_meta/schema/<type>.yaml`**，不要凭字段名猜语义。
 
 ---
 
@@ -30,7 +31,7 @@ grep -n "<关键词>" contracts/index.yaml
 
 或在 `contracts/index.yaml` 中按 `summary` / `id` 检索。
 
-**不要凭记忆写契约 ID 或字段名**——必须打开文件确认。
+**不要凭记忆写契约 ID 或字段名**——必须打开文件确认；字段语义见 `contracts/_meta/schema/<type>.yaml`。
 
 ---
 
@@ -83,6 +84,25 @@ make contract-impact id=<被修改的 ID>
 - 未实现的能力用 `planned:<id>`，落地后替换
 - 新契约文件必须同步 `contracts/index.yaml`
 
+### 3.1 新建骨架
+
+新增表 / 枚举时，先用模板，避免漏字段：
+
+```bash
+make contract-new type=data.tables name=note module=notes summary="备注表"
+make contract-new type=data.enums  name=note_status
+```
+
+生成后替换所有 `<...>` 占位符。模板来源：`contracts/_meta/templates/`。
+
+### 3.2 校验
+
+```bash
+make contract-check
+```
+
+校验结构、ID、`extends`、基类列、约束/索引命名、`used_by` 三列表。不通过不要进入生成。
+
 ---
 
 ## 4. 生成
@@ -122,6 +142,7 @@ make gen-client    # 合并 spec → packages/api-client/src/generated
 ## 6. 跑闸门
 
 ```bash
+make contract-check          # 结构 / ID / used_by
 make contract-graph          # 重复 ID / 悬空 / 越层 / 循环 / 孤儿
 make gen && git diff --exit-code   # 生成物是否同步
 make test-api                # 路由集合比对 + 响应 schema 校验
@@ -171,6 +192,7 @@ PR 描述模板已包含上述清单。
 ## 9. 完成定义（DoD）
 
 - [ ] `make gen` 幂等（连续两次无 diff）
+- [ ] `make contract-check` 通过
 - [ ] `make contract-graph` 通过
 - [ ] 编译通过（Go + TS）
 - [ ] 测试通过（含路由比对、响应 schema）
@@ -193,12 +215,15 @@ PR 描述模板已包含上述清单。
 | 一个 PR 只改契约 | CI 长期红，闸门失效 | 同一 PR 闭环 |
 | 删除契约文件不同步 index | 图校验报孤儿/悬空 | 同步 `index.yaml` |
 | 用 mock 验证契约一致性 | mock 永远符合契约，测不出漂移 | 真实 handler + `httptest` |
+| 凭字段名猜语义（如 `extends`） | 写成 PG `INHERITS` / 外键 / 组合 | 读 `_meta/schema/<type>.yaml` 的 `semantics` / `ai_mistake` |
 
 ---
 
 ## 11. 相关
 
 - 契约规范：[`contracts/README.md`](../../contracts/README.md)
+- 契约工具链：[`contracts/_meta/README.md`](../../contracts/_meta/README.md)
+- 类型 schema：[`contracts/_meta/schema/`](../../contracts/_meta/schema/)
 - 一致性机制：[`docs/guides/architecture.md`](../../docs/guides/architecture.md) 附录 A
 - 数据规范：[`contracts/data/README.md`](../../contracts/data/README.md)
 - 迁移策略：[`contracts/data/_policy.yaml`](../../contracts/data/_policy.yaml)

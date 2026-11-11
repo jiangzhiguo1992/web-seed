@@ -4,7 +4,7 @@
 
 后端 Go · 前端 Vue 3 · 单仓库多应用 · 契约优先。
 
-> 当前进度：**P0 技术验证、P1 仓库骨架、契约层五组重构已完成**；P2 生成器进行中。
+> 当前进度：**P0 技术验证、P1 仓库骨架、契约层五组重构已完成**；P2 契约工具链（`_meta` + `contract-check`）试点完成，生成器进行中。
 > 完整设计与实施清单见 [`docs/guides/architecture.md`](docs/guides/architecture.md)，AI 入口见 [`docs/index.md`](docs/index.md)。
 
 ---
@@ -51,6 +51,7 @@ web-seed/
 ├── contracts/                   [C] 契约层：唯一真相源
 │   ├── README.md                #   契约规范：原则、ID、分层、拆分、工作流
 │   ├── index.yaml               #   契约地图（AI 唯一入口，只放摘要）
+│   ├── _meta/                   #   契约工具链：schema / templates / contract-check
 │   ├── project.yaml             #   项目元信息（derive 唯一输入）
 │   ├── data/                    #   ① 数据：tables（真相源）/ entities / queries / _policy
 │   ├── capabilities/            #   ② 实现层：http / async / services / flows
@@ -179,6 +180,8 @@ make build-web        # apps/web/admin/dist
 | `make test` | 运行测试（P1 仅 Go） |
 | `make gen` | 重新生成全部契约产物（P2 实现，当前会失败） |
 | `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 分项生成（P2） |
+| `make contract-new type=data.tables name=note` | 从 `_meta/templates` 生成契约骨架 |
+| `make contract-check` | 校验契约结构、ID、`used_by`（data.tables / data.enums 试点） |
 | `make contract-graph` | 锚点图校验（P2） |
 | `make contract-impact id=<id>` | 影响面分析（P2） |
 | `make contract-compat` | 破坏性变更检测（P5） |
@@ -196,11 +199,14 @@ make build-web        # apps/web/admin/dist
 
 ```
 1. 读 contracts/index.yaml 定位相关契约（只看摘要）
-2. 改契约（2-5 个文件）
-3. make gen        # 生成类型 / DDL / 常量 / 图
-4. 修复编译错误（类型由契约生成）
-5. 跑闸门：锚点图 / 路由比对 / 响应校验 / oasdiff
-6. 同一个 PR 内提交：契约 + 生成物 + 实现 + 测试
+2. 写/改前读 contracts/_meta/README.md + _meta/schema/<type>.yaml
+3. 新建契约：make contract-new ...（生成骨架，替换占位符）
+4. 改契约（2-5 个文件）
+5. make contract-check  # 结构 / ID / used_by
+6. make gen             # 生成类型 / DDL / 常量 / 图
+7. 修复编译错误（类型由契约生成）
+8. 跑闸门：锚点图 / 路由比对 / 响应校验 / oasdiff
+9. 同一个 PR 内提交：契约 + 生成物 + 实现 + 测试
 ```
 
 硬规则：
@@ -210,7 +216,7 @@ make build-web        # apps/web/admin/dist
 - 禁止手改 `generated/`
 - 禁止绕过 `packages/api-client` 直连 `fetch`
 - 禁止在 `features` 契约里直接引用 `data.*`（页面必须走 capability）
-- CI 必须 `make gen && git diff --exit-code` + `make contract-graph`
+- CI 必须 `make gen && git diff --exit-code` + `make contract-check` + `make contract-graph`
 
 当前已可用的闸门见 `docs/guides/architecture.md` 附录 A。
 
