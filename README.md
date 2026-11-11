@@ -51,7 +51,7 @@ web-seed/
 ├── contracts/                   [C] 契约层：唯一真相源
 │   ├── README.md                #   契约规范：原则、ID、分层、拆分、工作流
 │   ├── index.yaml               #   契约地图（AI 唯一入口，只放摘要）
-│   ├── _meta/                   #   契约字段规范：data.tables / data.enums
+│   ├── _meta/                   #   契约字段规范 + 类型默认值（data.tables / data.enums / _types）
 │   ├── project.yaml             #   项目元信息（derive 唯一输入）
 │   ├── data/                    #   ① 数据：tables（真相源）/ entities / queries / _policy
 │   ├── capabilities/            #   ② 实现层：http / async / services / flows

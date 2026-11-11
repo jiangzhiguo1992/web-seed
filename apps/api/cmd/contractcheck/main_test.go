@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -42,6 +43,36 @@ func TestIsColumnType(t *testing.T) {
 		if got := isColumnType(tc.in, ct, refPrefixes); got != tc.want {
 			t.Errorf("isColumnType(%q) = %v, want %v", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestCheckStability(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "x.yaml"), []byte("# TODO\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: dir}
+	c.checkStability(map[string]any{"stability": "stable"}, "x.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "stable contract contains TODO") {
+		t.Fatalf("stable TODO not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkStability(map[string]any{"stability": "deprecated"}, "x.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "deprecated contract requires deprecation block") {
+		t.Fatalf("missing deprecation not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkStability(map[string]any{
+		"stability": "deprecated",
+		"deprecation": map[string]any{
+			"reason":      "replaced",
+			"replacement": "data.tables.y",
+		},
+	}, "x.yaml")
+	if len(c.errs) != 0 {
+		t.Fatalf("valid deprecation reported: %v", c.errs)
 	}
 }
 

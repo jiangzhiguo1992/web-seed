@@ -74,16 +74,16 @@
 contracts/
 ├── README.md                 # 本文件：规范正文
 ├── index.yaml                # 契约地图：所有条目的 ID / 路径 / 消费者 / 强度
-├── _types.yaml               # 每类契约的默认元数据（enforcement / consumers / 通用 do_not）
 ├── _meta/                    # 契约元规范（非业务契约，不登记 index）
 │   ├── README.md             #   AI 入口：写前读什么、写后跑什么
+│   ├── _types.yaml           #   每类契约的默认元数据（enforcement / consumers / 通用 do_not）
 │   ├── data.tables.yaml      #   字段树 + 值域 + 说明（单一源）
 │   └── data.enums.yaml       #   同上
 ├── project.yaml              # 项目元信息 + 应用组合（derive 的唯一输入）
 │
 ├── data/                     # ① 数据契约（不感知业务）
 │   ├── tables/_base.yaml     #   表结构基类：id/status/时间戳（不生成 DDL、不建实体）
-│   ├── tables/<file>.yaml     #   物理表结构（文件名单数；物理表名可复数）
+│   ├── tables/<file>.yaml     #   物理表结构（文件名决定 ID，物理表名可独立覆盖）
 │   ├── entities/<entity>.yaml#   逻辑数据实体：身份、字段、关系、validation
 │   ├── queries/<module>.yaml #   查询契约（SQL 是契约字段，.sql 是产物）
 │   ├── enums.yaml            #   跨端枚举集合（data.enums + data.enums.<name>）
@@ -280,8 +280,8 @@ business.states.account ─subject→ data.entities.account ─table→ data.tab
 
 | 层 | 位置 | 内容 |
 |---|---|---|
-| 类型默认值 | `_types.yaml` | 每类契约的 `enforcement` / `consumers` / `generates` / 通用 `do_not` |
-| 实例元数据 | 文件正文 | `id` / `summary` / `stability` / 实例级 `do_not` |
+| 类型默认值 | `_meta/_types.yaml` | 每类契约的 `enforcement` / `consumers` / `generates` / 通用 `do_not` |
+| 实例元数据 | 文件正文 | `id` / `summary` / `stability` / 可选 `review` / 可选 `deprecation` / 实例级 `do_not` |
 | 人类注释 | 文件第一行 | 一句 `# <用途>`，不承载机器信息 |
 
 ```yaml
@@ -290,17 +290,18 @@ business.states.account ─subject→ data.entities.account ─table→ data.tab
 id: data.tables.account
 summary: 账号主表
 stability: stable
-do_not:                        # 只写实例级；通用约束见 _types.yaml
+do_not:                        # 只写实例级；通用约束见 _meta/_types.yaml
   - number 唯一索引必须带 WHERE deleted_at IS NULL
 
 table:
-  name: accounts                 # 物理表名；默认等于文件段，复数表显式覆盖
+  name: accounts                 # 物理表名；默认等于文件段，需要不同名时显式覆盖
   ...
 ```
 
-- 契约文件名用**单数**（`tables/account.yaml` → `data.tables.account`）；物理表名默认等于文件段，复数表用 `table.name` 覆盖
-- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` / `data.tables.base` 按完整 ID 匹配 `_types.yaml`），文件无需声明 `type`
-- 生效元数据 = `_types.yaml` + 文件字段覆盖
+- 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖
+- `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 前必须替换 TODO 并跑 `make contract-check`；`deprecated` 必须写 `deprecation` 块
+- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` / `data.tables.base` 按完整 ID 匹配 `_meta/_types.yaml`），文件无需声明 `type`
+- 生效元数据 = `_meta/_types.yaml` + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移
 - **不写 `refs`**：依赖关系由图校验器从 `ref` / `capability` / `use` / `emits` / `column` / `target` 等结构化字段自动推导
 
@@ -333,7 +334,7 @@ table:
 - **1 个正例**：合法输入 + 期望输出
 - **1 个反例**：最容易被 AI 写错的用法
 
-没有示例的契约视为不完整——AI 会自行编造"合理但错误"的用法。反例写 `do_not`（实例级）或 `_types.yaml`（通用）。
+没有示例的契约视为不完整——AI 会自行编造"合理但错误"的用法。反例写 `do_not`（实例级）或 `_meta/_types.yaml`（通用）。
 
 ### 4.5 约束写在哪里
 
@@ -341,7 +342,7 @@ table:
 
 | 层 | 位置 | 例子 | 维护 |
 |---|---|---|---|
-| **类型级** | `_types.yaml` | "所有表不要手写 migrations" | 一处定义，全类继承 |
+| **类型级** | `_meta/_types.yaml` | "所有表不要手写 migrations" | 一处定义，全类继承 |
 | **组级** | `<group>/README.md` | "business 不引用 data"、"实体在 data 层" | 手写，稳定 |
 | **实例级** | 契约正文 `do_not` | "status 只能引用枚举"、"游标分页要有 tiebreaker" | 就近，每个文件 1–3 条 |
 | **全局** | `index.yaml` 的 `global_notes` | "错误响应由生成器注入" | 跨文件坑，极少 |
@@ -363,10 +364,10 @@ table:
 |---|---|
 | `status 只能引用 data.enums.account_status` | ✅ 含字段名，实例级 |
 | `游标分页必须有唯一 tiebreaker（created_at, id）` | ✅ 含字段名，实例级 |
-| `不要手写 migrations` | ❌ 所有表都适用 → 上移 `_types.yaml` |
+| `不要手写 migrations` | ❌ 所有表都适用 → 上移 `_meta/_types.yaml` |
 | `不要绕过软删过滤` | ❌ 所有软删表都适用 → 上移 |
 
-**同一句话只能出现一次**：在 `_types.yaml` 或某个契约文件里，不能两处都有。
+**同一句话只能出现一次**：在 `_meta/_types.yaml` 或某个契约文件里，不能两处都有。
 `make contract-lint` 会检查重复并报告。
 
 ### 4.6 人读视图自动生成
@@ -488,4 +489,4 @@ P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器�
 
 > P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`contract-check` 目前只覆盖 data.tables / data.enums / used_by，`gen` 与其余类型 schema 待补。`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。
 
-`_types.yaml` 是类型默认值，不是实例契约，不登记在 `index.yaml`。
+`_meta/_types.yaml` 是类型默认值，不是实例契约，不登记在 `index.yaml`。

@@ -64,7 +64,7 @@ contract-check: ## 校验契约结构与 used_by（试点：data.tables/data.enu
 	@./scripts/contract/validate.sh
 
 contract-lint: ## 契约 lint：do_not 重复、缺字段、YAML 引号（P2）
-	@echo "contract-lint: 尚未实现（P2）。检查项：do_not 与 _types 重复、缺具体标识、未引号的冒号值"
+	@echo "contract-lint: 尚未实现（P2）。检查项：do_not 与 _meta/_types.yaml 重复、缺具体标识、未引号的冒号值"
 	@exit 1
 
 contract-graph: ## 锚点图校验：重复/悬空/越层/循环/孤儿（P2）

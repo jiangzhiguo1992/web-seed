@@ -147,7 +147,7 @@ global_notes:
   - data.entities 的字段名与表列名可能不同，映射在 cap.services.persistence.field_map
   - 领域事件由 business/events 的 emitted_by 声明，capabilities 不写 emits
   - capabilities 契约不引用 business.*（cap.flows 仅允许引用 business.states/rules/events 做编排）
-  - 通用约束在 _types.yaml，组规则在 <group>/README.md，实例约束在正文 do_not
+  - 通用约束在 _meta/_types.yaml，组规则在 <group>/README.md，实例约束在正文 do_not
 
 # 白名单：允许没有入边的根契约
 orphan_whitelist:

@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -111,6 +112,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	if s, ok := doc["summary"].(string); ok && s == "" {
 		c.errf("%s: summary must not be empty", rel)
 	}
+	c.checkStability(doc, rel)
 	stem := strings.TrimSuffix(filepath.Base(rel), ".yaml")
 	if want := "data.tables." + stem; id != want {
 		c.errf("%s: id must be %s, got %s (file name is the source)", rel, want, id)
@@ -169,11 +171,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if _, ok := m["default"]; ok {
 			if _, ok2 := m["default_sql"]; ok2 {
 				c.errf("%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, name)
-			}
-		}
-		if a, ok := toFloat(m["min"]); ok {
-			if b, ok2 := toFloat(m["max"]); ok2 && a > b {
-				c.errf("%s: columns[%d] (%s): min > max", rel, i, name)
 			}
 		}
 		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes, schema.ColumnRefs.Prefixes) {
@@ -303,6 +300,40 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	}
 }
 
+func (c *Checker) checkStability(doc map[string]any, rel string) {
+	stability, _ := doc["stability"].(string)
+	if stability != "stable" && doc["review"] != nil {
+		c.errf("%s: review is only allowed when stability is stable", rel)
+	}
+	if stability != "deprecated" && doc["deprecation"] != nil {
+		c.errf("%s: deprecation is only allowed when stability is deprecated", rel)
+	}
+	switch stability {
+	case "stable":
+		b, err := os.ReadFile(filepath.Join(c.root, rel))
+		if err != nil {
+			return
+		}
+		for _, marker := range []string{"TODO", "FIXME"} {
+			if strings.Contains(string(b), marker) {
+				c.errf("%s: stable contract contains %s placeholder", rel, marker)
+			}
+		}
+	case "deprecated":
+		dep, ok := asMap(doc["deprecation"])
+		if !ok {
+			c.errf("%s: deprecated contract requires deprecation block", rel)
+			return
+		}
+		if !hasNonEmptyString(dep, "reason") {
+			c.errf("%s: deprecation.reason must not be empty", rel)
+		}
+		if !hasNonEmptyString(dep, "replacement") && !hasNonEmptyString(dep, "remove_after") {
+			c.errf("%s: deprecation requires replacement or remove_after", rel)
+		}
+	}
+}
+
 // commonColumnFields 从 schema 的 columns.item_fields 派生通用列字段。
 // 类型族扩展字段由 value_type_families.params 注入，必须排除，避免把
 // “只属于某个族”的字段误认为所有列都可写。
@@ -383,10 +414,17 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 				c.errf("%s: columns[%d] (%s): min_len > max_len", rel, i, name)
 			}
 		}
-	case "decimal":
-		if p, ok := toInt(m["precision"]); ok {
-			if s, ok2 := toInt(m["scale"]); ok2 && s > p {
-				c.errf("%s: columns[%d] (%s): scale > precision", rel, i, name)
+	case "integer", "float", "decimal":
+		if a, ok := toFloat(m["min"]); ok {
+			if b, ok2 := toFloat(m["max"]); ok2 && a > b {
+				c.errf("%s: columns[%d] (%s): min > max", rel, i, name)
+			}
+		}
+		if t == "decimal" {
+			if p, ok := toInt(m["precision"]); ok {
+				if s, ok2 := toInt(m["scale"]); ok2 && s > p {
+					c.errf("%s: columns[%d] (%s): scale > precision", rel, i, name)
+				}
 			}
 		}
 	}

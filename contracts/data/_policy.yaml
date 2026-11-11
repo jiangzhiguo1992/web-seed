@@ -9,7 +9,7 @@ naming:
   migration:
     pattern: "<utc_timestamp>_<snake_case_name>.sql"
     example: "20261111T093000_add_token_table.sql"
-  table: "契约文件名/ID 用单数 snake_case（data.tables.account）；物理表名默认等于文件段，复数表用 table.name 覆盖（accounts）"
+  table: "契约文件名/ID 用 snake_case（data.tables.account）；物理表名默认等于文件段，需要不同名时用 table.name 覆盖（accounts）"
   index: "idx_<table>_<cols>；唯一 uq_<table>_<cols>"
   constraint: "fk_<table>_<ref> / ck_<table>_<rule> / uq_<table>_<cols>"
   query: "snake_case；每个 query 必须有显式 id data.queries.<module>.<query_id>"

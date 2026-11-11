@@ -13,7 +13,7 @@ targets:
   dir: contracts/data/tables
   glob: "*.yaml"
   id: "data.tables.<file>"
-  naming: "文件名单数 snake_case；物理表名默认同名，复数表用 table.name 覆盖"
+  naming: "文件名 snake_case"
   exception: "_base.yaml 的 ID 为 data.tables.base"
 
 column_refs:
@@ -26,6 +26,8 @@ column_types:
         min_len: { type: integer, required: false, min: 0 }
         max_len: { type: integer, required: false, min: 0 }
         fixed: { type: boolean, required: false, default: false }
+        pattern: { type: string, required: false }
+        normalize: { type: string, required: false, enum: [lower, upper] }
     boolean:
       description: 布尔值；覆盖 bool / tinyint(1)
       params: {}
@@ -34,15 +36,21 @@ column_types:
       params:
         bits: { type: integer, required: false, enum: [8, 16, 32, 64], default: 64 }
         unsigned: { type: boolean, required: false, default: false }
+        min: { type: integer, required: false }
+        max: { type: integer, required: false }
     float:
       description: 浮点数；覆盖 real / double
       params:
         bits: { type: integer, required: false, enum: [32, 64], default: 64 }
+        min: { type: float, required: false }
+        max: { type: float, required: false }
     decimal:
       description: 精确小数；覆盖 decimal / numeric
       params:
         precision: { type: integer, required: true, min: 1, examples: [19] }
         scale: { type: integer, required: false, default: 0, min: 0 }
+        min: { type: decimal, required: false }
+        max: { type: decimal, required: false }
     datetime:
       description: 日期/时间；覆盖 date / time / datetime
       params:
@@ -77,9 +85,9 @@ fields:
     type: string
     required: true
     pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
-    description: 由文件路径派生；文件名单数
+    description: 由文件路径派生
     generates: 契约 ID、图节点
-    caution: 不要写 data.table.*；不要用物理表名复数当文件名
+    caution: 不要写 data.table.*
 
   - name: summary
     type: string
@@ -93,9 +101,26 @@ fields:
     required: true
     enum: [stable, draft, deprecated]
     default: draft
-    description: 契约稳定度
+    description: 契约稳定度；stable 必须通过 contract-check 且无 TODO
     generates: index 摘要
-    caution: 不要自定义取值
+    caution: 只能是 stable/draft/deprecated；状态流转由 review + PR 控制
+
+  - name: review
+    type: object
+    required: false
+    description: stable 契约的评审记录；draft 不写
+    fields:
+      - { name: by, type: string, required: true, description: 评审人/角色 }
+      - { name: at, type: string, required: true, pattern: '^\d{4}-\d{2}-\d{2}$', description: 评审日期 YYYY-MM-DD }
+
+  - name: deprecation
+    type: object
+    required: false
+    description: deprecated 契约的替代与移除计划
+    fields:
+      - { name: reason, type: string, required: true, description: 废弃原因 }
+      - { name: replacement, type: string, required: false, description: 替代契约 ID }
+      - { name: remove_after, type: string, required: false, pattern: '^\d{4}-\d{2}-\d{2}$', description: 最早移除日期 }
 
   - name: kind
     type: string
@@ -128,26 +153,26 @@ fields:
     required: false
     description: 实例级负向约束；每条必须含本表的具体标识
     generates: AI 反例索引
-    caution: 不要把通用规则复制到这里（通用规则在 _types.yaml）
+    caution: 不要把通用规则复制到这里（通用规则在 contracts/_meta/_types.yaml）
 
   - name: table
     type: object
     required: true
     description: 物理表元数据
     generates: DDL 表名、注释、保留期、分区
-    caution: 不是契约 ID；物理表名可复数
+    caution: 不是契约 ID
     fields:
       - name: name
         type: string
         required: false
         pattern: '^[a-z][a-z0-9_]*$'
-        description: 物理表名；默认等于文件段，复数表显式覆盖
+        description: 物理表名；默认等于文件段，需要不同名时显式覆盖
         generates: DDL 表名、SQL FROM 目标
-        caution: 不是契约 ID；不要默认写 accounts
+        caution: 不是契约 ID
       - name: comment
         type: string
         required: true
-        description: 写入 PostgreSQL COMMENT
+        description: 写入 PostgreSQL/MYSQL COMMENT
         generates: DDL COMMENT
         caution: 不要和 summary 重复
       - name: size_class
@@ -194,11 +219,7 @@ fields:
       - { name: generated_by, type: string, required: false, enum: [application, database] }
       - { name: default, type: any, required: false }
       - { name: default_sql, type: string, required: false }
-      # 类型族扩展字段（min_len / max_len / fixed / bits / ...）由 column_types.value_type_families.params 注入
-      - { name: min, type: number, required: false }
-      - { name: max, type: number, required: false }
-      - { name: pattern, type: string, required: false }
-      - { name: normalize, type: string, required: false, enum: [lower, upper] }
+      # 类型族扩展字段由 column_types.value_type_families.params 注入
       - { name: pii, type: boolean, required: false }
       - { name: never_expose, type: boolean, required: false }
       - { name: managed_by, type: string, required: false, enum: [application, database] }
@@ -265,3 +286,5 @@ rules:
   - { id: unique-names, text: "列 / 约束 / 索引名在同一表内唯一" }
   - { id: physical-name-unique, text: "物理表名全局唯一" }
   - { id: retention-positive, text: "table.retention 的值必须是 >= 1 的整数" }
+  - { id: stability-stable, text: "stable 前必须替换 TODO/FIXME、跑 contract-check，并用 review 记录评审人/日期" }
+  - { id: stability-deprecated, text: "deprecated 必须写 deprecation.reason，以及 replacement 或 remove_after" }

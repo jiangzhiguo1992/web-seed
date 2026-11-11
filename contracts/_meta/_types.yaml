@@ -21,7 +21,7 @@ types:
     enforcement: generated+tested
     consumers: [api]
     generates: [schema_sql, migrations, sqlc]
-    schema: _meta/data.tables.yaml
+    schema: contracts/_meta/data.tables.yaml
     check: make contract-check
     do_not:
       - 不要手写 migrations，改本文件后运行 make gen-db
@@ -59,7 +59,7 @@ types:
     enforcement: generated
     consumers: [api, web/admin, worker]
     generates: [go_constants, ts_union, db_check]
-    schema: _meta/data.enums.yaml
+    schema: contracts/_meta/data.enums.yaml
     check: make contract-check
     do_not:
       - 枚举值只能追加，禁止改名或删除

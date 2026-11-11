@@ -11,6 +11,7 @@
 ```
 contracts/_meta/
 ├── README.md             # 本文件：AI 入口
+├── _types.yaml            # 每类契约的默认元数据（enforcement / consumers / 通用 do_not）
 ├── data.tables.yaml      # data.tables 的字段树 + 值域 + 说明
 └── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
 
@@ -106,6 +107,23 @@ scripts/contract/
 | `rules` | 跨字段规则的声明式说明 |
 
 **先读 `description` 和 `caution`，不要只按字段名猜。**
+
+### 5.1 `stability` 流转
+
+| 状态 | 进入条件 | 退出条件 |
+|---|---|---|
+| `draft` | 默认；正在编写 | 替换所有 `TODO`/`FIXME`，`make contract-check` 通过，PR 评审通过后改 `stable` |
+| `stable` | 评审通过；建议写 `review: { by, at }` | 加 `deprecation` 块，停止新增引用，按 `remove_after` 移除 |
+| `deprecated` | 有 `deprecation.reason`，且有 `replacement` 或 `remove_after` | 所有入边迁完并删除契约文件 |
+
+状态本身是**评审结果**，不是生成物。`contract-check` 只能校验当前状态是否自洽：
+
+- `stable` 文件不得含 `TODO` / `FIXME`；
+- `deprecated` 必须有 `deprecation` 块；
+- `review` 只允许出现在 `stable`；
+- `deprecation` 只允许出现在 `deprecated`。
+
+状态的**方向**由 PR 评审和 git 历史控制；`contract-check` 不是状态机，不可能从单个 YAML 推断上一版状态。
 
 ---
 
