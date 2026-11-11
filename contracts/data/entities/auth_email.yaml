@@ -15,16 +15,16 @@ do_not:
   - 不要在日志里输出完整邮箱
 
 fields:
-  - { name: id, type: uuid, required: true, mutable: false }
-  - { name: account_id, type: uuid, required: true, mutable: false }
-  - { name: username, type: string, min_length: 1, max_length: 64, required: true }
-  - { name: domain, type: string, min_length: 1, max_length: 190, required: true }
-  - { name: entity, type: string, max_length: 190 }
-  - { name: tld, type: string, max_length: 32 }
+  - { name: id, type: string, max_len: 36, required: true, mutable: false }
+  - { name: account_id, type: string, max_len: 36, required: true, mutable: false }
+  - { name: username, type: string, min_len: 1, max_len: 64, required: true }
+  - { name: domain, type: string, min_len: 1, max_len: 190, required: true }
+  - { name: entity, type: string, max_len: 190 }
+  - { name: tld, type: string, max_len: 32 }
   - { name: status, type: data.enums.auth_status, required: true }
-  - { name: created_at, type: datetime, required: true, mutable: false }
-  - { name: updated_at, type: datetime, required: true, mutable: false }
-  - { name: deleted_at, type: datetime, mutable: false }
+  - { name: created_at, type: timestamp, required: true, mutable: false }
+  - { name: updated_at, type: timestamp, required: true, mutable: false }
+  - { name: deleted_at, type: timestamp, mutable: false }
 
 relations:
   - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.auth_email.col.account_id }

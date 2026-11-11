@@ -8,16 +8,30 @@ import (
 
 func TestIsColumnType(t *testing.T) {
 	ct := ColumnTypes{
-		Builtin: []string{"text", "uuid"},
-		Refs:    []string{"data.enums.", "data.tables."},
+		ValueTypeFamilies: map[string]ValueTypeFamily{
+			"string": {}, "timestamp": {}, "integer": {}, "datetime": {}, "decimal": {}, "float": {},
+		},
+		RefPrefixes: []string{"data.enums.", "data.tables."},
 	}
 	cases := []struct {
 		in   string
 		want bool
 	}{
-		{"text", true},
-		{"uuid", true},
-		{"timestamp", false},
+		{"string", true},
+		{"uuid", false},
+		{"varchar", false},
+		{"timestamp", true},
+		{"datetime", true},
+		{"decimal", true},
+		{"float", true},
+		{"date", false},
+		{"time", false},
+		{"text", false},
+		{"timestamptz", false},
+		{"integer", true},
+		{"int", false},
+		{"int32", false},
+		{"double", false},
 		{"data.enums.account_status", true},
 		{"data.enums.", false},
 		{"data.tables.account.col.id", true},
@@ -28,6 +42,44 @@ func TestIsColumnType(t *testing.T) {
 		if got := isColumnType(tc.in, ct); got != tc.want {
 			t.Errorf("isColumnType(%q) = %v, want %v", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestFamilyParams(t *testing.T) {
+	schema := &Schema{ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
+		"decimal": {Params: map[string]Field{
+			"precision": {Type: "integer", Required: true, Min: 1},
+			"scale":     {Type: "integer", Min: 0},
+		}},
+		"string": {Params: map[string]Field{
+			"min_len": {Type: "integer", Min: 0},
+			"max_len": {Type: "integer", Min: 0},
+		}},
+	}}}
+
+	c := &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "amount", "type": "decimal", "scale": 2}, "decimal", "x", 0, "amount", schema)
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, `missing required param "precision"`) {
+		t.Fatalf("missing required family param not reported: %s", errs)
+	}
+
+	c = &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "amount", "type": "decimal", "precision": 19, "scale": 4}, "decimal", "x", 0, "amount", schema)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid decimal params reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "amount", "type": "decimal", "precision": 19, "scale": 4, "min_len": 1}, "decimal", "x", 0, "amount", schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), `param "min_len" not allowed for type decimal`) {
+		t.Fatalf("family-mismatched param not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "nickname", "type": "string", "min_len": 10, "max_len": 2}, "string", "x", 0, "nickname", schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "min_len > max_len") {
+		t.Fatalf("min_len > max_len not reported: %v", c.errs)
 	}
 }
 
@@ -47,8 +99,13 @@ func TestValidateDocRequiredAndUnknown(t *testing.T) {
 func TestTableRulesRejectUnknownColumn(t *testing.T) {
 	schema := &Schema{
 		ColumnTypes: ColumnTypes{
-			Builtin: []string{"text"},
-			Refs:    []string{"data.enums."},
+			ValueTypeFamilies: map[string]ValueTypeFamily{
+				"string": {Params: map[string]Field{
+					"min_len": {Type: "integer", Min: 0},
+					"max_len": {Type: "integer", Min: 0},
+				}},
+			},
+			RefPrefixes: []string{"data.enums."},
 		},
 	}
 	doc := map[string]any{
@@ -58,7 +115,7 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 		"table":        map[string]any{"comment": "x", "size_class": "small"},
 		"columns": []any{
 			map[string]any{"name": "status", "type": "data.enums.x_status"},
-			map[string]any{"name": "name", "type": "text"},
+			map[string]any{"name": "name", "type": "string"},
 		},
 		"constraints": []any{
 			map[string]any{

@@ -101,7 +101,7 @@ func RenderTable(s *Schema, name, module, summary string) ([]byte, error) {
 	}
 	enumName := name + "_status"
 	columnName := firstExample(columnField.ItemFields, "name", "name")
-	columnType := defaultString(columnField.ItemFields, "type", "text")
+	columnType := defaultString(columnField.ItemFields, "type", "string")
 	columnNullable := defaultBool(columnField.ItemFields, "nullable", false)
 	sizeClass := nestedDefaultString(s.Fields, "table", "size_class", "small")
 

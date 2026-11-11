@@ -18,30 +18,31 @@ table:
 
 columns:
   - name: account_id
-    type: uuid
+    type: string
+    max_len: 36
     nullable: false
     comment: 关联账号
 
   - name: code
-    type: text
+    type: string
     nullable: false
-    min_length: 2
-    max_length: 8
+    min_len: 2
+    max_len: 8
     pattern: "^\\+[0-9]{1,4}$"
     comment: 国际区号，例如 +86
 
   - name: number
-    type: text
+    type: string
     nullable: false
-    min_length: 1
-    max_length: 32
+    min_len: 1
+    max_len: 32
     pii: true
     comment: 手机号
 
   - name: operator
-    type: text
+    type: string
     nullable: true
-    max_length: 32
+    max_len: 32
     comment: 运营商
 
   - name: status

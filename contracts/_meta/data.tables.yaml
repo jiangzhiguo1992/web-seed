@@ -17,8 +17,52 @@ targets:
   exception: "_base.yaml 的 ID 为 data.tables.base"
 
 column_types:
-  builtin: [text, uuid, timestamptz, integer, bigint, boolean, jsonb, numeric, date, time, bytea, inet]
-  refs: ["data.enums.", "data.tables."]
+  value_type_families:
+    string:
+      description: 字符序列；覆盖 char / varchar / text
+      params:
+        min_len: { type: integer, required: false, min: 0 }
+        max_len: { type: integer, required: false, min: 0 }
+        fixed: { type: boolean, required: false, default: false }
+    boolean:
+      description: 布尔值；覆盖 bool / tinyint(1)
+      params: {}
+    integer:
+      description: 整数；覆盖 int8 / int16 / int32 / int64
+      params:
+        bits: { type: integer, required: false, enum: [8, 16, 32, 64], default: 64 }
+        unsigned: { type: boolean, required: false, default: false }
+    float:
+      description: 浮点数；覆盖 real / double
+      params:
+        bits: { type: integer, required: false, enum: [32, 64], default: 64 }
+    decimal:
+      description: 精确小数；覆盖 decimal / numeric
+      params:
+        precision: { type: integer, required: true, min: 1 }
+        scale: { type: integer, required: false, default: 0, min: 0 }
+    datetime:
+      description: 日期/时间；覆盖 date / time / datetime
+      params:
+        mode: { type: string, required: false, enum: [date, time, datetime], default: datetime }
+        timezone: { type: boolean, required: false, default: false }
+    timestamp:
+      description: 绝对时间点
+      params:
+        timezone: { type: boolean, required: false, default: true }
+        precision: { type: integer, required: false, default: 6, min: 0, max: 9 }
+    json:
+      description: JSON 文档；覆盖 json / jsonb
+      params:
+        binary: { type: boolean, required: false, default: false }
+    bytes:
+      description: 二进制；覆盖 binary / varbinary / blob / bytea
+      params:
+        min_len: { type: integer, required: false, min: 0 }
+        max_len: { type: integer, required: false, min: 0 }
+        fixed: { type: boolean, required: false, default: false }
+  # columns[].type 允许的引用前缀；不是外键，也不是完整类型名。
+  ref_prefixes: ["data.enums.", "data.tables."]
 
 fields:
   - name: schema_version
@@ -144,15 +188,13 @@ fields:
     caution: 不要声明 id/created_at/updated_at/deleted_at；status 可覆盖为枚举
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', examples: ["name"], description: 列名 }
-      - { name: type, type: string, required: true, default: text, description: 列类型；见 column_types }
+      - { name: type, type: string, required: true, default: string, description: 列类型；类型族键，或 ref_prefixes 允许的引用 }
       - { name: nullable, type: boolean, required: false, default: false, description: 是否可空 }
       - { name: primary_key, type: boolean, required: false }
       - { name: generated_by, type: string, required: false, enum: [application, database] }
       - { name: default, type: any, required: false }
       - { name: default_sql, type: string, required: false }
-      - { name: min_length, type: integer, required: false }
-      - { name: max_length, type: integer, required: false }
-      - { name: length_hint, type: integer, required: false }
+      # 类型族扩展字段（min_len / max_len / fixed / bits / ...）由 column_types.value_type_families.params 注入
       - { name: min, type: number, required: false }
       - { name: max, type: number, required: false }
       - { name: pattern, type: string, required: false }
@@ -215,7 +257,8 @@ rules:
   - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 可覆盖" }
   - { id: status-enum, text: "物理表必须声明 status，且 status 列必须引用 data.enums.*" }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥" }
-  - { id: column-type, text: "列类型只能是 column_types.builtin 或 column_types.refs 声明的类型" }
+  - { id: column-type, text: "列类型必须是 column_types.value_type_families 的键，或匹配 column_types.ref_prefixes" }
+  - { id: family-params, text: "列的扩展字段必须属于该 type 的类型族；类型族中 required: true 的参数必须出现" }
   - { id: unique-soft-delete, text: "唯一索引必须带 WHERE deleted_at IS NULL" }
   - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，contract-check 校验它等于实际入边" }
   - { id: id-from-file, text: "id 必须等于 data.tables.<file stem>；_base.yaml 例外为 data.tables.base" }

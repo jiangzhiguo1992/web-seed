@@ -22,36 +22,38 @@ table:
 
 columns:
   - name: own_type
-    type: text
+    type: string
     nullable: false
-    min_length: 1
-    max_length: 32
+    min_len: 1
+    max_len: 32
     comment: 归属类型（user/tenant/system；跨模块共享时升级为枚举）
 
   - name: own_id
-    type: uuid
+    type: string
+    max_len: 36
     nullable: false
     comment: 归属 ID；与 own_type 组成归属主体
 
   - name: number
-    type: text
+    type: string
     nullable: false
-    min_length: 4
-    max_length: 64
+    min_len: 4
+    max_len: 64
     pattern: "^[A-Za-z0-9_-]+$"
     normalize: upper
     comment: 账号编号；业务唯一；存储前大写归一
 
   - name: nickname
-    type: text
+    type: string
     nullable: false
-    min_length: 1
-    max_length: 100
+    min_len: 1
+    max_len: 100
     pii: true
     comment: 昵称
 
   - name: user_id
-    type: uuid
+    type: string
+    max_len: 36
     nullable: true
     comment: 关联用户 ID；user 模块落地后补外键
 

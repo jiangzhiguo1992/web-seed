@@ -12,34 +12,35 @@ do_not:
 
 columns:
   - name: id
-    type: uuid
+    type: string
+    max_len: 36
     primary_key: true
     generated_by: application
     nullable: false
-    comment: 主键 UUIDv7
+    comment: 主键 UUIDv7（36 字符字符串）
 
   - name: status
-    type: text
+    type: string
     nullable: false
-    max_length: 32
+    max_len: 32
     comment: 业务状态；物理表必须覆盖为具体枚举并说明取值
 
   - name: created_at
-    type: timestamptz
+    type: timestamp
     nullable: false
     default_sql: now()
     managed_by: database
     comment: 创建时间
 
   - name: updated_at
-    type: timestamptz
+    type: timestamp
     nullable: false
     default_sql: now()
     managed_by: application
     comment: 更新时间；应用层写入
 
   - name: deleted_at
-    type: timestamptz
+    type: timestamp
     nullable: true
     managed_by: application
     comment: 软删时间；为空表示未删除

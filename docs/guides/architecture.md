@@ -404,10 +404,10 @@ apps:
 ### 5.4 数据规范（`contracts/data/README.md`）
 
 - 表结构基类 `data/tables/_base.yaml`：`id / status / created_at / updated_at / deleted_at` 五列，所有物理表继承
-- 主键 UUIDv7；时间列 `timestamptz`，统一 UTC；`updated_at` 由应用写入
+- 主键 UUIDv7；时间列 `timestamp`，统一 UTC；`updated_at` 由应用写入
 - 业务表可选 `version` 做乐观锁；不是基类字段
 - 存储引擎、部署拓扑、连接池、锁在 `data/storage.yaml`，禁止逐表声明 engine
-- 枚举用 `text + check`，不用 PG enum（迁移困难）
+- 枚举用 `string + check`，不用 PG enum（迁移困难）
 - 软删的唯一约束必须用部分索引：`WHERE deleted_at IS NULL`
 - 索引命名 `idx_<table>_<cols>`；外键默认加，热点表可评估去掉
 - 迁移只前进；零停机三步：加可空列 → 回填 → 加约束

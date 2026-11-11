@@ -18,7 +18,7 @@ base:
   id: data.tables.base
   required: true
   rule: "物理表必须 extends: [data.tables.base]；不得重复声明基类 5 列"
-  override_allowed: [type, default, default_sql, comment, max_length]
+  override_allowed: [type, default, default_sql, comment, max_len]
   extra_columns: allowed
 
 columns:
@@ -29,7 +29,7 @@ columns:
     expression: default_sql
     rule: 字面量用 default，SQL 表达式用 default_sql；禁止混用
   length:
-    rule: min_length/max_length 默认生成 CHECK (char_length(col) BETWEEN ...)；仅提示时写 length_hint；枚举列忽略 max_length
+    rule: string/bytes 用 min_len/max_len；默认生成 CHECK (char_length(col) BETWEEN ...)；枚举列忽略 max_len
   normalize:
     rule: lower/upper 在应用写入前归一，DB 只存归一值；唯一索引建立在归一值上
   numeric:

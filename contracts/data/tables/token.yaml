@@ -21,58 +21,61 @@ table:
 
 columns:
   - name: own_type
-    type: text
+    type: string
     nullable: false
-    min_length: 1
-    max_length: 32
+    min_len: 1
+    max_len: 32
     comment: 归属类型
 
   - name: own_id
-    type: uuid
+    type: string
+    max_len: 36
     nullable: false
     comment: 归属 ID
 
   - name: account_id
-    type: uuid
+    type: string
+    max_len: 36
     nullable: false
     comment: 关联账号
 
   - name: device_id
-    type: text
+    type: string
     nullable: true
-    max_length: 128
+    max_len: 128
     comment: 设备标识；多端登录时区分设备
 
   - name: user_id
-    type: uuid
+    type: string
+    max_len: 36
     nullable: true
     comment: 关联用户 ID
 
   - name: access_token_hash
-    type: text
+    type: string
     nullable: false
-    min_length: 32
-    max_length: 128
+    min_len: 32
+    max_len: 128
     pii: true
     never_expose: true
     comment: 访问令牌哈希；只存哈希，禁止存原文
 
   - name: refresh_token_hash
-    type: text
+    type: string
     nullable: false
-    min_length: 32
-    max_length: 128
+    min_len: 32
+    max_len: 128
     pii: true
     never_expose: true
     comment: 刷新令牌哈希；只存哈希，禁止存原文
 
   - name: access_expire_at
-    type: timestamptz
+    type: timestamp
     nullable: false
     comment: 访问令牌过期时间
 
   - name: refresh_expire_at
-    type: timestamptz
+    type: timestamp
     nullable: false
     comment: 刷新令牌过期时间
 

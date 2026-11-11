@@ -20,32 +20,33 @@ table:
 
 columns:
   - name: account_id
-    type: uuid
+    type: string
+    max_len: 36
     nullable: false
     comment: 关联账号
 
   - name: username
-    type: text
+    type: string
     nullable: false
-    min_length: 1
-    max_length: 254
+    min_len: 1
+    max_len: 254
     pii: true
     comment: 登录名；唯一
 
   - name: password_hash
-    type: text
+    type: string
     nullable: true
-    min_length: 20
-    max_length: 255
+    min_len: 20
+    max_len: 255
     pii: true
     never_expose: true
     comment: argon2id 口令哈希；新密码写入此列
 
   - name: password_md5
-    type: text
+    type: string
     nullable: true
-    min_length: 32
-    max_length: 32
+    min_len: 32
+    max_len: 32
     pattern: "^[a-fA-F0-9]{32}$"
     pii: true
     never_expose: true
@@ -59,7 +60,7 @@ columns:
     comment: 连续失败次数；成功登录后归零
 
   - name: locked_until
-    type: timestamptz
+    type: timestamp
     nullable: true
     comment: 锁定截止时间；为空表示未锁定
 

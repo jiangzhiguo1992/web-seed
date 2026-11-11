@@ -16,20 +16,20 @@ do_not:
   - 原始 token 只在签发响应返回一次，数据库不存原文
 
 fields:
-  - { name: id, type: uuid, required: true, mutable: false }
-  - { name: own_type, type: string, max_length: 32, required: true }
-  - { name: own_id, type: uuid, required: true }
-  - { name: account_id, type: uuid, required: true, mutable: false }
-  - { name: device_id, type: string, max_length: 128 }
-  - { name: user_id, type: uuid }
-  - { name: access_token_hash, type: string, min_length: 32, max_length: 128, required: true, pii: true, never_expose: true }
-  - { name: refresh_token_hash, type: string, min_length: 32, max_length: 128, required: true, pii: true, never_expose: true }
-  - { name: access_expire_at, type: datetime, required: true }
-  - { name: refresh_expire_at, type: datetime, required: true }
+  - { name: id, type: string, max_len: 36, required: true, mutable: false }
+  - { name: own_type, type: string, max_len: 32, required: true }
+  - { name: own_id, type: string, max_len: 36, required: true }
+  - { name: account_id, type: string, max_len: 36, required: true, mutable: false }
+  - { name: device_id, type: string, max_len: 128 }
+  - { name: user_id, type: string, max_len: 36 }
+  - { name: access_token_hash, type: string, min_len: 32, max_len: 128, required: true, pii: true, never_expose: true }
+  - { name: refresh_token_hash, type: string, min_len: 32, max_len: 128, required: true, pii: true, never_expose: true }
+  - { name: access_expire_at, type: timestamp, required: true }
+  - { name: refresh_expire_at, type: timestamp, required: true }
   - { name: status, type: data.enums.token_status, required: true }
-  - { name: created_at, type: datetime, required: true, mutable: false }
-  - { name: updated_at, type: datetime, required: true, mutable: false }
-  - { name: deleted_at, type: datetime, mutable: false }
+  - { name: created_at, type: timestamp, required: true, mutable: false }
+  - { name: updated_at, type: timestamp, required: true, mutable: false }
+  - { name: deleted_at, type: timestamp, mutable: false }
 
 relations:
   - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.token.col.account_id }

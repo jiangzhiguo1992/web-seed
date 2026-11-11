@@ -17,8 +17,15 @@ type Schema struct {
 }
 
 type ColumnTypes struct {
-	Builtin []string `yaml:"builtin"`
-	Refs    []string `yaml:"refs"`
+	ValueTypeFamilies map[string]ValueTypeFamily `yaml:"value_type_families"`
+	RefPrefixes       []string                   `yaml:"ref_prefixes"`
+}
+
+// ValueTypeFamily 描述一个类型族及其允许的扩展字段。
+// Params 的 required 表示使用该族时必须声明该扩展字段。
+type ValueTypeFamily struct {
+	Description string           `yaml:"description"`
+	Params      map[string]Field `yaml:"params"`
 }
 
 type Field struct {
@@ -28,6 +35,8 @@ type Field struct {
 	Const       any     `yaml:"const"`
 	Enum        []any   `yaml:"enum"`
 	Allowed     []any   `yaml:"allowed"`
+	Min         any     `yaml:"min"`
+	Max         any     `yaml:"max"`
 	Pattern     string  `yaml:"pattern"`
 	Description string  `yaml:"description"`
 	Generates   string  `yaml:"generates"`
@@ -53,7 +62,37 @@ func LoadSchema(path string) (*Schema, error) {
 	if s.Type == "" || len(s.Fields) == 0 {
 		return nil, fmt.Errorf("%s: empty schema (type/fields)", path)
 	}
+	injectFamilyParams(&s)
 	return &s, nil
+}
+
+// injectFamilyParams 把所有类型族的扩展字段名加入 columns.item_fields。
+// 类型族参数各自只对特定族合法，具体类型/范围由 contractcheck 按族校验；
+// 这里只负责让通用字段校验不把扩展字段当成未知字段。
+func injectFamilyParams(s *Schema) {
+	idx := -1
+	for i := range s.Fields {
+		if s.Fields[i].Name == "columns" {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return
+	}
+	seen := make(map[string]bool, len(s.Fields[idx].ItemFields))
+	for _, f := range s.Fields[idx].ItemFields {
+		seen[f.Name] = true
+	}
+	for _, fam := range s.ColumnTypes.ValueTypeFamilies {
+		for name := range fam.Params {
+			if seen[name] {
+				continue
+			}
+			s.Fields[idx].ItemFields = append(s.Fields[idx].ItemFields, Field{Name: name, Type: "any", Required: false})
+			seen[name] = true
+		}
+	}
 }
 
 func FindField(fields []Field, name string) (Field, bool) {

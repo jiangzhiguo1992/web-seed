@@ -28,6 +28,7 @@ import (
 
 type Schema = contractspec.Schema
 type ColumnTypes = contractspec.ColumnTypes
+type ValueTypeFamily = contractspec.ValueTypeFamily
 type Field = contractspec.Field
 
 var baseColumns = []string{"id", "status", "created_at", "updated_at", "deleted_at"}

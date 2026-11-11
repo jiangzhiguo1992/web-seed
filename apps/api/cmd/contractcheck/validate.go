@@ -55,17 +55,23 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 		}
 		c.checkScalar(s, f, path)
 	case "integer":
-		if _, ok := toInt(v); !ok {
+		n, ok := toInt(v)
+		if !ok {
 			c.errf("%s: must be integer", path)
 			return
 		}
 		c.checkConst(v, f, path)
+		c.checkNumericEnum(fmt.Sprint(n), f, path)
+		c.checkIntRange(n, f, path)
 	case "number":
-		if _, ok := toFloat(v); !ok {
+		n, ok := toFloat(v)
+		if !ok {
 			c.errf("%s: must be number", path)
 			return
 		}
 		c.checkConst(v, f, path)
+		c.checkNumericEnum(fmt.Sprint(n), f, path)
+		c.checkFloatRange(n, f, path)
 	case "boolean":
 		if _, ok := v.(bool); !ok {
 			c.errf("%s: must be boolean", path)
@@ -138,5 +144,37 @@ func (c *Checker) checkConst(v any, f Field, path string) {
 	}
 	if fmt.Sprint(v) != fmt.Sprint(f.Const) {
 		c.errf("%s: must be %v, got %v", path, f.Const, v)
+	}
+}
+
+func (c *Checker) checkNumericEnum(s string, f Field, path string) {
+	if len(f.Enum) > 0 && !inList(f.Enum, s) {
+		c.errf("%s: %s not in enum %v", path, s, f.Enum)
+	}
+}
+
+func (c *Checker) checkIntRange(n int, f Field, path string) {
+	if f.Min != nil {
+		if m, ok := toInt(f.Min); ok && n < m {
+			c.errf("%s: %d < min %d", path, n, m)
+		}
+	}
+	if f.Max != nil {
+		if m, ok := toInt(f.Max); ok && n > m {
+			c.errf("%s: %d > max %d", path, n, m)
+		}
+	}
+}
+
+func (c *Checker) checkFloatRange(n float64, f Field, path string) {
+	if f.Min != nil {
+		if m, ok := toFloat(f.Min); ok && n < m {
+			c.errf("%s: %v < min %v", path, n, m)
+		}
+	}
+	if f.Max != nil {
+		if m, ok := toFloat(f.Max); ok && n > m {
+			c.errf("%s: %v > max %v", path, n, m)
+		}
 	}
 }

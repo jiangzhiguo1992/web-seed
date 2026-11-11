@@ -16,17 +16,17 @@ do_not:
   - password_md5 只用于遗留兼容；新密码写 password_hash
 
 fields:
-  - { name: id, type: uuid, required: true, mutable: false }
-  - { name: account_id, type: uuid, required: true, mutable: false }
-  - { name: username, type: string, min_length: 1, max_length: 254, required: true }
-  - { name: password_hash, type: string, min_length: 20, max_length: 255, pii: true, never_expose: true, note: argon2id；新密码写入此列 }
-  - { name: password_md5, type: string, min_length: 32, max_length: 32, pii: true, never_expose: true, note: 遗留 MD5；仅兼容旧账号 }
+  - { name: id, type: string, max_len: 36, required: true, mutable: false }
+  - { name: account_id, type: string, max_len: 36, required: true, mutable: false }
+  - { name: username, type: string, min_len: 1, max_len: 254, required: true }
+  - { name: password_hash, type: string, min_len: 20, max_len: 255, pii: true, never_expose: true, note: argon2id；新密码写入此列 }
+  - { name: password_md5, type: string, min_len: 32, max_len: 32, pii: true, never_expose: true, note: 遗留 MD5；仅兼容旧账号 }
   - { name: failed_login_count, type: integer, required: true }
-  - { name: locked_until, type: datetime }
+  - { name: locked_until, type: timestamp }
   - { name: status, type: data.enums.auth_status, required: true }
-  - { name: created_at, type: datetime, required: true, mutable: false }
-  - { name: updated_at, type: datetime, required: true, mutable: false }
-  - { name: deleted_at, type: datetime, mutable: false }
+  - { name: created_at, type: timestamp, required: true, mutable: false }
+  - { name: updated_at, type: timestamp, required: true, mutable: false }
+  - { name: deleted_at, type: timestamp, mutable: false }
 
 relations:
   - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.auth_pwd.col.account_id }

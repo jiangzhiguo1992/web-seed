@@ -21,7 +21,7 @@ queries:
     kind: one
     table: data.tables.account
     params:
-      - { name: id, type: uuid }
+      - { name: id, type: text }
     returns: data.tables.account.row
     semantics: 已软删视为不存在
     sql: |
@@ -65,8 +65,8 @@ queries:
     params:
       - { name: status, type: data.enums.account_status, nullable: true }
       - { name: own_type, type: text, nullable: true }
-      - { name: cursor_created_at, type: timestamptz, nullable: true }
-      - { name: cursor_id, type: uuid, nullable: true }
+      - { name: cursor_created_at, type: timestamp, nullable: true }
+      - { name: cursor_id, type: text, nullable: true }
       - { name: page_size, type: integer, max: 100, default: 20 }
     returns: "[]data.tables.account.row"
     semantics: 按 created_at DESC, id DESC 游标分页；status/own_type 为空不过滤
@@ -78,7 +78,7 @@ queries:
         AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
         AND (sqlc.narg('own_type')::text IS NULL OR own_type = sqlc.narg('own_type'))
         AND (
-          sqlc.narg('cursor_created_at')::timestamptz IS NULL
+          sqlc.narg('cursor_created_at')::timestamp IS NULL
           OR (created_at, id) < (sqlc.narg('cursor_created_at'), sqlc.narg('cursor_id'))
         )
       ORDER BY created_at DESC, id DESC
@@ -89,12 +89,12 @@ queries:
     kind: one
     table: data.tables.account
     params:
-      - { name: id, type: uuid }
+      - { name: id, type: text }
       - { name: own_type, type: text }
-      - { name: own_id, type: uuid }
+      - { name: own_id, type: text }
       - { name: number, type: text }
       - { name: nickname, type: text }
-      - { name: user_id, type: uuid, nullable: true }
+      - { name: user_id, type: text, nullable: true }
     returns: data.tables.account.row
     semantics: 初始状态 pending；number 入库前大写归一
     sql: |
@@ -108,7 +108,7 @@ queries:
     kind: execrows
     table: data.tables.account
     params:
-      - { name: id, type: uuid }
+      - { name: id, type: text }
       - { name: nickname, type: text }
       - { name: version, type: integer }
     returns: affected_rows
@@ -123,7 +123,7 @@ queries:
     kind: execrows
     table: data.tables.account
     params:
-      - { name: id, type: uuid }
+      - { name: id, type: text }
       - { name: status, type: data.enums.account_status }
       - { name: version, type: integer }
     returns: affected_rows
@@ -141,7 +141,7 @@ queries:
     kind: execrows
     table: data.tables.account
     params:
-      - { name: id, type: uuid }
+      - { name: id, type: text }
       - { name: version, type: integer }
     returns: affected_rows
     semantics: 软删；同时写 status=deleted 与 deleted_at，保证两者一致；幂等（已删返回 0）
@@ -174,12 +174,12 @@ queries:
     kind: execrows
     table: data.tables.account
     params:
-      - { name: ids, type: "[]uuid" }
+      - { name: ids, type: "[]text" }
     returns: affected_rows
     semantics: 批量软删 pending 账号；只处理仍为 pending 且未删除的记录
     sql: |
       UPDATE accounts
       SET status = 'deleted', deleted_at = now(), updated_at = now()
-      WHERE id = ANY(@ids::uuid[])
+      WHERE id = ANY(@ids::text[])
         AND status = 'pending'
         AND deleted_at IS NULL;

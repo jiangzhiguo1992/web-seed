@@ -29,7 +29,7 @@
 - `updated_at`：应用写入
 - `deleted_at`：软删时间；为空表示未删除
 
-物理表必须声明 `extends: [data.tables.base]`，不得重复声明这 5 列；只允许覆盖 `type/default/default_sql/comment/max_length`。
+物理表必须声明 `extends: [data.tables.base]`，不得重复声明这 5 列；只允许覆盖 `type/default/default_sql/comment/max_len`。
 
 ### 1.2 表与实体是两层
 
@@ -78,15 +78,16 @@ data/storage.yaml ────> 配置校验 + 运维约束
 
 1. **一表一文件**，不按字段拆分；基类列不重复声明。
 2. **每个可寻址项必须有稳定 ID**：表 `data.tables.<file>`、列 `data.tables.<file>.col.<col>`、约束 `data.tables.<file>.constraint.<constraint.name>`、查询 `data.queries.<module>.<query_id>`、枚举 `data.enums.<name>`。查询/枚举必须显式写 `id`；列/约束用 `name` 派生，不得改名。契约文件名用**单数**（`tables/account.yaml` → `data.tables.account`）；物理表名默认等于文件段，复数表用 `table.name` 覆盖（`account.yaml` 里 `table.name: accounts`）。
-3. **字段类型用契约内类型**：`text`、`uuid`、`timestamptz`、`integer`、`boolean`、`jsonb`、`data.enums.<name>`、`data.tables.<file>.col.<col>`。
-4. **时间统一 `timestamptz`**，应用层只用 UTC。
-5. **软删表必须有 `deleted_at`**，唯一约束必须带 `where: "deleted_at IS NULL"`。
-6. **枚举用 `text + check`**，不用 PostgreSQL enum；枚举值只能追加。
-7. **索引必须写 `reason`**；表达式索引用 `expression`，大表用 `concurrently: auto`。
-8. **主键默认由应用层生成 UUIDv7**（`generated_by: application`），数据库不设 default。
-9. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表，其他模块只能经 service 读。
-10. **禁止未结构化 DDL 字段**：分区、表达式索引、CONCURRENTLY 必须用结构化字段表达（`table.partition`、`indexes[].expression`、`indexes[].concurrently`），不要塞原生 SQL。
-11. **`used_by` 是生成物**：由 `make gen-graph` 写入，禁止手改；结构固定为 `entities` / `queries` / `capabilities` 三个列表，只记**直接入边**。完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
+3. **字段类型用契约内逻辑类型**：`string`、`boolean`、`integer`、`float`、`decimal`、`datetime`、`timestamp`、`json`、`bytes`、`data.enums.<name>`、`data.tables.<file>.col.<col>`。
+4. **类型族扩展字段写在列上**：`string`/`bytes` 用 `min_len`/`max_len`/`fixed`，`integer` 用 `bits`/`unsigned`，`float` 用 `bits`，`decimal` 用 `precision`/`scale`，`datetime` 用 `mode`/`timezone`，`timestamp` 用 `timezone`/`precision`，`json` 用 `binary`。字段定义与 `required` 在 `contracts/_meta/data.tables.yaml` 的 `column_types.value_type_families`。
+5. **时间统一 `timestamp`**，应用层只用 UTC。
+6. **软删表必须有 `deleted_at`**，唯一约束必须带 `where: "deleted_at IS NULL"`。
+7. **枚举用 `string + check`**，不用 PostgreSQL enum；枚举值只能追加。
+8. **索引必须写 `reason`**；表达式索引用 `expression`，大表用 `concurrently: auto`。
+9. **主键默认由应用层生成 UUIDv7**（`generated_by: application`），数据库不设 default。
+10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表，其他模块只能经 service 读。
+11. **禁止未结构化 DDL 字段**：分区、表达式索引、CONCURRENTLY 必须用结构化字段表达（`table.partition`、`indexes[].expression`、`indexes[].concurrently`），不要塞原生 SQL。
+12. **`used_by` 是生成物**：由 `make gen-graph` 写入，禁止手改；结构固定为 `entities` / `queries` / `capabilities` 三个列表，只记**直接入边**。完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
 
 ---
 

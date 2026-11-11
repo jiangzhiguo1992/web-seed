@@ -169,18 +169,15 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.errf("%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, name)
 			}
 		}
-		if a, ok := toInt(m["min_length"]); ok {
-			if b, ok2 := toInt(m["max_length"]); ok2 && a > b {
-				c.errf("%s: columns[%d] (%s): min_length > max_length", rel, i, name)
-			}
-		}
 		if a, ok := toFloat(m["min"]); ok {
 			if b, ok2 := toFloat(m["max"]); ok2 && a > b {
 				c.errf("%s: columns[%d] (%s): min > max", rel, i, name)
 			}
 		}
 		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes) {
-			c.errf("%s: columns[%d] (%s): unsupported type %q (builtin %v or refs %v)", rel, i, name, t, schema.ColumnTypes.Builtin, schema.ColumnTypes.Refs)
+			c.errf("%s: columns[%d] (%s): unsupported type %q (value_type_families %v or ref_prefixes %v)", rel, i, name, t, familyNames(schema.ColumnTypes), schema.ColumnTypes.RefPrefixes)
+		} else {
+			c.checkFamilyParams(m, t, rel, i, name, schema)
 		}
 	}
 	if !colNames["status"] {
@@ -300,6 +297,75 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			}
 		} else if !strings.HasPrefix(name, "idx_") {
 			c.errf("%s: indexes[%d]: non-unique name must start with idx_", rel, i)
+		}
+	}
+}
+
+// commonColumnFields 是所有列都可以出现的字段；类型族扩展字段另外按族允许。
+var commonColumnFields = map[string]bool{
+	"name": true, "type": true, "nullable": true, "primary_key": true,
+	"generated_by": true, "default": true, "default_sql": true,
+	"min": true, "max": true, "pattern": true, "normalize": true,
+	"pii": true, "never_expose": true, "managed_by": true, "comment": true,
+}
+
+func familyNames(ct ColumnTypes) []string {
+	out := make([]string, 0, len(ct.ValueTypeFamilies))
+	for k := range ct.ValueTypeFamilies {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// checkFamilyParams 校验列上的类型族扩展字段：
+//   - 该族不允许的扩展字段直接报错；
+//   - required: true 的扩展字段必须出现；
+//   - 出现时按族定义校验类型、枚举、范围。
+func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name string, schema *Schema) {
+	fam, ok := schema.ColumnTypes.ValueTypeFamilies[t]
+	if !ok {
+		for k := range m {
+			if !commonColumnFields[k] {
+				c.errf("%s: columns[%d] (%s): param %q not allowed for type %s", rel, i, name, k, t)
+			}
+		}
+		return
+	}
+	allowed := map[string]bool{}
+	for k := range commonColumnFields {
+		allowed[k] = true
+	}
+	for k := range fam.Params {
+		allowed[k] = true
+	}
+	for k := range m {
+		if !allowed[k] {
+			c.errf("%s: columns[%d] (%s): param %q not allowed for type %s", rel, i, name, k, t)
+		}
+	}
+	for pk, def := range fam.Params {
+		v, present := m[pk]
+		if def.Required && !present {
+			c.errf("%s: columns[%d] (%s): missing required param %q for type %s", rel, i, name, pk, t)
+			continue
+		}
+		if present {
+			c.validateValue(v, def, fmt.Sprintf("%s.columns[%d].%s", rel, i, pk))
+		}
+	}
+	switch t {
+	case "string", "bytes":
+		if a, ok := toInt(m["min_len"]); ok {
+			if b, ok2 := toInt(m["max_len"]); ok2 && a > b {
+				c.errf("%s: columns[%d] (%s): min_len > max_len", rel, i, name)
+			}
+		}
+	case "decimal":
+		if p, ok := toInt(m["precision"]); ok {
+			if s, ok2 := toInt(m["scale"]); ok2 && s > p {
+				c.errf("%s: columns[%d] (%s): scale > precision", rel, i, name)
+			}
 		}
 	}
 }

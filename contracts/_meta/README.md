@@ -64,7 +64,7 @@ scripts/contract/
   - `id` 与文件名一致；`_base.yaml` 特例
   - 物理表 `extends: [data.tables.base]`；不得重复基类列
   - `status` 必须声明，且引用 `data.enums.*`
-  - `default` / `default_sql` 互斥；`min_length <= max_length`；`min <= max`
+  - `default` / `default_sql` 互斥；`min_len <= max_len`；`min <= max`
   - 列 / 约束 / 索引重名
   - `constraints` 的 `type`、必填子字段与列引用
   - `indexes` 的 `reason`、`columns` xor `expression`、唯一索引软删过滤、命名前缀、列引用
@@ -100,7 +100,7 @@ scripts/contract/
 | `required` / `type` / `enum` / `allowed` / `pattern` / `const` | 结构约束 |
 | `default` | 生成骨架时的默认值 |
 | `examples` | 示例值；`contract-new` 可用于生成 |
-| `column_types` | 列类型白名单（`builtin` + `refs`）；check 与生成器共用 |
+| `column_types` | 类型族策略：`value_type_families` 是类型族映射，每个族声明 `description` 与 `params`；每个参数可带 `required`、`min`、`max`、`enum`、`default`。`ref_prefixes` 是允许的类型引用前缀；不是数据库物理类型，也不是外键 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
 | `rules` | 跨字段规则的声明式说明 |
 

@@ -36,8 +36,8 @@ queries:
     kind: one
     table: data.tables.auth_pwd
     params:
-      - { name: id, type: uuid }
-      - { name: account_id, type: uuid }
+      - { name: id, type: text }
+      - { name: account_id, type: text }
       - { name: username, type: text }
       - { name: password_hash, type: text, nullable: true }
       - { name: password_md5, type: text, nullable: true }
@@ -55,7 +55,7 @@ queries:
     kind: execrows
     table: data.tables.auth_pwd
     params:
-      - { name: id, type: uuid }
+      - { name: id, type: text }
       - { name: password_hash, type: text }
     returns: affected_rows
     semantics: 设置新 argon2id 哈希并清空遗留 MD5；成功后应吊销该账号全部令牌
@@ -69,7 +69,7 @@ queries:
     kind: execrows
     table: data.tables.auth_pwd
     params:
-      - { name: id, type: uuid }
+      - { name: id, type: text }
     returns: affected_rows
     semantics: 成功登录后重置失败计数与锁定
     sql: |
@@ -82,8 +82,8 @@ queries:
     kind: execrows
     table: data.tables.auth_pwd
     params:
-      - { name: id, type: uuid }
-      - { name: lock_until, type: timestamptz, nullable: true }
+      - { name: id, type: text }
+      - { name: lock_until, type: timestamp, nullable: true }
     returns: affected_rows
     semantics: 失败计数 +1；达到阈值时设置 locked_until
     sql: |
@@ -113,8 +113,8 @@ queries:
     kind: one
     table: data.tables.auth_phone
     params:
-      - { name: id, type: uuid }
-      - { name: account_id, type: uuid }
+      - { name: id, type: text }
+      - { name: account_id, type: text }
       - { name: code, type: text }
       - { name: number, type: text }
       - { name: operator, type: text, nullable: true }
@@ -146,8 +146,8 @@ queries:
     kind: one
     table: data.tables.auth_email
     params:
-      - { name: id, type: uuid }
-      - { name: account_id, type: uuid }
+      - { name: id, type: text }
+      - { name: account_id, type: text }
       - { name: username, type: text }
       - { name: domain, type: text }
       - { name: entity, type: text, nullable: true }
@@ -166,16 +166,16 @@ queries:
     kind: one
     table: data.tables.token
     params:
-      - { name: id, type: uuid }
+      - { name: id, type: text }
       - { name: own_type, type: text }
-      - { name: own_id, type: uuid }
-      - { name: account_id, type: uuid }
+      - { name: own_id, type: text }
+      - { name: account_id, type: text }
       - { name: device_id, type: text, nullable: true }
-      - { name: user_id, type: uuid, nullable: true }
+      - { name: user_id, type: text, nullable: true }
       - { name: access_token_hash, type: text }
       - { name: refresh_token_hash, type: text }
-      - { name: access_expire_at, type: timestamptz }
-      - { name: refresh_expire_at, type: timestamptz }
+      - { name: access_expire_at, type: timestamp }
+      - { name: refresh_expire_at, type: timestamp }
     returns: data.tables.token.row
     return_columns: [id, account_id, device_id, access_expire_at, refresh_expire_at, status]
     semantics: 创建令牌对；数据库只存哈希，原文由调用方返回一次
@@ -259,7 +259,7 @@ queries:
     kind: many
     table: data.tables.token
     params:
-      - { name: account_id, type: uuid }
+      - { name: account_id, type: text }
     returns: "[]data.tables.token.row"
     return_columns: [id, account_id, device_id, access_expire_at, refresh_expire_at, status, created_at, updated_at]
     semantics: 列出账号的设备令牌；不返回 token 原文

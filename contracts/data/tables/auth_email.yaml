@@ -20,35 +20,36 @@ table:
 
 columns:
   - name: account_id
-    type: uuid
+    type: string
+    max_len: 36
     nullable: false
     comment: 关联账号
 
   - name: username
-    type: text
+    type: string
     nullable: false
-    min_length: 1
-    max_length: 64
+    min_len: 1
+    max_len: 64
     pii: true
     comment: 邮箱 @ 前的本地部分
 
   - name: domain
-    type: text
+    type: string
     nullable: false
-    min_length: 1
-    max_length: 190
+    min_len: 1
+    max_len: 190
     comment: 完整域名，例如 example.com；小写归一
 
   - name: entity
-    type: text
+    type: string
     nullable: true
-    max_length: 190
+    max_len: 190
     comment: 注册域/二级域，例如 example.com
 
   - name: tld
-    type: text
+    type: string
     nullable: true
-    max_length: 32
+    max_len: 32
     comment: 顶级域，例如 com
 
   - name: status

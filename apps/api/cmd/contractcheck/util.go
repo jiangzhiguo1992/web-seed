@@ -83,12 +83,10 @@ func hasNonEmptyString(m map[string]any, key string) bool {
 }
 
 func isColumnType(t string, ct ColumnTypes) bool {
-	for _, x := range ct.Builtin {
-		if t == x {
-			return true
-		}
+	if _, ok := ct.ValueTypeFamilies[t]; ok {
+		return true
 	}
-	for _, p := range ct.Refs {
+	for _, p := range ct.RefPrefixes {
 		if !strings.HasPrefix(t, p) || t == p {
 			continue
 		}
