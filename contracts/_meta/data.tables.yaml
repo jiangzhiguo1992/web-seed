@@ -19,7 +19,7 @@ targets:
 column_refs:
   prefixes: ["data.enums.", "data.tables."]
 column_types:
-  value_type_families:
+  families:
     string:
       description: 字符序列；覆盖 char / varchar / text
       params:
@@ -202,7 +202,7 @@ fields:
       - { name: generated_by, type: string, required: false, enum: [application, database] }
       - { name: default, type: any, required: false }
       - { name: default_sql, type: string, required: false }
-      # 类型族扩展字段由 column_types.value_type_families.params 注入
+      # 类型族扩展字段由 column_types.families.params 注入
       - { name: pii, type: boolean, required: false }
       - { name: never_expose, type: boolean, required: false }
       - { name: managed_by, type: string, required: false, enum: [application, database] }
@@ -261,7 +261,7 @@ rules:
   - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 可覆盖" }
   - { id: status-enum, text: "物理表必须声明 status，且 status 列必须引用 data.enums.*" }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥" }
-  - { id: column-type, text: "列类型必须是 column_types.value_type_families 的键，或匹配 column_refs.prefixes" }
+  - { id: column-type, text: "列类型必须是 column_types.families 的键，或匹配 column_refs.prefixes" }
   - { id: family-params, text: "列的扩展字段必须属于该 type 的类型族；类型族中 required: true 的参数必须出现" }
   - { id: unique-soft-delete, text: "唯一索引必须带 WHERE deleted_at IS NULL" }
   - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，contract-check 校验它等于实际入边" }

@@ -177,7 +177,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			}
 		}
 		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes, schema.ColumnRefs.Prefixes) {
-			c.errf("%s: columns[%d] (%s): unsupported type %q (value_type_families %v or column_refs.prefixes %v)", rel, i, name, t, familyNames(schema.ColumnTypes), schema.ColumnRefs.Prefixes)
+			c.errf("%s: columns[%d] (%s): unsupported type %q (families %v or column_refs.prefixes %v)", rel, i, name, t, familyNames(schema.ColumnTypes), schema.ColumnRefs.Prefixes)
 		} else {
 			c.checkFamilyParams(m, t, rel, i, name, schema)
 		}
@@ -358,7 +358,7 @@ func (c *Checker) headStability(rel string) (string, bool) {
 }
 
 // commonColumnFields 从 schema 的 columns.item_fields 派生通用列字段。
-// 类型族扩展字段由 value_type_families.params 注入，必须排除，避免把
+// 类型族扩展字段由 families.params 注入，必须排除，避免把
 // “只属于某个族”的字段误认为所有列都可写。
 func commonColumnFields(schema *Schema) map[string]bool {
 	cols, ok := contractspec.FindField(schema.Fields, "columns")

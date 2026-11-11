@@ -109,7 +109,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	columnType := defaultString(columnField.ItemFields, "type", "string")
 	if columnTypeOverride != "" {
 		if _, ok := s.ColumnTypes.ValueTypeFamilies[columnTypeOverride]; !ok {
-			return nil, fmt.Errorf("RenderTable: unknown column type %q (not in value_type_families)", columnTypeOverride)
+			return nil, fmt.Errorf("RenderTable: unknown column type %q (not in families)", columnTypeOverride)
 		}
 		columnType = columnTypeOverride
 	}

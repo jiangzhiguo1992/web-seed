@@ -18,7 +18,7 @@ type Schema struct {
 }
 
 type ColumnTypes struct {
-	ValueTypeFamilies map[string]ValueTypeFamily `yaml:"value_type_families"`
+	ValueTypeFamilies map[string]ValueTypeFamily `yaml:"families"`
 }
 
 // ColumnRefs 描述 columns[].type 允许引用的命名空间，与类型族是不同维度。

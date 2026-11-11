@@ -101,7 +101,7 @@ scripts/contract/
 | `required` / `type` / `enum` / `allowed` / `pattern` / `const` | 结构约束 |
 | `default` | 生成骨架时的默认值 |
 | `examples` | 示例值；`contract-new` 可用于生成 |
-| `column_types` | 类型族策略：`value_type_families` 是类型族映射，每个族声明 `description` 与 `params`；每个参数可带 `required`、`min`、`max`、`enum`、`default`；不是数据库物理类型 |
+| `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；每个参数可带 `required`、`min`、`max`、`enum`、`default`；不是数据库物理类型 |
 | `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；不是类型族，也不是外键；与 `column_types` 分开 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
 | `rules` | 跨字段规则的声明式说明 |
