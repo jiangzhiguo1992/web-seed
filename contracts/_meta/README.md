@@ -112,18 +112,26 @@ scripts/contract/
 
 | 状态 | 进入条件 | 退出条件 |
 |---|---|---|
-| `draft` | 默认；正在编写 | 替换所有 `TODO`/`FIXME`，`make contract-check` 通过，PR 评审通过后改 `stable` |
-| `stable` | 评审通过；建议写 `review: { by, at }` | 加 `deprecation` 块，停止新增引用，按 `remove_after` 移除 |
-| `deprecated` | 有 `deprecation.reason`，且有 `replacement` 或 `remove_after` | 所有入边迁完并删除契约文件 |
+| `draft` | 默认；正在编写 | 替换所有 `TODO`/`FIXME`，`make contract-check` 通过后改 `stable` |
+| `stable` | 评审通过、无 TODO | 改 `deprecated`，停止新增引用，准备移除 |
+| `deprecated` | 已废弃；不再新增引用 | 所有入边迁完并删除契约文件 |
 
-状态本身是**评审结果**，不是生成物。`contract-check` 只能校验当前状态是否自洽：
+状态只允许向前流转：
+
+```text
+draft → stable
+draft → deprecated
+stable → deprecated
+```
+
+`deprecated` 不能回到 `draft` 或 `stable`；`stable` 不能回退到 `draft`。
+
+`contract-check` 能校验：
 
 - `stable` 文件不得含 `TODO` / `FIXME`；
-- `deprecated` 必须有 `deprecation` 块；
-- `review` 只允许出现在 `stable`；
-- `deprecation` 只允许出现在 `deprecated`。
+- 用 `git show HEAD:<file>` 对比上一版，禁止非法回退。
 
-状态的**方向**由 PR 评审和 git 历史控制；`contract-check` 不是状态机，不可能从单个 YAML 推断上一版状态。
+状态的**判断**仍由 PR 评审负责；`contract-check` 只负责当前状态自洽和方向不回退。
 
 ---
 

@@ -281,7 +281,7 @@ business.states.account ─subject→ data.entities.account ─table→ data.tab
 | 层 | 位置 | 内容 |
 |---|---|---|
 | 类型默认值 | `_meta/_types.yaml` | 每类契约的 `enforcement` / `consumers` / `generates` / 通用 `do_not` |
-| 实例元数据 | 文件正文 | `id` / `summary` / `stability` / 可选 `review` / 可选 `deprecation` / 实例级 `do_not` |
+| 实例元数据 | 文件正文 | `id` / `summary` / `stability` / 实例级 `do_not` |
 | 人类注释 | 文件第一行 | 一句 `# <用途>`，不承载机器信息 |
 
 ```yaml
@@ -299,7 +299,7 @@ table:
 ```
 
 - 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖
-- `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 前必须替换 TODO 并跑 `make contract-check`；`deprecated` 必须写 `deprecation` 块
+- `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 前必须替换 TODO 并跑 `make contract-check`；`deprecated` 只能向前流转
 - 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` / `data.tables.base` 按完整 ID 匹配 `_meta/_types.yaml`），文件无需声明 `type`
 - 生效元数据 = `_meta/_types.yaml` + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移

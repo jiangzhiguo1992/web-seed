@@ -4,11 +4,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/yourorg/web-seed/apps/api/internal/contractspec"
+	"gopkg.in/yaml.v3"
 )
 
 func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map[string]bool) {
@@ -79,6 +81,7 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 		"stability": true, "do_not": true, "columns": true,
 	}
 	c.validateDoc(doc, filterFields(schema.Fields, allowed), rel)
+	c.checkStability(doc, rel)
 	if s, ok := doc["summary"].(string); ok && s == "" {
 		c.errf("%s: summary must not be empty", rel)
 	}
@@ -302,36 +305,56 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 
 func (c *Checker) checkStability(doc map[string]any, rel string) {
 	stability, _ := doc["stability"].(string)
-	if stability != "stable" && doc["review"] != nil {
-		c.errf("%s: review is only allowed when stability is stable", rel)
-	}
-	if stability != "deprecated" && doc["deprecation"] != nil {
-		c.errf("%s: deprecation is only allowed when stability is deprecated", rel)
-	}
-	switch stability {
-	case "stable":
+	if stability == "stable" {
 		b, err := os.ReadFile(filepath.Join(c.root, rel))
-		if err != nil {
-			return
-		}
-		for _, marker := range []string{"TODO", "FIXME"} {
-			if strings.Contains(string(b), marker) {
-				c.errf("%s: stable contract contains %s placeholder", rel, marker)
+		if err == nil {
+			for _, marker := range []string{"TODO", "FIXME"} {
+				if strings.Contains(string(b), marker) {
+					c.errf("%s: stable contract contains %s placeholder", rel, marker)
+				}
 			}
 		}
-	case "deprecated":
-		dep, ok := asMap(doc["deprecation"])
-		if !ok {
-			c.errf("%s: deprecated contract requires deprecation block", rel)
-			return
-		}
-		if !hasNonEmptyString(dep, "reason") {
-			c.errf("%s: deprecation.reason must not be empty", rel)
-		}
-		if !hasNonEmptyString(dep, "replacement") && !hasNonEmptyString(dep, "remove_after") {
-			c.errf("%s: deprecation requires replacement or remove_after", rel)
-		}
 	}
+	if prev, ok := c.headStability(rel); ok && !stabilityTransitionAllowed(prev, stability) {
+		c.errf("%s: invalid stability transition %s -> %s", rel, prev, stability)
+	}
+}
+
+// stabilityTransitionAllowed 只允许向前流转：
+// draft → stable、draft → deprecated、stable → deprecated。
+// deprecated 不能回到 draft/stable；stable 不能回退到 draft。
+func stabilityTransitionAllowed(prev, cur string) bool {
+	if prev == cur {
+		return true
+	}
+	switch prev {
+	case "draft":
+		return cur == "stable" || cur == "deprecated"
+	case "stable":
+		return cur == "deprecated"
+	case "deprecated":
+		return false
+	}
+	return true
+}
+
+// headStability 读取 HEAD 版本的状态；没有历史或不是 git 仓库时返回 false，
+// 不阻断本地编辑和新文件。
+func (c *Checker) headStability(rel string) (string, bool) {
+	if c.root == "" {
+		return "", false
+	}
+	out, err := exec.Command("git", "-C", c.root, "show", "HEAD:"+rel).Output()
+	if err != nil {
+		return "", false
+	}
+	var prev struct {
+		Stability string `yaml:"stability"`
+	}
+	if yaml.Unmarshal(out, &prev) != nil || prev.Stability == "" {
+		return "", false
+	}
+	return prev.Stability, true
 }
 
 // commonColumnFields 从 schema 的 columns.item_fields 派生通用列字段。

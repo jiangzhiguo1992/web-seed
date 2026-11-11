@@ -101,26 +101,9 @@ fields:
     required: true
     enum: [stable, draft, deprecated]
     default: draft
-    description: 契约稳定度；stable 必须通过 contract-check 且无 TODO
+    description: 契约稳定度；draft 可含 TODO，stable 必须通过 contract-check 且无 TODO，deprecated 表示已废弃
     generates: index 摘要
-    caution: 只能是 stable/draft/deprecated；状态流转由 review + PR 控制
-
-  - name: review
-    type: object
-    required: false
-    description: stable 契约的评审记录；draft 不写
-    fields:
-      - { name: by, type: string, required: true, description: 评审人/角色 }
-      - { name: at, type: string, required: true, pattern: '^\d{4}-\d{2}-\d{2}$', description: 评审日期 YYYY-MM-DD }
-
-  - name: deprecation
-    type: object
-    required: false
-    description: deprecated 契约的替代与移除计划
-    fields:
-      - { name: reason, type: string, required: true, description: 废弃原因 }
-      - { name: replacement, type: string, required: false, description: 替代契约 ID }
-      - { name: remove_after, type: string, required: false, pattern: '^\d{4}-\d{2}-\d{2}$', description: 最早移除日期 }
+    caution: 只能按 draft→stable、draft→deprecated、stable→deprecated 向前流转
 
   - name: kind
     type: string
@@ -286,5 +269,5 @@ rules:
   - { id: unique-names, text: "列 / 约束 / 索引名在同一表内唯一" }
   - { id: physical-name-unique, text: "物理表名全局唯一" }
   - { id: retention-positive, text: "table.retention 的值必须是 >= 1 的整数" }
-  - { id: stability-stable, text: "stable 前必须替换 TODO/FIXME、跑 contract-check，并用 review 记录评审人/日期" }
-  - { id: stability-deprecated, text: "deprecated 必须写 deprecation.reason，以及 replacement 或 remove_after" }
+  - { id: stability-stable, text: "stable 前必须替换 TODO/FIXME 并跑 contract-check" }
+  - { id: stability-transition, text: "stability 只能 draft→stable、draft→deprecated、stable→deprecated；禁止回退" }

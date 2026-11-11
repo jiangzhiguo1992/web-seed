@@ -59,20 +59,30 @@ func TestCheckStability(t *testing.T) {
 
 	c = &Checker{}
 	c.checkStability(map[string]any{"stability": "deprecated"}, "x.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "deprecated contract requires deprecation block") {
-		t.Fatalf("missing deprecation not reported: %v", c.errs)
-	}
-
-	c = &Checker{}
-	c.checkStability(map[string]any{
-		"stability": "deprecated",
-		"deprecation": map[string]any{
-			"reason":      "replaced",
-			"replacement": "data.tables.y",
-		},
-	}, "x.yaml")
 	if len(c.errs) != 0 {
-		t.Fatalf("valid deprecation reported: %v", c.errs)
+		t.Fatalf("deprecated without history reported: %v", c.errs)
+	}
+}
+
+func TestStabilityTransition(t *testing.T) {
+	cases := []struct {
+		prev, cur string
+		want      bool
+	}{
+		{"draft", "draft", true},
+		{"draft", "stable", true},
+		{"draft", "deprecated", true},
+		{"stable", "stable", true},
+		{"stable", "deprecated", true},
+		{"stable", "draft", false},
+		{"deprecated", "deprecated", true},
+		{"deprecated", "draft", false},
+		{"deprecated", "stable", false},
+	}
+	for _, tc := range cases {
+		if got := stabilityTransitionAllowed(tc.prev, tc.cur); got != tc.want {
+			t.Errorf("stabilityTransitionAllowed(%q, %q) = %v, want %v", tc.prev, tc.cur, got, tc.want)
+		}
 	}
 }
 
