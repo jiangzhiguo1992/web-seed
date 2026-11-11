@@ -1,11 +1,11 @@
-// 将 contracts/design/tokens.json 生成为 Tailwind v4 的 @theme 块。
+// 将 contracts/platform/design/tokens.json 生成为 Tailwind v4 的 @theme 块。
 //
 // 这是"设计契约 → CSS 变量"的唯一生成入口；theme.css 是生成物，禁止手改。
-// 真相源在 contracts/design/tokens.json，本包只负责生成与分发。
+// 真相源在 contracts/platform/design/tokens.json，本包只负责生成与分发。
 // 支持两层结构：color.brand.500 → --color-brand-500。
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const tokens = JSON.parse(readFileSync(new URL('../../../contracts/design/tokens.json', import.meta.url), 'utf8'))
+const tokens = JSON.parse(readFileSync(new URL('../../../contracts/platform/design/tokens.json', import.meta.url), 'utf8'))
 
 const lines = ['/* 生成物：由 scripts/build.mjs 从 tokens.json 生成，禁止手改。 */', '@theme {']
 

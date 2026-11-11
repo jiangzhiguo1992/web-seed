@@ -1,0 +1,48 @@
+# contract: platform.obs.metrics
+# summary: 指标名与标签唯一来源。默认注册但不导出（exporter=none）。
+# enforcement: generated
+# consumers: [api, ops]
+# refs: [platform.obs.log]
+# generates:
+#   - apps/api/internal/generated/platform/metrics.go
+# do_not:
+#   - 不要用高基数标签（user_id / entity_id / path 实际值）
+#   - 不要新增未登记指标
+#   - 不要改指标名（会断裂历史数据）
+
+schema_version: 1
+id: platform.obs.metrics
+summary: 指标名与标签
+stability: stable
+
+naming:
+  pattern: "<subsystem>_<name>_<unit>"
+  unit_suffixes: [_total, _seconds, _bytes, _ratio]
+
+metrics:
+  # ---------- HTTP ----------
+  - { name: http_requests_total, type: counter, labels: [method, route, status], description: 请求总数 }
+  - { name: http_request_duration_seconds, type: histogram, labels: [method, route], buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5], description: 请求耗时 }
+  - { name: http_in_flight, type: gauge, labels: [], description: 在途请求数 }
+  - { name: http_request_bytes, type: histogram, labels: [method], buckets: [128, 512, 2048, 8192, 32768, 131072], description: 请求体大小 }
+  - { name: http_response_bytes, type: histogram, labels: [method], buckets: [128, 512, 2048, 8192, 32768, 131072], description: 响应体大小 }
+
+  # ---------- 数据库 ----------
+  - { name: db_query_duration_seconds, type: histogram, labels: [operation, table], buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1], description: 查询耗时 }
+  - { name: db_pool_conns, type: gauge, labels: [state], description: 连接池状态 }
+  - { name: db_errors_total, type: counter, labels: [operation, code], description: 数据库错误 }
+
+  # ---------- 任务 ----------
+  - { name: job_duration_ms, type: histogram, labels: [job], buckets: [100, 500, 1000, 5000, 30000, 300000], description: 任务耗时 }
+  - { name: job_failed_total, type: counter, labels: [job, reason], description: 任务失败 }
+  - { name: job_last_success_timestamp, type: gauge, labels: [job], description: 最近成功时间 }
+
+label_rules:
+  low_cardinality_only: true
+  forbidden_labels: [user_id, entity_id, request_id, trace_id, email, ip]
+  route_label: 使用路由模板，不使用实际路径
+
+exporter:
+  default: none
+  options: [none, otlp]
+  config_source: platform.config.env

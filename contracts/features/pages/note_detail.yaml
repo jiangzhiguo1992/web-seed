@@ -1,0 +1,67 @@
+# contract: feature.page.note_detail
+# summary: 笔记详情页。四态与可用动作由状态机决定。
+# enforcement: generated+tested
+# consumers: [web/admin]
+# refs: [cap.http.notes.get, domain.state.note, platform.sec.permissions, platform.errors]
+# do_not:
+#   - 不要在前端判断状态合法性，使用 domain.state.note 生成的转换表
+#   - 不要省略 forbidden 态
+
+schema_version: 1
+id: feature.page.note_detail
+summary: 笔记详情页
+stability: stable
+page: note_detail
+route: feature.route.note_detail
+
+data:
+  detail:
+    capability: cap.http.notes.get
+    params:
+      id: { from: route.params.id, type: uuid, required: true }
+    cache:
+      stale_time: 10s
+
+states:
+  loading:
+    when: "query.isPending"
+    ui: skeleton-detail
+  empty:
+    when: "false"
+    note: 详情页无空态，不存在时进入 error/not_found
+  error:
+    when: "query.isError"
+    ui: error-panel
+    show: "problem.detail"
+  forbidden:
+    when: "problem.code == 'NOTE_FORBIDDEN'"
+    ui: forbidden-panel
+
+actions:
+  edit:
+    capability: cap.http.notes.update
+    permission: platform.permission.note_write
+    available_when: "domain.entity.note.is_editable"
+    ui: primary-button
+  archive:
+    capability: cap.http.notes.archive
+    permission: platform.permission.note_write
+    available_when: "canTransition('archive')"
+    confirm: true
+  delete:
+    capability: cap.http.notes.delete
+    permission: platform.permission.note_write
+    available_when: "canTransition('delete')"
+    confirm: true
+    danger: true
+
+fields:
+  - { name: title, render: heading }
+  - { name: status, enum: domain.state.note.states, render: badge }
+  - { name: body, render: markdown }
+  - { name: updated_at, render: relative_time }
+  - { name: version, render: hidden }
+
+transition_ui:
+  source: domain.state.note.events
+  rule: 只渲染 from 包含当前状态的按钮；点击前调用 canTransition()

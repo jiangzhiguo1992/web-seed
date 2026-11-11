@@ -1,0 +1,66 @@
+# contract: platform.sec.auth
+# summary: 认证与会话策略。影响 cookie、CSRF、token 生命周期。
+# enforcement: tested
+# consumers: [api, web/admin]
+# refs: [platform.environments, platform.errors, platform.sec.roles]
+# do_not:
+#   - 不要把 refresh token 放进 localStorage
+#   - 不要在 token 里放 PII
+#   - 不要省略 token 的 audience 校验
+
+schema_version: 1
+id: platform.sec.auth
+summary: 会话与认证策略
+stability: stable
+
+token:
+  access:
+    type: jwt
+    algorithm: HS256
+    ttl: 15m
+    claims_required: [sub, aud, exp, iat, jti]
+    audience: [web/admin]
+    pii_in_token: false
+  refresh:
+    type: opaque
+    ttl: 30d
+    rotation: true                  # 每次刷新换新 token，旧的作废
+    reuse_detection: true           # 复用旧 token 即吊销全部会话
+    storage: httpOnly_cookie
+    cookie:
+      name: refresh_token
+      same_site: Lax
+      secure: platform.environments（security.cookie_secure）
+      path: /v1/auth/refresh
+      http_only: true
+
+session:
+  max_concurrent: 5
+  idle_timeout: 7d
+  absolute_timeout: 30d
+  revoke_on_password_change: true
+  store: database
+
+csrf:
+  strategy: double_submit_cookie
+  applies_to: cookie_based_endpoints
+  header: X-CSRF-Token
+  exempt: [GET, HEAD, OPTIONS]
+
+password:
+  algorithm: argon2id
+  min_length: 12
+  require_mixed_case: false
+  max_attempts: 5
+  lockout: 15m
+  breach_check: true
+
+mfa:
+  required_for_roles: [admin]
+  methods: [totp]
+  recovery_codes: 10
+
+authorization:
+  model: rbac + resource_rule
+  note: 角色决定"能不能做"，domain.rule 决定"能不能对这个资源做"
+  deny_by_default: true

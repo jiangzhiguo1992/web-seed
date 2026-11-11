@@ -105,7 +105,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 }
 
-// requestLogger 输出结构化访问日志，字段名与 contracts/observability/log-fields.yaml 对齐。
+// requestLogger 输出结构化访问日志，字段名与 contracts/platform/observability/log-fields.yaml 对齐。
 func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

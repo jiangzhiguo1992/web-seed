@@ -1,0 +1,53 @@
+# contract: platform.errors
+# summary: 错误码唯一来源。代码禁止裸字符串，文案 key 由 code 派生。
+# enforcement: generated+tested
+# consumers: [api, web/admin]
+# refs: [capabilities/http/shared, platform.http_conventions]
+# generates:
+#   - apps/api/internal/generated/platform/errors.go
+#   - packages/api-client/src/generated/errors.ts
+#   - docs/reference/generated/errors.md
+# do_not:
+#   - 不要在代码里写字符串错误码
+#   - 不要复用错误码表达不同含义
+#   - 不要新增错误码超过 50 个总量
+
+schema_version: 1
+id: platform.errors
+summary: 错误码与 HTTP 映射
+stability: stable
+
+naming:
+  pattern: "<DOMAIN>_<REASON>"
+  common_prefix: COMMON_
+  max_total: 50
+
+errors:
+  # ---------- 通用 ----------
+  - { code: COMMON_BAD_REQUEST, status: 400, retryable: false, i18n: errors.common.bad_request, message: 请求参数不合法 }
+  - { code: COMMON_UNAUTHORIZED, status: 401, retryable: false, i18n: errors.common.unauthorized, message: 未认证 }
+  - { code: COMMON_FORBIDDEN, status: 403, retryable: false, i18n: errors.common.forbidden, message: 无权限 }
+  - { code: COMMON_NOT_FOUND, status: 404, retryable: false, i18n: errors.common.not_found, message: 资源不存在 }
+  - { code: COMMON_CONFLICT, status: 409, retryable: false, i18n: errors.common.conflict, message: 状态冲突 }
+  - { code: COMMON_RATE_LIMITED, status: 429, retryable: true, i18n: errors.common.rate_limited, message: 请求过于频繁 }
+  - { code: COMMON_INTERNAL, status: 500, retryable: true, i18n: errors.common.internal, message: 服务端错误 }
+  - { code: COMMON_UNAVAILABLE, status: 503, retryable: true, i18n: errors.common.unavailable, message: 服务暂不可用 }
+
+  # ---------- 笔记 ----------
+  - { code: NOTE_NOT_FOUND, status: 404, retryable: false, i18n: errors.note.not_found, message: 笔记不存在 }
+  - { code: NOTE_FORBIDDEN, status: 403, retryable: false, i18n: errors.note.forbidden, message: 无权操作该笔记 }
+  - { code: NOTE_TITLE_REQUIRED, status: 400, retryable: false, i18n: errors.note.title_required, message: 标题不能为空 }
+  - { code: NOTE_VERSION_CONFLICT, status: 409, retryable: true, i18n: errors.note.version_conflict, message: 内容已被修改，请刷新后重试 }
+  - { code: NOTE_ILLEGAL_TRANSITION, status: 409, retryable: false, i18n: errors.note.illegal_transition, message: 当前状态不允许该操作 }
+  - { code: NOTE_ILLEGAL_STATE, status: 500, retryable: false, i18n: errors.note.illegal_state, message: 数据状态非法 }
+  - { code: NOTE_ALREADY_DELETED, status: 409, retryable: false, i18n: errors.note.already_deleted, message: 笔记已删除 }
+
+mapping_rules:
+  - { status: 400, when: 请求体/参数校验失败 }
+  - { status: 401, when: 缺失或无效凭据 }
+  - { status: 403, when: 已认证但无权限 }
+  - { status: 404, when: 资源不存在或对当前用户不可见 }
+  - { status: 409, when: 版本冲突、状态冲突、唯一约束 }
+  - { status: 422, when: 语义校验失败（格式正确但业务不接受） }
+  - { status: 429, when: 触发限流 }
+  - { status: 500, when: 未预期错误，必须记日志并含 request_id }

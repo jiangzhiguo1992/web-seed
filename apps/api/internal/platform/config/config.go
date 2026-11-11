@@ -3,7 +3,7 @@
 // 设计决策：
 //   - 12-factor：只从环境变量读取，不从文件读
 //   - fail-fast：非法值直接返回错误，由 main 终止进程
-//   - P2 起由 contracts/config/env.schema.json 作为真相源，测试断言 key 集合一致
+//   - P2 起由 contracts/platform/config/env.schema.json 作为真相源，测试断言 key 集合一致
 //
 // 职责边界：
 //   - 只做读取与校验，不持有全局状态

@@ -1,0 +1,86 @@
+# contract: platform.analytics.events
+# summary: 埋点事件唯一来源。未登记事件编译失败；pii: true 的属性生成时剔除。
+# enforcement: generated
+# consumers: [web/admin, api]
+# refs: [features/pages/*]
+# generates:
+#   - packages/api-client/src/generated/analytics.ts
+#   - apps/api/internal/generated/platform/analytics.go
+# do_not:
+#   - 不要用未登记的事件名
+#   - 不要在属性里放 PII
+#   - 不要用自由文本做属性值（不可聚合）
+
+schema_version: 1
+id: platform.analytics.events
+summary: 埋点事件与属性
+stability: draft
+
+naming:
+  pattern: "<domain>.<past_tense>"
+  property_case: snake_case
+  id_policy: 埋点事件使用 name 作为唯一标识，不进入 ID 图；图校验只检查事件名集合
+
+common_properties:
+  - { name: app, type: string, pii: false }
+  - { name: env, type: string, pii: false }
+  - { name: session_id, type: string, pii: false }
+  - { name: page, type: string, pii: false }
+
+events:
+  # ---------- 页面 ----------
+  - name: page.note_list_viewed
+    description: 笔记列表页曝光
+    trigger: mount
+    properties:
+      - { name: item_count, type: integer, pii: false }
+      - { name: filter_status, type: string, pii: false }
+
+  # ---------- 动作 ----------
+  - name: note.create_clicked
+    description: 点击新建笔记
+    trigger: click
+    properties: []
+
+  - name: note.created
+    description: 笔记创建成功
+    trigger: api_success
+    ref: cap.http.notes.create
+    properties:
+      - { name: note_id, type: string, pii: false }
+      - { name: has_body, type: boolean, pii: false }
+      - { name: duration_ms, type: integer, pii: false }
+
+  - name: note.archived
+    description: 笔记归档成功
+    trigger: api_success
+    ref: cap.http.notes.archive
+    properties:
+      - { name: note_id, type: string, pii: false }
+
+  - name: note.deleted
+    description: 笔记删除成功
+    trigger: api_success
+    ref: cap.http.notes.delete
+    properties:
+      - { name: note_id, type: string, pii: false }
+
+  # ---------- 失败 ----------
+  - name: request.failed
+    description: 请求失败
+    trigger: api_error
+    properties:
+      - { name: capability, type: string, pii: false }
+      - { name: error_code, type: string, pii: false }
+      - { name: status, type: integer, pii: false }
+
+forbidden_properties:
+  - title
+  - body
+  - email
+  - phone
+  - token
+
+provider:
+  default: noop
+  options: [noop, console, http]

@@ -1,0 +1,102 @@
+# contract: domain.event.note
+# summary: 笔记领域事件。状态转换与业务动作的副作用，供异步消费者订阅。
+# enforcement: generated+tested
+# consumers: [api, worker]
+# refs: [domain.entity.note, domain.state.note]
+# generates:
+#   - apps/api/internal/generated/domain/note_events.go
+#   - packages/api-client/src/generated/domain/note_events.ts
+# do_not:
+#   - 不要在事件里放 PII（title / body 禁止）
+#   - 不要复用事件名表达不同语义
+#   - 不要省略 version（破坏兼容需升版本）
+
+schema_version: 1
+id: domain.event.note
+summary: 笔记领域事件
+stability: stable
+scope: note
+delivery: at_least_once
+
+events:
+  - id: domain.event.note_created
+    name: note.created
+    version: 1
+    trigger: cap.internal.notes.Create
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, owner_id, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        owner_id: { type: string, format: uuid }
+        status: { type: string, enum: [draft, active, archived] }
+        created_at: { type: string, format: date-time }
+
+  - id: domain.event.note_updated
+    name: note.updated
+    version: 1
+    trigger: cap.internal.notes.Update
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, version, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer }
+        changed_fields: { type: array, items: { type: string } }
+        updated_at: { type: string, format: date-time }
+
+  - id: domain.event.note_published
+    name: note.published
+    version: 1
+    trigger: domain.state.note.transition#publish
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, published_at]
+      properties:
+        id: { type: string, format: uuid }
+        published_at: { type: string, format: date-time }
+
+  - id: domain.event.note_archived
+    name: note.archived
+    version: 1
+    trigger: domain.state.note.transition#archive
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, archived_at]
+      properties:
+        id: { type: string, format: uuid }
+        archived_at: { type: string, format: date-time }
+
+  - id: domain.event.note_deleted
+    name: note.deleted
+    version: 1
+    trigger: domain.state.note.transition#delete
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, deleted_at]
+      properties:
+        id: { type: string, format: uuid }
+        deleted_at: { type: string, format: date-time }
+
+  - id: domain.event.notes_cleaned
+    name: notes.cleaned
+    version: 1
+    trigger: cap.async.notes_cleanup
+    payload:
+      type: object
+      additionalProperties: false
+      required: [deleted_count, executed_at]
+      properties:
+        deleted_count: { type: integer }
+        executed_at: { type: string, format: date-time }
+
+consumers:
+  - module: audit
+    events: [note.created, note.updated, note.published, note.archived, note.deleted]
+  - module: notification
+    events: [note.published]

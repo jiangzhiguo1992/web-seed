@@ -1,0 +1,94 @@
+# contract: feature.page.note_list
+# summary: 笔记列表页。四态必须齐全，数据源必须引用 capability。
+# enforcement: generated+tested
+# consumers: [web/admin]
+# refs: [cap.http.notes.list, domain.state.note, platform.sec.permissions, platform.errors]
+# generates:
+#   - apps/web/admin/src/generated/pages/note_list.ts
+#   - apps/web/admin/src/pages/note_list/（骨架）
+# do_not:
+#   - 不要手写 URL，必须使用 capability 的 operationId
+#   - 不要省略四态
+#   - 不要直接引用 data.*
+#   - 不要在页面里重复后端校验规则
+
+schema_version: 1
+id: feature.page.note_list
+summary: 笔记列表页
+stability: stable
+page: note_list
+route: feature.route.note_list
+
+data:
+  list:
+    capability: cap.http.notes.list
+    params:
+      status: { from: query.status, enum: domain.state.note.states, optional: true }
+      page_size: { from: query.page_size, type: integer, default: 20 }
+    cache:
+      stale_time: 30s
+      refetch_on_focus: false
+
+states:
+  loading:
+    when: "query.isPending"
+    ui: skeleton-table
+  empty:
+    when: "query.isSuccess && items.length == 0"
+    ui: empty-state
+    action: create
+  error:
+    when: "query.isError"
+    ui: error-panel
+    show: "problem.detail"
+    retry: true
+  forbidden:
+    when: "!hasPermission('platform.permission.note_read')"
+    ui: forbidden-panel
+
+actions:
+  create:
+    capability: cap.http.notes.create
+    permission: platform.permission.note_write
+    ui: primary-button
+    label: 新建笔记
+    on_success: navigate(feature.flow.note_create.success_target)
+  archive:
+    capability: cap.http.notes.archive
+    permission: platform.permission.note_write
+    ui: row-action
+    label: 归档
+    confirm: true
+    available_when: "row.status == active"
+  delete:
+    capability: cap.http.notes.delete
+    permission: platform.permission.note_write
+    ui: row-action
+    label: 删除
+    confirm: true
+    danger: true
+    available_when: "row.status != deleted"
+
+fields:
+  - { name: title, render: text }
+  - { name: status, enum: domain.state.note.states, render: badge }
+  - { name: updated_at, render: relative_time }
+
+filters:
+  - { name: status, enum: domain.state.note.states, multiple: false, label: 状态 }
+
+pagination:
+  style: cursor
+  param: cursor
+  page_size_default: 20
+  page_size_max: 100
+
+empty_copy:
+  title: 还没有笔记
+  description: 创建第一条笔记开始使用
+  action_label: 新建笔记
+
+analytics:
+  page_view: page.note_list_viewed
+  actions:
+    create: note.create_clicked

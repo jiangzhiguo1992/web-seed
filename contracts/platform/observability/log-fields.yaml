@@ -1,0 +1,68 @@
+# contract: platform.obs.log
+# summary: 日志字段唯一来源。未登记字段 CI 警告；pii: true 的字段禁止进入日志。
+# enforcement: generated+tested
+# consumers: [api, ops]
+# refs: [platform.environments, platform.errors]
+# generates:
+#   - apps/api/internal/generated/platform/logfields.go
+#   - packages/api-client/src/generated/logfields.ts
+# do_not:
+#   - 不要用未登记的字段名（会造成聚合断裂）
+#   - 不要记录 pii: true 的字段
+#   - 不要在日志里拼字符串模板，使用结构化字段
+
+schema_version: 1
+id: platform.obs.log
+summary: 日志字段与 PII 规则
+stability: stable
+
+format: json
+timestamp: RFC3339Nano
+level_field: level
+
+required:
+  - { name: time, type: string, format: date-time }
+  - { name: level, type: string, enum: [debug, info, warn, error] }
+  - { name: msg, type: string }
+
+fields:
+  # ---------- 请求上下文 ----------
+  - { name: request_id, type: string, pii: false, required_for: [http] }
+  - { name: trace_id, type: string, pii: false, required_for: [http] }
+  - { name: span_id, type: string, pii: false }
+  - { name: method, type: string, pii: false, required_for: [http] }
+  - { name: path, type: string, pii: false, required_for: [http], note: 只记录路由模板，不记录真实参数 }
+  - { name: status, type: integer, pii: false, required_for: [http] }
+  - { name: duration_ms, type: integer, pii: false, required_for: [http] }
+  - { name: bytes, type: integer, pii: false }
+
+  # ---------- 身份 ----------
+  - { name: user_id, type: string, pii: true, note: 仅记录哈希或 ID，不记录邮箱/手机号 }
+  - { name: role, type: string, pii: false }
+  - { name: app, type: string, pii: false, required_for: [http, job] }
+
+  # ---------- 业务 ----------
+  - { name: module, type: string, pii: false }
+  - { name: entity, type: string, pii: false }
+  - { name: entity_id, type: string, pii: false }
+  - { name: error_code, type: string, pii: false, ref: platform.errors }
+  - { name: job, type: string, pii: false, required_for: [job] }
+  - { name: attempt, type: integer, pii: false, required_for: [job] }
+
+never_log:
+  - password
+  - token
+  - cookie
+  - authorization
+  - secret
+  - email
+  - phone
+  - "*_title"         # 任何 pii: true 的标题字段
+  - "*_body"          # 用户正文内容
+
+pii_source: "生成器汇总所有 data/tables/*.yaml 中 pii: true 的列，自动加入 never_log"
+
+rules:
+  - 路径记录路由模板（/v1/notes/{id}），不记录实际值
+  - 错误日志必须带 request_id 与 error_code
+  - 生产 level >= warn，debug 仅 dev 环境

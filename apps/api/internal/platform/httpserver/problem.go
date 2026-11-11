@@ -8,8 +8,8 @@ import (
 
 // Problem 是 RFC 9457 错误响应的最小实现。
 //
-// 字段与 contracts/openapi/shared/problem.yaml 保持一致；
-// code 为业务错误码，映射表见 contracts/domain/error-codes.yaml。
+// 字段与 contracts/capabilities/http/shared.yaml 的 Problem 保持一致；
+// code 为业务错误码，映射表见 contracts/platform/errors.yaml。
 type Problem struct {
 	Type   string  `json:"type"`
 	Title  string  `json:"title"`

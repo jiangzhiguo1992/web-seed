@@ -1,0 +1,56 @@
+# contract: domain.entity.note
+# summary: 笔记实体与不变量。字段类型引用 data 契约，不重复定义。
+# enforcement: generated+tested
+# consumers: [api]
+# refs: [data.table.notes, data.enum.note_status, domain.state.note]
+# generates:
+#   - apps/api/internal/generated/domain/note.go
+#   - packages/api-client/src/generated/domain/note.ts
+# do_not:
+#   - 不要在本文件重复定义字段类型与长度，引用 data.table.notes.col.*
+#   - 不要新增不变量而不写断言
+#   - 不要绕过 state 机直接改 status
+
+schema_version: 1
+id: domain.entity.note
+summary: 笔记实体
+stability: stable
+entity: Note
+
+fields:
+  - { name: id, ref: data.table.notes.col.id, required: true }
+  - { name: title, ref: data.table.notes.col.title, required: true }
+  - { name: body, ref: data.table.notes.col.body }
+  - { name: status, ref: data.table.notes.col.status, required: true }
+  - { name: user_id, ref: data.table.notes.col.user_id, required: true }
+  - { name: version, ref: data.table.notes.col.version, required: true }
+  - { name: created_at, ref: data.table.notes.col.created_at, required: true }
+  - { name: updated_at, ref: data.table.notes.col.updated_at, required: true }
+  - { name: deleted_at, ref: data.table.notes.col.deleted_at }
+
+invariants:
+  - id: inv_note_title_trimmed
+    description: 标题首尾空白必须去除后非空
+    assert: "trim(title) != ''"
+    on_violation: platform.error.NOTE_TITLE_REQUIRED
+
+  - id: inv_note_state_known
+    description: status 必须是状态机的合法状态
+    assert: "status in domain.state.note.states"
+    on_violation: platform.error.NOTE_ILLEGAL_STATE
+
+  - id: inv_note_soft_delete_consistency
+    description: 已软删的记录不允许再被修改
+    assert: "deleted_at == nil || action == 'read'"
+    on_violation: platform.error.NOTE_ALREADY_DELETED
+
+lifecycle:
+  created_by: CreateNote
+  updated_by: UpdateNoteVersioned
+  deleted_by: SoftDeleteNote
+  default_state: draft
+
+derived:
+  - name: is_editable
+    description: 仅 draft 与 active 可编辑
+    expr: "status in [draft, active] && deleted_at == nil"

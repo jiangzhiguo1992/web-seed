@@ -1,0 +1,91 @@
+# contract: data.query.notes
+# summary: 笔记查询集。SQL 是契约字段，queries/*.sql 由本文件生成。
+# enforcement: generated+tested
+# consumers: [api]
+# refs: [data.table.notes, data.enum.note_status]
+# generates:
+#   - apps/api/queries/notes.sql
+#   - apps/api/internal/generated/db/notes.sql.go
+# do_not:
+#   - 不要在 repo 层手写 SQL，所有语句必须登记在此
+#   - 不要写 SELECT *，列必须显式或引用整行类型
+#   - 不要绕过软删过滤
+
+schema_version: 1
+id: data.query.notes
+summary: 笔记查询集
+stability: stable
+module: notes
+
+queries:
+  - name: GetNote
+    kind: one
+    params:
+      - { name: id, type: uuid }
+    returns: data.table.notes.row
+    semantics: 已软删的记录视为不存在
+    sql: |
+      SELECT * FROM notes
+      WHERE id = @id AND deleted_at IS NULL;
+
+  - name: ListNotes
+    kind: many
+    params:
+      - { name: user_id, type: uuid }
+      - { name: status, type: data.enum.note_status, nullable: true }
+      - { name: cursor_created_at, type: timestamptz, nullable: true }
+      - { name: cursor_id, type: uuid, nullable: true }
+      - { name: page_size, type: integer, max: 100, default: 20 }
+    returns: "[]data.table.notes.row"
+    semantics: 按 created_at DESC, id DESC 游标分页；status 为空表示不过滤
+    sql: |
+      SELECT * FROM notes
+      WHERE deleted_at IS NULL
+        AND user_id = @user_id
+        AND (@status::text IS NULL OR status = @status)
+        AND (
+          @cursor_created_at::timestamptz IS NULL
+          OR (created_at, id) < (@cursor_created_at, @cursor_id)
+        )
+      ORDER BY created_at DESC, id DESC
+      LIMIT @page_size;
+
+  - name: CreateNote
+    kind: one
+    params:
+      - { name: id, type: uuid }
+      - { name: user_id, type: uuid }
+      - { name: title, type: text }
+      - { name: body, type: text, nullable: true }
+    returns: data.table.notes.row
+    semantics: 初始状态为 draft
+    sql: |
+      INSERT INTO notes (id, user_id, title, body, status)
+      VALUES (@id, @user_id, @title, @body, 'draft')
+      RETURNING *;
+
+  - name: UpdateNoteVersioned
+    kind: execrows
+    params:
+      - { name: id, type: uuid }
+      - { name: title, type: text }
+      - { name: body, type: text, nullable: true }
+      - { name: version, type: integer }
+    returns: affected_rows
+    semantics: 乐观锁；返回 0 表示版本冲突，调用方须报 platform.error.NOTE_VERSION_CONFLICT
+    sql: |
+      UPDATE notes
+      SET title = @title, body = @body, updated_at = now(), version = version + 1
+      WHERE id = @id AND version = @version AND deleted_at IS NULL;
+
+  - name: SoftDeleteNote
+    kind: execrows
+    params:
+      - { name: id, type: uuid }
+      - { name: version, type: integer }
+    returns: affected_rows
+    semantics: 软删；幂等（已删返回 0）
+    sql: |
+      UPDATE notes
+      SET deleted_at = now(), updated_at = now(), version = version + 1
+      WHERE id = @id AND version = @version AND deleted_at IS NULL;

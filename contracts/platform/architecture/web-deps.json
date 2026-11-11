@@ -1,0 +1,48 @@
+{
+  "$comment": "contract: platform.arch.web | 前端依赖方向唯一真相源。生成 dependency-cruiser 配置。",
+  "id": "platform.arch.web",
+  "summary": "前端依赖方向约束",
+  "stability": "stable",
+  "enforcement": "tested",
+  "consumers": ["tools"],
+  "generates": [".dependency-cruiser.js"],
+  "do_not": [
+    "不要在 shared 里 import features 或 pages",
+    "不要让 app 之间互相 import（共享走 packages/*）",
+    "不要在页面里直接 fetch，必须用 packages/api-client"
+  ],
+  "layers": [
+    { "name": "app", "in": "src/app/**" },
+    { "name": "pages", "in": "src/pages/**" },
+    { "name": "features", "in": "src/features/**" },
+    { "name": "shared", "in": "src/shared/**" },
+    { "name": "generated", "in": "src/generated/**" }
+  ],
+  "rules": [
+    { "from": "app", "mayDependOn": ["pages", "features", "shared", "generated"] },
+    { "from": "pages", "mayDependOn": ["features", "shared", "generated"] },
+    { "from": "features", "mayDependOn": ["shared", "generated"] },
+    { "from": "shared", "mayDependOn": ["generated"], "forbid": ["pages", "features", "app"] },
+    { "from": "generated", "mayDependOn": [], "forbid": ["app", "pages", "features", "shared"] }
+  ],
+  "forbiddenModules": [
+    {
+      "name": "no-direct-fetch",
+      "from": { "path": "src/**", "pathNot": "src/generated/**" },
+      "to": { "path": "^(node:)?(undici|axios|ky)$" },
+      "reason": "必须通过 packages/api-client"
+    },
+    {
+      "name": "no-cross-app-import",
+      "from": { "path": "^apps/web/([^/]+)/" },
+      "to": { "path": "^apps/web/(?!\\1)/" },
+      "reason": "应用之间禁止互相 import，共享走 packages/*"
+    },
+    {
+      "name": "no-handwritten-api-types",
+      "from": { "path": "src/(?!generated)" },
+      "to": { "path": "src/generated/" },
+      "comment": "允许从 generated 读取类型，但禁止手写同形类型（由 lint 规则补充）"
+    }
+  ]
+}

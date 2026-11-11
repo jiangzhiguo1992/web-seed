@@ -1,0 +1,54 @@
+# contract: platform.sec.roles
+# summary: 角色与权限映射。生成常量与 seed 数据来源。
+# enforcement: generated+tested
+# consumers: [api, web/admin]
+# refs: [platform.sec.permissions, data.seed.roles]
+# generates:
+#   - apps/api/internal/generated/platform/roles.go
+#   - packages/api-client/src/generated/roles.ts
+# do_not:
+#   - 不要在角色里硬编码权限字符串，引用 platform.permission.*
+#   - 不要创建"临时角色"绕过权限模型
+#   - 角色继承深度不超过 2 层
+
+schema_version: 1
+id: platform.sec.roles
+summary: 角色与权限映射
+stability: stable
+
+roles:
+  - code: admin
+    name: 管理员
+    description: 全部权限
+    inherits: []
+    permissions: ["*"]
+    mfa_required: true
+
+  - code: editor
+    name: 编辑
+    description: 可管理笔记
+    inherits: [viewer]
+    permissions:
+      - platform.permission.note_write
+      - platform.permission.note_delete
+
+  - code: viewer
+    name: 只读
+    description: 仅查看
+    inherits: []
+    permissions:
+      - platform.permission.note_read
+
+  - code: auditor
+    name: 审计员
+    description: 只读 + 审计日志
+    inherits: [viewer]
+    permissions:
+      - platform.permission.audit_read
+
+constraints:
+  max_inheritance_depth: 2
+  cycle_forbidden: true
+  unknown_permission_forbidden: true
+
+default_role: viewer

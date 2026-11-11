@@ -95,13 +95,13 @@
 
 #### P2 契约生成链
 
-- [ ] `contracts/openapi/admin.yaml` → Go server 类型
+- [ ] `contracts/capabilities/http/notes.yaml` → Go server 类型
 - [ ] 同上 → `packages/api-client` TS 类型（`openapi-typescript` + `openapi-fetch`）
-- [ ] `contracts/config/env.schema.json` → `.env.example`（`gen-env.sh`）
-- [ ] `contracts/domain/error-codes.yaml` → Go 常量 + TS union
-- [ ] `contracts/domain/enums.yaml` → 同上（只收跨端枚举）
-- [ ] `contracts/design/tokens.json` → CSS variables（`@theme`）
-- [ ] `contracts/security/permissions.yaml` → Go/TS 常量
+- [ ] `contracts/platform/config/env.schema.json` → `.env.example`（`gen-env.sh`）
+- [ ] `contracts/platform/errors.yaml` → Go 常量 + TS union
+- [ ] `contracts/data/enums.yaml` → 同上（只收跨端枚举）
+- [ ] `contracts/platform/design/tokens.json` → CSS variables（`@theme`）
+- [ ] `contracts/platform/security/permissions.yaml` → Go/TS 常量
 - [ ] `make gen` 幂等：连续两次生成结果一致
 
 #### P3 后端地基（`internal/platform`）
@@ -120,7 +120,7 @@
 - [ ] 迁移：`notes` 表（含审计列、软删、乐观锁、部分唯一索引示例）
 - [ ] `queries/notes.sql` + sqlc 生成
 - [ ] `internal/modules/notes`（handler/service/repo 三段）
-- [ ] `contracts/openapi/admin.yaml` 补 notes 端点
+- [ ] `contracts/capabilities/http/notes.yaml` 补 notes 端点
 - [ ] `internal/composition/adminapi` 装配 + `routes_test.go`
 - [ ] `apps/web/admin`：列表/详情/创建三态页面
 - [ ] Playwright 跑通一条关键路径
@@ -200,40 +200,48 @@
 
 每类契约必须具备三件事：**有校验、有 playbook、有删除路径**，缺一即会腐烂。
 
-### 2.2 生成链
+### 2.2 五组结构
+
+| 组 | 职责 | 真相源 |
+|---|---|---|
+| `data/` | 表结构、枚举、查询、种子、迁移策略 | `data/tables/*.yaml`（**migrations 由此生成**） |
+| `capabilities/` | HTTP、异步任务、跨模块 service | `capabilities/**` |
+| `domain/` | 实体、状态机、规则、流程、领域事件、术语 | `domain/**` |
+| `features/` | 路由、页面、跨页旅程 | `features/**` |
+| `platform/` | 环境、版本、错误、HTTP 约定、质量、配置、架构、设计、观测、埋点、安全 | `platform/**` |
+
+`index.yaml` 是契约地图，`generated/` 是产物。详见 [`contracts/README.md`](../../contracts/README.md)。
+
+### 2.3 生成链
 
 ```
-contracts/openapi/*.yaml
-  ├─ oapi-codegen ──────> apps/api/internal/generated/openapi/   (Go server 类型)
-  └─ openapi-typescript ─> packages/api-client/src/generated/    (TS 类型)
+data/tables/*.yaml
+  ├─ schema.sql ──> sqlc ──> Go 查询代码
+  └─ diff DB ─────> migrations/*.sql
 
-apps/api/migrations + queries
-  └─ sqlc ─> apps/api/internal/generated/db/
+capabilities/http/*.yaml + shared.yaml
+  ├─ 合并 ─────────> generated/openapi/admin.yaml
+  ├─ oapi-codegen ─> apps/api/internal/generated/openapi/
+  └─ openapi-typescript ─> packages/api-client/src/generated/
 
-contracts/design/tokens.json
-  └─ design-tokens/build.mjs ─> packages/design-tokens/theme.css
+data/queries/*.yaml ──> queries/*.sql ──> sqlc
 
-contracts/domain/*.yaml
-  └─ 生成脚本 ─> Go 常量 + TS union
+domain/** ──> 状态机 / 常量 / 断言 / 测试骨架
+features/** ──> 路由 / 页面骨架 / 类型
+platform/** ──> 配置校验 / 常量 / CSS 变量
+
+全部 refs ──> generated/graph.json + lineage.md
 ```
 
 生成物入库，CI 用 `make gen && git diff --exit-code` 保证同步。
 
-### 2.3 九类一览
+### 2.4 锚点机制
 
-| 类型 | 真相源 |
-|---|---|
-| 接口 | `contracts/openapi/` |
-| 数据 | `apps/api/migrations` + `queries` |
-| 配置 | `contracts/config/env.schema.json` |
-| 领域 | `contracts/domain/` |
-| 设计 | `contracts/design/tokens.json` |
-| 架构 | `contracts/architecture/` |
-| HTTP | `contracts/http/envelope.yaml` |
-| 观测 | `contracts/observability/` |
-| 埋点 | `contracts/analytics/` |
-
-详细说明见 [`contracts/README.md`](../../contracts/README.md)。
+- ID 规范：`<group>.<type>.<scope>.<name>[.<item>]`
+- 跨文件引用写 ID，不写路径
+- 分层约束：`features → capabilities → data`，`domain → data`，`platform` 只被引用（三个例外）
+- 图校验：重复 ID / 悬空引用 / 越层 / 循环 / 孤儿
+- 影响面：`make contract-impact id=<id>`
 
 ---
 
@@ -353,7 +361,7 @@ internal/platform/             与业务无关的基础设施
 - 禁止把 `*pgx.Tx` 当参数层层传递
 - 事务只在 service 层开启，handler 不开事务
 
-### 5.4 数据规范（`contracts/db/README.md`）
+### 5.4 数据规范（`contracts/data/README.md`）
 
 - 主键 UUIDv7；时间列 `timestamptz`，统一 UTC
 - 业务表标准列：`created_at / updated_at / created_by / deleted_at / version`

@@ -1,0 +1,86 @@
+# contract: platform.http_conventions
+# summary: HTTP 信封、分页、header、状态码约定。只写规则，不写 schema。
+# enforcement: generated
+# consumers: [api, web/admin]
+# refs: [capabilities/http/shared, platform.errors]
+# generates:
+#   - apps/api/internal/generated/platform/http.go
+#   - packages/api-client/src/generated/http.ts
+# do_not:
+#   - 不要在本文件重复定义 Problem schema（唯一源是 capabilities/http/shared.yaml）
+#   - 不要在业务响应里包一层固定信封
+
+schema_version: 1
+id: platform.http_conventions
+summary: HTTP 信封与状态码约定
+stability: stable
+
+response:
+  success: 直接返回资源或集合，不额外包 code/message 信封
+  error: application/problem+json（RFC 9457）
+  empty:
+    status: 204
+    body: 无
+
+pagination:
+  style: cursor
+  request:
+    - { name: cursor, in: query, required: false }
+    - { name: page_size, in: query, required: false, default: 20, max: 100 }
+  response:
+    shape: "{ items: [], page: { has_more, next_cursor } }"
+    ordering: 必须稳定（有唯一 tiebreaker，如 id）
+  offset:
+    allowed: false
+    reason: 深分页性能与一致性不可控
+
+headers:
+  request:
+    - { name: X-Request-Id, required: false, note: 客户端可传，服务端校验或生成 }
+    - { name: Idempotency-Key, required: false, note: 幂等端点建议必传 }
+    - { name: Accept-Language, required: false, note: 用于错误文案 }
+  response:
+    - { name: X-Request-Id, required: true, note: 必须回传，便于关联日志 }
+    - { name: RateLimit-Limit, required: false }
+    - { name: RateLimit-Remaining, required: false }
+    - { name: RateLimit-Reset, required: false }
+    - { name: Deprecation, required: false }
+    - { name: Sunset, required: false }
+
+status_codes:
+  success: [200, 201, 202, 204]
+  client_error: [400, 401, 403, 404, 409, 413, 415, 422, 429]
+  server_error: [500, 502, 503, 504]
+  forbidden_usage:
+    - 200 表示错误
+    - 500 表示业务校验失败
+    - 302 用于 API 重定向
+
+content_types:
+  json: application/json
+  problem: application/problem+json
+  upload: multipart/form-data
+
+timeouts:
+  server_read_header: 5s
+  server_read: 15s
+  server_write: 30s
+  server_idle: 60s
+  handler_default: 10s
+  external_call_default: 3s
+
+limits:
+  max_body_bytes: 1048576
+  max_upload_bytes: 10485760
+  max_header_bytes: 16384
+
+cors:
+  allowed_origins_source: platform.environments
+  allow_credentials: true
+  max_age_seconds: 600
+
+idempotency:
+  header: Idempotency-Key
+  window: 24h
+  scope: [POST 创建类端点]
+  storage: 数据库唯一索引 + request hash

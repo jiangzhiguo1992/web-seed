@@ -1,0 +1,73 @@
+# contract: platform.environments
+# summary: 环境清单与差异。禁止在代码里按环境名写分支。
+# enforcement: tested
+# consumers: [ops, api, web/admin]
+# refs: [platform.config.env, platform.sec.auth]
+# generates:
+#   - apps/api/internal/generated/platform/environments.go
+#   - packages/api-client/src/generated/environments.ts
+# do_not:
+#   - 不要在代码里写 if env == "prod"
+#   - 不要为某个环境单独加未登记的配置项
+#   - 不要在环境差异里放业务逻辑
+
+schema_version: 1
+id: platform.environments
+summary: 环境清单与差异
+stability: stable
+
+environments:
+  - name: dev
+    description: 本地开发
+    api_base_url: http://localhost:8080
+    web_base_url: http://localhost:5173
+    debug: true
+    seed: true
+    logging: { level: debug, format: json }
+    security: { require_https: false, cookie_secure: false }
+
+  - name: test
+    description: 自动化测试
+    api_base_url: http://localhost:8080
+    web_base_url: http://localhost:5173
+    debug: false
+    seed: true
+    logging: { level: info, format: json }
+    security: { require_https: false, cookie_secure: false }
+
+  - name: staging
+    description: 预发布，与生产同构
+    api_base_url: https://api.staging.example.com
+    web_base_url: https://admin.staging.example.com
+    debug: false
+    seed: false
+    logging: { level: info, format: json }
+    security: { require_https: true, cookie_secure: true }
+
+  - name: prod
+    description: 生产
+    api_base_url: https://api.example.com
+    web_base_url: https://admin.example.com
+    debug: false
+    seed: false
+    logging: { level: warn, format: json }
+    security: { require_https: true, cookie_secure: true, require_mfa: true }
+
+differences:
+  # 唯一允许的环境差异清单，新增差异必须登记
+  - { key: debug, environments: [dev], note: 仅本地开启 pprof / verbose error }
+  - { key: seed, environments: [dev, test], note: 允许写入示例数据 }
+  - { key: security.cookie_secure, environments: [staging, prod], note: 强制 Secure 属性 }
+  - { key: security.require_mfa, environments: [prod], note: 管理员强制 MFA }
+
+secrets_source:
+  dev: .env.local
+  test: CI secrets
+  staging: 平台注入（不落盘）
+  prod: 平台注入（不落盘）
+
+# 禁止进入镜像与仓库的内容
+never_committed:
+  - .env.local
+  - "*.pem"
+  - "*.key"

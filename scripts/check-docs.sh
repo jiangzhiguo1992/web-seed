@@ -12,6 +12,8 @@ required=(
   "docs/index.md"
   "docs/guides/architecture.md"
   "contracts/README.md"
+  "contracts/index.yaml"
+  "contracts/data/README.md"
   "apps/api/go.mod"
   "apps/web/admin/package.json"
 )

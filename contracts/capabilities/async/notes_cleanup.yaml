@@ -1,0 +1,59 @@
+# contract: cap.async.notes_cleanup
+# summary: 定期清理过期草稿。五要素必须齐全，缺一即校验失败。
+# enforcement: generated+tested
+# consumers: [worker]
+# refs: [data.query.notes, platform.obs.log, platform.obs.metrics]
+# generates:
+#   - apps/api/internal/generated/jobs/notes_cleanup.go
+# do_not:
+#   - 不要在任务里写业务规则，规则引用 domain.rule.*
+#   - 不要省略 idempotency 与 retry
+
+schema_version: 1
+id: cap.async.notes_cleanup
+summary: 过期草稿清理任务
+stability: draft
+
+trigger:
+  type: cron
+  schedule: "0 3 * * *"        # 每日 03:00 UTC
+  timezone: UTC
+
+input:
+  type: object
+  additionalProperties: false
+  properties:
+    older_than_days: { type: integer, minimum: 1, default: 30 }
+    batch_size: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+
+output:
+  type: object
+  additionalProperties: false
+  required: [deleted_count]
+  properties:
+    deleted_count: { type: integer, minimum: 0 }
+
+idempotency:
+  key: "notes_cleanup:{date}:{older_than_days}"
+  window: 24h
+  rationale: 同一天重复执行结果一致，已删记录不会被再次匹配
+
+retry:
+  max_attempts: 3
+  backoff: exponential
+  initial_delay: 30s
+  max_delay: 10m
+  dead_letter: notes_cleanup_dlq
+
+concurrency:
+  max_in_flight: 1
+  rationale: 避免多实例同时扫同一批数据
+
+observability:
+  log_event: job.notes_cleanup.completed
+  metrics:
+    - platform.metric.job_duration_ms
+    - platform.metric.job_failed_total
+
+side_effects:
+  - domain.event.notes_cleaned

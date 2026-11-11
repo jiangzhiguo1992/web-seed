@@ -1,0 +1,48 @@
+# contract: feature.flow.note_create
+# summary: 创建笔记的用户旅程。只描述界面步骤与结果，不写实现。
+# enforcement: tested
+# consumers: [web/admin]
+# refs: [feature.page.note_list, cap.http.notes.create, feature.page.note_detail]
+# do_not:
+#   - 不要在本文件写组件或请求代码
+#   - 不要在流程里绕过 capability 直接调后端
+
+schema_version: 1
+id: feature.flow.note_create
+summary: 创建笔记用户旅程
+stability: draft
+entry: feature.page.note_list
+success_target: feature.page.note_detail
+
+steps:
+  - id: open
+    ui: 点击「新建笔记」
+    from: feature.page.note_list
+    to: feature.page.note_detail
+    state: draft
+
+  - id: fill
+    ui: 填写标题与正文
+    fields: [title, body]
+    validation:
+      - { field: title, rule: domain.rule.note.title_required, message_key: platform.error.NOTE_TITLE_REQUIRED }
+
+  - id: submit
+    ui: 提交
+    capability: cap.http.notes.create
+    idempotency: client_generated_key
+    loading_state: button_spinner
+    on_success: goto(detail)
+    on_error:
+      - { code: platform.error.NOTE_TITLE_REQUIRED, ui: inline_field_error, field: title }
+      - { code: platform.error.NOTE_FORBIDDEN, ui: toast }
+      - { code: platform.error.COMMON_INTERNAL, ui: toast, retryable: true }
+
+  - id: done
+    ui: 进入详情页，提示创建成功
+    to: feature.page.note_detail
+
+edge_cases:
+  - { id: double_submit, handling: 提交中禁用按钮 + Idempotency-Key }
+  - { id: unsaved_leave, handling: 离开前确认 }
+  - { id: network_error, handling: 保留表单内容，允许重试 }

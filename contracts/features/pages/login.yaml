@@ -1,0 +1,54 @@
+# contract: feature.page.login
+# summary: 登录页。通用页面，auth 能力落地前以 planned 引用占位。
+# enforcement: generated+tested
+# consumers: [web/admin]
+# refs: [feature.route.login, platform.sec.auth, platform.errors]
+# do_not:
+#   - 不要把 token 存进 localStorage
+#   - 不要在页面里自行实现刷新逻辑
+
+schema_version: 1
+id: feature.page.login
+summary: 登录页
+stability: draft
+page: login
+route: feature.route.login
+
+data:
+  submit:
+    capability: planned:cap.http.auth.login
+    note: auth 模块落地后替换为真实 capability
+    params:
+      username: { from: form.username, type: string, required: true }
+      password: { from: form.password, type: string, required: true }
+
+states:
+  idle:
+    when: "true"
+    ui: form
+  loading:
+    when: "mutation.isPending"
+    ui: button_spinner
+  error:
+    when: "mutation.isError"
+    ui: inline_alert
+    show: "problem.title"
+  forbidden:
+    when: "problem.code == 'COMMON_FORBIDDEN'"
+    ui: inline_alert
+    show: "账号已锁定或无权登录"
+
+actions:
+  submit:
+    capability: planned:cap.http.auth.login
+    ui: primary-button
+    label: 登录
+    on_success: close_and_redirect(feature.route.note_list)
+
+fields:
+  - { name: username, type: string, required: true, maxLength: 128, autocomplete: username }
+  - { name: password, type: string, required: true, minLength: 12, autocomplete: current-password, secret: true }
+
+security:
+  rate_limit_hint: 连续失败 5 次锁定 15 分钟（见 platform.sec.auth）
+  error_copy_uniform: 用户名与密码错误统一提示，避免枚举账号

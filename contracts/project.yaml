@@ -1,0 +1,46 @@
+# contract: project
+# summary: 项目元信息。derive 脚本的唯一输入，所有生成物的命名来源。
+# enforcement: generated
+# consumers: [ops, tools]
+# do_not:
+#   - 不要在其他文件硬编码项目名 / module / scope，一切引用本文件
+#   - 不要改 id 前缀后不跑 make derive-check
+
+id: project
+schema_version: 1
+stability: stable
+
+project:
+  name: web-seed
+  display_name: Web Seed
+  description: 通用 Web + API 脚手架模板
+  version: 0.1.0
+  license: MIT
+
+go:
+  module: github.com/yourorg/web-seed/apps/api
+  version: "1.27"
+
+web:
+  package_scope: "@webseed"
+  node_version: "26"
+  package_manager: pnpm
+  package_manager_version: "12.18.0"
+
+defaults:
+  timezone: UTC
+  locale: zh-CN
+  currency: CNY
+  id_strategy: uuid_v7
+
+# derive 时由 scripts/derive.sh 读取并替换
+derive:
+  replace:
+    - { from: "github.com/yourorg/web-seed", to: "<your-module>" }
+    - { from: "@webseed", to: "<your-scope>" }
+    - { from: "web-seed", to: "<your-project>" }
+  delete_after_derive:
+    - docs/playbooks/template-derive.md
+    - .opencode/skills/template-derive
+    - .opencode/skills/template-doctor
+    - .opencode/opencode.json

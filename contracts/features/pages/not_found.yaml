@@ -1,0 +1,34 @@
+# contract: feature.page.not_found
+# summary: 404 页。通用页面，无数据源。
+# enforcement: generated
+# consumers: [web/admin]
+# refs: [feature.routes]
+# do_not:
+#   - 不要展示原始路径（可能含敏感参数）
+
+schema_version: 1
+id: feature.page.not_found
+summary: 404 页
+stability: stable
+page: not_found
+route: null            # 由 router 的 catch-all 触发
+
+data: {}
+
+states:
+  empty:
+    when: "true"
+    ui: not_found_illustration
+  loading: { when: "false" }
+  error: { when: "false" }
+  forbidden: { when: "false" }
+
+actions:
+  back_home:
+    ui: secondary-button
+    label: 返回首页
+    on_success: navigate(feature.route.note_list)
+
+copy:
+  title: 页面不存在
+  description: 链接可能已失效，或你没有访问权限

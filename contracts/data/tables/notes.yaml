@@ -1,0 +1,98 @@
+# contract: data.table.notes
+# summary: 笔记主表。表结构真相源，migrations 由本文件生成。
+# enforcement: generated+tested
+# consumers: [api]
+# refs: [data.enum.note_status]
+# generates:
+#   - apps/api/internal/generated/db/schema.sql
+#   - apps/api/migrations/*.sql
+# do_not:
+#   - 不要手写 migrations，改本文件后运行 make gen-db
+#   - 不要在 queries 之外直接拼接 SQL
+#   - 不要直接用 status 字符串，使用 data.enum.note_status
+
+schema_version: 1
+id: data.table.notes
+summary: 笔记主表
+stability: stable
+owner_module: notes
+
+table:
+  name: notes
+  comment: 用户笔记
+  lifecycle: soft_delete      # soft_delete | hard_delete
+  audit_columns: true         # 自动补 created_by / updated_by
+
+columns:
+  - name: id
+    type: uuid
+    primary_key: true
+    generated_by: application # UUIDv7，保证时间有序
+    comment: 主键
+
+  - name: title
+    type: text
+    nullable: false
+    max_length: 200
+    pii: true
+    comment: 笔记标题；用户可搜索，禁止写入日志
+
+  - name: body
+    type: text
+    nullable: true
+    pii: true
+    comment: 正文
+
+  - name: status
+    type: data.enum.note_status
+    nullable: false
+    default: draft
+    comment: 可见状态，不表示审核状态
+
+  - name: user_id
+    type: uuid
+    nullable: false
+    comment: 归属用户；用户表契约在接入 auth 模块时新增
+
+  - name: created_at
+    type: timestamptz
+    nullable: false
+    default: now()
+
+  - name: updated_at
+    type: timestamptz
+    nullable: false
+    default: now()
+
+  - name: deleted_at
+    type: timestamptz
+    nullable: true
+    comment: 软删时间；查询默认过滤
+
+  - name: version
+    type: integer
+    nullable: false
+    default: 1
+    comment: 乐观锁，更新时 version = version + 1
+
+constraints:
+  - name: ck_notes_title_len
+    type: check
+    expr: "char_length(title) BETWEEN 1 AND 200"
+
+  # 外键在 users 表契约落地后补（fk_notes_user -> users.id）
+
+indexes:
+  - name: idx_notes_user_created
+    columns: [user_id, created_at, id]
+    order: [asc, desc, desc]
+    where: "deleted_at IS NULL"
+    reason: 列表按用户 + 时间倒序游标分页
+
+  - name: idx_notes_status
+    columns: [status]
+    where: "deleted_at IS NULL"
+    reason: 按状态筛选
+
+# 逃生口：结构化字段无法表达的 DDL。每表 ≤3 处，必须说明原因。
+ddl_ext: []

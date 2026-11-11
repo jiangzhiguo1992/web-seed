@@ -1,0 +1,61 @@
+# contract: platform.arch.go
+# summary: Go 分层与模块边界。生成 go-arch-lint 配置，违反即 CI 失败。
+# enforcement: tested
+# consumers: [tools]
+# refs: [platform.quality]
+# generates:
+#   - apps/api/.go-arch-lint.yml
+# do_not:
+#   - 不要在 modules 之间横向 import（走 cap.internal.*）
+#   - 不要让 cmd 直接 import modules
+#   - 不要让 modules import internal/generated/openapi
+
+schema_version: 1
+id: platform.arch.go
+summary: Go 分层约束
+stability: stable
+
+layers:
+  - name: cmd
+    in: cmd/**
+  - name: composition
+    in: internal/composition/**
+  - name: handlers
+    in: internal/composition/*/handlers/**
+  - name: modules
+    in: internal/modules/**
+  - name: platform
+    in: internal/platform/**
+  - name: generated
+    in: internal/generated/**
+
+rules:
+  cmd:
+    may_depend_on: [composition, platform]
+  composition:
+    may_depend_on: [handlers, modules, platform, generated]
+  handlers:
+    may_depend_on: [modules, platform, generated]
+    forbid: [cmd]
+  modules:
+    may_depend_on: [platform, generated]
+    forbid: [cmd, composition, handlers, "internal/modules/*/**"]   # 模块间横向禁止
+    note: 跨模块调用只能依赖 cap.internal 生成的 interface
+  platform:
+    may_depend_on: [generated]
+    forbid: [cmd, composition, handlers, modules]
+  generated:
+    may_depend_on: []
+    note: 生成物只依赖标准库与第三方
+
+# 具体模块的允许依赖（覆盖通用规则）
+module_dependencies:
+  notes: [platform, generated]
+  auth: [platform, generated]
+  audit: [platform, generated]
+  notification: [platform, generated]
+
+forbidden_imports:
+  - { path: "net/http", in: [modules], reason: 模块不得感知 HTTP }
+  - { path: "internal/generated/openapi", in: [modules], reason: HTTP 契约只允许出现在 handlers }
+  - { path: "database/sql", in: [handlers], reason: handler 不得直接访问数据库 }

@@ -48,19 +48,16 @@ web-seed/
 ├── lefthook.yml                 [C] 提交/推送钩子
 ├── .editorconfig .gitattributes .nvmrc .dockerignore .gitignore
 │
-├── contracts/                   [C] 契约层：机器可读的真相源
-│   ├── README.md                #   什么算契约、变更三问
-│   ├── openapi/                 [P] 接口契约（admin + shared；user 端按需新增）
-│   ├── domain/                  [P] 错误码、跨端枚举
-│   ├── config/                  [P] 环境变量 schema
-│   ├── design/                  [C] 设计令牌真相源 tokens.json（生成物在 packages/design-tokens）
-│   ├── architecture/            [P] 分层规则（go-arch-lint / dependency-cruiser）
-│   ├── http/                    [P] 状态码映射、header、分页规则
-│   ├── observability/           [P] 日志字段、指标名
-│   ├── analytics/               [P] 埋点事件
-│   ├── security/                [P] 权限点
-│   ├── db/README.md        [C] 数据规范
-│   └── events/README.md         [C] 异步事件预留形状
+├── contracts/                   [C] 契约层：唯一真相源
+│   ├── README.md                #   契约规范：原则、ID、分层、拆分、工作流
+│   ├── index.yaml               #   契约地图（AI 唯一入口，只放摘要）
+│   ├── project.yaml             #   项目元信息（derive 唯一输入）
+│   ├── data/                    #   ① 数据：tables（真相源）/ enums / queries / seeds / policy
+│   ├── capabilities/            #   ② 能力：http / async / internal
+│   ├── domain/                  #   ③ 领域：entities / states / rules / flows / events / glossary
+│   ├── features/                #   ④ 功能：routes / pages / flows
+│   ├── platform/                #   ⑤ 平台：环境/版本/错误/HTTP/质量/配置/架构/设计/观测/埋点/安全
+│   └── generated/               #   产物索引：manifest / graph / lineage
 │
 ├── docs/                        [C] 文档层（面向 AI + 人）
 │   ├── index.md                 #   唯一地图，AI 先读
@@ -191,19 +188,22 @@ make build-web        # apps/web/admin/dist
 目标流程（P2 起生效）：
 
 ```
-1. 改 contracts/openapi/*.yaml
-2. make gen
-3. 修复编译错误（类型由契约生成）
-4. 跑闸门：路由比对 / 响应校验 / oasdiff
-5. 同一个 PR 内提交：契约 + 生成物 + 实现 + 测试
+1. 读 contracts/index.yaml 定位相关契约（只看摘要）
+2. 改契约（2-5 个文件）
+3. make gen        # 生成类型 / DDL / 常量 / 图
+4. 修复编译错误（类型由契约生成）
+5. 跑闸门：锚点图 / 路由比对 / 响应校验 / oasdiff
+6. 同一个 PR 内提交：契约 + 生成物 + 实现 + 测试
 ```
 
 硬规则：
 
+- 契约是唯一真相源，**migrations / queries 由 `data/` 生成**，禁止手写
 - 禁止先写实现后补契约
-- 禁止手改 `gen/`
+- 禁止手改 `generated/`
 - 禁止绕过 `packages/api-client` 直连 `fetch`
-- CI 必须 `make gen && git diff --exit-code`
+- 禁止在 `features` 契约里直接引用 `data.*`（页面必须走 capability）
+- CI 必须 `make gen && git diff --exit-code` + `make contract-graph`
 
 当前已可用的闸门见 `docs/guides/architecture.md` 附录 A。
 
@@ -230,7 +230,7 @@ make build-web        # apps/web/admin/dist
 | [`docs/index.md`](docs/index.md) | AI 进入仓库的第一站 |
 | [`docs/guides/architecture.md`](docs/guides/architecture.md) | 架构、契约体系、实施进度 |
 | [`contracts/README.md`](contracts/README.md) | 改契约前 |
-| [`contracts/db/README.md`](contracts/db/README.md) | 加表 / 写查询前 |
+| [`contracts/data/README.md`](contracts/data/README.md) | 加表 / 写查询前 |
 | `docs/playbooks/` | 执行具体任务时（P7） |
 | `docs/adr/` | 想改架构前（P7） |
 

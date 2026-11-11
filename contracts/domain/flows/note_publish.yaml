@@ -1,0 +1,50 @@
+# contract: domain.flow.note_publish
+# summary: 笔记发布业务流程。只编排，不实现。
+# enforcement: tested
+# consumers: [api]
+# refs: [domain.state.note, cap.internal.notes, platform.errors]
+# do_not:
+#   - 不要在本文件写具体调用代码
+#   - 不要跳过状态机直接改 status
+#   - 不要在流程里处理 HTTP 细节
+
+schema_version: 1
+id: domain.flow.note_publish
+summary: 笔记发布业务流程
+stability: draft
+trigger: cap.internal.notes.publish
+
+steps:
+  - id: load
+    action: 加载笔记
+    use: cap.internal.notes.Get
+    on_error: [platform.error.NOTE_NOT_FOUND]
+
+  - id: authorize
+    action: 校验作者身份
+    use: domain.rule.note.owner_only
+    on_error: [platform.error.NOTE_FORBIDDEN]
+
+  - id: transition
+    action: 执行 draft → active
+    use: domain.state.note.transition
+    inputs: { event: publish }
+    on_error: [platform.error.NOTE_ILLEGAL_TRANSITION, platform.error.NOTE_TITLE_REQUIRED]
+
+  - id: persist
+    action: 持久化状态变更
+    use: data.query.notes.UpdateNoteVersioned
+    on_error: [platform.error.NOTE_VERSION_CONFLICT]
+
+  - id: emit
+    action: 发出领域事件
+    use: domain.event.note_published
+    async: true
+
+compensation:
+  on_failure: 回滚事务，不发送事件
+  retryable: false
+
+postconditions:
+  - "note.status == active"
+  - "domain.event.note_published 已入队"
