@@ -12,18 +12,18 @@
 | `environments.yaml` | 环境清单、域名、差异项、密钥来源 | tested |
 | `versioning.yaml` | API 版本、契约版本、弃用窗口 | tested |
 | `errors.yaml` | 错误码、HTTP 映射、文案 key、可重试性 | generated+tested |
-| `http-conventions.yaml` | 信封、分页、header、状态码映射 | generated |
+| `http_conventions.yaml` | 信封、分页、header、状态码映射 | generated |
 | `quality.yaml` | 覆盖率门槛、必测路径、禁止项 | tested |
-| `config/env.schema.json` | 环境变量 schema | generated+tested |
-| `architecture/go-arch.yaml` | Go 分层与模块边界 | tested（linter） |
-| `architecture/web-deps.json` | 前端依赖方向 | tested（linter） |
+| `config/env.json` | 环境变量 schema | generated+tested |
+| `architecture/go_arch.yaml` | Go 分层与模块边界 | tested（linter） |
+| `architecture/web_deps.json` | 前端依赖方向 | tested（linter） |
 | `design/tokens.json` | 设计令牌 | generated |
-| `observability/log-fields.yaml` | 日志字段、PII 规则 | generated+tested |
+| `observability/log_fields.yaml` | 日志字段、PII 规则 | generated+tested |
 | `observability/metrics.yaml` | 指标名与标签 | generated |
 | `analytics/events.yaml` | 埋点事件、属性、PII | generated |
 | `security/permissions.yaml` | 权限点 | generated+tested |
 | `security/roles.yaml` | 角色 → 权限映射 | generated+tested |
-| `security/auth-policy.yaml` | 会话、token、MFA 策略 | tested |
+| `security/auth_policy.yaml` | 会话、token、MFA 策略 | tested |
 
 ## 2. 硬规则
 

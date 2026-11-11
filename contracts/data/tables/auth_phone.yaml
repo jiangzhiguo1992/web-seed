@@ -1,14 +1,14 @@
 # 手机号认证表。一个账号可绑定多个手机号；只允许认证模块读写。
 
 schema_version: 1
-id: data.table.auth_phone
+id: data.tables.auth_phone
 summary: 手机号认证表
 stability: stable
 owner_module: auth
-extends: [data.table.base]
+extends: [data.tables.base]
 do_not:
   - (code, number) 唯一索引必须带 WHERE deleted_at IS NULL
-  - 只有 owner_module 对应的 cap.service 可以写本表，其他模块只能经 service 读
+  - 只有 owner_module 对应的 cap.services 可以写本表，其他模块只能经 service 读
   - used_by 由 make gen-graph 生成，禁止手改
 
 table:
@@ -45,7 +45,7 @@ columns:
     comment: 运营商
 
   - name: status
-    type: data.enum.auth_status
+    type: data.enums.auth_status
     nullable: false
     default: active
     comment: 认证记录状态
@@ -54,14 +54,14 @@ constraints:
   - name: fk_auth_phone_account
     type: foreign_key
     columns: [account_id]
-    references: data.table.accounts.col.id
+    references: data.tables.account.col.id
     on_delete: cascade
     on_update: no_action
 
   - name: ck_auth_phone_status
     type: enum
     column: status
-    enum: data.enum.auth_status
+    enum: data.enums.auth_status
 
 indexes:
   - name: uq_auth_phone_number
@@ -76,6 +76,6 @@ indexes:
     reason: 按账号查手机号
 
 used_by:
-  - data.entity.auth_phone
-  - data.query.auth
-  - cap.service.auth
+  entities: [data.entities.auth_phone]
+  queries: [data.queries.auth]
+  capabilities: [cap.services.auth]

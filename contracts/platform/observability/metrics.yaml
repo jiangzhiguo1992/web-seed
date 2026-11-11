@@ -1,7 +1,7 @@
 # 指标名与标签唯一来源。默认注册但不导出（exporter=none）。
 
 schema_version: 1
-id: platform.obs.metrics
+id: platform.observability.metrics
 summary: 指标名与标签
 stability: stable
 

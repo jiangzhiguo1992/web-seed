@@ -1,7 +1,7 @@
 # Go 分层与模块边界。生成 go-arch-lint 配置，违反即 CI 失败。
 
 schema_version: 1
-id: platform.arch.go
+id: platform.architecture.go_arch
 summary: Go 分层约束
 stability: stable
 

@@ -1,16 +1,16 @@
 # 密码认证表。一个账号一条密码记录；只允许认证模块读写。
 
 schema_version: 1
-id: data.table.auth_pwd
+id: data.tables.auth_pwd
 summary: 密码认证表
 stability: stable
 owner_module: auth
-extends: [data.table.base]
+extends: [data.tables.base]
 do_not:
   - password_md5 仅用于兼容遗留系统；新密码必须使用 argon2id 并写入 password_hash
   - password_hash / password_md5 禁止出现在响应、日志、事件
   - username 唯一索引必须带 WHERE deleted_at IS NULL
-  - 只有 owner_module 对应的 cap.service 可以写本表，其他模块只能经 service 读
+  - 只有 owner_module 对应的 cap.services 可以写本表，其他模块只能经 service 读
   - used_by 由 make gen-graph 生成，禁止手改
 
 table:
@@ -64,7 +64,7 @@ columns:
     comment: 锁定截止时间；为空表示未锁定
 
   - name: status
-    type: data.enum.auth_status
+    type: data.enums.auth_status
     nullable: false
     default: active
     comment: 认证记录状态
@@ -73,7 +73,7 @@ constraints:
   - name: fk_auth_pwd_account
     type: foreign_key
     columns: [account_id]
-    references: data.table.accounts.col.id
+    references: data.tables.account.col.id
     on_delete: cascade
     on_update: no_action
 
@@ -84,7 +84,7 @@ constraints:
   - name: ck_auth_pwd_status
     type: enum
     column: status
-    enum: data.enum.auth_status
+    enum: data.enums.auth_status
 
 indexes:
   - name: uq_auth_pwd_username
@@ -100,6 +100,6 @@ indexes:
     reason: 一个账号只有一条密码记录
 
 used_by:
-  - data.entity.auth_pwd
-  - data.query.auth
-  - cap.service.auth
+  entities: [data.entities.auth_pwd]
+  queries: [data.queries.auth]
+  capabilities: [cap.services.auth]

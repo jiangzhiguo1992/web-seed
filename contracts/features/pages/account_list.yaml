@@ -1,22 +1,22 @@
 # 账号列表页。四态必须齐全，数据源必须引用 capability。
 
 schema_version: 1
-id: feature.page.account_list
+id: feature.pages.account_list
 summary: 账号列表页
 stability: stable
 do_not:
-  - 状态筛选的取值必须来自 business.state.account.states，不要硬编码
-  - forbidden 态依赖 platform.permission.account_read，不可省略
+  - 状态筛选的取值必须来自 business.states.account.states，不要硬编码
+  - forbidden 态依赖 platform.security.permissions.account_read，不可省略
   - 不要展示密码、手机号、邮箱、令牌
 
 page: account_list
-route: feature.route.account_list
+route: feature.routes.account_list
 
 data:
   list:
     capability: cap.http.accounts.list
     params:
-      status: { from: query.status, enum: business.state.account.states, optional: true }
+      status: { from: query.status, enum: business.states.account.states, optional: true }
       own_type: { from: query.own_type, optional: true }
       page_size: { from: query.page_size, type: integer, default: 20 }
     cache:
@@ -37,32 +37,32 @@ states:
     show: "problem.detail"
     retry: true
   forbidden:
-    when: "!hasPermission('platform.permission.account_read')"
+    when: "!hasPermission('platform.security.permissions.account_read')"
     ui: forbidden-panel
 
 actions:
   create:
     capability: cap.http.accounts.create
-    permission: platform.permission.account_write
+    permission: platform.security.permissions.account_write
     ui: primary-button
     label: 新建账号
-    on_success: navigate(feature.flow.account_create.success_target)
+    on_success: navigate(feature.flows.account_create.success_target)
   activate:
     capability: cap.http.accounts.activate
-    permission: platform.permission.account_write
+    permission: platform.security.permissions.account_write
     ui: row-action
     label: 激活
     available_when: "row.status == pending || row.status == suspended"
   suspend:
     capability: cap.http.accounts.suspend
-    permission: platform.permission.account_write
+    permission: platform.security.permissions.account_write
     ui: row-action
     label: 封禁
     confirm: true
     available_when: "row.status == active"
   delete:
     capability: cap.http.accounts.delete
-    permission: platform.permission.account_delete
+    permission: platform.security.permissions.account_delete
     ui: row-action
     label: 删除
     confirm: true
@@ -73,11 +73,11 @@ fields:
   - { name: number, render: text }
   - { name: nickname, render: text }
   - { name: own_type, render: tag }
-  - { name: status, enum: business.state.account.states, render: badge }
+  - { name: status, enum: business.states.account.states, render: badge }
   - { name: created_at, render: relative_time }
 
 filters:
-  - { name: status, enum: business.state.account.states, multiple: false, label: 状态 }
+  - { name: status, enum: business.states.account.states, multiple: false, label: 状态 }
   - { name: own_type, type: string, multiple: false, label: 归属类型 }
 
 pagination:

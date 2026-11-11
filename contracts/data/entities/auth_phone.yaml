@@ -1,10 +1,10 @@
 # 手机号认证数据实体。物理表在 tables/auth_phone.yaml。
 
 schema_version: 1
-id: data.entity.auth_phone
+id: data.entities.auth_phone
 summary: 手机号认证数据实体
 stability: stable
-table: data.table.auth_phone
+table: data.tables.auth_phone
 identity: id
 do_not:
   - 不要把手机号写进账号主表
@@ -16,10 +16,10 @@ fields:
   - { name: code, type: string, min_length: 2, max_length: 8, required: true }
   - { name: number, type: string, min_length: 1, max_length: 32, required: true, pii: true }
   - { name: operator, type: string, max_length: 32 }
-  - { name: status, type: data.enum.auth_status, required: true }
+  - { name: status, type: data.enums.auth_status, required: true }
   - { name: created_at, type: datetime, required: true, mutable: false }
   - { name: updated_at, type: datetime, required: true, mutable: false }
   - { name: deleted_at, type: datetime, mutable: false }
 
 relations:
-  - { name: account, target: data.entity.account, kind: many_to_one, via: data.table.auth_phone.col.account_id }
+  - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.auth_phone.col.account_id }

@@ -1,40 +1,40 @@
 # 账号激活流程。只编排，不实现。
 
 schema_version: 1
-id: cap.flow.account_activation
+id: cap.flows.account_activation
 summary: 账号激活流程编排
 stability: draft
 do_not:
   - 只编排，不写调用代码
   - 不要绕过状态机直接改 status
 
-trigger: cap.service.accounts.activate
+trigger: cap.services.accounts.activate
 
 steps:
   - id: load
     action: 加载账号
-    use: cap.service.accounts.get
-    on_error: [platform.error.ACCOUNT_NOT_FOUND]
+    use: cap.services.accounts.get
+    on_error: [platform.errors.ACCOUNT_NOT_FOUND]
 
   - id: authorize
     action: 校验操作者权限
-    use: platform.permission.account_write
-    on_error: [platform.error.COMMON_FORBIDDEN]
+    use: platform.security.permissions.account_write
+    on_error: [platform.errors.COMMON_FORBIDDEN]
 
   - id: transition
     action: 执行 pending → active 或 suspended → active
-    use: business.state.account.transition
+    use: business.states.account.transition
     inputs: { transition: activate }
-    on_error: [platform.error.ACCOUNT_ILLEGAL_TRANSITION]
+    on_error: [platform.errors.ACCOUNT_ILLEGAL_TRANSITION]
 
   - id: persist
     action: 持久化状态变更
-    use: data.query.accounts.set_account_status
-    on_error: [platform.error.ACCOUNT_VERSION_CONFLICT]
+    use: data.queries.account.set_account_status
+    on_error: [platform.errors.ACCOUNT_VERSION_CONFLICT]
 
   - id: emit
     action: 发出领域事件
-    use: business.event.account_activated
+    use: business.events.account.activated
     async: true
 
 compensation:
@@ -43,4 +43,4 @@ compensation:
 
 postconditions:
   - "account.status == active"
-  - "business.event.account_activated 已入队"
+  - "business.events.account.activated 已入队"

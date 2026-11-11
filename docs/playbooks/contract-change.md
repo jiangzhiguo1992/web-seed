@@ -68,7 +68,7 @@ make contract-impact id=<被修改的 ID>
 | 应用包含哪些接口 | `contracts/project.yaml` 的 `apps` 段 |
 | 定时任务 / 消费者 | `contracts/capabilities/async/<job>.yaml` |
 | 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
-| 表结构 | `contracts/data/tables/<table>.yaml` |
+| 表结构 | `contracts/data/tables/<file>.yaml` |
 | 查询 | `contracts/data/queries/<module>.yaml` |
 | 枚举 | `contracts/data/enums.yaml` |
 | 实体 / 状态机 / 规则 / 流程 | `contracts/business/**` |

@@ -1,16 +1,16 @@
 # 账号详情页。四态与可用动作由状态机决定。
 
 schema_version: 1
-id: feature.page.account_detail
+id: feature.pages.account_detail
 summary: 账号详情页
 stability: stable
 do_not:
-  - 不要在前端判断状态合法性，使用 business.state.account 的转换表
+  - 不要在前端判断状态合法性，使用 business.states.account 的转换表
   - 不要在页面展示密码、手机号、邮箱、令牌
   - 认证信息只能通过认证接口获取，不要在本页拼装
 
 page: account_detail
-route: feature.route.account_detail
+route: feature.routes.account_detail
 
 data:
   detail:
@@ -38,21 +38,21 @@ states:
 actions:
   edit:
     capability: cap.http.accounts.update
-    permission: platform.permission.account_write
+    permission: platform.security.permissions.account_write
     available_when: "row.status != deleted"
     ui: primary-button
   activate:
     capability: cap.http.accounts.activate
-    permission: platform.permission.account_write
+    permission: platform.security.permissions.account_write
     available_when: "canTransition('activate')"
   suspend:
     capability: cap.http.accounts.suspend
-    permission: platform.permission.account_write
+    permission: platform.security.permissions.account_write
     available_when: "canTransition('suspend')"
     confirm: true
   delete:
     capability: cap.http.accounts.delete
-    permission: platform.permission.account_delete
+    permission: platform.security.permissions.account_delete
     available_when: "canTransition('delete')"
     confirm: true
     danger: true
@@ -63,11 +63,11 @@ fields:
   - { name: own_type, render: tag }
   - { name: own_id, render: code }
   - { name: user_id, render: code }
-  - { name: status, enum: business.state.account.states, render: badge }
+  - { name: status, enum: business.states.account.states, render: badge }
   - { name: created_at, render: relative_time }
   - { name: updated_at, render: relative_time }
   - { name: version, render: hidden }
 
 transition_ui:
-  source: business.state.account.transitions
+  source: business.states.account.transitions
   rule: 只渲染 from 包含当前状态的按钮；点击前调用 canTransition()

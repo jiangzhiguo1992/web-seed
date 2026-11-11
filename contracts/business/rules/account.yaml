@@ -5,77 +5,77 @@
 #   - 数据库能表达的约束在 data/tables；这里写业务行为与不变量。
 
 schema_version: 1
-id: business.rule.account
+id: business.rules.account
 summary: 账号业务规则集
 stability: stable
 do_not:
   - number_unique 必须限定在未删除账号内，不要写成全局唯一
   - 不要在 handler 里手写编号格式或归属校验
-  - 不要在本文件写密码强度规则（见 platform/security/auth-policy）
+  - 不要在本文件写密码强度规则（见 platform/security/auth_policy）
 
 scope: account
 
 rules:
-  - id: business.rule.account.number_format
+  - id: business.rules.account.number_format
     summary: 账号编号只允许字母、数字、下划线和短横线，长度 4–64
     severity: error
-    on_violation: platform.error.ACCOUNT_NUMBER_INVALID
+    on_violation: platform.errors.ACCOUNT_NUMBER_INVALID
     given: "number = 'A 01'"
     when: "create"
     then: "拒绝，返回 ACCOUNT_NUMBER_INVALID"
-    implemented_by: [cap.service.accounts.create]
+    implemented_by: [cap.services.accounts.create]
 
-  - id: business.rule.account.number_unique
+  - id: business.rules.account.number_unique
     summary: 未删除账号内编号唯一
     severity: error
-    on_violation: platform.error.ACCOUNT_NUMBER_TAKEN
+    on_violation: platform.errors.ACCOUNT_NUMBER_TAKEN
     given: "已存在 active 账号 ACC-0001"
     when: "创建 ACC-0001"
     then: "拒绝，返回 ACCOUNT_NUMBER_TAKEN"
-    implemented_by: [cap.service.accounts.create]
+    implemented_by: [cap.services.accounts.create]
 
-  - id: business.rule.account.own_pair
+  - id: business.rules.account.own_pair
     summary: own_type 与 own_id 必须同时存在
     severity: error
-    on_violation: platform.error.ACCOUNT_OWN_INVALID
+    on_violation: platform.errors.ACCOUNT_OWN_INVALID
     given: "own_type = '' 或 own_id = nil"
     when: "create"
     then: "拒绝，返回 ACCOUNT_OWN_INVALID"
-    implemented_by: [cap.service.accounts.create]
+    implemented_by: [cap.services.accounts.create]
 
-  - id: business.rule.account.nickname_length
+  - id: business.rules.account.nickname_length
     summary: 昵称长度 1–100
     severity: error
-    on_violation: platform.error.ACCOUNT_NICKNAME_INVALID
+    on_violation: platform.errors.ACCOUNT_NICKNAME_INVALID
     given: "nickname 长度 = 0 或 101"
     when: "create 或 update"
     then: "拒绝，返回 ACCOUNT_NICKNAME_INVALID"
-    implemented_by: [cap.service.accounts.create, cap.service.accounts.update]
+    implemented_by: [cap.services.accounts.create, cap.services.accounts.update]
 
-  - id: business.rule.account.self_only
+  - id: business.rules.account.self_only
     summary: 非管理员只能查看和修改自己的账号
     severity: error
-    on_violation: platform.error.COMMON_FORBIDDEN
+    on_violation: platform.errors.COMMON_FORBIDDEN
     given: "当前用户 id = A，目标账号 user_id = B"
     when: "非 admin 角色访问 B"
     then: "拒绝，返回 COMMON_FORBIDDEN"
-    implemented_by: [cap.service.accounts.get, cap.service.accounts.update]
+    implemented_by: [cap.services.accounts.get, cap.services.accounts.update]
 
-  - id: business.rule.account.deleted_cannot_modify
+  - id: business.rules.account.deleted_cannot_modify
     summary: 已软删账号不可修改、不可再次删除
     severity: error
-    on_violation: platform.error.ACCOUNT_ALREADY_DELETED
+    on_violation: platform.errors.ACCOUNT_ALREADY_DELETED
     given: "deleted_at != nil"
     when: "update / activate / suspend / delete"
     then: "拒绝，返回 ACCOUNT_ALREADY_DELETED"
-    implemented_by: [cap.service.accounts.update, cap.service.accounts.activate, cap.service.accounts.suspend, cap.service.accounts.delete]
+    implemented_by: [cap.services.accounts.update, cap.services.accounts.activate, cap.services.accounts.suspend, cap.services.accounts.delete]
 
 invariants:
-  - id: business.inv.account.deleted_status_consistent
+  - id: business.rules.account.invariants.deleted_status_consistent
     description: status=deleted 当且仅当 deleted_at 非空
     assert: "(status == deleted) == (deleted_at != nil)"
-    on_violation: platform.error.ACCOUNT_ILLEGAL_TRANSITION
-    implemented_by: [cap.service.accounts.delete]
+    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    implemented_by: [cap.services.accounts.delete]
 
 derived:
   - name: is_loginable

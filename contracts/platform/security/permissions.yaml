@@ -1,7 +1,7 @@
 # 权限点唯一来源。只增不改；删除必须走弃用流程。
 
 schema_version: 1
-id: platform.sec.permissions
+id: platform.security.permissions
 summary: 权限点
 stability: stable
 do_not:
@@ -27,8 +27,8 @@ permissions:
 boundaries:
   resource_level:
     description: 资源级权限（如仅本人可改）必须在 business/rules 中声明，不能只靠权限点
-    example: "见 business.rule.account.self_only"
+    example: "见 business.rules.account.self_only"
 
   wildcard:
-    allowed_for: [platform.role.admin]
+    allowed_for: [platform.security.roles.admin]
     note: 仅 admin 角色可使用 *

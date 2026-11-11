@@ -18,7 +18,7 @@
 
 capabilities 是 business 的实现，**契约里不出现 `business.*`**：
 
-- 返回类型用 `data.table.*.row`，不用 `data.entity.*`
+- 返回类型用 `data.tables.*.row`，不用 `data.entities.*`
 - 事件由 `business/events` 的 `emitted_by` 声明
 - 规则由 `business/rules` 的 `implemented_by` 声明
 
@@ -46,7 +46,7 @@ contracts/capabilities/http/
 | `x-idempotent` | 是否幂等，配合 `Idempotency-Key` | 重试可能重复写入 |
 | `x-timeout-ms` | 服务端处理超时 | 使用全局默认 |
 | `x-rate-limit` | 限流策略 | 无限流 |
-| `x-preconditions` | 前置条件，引用 `business.rule.*` | 条件散落在代码里 |
+| `x-preconditions` | 前置条件，引用 `business.rules.*` | 条件散落在代码里 |
 | `x-side-effects` | 副作用（发事件、写审计） | AI 不知道会触发什么 |
 | `x-audit` | 是否写审计日志 | 漏审计 |
 

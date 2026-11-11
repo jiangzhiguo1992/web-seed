@@ -6,7 +6,7 @@ summary: 路由与菜单
 stability: stable
 do_not:
   - 不要手写路由表
-  - 不要在路由 meta 硬编码权限字符串，引用 platform.permission.*
+  - 不要在路由 meta 硬编码权限字符串，引用 platform.security.permissions.*
 
 app: web/admin
 
@@ -15,12 +15,12 @@ layout:
   auth: blank
 
 routes:
-  - id: feature.route.account_list
+  - id: feature.routes.account_list
     path: /accounts
     name: account-list
-    page: feature.page.account_list
+    page: feature.pages.account_list
     layout: default
-    permission: platform.permission.account_read
+    permission: platform.security.permissions.account_read
     menu:
       group: 系统管理
       label: 账号
@@ -29,30 +29,30 @@ routes:
     meta:
       title: 账号列表
 
-  - id: feature.route.account_create
+  - id: feature.routes.account_create
     path: /accounts/new
     name: account-create
-    page: feature.page.account_create
+    page: feature.pages.account_create
     layout: default
-    permission: platform.permission.account_write
+    permission: platform.security.permissions.account_write
     menu: null
     meta:
       title: 新建账号
 
-  - id: feature.route.account_detail
+  - id: feature.routes.account_detail
     path: /accounts/:id
     name: account-detail
-    page: feature.page.account_detail
+    page: feature.pages.account_detail
     layout: default
-    permission: platform.permission.account_read
+    permission: platform.security.permissions.account_read
     menu: null
     meta:
       title: 账号详情
 
-  - id: feature.route.login
+  - id: feature.routes.login
     path: /login
     name: login
-    page: feature.page.login
+    page: feature.pages.login
     layout: auth
     permission: null
     menu: null
@@ -64,5 +64,5 @@ redirects:
   - { from: /, to: /accounts }
 
 not_found:
-  page: feature.page.not_found
+  page: feature.pages.not_found
   layout: default

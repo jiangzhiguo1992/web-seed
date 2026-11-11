@@ -1,16 +1,16 @@
 # 新建账号页。账号创建不包含认证信息；认证由 auth 模块单独创建。
 
 schema_version: 1
-id: feature.page.account_create
+id: feature.pages.account_create
 summary: 新建账号页
 stability: draft
 do_not:
   - 不要在本页收集密码/手机号/邮箱；认证信息由 auth 模块单独创建
-  - 不要硬编码编号格式，引用 business.rule.account.number_format
+  - 不要硬编码编号格式，引用 business.rules.account.number_format
   - 四态（loading/empty/error/forbidden）缺一不可
 
 page: account_create
-route: feature.route.account_create
+route: feature.routes.account_create
 
 data:
   submit:
@@ -34,16 +34,16 @@ states:
     ui: inline_alert
     show: "problem.detail"
   forbidden:
-    when: "!hasPermission('platform.permission.account_write')"
+    when: "!hasPermission('platform.security.permissions.account_write')"
     ui: forbidden-panel
 
 actions:
   submit:
     capability: cap.http.accounts.create
-    permission: platform.permission.account_write
+    permission: platform.security.permissions.account_write
     ui: primary-button
     label: 创建
-    on_success: navigate(feature.page.account_detail)
+    on_success: navigate(feature.pages.account_detail)
 
 fields:
   - { name: own_type, type: string, required: true, maxLength: 32, label: 归属类型 }

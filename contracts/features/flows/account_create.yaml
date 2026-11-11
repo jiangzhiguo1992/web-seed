@@ -1,7 +1,7 @@
 # 创建账号的用户旅程。只描述界面步骤与结果，不写实现。
 
 schema_version: 1
-id: feature.flow.account_create
+id: feature.flows.account_create
 summary: 创建账号用户旅程
 stability: draft
 do_not:
@@ -9,21 +9,21 @@ do_not:
   - 不要在客户端重复服务端的编号规则
   - 账号创建不包含密码；认证信息由 auth 模块单独创建
 
-entry: feature.page.account_list
-success_target: feature.page.account_detail
+entry: feature.pages.account_list
+success_target: feature.pages.account_detail
 
 steps:
   - id: open
     ui: 点击「新建账号」
-    from: feature.page.account_list
-    to: feature.page.account_create
+    from: feature.pages.account_list
+    to: feature.pages.account_create
 
   - id: fill
     ui: 填写归属类型、归属 ID、账号编号、昵称
     fields: [own_type, own_id, number, nickname]
     validation:
-      - { field: number, rule: business.rule.account.number_format, message_key: platform.error.ACCOUNT_NUMBER_INVALID }
-      - { field: own_type, rule: business.rule.account.own_pair, message_key: platform.error.ACCOUNT_OWN_INVALID }
+      - { field: number, rule: business.rules.account.number_format, message_key: platform.errors.ACCOUNT_NUMBER_INVALID }
+      - { field: own_type, rule: business.rules.account.own_pair, message_key: platform.errors.ACCOUNT_OWN_INVALID }
 
   - id: submit
     ui: 提交
@@ -32,14 +32,14 @@ steps:
     loading_state: button_spinner
     on_success: goto(detail)
     on_error:
-      - { code: platform.error.ACCOUNT_NUMBER_TAKEN, ui: inline_field_error, field: number }
-      - { code: platform.error.ACCOUNT_NUMBER_INVALID, ui: inline_field_error, field: number }
-      - { code: platform.error.ACCOUNT_OWN_INVALID, ui: inline_field_error, field: own_id }
-      - { code: platform.error.COMMON_INTERNAL, ui: toast, retryable: true }
+      - { code: platform.errors.ACCOUNT_NUMBER_TAKEN, ui: inline_field_error, field: number }
+      - { code: platform.errors.ACCOUNT_NUMBER_INVALID, ui: inline_field_error, field: number }
+      - { code: platform.errors.ACCOUNT_OWN_INVALID, ui: inline_field_error, field: own_id }
+      - { code: platform.errors.COMMON_INTERNAL, ui: toast, retryable: true }
 
   - id: done
     ui: 进入详情页，提示"账号已创建，状态为待激活"
-    to: feature.page.account_detail
+    to: feature.pages.account_detail
 
 edge_cases:
   - { id: double_submit, handling: 提交中禁用按钮 + Idempotency-Key }

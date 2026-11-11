@@ -1,19 +1,20 @@
 # 令牌表。访问令牌与刷新令牌；只允许认证模块读写。
 
 schema_version: 1
-id: data.table.tokens
+id: data.tables.token
 summary: 令牌表
 stability: stable
 owner_module: auth
-extends: [data.table.base]
+extends: [data.tables.base]
 do_not:
-  - access_token / refresh_token 禁止出现在普通响应、日志、事件；仅 /auth/login 与 /auth/refresh 的 TokenPair 可返回
-  - 建议只存哈希或加密值；若存原文，必须由 platform 层加密
+  - access_token_hash / refresh_token_hash 禁止出现在普通响应、日志、事件；仅 /auth/login 与 /auth/refresh 的 TokenPair 返回原文一次
+  - 数据库只存哈希；禁止存 token 原文；哈希必须使用平台统一的 SHA-256/HMAC
   - 唯一索引必须带 WHERE deleted_at IS NULL
-  - 只有 owner_module 对应的 cap.service 可以写本表，其他模块只能经 service 读
+  - 只有 owner_module 对应的 cap.services 可以写本表，其他模块只能经 service 读
   - used_by 由 make gen-graph 生成，禁止手改
 
 table:
+  name: tokens
   comment: 令牌（访问令牌与刷新令牌）
   size_class: large
   retention: { expired_days: 30 }
@@ -47,19 +48,23 @@ columns:
     nullable: true
     comment: 关联用户 ID
 
-  - name: access_token
+  - name: access_token_hash
     type: text
     nullable: false
+    min_length: 32
+    max_length: 128
     pii: true
     never_expose: true
-    comment: 访问令牌；仅认证签发响应可返回，禁止日志
+    comment: 访问令牌哈希；只存哈希，禁止存原文
 
-  - name: refresh_token
+  - name: refresh_token_hash
     type: text
     nullable: false
+    min_length: 32
+    max_length: 128
     pii: true
     never_expose: true
-    comment: 刷新令牌；仅认证签发响应可返回，禁止日志
+    comment: 刷新令牌哈希；只存哈希，禁止存原文
 
   - name: access_expire_at
     type: timestamptz
@@ -72,7 +77,7 @@ columns:
     comment: 刷新令牌过期时间
 
   - name: status
-    type: data.enum.token_status
+    type: data.enums.token_status
     nullable: false
     default: active
     comment: 令牌状态
@@ -81,7 +86,7 @@ constraints:
   - name: fk_tokens_account
     type: foreign_key
     columns: [account_id]
-    references: data.table.accounts.col.id
+    references: data.tables.account.col.id
     on_delete: cascade
     on_update: no_action
 
@@ -92,20 +97,20 @@ constraints:
   - name: ck_tokens_status
     type: enum
     column: status
-    enum: data.enum.token_status
+    enum: data.enums.token_status
 
 indexes:
-  - name: uq_tokens_access
-    columns: [access_token]
+  - name: uq_tokens_access_hash
+    columns: [access_token_hash]
     unique: true
     where: "deleted_at IS NULL"
-    reason: 访问令牌查找
+    reason: 访问令牌哈希查找
 
-  - name: uq_tokens_refresh
-    columns: [refresh_token]
+  - name: uq_tokens_refresh_hash
+    columns: [refresh_token_hash]
     unique: true
     where: "deleted_at IS NULL"
-    reason: 刷新令牌查找
+    reason: 刷新令牌哈希查找
 
   - name: idx_tokens_account_id
     columns: [account_id]
@@ -123,6 +128,6 @@ indexes:
     reason: 按设备吊销令牌
 
 used_by:
-  - data.entity.token
-  - data.query.auth
-  - cap.service.auth
+  entities: [data.entities.token]
+  queries: [data.queries.auth]
+  capabilities: [cap.services.auth]

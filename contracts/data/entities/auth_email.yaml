@@ -5,10 +5,10 @@
 #   - 完整邮箱 = username + "@" + domain；entity/tld 由 domain 派生，可为空。
 
 schema_version: 1
-id: data.entity.auth_email
+id: data.entities.auth_email
 summary: 邮箱认证数据实体
 stability: stable
-table: data.table.auth_email
+table: data.tables.auth_email
 identity: id
 do_not:
   - 不要把完整邮箱写进账号主表
@@ -21,15 +21,15 @@ fields:
   - { name: domain, type: string, min_length: 1, max_length: 190, required: true }
   - { name: entity, type: string, max_length: 190 }
   - { name: tld, type: string, max_length: 32 }
-  - { name: status, type: data.enum.auth_status, required: true }
+  - { name: status, type: data.enums.auth_status, required: true }
   - { name: created_at, type: datetime, required: true, mutable: false }
   - { name: updated_at, type: datetime, required: true, mutable: false }
   - { name: deleted_at, type: datetime, mutable: false }
 
 relations:
-  - { name: account, target: data.entity.account, kind: many_to_one, via: data.table.auth_email.col.account_id }
+  - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.auth_email.col.account_id }
 
 validation:
-  - id: data.entity.auth_email.domain_parts
+  - id: data.entities.auth_email.domain_parts
     expr: "tld == nil || domain endsWith('.' + tld)"
-    on_violation: platform.error.AUTH_EMAIL_INVALID
+    on_violation: platform.errors.AUTH_EMAIL_INVALID

@@ -23,7 +23,7 @@ paths:
     post:
       operationId: login
       x-contract-id: cap.http.auth.login
-      x-service: cap.service.auth.login
+      x-service: cap.services.auth.login
       summary: 登录
       x-timeout-ms: 5000
       x-rate-limit: { requests: 10, window_seconds: 60 }
@@ -54,7 +54,7 @@ paths:
     post:
       operationId: refreshToken
       x-contract-id: cap.http.auth.refresh
-      x-service: cap.service.auth.refresh
+      x-service: cap.services.auth.refresh
       summary: 刷新令牌
       x-timeout-ms: 3000
       requestBody:
@@ -78,7 +78,7 @@ paths:
     post:
       operationId: logout
       x-contract-id: cap.http.auth.logout
-      x-service: cap.service.auth.logout
+      x-service: cap.services.auth.logout
       summary: 登出
       x-idempotent: true
       x-audit: true
@@ -100,7 +100,7 @@ components:
     TokenPair:
       type: object
       additionalProperties: false
-      x-entity: data.entity.token
+      x-entity: data.entities.token
       x-auth-response: true
       required: [access_token, refresh_token, access_expire_at, refresh_expire_at]
       properties:

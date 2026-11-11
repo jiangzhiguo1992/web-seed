@@ -23,9 +23,9 @@ paths:
     get:
       operationId: listAccounts
       x-contract-id: cap.http.accounts.list
-      x-service: cap.service.accounts.list
+      x-service: cap.services.accounts.list
       summary: 列出账号
-      x-preconditions: [platform.permission.account_read]
+      x-preconditions: [platform.security.permissions.account_read]
       x-timeout-ms: 3000
       x-rate-limit: { requests: 60, window_seconds: 60 }
       parameters:
@@ -55,10 +55,10 @@ paths:
     post:
       operationId: createAccount
       x-contract-id: cap.http.accounts.create
-      x-service: cap.service.accounts.create
+      x-service: cap.services.accounts.create
       summary: 创建账号
       x-idempotent: true
-      x-preconditions: [platform.permission.account_write]
+      x-preconditions: [platform.security.permissions.account_write]
       x-timeout-ms: 5000
       x-audit: true
       parameters:
@@ -89,9 +89,9 @@ paths:
     get:
       operationId: getAccount
       x-contract-id: cap.http.accounts.get
-      x-service: cap.service.accounts.get
+      x-service: cap.services.accounts.get
       summary: 获取账号
-      x-preconditions: [platform.permission.account_read]
+      x-preconditions: [platform.security.permissions.account_read]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -104,9 +104,9 @@ paths:
     patch:
       operationId: updateAccount
       x-contract-id: cap.http.accounts.update
-      x-service: cap.service.accounts.update
+      x-service: cap.services.accounts.update
       summary: 更新账号资料
-      x-preconditions: [platform.permission.account_write]
+      x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -131,10 +131,10 @@ paths:
     delete:
       operationId: deleteAccount
       x-contract-id: cap.http.accounts.delete
-      x-service: cap.service.accounts.delete
+      x-service: cap.services.accounts.delete
       summary: 删除账号（软删）
       x-idempotent: true
-      x-preconditions: [platform.permission.account_delete]
+      x-preconditions: [platform.security.permissions.account_delete]
       x-audit: true
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -146,9 +146,9 @@ paths:
     post:
       operationId: activateAccount
       x-contract-id: cap.http.accounts.activate
-      x-service: cap.service.accounts.activate
+      x-service: cap.services.accounts.activate
       summary: 激活账号
-      x-preconditions: [platform.permission.account_write]
+      x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -164,9 +164,9 @@ paths:
     post:
       operationId: suspendAccount
       x-contract-id: cap.http.accounts.suspend
-      x-service: cap.service.accounts.suspend
+      x-service: cap.services.accounts.suspend
       summary: 封禁账号
-      x-preconditions: [platform.permission.account_write]
+      x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -193,7 +193,7 @@ components:
     Account:
       type: object
       additionalProperties: false
-      x-entity: data.entity.account
+      x-entity: data.entities.account
       required: [id, own_type, own_id, number, nickname, status, version, created_at]
       properties:
         id: { type: string, format: uuid }

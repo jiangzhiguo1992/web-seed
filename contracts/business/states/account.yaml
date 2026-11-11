@@ -1,7 +1,7 @@
 # 账号状态机。所有合法转换必须穷举，未列出即为非法。
 
 schema_version: 1
-id: business.state.account
+id: business.states.account
 summary: 账号状态机
 stability: stable
 do_not:
@@ -11,7 +11,7 @@ do_not:
   - suspended 不可直接删除；必须先解封再删除
 
 machine: account
-subject: data.entity.account
+subject: data.entities.account
 
 states:
   - { name: pending, description: 待激活，不能登录, terminal: false }
@@ -27,33 +27,33 @@ transitions:
     from: [pending]
     to: active
     guard: "number 已归一且格式合法"
-    on_violation: platform.error.ACCOUNT_ILLEGAL_TRANSITION
-    side_effects: [business.event.account_activated]
-    implemented_by: [cap.service.accounts.activate]
+    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    side_effects: [business.events.account.activated]
+    implemented_by: [cap.services.accounts.activate]
 
   - name: suspend
     description: 封禁账号
     from: [active]
     to: suspended
     guard: "true"
-    side_effects: [business.event.account_suspended]
-    implemented_by: [cap.service.accounts.suspend]
+    side_effects: [business.events.account.suspended]
+    implemented_by: [cap.services.accounts.suspend]
 
   - name: reactivate
     description: 解封
     from: [suspended]
     to: active
     guard: "true"
-    side_effects: [business.event.account_reactivated]
-    implemented_by: [cap.service.accounts.activate]
+    side_effects: [business.events.account.reactivated]
+    implemented_by: [cap.services.accounts.activate]
 
   - name: delete
     description: 软删
     from: [pending, active]
     to: deleted
     guard: "true"
-    side_effects: [business.event.account_deleted]
-    implemented_by: [cap.service.accounts.delete]
+    side_effects: [business.events.account.deleted]
+    implemented_by: [cap.services.accounts.delete]
 
 forbidden_examples:
   - { from: deleted, transition: activate, reason: 已删除不可激活 }

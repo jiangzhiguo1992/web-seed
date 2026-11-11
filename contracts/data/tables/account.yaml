@@ -1,19 +1,21 @@
 # 账号主表。账号是业务主体，不承载密码、手机号、邮箱、令牌；认证信息在 auth_* / tokens。
 
 schema_version: 1
-id: data.table.accounts
+id: data.tables.account
 summary: 账号主表
 stability: stable
 owner_module: accounts
-extends: [data.table.base]
+extends: [data.tables.base]
 do_not:
   - 认证信息（密码/手机号/邮箱/令牌）禁止写入本表
   - number 唯一索引必须带 WHERE deleted_at IS NULL
-  - status 只能引用 data.enum.account_status
-  - 只有 owner_module 对应的 cap.service/cap.async 可以写本表，其他模块只能经 service 读
+  - status 只能引用 data.enums.account_status
+  - own_type/own_id 表示数据归属，user_id 表示关联用户；不要把 user_id 当作 own_id 的别名
+  - 只有 owner_module 对应的 cap.services/cap.async 可以写本表，其他模块只能经 service 读
   - used_by 由 make gen-graph 生成，禁止手改
 
 table:
+  name: accounts
   comment: 账号（业务主体）
   size_class: large
   retention: { pending_days: 7, soft_delete_days: 30, hard_delete_days: 90 }
@@ -54,7 +56,7 @@ columns:
     comment: 关联用户 ID；user 模块落地后补外键
 
   - name: status
-    type: data.enum.account_status
+    type: data.enums.account_status
     nullable: false
     default: pending
     comment: 账号状态
@@ -70,7 +72,7 @@ constraints:
   - name: ck_accounts_status
     type: enum
     column: status
-    enum: data.enum.account_status
+    enum: data.enums.account_status
 
   - name: ck_accounts_deleted_consistent
     type: check
@@ -100,7 +102,6 @@ indexes:
     reason: 列表游标分页
 
 used_by:
-  - data.entity.account
-  - data.query.accounts
-  - cap.service.accounts
-  - cap.service.auth
+  entities: [data.entities.account]
+  queries: [data.queries.account]
+  capabilities: [cap.services.accounts, cap.services.auth]

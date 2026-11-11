@@ -5,44 +5,44 @@
 
 schema_version: 1
 
-# 类型由 ID 前两段推导：data.table.accounts → data.table
+# 类型由 ID 前两段推导：data.tables.account → data.tables
 # platform 组统一映射为 platform.*
 types:
-  data.table.base:
+  data.tables.base:
     enforcement: generated
     consumers: [tools]
     generates: []
     do_not:
       - 本文件不是物理表：不生成 DDL、不建实体、不落存储
-      - "物理表必须 extends: [data.table.base]"
+      - "物理表必须 extends: [data.tables.base]"
       - 不要给基类加业务字段
 
-  data.table:
+  data.tables:
     enforcement: generated+tested
     consumers: [api]
     generates: [schema_sql, migrations, sqlc]
     do_not:
       - 不要手写 migrations，改本文件后运行 make gen-db
-      - "物理表必须 extends: [data.table.base]，不得重复声明基类 5 列"
+      - "物理表必须 extends: [data.tables.base]，不得重复声明基类 5 列"
       - 不要绕过软删过滤（deleted_at IS NULL）
       - 唯一约束必须带 WHERE deleted_at IS NULL
       - 不要用未结构化字段塞原生 DDL；分区用 table.partition，表达式索引用 indexes[].expression
       - used_by 是生成物，禁止手改
-      - 只有 owner_module 对应的 cap.service 可以写表
+      - 只有 owner_module 对应的 cap.services 可以写表
       - never_expose 列禁止进入普通 OpenAPI/TS/事件/普通 entity；认证 query 与 x-auth-response 是唯一例外
 
-  data.query:
+  data.queries:
     enforcement: generated+tested
     consumers: [api]
     generates: [queries_sql, sqlc]
     do_not:
-      - 每个 query 必须有显式 id：data.query.<module>.<query_id>
+      - 每个 query 必须有显式 id：data.queries.<module>.<query_id>
       - 每个 query 必须声明 table 或 tables，供图校验推导血缘
       - 不要在 repo 层手写 SQL
       - 不要写 SELECT *；敏感表必须用 return_columns 显式列出返回列
       - nullable 参数在 SQL 中使用 sqlc.narg('name')
 
-  data.entity:
+  data.entities:
     enforcement: generated+tested
     consumers: [api, web/admin]
     generates: [go_type, ts_type]
@@ -50,7 +50,7 @@ types:
       - 不要在实体文件里写 DDL（物理结构在 data/tables）
       - 不要写状态机、业务规则（属于 business）
       - 数据库表达不了的复杂校验写在 validation，不要搬到 tables
-      - "实体必须用 table: data.table.<name> 指回物理表"
+      - "实体必须用 table: data.tables.<file> 指回物理表"
       - 不要引用 business.*
 
   data.enums:
@@ -59,7 +59,7 @@ types:
     generates: [go_constants, ts_union, db_check]
     do_not:
       - 枚举值只能追加，禁止改名或删除
-      - 每个枚举项必须有显式 id：data.enum.<name>
+      - 每个枚举项必须有显式 id：data.enums.<name>
       - 不要收模块内部枚举
 
   data.storage:
@@ -83,7 +83,7 @@ types:
       - 不要在 handler 里直接读 r.URL.Query()
       - 不要逐接口重复声明默认错误响应
       - "响应 schema 必须 additionalProperties: false"
-      - 不要写 business.rule.* 或 business.event.*（由 business 侧锚点）
+      - 不要写 business.rules.* 或 business.events.*（由 business 侧锚点）
       - 每个 operation 必须写 x-contract-id 与 x-service
       - 字段长度/枚举以 data 契约为准；手写值只用于 OpenAPI 展开
 
@@ -94,10 +94,10 @@ types:
     do_not:
       - 五要素必须齐全：trigger / input / output / idempotency / retry
       - 不要引用 business.*
-      - 不要在任务里写业务规则，引用 business.rule.*
+      - 不要在任务里写业务规则，引用 business.rules.*
       - 多实例部署时必须声明分布式锁
 
-  cap.service:
+  cap.services:
     enforcement: generated+tested
     consumers: [api]
     generates: [go_interface, mock]
@@ -107,11 +107,11 @@ types:
       - 必须声明 persistence（表、字段映射、查询、约束错误映射）
       - 跨模块读表必须写 persistence.read_only_tables，写表必须属于 owner_module
       - 不要引用 business.*（规则/事件由 business 侧锚点）
-      - 返回 data.entity.*，不要返回表行 data.table.*.row
+      - 返回 data.entities.*，不要返回表行 data.tables.*.row
       - field_map 只写命名不同的字段，同名不写
       - 数据库约束到业务错误的映射写在 constraint_errors，不要写 constraint_map
 
-  business.state:
+  business.states:
     enforcement: generated+tested
     consumers: [api, web/admin]
     generates: [state_constants, transition_table, tests]
@@ -121,7 +121,7 @@ types:
       - 非法转换清单必须与 transitions 同步维护
       - archived 与 deleted 不可混用
 
-  business.rule:
+  business.rules:
     enforcement: tested
     consumers: [api]
     generates: [test_skeleton]
@@ -130,23 +130,30 @@ types:
       - 不要在 handler 里复制规则逻辑
       - 每条规则必须声明 implemented_by，否则视为未实现
 
-  cap.flow:
+  cap.flows:
     enforcement: tested
     consumers: [api]
     do_not:
       - 只编排，不写调用代码
       - 流程编排属于实现层，不要放回 business
-      - 只允许引用 business.state/rule/event 进行编排，不要复制规则逻辑
+      - 只允许引用 business.states/rules/events 进行编排，不要复制规则逻辑
 
-  business.event:
+  business.events:
     enforcement: generated+tested
     consumers: [api, worker]
     generates: [event_constants, payload_types]
     do_not:
       - 不要在事件里放 PII
       - 破坏兼容必须升 version
-      - payload 字段只能是 data.entity.* 字段的子集
+      - payload 字段只能是 data.entities.* 字段的子集
       - 不要写 trigger 反向引用能力（由 capabilities 的 emits 声明）
+
+  business.glossary:
+    enforcement: review-only
+    consumers: [ai, api, web/admin]
+    do_not:
+      - 术语表是唯一命名来源；代码、契约、UI 文案必须一致
+      - 不要在本文件写实现细节
 
   feature.routes:
     enforcement: generated
@@ -156,7 +163,7 @@ types:
       - 不要手写路由表
       - 不要在路由 meta 硬编码权限字符串
 
-  feature.page:
+  feature.pages:
     enforcement: generated+tested
     consumers: [web/admin]
     generates: [page_skeleton, types, tests]
@@ -165,7 +172,7 @@ types:
       - 四态（loading/empty/error/forbidden）缺一不可
       - 禁止引用 data.*
 
-  feature.flow:
+  feature.flows:
     enforcement: tested
     consumers: [web/admin]
     do_not:

@@ -1,7 +1,7 @@
 # 404 页。通用页面，无数据源。
 
 schema_version: 1
-id: feature.page.not_found
+id: feature.pages.not_found
 summary: 404 页
 stability: stable
 do_not:
@@ -24,7 +24,7 @@ actions:
   back_home:
     ui: secondary-button
     label: 返回首页
-    on_success: navigate(feature.route.account_list)
+    on_success: navigate(feature.routes.account_list)
 
 copy:
   title: 页面不存在

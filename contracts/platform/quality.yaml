@@ -37,7 +37,7 @@ must_test:
 e2e:
   tool: playwright
   required_flows:
-    - feature.flow.account_create
+    - feature.flows.account_create
   base_url_source: platform.environments
 
 forbidden:

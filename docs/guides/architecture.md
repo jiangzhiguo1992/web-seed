@@ -103,7 +103,7 @@
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
 - [ ] `data/enums.yaml` → Go 常量 + TS union + DB check
 - [ ] `platform/errors.yaml` + `platform/security/permissions.yaml` → 两端常量
-- [ ] `platform/config/env.schema.json` → `.env.example`（`gen-env.sh`）
+- [ ] `platform/config/env.json` → `.env.example`（`gen-env.sh`）
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
 - [ ] `business/**` → 状态机常量 + 断言 + 测试骨架
 - [ ] `features/**` → 路由表 + 页面骨架 + 类型
@@ -123,13 +123,13 @@
 
 #### P4 最小纵切（示例模块 accounts）
 
-- [ ] 由 `data/tables/_base.yaml` + `accounts.yaml` 生成 schema 与迁移（含软删、乐观锁、部分唯一索引）
-- [ ] 由 `data/queries/accounts.yaml` 生成 `.sql` 并跑 sqlc
+- [ ] 由 `data/tables/_base.yaml` + `account.yaml` 生成 schema 与迁移（含软删、乐观锁、部分唯一索引）
+- [ ] 由 `data/queries/account.yaml` 生成 `.sql` 并跑 sqlc
 - [ ] `internal/modules/accounts`（service + repo，不含 HTTP）
 - [ ] `internal/composition/adminapi/handlers`（实现 StrictServerInterface）
 - [ ] `routes_test.go`：路由集合 == 契约集合 + 响应 schema 校验
 - [ ] 由 `features/**` 生成路由与页面骨架，补齐四态
-- [ ] Playwright 跑通 `feature.flow.account_create`
+- [ ] Playwright 跑通 `feature.flows.account_create`
 
 #### P5 一致性闸门（详见附录 A）
 
@@ -249,8 +249,8 @@ platform/** ──> 配置校验 / 常量 / CSS 变量
 - **唯一顺序**：`feature → business → capabilities → data`（单向链，无反向）
 - **锚点只在上游写**：`feature --uses--> business`，`business --implemented_by--> capabilities`，
   `capabilities --persists_via--> data`
-- **capabilities 契约不引用 business**：返回 `data` 行；规则与事件由 business 侧锚点（`cap.flow` 例外：仅允许引用 `business.state/rule/event` 做编排）
-- 图校验禁止 `cap.http` / `cap.service` / `cap.async` → `business`，仅放行 `cap.flow` → `business.{state,rule,event}`
+- **capabilities 契约不引用 business**：返回 `data` 行；规则与事件由 business 侧锚点（`cap.flows` 例外：仅允许引用 `business.states/rule/event` 做编排）
+- 图校验禁止 `cap.http` / `cap.services` / `cap.async` → `business`，仅放行 `cap.flows` → `business.{state,rule,event}`
 - 影响面：`make contract-impact id=<id>`
 
 **引用必须写在结构化字段里**（`ref` / `refs` / `capability` / `use` / `emits` / `page` / `route` / `x-*`）。

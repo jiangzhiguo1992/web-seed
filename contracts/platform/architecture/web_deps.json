@@ -1,6 +1,6 @@
 {
-  "$comment": "contract: platform.arch.web | 前端依赖方向唯一真相源。生成 dependency-cruiser 配置。",
-  "id": "platform.arch.web",
+  "$comment": "contract: platform.architecture.web_deps | 前端依赖方向唯一真相源。生成 dependency-cruiser 配置。",
+  "id": "platform.architecture.web_deps",
   "summary": "前端依赖方向约束",
   "stability": "stable",
   "enforcement": "tested",

@@ -1,7 +1,7 @@
 # 日志字段唯一来源。未登记字段 CI 警告；pii: true 的字段禁止进入日志。
 
 schema_version: 1
-id: platform.obs.log
+id: platform.observability.log_fields
 summary: 日志字段与 PII 规则
 stability: stable
 

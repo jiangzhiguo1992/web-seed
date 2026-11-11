@@ -3,26 +3,26 @@
 # 规则：
 #   - 每个 query 必须有显式 id；capabilities 只能引用 id。
 #   - nullable 参数在 SQL 中使用 sqlc.narg('name')，非 nullable 使用 @name。
-#   - 账号表不含敏感字段，允许返回 data.table.accounts.row。
+#   - 账号表不含敏感字段，允许返回 data.tables.account.row。
 
 schema_version: 1
-id: data.query.accounts
+id: data.queries.account
 summary: 账号查询集
 stability: stable
 module: accounts
 do_not:
-  - 邮箱/手机号/密码查询不要写在这里，去 data.query.auth
+  - 邮箱/手机号/密码查询不要写在这里，去 data.queries.auth
   - number 唯一性查询必须带 deleted_at IS NULL
   - 不要写 SELECT *；返回列必须显式列出
 
 queries:
-  - id: data.query.accounts.get_account
+  - id: data.queries.account.get_account
     name: GetAccount
     kind: one
-    table: data.table.accounts
+    table: data.tables.account
     params:
       - { name: id, type: uuid }
-    returns: data.table.accounts.row
+    returns: data.tables.account.row
     semantics: 已软删视为不存在
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
@@ -30,13 +30,13 @@ queries:
       FROM accounts
       WHERE id = @id AND deleted_at IS NULL;
 
-  - id: data.query.accounts.get_account_by_number
+  - id: data.queries.account.get_account_by_number
     name: GetAccountByNumber
     kind: one
-    table: data.table.accounts
+    table: data.tables.account
     params:
       - { name: number, type: text }
-    returns: data.table.accounts.row
+    returns: data.tables.account.row
     semantics: 按账号编号精确查询；已软删视为不存在
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
@@ -44,10 +44,10 @@ queries:
       FROM accounts
       WHERE number = upper(@number) AND deleted_at IS NULL;
 
-  - id: data.query.accounts.exists_account_number
+  - id: data.queries.account.exists_account_number
     name: ExistsAccountNumber
     kind: one
-    table: data.table.accounts
+    table: data.tables.account
     params:
       - { name: number, type: text }
     returns: boolean
@@ -58,17 +58,17 @@ queries:
         WHERE number = upper(@number) AND deleted_at IS NULL
       );
 
-  - id: data.query.accounts.list_accounts
+  - id: data.queries.account.list_accounts
     name: ListAccounts
     kind: many
-    table: data.table.accounts
+    table: data.tables.account
     params:
-      - { name: status, type: data.enum.account_status, nullable: true }
+      - { name: status, type: data.enums.account_status, nullable: true }
       - { name: own_type, type: text, nullable: true }
       - { name: cursor_created_at, type: timestamptz, nullable: true }
       - { name: cursor_id, type: uuid, nullable: true }
       - { name: page_size, type: integer, max: 100, default: 20 }
-    returns: "[]data.table.accounts.row"
+    returns: "[]data.tables.account.row"
     semantics: 按 created_at DESC, id DESC 游标分页；status/own_type 为空不过滤
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
@@ -84,10 +84,10 @@ queries:
       ORDER BY created_at DESC, id DESC
       LIMIT sqlc.arg('page_size');
 
-  - id: data.query.accounts.create_account
+  - id: data.queries.account.create_account
     name: CreateAccount
     kind: one
-    table: data.table.accounts
+    table: data.tables.account
     params:
       - { name: id, type: uuid }
       - { name: own_type, type: text }
@@ -95,7 +95,7 @@ queries:
       - { name: number, type: text }
       - { name: nickname, type: text }
       - { name: user_id, type: uuid, nullable: true }
-    returns: data.table.accounts.row
+    returns: data.tables.account.row
     semantics: 初始状态 pending；number 入库前大写归一
     sql: |
       INSERT INTO accounts (id, own_type, own_id, number, nickname, user_id, status)
@@ -103,10 +103,10 @@ queries:
       RETURNING id, own_type, own_id, number, nickname, user_id, status, version,
                 created_at, updated_at, deleted_at;
 
-  - id: data.query.accounts.update_account
+  - id: data.queries.account.update_account
     name: UpdateAccount
     kind: execrows
-    table: data.table.accounts
+    table: data.tables.account
     params:
       - { name: id, type: uuid }
       - { name: nickname, type: text }
@@ -118,13 +118,13 @@ queries:
       SET nickname = @nickname, updated_at = now(), version = version + 1
       WHERE id = @id AND version = @version AND deleted_at IS NULL;
 
-  - id: data.query.accounts.set_account_status
+  - id: data.queries.account.set_account_status
     name: SetAccountStatus
     kind: execrows
-    table: data.table.accounts
+    table: data.tables.account
     params:
       - { name: id, type: uuid }
-      - { name: status, type: data.enum.account_status }
+      - { name: status, type: data.enums.account_status }
       - { name: version, type: integer }
     returns: affected_rows
     semantics: 只允许非 deleted 状态；deleted 只能走 soft_delete_account
@@ -136,10 +136,10 @@ queries:
         AND status <> 'deleted'
         AND @status <> 'deleted';
 
-  - id: data.query.accounts.soft_delete_account
+  - id: data.queries.account.soft_delete_account
     name: SoftDeleteAccount
     kind: execrows
-    table: data.table.accounts
+    table: data.tables.account
     params:
       - { name: id, type: uuid }
       - { name: version, type: integer }
@@ -150,14 +150,14 @@ queries:
       SET status = 'deleted', deleted_at = now(), updated_at = now(), version = version + 1
       WHERE id = @id AND version = @version AND deleted_at IS NULL;
 
-  - id: data.query.accounts.list_stale_pending_accounts
+  - id: data.queries.account.list_stale_pending_accounts
     name: ListStalePendingAccounts
     kind: many
-    table: data.table.accounts
+    table: data.tables.account
     params:
       - { name: older_than_days, type: integer, min: 1 }
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
-    returns: "[]data.table.accounts.row"
+    returns: "[]data.tables.account.row"
     semantics: 扫描超过保留期仍未激活的账号；供 accounts_cleanup 使用
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
@@ -169,10 +169,10 @@ queries:
       ORDER BY created_at
       LIMIT @batch_size;
 
-  - id: data.query.accounts.soft_delete_stale_pending_accounts
+  - id: data.queries.account.soft_delete_stale_pending_accounts
     name: SoftDeleteStalePendingAccounts
     kind: execrows
-    table: data.table.accounts
+    table: data.tables.account
     params:
       - { name: ids, type: "[]uuid" }
     returns: affected_rows
