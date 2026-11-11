@@ -1,12 +1,16 @@
 # 跨前后端枚举集合。仅收两端都要用的枚举，模块内部枚举不进本文件。
+#
+# 集合契约：文件 id 为 data.enums；每个枚举项有显式 id data.enum.<name>。
+# 表列引用枚举时写 data.enum.<name>，不要写裸字符串。
 
 schema_version: 1
-id: data.enum.account_status
+id: data.enums
 summary: 跨端枚举集合
 stability: stable
 
 enums:
-  - name: account_status
+  - id: data.enum.account_status
+    name: account_status
     description: 账号状态
     db_type: text
     go_type: AccountStatus
@@ -15,9 +19,42 @@ enums:
       - { value: pending, description: 待激活，不能登录 }
       - { value: active, description: 正常，可登录 }
       - { value: suspended, description: 已封禁，不能登录 }
-      - { value: deleted, description: 已软删，终态 }
+      - { value: deleted, description: 已软删，终态；与 deleted_at 同步 }
 
-  - name: audit_action
+  - id: data.enum.auth_status
+    name: auth_status
+    description: 认证记录状态
+    db_type: text
+    go_type: AuthStatus
+    ts_type: AuthStatus
+    values:
+      - { value: active, description: 可认证 }
+      - { value: disabled, description: 已停用 }
+
+  - id: data.enum.token_status
+    name: token_status
+    description: 令牌状态
+    db_type: text
+    go_type: TokenStatus
+    ts_type: TokenStatus
+    values:
+      - { value: active, description: 有效 }
+      - { value: revoked, description: 已吊销 }
+      - { value: expired, description: 已过期 }
+
+  - id: data.enum.auth_type
+    name: auth_type
+    description: 认证方式
+    db_type: text
+    go_type: AuthType
+    ts_type: AuthType
+    values:
+      - { value: pwd, description: 密码认证 }
+      - { value: phone, description: 手机号认证 }
+      - { value: email, description: 邮箱认证 }
+
+  - id: data.enum.audit_action
+    name: audit_action
     description: 审计日志动作
     db_type: text
     go_type: AuditAction

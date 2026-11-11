@@ -1,0 +1,53 @@
+# 表结构基类。所有物理表必须继承；本文件不是物理表：不生成 DDL、不建实体、不落存储。
+#
+# 设计决策：
+#   - 只收敛“每张表都必须有”的 5 个字段，不放业务字段。
+#   - 物理表通过 extends 继承；同名列表允许覆盖 type/default/default_sql/comment。
+#   - status 只给通用 text 定义，物理表必须覆盖为具体枚举并说明取值。
+#   - created_at/updated_at/deleted_at 的语义只在这里定义一次，避免每张表重复解释。
+
+schema_version: 1
+id: data.table.base
+kind: base
+summary: 表结构基类
+stability: stable
+do_not:
+  - 本文件不是物理表，禁止生成 DDL、建实体或写入 storage
+  - 物理表必须声明 extends: [data.table.base]
+  - 物理表不得重复定义 id/status/created_at/updated_at/deleted_at；只允许覆盖 type/default/default_sql/comment
+  - 不要给基类加业务字段
+  - deleted_at 为空表示未删除；唯一约束必须带 WHERE deleted_at IS NULL
+
+columns:
+  - name: id
+    type: uuid
+    primary_key: true
+    generated_by: application
+    nullable: false
+    comment: 主键 UUIDv7
+
+  - name: status
+    type: text
+    nullable: false
+    max_length: 32
+    comment: 业务状态；物理表必须覆盖为具体枚举并说明取值
+
+  - name: created_at
+    type: timestamptz
+    nullable: false
+    default_sql: now()
+    managed_by: database
+    comment: 创建时间
+
+  - name: updated_at
+    type: timestamptz
+    nullable: false
+    default_sql: now()
+    managed_by: application
+    comment: 更新时间；应用层写入
+
+  - name: deleted_at
+    type: timestamptz
+    nullable: true
+    managed_by: application
+    comment: 软删时间；为空表示未删除

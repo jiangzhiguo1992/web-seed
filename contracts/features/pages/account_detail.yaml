@@ -6,7 +6,8 @@ summary: 账号详情页
 stability: stable
 do_not:
   - 不要在前端判断状态合法性，使用 business.state.account 的转换表
-  - 不要在页面展示 password_hash 或任何密码字段
+  - 不要在页面展示密码、手机号、邮箱、令牌
+  - 认证信息只能通过认证接口获取，不要在本页拼装
 
 page: account_detail
 route: feature.route.account_detail
@@ -57,10 +58,12 @@ actions:
     danger: true
 
 fields:
-  - { name: email, render: text }
-  - { name: display_name, render: heading }
+  - { name: number, render: heading }
+  - { name: nickname, render: text }
+  - { name: own_type, render: tag }
+  - { name: own_id, render: code }
+  - { name: user_id, render: code }
   - { name: status, enum: business.state.account.states, render: badge }
-  - { name: last_login_at, render: relative_time }
   - { name: created_at, render: relative_time }
   - { name: updated_at, render: relative_time }
   - { name: version, render: hidden }

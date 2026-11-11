@@ -8,23 +8,68 @@ schema_version: 1
 # 类型由 ID 前两段推导：data.table.accounts → data.table
 # platform 组统一映射为 platform.*
 types:
+  data.table.base:
+    enforcement: generated
+    consumers: [tools]
+    generates: []
+    do_not:
+      - 本文件不是物理表：不生成 DDL、不建实体、不落存储
+      - "物理表必须 extends: [data.table.base]"
+      - 不要给基类加业务字段
+
   data.table:
     enforcement: generated+tested
     consumers: [api]
-    generates: [schema_sql, migrations, sqlc, go_types]
+    generates: [schema_sql, migrations, sqlc]
     do_not:
       - 不要手写 migrations，改本文件后运行 make gen-db
+      - "物理表必须 extends: [data.table.base]，不得重复声明基类 5 列"
       - 不要绕过软删过滤（deleted_at IS NULL）
       - 唯一约束必须带 WHERE deleted_at IS NULL
-
+      - 不要用未结构化字段塞原生 DDL；分区用 table.partition，表达式索引用 indexes[].expression
+      - used_by 是生成物，禁止手改
+      - 只有 owner_module 对应的 cap.service 可以写表
+      - never_expose 列禁止进入普通 OpenAPI/TS/事件/普通 entity；认证 query 与 x-auth-response 是唯一例外
 
   data.query:
     enforcement: generated+tested
     consumers: [api]
     generates: [queries_sql, sqlc]
     do_not:
+      - 每个 query 必须有显式 id：data.query.<module>.<query_id>
+      - 每个 query 必须声明 table 或 tables，供图校验推导血缘
       - 不要在 repo 层手写 SQL
-      - 不要写 SELECT *，除非返回整行类型
+      - 不要写 SELECT *；敏感表必须用 return_columns 显式列出返回列
+      - nullable 参数在 SQL 中使用 sqlc.narg('name')
+
+  data.entity:
+    enforcement: generated+tested
+    consumers: [api, web/admin]
+    generates: [go_type, ts_type]
+    do_not:
+      - 不要在实体文件里写 DDL（物理结构在 data/tables）
+      - 不要写状态机、业务规则（属于 business）
+      - 数据库表达不了的复杂校验写在 validation，不要搬到 tables
+      - "实体必须用 table: data.table.<name> 指回物理表"
+      - 不要引用 business.*
+
+  data.enums:
+    enforcement: generated
+    consumers: [api, web/admin, worker]
+    generates: [go_constants, ts_union, db_check]
+    do_not:
+      - 枚举值只能追加，禁止改名或删除
+      - 每个枚举项必须有显式 id：data.enum.<name>
+      - 不要收模块内部枚举
+
+  data.storage:
+    enforcement: tested
+    consumers: [api, worker, ops]
+    generates: []
+    do_not:
+      - 存储引擎只在本文件定义，禁止在 tables 里逐表声明 engine
+      - 未列出的引擎与拓扑一律视为不支持
+      - Redis 不是表存储
 
   data.policy:
     enforcement: generated
@@ -39,6 +84,8 @@ types:
       - 不要逐接口重复声明默认错误响应
       - "响应 schema 必须 additionalProperties: false"
       - 不要写 business.rule.* 或 business.event.*（由 business 侧锚点）
+      - 每个 operation 必须写 x-contract-id 与 x-service
+      - 字段长度/枚举以 data 契约为准；手写值只用于 OpenAPI 展开
 
   cap.async:
     enforcement: generated+tested
@@ -48,6 +95,7 @@ types:
       - 五要素必须齐全：trigger / input / output / idempotency / retry
       - 不要引用 business.*
       - 不要在任务里写业务规则，引用 business.rule.*
+      - 多实例部署时必须声明分布式锁
 
   cap.service:
     enforcement: generated+tested
@@ -56,27 +104,12 @@ types:
     do_not:
       - 只登记跨模块调用的方法
       - 不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型
-      - 必须声明 persistence（表、字段映射、查询、约束映射）
+      - 必须声明 persistence（表、字段映射、查询、约束错误映射）
+      - 跨模块读表必须写 persistence.read_only_tables，写表必须属于 owner_module
       - 不要引用 business.*（规则/事件由 business 侧锚点）
       - 返回 data.entity.*，不要返回表行 data.table.*.row
       - field_map 只写命名不同的字段，同名不写
-
-  data.enum:
-    enforcement: generated
-    consumers: [api, web/admin, worker]
-    generates: [go_constants, ts_union, db_check]
-    do_not:
-      - 枚举值只能追加，禁止改名或删除
-      - 不要收模块内部枚举
-
-  data.entity:
-    enforcement: generated+tested
-    consumers: [api, web/admin]
-    generates: [go_type, ts_type]
-    do_not:
-      - 不要在实体文件里写 DDL（物理结构在 data/tables）
-      - 不要写状态机、业务规则、不变量（属于 business）
-      - 不要引用 business.*
+      - 数据库约束到业务错误的映射写在 constraint_errors，不要写 constraint_map
 
   business.state:
     enforcement: generated+tested
@@ -103,7 +136,7 @@ types:
     do_not:
       - 只编排，不写调用代码
       - 流程编排属于实现层，不要放回 business
-      - 不要引用 business.*
+      - 只允许引用 business.state/rule/event 进行编排，不要复制规则逻辑
 
   business.event:
     enforcement: generated+tested

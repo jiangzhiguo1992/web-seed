@@ -35,8 +35,7 @@ apps:
     includes:
       - cap.http.shared
       - cap.http.accounts
-    planned:
-      - planned:cap.http.auth
+      - cap.http.auth
     generated:
       spec: generated/openapi/admin.yaml
       server: apps/api/internal/generated/openapi

@@ -1,34 +1,36 @@
-# 账号数据实体：逻辑数据模型。物理表在 tables/accounts.yaml，业务规则在 business/。
+# 账号数据实体。物理表在 tables/accounts.yaml；认证信息在 auth_* / tokens。
+#
+# 边界：
+#   - 实体只描述业务可用的字段与关系，不写 DDL。
+#   - 密码、手机号、邮箱、令牌不在本实体出现；通过关系实体访问。
+#   - 复杂校验写 validation；数据库能表达的约束留在 tables。
 
+schema_version: 1
 id: data.entity.account
 summary: 账号数据实体
 stability: stable
-do_not:
-  - password_hash 标记 never_expose，禁止出现在任何 DTO 或事件
-  - email 存储前必须小写归一，比较时不要区分大小写
-
+table: data.table.accounts
 identity: id
+do_not:
+  - 禁止在本实体上放密码、手机号、邮箱、令牌字段
+  - 认证标识只能通过 auth_* 实体访问
+  - 不要在 validation 里写 DDL
 
 fields:
   - { name: id, type: uuid, required: true, mutable: false }
-  - { name: email, type: string, max_length: 254, required: true, pii: true, note: 登录标识，小写归一 }
-  - { name: password_hash, type: string, required: true, pii: true, never_expose: true }
-  - { name: display_name, type: string, max_length: 100, required: true, pii: true }
+  - { name: own_type, type: string, max_length: 32, required: true }
+  - { name: own_id, type: uuid, required: true }
+  - { name: number, type: string, min_length: 4, max_length: 64, required: true, note: 账号编号，存储前大写归一 }
+  - { name: nickname, type: string, min_length: 1, max_length: 100, required: true }
+  - { name: user_id, type: uuid }
   - { name: status, type: data.enum.account_status, required: true }
-  - { name: failed_login_count, type: integer, required: true }
-  - { name: locked_until, type: datetime }
-  - { name: last_login_at, type: datetime }
   - { name: version, type: integer, required: true, note: 乐观锁 }
   - { name: created_at, type: datetime, required: true, mutable: false }
   - { name: updated_at, type: datetime, required: true, mutable: false }
   - { name: deleted_at, type: datetime, mutable: false }
 
 relations:
-  - name: roles
-    target: planned:data.entity.role
-    kind: many_to_many
-    via: planned:data.table.account_roles
-
-# 状态机、业务规则、不变量、派生属性均不在本文件：
-#   状态机  → business/states/account.yaml（subject: data.entity.account）
-#   规则    → business/rules/account.yaml
+  - { name: tokens, target: data.entity.token, kind: one_to_many, via: data.table.tokens.col.account_id }
+  - { name: auth_pwd, target: data.entity.auth_pwd, kind: one_to_one, via: data.table.auth_pwd.col.account_id }
+  - { name: auth_phone, target: data.entity.auth_phone, kind: one_to_many, via: data.table.auth_phone.col.account_id }
+  - { name: auth_email, target: data.entity.auth_email, kind: one_to_many, via: data.table.auth_email.col.account_id }

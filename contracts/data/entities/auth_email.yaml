@@ -1,0 +1,35 @@
+# 邮箱认证数据实体。物理表在 tables/auth_email.yaml。
+#
+# 边界：
+#   - 邮箱拆分为 username/domain/entity/tld，便于检索与域名聚合。
+#   - 完整邮箱 = username + "@" + domain；entity/tld 由 domain 派生，可为空。
+
+schema_version: 1
+id: data.entity.auth_email
+summary: 邮箱认证数据实体
+stability: stable
+table: data.table.auth_email
+identity: id
+do_not:
+  - 不要把完整邮箱写进账号主表
+  - 不要在日志里输出完整邮箱
+
+fields:
+  - { name: id, type: uuid, required: true, mutable: false }
+  - { name: account_id, type: uuid, required: true, mutable: false }
+  - { name: username, type: string, min_length: 1, max_length: 64, required: true }
+  - { name: domain, type: string, min_length: 1, max_length: 190, required: true }
+  - { name: entity, type: string, max_length: 190 }
+  - { name: tld, type: string, max_length: 32 }
+  - { name: status, type: data.enum.auth_status, required: true }
+  - { name: created_at, type: datetime, required: true, mutable: false }
+  - { name: updated_at, type: datetime, required: true, mutable: false }
+  - { name: deleted_at, type: datetime, mutable: false }
+
+relations:
+  - { name: account, target: data.entity.account, kind: many_to_one, via: data.table.auth_email.col.account_id }
+
+validation:
+  - id: data.entity.auth_email.domain_parts
+    expr: "tld == nil || domain endsWith('.' + tld)"
+    on_violation: platform.error.AUTH_EMAIL_INVALID

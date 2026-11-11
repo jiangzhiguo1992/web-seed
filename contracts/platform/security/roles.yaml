@@ -1,4 +1,4 @@
-# 角色与权限映射。生成常量与 seed 数据来源。
+# 角色与权限映射。生成常量；seed 由可选 rbac 模块提供。
 
 schema_version: 1
 id: platform.sec.roles
@@ -16,7 +16,7 @@ roles:
   - code: operator
     name: 运营
     description: 可管理账号，不可删除
-    inherits: [viewer]
+    inherits: [platform.role.viewer]
     permissions:
       - platform.permission.account_read
       - platform.permission.account_write
@@ -31,7 +31,7 @@ roles:
   - code: auditor
     name: 审计员
     description: 只读 + 审计日志
-    inherits: [viewer]
+    inherits: [platform.role.viewer]
     permissions:
       - platform.permission.audit_read
 
@@ -40,4 +40,4 @@ constraints:
   cycle_forbidden: true
   unknown_permission_forbidden: true
 
-default_role: viewer
+default_role: platform.role.viewer

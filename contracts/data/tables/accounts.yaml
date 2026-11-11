@@ -1,47 +1,57 @@
-# 账号主表。表结构真相源，migrations 由本文件生成。
+# 账号主表。账号是业务主体，不承载密码、手机号、邮箱、令牌；认证信息在 auth_* / tokens。
 
 schema_version: 1
 id: data.table.accounts
 summary: 账号主表
 stability: stable
 owner_module: accounts
+extends: [data.table.base]
 do_not:
-  - email 唯一索引必须带 WHERE deleted_at IS NULL
-  - password_hash 禁止出现在任何查询响应与日志
-  - status 只能引用 data.enum.account_status，不要裸字符串
+  - 认证信息（密码/手机号/邮箱/令牌）禁止写入本表
+  - number 唯一索引必须带 WHERE deleted_at IS NULL
+  - status 只能引用 data.enum.account_status
+  - 只有 owner_module 对应的 cap.service/cap.async 可以写本表，其他模块只能经 service 读
+  - used_by 由 make gen-graph 生成，禁止手改
 
 table:
-  name: accounts
-  comment: 账号（管理员与普通用户统一模型）
-  lifecycle: soft_delete
-  audit_columns: true
+  comment: 账号（业务主体）
+  size_class: large
+  retention: { pending_days: 7, soft_delete_days: 30, hard_delete_days: 90 }
 
 columns:
-  - name: id
+  - name: own_type
+    type: text
+    nullable: false
+    min_length: 1
+    max_length: 32
+    comment: 归属类型（user/tenant/system；跨模块共享时升级为枚举）
+
+  - name: own_id
     type: uuid
-    primary_key: true
-    generated_by: application
-    comment: 主键
+    nullable: false
+    comment: 归属 ID；与 own_type 组成归属主体
 
-  - name: email
+  - name: number
     type: text
     nullable: false
-    max_length: 254
-    pii: true
-    comment: 登录标识；存储前统一小写
+    min_length: 4
+    max_length: 64
+    pattern: "^[A-Za-z0-9_-]+$"
+    normalize: upper
+    comment: 账号编号；业务唯一；存储前大写归一
 
-  - name: password_hash
+  - name: nickname
     type: text
     nullable: false
-    pii: true
-    never_expose: true
-    comment: argon2id 哈希；永不出现在响应、日志、事件
-
-  - name: display_name
-    type: text
-    nullable: false
+    min_length: 1
     max_length: 100
     pii: true
+    comment: 昵称
+
+  - name: user_id
+    type: uuid
+    nullable: true
+    comment: 关联用户 ID；user 模块落地后补外键
 
   - name: status
     type: data.enum.account_status
@@ -49,67 +59,48 @@ columns:
     default: pending
     comment: 账号状态
 
-  - name: failed_login_count
-    type: integer
-    nullable: false
-    default: 0
-    comment: 连续失败次数；成功登录后归零
-
-  - name: locked_until
-    type: timestamptz
-    nullable: true
-    comment: 锁定截止时间；为空表示未锁定
-
-  - name: last_login_at
-    type: timestamptz
-    nullable: true
-
-  - name: created_at
-    type: timestamptz
-    nullable: false
-    default: now()
-
-  - name: updated_at
-    type: timestamptz
-    nullable: false
-    default: now()
-
-  - name: deleted_at
-    type: timestamptz
-    nullable: true
-    comment: 软删时间；查询默认过滤
-
   - name: version
     type: integer
     nullable: false
+    min: 1
     default: 1
-    comment: 乐观锁
+    comment: 乐观锁；非业务字段
 
 constraints:
-  - name: ck_accounts_email_format
-    type: check
-    expr: "email ~* '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'"
+  - name: ck_accounts_status
+    type: enum
+    column: status
+    enum: data.enum.account_status
 
-  - name: ck_accounts_failed_login_non_negative
+  - name: ck_accounts_deleted_consistent
     type: check
-    expr: "failed_login_count >= 0"
+    expr: "(status = 'deleted') = (deleted_at IS NOT NULL)"
 
 indexes:
-  - name: uq_accounts_email
-    columns: [email]
+  - name: uq_accounts_number
+    columns: [number]
     unique: true
     where: "deleted_at IS NULL"
-    reason: 登录标识在未删除账号内唯一
+    reason: 账号编号在未删除账号内唯一
 
-  - name: idx_accounts_status
-    columns: [status]
+  - name: idx_accounts_own_type_own_id
+    columns: [own_type, own_id]
     where: "deleted_at IS NULL"
-    reason: 按状态筛选
+    reason: 按归属主体查询
 
-  - name: idx_accounts_created
+  - name: idx_accounts_user_id
+    columns: [user_id]
+    where: "deleted_at IS NULL AND user_id IS NOT NULL"
+    reason: 按用户反查账号
+
+  - name: idx_accounts_created_at_id
     columns: [created_at, id]
     order: [desc, desc]
     where: "deleted_at IS NULL"
     reason: 列表游标分页
 
-ddl_ext: []
+used_by:
+  - data.entity.account
+  - data.query.accounts
+  - cap.service.accounts
+  - cap.service.auth

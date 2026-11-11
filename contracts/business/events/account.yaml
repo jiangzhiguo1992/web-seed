@@ -1,13 +1,16 @@
 # 账号领域事件。状态转换与业务动作的副作用，供异步消费者订阅。
+#
+# 规则：payload 禁止包含 PII；账号事件只带 id/number 等非敏感标识。
 
 schema_version: 1
 id: business.event.account
 summary: 账号领域事件
 stability: stable
 do_not:
-  - payload 禁止包含 password_hash
+  - payload 禁止包含 password_md5、token、邮箱、手机号
   - 破坏兼容必须升 version，不要原地改
   - 登录失败事件不要带原始密码或哈希
+  - 事件 payload 字段只能是 data.entity.account 字段的子集
 
 scope: account
 delivery: at_least_once
@@ -19,11 +22,10 @@ events:
     payload:
       type: object
       additionalProperties: false
-      required: [id, email, status, created_at]
+      required: [id, number, status, created_at]
       properties:
         id: { type: string, format: uuid }
-        email: { type: string, format: email }
-        display_name: { type: string }
+        number: { type: string }
         status: { type: string, enum: [pending, active] }
         created_at: { type: string, format: date-time }
     trigger: [cap.service.accounts.create]
@@ -89,7 +91,7 @@ events:
         ip: { type: string }
         user_agent: { type: string }
         login_at: { type: string, format: date-time }
-    trigger: [planned:cap.service.auth.login]
+    trigger: [cap.service.auth.login]
 
   - id: business.event.account_login_failed
     name: account.login_failed
@@ -97,12 +99,12 @@ events:
     payload:
       type: object
       additionalProperties: false
-      required: [email, reason, failed_at]
+      required: [reason, failed_at]
       properties:
-        email: { type: string, format: email }
+        account_id: { type: string, format: uuid, nullable: true }
         reason: { type: string, enum: [bad_password, locked, suspended, not_found] }
         failed_at: { type: string, format: date-time }
-    trigger: [planned:cap.service.auth.login]
+    trigger: [cap.service.auth.login]
 
   - id: business.event.accounts_cleaned
     name: accounts.cleaned

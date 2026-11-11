@@ -32,7 +32,7 @@ routes:
   - id: feature.route.account_create
     path: /accounts/new
     name: account-create
-    page: feature.page.account_list
+    page: feature.page.account_create
     layout: default
     permission: platform.permission.account_write
     menu: null

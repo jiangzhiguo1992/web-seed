@@ -1,0 +1,56 @@
+# 数据存储与部署。项目级单例，禁止在 tables/*.yaml 里逐表声明 engine。
+#
+# 设计决策：
+#   - 存储引擎、部署拓扑、连接方式都是项目级事实，不是某张表的属性。
+#   - 未列出的引擎/拓扑即为不支持；AI 不得自行引入分库分表、多主、跨地域。
+#   - Redis 只作为缓存/会话/锁，不作为表存储；启用时在此登记。
+#   - 表级只声明会影响 DDL/查询的物理事实（size_class、retention、partition）。
+
+schema_version: 1
+id: data.storage
+summary: 数据存储与部署
+stability: stable
+do_not:
+  - 禁止在 data/tables/*.yaml 里声明 engine，存储引擎只在本文件定义
+  - 未列出的引擎与拓扑一律视为不支持，禁止自行引入
+  - Redis 不是表存储；表数据只能落在 primary 引擎
+  - 多实例部署时，定时任务必须显式声明锁机制，不能只写 max_in_flight
+
+primary: postgres
+
+engines:
+  postgres:
+    version: "18"
+    extensions: [pgcrypto]
+    timezone: UTC
+    pooler: none                 # none | pgbouncer；启用 transaction 模式时需评估 prepared statements
+    max_conns: 20
+    migration_tool: goose
+    transaction_default: true
+
+  redis:
+    enabled: false
+    role: cache                  # cache | session | lock
+    note: 仅缓存/会话/锁；不作为表存储，启用时在此登记
+
+deployment:
+  topology: single-primary
+  api: stateless_horizontal
+  database:
+    primary: 1
+    replicas: 0
+    read_split: false
+  jobs:
+    runner: single               # single | multi
+    distributed_lock: postgres_advisory_lock
+  migrations:
+    strategy: forward_only
+    concurrent_index: auto       # 由 table.size_class 决定
+
+not_supported:
+  - mysql
+  - mongodb
+  - sharding
+  - multi-primary
+  - cross-region
+  - outbox

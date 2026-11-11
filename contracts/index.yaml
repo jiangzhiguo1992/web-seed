@@ -1,6 +1,6 @@
 # contract: index
 # summary: 契约地图。AI 的唯一入口：先读本文件摘要，再按 playbook 指令读正文。
-# enforcement: generated（由各契约文件头聚合生成）
+# enforcement: review-only（P2 生成器落地前人工维护；之后由 gen-graph 聚合生成）
 # do_not:
 #   - 不要把正文写进本文件，只放摘要与索引
 #   - 不要在本文件里写业务规则
@@ -17,14 +17,14 @@ read_order:
 
 groups:
   data:
-    description: 数据契约。tables 是物理结构真相源（migrations 由它生成），entities 是逻辑数据模型。
-    layers: [tables, entities, queries, policy]
+    description: 数据契约。tables 是物理结构真相源（含 base 基类，migrations 由它生成），entities 是逻辑数据模型，storage 是项目级存储与部署。
+    layers: [tables, entities, queries, storage, policy]
   capabilities:
     description: 能力契约。HTTP / 异步 / 跨模块 service。
     layers: [http, async, services, flows]
   business:
-    description: 业务规格。实体、状态机、规则、领域事件、术语；不含实现。
-    layers: [entities, states, rules, events, glossary]
+    description: 业务规格。状态机、规则、领域事件、术语；实体在 data 层。
+    layers: [states, rules, events, glossary]
   features:
     description: 功能契约。路由、页面、跨页旅程。
     layers: [routes, pages, flows]
@@ -39,6 +39,8 @@ entries:
   - { id: project, path: project.yaml, summary: 项目元信息与 derive 输入, consumers: [ops, tools], enforcement: generated, stability: stable }
 
   # ---------- data ----------
+  - { id: data.table.base, path: data/tables/_base.yaml, kind: base, summary: 表结构基类（5 个基础字段）, consumers: [tools], enforcement: generated, stability: stable }
+  - { id: data.storage, path: data/storage.yaml, summary: 数据存储与部署（引擎/拓扑/锁）, consumers: [api, worker, ops], enforcement: tested, stability: stable }
   - id: data.table.accounts
     path: data/tables/accounts.yaml
     summary: 账号主表结构
@@ -46,11 +48,22 @@ entries:
     enforcement: generated+tested
     stability: stable
     common_mistakes:
+      - 把密码/手机号/邮箱/令牌写进账号主表
       - 手写 migrations 而不是改本文件
       - 忘记软删过滤（deleted_at IS NULL）
       - 唯一索引用普通 CREATE UNIQUE INDEX，导致软删后无法重建同值
+  - { id: data.table.tokens, path: data/tables/tokens.yaml, summary: 令牌表结构, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: data.table.auth_pwd, path: data/tables/auth_pwd.yaml, summary: 密码认证表结构, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: data.table.auth_phone, path: data/tables/auth_phone.yaml, summary: 手机号认证表结构, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: data.table.auth_email, path: data/tables/auth_email.yaml, summary: 邮箱认证表结构, consumers: [api], enforcement: generated+tested, stability: stable }
   - { id: data.entity.account, path: data/entities/account.yaml, summary: 账号数据实体与关系, consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: data.entity.token, path: data/entities/token.yaml, summary: 令牌数据实体, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: data.entity.auth_pwd, path: data/entities/auth_pwd.yaml, summary: 密码认证数据实体, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: data.entity.auth_phone, path: data/entities/auth_phone.yaml, summary: 手机号认证数据实体, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: data.entity.auth_email, path: data/entities/auth_email.yaml, summary: 邮箱认证数据实体, consumers: [api], enforcement: generated+tested, stability: stable }
   - { id: data.query.accounts, path: data/queries/accounts.yaml, summary: 账号查询集, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: data.query.auth, path: data/queries/auth.yaml, summary: 认证查询集（密码/手机/邮箱/令牌）, consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.enums, path: data/enums.yaml, summary: 跨端枚举集合, consumers: [api, web/admin, worker], enforcement: generated, stability: stable }
   - { id: data.policy, path: data/_policy.yaml, summary: 数据契约机器可读规则, consumers: [tools], enforcement: generated, stability: stable }
 
   # ---------- capabilities ----------
@@ -65,8 +78,11 @@ entries:
       - 在 handler 里直接读 r.URL.Query() 而不用生成参数
       - 逐接口重复声明 4xx/5xx 响应（已由 default_error_responses 注入）
       - 响应 schema 缺少 additionalProperties: false
+      - 忘记 x-service 锚点到 cap.service
+  - { id: cap.http.auth, path: capabilities/http/auth.yaml, summary: 认证 HTTP 接口（登录/刷新/登出）, consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.async.accounts_cleanup, path: capabilities/async/accounts_cleanup.yaml, summary: 过期账号清理任务, consumers: [worker], enforcement: generated+tested, stability: draft }
   - { id: cap.service.accounts, path: capabilities/services/accounts.yaml, summary: 账号跨模块 service 接口, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: cap.service.auth, path: capabilities/services/auth.yaml, summary: 认证跨模块 service 接口, consumers: [api], enforcement: generated+tested, stability: draft }
 
   # ---------- business ----------
   - id: business.state.account
@@ -97,12 +113,12 @@ entries:
       - 漏掉 forbidden 态
       - 在页面里直接引用 data.*
   - { id: feature.page.account_detail, path: features/pages/account_detail.yaml, summary: 账号详情页, consumers: [web/admin], enforcement: generated+tested, stability: stable }
+  - { id: feature.page.account_create, path: features/pages/account_create.yaml, summary: 新建账号页, consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.page.login, path: features/pages/login.yaml, summary: 登录页, consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.page.not_found, path: features/pages/not_found.yaml, summary: 404 页, consumers: [web/admin], enforcement: generated, stability: stable }
   - { id: feature.flow.account_create, path: features/flows/account_create.yaml, summary: 创建账号用户旅程, consumers: [web/admin], enforcement: tested, stability: draft }
 
   # ---------- platform ----------
-  - { id: data.enum, path: data/enums.yaml, summary: 跨端枚举集合, consumers: [api, web/admin, worker], enforcement: generated, stability: stable }
   - { id: platform.environments, path: platform/environments.yaml, summary: 环境清单与差异, consumers: [ops, api, web/admin], enforcement: tested, stability: stable }
   - { id: platform.versioning, path: platform/versioning.yaml, summary: 版本与兼容策略, consumers: [api, web/admin, ops], enforcement: tested, stability: stable }
   - { id: platform.errors, path: platform/errors.yaml, summary: 错误码与 HTTP 映射, consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
@@ -122,6 +138,7 @@ entries:
   # ---------- generated（产物索引，非契约正文） ----------
   - { id: generated.manifest, path: generated/manifest.json, summary: 生成物与来源契约映射, consumers: [tools], enforcement: generated, stability: stable }
   - { id: generated.graph, path: generated/graph.json, summary: 锚点图, consumers: [tools, ai], enforcement: generated, stability: stable }
+  - { id: generated.inbound, path: generated/inbound.yaml, summary: 反向索引（表/契约被谁引用，写入 used_by）, consumers: [tools, ai], enforcement: generated, stability: stable }
   - { id: generated.lineage, path: generated/lineage.md, summary: 人读血缘报告, consumers: [ai, ops], enforcement: generated, stability: stable }
 
 # 跨文件的坑：不属于任何单一契约，但 AI 最容易犯
@@ -135,6 +152,8 @@ global_notes:
 # 白名单：允许没有入边的根契约
 orphan_whitelist:
   - project
+  - data.table.base
+  - data.storage
   - platform.environments
   - platform.versioning
   - platform.quality
@@ -142,4 +161,5 @@ orphan_whitelist:
   - platform.arch.web
   - generated.manifest
   - generated.graph
+  - generated.inbound
   - generated.lineage

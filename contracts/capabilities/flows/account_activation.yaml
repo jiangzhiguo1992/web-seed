@@ -29,7 +29,7 @@ steps:
 
   - id: persist
     action: 持久化状态变更
-    use: data.query.accounts.setaccountstatus
+    use: data.query.accounts.set_account_status
     on_error: [platform.error.ACCOUNT_VERSION_CONFLICT]
 
   - id: emit

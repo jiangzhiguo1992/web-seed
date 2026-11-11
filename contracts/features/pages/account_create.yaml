@@ -1,0 +1,53 @@
+# 新建账号页。账号创建不包含认证信息；认证由 auth 模块单独创建。
+
+schema_version: 1
+id: feature.page.account_create
+summary: 新建账号页
+stability: draft
+do_not:
+  - 不要在本页收集密码/手机号/邮箱；认证信息由 auth 模块单独创建
+  - 不要硬编码编号格式，引用 business.rule.account.number_format
+  - 四态（loading/empty/error/forbidden）缺一不可
+
+page: account_create
+route: feature.route.account_create
+
+data:
+  submit:
+    capability: cap.http.accounts.create
+    params:
+      own_type: { from: form.own_type, type: string, required: true }
+      own_id: { from: form.own_id, type: uuid, required: true }
+      number: { from: form.number, type: string, required: true }
+      nickname: { from: form.nickname, type: string, required: true }
+      user_id: { from: form.user_id, type: uuid, optional: true }
+
+states:
+  loading:
+    when: "mutation.isPending"
+    ui: button_spinner
+  empty:
+    when: "false"
+    note: 表单页无空态
+  error:
+    when: "mutation.isError"
+    ui: inline_alert
+    show: "problem.detail"
+  forbidden:
+    when: "!hasPermission('platform.permission.account_write')"
+    ui: forbidden-panel
+
+actions:
+  submit:
+    capability: cap.http.accounts.create
+    permission: platform.permission.account_write
+    ui: primary-button
+    label: 创建
+    on_success: navigate(feature.page.account_detail)
+
+fields:
+  - { name: own_type, type: string, required: true, maxLength: 32, label: 归属类型 }
+  - { name: own_id, type: uuid, required: true, label: 归属 ID }
+  - { name: number, type: string, required: true, minLength: 4, maxLength: 64, label: 账号编号 }
+  - { name: nickname, type: string, required: true, maxLength: 100, label: 昵称 }
+  - { name: user_id, type: uuid, optional: true, label: 关联用户 }

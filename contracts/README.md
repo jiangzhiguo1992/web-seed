@@ -31,7 +31,7 @@
 | 实现由契约生成 | 类型、常量、路由、状态机、DDL 均从本目录产出 |
 | 生成物不可手改 | `**/generated/` 与 `apps/api/migrations/` 是产物；手改会被 CI 拦截 |
 | 需求变更先改契约 | 禁止"先写代码后补契约" |
-| 契约不丢信息 | SQL 特性无法结构化时用 `ddl_ext` 逃生口，而非降级契约 |
+| 契约不丢信息 | SQL 特性用结构化字段表达（`table.partition` / `indexes[].expression`），禁止塞回原生 DDL |
 
 ### 1.2 契约的判定标准
 
@@ -78,10 +78,12 @@ contracts/
 ├── project.yaml              # 项目元信息 + 应用组合（derive 的唯一输入）
 │
 ├── data/                     # ① 数据契约（不感知业务）
+│   ├── tables/_base.yaml     #   表结构基类：id/status/时间戳（不生成 DDL、不建实体）
 │   ├── tables/<table>.yaml   #   物理表结构（真相源；migrations 由此生成）
-│   ├── entities/<entity>.yaml#   逻辑数据实体：身份、字段、关系
+│   ├── entities/<entity>.yaml#   逻辑数据实体：身份、字段、关系、validation
 │   ├── queries/<module>.yaml #   查询契约（SQL 是契约字段，.sql 是产物）
-│   └── _policy.yaml          #   组级规则：禁止操作、人工调整边界、校验命令
+│   ├── storage.yaml          #   项目级存储引擎与部署拓扑（单例）
+│   └── _policy.yaml          #   组级规则：命名、继承、禁止操作、校验命令
 │
 ├── capabilities/             # ② 实现层
 │   ├── http/<module>.yaml    #   OpenAPI，按业务模块拆
@@ -129,7 +131,7 @@ contracts/
 
 | 组 | 示例 |
 |---|---|
-| data | `data.table.accounts`、`data.table.accounts.col.title`、`data.enum.note_status`、`data.query.accounts.list`、`data.policy` |
+| data | `data.table.accounts`、`data.table.accounts.col.number`、`data.table.accounts.constraint.ck_accounts_deleted_consistent`、`data.enum.account_status`、`data.query.accounts.get_account`、`data.storage`、`data.table.base`、`data.policy` |
 | capabilities | `cap.http.accounts.create`、`cap.async.accounts_cleanup`、`cap.service.accounts` |
 | business | `business.state.account`、`business.rule.account.publish_requires_title`、`business.event.account_published` |
 | features | `feature.route.account_list`、`feature.page.account_list`、`feature.action.account_list.create` |
@@ -141,13 +143,25 @@ contracts/
 - **ID 一旦发布不可改名**；改名 = 新 ID + 旧 ID 标 `deprecated`
 - 跨文件引用一律写 ID，**禁止写文件路径**
 
+**集合契约 vs 项契约**：一个文件可以承载一组同类契约，但每个可寻址项必须有显式 `id`，禁止依赖 snake_case 隐式推导。
+
+| 集合文件 | 文件 ID | 项 ID |
+|---|---|---|
+| `data/tables/<table>.yaml` | `data.table.<table>` | `data.table.<table>.col.<column>` / `data.table.<table>.constraint.<name>` |
+| `data/queries/<module>.yaml` | `data.query.<module>` | `data.query.<module>.<query_id>` |
+| `data/enums.yaml` | `data.enums` | `data.enum.<name>` |
+| `platform/security/permissions.yaml` | `platform.sec.permissions` | `platform.permission.<code>` |
+| `platform/security/roles.yaml` | `platform.sec.roles` | `platform.role.<code>` |
+
+`data.storage`、`data.policy`、`data.table.base` 是单例契约，没有项 ID。
+
 ### 3.2 唯一顺序：单向链
 
 ```
 feature ──> business ──> capabilities ──> data
 ```
 
-契约依赖只有这一条链，**没有反向**。
+契约依赖只有这一条链，**没有反向**。允许两个前向例外：`business → data.entity`（业务主体）与 `cap.flow → business.{state,rule,event}`（流程编排）。
 
 | 环节 | 职责 | 锚点写在哪 |
 |---|---|---|
@@ -163,7 +177,11 @@ feature ──> business ──> capabilities ──> data
 | feature → business | 页面契约 | `data` / `actions` / `fields` / `states` |
 | feature → capabilities | 页面契约 | `capability:` |
 | business → capabilities | 规则 / 状态机 / 事件 | `implemented_by` / `emitted_by` |
-| capabilities → data | service 契约 | `persistence.queries` |
+| capabilities/http → capabilities/service | HTTP operation | `x-service` |
+| capabilities/service → data | service 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
+| data.query → data.table | 查询项 | `table` / `tables` |
+| data.entity → data.table | 实体 | `table` / `column` |
+| data.table → 上游（反向） | 表文件 | `used_by`（生成物，`make gen-graph` 写入） |
 
 ### 3.2.1 capabilities 不引用 business
 
@@ -177,6 +195,10 @@ capabilities 契约里**不出现任何 `business.*`**：
 | `x-side-effects: business.event.*` | 同上 |
 
 理由：capability 是 business 的实现，**实现不反向声明"我实现了谁"**——那由上游锚点。两处都写必然漂移。
+
+例外：`cap.flow` 允许引用 `business.state` / `business.rule` / `business.event` 做编排，但不得复制规则逻辑；`cap.http` / `cap.service` / `cap.async` 仍然禁止引用 `business.*`。
+
+`business` 允许引用 `data.entity.*` 作为业务主体（状态机的 `subject`、规则的实体），但禁止引用 `data.table` / `data.query` / `data.storage`。这是"业务规格描述对象"与"实现依赖表"的区别。
 
 实现代码按 `business` 契约编写，但契约层不表达这种依赖。
 
@@ -200,8 +222,12 @@ make contract-impact id=data.table.accounts.col.title
 
 ```
 feature.page.account_list
-  ├─ cap.http.accounts.list ──> data.query.accounts.list ──> data.table.accounts
-  └─ cap.http.accounts.create ─> data.table.accounts ──> data.table.accounts ─> business.state.account
+  ├─ cap.http.accounts.list ─x-service→ cap.service.accounts.list
+  │    └─ data.query.accounts.list_accounts ─> data.table.accounts
+  └─ cap.http.accounts.create ─x-service→ cap.service.accounts.create
+       └─ data.table.accounts
+
+business.state.account ─subject→ data.entity.account ─table→ data.table.accounts
 ```
 
 ### 3.4 契约变更流程
@@ -258,13 +284,13 @@ id: data.table.accounts
 summary: 账号主表
 stability: stable
 do_not:                        # 只写实例级；通用约束见 _types.yaml
-  - slug 唯一索引必须带 WHERE deleted_at IS NULL
+  - number 唯一索引必须带 WHERE deleted_at IS NULL
 
 table:
   ...
 ```
 
-- 类型由 ID 前两段推导（`data.table.accounts` → `data.table`），文件无需声明 `type`
+- 类型由文件级 ID 推导（`data.table.accounts` → `data.table`；`data.enums` / `data.storage` / `data.table.base` 按完整 ID 匹配 `_types.yaml`），文件无需声明 `type`
 - 生效元数据 = `_types.yaml` + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移
 - **不写 `refs`**：依赖关系由图校验器从 `ref` / `capability` / `use` / `emits` / `column` / `target` 等结构化字段自动推导
@@ -326,7 +352,7 @@ table:
 
 | 写法 | 判定 |
 |---|---|
-| `status 只能引用 data.enum.note_status` | ✅ 含字段名，实例级 |
+| `status 只能引用 data.enum.account_status` | ✅ 含字段名，实例级 |
 | `游标分页必须有唯一 tiebreaker（created_at, id）` | ✅ 含字段名，实例级 |
 | `不要手写 migrations` | ❌ 所有表都适用 → 上移 `_types.yaml` |
 | `不要绕过软删过滤` | ❌ 所有软删表都适用 → 上移 |
@@ -404,9 +430,10 @@ AI 对负向约束的敏感度高于正向描述。
 **migrations 是生成物，不是真相源。**
 
 ```
-data/tables/*.yaml ──> schema.sql（目标态）
-                          ├─ diff 当前 DB ──> migrations/<ts>_<name>.sql
-                          └─> sqlc 输入
+data/tables/_base.yaml + tables/*.yaml ──> schema.sql（目标态）
+                                             ├─ diff 当前 DB ──> migrations/<ts>_<name>.sql
+                                             └─> sqlc 输入
+data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 ```
 
 | 规则 | 说明 |
@@ -414,7 +441,7 @@ data/tables/*.yaml ──> schema.sql（目标态）
 | 禁止手写迁移 | 改 `tables/*.yaml` 后跑 `make gen-db` |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验 | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
-| 逃生口 | `ddl_ext` 承载原生 SQL 片段，必须标 `escape_hatch: true`；每表 ≤3 处，全局 ≤20 处 |
+| 结构化 DDL | 分区用 `table.partition`，表达式索引用 `indexes[].expression`，大表索引用 `concurrently`；**不设未结构化 DDL 字段** |
 
 **诚实边界**：生产环境的在线 DDL（大表加索引、数据回填）无法全自动。契约约束**最终态**，迁移**过程**允许人工介入并在 `data/_policy.yaml` 中声明。
 
@@ -431,16 +458,18 @@ data/tables/*.yaml ──> schema.sql（目标态）
 | 算法、并发实现 | 技术决策；影响行为的已进 tables / rules |
 | 日志格式 | 字段名进契约，格式不进 |
 
-按需扩展（有真实需求再建）：`capabilities/integrations.yaml`、`platform/compliance.yaml`、`platform/features.yaml`、`features/i18n.yaml`、`platform/storage.yaml`、`platform/notifications.yaml`。
+按需扩展（有真实需求再建）：`capabilities/integrations.yaml`、`platform/compliance.yaml`、`platform/features.yaml`、`features/i18n.yaml`、`platform/notifications.yaml`。
 
 ---
 
 ## 8. 当前状态
 
-P2：目录与最小示例（`accounts`）已落盘，生成器待实现。
+P2：目录与最小示例已落盘，生成器待实现。
 
-- **data**：`tables/accounts`、`entities/account`、`enums`、`queries/accounts`、`_policy`（其余业务表待建）
-- **capabilities**：`http/{shared,accounts}`、`async/accounts_cleanup`、`services/accounts`（其余模块待建）
-- **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、15 个平台文件
+- **data**：`tables/_base` + `accounts` / `tokens` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{accounts,auth}`、`storage`、`_policy`
+- **capabilities**：`http/{shared,accounts,auth}`、`async/accounts_cleanup`、`services/{accounts,auth}`（其余模块待建）
+- **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件
+
+> P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。
 
 `_types.yaml` 是类型默认值，不是实例契约，不登记在 `index.yaml`。

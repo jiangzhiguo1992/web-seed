@@ -1,0 +1,119 @@
+# 认证 HTTP 接口。OpenAPI 片段，生成时与 shared.yaml / accounts.yaml 合并。
+#
+# 规则：
+#   - 登录失败统一返回 AUTH_INVALID_CREDENTIALS，避免枚举账号是否存在。
+#   - 响应中的 token 只允许出现在 /auth/login 与 /auth/refresh。
+#   - 每个 operation 必须有 x-contract-id 与 x-service。
+
+schema_version: 1
+id: cap.http.auth
+summary: 认证 HTTP 接口
+stability: draft
+do_not:
+  - 不要把 password_md5 或 token 写入日志、事件
+  - 不要在登录响应里区分“账号不存在/密码错误”
+  - 不要在 handler 里直接读 r.URL.Query()
+
+module: auth
+base_path: /v1
+default_error_responses: [400, 401, 403, 422, 423, 429, 500]
+
+paths:
+  /auth/login:
+    post:
+      operationId: login
+      x-contract-id: cap.http.auth.login
+      x-service: cap.service.auth.login
+      summary: 登录
+      x-timeout-ms: 5000
+      x-rate-limit: { requests: 10, window_seconds: 60 }
+      x-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [auth_type, identifier]
+              properties:
+                auth_type: { type: string, enum: [pwd, phone, email] }
+                identifier: { type: string, minLength: 1, maxLength: 254 }
+                password: { type: string, writeOnly: true, nullable: true }
+                code: { type: string, nullable: true, description: 手机号区号，例如 +86 }
+                device_id: { type: string, nullable: true, maxLength: 128 }
+            example: { auth_type: pwd, identifier: "admin", password: "a-strong-password", device_id: "web-admin" }
+      responses:
+        "200":
+          description: 登录成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthSession" }
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      x-contract-id: cap.http.auth.refresh
+      x-service: cap.service.auth.refresh
+      summary: 刷新令牌
+      x-timeout-ms: 3000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenPair" }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      x-contract-id: cap.http.auth.logout
+      x-service: cap.service.auth.logout
+      summary: 登出
+      x-idempotent: true
+      x-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string, minLength: 1 }
+      responses:
+        "204": { description: 已登出 }
+
+components:
+  schemas:
+    TokenPair:
+      type: object
+      additionalProperties: false
+      x-entity: data.entity.token
+      x-auth-response: true
+      required: [access_token, refresh_token, access_expire_at, refresh_expire_at]
+      properties:
+        access_token: { type: string, readOnly: true }
+        refresh_token: { type: string, readOnly: true }
+        access_expire_at: { type: string, format: date-time }
+        refresh_expire_at: { type: string, format: date-time }
+        token_type: { type: string, enum: [Bearer] }
+
+    AuthSession:
+      type: object
+      additionalProperties: false
+      required: [account, tokens]
+      properties:
+        account: { $ref: "#/components/schemas/Account" }
+        tokens: { $ref: "#/components/schemas/TokenPair" }

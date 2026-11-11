@@ -99,6 +99,7 @@
 - [ ] 合并 spec → Go server 类型（`oapi-codegen strict-server`）
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
 - [ ] `data/tables/*.yaml` → `schema.sql` + 增量 `migrations/*.sql`
+- [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/token/auth_* 拆分（契约已落盘）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
 - [ ] `data/enums.yaml` → Go 常量 + TS union + DB check
 - [ ] `platform/errors.yaml` + `platform/security/permissions.yaml` → 两端常量
@@ -122,7 +123,7 @@
 
 #### P4 最小纵切（示例模块 accounts）
 
-- [ ] 由 `data/tables/accounts.yaml` 生成 schema 与迁移（含软删、乐观锁、部分唯一索引）
+- [ ] 由 `data/tables/_base.yaml` + `accounts.yaml` 生成 schema 与迁移（含软删、乐观锁、部分唯一索引）
 - [ ] 由 `data/queries/accounts.yaml` 生成 `.sql` 并跑 sqlc
 - [ ] `internal/modules/accounts`（service + repo，不含 HTTP）
 - [ ] `internal/composition/adminapi/handlers`（实现 StrictServerInterface）
@@ -210,7 +211,7 @@
 
 | 组 | 职责 | 真相源 |
 |---|---|---|
-| `data/` | 物理表、逻辑实体、查询、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成） |
+| `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储与部署、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` |
 | `capabilities/` | 实现层：HTTP、异步、跨模块 service、业务流程编排 | `capabilities/**` |
 | `business/` | 业务规格：状态机、规则、领域事件、术语（不含实体与实现） | `business/**` |
 | `features/` | 功能定义：路由、页面、用户旅程 | `features/**` |
@@ -248,8 +249,8 @@ platform/** ──> 配置校验 / 常量 / CSS 变量
 - **唯一顺序**：`feature → business → capabilities → data`（单向链，无反向）
 - **锚点只在上游写**：`feature --uses--> business`，`business --implemented_by--> capabilities`，
   `capabilities --persists_via--> data`
-- **capabilities 契约不引用 business**：返回 `data` 行；规则与事件由 business 侧锚点
-- 图校验禁止 `capabilities → business`
+- **capabilities 契约不引用 business**：返回 `data` 行；规则与事件由 business 侧锚点（`cap.flow` 例外：仅允许引用 `business.state/rule/event` 做编排）
+- 图校验禁止 `cap.http` / `cap.service` / `cap.async` → `business`，仅放行 `cap.flow` → `business.{state,rule,event}`
 - 影响面：`make contract-impact id=<id>`
 
 **引用必须写在结构化字段里**（`ref` / `refs` / `capability` / `use` / `emits` / `page` / `route` / `x-*`）。
@@ -272,7 +273,7 @@ web-seed/
 ├── contracts/                        [C] 五组契约（唯一真相源）
 │   ├── index.yaml                    #   契约地图（AI 入口）
 │   ├── project.yaml                  #   项目元信息（derive 输入）
-│   ├── data/                         #   tables / entities / queries / _policy
+│   ├── data/                         #   tables(_base) / entities / queries / storage / _policy
 │   ├── capabilities/                 #   http / async / services / flows
 │   ├── business/                       #   states / rules / events / glossary
 │   ├── features/                     #   routes / pages / flows
@@ -331,7 +332,7 @@ internal/platform/             与业务无关的基础设施
 2. `modules/*` 之间禁止横向 import，跨模块走 service 接口或事件
 3. `composition/*` 只允许"选择 + 组装 + 配置"，出现 `if/for` 业务分支即违规
 4. `apps/web/*` 之间禁止互相 import，共享只能走 `packages/*`
-5. `modules/*` 禁止 import `internal/generated/*`；HTTP 契约产物只允许出现在 `composition/*/handlers`
+5. `modules/*` 禁止 import `internal/generated/http`；sqlc 产物在 `internal/generated/db`，仅 `modules/*/repo` 可 import
 
 ### 4.3 装配方式
 
@@ -401,13 +402,16 @@ apps:
 
 ### 5.4 数据规范（`contracts/data/README.md`）
 
-- 主键 UUIDv7；时间列 `timestamptz`，统一 UTC
-- 业务表标准列：`created_at / updated_at / created_by / deleted_at / version`
+- 表结构基类 `data/tables/_base.yaml`：`id / status / created_at / updated_at / deleted_at` 五列，所有物理表继承
+- 主键 UUIDv7；时间列 `timestamptz`，统一 UTC；`updated_at` 由应用写入
+- 业务表可选 `version` 做乐观锁；不是基类字段
+- 存储引擎、部署拓扑、连接池、锁在 `data/storage.yaml`，禁止逐表声明 engine
 - 枚举用 `text + check`，不用 PG enum（迁移困难）
 - 软删的唯一约束必须用部分索引：`WHERE deleted_at IS NULL`
 - 索引命名 `idx_<table>_<cols>`；外键默认加，热点表可评估去掉
 - 迁移只前进；零停机三步：加可空列 → 回填 → 加约束
 - 软删默认过滤，必须在 repo 层统一，禁止每处手写
+- 分区/表达式索引/`CONCURRENTLY` 用结构化字段；不设未结构化 DDL 字段
 
 ### 5.5 请求治理
 
@@ -507,7 +511,7 @@ self:     doctor（模板自身健康）
 
 ## 8. 明确不做
 
-多租户 · Outbox · SSR/Nuxt · 微服务 · K8s manifests · CDN · 备份 · 告警平台 · 完整 i18n · 低代码 · turbo/nx · GraphQL · gRPC。
+多租户 · Outbox · SSR/Nuxt · 微服务 · K8s manifests · CDN · 备份 · 告警平台 · 完整 i18n · 低代码 · turbo/nx · GraphQL · gRPC · MySQL · MongoDB · 分库分表 · 多主 · 跨地域。
 
 **"完整"的定义**：不是功能全量，而是所有横切面都有明确归属——做 / 不做 / 留口，没有"没人管"的地带。
 

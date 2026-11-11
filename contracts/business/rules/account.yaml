@@ -1,90 +1,88 @@
 # 账号业务规则集。每条规则必须有 given/when/then，否则不算规则。
+#
+# 边界：
+#   - 账号只关心业务主体；密码/手机/邮箱/令牌规则在认证策略与 auth 契约。
+#   - 数据库能表达的约束在 data/tables；这里写业务行为与不变量。
 
 schema_version: 1
 id: business.rule.account
 summary: 账号业务规则集
 stability: stable
 do_not:
-  - email_unique 必须限定在未删除账号内，不要写成全局唯一
-  - 不要把密码强度规则写进 handler，统一走本文件
+  - number_unique 必须限定在未删除账号内，不要写成全局唯一
+  - 不要在 handler 里手写编号格式或归属校验
+  - 不要在本文件写密码强度规则（见 platform/security/auth-policy）
 
 scope: account
 
 rules:
-  - id: business.rule.account.email_format
-    summary: 邮箱必须符合基本格式
+  - id: business.rule.account.number_format
+    summary: 账号编号只允许字母、数字、下划线和短横线，长度 4–64
     severity: error
-    on_violation: platform.error.ACCOUNT_EMAIL_INVALID
-    given: "email = 'not-an-email'"
+    on_violation: platform.error.ACCOUNT_NUMBER_INVALID
+    given: "number = 'A 01'"
+    when: "create"
+    then: "拒绝，返回 ACCOUNT_NUMBER_INVALID"
+    implemented_by: [cap.service.accounts.create]
+
+  - id: business.rule.account.number_unique
+    summary: 未删除账号内编号唯一
+    severity: error
+    on_violation: platform.error.ACCOUNT_NUMBER_TAKEN
+    given: "已存在 active 账号 ACC-0001"
+    when: "创建 ACC-0001"
+    then: "拒绝，返回 ACCOUNT_NUMBER_TAKEN"
+    implemented_by: [cap.service.accounts.create]
+
+  - id: business.rule.account.own_pair
+    summary: own_type 与 own_id 必须同时存在
+    severity: error
+    on_violation: platform.error.ACCOUNT_OWN_INVALID
+    given: "own_type = '' 或 own_id = nil"
+    when: "create"
+    then: "拒绝，返回 ACCOUNT_OWN_INVALID"
+    implemented_by: [cap.service.accounts.create]
+
+  - id: business.rule.account.nickname_length
+    summary: 昵称长度 1–100
+    severity: error
+    on_violation: platform.error.ACCOUNT_NICKNAME_INVALID
+    given: "nickname 长度 = 0 或 101"
     when: "create 或 update"
-    then: "拒绝，返回 ACCOUNT_EMAIL_INVALID"
+    then: "拒绝，返回 ACCOUNT_NICKNAME_INVALID"
     implemented_by: [cap.service.accounts.create, cap.service.accounts.update]
-
-  - id: business.rule.account.email_unique
-    summary: 未删除账号内邮箱唯一
-    severity: error
-    on_violation: platform.error.ACCOUNT_EMAIL_TAKEN
-    given: "已存在 active 账号 a@example.com"
-    when: "创建 a@example.com"
-    then: "拒绝，返回 ACCOUNT_EMAIL_TAKEN"
-    implemented_by: [cap.service.accounts.create]
-
-  - id: business.rule.account.password_min_length
-    summary: 密码不少于 12 位
-    severity: error
-    on_violation: platform.error.ACCOUNT_WEAK_PASSWORD
-    given: "password 长度 = 8"
-    when: "create 或修改密码"
-    then: "拒绝，返回 ACCOUNT_WEAK_PASSWORD"
-    implemented_by: [cap.service.accounts.create]
-
-  - id: business.rule.account.locked_cannot_login
-    summary: 锁定期间不能登录
-    severity: error
-    on_violation: platform.error.ACCOUNT_LOCKED
-    given: "locked_until > now()"
-    when: "login"
-    then: "拒绝，返回 ACCOUNT_LOCKED"
-    implemented_by: [planned:cap.service.auth.login]
-
-  - id: business.rule.account.suspended_cannot_login
-    summary: 封禁账号不能登录
-    severity: error
-    on_violation: platform.error.ACCOUNT_SUSPENDED
-    given: "status = suspended"
-    when: "login"
-    then: "拒绝，返回 ACCOUNT_SUSPENDED"
-    implemented_by: [planned:cap.service.auth.login]
 
   - id: business.rule.account.self_only
     summary: 非管理员只能查看和修改自己的账号
     severity: error
     on_violation: platform.error.COMMON_FORBIDDEN
-    given: "当前用户 id = A，目标账号 id = B"
+    given: "当前用户 id = A，目标账号 user_id = B"
     when: "非 admin 角色访问 B"
     then: "拒绝，返回 COMMON_FORBIDDEN"
     implemented_by: [cap.service.accounts.get, cap.service.accounts.update]
 
-invariants:
-  - id: business.inv.account.email_normalized
-    description: 邮箱必须小写归一后存储
-    assert: "email == lower(email)"
-    on_violation: platform.error.ACCOUNT_EMAIL_INVALID
-    implemented_by: [cap.service.accounts.create]
+  - id: business.rule.account.deleted_cannot_modify
+    summary: 已软删账号不可修改、不可再次删除
+    severity: error
+    on_violation: platform.error.ACCOUNT_ALREADY_DELETED
+    given: "deleted_at != nil"
+    when: "update / activate / suspend / delete"
+    then: "拒绝，返回 ACCOUNT_ALREADY_DELETED"
+    implemented_by: [cap.service.accounts.update, cap.service.accounts.activate, cap.service.accounts.suspend, cap.service.accounts.delete]
 
-  - id: business.inv.account.password_never_exposed
-    description: password_hash 不得出现在响应、日志、事件
-    assert: "password_hash not in response && not in log && not in event"
-    on_violation: platform.error.COMMON_INTERNAL
-    implemented_by: [cap.service.accounts.create, cap.service.accounts.update]
+invariants:
+  - id: business.inv.account.deleted_status_consistent
+    description: status=deleted 当且仅当 deleted_at 非空
+    assert: "(status == deleted) == (deleted_at != nil)"
+    on_violation: platform.error.ACCOUNT_ILLEGAL_TRANSITION
+    implemented_by: [cap.service.accounts.delete]
 
 derived:
   - name: is_loginable
-    description: 仅 active 且未锁定且未删除可登录
-    expr: "status == active && locked_until == nil && deleted_at == nil"
-    consumed_by: [feature.page.account_list]
+    description: 仅 active 且未删除可登录
+    expr: "status == active && deleted_at == nil"
 
 limits:
-  max_display_name_length: 100
-  max_email_length: 254
-  min_password_length: 12
+  min_number_length: 4
+  max_number_length: 64
+  max_nickname_length: 100

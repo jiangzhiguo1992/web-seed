@@ -4,9 +4,12 @@ schema_version: 1
 id: cap.async.accounts_cleanup
 summary: 未激活账号清理任务
 stability: draft
+module: accounts
 do_not:
   - 只清理 pending 状态，不要碰 active / suspended
   - 必须保留审计事件，不要静默删除
+  - 多实例部署时必须持有分布式锁，不能只靠 max_in_flight
+  - 清理阈值必须与 data.table.accounts.retention.pending_days 保持一致
 
 trigger:
   type: cron
@@ -17,7 +20,7 @@ input:
   type: object
   additionalProperties: false
   properties:
-    older_than_days: { type: integer, minimum: 1, default: 7 }
+    older_than_days: { type: integer, minimum: 1, default: 7, x-source: data.table.accounts.retention.pending_days }
     batch_size: { type: integer, minimum: 1, maximum: 1000, default: 100 }
 
 output:
@@ -27,10 +30,14 @@ output:
   properties:
     deleted_count: { type: integer, minimum: 0 }
 
+uses:
+  - data.query.accounts.list_stale_pending_accounts
+  - data.query.accounts.soft_delete_stale_pending_accounts
+
 idempotency:
   key: "accounts_cleanup:{date}:{older_than_days}"
   window: 24h
-  rationale: 同一天重复执行结果一致，已删记录不会被再次匹配
+  rationale: 同一天重复执行结果一致，已软删记录不会被再次匹配
 
 retry:
   max_attempts: 3
@@ -41,6 +48,7 @@ retry:
 
 concurrency:
   max_in_flight: 1
+  lock: postgres_advisory_lock
   rationale: 避免多实例同时扫同一批数据
 
 observability:

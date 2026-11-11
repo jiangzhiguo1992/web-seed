@@ -23,6 +23,9 @@ test: test-api ## 运行测试（P1 仅 Go）
 test-api: ## Go 测试
 	cd $(APP_API) && go test ./...
 
+test-race: ## Go 竞态测试
+	cd $(APP_API) && go test -race ./...
+
 test-web: ## 前端测试（P1 未接入）
 	@echo "web tests: 尚未配置（P7 接入 Vitest）"
 

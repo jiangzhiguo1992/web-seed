@@ -7,6 +7,7 @@ stability: stable
 do_not:
   - 状态筛选的取值必须来自 business.state.account.states，不要硬编码
   - forbidden 态依赖 platform.permission.account_read，不可省略
+  - 不要展示密码、手机号、邮箱、令牌
 
 page: account_list
 route: feature.route.account_list
@@ -16,6 +17,7 @@ data:
     capability: cap.http.accounts.list
     params:
       status: { from: query.status, enum: business.state.account.states, optional: true }
+      own_type: { from: query.own_type, optional: true }
       page_size: { from: query.page_size, type: integer, default: 20 }
     cache:
       stale_time: 30s
@@ -65,17 +67,18 @@ actions:
     label: 删除
     confirm: true
     danger: true
-    available_when: "row.status != deleted"
+    available_when: "row.status == pending || row.status == active"
 
 fields:
-  - { name: email, render: text }
-  - { name: display_name, render: text }
+  - { name: number, render: text }
+  - { name: nickname, render: text }
+  - { name: own_type, render: tag }
   - { name: status, enum: business.state.account.states, render: badge }
-  - { name: last_login_at, render: relative_time }
   - { name: created_at, render: relative_time }
 
 filters:
   - { name: status, enum: business.state.account.states, multiple: false, label: 状态 }
+  - { name: own_type, type: string, multiple: false, label: 归属类型 }
 
 pagination:
   style: cursor

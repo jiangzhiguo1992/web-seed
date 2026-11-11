@@ -1,0 +1,133 @@
+# 认证模块对外暴露的 service 能力。只登记跨模块调用，模块内部方法不进契约。
+
+schema_version: 1
+id: cap.service.auth
+summary: 认证跨模块 service 接口
+stability: draft
+do_not:
+  - 不要在普通方法里暴露 password_md5 / access_token / refresh_token；Login/Refresh 返回 TokenPair 是唯一例外
+  - 不要返回 data.table.*.row；返回 data.entity.account 或 TokenPair
+  - 不要引用 business.*（规则/事件由 business 侧锚点）
+  - 认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在
+  - password_md5 只做遗留回退；登录成功后应升级为 password_hash 并清空 MD5
+  - 数据库约束到业务错误的映射写在 constraint_errors
+
+module: auth
+
+interface:
+  name: AuthService
+  package: internal/modules/auth
+  methods:
+    - name: Login
+      summary: 登录并签发令牌；优先校验 password_hash，password_md5 仅遗留兼容
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: input, type: LoginInput }
+      returns:
+        - { name: session, type: AuthSession }
+        - { name: err, type: error }
+      errors:
+        - platform.error.AUTH_INVALID_CREDENTIALS
+        - platform.error.AUTH_LOCKED
+        - platform.error.ACCOUNT_SUSPENDED
+        - platform.error.COMMON_FORBIDDEN
+      transaction: required
+
+    - name: Refresh
+      summary: 用刷新令牌换取新令牌对
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: refresh_token, type: string }
+      returns:
+        - { name: tokens, type: TokenPair }
+        - { name: err, type: error }
+      errors:
+        - platform.error.AUTH_TOKEN_INVALID
+        - platform.error.AUTH_TOKEN_EXPIRED
+      transaction: required
+
+    - name: Logout
+      summary: 吊销刷新令牌
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: refresh_token, type: string }
+      returns:
+        - { name: err, type: error }
+      errors: [platform.error.AUTH_TOKEN_INVALID]
+      transaction: required
+
+    - name: Verify
+      summary: 校验访问令牌并返回账号
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: access_token, type: string }
+      returns:
+        - { name: account, type: data.entity.account }
+        - { name: err, type: error }
+      errors:
+        - platform.error.AUTH_TOKEN_INVALID
+        - platform.error.AUTH_TOKEN_EXPIRED
+      transaction: read_only
+
+# 持久化实现：认证数据全部由本服务读写
+persistence:
+  tables:
+    - data.table.accounts
+    - data.table.auth_pwd
+    - data.table.auth_phone
+    - data.table.auth_email
+    - data.table.tokens
+  read_only_tables:
+    - data.table.accounts
+  field_map: {}
+  queries:
+    get_account: data.query.accounts.get_account
+    get_auth_pwd_by_username: data.query.auth.get_auth_pwd_by_username
+    get_auth_phone_by_number: data.query.auth.get_auth_phone_by_number
+    get_auth_email_by_username_domain: data.query.auth.get_auth_email_by_username_domain
+    record_login_success: data.query.auth.record_auth_pwd_login_success
+    record_login_failure: data.query.auth.record_auth_pwd_login_failure
+    create_token: data.query.auth.create_token
+    get_token_by_refresh: data.query.auth.get_token_by_refresh
+    get_token_by_access: data.query.auth.get_token_by_access
+    revoke_token: data.query.auth.revoke_token
+    delete_expired_tokens: data.query.auth.delete_expired_tokens
+    list_tokens_by_account: data.query.auth.list_tokens_by_account
+  constraint_errors:
+    uq_auth_pwd_username: platform.error.AUTH_USERNAME_TAKEN
+    uq_auth_pwd_account: platform.error.AUTH_USERNAME_TAKEN
+    ck_auth_pwd_password_present: platform.error.AUTH_INVALID_CREDENTIALS
+    uq_auth_phone_number: platform.error.AUTH_PHONE_TAKEN
+    uq_auth_email_username_domain: platform.error.AUTH_EMAIL_TAKEN
+
+types:
+  LoginInput:
+    type: object
+    additionalProperties: false
+    required: [auth_type, identifier]
+    properties:
+      auth_type: { type: data.enum.auth_type }
+      identifier: { type: string, minLength: 1, maxLength: 254 }
+      password: { type: string, writeOnly: true, nullable: true }
+      code: { type: string, nullable: true, description: 手机号区号，例如 +86 }
+      device_id: { type: string, nullable: true, maxLength: 128 }
+
+  TokenPair:
+    type: object
+    additionalProperties: false
+    x-auth-response: true
+    required: [access_token, refresh_token, access_expire_at, refresh_expire_at]
+    properties:
+      access_token: { type: string, readOnly: true }
+      refresh_token: { type: string, readOnly: true }
+      access_expire_at: { type: string, format: date-time }
+      refresh_expire_at: { type: string, format: date-time }
+      token_type: { type: string, enum: [Bearer] }
+
+  AuthSession:
+    type: object
+    additionalProperties: false
+    required: [account, tokens]
+    properties:
+      account: { type: data.entity.account }
+      tokens: { type: TokenPair }

@@ -6,6 +6,7 @@ summary: 会话与认证策略
 stability: stable
 
 token:
+  persistence: data.table.tokens
   access:
     type: jwt
     algorithm: HS256
@@ -13,12 +14,14 @@ token:
     claims_required: [sub, aud, exp, iat, jti]
     audience: [web/admin]
     pii_in_token: false
+    storage: database            # 仅用于审计/吊销；校验优先验签
   refresh:
     type: opaque
     ttl: 30d
-    rotation: true                  # 每次刷新换新 token，旧的作废
-    reuse_detection: true           # 复用旧 token 即吊销全部会话
-    storage: httpOnly_cookie
+    rotation: true               # 每次刷新换新 token，旧的作废
+    reuse_detection: true        # 复用旧 token 即吊销全部会话
+    storage: database
+    table: data.table.tokens
     cookie:
       name: refresh_token
       same_site: Lax
@@ -41,11 +44,15 @@ csrf:
 
 password:
   algorithm: argon2id
+  hash_field: data.table.auth_pwd.col.password_hash
   min_length: 12
   require_mixed_case: false
   max_attempts: 5
   lockout: 15m
   breach_check: true
+  legacy:
+    field: data.table.auth_pwd.col.password_md5
+    note: 仅兼容遗留系统；新密码写入 password_hash，登录成功后清除 MD5
 
 mfa:
   required_for_roles: [admin]

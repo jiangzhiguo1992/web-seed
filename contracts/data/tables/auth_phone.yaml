@@ -1,0 +1,81 @@
+# 手机号认证表。一个账号可绑定多个手机号；只允许认证模块读写。
+
+schema_version: 1
+id: data.table.auth_phone
+summary: 手机号认证表
+stability: stable
+owner_module: auth
+extends: [data.table.base]
+do_not:
+  - (code, number) 唯一索引必须带 WHERE deleted_at IS NULL
+  - 只有 owner_module 对应的 cap.service 可以写本表，其他模块只能经 service 读
+  - used_by 由 make gen-graph 生成，禁止手改
+
+table:
+  comment: 手机号认证
+  size_class: small
+  retention: { soft_delete_days: 30, hard_delete_days: 90 }
+
+columns:
+  - name: account_id
+    type: uuid
+    nullable: false
+    comment: 关联账号
+
+  - name: code
+    type: text
+    nullable: false
+    min_length: 2
+    max_length: 8
+    pattern: "^\\+[0-9]{1,4}$"
+    comment: 国际区号，例如 +86
+
+  - name: number
+    type: text
+    nullable: false
+    min_length: 1
+    max_length: 32
+    pii: true
+    comment: 手机号
+
+  - name: operator
+    type: text
+    nullable: true
+    max_length: 32
+    comment: 运营商
+
+  - name: status
+    type: data.enum.auth_status
+    nullable: false
+    default: active
+    comment: 认证记录状态
+
+constraints:
+  - name: fk_auth_phone_account
+    type: foreign_key
+    columns: [account_id]
+    references: data.table.accounts.col.id
+    on_delete: cascade
+    on_update: no_action
+
+  - name: ck_auth_phone_status
+    type: enum
+    column: status
+    enum: data.enum.auth_status
+
+indexes:
+  - name: uq_auth_phone_number
+    columns: [code, number]
+    unique: true
+    where: "deleted_at IS NULL"
+    reason: 手机号在未删除记录内唯一
+
+  - name: idx_auth_phone_account_id
+    columns: [account_id]
+    where: "deleted_at IS NULL"
+    reason: 按账号查手机号
+
+used_by:
+  - data.entity.auth_phone
+  - data.query.auth
+  - cap.service.auth

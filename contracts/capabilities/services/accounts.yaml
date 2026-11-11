@@ -6,7 +6,10 @@ summary: 账号跨模块 service 接口
 stability: stable
 do_not:
   - 返回 data.entity.account，不要返回表行
-  - persistence.queries.get_for_auth 只能被认证流程使用
+  - 不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型
+  - 不要引用 business.*（规则/事件由 business 侧锚点）
+  - 认证相关方法在 cap.service.auth，不要塞进本接口
+  - 数据库约束到业务错误的映射写在 constraint_errors
 
 module: accounts
 
@@ -46,9 +49,10 @@ interface:
         - { name: account, type: data.entity.account }
         - { name: err, type: error }
       errors:
-        - platform.error.ACCOUNT_EMAIL_INVALID
-        - platform.error.ACCOUNT_EMAIL_TAKEN
-        - platform.error.ACCOUNT_WEAK_PASSWORD
+        - platform.error.ACCOUNT_NUMBER_INVALID
+        - platform.error.ACCOUNT_NUMBER_TAKEN
+        - platform.error.ACCOUNT_OWN_INVALID
+        - platform.error.COMMON_FORBIDDEN
       transaction: required
 
     - name: Update
@@ -116,17 +120,20 @@ persistence:
   table: data.table.accounts
   field_map: {}                    # 实体字段名与列名一致，无差异
   queries:
-    get: data.query.accounts.getaccount
-    get_for_auth: data.query.accounts.getaccountforauth
-    list: data.query.accounts.listaccounts
-    create: data.query.accounts.createaccount
-    update: data.query.accounts.updateaccountversioned
-    set_status: data.query.accounts.setaccountstatus
-    record_login_success: data.query.accounts.recordloginsuccess
-    record_login_failure: data.query.accounts.recordloginfailure
-    soft_delete: data.query.accounts.softdeleteaccount
-  constraint_map:
-    business.inv.account.email_normalized: data.table.accounts.constraint.ck_accounts_email_format
+    get: data.query.accounts.get_account
+    get_by_number: data.query.accounts.get_account_by_number
+    exists_number: data.query.accounts.exists_account_number
+    list: data.query.accounts.list_accounts
+    create: data.query.accounts.create_account
+    update: data.query.accounts.update_account
+    set_status: data.query.accounts.set_account_status
+    soft_delete: data.query.accounts.soft_delete_account
+    list_stale_pending: data.query.accounts.list_stale_pending_accounts
+    soft_delete_stale_pending: data.query.accounts.soft_delete_stale_pending_accounts
+  constraint_errors:
+    uq_accounts_number: platform.error.ACCOUNT_NUMBER_TAKEN
+    ck_accounts_status: platform.error.ACCOUNT_ILLEGAL_TRANSITION
+    ck_accounts_deleted_consistent: platform.error.ACCOUNT_ILLEGAL_TRANSITION
 
 types:
   ListAccountsFilter:
@@ -134,28 +141,33 @@ types:
     additionalProperties: false
     properties:
       status: { type: data.enum.account_status, nullable: true }
+      own_type: { type: string, nullable: true, maxLength: 32 }
       cursor: { type: string, nullable: true }
       page_size: { type: integer, minimum: 1, maximum: 100, default: 20 }
 
   CreateAccountInput:
     type: object
     additionalProperties: false
-    required: [email, password, display_name]
+    required: [own_type, own_id, number, nickname]
     properties:
-      email: { type: string, format: email, maxLength: 254 }
-      password: { type: string, minLength: 12, writeOnly: true }
-      display_name: { type: string, minLength: 1, maxLength: 100 }
+      own_type: { type: string, minLength: 1, maxLength: 32 }
+      own_id: { type: string, format: uuid }
+      number: { type: string, minLength: 4, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" }
+      nickname: { type: string, minLength: 1, maxLength: 100 }
+      user_id: { type: string, format: uuid, nullable: true }
 
   UpdateAccountInput:
     type: object
     additionalProperties: false
-    required: [display_name, version]
+    required: [nickname, version]
     properties:
-      display_name: { type: string, minLength: 1, maxLength: 100 }
+      nickname: { type: string, minLength: 1, maxLength: 100 }
       version: { type: integer, minimum: 1 }
 
 consumers:
   - module: audit
     uses: [Get]
   - module: auth
+    uses: [Get]
+  - module: notification
     uses: [Get]
