@@ -350,7 +350,7 @@ internal/platform/             与业务无关的基础设施
 apps:
   admin:
     kind: api
-    includes: [cap.http.shared, cap.http.accounts]
+    includes: [cap.http.shared, cap.http.account]
     generated: { spec: generated/openapi/admin.yaml }
 ```
 

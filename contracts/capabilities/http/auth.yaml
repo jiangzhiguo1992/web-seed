@@ -1,4 +1,4 @@
-# 认证 HTTP 接口。OpenAPI 片段，生成时与 shared.yaml / accounts.yaml 合并。
+# 认证 HTTP 接口。OpenAPI 片段，生成时与 shared.yaml / account.yaml 合并。
 #
 # 规则：
 #   - 登录失败统一返回 AUTH_INVALID_CREDENTIALS，避免枚举账号是否存在。

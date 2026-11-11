@@ -14,7 +14,7 @@ route: feature.routes.account_create
 
 data:
   submit:
-    capability: cap.http.accounts.create
+    capability: cap.http.account.create
     params:
       own_type: { from: form.own_type, type: string, required: true }
       own_id: { from: form.own_id, type: uuid, required: true }
@@ -39,7 +39,7 @@ states:
 
 actions:
   submit:
-    capability: cap.http.accounts.create
+    capability: cap.http.account.create
     permission: platform.security.permissions.account_write
     ui: primary-button
     label: 创建

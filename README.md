@@ -225,7 +225,7 @@ make build-web        # apps/web/admin/dist
 3. 手工同步替换（`derive.sh` 落地前）：
    - Go module：`github.com/yourorg/web-seed/apps/api` → 你的 module
    - 前端 scope：`@webseed/*` → 你的 scope
-4. 删除示例契约与实现：`data/tables/{account,token,auth_pwd,auth_phone,auth_email}.yaml`、`data/entities/{account,token,auth_pwd,auth_phone,auth_email}.yaml`、`data/queries/{account,auth}.yaml`、`capabilities/http/{accounts,auth}.yaml`、`capabilities/services/{accounts,auth}.yaml`、`capabilities/flows/account_activation.yaml`、`capabilities/async/accounts_cleanup.yaml`、`business/**/account*.yaml`、`features/{pages,flows}/account_*.yaml` 及对应代码
+4. 删除示例契约与实现：`data/tables/{account,token,auth_pwd,auth_phone,auth_email}.yaml`、`data/entities/{account,token,auth_pwd,auth_phone,auth_email}.yaml`、`data/queries/{account,auth}.yaml`、`capabilities/http/{account,auth}.yaml`、`capabilities/services/{account,auth}.yaml`、`capabilities/flows/account_activation.yaml`、`capabilities/async/account_cleanup.yaml`、`business/**/account*.yaml`、`features/{pages,flows}/account_*.yaml` 及对应代码
 5. 删除 `.opencode/opencode.json`（含本地 MCP 配置）
 6. 创建 `.env.local`，参考 `.env.example`（P2 生成）
 

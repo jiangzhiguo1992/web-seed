@@ -8,12 +8,12 @@ do_not:
   - 只编排，不写调用代码
   - 不要绕过状态机直接改 status
 
-trigger: cap.services.accounts.activate
+trigger: cap.services.account.activate
 
 steps:
   - id: load
     action: 加载账号
-    use: cap.services.accounts.get
+    use: cap.services.account.get
     on_error: [platform.errors.ACCOUNT_NOT_FOUND]
 
   - id: authorize

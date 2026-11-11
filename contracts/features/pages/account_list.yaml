@@ -14,7 +14,7 @@ route: feature.routes.account_list
 
 data:
   list:
-    capability: cap.http.accounts.list
+    capability: cap.http.account.list
     params:
       status: { from: query.status, enum: business.states.account.states, optional: true }
       own_type: { from: query.own_type, optional: true }
@@ -42,26 +42,26 @@ states:
 
 actions:
   create:
-    capability: cap.http.accounts.create
+    capability: cap.http.account.create
     permission: platform.security.permissions.account_write
     ui: primary-button
     label: 新建账号
     on_success: navigate(feature.flows.account_create.success_target)
   activate:
-    capability: cap.http.accounts.activate
+    capability: cap.http.account.activate
     permission: platform.security.permissions.account_write
     ui: row-action
     label: 激活
     available_when: "row.status == pending || row.status == suspended"
   suspend:
-    capability: cap.http.accounts.suspend
+    capability: cap.http.account.suspend
     permission: platform.security.permissions.account_write
     ui: row-action
     label: 封禁
     confirm: true
     available_when: "row.status == active"
   delete:
-    capability: cap.http.accounts.delete
+    capability: cap.http.account.delete
     permission: platform.security.permissions.account_delete
     ui: row-action
     label: 删除

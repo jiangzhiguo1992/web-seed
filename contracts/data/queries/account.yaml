@@ -158,7 +158,7 @@ queries:
       - { name: older_than_days, type: integer, min: 1 }
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
     returns: "[]data.tables.account.row"
-    semantics: 扫描超过保留期仍未激活的账号；供 accounts_cleanup 使用
+    semantics: 扫描超过保留期仍未激活的账号；供 account_cleanup 使用
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
              created_at, updated_at, deleted_at

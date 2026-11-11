@@ -34,7 +34,7 @@ events:
   - name: account.created
     description: 账号创建成功
     trigger: api_success
-    ref: cap.http.accounts.create
+    ref: cap.http.account.create
     properties:
       - { name: account_id, type: string, pii: false }
       - { name: has_body, type: boolean, pii: false }
@@ -43,21 +43,21 @@ events:
   - name: account.activated
     description: 账号激活成功
     trigger: api_success
-    ref: cap.http.accounts.activate
+    ref: cap.http.account.activate
     properties:
       - { name: account_id, type: string, pii: false }
 
   - name: account.suspended
     description: 账号封禁成功
     trigger: api_success
-    ref: cap.http.accounts.suspend
+    ref: cap.http.account.suspend
     properties:
       - { name: account_id, type: string, pii: false }
 
   - name: account.deleted
     description: 账号删除成功
     trigger: api_success
-    ref: cap.http.accounts.delete
+    ref: cap.http.account.delete
     properties:
       - { name: account_id, type: string, pii: false }
 

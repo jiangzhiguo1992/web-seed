@@ -29,7 +29,7 @@ capabilities 是 business 的实现，**契约里不出现 `business.*`**：
 ```
 contracts/capabilities/http/
 ├── shared.yaml      # 共享组件：Problem、分页、排序、header 参数
-├── accounts.yaml    # 一个业务模块一个文件
+├── account.yaml     # 一个业务模块一个文件
 └── auth.yaml        # 同上
 
 生成时合并 ──> contracts/generated/openapi/admin.yaml（完整 spec）
@@ -37,7 +37,7 @@ contracts/capabilities/http/
            ──> packages/api-client/src/generated/（TS 类型）
 ```
 
-**为什么先拆再合并**：AI 改 accounts 只读 `accounts.yaml`（≤200 行），不需要读整个 spec。组合文件是产物，禁止手改。
+**为什么先拆再合并**：AI 改 account 只读 `account.yaml`（≤200 行），不需要读整个 spec。组合文件是产物，禁止手改。
 
 ### 2.1 OpenAPI 扩展字段（必须使用）
 

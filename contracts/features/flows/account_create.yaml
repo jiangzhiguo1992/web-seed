@@ -27,7 +27,7 @@ steps:
 
   - id: submit
     ui: 提交
-    capability: cap.http.accounts.create
+    capability: cap.http.account.create
     idempotency: client_generated_key
     loading_state: button_spinner
     on_success: goto(detail)

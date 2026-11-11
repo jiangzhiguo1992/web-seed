@@ -1,7 +1,7 @@
 # 账号模块对外暴露的 service 能力。只登记跨模块调用，模块内部方法不进契约。
 
 schema_version: 1
-id: cap.services.accounts
+id: cap.services.account
 summary: 账号跨模块 service 接口
 stability: stable
 do_not:

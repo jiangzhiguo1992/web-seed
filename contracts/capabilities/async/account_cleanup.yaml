@@ -1,7 +1,7 @@
 # 定期清理长期未激活的账号。五要素必须齐全，缺一即校验失败。
 
 schema_version: 1
-id: cap.async.accounts_cleanup
+id: cap.async.account_cleanup
 summary: 未激活账号清理任务
 stability: draft
 module: accounts
@@ -35,7 +35,7 @@ uses:
   - data.queries.account.soft_delete_stale_pending_accounts
 
 idempotency:
-  key: "accounts_cleanup:{date}:{older_than_days}"
+  key: "account_cleanup:{date}:{older_than_days}"
   window: 24h
   rationale: 同一天重复执行结果一致，已软删记录不会被再次匹配
 
@@ -44,7 +44,7 @@ retry:
   backoff: exponential
   initial_delay: 30s
   max_delay: 10m
-  dead_letter: accounts_cleanup_dlq
+  dead_letter: account_cleanup_dlq
 
 concurrency:
   max_in_flight: 1
@@ -52,7 +52,7 @@ concurrency:
   rationale: 避免多实例同时扫同一批数据
 
 observability:
-  log_event: job.accounts_cleanup.completed
+  log_event: job.account_cleanup.completed
   metrics:
     - platform.observability.metrics.job_duration_ms
     - platform.observability.metrics.job_failed_total

@@ -28,7 +28,7 @@ events:
         number: { type: string }
         status: { type: string, enum: [pending, active] }
         created_at: { type: string, format: date-time }
-    trigger: [cap.services.accounts.create]
+    trigger: [cap.services.account.create]
 
   - id: business.events.account.activated
     name: account.activated
@@ -40,7 +40,7 @@ events:
       properties:
         id: { type: string, format: uuid }
         activated_at: { type: string, format: date-time }
-    trigger: [cap.services.accounts.activate]
+    trigger: [cap.services.account.activate]
 
   - id: business.events.account.suspended
     name: account.suspended
@@ -53,7 +53,7 @@ events:
         id: { type: string, format: uuid }
         reason: { type: string }
         suspended_at: { type: string, format: date-time }
-    trigger: [cap.services.accounts.suspend]
+    trigger: [cap.services.account.suspend]
 
   - id: business.events.account.reactivated
     name: account.reactivated
@@ -65,7 +65,7 @@ events:
       properties:
         id: { type: string, format: uuid }
         reactivated_at: { type: string, format: date-time }
-    trigger: [cap.services.accounts.activate]
+    trigger: [cap.services.account.activate]
 
   - id: business.events.account.deleted
     name: account.deleted
@@ -77,7 +77,7 @@ events:
       properties:
         id: { type: string, format: uuid }
         deleted_at: { type: string, format: date-time }
-    trigger: [cap.services.accounts.delete]
+    trigger: [cap.services.account.delete]
 
   - id: business.events.account.login_succeeded
     name: account.login_succeeded
@@ -116,7 +116,7 @@ events:
       properties:
         deleted_count: { type: integer }
         executed_at: { type: string, format: date-time }
-    trigger: [cap.async.accounts_cleanup]
+    trigger: [cap.async.account_cleanup]
 
 consumers:
   - module: audit

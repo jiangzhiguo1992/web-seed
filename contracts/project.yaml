@@ -34,7 +34,7 @@ apps:
     description: 管理端 API
     includes:
       - cap.http.shared
-      - cap.http.accounts
+      - cap.http.account
       - cap.http.auth
     generated:
       spec: generated/openapi/admin.yaml

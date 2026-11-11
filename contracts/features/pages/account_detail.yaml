@@ -14,7 +14,7 @@ route: feature.routes.account_detail
 
 data:
   detail:
-    capability: cap.http.accounts.get
+    capability: cap.http.account.get
     params:
       id: { from: route.params.id, type: uuid, required: true }
     cache:
@@ -37,21 +37,21 @@ states:
 
 actions:
   edit:
-    capability: cap.http.accounts.update
+    capability: cap.http.account.update
     permission: platform.security.permissions.account_write
     available_when: "row.status != deleted"
     ui: primary-button
   activate:
-    capability: cap.http.accounts.activate
+    capability: cap.http.account.activate
     permission: platform.security.permissions.account_write
     available_when: "canTransition('activate')"
   suspend:
-    capability: cap.http.accounts.suspend
+    capability: cap.http.account.suspend
     permission: platform.security.permissions.account_write
     available_when: "canTransition('suspend')"
     confirm: true
   delete:
-    capability: cap.http.accounts.delete
+    capability: cap.http.account.delete
     permission: platform.security.permissions.account_delete
     available_when: "canTransition('delete')"
     confirm: true

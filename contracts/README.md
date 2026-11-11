@@ -133,7 +133,7 @@ contracts/
 | 组 | 示例 |
 |---|---|
 | data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_accounts_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base`、`data.policy` |
-| capabilities | `cap.http.accounts.create`、`cap.async.accounts_cleanup`、`cap.services.accounts` |
+| capabilities | `cap.http.account.create`、`cap.async.account_cleanup`、`cap.services.account` |
 | business | `business.states.account`、`business.rules.account.number_format`、`business.events.account.created` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
 | platform | `platform.errors.ACCOUNT_NOT_FOUND`、`platform.security.permissions.account_read`、`platform.security.roles.admin`、`platform.analytics.events.page.account_list_viewed` |
@@ -178,7 +178,7 @@ feature ──> business ──> capabilities ──> data
 | feature → business | 页面契约 | `data` / `actions` / `fields` / `states` |
 | feature → capabilities | 页面契约 | `capability:` |
 | business → capabilities | 规则 / 状态机 / 事件 | `implemented_by` / `emitted_by` |
-| capabilities/http → capabilities/service | HTTP operation | `x-service` |
+| capabilities/http → capabilities/services | HTTP operation | `x-service` |
 | capabilities/service → data | service 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
 | data.queries → data.tables | 查询项 | `table` / `tables` |
 | data.entities → data.tables | 实体 | `table` / `column` |
@@ -223,9 +223,9 @@ make contract-impact id=data.tables.account.col.number
 
 ```
 feature.pages.account_list
-  ├─ cap.http.accounts.list ─x-service→ cap.services.accounts.list
+  ├─ cap.http.account.list ─x-service→ cap.services.account.list
   │    └─ data.queries.account.list_accounts ─> data.tables.account
-  └─ cap.http.accounts.create ─x-service→ cap.services.accounts.create
+  └─ cap.http.account.create ─x-service→ cap.services.account.create
        └─ data.tables.account
 
 business.states.account ─subject→ data.entities.account ─table→ data.tables.account
@@ -470,7 +470,7 @@ data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 P2：目录与最小示例已落盘，生成器待实现。
 
 - **data**：`tables/_base` + `accounts` / `tokens` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{accounts,auth}`、`storage`、`_policy`
-- **capabilities**：`http/{shared,accounts,auth}`、`async/accounts_cleanup`、`services/{accounts,auth}`（其余模块待建）
+- **capabilities**：`http/{shared,account,auth}`、`async/account_cleanup`、`services/{account,auth}`（其余模块待建）
 - **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件
 
 > P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。

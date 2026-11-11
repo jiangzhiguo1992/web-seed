@@ -104,4 +104,4 @@ indexes:
 used_by:
   entities: [data.entities.account]
   queries: [data.queries.account]
-  capabilities: [cap.services.accounts, cap.services.auth]
+  capabilities: [cap.services.account, cap.services.auth]

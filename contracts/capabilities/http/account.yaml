@@ -6,7 +6,7 @@
 #   - 字段长度/枚举以 data 契约为准，这里手写值只用于 OpenAPI 展开。
 
 schema_version: 1
-id: cap.http.accounts
+id: cap.http.account
 summary: 账号 HTTP 接口
 stability: stable
 do_not:
@@ -22,8 +22,8 @@ paths:
   /accounts:
     get:
       operationId: listAccounts
-      x-contract-id: cap.http.accounts.list
-      x-service: cap.services.accounts.list
+      x-contract-id: cap.http.account.list
+      x-service: cap.services.account.list
       summary: 列出账号
       x-preconditions: [platform.security.permissions.account_read]
       x-timeout-ms: 3000
@@ -54,8 +54,8 @@ paths:
 
     post:
       operationId: createAccount
-      x-contract-id: cap.http.accounts.create
-      x-service: cap.services.accounts.create
+      x-contract-id: cap.http.account.create
+      x-service: cap.services.account.create
       summary: 创建账号
       x-idempotent: true
       x-preconditions: [platform.security.permissions.account_write]
@@ -88,8 +88,8 @@ paths:
   /accounts/{id}:
     get:
       operationId: getAccount
-      x-contract-id: cap.http.accounts.get
-      x-service: cap.services.accounts.get
+      x-contract-id: cap.http.account.get
+      x-service: cap.services.account.get
       summary: 获取账号
       x-preconditions: [platform.security.permissions.account_read]
       parameters:
@@ -103,8 +103,8 @@ paths:
 
     patch:
       operationId: updateAccount
-      x-contract-id: cap.http.accounts.update
-      x-service: cap.services.accounts.update
+      x-contract-id: cap.http.account.update
+      x-service: cap.services.account.update
       summary: 更新账号资料
       x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
@@ -130,8 +130,8 @@ paths:
 
     delete:
       operationId: deleteAccount
-      x-contract-id: cap.http.accounts.delete
-      x-service: cap.services.accounts.delete
+      x-contract-id: cap.http.account.delete
+      x-service: cap.services.account.delete
       summary: 删除账号（软删）
       x-idempotent: true
       x-preconditions: [platform.security.permissions.account_delete]
@@ -145,8 +145,8 @@ paths:
   /accounts/{id}/activate:
     post:
       operationId: activateAccount
-      x-contract-id: cap.http.accounts.activate
-      x-service: cap.services.accounts.activate
+      x-contract-id: cap.http.account.activate
+      x-service: cap.services.account.activate
       summary: 激活账号
       x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
@@ -163,8 +163,8 @@ paths:
   /accounts/{id}/suspend:
     post:
       operationId: suspendAccount
-      x-contract-id: cap.http.accounts.suspend
-      x-service: cap.services.accounts.suspend
+      x-contract-id: cap.http.account.suspend
+      x-service: cap.services.account.suspend
       summary: 封禁账号
       x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
