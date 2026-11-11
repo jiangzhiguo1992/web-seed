@@ -41,10 +41,10 @@ dev: ## 本地开发说明（P3 串接）
 	@echo "分别运行: make compose-up && make api-dev && make web-dev"
 
 api-dev: ## 启动 API
-	cd $(APP_API) && go run ./cmd/userapi
+	cd $(APP_API) && go run ./cmd/adminapi
 
 web-dev: ## 启动前端
-	pnpm --filter @webseed/user dev
+	pnpm --filter @webseed/admin dev
 
 compose-up: ## 启动本地依赖（PG）
 	docker compose -f infra/compose.yaml --profile core up -d

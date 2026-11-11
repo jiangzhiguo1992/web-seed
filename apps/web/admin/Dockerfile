@@ -4,12 +4,12 @@ FROM node:26-alpine AS build
 WORKDIR /src
 RUN corepack enable
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY apps/web/user/package.json apps/web/user/
+COPY apps/web/admin/package.json apps/web/admin/
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm -r build
 
 FROM nginx:1.27-alpine
-COPY --from=build /src/apps/web/user/dist /usr/share/nginx/html
+COPY --from=build /src/apps/web/admin/dist /usr/share/nginx/html
 EXPOSE 80

@@ -87,7 +87,7 @@
 - [x] `docs/{index.md,adr/,playbooks/,guides/,reference/}`
 - [x] `contracts/` 九类目录 + `README.md`（变更三问）
 - [x] `apps/api` 骨架（`cmd/` `internal/{platform,modules,composition,generated}`、`composition/<app>/handlers/`、`migrations/` `queries/`）
-- [x] `apps/web/user` 骨架（`src/{app,pages,features,shared}`）
+- [x] `apps/web/admin` 骨架（`src/{app,pages,features,shared}`）
 - [x] `packages/{api-client,ui,design-tokens,tsconfig,eslint-config}`
 - [x] `infra/compose.yaml`（profiles: core/data/mail/object/observability）
 - [x] `scripts/{derive,doctor,check-docs,gen-env}.sh` 空壳 + `make help`
@@ -95,7 +95,7 @@
 
 #### P2 契约生成链
 
-- [ ] `contracts/openapi/user.yaml` → Go server 类型
+- [ ] `contracts/openapi/admin.yaml` → Go server 类型
 - [ ] 同上 → `packages/api-client` TS 类型（`openapi-typescript` + `openapi-fetch`）
 - [ ] `contracts/config/env.schema.json` → `.env.example`（`gen-env.sh`）
 - [ ] `contracts/domain/error-codes.yaml` → Go 常量 + TS union
@@ -120,9 +120,9 @@
 - [ ] 迁移：`notes` 表（含审计列、软删、乐观锁、部分唯一索引示例）
 - [ ] `queries/notes.sql` + sqlc 生成
 - [ ] `internal/modules/notes`（handler/service/repo 三段）
-- [ ] `contracts/openapi/user.yaml` 补 notes 端点
-- [ ] `internal/composition/userapi` 装配 + `routes_test.go`
-- [ ] `apps/web/user`：列表/详情/创建三态页面
+- [ ] `contracts/openapi/admin.yaml` 补 notes 端点
+- [ ] `internal/composition/adminapi` 装配 + `routes_test.go`
+- [ ] `apps/web/admin`：列表/详情/创建三态页面
 - [ ] Playwright 跑通一条关键路径
 
 #### P5 一致性闸门（详见附录 A）
@@ -137,7 +137,7 @@
 
 #### P6 可选模块（默认非自动生成）
 
-- [ ] `auth`：注册/登录/刷新/登出/会话吊销（audience = user | admin）
+- [ ] `auth`：注册/登录/刷新/登出/会话吊销（audience = admin，未来按需扩展）
 - [ ] `rbac`：角色/权限点 + `usePermission()`
 - [ ] `audit`：who/what/when/before/after
 - [ ] `user`：资料与偏好（与 auth 分离）
@@ -259,20 +259,20 @@ web-seed/
 ├── apps/
 │   ├── api/                          [C] 单 Go module，多 cmd，多应用装配
 │   │   ├── AGENTS.md
-│   │   ├── cmd/{userapi,adminapi[O]}/main.go
+│   │   ├── cmd/adminapi/main.go
 │   │   ├── internal/
 │   │   │   ├── platform/{config,httpserver,database,observability,security,storage}
 │   │   │   ├── modules/{health,auth[O],rbac[O],audit[O],user[O],upload[O],notification[O],webhook[O],notes[E]}
 │   │   │   │   └── registry.go       # 唯一注册表
-│   │   │   ├── composition/{userapi,adminapi[O]}/  # app.go / routes.go / routes_test.go
+│   │   │   ├── composition/adminapi/  # app.go / routes.go / routes_test.go
 │   │   │   └── generated/            # 生成物入库
 │   │   ├── migrations/  queries/  seeds/  sqlc.yaml  codegen/  Dockerfile
 │   │   └── ...
 │   └── web/
-│       ├── user/                     [C]
-│       │   ├── AGENTS.md  vite.config.ts  Dockerfile
-│       │   └── src/{app,pages,features,shared}
-│       └── admin/                    [O] 同构
+│       └── admin/                    [C] 模板默认端
+│           ├── AGENTS.md  vite.config.ts  Dockerfile
+│           └── src/{app,pages,features,shared}
+│           # user 端为派生时按需新增（非模板默认）
 │
 ├── packages/{api-client,ui-kit,design-tokens,tsconfig,eslint-config}
 ├── infra/compose.yaml                [O] profiles: core/data/mail/object/observability
@@ -314,8 +314,8 @@ internal/platform/             与业务无关的基础设施
 
 | 问题 | 影响 | 倾向 |
 |---|---|---|
-| user/admin 登录态是否共享 | Cookie 域策略、CSRF 方案 | 默认不共享（不同域，各自登录） |
-| admin 是否与 user 共库 | 迁移归属、只读账号 | 默认共库，模块自治表 |
+| 未来新增 user 端时登录态是否共享 | Cookie 域策略、CSRF 方案 | 默认不共享（不同域，各自登录） |
+| 新增端是否与 admin 共库 | 迁移归属、只读账号 | 默认共库，模块自治表 |
 | SPA 的 SEO 取舍 | 是否留 Nuxt 迁移路径 | 默认 SPA，ADR 记录代价 |
 
 ---

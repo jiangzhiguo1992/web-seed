@@ -24,7 +24,7 @@
 
 | 类型 | 真相源 | 生成/校验 |
 |---|---|---|
-| 接口 | `openapi/{user,admin}.yaml` + `shared/` | Go server 桩 + TS client |
+| 接口 | `openapi/admin.yaml` + `shared/` | Go server 桩 + TS client |
 | 数据 | `apps/api/migrations/` + `queries/` | sqlc |
 | 配置 | `config/env.schema.json` | `.env.example` + 两端 key 断言 |
 | 领域 | `domain/{error-codes,enums}.yaml` | Go 常量 + TS union |

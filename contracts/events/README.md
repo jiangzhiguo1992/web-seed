@@ -7,7 +7,7 @@
 ```yaml
 name: note.created
 version: 1
-producer: userapi
+producer: adminapi
 consumers: [worker]
 payload:
   type: object

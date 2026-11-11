@@ -13,7 +13,7 @@ required=(
   "docs/guides/architecture.md"
   "contracts/README.md"
   "apps/api/go.mod"
-  "apps/web/user/package.json"
+  "apps/web/admin/package.json"
 )
 
 for p in "${required[@]}"; do

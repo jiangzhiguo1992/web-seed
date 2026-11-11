@@ -5,9 +5,9 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -o /out/userapi ./cmd/userapi
+RUN CGO_ENABLED=0 go build -trimpath -o /out/adminapi ./cmd/adminapi
 
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/userapi /userapi
+COPY --from=build /out/adminapi /adminapi
 EXPOSE 8080
-ENTRYPOINT ["/userapi"]
+ENTRYPOINT ["/adminapi"]

@@ -1,4 +1,4 @@
-// Package userapi 是面向用户端的 API 应用装配层。
+// Package adminapi 是面向管理端的 API 应用装配层。
 //
 // 设计决策：
 //   - 只做"选择模块 + 挂路由 + 配中间件 + 聚合 handler"
@@ -8,7 +8,7 @@
 // 职责边界：
 //   - 不直接访问数据库
 //   - 不做跨模块编排（编排属于模块 service 或独立 usecase）
-package userapi
+package adminapi
 
 import (
 	"context"

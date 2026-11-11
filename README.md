@@ -50,7 +50,7 @@ web-seed/
 │
 ├── contracts/                   [C] 契约层：机器可读的真相源
 │   ├── README.md                #   什么算契约、变更三问
-│   ├── openapi/                 [P] 接口契约（user/admin + shared）
+│   ├── openapi/                 [P] 接口契约（admin + shared；user 端按需新增）
 │   ├── domain/                  [P] 错误码、跨端枚举
 │   ├── config/                  [P] 环境变量 schema
 │   ├── design/                  [C] 设计令牌真相源 tokens.json（生成物在 packages/design-tokens）
@@ -71,18 +71,18 @@ web-seed/
 │
 ├── apps/
 │   ├── api/                     [C] Go 后端（单 module，多 cmd，多应用装配）
-│   │   ├── cmd/userapi/         #   用户端 API 入口
+│   │   ├── cmd/adminapi/         #   管理端 API 入口
 │   │   ├── internal/
 │   │   │   ├── platform/        #   基础设施：config、httpserver（P3 扩 database/observability/security）
 │   │   │   ├── modules/         [P] 业务模块：service + repo，不依赖 HTTP
-│   │   │   ├── composition/userapi/ #   应用装配 + handlers/[P] 契约适配器
+│   │   │   ├── composition/adminapi/ #   应用装配 + handlers/[P] 契约适配器
 │   │   │   └── generated/       [P] 生成物（OpenAPI/sqlc/常量）
 │   │   ├── migrations/          [P]
 │   │   ├── queries/             [P]
 │   │   └── go.mod  Dockerfile
 │   │
 │   └── web/
-│       └── user/                [C] 用户端前端
+│       └── admin/               [C] 管理端前端（模板默认端）
 │           ├── src/app/         [P] router / providers / layouts
 │           ├── src/pages/       [P] 路由级视图
 │           ├── src/features/    [P] 用户动作
@@ -165,7 +165,7 @@ curl -i http://localhost:8080/readyz    # 200，P3 起查 DB
 
 ```bash
 make build-api        # apps/api 编译
-make build-web        # apps/web/user/dist
+make build-web        # apps/web/admin/dist
 ```
 
 ---
@@ -216,7 +216,7 @@ make build-web        # apps/web/user/dist
 1. 复制仓库，删除 `.git` 后重新 `git init`
 2. 替换 Go module：`github.com/yourorg/web-seed/apps/api` → 你的 module
 3. 替换前端 scope：`@webseed/*` → 你的 scope
-4. 更新 `README.md`、`package.json`、`apps/web/user/index.html`
+4. 更新 `README.md`、`package.json`、`apps/web/admin/index.html`
 5. 删除示例模块与页面（P2 后出现）
 6. 删除 `.opencode/opencode.json` 中的本地 MCP 配置
 7. 创建 `.env.local`，参考 `.env.example`（P2 生成）
