@@ -30,11 +30,12 @@ type tableDef struct {
 }
 
 type columnDef struct {
-	Name     string `yaml:"name"`
-	Type     string `yaml:"type"`
-	Nullable bool   `yaml:"nullable"`
-	Default  any    `yaml:"default,omitempty"`
-	Comment  string `yaml:"comment,omitempty"`
+	Name     string         `yaml:"name"`
+	Type     string         `yaml:"type"`
+	Nullable bool           `yaml:"nullable"`
+	Default  any            `yaml:"default,omitempty"`
+	Comment  string         `yaml:"comment,omitempty"`
+	Params   map[string]any `yaml:",inline"`
 }
 
 type constraintDef struct {
@@ -66,6 +67,10 @@ type enumValueScaffold struct {
 }
 
 func RenderTable(s *Schema, name, module, summary string) ([]byte, error) {
+	return RenderTableWithColumnType(s, name, module, summary, "")
+}
+
+func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverride string) ([]byte, error) {
 	if s == nil || s.Type != "data.tables" {
 		return nil, fmt.Errorf("RenderTable: want data.tables schema")
 	}
@@ -102,6 +107,16 @@ func RenderTable(s *Schema, name, module, summary string) ([]byte, error) {
 	enumName := name + "_status"
 	columnName := firstExample(columnField.ItemFields, "name", "name")
 	columnType := defaultString(columnField.ItemFields, "type", "string")
+	if columnTypeOverride != "" {
+		if _, ok := s.ColumnTypes.ValueTypeFamilies[columnTypeOverride]; !ok {
+			return nil, fmt.Errorf("RenderTable: unknown column type %q (not in value_type_families)", columnTypeOverride)
+		}
+		columnType = columnTypeOverride
+	}
+	columnParams, err := scaffoldFamilyParams(s, columnType)
+	if err != nil {
+		return nil, err
+	}
 	columnNullable := defaultBool(columnField.ItemFields, "nullable", false)
 	sizeClass := nestedDefaultString(s.Fields, "table", "size_class", "small")
 
@@ -118,7 +133,7 @@ func RenderTable(s *Schema, name, module, summary string) ([]byte, error) {
 			SizeClass: sizeClass,
 		},
 		Columns: []columnDef{
-			{Name: columnName, Type: columnType, Nullable: columnNullable, Comment: "TODO: 列说明"},
+			{Name: columnName, Type: columnType, Nullable: columnNullable, Comment: "TODO: 列说明", Params: columnParams},
 			{Name: "status", Type: "data.enums." + enumName, Nullable: false, Default: "active", Comment: "TODO: 状态说明"},
 		},
 		Constraints: []constraintDef{
@@ -167,6 +182,40 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	}
 	header := "# 追加到 contracts/data/enums.yaml 的 enums 列表。\n\n"
 	return append([]byte(header), b...), nil
+}
+
+func scaffoldFamilyParams(s *Schema, columnType string) (map[string]any, error) {
+	fam, ok := s.ColumnTypes.ValueTypeFamilies[columnType]
+	if !ok {
+		return nil, nil
+	}
+	hasRequired := false
+	for _, def := range fam.Params {
+		if def.Required {
+			hasRequired = true
+			break
+		}
+	}
+	// 只有含 required 参数的类型族才需要骨架扩展字段；
+	// string/integer 等可选参数不强行写入，避免生成无意义的 0/false。
+	if !hasRequired {
+		return nil, nil
+	}
+	out := map[string]any{}
+	for name, def := range fam.Params {
+		if def.Default != nil {
+			out[name] = def.Default
+			continue
+		}
+		if len(def.Examples) > 0 {
+			out[name] = def.Examples[0]
+			continue
+		}
+		if def.Required {
+			return nil, fmt.Errorf("scaffold %s.%s: required param has no default/examples", columnType, name)
+		}
+	}
+	return out, nil
 }
 
 func firstExample(fields []Field, name, fallback string) string {

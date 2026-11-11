@@ -82,11 +82,11 @@ func hasNonEmptyString(m map[string]any, key string) bool {
 	return ok && strings.TrimSpace(s) != ""
 }
 
-func isColumnType(t string, ct ColumnTypes) bool {
+func isColumnType(t string, ct ColumnTypes, refPrefixes []string) bool {
 	if _, ok := ct.ValueTypeFamilies[t]; ok {
 		return true
 	}
-	for _, p := range ct.RefPrefixes {
+	for _, p := range refPrefixes {
 		if !strings.HasPrefix(t, p) || t == p {
 			continue
 		}

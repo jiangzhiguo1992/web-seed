@@ -28,6 +28,7 @@ import (
 
 type Schema = contractspec.Schema
 type ColumnTypes = contractspec.ColumnTypes
+type ColumnRefs = contractspec.ColumnRefs
 type ValueTypeFamily = contractspec.ValueTypeFamily
 type Field = contractspec.Field
 

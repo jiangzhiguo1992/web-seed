@@ -11,8 +11,8 @@ func TestIsColumnType(t *testing.T) {
 		ValueTypeFamilies: map[string]ValueTypeFamily{
 			"string": {}, "timestamp": {}, "integer": {}, "datetime": {}, "decimal": {}, "float": {},
 		},
-		RefPrefixes: []string{"data.enums.", "data.tables."},
 	}
+	refPrefixes := []string{"data.enums.", "data.tables."}
 	cases := []struct {
 		in   string
 		want bool
@@ -39,23 +39,54 @@ func TestIsColumnType(t *testing.T) {
 		{"data.tables.account.col.", false},
 	}
 	for _, tc := range cases {
-		if got := isColumnType(tc.in, ct); got != tc.want {
+		if got := isColumnType(tc.in, ct, refPrefixes); got != tc.want {
 			t.Errorf("isColumnType(%q) = %v, want %v", tc.in, got, tc.want)
 		}
 	}
 }
 
+func TestCommonColumnFieldsExcludesFamilyParams(t *testing.T) {
+	schema := &Schema{
+		Fields: []Field{{
+			Name: "columns", Type: "list<object>", ItemFields: []Field{
+				{Name: "name", Type: "string"},
+				{Name: "type", Type: "string"},
+				{Name: "min_len", Type: "integer"},
+				{Name: "comment", Type: "string"},
+			},
+		}},
+		ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
+			"string": {Params: map[string]Field{"min_len": {Type: "integer"}}},
+		}},
+	}
+	common := commonColumnFields(schema)
+	if !common["name"] || !common["type"] || !common["comment"] {
+		t.Fatalf("common fields missing: %v", common)
+	}
+	if common["min_len"] {
+		t.Fatalf("family param leaked into common fields: %v", common)
+	}
+}
+
 func TestFamilyParams(t *testing.T) {
-	schema := &Schema{ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
-		"decimal": {Params: map[string]Field{
-			"precision": {Type: "integer", Required: true, Min: 1},
-			"scale":     {Type: "integer", Min: 0},
+	schema := &Schema{
+		Fields: []Field{{
+			Name: "columns", Type: "list<object>", ItemFields: []Field{
+				{Name: "name", Type: "string"},
+				{Name: "type", Type: "string"},
+				{Name: "nullable", Type: "boolean"},
+			},
 		}},
-		"string": {Params: map[string]Field{
-			"min_len": {Type: "integer", Min: 0},
-			"max_len": {Type: "integer", Min: 0},
-		}},
-	}}}
+		ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
+			"decimal": {Params: map[string]Field{
+				"precision": {Type: "integer", Required: true, Min: 1},
+				"scale":     {Type: "integer", Min: 0},
+			}},
+			"string": {Params: map[string]Field{
+				"min_len": {Type: "integer", Min: 0},
+				"max_len": {Type: "integer", Min: 0},
+			}},
+		}}}
 
 	c := &Checker{}
 	c.checkFamilyParams(map[string]any{"name": "amount", "type": "decimal", "scale": 2}, "decimal", "x", 0, "amount", schema)
@@ -105,8 +136,8 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 					"max_len": {Type: "integer", Min: 0},
 				}},
 			},
-			RefPrefixes: []string{"data.enums."},
 		},
+		ColumnRefs: ColumnRefs{Prefixes: []string{"data.enums."}},
 	}
 	doc := map[string]any{
 		"id":           "data.tables.x",

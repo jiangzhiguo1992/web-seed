@@ -23,6 +23,9 @@ func loadTestSchema(t *testing.T) *Schema {
 
 func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	s := loadTestSchema(t)
+	if len(s.ColumnRefs.Prefixes) == 0 {
+		t.Fatal("column_refs.prefixes not loaded")
+	}
 	for i := range s.Fields {
 		switch s.Fields[i].Name {
 		case "stability":
@@ -67,6 +70,39 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	}
 	if !strings.Contains(string(b), "data.enums.note_status") {
 		t.Fatalf("status enum not generated:\n%s", b)
+	}
+}
+
+func TestRenderTableDecimalFamilyParams(t *testing.T) {
+	s := loadTestSchema(t)
+	b, err := RenderTableWithColumnType(s, "note", "notes", "备注表", "decimal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
+	}
+	cols, _ := doc["columns"].([]any)
+	first, _ := cols[0].(map[string]any)
+	if first["type"] != "decimal" {
+		t.Fatalf("column type not overridden: %#v", first)
+	}
+	if first["precision"] != 19 {
+		t.Fatalf("precision not scaffolded: %#v", first)
+	}
+	if first["scale"] != 0 {
+		t.Fatalf("scale not scaffolded: %#v", first)
+	}
+}
+
+func TestRenderTableScaffoldRequiresParamValue(t *testing.T) {
+	s := loadTestSchema(t)
+	s.ColumnTypes.ValueTypeFamilies["weird"] = ValueTypeFamily{Params: map[string]Field{
+		"missing": {Type: "integer", Required: true},
+	}}
+	if _, err := RenderTableWithColumnType(s, "note", "notes", "备注表", "weird"); err == nil {
+		t.Fatal("expected required param without default/examples to fail")
 	}
 }
 

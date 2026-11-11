@@ -13,12 +13,17 @@ type Schema struct {
 	Type        string      `yaml:"type"`
 	Title       string      `yaml:"title"`
 	ColumnTypes ColumnTypes `yaml:"column_types"`
+	ColumnRefs  ColumnRefs  `yaml:"column_refs"`
 	Fields      []Field     `yaml:"fields"`
 }
 
 type ColumnTypes struct {
 	ValueTypeFamilies map[string]ValueTypeFamily `yaml:"value_type_families"`
-	RefPrefixes       []string                   `yaml:"ref_prefixes"`
+}
+
+// ColumnRefs 描述 columns[].type 允许引用的命名空间，与类型族是不同维度。
+type ColumnRefs struct {
+	Prefixes []string `yaml:"prefixes"`
 }
 
 // ValueTypeFamily 描述一个类型族及其允许的扩展字段。

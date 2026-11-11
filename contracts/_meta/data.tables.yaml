@@ -16,6 +16,8 @@ targets:
   naming: "文件名单数 snake_case；物理表名默认同名，复数表用 table.name 覆盖"
   exception: "_base.yaml 的 ID 为 data.tables.base"
 
+column_refs:
+  prefixes: ["data.enums.", "data.tables."]
 column_types:
   value_type_families:
     string:
@@ -39,7 +41,7 @@ column_types:
     decimal:
       description: 精确小数；覆盖 decimal / numeric
       params:
-        precision: { type: integer, required: true, min: 1 }
+        precision: { type: integer, required: true, min: 1, examples: [19] }
         scale: { type: integer, required: false, default: 0, min: 0 }
     datetime:
       description: 日期/时间；覆盖 date / time / datetime
@@ -49,8 +51,8 @@ column_types:
     timestamp:
       description: 绝对时间点
       params:
-        timezone: { type: boolean, required: false, default: true }
-        precision: { type: integer, required: false, default: 6, min: 0, max: 9 }
+        timezone:          { type: boolean, required: false, default: true }
+        fractional_seconds: { type: integer, required: false, default: 6, min: 0, max: 9 }
     json:
       description: JSON 文档；覆盖 json / jsonb
       params:
@@ -61,8 +63,6 @@ column_types:
         min_len: { type: integer, required: false, min: 0 }
         max_len: { type: integer, required: false, min: 0 }
         fixed: { type: boolean, required: false, default: false }
-  # columns[].type 允许的引用前缀；不是外键，也不是完整类型名。
-  ref_prefixes: ["data.enums.", "data.tables."]
 
 fields:
   - name: schema_version
@@ -188,7 +188,7 @@ fields:
     caution: 不要声明 id/created_at/updated_at/deleted_at；status 可覆盖为枚举
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', examples: ["name"], description: 列名 }
-      - { name: type, type: string, required: true, default: string, description: 列类型；类型族键，或 ref_prefixes 允许的引用 }
+      - { name: type, type: string, required: true, default: string, description: 列类型；类型族键，或 column_refs.prefixes 允许的引用 }
       - { name: nullable, type: boolean, required: false, default: false, description: 是否可空 }
       - { name: primary_key, type: boolean, required: false }
       - { name: generated_by, type: string, required: false, enum: [application, database] }
@@ -257,7 +257,7 @@ rules:
   - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 可覆盖" }
   - { id: status-enum, text: "物理表必须声明 status，且 status 列必须引用 data.enums.*" }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥" }
-  - { id: column-type, text: "列类型必须是 column_types.value_type_families 的键，或匹配 column_types.ref_prefixes" }
+  - { id: column-type, text: "列类型必须是 column_types.value_type_families 的键，或匹配 column_refs.prefixes" }
   - { id: family-params, text: "列的扩展字段必须属于该 type 的类型族；类型族中 required: true 的参数必须出现" }
   - { id: unique-soft-delete, text: "唯一索引必须带 WHERE deleted_at IS NULL" }
   - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，contract-check 校验它等于实际入边" }

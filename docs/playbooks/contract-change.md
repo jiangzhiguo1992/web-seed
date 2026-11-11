@@ -90,8 +90,11 @@ make contract-impact id=<被修改的 ID>
 
 ```bash
 make contract-new type=data.tables name=note module=notes summary="备注表"
+make contract-new type=data.tables name=account_balance module=accounts summary="账户余额" column_type=decimal
 make contract-new type=data.enums  name=note_status
 ```
+
+`column_type` 可选；指定后第一列使用该类型族，并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
 
 生成后替换所有 `<...>` 占位符。字段规范：`contracts/_meta/data.tables.yaml`。
 

@@ -45,7 +45,7 @@ scripts/contract/
 
 | 命令 | 作用 | 何时跑 |
 |---|---|---|
-| `make contract-new type=data.tables name=note module=notes summary="备注表"` | 按 `_meta/data.tables.yaml` 生成最小表骨架 | 新建表前 |
+| `make contract-new type=data.tables name=note module=notes summary="备注表"` | 按 `_meta/data.tables.yaml` 生成最小表骨架；`column_type=decimal` 可指定第一列类型并带出扩展字段 | 新建表前 |
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
 | `make contract-check` | 结构 / ID / 基类 / 约束 / 索引 / used_by | 每次改完契约 |
 | `make gen` | 生成 DDL / OpenAPI / 类型 / graph | `contract-check` 通过后 |
@@ -100,7 +100,8 @@ scripts/contract/
 | `required` / `type` / `enum` / `allowed` / `pattern` / `const` | 结构约束 |
 | `default` | 生成骨架时的默认值 |
 | `examples` | 示例值；`contract-new` 可用于生成 |
-| `column_types` | 类型族策略：`value_type_families` 是类型族映射，每个族声明 `description` 与 `params`；每个参数可带 `required`、`min`、`max`、`enum`、`default`。`ref_prefixes` 是允许的类型引用前缀；不是数据库物理类型，也不是外键 |
+| `column_types` | 类型族策略：`value_type_families` 是类型族映射，每个族声明 `description` 与 `params`；每个参数可带 `required`、`min`、`max`、`enum`、`default`；不是数据库物理类型 |
+| `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；不是类型族，也不是外键；与 `column_types` 分开 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
 | `rules` | 跨字段规则的声明式说明 |
 

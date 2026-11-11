@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/yourorg/web-seed/apps/api/internal/contractspec"
 )
 
 func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map[string]bool) {
@@ -174,8 +176,8 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.errf("%s: columns[%d] (%s): min > max", rel, i, name)
 			}
 		}
-		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes) {
-			c.errf("%s: columns[%d] (%s): unsupported type %q (value_type_families %v or ref_prefixes %v)", rel, i, name, t, familyNames(schema.ColumnTypes), schema.ColumnTypes.RefPrefixes)
+		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes, schema.ColumnRefs.Prefixes) {
+			c.errf("%s: columns[%d] (%s): unsupported type %q (value_type_families %v or column_refs.prefixes %v)", rel, i, name, t, familyNames(schema.ColumnTypes), schema.ColumnRefs.Prefixes)
 		} else {
 			c.checkFamilyParams(m, t, rel, i, name, schema)
 		}
@@ -301,12 +303,27 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	}
 }
 
-// commonColumnFields 是所有列都可以出现的字段；类型族扩展字段另外按族允许。
-var commonColumnFields = map[string]bool{
-	"name": true, "type": true, "nullable": true, "primary_key": true,
-	"generated_by": true, "default": true, "default_sql": true,
-	"min": true, "max": true, "pattern": true, "normalize": true,
-	"pii": true, "never_expose": true, "managed_by": true, "comment": true,
+// commonColumnFields 从 schema 的 columns.item_fields 派生通用列字段。
+// 类型族扩展字段由 value_type_families.params 注入，必须排除，避免把
+// “只属于某个族”的字段误认为所有列都可写。
+func commonColumnFields(schema *Schema) map[string]bool {
+	cols, ok := contractspec.FindField(schema.Fields, "columns")
+	if !ok {
+		return nil
+	}
+	familyParams := map[string]bool{}
+	for _, fam := range schema.ColumnTypes.ValueTypeFamilies {
+		for k := range fam.Params {
+			familyParams[k] = true
+		}
+	}
+	out := map[string]bool{}
+	for _, f := range cols.ItemFields {
+		if !familyParams[f.Name] {
+			out[f.Name] = true
+		}
+	}
+	return out
 }
 
 func familyNames(ct ColumnTypes) []string {
@@ -323,25 +340,30 @@ func familyNames(ct ColumnTypes) []string {
 //   - required: true 的扩展字段必须出现；
 //   - 出现时按族定义校验类型、枚举、范围。
 func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name string, schema *Schema) {
+	common := commonColumnFields(schema)
 	fam, ok := schema.ColumnTypes.ValueTypeFamilies[t]
 	if !ok {
-		for k := range m {
-			if !commonColumnFields[k] {
-				c.errf("%s: columns[%d] (%s): param %q not allowed for type %s", rel, i, name, k, t)
+		if common != nil {
+			for k := range m {
+				if !common[k] {
+					c.errf("%s: columns[%d] (%s): param %q not allowed for type %s", rel, i, name, k, t)
+				}
 			}
 		}
 		return
 	}
 	allowed := map[string]bool{}
-	for k := range commonColumnFields {
+	for k := range common {
 		allowed[k] = true
 	}
 	for k := range fam.Params {
 		allowed[k] = true
 	}
-	for k := range m {
-		if !allowed[k] {
-			c.errf("%s: columns[%d] (%s): param %q not allowed for type %s", rel, i, name, k, t)
+	if common != nil {
+		for k := range m {
+			if !allowed[k] {
+				c.errf("%s: columns[%d] (%s): param %q not allowed for type %s", rel, i, name, k, t)
+			}
 		}
 	}
 	for pk, def := range fam.Params {
