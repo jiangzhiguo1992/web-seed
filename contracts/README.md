@@ -77,8 +77,8 @@ contracts/
 ├── _types.yaml               # 每类契约的默认元数据（enforcement / consumers / 通用 do_not）
 ├── _meta/                    # 契约元规范（非业务契约，不登记 index）
 │   ├── README.md             #   AI 入口：写前读什么、写后跑什么
-│   ├── schema/               #   字段字典 + 生成规则 + AI 易错点（单一源）
-│   └── templates/            #   contract-new 骨架
+│   ├── data.tables.yaml      #   字段树 + 值域 + 说明（单一源）
+│   └── data.enums.yaml       #   同上
 ├── project.yaml              # 项目元信息 + 应用组合（derive 的唯一输入）
 │
 ├── data/                     # ① 数据契约（不感知业务）
@@ -274,7 +274,7 @@ business.states.account ─subject→ data.entities.account ─table→ data.tab
 `index.yaml` 中的 `path` **相对 `contracts/` 目录**，例如 `data/tables/account.yaml`。
 生成器与校验器统一按此规则拼接，避免仓库绝对路径进入契约。
 
-`_meta/` 是契约工具链（schema / templates / scripts），不登记 `index.yaml`；`generated/` 只放产物，也不登记为业务契约。
+`_meta/` 是契约字段规范与脚本入口，不登记 `index.yaml`；`generated/` 只放产物，也不登记为业务契约。
 
 ### 4.1 文件结构（三层）
 
@@ -390,7 +390,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 1. 读 docs/index.md                 获取地图
 2. 读对应 playbook                  获取本任务必读契约 ID 列表
 3. 写/改契约时读 _meta/README.md    字段语义、生成行为、易错点
-   并读 _meta/schema/<type>.yaml
+   并读 _meta/<type>.yaml
 4. 读 index.yaml 相关条目           只看 summary，不读正文
 5. 读 2–5 个契约文件                含 do_not / examples
 6. 新建契约：make contract-new ...  生成骨架，替换占位符
@@ -481,7 +481,7 @@ data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 
 P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器待实现。
 
-- **_meta**：`schema/{data.tables,data.enums}` + `templates/*` + `make contract-new` + `make contract-check`（试点；其余类型待补）
+- **_meta**：`data.tables.yaml` / `data.enums.yaml` + `make contract-new` + `make contract-check`（试点；其余类型待补）
 - **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{account,auth}`、`storage`、`_policy`
 - **capabilities**：`http/{shared,account,auth}`、`async/account_cleanup`、`services/{account,auth}`（其余模块待建）
 - **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件

@@ -100,7 +100,7 @@
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
 - [ ] `data/tables/*.yaml` → `schema.sql` + 增量 `migrations/*.sql`
 - [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/token/auth_* 拆分（契约已落盘）
-- [x] 契约元规范试点：`_meta/schema/{data.tables,data.enums}` + `make contract-new` + `make contract-check`（结构 / ID / used_by）
+- [x] 契约元规范试点：`_meta/{data.tables,data.enums}` + `make contract-new` + `make contract-check`（结构 / ID / used_by）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
 - [ ] `data/enums.yaml` → Go 常量 + TS union + DB check
 - [ ] `platform/errors.yaml` + `platform/security/permissions.yaml` → 两端常量

@@ -3,7 +3,7 @@
 > **`data/tables/*.yaml` 是表结构的唯一真相源。**
 > `apps/api/migrations/*.sql` 与 `apps/api/internal/generated/db/schema.sql` 都是生成物。
 > 禁止手写迁移；改表先改契约，再 `make gen-db`。
-> 字段语义与生成行为见 `contracts/_meta/schema/data.tables.yaml` / `data.enums.yaml`；新建表用 `make contract-new`，改完跑 `make contract-check`。
+> 字段语义与生成行为见 `contracts/_meta/data.tables.yaml` / `data.enums.yaml`；新建表用 `make contract-new`，改完跑 `make contract-check`。
 
 ---
 

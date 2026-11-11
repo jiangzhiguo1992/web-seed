@@ -22,42 +22,15 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/yourorg/web-seed/apps/api/internal/contractspec"
 	"gopkg.in/yaml.v3"
 )
 
-type Schema struct {
-	ID          string      `yaml:"id"`
-	Type        string      `yaml:"type"`
-	Title       string      `yaml:"title"`
-	ColumnTypes ColumnTypes `yaml:"column_types"`
-	Fields      []Field     `yaml:"fields"`
-}
-
-type ColumnTypes struct {
-	Builtin []string `yaml:"builtin"`
-	Refs    []string `yaml:"refs"`
-}
+type Schema = contractspec.Schema
+type ColumnTypes = contractspec.ColumnTypes
+type Field = contractspec.Field
 
 var baseColumns = []string{"id", "status", "created_at", "updated_at", "deleted_at"}
-
-type Field struct {
-	Name       string  `yaml:"name"`
-	Type       string  `yaml:"type"`
-	Required   bool    `yaml:"required"`
-	Const      any     `yaml:"const"`
-	Enum       []any   `yaml:"enum"`
-	Allowed    []any   `yaml:"allowed"`
-	Pattern    string  `yaml:"pattern"`
-	Semantics  string  `yaml:"semantics"`
-	Generates  string  `yaml:"generates"`
-	AIMistake  string  `yaml:"ai_mistake"`
-	Example    string  `yaml:"example"`
-	Generated  bool    `yaml:"generated"`
-	Write      string  `yaml:"write"`
-	Unique     bool    `yaml:"unique"`
-	Fields     []Field `yaml:"fields"`
-	ItemFields []Field `yaml:"item_fields"`
-}
 
 type Checker struct {
 	root string
@@ -89,12 +62,12 @@ func (c *Checker) errf(format string, args ...any) {
 }
 
 func (c *Checker) run() {
-	tableSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/schema/data.tables.yaml"))
+	tableSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/data.tables.yaml"))
 	if err != nil {
 		c.errf("load tables schema: %v", err)
 		return
 	}
-	enumSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/schema/data.enums.yaml"))
+	enumSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/data.enums.yaml"))
 	if err != nil {
 		c.errf("load enums schema: %v", err)
 		return
@@ -109,21 +82,14 @@ func (c *Checker) run() {
 }
 
 func loadSchema(path string) (*Schema, error) {
-	b, err := os.ReadFile(path)
+	s, err := contractspec.LoadSchema(path)
 	if err != nil {
 		return nil, err
-	}
-	var s Schema
-	if err := yaml.Unmarshal(b, &s); err != nil {
-		return nil, err
-	}
-	if s.Type == "" || len(s.Fields) == 0 {
-		return nil, fmt.Errorf("%s: empty schema (type/fields)", path)
 	}
 	if err := validatePatterns(s.Fields); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	return &s, nil
+	return s, nil
 }
 
 func loadYAML(path string) (map[string]any, error) {

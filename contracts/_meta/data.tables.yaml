@@ -1,10 +1,10 @@
-# data.tables 类型的字段字典与生成规则。
+# data.tables 类型的单一规范：字段树 + 值域 + 字段说明。
 #
 # 这是契约的元规范（meta），不是业务契约，不登记在 index.yaml。
-# - semantics 给 AI 读
-# - generates 给生成器读
-# - ai_mistake 给 guide/审查读
-# - contract-check 校验 required/type/enum/const/allowed/pattern + 跨字段规则
+# - type / required / enum / pattern / const / allowed：给 contract-check
+# - description / caution：给 AI 与 review
+# - generates：给生成器
+# - 该文件同时是 contract-new 的字段来源；不要另写模板。
 
 id: meta.data.tables
 type: data.tables
@@ -25,98 +25,101 @@ fields:
     type: integer
     required: true
     const: 1
-    semantics: 契约格式版本；当前固定 1
+    description: 契约格式版本；当前固定 1
     generates: 无
-    ai_mistake: 不要写字符串 "1"
+    caution: 不要写字符串 "1"
 
   - name: id
     type: string
     required: true
     pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
-    semantics: 由文件路径派生；文件名单数
+    description: 由文件路径派生；文件名单数
     generates: 契约 ID、图节点
-    ai_mistake: 不要写 data.table.*；不要用物理表名复数当文件名
+    caution: 不要写 data.table.*；不要用物理表名复数当文件名
 
   - name: summary
     type: string
     required: true
-    semantics: 一句话说明这张表是什么
+    description: 一句话说明这张表是什么
     generates: index 摘要
-    ai_mistake: 不要写字段清单
+    caution: 不要写字段清单
 
   - name: stability
     type: string
     required: true
     enum: [stable, draft, deprecated]
-    semantics: 契约稳定度
+    default: draft
+    description: 契约稳定度
     generates: index 摘要
-    ai_mistake: 不要自定义取值
+    caution: 不要自定义取值
 
   - name: kind
     type: string
     required: false
     enum: [base]
-    semantics: 仅 _base.yaml 使用；物理表不写
+    description: 仅 _base.yaml 使用；物理表不写
     generates: 生成器跳过 DDL
-    ai_mistake: 不要把普通表标成 base
+    caution: 不要把普通表标成 base
 
   - name: owner_module
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    semantics: 唯一写归属模块；只有该模块的 cap.services/cap.async 可以写表
+    description: 唯一写归属模块；只有该模块的 cap.services/cap.async 可以写表
     generates: 模块归属校验、repo 目录
-    ai_mistake: 不是文件路径；不是 owner user
+    caution: 不是文件路径；不是 owner user
 
   - name: extends
     type: list<string>
     required: true
     allowed: [data.tables.base]
     unique: true
-    semantics: 契约层继承基类 5 列；生成器把基类列展开到物理表
+    default: [data.tables.base]
+    description: 契约层继承基类 5 列；生成器把基类列展开到物理表
     generates: expand_base_columns
-    ai_mistake: 不是 PostgreSQL INHERITS、外键或组合；不要写其他表
+    caution: 不是 PostgreSQL INHERITS、外键或组合；不要写其他表
 
   - name: do_not
     type: list<string>
     required: false
-    semantics: 实例级负向约束；每条必须含本表的具体标识
+    description: 实例级负向约束；每条必须含本表的具体标识
     generates: AI 反例索引
-    ai_mistake: 不要把通用规则复制到这里（通用规则在 _types.yaml）
+    caution: 不要把通用规则复制到这里（通用规则在 _types.yaml）
 
   - name: table
     type: object
     required: true
-    semantics: 物理表元数据
+    description: 物理表元数据
     generates: DDL 表名、注释、保留期、分区
-    ai_mistake: 不是契约 ID；物理表名可复数
+    caution: 不是契约 ID；物理表名可复数
     fields:
       - name: name
         type: string
         required: false
         pattern: '^[a-z][a-z0-9_]*$'
-        semantics: 物理表名；默认等于文件段，复数表显式覆盖
+        description: 物理表名；默认等于文件段，复数表显式覆盖
         generates: DDL 表名、SQL FROM 目标
-        ai_mistake: 不是契约 ID；不要默认写 accounts
+        caution: 不是契约 ID；不要默认写 accounts
       - name: comment
         type: string
         required: true
-        semantics: 写入 PostgreSQL COMMENT
+        description: 写入 PostgreSQL COMMENT
         generates: DDL COMMENT
-        ai_mistake: 不要和 summary 重复
+        caution: 不要和 summary 重复
       - name: size_class
         type: string
         required: true
         enum: [small, large]
-        semantics: 表量级；large 决定索引默认 CONCURRENTLY
+        default: small
+        description: 表量级；large 决定索引默认 CONCURRENTLY
         generates: index_concurrently_policy
-        ai_mistake: 不是性能承诺；不要按当前数据量随意写
+        caution: 不是性能承诺；不要按当前数据量随意写
       - name: retention
         type: object
         required: false
-        semantics: 数据保留与清理策略；cleanup 任务的唯一来源
+        description: 数据保留与清理策略；cleanup 任务的唯一来源
         generates: cleanup_job_policy
-        ai_mistake: 不是数据库 TTL
+        caution: 不是数据库 TTL
         fields:
           - { name: pending_days, type: integer, required: false }
           - { name: soft_delete_days, type: integer, required: false }
@@ -125,9 +128,9 @@ fields:
       - name: partition
         type: object
         required: false
-        semantics: 分区策略；替代 ddl_ext
+        description: 分区策略；替代 ddl_ext
         generates: DDL PARTITION BY
-        ai_mistake: 不要用原生 SQL 字段
+        caution: 不要用原生 SQL 字段
         fields:
           - { name: strategy, type: string, required: true, enum: [range, list, hash] }
           - { name: columns, type: list<string>, required: true }
@@ -136,13 +139,13 @@ fields:
   - name: columns
     type: list<object>
     required: true
-    semantics: 物理列；基类列不重复声明
+    description: 物理列；基类列不重复声明
     generates: DDL 列、sqlc 输入、Go 类型
-    ai_mistake: 不要声明 id/created_at/updated_at/deleted_at；status 可覆盖为枚举
+    caution: 不要声明 id/created_at/updated_at/deleted_at；status 可覆盖为枚举
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$' }
-      - { name: type, type: string, required: true }
-      - { name: nullable, type: boolean, required: false }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', examples: ["name"], description: 列名 }
+      - { name: type, type: string, required: true, default: text, description: 列类型；见 column_types }
+      - { name: nullable, type: boolean, required: false, default: false, description: 是否可空 }
       - { name: primary_key, type: boolean, required: false }
       - { name: generated_by, type: string, required: false, enum: [application, database] }
       - { name: default, type: any, required: false }
@@ -162,9 +165,9 @@ fields:
   - name: constraints
     type: list<object>
     required: false
-    semantics: 数据库能表达的 DDL 约束
+    description: 数据库能表达的 DDL 约束
     generates: DDL CHECK/FK/UNIQUE/EXCLUDE
-    ai_mistake: 业务不变量不要写在这里；去 entities.validation 或 business.rules
+    caution: 业务不变量不要写在这里；去 entities.validation 或 business.rules
     item_fields:
       - { name: name, type: string, required: true, pattern: '^(ck|fk|uq|ex)_[a-z][a-z0-9_]*$' }
       - { name: type, type: string, required: true, enum: [check, unique, foreign_key, enum, exclude] }
@@ -179,9 +182,9 @@ fields:
   - name: indexes
     type: list<object>
     required: false
-    semantics: 索引；每条必须有 reason
+    description: 索引；每条必须有 reason
     generates: DDL INDEX
-    ai_mistake: 不要写无理由索引；唯一索引必须带软删过滤
+    caution: 不要写无理由索引；唯一索引必须带软删过滤
     item_fields:
       - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$' }
       - { name: columns, type: list<string>, required: false }
@@ -199,9 +202,9 @@ fields:
     required: true
     generated: true
     write: forbidden
-    semantics: 反向索引；只记直接入边
+    description: 反向索引；只记直接入边
     generates: used_by / generated/inbound.yaml
-    ai_mistake: 禁止手改；不是业务字段
+    caution: 禁止手改；不是业务字段
     fields:
       - { name: entities, type: list<string>, required: true, unique: true }
       - { name: queries, type: list<string>, required: true, unique: true }

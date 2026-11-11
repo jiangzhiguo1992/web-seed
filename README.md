@@ -51,7 +51,7 @@ web-seed/
 ├── contracts/                   [C] 契约层：唯一真相源
 │   ├── README.md                #   契约规范：原则、ID、分层、拆分、工作流
 │   ├── index.yaml               #   契约地图（AI 唯一入口，只放摘要）
-│   ├── _meta/                   #   契约工具链：schema / templates / contract-check
+│   ├── _meta/                   #   契约字段规范：data.tables / data.enums
 │   ├── project.yaml             #   项目元信息（derive 唯一输入）
 │   ├── data/                    #   ① 数据：tables（真相源）/ entities / queries / _policy
 │   ├── capabilities/            #   ② 实现层：http / async / services / flows
@@ -180,7 +180,7 @@ make build-web        # apps/web/admin/dist
 | `make test` | 运行测试（P1 仅 Go） |
 | `make gen` | 重新生成全部契约产物（P2 实现，当前会失败） |
 | `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 分项生成（P2） |
-| `make contract-new type=data.tables name=note` | 从 `_meta/templates` 生成契约骨架 |
+| `make contract-new type=data.tables name=note` | 从 `_meta` 生成契约骨架 |
 | `make contract-check` | 校验契约结构、ID、`used_by`（data.tables / data.enums 试点） |
 | `make contract-graph` | 锚点图校验（P2） |
 | `make contract-impact id=<id>` | 影响面分析（P2） |
@@ -199,7 +199,7 @@ make build-web        # apps/web/admin/dist
 
 ```
 1. 读 contracts/index.yaml 定位相关契约（只看摘要）
-2. 写/改前读 contracts/_meta/README.md + _meta/schema/<type>.yaml
+2. 写/改前读 contracts/_meta/README.md + _meta/<type>.yaml
 3. 新建契约：make contract-new ...（生成骨架，替换占位符）
 4. 改契约（2-5 个文件）
 5. make contract-check  # 结构 / ID / used_by

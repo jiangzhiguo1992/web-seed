@@ -10,7 +10,7 @@
 2. 本文件 —— 地图与任务路由
 3. `docs/guides/architecture.md` —— 整体设计与实施进度
 4. `contracts/index.yaml` —— **契约地图**：只看摘要，不读正文
-5. 写/改契约时：`contracts/_meta/README.md` + `_meta/schema/<type>.yaml` —— 字段语义、生成行为、易错点
+5. 写/改契约时：`contracts/_meta/README.md` + `_meta/<type>.yaml` —— 字段语义、生成行为、易错点
 6. 任务对应的 `docs/playbooks/<task>.md`
 7. playbook 指定的 2–5 个契约文件
 8. 需要决策背景时读 `docs/adr/`
@@ -23,9 +23,9 @@
 
 | 要做的事 | 先读 playbook | 再读契约 |
 |---|---|---|
-| 改任何契约 | `playbooks/contract-change.md` | `_meta/README.md` → `_meta/schema/<type>.yaml` → `index.yaml` → 目标文件 |
+| 改任何契约 | `playbooks/contract-change.md` | `_meta/README.md` → `_meta/<type>.yaml` → `index.yaml` → 目标文件 |
 | 新增 / 修改 API | `contract-change` + `add-endpoint`（P7） | `capabilities/http/*.yaml`、`project.yaml`（apps） |
-| 新增表 / 迁移 | `contract-change` + `add-table`（P7） | `_meta/schema/data.tables.yaml`、`data/tables/_base.yaml`、`data/tables/*.yaml`、`data/storage.yaml`、`data/_policy.yaml` |
+| 新增表 / 迁移 | `contract-change` + `add-table`（P7） | `_meta/data.tables.yaml`、`data/tables/_base.yaml`、`data/tables/*.yaml`、`data/storage.yaml`、`data/_policy.yaml` |
 | 改存储引擎 / 部署拓扑 | `contract-change` | `data/storage.yaml` |
 | 新增页面 | `contract-change` + `add-feature`（P7） | `features/pages/*.yaml`、`features/routes.yaml` |
 | 新增 API / Web 应用 | `contract-change` + `add-app`（P7） | `project.yaml`（apps 段） |
@@ -51,8 +51,8 @@ playbook 未覆盖的任务：**先写 playbook，再动手**。这是硬规则�
 |---|---|---|
 | `docs/guides/architecture.md` | 架构、生成链、实施进度、一致性机制 | 每次任务开始 |
 | `contracts/index.yaml` | 契约地图（摘要级） | 定位契约时 |
-| `contracts/_meta/README.md` | 契约工具链：schema、模板、`contract-new` / `contract-check` | 写 / 改契约前 |
-| `contracts/_meta/schema/<type>.yaml` | 该类型每个字段的语义、生成行为、AI 易错点 | 写 / 改该类型契约前 |
+| `contracts/_meta/README.md` | 契约字段规范：`data.tables` / `data.enums`、`contract-new` / `contract-check` | 写 / 改契约前 |
+| `contracts/_meta/<type>.yaml` | 该类型每个字段的语义、生成行为、AI 易错点 | 写 / 改该类型契约前 |
 | `contracts/README.md` | 契约元规则：ID、分层、拆分、演进 | 改契约前 |
 | `contracts/data/README.md` | 数据契约与迁移规则 | 加表 / 写查询前 |
 | `docs/playbooks/` | 步骤化操作手册 | 执行具体任务时 |
