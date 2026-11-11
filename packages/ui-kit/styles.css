@@ -1,0 +1,2 @@
+/* Tailwind v4 不会自动扫描 workspace 共享包；由包自己声明源码位置。 */
+@source "./src";

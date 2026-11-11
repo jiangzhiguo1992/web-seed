@@ -1,0 +1,12 @@
+{
+  "name": "@webseed/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./theme.css": "./theme.css"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  }
+}

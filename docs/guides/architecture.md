@@ -79,14 +79,14 @@
 | A4 | pnpm `-r build` 严格按拓扑先构建 tokens/ui | 否则 app 构建拿不到 theme.css | P1 |
 | A5 | `golang:1.27-alpine` / `node:26-alpine` 镜像 tag 可用 | 镜像构建失败 | P3 真实 Docker |
 
-> A3 / A4 已于 P1 实测通过：`packages/ui/styles.css` 的 `@source "./src"` 生效，`pnpm -r build` 先构建 tokens。
+> A3 / A4 已于 P1 实测通过：`packages/ui-kit/styles.css` 的 `@source "./src"` 生效，`pnpm -r build` 先构建 tokens。
 
 #### P1 仓库骨架
 
 - [x] 根文件：`Makefile` `lefthook.yml` `.editorconfig` `.gitattributes` `.nvmrc` `pnpm-workspace.yaml` `package.json`
 - [x] `docs/{index.md,adr/,playbooks/,guides/,reference/}`
 - [x] `contracts/` 九类目录 + `README.md`（变更三问）
-- [x] `apps/api` 骨架（`cmd/` `internal/{platform,modules,apps,gen}`、`apps/<app>/handlers/`、`migrations/` `queries/`）
+- [x] `apps/api` 骨架（`cmd/` `internal/{platform,modules,composition,generated}`、`composition/<app>/handlers/`、`migrations/` `queries/`）
 - [x] `apps/web/user` 骨架（`src/{app,pages,features,shared}`）
 - [x] `packages/{api-client,ui,design-tokens,tsconfig,eslint-config}`
 - [x] `infra/compose.yaml`（profiles: core/data/mail/object/observability）
@@ -121,7 +121,7 @@
 - [ ] `queries/notes.sql` + sqlc 生成
 - [ ] `internal/modules/notes`（handler/service/repo 三段）
 - [ ] `contracts/openapi/user.yaml` 补 notes 端点
-- [ ] `internal/apps/userapi` 装配 + `routes_test.go`
+- [ ] `internal/composition/userapi` 装配 + `routes_test.go`
 - [ ] `apps/web/user`：列表/详情/创建三态页面
 - [ ] Playwright 跑通一条关键路径
 
@@ -190,43 +190,50 @@
 
 ---
 
-## 2. 契约体系（九类）
+## 2. 契约体系
 
-契约是唯一真相源。每类必须具备：**有校验、有 playbook、有删除路径**，三者缺一即会腐烂。
+> 契约清单、粒度纪律、变更三问的唯一正文是 [`contracts/README.md`](../../contracts/README.md)。本节只保留设计意图与生成链。
 
-| # | 类型 | 真相源 | 生成/校验 | 防的是 |
-|---|---|---|---|---|
-| 1 | 接口 | `contracts/openapi/{user,admin}.yaml` + `shared/` | Go server 桩 + TS client | 前后端各说各话 |
-| 2 | 数据 | `migrations/` + `queries/` | sqlc；迁移可重放 | 编字段、编表 |
-| 3 | 配置 | `contracts/config/env.schema.json` | 生成 `.env.example`；两端测试断言 key 一致 | 少配变量到生产才炸 |
-| 4 | 领域 | `contracts/domain/{error-codes,enums}.yaml` | Go 常量 + TS union + 文档 | 错误码/状态值漂移 |
-| 5 | 设计 | `contracts/design/tokens.json` | CSS variables → Tailwind `@theme` | user/admin 两套色值 |
-| 6 | 架构 | `contracts/architecture/{go-arch.yaml,web-deps.json}` | go-arch-lint / dependency-cruiser | 跨层调用 |
-| 7 | HTTP | `contracts/http/envelope.yaml` | 错误信封/分页/headers/状态映射 | 响应形状不一 |
-| 8 | 观测 | `contracts/observability/{log-fields,metrics}.yaml` | 字段/指标常量 + 脱敏规则 | 多应用日志无法聚合 |
-| 9 | 埋点 | `contracts/analytics/events.yaml` | TS 事件类型 + PII 剔除 | 事件名漂移、PII 外泄 |
+### 2.1 为什么是一等公民
 
-附加两份：
+契约解决的不是"文档没人看"，而是**改动成本不对称**：改契约要生成、修编译、同步前端；改实现只要加几行。没有约束时，AI 永远选便宜的路。契约 + 生成 + 闸门的作用，是给"绕过契约"加税。
 
-- `contracts/security/permissions.yaml`：权限点 → Go/TS 常量 + `usePermission()`。权限是最典型的跨端契约，不定则三处各写一套字符串。
-- `contracts/events/`：仅有 README，定义未来异步事件的形状，不实现。
+每类契约必须具备三件事：**有校验、有 playbook、有删除路径**，缺一即会腐烂。
 
-### 2.1 契约的粒度纪律
+### 2.2 生成链
 
-- OpenAPI 只描述**外部**形状，内部 DTO 不进
-- 禁止 `oneOf` 与深层 `allOf`；spec 保持平铺
-- 响应 schema 默认 `additionalProperties: false`（否则"多返回字段"无法被检测）
-- 错误码总量 ≤ 50，分层：`COMMON_*` / `<DOMAIN>_*`
-- 只收**跨前后端**的枚举，模块内部枚举不进契约
-- `contracts/http/envelope.yaml` 只写规则（状态码映射、header 名、分页形状），**不写 schema**；schema 唯一源是 `openapi/shared/`
+```
+contracts/openapi/*.yaml
+  ├─ oapi-codegen ──────> apps/api/internal/generated/openapi/   (Go server 类型)
+  └─ openapi-typescript ─> packages/api-client/src/generated/    (TS 类型)
 
-### 2.2 变更流程（契约三问）
+apps/api/migrations + queries
+  └─ sqlc ─> apps/api/internal/generated/db/
 
-改任何契约前必须回答：
+contracts/design/tokens.json
+  └─ design-tokens/build.mjs ─> packages/design-tokens/theme.css
 
-1. 是否破坏兼容？（是 → 升版本或走弃用流程）
-2. 是否需要新版本？（URL major：`/v1`）
-3. 是否需要数据迁移？（是 → 先写迁移，再改契约）
+contracts/domain/*.yaml
+  └─ 生成脚本 ─> Go 常量 + TS union
+```
+
+生成物入库，CI 用 `make gen && git diff --exit-code` 保证同步。
+
+### 2.3 九类一览
+
+| 类型 | 真相源 |
+|---|---|
+| 接口 | `contracts/openapi/` |
+| 数据 | `apps/api/migrations` + `queries` |
+| 配置 | `contracts/config/env.schema.json` |
+| 领域 | `contracts/domain/` |
+| 设计 | `contracts/design/tokens.json` |
+| 架构 | `contracts/architecture/` |
+| HTTP | `contracts/http/envelope.yaml` |
+| 观测 | `contracts/observability/` |
+| 埋点 | `contracts/analytics/` |
+
+详细说明见 [`contracts/README.md`](../../contracts/README.md)。
 
 ---
 
@@ -257,8 +264,8 @@ web-seed/
 │   │   │   ├── platform/{config,httpserver,database,observability,security,storage}
 │   │   │   ├── modules/{health,auth[O],rbac[O],audit[O],user[O],upload[O],notification[O],webhook[O],notes[E]}
 │   │   │   │   └── registry.go       # 唯一注册表
-│   │   │   ├── apps/{userapi,adminapi[O]}/  # app.go / routes.go / routes_test.go
-│   │   │   └── gen/                  # 生成物入库
+│   │   │   ├── composition/{userapi,adminapi[O]}/  # app.go / routes.go / routes_test.go
+│   │   │   └── generated/            # 生成物入库
 │   │   ├── migrations/  queries/  seeds/  sqlc.yaml  codegen/  Dockerfile
 │   │   └── ...
 │   └── web/
@@ -267,7 +274,7 @@ web-seed/
 │       │   └── src/{app,pages,features,shared}
 │       └── admin/                    [O] 同构
 │
-├── packages/{api-client,ui,design-tokens,tsconfig,eslint-config}
+├── packages/{api-client,ui-kit,design-tokens,tsconfig,eslint-config}
 ├── infra/compose.yaml                [O] profiles: core/data/mail/object/observability
 ├── scripts/{derive,doctor,check-docs,gen-env}.sh
 ├── .opencode/skills/                 # AI 行为入口（薄封装 playbook，见第 10 节）
@@ -282,26 +289,26 @@ web-seed/
 
 ```
 cmd/<app>/main.go              只做启动：解析配置 → 构造 → 运行 → 关闭
-internal/apps/<app>/           装配：选模块、挂路由、配中间件、聚合 handler
-internal/apps/<app>/handlers/  HTTP 适配器：参数转换 → 调 service → 映射响应（禁止业务逻辑）
+internal/composition/<app>/           装配：选模块、挂路由、配中间件、聚合 handler
+internal/composition/<app>/handlers/  HTTP 适配器：参数转换 → 调 service → 映射响应（禁止业务逻辑）
 internal/modules/<biz>/        业务能力：service + repo，不依赖 HTTP 契约
 internal/platform/             与业务无关的基础设施
 ```
 
 ### 4.2 硬边界（机器校验）
 
-1. `cmd/*` 只能 import `internal/apps/*`，不许直接碰 `modules`
+1. `cmd/*` 只能 import `internal/composition/*`，不许直接碰 `modules`
 2. `modules/*` 之间禁止横向 import，跨模块走 service 接口或事件
 3. `apps/*` 只允许"选择 + 组装 + 配置"，出现 `if/for` 业务分支即违规
 4. `apps/web/*` 之间禁止互相 import，共享只能走 `packages/*`
-5. `modules/*` 禁止 import `internal/gen/*`；HTTP 契约产物只允许出现在 `apps/*/handlers`
+5. `modules/*` 禁止 import `internal/generated/*`；HTTP 契约产物只允许出现在 `apps/*/handlers`
 
 ### 4.3 装配方式
 
 - 模块构造全显式手写，禁止 `init()` 自注册
 - 禁止 wire / fx（此规模属过度）
 - `StrictServerInterface` 由 `apps/<app>/handlers` 聚合实现；模块只暴露 service
-- 加一个 API 应用 = 契约 + `internal/apps/newapp/` + `cmd/newapp/`，业务模块零改动
+- 加一个 API 应用 = 契约 + `internal/composition/newapp/` + `cmd/newapp/`，业务模块零改动
 
 ### 4.4 多应用待决问题
 
@@ -346,7 +353,7 @@ internal/platform/             与业务无关的基础设施
 - 禁止把 `*pgx.Tx` 当参数层层传递
 - 事务只在 service 层开启，handler 不开事务
 
-### 5.4 数据规范（`contracts/db/conventions.md`）
+### 5.4 数据规范（`contracts/db/README.md`）
 
 - 主键 UUIDv7；时间列 `timestamptz`，统一 UTC
 - 业务表标准列：`created_at / updated_at / created_by / deleted_at / version`
@@ -396,7 +403,7 @@ src/
 - 三态（loading/empty/error）使用共享组件，禁止各页自造
 - 运行时配置由 `public/config.js` 注入，前端启动时 zod 校验 → 同一镜像多环境
 - 主题走 CSS 变量，暗色模式为 token 的第二组值
-- **Tailwind v4 不自动扫描 workspace 共享包**：由 `packages/ui` 自备 `styles.css`（内含 `@source "./src"`），app 只 `@import "@webseed/ui/styles.css"`，避免路径耦合；`@theme` 变量默认只输出被使用的
+- **Tailwind v4 不自动扫描 workspace 共享包**：由 `packages/ui-kit` 自备 `styles.css`（内含 `@source "./src"`），app 只 `@import "@webseed/ui-kit/styles.css"`，避免路径耦合；`@theme` 变量默认只输出被使用的
 
 ### 6.3 埋点
 
@@ -472,35 +479,59 @@ self:   doctor（模板自身健康）
 
 ## 10. Skills 与 AI 能力沉淀
 
-### 10.1 必要性：skills 不保证一致性
+### 10.1 定位：skills 不保证一致性
 
 一致性由编译、测试、CI 闸门保证；skills 只能降低 AI 走错路的概率。
-不要写一个"提醒 AI 改契约"的 skill 当作机制——提醒不可靠，闸门才可靠。
+不要写"提醒 AI 改契约"的 skill 当作机制——提醒不可靠，闸门才可靠。
 
-skills 的真正价值：把 playbook 变成**自动触发的上下文**。AI 可能不主动读文档，但会在匹配任务时加载 skill。
+### 10.2 跨工具原则：正文工具无关，适配层可生成
 
-### 10.2 存放位置
+团队里 agent 不统一（OpenCode / Claude Code / Cursor / Codex / Gemini），各工具的 skill 路径不同。
+解决办法不是选一个工具，而是分层：
 
-项目级 skill 必须放 **`.opencode/skills/<id>/SKILL.md`**（本仓库根 `AGENTS.md` 已规定），理由：
+| 层 | 位置 | 工具无关 | 作用 |
+|---|---|---|---|
+| 硬规则 | 根 `AGENTS.md` | 是（事实标准） | 不可协商的约束 |
+| 流程正文 | `docs/playbooks/*.md` | 是 | 步骤、验证、完成定义 |
+| 适配层 | `.opencode/skills/`、`.claude/skills/`、`.cursor/rules/` | 否 | 每个 10–20 行的薄入口 |
+| 生成器 | `scripts/sync-agents.sh` | 是 | 从 playbook frontmatter 生成适配层（P7 实现） |
 
-- OpenCode 只从该路径发现项目级 skill；放 `docs/` 或 `contracts/` 不会被加载
-- 不单开根目录 `skills/`：与工具约定重复，派生项目还要额外维护映射
-- `.opencode/skills/` 未被 `.gitignore` 忽略，可随模板分发
+判断标准：**`AGENTS.md` 是底线，skills 是增强。** 即使成员不用任何 skill，靠 AGENTS.md + playbooks 也能完整工作。
 
-`contracts/` 只放机器可读契约；skills 是行为指令，职责不同，不能混放。
+### 10.3 单一源格式
 
-### 10.3 与 playbooks 的关系（防双源）
+playbook 顶部带 frontmatter：
 
-**playbooks 为唯一正文，skills 为薄入口。**
+```yaml
+---
+name: add-endpoint
+description: 新增 API 端点的完整流程
+targets: [opencode, claude, cursor]
+---
+```
 
-skill 只包含四段：触发条件 → 必读文件（playbook 路径）→ 必跑命令 → 完成定义。
-步骤细节全部留在 playbook，避免两处各写一套而漂移。
+`make agents` 生成各工具入口，内容只有四段：触发条件 → 必读 playbook 路径 → 必跑命令 → 完成定义。
 
-理由：playbook 可被 PR review、可被 `docs/index.md` 索引、换 AI 工具仍有效；skill 是 OpenCode 专有格式。
+生成物示例：
 
-`check-docs.sh` 增加一条校验：每个 skill 引用的 playbook 路径必须存在。
+```markdown
+<!-- .opencode/skills/add-endpoint/SKILL.md（生成物，禁止手改） -->
+---
+name: add-endpoint
+description: 新增 API 端点的完整流程
+---
+1. 读 docs/playbooks/add-endpoint.md
+2. 按其中步骤执行
+3. 跑 make verify
+```
 
-### 10.4 建议的 skill 清单
+### 10.4 三条纪律
+
+1. **不用 symlink**：Windows checkout 需要开发者模式，跨团队必踩坑；用生成 + CI diff
+2. **CI 校验生成物无 diff**：与契约生成同一套思路
+3. **不承诺全工具支持**：只维护团队实际在用的 2–3 个，其余靠 `AGENTS.md` 兜底
+
+### 10.5 建议的 skill 清单
 
 | skill | 触发场景 | 随派生保留 |
 |---|---|---|
@@ -509,15 +540,16 @@ skill 只包含四段：触发条件 → 必读文件（playbook 路径）→ �
 | `add-table` | 新增表 / 迁移 | 是 |
 | `add-app` | 新增 api / web 应用 | 是 |
 | `verify` | 提交前跑全套闸门 | 是 |
-| `template-derive` | 派生新项目 | 否，派生即删 |
-| `template-doctor` | 模板自身健康检查 | 否，派生即删 |
+| `template-derive` | 派生新项目 | 否，派生即卸 |
+| `template-doctor` | 模板自身健康检查 | 否，派生即卸 |
 
-派生脚本删除 `template-*` 目录，其余保留。
+派生脚本删除 `template-*`，其余保留。
 
-### 10.5 反模式
+### 10.6 反模式
 
 - 用 skill 复制一份契约内容 → 必然漂移
 - 用 skill 代替 CI 检查
+- **把正文写在 `.opencode/` 里** → 换工具即失效
 - 为每个 CRUD 端点写一个 skill → 爆炸
 
 ## 附录 A：契约与实现的一致性机制

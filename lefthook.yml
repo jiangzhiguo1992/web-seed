@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "apps/api/**/*.go"
+      run: cd apps/api && test -z "$(gofmt -l .)" || (echo "gofmt required:" && gofmt -l . && exit 1)
+    govet:
+      glob: "apps/api/**/*.go"
+      run: cd apps/api && go vet ./...
+    docs:
+      glob: "docs/**/*.md"
+      run: ./scripts/check-docs.sh
+
+pre-push:
+  commands:
+    build:
+      run: make build

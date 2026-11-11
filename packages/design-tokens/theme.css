@@ -1,0 +1,7 @@
+/* 生成物：由 scripts/build.mjs 从 tokens.json 生成，禁止手改。 */
+@theme {
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-surface: #ffffff;
+  --radius-card: 12px;
+}
