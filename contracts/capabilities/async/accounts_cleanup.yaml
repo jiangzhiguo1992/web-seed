@@ -1,0 +1,50 @@
+# 定期清理长期未激活的账号。五要素必须齐全，缺一即校验失败。
+
+schema_version: 1
+id: cap.async.accounts_cleanup
+summary: 未激活账号清理任务
+stability: draft
+do_not:
+  - 只清理 pending 状态，不要碰 active / suspended
+  - 必须保留审计事件，不要静默删除
+
+trigger:
+  type: cron
+  schedule: "0 4 * * *"
+  timezone: UTC
+
+input:
+  type: object
+  additionalProperties: false
+  properties:
+    older_than_days: { type: integer, minimum: 1, default: 7 }
+    batch_size: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+
+output:
+  type: object
+  additionalProperties: false
+  required: [deleted_count]
+  properties:
+    deleted_count: { type: integer, minimum: 0 }
+
+idempotency:
+  key: "accounts_cleanup:{date}:{older_than_days}"
+  window: 24h
+  rationale: 同一天重复执行结果一致，已删记录不会被再次匹配
+
+retry:
+  max_attempts: 3
+  backoff: exponential
+  initial_delay: 30s
+  max_delay: 10m
+  dead_letter: accounts_cleanup_dlq
+
+concurrency:
+  max_in_flight: 1
+  rationale: 避免多实例同时扫同一批数据
+
+observability:
+  log_event: job.accounts_cleanup.completed
+  metrics:
+    - platform.metric.job_duration_ms
+    - platform.metric.job_failed_total

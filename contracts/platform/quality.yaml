@@ -1,12 +1,4 @@
-# contract: platform.quality
-# summary: 测试策略与门槛。改动会影响 CI 结果。
-# enforcement: tested
-# consumers: [tools]
-# refs: [platform.arch.go, platform.arch.web]
-# do_not:
-#   - 不要为了达标写无断言测试
-#   - 不要跳过必测路径
-#   - 不要降低门槛而不更新本文件
+# 测试策略与门槛。改动会影响 CI 结果。
 
 schema_version: 1
 id: platform.quality
@@ -25,7 +17,7 @@ coverage:
 must_test:
   - id: state_machine_transitions
     why: 非法转换必须 panic 或返回明确错误
-    where: apps/api/internal/generated/domain/*_state_test.go
+    where: apps/api/internal/generated/business/*_state_test.go
   - id: response_schema
     why: 防止实现多返回字段
     where: apps/api/internal/composition/*/routes_test.go
@@ -33,7 +25,7 @@ must_test:
     why: 防止端点漂移
     where: apps/api/internal/composition/*/routes_test.go
   - id: business_rules
-    why: domain/rules 每条规则至少一组用例
+    why: business/rules 每条规则至少一组用例
     where: apps/api/internal/modules/*/rules_test.go
   - id: page_states
     why: 页面四态必须有快照或断言
@@ -45,7 +37,7 @@ must_test:
 e2e:
   tool: playwright
   required_flows:
-    - feature.flow.note_create
+    - feature.flow.account_create
   base_url_source: platform.environments
 
 forbidden:

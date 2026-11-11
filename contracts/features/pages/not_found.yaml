@@ -1,17 +1,14 @@
-# contract: feature.page.not_found
-# summary: 404 页。通用页面，无数据源。
-# enforcement: generated
-# consumers: [web/admin]
-# refs: [feature.routes]
-# do_not:
-#   - 不要展示原始路径（可能含敏感参数）
+# 404 页。通用页面，无数据源。
 
 schema_version: 1
 id: feature.page.not_found
 summary: 404 页
 stability: stable
+do_not:
+  - 不要展示原始路径（可能含敏感参数）
+
 page: not_found
-route: null            # 由 router 的 catch-all 触发
+route: null
 
 data: {}
 
@@ -27,7 +24,7 @@ actions:
   back_home:
     ui: secondary-button
     label: 返回首页
-    on_success: navigate(feature.route.note_list)
+    on_success: navigate(feature.route.account_list)
 
 copy:
   title: 页面不存在

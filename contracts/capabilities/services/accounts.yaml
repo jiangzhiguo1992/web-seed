@@ -1,0 +1,161 @@
+# 账号模块对外暴露的 service 能力。只登记跨模块调用，模块内部方法不进契约。
+
+schema_version: 1
+id: cap.service.accounts
+summary: 账号跨模块 service 接口
+stability: stable
+do_not:
+  - 返回 data.entity.account，不要返回表行
+  - persistence.queries.get_for_auth 只能被认证流程使用
+
+module: accounts
+
+interface:
+  name: AccountsService
+  package: internal/modules/accounts
+  methods:
+    - name: Get
+      summary: 按 ID 获取账号
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: id, type: uuid }
+      returns:
+        - { name: account, type: data.entity.account }
+        - { name: err, type: error }
+      errors: [platform.error.ACCOUNT_NOT_FOUND, platform.error.COMMON_FORBIDDEN]
+      transaction: read_only
+
+    - name: List
+      summary: 列出账号（游标分页）
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: filter, type: ListAccountsFilter }
+      returns:
+        - { name: accounts, type: "[]data.entity.account" }
+        - { name: next_cursor, type: string, nullable: true }
+        - { name: err, type: error }
+      errors: [platform.error.COMMON_FORBIDDEN]
+      transaction: read_only
+
+    - name: Create
+      summary: 创建账号
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: input, type: CreateAccountInput }
+      returns:
+        - { name: account, type: data.entity.account }
+        - { name: err, type: error }
+      errors:
+        - platform.error.ACCOUNT_EMAIL_INVALID
+        - platform.error.ACCOUNT_EMAIL_TAKEN
+        - platform.error.ACCOUNT_WEAK_PASSWORD
+      transaction: required
+
+    - name: Update
+      summary: 更新账号资料
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: id, type: uuid }
+        - { name: input, type: UpdateAccountInput }
+      returns:
+        - { name: account, type: data.entity.account }
+        - { name: err, type: error }
+      errors:
+        - platform.error.ACCOUNT_NOT_FOUND
+        - platform.error.ACCOUNT_VERSION_CONFLICT
+        - platform.error.COMMON_FORBIDDEN
+      transaction: required
+
+    - name: Activate
+      summary: 激活或解封账号
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: id, type: uuid }
+        - { name: version, type: integer }
+      returns:
+        - { name: account, type: data.entity.account }
+        - { name: err, type: error }
+      errors:
+        - platform.error.ACCOUNT_NOT_FOUND
+        - platform.error.ACCOUNT_ILLEGAL_TRANSITION
+        - platform.error.ACCOUNT_VERSION_CONFLICT
+      transaction: required
+
+    - name: Suspend
+      summary: 封禁账号
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: id, type: uuid }
+        - { name: reason, type: string }
+        - { name: version, type: integer }
+      returns:
+        - { name: account, type: data.entity.account }
+        - { name: err, type: error }
+      errors:
+        - platform.error.ACCOUNT_NOT_FOUND
+        - platform.error.ACCOUNT_ILLEGAL_TRANSITION
+        - platform.error.ACCOUNT_VERSION_CONFLICT
+      transaction: required
+
+    - name: Delete
+      summary: 软删账号
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: id, type: uuid }
+        - { name: version, type: integer }
+      returns:
+        - { name: err, type: error }
+      errors:
+        - platform.error.ACCOUNT_NOT_FOUND
+        - platform.error.ACCOUNT_VERSION_CONFLICT
+        - platform.error.COMMON_FORBIDDEN
+      transaction: required
+
+# 持久化实现：capabilities 负责把 data 实体映射到表
+persistence:
+  table: data.table.accounts
+  field_map: {}                    # 实体字段名与列名一致，无差异
+  queries:
+    get: data.query.accounts.getaccount
+    get_for_auth: data.query.accounts.getaccountforauth
+    list: data.query.accounts.listaccounts
+    create: data.query.accounts.createaccount
+    update: data.query.accounts.updateaccountversioned
+    set_status: data.query.accounts.setaccountstatus
+    record_login_success: data.query.accounts.recordloginsuccess
+    record_login_failure: data.query.accounts.recordloginfailure
+    soft_delete: data.query.accounts.softdeleteaccount
+  constraint_map:
+    business.inv.account.email_normalized: data.table.accounts.constraint.ck_accounts_email_format
+
+types:
+  ListAccountsFilter:
+    type: object
+    additionalProperties: false
+    properties:
+      status: { type: data.enum.account_status, nullable: true }
+      cursor: { type: string, nullable: true }
+      page_size: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  CreateAccountInput:
+    type: object
+    additionalProperties: false
+    required: [email, password, display_name]
+    properties:
+      email: { type: string, format: email, maxLength: 254 }
+      password: { type: string, minLength: 12, writeOnly: true }
+      display_name: { type: string, minLength: 1, maxLength: 100 }
+
+  UpdateAccountInput:
+    type: object
+    additionalProperties: false
+    required: [display_name, version]
+    properties:
+      display_name: { type: string, minLength: 1, maxLength: 100 }
+      version: { type: integer, minimum: 1 }
+
+consumers:
+  - module: audit
+    uses: [Get]
+  - module: auth
+    uses: [Get]

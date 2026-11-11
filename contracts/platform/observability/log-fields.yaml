@@ -1,15 +1,4 @@
-# contract: platform.obs.log
-# summary: 日志字段唯一来源。未登记字段 CI 警告；pii: true 的字段禁止进入日志。
-# enforcement: generated+tested
-# consumers: [api, ops]
-# refs: [platform.environments, platform.errors]
-# generates:
-#   - apps/api/internal/generated/platform/logfields.go
-#   - packages/api-client/src/generated/logfields.ts
-# do_not:
-#   - 不要用未登记的字段名（会造成聚合断裂）
-#   - 不要记录 pii: true 的字段
-#   - 不要在日志里拼字符串模板，使用结构化字段
+# 日志字段唯一来源。未登记字段 CI 警告；pii: true 的字段禁止进入日志。
 
 schema_version: 1
 id: platform.obs.log
@@ -63,6 +52,6 @@ never_log:
 pii_source: "生成器汇总所有 data/tables/*.yaml 中 pii: true 的列，自动加入 never_log"
 
 rules:
-  - 路径记录路由模板（/v1/notes/{id}），不记录实际值
+  - 路径记录路由模板（/v1/accounts/{id}），不记录实际值
   - 错误日志必须带 request_id 与 error_code
   - 生产 level >= warn，debug 仅 dev 环境

@@ -1,12 +1,4 @@
-# contract: platform.versioning
-# summary: API 版本与契约兼容策略。
-# enforcement: tested
-# consumers: [api, web/admin, ops]
-# refs: [platform.errors]
-# do_not:
-#   - 不要在同一 URL 下做破坏性变更
-#   - 不要删除未过弃用窗口的字段
-#   - 不要手动改弃用日期而不更新本文件
+# API 版本与契约兼容策略。
 
 schema_version: 1
 id: platform.versioning

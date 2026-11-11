@@ -1,10 +1,4 @@
-# contract: cap.http.shared
-# summary: HTTP 共享组件。各模块 OpenAPI 引用的公共 schema 与参数。
-# enforcement: generated
-# consumers: [api, web/admin]
-# do_not:
-#   - 不要在模块文件里重复定义 Problem / 分页结构
-#   - 不要给响应 schema 省略 additionalProperties: false
+# HTTP 共享组件。各模块 OpenAPI 引用的公共 schema 与参数。
 
 schema_version: 1
 id: cap.http.shared

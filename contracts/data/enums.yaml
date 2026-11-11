@@ -1,30 +1,21 @@
-# contract: data.enum.note_status
-# summary: 跨前后端枚举集合。仅收两端都要用的枚举，模块内部枚举不进本文件。
-# enforcement: generated
-# consumers: [api, web/admin]
-# generates:
-#   - apps/api/internal/generated/enums/enums.go
-#   - packages/api-client/src/generated/enums.ts
-# do_not:
-#   - 不要新增模块内部枚举
-#   - 不要手改生成的常量
-#   - 枚举值只能追加，禁止改名或删除（破坏兼容）
+# 跨前后端枚举集合。仅收两端都要用的枚举，模块内部枚举不进本文件。
 
 schema_version: 1
-id: data.enum.note_status
+id: data.enum.account_status
 summary: 跨端枚举集合
 stability: stable
 
 enums:
-  - name: note_status
-    description: 笔记可见状态，不表示审核状态
+  - name: account_status
+    description: 账号状态
     db_type: text
-    go_type: NoteStatus
-    ts_type: NoteStatus
+    go_type: AccountStatus
+    ts_type: AccountStatus
     values:
-      - { value: draft, description: 草稿，仅作者可见 }
-      - { value: active, description: 已发布 }
-      - { value: archived, description: 已归档，可恢复 }
+      - { value: pending, description: 待激活，不能登录 }
+      - { value: active, description: 正常，可登录 }
+      - { value: suspended, description: 已封禁，不能登录 }
+      - { value: deleted, description: 已软删，终态 }
 
   - name: audit_action
     description: 审计日志动作

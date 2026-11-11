@@ -1,15 +1,4 @@
-# contract: platform.analytics.events
-# summary: 埋点事件唯一来源。未登记事件编译失败；pii: true 的属性生成时剔除。
-# enforcement: generated
-# consumers: [web/admin, api]
-# refs: [features/pages/*]
-# generates:
-#   - packages/api-client/src/generated/analytics.ts
-#   - apps/api/internal/generated/platform/analytics.go
-# do_not:
-#   - 不要用未登记的事件名
-#   - 不要在属性里放 PII
-#   - 不要用自由文本做属性值（不可聚合）
+# 埋点事件唯一来源。未登记事件编译失败；pii: true 的属性生成时剔除。
 
 schema_version: 1
 id: platform.analytics.events
@@ -29,41 +18,48 @@ common_properties:
 
 events:
   # ---------- 页面 ----------
-  - name: page.note_list_viewed
-    description: 笔记列表页曝光
+  - name: page.account_list_viewed
+    description: 账号列表页曝光
     trigger: mount
     properties:
       - { name: item_count, type: integer, pii: false }
       - { name: filter_status, type: string, pii: false }
 
   # ---------- 动作 ----------
-  - name: note.create_clicked
-    description: 点击新建笔记
+  - name: account.create_clicked
+    description: 点击新建账号
     trigger: click
     properties: []
 
-  - name: note.created
-    description: 笔记创建成功
+  - name: account.created
+    description: 账号创建成功
     trigger: api_success
-    ref: cap.http.notes.create
+    ref: cap.http.accounts.create
     properties:
-      - { name: note_id, type: string, pii: false }
+      - { name: account_id, type: string, pii: false }
       - { name: has_body, type: boolean, pii: false }
       - { name: duration_ms, type: integer, pii: false }
 
-  - name: note.archived
-    description: 笔记归档成功
+  - name: account.activated
+    description: 账号激活成功
     trigger: api_success
-    ref: cap.http.notes.archive
+    ref: cap.http.accounts.activate
     properties:
-      - { name: note_id, type: string, pii: false }
+      - { name: account_id, type: string, pii: false }
 
-  - name: note.deleted
-    description: 笔记删除成功
+  - name: account.suspended
+    description: 账号封禁成功
     trigger: api_success
-    ref: cap.http.notes.delete
+    ref: cap.http.accounts.suspend
     properties:
-      - { name: note_id, type: string, pii: false }
+      - { name: account_id, type: string, pii: false }
+
+  - name: account.deleted
+    description: 账号删除成功
+    trigger: api_success
+    ref: cap.http.accounts.delete
+    properties:
+      - { name: account_id, type: string, pii: false }
 
   # ---------- 失败 ----------
   - name: request.failed

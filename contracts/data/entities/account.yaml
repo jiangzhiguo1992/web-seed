@@ -1,0 +1,34 @@
+# 账号数据实体：逻辑数据模型。物理表在 tables/accounts.yaml，业务规则在 business/。
+
+id: data.entity.account
+summary: 账号数据实体
+stability: stable
+do_not:
+  - password_hash 标记 never_expose，禁止出现在任何 DTO 或事件
+  - email 存储前必须小写归一，比较时不要区分大小写
+
+identity: id
+
+fields:
+  - { name: id, type: uuid, required: true, mutable: false }
+  - { name: email, type: string, max_length: 254, required: true, pii: true, note: 登录标识，小写归一 }
+  - { name: password_hash, type: string, required: true, pii: true, never_expose: true }
+  - { name: display_name, type: string, max_length: 100, required: true, pii: true }
+  - { name: status, type: data.enum.account_status, required: true }
+  - { name: failed_login_count, type: integer, required: true }
+  - { name: locked_until, type: datetime }
+  - { name: last_login_at, type: datetime }
+  - { name: version, type: integer, required: true, note: 乐观锁 }
+  - { name: created_at, type: datetime, required: true, mutable: false }
+  - { name: updated_at, type: datetime, required: true, mutable: false }
+  - { name: deleted_at, type: datetime, mutable: false }
+
+relations:
+  - name: roles
+    target: planned:data.entity.role
+    kind: many_to_many
+    via: planned:data.table.account_roles
+
+# 状态机、业务规则、不变量、派生属性均不在本文件：
+#   状态机  → business/states/account.yaml（subject: data.entity.account）
+#   规则    → business/rules/account.yaml

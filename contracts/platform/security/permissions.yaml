@@ -1,35 +1,24 @@
-# contract: platform.sec.permissions
-# summary: 权限点唯一来源。只增不改；删除必须走弃用流程。生成 Go/TS 常量与前端指令。
-# enforcement: generated+tested
-# consumers: [api, web/admin]
-# refs: [platform.sec.roles]
-# generates:
-#   - apps/api/internal/generated/platform/permissions.go
-#   - packages/api-client/src/generated/permissions.ts
-#   - docs/reference/generated/permissions.md
-# do_not:
-#   - 不要在代码里写权限字符串
-#   - 不要复用权限点表达不同含义
-#   - 不要删除仍在使用的权限点
+# 权限点唯一来源。只增不改；删除必须走弃用流程。
 
 schema_version: 1
 id: platform.sec.permissions
 summary: 权限点
 stability: stable
+do_not:
+  - 权限点只增不改；删除必须走弃用流程
+  - 资源级权限不要只靠权限点，必须在 business/rules 声明
 
 naming:
   pattern: "<resource>_<action>"
   actions: [read, write, delete, manage]
 
 permissions:
-  # ---------- 笔记 ----------
-  - { code: note_read, resource: note, action: read, description: 查看笔记 }
-  - { code: note_write, resource: note, action: write, description: 创建与编辑笔记 }
-  - { code: note_delete, resource: note, action: delete, description: 删除笔记 }
+  # ---------- 账号 ----------
+  - { code: account_read, resource: account, action: read, description: 查看账号 }
+  - { code: account_write, resource: account, action: write, description: 创建与编辑账号 }
+  - { code: account_delete, resource: account, action: delete, description: 删除账号 }
 
-  # ---------- 用户与角色 ----------
-  - { code: user_read, resource: user, action: read, description: 查看用户 }
-  - { code: user_write, resource: user, action: write, description: 管理用户 }
+  # ---------- 角色 ----------
   - { code: role_manage, resource: role, action: manage, description: 管理角色与权限 }
 
   # ---------- 审计 ----------
@@ -37,8 +26,8 @@ permissions:
 
 boundaries:
   resource_level:
-    description: 资源级权限（如仅作者可改）必须在 domain.rule 中声明，不能只靠权限点
-    example: domain.rule.note.owner_only
+    description: 资源级权限（如仅本人可改）必须在 business/rules 中声明，不能只靠权限点
+    example: "见 business/rules/account.yaml 的 self_only"
 
   wildcard:
     allowed_for: [platform.role.admin]

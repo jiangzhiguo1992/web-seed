@@ -27,7 +27,7 @@
 | P1 | 仓库骨架 | `make help`/`build`/`lint`/`doctor` 全通过 | `[x]` |
 | P2 | 契约生成链 | `make gen` 幂等、CI diff 通过 | `[~]` 契约层已落盘，生成器待实现 |
 | P3 | 后端地基 | platform 六件套可用 | `[ ]` |
-| P4 | 最小纵切 | notes 全链路跑通（DB→API→页面） | `[ ]` |
+| P4 | 最小纵切 | accounts 全链路跑通（DB→API→页面） | `[ ]` |
 | P5 | 一致性闸门 | 七道闸门全部生效 | `[~]` 闸门 1–3 原型已验证 |
 | P6 | 可选模块 | auth/rbac/audit 可摘除地接入 | `[ ]` |
 | P7 | 治理与文档 | derive/doctor/ADR/playbooks 齐备 | `[ ]` |
@@ -104,7 +104,7 @@
 - [ ] `platform/errors.yaml` + `platform/security/permissions.yaml` → 两端常量
 - [ ] `platform/config/env.schema.json` → `.env.example`（`gen-env.sh`）
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
-- [ ] `domain/**` → 状态机常量 + 断言 + 测试骨架
+- [ ] `business/**` → 状态机常量 + 断言 + 测试骨架
 - [ ] `features/**` → 路由表 + 页面骨架 + 类型
 - [ ] 全部 `refs` → `generated/{manifest.json,graph.json,lineage.md}`
 - [ ] `make gen` 幂等：连续两次生成结果一致
@@ -120,15 +120,15 @@
 - [ ] 优雅关闭：信号 → 停收 → 等在途 → 关池
 - [ ] `/healthz`（不查依赖）与 `/readyz`（查 DB）分离
 
-#### P4 最小纵切（示例模块 notes）
+#### P4 最小纵切（示例模块 accounts）
 
-- [ ] 由 `data/tables/notes.yaml` 生成 schema 与迁移（含软删、乐观锁、部分唯一索引）
-- [ ] 由 `data/queries/notes.yaml` 生成 `.sql` 并跑 sqlc
-- [ ] `internal/modules/notes`（service + repo，不含 HTTP）
+- [ ] 由 `data/tables/accounts.yaml` 生成 schema 与迁移（含软删、乐观锁、部分唯一索引）
+- [ ] 由 `data/queries/accounts.yaml` 生成 `.sql` 并跑 sqlc
+- [ ] `internal/modules/accounts`（service + repo，不含 HTTP）
 - [ ] `internal/composition/adminapi/handlers`（实现 StrictServerInterface）
 - [ ] `routes_test.go`：路由集合 == 契约集合 + 响应 schema 校验
 - [ ] 由 `features/**` 生成路由与页面骨架，补齐四态
-- [ ] Playwright 跑通 `feature.flow.note_create`
+- [ ] Playwright 跑通 `feature.flow.account_create`
 
 #### P5 一致性闸门（详见附录 A）
 
@@ -181,7 +181,7 @@
    可选能力在任何地方都不被引用，只通过一处显式注册表接入。删除 = 删目录 + 删一行注册。
 
 3. **薄校验优先，生成器克制**
-   能用测试/脚本比对的，不写代码生成器。生成器上限 **6 个**：openapi、db、domain、features、platform、graph。超过则维护成本压过收益。
+   能用测试/脚本比对的，不写代码生成器。生成器上限 **6 个**：openapi、db、business、features、platform、graph。超过则维护成本压过收益。
 
 ### 1.3 四防目标
 
@@ -210,11 +210,11 @@
 
 | 组 | 职责 | 真相源 |
 |---|---|---|
-| `data/` | 表结构、枚举、查询、种子、迁移策略 | `data/tables/*.yaml`（**migrations 由此生成**） |
-| `capabilities/` | HTTP、异步任务、跨模块 service | `capabilities/**` |
-| `domain/` | 实体、状态机、规则、流程、领域事件、术语 | `domain/**` |
-| `features/` | 路由、页面、跨页旅程 | `features/**` |
-| `platform/` | 环境、版本、错误、HTTP 约定、质量、配置、架构、设计、观测、埋点、安全 | `platform/**` |
+| `data/` | 物理表、逻辑实体、查询、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成） |
+| `capabilities/` | 实现层：HTTP、异步、跨模块 service、业务流程编排 | `capabilities/**` |
+| `business/` | 业务规格：状态机、规则、领域事件、术语（不含实体与实现） | `business/**` |
+| `features/` | 功能定义：路由、页面、用户旅程 | `features/**` |
+| `platform/` | 横切：环境、版本、错误、枚举、HTTP 约定、质量、配置、架构、设计、观测、埋点、安全 | `platform/**` |
 
 `index.yaml` 是契约地图，`generated/` 是产物。详见 [`contracts/README.md`](../../contracts/README.md)。
 
@@ -232,7 +232,7 @@ capabilities/http/*.yaml + shared.yaml
 
 data/queries/*.yaml ──> queries/*.sql ──> sqlc
 
-domain/** ──> 状态机 / 常量 / 断言 / 测试骨架
+business/** ──> 状态机 / 常量 / 断言 / 测试骨架
 features/** ──> 路由 / 页面骨架 / 类型
 platform/** ──> 配置校验 / 常量 / CSS 变量
 
@@ -245,8 +245,11 @@ platform/** ──> 配置校验 / 常量 / CSS 变量
 
 - ID 规范：`<group>.<type>.<scope>.<name>[.<item>]`
 - 跨文件引用写 ID，不写路径
-- 分层约束：`features → capabilities → data`，`domain → data`，`platform` 只被引用（三个例外）
-- 图校验：重复 ID / 悬空引用 / 越层 / 循环 / 孤儿
+- **唯一顺序**：`feature → business → capabilities → data`（单向链，无反向）
+- **锚点只在上游写**：`feature --uses--> business`，`business --implemented_by--> capabilities`，
+  `capabilities --persists_via--> data`
+- **capabilities 契约不引用 business**：返回 `data` 行；规则与事件由 business 侧锚点
+- 图校验禁止 `capabilities → business`
 - 影响面：`make contract-impact id=<id>`
 
 **引用必须写在结构化字段里**（`ref` / `refs` / `capability` / `use` / `emits` / `page` / `route` / `x-*`）。
@@ -269,11 +272,11 @@ web-seed/
 ├── contracts/                        [C] 五组契约（唯一真相源）
 │   ├── index.yaml                    #   契约地图（AI 入口）
 │   ├── project.yaml                  #   项目元信息（derive 输入）
-│   ├── data/                         #   tables / enums / queries / seeds / policy
-│   ├── capabilities/                 #   http / async / internal / apps
-│   ├── domain/                       #   entities / states / rules / flows / events / glossary
+│   ├── data/                         #   tables / entities / queries / _policy
+│   ├── capabilities/                 #   http / async / services / flows
+│   ├── business/                       #   states / rules / events / glossary
 │   ├── features/                     #   routes / pages / flows
-│   ├── platform/                     #   环境/版本/错误/HTTP/质量/配置/架构/设计/观测/埋点/安全
+│   ├── platform/                     #   环境/版本/错误/枚举/HTTP/质量/配置/架构/设计/观测/埋点/安全
 │   └── generated/                    #   manifest / graph / lineage
 ├── docs/
 │   ├── index.md                      # 唯一地图（AI 入口）
@@ -288,7 +291,7 @@ web-seed/
 │   │   ├── cmd/adminapi/main.go
 │   │   ├── internal/
 │   │   │   ├── platform/{config,httpserver,database,observability,security,storage}
-│   │   │   ├── modules/{health,auth[O],rbac[O],audit[O],user[O],upload[O],notification[O],webhook[O],notes[E]}
+│   │   │   ├── modules/{health,auth[O],rbac[O],audit[O],user[O],upload[O],notification[O],webhook[O],accounts[E]}
 │   │   │   │   └── registry.go       # 唯一注册表
 │   │   │   ├── composition/adminapi/  # app.go / routes.go / routes_test.go
 │   │   │   └── generated/            # 生成物入库
@@ -342,14 +345,16 @@ internal/platform/             与业务无关的基础设施
 业务契约按模块拆分，与 API 应用解耦；应用只声明"我包含哪些模块"：
 
 ```yaml
-# contracts/capabilities/apps/admin.yaml
-id: cap.app.admin
-app: admin
-includes: [cap.http.shared, cap.http.notes]
+# contracts/project.yaml（apps 段）
+apps:
+  admin:
+    kind: api
+    includes: [cap.http.shared, cap.http.accounts]
+    generated: { spec: generated/openapi/admin.yaml }
 ```
 
 生成器按该清单合并出 `generated/openapi/admin.yaml`，供 oapi-codegen 与文档站使用。
-新增应用 = 新增组合清单 + `composition/<app>/` + `cmd/<app>/`，业务模块与模块契约零改动。
+新增应用 = 在 `project.yaml` 加一段 + `composition/<app>/` + `cmd/<app>/`，业务模块与模块契约零改动。
 
 ### 4.5 多应用待决问题
 
@@ -514,7 +519,7 @@ self:     doctor（模板自身健康）
 |---|---|
 | 0001 | 采用 ADR 记录架构决策（含 Rejected alternatives） |
 | 0002 | **契约层为唯一真相源**：migrations / queries / 类型 / 路由均由契约生成 |
-| 0003 | 五组契约模型：`data / capabilities / domain / features / platform` |
+| 0003 | 五组契约模型：`data / capabilities / business / features / platform` |
 | 0004 | 锚点机制：全局 ID + 结构化引用 + 分层约束 + 图校验 |
 | 0005 | 模块化单体 + 多应用装配层 + 每应用契约组合 |
 | 0006 | copy-on-derive，不承诺上游同步 |

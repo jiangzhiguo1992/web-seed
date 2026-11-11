@@ -14,12 +14,22 @@
 
 模块内部私有函数**不进契约**——Go 编译器已能完全约束。
 
+## 1.1 不引用 business
+
+capabilities 是 business 的实现，**契约里不出现 `business.*`**：
+
+- 返回类型用 `data.table.*.row`，不用 `data.entity.*`
+- 事件由 `business/events` 的 `emitted_by` 声明
+- 规则由 `business/rules` 的 `implemented_by` 声明
+
+实现代码按 business 契约编写，但契约层不反向引用——两处都写必然漂移。
+
 ## 2. HTTP：拆分与组合
 
 ```
 contracts/capabilities/http/
 ├── shared.yaml      # 共享组件：Problem、分页、排序、header 参数
-├── notes.yaml       # 一个业务模块一个文件
+├── accounts.yaml    # 一个业务模块一个文件
 └── auth.yaml        # 同上
 
 生成时合并 ──> contracts/generated/openapi/admin.yaml（完整 spec）
@@ -27,7 +37,7 @@ contracts/capabilities/http/
            ──> packages/api-client/src/generated/（TS 类型）
 ```
 
-**为什么先拆再合并**：AI 改 notes 只读 `notes.yaml`（≤200 行），不需要读整个 spec。组合文件是产物，禁止手改。
+**为什么先拆再合并**：AI 改 accounts 只读 `accounts.yaml`（≤200 行），不需要读整个 spec。组合文件是产物，禁止手改。
 
 ### 2.1 OpenAPI 扩展字段（必须使用）
 
@@ -36,7 +46,7 @@ contracts/capabilities/http/
 | `x-idempotent` | 是否幂等，配合 `Idempotency-Key` | 重试可能重复写入 |
 | `x-timeout-ms` | 服务端处理超时 | 使用全局默认 |
 | `x-rate-limit` | 限流策略 | 无限流 |
-| `x-preconditions` | 前置条件，引用 `domain.rule.*` | 条件散落在代码里 |
+| `x-preconditions` | 前置条件，引用 `business.rule.*` | 条件散落在代码里 |
 | `x-side-effects` | 副作用（发事件、写审计） | AI 不知道会触发什么 |
 | `x-audit` | 是否写审计日志 | 漏审计 |
 

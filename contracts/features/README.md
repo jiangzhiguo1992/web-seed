@@ -17,7 +17,7 @@
 
 ```
 features → capabilities（必须通过 operationId / capability ID）
-features → domain（状态、规则、术语）
+features → business（状态、规则、术语）
 features → platform（权限点、错误码、埋点）
 features ✗ data（禁止直接引用表或字段）
 ```
@@ -35,9 +35,9 @@ features ✗ data（禁止直接引用表或字段）
 
 缺任一状态即校验失败——这是前端最容易漏、也最影响体验的部分。
 
-## 4. 与 `domain/flows` 的区别
+## 4. 与 `capabilities/flows` 的区别
 
-| | `domain/flows/*` | `features/flows/*` |
+| | `capabilities/flows/*` | `features/flows/*` |
 |---|---|---|
 | 视角 | 系统 / 业务 | 用户 / 界面 |
 | 步骤 | 能力调用、状态转换、事件 | 页面跳转、表单提交、提示 |

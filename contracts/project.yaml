@@ -1,10 +1,4 @@
-# contract: project
-# summary: 项目元信息。derive 脚本的唯一输入，所有生成物的命名来源。
-# enforcement: generated
-# consumers: [ops, tools]
-# do_not:
-#   - 不要在其他文件硬编码项目名 / module / scope，一切引用本文件
-#   - 不要改 id 前缀后不跑 make derive-check
+# 项目元信息。derive 脚本的唯一输入，所有生成物的命名来源。
 
 id: project
 schema_version: 1
@@ -32,6 +26,27 @@ defaults:
   locale: zh-CN
   currency: CNY
   id_strategy: uuid_v7
+
+# 应用拓扑：每个应用包含哪些能力。生成器按此合并 OpenAPI。
+apps:
+  admin:
+    kind: api
+    description: 管理端 API
+    includes:
+      - cap.http.shared
+      - cap.http.accounts
+    planned:
+      - planned:cap.http.auth
+    generated:
+      spec: generated/openapi/admin.yaml
+      server: apps/api/internal/generated/openapi
+      client: packages/api-client/src/generated
+
+  web-admin:
+    kind: web
+    description: 管理端前端
+    routes: feature.routes
+    packages: [api-client, ui-kit, design-tokens]
 
 # derive 时由 scripts/derive.sh 读取并替换
 derive:

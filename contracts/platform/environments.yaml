@@ -1,15 +1,4 @@
-# contract: platform.environments
-# summary: 环境清单与差异。禁止在代码里按环境名写分支。
-# enforcement: tested
-# consumers: [ops, api, web/admin]
-# refs: [platform.config.env, platform.sec.auth]
-# generates:
-#   - apps/api/internal/generated/platform/environments.go
-#   - packages/api-client/src/generated/environments.ts
-# do_not:
-#   - 不要在代码里写 if env == "prod"
-#   - 不要为某个环境单独加未登记的配置项
-#   - 不要在环境差异里放业务逻辑
+# 环境清单与差异。禁止在代码里按环境名写分支。
 
 schema_version: 1
 id: platform.environments

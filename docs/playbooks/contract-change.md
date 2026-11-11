@@ -65,13 +65,13 @@ make contract-impact id=<被修改的 ID>
 | 要改什么 | 改哪里 |
 |---|---|
 | 接口 | `contracts/capabilities/http/<module>.yaml` |
-| 应用包含哪些接口 | `contracts/capabilities/apps/<app>.yaml` |
+| 应用包含哪些接口 | `contracts/project.yaml` 的 `apps` 段 |
 | 定时任务 / 消费者 | `contracts/capabilities/async/<job>.yaml` |
-| 跨模块调用 | `contracts/capabilities/internal/<module>.yaml` |
+| 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
 | 表结构 | `contracts/data/tables/<table>.yaml` |
 | 查询 | `contracts/data/queries/<module>.yaml` |
 | 枚举 | `contracts/data/enums.yaml` |
-| 实体 / 状态机 / 规则 / 流程 | `contracts/domain/**` |
+| 实体 / 状态机 / 规则 / 流程 | `contracts/business/**` |
 | 路由 / 页面 / 用户旅程 | `contracts/features/**` |
 | 错误码 / 权限 / 配置 / 环境 | `contracts/platform/**` |
 
@@ -149,7 +149,7 @@ make db-verify      # 空库 apply 全部迁移 → dump → 与契约目标态�
   ```sql
   -- manual-adjust: CONCURRENTLY 无法在事务内执行
   ```
-- 禁止 `DROP COLUMN` / `RENAME COLUMN` / 原地改类型（见 `data/migrations-policy.yaml`）
+- 禁止 `DROP COLUMN` / `RENAME COLUMN` / 原地改类型（见 `data/_policy.yaml`）
 
 ---
 
@@ -201,4 +201,4 @@ PR 描述模板已包含上述清单。
 - 契约规范：[`contracts/README.md`](../../contracts/README.md)
 - 一致性机制：[`docs/guides/architecture.md`](../../docs/guides/architecture.md) 附录 A
 - 数据规范：[`contracts/data/README.md`](../../contracts/data/README.md)
-- 迁移策略：[`contracts/data/migrations-policy.yaml`](../../contracts/data/migrations-policy.yaml)
+- 迁移策略：[`contracts/data/_policy.yaml`](../../contracts/data/_policy.yaml)

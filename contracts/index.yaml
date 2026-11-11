@@ -17,14 +17,14 @@ read_order:
 
 groups:
   data:
-    description: 数据契约。tables 是表结构真相源，migrations 由它生成。
-    layers: [tables, enums, queries, seeds, policy]
+    description: 数据契约。tables 是物理结构真相源（migrations 由它生成），entities 是逻辑数据模型。
+    layers: [tables, entities, queries, policy]
   capabilities:
     description: 能力契约。HTTP / 异步 / 跨模块 service。
-    layers: [http, async, internal]
-  domain:
-    description: 领域契约。实体、状态机、规则、流程、术语。
-    layers: [entities, states, rules, flows, glossary]
+    layers: [http, async, services, flows]
+  business:
+    description: 业务规格。实体、状态机、规则、领域事件、术语；不含实现。
+    layers: [entities, states, rules, events, glossary]
   features:
     description: 功能契约。路由、页面、跨页旅程。
     layers: [routes, pages, flows]
@@ -39,9 +39,9 @@ entries:
   - { id: project, path: project.yaml, summary: 项目元信息与 derive 输入, consumers: [ops, tools], enforcement: generated, stability: stable }
 
   # ---------- data ----------
-  - id: data.table.notes
-    path: data/tables/notes.yaml
-    summary: 笔记主表结构
+  - id: data.table.accounts
+    path: data/tables/accounts.yaml
+    summary: 账号主表结构
     consumers: [api]
     enforcement: generated+tested
     stability: stable
@@ -49,17 +49,15 @@ entries:
       - 手写 migrations 而不是改本文件
       - 忘记软删过滤（deleted_at IS NULL）
       - 唯一索引用普通 CREATE UNIQUE INDEX，导致软删后无法重建同值
-  - { id: data.enum.note_status, path: data/enums.yaml, summary: 跨端枚举集合, consumers: [api, web/admin], enforcement: generated, stability: stable }
-  - { id: data.query.notes, path: data/queries/notes.yaml, summary: 笔记查询集, consumers: [api], enforcement: generated+tested, stability: stable }
-  - { id: data.seed.roles, path: data/seeds/roles.yaml, summary: 系统必需角色数据, consumers: [api, ops], enforcement: generated+tested, stability: stable }
-  - { id: data.policy.migrations, path: data/migrations-policy.yaml, summary: 迁移策略与禁止操作, consumers: [ops, tools], enforcement: generated, stability: stable }
+  - { id: data.entity.account, path: data/entities/account.yaml, summary: 账号数据实体与关系, consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: data.query.accounts, path: data/queries/accounts.yaml, summary: 账号查询集, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: data.policy, path: data/_policy.yaml, summary: 数据契约机器可读规则, consumers: [tools], enforcement: generated, stability: stable }
 
   # ---------- capabilities ----------
-  - { id: cap.app.admin, path: capabilities/apps/admin.yaml, summary: admin API 能力组合清单, consumers: [tools, api], enforcement: generated, stability: stable }
   - { id: cap.http.shared, path: capabilities/http/shared.yaml, summary: HTTP 共享组件, consumers: [api, web/admin], enforcement: generated, stability: stable }
-  - id: cap.http.notes
-    path: capabilities/http/notes.yaml
-    summary: 笔记 HTTP 接口
+  - id: cap.http.accounts
+    path: capabilities/http/accounts.yaml
+    summary: 账号 HTTP 接口
     consumers: [api, web/admin]
     enforcement: generated+tested
     stability: stable
@@ -67,14 +65,13 @@ entries:
       - 在 handler 里直接读 r.URL.Query() 而不用生成参数
       - 逐接口重复声明 4xx/5xx 响应（已由 default_error_responses 注入）
       - 响应 schema 缺少 additionalProperties: false
-  - { id: cap.async.notes_cleanup, path: capabilities/async/notes_cleanup.yaml, summary: 过期笔记清理任务, consumers: [worker], enforcement: generated+tested, stability: draft }
-  - { id: cap.internal.notes, path: capabilities/internal/notes.yaml, summary: 笔记跨模块 service 接口, consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: cap.async.accounts_cleanup, path: capabilities/async/accounts_cleanup.yaml, summary: 过期账号清理任务, consumers: [worker], enforcement: generated+tested, stability: draft }
+  - { id: cap.service.accounts, path: capabilities/services/accounts.yaml, summary: 账号跨模块 service 接口, consumers: [api], enforcement: generated+tested, stability: stable }
 
-  # ---------- domain ----------
-  - { id: domain.entity.note, path: domain/entities/note.yaml, summary: 笔记实体与不变量, consumers: [api], enforcement: generated+tested, stability: stable }
-  - id: domain.state.note
-    path: domain/states/note.yaml
-    summary: 笔记状态机
+  # ---------- business ----------
+  - id: business.state.account
+    path: business/states/account.yaml
+    summary: 账号状态机
     consumers: [api, web/admin]
     enforcement: generated+tested
     stability: stable
@@ -82,29 +79,30 @@ entries:
       - 在 handler/service 手写 status 判断
       - 新增状态却不加转换
       - 把 archived 与 deleted 混用
-  - { id: domain.rule.note, path: domain/rules/note.yaml, summary: 笔记业务规则集, consumers: [api], enforcement: tested, stability: stable }
-  - { id: domain.flow.note_publish, path: domain/flows/note_publish.yaml, summary: 笔记发布业务流程, consumers: [api], enforcement: tested, stability: draft }
-  - { id: domain.event.note, path: domain/events/note.yaml, summary: 笔记领域事件, consumers: [api, worker], enforcement: generated+tested, stability: stable }
-  - { id: domain.glossary, path: domain/glossary.md, summary: 统一术语表, consumers: [api, web/admin, ai], enforcement: review-only, stability: stable }
+  - { id: business.rule.account, path: business/rules/account.yaml, summary: 账号业务规则集, consumers: [api], enforcement: tested, stability: stable }
+  - { id: cap.flow.account_activation, path: capabilities/flows/account_activation.yaml, summary: 账号发布业务流程编排, consumers: [api], enforcement: tested, stability: draft }
+  - { id: business.event.account, path: business/events/account.yaml, summary: 账号领域事件, consumers: [api, worker], enforcement: generated+tested, stability: stable }
+  - { id: business.glossary, path: business/glossary.md, summary: 统一术语表, consumers: [api, web/admin, ai], enforcement: review-only, stability: stable }
 
   # ---------- features ----------
   - { id: feature.routes, path: features/routes.yaml, summary: 路由与菜单, consumers: [web/admin], enforcement: generated, stability: stable }
-  - id: feature.page.note_list
-    path: features/pages/note_list.yaml
-    summary: 笔记列表页
+  - id: feature.page.account_list
+    path: features/pages/account_list.yaml
+    summary: 账号列表页
     consumers: [web/admin]
     enforcement: generated+tested
     stability: stable
     common_mistakes:
-      - 手写 /v1/notes 而不是引用 capability
+      - 手写 /v1/accounts 而不是引用 capability
       - 漏掉 forbidden 态
       - 在页面里直接引用 data.*
-  - { id: feature.page.note_detail, path: features/pages/note_detail.yaml, summary: 笔记详情页, consumers: [web/admin], enforcement: generated+tested, stability: stable }
+  - { id: feature.page.account_detail, path: features/pages/account_detail.yaml, summary: 账号详情页, consumers: [web/admin], enforcement: generated+tested, stability: stable }
   - { id: feature.page.login, path: features/pages/login.yaml, summary: 登录页, consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.page.not_found, path: features/pages/not_found.yaml, summary: 404 页, consumers: [web/admin], enforcement: generated, stability: stable }
-  - { id: feature.flow.note_create, path: features/flows/note_create.yaml, summary: 创建笔记用户旅程, consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.flow.account_create, path: features/flows/account_create.yaml, summary: 创建账号用户旅程, consumers: [web/admin], enforcement: tested, stability: draft }
 
   # ---------- platform ----------
+  - { id: data.enum, path: data/enums.yaml, summary: 跨端枚举集合, consumers: [api, web/admin, worker], enforcement: generated, stability: stable }
   - { id: platform.environments, path: platform/environments.yaml, summary: 环境清单与差异, consumers: [ops, api, web/admin], enforcement: tested, stability: stable }
   - { id: platform.versioning, path: platform/versioning.yaml, summary: 版本与兼容策略, consumers: [api, web/admin, ops], enforcement: tested, stability: stable }
   - { id: platform.errors, path: platform/errors.yaml, summary: 错误码与 HTTP 映射, consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
@@ -125,6 +123,14 @@ entries:
   - { id: generated.manifest, path: generated/manifest.json, summary: 生成物与来源契约映射, consumers: [tools], enforcement: generated, stability: stable }
   - { id: generated.graph, path: generated/graph.json, summary: 锚点图, consumers: [tools, ai], enforcement: generated, stability: stable }
   - { id: generated.lineage, path: generated/lineage.md, summary: 人读血缘报告, consumers: [ai, ops], enforcement: generated, stability: stable }
+
+# 跨文件的坑：不属于任何单一契约，但 AI 最容易犯
+global_notes:
+  - 错误响应由 capabilities/http 的 default_error_responses 注入，不要逐接口声明
+  - data.entity 的字段名与表列名可能不同，映射在 cap.service.persistence.field_map
+  - 领域事件由 business/events 的 emitted_by 声明，capabilities 不写 emits
+  - capabilities 契约不引用 business.*（实现不反向声明"我实现了谁"）
+  - 通用约束在 _types.yaml，组规则在 <group>/README.md，实例约束在正文 do_not
 
 # 白名单：允许没有入边的根契约
 orphan_whitelist:

@@ -1,12 +1,4 @@
-# contract: platform.sec.auth
-# summary: 认证与会话策略。影响 cookie、CSRF、token 生命周期。
-# enforcement: tested
-# consumers: [api, web/admin]
-# refs: [platform.environments, platform.errors, platform.sec.roles]
-# do_not:
-#   - 不要把 refresh token 放进 localStorage
-#   - 不要在 token 里放 PII
-#   - 不要省略 token 的 audience 校验
+# 认证与会话策略。影响 cookie、CSRF、token 生命周期。
 
 schema_version: 1
 id: platform.sec.auth
@@ -62,5 +54,5 @@ mfa:
 
 authorization:
   model: rbac + resource_rule
-  note: 角色决定"能不能做"，domain.rule 决定"能不能对这个资源做"
+  note: 角色决定"能不能做"，business/rules 决定"能不能对这个资源做"
   deny_by_default: true

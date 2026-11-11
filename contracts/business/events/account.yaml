@@ -1,0 +1,123 @@
+# 账号领域事件。状态转换与业务动作的副作用，供异步消费者订阅。
+
+schema_version: 1
+id: business.event.account
+summary: 账号领域事件
+stability: stable
+do_not:
+  - payload 禁止包含 password_hash
+  - 破坏兼容必须升 version，不要原地改
+  - 登录失败事件不要带原始密码或哈希
+
+scope: account
+delivery: at_least_once
+
+events:
+  - id: business.event.account_created
+    name: account.created
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, email, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        status: { type: string, enum: [pending, active] }
+        created_at: { type: string, format: date-time }
+    trigger: [cap.service.accounts.create]
+
+  - id: business.event.account_activated
+    name: account.activated
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, activated_at]
+      properties:
+        id: { type: string, format: uuid }
+        activated_at: { type: string, format: date-time }
+    trigger: [cap.service.accounts.activate]
+
+  - id: business.event.account_suspended
+    name: account.suspended
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, suspended_at, reason]
+      properties:
+        id: { type: string, format: uuid }
+        reason: { type: string }
+        suspended_at: { type: string, format: date-time }
+    trigger: [cap.service.accounts.suspend]
+
+  - id: business.event.account_reactivated
+    name: account.reactivated
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, reactivated_at]
+      properties:
+        id: { type: string, format: uuid }
+        reactivated_at: { type: string, format: date-time }
+    trigger: [cap.service.accounts.activate]
+
+  - id: business.event.account_deleted
+    name: account.deleted
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, deleted_at]
+      properties:
+        id: { type: string, format: uuid }
+        deleted_at: { type: string, format: date-time }
+    trigger: [cap.service.accounts.delete]
+
+  - id: business.event.account_login_succeeded
+    name: account.login_succeeded
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, login_at]
+      properties:
+        id: { type: string, format: uuid }
+        ip: { type: string }
+        user_agent: { type: string }
+        login_at: { type: string, format: date-time }
+    trigger: [planned:cap.service.auth.login]
+
+  - id: business.event.account_login_failed
+    name: account.login_failed
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [email, reason, failed_at]
+      properties:
+        email: { type: string, format: email }
+        reason: { type: string, enum: [bad_password, locked, suspended, not_found] }
+        failed_at: { type: string, format: date-time }
+    trigger: [planned:cap.service.auth.login]
+
+  - id: business.event.accounts_cleaned
+    name: accounts.cleaned
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [deleted_count, executed_at]
+      properties:
+        deleted_count: { type: integer }
+        executed_at: { type: string, format: date-time }
+    trigger: [cap.async.accounts_cleanup]
+
+consumers:
+  - module: audit
+    events: [account.created, account.activated, account.suspended, account.deleted, account.login_succeeded, account.login_failed]
+  - module: notification
+    events: [account.activated, account.suspended]

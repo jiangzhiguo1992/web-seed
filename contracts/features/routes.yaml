@@ -1,51 +1,53 @@
-# contract: feature.routes
-# summary: 路由与菜单。页面路由由本文件生成，禁止手写。
-# enforcement: generated
-# consumers: [web/admin]
-# refs: [features/pages/*, platform.sec.permissions]
-# generates:
-#   - apps/web/admin/src/generated/routes.ts
-#   - apps/web/admin/src/generated/menu.ts
-# do_not:
-#   - 不要在 src/router 手写路由，改本文件
-#   - 不要在路由 meta 里硬编码权限字符串
-#   - 新增页面必须同时登记 page 契约
+# 路由与菜单。页面路由由本文件生成，禁止手写。
 
 schema_version: 1
 id: feature.routes
 summary: 路由与菜单
 stability: stable
+do_not:
+  - 不要手写路由表
+  - 不要在路由 meta 硬编码权限字符串，引用 platform.permission.*
 
 app: web/admin
 
 layout:
   default: default
-  auth: blank          # 登录页等无导航布局
+  auth: blank
 
 routes:
-  - id: feature.route.note_list
-    path: /notes
-    name: note-list
-    page: feature.page.note_list
+  - id: feature.route.account_list
+    path: /accounts
+    name: account-list
+    page: feature.page.account_list
     layout: default
-    permission: platform.permission.note_read
+    permission: platform.permission.account_read
     menu:
-      group: 内容管理
-      label: 笔记
-      icon: document
+      group: 系统管理
+      label: 账号
+      icon: users
       order: 10
     meta:
-      title: 笔记列表
+      title: 账号列表
 
-  - id: feature.route.note_detail
-    path: /notes/:id
-    name: note-detail
-    page: feature.page.note_detail
+  - id: feature.route.account_create
+    path: /accounts/new
+    name: account-create
+    page: feature.page.account_list
     layout: default
-    permission: platform.permission.note_read
-    menu: null          # 不在菜单中显示
+    permission: platform.permission.account_write
+    menu: null
     meta:
-      title: 笔记详情
+      title: 新建账号
+
+  - id: feature.route.account_detail
+    path: /accounts/:id
+    name: account-detail
+    page: feature.page.account_detail
+    layout: default
+    permission: platform.permission.account_read
+    menu: null
+    meta:
+      title: 账号详情
 
   - id: feature.route.login
     path: /login
@@ -59,7 +61,7 @@ routes:
       public: true
 
 redirects:
-  - { from: /, to: /notes }
+  - { from: /, to: /accounts }
 
 not_found:
   page: feature.page.not_found

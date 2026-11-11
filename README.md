@@ -52,11 +52,11 @@ web-seed/
 │   ├── README.md                #   契约规范：原则、ID、分层、拆分、工作流
 │   ├── index.yaml               #   契约地图（AI 唯一入口，只放摘要）
 │   ├── project.yaml             #   项目元信息（derive 唯一输入）
-│   ├── data/                    #   ① 数据：tables（真相源）/ enums / queries / seeds / policy
-│   ├── capabilities/            #   ② 能力：http / async / internal / apps
-│   ├── domain/                  #   ③ 领域：entities / states / rules / flows / events / glossary
+│   ├── data/                    #   ① 数据：tables（真相源）/ entities / queries / _policy
+│   ├── capabilities/            #   ② 实现层：http / async / services / flows
+│   ├── business/                  #   ③ 业务规格：states / rules / events / glossary
 │   ├── features/                #   ④ 功能：routes / pages / flows
-│   ├── platform/                #   ⑤ 平台：环境/版本/错误/HTTP/质量/配置/架构/设计/观测/埋点/安全
+│   ├── platform/                #   ⑤ 横切：环境/版本/错误/枚举/HTTP/质量/配置/架构/设计/观测/埋点/安全
 │   └── generated/               #   产物索引：manifest / graph / lineage
 │
 ├── docs/                        [C] 文档层（面向 AI + 人）
@@ -73,7 +73,7 @@ web-seed/
 │   │   │   ├── platform/        #   基础设施：config、httpserver（P3 扩 database/observability/security）
 │   │   │   ├── modules/         [P] 业务模块：service + repo，不依赖 HTTP
 │   │   │   ├── composition/adminapi/ #   应用装配 + handlers/[P] 契约适配器
-│   │   │   └── generated/       [P] 生成物（openapi / db / domain / features / 常量）
+│   │   │   └── generated/       [P] 生成物（openapi / db / business / features / 常量）
 │   │   ├── migrations/          [P]
 │   │   ├── queries/             [P]
 │   │   └── go.mod  Dockerfile
@@ -120,7 +120,7 @@ web-seed/
 |---|---|---|
 | 后端语言 | Go 1.27 | 已用 |
 | HTTP | chi + net/http | 已用 |
-| 契约生成 | 6 个生成器：openapi / db / domain / features / platform / graph | P2 |
+| 契约生成 | 6 个生成器：openapi / db / business / features / platform / graph | P2 |
 | 接口生成 | oapi-codegen（`strict-server`）+ openapi-typescript | P2 |
 | 数据访问 | pgx + sqlc | P2 |
 | 迁移 | goose | P2 |
@@ -225,7 +225,7 @@ make build-web        # apps/web/admin/dist
 3. 手工同步替换（`derive.sh` 落地前）：
    - Go module：`github.com/yourorg/web-seed/apps/api` → 你的 module
    - 前端 scope：`@webseed/*` → 你的 scope
-4. 删除示例契约与实现：`data/tables/notes.yaml`、`capabilities/http/notes.yaml`、`domain/**/note*.yaml`、`features/pages/note_*.yaml` 及对应代码
+4. 删除示例契约与实现：`data/tables/accounts.yaml`、`data/entities/account.yaml`、`capabilities/http/accounts.yaml`、`business/**/account*.yaml`、`features/pages/account_*.yaml` 及对应代码
 5. 删除 `.opencode/opencode.json`（含本地 MCP 配置）
 6. 创建 `.env.local`，参考 `.env.example`（P2 生成）
 

@@ -1,0 +1,196 @@
+# 账号 HTTP 接口。OpenAPI 片段，生成时与 shared.yaml 合并。
+
+schema_version: 1
+id: cap.http.accounts
+summary: 账号 HTTP 接口
+stability: stable
+do_not:
+  - 响应禁止包含 password_hash，Account schema 不得加该字段
+  - x-contract-id 必须与 index 中的 operation 一一对应
+
+module: accounts
+base_path: /v1
+default_error_responses: [400, 401, 403, 404, 409, 422, 423, 429, 500]
+
+paths:
+  /accounts:
+    get:
+      operationId: listAccounts
+      x-contract-id: cap.http.accounts.list
+      summary: 列出账号
+      x-preconditions: [platform.permission.account_read]
+      x-timeout-ms: 3000
+      x-rate-limit: { requests: 60, window_seconds: 60 }
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [pending, active, suspended, deleted] } }
+        - { name: cursor, in: query, required: false, schema: { type: string } }
+        - { name: page_size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Account" }
+                  page: { $ref: "#/components/schemas/PageInfo" }
+              example:
+                items:
+                  - { id: "0190f5c2-7d3a-7c3e-9b6a-2f5b1c8d9e01", email: "admin@example.com", display_name: "管理员", status: active, version: 1, created_at: "2026-11-11T09:30:00Z" }
+                page: { has_more: false, next_cursor: null }
+
+    post:
+      operationId: createAccount
+      x-contract-id: cap.http.accounts.create
+      summary: 创建账号
+      x-idempotent: true
+      x-preconditions: [platform.permission.account_write]
+      x-timeout-ms: 5000
+      x-audit: true
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password, display_name]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, minLength: 12, writeOnly: true }
+                display_name: { type: string, minLength: 1, maxLength: 100 }
+            example: { email: "user@example.com", password: "a-strong-password", display_name: "张三" }
+      responses:
+        "201":
+          description: 已创建
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      x-contract-id: cap.http.accounts.get
+      summary: 获取账号
+      x-preconditions: [platform.permission.account_read]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+
+    patch:
+      operationId: updateAccount
+      x-contract-id: cap.http.accounts.update
+      summary: 更新账号资料
+      x-preconditions: [platform.permission.account_write]
+      x-audit: true
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [display_name, version]
+              properties:
+                display_name: { type: string, minLength: 1, maxLength: 100 }
+                version: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+
+    delete:
+      operationId: deleteAccount
+      x-contract-id: cap.http.accounts.delete
+      summary: 删除账号（软删）
+      x-idempotent: true
+      x-preconditions: [platform.permission.account_delete]
+      x-audit: true
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: version, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "204": { description: 已删除 }
+
+  /accounts/{id}/activate:
+    post:
+      operationId: activateAccount
+      x-contract-id: cap.http.accounts.activate
+      summary: 激活账号
+      x-preconditions: [platform.permission.account_write]
+      x-audit: true
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+
+  /accounts/{id}/suspend:
+    post:
+      operationId: suspendAccount
+      x-contract-id: cap.http.accounts.suspend
+      summary: 封禁账号
+      x-preconditions: [platform.permission.account_write]
+      x-audit: true
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Account" }
+
+components:
+  schemas:
+    Account:
+      type: object
+      additionalProperties: false
+      required: [id, email, display_name, status, version, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string, maxLength: 100 }
+        status: { type: string, enum: [pending, active, suspended, deleted] }
+        last_login_at: { type: string, format: date-time, nullable: true }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+      example:
+        id: "0190f5c2-7d3a-7c3e-9b6a-2f5b1c8d9e01"
+        email: "admin@example.com"
+        display_name: "管理员"
+        status: active
+        last_login_at: "2026-11-11T09:30:00Z"
+        version: 1
+        created_at: "2026-11-11T09:00:00Z"
+        updated_at: "2026-11-11T09:30:00Z"

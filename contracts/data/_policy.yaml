@@ -1,15 +1,7 @@
-# contract: data.policy.migrations
-# summary: 迁移策略。约束生成器与人工调整的边界。
-# enforcement: generated
-# consumers: [ops, tools]
-# do_not:
-#   - 不要手工修改已合并的迁移文件
-#   - 不要写 DOWN 迁移（只前进，用补偿迁移）
-#   - 不要在同一次迁移里做 DDL 和数据回填
+# 数据契约的机器可读规则。人类规范见 data/README.md。
 
-schema_version: 1
-id: data.policy.migrations
-summary: 迁移策略与禁止操作
+id: data.policy
+summary: 数据契约的机器可读规则
 stability: stable
 
 naming:
@@ -18,12 +10,13 @@ naming:
 
 forward_only: true
 down_migrations: false
-transactional_default: true       # 需要 CREATE INDEX CONCURRENTLY 时显式关闭
+transactional_default: true
 
+# 生成器遇到以下操作应报错，而不是生成迁移
 forbidden:
   - id: no_drop_column
     rule: 禁止直接 DROP COLUMN
-    instead: 先标记 deprecated，停止写入一个版本后再删
+    instead: 先标 deprecated，停止写入一个版本后再删
   - id: no_rename_column
     rule: 禁止 RENAME COLUMN
     instead: 加新列 → 双写 → 回填 → 切读 → 删旧列
@@ -37,15 +30,9 @@ forbidden:
     rule: 大表禁止非 CONCURRENTLY 建索引
     instead: "CREATE INDEX CONCURRENTLY（需 transaction: false）"
 
-zero_downtime_steps:
-  - 加可空列
-  - 回填（分批，限速）
-  - 加约束（NOT NULL / CHECK，使用 NOT VALID 后 VALIDATE）
-  - 切换读写路径
-  - 删除旧列（下个版本）
-
+# 生成器无法表达时，允许人工调整的边界
 manual_adjust:
-  allowed_prefix: "-- manual-adjust:"
+  prefix: "-- manual-adjust:"
   required_reason: true
   allowed_cases:
     - CREATE INDEX CONCURRENTLY

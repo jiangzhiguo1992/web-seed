@@ -1,7 +1,7 @@
 # 平台契约（platform）
 
 > 平台层是工程约束：环境、版本、错误、HTTP 约定、质量门槛、配置、架构分层、设计令牌、观测、埋点、安全。
-> 这一层只被业务层引用，不反向引用 `data` / `capabilities` / `domain` / `features`。
+> 这一层只被业务层引用，不反向引用 `data` / `capabilities` / `business` / `features`。
 
 ---
 

@@ -1,0 +1,47 @@
+# 创建账号的用户旅程。只描述界面步骤与结果，不写实现。
+
+schema_version: 1
+id: feature.flow.account_create
+summary: 创建账号用户旅程
+stability: draft
+do_not:
+  - 不要在本文件写组件或请求代码
+  - 密码字段禁止回显，提交后立即清空
+  - 不要在客户端重复服务端的密码强度规则
+
+entry: feature.page.account_list
+success_target: feature.page.account_detail
+
+steps:
+  - id: open
+    ui: 点击「新建账号」
+    from: feature.page.account_list
+    to: feature.page.account_create
+
+  - id: fill
+    ui: 填写邮箱、显示名、初始密码
+    fields: [email, password, display_name]
+    validation:
+      - { field: email, rule: business.rule.account.email_format, message_key: platform.error.ACCOUNT_EMAIL_INVALID }
+      - { field: password, rule: business.rule.account.password_min_length, message_key: platform.error.ACCOUNT_WEAK_PASSWORD }
+
+  - id: submit
+    ui: 提交
+    capability: cap.http.accounts.create
+    idempotency: client_generated_key
+    loading_state: button_spinner
+    on_success: goto(detail)
+    on_error:
+      - { code: platform.error.ACCOUNT_EMAIL_TAKEN, ui: inline_field_error, field: email }
+      - { code: platform.error.ACCOUNT_EMAIL_INVALID, ui: inline_field_error, field: email }
+      - { code: platform.error.ACCOUNT_WEAK_PASSWORD, ui: inline_field_error, field: password }
+      - { code: platform.error.COMMON_INTERNAL, ui: toast, retryable: true }
+
+  - id: done
+    ui: 进入详情页，提示"账号已创建，状态为待激活"
+    to: feature.page.account_detail
+
+edge_cases:
+  - { id: double_submit, handling: 提交中禁用按钮 + Idempotency-Key }
+  - { id: unsaved_leave, handling: 离开前确认 }
+  - { id: network_error, handling: 保留表单内容，但清空密码，允许重试 }

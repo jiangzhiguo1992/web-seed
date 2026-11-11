@@ -1,14 +1,4 @@
-# contract: platform.obs.metrics
-# summary: 指标名与标签唯一来源。默认注册但不导出（exporter=none）。
-# enforcement: generated
-# consumers: [api, ops]
-# refs: [platform.obs.log]
-# generates:
-#   - apps/api/internal/generated/platform/metrics.go
-# do_not:
-#   - 不要用高基数标签（user_id / entity_id / path 实际值）
-#   - 不要新增未登记指标
-#   - 不要改指标名（会断裂历史数据）
+# 指标名与标签唯一来源。默认注册但不导出（exporter=none）。
 
 schema_version: 1
 id: platform.obs.metrics

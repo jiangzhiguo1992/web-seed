@@ -23,10 +23,10 @@
 | 要做的事 | 先读 playbook | 再读契约 |
 |---|---|---|
 | 改任何契约 | `playbooks/contract-change.md` | `index.yaml` → 目标文件 |
-| 新增 / 修改 API | `contract-change` + `add-endpoint`（P7） | `capabilities/http/*.yaml`、`capabilities/apps/*.yaml` |
-| 新增表 / 迁移 | `contract-change` + `add-table`（P7） | `data/tables/*.yaml`、`data/migrations-policy.yaml` |
+| 新增 / 修改 API | `contract-change` + `add-endpoint`（P7） | `capabilities/http/*.yaml`、`project.yaml`（apps） |
+| 新增表 / 迁移 | `contract-change` + `add-table`（P7） | `data/tables/*.yaml`、`data/_policy.yaml` |
 | 新增页面 | `contract-change` + `add-feature`（P7） | `features/pages/*.yaml`、`features/routes.yaml` |
-| 新增 API / Web 应用 | `contract-change` + `add-app`（P7） | `capabilities/apps/*.yaml`、`project.yaml` |
+| 新增 API / Web 应用 | `contract-change` + `add-app`（P7） | `project.yaml`（apps 段） |
 | 派生新项目 | `rename-project`（P7） | `project.yaml` |
 
 playbook 未覆盖的任务：**先写 playbook，再动手**。这是硬规则。

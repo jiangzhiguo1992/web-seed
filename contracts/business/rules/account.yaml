@@ -1,0 +1,90 @@
+# 账号业务规则集。每条规则必须有 given/when/then，否则不算规则。
+
+schema_version: 1
+id: business.rule.account
+summary: 账号业务规则集
+stability: stable
+do_not:
+  - email_unique 必须限定在未删除账号内，不要写成全局唯一
+  - 不要把密码强度规则写进 handler，统一走本文件
+
+scope: account
+
+rules:
+  - id: business.rule.account.email_format
+    summary: 邮箱必须符合基本格式
+    severity: error
+    on_violation: platform.error.ACCOUNT_EMAIL_INVALID
+    given: "email = 'not-an-email'"
+    when: "create 或 update"
+    then: "拒绝，返回 ACCOUNT_EMAIL_INVALID"
+    implemented_by: [cap.service.accounts.create, cap.service.accounts.update]
+
+  - id: business.rule.account.email_unique
+    summary: 未删除账号内邮箱唯一
+    severity: error
+    on_violation: platform.error.ACCOUNT_EMAIL_TAKEN
+    given: "已存在 active 账号 a@example.com"
+    when: "创建 a@example.com"
+    then: "拒绝，返回 ACCOUNT_EMAIL_TAKEN"
+    implemented_by: [cap.service.accounts.create]
+
+  - id: business.rule.account.password_min_length
+    summary: 密码不少于 12 位
+    severity: error
+    on_violation: platform.error.ACCOUNT_WEAK_PASSWORD
+    given: "password 长度 = 8"
+    when: "create 或修改密码"
+    then: "拒绝，返回 ACCOUNT_WEAK_PASSWORD"
+    implemented_by: [cap.service.accounts.create]
+
+  - id: business.rule.account.locked_cannot_login
+    summary: 锁定期间不能登录
+    severity: error
+    on_violation: platform.error.ACCOUNT_LOCKED
+    given: "locked_until > now()"
+    when: "login"
+    then: "拒绝，返回 ACCOUNT_LOCKED"
+    implemented_by: [planned:cap.service.auth.login]
+
+  - id: business.rule.account.suspended_cannot_login
+    summary: 封禁账号不能登录
+    severity: error
+    on_violation: platform.error.ACCOUNT_SUSPENDED
+    given: "status = suspended"
+    when: "login"
+    then: "拒绝，返回 ACCOUNT_SUSPENDED"
+    implemented_by: [planned:cap.service.auth.login]
+
+  - id: business.rule.account.self_only
+    summary: 非管理员只能查看和修改自己的账号
+    severity: error
+    on_violation: platform.error.COMMON_FORBIDDEN
+    given: "当前用户 id = A，目标账号 id = B"
+    when: "非 admin 角色访问 B"
+    then: "拒绝，返回 COMMON_FORBIDDEN"
+    implemented_by: [cap.service.accounts.get, cap.service.accounts.update]
+
+invariants:
+  - id: business.inv.account.email_normalized
+    description: 邮箱必须小写归一后存储
+    assert: "email == lower(email)"
+    on_violation: platform.error.ACCOUNT_EMAIL_INVALID
+    implemented_by: [cap.service.accounts.create]
+
+  - id: business.inv.account.password_never_exposed
+    description: password_hash 不得出现在响应、日志、事件
+    assert: "password_hash not in response && not in log && not in event"
+    on_violation: platform.error.COMMON_INTERNAL
+    implemented_by: [cap.service.accounts.create, cap.service.accounts.update]
+
+derived:
+  - name: is_loginable
+    description: 仅 active 且未锁定且未删除可登录
+    expr: "status == active && locked_until == nil && deleted_at == nil"
+    consumed_by: [feature.page.account_list]
+
+limits:
+  max_display_name_length: 100
+  max_email_length: 254
+  min_password_length: 12

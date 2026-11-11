@@ -1,0 +1,146 @@
+# 契约类型默认值
+#
+# 每类契约的默认元数据。文件只需写实例差异，不重复类型级配置。
+# 生效值 = 本文件 + 文件正文覆盖。
+
+schema_version: 1
+
+# 类型由 ID 前两段推导：data.table.accounts → data.table
+# platform 组统一映射为 platform.*
+types:
+  data.table:
+    enforcement: generated+tested
+    consumers: [api]
+    generates: [schema_sql, migrations, sqlc, go_types]
+    do_not:
+      - 不要手写 migrations，改本文件后运行 make gen-db
+      - 不要绕过软删过滤（deleted_at IS NULL）
+      - 唯一约束必须带 WHERE deleted_at IS NULL
+
+
+  data.query:
+    enforcement: generated+tested
+    consumers: [api]
+    generates: [queries_sql, sqlc]
+    do_not:
+      - 不要在 repo 层手写 SQL
+      - 不要写 SELECT *，除非返回整行类型
+
+  data.policy:
+    enforcement: generated
+    consumers: [tools]
+
+  cap.http:
+    enforcement: generated+tested
+    consumers: [api, web/admin]
+    generates: [openapi_merged, go_server, ts_client]
+    do_not:
+      - 不要在 handler 里直接读 r.URL.Query()
+      - 不要逐接口重复声明默认错误响应
+      - "响应 schema 必须 additionalProperties: false"
+      - 不要写 business.rule.* 或 business.event.*（由 business 侧锚点）
+
+  cap.async:
+    enforcement: generated+tested
+    consumers: [worker]
+    generates: [job_skeleton]
+    do_not:
+      - 五要素必须齐全：trigger / input / output / idempotency / retry
+      - 不要引用 business.*
+      - 不要在任务里写业务规则，引用 business.rule.*
+
+  cap.service:
+    enforcement: generated+tested
+    consumers: [api]
+    generates: [go_interface, mock]
+    do_not:
+      - 只登记跨模块调用的方法
+      - 不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型
+      - 必须声明 persistence（表、字段映射、查询、约束映射）
+      - 不要引用 business.*（规则/事件由 business 侧锚点）
+      - 返回 data.entity.*，不要返回表行 data.table.*.row
+      - field_map 只写命名不同的字段，同名不写
+
+  data.enum:
+    enforcement: generated
+    consumers: [api, web/admin, worker]
+    generates: [go_constants, ts_union, db_check]
+    do_not:
+      - 枚举值只能追加，禁止改名或删除
+      - 不要收模块内部枚举
+
+  data.entity:
+    enforcement: generated+tested
+    consumers: [api, web/admin]
+    generates: [go_type, ts_type]
+    do_not:
+      - 不要在实体文件里写 DDL（物理结构在 data/tables）
+      - 不要写状态机、业务规则、不变量（属于 business）
+      - 不要引用 business.*
+
+  business.state:
+    enforcement: generated+tested
+    consumers: [api, web/admin]
+    generates: [state_constants, transition_table, tests]
+    do_not:
+      - 不要在 handler/service 手写状态判断
+      - 不要新增状态而不更新转换表
+      - 非法转换清单必须与 transitions 同步维护
+      - archived 与 deleted 不可混用
+
+  business.rule:
+    enforcement: tested
+    consumers: [api]
+    generates: [test_skeleton]
+    do_not:
+      - 不要写没有 given/when/then 的规则
+      - 不要在 handler 里复制规则逻辑
+      - 每条规则必须声明 implemented_by，否则视为未实现
+
+  cap.flow:
+    enforcement: tested
+    consumers: [api]
+    do_not:
+      - 只编排，不写调用代码
+      - 流程编排属于实现层，不要放回 business
+      - 不要引用 business.*
+
+  business.event:
+    enforcement: generated+tested
+    consumers: [api, worker]
+    generates: [event_constants, payload_types]
+    do_not:
+      - 不要在事件里放 PII
+      - 破坏兼容必须升 version
+      - payload 字段只能是 data.entity.* 字段的子集
+      - 不要写 trigger 反向引用能力（由 capabilities 的 emits 声明）
+
+  feature.routes:
+    enforcement: generated
+    consumers: [web/admin]
+    generates: [router, menu]
+    do_not:
+      - 不要手写路由表
+      - 不要在路由 meta 硬编码权限字符串
+
+  feature.page:
+    enforcement: generated+tested
+    consumers: [web/admin]
+    generates: [page_skeleton, types, tests]
+    do_not:
+      - 不要手写 URL，必须引用 capability
+      - 四态（loading/empty/error/forbidden）缺一不可
+      - 禁止引用 data.*
+
+  feature.flow:
+    enforcement: tested
+    consumers: [web/admin]
+    do_not:
+      - 只描述界面步骤与结果，不写实现
+
+  platform.*:
+    enforcement: tested
+    consumers: [tools, api, web/admin]
+    do_not:
+      - 不要绕过本契约直接写常量
+      - 新增字段必须登记，否则 CI 警告

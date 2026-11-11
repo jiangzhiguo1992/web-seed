@@ -1,14 +1,4 @@
-# contract: platform.http_conventions
-# summary: HTTP 信封、分页、header、状态码约定。只写规则，不写 schema。
-# enforcement: generated
-# consumers: [api, web/admin]
-# refs: [capabilities/http/shared, platform.errors]
-# generates:
-#   - apps/api/internal/generated/platform/http.go
-#   - packages/api-client/src/generated/http.ts
-# do_not:
-#   - 不要在本文件重复定义 Problem schema（唯一源是 capabilities/http/shared.yaml）
-#   - 不要在业务响应里包一层固定信封
+# HTTP 信封、分页、header、状态码约定。只写规则，不写 schema。
 
 schema_version: 1
 id: platform.http_conventions
