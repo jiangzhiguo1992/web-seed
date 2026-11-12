@@ -71,8 +71,6 @@ fields:
       - { name: name, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "sqlc 方法名", caution: "必须等于 query id 末段的 PascalCase；全局唯一" }
       - { name: kind, type: string, required: true, enum: [ one, many, execrows ], description: "sqlc 返回形态", caution: "execrows 必须是写语句；one/many 的 INSERT/UPDATE/DELETE 必须带 RETURNING" }
 
-      - { name: table, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "单表查询的物理表；与 tables 二选一", caution: "不得指向 data.tables.base" }
-      - { name: tables, type: list<string>, required: false, min_items: 1, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "多表查询/JOIN 的表列表；与 table 二选一", caution: "多表查询不得写 index_columns；不得出现在 index.used_by" }
 
       - name: params
         type: list<object>
@@ -90,7 +88,7 @@ fields:
           - { name: note, type: string, required: false, description: "参数补充说明" }
 
       - { name: returns, type: string, required: true, description: "返回 DSL：data.tables.<t>.row、data.entities.<e>、[] 前缀、boolean/integer/string/float/decimal/timestamp、affected_rows、object", generates: "sqlc 返回类型", caution: "object 必须配 output_fields；affected_rows 只能配 execrows" }
-      - { name: return_columns, type: list<string>, required: false, unique: true, description: "显式返回列；用于裁剪敏感字段或实体字段", caution: "returns 为表行时是列名，为实体时是字段名；object 用 output_fields，不用本字段" }
+      - { name: return_columns, type: list<string>, required: false, unique: true, description: "显式返回列；用于裁剪敏感字段或实体字段", caution: "按物理列名写；object 用 output_fields，不用本字段" }
       - name: output_fields
         type: list<object>
         required: false
@@ -139,8 +137,7 @@ rules:
   - { id: query-id-unique, text: "query.id 在当前集合内唯一", implemented_by: [ query-id-unique ] }
   - { id: query-name, text: "query.name 必须等于 query id 末段的 PascalCase", implemented_by: [ query-name ] }
   - { id: query-name-unique, text: "query.name 全局唯一，避免 sqlc 方法名冲突", implemented_by: [ query-name-unique ] }
-  - { id: query-table-shape, text: "table 与 tables 必须恰好出现一个；表必须存在、去重、不得指向 data.tables.base", implemented_by: [ query-table-shape ] }
-  - { id: query-table-sql, text: "table/tables 必须与 sql.from/into/joins 完全一致", implemented_by: [ query-table-sql ] }
+  - { id: query-table-shape, text: "sql 必须声明 from/into；表必须存在、去重、不得指向 data.tables.base", implemented_by: [ query-table-shape ] }
   - { id: query-params, text: "params 的 name 不得重复", implemented_by: [ query-params ] }
   - { id: query-param-sql, text: "sql 表达式中的参数与 params 必须双向一致", implemented_by: [ query-param-sql ] }
   - { id: query-param-nullable, text: "nullable:true 必须且只能用 sqlc.narg；非 nullable 不得使用 sqlc.narg", implemented_by: [ query-param-nullable ] }
@@ -152,7 +149,7 @@ rules:
   - { id: query-kind-sql, text: "one/many 的写语句必须写 returning；execrows 的 statement 不能是 select", implemented_by: [ query-kind-sql ] }
   - { id: query-no-select-star, text: "select/returning 禁止 *，COUNT(*) 除外", implemented_by: [ query-no-select-star ] }
   - { id: query-one-unique, text: "one 的 SELECT 非标量返回必须命中主键/唯一索引前缀，或 sql.limit 为 1", implemented_by: [ query-one-unique ] }
-  - { id: query-sql-shape, text: "sql 必须是对象；statement 与子句匹配；from/into/joins 与 table/tables 一致；表/列必须存在；表/实体返回只能是纯列名", implemented_by: [ query-sql-shape ] }
+  - { id: query-sql-shape, text: "sql 必须是对象；statement 与子句匹配；from/into/joins 必须存在；列必须存在；表/实体返回只能是纯列名", implemented_by: [ query-sql-shape ] }
   - { id: query-write-owner, text: "写目标取自 sql.into/sql.from；module 必须等于 owner_module；读取表可以跨模块", implemented_by: [ query-write-owner ] }
   - { id: query-sensitive-columns, text: "never_expose 列不得被跨模块查询返回；同模块必须显式写 return_columns", implemented_by: [ query-sensitive-columns ] }
   - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识；通用规则放组 README，禁止复制", implemented_by: [ query-do-not-specific ] }

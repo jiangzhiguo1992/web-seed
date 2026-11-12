@@ -21,34 +21,6 @@ type Schema struct {
 	ColumnRefs  ColumnRefs  `yaml:"column_refs"`
 	Fields      []Field     `yaml:"fields"`
 	Rules       []Rule      `yaml:"rules"`
-	Migration   Migration   `yaml:"migration"`
-}
-
-// Migration 描述表契约到迁移文件的生成策略；只用于 data.tables。
-type Migration struct {
-	Naming       string                  `yaml:"naming"`
-	Forbidden    []MigrationForbidden    `yaml:"forbidden"`
-	ManualAdjust MigrationManualAdjust   `yaml:"manual_adjust"`
-	Verification []MigrationVerification `yaml:"verification"`
-}
-
-type MigrationForbidden struct {
-	ID      string `yaml:"id"`
-	Rule    string `yaml:"rule"`
-	Instead string `yaml:"instead"`
-}
-
-type MigrationManualAdjust struct {
-	Prefix         string   `yaml:"prefix"`
-	RequiredReason bool     `yaml:"required_reason"`
-	AllowedCases   []string `yaml:"allowed_cases"`
-	ReviewRequired bool     `yaml:"review_required"`
-}
-
-type MigrationVerification struct {
-	ID      string `yaml:"id"`
-	Command string `yaml:"command"`
-	Rule    string `yaml:"rule"`
 }
 
 type Rule struct {

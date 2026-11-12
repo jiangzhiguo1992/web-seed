@@ -75,10 +75,10 @@ type entityScaffold struct {
 	SchemaVersion int                   `yaml:"schema_version"`
 	ID            string                `yaml:"id"`
 	Summary       string                `yaml:"summary"`
+	Name          string                `yaml:"name"`
 	Stability     string                `yaml:"stability"`
 	Extends       []string              `yaml:"extends"`
-	Table         string                `yaml:"table"`
-	Identity      string                `yaml:"identity"`
+	Tables        flowStrings           `yaml:"tables"`
 	Fields        []entityFieldScaffold `yaml:"fields"`
 	UsedBy        entityUsedByScaffold  `yaml:"used_by"`
 }
@@ -108,7 +108,6 @@ type queryItemScaffold struct {
 	ID           string               `yaml:"id"`
 	Name         string               `yaml:"name"`
 	Kind         string               `yaml:"kind"`
-	Table        string               `yaml:"table"`
 	Params       []queryParamScaffold `yaml:"params"`
 	Returns      string               `yaml:"returns"`
 	Semantics    string               `yaml:"semantics"`
@@ -117,10 +116,21 @@ type queryItemScaffold struct {
 }
 
 type querySQLScaffold struct {
-	Statement string   `yaml:"statement"`
-	From      string   `yaml:"from"`
-	Select    []string `yaml:"select"`
-	Where     []string `yaml:"where,omitempty"`
+	Statement string      `yaml:"statement"`
+	From      string      `yaml:"from"`
+	Select    flowStrings `yaml:"select"`
+	Where     []string    `yaml:"where,omitempty"`
+}
+
+// flowStrings 以 YAML flow list 输出，保持 query sql 的列清单横排。
+type flowStrings []string
+
+func (s flowStrings) MarshalYAML() (any, error) {
+	n := &yaml.Node{Kind: yaml.SequenceNode, Style: yaml.FlowStyle}
+	for _, v := range s {
+		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: v})
+	}
+	return n, nil
 }
 
 type queryParamScaffold struct {
@@ -277,8 +287,8 @@ func RenderEntity(s *Schema, name, table, summary string) ([]byte, error) {
 		return nil, fmt.Errorf("RenderEntity: summary must not be empty")
 	}
 	top := map[string]bool{
-		"schema_version": true, "id": true, "summary": true, "stability": true,
-		"extends": true, "table": true, "identity": true, "fields": true, "used_by": true,
+		"schema_version": true, "id": true, "summary": true, "name": true, "stability": true,
+		"extends": true, "tables": true, "fields": true, "used_by": true,
 	}
 	if err := requireSupported(s.Fields, top, "data.entities"); err != nil {
 		return nil, err
@@ -288,7 +298,9 @@ func RenderEntity(s *Schema, name, table, summary string) ([]byte, error) {
 		return nil, fmt.Errorf("RenderEntity: fields is missing in schema")
 	}
 	if err := requireSupported(fieldsField.ItemFields, map[string]bool{
-		"name": true, "type": true, "required": true, "mutable": true,
+		"name": true, "column": true, "type": true, "required": true, "mutable": true,
+		"pii": true, "never_expose": true, "json_name": true,
+		"examples": true, "description": true,
 	}, "data.entities.fields"); err != nil {
 		return nil, err
 	}
@@ -309,10 +321,10 @@ func RenderEntity(s *Schema, name, table, summary string) ([]byte, error) {
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            entityID,
 		Summary:       summary,
+		Name:          lowerCamel(name),
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		Extends:       []string{"data.entities.base"},
-		Table:         "data.tables." + table,
-		Identity:      "id",
+		Tables:        flowStrings{"data.tables." + table},
 		Fields:        []entityFieldScaffold{},
 		UsedBy:        entityUsedByScaffold{Queries: []string{}, Entities: []string{}},
 	}
@@ -350,7 +362,7 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		return nil, fmt.Errorf("RenderQuery: queries is missing in schema")
 	}
 	if err := requireSupported(queriesField.ItemFields, map[string]bool{
-		"id": true, "name": true, "kind": true, "table": true, "params": true,
+		"id": true, "name": true, "kind": true, "params": true,
 		"returns": true, "semantics": true, "index_columns": true, "sql": true,
 	}, "data.queries.queries"); err != nil {
 		return nil, err
@@ -379,7 +391,6 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 			ID:           queryID,
 			Name:         "Exists" + pascal(name),
 			Kind:         "one",
-			Table:        "data.tables." + table,
 			Params:       []queryParamScaffold{{Name: "id", Type: "text"}},
 			Returns:      "boolean",
 			Semantics:    "TODO: 查询语义",
@@ -387,7 +398,7 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 			SQL: querySQLScaffold{
 				Statement: "select",
 				From:      "data.tables." + table,
-				Select:    []string{fmt.Sprintf("EXISTS (SELECT 1 FROM %s WHERE id = @id)", physical)},
+				Select:    flowStrings{fmt.Sprintf("EXISTS (SELECT 1 FROM %s WHERE id = @id)", physical)},
 			},
 		}},
 	}
@@ -508,6 +519,21 @@ func intConst(fields []Field, name string, fallback int) int {
 		return int(v)
 	}
 	return fallback
+}
+
+func lowerCamel(s string) string {
+	parts := strings.Split(s, "_")
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		if i == 0 {
+			parts[i] = strings.ToLower(p[:1]) + p[1:]
+			continue
+		}
+		parts[i] = strings.ToUpper(p[:1]) + p[1:]
+	}
+	return strings.Join(parts, "")
 }
 
 func pascal(s string) string {

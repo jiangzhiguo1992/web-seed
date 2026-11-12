@@ -28,12 +28,11 @@ func TestEntityFieldProjectionRules(t *testing.T) {
 			Rel:     "contracts/data/entities/x.yaml",
 			Tables:  []string{"data.tables.x"},
 			Primary: "data.tables.x",
-			Doc:     map[string]any{"identity": "id"},
 			Fields: []entityFieldInfo{
-				{Name: "id", ColumnTable: "data.tables.x", Column: "id", Type: "string", Required: true, Mutable: false},
-				{Name: "own", ColumnTable: "data.tables.x", Column: "own", Type: "string", Required: true, Mutable: true},
-				{Name: "opt", ColumnTable: "data.tables.x", Column: "opt", Type: "string", Mutable: true},
-				{Name: "nickname", ColumnTable: "data.tables.x", Column: "nickname", Type: "string", Required: true, Mutable: true, PII: true},
+				{Name: "ID", ColumnTable: "data.tables.x", Column: "id", Type: "string", Required: true, Mutable: false},
+				{Name: "Own", ColumnTable: "data.tables.x", Column: "own", Type: "string", Required: true, Mutable: true},
+				{Name: "Opt", ColumnTable: "data.tables.x", Column: "opt", Type: "string", Mutable: true},
+				{Name: "Nickname", ColumnTable: "data.tables.x", Column: "nickname", Type: "string", Required: true, Mutable: true, PII: true},
 				{Name: "secret", ColumnTable: "data.tables.x", Column: "secret", Type: "string", Required: true, Mutable: true, NeverExpose: true},
 			},
 		}
@@ -42,7 +41,7 @@ func TestEntityFieldProjectionRules(t *testing.T) {
 	c := newChecker()
 	e := newEntity()
 	c.checkEntityFields(e)
-	c.checkEntityIdentity(e)
+	c.checkEntityID(e)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid entity fields reported: %v", c.errs)
 	}
@@ -85,21 +84,20 @@ func TestEntityBaseMerge(t *testing.T) {
 			},
 		},
 		entityBaseFields: []entityFieldInfo{
-			{Name: "id", Type: "string", Required: true, Mutable: false, HasExplicitType: true, FromBase: true},
-			{Name: "status", Type: "integer", Required: true, Mutable: true, HasExplicitType: true, FromBase: true},
-			{Name: "created_at", Type: "timestamp", Required: true, Mutable: false, HasExplicitType: true, FromBase: true},
-			{Name: "updated_at", Type: "timestamp", Required: true, Mutable: false, HasExplicitType: true, FromBase: true},
-			{Name: "deleted_at", Type: "timestamp", Mutable: false, HasExplicitType: true, FromBase: true},
+			{Name: "ID", Type: "string", Required: true, Mutable: false, HasExplicitType: true, FromBase: true},
+			{Name: "Status", Type: "integer", Required: true, Mutable: true, HasExplicitType: true, FromBase: true},
+			{Name: "CreatedAt", Type: "timestamp", Required: true, Mutable: false, HasExplicitType: true, FromBase: true},
+			{Name: "UpdatedAt", Type: "timestamp", Required: true, Mutable: false, HasExplicitType: true, FromBase: true},
+			{Name: "DeletedAt", Type: "timestamp", Mutable: false, HasExplicitType: true, FromBase: true},
 		},
 	}
 	doc := map[string]any{
-		"id":       "data.entities.x",
-		"extends":  []any{"data.entities.base"},
-		"table":    "data.tables.x",
-		"identity": "id",
+		"id":      "data.entities.x",
+		"extends": []any{"data.entities.base"},
+		"tables":  []any{"data.tables.x"},
 		"fields": []any{
-			map[string]any{"name": "status", "type": "data.enums.x_status"},
-			map[string]any{"name": "own", "type": "string", "required": true},
+			map[string]any{"name": "Status", "type": "data.enums.x_status"},
+			map[string]any{"name": "Own", "type": "string", "required": true},
 		},
 	}
 	e := c.parseEntity(doc, "contracts/data/entities/x.yaml")
@@ -108,14 +106,14 @@ func TestEntityBaseMerge(t *testing.T) {
 	}
 	var status *entityFieldInfo
 	for i := range e.Fields {
-		if e.Fields[i].Name == "status" {
+		if e.Fields[i].Name == "Status" {
 			status = &e.Fields[i]
 		}
 	}
 	if status == nil || !status.OverridesBase || !status.Required || status.Column != "status" {
 		t.Fatalf("status override not merged: %#v", status)
 	}
-	if e.Fields[0].Name != "id" || !e.Fields[0].FromBase {
+	if e.Fields[0].Name != "ID" || !e.Fields[0].FromBase {
 		t.Fatalf("base id not inherited: %#v", e.Fields[0])
 	}
 }
@@ -158,13 +156,11 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 			entities: map[string]*entityInfo{
 				"data.entities.account": {
 					ID: "data.entities.account", Rel: "account.yaml", Tables: []string{"data.tables.account"}, Primary: "data.tables.account",
-					Doc:    map[string]any{"identity": "id"},
-					Fields: []entityFieldInfo{{Name: "id", ColumnTable: "data.tables.account", Column: "id", Type: "string", Required: true, Mutable: false}},
+					Fields: []entityFieldInfo{{Name: "ID", ColumnTable: "data.tables.account", Column: "id", Type: "string", Required: true, Mutable: false}},
 				},
 				"data.entities.token": {
 					ID: "data.entities.token", Rel: "token.yaml", Tables: []string{"data.tables.token"}, Primary: "data.tables.token",
-					Doc:    map[string]any{"identity": "id"},
-					Fields: []entityFieldInfo{{Name: "id", ColumnTable: "data.tables.token", Column: "id", Type: "string", Required: true, Mutable: false}},
+					Fields: []entityFieldInfo{{Name: "ID", ColumnTable: "data.tables.token", Column: "id", Type: "string", Required: true, Mutable: false}},
 				},
 			},
 		}
@@ -267,8 +263,8 @@ func TestQueryParamsSQL(t *testing.T) {
 func TestQueryEntityCoverageAndSensitivity(t *testing.T) {
 	accountEntity := func(withSecret bool) *entityInfo {
 		fields := []entityFieldInfo{
-			{Name: "id", ColumnTable: "data.tables.account", Column: "id", Type: "string", Required: true, Mutable: false},
-			{Name: "nickname", ColumnTable: "data.tables.account", Column: "nickname", Type: "string", Required: true, Mutable: true},
+			{Name: "ID", ColumnTable: "data.tables.account", Column: "id", Type: "string", Required: true, Mutable: false},
+			{Name: "Nickname", ColumnTable: "data.tables.account", Column: "nickname", Type: "string", Required: true, Mutable: true},
 		}
 		if withSecret {
 			fields = append(fields, entityFieldInfo{Name: "secret", ColumnTable: "data.tables.account", Column: "secret", Type: "string", Required: true, Mutable: true, NeverExpose: true})
@@ -305,7 +301,7 @@ func TestQueryEntityCoverageAndSensitivity(t *testing.T) {
 
 	q.ReturnColumns = []string{"id"}
 	c.checkQueryReturnColumns(q)
-	if !strings.Contains(entityErrs(c), "omits required field nickname") {
+	if !strings.Contains(entityErrs(c), "omits required field Nickname") {
 		t.Fatalf("missing required coverage not reported: %v", c.errs)
 	}
 
@@ -415,7 +411,7 @@ func TestMultiTableQueryRejectsIndexColumns(t *testing.T) {
 }
 
 func TestQueryOutputFields(t *testing.T) {
-	c := &Checker{}
+	c := &Checker{tableTypeFamilies: map[string]bool{"integer": true}}
 	q := &queryInfo{
 		ID: "data.queries.account.count", File: "account.yaml", Kind: "many",
 		Tables: []string{"data.tables.account"},
@@ -521,5 +517,158 @@ func TestQuerySQLShape(t *testing.T) {
 	c.checkQuerySQLShape(q)
 	if !strings.Contains(entityErrs(c), "plain column") {
 		t.Fatalf("composite select not reported: %v", c.errs)
+	}
+}
+
+func TestNeverExposeFieldMustBeUnexported(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.x": {
+			"id":     {typ: "string", primaryKey: true},
+			"secret": {typ: "string", neverExpose: true},
+		},
+	}}
+	e := &entityInfo{
+		ID: "data.entities.x", Rel: "contracts/data/entities/x.yaml",
+		Tables: []string{"data.tables.x"}, Primary: "data.tables.x",
+		Fields: []entityFieldInfo{
+			{Name: "ID", ColumnTable: "data.tables.x", Column: "id", Type: "string", Required: true, Mutable: false},
+			{Name: "Secret", ColumnTable: "data.tables.x", Column: "secret", Type: "string", Required: true, NeverExpose: true},
+		},
+	}
+	c.checkEntityFields(e)
+	if !strings.Contains(entityErrs(c), "never_expose field must start lowercase") {
+		t.Fatalf("exported never_expose field not reported: %v", c.errs)
+	}
+}
+
+func TestEntityName(t *testing.T) {
+	c := &Checker{}
+	c.checkEntityName(&entityInfo{Rel: "x.yaml"})
+	if !strings.Contains(entityErrs(c), "name is required") {
+		t.Fatalf("missing entity name not reported: %v", c.errs)
+	}
+	c.errs = nil
+	c.checkEntityName(&entityInfo{Rel: "x.yaml", Name: "bad_name"})
+	if !strings.Contains(entityErrs(c), "must be a valid non-keyword Go identifier") {
+		t.Fatalf("invalid entity name not reported: %v", c.errs)
+	}
+	c.errs = nil
+	c.checkEntityName(&entityInfo{Rel: "x.yaml", Name: "type"})
+	if !strings.Contains(entityErrs(c), "non-keyword") {
+		t.Fatalf("keyword entity name not reported: %v", c.errs)
+	}
+	c.errs = nil
+	c.checkEntityName(&entityInfo{Rel: "x.yaml", Name: "Account"})
+	if len(c.errs) != 0 {
+		t.Fatalf("valid entity name reported: %v", c.errs)
+	}
+}
+
+func TestEntityTypeReusesTableFamilies(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {"id": {typ: "string", primaryKey: true}, "code": {typ: "string"}},
+		},
+		tableTypeFamilies: map[string]bool{"string": true, "integer": true},
+	}
+	e := &entityInfo{ID: "data.entities.x", Rel: "x.yaml", Tables: []string{"data.tables.x"}, Primary: "data.tables.x", Fields: []entityFieldInfo{
+		{Name: "ID", ColumnTable: "data.tables.x", Column: "id", Type: "string", Required: true, Mutable: false},
+		{Name: "Code", ColumnTable: "data.tables.x", Column: "code", Type: "uuid", HasExplicitType: true, Required: true},
+	}}
+	c.checkEntityFields(e)
+	if !strings.Contains(entityErrs(c), "unknown entity type uuid") {
+		t.Fatalf("non-table-family type not reported: %v", c.errs)
+	}
+}
+
+func TestEntityFieldMetadata(t *testing.T) {
+	c := &Checker{}
+	e := &entityInfo{
+		ID: "data.entities.x", Rel: "contracts/data/entities/x.yaml",
+		Fields: []entityFieldInfo{
+			{Name: "ID", Type: "string"},
+			{Name: "Email", Type: "string", JSONName: "emailAddress"},
+			{Name: "DupJSON", Type: "string", JSONName: "emailAddress"},
+			{Name: "BadExample", Type: "integer", Examples: []any{"x"}},
+			{Name: "type", Type: "string"},
+			{Name: "Status", Type: "data.enums.x_status", Examples: []any{1}},
+		},
+	}
+	c.checkEntityFieldMetadata(e)
+	errs := entityErrs(c)
+	for _, want := range []string{
+		`json_name "emailAddress" already used by field Email`,
+		"example x does not match type integer",
+		`field name "type" must be a valid non-keyword Go identifier`,
+	} {
+		if !strings.Contains(errs, want) {
+			t.Fatalf("missing %q in:\n%s", want, errs)
+		}
+	}
+	if strings.Contains(errs, "Status") {
+		t.Fatalf("enum example reported: %v", c.errs)
+	}
+}
+
+func TestStatusOverrideInheritsBaseMetadata(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {
+				"id":     {typ: "string", primaryKey: true},
+				"status": {typ: "integer"},
+			},
+		},
+		entityBaseFields: []entityFieldInfo{
+			{Name: "ID", Type: "string", Required: true, Mutable: false},
+			{Name: "Status", Type: "integer", Required: true, Mutable: true, Description: "base status"},
+		},
+	}
+	doc := map[string]any{
+		"id":     "data.entities.x",
+		"tables": []any{"data.tables.x"},
+		"fields": []any{
+			map[string]any{"name": "Status", "type": "data.enums.x_status"},
+		},
+	}
+	e := c.parseEntity(doc, "contracts/data/entities/x.yaml")
+	status := findEntityField(e, "Status")
+	if status == nil || !status.OverridesBase {
+		t.Fatalf("status not merged: %#v", status)
+	}
+	if status.Description != "base status" {
+		t.Fatalf("base metadata not inherited: %#v", status)
+	}
+}
+
+func TestMultiTableEntityProjection(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.x": {"id": {typ: "string", primaryKey: true}, "own": {typ: "string"}},
+		"data.tables.y": {"extra": {typ: "string"}},
+	}}
+	e := &entityInfo{
+		ID: "data.entities.x", Rel: "contracts/data/entities/x.yaml",
+		Tables: []string{"data.tables.x", "data.tables.y"}, Primary: "data.tables.x",
+		Fields: []entityFieldInfo{
+			{Name: "ID", ColumnTable: "data.tables.x", Column: "id", Type: "string", Required: true, Mutable: false},
+			{Name: "Own", ColumnTable: "data.tables.x", Column: "own", Type: "string", Required: true},
+			{Name: "Extra", ColumnTable: "data.tables.y", Column: "extra", Type: "string", Required: true},
+		},
+	}
+	c.checkEntityFields(e)
+	c.checkEntityID(e)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid multi-table entity reported: %v", c.errs)
+	}
+}
+
+func TestSnakeCase(t *testing.T) {
+	cases := map[string]string{
+		"ID": "id", "OwnID": "own_id", "UserID": "user_id", "TLD": "tld",
+		"CreatedAt": "created_at", "AccountID": "account_id", "PasswordHash": "password_hash",
+	}
+	for in, want := range cases {
+		if got := snakeCase(in); got != want {
+			t.Fatalf("snakeCase(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

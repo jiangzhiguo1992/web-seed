@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -38,6 +39,9 @@ type entityFieldInfo struct {
 	Mutable         bool
 	PII             bool
 	NeverExpose     bool
+	JSONName        string
+	Examples        []any
+	Description     string
 	FromBase        bool
 	OverridesBase   bool
 	BaseRedeclared  bool
@@ -58,6 +62,7 @@ type entityInfo struct {
 	ID          string
 	Rel         string
 	Doc         map[string]any
+	Name        string
 	Tables      []string
 	Primary     string
 	Fields      []entityFieldInfo
@@ -218,6 +223,11 @@ func parseEntityBaseFields(doc map[string]any) []entityFieldInfo {
 		}
 		f := entityFieldInfo{Name: name, Mutable: true, HasExplicitType: true, FromBase: true}
 		f.Type, _ = m["type"].(string)
+		f.JSONName, _ = m["json_name"].(string)
+		for _, x := range asList(m["examples"]) {
+			f.Examples = append(f.Examples, x)
+		}
+		f.Description, _ = m["description"].(string)
 		if v, ok := m["required"].(bool); ok {
 			f.Required = v
 			f.HasRequired = true
@@ -239,7 +249,8 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		UsedByEnt:   map[string]bool{},
 	}
 	e.ID, _ = doc["id"].(string)
-	e.Tables = tableRefs(doc)
+	e.Name, _ = doc["name"].(string)
+	e.Tables = stringList(doc["tables"])
 	if len(e.Tables) > 0 {
 		e.Primary = e.Tables[0]
 	}
@@ -263,6 +274,11 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		}
 		f.PII, _ = m["pii"].(bool)
 		f.NeverExpose, _ = m["never_expose"].(bool)
+		f.JSONName, _ = m["json_name"].(string)
+		for _, x := range asList(m["examples"]) {
+			f.Examples = append(f.Examples, x)
+		}
+		f.Description, _ = m["description"].(string)
 		f.Type, _ = m["type"].(string)
 		f.HasExplicitType = f.Type != ""
 		if ref, _ := m["column"].(string); ref != "" {
@@ -271,7 +287,7 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 				f.ColumnTable, f.Column = t, col
 			}
 		} else if len(e.Tables) == 1 {
-			f.ColumnTable, f.Column = e.Tables[0], name
+			f.ColumnTable, f.Column = e.Tables[0], snakeCase(name)
 		}
 		if f.ColumnTable != "" {
 			if meta, ok := c.tableColumns[f.ColumnTable][f.Column]; ok && f.Type == "" {
@@ -280,7 +296,7 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		}
 		e.Fields = append(e.Fields, f)
 	}
-	// 基类字段由 _base 继承；status 允许用枚举类型特化。
+	// 基类字段由 _base 继承；Status 允许用枚举类型特化。
 	byName := map[string]*entityFieldInfo{}
 	for i := range e.Fields {
 		byName[e.Fields[i].Name] = &e.Fields[i]
@@ -288,10 +304,10 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 	var inherited []entityFieldInfo
 	for _, bf := range c.entityBaseFields {
 		if cf := byName[bf.Name]; cf != nil {
-			if bf.Name == "status" && strings.HasPrefix(cf.Type, "data.enums.") {
+			if bf.Name == "Status" && strings.HasPrefix(cf.Type, "data.enums.") {
 				cf.OverridesBase = true
 				if !cf.HasColumnRef && cf.ColumnTable == "" {
-					cf.ColumnTable, cf.Column = e.Primary, bf.Name
+					cf.ColumnTable, cf.Column = e.Primary, snakeCase(bf.Name)
 				}
 				if !cf.HasRequired {
 					cf.Required = bf.Required
@@ -299,12 +315,21 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 				if !cf.HasMutable {
 					cf.Mutable = bf.Mutable
 				}
+				if cf.Description == "" {
+					cf.Description = bf.Description
+				}
+				if cf.JSONName == "" {
+					cf.JSONName = bf.JSONName
+				}
+				if len(cf.Examples) == 0 {
+					cf.Examples = bf.Examples
+				}
 			} else {
 				cf.BaseRedeclared = true
 			}
 			continue
 		}
-		bf.ColumnTable, bf.Column = e.Primary, bf.Name
+		bf.ColumnTable, bf.Column = e.Primary, snakeCase(bf.Name)
 		inherited = append(inherited, bf)
 	}
 	e.Fields = append(inherited, e.Fields...)
@@ -359,6 +384,7 @@ func (c *Checker) checkEntities(schema *Schema) {
 	c.checkTargets(schema)
 	c.checkEntityBase(schema)
 	seenIDs := map[string]string{}
+	seenNames := map[string]string{}
 	usedTables := map[string]bool{}
 	for _, ed := range c.entityDocs {
 		c.checkTargetFileName(schema, filepath.Base(ed.rel), ed.rel)
@@ -377,6 +403,13 @@ func (c *Checker) checkEntities(schema *Schema) {
 		} else if id != "" {
 			seenIDs[id] = ed.rel
 		}
+		if name, _ := ed.doc["name"].(string); name != "" {
+			if prev, ok := seenNames[name]; ok {
+				c.rulef("entity-name-unique", "%s: duplicate entity name %s (also %s)", ed.rel, name, prev)
+			} else {
+				seenNames[name] = ed.rel
+			}
+		}
 		short := strings.TrimSuffix(filepath.Base(ed.rel), filepath.Ext(ed.rel))
 		c.checkEntityDoNot(ed, short)
 		ext := stringList(ed.doc["extends"])
@@ -389,7 +422,9 @@ func (c *Checker) checkEntities(schema *Schema) {
 	for _, e := range c.entities {
 		c.checkEntityShape(e)
 		c.checkEntityFields(e)
-		c.checkEntityIdentity(e)
+		c.checkEntityID(e)
+		c.checkEntityName(e)
+		c.checkEntityFieldMetadata(e)
 		c.checkEntityRelations(e, expectedEnt)
 		c.checkEntityValidation(e)
 		for _, t := range e.Tables {
@@ -463,11 +498,11 @@ type entityBaseFieldShape struct {
 }
 
 var entityBaseShape = map[string]entityBaseFieldShape{
-	"id":         {"string", true, false},
-	"status":     {"integer", true, true},
-	"created_at": {"timestamp", true, false},
-	"updated_at": {"timestamp", true, false},
-	"deleted_at": {"timestamp", false, false},
+	"ID":        {"string", true, false},
+	"Status":    {"integer", true, true},
+	"CreatedAt": {"timestamp", true, false},
+	"UpdatedAt": {"timestamp", true, false},
+	"DeletedAt": {"timestamp", false, false},
 }
 
 // checkEntityBase 校验基类路径/ID/5 字段形状；基类不参与实体映射和 used_by。
@@ -540,13 +575,8 @@ func (c *Checker) checkEntityBase(schema *Schema) {
 }
 
 func (c *Checker) checkEntityShape(e *entityInfo) {
-	_, hasTable := e.Doc["table"]
-	_, hasTables := e.Doc["tables"]
-	if hasTable == hasTables {
-		c.rulef("entity-table-shape", "%s: exactly one of table/tables is required", e.Rel)
-	}
 	if len(e.Tables) == 0 {
-		c.rulef("entity-table-shape", "%s: table/tables must not be empty", e.Rel)
+		c.rulef("entity-table-shape", "%s: tables must not be empty", e.Rel)
 		return
 	}
 	seen := map[string]bool{}
@@ -565,10 +595,17 @@ func (c *Checker) checkEntityShape(e *entityInfo) {
 	}
 }
 
-func entityScalarType(typ string) bool {
-	switch typ {
-	case "string", "integer", "float", "decimal", "boolean", "datetime", "timestamp", "json", "bytes":
+// isEntityType 复用 data.tables 的类型族；测试/独立调用时从已加载列兜底。
+func (c *Checker) isEntityType(typ string) bool {
+	if c.tableTypeFamilies[typ] {
 		return true
+	}
+	for _, cols := range c.tableColumns {
+		for _, meta := range cols {
+			if c.resolvedColumnType(meta.typ) == typ {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -623,7 +660,7 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 				}
 			case strings.HasPrefix(typ, "data.tables."):
 				c.rulef("entity-field-type", "%s: entity fields must not reference table row types", where)
-			case entityScalarType(typ):
+			case c.isEntityType(typ):
 				if colType != typ {
 					c.rulef("entity-field-type", "%s: type %s does not match column type %s", where, typ, colType)
 				}
@@ -643,7 +680,10 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 		if meta.neverExpose && !f.NeverExpose {
 			c.rulef("entity-field-sensitive", "%s: column is never_expose; entity field must set never_expose:true", where)
 		}
-		if f.Name == "created_at" || f.Name == "updated_at" || f.Name == "deleted_at" {
+		if f.NeverExpose && isExportedName(f.Name) {
+			c.rulef("entity-field-sensitive", "%s: never_expose field must start lowercase (unexported)", where)
+		}
+		if f.Name == "CreatedAt" || f.Name == "UpdatedAt" || f.Name == "DeletedAt" {
 			if f.Mutable {
 				c.rulef("entity-field-mutable", "%s: %s must be mutable:false", where, f.Name)
 			}
@@ -665,43 +705,131 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 	}
 }
 
-func (c *Checker) checkEntityIdentity(e *entityInfo) {
-	var idField *entityFieldInfo
-	for i := range e.Fields {
-		if e.Fields[i].Name == e.identity() {
-			idField = &e.Fields[i]
-			break
-		}
-	}
-	identity, _ := e.Doc["identity"].(string)
-	if identity == "" {
-		return // schema.required 报缺失
-	}
+func (c *Checker) checkEntityID(e *entityInfo) {
+	idField := findEntityField(e, "ID")
 	if idField == nil {
-		c.rulef("entity-identity", "%s: identity %q is not in fields", e.Rel, identity)
+		c.rulef("entity-id", "%s: base ID field is missing", e.Rel)
 		return
 	}
 	if !idField.Required {
-		c.rulef("entity-identity", "%s: identity %q must be required:true", e.Rel, identity)
+		c.rulef("entity-id", "%s: ID must be required:true", e.Rel)
 	}
 	if idField.Mutable {
-		c.rulef("entity-identity", "%s: identity %q must be mutable:false", e.Rel, identity)
+		c.rulef("entity-id", "%s: ID must be mutable:false", e.Rel)
 	}
 	if idField.ColumnTable != e.Primary {
-		c.rulef("entity-identity", "%s: identity %q must come from primary table %s", e.Rel, identity, e.Primary)
+		c.rulef("entity-id", "%s: ID must come from primary table %s", e.Rel, e.Primary)
 	}
 	if meta, ok := c.tableColumns[idField.ColumnTable][idField.Column]; ok && !meta.primaryKey {
-		c.rulef("entity-identity", "%s: identity column %s.%s must be a primary key", e.Rel, idField.ColumnTable, idField.Column)
+		c.rulef("entity-id", "%s: ID column %s.%s must be a primary key", e.Rel, idField.ColumnTable, idField.Column)
 	}
 	if pks := c.tablePrimaryKey[e.Primary]; len(pks) > 0 && (len(pks) != 1 || pks[0] != idField.Column) {
-		c.rulef("entity-identity", "%s: identity column must be the sole primary key of %s, got %v", e.Rel, e.Primary, pks)
+		c.rulef("entity-id", "%s: ID column must be the sole primary key of %s, got %v", e.Rel, e.Primary, pks)
 	}
 }
 
-// identity 从文档读取 identity，避免解析结构被修改后丢失原值。
-func (e *entityInfo) identity() string {
-	s, _ := e.Doc["identity"].(string)
-	return s
+// checkEntityName 校验实体名是 Go 标识符；首字母大小写表达 public/internal。
+func (c *Checker) checkEntityName(e *entityInfo) {
+	if e.Name == "" {
+		c.rulef("entity-name", "%s: name is required", e.Rel)
+		return
+	}
+	if !isGoIdent(e.Name) || goKeywords[e.Name] {
+		c.rulef("entity-name", "%s: name %q must be a valid non-keyword Go identifier", e.Rel, e.Name)
+	}
+}
+
+var goKeywords = map[string]bool{
+	"break": true, "case": true, "chan": true, "const": true, "continue": true,
+	"default": true, "defer": true, "else": true, "fallthrough": true, "for": true,
+	"func": true, "go": true, "goto": true, "if": true, "import": true,
+	"interface": true, "map": true, "package": true, "range": true, "return": true,
+	"select": true, "struct": true, "switch": true, "type": true, "var": true,
+}
+
+// isGoIdent 判断是否是仅含字母数字、且以字母开头的 Go 标识符。
+func isGoIdent(s string) bool {
+	if s == "" || !isASCIILetter(s[0]) {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		if !isASCIILetter(s[i]) && (s[i] < '0' || s[i] > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCIILetter(b byte) bool {
+	return (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z')
+}
+
+func isExportedName(s string) bool {
+	return s != "" && s[0] >= 'A' && s[0] <= 'Z'
+}
+
+// checkEntityFieldMetadata 校验 json_name/examples 这类生成语义。
+func (c *Checker) checkEntityFieldMetadata(e *entityInfo) {
+	jsonNames := map[string]string{}
+	for _, f := range e.Fields {
+		where := fmt.Sprintf("%s: fields.%s", e.Rel, f.Name)
+		if !isGoIdent(f.Name) || goKeywords[f.Name] {
+			c.rulef("entity-field-name", "%s: field name %q must be a valid non-keyword Go identifier", where, f.Name)
+		}
+		jsonName := f.JSONName
+		if jsonName == "" {
+			jsonName = snakeCase(f.Name)
+		}
+		if prev, ok := jsonNames[jsonName]; ok {
+			c.rulef("entity-field-json-name", "%s: json_name %q already used by field %s", where, jsonName, prev)
+		} else {
+			jsonNames[jsonName] = f.Name
+		}
+		for _, ex := range f.Examples {
+			if !entityExampleMatches(f.Type, ex) {
+				c.rulef("entity-field-examples", "%s: example %v does not match type %s", where, ex, f.Type)
+			}
+		}
+	}
+}
+
+func entityExampleMatches(typ string, v any) bool {
+	if strings.HasPrefix(typ, "data.enums.") {
+		return isIntegerExample(v)
+	}
+	switch typ {
+	case "string", "bytes":
+		_, ok := v.(string)
+		return ok
+	case "timestamp", "datetime":
+		switch v.(type) {
+		case string, time.Time:
+			return true
+		}
+		return false
+	case "integer":
+		return isIntegerExample(v)
+	case "float", "decimal":
+		switch v.(type) {
+		case int, int64, uint64, float64:
+			return true
+		}
+		return false
+	case "boolean":
+		_, ok := v.(bool)
+		return ok
+	case "json":
+		return true
+	}
+	return true
+}
+
+func isIntegerExample(v any) bool {
+	switch v.(type) {
+	case int, int64, uint64:
+		return true
+	}
+	return false
 }
 
 func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[string]bool) {
@@ -747,7 +875,7 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 		default:
 			c.rulef("entity-relation-direction", "%s: unknown kind %s", where, r.Kind)
 		}
-		counterpart := c.counterpartIdentity(e, target, inSelf)
+		counterpart := c.counterpartID(e, target, inSelf)
 		if counterpart != nil {
 			if meta, ok := c.tableColumns[counterpart.ColumnTable][counterpart.Column]; ok {
 				counterType := c.resolvedColumnType(meta.typ)
@@ -769,20 +897,15 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 	}
 }
 
-// counterpartIdentity 返回关系另一端用于类型比较的身份字段。
-func (c *Checker) counterpartIdentity(e, target *entityInfo, inSelf bool) *entityFieldInfo {
+// counterpartID 返回关系另一端用于类型比较的 id 字段。
+func (c *Checker) counterpartID(e, target *entityInfo, inSelf bool) *entityFieldInfo {
 	var owner *entityInfo
 	if inSelf {
 		owner = target
 	} else {
 		owner = e
 	}
-	for i := range owner.Fields {
-		if owner.Fields[i].Name == owner.identity() {
-			return &owner.Fields[i]
-		}
-	}
-	return nil
+	return findEntityField(owner, "id")
 }
 
 // resolvedColumnType 把列引用解析为实际类型族；非引用原样返回。

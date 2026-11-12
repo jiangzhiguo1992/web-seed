@@ -81,7 +81,7 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			if qid != "" {
 				queryIDs[qid] = true
 			}
-			ts := tableRefs(m)
+			ts := queryTableRefs(m)
 			for _, t := range ts {
 				if c.isBaseTableRef(t) {
 					c.rulef("base-file", "%s: queries[%d] (%s): base contract is not a physical table", rel, i, qid)
@@ -244,7 +244,7 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 				c.rulef("schema.required", "%s: queries[%d]: missing id", rel, i)
 				continue
 			}
-			for _, t := range tableRefs(m) {
+			for _, t := range queryTableRefs(m) {
 				if inbound[t] != nil {
 					inbound[t]["queries"][qid] = true
 				}

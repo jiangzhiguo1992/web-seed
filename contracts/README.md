@@ -185,8 +185,8 @@ feature ──> business ──> capabilities ──> data
 | business → capabilities | 规则 / 状态机 / 事件 | `implemented_by` / `emitted_by` |
 | capabilities/http → capabilities/services | HTTP operation | `x-service` |
 | capabilities/service → data | service 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
-| data.queries → data.tables | 查询项 | `table` / `tables` |
-| data.entities → data.tables | 实体 | `table` / `column` |
+| data.queries → data.tables | 查询项 | `sql.from` / `sql.into` / `sql.joins[].table` |
+| data.entities → data.tables | 实体 | `tables` / `column` |
 | data.tables → 上游（反向） | 表文件 | `used_by.{entities,queries}`（生成物，`make gen-graph` 写入） |
 
 ### 3.2.1 capabilities 不引用 business

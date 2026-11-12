@@ -9,38 +9,38 @@ schema_version: 1
 id: data.entities.account
 summary: "账号数据实体"
 stability: stable
+name: Account
 extends: [ data.entities.base ]
-table: data.tables.account
-identity: id
+tables: [ data.tables.account ]
 do_not:
   - "account 实体禁止放密码、手机号、邮箱、令牌字段"
   - "account 的认证标识只能通过 auth_* 实体访问"
-  - "own_type/own_id 是数据归属，user_id 是关联用户；两者不得互相替代"
+  - "OwnType/OwnID 是数据归属，userID 是关联用户；两者不得互相替代"
   - "account.validation 不要写 DDL"
 
 fields:
-  - name: own_type
+  - name: OwnType
     type: string
     required: true
-  - name: own_id
+  - name: OwnID
     type: string
     required: true
-  - name: number
+  - name: Number
     type: string
     required: true
-    note: "账号编号，存储前大写归一"
-  - name: nickname
+    description: "账号编号，存储前大写归一"
+  - name: Nickname
     type: string
     required: true
     pii: true
-  - name: user_id
+  - name: userID
     type: string
-  - name: status
+  - name: Status
     type: data.enums.account_status
-  - name: version
+  - name: Version
     type: integer
     required: true
-    note: "乐观锁"
+    description: "乐观锁"
 
 relations:
   - { name: tokens, target: data.entities.token, kind: one_to_many, via: data.tables.token.col.account_id }

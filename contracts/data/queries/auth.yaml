@@ -20,7 +20,6 @@ queries:
   - id: data.queries.auth.get_auth_pwd_by_username
     name: GetAuthPwdByUsername
     kind: one
-    table: data.tables.auth_pwd
     params:
       - { name: username, type: text }
     returns: data.tables.auth_pwd.row
@@ -30,14 +29,7 @@ queries:
     sql:
       statement: select
       from: data.tables.auth_pwd
-      select:
-        - id
-        - account_id
-        - username
-        - password_hash
-        - failed_login_count
-        - locked_until
-        - status
+      select: [ id, account_id, username, password_hash, failed_login_count, locked_until, status ]
       where:
         - "username = @username"
         - "deleted_at IS NULL"
@@ -45,7 +37,6 @@ queries:
   - id: data.queries.auth.create_auth_pwd
     name: CreateAuthPwd
     kind: one
-    table: data.tables.auth_pwd
     params:
       - { name: id, type: text }
       - { name: account_id, type: text }
@@ -60,18 +51,11 @@ queries:
       into: data.tables.auth_pwd
       columns: [ id, account_id, username, password_hash, status ]
       values: [ "@id", "@account_id", "@username", "@password_hash", "0" ]
-      returning:
-        - id
-        - account_id
-        - username
-        - status
-        - created_at
-        - updated_at
+      returning: [ id, account_id, username, status, created_at, updated_at ]
 
   - id: data.queries.auth.update_auth_pwd_hash
     name: UpdateAuthPwdHash
     kind: execrows
-    table: data.tables.auth_pwd
     params:
       - { name: id, type: text }
       - { name: password_hash, type: text }
@@ -91,7 +75,6 @@ queries:
   - id: data.queries.auth.record_auth_pwd_login_success
     name: RecordAuthPwdLoginSuccess
     kind: execrows
-    table: data.tables.auth_pwd
     params:
       - { name: id, type: text }
     returns: affected_rows
@@ -111,7 +94,6 @@ queries:
   - id: data.queries.auth.record_auth_pwd_login_failure
     name: RecordAuthPwdLoginFailure
     kind: execrows
-    table: data.tables.auth_pwd
     params:
       - { name: id, type: text }
       - { name: lock_until, type: timestamp, nullable: true }
@@ -132,7 +114,6 @@ queries:
   - id: data.queries.auth.get_auth_phone_by_number
     name: GetAuthPhoneByNumber
     kind: one
-    table: data.tables.auth_phone
     params:
       - { name: code, type: text }
       - { name: number, type: text }
@@ -143,13 +124,7 @@ queries:
     sql:
       statement: select
       from: data.tables.auth_phone
-      select:
-        - id
-        - account_id
-        - code
-        - number
-        - operator
-        - status
+      select: [ id, account_id, code, number, operator, status ]
       where:
         - "code = @code"
         - "number = @number"
@@ -158,7 +133,6 @@ queries:
   - id: data.queries.auth.create_auth_phone
     name: CreateAuthPhone
     kind: one
-    table: data.tables.auth_phone
     params:
       - { name: id, type: text }
       - { name: account_id, type: text }
@@ -174,20 +148,11 @@ queries:
       into: data.tables.auth_phone
       columns: [ id, account_id, code, number, operator, status ]
       values: [ "@id", "@account_id", "@code", "@number", "sqlc.narg('operator')", "0" ]
-      returning:
-        - id
-        - account_id
-        - code
-        - number
-        - operator
-        - status
-        - created_at
-        - updated_at
+      returning: [ id, account_id, code, number, operator, status, created_at, updated_at ]
 
   - id: data.queries.auth.get_auth_email_by_username_domain
     name: GetAuthEmailByUsernameDomain
     kind: one
-    table: data.tables.auth_email
     params:
       - { name: username, type: text }
       - { name: domain, type: text }
@@ -198,14 +163,7 @@ queries:
     sql:
       statement: select
       from: data.tables.auth_email
-      select:
-        - id
-        - account_id
-        - username
-        - domain
-        - entity
-        - tld
-        - status
+      select: [ id, account_id, username, domain, entity, tld, status ]
       where:
         - "username = @username"
         - "domain = @domain"
@@ -214,7 +172,6 @@ queries:
   - id: data.queries.auth.create_auth_email
     name: CreateAuthEmail
     kind: one
-    table: data.tables.auth_email
     params:
       - { name: id, type: text }
       - { name: account_id, type: text }
@@ -231,21 +188,11 @@ queries:
       into: data.tables.auth_email
       columns: [ id, account_id, username, domain, entity, tld, status ]
       values: [ "@id", "@account_id", "@username", "lower(@domain)", "sqlc.narg('entity')", "sqlc.narg('tld')", "0" ]
-      returning:
-        - id
-        - account_id
-        - username
-        - domain
-        - entity
-        - tld
-        - status
-        - created_at
-        - updated_at
+      returning: [ id, account_id, username, domain, entity, tld, status, created_at, updated_at ]
 
   - id: data.queries.auth.create_token
     name: CreateToken
     kind: one
-    table: data.tables.token
     params:
       - { name: id, type: text }
       - { name: own_type, type: text }
@@ -266,18 +213,11 @@ queries:
       into: data.tables.token
       columns: [ id, own_type, own_id, account_id, device_id, user_id, access_token_hash, refresh_token_hash, access_expire_at, refresh_expire_at, status ]
       values: [ "@id", "@own_type", "@own_id", "@account_id", "sqlc.narg('device_id')", "sqlc.narg('user_id')", "@access_token_hash", "@refresh_token_hash", "@access_expire_at", "@refresh_expire_at", "0" ]
-      returning:
-        - id
-        - account_id
-        - device_id
-        - access_expire_at
-        - refresh_expire_at
-        - status
+      returning: [ id, account_id, device_id, access_expire_at, refresh_expire_at, status ]
 
   - id: data.queries.auth.get_token_by_refresh
     name: GetTokenByRefresh
     kind: one
-    table: data.tables.token
     params:
       - { name: refresh_token_hash, type: text }
     returns: data.tables.token.row
@@ -287,14 +227,7 @@ queries:
     sql:
       statement: select
       from: data.tables.token
-      select:
-        - id
-        - account_id
-        - device_id
-        - user_id
-        - access_expire_at
-        - refresh_expire_at
-        - status
+      select: [ id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status ]
       where:
         - "refresh_token_hash = @refresh_token_hash"
         - "deleted_at IS NULL"
@@ -302,7 +235,6 @@ queries:
   - id: data.queries.auth.get_token_by_access
     name: GetTokenByAccess
     kind: one
-    table: data.tables.token
     params:
       - { name: access_token_hash, type: text }
     returns: data.tables.token.row
@@ -312,14 +244,7 @@ queries:
     sql:
       statement: select
       from: data.tables.token
-      select:
-        - id
-        - account_id
-        - device_id
-        - user_id
-        - access_expire_at
-        - refresh_expire_at
-        - status
+      select: [ id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status ]
       where:
         - "access_token_hash = @access_token_hash"
         - "deleted_at IS NULL"
@@ -327,7 +252,6 @@ queries:
   - id: data.queries.auth.revoke_token
     name: RevokeToken
     kind: execrows
-    table: data.tables.token
     params:
       - { name: refresh_token_hash, type: text }
     returns: affected_rows
@@ -347,7 +271,6 @@ queries:
   - id: data.queries.auth.delete_expired_tokens
     name: DeleteExpiredTokens
     kind: execrows
-    table: data.tables.token
     params:
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
     returns: affected_rows
@@ -366,7 +289,6 @@ queries:
   - id: data.queries.auth.list_tokens_by_account
     name: ListTokensByAccount
     kind: many
-    table: data.tables.token
     params:
       - { name: account_id, type: text }
     returns: "[]data.tables.token.row"
@@ -376,15 +298,7 @@ queries:
     sql:
       statement: select
       from: data.tables.token
-      select:
-        - id
-        - account_id
-        - device_id
-        - access_expire_at
-        - refresh_expire_at
-        - status
-        - created_at
-        - updated_at
+      select: [ id, account_id, device_id, access_expire_at, refresh_expire_at, status, created_at, updated_at ]
       where:
         - "account_id = @account_id"
         - "deleted_at IS NULL"

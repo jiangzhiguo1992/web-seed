@@ -122,6 +122,51 @@ func isColumnRefType(t string, refs ColumnRefs) bool {
 	return false
 }
 
+// queryTableRefs 从结构化 sql 子句推导查询引用的表；查询不再手写 table/tables。
+func queryTableRefs(m map[string]any) []string {
+	sql, _ := asMap(m["sql"])
+	if sql == nil {
+		return nil
+	}
+	var out []string
+	add := func(v any) {
+		if s, ok := v.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	add(sql["from"])
+	add(sql["into"])
+	for _, raw := range asList(sql["joins"]) {
+		jm, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		add(jm["table"])
+	}
+	return out
+}
+
+// snakeCase 把 Go 导出的字段名转换为默认物理列名/JSON 名。
+// 例：ID→id、OwnID→own_id、userID→user_id、TLD→tld、CreatedAt→created_at。
+func snakeCase(s string) string {
+	rs := []rune(s)
+	var b strings.Builder
+	for i, r := range rs {
+		if r >= 'A' && r <= 'Z' {
+			if i > 0 {
+				prev := rs[i-1]
+				if (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9') {
+					b.WriteByte('_')
+				}
+			}
+			b.WriteRune(r + ('a' - 'A'))
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 func tableRefs(m map[string]any) []string {
 	var out []string
 	if t, ok := m["table"].(string); ok && t != "" {

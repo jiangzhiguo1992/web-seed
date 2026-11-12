@@ -13,7 +13,7 @@
 |---|---|---|
 | `tables/_base.yaml` | 表结构基类：5 列 + `do_not`（单例，字段树与规则复用 `data.tables`） | 无（不生成 DDL、不建实体、不落存储） |
 | `tables/<file>.yaml` | 物理表：字段、类型、约束、索引、分区、保留期 | `schema.sql`、增量 `migrations/*.sql`、sqlc 输入 |
-| `entities/<entity>.yaml` | 读模型：身份、字段、关系、复杂校验 | Go/TS 类型 |
+| `entities/<entity>.yaml` | 读模型：Go 类型 `name`、唯一主键 `ID`、字段、关系、复杂校验 | Go/TS 类型 |
 | `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
 | `queries/<module>.yaml` | 查询契约：id、参数、返回、结构化 SQL、语义 | `queries/*.sql`、sqlc 代码 |
 | `storage.yaml` | 项目级存储引擎、部署拓扑、连接与锁 | 配置校验、运维约束 |
@@ -43,9 +43,11 @@
 - **一个实体可以跨多表**：合成只读，JOIN 条件写在 query，entity 只声明字段来源。
 - **约束层次不同**：`CHECK (char_length(number) > 0)` 是 DDL；「已软删的账号不可修改」是业务不变量。
 
-5 个通用字段（`id` / `status` / `created_at` / `updated_at` / `deleted_at`）在 `entities/_base.yaml`；具体实体写 `extends: [data.entities.base]`，只写业务字段。基类字段不得重声明；`status` 允许用 `data.enums.*` 特化类型。
+5 个通用字段（`ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`）在 `entities/_base.yaml`；具体实体写 `extends: [data.entities.base]`，只写业务字段。基类字段不得重声明；`Status` 允许用 `data.enums.*` 特化类型。
 
-关联方式是 `table` / `tables` + `column`：单表实体可省略 `column`（按字段名匹配列），多表合成必须写 `column: data.tables.<t>.col.<c>`。实体字段不重复物理长度参数，也不允许聚合/计算字段；统计结果放 query 的 `output_fields`。
+实体和字段名都是 Go 标识符：实体 `name` 首字母大写表示 public、小写表示 internal；字段 `name` 同理，首字母大写导出、小写不导出。`never_expose` 字段必须小写开头。默认列名/JSON 名是 `snake_case(name)`，可用 `column` / `json_name` 覆盖。字段不再有 `visibility` / `read_only` / `write_only` / `format` / `deprecated`。类型不另起一套：显式 `type` 复用 `data.tables` 的 `column_types.families`，或写 `data.enums.*`。
+
+关联方式是 `tables` + `column`：单表实体可省略 `column`（按 `snake_case(name)` 匹配列），多表合成必须写 `column: data.tables.<t>.col.<c>`。`tables[0]` 是主表，`ID` 必须来自主表 `id` 列。实体字段不重复物理长度参数，也不允许聚合/计算字段；统计结果放 query 的 `output_fields`。
 
 ### 1.3 约束与校验的分界
 
@@ -90,7 +92,6 @@ redundancy: { group: account_own_type, role: copy, ref: data.tables.account.col.
 
 ```yaml
 - id: data.queries.account.list_accounts
-  table: data.tables.account
   index_columns:
     - [created_at, id]
     - [own_type]
@@ -163,7 +164,7 @@ data/storage.yaml ────> 配置校验 + 运维约束
 13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
 14. **冗余字段必须声明**：`columns[].redundancy` 的 `source`/`copy` 同组，`copy` 必须写 `ref` 指向同组 `source`，`type`/`nullable` 一致；同组只能有一个 `source`。
 15. **单表 query 必须声明 `index_columns`**：每个内层列表按顺序匹配表索引最左前缀或主键；匹配的索引必须把 query 写进 `used_by`，反向也校验。多表 query 不写 `index_columns`，也不进索引 `used_by`。
-16. **entity 字段必须能投影回列**：单表实体无 `column` 时按字段名匹配；多表合成必须写 `column`，且每张表至少被一个字段引用。字段的 `required` 必须等价于来源列非空，`pii`/`never_expose` 不得放松。
+16. **entity 字段必须能投影回列**：单表实体无 `column` 时按 `snake_case(name)` 匹配；多表合成必须写 `column`，且每张表至少被一个字段引用。字段的 `required` 必须等价于来源列非空，`pii`/`never_expose` 不得放松。
 17. **query 返回实体时必须完整**：`returns: data.entities.*` 的 `return_columns`（省略表示全字段）必须覆盖 required 非敏感字段；`never_expose` 字段只有同模块 query 可以返回。返回实体的 query 会写入 `entity.used_by.queries`。
 18. **entity.used_by 是生成物**：`queries` 记录 `returns` 本实体的 query 项 ID，`entities` 记录通过 relations 指向本实体的 entity ID；由 `make gen-graph` 写回，禁止手改，`contract-check` 对账。
 
@@ -171,7 +172,7 @@ data/storage.yaml ────> 配置校验 + 运维约束
 
 ## 3.1 迁移禁止操作
 
-以下操作生成器直接报错，不会产出迁移（机器可读部分见 `_meta/data.tables.yaml` 的 `migration`）：
+以下操作生成器直接报错，不会产出迁移：
 
 迁移文件名：`<utc_timestamp>_<snake_case_name>.sql`。
 
@@ -215,7 +216,7 @@ indexes:
 -- manual-adjust: CONCURRENTLY 无法在事务内执行
 ```
 
-`manual_adjust` 与 `verification` 的机器可读定义在 `_meta/data.tables.yaml` 的 `migration`。
+人工调整统一使用 `-- manual-adjust:` 前缀；验证命令在 CI/Makefile 中执行。
 
 ### 3.3 类型级负向约束
 
@@ -237,7 +238,7 @@ indexes:
 **data.queries**
 
 - 每个 query 必须有显式 id：`data.queries.<file>.<query_id>`
-- 每个 query 必须声明 `table` 或 `tables`，供图校验推导血缘
+- 每个 query 的表从 `sql.from` / `sql.into` / `sql.joins[].table` 推导，供图校验推导血缘
 - 返回实体用 `returns: data.entities.*`；统计结果用 `output_fields`
 - 写查询的 module 必须等于写目标表的 `owner_module`
 - 不要在 repo 层手写 SQL
@@ -303,6 +304,6 @@ indexes:
 ## 7. 诚实边界
 
 生产在线 DDL（大表加索引需 `CONCURRENTLY`、数据回填分步）无法全自动。
-契约约束**最终态**，迁移**过程**允许人工介入，机器规则见 `_meta/data.tables.yaml` 的 `migration`。
+契约约束**最终态**，迁移**过程**允许人工介入，规则见本节。
 
 P2 生成器尚未实现：当前的 `generated+tested` 是目标值，不代表已有闸门；生成器落地后以 `make gen` / `make gen-db` / `make gen-graph` 为准。

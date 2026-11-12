@@ -38,8 +38,6 @@ type queryInfo struct {
 	Module        string
 	Kind          string
 	Tables        []string
-	HasTable      bool
-	HasTables     bool
 	Params        []queryParam
 	Return        queryReturn
 	ReturnColumns []string
@@ -150,15 +148,7 @@ func parseQuery(m map[string]any, rel, fileID, module string) *queryInfo {
 	q.Kind, _ = m["kind"].(string)
 	q.Semantics, _ = m["semantics"].(string)
 	q.SQL = parseQuerySQL(m["sql"])
-	q.HasTable = false
-	q.HasTables = false
-	if s, ok := m["table"].(string); ok && s != "" {
-		q.HasTable = true
-	}
-	if _, ok := m["tables"]; ok {
-		q.HasTables = true
-	}
-	q.Tables = tableRefs(m)
+	q.Tables = q.SQL.TableRefs()
 	for _, raw := range asList(m["params"]) {
 		pm, ok := asMap(raw)
 		if !ok {
@@ -498,28 +488,16 @@ func (c *Checker) checkQuerySQLShape(q *queryInfo) {
 		c.rulef("query-sql-shape", "%s: limit is only allowed for select", where)
 	}
 
-	declared := map[string]bool{}
-	for _, t := range q.Tables {
-		declared[t] = true
+	if len(s.TableRefs()) == 0 {
+		c.rulef("query-table-shape", "%s: sql must declare from or into", where)
 	}
-	sqlTables := map[string]bool{}
 	for _, t := range s.TableRefs() {
 		if t == c.baseID {
 			c.rulef("query-table-shape", "%s: sql references data.tables.base", where)
 			continue
 		}
 		if _, ok := c.tableColumns[t]; !ok {
-			c.rulef("query-sql-shape", "%s: sql table %s not found", where, t)
-			continue
-		}
-		if !declared[t] {
-			c.rulef("query-table-sql", "%s: sql table %s is not declared in table/tables", where, t)
-		}
-		sqlTables[t] = true
-	}
-	for _, t := range q.Tables {
-		if !sqlTables[t] {
-			c.rulef("query-table-sql", "%s: declared table %s does not appear in sql", where, t)
+			c.rulef("query-table-shape", "%s: sql table %s not found", where, t)
 		}
 	}
 
@@ -581,23 +559,8 @@ func (c *Checker) columnInTables(col string, tables []string) bool {
 }
 
 func (c *Checker) checkQueryTable(q *queryInfo) {
-	if q.HasTable == q.HasTables {
-		c.rulef("query-table-shape", "%s: query %s requires exactly one of table/tables", q.File, q.ID)
-	}
-	if len(q.Tables) == 0 {
-		c.rulef("query-table-shape", "%s: query %s table/tables must not be empty", q.File, q.ID)
-		return
-	}
 	seen := map[string]bool{}
 	for _, t := range q.Tables {
-		if t == c.baseID {
-			c.rulef("query-table-shape", "%s: query %s references data.tables.base", q.File, q.ID)
-			continue
-		}
-		if _, ok := c.tableColumns[t]; !ok {
-			c.rulef("query-table-shape", "%s: query %s table %s not found", q.File, q.ID, t)
-			continue
-		}
 		if seen[t] {
 			c.rulef("query-table-shape", "%s: query %s duplicate table %s", q.File, q.ID, t)
 		}
@@ -774,7 +737,7 @@ func (c *Checker) checkQueryReturnColumns(q *queryInfo) {
 				c.rulef("query-output-fields", "%s: query %s output field %s missing type", q.File, q.ID, f.Name)
 			case strings.HasPrefix(f.Type, "data.enums."):
 				// 枚举存在性由全局 enum 引用扫描校验。
-			case !entityScalarType(f.Type):
+			case !c.isEntityType(f.Type):
 				c.rulef("query-output-fields", "%s: query %s output field %s has unsupported type %s", q.File, q.ID, f.Name, f.Type)
 			}
 			if f.Name != "" && !aliases[f.Name] {
@@ -817,16 +780,16 @@ func (c *Checker) checkQueryReturnColumns(q *queryInfo) {
 			return
 		}
 		for _, col := range q.ReturnColumns {
-			f := findEntityField(e, col)
+			f := findEntityFieldByColumn(e, col)
 			if f == nil {
-				c.rulef("query-return-columns", "%s: query %s return field %s not found in %s", q.File, q.ID, col, e.ID)
+				c.rulef("query-return-columns", "%s: query %s return column %s not found in %s", q.File, q.ID, col, e.ID)
 				continue
 			}
 			if !selectedSet[col] {
-				c.rulef("query-return-columns", "%s: query %s return field %s is not selected in SQL", q.File, q.ID, col)
+				c.rulef("query-return-columns", "%s: query %s return column %s is not selected in SQL", q.File, q.ID, col)
 			}
 			if f.NeverExpose && q.Module != c.tableOwners[f.ColumnTable] {
-				c.rulef("query-sensitive-columns", "%s: query %s returns never_expose field %s outside module %s", q.File, q.ID, col, c.tableOwners[f.ColumnTable])
+				c.rulef("query-sensitive-columns", "%s: query %s returns never_expose field %s outside module %s", q.File, q.ID, f.Name, c.tableOwners[f.ColumnTable])
 			}
 		}
 		c.checkEntityCoverage(q, selected, q.ReturnColumns)
@@ -849,7 +812,7 @@ func (c *Checker) checkSensitiveWithoutColumns(q *queryInfo, selected map[string
 			return
 		}
 		for _, f := range e.Fields {
-			if f.NeverExpose && selected[f.Name] {
+			if f.NeverExpose && selected[f.Column] {
 				c.rulef("query-sensitive-columns", "%s: query %s must list return_columns to exclude never_expose field %s", q.File, q.ID, f.Name)
 			}
 		}
@@ -870,7 +833,7 @@ func (c *Checker) checkEntityCoverage(q *queryInfo, selected, required []string)
 		req[s] = true
 	}
 	for _, f := range e.Fields {
-		if !sel[f.Name] {
+		if !sel[f.Column] {
 			continue
 		}
 		if f.ColumnTable != "" && !containsString(q.Tables, f.ColumnTable) {
@@ -878,7 +841,7 @@ func (c *Checker) checkEntityCoverage(q *queryInfo, selected, required []string)
 		}
 	}
 	for _, f := range e.Fields {
-		if f.Required && !f.NeverExpose && !req[f.Name] {
+		if f.Required && !f.NeverExpose && !req[f.Column] {
 			c.rulef("query-entity-coverage", "%s: query %s omits required field %s", q.File, q.ID, f.Name)
 		}
 	}
@@ -887,6 +850,15 @@ func (c *Checker) checkEntityCoverage(q *queryInfo, selected, required []string)
 func findEntityField(e *entityInfo, name string) *entityFieldInfo {
 	for i := range e.Fields {
 		if e.Fields[i].Name == name {
+			return &e.Fields[i]
+		}
+	}
+	return nil
+}
+
+func findEntityFieldByColumn(e *entityInfo, column string) *entityFieldInfo {
+	for i := range e.Fields {
+		if e.Fields[i].Column == column {
 			return &e.Fields[i]
 		}
 	}

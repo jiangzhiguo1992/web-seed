@@ -26,7 +26,7 @@ func validatePatterns(fields []Field) error {
 var schemaFieldTypes = map[string]bool{
 	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
 	"boolean": true, "any": true, "object": true,
-	"list<string>": true, "list<object>": true, "list<list<string>>": true,
+	"list<string>": true, "list<object>": true, "list<list<string>>": true, "list<any>": true,
 }
 
 // validateFieldTypes 校验 _meta 自身的 type 词汇；避免把列类型族的
@@ -152,6 +152,13 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			}
 			c.validateDoc(m, f.ItemFields, fmt.Sprintf("%s[%d]", path, i))
 		}
+	case "list<any>":
+		l, ok := asList2(v)
+		if !ok {
+			c.rulef("schema.type", "%s: must be list", path)
+			return
+		}
+		c.checkMinItems(l, f, path)
 	case "list<list<string>>":
 		l, ok := asList2(v)
 		if !ok {

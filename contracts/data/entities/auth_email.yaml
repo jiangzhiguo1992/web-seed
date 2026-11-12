@@ -9,30 +9,30 @@ schema_version: 1
 id: data.entities.auth_email
 summary: "邮箱认证数据实体"
 stability: stable
+name: authEmail
 extends: [ data.entities.base ]
-table: data.tables.auth_email
-identity: id
+tables: [ data.tables.auth_email ]
 do_not:
   - "auth_email.domain 不要写进账号主表"
   - "auth_email 的完整邮箱不要出现在日志"
 
 fields:
-  - name: account_id
+  - name: AccountID
     type: string
     required: true
     mutable: false
-  - name: username
+  - name: Username
     type: string
     required: true
     pii: true
-  - name: domain
+  - name: Domain
     type: string
     required: true
-  - name: entity
+  - name: Entity
     type: string
-  - name: tld
+  - name: TLD
     type: string
-  - name: status
+  - name: Status
     type: data.enums.auth_status
 
 relations:
@@ -40,7 +40,7 @@ relations:
 
 validation:
   - id: data.entities.auth_email.domain_parts
-    expr: "tld == nil || domain endsWith('.' + tld)"
+    expr: "TLD == nil || Domain endsWith('.' + TLD)"
     on_violation: platform.errors.AUTH_EMAIL_INVALID
 
 used_by:

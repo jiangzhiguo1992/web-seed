@@ -32,11 +32,10 @@ scripts/cmd/
 
 ### 1.1 为什么没有 `_types.yaml`
 
-类型级信息只有三类：
+类型级信息只有两类：
 
 - **可执行规则**：`schema.*` 由 checker 代码直接强制，不写 YAML 清单；
 - **字段规范**：每类一份 `_meta/<type>.yaml`，包含字段树、值域、类型规则和 `targets`；
-- **类型专有策略**：例如迁移策略，直接放在 `_meta/data.tables.yaml` 的 `migration`。
 
 不再维护“元数据的元数据”第三份文件；实例的 `enforcement` / `consumers` 以 `index.yaml` 为准。
 
@@ -79,7 +78,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；entity/query 骨架要求目标表契约已存在，query 默认生成只依赖主键的 `SELECT EXISTS`，不会伪造业务字段。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `name`，需要 public 时改成 PascalCase；query 默认生成只依赖主键的 `SELECT EXISTS`，不会伪造业务字段。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -131,28 +130,33 @@ scripts/cmd/
   - `used_by.entities/tables` 必须与 entity 字段引用完全一致；只列 data.entities/data.tables，capability/feature 引用不写入 used_by，空列表合法
 - `data.entities.base`（`contracts/data/entities/_base.yaml`，单例）
   - 路径/ID 由 checker 写死识别；5 个字段固定为 `id` / `status` / `created_at` / `updated_at` / `deleted_at`
-  - `id` string 非空、`status` integer 非空、时间列 timestamp（`created_at`/`updated_at` 非空、`deleted_at` 可空）；`id` 与三个时间列 `mutable:false`
+  - `ID` string 非空、`Status` integer 非空、时间列 timestamp（`CreatedAt`/`UpdatedAt` 非空、`DeletedAt` 可空）；`ID` 与三个时间列 `mutable:false`
   - `do_not` 直接写在 `_base.yaml`，承载 `data.entities` 类型级通用规则；具体实体 `do_not` 必须含本实体标识
 - `data/entities/*.yaml`
   - 结构按 `_meta/data.entities.yaml`；`extends` 必须是 `[data.entities.base]`；具体实体不得重声明基类字段，`status` 可用 `data.enums.*` 特化
-  - `table`/`tables` 二选一；每张物理表至少一个 entity 映射
+  - `tables` 必填、非空、去重；`tables[0]` 是主表；每张物理表至少一个 entity 映射
   - 字段必须投影回列：单表可省略 `column`，多表必须写；同一列不得被两个字段引用
-  - `required` 必须等价于来源列非空；`pii`/`never_expose` 不得放松；显式类型必须与列类型族一致
-  - `identity` 必须是 required、mutable:false、主表主键
+  - `required` 必须等价于来源列非空；`pii`/`never_expose` 不得放松；显式类型复用 `data.tables` 类型族，或 `data.enums.*`
+  - 实体 `name` 是 Go 类型名：首字母大写 public，小写 internal；不得重名
+  - 实体 `name` 是 Go 类型名：首字母大写 public，小写 internal
+  - `ID` 是所有实体的唯一主键：来自主表 `id` 列，required、mutable:false、唯一主键
+  - 字段 `name` 是 Go 字段名：首字母大写导出，小写不导出；`never_expose` 字段必须小写开头
+  - 默认列名/JSON 名是 `snake_case(name)`；可用 `column` / `json_name` 覆盖
+  - 字段可声明生成语义：`json_name`、`examples`、`description`；`json_name` 在同一实体内唯一，`examples` 元素类型必须与字段类型一致
   - `relations` 的 target/via/方向/类型一致性；eager 必须有索引且不得成环
   - `validation` 的 id 前缀、expr 非空、`on_violation` 必须存在
   - `used_by.queries` 与 returns 本实体的 query 完全一致；`used_by.entities` 与 relations 入边一致
 - `data/queries/*.yaml`
   - 结构按 `_meta/data.queries.yaml`；query id 前缀、name=PascalCase、name 全局唯一
-  - `table`/`tables` 二选一；SQL 必须出现声明的物理表名
+  - 不再手写 `table`/`tables`：表从 `sql.from` / `sql.into` / `sql.joins[].table` 推导；SQL 必须声明 from/into，表必须存在
   - params 与 SQL 双向一致；`nullable` 与 `sqlc.narg` 严格对应
   - `returns` DSL：表行 / 实体 / 标量 / object；`[]` 与 kind 一致；object 必须有 output_fields
-  - `return_columns` 必须是表列或实体字段；实体返回必须覆盖 required 非敏感字段
+  - `return_columns` 必须是物理列；实体返回必须覆盖 required 非敏感字段
   - 单表 query 必须有 `index_columns` 且列出现在 SQL；多表 query 不得写，也不得进索引 `used_by`
   - 写查询的 module 必须等于所写表 `owner_module`；`never_expose` 列只有同模块可返回
   - 禁止 `SELECT *`；`one` 非标量返回必须命中唯一索引或 `sql.limit: "1"`
 - 实体/查询/能力对表的引用存在
-- 查询 `return_columns` 必须是表列（实体返回时是实体字段）
+- 查询 `return_columns` 必须是物理列（实体返回也按列名）
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复；entities/queries 文件必须登记
 
 **尚未机器化**（写在 `_meta` 的 `description` / `caution` / `rules`，靠 review）：
@@ -169,7 +173,7 @@ scripts/cmd/
 ## 5. 字段节点怎么读
 
 字段节点的硬/软分类、`required`、`default`、`stability` 等通用语义见本节；
-`data.tables.yaml` 只保留 data.tables 特有的 `column_types` / `column_refs` / `migration`。
+`data.tables.yaml` 只保留 data.tables 特有的 `column_types` / `column_refs`。
 
 | 键 | 用途 |
 |---|---|
@@ -188,7 +192,7 @@ scripts/cmd/
 
 **先读 `description` 和 `caution`，不要只按字段名猜。**
 
-通用结构规则（`schema.id-from-file`、`schema.contract-id-unique`、`schema.unique-names`）由 checker 代码强制，不再维护独立的 YAML 清单。`data.tables.yaml` 的 `migration` 定义迁移命名、禁止操作、人工调整与验证命令；实例的 `enforcement` / `consumers` 以 `index.yaml` 为准。类型级 `do_not` 已移到组 README 或 `<type>/_base.yaml`，`_meta` 下禁止出现 `do_not`。
+通用结构规则（`schema.id-from-file`、`schema.contract-id-unique`、`schema.unique-names`）由 checker 代码强制，不再维护独立的 YAML 清单。实例的 `enforcement` / `consumers` 以 `index.yaml` 为准。类型级 `do_not` 已移到组 README 或 `<type>/_base.yaml`，`_meta` 下禁止出现 `do_not`。
 
 ### 5.1 `stability` 流转
 

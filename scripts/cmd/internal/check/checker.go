@@ -4,7 +4,7 @@
 //   - contracts 下文本字段（description/comment/summary/do_not 等）双引号强制
 //   - data.tables / data.tables.base 的结构、ID/文件、基类 5 列、列/约束/索引、used_by、do_not 具体性
 //   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、code int32 范围、stability 与 summary
-//   - data.entities 的投影、identity、relations、validation、used_by
+//   - data.entities 的投影、ID、name、relations、validation、used_by
 //   - data.queries 的 ID/名称、表、params、returns、SQL 形态、写归属与敏感列
 //   - 表列引用的 column_refs 前缀是否存在；表列不引用 data.enums.*
 //   - 任意契约中的 data.enums.* 类型引用必须存在
@@ -55,17 +55,18 @@ type Checker struct {
 	objectKinds     map[string]string
 
 	// 实体与查询解析索引。
-	tableColumns     map[string]map[string]columnMeta
-	entityDocs       []entityDoc
-	entityBaseDoc    map[string]any
-	entityBaseFields []entityFieldInfo
-	entities         map[string]*entityInfo
-	entityOrder      []string
-	queries          map[string]*queryInfo
-	queryDocs        []queryDoc
-	queryOrder       []string
-	queryDupIDs      map[string]bool
-	errCodeSet       map[string]bool
+	tableColumns      map[string]map[string]columnMeta
+	tableTypeFamilies map[string]bool
+	entityDocs        []entityDoc
+	entityBaseDoc     map[string]any
+	entityBaseFields  []entityFieldInfo
+	entities          map[string]*entityInfo
+	entityOrder       []string
+	queries           map[string]*queryInfo
+	queryDocs         []queryDoc
+	queryOrder        []string
+	queryDupIDs       map[string]bool
+	errCodeSet        map[string]bool
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -110,6 +111,10 @@ func (c *Checker) run() {
 	}
 
 	c.loadQueryIndex(querySchema)
+	c.tableTypeFamilies = map[string]bool{}
+	for name := range tableSchema.ColumnTypes.ValueTypeFamilies {
+		c.tableTypeFamilies[name] = true
+	}
 	tableIDs, cols := c.checkTables(tableSchema)
 	c.loadTableColumns(tableIDs)
 	c.loadEntities(entitySchema)

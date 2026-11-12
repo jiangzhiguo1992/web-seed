@@ -543,7 +543,10 @@ func TestUsedByEntitiesAndQueries(t *testing.T) {
 id: data.queries.q
 queries:
   - id: data.queries.q.get_x
-    table: data.tables.x
+    sql:
+      statement: select
+      from: data.tables.x
+      select: [ id ]
 `)
 	write("contracts/data/tables/x.yaml", `
 id: data.tables.x

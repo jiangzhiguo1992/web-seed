@@ -9,33 +9,33 @@ schema_version: 1
 id: data.entities.auth_pwd
 summary: "密码认证数据实体"
 stability: stable
+name: authPwd
 extends: [ data.entities.base ]
-table: data.tables.auth_pwd
-identity: id
+tables: [ data.tables.auth_pwd ]
 do_not:
-  - "auth_pwd.password_hash 禁止出现在任何 DTO、日志、事件"
+  - "auth_pwd.passwordHash 禁止出现在任何 DTO、日志、事件"
   - "auth_pwd 不写密码强度规则；规则在 platform/security/auth_policy"
 
 fields:
-  - name: account_id
+  - name: AccountID
     type: string
     required: true
     mutable: false
-  - name: username
+  - name: Username
     type: string
     required: true
     pii: true
-  - name: password_hash
+  - name: passwordHash
     type: string
     pii: true
     never_expose: true
-    note: "argon2id；新密码写入此列"
-  - name: failed_login_count
+    description: "argon2id；新密码写入此列"
+  - name: FailedLoginCount
     type: integer
     required: true
-  - name: locked_until
+  - name: LockedUntil
     type: timestamp
-  - name: status
+  - name: Status
     type: data.enums.auth_status
 
 relations:
@@ -43,10 +43,10 @@ relations:
 
 validation:
   - id: data.entities.auth_pwd.password_present
-    expr: "password_hash != nil"
+    expr: "PasswordHash != nil"
     on_violation: platform.errors.AUTH_INVALID_CREDENTIALS
   - id: data.entities.auth_pwd.lock_consistency
-    expr: "locked_until == nil || failed_login_count > 0"
+    expr: "LockedUntil == nil || FailedLoginCount > 0"
     on_violation: platform.errors.AUTH_LOCKED
 
 used_by:

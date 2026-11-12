@@ -103,8 +103,18 @@ func TestRenderEntity(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
 	}
-	if doc["id"] != "data.entities.account_preview" || doc["table"] != "data.tables.account" || doc["identity"] != "id" {
+	if doc["id"] != "data.entities.account_preview" || doc["name"] != "accountPreview" {
 		t.Fatalf("unexpected top-level: %#v", doc)
+	}
+	tables, _ := doc["tables"].([]any)
+	if len(tables) != 1 || tables[0] != "data.tables.account" {
+		t.Fatalf("tables not scaffolded: %#v", doc["tables"])
+	}
+	if _, ok := doc["table"]; ok {
+		t.Fatalf("single table field must not be generated: %#v", doc)
+	}
+	if _, ok := doc["identity"]; ok {
+		t.Fatalf("identity must not be generated: %#v", doc)
 	}
 	extends, _ := doc["extends"].([]any)
 	if len(extends) != 1 || extends[0] != "data.entities.base" {
@@ -141,8 +151,11 @@ func TestRenderQuery(t *testing.T) {
 	if q["id"] != "data.queries.account.exists_account" || q["name"] != "ExistsAccount" {
 		t.Fatalf("query id/name not scaffolded: %#v", q)
 	}
-	if q["returns"] != "boolean" || q["table"] != "data.tables.account" {
-		t.Fatalf("query returns/table not scaffolded: %#v", q)
+	if q["returns"] != "boolean" {
+		t.Fatalf("query returns not scaffolded: %#v", q)
+	}
+	if _, ok := q["table"]; ok {
+		t.Fatalf("query must not scaffold table: %#v", q)
 	}
 	sqlMap, ok := q["sql"].(map[string]any)
 	if !ok {
@@ -154,6 +167,9 @@ func TestRenderQuery(t *testing.T) {
 	selects, _ := sqlMap["select"].([]any)
 	if len(selects) != 1 || !strings.Contains(selects[0].(string), "FROM accounts") {
 		t.Fatalf("physical table not used: %#v", sqlMap["select"])
+	}
+	if !strings.Contains(string(b), "select: [") {
+		t.Fatalf("sql.select must be a flow list:\n%s", b)
 	}
 	if !strings.Contains(string(b), `semantics: "TODO: 查询语义"`) {
 		t.Fatalf("semantics must be double-quoted:\n%s", b)

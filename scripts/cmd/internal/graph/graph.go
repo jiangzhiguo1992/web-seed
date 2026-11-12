@@ -125,7 +125,7 @@ func Compute(root string) (*Snapshot, error) {
 				return nil, fmt.Errorf("duplicate query id %s: %s and %s", qid, prev, rel(root, f))
 			}
 			seenQueries[qid] = rel(root, f)
-			for _, t := range tableRefs(m) {
+			for _, t := range queryTableRefs(m) {
 				if ts := tables[t]; ts != nil {
 					ts.queries[qid] = true
 				}
@@ -405,6 +405,30 @@ func asMap(v any) (map[string]any, bool) {
 func asList(v any) []any {
 	l, _ := v.([]any)
 	return l
+}
+
+// queryTableRefs 从结构化 sql 子句推导查询表；query 契约不再手写 table/tables。
+func queryTableRefs(m map[string]any) []string {
+	sql, _ := asMap(m["sql"])
+	if sql == nil {
+		return nil
+	}
+	var out []string
+	add := func(v any) {
+		if s, ok := v.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	add(sql["from"])
+	add(sql["into"])
+	for _, raw := range asList(sql["joins"]) {
+		jm, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		add(jm["table"])
+	}
+	return out
 }
 
 func tableRefs(m map[string]any) []string {
