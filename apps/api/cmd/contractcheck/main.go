@@ -91,6 +91,9 @@ func loadSchema(path string) (*Schema, error) {
 	if err := validatePatterns(s.Fields); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := validateFieldTypes(s.Fields); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 	return s, nil
 }
 

@@ -23,6 +23,28 @@ func validatePatterns(fields []Field) error {
 	return nil
 }
 
+var schemaFieldTypes = map[string]bool{
+	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
+	"boolean": true, "any": true, "object": true, "list<string>": true, "list<object>": true,
+}
+
+// validateFieldTypes 校验 _meta 自身的 type 词汇；避免把列类型族的
+// float/decimal 误写进 schema 的 Field.type 后，只在某列使用时才暴露。
+func validateFieldTypes(fields []Field) error {
+	for _, f := range fields {
+		if !schemaFieldTypes[f.Type] {
+			return fmt.Errorf("field %s: unknown schema type %q", f.Name, f.Type)
+		}
+		if err := validateFieldTypes(f.Fields); err != nil {
+			return err
+		}
+		if err := validateFieldTypes(f.ItemFields); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *Checker) validateDoc(doc map[string]any, fields []Field, path string) {
 	known := map[string]bool{}
 	for _, f := range fields {
@@ -63,7 +85,7 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 		c.checkConst(v, f, path)
 		c.checkNumericEnum(fmt.Sprint(n), f, path)
 		c.checkIntRange(n, f, path)
-	case "number":
+	case "number", "float", "decimal":
 		n, ok := toFloat(v)
 		if !ok {
 			c.errf("%s: must be number", path)

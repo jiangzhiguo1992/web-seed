@@ -54,6 +54,8 @@ scripts/contract/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
+`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。生成后仍需跑 `contract-check` 完成硬约束校验。
+
 ---
 
 ## 4. 当前试点范围
@@ -101,7 +103,7 @@ scripts/contract/
 | `required` / `type` / `enum` / `allowed` / `pattern` / `const` | 结构约束 |
 | `default` | 生成骨架时的默认值 |
 | `examples` | 示例值；`contract-new` 可用于生成 |
-| `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；每个参数可带 `required`、`min`、`max`、`enum`、`default`；不是数据库物理类型 |
+| `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；每个参数可带 `required`、`min`、`max`、`enum`、`default`；`min`/`max` 的 `type` 使用所属族名（integer / float / decimal），不使用抽象 number；不是数据库物理类型 |
 | `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；不是类型族，也不是外键；与 `column_types` 分开 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
 | `rules` | 跨字段规则的声明式说明 |

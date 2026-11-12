@@ -4,6 +4,7 @@ package contractspec
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -74,6 +75,15 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	if s == nil || s.Type != "data.tables" {
 		return nil, fmt.Errorf("RenderTable: want data.tables schema")
 	}
+	if !validName(name) {
+		return nil, fmt.Errorf("RenderTable: invalid name %q (snake_case required)", name)
+	}
+	if !validName(module) {
+		return nil, fmt.Errorf("RenderTable: invalid module %q (snake_case required)", module)
+	}
+	if strings.TrimSpace(summary) == "" {
+		return nil, fmt.Errorf("RenderTable: summary must not be empty")
+	}
 	top := map[string]bool{
 		"schema_version": true, "id": true, "summary": true, "stability": true,
 		"owner_module": true, "extends": true, "do_not": true, "table": true,
@@ -129,7 +139,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		Extends:       defaultList(s.Fields, "extends", []string{"data.tables.base"}),
 		DoNot:         []string{},
 		Table: tableDef{
-			Comment:   summary,
+			Comment:   "TODO: 表说明",
 			SizeClass: sizeClass,
 		},
 		Columns: []columnDef{
@@ -216,6 +226,12 @@ func scaffoldFamilyParams(s *Schema, columnType string) (map[string]any, error) 
 		}
 	}
 	return out, nil
+}
+
+var snakeNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+func validName(s string) bool {
+	return snakeNamePattern.MatchString(s)
 }
 
 func firstExample(fields []Field, name, fallback string) string {

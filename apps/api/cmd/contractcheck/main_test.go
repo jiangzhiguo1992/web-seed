@@ -46,6 +46,27 @@ func TestIsColumnType(t *testing.T) {
 	}
 }
 
+func TestValidateFieldTypes(t *testing.T) {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "uuid"}}); err == nil {
+		t.Fatal("expected invalid schema type to fail")
+	}
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "float"}}); err != nil {
+		t.Fatalf("float schema type reported: %v", err)
+	}
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "decimal"}}); err != nil {
+		t.Fatalf("decimal schema type reported: %v", err)
+	}
+}
+
+func TestNumericFamilyParamTypes(t *testing.T) {
+	c := &Checker{}
+	c.validateValue(1.5, Field{Type: "float"}, "float")
+	c.validateValue(1.5, Field{Type: "decimal"}, "decimal")
+	if len(c.errs) != 0 {
+		t.Fatalf("numeric family param types reported: %v", c.errs)
+	}
+}
+
 func TestCheckStability(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "x.yaml"), []byte("# TODO\n"), 0o644); err != nil {
@@ -126,6 +147,8 @@ func TestFamilyParams(t *testing.T) {
 			"string": {Params: map[string]Field{
 				"min_len": {Type: "integer", Min: 0},
 				"max_len": {Type: "integer", Min: 0},
+				"pattern": {Type: "string"},
+				"fixed":   {Type: "boolean"},
 			}},
 		}}}
 
@@ -152,6 +175,18 @@ func TestFamilyParams(t *testing.T) {
 	c.checkFamilyParams(map[string]any{"name": "nickname", "type": "string", "min_len": 10, "max_len": 2}, "string", "x", 0, "nickname", schema)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "min_len > max_len") {
 		t.Fatalf("min_len > max_len not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "code", "type": "string", "pattern": "["}, "string", "x", 0, "code", schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "invalid pattern") {
+		t.Fatalf("invalid pattern not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "code", "type": "string", "fixed": true}, "string", "x", 0, "code", schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "fixed requires max_len") {
+		t.Fatalf("fixed without max_len not reported: %v", c.errs)
 	}
 }
 

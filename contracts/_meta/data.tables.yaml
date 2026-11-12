@@ -129,7 +129,7 @@ fields:
     default: [data.tables.base]
     description: 契约层继承基类 5 列；生成器把基类列展开到物理表
     generates: expand_base_columns
-    caution: 不是 PostgreSQL INHERITS、外键或组合；不要写其他表
+    caution: 不是数据库继承、外键或组合；不要写其他表
 
   - name: do_not
     type: list<string>
@@ -151,11 +151,10 @@ fields:
         pattern: '^[a-z][a-z0-9_]*$'
         description: 物理表名；默认等于文件段，需要不同名时显式覆盖
         generates: DDL 表名、SQL FROM 目标
-        caution: 不是契约 ID
       - name: comment
         type: string
         required: true
-        description: 写入 PostgreSQL/MYSQL COMMENT
+        description: 写入数据库 COMMENT
         generates: DDL COMMENT
         caution: 不要和 summary 重复
       - name: size_class
@@ -173,10 +172,10 @@ fields:
         generates: cleanup_job_policy
         caution: 不是数据库 TTL
         fields:
-          - { name: pending_days, type: integer, required: false }
-          - { name: soft_delete_days, type: integer, required: false }
-          - { name: hard_delete_days, type: integer, required: false }
-          - { name: expired_days, type: integer, required: false }
+          - { name: pending_days, type: integer, required: false, description: 待处理数据保留天数 }
+          - { name: soft_delete_days, type: integer, required: false, description: 软删除数据保留天数 }
+          - { name: hard_delete_days, type: integer, required: false, description: 硬删除数据保留天数 }
+          - { name: expired_days, type: integer, required: false, description: 过期数据保留天数 }
       - name: partition
         type: object
         required: false
@@ -184,9 +183,9 @@ fields:
         generates: DDL PARTITION BY
         caution: 不要用原生 SQL 字段
         fields:
-          - { name: strategy, type: string, required: true, enum: [range, list, hash] }
-          - { name: columns, type: list<string>, required: true }
-          - { name: interval, type: string, required: false }
+          - { name: strategy, type: string, required: true, enum: [range, list, hash], description: 分区策略 }
+          - { name: columns, type: list<string>, required: true, description: 分区键列 }
+          - { name: interval, type: string, required: false, description: range 分区的间隔表达式 }
 
   - name: columns
     type: list<object>
@@ -197,16 +196,16 @@ fields:
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', examples: ["name"], description: 列名 }
       - { name: type, type: string, required: true, default: string, description: 列类型；类型族键，或 column_refs.prefixes 允许的引用 }
-      - { name: nullable, type: boolean, required: false, default: false, description: 是否可空 }
-      - { name: primary_key, type: boolean, required: false }
-      - { name: generated_by, type: string, required: false, enum: [application, database] }
-      - { name: default, type: any, required: false }
-      - { name: default_sql, type: string, required: false }
+      - { name: nullable, type: boolean, required: false, default: false, description: 是否允许 NULL；未写视为 false }
+      - { name: primary_key, type: boolean, required: false, description: 是否主键；主键列不可空 }
+      - { name: generated_by, type: string, required: false, enum: [application, database], description: 初始值由应用还是数据库生成 }
+      - { name: default, type: any, required: false, description: 字面量默认值；与 default_sql 互斥 }
+      - { name: default_sql, type: string, required: false, description: SQL 表达式默认值；与 default 互斥 }
       # 类型族扩展字段由 column_types.families.params 注入
-      - { name: pii, type: boolean, required: false }
-      - { name: never_expose, type: boolean, required: false }
-      - { name: managed_by, type: string, required: false, enum: [application, database] }
-      - { name: comment, type: string, required: false }
+      - { name: pii, type: boolean, required: false, description: 是否包含个人敏感信息 }
+      - { name: never_expose, type: boolean, required: false, description: 是否禁止进入普通 API/TS/事件/entity }
+      - { name: managed_by, type: string, required: false, enum: [application, database], description: 后续写入由应用还是数据库维护 }
+      - { name: comment, type: string, required: false, description: 列说明；写入 DDL COMMENT }
 
   - name: constraints
     type: list<object>
@@ -215,15 +214,15 @@ fields:
     generates: DDL CHECK/FK/UNIQUE/EXCLUDE
     caution: 业务不变量不要写在这里；去 entities.validation 或 business.rules
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^(ck|fk|uq|ex)_[a-z][a-z0-9_]*$' }
-      - { name: type, type: string, required: true, enum: [check, unique, foreign_key, enum, exclude] }
-      - { name: expr, type: string, required: false }
-      - { name: column, type: string, required: false }
-      - { name: enum, type: string, required: false }
-      - { name: columns, type: list<string>, required: false }
-      - { name: references, type: string, required: false }
-      - { name: on_delete, type: string, required: false, enum: [cascade, restrict, no_action, set_null, set_default] }
-      - { name: on_update, type: string, required: false, enum: [cascade, restrict, no_action, set_null, set_default] }
+      - { name: name, type: string, required: true, pattern: '^(ck|fk|uq|ex)_[a-z][a-z0-9_]*$', description: 约束名；按类型使用固定前缀 }
+      - { name: type, type: string, required: true, enum: [check, unique, foreign_key, enum, exclude], description: 约束类型 }
+      - { name: expr, type: string, required: false, description: check/exclude 的 SQL 表达式 }
+      - { name: column, type: string, required: false, description: enum 约束的列名 }
+      - { name: enum, type: string, required: false, description: enum 约束引用的 data.enums.* }
+      - { name: columns, type: list<string>, required: false, description: unique/foreign_key 的列名 }
+      - { name: references, type: string, required: false, description: foreign_key 目标 data.tables.<file>.col.<col> }
+      - { name: on_delete, type: string, required: false, enum: [cascade, restrict, no_action, set_null, set_default], description: 删除动作 }
+      - { name: on_update, type: string, required: false, enum: [cascade, restrict, no_action, set_null, set_default], description: 更新动作 }
 
   - name: indexes
     type: list<object>
@@ -232,16 +231,16 @@ fields:
     generates: DDL INDEX
     caution: 不要写无理由索引；唯一索引必须带软删过滤
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$' }
-      - { name: columns, type: list<string>, required: false }
-      - { name: expression, type: string, required: false }
-      - { name: unique, type: boolean, required: false }
-      - { name: where, type: string, required: false }
-      - { name: order, type: list<string>, required: false }
-      - { name: reason, type: string, required: true }
-      - { name: method, type: string, required: false, enum: [btree, hash, gin, gist, brin] }
-      - { name: concurrently, type: string, required: false, enum: [auto, "true", "false"] }
-      - { name: include, type: list<string>, required: false }
+      - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: 索引名；普通索引 idx_，唯一索引 uq_ }
+      - { name: columns, type: list<string>, required: false, description: 索引列；与 expression 二选一 }
+      - { name: expression, type: string, required: false, description: 表达式索引；与 columns 二选一 }
+      - { name: unique, type: boolean, required: false, description: 是否唯一索引 }
+      - { name: where, type: string, required: false, description: 部分索引条件 }
+      - { name: order, type: list<string>, required: false, description: 索引排序 }
+      - { name: reason, type: string, required: true, description: 为什么需要这个索引 }
+      - { name: method, type: string, required: false, enum: [btree, hash, gin, gist, brin], description: 索引方法 }
+      - { name: concurrently, type: string, required: false, enum: [auto, "true", "false"], description: 是否并发创建 }
+      - { name: include, type: list<string>, required: false, description: 覆盖索引的附加列 }
 
   - name: used_by
     type: object

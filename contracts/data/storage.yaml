@@ -13,13 +13,16 @@ stability: stable
 do_not:
   - 禁止在 data/tables/*.yaml 里声明 engine，存储引擎只在本文件定义
   - 未列出的引擎与拓扑一律视为不支持，禁止自行引入
-  - Redis 不是表存储；表数据只能落在 primary 引擎
+  - Redis 不是表存储；表数据只能落在当前 default_engine
   - 多实例部署时，定时任务必须显式声明锁机制，不能只写 max_in_flight
 
-primary: postgres
+# 默认引擎，不等于唯一允许的引擎；切换时只改这里和对应 engine 配置。
+default_engine: postgres
+supported_engines: [postgres, mysql, mongodb]
 
 engines:
   postgres:
+    enabled: true
     version: "18"
     extensions: [pgcrypto]
     timezone: UTC
@@ -27,6 +30,18 @@ engines:
     max_conns: 20
     migration_tool: goose
     transaction_default: true
+
+  mysql:
+    version: "8.4"
+    timezone: UTC
+    charset: utf8mb4
+    migration_tool: goose
+    note: 允许作为默认引擎；启用时改 default_engine
+
+  mongodb:
+    version: "8"
+    model: document
+    note: 文档模型；允许作为默认引擎，但启用时 tables 契约需映射为 collection
 
   redis:
     enabled: false
@@ -42,14 +57,12 @@ deployment:
     read_split: false
   jobs:
     runner: single               # single | multi
-    distributed_lock: postgres_advisory_lock
+    distributed_lock: engine_advisory_lock
   migrations:
     strategy: forward_only
     concurrent_index: auto       # 由 table.size_class 决定
 
 not_supported:
-  - mysql
-  - mongodb
   - sharding
   - multi-primary
   - cross-region

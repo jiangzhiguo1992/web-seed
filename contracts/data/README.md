@@ -82,7 +82,7 @@ data/storage.yaml ────> 配置校验 + 运维约束
 4. **类型族扩展字段写在列上**：`string` 用 `min_len`/`max_len`/`fixed`/`pattern`/`normalize`，`bytes` 用 `min_len`/`max_len`/`fixed`，`integer` 用 `bits`/`unsigned`/`min`/`max`，`float` 用 `bits`/`min`/`max`，`decimal` 用 `precision`/`scale`/`min`/`max`，`datetime` 用 `mode`/`timezone`，`timestamp` 用 `timezone`/`fractional_seconds`，`json` 用 `binary`。字段定义与 `required` 在 `contracts/_meta/data.tables.yaml` 的 `column_types.families`。
 5. **时间统一 `timestamp`**，应用层只用 UTC。
 6. **软删表必须有 `deleted_at`**，唯一约束必须带 `where: "deleted_at IS NULL"`。
-7. **枚举用 `string + check`**，不用 PostgreSQL enum；枚举值只能追加。
+7. **枚举用 `string + check`**，不用数据库原生 enum；枚举值只能追加。
 8. **索引必须写 `reason`**；表达式索引用 `expression`，大表用 `concurrently: auto`。
 9. **主键默认由应用层生成 UUIDv7**（`generated_by: application`），数据库不设 default。
 10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表，其他模块只能经 service 读。
@@ -163,10 +163,10 @@ indexes:
 
 `data/storage.yaml` 是项目级单例：
 
-- 引擎、版本、扩展、连接池、迁移工具
+- `supported_engines` / `default_engine`（postgres / mysql / mongodb）；`default_engine` 是当前项目选择，不是唯一允许引擎
 - 部署拓扑（single-primary / 副本数 / 读写分离）
 - 定时任务运行方式与分布式锁
-- `not_supported` 列表（mysql / mongodb / sharding / multi-primary / cross-region / outbox）
+- `not_supported` 列表（sharding / multi-primary / cross-region / outbox）
 
 表级只声明会影响 DDL/查询的物理事实：`size_class`、`retention`、`partition`。
 **禁止在 `tables/*.yaml` 里逐表声明 engine。**

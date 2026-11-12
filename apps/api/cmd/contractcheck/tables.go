@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -428,6 +429,13 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 		}
 		if present {
 			c.validateValue(v, def, fmt.Sprintf("%s.columns[%d].%s", rel, i, pk))
+			if pk == "pattern" {
+				if s, ok := v.(string); ok {
+					if _, err := regexp.Compile(s); err != nil {
+						c.errf("%s: columns[%d] (%s): invalid pattern %q: %v", rel, i, name, s, err)
+					}
+				}
+			}
 		}
 	}
 	switch t {
@@ -435,6 +443,11 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 		if a, ok := toInt(m["min_len"]); ok {
 			if b, ok2 := toInt(m["max_len"]); ok2 && a > b {
 				c.errf("%s: columns[%d] (%s): min_len > max_len", rel, i, name)
+			}
+		}
+		if fixed, ok := m["fixed"].(bool); ok && fixed {
+			if _, ok := m["max_len"]; !ok {
+				c.errf("%s: columns[%d] (%s): fixed requires max_len", rel, i, name)
 			}
 		}
 	case "integer", "float", "decimal":

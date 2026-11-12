@@ -106,6 +106,19 @@ func TestRenderTableScaffoldRequiresParamValue(t *testing.T) {
 	}
 }
 
+func TestRenderTableValidatesInput(t *testing.T) {
+	s := loadTestSchema(t)
+	if _, err := RenderTable(s, "Bad-Name", "notes", "备注表"); err == nil {
+		t.Fatal("expected invalid name to fail")
+	}
+	if _, err := RenderTable(s, "note", "Bad-Module", "备注表"); err == nil {
+		t.Fatal("expected invalid module to fail")
+	}
+	if _, err := RenderTable(s, "note", "notes", "  "); err == nil {
+		t.Fatal("expected empty summary to fail")
+	}
+}
+
 func TestRenderTableRejectsUnsupportedRequired(t *testing.T) {
 	s := loadTestSchema(t)
 	s.Fields = append(s.Fields, Field{Name: "new_required", Type: "string", Required: true})
