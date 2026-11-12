@@ -17,7 +17,7 @@ do_not:
 fields:
   - { name: id, type: string, max_len: 36, required: true, mutable: false }
   - { name: account_id, type: string, max_len: 36, required: true, mutable: false }
-  - { name: username, type: string, min_len: 1, max_len: 64, required: true }
+  - { name: username, type: string, min_len: 1, max_len: 64, required: true, pii: true }
   - { name: domain, type: string, min_len: 1, max_len: 190, required: true }
   - { name: entity, type: string, max_len: 190 }
   - { name: tld, type: string, max_len: 32 }

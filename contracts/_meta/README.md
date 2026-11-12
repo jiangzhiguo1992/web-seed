@@ -61,7 +61,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。生成后仍需跑 `contract-check` 完成硬约束校验。
+`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 不自动写 `default`（新表的枚举值尚未确定，写入 `active` 会制造隐式假设）。生成后仍需跑 `contract-check` 完成硬约束校验。
 
 ---
 
@@ -70,17 +70,20 @@ scripts/cmd/
 `contract-check` 当前覆盖：
 
 - `data.tables/*.yaml`
-  - 必填字段、类型、枚举、`const`、`pattern`
-  - `id` 与文件名一致；`_base.yaml` 特例
-  - 物理表 `extends: [data.tables.base]`；不得重复基类列
-  - `status` 必须声明，且引用 `data.enums.*`
-  - `default` / `default_sql` 互斥；`min_len <= max_len`；`min <= max`
-  - 列 / 约束 / 索引重名
-  - `constraints` 的 `type`、必填子字段与列引用
-  - `indexes` 的 `reason`、`columns` xor `expression`、唯一索引软删过滤、命名前缀、列引用
-  - `table.partition.columns` 存在
-  - `used_by` 三列表与实际入边一致
-  - `data.enums.*` 引用存在
+  - 必填字段、类型、枚举、`const`、`pattern`、`allowed`、`unique`
+  - `id` 与文件名一致；`_base.yaml` 特例；`kind: base` 只能出现在 `_base.yaml`
+  - 物理表 `extends: [data.tables.base]`；不得重复基类列；`status` 必须重声明为 `data.enums.*`
+  - `primary_key` 列不得可空
+  - `default` / `default_sql` 互斥；`default` 的 YAML 类型、长度、范围与列类型族兼容
+  - 列 / 约束 / 索引重名；`do_not` 每条必须含本表具体标识
+  - `constraints` 的 `type`、按类型允许的字段、必填子字段与列引用；enum 约束与列类型一致
+  - 外键 `columns` 与 `references` 数量一致，目标表/列存在
+  - `indexes` 的 `reason`、`columns` xor `expression`、`order` 长度/方向、唯一索引软删过滤、命名前缀、列引用；large 表不得显式禁用 `concurrently`
+  - `table.partition.columns` 存在；range 必须有 `interval`，其他策略不得有
+  - `table.retention` 的值 >= 1
+  - `used_by` 三列表与实际入边一致；`queries` 记录查询项 ID
+  - `owner_module` 与 capabilities 写表归属一致；写表不得同时列在 `read_only_tables`
+  - `data.enums.*` 引用存在；枚举列 `default` 必须是已有枚举值
 - `data/enums.yaml`
   - 集合 ID、item ID = `data.enums.<name>`、值唯一、`db_type: text`
 - 实体/查询/能力对表的引用存在
@@ -89,7 +92,7 @@ scripts/cmd/
 
 **尚未机器化**（写在 `_meta` 的 `description` / `caution` / `rules`，靠 review）：
 
-- 命名品味、业务语义、跨模块读写归属的完整判定
+- 命名品味、业务语义、跨模块读归属是否最小化
 - 全类型规范（entities/queries/http/services/...）
 - `graph.json` 越层/循环/孤儿
 - `generated/` diff
@@ -107,13 +110,13 @@ scripts/cmd/
 | `description` | 字段的准确含义 |
 | `generates` | 生成器会产出什么 / 怎么消费 |
 | `caution` | AI 最容易写错的用法 |
-| `required` / `type` / `enum` / `allowed` / `pattern` / `const` | 结构约束 |
-| `default` | 生成骨架时的默认值 |
+| `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` | 结构约束 |
+| `default` | required 字段上只影响 `contract-new` 骨架；optional 字段上表示省略时的语义默认值；`contract-check` 不补值 |
 | `examples` | 示例值；`contract-new` 可用于生成 |
 | `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；每个参数可带 `required`、`min`、`max`、`enum`、`default`；`min`/`max` 的 `type` 使用所属族名（integer / float / decimal），不使用抽象 number；不是数据库物理类型 |
 | `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；不是类型族，也不是外键；与 `column_types` 分开 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
-| `rules` | 跨字段规则的声明式说明 |
+| `rules` | 跨字段规则的声明式清单；声称硬约束的规则必须在 `scripts/cmd/internal/check` 有对应实现，否则只是文档 |
 
 **先读 `description` 和 `caution`，不要只按字段名猜。**
 
@@ -151,5 +154,6 @@ stable → deprecated
 - 不要把 `_meta` 或脚本放进 `contracts/generated/`。
 - 不要手写 `used_by`；它由 `make gen-graph` 写入，`contract-check` 校验。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
+- 不要把硬约束只写进 `rules` 而不在 `contract-check` 实现；`rules` 是清单，不是执行器。
 - 不要在 `contracts/_meta/` 里写业务实例；它只描述类型。
 - 不要为单个表/页面各写一份规范；按类型一份。

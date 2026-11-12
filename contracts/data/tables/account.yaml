@@ -7,12 +7,10 @@ stability: stable
 owner_module: accounts
 extends: [data.tables.base]
 do_not:
-  - 认证信息（密码/手机号/邮箱/令牌）禁止写入本表
-  - number 唯一索引必须带 WHERE deleted_at IS NULL
+  - account 表禁止写入密码/手机号/邮箱/令牌；这些在 auth_* / token 表
+  - uq_accounts_number 必须带 WHERE deleted_at IS NULL
   - status 只能引用 data.enums.account_status
   - own_type/own_id 表示数据归属，user_id 表示关联用户；不要把 user_id 当作 own_id 的别名
-  - 只有 owner_module 对应的 cap.services/cap.async 可以写本表，其他模块只能经 service 读
-  - used_by 由 make gen-graph 生成，禁止手改
 
 table:
   name: accounts
@@ -105,5 +103,15 @@ indexes:
 
 used_by:
   entities: [data.entities.account]
-  queries: [data.queries.account]
+  queries:
+    - data.queries.account.get_account
+    - data.queries.account.get_account_by_number
+    - data.queries.account.exists_account_number
+    - data.queries.account.list_accounts
+    - data.queries.account.create_account
+    - data.queries.account.update_account
+    - data.queries.account.set_account_status
+    - data.queries.account.soft_delete_account
+    - data.queries.account.list_stale_pending_accounts
+    - data.queries.account.soft_delete_stale_pending_accounts
   capabilities: [cap.services.account, cap.services.auth]

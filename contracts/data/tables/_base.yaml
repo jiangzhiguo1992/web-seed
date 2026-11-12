@@ -1,14 +1,10 @@
+# 表结构基类。不是物理表：只定义 5 列，不生成 DDL、不建实体、不落存储。
+
 schema_version: 1
 id: data.tables.base
 kind: base
 summary: 表结构基类
 stability: stable
-do_not:
-  - 本文件不是物理表，禁止生成 DDL、建实体或写入 storage
-  - "物理表必须声明 extends: [data.tables.base]"
-  - 物理表不得重复定义 id/status/created_at/updated_at/deleted_at；只允许覆盖 type/default/default_sql/comment
-  - 不要给基类加业务字段
-  - deleted_at 为空表示未删除；唯一约束必须带 WHERE deleted_at IS NULL
 
 columns:
   - name: id

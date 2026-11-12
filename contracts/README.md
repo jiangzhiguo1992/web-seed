@@ -363,7 +363,7 @@ table:
 | 写法 | 判定 |
 |---|---|
 | `status 只能引用 data.enums.account_status` | ✅ 含字段名，实例级 |
-| `游标分页必须有唯一 tiebreaker（created_at, id）` | ✅ 含字段名，实例级 |
+| `游标分页必须有唯一 tiebreaker（created_at, number）` | ✅ 含字段名，实例级 |
 | `不要手写 migrations` | ❌ 所有表都适用 → 上移 `_meta/_types.yaml` |
 | `不要绕过软删过滤` | ❌ 所有软删表都适用 → 上移 |
 
@@ -395,7 +395,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 4. 读 index.yaml 相关条目           只看 summary，不读正文
 5. 读 2–5 个契约文件                含 do_not / examples
 6. 新建契约：make contract-new ...  生成骨架，替换占位符
-7. 改完契约：make contract-check    结构 / ID / used_by
+7. 改完契约：make contract-check    结构 / ID / 约束 / 索引 / used_by
 8. make gen && make verify          生成 + 锚点图 + 测试
 9. PR 附 make contract-impact 报告
 ```
@@ -487,6 +487,6 @@ P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器�
 - **capabilities**：`http/{shared,account,auth}`、`async/account_cleanup`、`services/{account,auth}`（其余模块待建）
 - **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件
 
-> P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`contract-check` 目前只覆盖 data.tables / data.enums / used_by，`gen` 与其余类型 schema 待补。`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。
+> P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`contract-check` 目前覆盖 data.tables / data.enums / 跨文件引用 / used_by / owner 写归属，`gen` 与其余类型 schema 待补。`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。
 
 `_meta/_types.yaml` 是类型默认值，不是实例契约，不登记在 `index.yaml`。

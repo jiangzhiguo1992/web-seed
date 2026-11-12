@@ -22,7 +22,7 @@ fields:
   - { name: own_type, type: string, max_len: 32, required: true }
   - { name: own_id, type: string, max_len: 36, required: true }
   - { name: number, type: string, min_len: 4, max_len: 64, required: true, note: 账号编号，存储前大写归一 }
-  - { name: nickname, type: string, min_len: 1, max_len: 100, required: true }
+  - { name: nickname, type: string, min_len: 1, max_len: 100, required: true, pii: true }
   - { name: user_id, type: string, max_len: 36 }
   - { name: status, type: data.enums.account_status, required: true }
   - { name: version, type: integer, required: true, note: 乐观锁 }

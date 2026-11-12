@@ -229,7 +229,7 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 				"name":       "fk_x_other",
 				"type":       "foreign_key",
 				"columns":    []any{"missing"},
-				"references": "data.tables.other.col.id",
+				"references": []any{"data.tables.other.col.id"},
 			},
 		},
 		"indexes": []any{
@@ -245,6 +245,23 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 	errs := strings.Join(c.errs, "\n")
 	if strings.Count(errs, `unknown column "missing"`) != 2 {
 		t.Fatalf("expected two unknown-column errors, got:\n%s", errs)
+	}
+}
+
+func TestIsBaseTableRef(t *testing.T) {
+	cases := []struct {
+		ref  string
+		want bool
+	}{
+		{"data.tables.base", true},
+		{"data.tables.base.col.id", true},
+		{"data.tables.account", false},
+		{"data.tables.account.col.id", false},
+	}
+	for _, tc := range cases {
+		if got := isBaseTableRef(tc.ref); got != tc.want {
+			t.Errorf("isBaseTableRef(%q) = %v, want %v", tc.ref, got, tc.want)
+		}
 	}
 }
 
@@ -301,5 +318,296 @@ func TestRepoContracts(t *testing.T) {
 	c.run()
 	if len(c.errs) > 0 {
 		t.Fatalf("repository contracts failed:\n%s", strings.Join(c.errs, "\n"))
+	}
+}
+
+func minimalTableDoc() map[string]any {
+	return map[string]any{
+		"id":           "data.tables.x",
+		"summary":      "x",
+		"stability":    "draft",
+		"owner_module": "x",
+		"extends":      []any{"data.tables.base"},
+		"table":        map[string]any{"comment": "x", "size_class": "small"},
+		"columns": []any{
+			map[string]any{"name": "status", "type": "data.enums.x_status"},
+			map[string]any{"name": "code", "type": "string"},
+		},
+	}
+}
+
+func minimalTableSchema() *Schema {
+	return &Schema{
+		ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{"string": {}}},
+		ColumnRefs:  ColumnRefs{Prefixes: []string{"data.enums."}},
+	}
+}
+
+func TestTableRulesPrimaryKeyNullable(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["columns"] = append(doc["columns"].([]any), map[string]any{
+		"name": "pk", "type": "string", "primary_key": true, "nullable": true,
+	})
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "primary_key column must not be nullable") {
+		t.Fatalf("nullable primary key not reported: %v", c.errs)
+	}
+}
+
+func TestTableRulesConstraintFields(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["constraints"] = []any{map[string]any{
+		"name": "ck_x_code", "type": "check", "expr": "true", "on_delete": "cascade",
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), `field "on_delete" is not allowed for type check`) {
+		t.Fatalf("constraint field not narrowed by type: %v", c.errs)
+	}
+}
+
+func TestTableRulesUniqueConstraintRejected(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["constraints"] = []any{map[string]any{
+		"name": "uq_x_code", "type": "unique", "columns": []any{"code"},
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), `unknown type "unique"`) {
+		t.Fatalf("unique constraint not rejected: %v", c.errs)
+	}
+}
+
+func TestTableRulesForeignKeyColumnCount(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["columns"] = append(doc["columns"].([]any),
+		map[string]any{"name": "a", "type": "string"},
+		map[string]any{"name": "b", "type": "string"},
+	)
+	doc["constraints"] = []any{map[string]any{
+		"name": "fk_x_other", "type": "foreign_key",
+		"columns": []any{"a", "b"}, "references": []any{"data.tables.other.col.id"},
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "columns and references must have the same length") {
+		t.Fatalf("fk column/reference count mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestTableRulesIndexOrder(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["indexes"] = []any{map[string]any{
+		"name": "idx_x_code", "columns": []any{"code"}, "order": []any{"desc", "asc"}, "reason": "test",
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "order length must match columns") {
+		t.Fatalf("index order length mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestTableRulesLargeIndexConcurrently(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["table"].(map[string]any)["size_class"] = "large"
+	doc["indexes"] = []any{map[string]any{
+		"name": "idx_x_code", "columns": []any{"code"}, "reason": "test", "concurrently": "false",
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "large table must not disable CONCURRENTLY") {
+		t.Fatalf("large-table concurrently=false not reported: %v", c.errs)
+	}
+}
+
+func TestTableRulesPartitionRangeInterval(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["table"].(map[string]any)["partition"] = map[string]any{
+		"strategy": "range", "columns": []any{"created_at"},
+	}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "table.partition.interval is required for range") {
+		t.Fatalf("range partition without interval not reported: %v", c.errs)
+	}
+}
+
+func TestValidateListAllowed(t *testing.T) {
+	c := &Checker{}
+	c.validateValue([]any{"desc", "sideways"}, Field{Type: "list<string>", Allowed: []any{"asc", "desc"}}, "order")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `"sideways" not allowed`) {
+		t.Fatalf("list item not checked against allowed: %v", c.errs)
+	}
+}
+
+func TestValidateIntegerMin(t *testing.T) {
+	c := &Checker{}
+	c.validateValue(0, Field{Type: "integer", Min: 1}, "retention")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "0 < min 1") {
+		t.Fatalf("integer min not checked: %v", c.errs)
+	}
+}
+
+func TestDoNotSpecificity(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["do_not"] = []any{"不要手写 migrations"}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "do_not[0] must mention a specific identifier") {
+		t.Fatalf("generic do_not not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	doc = minimalTableDoc()
+	doc["do_not"] = []any{"code 必须大写归一"}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if len(c.errs) != 0 {
+		t.Fatalf("specific do_not reported: %v", c.errs)
+	}
+}
+
+func TestBaseTableMustLiveInBaseFile(t *testing.T) {
+	c := &Checker{}
+	doc := map[string]any{
+		"id": "data.tables.base", "kind": "base", "summary": "base", "stability": "stable",
+		"columns": []any{
+			map[string]any{"name": "id"}, map[string]any{"name": "status"},
+			map[string]any{"name": "created_at"}, map[string]any{"name": "updated_at"},
+			map[string]any{"name": "deleted_at"},
+		},
+	}
+	c.checkBaseTable(doc, &Schema{}, "contracts/data/tables/foo.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "base table must live in _base.yaml") {
+		t.Fatalf("base file location not reported: %v", c.errs)
+	}
+}
+
+func TestBasePrimaryKeyNullable(t *testing.T) {
+	c := &Checker{}
+	doc := map[string]any{
+		"id": "data.tables.base", "kind": "base", "summary": "base", "stability": "stable",
+		"columns": []any{
+			map[string]any{"name": "id", "primary_key": true, "nullable": true},
+			map[string]any{"name": "status"}, map[string]any{"name": "created_at"},
+			map[string]any{"name": "updated_at"}, map[string]any{"name": "deleted_at"},
+		},
+	}
+	c.checkBaseTable(doc, &Schema{}, "contracts/data/tables/_base.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "primary_key column must not be nullable") {
+		t.Fatalf("nullable base primary key not reported: %v", c.errs)
+	}
+}
+
+func TestPersistenceOwnership(t *testing.T) {
+	c := &Checker{tableOwners: map[string]string{
+		"data.tables.account":  "accounts",
+		"data.tables.auth_pwd": "auth",
+	}}
+	doc := map[string]any{"module": "auth"}
+	p := map[string]any{
+		"tables":           []any{"data.tables.account", "data.tables.auth_pwd"},
+		"read_only_tables": []any{"data.tables.account"},
+	}
+	c.checkPersistenceOwnership(doc, p, "contracts/capabilities/services/auth.yaml")
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, `cannot write data.tables.account`) {
+		t.Fatalf("cross-module write not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, "both writable and read_only") {
+		t.Fatalf("write/read contradiction not reported: %v", c.errs)
+	}
+}
+
+func TestUsedByQueriesUseQueryIDs(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("contracts/data/queries/q.yaml", `
+id: data.queries.q
+queries:
+  - id: data.queries.q.get_x
+    table: data.tables.x
+`)
+	write("contracts/data/tables/x.yaml", `
+id: data.tables.x
+used_by:
+  entities: []
+  queries: [data.queries.q.get_x]
+  capabilities: []
+`)
+	tableIDs := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
+
+	c := &Checker{root: root}
+	c.checkUsedBy(tableIDs)
+	if len(c.errs) != 0 {
+		t.Fatalf("query item ID not accepted: %v", c.errs)
+	}
+
+	write("contracts/data/tables/x.yaml", `
+id: data.tables.x
+used_by:
+  entities: []
+  queries: [data.queries.q]
+  capabilities: []
+`)
+	c = &Checker{root: root}
+	c.checkUsedBy(tableIDs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "used_by.queries mismatch") {
+		t.Fatalf("query file ID should not satisfy used_by: %v", c.errs)
+	}
+}
+
+func TestEnumDefaultAndConstraintMatch(t *testing.T) {
+	root := t.TempDir()
+	tableFile := filepath.Join(root, "contracts/data/tables/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(tableFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `
+columns:
+  - name: status
+    type: data.enums.x_status
+    default: missing
+  - name: code
+    type: string
+constraints:
+  - name: ck_x_status
+    type: enum
+    column: status
+    enum: data.enums.y_status
+  - name: ck_x_code
+    type: enum
+    column: code
+    enum: data.enums.x_status
+`
+	if err := os.WriteFile(tableFile, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkEnumRefs(
+		map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"},
+		map[string]map[string]bool{"data.tables.x": {"status": true, "code": true}},
+		map[string]map[string]bool{
+			"data.enums.x_status": {"active": true},
+			"data.enums.y_status": {"active": true},
+		},
+	)
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, `default "missing" not in data.enums.x_status`) {
+		t.Fatalf("enum default value not checked: %v", c.errs)
+	}
+	if !strings.Contains(errs, "does not match column status type") {
+		t.Fatalf("enum constraint/column mismatch not checked: %v", c.errs)
+	}
+	if !strings.Contains(errs, "must be data.enums.*") {
+		t.Fatalf("enum constraint on non-enum column not checked: %v", c.errs)
 	}
 }

@@ -7,9 +7,7 @@ stability: stable
 owner_module: auth
 extends: [data.tables.base]
 do_not:
-  - (code, number) 唯一索引必须带 WHERE deleted_at IS NULL
-  - 只有 owner_module 对应的 cap.services/cap.async 可以写本表，其他模块只能经 service 读
-  - used_by 由 make gen-graph 生成，禁止手改
+  - uq_auth_phone_number 必须带 WHERE deleted_at IS NULL
 
 table:
   comment: 手机号认证
@@ -55,7 +53,7 @@ constraints:
   - name: fk_auth_phone_account
     type: foreign_key
     columns: [account_id]
-    references: data.tables.account.col.id
+    references: [data.tables.account.col.id]
     on_delete: cascade
     on_update: no_action
 
@@ -78,5 +76,7 @@ indexes:
 
 used_by:
   entities: [data.entities.auth_phone]
-  queries: [data.queries.auth]
+  queries:
+    - data.queries.auth.get_auth_phone_by_number
+    - data.queries.auth.create_auth_phone
   capabilities: [cap.services.auth]

@@ -27,6 +27,12 @@ func checkColumnRef(c *Checker, ref string, tableIDs map[string]string, cols map
 	}
 }
 
+// isBaseTableRef 判断引用是否指向非物理的基类表。
+// 基类只提供列定义，不能被实体、查询、能力或外键当作物理表引用。
+func isBaseTableRef(ref string) bool {
+	return ref == "data.tables.base" || strings.HasPrefix(ref, "data.tables.base.col.")
+}
+
 func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[string]map[string]bool) {
 	// entities
 	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {
@@ -37,7 +43,9 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 		}
 		rel := relPath(c.root, f)
 		if t, _ := doc["table"].(string); t != "" {
-			if _, ok := tableIDs[t]; !ok {
+			if isBaseTableRef(t) {
+				c.errf("%s: data.tables.base is not a physical table", rel)
+			} else if _, ok := tableIDs[t]; !ok {
 				c.errf("%s: table %s not found", rel, t)
 			}
 		} else {
@@ -49,6 +57,10 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 				continue
 			}
 			if via, _ := m["via"].(string); via != "" {
+				if isBaseTableRef(via) {
+					c.errf("%s: relations[%d]: data.tables.base is not a physical table", rel, i)
+					continue
+				}
 				checkColumnRef(c, via, tableIDs, cols, fmt.Sprintf("%s: relations[%d]", rel, i))
 			}
 		}
@@ -69,7 +81,9 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			qid, _ := m["id"].(string)
 			ts := tableRefs(m)
 			for _, t := range ts {
-				if _, ok := tableIDs[t]; !ok {
+				if isBaseTableRef(t) {
+					c.errf("%s: queries[%d] (%s): data.tables.base is not a physical table", rel, i, qid)
+				} else if _, ok := tableIDs[t]; !ok {
 					c.errf("%s: queries[%d] (%s): table %s not found", rel, i, qid, t)
 				}
 			}
@@ -104,10 +118,39 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 		if p == nil {
 			continue
 		}
+		c.checkPersistenceOwnership(doc, p, rel)
 		for _, t := range tableRefs(p) {
-			if _, ok := tableIDs[t]; !ok {
+			if isBaseTableRef(t) {
+				c.errf("%s: data.tables.base is not a physical table", rel)
+			} else if _, ok := tableIDs[t]; !ok {
 				c.errf("%s: persistence references unknown table %s", rel, t)
 			}
+		}
+	}
+}
+
+// checkPersistenceOwnership 校验 capability 的写表归属：
+//   - 写表（table/tables）的 owner_module 必须等于 capability 的 module；
+//   - read_only_tables 只用于跨模块读，不得同时出现在写表里；
+//   - 有写表但没有 module 时无法判断归属，直接报错。
+func (c *Checker) checkPersistenceOwnership(doc, p map[string]any, rel string) {
+	writes := writeTableRefs(p)
+	reads := readOnlyTableRefs(p)
+	if len(writes) == 0 {
+		return
+	}
+	module, _ := doc["module"].(string)
+	if module == "" {
+		c.errf("%s: persistence requires module to verify write ownership", rel)
+		return
+	}
+	readSet := stringSetOf(reads)
+	for _, t := range writes {
+		if owner := c.tableOwners[t]; owner != "" && owner != module {
+			c.errf("%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
+		}
+		if readSet[t] {
+			c.errf("%s: table %s is listed as both writable and read_only", rel, t)
 		}
 	}
 }
@@ -133,21 +176,26 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 			inbound[t]["entities"][id] = true
 		}
 	}
-	// queries
+	// queries：按查询项 ID 记直接入边，而不是查询文件 ID。
 	for _, f := range glob(c.root, "contracts/data/queries/*.yaml") {
 		doc, err := loadYAML(f)
 		if err != nil || doc == nil {
 			continue
 		}
-		id, _ := doc["id"].(string)
-		for _, raw := range asList(doc["queries"]) {
+		rel := relPath(c.root, f)
+		for i, raw := range asList(doc["queries"]) {
 			m, ok := asMap(raw)
 			if !ok {
 				continue
 			}
+			qid, _ := m["id"].(string)
+			if qid == "" {
+				c.errf("%s: queries[%d]: missing id", rel, i)
+				continue
+			}
 			for _, t := range tableRefs(m) {
 				if inbound[t] != nil {
-					inbound[t]["queries"][id] = true
+					inbound[t]["queries"][qid] = true
 				}
 			}
 		}

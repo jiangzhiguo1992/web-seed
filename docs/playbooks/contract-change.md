@@ -104,7 +104,7 @@ make contract-new type=data.enums  name=note_status
 make contract-check
 ```
 
-校验结构、ID、`extends`、基类列、约束/索引命名、`used_by` 三列表。不通过不要进入生成。
+校验结构、ID、`extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`used_by` 三列表（`queries` 为查询项 ID）。不通过不要进入生成。
 
 ---
 
@@ -145,7 +145,7 @@ make gen-client    # 合并 spec → apps/web/packages/api-client/src/generated
 ## 6. 跑闸门
 
 ```bash
-make contract-check          # 结构 / ID / used_by
+make contract-check          # 结构 / ID / 约束 / 索引 / used_by
 make contract-graph          # 重复 ID / 悬空 / 越层 / 循环 / 孤儿
 make gen && git diff --exit-code   # 生成物是否同步
 make test-api                # 路由集合比对 + 响应 schema 校验

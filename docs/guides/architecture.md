@@ -100,7 +100,7 @@
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
 - [ ] `data/tables/*.yaml` → `schema.sql` + 增量 `migrations/*.sql`
 - [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/token/auth_* 拆分（契约已落盘）
-- [x] 契约元规范试点：`_meta/{data.tables,data.enums}` + `make contract-new` + `make contract-check`（结构 / ID / used_by）
+- [x] 契约元规范试点：`_meta/{data.tables,data.enums}` + `make contract-new` + `make contract-check`（结构 / ID / 约束 / 索引 / used_by / owner 写归属）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
 - [ ] `data/enums.yaml` → Go 常量 + TS union + DB check
 - [ ] `platform/errors.yaml` + `platform/security/permissions.yaml` → 两端常量
@@ -639,7 +639,7 @@ description: 新增 API 端点的完整流程
 | 6 | 禁止手改 `generated/`（文件头 + lint + 重新生成 diff） | AI 直接改生成物而非改契约 | CI | 低 | 100% |
 | 7 | 禁止绕过 client 直连（`no-restricted-imports` 禁 `fetch`/`axios`） | 前端自造请求，逃逸类型检查 | 编译 | 低 | 100% |
 
-> `make contract-check`（结构 / ID / `used_by` / `index` 路径）是闸门 0 的前置试点，已接入 pre-commit 与 CI；完整图校验仍以闸门 0 `make contract-graph` 为准。
+> `make contract-check`（结构 / ID / 约束 / 索引 / used_by / owner 写归属 / index 路径）是闸门 0 的前置试点，已接入 pre-commit 与 CI；完整图校验仍以闸门 0 `make contract-graph` 为准。
 
 **闸门 2 是性价比最高的一道**：一个测试函数即可覆盖"新增端点没写契约"和"契约加了端点没实现"两个方向。实现要点：
 

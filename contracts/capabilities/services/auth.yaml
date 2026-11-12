@@ -70,10 +70,9 @@ interface:
         - platform.errors.AUTH_TOKEN_EXPIRED
       transaction: read_only
 
-# 持久化实现：认证数据全部由本服务读写
+# 持久化实现：认证数据由本服务读写；account 只读
 persistence:
   tables:
-    - data.tables.account
     - data.tables.auth_pwd
     - data.tables.auth_phone
     - data.tables.auth_email

@@ -127,6 +127,36 @@ func TestRenderTableRejectsUnsupportedRequired(t *testing.T) {
 	}
 }
 
+func TestRenderTableStatusWithoutDefault(t *testing.T) {
+	s := loadTestSchema(t)
+	b, err := RenderTable(s, "note", "notes", "备注表")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
+	}
+	cols, _ := doc["columns"].([]any)
+	for _, raw := range cols {
+		col, _ := raw.(map[string]any)
+		if col["name"] == "status" {
+			if _, ok := col["default"]; ok {
+				t.Fatalf("status must not get an implicit default: %#v", col)
+			}
+			return
+		}
+	}
+	t.Fatal("status column missing")
+}
+
+func TestRenderEnumItemRejectsInvalidName(t *testing.T) {
+	enumSchema := &Schema{Type: "data.enums"}
+	if _, err := RenderEnumItem(enumSchema, "Bad-Name"); err == nil {
+		t.Fatal("expected invalid enum name to fail")
+	}
+}
+
 func TestRenderEnumItem(t *testing.T) {
 	path, err := filepath.Abs("../../../../contracts/_meta/data.enums.yaml")
 	if err != nil {

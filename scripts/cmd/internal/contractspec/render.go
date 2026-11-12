@@ -34,7 +34,6 @@ type columnDef struct {
 	Name     string         `yaml:"name"`
 	Type     string         `yaml:"type"`
 	Nullable bool           `yaml:"nullable"`
-	Default  any            `yaml:"default,omitempty"`
 	Comment  string         `yaml:"comment,omitempty"`
 	Params   map[string]any `yaml:",inline"`
 }
@@ -144,7 +143,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		},
 		Columns: []columnDef{
 			{Name: columnName, Type: columnType, Nullable: columnNullable, Comment: "TODO: 列说明", Params: columnParams},
-			{Name: "status", Type: "data.enums." + enumName, Nullable: false, Default: "active", Comment: "TODO: 状态说明"},
+			{Name: "status", Type: "data.enums." + enumName, Nullable: false, Comment: "TODO: 状态说明"},
 		},
 		Constraints: []constraintDef{
 			{Name: "ck_" + name + "_status", Type: "enum", Column: "status", Enum: "data.enums." + enumName},
@@ -163,6 +162,9 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	if s == nil || s.Type != "data.enums" {
 		return nil, fmt.Errorf("RenderEnumItem: want data.enums schema")
+	}
+	if !validName(name) {
+		return nil, fmt.Errorf("RenderEnumItem: invalid name %q (snake_case required)", name)
 	}
 	enumsField, _ := FindField(s.Fields, "enums")
 	if err := requireSupported(enumsField.ItemFields, map[string]bool{

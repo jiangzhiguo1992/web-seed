@@ -11,14 +11,14 @@ naming:
     example: "20261111T093000_add_token_table.sql"
   table: "契约文件名/ID 用 snake_case（data.tables.account）；物理表名默认等于文件段，需要不同名时用 table.name 覆盖（accounts）"
   index: "idx_<table>_<cols>；唯一 uq_<table>_<cols>"
-  constraint: "fk_<table>_<ref> / ck_<table>_<rule> / uq_<table>_<cols>"
+  constraint: "fk_<table>_<ref> / ck_<table>_<rule> / ex_<table>_<rule>"
   query: "snake_case；每个 query 必须有显式 id data.queries.<module>.<query_id>"
 
 base:
   id: data.tables.base
   required: true
-  rule: "物理表必须 extends: [data.tables.base]；不得重复声明基类 5 列"
-  override_allowed: [type, default, default_sql, comment, max_len]
+  rule: "物理表必须 extends: [data.tables.base]；不得重复声明 id/created_at/updated_at/deleted_at；status 必须重声明为 data.enums.*"
+  override_allowed: [status]
   extra_columns: allowed
 
 columns:
@@ -43,10 +43,9 @@ columns:
 constraints:
   physical_in: data/tables/*.yaml
   business_in: data/entities/*.yaml + business/rules/*.yaml
-  rule: 数据库能表达的约束（check/unique/foreign_key/enum/exclude）留在 tables；跨字段、跨表、业务不变量写 entities.validation 或 business.rules
+  rule: 数据库能表达的约束（check/foreign_key/enum/exclude）留在 tables；唯一性用 indexes[].unique；跨字段、跨表、业务不变量写 entities.validation 或 business.rules
   types:
     - check
-    - unique
     - foreign_key
     - enum
     - exclude
@@ -65,7 +64,7 @@ indexes:
 
 soft_delete:
   column: deleted_at
-  rule: 软删表必须有 deleted_at；唯一约束必须带 WHERE deleted_at IS NULL
+  rule: 软删表必须有 deleted_at；唯一性必须用 indexes[].unique + WHERE deleted_at IS NULL 表达，禁止 UNIQUE 约束
   consistency: 若 status 也有 deleted 值，必须加 CHECK (status = 'deleted') = (deleted_at IS NOT NULL)
 
 ownership:

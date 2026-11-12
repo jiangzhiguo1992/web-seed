@@ -11,7 +11,7 @@
 |---|---|---|
 | `manifest.json` | 所有契约的 `generates` 字段汇总 | 生成物 → 来源契约映射 |
 | `graph.json` | 所有契约的 `refs` 字段 | 锚点图，供 AI 与影响面分析查询 |
-| `inbound.yaml` | `graph.json` 反向索引 | 每张表/契约被谁引用；写入 `tables/*.yaml` 的 `used_by.{entities,queries,capabilities}` |
+| `inbound.yaml` | `graph.json` 反向索引 | 每张表/契约被谁引用；写入 `tables/*.yaml` 的 `used_by.{entities,queries,capabilities}`（`queries` 为查询项 ID） |
 | `lineage.md` | `graph.json` 渲染 | 人读血缘报告 |
 | `openapi/admin.yaml` | `capabilities/http/*.yaml` + `shared.yaml` 合并 | 完整 OpenAPI spec，供 oapi-codegen / Swagger |
 

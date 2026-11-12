@@ -180,7 +180,7 @@ make build-web        # apps/web/admin/dist
 | `make gen` | 重新生成全部契约产物（P2 实现，当前会失败） |
 | `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 分项生成（P2） |
 | `make contract-new type=data.tables name=note` | 从 `_meta` 生成契约骨架 |
-| `make contract-check` | 校验契约结构、ID、`used_by`（data.tables / data.enums 试点） |
+| `make contract-check` | 校验契约结构、ID、约束/索引、`used_by`、`owner_module` 写归属（data.tables / data.enums 试点） |
 | `make contract-graph` | 锚点图校验（P2） |
 | `make contract-impact id=<id>` | 影响面分析（P2） |
 | `make contract-compat` | 破坏性变更检测（P5） |
@@ -201,7 +201,7 @@ make build-web        # apps/web/admin/dist
 2. 写/改前读 contracts/_meta/README.md + _meta/<type>.yaml
 3. 新建契约：make contract-new ...（生成骨架，替换占位符）
 4. 改契约（2-5 个文件）
-5. make contract-check  # 结构 / ID / used_by
+5. make contract-check  # 结构 / ID / 约束 / 索引 / used_by
 6. make gen             # 生成类型 / DDL / 常量 / 图
 7. 修复编译错误（类型由契约生成）
 8. 跑闸门：锚点图 / 路由比对 / 响应校验 / oasdiff

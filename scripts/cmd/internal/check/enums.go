@@ -1,4 +1,4 @@
-// enums.go 校验 data.enums 集合与枚举引用。
+// enums.go 校验 data.enums 集合、枚举引用、枚举默认值与 enum 约束一致性。
 package check
 
 import (
@@ -7,19 +7,19 @@ import (
 	"strings"
 )
 
-func (c *Checker) checkEnums(schema *Schema) map[string]bool {
+func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 	path := filepath.Join(c.root, "contracts/data/enums.yaml")
 	rel := relPath(c.root, path)
 	doc, err := loadYAML(path)
 	if err != nil {
 		c.errf("%s: %v", rel, err)
-		return map[string]bool{}
+		return map[string]map[string]bool{}
 	}
 	c.validateDoc(doc, schema.Fields, rel)
 	if doc["id"] != "data.enums" {
 		c.errf("%s: id must be data.enums", rel)
 	}
-	ids := map[string]bool{}
+	enums := map[string]map[string]bool{}
 	names := map[string]bool{}
 	rawEnums := asList(doc["enums"])
 	if len(rawEnums) == 0 {
@@ -36,10 +36,9 @@ func (c *Checker) checkEnums(schema *Schema) map[string]bool {
 		if id != "data.enums."+name {
 			c.errf("%s: enums[%d]: id must be data.enums.%s, got %s", rel, i, name, id)
 		}
-		if ids[id] {
+		if _, ok := enums[id]; ok {
 			c.errf("%s: enums[%d]: duplicate id %s", rel, i, id)
 		}
-		ids[id] = true
 		if names[name] {
 			c.errf("%s: enums[%d]: duplicate name %s", rel, i, name)
 		}
@@ -61,11 +60,12 @@ func (c *Checker) checkEnums(schema *Schema) map[string]bool {
 			}
 			values[v] = true
 		}
+		enums[id] = values
 	}
-	return ids
+	return enums
 }
 
-func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[string]bool, enumIDs map[string]bool) {
+func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[string]bool, enums map[string]map[string]bool) {
 	for _, rel := range tableIDs {
 		doc, err := loadYAML(filepath.Join(c.root, rel))
 		if err != nil {
@@ -77,8 +77,18 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 				continue
 			}
 			t, _ := m["type"].(string)
-			if strings.HasPrefix(t, "data.enums.") && !enumIDs[t] {
-				c.errf("%s: columns[%d] (%s): unknown enum %s", rel, i, m["name"], t)
+			if strings.HasPrefix(t, "data.enums.") {
+				values, ok := enums[t]
+				if !ok {
+					c.errf("%s: columns[%d] (%s): unknown enum %s", rel, i, m["name"], t)
+				} else if def, ok := m["default"]; ok && def != nil {
+					s, ok := def.(string)
+					if !ok {
+						c.errf("%s: columns[%d] (%s): enum default must be a string", rel, i, m["name"])
+					} else if !values[s] {
+						c.errf("%s: columns[%d] (%s): default %q not in %s", rel, i, m["name"], s, t)
+					}
+				}
 			}
 			if strings.HasPrefix(t, "data.tables.") {
 				checkColumnRef(c, t, tableIDs, cols, fmt.Sprintf("%s: columns[%d] (%s)", rel, i, m["name"]))
@@ -90,13 +100,36 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 				continue
 			}
 			if m["type"] == "enum" {
-				if e, _ := m["enum"].(string); e != "" && !enumIDs[e] {
-					c.errf("%s: constraints[%d] (%s): unknown enum %s", rel, i, m["name"], e)
+				e, _ := m["enum"].(string)
+				if e != "" {
+					if _, ok := enums[e]; !ok {
+						c.errf("%s: constraints[%d] (%s): unknown enum %s", rel, i, m["name"], e)
+					}
+					if col, _ := m["column"].(string); col != "" {
+						switch ct := columnType(doc, col); {
+						case ct == "":
+							// 列不存在由 checkTableRules 报错。
+						case strings.HasPrefix(ct, "data.enums."):
+							if ct != e {
+								c.errf("%s: constraints[%d] (%s): enum %s does not match column %s type %s", rel, i, m["name"], e, col, ct)
+							}
+						case strings.HasPrefix(ct, "data.tables."):
+							// 引用列的具体类型由目标表定义，当前不做递归解析。
+						default:
+							c.errf("%s: constraints[%d] (%s): enum constraint column %s must be data.enums.*, got %s", rel, i, m["name"], col, ct)
+						}
+					}
 				}
 			}
 			if m["type"] == "foreign_key" {
-				ref, _ := m["references"].(string)
-				checkColumnRef(c, ref, tableIDs, cols, fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, m["name"]))
+				for _, ref := range asList(m["references"]) {
+					s, _ := ref.(string)
+					if isBaseTableRef(s) {
+						c.errf("%s: constraints[%d] (%s): data.tables.base is not a physical table", rel, i, m["name"])
+						continue
+					}
+					checkColumnRef(c, s, tableIDs, cols, fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, m["name"]))
+				}
 			}
 		}
 	}
@@ -111,9 +144,25 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 			if !ok {
 				continue
 			}
-			if t, _ := m["type"].(string); strings.HasPrefix(t, "data.enums.") && !enumIDs[t] {
-				c.errf("%s: fields[%d] (%s): unknown enum %s", rel, i, m["name"], t)
+			if t, _ := m["type"].(string); strings.HasPrefix(t, "data.enums.") {
+				if _, ok := enums[t]; !ok {
+					c.errf("%s: fields[%d] (%s): unknown enum %s", rel, i, m["name"], t)
+				}
 			}
 		}
 	}
+}
+
+func columnType(doc map[string]any, name string) string {
+	for _, raw := range asList(doc["columns"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		if n, _ := m["name"].(string); n == name {
+			t, _ := m["type"].(string)
+			return t
+		}
+	}
+	return ""
 }

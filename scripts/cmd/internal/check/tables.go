@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
@@ -20,6 +22,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	tableIDs := map[string]string{}
 	cols := map[string]map[string]bool{}
 	physicalNames := map[string]string{}
+	c.tableOwners = map[string]string{}
 	for _, file := range files {
 		rel := relPath(c.root, file)
 		doc, err := loadYAML(file)
@@ -37,11 +40,19 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 		}
 		tableIDs[id] = rel
 
+		baseFile := filepath.Base(rel) == "_base.yaml"
+		if id == "data.tables.base" && !baseFile {
+			c.errf("%s: data.tables.base must live in _base.yaml", rel)
+		}
+
 		if doc["kind"] == "base" {
 			c.checkBaseTable(doc, schema, rel)
 		} else {
 			c.validateDoc(doc, schema.Fields, rel)
 			c.checkTableRules(doc, rel, schema)
+			if owner, _ := doc["owner_module"].(string); owner != "" {
+				c.tableOwners[id] = owner
+			}
 			phys := strings.TrimSuffix(filepath.Base(rel), ".yaml")
 			if table, _ := asMap(doc["table"]); table != nil {
 				if n, ok := table["name"].(string); ok && n != "" {
@@ -77,6 +88,9 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 }
 
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
+	if filepath.Base(rel) != "_base.yaml" {
+		c.errf("%s: base table must live in _base.yaml", rel)
+	}
 	allowed := map[string]bool{
 		"schema_version": true, "id": true, "kind": true, "summary": true,
 		"stability": true, "do_not": true, "columns": true,
@@ -101,6 +115,11 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 		}
 		if n, ok := m["name"].(string); ok {
 			names = append(names, n)
+			if pk, _ := m["primary_key"].(bool); pk {
+				if nullable, _ := m["nullable"].(bool); nullable {
+					c.errf("%s: column %q: primary_key column must not be nullable", rel, n)
+				}
+			}
 		}
 	}
 	want := append([]string(nil), baseColumns...)
@@ -109,6 +128,22 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		c.errf("%s: base columns must be %v, got %v", rel, want, names)
 	}
+}
+
+// constraintAllowedFields 声明每种约束允许出现的字段。
+// 约束是平铺的 union，必须按 type 收窄，避免把 on_delete 写在 check 上。
+var constraintAllowedFields = map[string]map[string]bool{
+	"check":       {"name": true, "type": true, "expr": true},
+	"enum":        {"name": true, "type": true, "column": true, "enum": true},
+	"foreign_key": {"name": true, "type": true, "columns": true, "references": true, "on_delete": true, "on_update": true},
+	"exclude":     {"name": true, "type": true, "expr": true},
+}
+
+// constraintKnownFields 是 item_fields 的并集；完全未知的字段交给 validateDoc 报错，
+// 这里只处理“字段存在但不适用于当前 type”的情况，避免重复报错。
+var constraintKnownFields = map[string]bool{
+	"name": true, "type": true, "expr": true, "column": true, "enum": true,
+	"columns": true, "references": true, "on_delete": true, "on_update": true,
 }
 
 func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema) {
@@ -132,13 +167,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		}
 		if _, ok := table["comment"]; ok && !hasNonEmptyString(table, "comment") {
 			c.errf("%s: table.comment must not be empty", rel)
-		}
-		if r, ok := asMap(table["retention"]); ok {
-			for k, v := range r {
-				if i, ok := toInt(v); ok && i < 1 {
-					c.errf("%s: table.retention.%s must be >= 1", rel, k)
-				}
-			}
 		}
 	}
 
@@ -172,6 +200,11 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.errf("%s: columns[%d]: status must reference data.enums.*, got %q", rel, i, t)
 			}
 		}
+		if pk, _ := m["primary_key"].(bool); pk {
+			if nullable, _ := m["nullable"].(bool); nullable {
+				c.errf("%s: columns[%d] (%s): primary_key column must not be nullable", rel, i, name)
+			}
+		}
 		if _, ok := m["default"]; ok {
 			if _, ok2 := m["default_sql"]; ok2 {
 				c.errf("%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, name)
@@ -201,7 +234,19 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	}
 	if table != nil {
 		if p, ok := asMap(table["partition"]); ok {
-			checkCols(fmt.Sprintf("%s: table.partition", rel), asList(p["columns"]))
+			pcols := asList(p["columns"])
+			if len(pcols) == 0 {
+				c.errf("%s: table.partition.columns must not be empty", rel)
+			}
+			checkCols(fmt.Sprintf("%s: table.partition", rel), pcols)
+			strategy, _ := p["strategy"].(string)
+			interval, _ := p["interval"].(string)
+			if strategy == "range" && strings.TrimSpace(interval) == "" {
+				c.errf("%s: table.partition.interval is required for range", rel)
+			}
+			if strategy != "range" && strings.TrimSpace(interval) != "" {
+				c.errf("%s: table.partition.interval is only allowed for range", rel)
+			}
 		}
 	}
 
@@ -219,13 +264,23 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.errf("%s: constraints[%d]: duplicate constraint %q", rel, i, name)
 		}
 		typ, _ := m["type"].(string)
+		if allowed, known := constraintAllowedFields[typ]; known {
+			for k := range m {
+				if !constraintKnownFields[k] {
+					continue
+				}
+				if !allowed[k] {
+					c.errf("%s: constraints[%d] (%s): field %q is not allowed for type %s", rel, i, name, k, typ)
+				}
+			}
+		}
 		switch typ {
 		case "check":
 			if !hasNonEmptyString(m, "expr") {
 				c.errf("%s: constraints[%d] (%s): check requires expr", rel, i, name)
 			}
 			if !strings.HasPrefix(name, "ck_") {
-				c.errf("%s: constraints[%d]: check name must start with ck_", rel, i)
+				c.errf("%s: constraints[%d] (%s): check name must start with ck_", rel, i, name)
 			}
 		case "enum":
 			if !hasNonEmptyString(m, "column") || !hasNonEmptyString(m, "enum") {
@@ -234,30 +289,26 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.errf("%s: constraints[%d] (%s): unknown column %q", rel, i, name, col)
 			}
 			if !strings.HasPrefix(name, "ck_") {
-				c.errf("%s: constraints[%d]: enum name must start with ck_", rel, i)
+				c.errf("%s: constraints[%d] (%s): enum name must start with ck_", rel, i, name)
 			}
 		case "foreign_key":
-			if len(asList(m["columns"])) == 0 || !hasNonEmptyString(m, "references") {
+			cols := asList(m["columns"])
+			refs := asList(m["references"])
+			if len(cols) == 0 || len(refs) == 0 {
 				c.errf("%s: constraints[%d] (%s): foreign_key requires columns and references", rel, i, name)
+			} else if len(cols) != len(refs) {
+				c.errf("%s: constraints[%d] (%s): columns and references must have the same length", rel, i, name)
 			}
-			checkCols(fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, name), asList(m["columns"]))
+			checkCols(fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, name), cols)
 			if !strings.HasPrefix(name, "fk_") {
-				c.errf("%s: constraints[%d]: foreign_key name must start with fk_", rel, i)
-			}
-		case "unique":
-			if len(asList(m["columns"])) == 0 {
-				c.errf("%s: constraints[%d] (%s): unique requires columns", rel, i, name)
-			}
-			checkCols(fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, name), asList(m["columns"]))
-			if !strings.HasPrefix(name, "uq_") {
-				c.errf("%s: constraints[%d]: unique name must start with uq_", rel, i)
+				c.errf("%s: constraints[%d] (%s): foreign_key name must start with fk_", rel, i, name)
 			}
 		case "exclude":
 			if !hasNonEmptyString(m, "expr") {
 				c.errf("%s: constraints[%d] (%s): exclude requires expr", rel, i, name)
 			}
 			if !strings.HasPrefix(name, "ex_") {
-				c.errf("%s: constraints[%d]: exclude name must start with ex_", rel, i)
+				c.errf("%s: constraints[%d] (%s): exclude name must start with ex_", rel, i, name)
 			}
 		default:
 			c.errf("%s: constraints[%d] (%s): unknown type %q", rel, i, name, typ)
@@ -265,6 +316,10 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	}
 
 	indexNames := map[string]bool{}
+	sizeClass := ""
+	if table != nil {
+		sizeClass, _ = table["size_class"].(string)
+	}
 	for i, raw := range asList(doc["indexes"]) {
 		m, ok := asMap(raw)
 		if !ok {
@@ -288,20 +343,104 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if hasCols {
 			checkCols(fmt.Sprintf("%s: indexes[%d] (%s)", rel, i, name), asList(m["columns"]))
 		}
+		if order := asList(m["order"]); len(order) > 0 {
+			if !hasCols {
+				c.errf("%s: indexes[%d] (%s): order requires columns", rel, i, name)
+			} else if len(order) != len(asList(m["columns"])) {
+				c.errf("%s: indexes[%d] (%s): order length must match columns", rel, i, name)
+			}
+		}
+		if sizeClass == "large" {
+			if conc, _ := m["concurrently"].(string); conc == "false" {
+				c.errf("%s: indexes[%d] (%s): large table must not disable CONCURRENTLY", rel, i, name)
+			}
+		}
 		checkCols(fmt.Sprintf("%s: indexes[%d] (%s).include", rel, i, name), asList(m["include"]))
 		unique, _ := m["unique"].(bool)
 		if unique {
 			if !strings.HasPrefix(name, "uq_") {
-				c.errf("%s: indexes[%d]: unique name must start with uq_", rel, i)
+				c.errf("%s: indexes[%d] (%s): unique name must start with uq_", rel, i, name)
 			}
 			where, _ := m["where"].(string)
 			if !strings.Contains(where, "deleted_at IS NULL") {
 				c.errf("%s: indexes[%d] (%s): unique index must filter deleted_at IS NULL", rel, i, name)
 			}
 		} else if !strings.HasPrefix(name, "idx_") {
-			c.errf("%s: indexes[%d]: non-unique name must start with idx_", rel, i)
+			c.errf("%s: indexes[%d] (%s): non-unique name must start with idx_", rel, i, name)
 		}
 	}
+	c.checkDoNotSpecificity(doc, rel, stem, table, colNames, constraintNames, indexNames)
+}
+
+// checkDoNotSpecificity 落实 contracts/README §4.5.1：
+// 每条 do_not 必须含本表的具体标识，通用规则应上移 _types.yaml。
+func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, table map[string]any, colNames, constraintNames, indexNames map[string]bool) {
+	tokens := map[string]bool{}
+	add := func(s string) {
+		if utf8.RuneCountInString(s) >= 3 {
+			tokens[s] = true
+		}
+	}
+	add(stem)
+	if table != nil {
+		if n, ok := table["name"].(string); ok {
+			add(n)
+		}
+	}
+	for n := range colNames {
+		if !isBaseColumn(n) {
+			add(n)
+		}
+	}
+	for n := range constraintNames {
+		add(n)
+	}
+	for n := range indexNames {
+		add(n)
+	}
+	for _, raw := range asList(doc["columns"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		if t, _ := m["type"].(string); strings.HasPrefix(t, "data.enums.") {
+			add(strings.TrimPrefix(t, "data.enums."))
+		}
+	}
+	for _, raw := range asList(doc["constraints"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		if e, _ := m["enum"].(string); strings.HasPrefix(e, "data.enums.") {
+			add(strings.TrimPrefix(e, "data.enums."))
+		}
+	}
+	for i, raw := range asList(doc["do_not"]) {
+		s, ok := raw.(string)
+		if !ok {
+			continue
+		}
+		found := false
+		for tok := range tokens {
+			if strings.Contains(s, tok) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.errf("%s: do_not[%d] must mention a specific identifier of table %q (file stem, physical name, column, constraint, index or enum)", rel, i, stem)
+		}
+	}
+}
+
+func isBaseColumn(name string) bool {
+	for _, n := range baseColumns {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Checker) checkStability(doc map[string]any, rel string) {
@@ -393,7 +532,8 @@ func familyNames(ct ColumnTypes) []string {
 // checkFamilyParams 校验列上的类型族扩展字段：
 //   - 该族不允许的扩展字段直接报错；
 //   - required: true 的扩展字段必须出现；
-//   - 出现时按族定义校验类型、枚举、范围。
+//   - 出现时按族定义校验类型、枚举、范围；
+//   - default 的 YAML 类型、长度、范围必须与族定义兼容。
 func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name string, schema *Schema) {
 	common := commonColumnFields(schema)
 	fam, ok := schema.ColumnTypes.ValueTypeFamilies[t]
@@ -438,6 +578,7 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 			}
 		}
 	}
+	c.checkColumnDefaultType(m, t, rel, i, name)
 	switch t {
 	case "string", "bytes":
 		if a, ok := toInt(m["min_len"]); ok {
@@ -448,6 +589,22 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 		if fixed, ok := m["fixed"].(bool); ok && fixed {
 			if _, ok := m["max_len"]; !ok {
 				c.errf("%s: columns[%d] (%s): fixed requires max_len", rel, i, name)
+			} else if minLen, ok := toInt(m["min_len"]); ok {
+				if maxLen, ok2 := toInt(m["max_len"]); ok2 && minLen != maxLen {
+					c.errf("%s: columns[%d] (%s): fixed requires min_len == max_len", rel, i, name)
+				}
+			}
+		}
+		if s, ok := m["default"].(string); ok {
+			n := utf8.RuneCountInString(s)
+			if t == "bytes" {
+				n = len(s)
+			}
+			if minLen, ok := toInt(m["min_len"]); ok && n < minLen {
+				c.errf("%s: columns[%d] (%s): default length %d < min_len %d", rel, i, name, n, minLen)
+			}
+			if maxLen, ok := toInt(m["max_len"]); ok && n > maxLen {
+				c.errf("%s: columns[%d] (%s): default length %d > max_len %d", rel, i, name, n, maxLen)
 			}
 		}
 	case "integer", "float", "decimal":
@@ -463,5 +620,65 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 				}
 			}
 		}
+		if t == "integer" {
+			if unsigned, _ := m["unsigned"].(bool); unsigned {
+				if v, ok := toInt(m["min"]); ok && v < 0 {
+					c.errf("%s: columns[%d] (%s): unsigned integer min must be >= 0", rel, i, name)
+				}
+				if v, ok := toInt(m["default"]); ok && v < 0 {
+					c.errf("%s: columns[%d] (%s): unsigned integer default must be >= 0", rel, i, name)
+				}
+			}
+			if def, ok := toInt(m["default"]); ok {
+				if min, ok := toInt(m["min"]); ok && def < min {
+					c.errf("%s: columns[%d] (%s): default %d < min %d", rel, i, name, def, min)
+				}
+				if max, ok := toInt(m["max"]); ok && def > max {
+					c.errf("%s: columns[%d] (%s): default %d > max %d", rel, i, name, def, max)
+				}
+			}
+		} else if def, ok := toFloat(m["default"]); ok {
+			if min, ok := toFloat(m["min"]); ok && def < min {
+				c.errf("%s: columns[%d] (%s): default %v < min %v", rel, i, name, def, min)
+			}
+			if max, ok := toFloat(m["max"]); ok && def > max {
+				c.errf("%s: columns[%d] (%s): default %v > max %v", rel, i, name, def, max)
+			}
+		}
+	}
+}
+
+// checkColumnDefaultType 校验字面量 default 的 YAML 类型与列类型族兼容。
+// 枚举列的默认值由 checkEnumRefs 结合枚举值校验；表列引用暂不展开校验。
+func (c *Checker) checkColumnDefaultType(m map[string]any, t, rel string, i int, name string) {
+	def, ok := m["default"]
+	if !ok || def == nil {
+		return
+	}
+	switch t {
+	case "string", "bytes":
+		if _, ok := def.(string); !ok {
+			c.errf("%s: columns[%d] (%s): default must be string for type %s", rel, i, name, t)
+		}
+	case "datetime", "timestamp":
+		switch def.(type) {
+		case string, time.Time:
+		default:
+			c.errf("%s: columns[%d] (%s): default must be string/time for type %s", rel, i, name, t)
+		}
+	case "boolean":
+		if _, ok := def.(bool); !ok {
+			c.errf("%s: columns[%d] (%s): default must be boolean for type %s", rel, i, name, t)
+		}
+	case "integer":
+		if _, ok := toInt(def); !ok {
+			c.errf("%s: columns[%d] (%s): default must be integer for type %s", rel, i, name, t)
+		}
+	case "float", "decimal":
+		if _, ok := toFloat(def); !ok {
+			c.errf("%s: columns[%d] (%s): default must be number for type %s", rel, i, name, t)
+		}
+	case "json":
+		// JSON 文档允许任意 YAML 结构。
 	}
 }

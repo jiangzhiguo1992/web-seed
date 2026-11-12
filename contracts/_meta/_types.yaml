@@ -16,6 +16,7 @@ types:
       - 本文件不是物理表：不生成 DDL、不建实体、不落存储
       - "物理表必须 extends: [data.tables.base]"
       - 不要给基类加业务字段
+      - 基类 5 列不得改名或删除
 
   data.tables:
     enforcement: generated+tested
@@ -25,12 +26,12 @@ types:
     check: make contract-check
     do_not:
       - 不要手写 migrations，改本文件后运行 make gen-db
-      - "物理表必须 extends: [data.tables.base]，不得重复声明基类 5 列"
+      - "物理表必须 extends: [data.tables.base]；不得重复声明 id/created_at/updated_at/deleted_at；status 必须重声明为 data.enums.*"
       - 不要绕过软删过滤（deleted_at IS NULL）
-      - 唯一约束必须带 WHERE deleted_at IS NULL
+      - 唯一性用 indexes[].unique + where: deleted_at IS NULL；禁止 UNIQUE 约束（无法带软删过滤）
       - 不要用未结构化字段塞原生 DDL；分区用 table.partition，表达式索引用 indexes[].expression
-      - used_by 是生成物，禁止手改
-      - 只有 owner_module 对应的 cap.services/cap.async 可以写表
+      - used_by 是生成物，禁止手改；queries 记录查询项 ID，不是查询文件 ID
+      - 只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读表写入 persistence.read_only_tables
       - never_expose 列禁止进入普通 OpenAPI/TS/事件/普通 entity；认证 query 与 x-auth-response 是唯一例外
 
   data.queries:

@@ -1,9 +1,11 @@
 // Package check 实现契约校验：结构、ID、基类、列/约束/索引、引用、used_by、index 与 stability。
 //
 // 当前覆盖：
-//   - data.tables/*.yaml 的结构、ID/文件、基类继承、列/约束/索引、used_by
+//   - data.tables/*.yaml 的结构、ID/文件、基类继承、列/约束/索引、used_by、do_not 具体性
 //   - data/enums.yaml 的结构、item ID、值唯一性
-//   - 表列引用的 data.enums.* 是否存在
+//   - 表列引用的 data.enums.* / data.tables.*.col.* 是否存在
+//   - 枚举默认值、enum 约束与列类型一致
+//   - owner_module 写归属（capabilities.persistence）
 //   - entity/query/capability 的表引用是否存在
 //
 // 不覆盖（后续扩展）：
@@ -30,8 +32,9 @@ type Field = contractspec.Field
 var baseColumns = []string{"id", "status", "created_at", "updated_at", "deleted_at"}
 
 type Checker struct {
-	root string
-	errs []string
+	root        string
+	errs        []string
+	tableOwners map[string]string
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -58,8 +61,8 @@ func (c *Checker) run() {
 	}
 
 	tableIDs, cols := c.checkTables(tableSchema)
-	enumIDs := c.checkEnums(enumSchema)
-	c.checkEnumRefs(tableIDs, cols, enumIDs)
+	enumValues := c.checkEnums(enumSchema)
+	c.checkEnumRefs(tableIDs, cols, enumValues)
 	c.checkCrossFileTableRefs(tableIDs, cols)
 	c.checkUsedBy(tableIDs)
 	c.checkIndex(tableIDs)
