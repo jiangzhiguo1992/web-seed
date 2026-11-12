@@ -2,10 +2,10 @@
 
 schema_version: 1
 id: feature.pages.not_found
-summary: 404 页
+summary: "404 页"
 stability: stable
 do_not:
-  - 不要展示原始路径（可能含敏感参数）
+  - "不要展示原始路径（可能含敏感参数）"
 
 page: not_found
 route: null
@@ -15,17 +15,17 @@ data: {}
 states:
   empty:
     when: "true"
-    ui: not_found_illustration
+    ui: "not_found_illustration"
   loading: { when: "false" }
   error: { when: "false" }
   forbidden: { when: "false" }
 
 actions:
   back_home:
-    ui: secondary-button
-    label: 返回首页
-    on_success: navigate(feature.routes.account_list)
+    ui: "secondary-button"
+    label: "返回首页"
+    on_success: "navigate(feature.routes.account_list)"
 
 copy:
-  title: 页面不存在
-  description: 链接可能已失效，或你没有访问权限
+  title: "页面不存在"
+  description: "链接可能已失效，或你没有访问权限"

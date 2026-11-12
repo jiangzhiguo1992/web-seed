@@ -39,10 +39,10 @@ type columnDef struct {
 }
 
 type constraintDef struct {
-	Name   string `yaml:"name"`
-	Type   string `yaml:"type"`
-	Column string `yaml:"column"`
-	Enum   string `yaml:"enum"`
+	Name    string   `yaml:"name"`
+	Type    string   `yaml:"type"`
+	Expr    string   `yaml:"expr,omitempty"`
+	Columns []string `yaml:"columns,omitempty"`
 }
 
 type usedByDef struct {
@@ -55,7 +55,6 @@ type enumItemScaffold struct {
 	ID          string              `yaml:"id"`
 	Name        string              `yaml:"name"`
 	Description string              `yaml:"description"`
-	DBType      string              `yaml:"db_type"`
 	GoType      string              `yaml:"go_type"`
 	TSType      string              `yaml:"ts_type"`
 	Values      []enumValueScaffold `yaml:"values"`
@@ -63,6 +62,7 @@ type enumItemScaffold struct {
 
 type enumValueScaffold struct {
 	Value       string `yaml:"value"`
+	Code        int    `yaml:"code"`
 	Description string `yaml:"description"`
 }
 
@@ -103,7 +103,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	}
 	constraintsField, _ := FindField(s.Fields, "constraints")
 	if err := requireSupported(constraintsField.ItemFields, map[string]bool{
-		"name": true, "type": true, "column": true, "enum": true,
+		"name": true, "type": true, "expr": true, "columns": true,
 	}, "data.tables.constraints"); err != nil {
 		return nil, err
 	}
@@ -113,7 +113,6 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	}, "data.tables.used_by"); err != nil {
 		return nil, err
 	}
-	enumName := name + "_status"
 	columnName := firstExample(columnField.ItemFields, "name", "name")
 	columnType := defaultString(columnField.ItemFields, "type", "string")
 	if columnTypeOverride != "" {
@@ -143,13 +142,11 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		},
 		Columns: []columnDef{
 			{Name: columnName, Type: columnType, Nullable: columnNullable, Comment: "TODO: 列说明", Params: columnParams},
-			{Name: "status", Type: "data.enums." + enumName, Nullable: false, Comment: "TODO: 状态说明"},
+			{Name: "status", Type: "integer", Nullable: false, Comment: "TODO: 状态整数码；枚举在 entity", Params: map[string]any{"bits": 32}},
 		},
-		Constraints: []constraintDef{
-			{Name: "ck_" + name + "_status", Type: "enum", Column: "status", Enum: "data.enums." + enumName},
-		},
-		Indexes: []any{},
-		UsedBy:  usedByDef{Entities: []string{}, Queries: []string{}, Capabilities: []string{}},
+		Constraints: []constraintDef{},
+		Indexes:     []any{},
+		UsedBy:      usedByDef{Entities: []string{}, Queries: []string{}, Capabilities: []string{}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
@@ -168,25 +165,23 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	}
 	enumsField, _ := FindField(s.Fields, "enums")
 	if err := requireSupported(enumsField.ItemFields, map[string]bool{
-		"id": true, "name": true, "description": true, "db_type": true,
+		"id": true, "name": true, "description": true,
 		"go_type": true, "ts_type": true, "values": true,
 	}, "data.enums.enums"); err != nil {
 		return nil, err
 	}
 	valuesField, _ := FindField(enumsField.ItemFields, "values")
-	if err := requireSupported(valuesField.ItemFields, map[string]bool{"value": true, "description": true}, "data.enums.enums.values"); err != nil {
+	if err := requireSupported(valuesField.ItemFields, map[string]bool{"value": true, "code": true, "description": true}, "data.enums.enums.values"); err != nil {
 		return nil, err
 	}
-	dbType := defaultString(enumsField.ItemFields, "db_type", "text")
 	pc := pascal(name)
 	doc := enumItemScaffold{
 		ID:          "data.enums." + name,
 		Name:        name,
 		Description: name,
-		DBType:      dbType,
 		GoType:      pc,
 		TSType:      pc,
-		Values:      []enumValueScaffold{{Value: name, Description: name}},
+		Values:      []enumValueScaffold{{Value: name, Code: 0, Description: name}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {

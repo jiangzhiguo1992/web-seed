@@ -2,15 +2,15 @@
 
 schema_version: 1
 id: platform.http_conventions
-summary: HTTP 信封与状态码约定
+summary: "HTTP 信封与状态码约定"
 stability: stable
 
 response:
-  success: 直接返回资源或集合，不额外包 code/message 信封
-  error: application/problem+json（RFC 9457）
+  success: "直接返回资源或集合，不额外包 code/message 信封"
+  error: "application/problem+json（RFC 9457）"
   empty:
     status: 204
-    body: 无
+    body: "无"
 
 pagination:
   style: cursor
@@ -19,18 +19,18 @@ pagination:
     - { name: page_size, in: query, required: false, default: 20, max: 100 }
   response:
     shape: "{ items: [], page: { has_more, next_cursor } }"
-    ordering: 必须稳定（有唯一 tiebreaker，如 id）
+    ordering: "必须稳定（有唯一 tiebreaker，如 id）"
   offset:
     allowed: false
-    reason: 深分页性能与一致性不可控
+    reason: "深分页性能与一致性不可控"
 
 headers:
   request:
-    - { name: X-Request-Id, required: false, note: 客户端可传，服务端校验或生成 }
-    - { name: Idempotency-Key, required: false, note: 幂等端点建议必传 }
-    - { name: Accept-Language, required: false, note: 用于错误文案 }
+    - { name: X-Request-Id, required: false, note: "客户端可传，服务端校验或生成" }
+    - { name: Idempotency-Key, required: false, note: "幂等端点建议必传" }
+    - { name: Accept-Language, required: false, note: "用于错误文案" }
   response:
-    - { name: X-Request-Id, required: true, note: 必须回传，便于关联日志 }
+    - { name: X-Request-Id, required: true, note: "必须回传，便于关联日志" }
     - { name: RateLimit-Limit, required: false }
     - { name: RateLimit-Remaining, required: false }
     - { name: RateLimit-Reset, required: false }
@@ -42,9 +42,9 @@ status_codes:
   client_error: [400, 401, 403, 404, 409, 413, 415, 422, 429]
   server_error: [500, 502, 503, 504]
   forbidden_usage:
-    - 200 表示错误
-    - 500 表示业务校验失败
-    - 302 用于 API 重定向
+    - "200 表示错误"
+    - "500 表示业务校验失败"
+    - "302 用于 API 重定向"
 
 content_types:
   json: application/json
@@ -72,5 +72,5 @@ cors:
 idempotency:
   header: Idempotency-Key
   window: 24h
-  scope: [POST 创建类端点]
-  storage: 数据库唯一索引 + request hash
+  scope: ["POST 创建类端点"]
+  storage: "数据库唯一索引 + request hash"

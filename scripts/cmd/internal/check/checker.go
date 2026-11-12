@@ -1,11 +1,11 @@
 // Package check 实现契约校验：结构、ID、基类、列/约束/索引、引用、used_by、index 与 stability。
 //
 // 当前覆盖：
-//   - _meta 的 description/generates/caution 双引号强制
+//   - contracts 下文本字段（description/comment/summary/do_not 等）双引号强制
 //   - data.tables/*.yaml 的结构、ID/文件、基类继承、列/约束/索引、used_by、do_not 具体性
-//   - data/enums.yaml 的结构、item ID、值唯一性
-//   - 表列引用的 data.enums.* / data.tables.*.col.* 是否存在
-//   - 枚举默认值、enum 约束与列类型一致
+//   - data/enums.yaml 的结构、item ID、值唯一性、code 唯一性
+//   - 表列引用的 data.tables.*.col.* 是否存在；表列不引用 data.enums.*
+//   - status 必须是 integer；枚举只在 entity
 //   - 禁止 foreign_key；unique 约束与唯一索引的软删语义区分
 //   - owner_module 写归属（capabilities.persistence）
 //   - entity/query/capability 的表引用是否存在
@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
@@ -54,7 +53,7 @@ func (c *Checker) rulef(rule, format string, args ...any) {
 }
 
 func (c *Checker) run() {
-	c.checkMetaQuotes()
+	c.checkContractProseQuotes()
 	c.checkTypeMeta()
 	tableSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/data.tables.yaml"))
 	if err != nil {
@@ -75,12 +74,10 @@ func (c *Checker) run() {
 	c.checkIndex(tableIDs)
 }
 
-// checkMetaQuotes 强制 _meta 的 description/generates/caution 使用双引号，
-// 避免 AI/正则按未加引号的字符串解析时出现歧义。
-func (c *Checker) checkMetaQuotes() {
-	files, _ := filepath.Glob(filepath.Join(c.root, "contracts/_meta/*.yaml"))
-	sort.Strings(files)
-	for _, file := range files {
+// checkContractProseQuotes 强制 contracts 下文本字段使用双引号，
+// 避免正则/外部工具按未加引号的字符串解析时出现歧义。
+func (c *Checker) checkContractProseQuotes() {
+	for _, file := range walkYAML(c.root, "contracts") {
 		rel := relPath(c.root, file)
 		b, err := os.ReadFile(file)
 		if err != nil {
@@ -96,6 +93,26 @@ func (c *Checker) checkMetaQuotes() {
 	}
 }
 
+var proseScalarFields = map[string]bool{
+	"action": true, "body": true, "caution": true, "comment": true,
+	"consistency": true, "description": true, "display_name": true,
+	"error": true, "error_copy_uniform": true, "explanation": true,
+	"generates": true, "handling": true, "id_policy": true, "instead": true,
+	"label": true, "message": true, "naming": true, "note": true,
+	"on_failure": true, "on_success": true, "ordering": true, "rationale": true,
+	"rate_limit_hint": true, "reason": true, "route_label": true, "rule": true,
+	"semantics": true, "scope": true, "storage": true, "success": true,
+	"summary": true, "text": true, "title": true, "ui": true,
+	"when": true, "why": true,
+}
+
+var proseListFields = map[string]bool{
+	"allowed_cases": true, "client_requirements": true, "common_mistakes": true,
+	"definition": true, "do_not": true, "forbidden": true,
+	"forbidden_usage": true, "global_notes": true, "non_breaking": true,
+	"process": true, "rules": true, "scope": true,
+}
+
 func (c *Checker) checkProseQuotes(n *yaml.Node, rel string) {
 	switch n.Kind {
 	case yaml.DocumentNode, yaml.SequenceNode:
@@ -105,17 +122,21 @@ func (c *Checker) checkProseQuotes(n *yaml.Node, rel string) {
 	case yaml.MappingNode:
 		for i := 0; i+1 < len(n.Content); i += 2 {
 			k, v := n.Content[i], n.Content[i+1]
-			switch k.Value {
-			case "description", "caution":
-				if v.Kind != yaml.ScalarNode {
+			if proseScalarFields[k.Value] {
+				switch {
+				case v.Kind == yaml.ScalarNode:
+					if v.Style != yaml.DoubleQuotedStyle {
+						c.rulef("schema.quote", "%s: %s must be double-quoted", rel, k.Value)
+					}
+				case k.Value == "description" || k.Value == "caution":
 					c.rulef("schema.quote", "%s: %s must be a double-quoted string", rel, k.Value)
-				} else if v.Style != yaml.DoubleQuotedStyle {
-					c.rulef("schema.quote", "%s: %s must be double-quoted", rel, k.Value)
 				}
-			case "generates":
-				// _types.yaml 的 generates 是生成物列表；标量时必须双引号。
-				if v.Kind == yaml.ScalarNode && v.Style != yaml.DoubleQuotedStyle {
-					c.rulef("schema.quote", "%s: %s must be double-quoted", rel, k.Value)
+			}
+			if proseListFields[k.Value] && v.Kind == yaml.SequenceNode {
+				for _, item := range v.Content {
+					if item.Kind == yaml.ScalarNode && item.Style != yaml.DoubleQuotedStyle {
+						c.rulef("schema.quote", "%s: %s list items must be double-quoted", rel, k.Value)
+					}
 				}
 			}
 			c.checkProseQuotes(v, rel)
@@ -128,6 +149,10 @@ type typeMeta struct {
 		HardFields []string `yaml:"hard_fields"`
 		SoftFields []string `yaml:"soft_fields"`
 	} `yaml:"schema_semantics"`
+	SchemaRules []struct {
+		ID   string `yaml:"id"`
+		Text string `yaml:"text"`
+	} `yaml:"schema_rules"`
 	Types map[string]struct {
 		Generates []string `yaml:"generates"`
 		DoNot     []string `yaml:"do_not"`
@@ -151,6 +176,19 @@ func (c *Checker) checkTypeMeta() {
 	}
 	if len(meta.SchemaSemantics.HardFields) == 0 || len(meta.SchemaSemantics.SoftFields) == 0 {
 		c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_semantics.hard_fields/soft_fields must not be empty")
+	}
+	if len(meta.SchemaRules) == 0 {
+		c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_rules must not be empty")
+	}
+	seenRule := map[string]bool{}
+	for i, r := range meta.SchemaRules {
+		if r.ID == "" || r.Text == "" {
+			c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_rules[%d] must have id and text", i)
+		}
+		if seenRule[r.ID] {
+			c.rulef("schema.meta", "contracts/_meta/_types.yaml: duplicate schema rule %q", r.ID)
+		}
+		seenRule[r.ID] = true
 	}
 }
 

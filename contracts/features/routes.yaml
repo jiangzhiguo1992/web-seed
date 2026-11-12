@@ -2,11 +2,11 @@
 
 schema_version: 1
 id: feature.routes
-summary: 路由与菜单
+summary: "路由与菜单"
 stability: stable
 do_not:
-  - 不要手写路由表
-  - 不要在路由 meta 硬编码权限字符串，引用 platform.security.permissions.*
+  - "不要手写路由表"
+  - "不要在路由 meta 硬编码权限字符串，引用 platform.security.permissions.*"
 
 app: web/admin
 
@@ -23,11 +23,11 @@ routes:
     permission: platform.security.permissions.account_read
     menu:
       group: 系统管理
-      label: 账号
+      label: "账号"
       icon: users
       order: 10
     meta:
-      title: 账号列表
+      title: "账号列表"
 
   - id: feature.routes.account_create
     path: /accounts/new
@@ -37,7 +37,7 @@ routes:
     permission: platform.security.permissions.account_write
     menu: null
     meta:
-      title: 新建账号
+      title: "新建账号"
 
   - id: feature.routes.account_detail
     path: /accounts/:id
@@ -47,7 +47,7 @@ routes:
     permission: platform.security.permissions.account_read
     menu: null
     meta:
-      title: 账号详情
+      title: "账号详情"
 
   - id: feature.routes.login
     path: /login
@@ -57,7 +57,7 @@ routes:
     permission: null
     menu: null
     meta:
-      title: 登录
+      title: "登录"
       public: true
 
 redirects:

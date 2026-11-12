@@ -3,7 +3,7 @@
 schema_version: 1
 id: data.tables.base
 kind: base
-summary: 表结构基类
+summary: "表结构基类"
 stability: stable
 
 columns:
@@ -13,30 +13,30 @@ columns:
     primary_key: true
     generated_by: application
     nullable: false
-    comment: 主键 UUIDv7（36 字符字符串）
+    comment: "主键 UUIDv7（36 字符字符串）"
 
   - name: status
-    type: string
+    type: integer
+    bits: 32
     nullable: false
-    max_len: 32
-    comment: 业务状态；物理表必须覆盖为具体枚举并说明取值
+    comment: "业务状态整数码；枚举映射在 entity 层"
 
   - name: created_at
     type: timestamp
     nullable: false
     default_sql: now()
     managed_by: database
-    comment: 创建时间
+    comment: "创建时间"
 
   - name: updated_at
     type: timestamp
     nullable: false
     default_sql: now()
     managed_by: application
-    comment: 更新时间；应用层写入
+    comment: "更新时间；应用层写入"
 
   - name: deleted_at
     type: timestamp
     nullable: true
     managed_by: application
-    comment: 软删时间；为空表示未删除
+    comment: "软删时间；为空表示未删除"

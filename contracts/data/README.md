@@ -14,7 +14,7 @@
 | `tables/_base.yaml` | 表结构基类：`id/status/created_at/updated_at/deleted_at` | 无（不生成 DDL、不建实体、不落存储） |
 | `tables/<file>.yaml` | 物理表：字段、类型、约束、索引、分区、保留期 | `schema.sql`、增量 `migrations/*.sql`、sqlc 输入 |
 | `entities/<entity>.yaml` | 逻辑数据实体：身份、字段、关系、复杂校验 | Go/TS 类型 |
-| `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、DB CHECK |
+| `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
 | `queries/<module>.yaml` | 查询契约：id、参数、返回、SQL、语义 | `queries/*.sql`、sqlc 代码 |
 | `storage.yaml` | 项目级存储引擎、部署拓扑、连接与锁 | 配置校验、运维约束 |
 | `_policy.yaml` | **组级配置**（非实例契约）：命名、继承、禁止操作、校验命令 | 约束生成器 |
@@ -24,12 +24,12 @@
 `tables/_base.yaml` 只收敛 5 个字段：
 
 - `id`：UUIDv7，应用生成，主键
-- `status`：业务状态；物理表必须覆盖为具体枚举
+- `status`：业务状态整数码；物理表沿用 `integer`，枚举映射在 entity
 - `created_at`：数据库默认 `now()`
 - `updated_at`：应用写入
 - `deleted_at`：软删时间；为空表示未删除
 
-物理表必须声明 `extends: [data.tables.base]`，不得重复声明 `id/created_at/updated_at/deleted_at`；`status` 必须重声明为具体的 `data.enums.*`。
+物理表必须声明 `extends: [data.tables.base]`，不得重复声明 `id/created_at/updated_at/deleted_at`；`status` 必须重声明为 `integer`，枚举映射只在 entity。
 
 ### 1.2 表与实体是两层
 
@@ -50,7 +50,7 @@
 
 | 类型 | 写在哪 | 例子 |
 |---|---|---|
-| 数据库能表达的约束 | `tables/*.yaml` 的 `constraints` | `CHECK`、枚举 `CHECK`、`UNIQUE`、`EXCLUDE`；软删后可复用的唯一性用 `indexes[].unique` + `where` |
+| 数据库能表达的约束 | `tables/*.yaml` 的 `constraints` | `CHECK`、`UNIQUE`、`EXCLUDE`；表不使用 enum 约束；软删后可复用的唯一性用 `indexes[].unique` + `where` |
 | 跨字段/跨表/业务不变量 | `entities/*.yaml` 的 `validation` | 邮箱拆分一致性、令牌过期顺序 |
 | 业务行为规则 | `business/rules/*.yaml` | 编号唯一、仅本人可改 |
 
@@ -65,7 +65,7 @@ data/tables/_base.yaml + tables/*.yaml ──> schema.sql（目标态）
                                              ├─ diff 当前 DB ──> migrations/<ts>_<name>.sql
                                              └─> sqlc 输入 ──> Go 查询代码
 
-data/enums.yaml ──────> Go 常量 + TS union + CHECK 约束
+data/enums.yaml ──────> Go 常量 + TS union + entity 整数映射
 data/queries/*.yaml ──> queries/*.sql ──> sqlc 代码
 data/storage.yaml ────> 配置校验 + 运维约束
 ```
@@ -78,11 +78,11 @@ data/storage.yaml ────> 配置校验 + 运维约束
 
 1. **一表一文件**，不按字段拆分；基类列不重复声明。
 2. **每个可寻址项必须有稳定 ID**：表 `data.tables.<file>`、列 `data.tables.<file>.col.<col>`、约束 `data.tables.<file>.constraint.<constraint.name>`、查询 `data.queries.<module>.<query_id>`、枚举 `data.enums.<name>`。查询/枚举必须显式写 `id`；列/约束用 `name` 派生，不得改名。契约文件名决定 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖（如 `account.yaml` 的 `table.name: accounts`）。
-3. **字段类型用契约内逻辑类型**：`string`、`boolean`、`integer`、`float`、`decimal`、`datetime`、`timestamp`、`json`、`bytes`、`data.enums.<name>`、`data.tables.<file>.col.<col>`。
+3. **字段类型用契约内逻辑类型**：`string`、`boolean`、`integer`、`float`、`decimal`、`datetime`、`timestamp`、`json`、`bytes`、`data.tables.<file>.col.<col>`。表列不引用 `data.enums.*`；entity 字段才用枚举。
 4. **类型族扩展字段写在列上**：`string` 用 `min_len`/`max_len`/`fixed`/`pattern`/`normalize`，`bytes` 用 `min_len`/`max_len`/`fixed`，`integer` 用 `bits`/`unsigned`/`min`/`max`，`float` 用 `bits`/`min`/`max`，`decimal` 用 `precision`/`scale`/`min`/`max`，`datetime` 用 `mode`/`timezone`，`timestamp` 用 `timezone`/`fractional_seconds`，`json` 用 `binary`。字段定义与 `required` 在 `contracts/_meta/data.tables.yaml` 的 `column_types.families`。
 5. **时间统一 `timestamp`**，应用层只用 UTC。
 6. **软删表必须有 `deleted_at`**。全局唯一（含软删行）用 `constraints.unique`；软删后可复用用唯一索引 + `where: "deleted_at IS NULL"`。
-7. **枚举用 `string + check`**，不用数据库原生 enum；枚举值只能追加。
+7. **表不使用枚举**：`status` 等状态列用 `integer`，`data/enums.yaml` 的 `values[].code` 是数据库整数码，entity 负责 code ↔ 枚举映射；枚举值只能追加。
 8. **索引必须写 `reason`**；表达式索引用 `expression`，大表用 `concurrently: auto`。
 9. **主键默认由应用层生成 UUIDv7**（`generated_by: application`），数据库不设 default。
 10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；跨模块读通过 `persistence.queries`。

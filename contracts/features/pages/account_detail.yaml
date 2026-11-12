@@ -2,12 +2,12 @@
 
 schema_version: 1
 id: feature.pages.account_detail
-summary: 账号详情页
+summary: "账号详情页"
 stability: stable
 do_not:
-  - 不要在前端判断状态合法性，使用 business.states.account 的转换表
-  - 不要在页面展示密码、手机号、邮箱、令牌
-  - 认证信息只能通过认证接口获取，不要在本页拼装
+  - "不要在前端判断状态合法性，使用 business.states.account 的转换表"
+  - "不要在页面展示密码、手机号、邮箱、令牌"
+  - "认证信息只能通过认证接口获取，不要在本页拼装"
 
 page: account_detail
 route: feature.routes.account_detail
@@ -23,24 +23,24 @@ data:
 states:
   loading:
     when: "query.isPending"
-    ui: skeleton-detail
+    ui: "skeleton-detail"
   empty:
     when: "false"
-    note: 详情页无空态，不存在时进入 error/not_found
+    note: "详情页无空态，不存在时进入 error/not_found"
   error:
     when: "query.isError"
-    ui: error-panel
+    ui: "error-panel"
     show: "problem.detail"
   forbidden:
     when: "problem.code == 'COMMON_FORBIDDEN'"
-    ui: forbidden-panel
+    ui: "forbidden-panel"
 
 actions:
   edit:
     capability: cap.http.account.update
     permission: platform.security.permissions.account_write
     available_when: "row.status != deleted"
-    ui: primary-button
+    ui: "primary-button"
   activate:
     capability: cap.http.account.activate
     permission: platform.security.permissions.account_write
@@ -70,4 +70,4 @@ fields:
 
 transition_ui:
   source: business.states.account.transitions
-  rule: 只渲染 from 包含当前状态的按钮；点击前调用 canTransition()
+  rule: "只渲染 from 包含当前状态的按钮；点击前调用 canTransition()"

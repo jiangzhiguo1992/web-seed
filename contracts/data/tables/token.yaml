@@ -2,17 +2,17 @@
 
 schema_version: 1
 id: data.tables.token
-summary: 令牌表
+summary: "令牌表"
 stability: stable
 owner_module: auth
 extends: [data.tables.base]
 do_not:
-  - access_token_hash / refresh_token_hash 只存哈希，禁止出现在普通响应、日志、事件；原文只在 /auth/login、/auth/refresh 的 TokenPair 返回一次
-  - uq_tokens_access_hash / uq_tokens_refresh_hash 必须带 WHERE deleted_at IS NULL
+  - "access_token_hash / refresh_token_hash 只存哈希，禁止出现在普通响应、日志、事件；原文只在 /auth/login、/auth/refresh 的 TokenPair 返回一次"
+  - "uq_tokens_access_hash / uq_tokens_refresh_hash 必须带 WHERE deleted_at IS NULL"
 
 table:
   name: tokens
-  comment: 令牌（访问令牌与刷新令牌）
+  comment: "令牌（访问令牌与刷新令牌）"
   size_class: large
   retention: { unit: days, ttl: 30 }
 
@@ -22,31 +22,31 @@ columns:
     nullable: false
     min_len: 1
     max_len: 32
-    comment: 归属类型
+    comment: "归属类型"
 
   - name: own_id
     type: string
     max_len: 36
     nullable: false
-    comment: 归属 ID
+    comment: "归属 ID"
 
   - name: account_id
     type: string
     max_len: 36
     nullable: false
-    comment: 关联账号
+    comment: "关联账号"
 
   - name: device_id
     type: string
     nullable: true
     max_len: 128
-    comment: 设备标识；多端登录时区分设备
+    comment: "设备标识；多端登录时区分设备"
 
   - name: user_id
     type: string
     max_len: 36
     nullable: true
-    comment: 关联用户 ID
+    comment: "关联用户 ID"
 
   - name: access_token_hash
     type: string
@@ -55,7 +55,7 @@ columns:
     max_len: 128
     pii: true
     never_expose: true
-    comment: 访问令牌哈希；只存哈希，禁止存原文
+    comment: "访问令牌哈希；只存哈希，禁止存原文"
 
   - name: refresh_token_hash
     type: string
@@ -64,61 +64,57 @@ columns:
     max_len: 128
     pii: true
     never_expose: true
-    comment: 刷新令牌哈希；只存哈希，禁止存原文
+    comment: "刷新令牌哈希；只存哈希，禁止存原文"
 
   - name: access_expire_at
     type: timestamp
     nullable: false
-    comment: 访问令牌过期时间
+    comment: "访问令牌过期时间"
 
   - name: refresh_expire_at
     type: timestamp
     nullable: false
-    comment: 刷新令牌过期时间
+    comment: "刷新令牌过期时间"
 
   - name: status
-    type: data.enums.token_status
+    type: integer
+    bits: 32
     nullable: false
-    default: active
-    comment: 令牌状态
+    default: 0
+    comment: "令牌状态整数码；0=active 1=revoked 2=expired"
 
 constraints:
   - name: ck_tokens_expire_order
     type: check
     expr: "refresh_expire_at > access_expire_at"
 
-  - name: ck_tokens_status
-    type: enum
-    column: status
-    enum: data.enums.token_status
-
 indexes:
   - name: uq_tokens_access_hash
     columns: [access_token_hash]
     unique: true
     where: "deleted_at IS NULL"
-    reason: 访问令牌哈希查找
+    reason: "访问令牌哈希查找"
 
   - name: uq_tokens_refresh_hash
     columns: [refresh_token_hash]
     unique: true
     where: "deleted_at IS NULL"
-    reason: 刷新令牌哈希查找
+    reason: "刷新令牌哈希查找"
 
   - name: idx_tokens_account_id
     columns: [account_id]
     where: "deleted_at IS NULL"
-    reason: 按账号列出令牌
+    reason: "按账号列出令牌"
 
   - name: idx_tokens_refresh_expire_at
     columns: [refresh_expire_at]
     where: "deleted_at IS NULL"
-    reason: 过期令牌清理
+    reason: "过期令牌清理"
 
   - name: idx_tokens_account_id_device_id
     columns: [account_id, device_id]
     where: "deleted_at IS NULL"
-    reason: 按设备吊销令牌
+    reason: "按设备吊销令牌"
 
 used_by:
   entities: [data.entities.token]

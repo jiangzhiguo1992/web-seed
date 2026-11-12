@@ -7,12 +7,12 @@
 
 schema_version: 1
 id: cap.http.account
-summary: 账号 HTTP 接口
+summary: "账号 HTTP 接口"
 stability: stable
 do_not:
-  - 响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段
-  - x-contract-id 必须与 index 中的 operation 一一对应
-  - 不要在 handler 里直接读 r.URL.Query()
+  - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
+  - "x-contract-id 必须与 index 中的 operation 一一对应"
+  - "不要在 handler 里直接读 r.URL.Query()"
 
 module: accounts
 base_path: /v1
@@ -24,7 +24,7 @@ paths:
       operationId: listAccounts
       x-contract-id: cap.http.account.list
       x-service: cap.services.account.list
-      summary: 列出账号
+      summary: "列出账号"
       x-preconditions: [platform.security.permissions.account_read]
       x-timeout-ms: 3000
       x-rate-limit: { requests: 60, window_seconds: 60 }
@@ -35,7 +35,7 @@ paths:
         - { name: page_size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
         "200":
-          description: 成功
+          description: "成功"
           content:
             application/json:
               schema:
@@ -56,7 +56,7 @@ paths:
       operationId: createAccount
       x-contract-id: cap.http.account.create
       x-service: cap.services.account.create
-      summary: 创建账号
+      summary: "创建账号"
       x-idempotent: true
       x-preconditions: [platform.security.permissions.account_write]
       x-timeout-ms: 5000
@@ -80,7 +80,7 @@ paths:
             example: { own_type: user, own_id: "0190f5c2-7d3a-7c3e-9b6a-2f5b1c8d9e02", number: "ACC-0001", nickname: "管理员" }
       responses:
         "201":
-          description: 已创建
+          description: "已创建"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Account" }
@@ -90,13 +90,13 @@ paths:
       operationId: getAccount
       x-contract-id: cap.http.account.get
       x-service: cap.services.account.get
-      summary: 获取账号
+      summary: "获取账号"
       x-preconditions: [platform.security.permissions.account_read]
       parameters:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
         "200":
-          description: 成功
+          description: "成功"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Account" }
@@ -105,7 +105,7 @@ paths:
       operationId: updateAccount
       x-contract-id: cap.http.account.update
       x-service: cap.services.account.update
-      summary: 更新账号资料
+      summary: "更新账号资料"
       x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
       parameters:
@@ -123,7 +123,7 @@ paths:
                 version: { type: integer, minimum: 1 }
       responses:
         "200":
-          description: 成功
+          description: "成功"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Account" }
@@ -132,7 +132,7 @@ paths:
       operationId: deleteAccount
       x-contract-id: cap.http.account.delete
       x-service: cap.services.account.delete
-      summary: 删除账号（软删）
+      summary: "删除账号（软删）"
       x-idempotent: true
       x-preconditions: [platform.security.permissions.account_delete]
       x-audit: true
@@ -140,14 +140,14 @@ paths:
         - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
         - { name: version, in: query, required: true, schema: { type: integer, minimum: 1 } }
       responses:
-        "204": { description: 已删除 }
+        "204": { description: "已删除" }
 
   /accounts/{id}/activate:
     post:
       operationId: activateAccount
       x-contract-id: cap.http.account.activate
       x-service: cap.services.account.activate
-      summary: 激活账号
+      summary: "激活账号"
       x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
       parameters:
@@ -155,7 +155,7 @@ paths:
         - { name: version, in: query, required: true, schema: { type: integer, minimum: 1 } }
       responses:
         "200":
-          description: 成功
+          description: "成功"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Account" }
@@ -165,7 +165,7 @@ paths:
       operationId: suspendAccount
       x-contract-id: cap.http.account.suspend
       x-service: cap.services.account.suspend
-      summary: 封禁账号
+      summary: "封禁账号"
       x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
       parameters:
@@ -183,7 +183,7 @@ paths:
                 reason: { type: string, minLength: 1, maxLength: 200 }
       responses:
         "200":
-          description: 成功
+          description: "成功"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Account" }

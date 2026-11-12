@@ -2,16 +2,16 @@
 
 schema_version: 1
 id: platform.versioning
-summary: 版本与兼容策略
+summary: "版本与兼容策略"
 stability: stable
 
 api:
   scheme: url_major             # /v1 /v2
   current: v1
   stability_levels:
-    - { level: experimental, note: 可随时变更，需显式标注 }
-    - { level: stable, note: 遵守弃用流程 }
-    - { level: deprecated, note: 已弃用，倒计时中 }
+    - { level: experimental, note: "可随时变更，需显式标注" }
+    - { level: stable, note: "遵守弃用流程" }
+    - { level: deprecated, note: "已弃用，倒计时中" }
 
 contract:
   schema_version: 1
@@ -20,17 +20,17 @@ contract:
 compatibility:
   breaking_changes:
     definition:
-      - 删除或改名端点
-      - 删除或改名响应字段
-      - 改字段类型或格式
-      - 收紧校验（新增必填、降低上限）
-      - 改错误码含义
+      - "删除或改名端点"
+      - "删除或改名响应字段"
+      - "改字段类型或格式"
+      - "收紧校验（新增必填、降低上限）"
+      - "改错误码含义"
     requires: major_version_bump
   non_breaking:
-    - 新增可选请求字段
-    - 新增响应字段（客户端必须忽略未知字段）
-    - 新增端点
-    - 放宽校验
+    - "新增可选请求字段"
+    - "新增响应字段（客户端必须忽略未知字段）"
+    - "新增端点"
+    - "放宽校验"
 
 deprecation:
   header_required: true
@@ -40,9 +40,9 @@ deprecation:
   min_window_days: 90
   process:
     - 契约标记 stability: deprecated
-    - 响应加 Deprecation / Sunset
-    - 文档登记迁移指南
-    - 窗口结束且无调用后移除
+    - "响应加 Deprecation / Sunset"
+    - "文档登记迁移指南"
+    - "窗口结束且无调用后移除"
 
 detection:
   command: make contract-compat
@@ -51,6 +51,6 @@ detection:
   fail_on: [breaking]
 
 client_requirements:
-  - 必须忽略未知响应字段
-  - 必须处理 410 Gone
-  - 不得缓存 Deprecation 头之外的 5xx
+  - "必须忽略未知响应字段"
+  - "必须处理 410 Gone"
+  - "不得缓存 Deprecation 头之外的 5xx"

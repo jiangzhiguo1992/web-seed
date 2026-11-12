@@ -2,12 +2,12 @@
 
 schema_version: 1
 id: platform.security.auth_policy
-summary: 会话与认证策略
+summary: "会话与认证策略"
 stability: stable
 
 token:
   persistence: data.tables.token
-  storage: hash
+  storage: "hash"
   hash_algorithm: sha256
   access:
     type: jwt
@@ -16,13 +16,13 @@ token:
     claims_required: [sub, aud, exp, iat, jti]
     audience: [web/admin]
     pii_in_token: false
-    storage: hash              # 仅存哈希用于吊销/审计；校验优先验签
+    storage: "hash"              # 仅存哈希用于吊销/审计；校验优先验签
   refresh:
     type: opaque
     ttl: 30d
     rotation: true               # 每次刷新换新 token，旧的作废
     reuse_detection: true        # 复用旧 token 即吊销全部会话
-    storage: hash
+    storage: "hash"
     table: data.tables.token
     cookie:
       name: refresh_token
@@ -54,7 +54,7 @@ password:
   breach_check: true
   legacy:
     field: data.tables.auth_pwd.col.password_md5
-    note: 仅兼容遗留系统；新密码写入 password_hash，登录成功后清除 MD5
+    note: "仅兼容遗留系统；新密码写入 password_hash，登录成功后清除 MD5"
 
 mfa:
   required_for_roles: [admin]
@@ -63,5 +63,5 @@ mfa:
 
 authorization:
   model: rbac + resource_rule
-  note: 角色决定"能不能做"，business/rules 决定"能不能对这个资源做"
+  note: "角色决定\"能不能做\"，business/rules 决定\"能不能对这个资源做\""
   deny_by_default: true

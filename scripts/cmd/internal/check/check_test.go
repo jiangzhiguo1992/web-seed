@@ -76,8 +76,12 @@ func TestCheckStability(t *testing.T) {
 	}
 	c := &Checker{root: dir}
 	c.checkStability(map[string]any{"stability": "stable"}, "x.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "stable contract contains TODO") {
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "stable contract contains TODO") {
 		t.Fatalf("stable TODO not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, "[schema.stability]") {
+		t.Fatalf("stability rule id missing: %v", c.errs)
 	}
 
 	c = &Checker{}
@@ -211,7 +215,7 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 		"owner_module": "x",
 		"table":        map[string]any{"comment": "x", "size_class": "small"},
 		"columns": []any{
-			map[string]any{"name": "status", "type": "data.enums.x_status"},
+			map[string]any{"name": "status", "type": "integer"},
 			map[string]any{"name": "name", "type": "string"},
 		},
 		"constraints": []any{
@@ -319,7 +323,7 @@ func minimalTableDoc() map[string]any {
 		"extends":      []any{"data.tables.base"},
 		"table":        map[string]any{"comment": "x", "size_class": "small"},
 		"columns": []any{
-			map[string]any{"name": "status", "type": "data.enums.x_status"},
+			map[string]any{"name": "status", "type": "integer"},
 			map[string]any{"name": "code", "type": "string"},
 		},
 	}
@@ -327,8 +331,11 @@ func minimalTableDoc() map[string]any {
 
 func minimalTableSchema() *Schema {
 	return &Schema{
-		ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{"string": {}}},
-		ColumnRefs:  ColumnRefs{Prefixes: []string{"data.enums."}},
+		ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
+			"string":  {},
+			"integer": {},
+		}},
+		ColumnRefs: ColumnRefs{Prefixes: []string{"data.tables."}},
 	}
 }
 
@@ -389,7 +396,7 @@ func TestTableRulesForeignKeyRejected(t *testing.T) {
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, `unknown type "foreign_key"`) {
+	if !strings.Contains(errs, "foreign_key is forbidden") {
 		t.Fatalf("foreign_key not rejected: %v", c.errs)
 	}
 	if !strings.Contains(errs, "[no-foreign-key]") {
@@ -574,50 +581,68 @@ used_by:
 	}
 }
 
-func TestEnumDefaultAndConstraintMatch(t *testing.T) {
+func TestTableEnumTypeRejected(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["columns"] = append(doc["columns"].([]any), map[string]any{
+		"name": "bad", "type": "data.enums.x_status",
+	})
+	schema := minimalTableSchema()
+	schema.ColumnRefs = ColumnRefs{Prefixes: []string{"data.tables."}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[column-type]") {
+		t.Fatalf("table enum column not rejected: %v", c.errs)
+	}
+}
+
+func TestTableStatusMustBeInteger(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["columns"] = []any{
+		map[string]any{"name": "status", "type": "string"},
+		map[string]any{"name": "code", "type": "string"},
+	}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[status-integer]") {
+		t.Fatalf("non-integer status not rejected: %v", c.errs)
+	}
+}
+
+func TestEnumCodeUnique(t *testing.T) {
 	root := t.TempDir()
-	tableFile := filepath.Join(root, "contracts/data/tables/x.yaml")
-	if err := os.MkdirAll(filepath.Dir(tableFile), 0o755); err != nil {
+	dir := filepath.Join(root, "contracts/data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	body := `
-columns:
-  - name: status
-    type: data.enums.x_status
-    default: missing
-  - name: code
-    type: string
-constraints:
-  - name: ck_x_status
-    type: enum
-    column: status
-    enum: data.enums.y_status
-  - name: ck_x_code
-    type: enum
-    column: code
-    enum: data.enums.x_status
+schema_version: 1
+id: data.enums
+summary: "x"
+stability: stable
+enums:
+  - id: data.enums.x_status
+    name: x_status
+    go_type: XStatus
+    ts_type: XStatus
+    values:
+      - { value: active, code: 0 }
+      - { value: disabled, code: 0 }
 `
-	if err := os.WriteFile(tableFile, []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "enums.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repoRoot, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(repoRoot, "contracts/_meta/data.enums.yaml"))
+	if err != nil {
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
-	c.checkEnumRefs(
-		map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"},
-		map[string]map[string]bool{"data.tables.x": {"status": true, "code": true}},
-		map[string]map[string]bool{
-			"data.enums.x_status": {"active": true},
-			"data.enums.y_status": {"active": true},
-		},
-	)
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, `default "missing" not in data.enums.x_status`) {
-		t.Fatalf("enum default value not checked: %v", c.errs)
-	}
-	if !strings.Contains(errs, "does not match column status type") {
-		t.Fatalf("enum constraint/column mismatch not checked: %v", c.errs)
-	}
-	if !strings.Contains(errs, "must be data.enums.*") {
-		t.Fatalf("enum constraint on non-enum column not checked: %v", c.errs)
+	c.checkEnums(schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[enum-code-unique]") {
+		t.Fatalf("duplicate enum code not reported: %v", c.errs)
 	}
 }
 
@@ -627,7 +652,7 @@ func TestMetaProseIsDoubleQuoted(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
-	c.checkMetaQuotes()
+	c.checkContractProseQuotes()
 	if len(c.errs) != 0 {
 		t.Fatalf("meta prose quoting failed:\n%s", strings.Join(c.errs, "\n"))
 	}
@@ -741,5 +766,82 @@ func TestTypeMetaRequiresSchemaSemantics(t *testing.T) {
 	c.checkTypeMeta()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.meta]") {
 		t.Fatalf("missing schema_semantics not reported: %v", c.errs)
+	}
+}
+
+func TestForeignKeyReportsOnlyNoForeignKey(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := loadYAML(filepath.Join(root, "contracts/data/tables/account.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc["constraints"] = append(asList(doc["constraints"]), map[string]any{
+		"name":       "fk_accounts_x",
+		"type":       "foreign_key",
+		"columns":    []any{"account_id"},
+		"references": []any{"data.tables.account.col.id"},
+	})
+	c := &Checker{}
+	c.checkPhysicalTable(doc, "contracts/data/tables/account.yaml", schema)
+	errs := strings.Join(c.errs, "\n")
+	if strings.Count(errs, "[no-foreign-key]") != 1 {
+		t.Fatalf("expected exactly one no-foreign-key error, got:\n%s", errs)
+	}
+	for _, bad := range []string{"[schema.unknown-field]", "[schema.pattern]", "[schema.enum]"} {
+		if strings.Contains(errs, bad) {
+			t.Fatalf("foreign_key produced extra %s error:\n%s", bad, errs)
+		}
+	}
+}
+
+func TestTypeMetaRejectsDuplicateSchemaRule(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/_meta")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "schema_semantics: {hard_fields: [name], soft_fields: [description]}\n" +
+		"schema_rules:\n  - {id: x, text: \"a\"}\n  - {id: x, text: \"b\"}\n"
+	if err := os.WriteFile(filepath.Join(dir, "_types.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkTypeMeta()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "duplicate schema rule") {
+		t.Fatalf("duplicate schema rule not reported: %v", c.errs)
+	}
+}
+
+func TestStripForeignKeysDoesNotMutateOriginal(t *testing.T) {
+	doc := minimalTableDoc()
+	doc["constraints"] = []any{
+		map[string]any{"name": "fk_x_other", "type": "foreign_key"},
+		map[string]any{"name": "uq_x_code", "type": "unique", "columns": []any{"code"}},
+	}
+	clean := stripForeignKeys(doc)
+	if len(asList(doc["constraints"])) != 2 {
+		t.Fatalf("original doc mutated: %v", doc["constraints"])
+	}
+	if len(asList(clean["constraints"])) != 1 {
+		t.Fatalf("foreign key not stripped: %v", clean["constraints"])
+	}
+}
+
+func TestProseQuoteCheckDetectsList(t *testing.T) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte("do_not:\n  - plain\n"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{}
+	c.checkProseQuotes(&doc, "x")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "list items must be double-quoted") {
+		t.Fatalf("unquoted list item not reported: %v", c.errs)
 	}
 }

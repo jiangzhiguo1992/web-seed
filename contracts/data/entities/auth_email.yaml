@@ -6,13 +6,13 @@
 
 schema_version: 1
 id: data.entities.auth_email
-summary: 邮箱认证数据实体
+summary: "邮箱认证数据实体"
 stability: stable
 table: data.tables.auth_email
 identity: id
 do_not:
-  - 不要把完整邮箱写进账号主表
-  - 不要在日志里输出完整邮箱
+  - "不要把完整邮箱写进账号主表"
+  - "不要在日志里输出完整邮箱"
 
 fields:
   - { name: id, type: string, max_len: 36, required: true, mutable: false }

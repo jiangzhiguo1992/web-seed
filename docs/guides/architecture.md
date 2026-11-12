@@ -102,7 +102,7 @@
 - [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/token/auth_* 拆分（契约已落盘）
 - [x] 契约元规范试点：`_meta/{data.tables,data.enums}` + `make contract-new` + `make contract-check`（结构 / ID / 约束 / 索引 / used_by / owner 写归属）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
-- [ ] `data/enums.yaml` → Go 常量 + TS union + DB check
+- [ ] `data/enums.yaml` → Go 常量 + TS union + entity 整数映射
 - [ ] `platform/errors.yaml` + `platform/security/permissions.yaml` → 两端常量
 - [ ] `platform/config/env.json` → `.env.example`（`gen-env.sh`）
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
@@ -409,7 +409,7 @@ apps:
 - 主键 UUIDv7；时间列 `timestamp`，统一 UTC；`updated_at` 由应用写入
 - 业务表可选 `version` 做乐观锁；不是基类字段
 - 存储引擎、部署拓扑、连接池、锁在 `data/storage.yaml`，禁止逐表声明 engine
-- 枚举用 `string + check`，不用 PG enum（迁移困难）
+- 表不使用枚举：`status` 等状态列用 `integer`，枚举只在 entity，`data/enums.yaml` 的 `values[].code` 是 DB 整数码
 - 软删后可复用的唯一性用部分唯一索引：`WHERE deleted_at IS NULL`；全局唯一（含软删行）用 `UNIQUE` 约束
 - 索引命名 `idx_<table>_<cols>`；禁止数据库外键，跨表一致性由应用/业务规则保证
 - 迁移只前进；零停机三步：加可空列 → 回填 → 加约束

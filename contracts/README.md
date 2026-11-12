@@ -344,7 +344,7 @@ table:
 |---|---|---|---|
 | **类型级** | `_meta/_types.yaml` | "所有表不要手写 migrations" | 一处定义，全类继承 |
 | **组级** | `<group>/README.md` | "business 不引用 data"、"实体在 data 层" | 手写，稳定 |
-| **实例级** | 契约正文 `do_not` | "status 只能引用枚举"、"游标分页要有 tiebreaker" | 就近，每个文件 1–3 条 |
+| **实例级** | 契约正文 `do_not` | "account.status 使用 integer；枚举只在 entity"、"游标分页要有 tiebreaker" | 就近，每个文件 1–3 条 |
 | **全局** | `index.yaml` 的 `global_notes` | "错误响应由生成器注入" | 跨文件坑，极少 |
 
 **不建目录级 index 汇总约束**，原因：
@@ -362,7 +362,7 @@ table:
 
 | 写法 | 判定 |
 |---|---|
-| `status 只能引用 data.enums.account_status` | ✅ 含字段名，实例级 |
+| `account.status 使用 integer；枚举只在 entity` | ✅ 含字段名，实例级 |
 | `游标分页必须有唯一 tiebreaker（created_at, number）` | ✅ 含字段名，实例级 |
 | `不要手写 migrations` | ❌ 所有表都适用 → 上移 `_meta/_types.yaml` |
 | `不要绕过软删过滤` | ❌ 所有软删表都适用 → 上移 |

@@ -6,8 +6,8 @@ stability: stable
 
 project:
   name: web-seed
-  display_name: Web Seed
-  description: 通用 Web + API 脚手架模板
+  display_name: "Web Seed"
+  description: "通用 Web + API 脚手架模板"
   version: 0.1.0
   license: MIT
 
@@ -31,7 +31,7 @@ defaults:
 apps:
   admin:
     kind: api
-    description: 管理端 API
+    description: "管理端 API"
     includes:
       - cap.http.shared
       - cap.http.account
@@ -43,7 +43,7 @@ apps:
 
   web-admin:
     kind: web
-    description: 管理端前端
+    description: "管理端前端"
     routes: feature.routes
     packages: [api-client, ui-kit, design-tokens]
 

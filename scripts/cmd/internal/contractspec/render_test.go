@@ -68,8 +68,12 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	if first["name"] != "custom_name" {
 		t.Fatalf("column name not from schema examples: %#v", first)
 	}
-	if !strings.Contains(string(b), "data.enums.note_status") {
-		t.Fatalf("status enum not generated:\n%s", b)
+	status, _ := cols[1].(map[string]any)
+	if status["type"] != "integer" || status["bits"] != 32 {
+		t.Fatalf("status must be integer with bits 32: %#v", status)
+	}
+	if strings.Contains(string(b), "data.enums.") {
+		t.Fatalf("table scaffold must not reference enums:\n%s", b)
 	}
 }
 

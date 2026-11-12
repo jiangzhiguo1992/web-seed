@@ -2,13 +2,13 @@
 
 schema_version: 1
 id: platform.analytics.events
-summary: 埋点事件与属性
+summary: "埋点事件与属性"
 stability: draft
 
 naming:
   pattern: "<domain>.<past_tense>"
   property_case: snake_case
-  id_policy: 埋点事件使用 name 作为唯一标识，不进入 ID 图；图校验只检查事件名集合
+  id_policy: "埋点事件使用 name 作为唯一标识，不进入 ID 图；图校验只检查事件名集合"
 
 common_properties:
   - { name: app, type: string, pii: false }
@@ -19,7 +19,7 @@ common_properties:
 events:
   # ---------- 页面 ----------
   - name: page.account_list_viewed
-    description: 账号列表页曝光
+    description: "账号列表页曝光"
     trigger: mount
     properties:
       - { name: item_count, type: integer, pii: false }
@@ -27,12 +27,12 @@ events:
 
   # ---------- 动作 ----------
   - name: account.create_clicked
-    description: 点击新建账号
+    description: "点击新建账号"
     trigger: click
     properties: []
 
   - name: account.created
-    description: 账号创建成功
+    description: "账号创建成功"
     trigger: api_success
     ref: cap.http.account.create
     properties:
@@ -41,21 +41,21 @@ events:
       - { name: duration_ms, type: integer, pii: false }
 
   - name: account.activated
-    description: 账号激活成功
+    description: "账号激活成功"
     trigger: api_success
     ref: cap.http.account.activate
     properties:
       - { name: account_id, type: string, pii: false }
 
   - name: account.suspended
-    description: 账号封禁成功
+    description: "账号封禁成功"
     trigger: api_success
     ref: cap.http.account.suspend
     properties:
       - { name: account_id, type: string, pii: false }
 
   - name: account.deleted
-    description: 账号删除成功
+    description: "账号删除成功"
     trigger: api_success
     ref: cap.http.account.delete
     properties:
@@ -63,7 +63,7 @@ events:
 
   # ---------- 失败 ----------
   - name: request.failed
-    description: 请求失败
+    description: "请求失败"
     trigger: api_error
     properties:
       - { name: capability, type: string, pii: false }

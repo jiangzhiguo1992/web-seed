@@ -2,28 +2,28 @@
 
 schema_version: 1
 id: business.states.account
-summary: 账号状态机
+summary: "账号状态机"
 stability: stable
 do_not:
-  - deleted 是终态，不允许任何出边
-  - 封禁与软删不要混用：suspended 可恢复，deleted 不可
-  - 不要在 handler/service 手写状态判断
-  - suspended 不可直接删除；必须先解封再删除
+  - "deleted 是终态，不允许任何出边"
+  - "封禁与软删不要混用：suspended 可恢复，deleted 不可"
+  - "不要在 handler/service 手写状态判断"
+  - "suspended 不可直接删除；必须先解封再删除"
 
 machine: account
 subject: data.entities.account
 
 states:
-  - { name: pending, description: 待激活，不能登录, terminal: false }
-  - { name: active, description: 正常，可登录, terminal: false }
-  - { name: suspended, description: 已封禁，不能登录, terminal: false }
-  - { name: deleted, description: 已软删，终态, terminal: true }
+  - { name: pending, description: "待激活，不能登录", terminal: false }
+  - { name: active, description: "正常，可登录", terminal: false }
+  - { name: suspended, description: "已封禁，不能登录", terminal: false }
+  - { name: deleted, description: "已软删，终态", terminal: true }
 
 initial: pending
 
 transitions:
   - name: activate
-    description: 激活账号
+    description: "激活账号"
     from: [pending]
     to: active
     guard: "number 已归一且格式合法"
@@ -32,7 +32,7 @@ transitions:
     implemented_by: [cap.services.account.activate]
 
   - name: suspend
-    description: 封禁账号
+    description: "封禁账号"
     from: [active]
     to: suspended
     guard: "true"
@@ -40,7 +40,7 @@ transitions:
     implemented_by: [cap.services.account.suspend]
 
   - name: reactivate
-    description: 解封
+    description: "解封"
     from: [suspended]
     to: active
     guard: "true"
@@ -48,7 +48,7 @@ transitions:
     implemented_by: [cap.services.account.activate]
 
   - name: delete
-    description: 软删
+    description: "软删"
     from: [pending, active]
     to: deleted
     guard: "true"
@@ -56,8 +56,8 @@ transitions:
     implemented_by: [cap.services.account.delete]
 
 forbidden_examples:
-  - { from: deleted, transition: activate, reason: 已删除不可激活 }
-  - { from: pending, transition: suspend, reason: 待激活账号不可直接封禁 }
-  - { from: suspended, transition: delete, reason: 封禁账号需先解封再删除（业务选择） }
+  - { from: deleted, transition: activate, reason: "已删除不可激活" }
+  - { from: pending, transition: suspend, reason: "待激活账号不可直接封禁" }
+  - { from: suspended, transition: delete, reason: "封禁账号需先解封再删除（业务选择）" }
 
 idempotent_transitions: []

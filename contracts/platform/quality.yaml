@@ -2,7 +2,7 @@
 
 schema_version: 1
 id: platform.quality
-summary: 测试策略与门槛
+summary: "测试策略与门槛"
 stability: stable
 
 coverage:
@@ -16,22 +16,22 @@ coverage:
 
 must_test:
   - id: state_machine_transitions
-    why: 非法转换必须 panic 或返回明确错误
+    why: "非法转换必须 panic 或返回明确错误"
     where: apps/api/internal/generated/business/*_state_test.go
   - id: response_schema
-    why: 防止实现多返回字段
+    why: "防止实现多返回字段"
     where: apps/api/internal/composition/*/routes_test.go
   - id: route_set_matches_contract
-    why: 防止端点漂移
+    why: "防止端点漂移"
     where: apps/api/internal/composition/*/routes_test.go
   - id: business_rules
-    why: business/rules 每条规则至少一组用例
+    why: "business/rules 每条规则至少一组用例"
     where: apps/api/internal/modules/*/rules_test.go
   - id: page_states
-    why: 页面四态必须有快照或断言
+    why: "页面四态必须有快照或断言"
     where: apps/web/*/src/**/*.spec.ts
   - id: error_mapping
-    why: 每个错误码必须映射到预期状态码
+    why: "每个错误码必须映射到预期状态码"
     where: apps/api/internal/platform/httpserver/problem_test.go
 
 e2e:
@@ -41,12 +41,12 @@ e2e:
   base_url_source: platform.environments
 
 forbidden:
-  - 测试里 sleep 固定时长（除显式超时测试）
-  - mock 数据库（集成测试必须用真实 PG）
-  - 测试间共享可变状态
+  - "测试里 sleep 固定时长（除显式超时测试）"
+  - "mock 数据库（集成测试必须用真实 PG）"
+  - "测试间共享可变状态"
 
 gates:
   - { name: go-test, command: make test-api, blocking: true }
   - { name: go-race, command: make test-race, blocking: true }
-  - { name: web-test, command: make test-web, blocking: false, note: P7 接入 Vitest 后改为 true }
-  - { name: e2e, command: make test-e2e, blocking: false, note: P4 接入 Playwright 后改为 true }
+  - { name: web-test, command: make test-web, blocking: false, note: "P7 接入 Vitest 后改为 true" }
+  - { name: e2e, command: make test-e2e, blocking: false, note: "P4 接入 Playwright 后改为 true" }

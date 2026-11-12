@@ -1,4 +1,4 @@
-// enums.go 校验 data.enums 集合、枚举引用、枚举默认值与 enum 约束一致性。
+// enums.go 校验 data.enums 集合、code 唯一性与 entity 枚举引用。
 package check
 
 import (
@@ -44,6 +44,7 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		}
 		names[name] = true
 		values := map[string]bool{}
+		codes := map[int]bool{}
 		rawValues := asList(m["values"])
 		if len(rawValues) == 0 {
 			c.rulef("schema.non-empty", "%s: enums[%d] (%s): values must not be empty", rel, i, name)
@@ -59,6 +60,12 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 				c.rulef("enum-values-unique", "%s: enums[%d] (%s): duplicate value %s", rel, i, name, v)
 			}
 			values[v] = true
+			if n, ok := toInt(vm["code"]); ok {
+				if codes[n] {
+					c.rulef("enum-code-unique", "%s: enums[%d] (%s): duplicate code %d", rel, i, name, n)
+				}
+				codes[n] = true
+			}
 		}
 		enums[id] = values
 	}
@@ -76,50 +83,8 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 			if !ok {
 				continue
 			}
-			t, _ := m["type"].(string)
-			if strings.HasPrefix(t, "data.enums.") {
-				values, ok := enums[t]
-				if !ok {
-					c.rulef("column-type", "%s: columns[%d] (%s): unknown enum %s", rel, i, m["name"], t)
-				} else if def, ok := m["default"]; ok && def != nil {
-					s, ok := def.(string)
-					if !ok {
-						c.rulef("default-type", "%s: columns[%d] (%s): enum default must be a string", rel, i, m["name"])
-					} else if !values[s] {
-						c.rulef("default-type", "%s: columns[%d] (%s): default %q not in %s", rel, i, m["name"], s, t)
-					}
-				}
-			}
-			if strings.HasPrefix(t, "data.tables.") {
+			if t, _ := m["type"].(string); strings.HasPrefix(t, "data.tables.") {
 				checkColumnRef(c, t, tableIDs, cols, fmt.Sprintf("%s: columns[%d] (%s)", rel, i, m["name"]))
-			}
-		}
-		for i, raw := range asList(doc["constraints"]) {
-			m, ok := asMap(raw)
-			if !ok {
-				continue
-			}
-			if m["type"] == "enum" {
-				e, _ := m["enum"].(string)
-				if e != "" {
-					if _, ok := enums[e]; !ok {
-						c.rulef("enum-column-match", "%s: constraints[%d] (%s): unknown enum %s", rel, i, m["name"], e)
-					}
-					if col, _ := m["column"].(string); col != "" {
-						switch ct := columnType(doc, col); {
-						case ct == "":
-							// 列不存在由 checkTableRules 报错。
-						case strings.HasPrefix(ct, "data.enums."):
-							if ct != e {
-								c.rulef("enum-column-match", "%s: constraints[%d] (%s): enum %s does not match column %s type %s", rel, i, m["name"], e, col, ct)
-							}
-						case strings.HasPrefix(ct, "data.tables."):
-							// 引用列的具体类型由目标表定义，当前不做递归解析。
-						default:
-							c.rulef("enum-column-match", "%s: constraints[%d] (%s): enum constraint column %s must be data.enums.*, got %s", rel, i, m["name"], col, ct)
-						}
-					}
-				}
 			}
 		}
 	}
@@ -141,18 +106,4 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 			}
 		}
 	}
-}
-
-func columnType(doc map[string]any, name string) string {
-	for _, raw := range asList(doc["columns"]) {
-		m, ok := asMap(raw)
-		if !ok {
-			continue
-		}
-		if n, _ := m["name"].(string); n == name {
-			t, _ := m["type"].(string)
-			return t
-		}
-	}
-	return ""
 }

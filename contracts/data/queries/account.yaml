@@ -7,13 +7,13 @@
 
 schema_version: 1
 id: data.queries.account
-summary: 账号查询集
+summary: "账号查询集"
 stability: stable
 module: accounts
 do_not:
-  - 邮箱/手机号/密码查询不要写在这里，去 data.queries.auth
-  - number 唯一性查询必须带 deleted_at IS NULL
-  - 不要写 SELECT *；返回列必须显式列出
+  - "邮箱/手机号/密码查询不要写在这里，去 data.queries.auth"
+  - "number 唯一性查询必须带 deleted_at IS NULL"
+  - "不要写 SELECT *；返回列必须显式列出"
 
 queries:
   - id: data.queries.account.get_account
@@ -23,7 +23,7 @@ queries:
     params:
       - { name: id, type: text }
     returns: data.tables.account.row
-    semantics: 已软删视为不存在
+    semantics: "已软删视为不存在"
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
              created_at, updated_at, deleted_at
@@ -37,7 +37,7 @@ queries:
     params:
       - { name: number, type: text }
     returns: data.tables.account.row
-    semantics: 按账号编号精确查询；已软删视为不存在
+    semantics: "按账号编号精确查询；已软删视为不存在"
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
              created_at, updated_at, deleted_at
@@ -51,7 +51,7 @@ queries:
     params:
       - { name: number, type: text }
     returns: boolean
-    semantics: 未删除账号内编号是否存在
+    semantics: "未删除账号内编号是否存在"
     sql: |
       SELECT EXISTS (
         SELECT 1 FROM accounts
@@ -63,13 +63,13 @@ queries:
     kind: many
     table: data.tables.account
     params:
-      - { name: status, type: data.enums.account_status, nullable: true }
+      - { name: status, type: integer, nullable: true }
       - { name: own_type, type: text, nullable: true }
       - { name: cursor_created_at, type: timestamp, nullable: true }
       - { name: cursor_id, type: text, nullable: true }
       - { name: page_size, type: integer, max: 100, default: 20 }
     returns: "[]data.tables.account.row"
-    semantics: 按 created_at DESC, id DESC 游标分页；status/own_type 为空不过滤
+    semantics: "按 created_at DESC, id DESC 游标分页；status/own_type 为空不过滤"
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
              created_at, updated_at, deleted_at
@@ -96,7 +96,7 @@ queries:
       - { name: nickname, type: text }
       - { name: user_id, type: text, nullable: true }
     returns: data.tables.account.row
-    semantics: 初始状态 pending；number 入库前大写归一
+    semantics: "初始状态 pending；number 入库前大写归一"
     sql: |
       INSERT INTO accounts (id, own_type, own_id, number, nickname, user_id, status)
       VALUES (@id, @own_type, @own_id, upper(@number), @nickname, sqlc.narg('user_id'), 'pending')
@@ -112,7 +112,7 @@ queries:
       - { name: nickname, type: text }
       - { name: version, type: integer }
     returns: affected_rows
-    semantics: 乐观锁；返回 0 表示版本冲突
+    semantics: "乐观锁；返回 0 表示版本冲突"
     sql: |
       UPDATE accounts
       SET nickname = @nickname, updated_at = now(), version = version + 1
@@ -124,10 +124,10 @@ queries:
     table: data.tables.account
     params:
       - { name: id, type: text }
-      - { name: status, type: data.enums.account_status }
+      - { name: status, type: integer }
       - { name: version, type: integer }
     returns: affected_rows
-    semantics: 只允许非 deleted 状态；deleted 只能走 soft_delete_account
+    semantics: "只允许非 deleted 状态；deleted 只能走 soft_delete_account"
     sql: |
       UPDATE accounts
       SET status = @status, updated_at = now(), version = version + 1
@@ -144,7 +144,7 @@ queries:
       - { name: id, type: text }
       - { name: version, type: integer }
     returns: affected_rows
-    semantics: 软删；同时写 status=deleted 与 deleted_at，保证两者一致；幂等（已删返回 0）
+    semantics: "软删；同时写 status=deleted 与 deleted_at，保证两者一致；幂等（已删返回 0）"
     sql: |
       UPDATE accounts
       SET status = 'deleted', deleted_at = now(), updated_at = now(), version = version + 1
@@ -158,7 +158,7 @@ queries:
       - { name: older_than_days, type: integer, min: 1 }
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
     returns: "[]data.tables.account.row"
-    semantics: 扫描超过保留期仍未激活的账号；供 account_cleanup 使用
+    semantics: "扫描超过保留期仍未激活的账号；供 account_cleanup 使用"
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
              created_at, updated_at, deleted_at
@@ -176,7 +176,7 @@ queries:
     params:
       - { name: ids, type: "[]text" }
     returns: affected_rows
-    semantics: 批量软删 pending 账号；只处理仍为 pending 且未删除的记录
+    semantics: "批量软删 pending 账号；只处理仍为 pending 且未删除的记录"
     sql: |
       UPDATE accounts
       SET status = 'deleted', deleted_at = now(), updated_at = now()

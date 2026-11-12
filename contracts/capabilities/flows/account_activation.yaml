@@ -2,43 +2,43 @@
 
 schema_version: 1
 id: cap.flows.account_activation
-summary: 账号激活流程编排
+summary: "账号激活流程编排"
 stability: draft
 do_not:
-  - 只编排，不写调用代码
-  - 不要绕过状态机直接改 status
+  - "只编排，不写调用代码"
+  - "不要绕过状态机直接改 status"
 
 trigger: cap.services.account.activate
 
 steps:
   - id: load
-    action: 加载账号
+    action: "加载账号"
     use: cap.services.account.get
     on_error: [platform.errors.ACCOUNT_NOT_FOUND]
 
   - id: authorize
-    action: 校验操作者权限
+    action: "校验操作者权限"
     use: platform.security.permissions.account_write
     on_error: [platform.errors.COMMON_FORBIDDEN]
 
   - id: transition
-    action: 执行 pending → active 或 suspended → active
+    action: "执行 pending → active 或 suspended → active"
     use: business.states.account.transition
     inputs: { transition: activate }
     on_error: [platform.errors.ACCOUNT_ILLEGAL_TRANSITION]
 
   - id: persist
-    action: 持久化状态变更
+    action: "持久化状态变更"
     use: data.queries.account.set_account_status
     on_error: [platform.errors.ACCOUNT_VERSION_CONFLICT]
 
   - id: emit
-    action: 发出领域事件
+    action: "发出领域事件"
     use: business.events.account.activated
     async: true
 
 compensation:
-  on_failure: 回滚事务，不发送事件
+  on_failure: "回滚事务，不发送事件"
   retryable: false
 
 postconditions:

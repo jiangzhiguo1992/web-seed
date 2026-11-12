@@ -2,20 +2,20 @@
 
 schema_version: 1
 id: platform.security.roles
-summary: 角色与权限映射
+summary: "角色与权限映射"
 stability: stable
 
 roles:
   - code: admin
     name: 管理员
-    description: 全部权限
+    description: "全部权限"
     inherits: []
     permissions: ["*"]
     mfa_required: true
 
   - code: operator
     name: 运营
-    description: 可管理账号，不可删除
+    description: "可管理账号，不可删除"
     inherits: [platform.security.roles.viewer]
     permissions:
       - platform.security.permissions.account_read
@@ -23,14 +23,14 @@ roles:
 
   - code: viewer
     name: 只读
-    description: 仅查看
+    description: "仅查看"
     inherits: []
     permissions:
       - platform.security.permissions.account_read
 
   - code: auditor
     name: 审计员
-    description: 只读 + 审计日志
+    description: "只读 + 审计日志"
     inherits: [platform.security.roles.viewer]
     permissions:
       - platform.security.permissions.audit_read

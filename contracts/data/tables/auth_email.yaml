@@ -3,16 +3,16 @@
 
 schema_version: 1
 id: data.tables.auth_email
-summary: 邮箱认证表
+summary: "邮箱认证表"
 stability: stable
 owner_module: auth
 extends: [data.tables.base]
 do_not:
-  - uq_auth_email_username_domain 必须带 WHERE deleted_at IS NULL
-  - domain 必须小写归一后再存储
+  - "uq_auth_email_username_domain 必须带 WHERE deleted_at IS NULL"
+  - "domain 必须小写归一后再存储"
 
 table:
-  comment: 邮箱认证
+  comment: "邮箱认证"
   size_class: small
   retention: { unit: days, soft_delete: 30, hard_delete: 90 }
 
@@ -21,7 +21,7 @@ columns:
     type: string
     max_len: 36
     nullable: false
-    comment: 关联账号
+    comment: "关联账号"
 
   - name: username
     type: string
@@ -29,59 +29,55 @@ columns:
     min_len: 1
     max_len: 64
     pii: true
-    comment: 邮箱 @ 前的本地部分
+    comment: "邮箱 @ 前的本地部分"
 
   - name: domain
     type: string
     nullable: false
     min_len: 1
     max_len: 190
-    comment: 完整域名，例如 example.com；小写归一
+    comment: "完整域名，例如 example.com；小写归一"
 
   - name: entity
     type: string
     nullable: true
     max_len: 190
-    comment: 注册域/二级域，例如 example.com
+    comment: "注册域/二级域，例如 example.com"
 
   - name: tld
     type: string
     nullable: true
     max_len: 32
-    comment: 顶级域，例如 com
+    comment: "顶级域，例如 com"
 
   - name: status
-    type: data.enums.auth_status
+    type: integer
+    bits: 32
     nullable: false
-    default: active
-    comment: 认证记录状态
+    default: 0
+    comment: "认证记录状态整数码；0=active 1=disabled"
 
 constraints:
   - name: ck_auth_email_domain_lowercase
     type: check
     expr: "domain = lower(domain)"
 
-  - name: ck_auth_email_status
-    type: enum
-    column: status
-    enum: data.enums.auth_status
-
 indexes:
   - name: uq_auth_email_username_domain
     columns: [username, domain]
     unique: true
     where: "deleted_at IS NULL"
-    reason: 邮箱在未删除记录内唯一
+    reason: "邮箱在未删除记录内唯一"
 
   - name: idx_auth_email_domain
     columns: [domain]
     where: "deleted_at IS NULL"
-    reason: 按域名聚合与检索
+    reason: "按域名聚合与检索"
 
   - name: idx_auth_email_account_id
     columns: [account_id]
     where: "deleted_at IS NULL"
-    reason: 按账号查邮箱
+    reason: "按账号查邮箱"
 
 used_by:
   entities: [data.entities.auth_email]

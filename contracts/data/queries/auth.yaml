@@ -7,13 +7,13 @@
 
 schema_version: 1
 id: data.queries.auth
-summary: 认证查询集
+summary: "认证查询集"
 stability: draft
 module: auth
 do_not:
-  - 不要让普通业务查询引用本文件
-  - 不要返回 password_md5 / access_token / refresh_token 给非认证调用方
-  - 不要写 SELECT *
+  - "不要让普通业务查询引用本文件"
+  - "不要返回 password_md5 / access_token / refresh_token 给非认证调用方"
+  - "不要写 SELECT *"
 
 queries:
   - id: data.queries.auth.get_auth_pwd_by_username
@@ -24,7 +24,7 @@ queries:
       - { name: username, type: text }
     returns: data.tables.auth_pwd.row
     return_columns: [id, account_id, username, password_hash, password_md5, failed_login_count, locked_until, status]
-    semantics: 仅供登录校验；包含 password_hash 与遗留 password_md5
+    semantics: "仅供登录校验；包含 password_hash 与遗留 password_md5"
     sql: |
       SELECT id, account_id, username, password_hash, password_md5,
              failed_login_count, locked_until, status
@@ -43,7 +43,7 @@ queries:
       - { name: password_md5, type: text, nullable: true }
     returns: data.tables.auth_pwd.row
     return_columns: [id, account_id, username, status, created_at, updated_at]
-    semantics: 创建密码认证记录；password_hash/password_md5 至少一个，均不返回
+    semantics: "创建密码认证记录；password_hash/password_md5 至少一个，均不返回"
     sql: |
       INSERT INTO auth_pwd (id, account_id, username, password_hash, password_md5, status)
       VALUES (@id, @account_id, @username,
@@ -58,7 +58,7 @@ queries:
       - { name: id, type: text }
       - { name: password_hash, type: text }
     returns: affected_rows
-    semantics: 设置新 argon2id 哈希并清空遗留 MD5；成功后应吊销该账号全部令牌
+    semantics: "设置新 argon2id 哈希并清空遗留 MD5；成功后应吊销该账号全部令牌"
     sql: |
       UPDATE auth_pwd
       SET password_hash = @password_hash, password_md5 = NULL, updated_at = now()
@@ -71,7 +71,7 @@ queries:
     params:
       - { name: id, type: text }
     returns: affected_rows
-    semantics: 成功登录后重置失败计数与锁定
+    semantics: "成功登录后重置失败计数与锁定"
     sql: |
       UPDATE auth_pwd
       SET failed_login_count = 0, locked_until = NULL, updated_at = now()
@@ -85,7 +85,7 @@ queries:
       - { name: id, type: text }
       - { name: lock_until, type: timestamp, nullable: true }
     returns: affected_rows
-    semantics: 失败计数 +1；达到阈值时设置 locked_until
+    semantics: "失败计数 +1；达到阈值时设置 locked_until"
     sql: |
       UPDATE auth_pwd
       SET failed_login_count = failed_login_count + 1,
@@ -102,7 +102,7 @@ queries:
       - { name: number, type: text }
     returns: data.tables.auth_phone.row
     return_columns: [id, account_id, code, number, operator, status]
-    semantics: 按区号 + 手机号登录/校验
+    semantics: "按区号 + 手机号登录/校验"
     sql: |
       SELECT id, account_id, code, number, operator, status
       FROM auth_phone
@@ -120,7 +120,7 @@ queries:
       - { name: operator, type: text, nullable: true }
     returns: data.tables.auth_phone.row
     return_columns: [id, account_id, code, number, operator, status, created_at, updated_at]
-    semantics: 绑定手机号
+    semantics: "绑定手机号"
     sql: |
       INSERT INTO auth_phone (id, account_id, code, number, operator, status)
       VALUES (@id, @account_id, @code, @number, sqlc.narg('operator'), 'active')
@@ -135,7 +135,7 @@ queries:
       - { name: domain, type: text }
     returns: data.tables.auth_email.row
     return_columns: [id, account_id, username, domain, entity, tld, status]
-    semantics: 按邮箱本地部分 + 域名登录/校验
+    semantics: "按邮箱本地部分 + 域名登录/校验"
     sql: |
       SELECT id, account_id, username, domain, entity, tld, status
       FROM auth_email
@@ -154,7 +154,7 @@ queries:
       - { name: tld, type: text, nullable: true }
     returns: data.tables.auth_email.row
     return_columns: [id, account_id, username, domain, entity, tld, status, created_at, updated_at]
-    semantics: 绑定邮箱；domain 入库前小写归一
+    semantics: "绑定邮箱；domain 入库前小写归一"
     sql: |
       INSERT INTO auth_email (id, account_id, username, domain, entity, tld, status)
       VALUES (@id, @account_id, @username, lower(@domain),
@@ -178,7 +178,7 @@ queries:
       - { name: refresh_expire_at, type: timestamp }
     returns: data.tables.token.row
     return_columns: [id, account_id, device_id, access_expire_at, refresh_expire_at, status]
-    semantics: 创建令牌对；数据库只存哈希，原文由调用方返回一次
+    semantics: "创建令牌对；数据库只存哈希，原文由调用方返回一次"
     sql: |
       INSERT INTO tokens (
         id, own_type, own_id, account_id, device_id, user_id,
@@ -199,7 +199,7 @@ queries:
       - { name: refresh_token_hash, type: text }
     returns: data.tables.token.row
     return_columns: [id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status]
-    semantics: 仅供刷新流程；按哈希查找，不返回哈希原文
+    semantics: "仅供刷新流程；按哈希查找，不返回哈希原文"
     sql: |
       SELECT id, account_id, device_id, user_id, access_expire_at,
              refresh_expire_at, status
@@ -214,7 +214,7 @@ queries:
       - { name: access_token_hash, type: text }
     returns: data.tables.token.row
     return_columns: [id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status]
-    semantics: 校验访问令牌；按哈希查找
+    semantics: "校验访问令牌；按哈希查找"
     sql: |
       SELECT id, account_id, device_id, user_id, access_expire_at,
              refresh_expire_at, status
@@ -228,7 +228,7 @@ queries:
     params:
       - { name: refresh_token_hash, type: text }
     returns: affected_rows
-    semantics: 吊销单个刷新令牌；幂等
+    semantics: "吊销单个刷新令牌；幂等"
     sql: |
       UPDATE tokens
       SET status = 'revoked', updated_at = now()
@@ -243,7 +243,7 @@ queries:
     params:
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
     returns: affected_rows
-    semantics: 软删过期令牌；供清理任务使用
+    semantics: "软删过期令牌；供清理任务使用"
     sql: |
       UPDATE tokens
       SET deleted_at = now(), updated_at = now(), status = 'expired'
@@ -262,7 +262,7 @@ queries:
       - { name: account_id, type: text }
     returns: "[]data.tables.token.row"
     return_columns: [id, account_id, device_id, access_expire_at, refresh_expire_at, status, created_at, updated_at]
-    semantics: 列出账号的设备令牌；不返回 token 原文
+    semantics: "列出账号的设备令牌；不返回 token 原文"
     sql: |
       SELECT id, account_id, device_id, access_expire_at, refresh_expire_at,
              status, created_at, updated_at

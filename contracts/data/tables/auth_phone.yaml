@@ -2,15 +2,15 @@
 
 schema_version: 1
 id: data.tables.auth_phone
-summary: 手机号认证表
+summary: "手机号认证表"
 stability: stable
 owner_module: auth
 extends: [data.tables.base]
 do_not:
-  - uq_auth_phone_number 必须带 WHERE deleted_at IS NULL
+  - "uq_auth_phone_number 必须带 WHERE deleted_at IS NULL"
 
 table:
-  comment: 手机号认证
+  comment: "手机号认证"
   size_class: small
   retention: { unit: days, soft_delete: 30, hard_delete: 90 }
 
@@ -19,7 +19,7 @@ columns:
     type: string
     max_len: 36
     nullable: false
-    comment: 关联账号
+    comment: "关联账号"
 
   - name: code
     type: string
@@ -27,7 +27,7 @@ columns:
     min_len: 2
     max_len: 8
     pattern: "^\\+[0-9]{1,4}$"
-    comment: 国际区号，例如 +86
+    comment: "国际区号，例如 +86"
 
   - name: number
     type: string
@@ -35,37 +35,32 @@ columns:
     min_len: 1
     max_len: 32
     pii: true
-    comment: 手机号
+    comment: "手机号"
 
   - name: operator
     type: string
     nullable: true
     max_len: 32
-    comment: 运营商
+    comment: "运营商"
 
   - name: status
-    type: data.enums.auth_status
+    type: integer
+    bits: 32
     nullable: false
-    default: active
-    comment: 认证记录状态
-
-constraints:
-  - name: ck_auth_phone_status
-    type: enum
-    column: status
-    enum: data.enums.auth_status
+    default: 0
+    comment: "认证记录状态整数码；0=active 1=disabled"
 
 indexes:
   - name: uq_auth_phone_number
     columns: [code, number]
     unique: true
     where: "deleted_at IS NULL"
-    reason: 手机号在未删除记录内唯一
+    reason: "手机号在未删除记录内唯一"
 
   - name: idx_auth_phone_account_id
     columns: [account_id]
     where: "deleted_at IS NULL"
-    reason: 按账号查手机号
+    reason: "按账号查手机号"
 
 used_by:
   entities: [data.entities.auth_phone]

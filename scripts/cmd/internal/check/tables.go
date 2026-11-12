@@ -57,8 +57,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 		if doc["kind"] == "base" {
 			c.checkBaseTable(doc, schema, rel)
 		} else {
-			c.validateDoc(doc, schema.Fields, rel)
-			c.checkTableRules(doc, rel, schema)
+			c.checkPhysicalTable(doc, rel, schema)
 			if owner, _ := doc["owner_module"].(string); owner != "" {
 				c.tableOwners[id] = owner
 			}
@@ -96,6 +95,42 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	return tableIDs, cols
 }
 
+// checkPhysicalTable 先按 schema 校验结构，再跑表级规则。
+// foreign_key 已禁用：先从结构校验视图中剥离，避免同一错误被拆成
+// unknown field / pattern / enum 多条；表级规则只报一条 [no-foreign-key]。
+func (c *Checker) checkPhysicalTable(doc map[string]any, rel string, schema *Schema) {
+	c.validateDoc(stripForeignKeys(doc), schema.Fields, rel)
+	c.checkTableRules(doc, rel, schema)
+}
+
+// stripForeignKeys 返回去掉 foreign_key 约束的浅拷贝；没有 FK 时原样返回。
+func stripForeignKeys(doc map[string]any) map[string]any {
+	raw, ok := doc["constraints"]
+	if !ok {
+		return doc
+	}
+	list := asList(raw)
+	kept := make([]any, 0, len(list))
+	removed := false
+	for _, item := range list {
+		m, ok := asMap(item)
+		if ok && m["type"] == "foreign_key" {
+			removed = true
+			continue
+		}
+		kept = append(kept, item)
+	}
+	if !removed {
+		return doc
+	}
+	cp := make(map[string]any, len(doc))
+	for k, v := range doc {
+		cp[k] = v
+	}
+	cp["constraints"] = kept
+	return cp
+}
+
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
 	if filepath.Base(rel) != "_base.yaml" {
 		c.rulef("base-file", "%s: base table must live in _base.yaml", rel)
@@ -124,6 +159,11 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 		}
 		if n, ok := m["name"].(string); ok {
 			names = append(names, n)
+			if n == "status" {
+				if t, _ := m["type"].(string); t != "integer" {
+					c.rulef("status-integer", "%s: base status must be integer, got %q", rel, t)
+				}
+			}
 			if pk, _ := m["primary_key"].(bool); pk {
 				if nullable, _ := m["nullable"].(bool); nullable {
 					c.rulef("primary-key-nullable", "%s: column %q: primary_key column must not be nullable", rel, n)
@@ -143,7 +183,6 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 // 约束是平铺的 union，必须按 type 收窄，避免把 expr 写在 unique 上。
 var constraintAllowedFields = map[string]map[string]bool{
 	"check":   {"name": true, "type": true, "expr": true},
-	"enum":    {"name": true, "type": true, "column": true, "enum": true},
 	"unique":  {"name": true, "type": true, "columns": true},
 	"exclude": {"name": true, "type": true, "expr": true},
 }
@@ -151,7 +190,7 @@ var constraintAllowedFields = map[string]map[string]bool{
 // constraintKnownFields 是 item_fields 的并集；完全未知的字段交给 validateDoc 报错，
 // 这里只处理“字段存在但不适用于当前 type”的情况，避免重复报错。
 var constraintKnownFields = map[string]bool{
-	"name": true, "type": true, "expr": true, "column": true, "enum": true, "columns": true,
+	"name": true, "type": true, "expr": true, "columns": true,
 }
 
 func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema) {
@@ -204,8 +243,8 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.rulef("no-base-columns", "%s: columns[%d]: base column %q must not be redeclared", rel, i, name)
 		case "status":
 			t, _ := m["type"].(string)
-			if !strings.HasPrefix(t, "data.enums.") {
-				c.rulef("status-enum", "%s: columns[%d]: status must reference data.enums.*, got %q", rel, i, t)
+			if t != "integer" {
+				c.rulef("status-integer", "%s: columns[%d]: status must be integer, got %q", rel, i, t)
 			}
 		}
 		if pk, _ := m["primary_key"].(bool); pk {
@@ -225,7 +264,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		}
 	}
 	if !colNames["status"] {
-		c.rulef("status-enum", "%s: status column must be declared and reference data.enums.*", rel)
+		c.rulef("status-integer", "%s: status column must be declared and typed integer", rel)
 	}
 
 	checkCols := func(rule, where string, list []any) {
@@ -266,12 +305,16 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			continue
 		}
 		name, _ := m["name"].(string)
+		typ, _ := m["type"].(string)
+		if typ == "foreign_key" {
+			c.rulef("no-foreign-key", "%s: constraints[%d] (%s): foreign_key is forbidden; use application/service rules", rel, i, name)
+			continue
+		}
 		if !constraintNames[name] {
 			constraintNames[name] = true
 		} else {
 			c.rulef("unique-names", "%s: constraints[%d]: duplicate constraint %q", rel, i, name)
 		}
-		typ, _ := m["type"].(string)
 		if allowed, known := constraintAllowedFields[typ]; known {
 			for k := range m {
 				if !constraintKnownFields[k] {
@@ -290,15 +333,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			if !strings.HasPrefix(name, "ck_") {
 				c.rulef("constraint-fields", "%s: constraints[%d] (%s): check name must start with ck_", rel, i, name)
 			}
-		case "enum":
-			if !hasNonEmptyString(m, "column") || !hasNonEmptyString(m, "enum") {
-				c.rulef("constraint-fields", "%s: constraints[%d] (%s): enum requires column and enum", rel, i, name)
-			} else if col, _ := m["column"].(string); !allCols[col] {
-				c.rulef("constraint-fields", "%s: constraints[%d] (%s): unknown column %q", rel, i, name, col)
-			}
-			if !strings.HasPrefix(name, "ck_") {
-				c.rulef("constraint-fields", "%s: constraints[%d] (%s): enum name must start with ck_", rel, i, name)
-			}
 		case "unique":
 			cols := asList(m["columns"])
 			if len(cols) == 0 {
@@ -316,11 +350,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.rulef("constraint-fields", "%s: constraints[%d] (%s): exclude name must start with ex_", rel, i, name)
 			}
 		default:
-			rule := "constraint-fields"
-			if typ == "foreign_key" {
-				rule = "no-foreign-key"
-			}
-			c.rulef(rule, "%s: constraints[%d] (%s): unknown type %q", rel, i, name, typ)
+			c.rulef("constraint-fields", "%s: constraints[%d] (%s): unknown type %q", rel, i, name, typ)
 		}
 	}
 
@@ -407,24 +437,6 @@ func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, ta
 	for n := range indexNames {
 		add(n)
 	}
-	for _, raw := range asList(doc["columns"]) {
-		m, ok := asMap(raw)
-		if !ok {
-			continue
-		}
-		if t, _ := m["type"].(string); strings.HasPrefix(t, "data.enums.") {
-			add(strings.TrimPrefix(t, "data.enums."))
-		}
-	}
-	for _, raw := range asList(doc["constraints"]) {
-		m, ok := asMap(raw)
-		if !ok {
-			continue
-		}
-		if e, _ := m["enum"].(string); strings.HasPrefix(e, "data.enums.") {
-			add(strings.TrimPrefix(e, "data.enums."))
-		}
-	}
 	for i, raw := range asList(doc["do_not"]) {
 		s, ok := raw.(string)
 		if !ok {
@@ -459,7 +471,7 @@ func (c *Checker) checkStability(doc map[string]any, rel string) {
 		if err == nil {
 			for _, marker := range []string{"TODO", "FIXME"} {
 				if strings.Contains(string(b), marker) {
-					c.rulef("stability-stable", "%s: stable contract contains %s placeholder", rel, marker)
+					c.rulef("schema.stability", "%s: stable contract contains %s placeholder", rel, marker)
 				}
 			}
 		}

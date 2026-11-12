@@ -2,14 +2,14 @@
 
 schema_version: 1
 id: cap.services.account
-summary: 账号跨模块 service 接口
+summary: "账号跨模块 service 接口"
 stability: stable
 do_not:
-  - 返回 data.entities.account，不要返回表行
-  - 不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型
-  - 不要引用 business.*（规则/事件由 business 侧锚点）
-  - 认证相关方法在 cap.services.auth，不要塞进本接口
-  - 数据库约束到业务错误的映射写在 constraint_errors
+  - "返回 data.entities.account，不要返回表行"
+  - "不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型"
+  - "不要引用 business.*（规则/事件由 business 侧锚点）"
+  - "认证相关方法在 cap.services.auth，不要塞进本接口"
+  - "数据库约束到业务错误的映射写在 constraint_errors"
 
 module: accounts
 
@@ -18,7 +18,7 @@ interface:
   package: internal/modules/accounts
   methods:
     - name: Get
-      summary: 按 ID 获取账号
+      summary: "按 ID 获取账号"
       params:
         - { name: ctx, type: context.Context }
         - { name: id, type: string }
@@ -29,7 +29,7 @@ interface:
       transaction: read_only
 
     - name: List
-      summary: 列出账号（游标分页）
+      summary: "列出账号（游标分页）"
       params:
         - { name: ctx, type: context.Context }
         - { name: filter, type: ListAccountsFilter }
@@ -41,7 +41,7 @@ interface:
       transaction: read_only
 
     - name: Create
-      summary: 创建账号
+      summary: "创建账号"
       params:
         - { name: ctx, type: context.Context }
         - { name: input, type: CreateAccountInput }
@@ -56,7 +56,7 @@ interface:
       transaction: required
 
     - name: Update
-      summary: 更新账号资料
+      summary: "更新账号资料"
       params:
         - { name: ctx, type: context.Context }
         - { name: id, type: string }
@@ -71,7 +71,7 @@ interface:
       transaction: required
 
     - name: Activate
-      summary: 激活或解封账号
+      summary: "激活或解封账号"
       params:
         - { name: ctx, type: context.Context }
         - { name: id, type: string }
@@ -86,7 +86,7 @@ interface:
       transaction: required
 
     - name: Suspend
-      summary: 封禁账号
+      summary: "封禁账号"
       params:
         - { name: ctx, type: context.Context }
         - { name: id, type: string }
@@ -102,7 +102,7 @@ interface:
       transaction: required
 
     - name: Delete
-      summary: 软删账号
+      summary: "软删账号"
       params:
         - { name: ctx, type: context.Context }
         - { name: id, type: string }

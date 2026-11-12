@@ -21,13 +21,12 @@ fields:
     type: list<object>
     required: true
     description: "跨前后端枚举；模块内部枚举不进本文件"
-    generates: "Go 常量、TS union、DB CHECK"
-    caution: "不要收只在一个模块内部使用的枚举"
+    generates: "Go 常量、TS union"
+    caution: "不要收只在一个模块内部使用的枚举；表列不引用枚举"
     item_fields:
       - { name: id, type: string, required: true, pattern: '^data\.enums\.[a-z][a-z0-9_]*$', description: "枚举项 ID，等于 data.enums.<name>" }
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "枚举名，snake_case" }
       - { name: description, type: string, required: false, description: "枚举用途说明" }
-      - { name: db_type, type: string, required: true, const: text, description: "数据库存储类型，固定 text" }
       - { name: go_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "Go 类型名，PascalCase" }
       - { name: ts_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "TS 类型名，PascalCase" }
       - name: values
@@ -36,10 +35,12 @@ fields:
         description: "枚举值列表；只能追加，不能改名或删除"
         item_fields:
           - { name: value, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "枚举值，snake_case" }
+          - { name: code, type: integer, required: true, min: 0, description: "数据库整数码；entity 映射回枚举" }
           - { name: description, type: string, required: false, description: "枚举值说明" }
 
 rules:
   - { id: enum-id, text: "集合 id 固定为 data.enums" }
   - { id: enum-id-matches-name, text: "item.id 必须等于 data.enums.<item.name>" }
   - { id: enum-values-unique, text: "同一枚举的 values 不得重复" }
-  - { id: enum-append-only, text: "枚举值只能追加，禁止改名或删除" }
+  - { id: enum-code-unique, text: "同一枚举的 code 不得重复" }
+  - { id: enum-append-only, text: "枚举值只能追加；code 一旦分配不得复用或修改" }

@@ -1,5 +1,5 @@
 # data.tables 的字段树 + 值域 + 字段说明。
-# 通用字段语义见 _types.yaml 的 schema_semantics；本文件只写 data.tables 特有内容。
+# 通用字段语义见 _types.yaml 的 schema_semantics；通用规则见 schema_rules；本文件只写 data.tables 特有内容。
 # targets.dir/glob 由 contract-check 使用；本文件同时是 contract-new 的字段来源；不要另写模板。
 
 id: meta.data.tables
@@ -13,7 +13,7 @@ targets:
   exception: "_base.yaml 的 ID 为 data.tables.base"
 
 column_refs:
-  prefixes: [ "data.enums.", "data.tables." ]
+  prefixes: [ "data.tables." ]
 column_types:
   families:
     string:
@@ -187,12 +187,12 @@ fields:
   - name: columns
     type: list<object>
     required: true
-    description: "物理列；id/created_at/updated_at/deleted_at 不重声明，status 必须重声明为枚举"
+    description: "物理列；id/status/created_at/updated_at/deleted_at 不重声明"
     generates: "DDL 列、sqlc、Go 类型"
-    caution: "status 必须引用 data.enums.*"
+    caution: "status 必须是 integer；枚举映射只在 entity"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', examples: [ "name" ], description: "列名" }
-      - { name: type, type: string, required: true, default: string, description: "类型族键，或 data.enums.* / data.tables.*.col.* 引用", caution: "引用类型不可带类型族参数" }
+      - { name: type, type: string, required: true, default: string, description: "类型族键，或 data.tables.*.col.* 引用", caution: "表列不引用 data.enums.*；引用类型不可带类型族参数" }
       - { name: nullable, type: boolean, required: false, default: false, description: "是否可空；默认 false" }
       - { name: primary_key, type: boolean, required: false, description: "是否主键；主键不可空", caution: "基类 id 已是主键；仅复合主键时使用" }
       - { name: generated_by, type: string, required: false, enum: [ application, database ], description: "初始值由应用/数据库生成" }
@@ -207,15 +207,13 @@ fields:
   - name: constraints
     type: list<object>
     required: false
-    description: "DDL 约束：check/enum/unique/exclude"
+    description: "DDL 约束：check/unique/exclude"
     generates: "DDL CHECK/UNIQUE/EXCLUDE"
     caution: "UNIQUE 含软删行；需软删后复用请用唯一索引"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^(ck|uq|ex)_[a-z][a-z0-9_]*$', description: "约束名；check/enum=ck_, unique=uq_, exclude=ex_" }
-      - { name: type, type: string, required: true, enum: [ check, enum, unique, exclude ], description: "约束类型" }
+      - { name: name, type: string, required: true, pattern: '^(ck|uq|ex)_[a-z][a-z0-9_]*$', description: "约束名；check=ck_, unique=uq_, exclude=ex_" }
+      - { name: type, type: string, required: true, enum: [ check, unique, exclude ], description: "约束类型" }
       - { name: expr, type: string, required: false, description: "check/exclude 的 SQL 表达式" }
-      - { name: column, type: string, required: false, description: "enum 约束的列名" }
-      - { name: enum, type: string, required: false, description: "enum 约束引用的 data.enums.*；须与列类型一致" }
       - { name: columns, type: list<string>, required: false, description: "unique 约束的列名" }
 
   - name: indexes
@@ -251,32 +249,27 @@ fields:
 
 rules:
   - { id: base-only, text: "extends 只能是 [data.tables.base]" }
-  - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 必须重声明为 data.enums.*" }
-  - { id: status-enum, text: "物理表必须声明 status，且引用 data.enums.*" }
+  - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 必须重声明为 integer" }
+  - { id: status-integer, text: "物理表必须声明 status，且类型为 integer；枚举只在 entity" }
   - { id: base-file, text: "kind: base 与 data.tables.base 只能出现在 tables/_base.yaml" }
-  - { id: primary-key-nullable, text: "primary_key: true 的列不得 nullable: true" }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥" }
-  - { id: default-type, text: "default 的类型、长度、范围必须与列类型兼容；枚举默认值必须存在" }
-  - { id: column-type, text: "列类型必须是类型族键，或匹配 column_refs.prefixes" }
+  - { id: default-type, text: "default 的类型、长度、范围必须与列类型兼容" }
+  - { id: column-type, text: "列类型必须是类型族键，或匹配 column_refs.prefixes；表列不引用 data.enums.*" }
   - { id: family-params, text: "列参数必须属于该类型族；required 参数必须出现" }
   - { id: family-length, text: "min_len <= max_len；fixed 必须写 max_len 且 min_len 等于 max_len" }
   - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内" }
   - { id: family-decimal, text: "scale <= precision" }
   - { id: no-foreign-key, text: "禁止 foreign_key；跨表一致性由应用/业务规则保证" }
   - { id: unique-scope, text: "UNIQUE 约束含软删行；唯一索引 + where 只约束未删行，按业务选择" }
-  - { id: constraint-fields, text: "check/exclude 用 expr；enum 用 column+enum；unique 用 columns" }
-  - { id: enum-column-match, text: "enum 约束的 enum 必须等于 column 的 data.enums.* 类型" }
+  - { id: constraint-fields, text: "check/exclude 用 expr；unique 用 columns" }
   - { id: index-order, text: "order 只能与 columns 配合，长度一致，值为 asc/desc" }
   - { id: large-index-concurrently, text: "size_class=large 时索引不得显式 concurrently: \"false\"" }
   - { id: partition, text: "partition.columns 非空；range 必须有 interval，其他策略不得有" }
   - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；queries 记录查询项 ID，不是查询文件 ID" }
   - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表" }
-  - { id: id-from-file, text: "id 必须等于 data.tables.<file stem>；_base.yaml 例外" }
   - { id: table-id-unique, text: "表 ID 全局唯一" }
   - { id: base-columns, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at" }
   - { id: unique-names, text: "列名不重复；约束名与索引名各自唯一" }
   - { id: physical-name-unique, text: "物理表名全局唯一" }
   - { id: index-reason, text: "索引必须写非空 reason" }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型" }
-  - { id: do-not-specific, text: "do_not 每条必须含本表标识" }
-  - { id: stability-stable, text: "stable 不得含 TODO/FIXME" }

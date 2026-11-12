@@ -6,21 +6,21 @@
 
 schema_version: 1
 id: data.entities.auth_pwd
-summary: 密码认证数据实体
+summary: "密码认证数据实体"
 stability: stable
 table: data.tables.auth_pwd
 identity: id
 do_not:
-  - password_hash / password_md5 禁止出现在任何 DTO、日志、事件
-  - 不要在本实体写密码强度规则；规则在 platform/security/auth_policy
-  - password_md5 只用于遗留兼容；新密码写 password_hash
+  - "password_hash / password_md5 禁止出现在任何 DTO、日志、事件"
+  - "不要在本实体写密码强度规则；规则在 platform/security/auth_policy"
+  - "password_md5 只用于遗留兼容；新密码写 password_hash"
 
 fields:
   - { name: id, type: string, max_len: 36, required: true, mutable: false }
   - { name: account_id, type: string, max_len: 36, required: true, mutable: false }
   - { name: username, type: string, min_len: 1, max_len: 254, required: true, pii: true }
-  - { name: password_hash, type: string, min_len: 20, max_len: 255, pii: true, never_expose: true, note: argon2id；新密码写入此列 }
-  - { name: password_md5, type: string, min_len: 32, max_len: 32, pii: true, never_expose: true, note: 遗留 MD5；仅兼容旧账号 }
+  - { name: password_hash, type: string, min_len: 20, max_len: 255, pii: true, never_expose: true, note: "argon2id；新密码写入此列" }
+  - { name: password_md5, type: string, min_len: 32, max_len: 32, pii: true, never_expose: true, note: "遗留 MD5；仅兼容旧账号" }
   - { name: failed_login_count, type: integer, required: true }
   - { name: locked_until, type: timestamp }
   - { name: status, type: data.enums.auth_status, required: true }

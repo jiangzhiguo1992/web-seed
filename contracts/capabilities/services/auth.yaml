@@ -2,16 +2,16 @@
 
 schema_version: 1
 id: cap.services.auth
-summary: 认证跨模块 service 接口
+summary: "认证跨模块 service 接口"
 stability: draft
 do_not:
-  - 不要在普通方法里暴露 password_md5 / access_token / refresh_token；Login/Refresh 返回 TokenPair 是唯一例外
-  - 持久化 token 前必须哈希；数据库表只存 hash，不存原文
-  - 不要返回 data.tables.*.row；返回 data.entities.account 或 TokenPair
-  - 不要引用 business.*（规则/事件由 business 侧锚点）
-  - 认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在
-  - password_md5 只做遗留回退；登录成功后应升级为 password_hash 并清空 MD5
-  - 数据库约束到业务错误的映射写在 constraint_errors
+  - "不要在普通方法里暴露 password_md5 / access_token / refresh_token；Login/Refresh 返回 TokenPair 是唯一例外"
+  - "持久化 token 前必须哈希；数据库表只存 hash，不存原文"
+  - "不要返回 data.tables.*.row；返回 data.entities.account 或 TokenPair"
+  - "不要引用 business.*（规则/事件由 business 侧锚点）"
+  - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
+  - "password_md5 只做遗留回退；登录成功后应升级为 password_hash 并清空 MD5"
+  - "数据库约束到业务错误的映射写在 constraint_errors"
 
 module: auth
 
@@ -20,7 +20,7 @@ interface:
   package: internal/modules/auth
   methods:
     - name: Login
-      summary: 登录并签发令牌；优先校验 password_hash，password_md5 仅遗留兼容
+      summary: "登录并签发令牌；优先校验 password_hash，password_md5 仅遗留兼容"
       params:
         - { name: ctx, type: context.Context }
         - { name: input, type: LoginInput }
@@ -35,7 +35,7 @@ interface:
       transaction: required
 
     - name: Refresh
-      summary: 用刷新令牌换取新令牌对
+      summary: "用刷新令牌换取新令牌对"
       params:
         - { name: ctx, type: context.Context }
         - { name: refresh_token, type: string }
@@ -48,7 +48,7 @@ interface:
       transaction: required
 
     - name: Logout
-      summary: 吊销刷新令牌
+      summary: "吊销刷新令牌"
       params:
         - { name: ctx, type: context.Context }
         - { name: refresh_token, type: string }
@@ -58,7 +58,7 @@ interface:
       transaction: required
 
     - name: Verify
-      summary: 校验访问令牌并返回账号
+      summary: "校验访问令牌并返回账号"
       params:
         - { name: ctx, type: context.Context }
         - { name: access_token, type: string }
@@ -107,7 +107,7 @@ types:
       auth_type: { type: data.enums.auth_type }
       identifier: { type: string, minLength: 1, maxLength: 254 }
       password: { type: string, writeOnly: true, nullable: true }
-      code: { type: string, nullable: true, description: 手机号区号，例如 +86 }
+      code: { type: string, nullable: true, description: "手机号区号，例如 +86" }
       device_id: { type: string, nullable: true, maxLength: 128 }
 
   TokenPair:

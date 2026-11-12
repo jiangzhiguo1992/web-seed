@@ -2,11 +2,11 @@
 
 schema_version: 1
 id: platform.security.permissions
-summary: 权限点
+summary: "权限点"
 stability: stable
 do_not:
-  - 权限点只增不改；删除必须走弃用流程
-  - 资源级权限不要只靠权限点，必须在 business/rules 声明
+  - "权限点只增不改；删除必须走弃用流程"
+  - "资源级权限不要只靠权限点，必须在 business/rules 声明"
 
 naming:
   pattern: "<resource>_<action>"
@@ -14,21 +14,21 @@ naming:
 
 permissions:
   # ---------- 账号 ----------
-  - { code: account_read, resource: account, action: read, description: 查看账号 }
-  - { code: account_write, resource: account, action: write, description: 创建与编辑账号 }
-  - { code: account_delete, resource: account, action: delete, description: 删除账号 }
+  - { code: account_read, resource: account, action: "read", description: "查看账号" }
+  - { code: account_write, resource: account, action: "write", description: "创建与编辑账号" }
+  - { code: account_delete, resource: account, action: "delete", description: "删除账号" }
 
   # ---------- 角色 ----------
-  - { code: role_manage, resource: role, action: manage, description: 管理角色与权限 }
+  - { code: role_manage, resource: role, action: "manage", description: "管理角色与权限" }
 
   # ---------- 审计 ----------
-  - { code: audit_read, resource: audit, action: read, description: 查看审计日志 }
+  - { code: audit_read, resource: audit, action: "read", description: "查看审计日志" }
 
 boundaries:
   resource_level:
-    description: 资源级权限（如仅本人可改）必须在 business/rules 中声明，不能只靠权限点
+    description: "资源级权限（如仅本人可改）必须在 business/rules 中声明，不能只靠权限点"
     example: "见 business.rules.account.self_only"
 
   wildcard:
     allowed_for: [platform.security.roles.admin]
-    note: 仅 admin 角色可使用 *
+    note: "仅 admin 角色可使用 *"

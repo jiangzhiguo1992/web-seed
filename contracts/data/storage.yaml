@@ -8,13 +8,13 @@
 
 schema_version: 1
 id: data.storage
-summary: 数据存储与部署
+summary: "数据存储与部署"
 stability: stable
 do_not:
-  - 禁止在 data/tables/*.yaml 里声明 engine，存储引擎只在本文件定义
-  - 未列出的引擎与拓扑一律视为不支持，禁止自行引入
-  - Redis 不是表存储；表数据只能落在当前 default_engine
-  - 多实例部署时，定时任务必须显式声明锁机制，不能只写 max_in_flight
+  - "禁止在 data/tables/*.yaml 里声明 engine，存储引擎只在本文件定义"
+  - "未列出的引擎与拓扑一律视为不支持，禁止自行引入"
+  - "Redis 不是表存储；表数据只能落在当前 default_engine"
+  - "多实例部署时，定时任务必须显式声明锁机制，不能只写 max_in_flight"
 
 # 默认引擎，不等于唯一允许的引擎；切换时只改这里和对应 engine 配置。
 default_engine: postgres
@@ -36,17 +36,17 @@ engines:
     timezone: UTC
     charset: utf8mb4
     migration_tool: goose
-    note: 允许作为默认引擎；启用时改 default_engine
+    note: "允许作为默认引擎；启用时改 default_engine"
 
   mongodb:
     version: "8"
     model: document
-    note: 文档模型；允许作为默认引擎，但启用时 tables 契约需映射为 collection
+    note: "文档模型；允许作为默认引擎，但启用时 tables 契约需映射为 collection"
 
   redis:
     enabled: false
     role: cache                  # cache | session | lock
-    note: 仅缓存/会话/锁；不作为表存储，启用时在此登记
+    note: "仅缓存/会话/锁；不作为表存储，启用时在此登记"
 
 deployment:
   topology: single-primary

@@ -2,12 +2,12 @@
 
 schema_version: 1
 id: platform.environments
-summary: 环境清单与差异
+summary: "环境清单与差异"
 stability: stable
 
 environments:
   - name: dev
-    description: 本地开发
+    description: "本地开发"
     api_base_url: http://localhost:8080
     web_base_url: http://localhost:5173
     debug: true
@@ -16,7 +16,7 @@ environments:
     security: { require_https: false, cookie_secure: false }
 
   - name: test
-    description: 自动化测试
+    description: "自动化测试"
     api_base_url: http://localhost:8080
     web_base_url: http://localhost:5173
     debug: false
@@ -25,7 +25,7 @@ environments:
     security: { require_https: false, cookie_secure: false }
 
   - name: staging
-    description: 预发布，与生产同构
+    description: "预发布，与生产同构"
     api_base_url: https://api.staging.example.com
     web_base_url: https://admin.staging.example.com
     debug: false
@@ -34,7 +34,7 @@ environments:
     security: { require_https: true, cookie_secure: true }
 
   - name: prod
-    description: 生产
+    description: "生产"
     api_base_url: https://api.example.com
     web_base_url: https://admin.example.com
     debug: false
@@ -44,10 +44,10 @@ environments:
 
 differences:
   # 唯一允许的环境差异清单，新增差异必须登记
-  - { key: debug, environments: [dev], note: 仅本地开启 pprof / verbose error }
-  - { key: seed, environments: [dev, test], note: 允许写入示例数据 }
-  - { key: security.cookie_secure, environments: [staging, prod], note: 强制 Secure 属性 }
-  - { key: security.require_mfa, environments: [prod], note: 管理员强制 MFA }
+  - { key: debug, environments: [dev], note: "仅本地开启 pprof / verbose error" }
+  - { key: seed, environments: [dev, test], note: "允许写入示例数据" }
+  - { key: security.cookie_secure, environments: [staging, prod], note: "强制 Secure 属性" }
+  - { key: security.require_mfa, environments: [prod], note: "管理员强制 MFA" }
 
 secrets_source:
   dev: .env.local

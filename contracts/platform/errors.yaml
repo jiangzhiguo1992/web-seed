@@ -2,12 +2,12 @@
 
 schema_version: 1
 id: platform.errors
-summary: 错误码与 HTTP 映射
+summary: "错误码与 HTTP 映射"
 stability: stable
 do_not:
-  - 新增错误码前先查重，总量不超过 50
-  - 错误码只增不改；改变含义必须新建 code
-  - 账号错误与认证错误分开，不要把认证失败塞进 ACCOUNT_*
+  - "新增错误码前先查重，总量不超过 50"
+  - "错误码只增不改；改变含义必须新建 code"
+  - "账号错误与认证错误分开，不要把认证失败塞进 ACCOUNT_*"
 
 naming:
   pattern: "<DOMAIN>_<REASON>"
@@ -16,45 +16,45 @@ naming:
 
 errors:
   # ---------- 通用 ----------
-  - { code: COMMON_BAD_REQUEST, status: 400, retryable: false, i18n: errors.common.bad_request, message: 请求参数不合法 }
-  - { code: COMMON_UNAUTHORIZED, status: 401, retryable: false, i18n: errors.common.unauthorized, message: 未认证 }
-  - { code: COMMON_FORBIDDEN, status: 403, retryable: false, i18n: errors.common.forbidden, message: 无权限 }
-  - { code: COMMON_NOT_FOUND, status: 404, retryable: false, i18n: errors.common.not_found, message: 资源不存在 }
-  - { code: COMMON_CONFLICT, status: 409, retryable: false, i18n: errors.common.conflict, message: 状态冲突 }
-  - { code: COMMON_RATE_LIMITED, status: 429, retryable: true, i18n: errors.common.rate_limited, message: 请求过于频繁 }
-  - { code: COMMON_INTERNAL, status: 500, retryable: true, i18n: errors.common.internal, message: 服务端错误 }
-  - { code: COMMON_UNAVAILABLE, status: 503, retryable: true, i18n: errors.common.unavailable, message: 服务暂不可用 }
+  - { code: COMMON_BAD_REQUEST, status: 400, retryable: false, i18n: errors.common.bad_request, message: "请求参数不合法" }
+  - { code: COMMON_UNAUTHORIZED, status: 401, retryable: false, i18n: errors.common.unauthorized, message: "未认证" }
+  - { code: COMMON_FORBIDDEN, status: 403, retryable: false, i18n: errors.common.forbidden, message: "无权限" }
+  - { code: COMMON_NOT_FOUND, status: 404, retryable: false, i18n: errors.common.not_found, message: "资源不存在" }
+  - { code: COMMON_CONFLICT, status: 409, retryable: false, i18n: errors.common.conflict, message: "状态冲突" }
+  - { code: COMMON_RATE_LIMITED, status: 429, retryable: true, i18n: errors.common.rate_limited, message: "请求过于频繁" }
+  - { code: COMMON_INTERNAL, status: 500, retryable: true, i18n: errors.common.internal, message: "服务端错误" }
+  - { code: COMMON_UNAVAILABLE, status: 503, retryable: true, i18n: errors.common.unavailable, message: "服务暂不可用" }
 
   # ---------- 账号 ----------
-  - { code: ACCOUNT_NOT_FOUND, status: 404, retryable: false, i18n: errors.account.not_found, message: 账号不存在 }
-  - { code: ACCOUNT_NUMBER_TAKEN, status: 409, retryable: false, i18n: errors.account.number_taken, message: 账号编号已被使用 }
-  - { code: ACCOUNT_NUMBER_INVALID, status: 422, retryable: false, i18n: errors.account.number_invalid, message: 账号编号格式不合法 }
-  - { code: ACCOUNT_NICKNAME_INVALID, status: 422, retryable: false, i18n: errors.account.nickname_invalid, message: 昵称长度不合法 }
-  - { code: ACCOUNT_OWN_INVALID, status: 422, retryable: false, i18n: errors.account.own_invalid, message: 账号归属不合法 }
-  - { code: ACCOUNT_SUSPENDED, status: 403, retryable: false, i18n: errors.account.suspended, message: 账号已被封禁 }
-  - { code: ACCOUNT_ILLEGAL_TRANSITION, status: 409, retryable: false, i18n: errors.account.illegal_transition, message: 当前状态不允许该操作 }
-  - { code: ACCOUNT_ALREADY_DELETED, status: 409, retryable: false, i18n: errors.account.already_deleted, message: 账号已删除 }
-  - { code: ACCOUNT_VERSION_CONFLICT, status: 409, retryable: true, i18n: errors.account.version_conflict, message: 内容已被修改，请刷新后重试 }
+  - { code: ACCOUNT_NOT_FOUND, status: 404, retryable: false, i18n: errors.account.not_found, message: "账号不存在" }
+  - { code: ACCOUNT_NUMBER_TAKEN, status: 409, retryable: false, i18n: errors.account.number_taken, message: "账号编号已被使用" }
+  - { code: ACCOUNT_NUMBER_INVALID, status: 422, retryable: false, i18n: errors.account.number_invalid, message: "账号编号格式不合法" }
+  - { code: ACCOUNT_NICKNAME_INVALID, status: 422, retryable: false, i18n: errors.account.nickname_invalid, message: "昵称长度不合法" }
+  - { code: ACCOUNT_OWN_INVALID, status: 422, retryable: false, i18n: errors.account.own_invalid, message: "账号归属不合法" }
+  - { code: ACCOUNT_SUSPENDED, status: 403, retryable: false, i18n: errors.account.suspended, message: "账号已被封禁" }
+  - { code: ACCOUNT_ILLEGAL_TRANSITION, status: 409, retryable: false, i18n: errors.account.illegal_transition, message: "当前状态不允许该操作" }
+  - { code: ACCOUNT_ALREADY_DELETED, status: 409, retryable: false, i18n: errors.account.already_deleted, message: "账号已删除" }
+  - { code: ACCOUNT_VERSION_CONFLICT, status: 409, retryable: true, i18n: errors.account.version_conflict, message: "内容已被修改，请刷新后重试" }
 
   # ---------- 认证 ----------
-  - { code: AUTH_INVALID_CREDENTIALS, status: 401, retryable: false, i18n: errors.auth.invalid_credentials, message: 账号标识或凭据不正确 }
-  - { code: AUTH_LOCKED, status: 423, retryable: true, i18n: errors.auth.locked, message: 认证已锁定，请稍后再试 }
-  - { code: AUTH_USERNAME_TAKEN, status: 409, retryable: false, i18n: errors.auth.username_taken, message: 登录名已被使用 }
-  - { code: AUTH_PHONE_TAKEN, status: 409, retryable: false, i18n: errors.auth.phone_taken, message: 手机号已被绑定 }
-  - { code: AUTH_EMAIL_TAKEN, status: 409, retryable: false, i18n: errors.auth.email_taken, message: 邮箱已被绑定 }
-  - { code: AUTH_PHONE_INVALID, status: 422, retryable: false, i18n: errors.auth.phone_invalid, message: 手机号格式不合法 }
-  - { code: AUTH_EMAIL_INVALID, status: 422, retryable: false, i18n: errors.auth.email_invalid, message: 邮箱格式不合法 }
-  - { code: AUTH_WEAK_PASSWORD, status: 422, retryable: false, i18n: errors.auth.weak_password, message: 密码强度不足 }
-  - { code: AUTH_TOKEN_INVALID, status: 401, retryable: false, i18n: errors.auth.token_invalid, message: 令牌无效 }
-  - { code: AUTH_TOKEN_EXPIRED, status: 401, retryable: true, i18n: errors.auth.token_expired, message: 令牌已过期 }
+  - { code: AUTH_INVALID_CREDENTIALS, status: 401, retryable: false, i18n: errors.auth.invalid_credentials, message: "账号标识或凭据不正确" }
+  - { code: AUTH_LOCKED, status: 423, retryable: true, i18n: errors.auth.locked, message: "认证已锁定，请稍后再试" }
+  - { code: AUTH_USERNAME_TAKEN, status: 409, retryable: false, i18n: errors.auth.username_taken, message: "登录名已被使用" }
+  - { code: AUTH_PHONE_TAKEN, status: 409, retryable: false, i18n: errors.auth.phone_taken, message: "手机号已被绑定" }
+  - { code: AUTH_EMAIL_TAKEN, status: 409, retryable: false, i18n: errors.auth.email_taken, message: "邮箱已被绑定" }
+  - { code: AUTH_PHONE_INVALID, status: 422, retryable: false, i18n: errors.auth.phone_invalid, message: "手机号格式不合法" }
+  - { code: AUTH_EMAIL_INVALID, status: 422, retryable: false, i18n: errors.auth.email_invalid, message: "邮箱格式不合法" }
+  - { code: AUTH_WEAK_PASSWORD, status: 422, retryable: false, i18n: errors.auth.weak_password, message: "密码强度不足" }
+  - { code: AUTH_TOKEN_INVALID, status: 401, retryable: false, i18n: errors.auth.token_invalid, message: "令牌无效" }
+  - { code: AUTH_TOKEN_EXPIRED, status: 401, retryable: true, i18n: errors.auth.token_expired, message: "令牌已过期" }
 
 mapping_rules:
-  - { status: 400, when: 请求体/参数校验失败 }
-  - { status: 401, when: 缺失或无效凭据、令牌无效/过期 }
-  - { status: 403, when: 已认证但无权限，或账号被封禁 }
-  - { status: 404, when: 资源不存在或对当前用户不可见 }
-  - { status: 409, when: 版本冲突、状态冲突、唯一约束 }
-  - { status: 422, when: 语义校验失败（格式正确但业务不接受） }
-  - { status: 423, when: 认证锁定中 }
-  - { status: 429, when: 触发限流 }
-  - { status: 500, when: 未预期错误，必须记日志并含 request_id }
+  - { status: 400, when: "请求体/参数校验失败" }
+  - { status: 401, when: "缺失或无效凭据、令牌无效/过期" }
+  - { status: 403, when: "已认证但无权限，或账号被封禁" }
+  - { status: 404, when: "资源不存在或对当前用户不可见" }
+  - { status: 409, when: "版本冲突、状态冲突、唯一约束" }
+  - { status: 422, when: "语义校验失败（格式正确但业务不接受）" }
+  - { status: 423, when: "认证锁定中" }
+  - { status: 429, when: "触发限流" }
+  - { status: 500, when: "未预期错误，必须记日志并含 request_id" }
