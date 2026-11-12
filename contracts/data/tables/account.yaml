@@ -5,7 +5,7 @@ id: data.tables.account
 summary: "账号主表"
 stability: stable
 owner_module: accounts
-extends: [data.tables.base]
+extends: [ data.tables.base ]
 do_not:
   - "account 表禁止写入密码/手机号/邮箱/令牌；这些在 auth_* / token 表"
   - "uq_accounts_number 必须带 WHERE deleted_at IS NULL"
@@ -70,36 +70,35 @@ columns:
     comment: "乐观锁；非业务字段"
 
 constraints:
-  # 3 = account_status.deleted；status 用整数存储，枚举在 entity
   - name: ck_accounts_deleted_consistent
     type: check
     expr: "(status = 3) = (deleted_at IS NOT NULL)"
 
 indexes:
   - name: uq_accounts_number
-    columns: [number]
+    columns: [ number ]
     unique: true
     where: "deleted_at IS NULL"
     reason: "账号编号在未删除账号内唯一"
 
   - name: idx_accounts_own_type_own_id
-    columns: [own_type, own_id]
+    columns: [ own_type, own_id ]
     where: "deleted_at IS NULL"
     reason: "按归属主体查询"
 
   - name: idx_accounts_user_id
-    columns: [user_id]
+    columns: [ user_id ]
     where: "deleted_at IS NULL AND user_id IS NOT NULL"
     reason: "按用户反查账号"
 
   - name: idx_accounts_created_at_id
-    columns: [created_at, id]
-    order: [desc, desc]
+    columns: [ created_at, id ]
+    order: [ desc, desc ]
     where: "deleted_at IS NULL"
     reason: "列表游标分页"
 
 used_by:
-  entities: [data.entities.account]
+  entities: [ data.entities.account ]
   queries:
     - data.queries.account.get_account
     - data.queries.account.get_account_by_number
@@ -111,4 +110,4 @@ used_by:
     - data.queries.account.soft_delete_account
     - data.queries.account.list_stale_pending_accounts
     - data.queries.account.soft_delete_stale_pending_accounts
-  capabilities: [cap.services.account]
+  capabilities: [ cap.services.account ]

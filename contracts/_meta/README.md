@@ -88,7 +88,9 @@ scripts/cmd/
   - `owner_module` 与 capabilities 写表归属一致；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
   - `persistence.queries` 引用的查询项必须存在
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
-  - `rules` 的 `id`/`text` 非空、`id` 唯一；`implemented_by` 必须指向 checker 实际输出的 `[rule-id]`（`schema.rules`）
+  - `rules` 的 `id`/`text` 非空、`id` 唯一；`implemented_by` 必须包含规则自身 ID，且每个值都指向 checker 实际输出的 `[rule-id]`（`schema.rules`）
+  - checker 输出的非 `schema.*` 错误 ID 必须由某个 `rules`/`schema_rules` 声明，反向防止“有实现没规则”
+  - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；`make contract-check` 校验它是否最新
   - `_meta/*.yaml` 以 `type` 作为类型 registry；checker/contract-new 按 type 查找，不再写死 meta 路径
   - 错误统一带 `[rule-id]` 前缀：表专有规则用 `data.tables.yaml` 的 `rules`，跨类型规则用 `_types.yaml` 的 `schema_rules` / `schema_semantics`，结构/格式用 `schema.*`（含 `schema.targets`）
 - `data/enums.yaml`
@@ -125,7 +127,7 @@ scripts/cmd/
 | `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；`require_col` 中的前缀必须带 `.col.`；不是类型族，也不是外键；表列不引用 `data.enums.*` |
 | `targets` | `dir`/`glob` 扫描路径；`id` 是 ID 模板（`<file>` → 文件 stem）；`naming` 是文件名规则（`snake_case`）；`exception` 是 `{file,id,kind}` 例外，`kind: base` 标记基类 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
-| `rules` | 本类型的专有规则；每条必须写 `implemented_by`，指向 checker 实际输出的 `[rule-id]`；跨类型规则放 `_types.yaml` 的 `schema_rules` |
+| `rules` | 本类型的专有规则；每条必须写 `implemented_by`（含规则自身 ID，指向 checker 实际输出的 `[rule-id]`）；跨类型规则放 `_types.yaml` 的 `schema_rules` |
 
 **先读 `description` 和 `caution`，不要只按字段名猜。**
 
@@ -153,7 +155,7 @@ scripts/cmd/
 - 不要把 `_meta` 或脚本放进 `contracts/generated/`。
 - 不要手写 `used_by`；它由 `make gen-graph` 写入，`contract-check` 校验。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
-- 不要把硬约束只写进 `rules` / `schema_rules` 而不写 `implemented_by`；`contract-check` 会校验每个 `implemented_by` 都对应 checker 实际输出的 `[rule-id]`，但不会判断检查逻辑本身是否正确（后者靠测试）。
+- 不要把硬约束只写进 `rules` / `schema_rules` 而不写 `implemented_by`；`contract-check` 会校验 `implemented_by` 必须包含规则自身 ID、每个 ID 都有实际输出，并反向检查所有非 `schema.*` 输出都已被规则声明；但不会判断检查逻辑本身是否正确（后者靠测试）。
 - 不要在 `data.tables.yaml` 重复 `_types.yaml` 的通用字段语义；类型文件只写类型特有内容。
 - 不要在 `contracts/_meta/` 里写业务实例；它只描述类型。
 - 不要为单个表/页面各写一份规范；按类型一份。

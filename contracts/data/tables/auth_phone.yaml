@@ -5,7 +5,7 @@ id: data.tables.auth_phone
 summary: "手机号认证表"
 stability: stable
 owner_module: auth
-extends: [data.tables.base]
+extends: [ data.tables.base ]
 do_not:
   - "uq_auth_phone_number 必须带 WHERE deleted_at IS NULL"
 
@@ -52,19 +52,19 @@ columns:
 
 indexes:
   - name: uq_auth_phone_number
-    columns: [code, number]
+    columns: [ code, number ]
     unique: true
     where: "deleted_at IS NULL"
     reason: "手机号在未删除记录内唯一"
 
   - name: idx_auth_phone_account_id
-    columns: [account_id]
+    columns: [ account_id ]
     where: "deleted_at IS NULL"
     reason: "按账号查手机号"
 
 used_by:
-  entities: [data.entities.auth_phone]
+  entities: [ data.entities.auth_phone ]
   queries:
     - data.queries.auth.get_auth_phone_by_number
     - data.queries.auth.create_auth_phone
-  capabilities: [cap.services.auth]
+  capabilities: [ cap.services.auth ]

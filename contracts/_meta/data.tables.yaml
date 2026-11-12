@@ -251,24 +251,24 @@ fields:
       - { name: capabilities, type: list<string>, required: true, unique: true, description: "能力 ID 列表" }
 
 rules:
-  - { id: base-only, text: "extends 只能是 targets.exception 声明的 base ID", implemented_by: [base-only] }
-  - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 必须重声明为 integer", implemented_by: [no-base-columns] }
-  - { id: status-integer, text: "物理表必须声明 status，且类型为 integer；枚举只在 entity", implemented_by: [status-integer] }
-  - { id: base-file, text: "kind: base 必须位于 targets.exception 声明的文件，且 ID 与例外一致", implemented_by: [base-file] }
-  - { id: column-type, text: "列类型必须是类型族键，或匹配 column_refs.prefixes；表列不引用 data.enums.*", implemented_by: [column-type] }
-  - { id: family-params, text: "列参数必须属于该类型族；required 参数必须出现", implemented_by: [family-params] }
-  - { id: family-length, text: "min_len <= max_len；fixed 必须写 max_len 且 min_len 等于 max_len", implemented_by: [family-length] }
-  - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内", implemented_by: [family-range] }
-  - { id: family-decimal, text: "scale <= precision", implemented_by: [family-decimal] }
-  - { id: no-foreign-key, text: "禁止 foreign_key；跨表一致性由应用/业务规则保证", implemented_by: [no-foreign-key] }
-  - { id: unique-scope, text: "UNIQUE 约束含软删行；唯一索引 + where 只约束未删行，按业务选择", implemented_by: [unique-scope] }
-  - { id: constraint-fields, text: "check/exclude 用 expr；unique 用 columns", implemented_by: [constraint-fields] }
-  - { id: index-order, text: "order 只能与 columns 配合，长度一致，值为 asc/desc", implemented_by: [index-order] }
-  - { id: large-index-concurrently, text: "size_class=large 时索引不得显式 concurrently: \"false\"", implemented_by: [large-index-concurrently] }
-  - { id: partition, text: "partition.columns 非空；range 必须有 interval，其他策略不得有", implemented_by: [partition] }
-  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；queries 记录查询项 ID，不是查询文件 ID", implemented_by: [used-by-generated] }
-  - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表", implemented_by: [owner-write] }
-  - { id: base-columns, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at", implemented_by: [base-columns] }
-  - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [physical-name-unique] }
-  - { id: index-reason, text: "索引必须写非空 reason", implemented_by: [index-reason] }
-  - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型", implemented_by: [index-definition] }
+  - { id: base-only, text: "extends 只能是 targets.exception 声明的 base ID", implemented_by: [ base-only ] }
+  - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 必须重声明为 integer", implemented_by: [ no-base-columns ] }
+  - { id: status-integer, text: "物理表必须声明 status，且类型为 integer；枚举只在 entity", implemented_by: [ status-integer ] }
+  - { id: base-file, text: "kind: base 必须位于 targets.exception 声明的文件，且 ID 与例外一致", implemented_by: [ base-file ] }
+  - { id: column-type, text: "列类型必须是类型族键，或匹配 column_refs.prefixes；表列不引用 data.enums.*", implemented_by: [ column-type ] }
+  - { id: family-params, text: "列参数必须属于该类型族；required 参数必须出现", implemented_by: [ family-params ] }
+  - { id: family-length, text: "min_len <= max_len；fixed 必须写 max_len 且 min_len 等于 max_len", implemented_by: [ family-length ] }
+  - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内", implemented_by: [ family-range ] }
+  - { id: family-decimal, text: "scale <= precision", implemented_by: [ family-decimal ] }
+  - { id: no-foreign-key, text: "禁止 foreign_key；跨表一致性由应用/业务规则保证", implemented_by: [ no-foreign-key ] }
+  - { id: unique-scope, text: "UNIQUE 约束含软删行；唯一索引 + where 只约束未删行，按业务选择", implemented_by: [ unique-scope ] }
+  - { id: constraint-fields, text: "check/exclude 用 expr；unique 用 columns", implemented_by: [ constraint-fields ] }
+  - { id: index-order, text: "order 只能与 columns 配合，长度一致，值为 asc/desc", implemented_by: [ index-order ] }
+  - { id: large-index-concurrently, text: "size_class=large 时索引不得显式 concurrently: \"false\"", implemented_by: [ large-index-concurrently ] }
+  - { id: partition, text: "partition.columns 非空；range 必须有 interval，其他策略不得有", implemented_by: [ partition ] }
+  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；queries 记录查询项 ID，不是查询文件 ID", implemented_by: [ used-by-generated ] }
+  - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表", implemented_by: [ owner-write ] }
+  - { id: base-columns, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at", implemented_by: [ base-columns ] }
+  - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
+  - { id: index-reason, text: "索引必须写非空 reason", implemented_by: [ index-reason ] }
+  - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型", implemented_by: [ index-definition ] }

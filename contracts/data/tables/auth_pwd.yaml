@@ -5,7 +5,7 @@ id: data.tables.auth_pwd
 summary: "密码认证表"
 stability: stable
 owner_module: auth
-extends: [data.tables.base]
+extends: [ data.tables.base ]
 do_not:
   - "password_md5 仅用于兼容遗留系统；新密码必须使用 argon2id 并写入 password_hash"
   - "password_hash / password_md5 禁止出现在响应、日志、事件"
@@ -76,23 +76,23 @@ constraints:
 
 indexes:
   - name: uq_auth_pwd_username
-    columns: [username]
+    columns: [ username ]
     unique: true
     where: "deleted_at IS NULL"
     reason: "登录名在未删除记录内唯一"
 
   - name: uq_auth_pwd_account
-    columns: [account_id]
+    columns: [ account_id ]
     unique: true
     where: "deleted_at IS NULL"
     reason: "一个账号只有一条密码记录"
 
 used_by:
-  entities: [data.entities.auth_pwd]
+  entities: [ data.entities.auth_pwd ]
   queries:
     - data.queries.auth.get_auth_pwd_by_username
     - data.queries.auth.create_auth_pwd
     - data.queries.auth.update_auth_pwd_hash
     - data.queries.auth.record_auth_pwd_login_success
     - data.queries.auth.record_auth_pwd_login_failure
-  capabilities: [cap.services.auth]
+  capabilities: [ cap.services.auth ]

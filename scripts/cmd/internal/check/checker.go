@@ -52,7 +52,11 @@ func Run(root string) []string {
 }
 
 // rulef 追加带稳定规则 ID 的错误，AI/CI 可直接按 [rule-id] 检索。
+// 未登记的 rule ID 先报 schema.rules，避免动态 rule 绕过生成映射。
 func (c *Checker) rulef(rule, format string, args ...any) {
+	if !knownRuleIDs[rule] {
+		c.errs = append(c.errs, fmt.Sprintf("[schema.rules] unregistered rule id %q", rule))
+	}
 	c.errs = append(c.errs, fmt.Sprintf("[%s] %s", rule, fmt.Sprintf(format, args...)))
 }
 
@@ -74,6 +78,7 @@ func (c *Checker) run() {
 	enumValues := c.checkEnums(enumSchema)
 	c.checkRules(tableSchema)
 	c.checkRules(enumSchema)
+	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues, tableSchema.ColumnRefs)
 	c.checkCrossFileTableRefs(tableIDs, cols)
 	c.checkUsedBy(tableIDs)
@@ -211,7 +216,7 @@ func (c *Checker) checkRules(schema *Schema) {
 			c.rulef("schema.rules", "%s: duplicate rule id %q", schema.ID, r.ID)
 		}
 		seen[r.ID] = true
-		c.checkImplementedBy(fmt.Sprintf("%s: rules[%d]", schema.ID, i), r.ImplementedBy)
+		c.checkImplementedBy(r.ID, fmt.Sprintf("%s: rules[%d]", schema.ID, i), r.ImplementedBy)
 	}
 }
 

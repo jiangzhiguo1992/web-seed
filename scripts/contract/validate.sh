@@ -7,6 +7,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT/scripts/cmd"
 
+go run ./gen_rule_ids -check
+
 tmp="$(mktemp "${TMPDIR:-/tmp}/contractcheck.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
 go build -o "$tmp" ./contract_check

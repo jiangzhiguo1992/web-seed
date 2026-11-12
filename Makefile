@@ -5,7 +5,7 @@ APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
         gen gen-openapi gen-db gen-graph gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
-        dev api-dev web-dev compose-up compose-down doctor derive check-docs
+        gen-rule-ids check-rule-ids dev api-dev web-dev compose-up compose-down doctor derive check-docs
 
 help: ## 显示可用目标
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -68,6 +68,12 @@ contract-new: ## 按 _meta 字段规范生成契约骨架（type=data.tables nam
 
 contract-check: ## 校验契约结构与 used_by（试点：data.tables/data.enums）
 	@./scripts/contract/validate.sh
+
+gen-rule-ids: ## 从 checker 的 rulef(...) 生成 rule_ids_gen.go
+	cd scripts/cmd && go run ./gen_rule_ids
+
+check-rule-ids: ## 校验 rule_ids_gen.go 是否最新
+	cd scripts/cmd && go run ./gen_rule_ids -check
 
 contract-lint: ## 契约 lint：do_not 重复、缺字段、YAML 引号（P2）
 	@echo "contract-lint: 尚未实现（P2）。检查项：do_not 与 _meta/_types.yaml 重复、缺具体标识、未引号的冒号值"

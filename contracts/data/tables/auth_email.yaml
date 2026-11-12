@@ -6,7 +6,7 @@ id: data.tables.auth_email
 summary: "邮箱认证表"
 stability: stable
 owner_module: auth
-extends: [data.tables.base]
+extends: [ data.tables.base ]
 do_not:
   - "uq_auth_email_username_domain 必须带 WHERE deleted_at IS NULL"
   - "domain 必须小写归一后再存储"
@@ -64,24 +64,24 @@ constraints:
 
 indexes:
   - name: uq_auth_email_username_domain
-    columns: [username, domain]
+    columns: [ username, domain ]
     unique: true
     where: "deleted_at IS NULL"
     reason: "邮箱在未删除记录内唯一"
 
   - name: idx_auth_email_domain
-    columns: [domain]
+    columns: [ domain ]
     where: "deleted_at IS NULL"
     reason: "按域名聚合与检索"
 
   - name: idx_auth_email_account_id
-    columns: [account_id]
+    columns: [ account_id ]
     where: "deleted_at IS NULL"
     reason: "按账号查邮箱"
 
 used_by:
-  entities: [data.entities.auth_email]
+  entities: [ data.entities.auth_email ]
   queries:
     - data.queries.auth.get_auth_email_by_username_domain
     - data.queries.auth.create_auth_email
-  capabilities: [cap.services.auth]
+  capabilities: [ cap.services.auth ]

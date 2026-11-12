@@ -62,4 +62,5 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: scripts/cmd/go.mod
+      - run: make check-rule-ids
       - run: make contract-check

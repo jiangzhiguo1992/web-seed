@@ -1106,3 +1106,48 @@ func TestColumnRefsRequireColSubset(t *testing.T) {
 		t.Fatalf("column_refs shape not checked: %v", c.errs)
 	}
 }
+
+func TestImplementedByMustIncludeRuleID(t *testing.T) {
+	c := &Checker{}
+	c.checkImplementedBy("base-only", "meta.x: rules[0]", []string{"no-foreign-key"})
+	if !strings.Contains(strings.Join(c.errs, "\n"), `must include rule id "base-only"`) {
+		t.Fatalf("own rule id not enforced: %v", c.errs)
+	}
+}
+
+func TestUndeclaredRuleIDs(t *testing.T) {
+	old := knownRuleIDs
+	knownRuleIDs = map[string]bool{
+		"custom-rule":  true,
+		"schema.load":  true,
+		"schema.rules": true,
+	}
+	defer func() { knownRuleIDs = old }()
+	c := &Checker{declaredRuleIDs: map[string]bool{}}
+	c.checkUndeclaredRuleIDs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), `rule id "custom-rule" is emitted`) {
+		t.Fatalf("undeclared rule not reported: %v", c.errs)
+	}
+	c = &Checker{declaredRuleIDs: map[string]bool{"custom-rule": true}}
+	c.checkUndeclaredRuleIDs()
+	if len(c.errs) != 0 {
+		t.Fatalf("declared rule reported: %v", c.errs)
+	}
+}
+
+func TestRulefRejectsUnregisteredID(t *testing.T) {
+	c := &Checker{}
+	c.rulef("not-a-rule", "x")
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, `unregistered rule id "not-a-rule"`) {
+		t.Fatalf("unregistered rule id not reported: %v", c.errs)
+	}
+}
+
+func TestGeneratedRuleIDsCoverDynamicCalls(t *testing.T) {
+	for _, id := range []string{"partition", "constraint-fields", "index-definition", "schema.targets"} {
+		if !knownRuleIDs[id] {
+			t.Fatalf("generated rule_ids_gen.go missing %q", id)
+		}
+	}
+}
