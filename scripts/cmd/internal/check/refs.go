@@ -42,14 +42,12 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			continue
 		}
 		rel := relPath(c.root, f)
-		if t, _ := doc["table"].(string); t != "" {
+		for _, t := range tableRefs(doc) {
 			if c.isBaseTableRef(t) {
 				c.rulef("base-file", "%s: base contract is not a physical table", rel)
 			} else if _, ok := tableIDs[t]; !ok {
 				c.rulef("schema.ref", "%s: table %s not found", rel, t)
 			}
-		} else {
-			c.rulef("schema.required", "%s: missing table", rel)
 		}
 		for i, raw := range asList(doc["relations"]) {
 			m, ok := asMap(raw)
@@ -91,21 +89,26 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 					c.rulef("schema.ref", "%s: queries[%d] (%s): table %s not found", rel, i, qid, t)
 				}
 			}
-			for _, rc := range asList(m["return_columns"]) {
-				col, ok := rc.(string)
-				if !ok {
-					c.rulef("schema.type", "%s: queries[%d] (%s): return_columns must be strings", rel, i, qid)
-					continue
-				}
-				found := false
-				for _, t := range ts {
-					if cols[t] != nil && cols[t][col] {
-						found = true
-						break
+			// 返回实体时 return_columns 是实体字段名，由 checkQueries 校验；
+			// 这里只校验表行返回的列。
+			returns, _ := m["returns"].(string)
+			if !strings.HasPrefix(strings.TrimPrefix(returns, "[]"), "data.entities.") {
+				for _, rc := range asList(m["return_columns"]) {
+					col, ok := rc.(string)
+					if !ok {
+						c.rulef("schema.type", "%s: queries[%d] (%s): return_columns must be strings", rel, i, qid)
+						continue
 					}
-				}
-				if !found {
-					c.rulef("schema.ref", "%s: queries[%d] (%s): return column %s not found in %v", rel, i, qid, col, ts)
+					found := false
+					for _, t := range ts {
+						if cols[t] != nil && cols[t][col] {
+							found = true
+							break
+						}
+					}
+					if !found {
+						c.rulef("schema.ref", "%s: queries[%d] (%s): return column %s not found in %v", rel, i, qid, col, ts)
+					}
 				}
 			}
 		}
@@ -218,8 +221,10 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 			continue
 		}
 		id, _ := doc["id"].(string)
-		if t, _ := doc["table"].(string); t != "" && inbound[t] != nil {
-			inbound[t]["entities"][id] = true
+		for _, t := range tableRefs(doc) {
+			if inbound[t] != nil {
+				inbound[t]["entities"][id] = true
+			}
 		}
 	}
 	// queries：按查询项 ID 记直接入边，而不是查询文件 ID。
@@ -270,7 +275,7 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 	}
 }
 
-func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema *Schema) {
+func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchema, querySchema *Schema) {
 	path := filepath.Join(c.root, "contracts/index.yaml")
 	rel := relPath(c.root, path)
 	doc, err := loadYAML(path)
@@ -332,6 +337,26 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema *Schema) {
 			c.rulef("schema.index", "%s: missing entry for %s", rel, p)
 		} else if got != enumSchema.Targets.ID {
 			c.rulef("schema.index", "%s: %s has id %s, expected %s", rel, p, got, enumSchema.Targets.ID)
+		}
+	}
+	for _, schema := range []*Schema{entitySchema, querySchema} {
+		if schema == nil || schema.Targets.Dir == "" || schema.Targets.Glob == "" {
+			continue
+		}
+		for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
+			wantID := schema.Targets.FileID(filepath.Base(file))
+			if wantID == "" {
+				continue
+			}
+			p := strings.TrimPrefix(relPath(c.root, file), "contracts/")
+			got, ok := byPath[p]
+			if !ok {
+				c.rulef("schema.index", "%s: missing entry for %s (%s)", rel, wantID, p)
+				continue
+			}
+			if got != wantID {
+				c.rulef("schema.index", "%s: path %s has id %s, expected %s", rel, p, got, wantID)
+			}
 		}
 	}
 }

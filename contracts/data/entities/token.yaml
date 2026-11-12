@@ -11,19 +11,19 @@ stability: stable
 table: data.tables.token
 identity: id
 do_not:
-  - "token 哈希字段禁止出现在任何 DTO、日志、事件"
-  - "不要在本实体写 JWT 签发或校验逻辑"
-  - "原始 token 只在签发响应返回一次，数据库不存原文"
+  - "token 的哈希字段禁止出现在任何 DTO、日志、事件"
+  - "token 实体不要写 JWT 签发或校验逻辑"
+  - "token 原文只在签发响应返回一次，数据库不存原文"
 
 fields:
-  - { name: id, type: string, max_len: 36, required: true, mutable: false }
-  - { name: own_type, type: string, max_len: 32, required: true }
-  - { name: own_id, type: string, max_len: 36, required: true }
-  - { name: account_id, type: string, max_len: 36, required: true, mutable: false }
-  - { name: device_id, type: string, max_len: 128 }
-  - { name: user_id, type: string, max_len: 36 }
-  - { name: access_token_hash, type: string, min_len: 32, max_len: 128, required: true, pii: true, never_expose: true }
-  - { name: refresh_token_hash, type: string, min_len: 32, max_len: 128, required: true, pii: true, never_expose: true }
+  - { name: id, type: string, required: true, mutable: false }
+  - { name: own_type, type: string, required: true }
+  - { name: own_id, type: string, required: true }
+  - { name: account_id, type: string, required: true, mutable: false }
+  - { name: device_id, type: string }
+  - { name: user_id, type: string }
+  - { name: access_token_hash, type: string, required: true, pii: true, never_expose: true }
+  - { name: refresh_token_hash, type: string, required: true, pii: true, never_expose: true }
   - { name: access_expire_at, type: timestamp, required: true }
   - { name: refresh_expire_at, type: timestamp, required: true }
   - { name: status, type: data.enums.token_status, required: true }
@@ -33,3 +33,7 @@ fields:
 
 relations:
   - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.token.col.account_id }
+
+used_by:
+  queries: []
+  entities: [ data.entities.account ]

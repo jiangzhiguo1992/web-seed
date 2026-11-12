@@ -17,7 +17,7 @@ read_order:
 
 groups:
   data:
-    description: "数据契约。tables 是物理结构真相源（含 base 基类，migrations 由它生成），entities 是逻辑数据模型，storage 是项目级存储与部署。"
+    description: "数据契约。tables 是物理结构真相源（含 base 基类，migrations 由它生成），entities 是读模型，queries 是实体与表之间的装载桥，storage 是项目级存储与部署。"
     layers: [tables, entities, queries, storage, policy]
   capabilities:
     description: "能力契约。HTTP / 异步 / 跨模块 service。"
@@ -143,7 +143,8 @@ entries:
 # 跨文件的坑：不属于任何单一契约，但 AI 最容易犯
 global_notes:
   - "错误响应由 capabilities/http 的 default_error_responses 注入，不要逐接口声明"
-  - "data.entities 的字段名与表列名可能不同，映射在 cap.services.persistence.field_map"
+  - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.output_fields"
+  - "data.entities 的字段名与表列名可能不同：entity 用 column 指明来源，cap.services.persistence.field_map 只描述 service 类型差异"
   - "领域事件由 business/events 的 emitted_by 声明，capabilities 不写 emits"
   - "capabilities 契约不引用 business.*（cap.flows 仅允许引用 business.states/rules/events 做编排）"
   - "通用约束在 _meta/_types.yaml，组规则在 <group>/README.md，实例约束在正文 do_not"

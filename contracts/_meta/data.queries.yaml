@@ -1,0 +1,99 @@
+# data.queries 的单一规范：字段树 + 值域 + 硬规则。
+# 通用字段语义见 _types.yaml 的 schema_semantics；本文件只写 data.queries 特有内容。
+# 查询是 entity 与 table 的桥：返回实体时负责投影，返回行时负责底层操作，统计结果走 output_fields。
+
+id: meta.data.queries
+type: data.queries
+title: "查询契约"
+targets:
+  dir: "contracts/data/queries"
+  glob: "*.yaml"
+  id: "data.queries.<file>"
+  naming: "snake_case"
+
+fields:
+  - { name: schema_version, type: integer, required: true, const: 1, description: "契约格式版本，固定 1", generates: "无", caution: "必须是整数 1" }
+
+  - name: id
+    type: string
+    required: true
+    pattern: '^data\.queries\.[a-z][a-z0-9_]*$'
+    description: "由 targets.id 模板派生（<file> 替换为文件 stem）"
+    generates: "契约 ID、图节点"
+    caution: "query 项 ID 必须以此 ID 加点为前缀；checker 以文件名为源"
+
+  - { name: summary, type: string, required: true, description: "一句话说明这个查询集负责什么", generates: "index 摘要", caution: "不要写单条 SQL 细节" }
+  - { name: stability, type: string, required: true, enum: [ stable, draft, deprecated ], default: draft, description: "契约稳定度", generates: "index 摘要", caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改" }
+  - { name: module, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "查询集归属模块", generates: "sqlc package、写归属校验", caution: "写查询的 module 必须等于所写表的 owner_module" }
+  - { name: do_not, type: list<string>, required: false, description: "实例级负向约束；每条含本查询集标识", generates: "AI 反例", caution: "通用规则在 _types.yaml，禁止复制到这里" }
+
+  - name: queries
+    type: list<object>
+    required: true
+    min_items: 1
+    description: "查询项列表；每条必须可直接生成 sqlc 代码"
+    generates: "queries/*.sql、sqlc 代码"
+    caution: "不要写 repo 层 SQL；不要写 SELECT *；敏感列必须有 return_columns"
+    item_fields:
+      - { name: id, type: string, required: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "查询项 ID：data.queries.<file>.<query>", caution: "必须以前缀 data.queries.<file>. 开头" }
+      - { name: name, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "sqlc 方法名", caution: "必须等于 query id 末段的 PascalCase；全局唯一" }
+      - { name: kind, type: string, required: true, enum: [ one, many, execrows ], description: "sqlc 返回形态", caution: "execrows 必须是写语句；one/many 的 INSERT/UPDATE/DELETE 必须带 RETURNING" }
+
+      - { name: table, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "单表查询的物理表；与 tables 二选一", caution: "不得指向 data.tables.base" }
+      - { name: tables, type: list<string>, required: false, min_items: 1, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "多表查询/JOIN 的表列表；与 table 二选一", caution: "多表查询不得写 index_columns；不得出现在 index.used_by" }
+
+      - name: params
+        type: list<object>
+        required: false
+        description: "SQL 参数；必须与 SQL 中的 @name/sqlc.arg/sqlc.narg 双向一致"
+        generates: "sqlc 参数、校验"
+        caution: "nullable:true 必须用 sqlc.narg；非 nullable 不得用 sqlc.narg"
+        item_fields:
+          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
+          - { name: type, type: string, required: true, description: "SQL/sqlc 类型，如 text、integer、timestamp、[]text" }
+          - { name: nullable, type: boolean, required: false, default: false, description: "是否允许空值" }
+          - { name: default, type: any, required: false, description: "默认值；只影响生成骨架" }
+          - { name: min, type: integer, required: false, description: "闭区间下限" }
+          - { name: max, type: integer, required: false, description: "闭区间上限" }
+          - { name: note, type: string, required: false, description: "参数补充说明" }
+
+      - { name: returns, type: string, required: true, description: "返回 DSL：data.tables.<t>.row、data.entities.<e>、[] 前缀、boolean/integer/string/float/decimal/timestamp、affected_rows、object", generates: "sqlc 返回类型", caution: "object 必须配 output_fields；affected_rows 只能配 execrows" }
+      - { name: return_columns, type: list<string>, required: false, unique: true, description: "显式返回列；用于裁剪敏感字段或实体字段", caution: "returns 为表行时是列名，为实体时是字段名；object 用 output_fields，不用本字段" }
+      - name: output_fields
+        type: list<object>
+        required: false
+        min_items: 1
+        description: "统计/聚合查询的自定义输出字段；不进入 entity"
+        generates: "输出类型、sqlc 返回"
+        caution: "只有 returns 为 object/[]object 时出现；字段名必须唯一且出现在 SQL"
+        item_fields:
+          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出字段名" }
+          - { name: type, type: string, required: true, description: "逻辑类型；可写 data.enums.*" }
+          - { name: nullable, type: boolean, required: false, description: "是否可空" }
+          - { name: note, type: string, required: false, description: "输出字段补充说明" }
+
+      - { name: semantics, type: string, required: true, description: "查询语义：过滤、排序、软删、锁、幂等", generates: "生成器注释、测试断言", caution: "不要写实现步骤；不要与 SQL 重复" }
+      - { name: index_columns, type: list<list<string>>, required: false, description: "索引使用声明：每个内层列表是最左前缀要求；单表必填，多表不得写", generates: "索引校验", caution: "列必须出现在 SQL；匹配的索引必须在 used_by 中列出本 query" }
+      - { name: sql, type: string, required: true, description: "SQL 契约字段；queries/*.sql 由它生成", generates: "queries/*.sql、sqlc 代码", caution: "禁止 SELECT *；表名必须是物理名；参数只能来自 params" }
+
+rules:
+  - { id: query-id-prefix, text: "query.id 必须以 <文件 id>. 开头", implemented_by: [ query-id-prefix ] }
+  - { id: query-id-unique, text: "query.id 在当前集合内唯一", implemented_by: [ query-id-unique ] }
+  - { id: query-name, text: "query.name 必须等于 query id 末段的 PascalCase", implemented_by: [ query-name ] }
+  - { id: query-name-unique, text: "query.name 全局唯一，避免 sqlc 方法名冲突", implemented_by: [ query-name-unique ] }
+  - { id: query-table-shape, text: "table 与 tables 必须恰好出现一个；表必须存在、去重、不得指向 data.tables.base", implemented_by: [ query-table-shape ] }
+  - { id: query-table-sql, text: "声明的每个物理表名必须出现在 SQL 中", implemented_by: [ query-table-sql ] }
+  - { id: query-params, text: "params 的 name 不得重复", implemented_by: [ query-params ] }
+  - { id: query-param-sql, text: "SQL 中的参数与 params 必须双向一致", implemented_by: [ query-param-sql ] }
+  - { id: query-param-nullable, text: "nullable:true 必须且只能用 sqlc.narg；非 nullable 不得使用 sqlc.narg", implemented_by: [ query-param-nullable ] }
+  - { id: query-returns, text: "returns DSL 必须合法，引用的表/实体必须存在", implemented_by: [ query-returns ] }
+  - { id: query-returns-kind, text: "many 必须返回 [] 前缀；one 不得返回 []；affected_rows 只能配 execrows", implemented_by: [ query-returns-kind ] }
+  - { id: query-return-columns, text: "return_columns 必须是 returns 的列/字段，且出现在 SQL 中", implemented_by: [ query-return-columns ] }
+  - { id: query-entity-coverage, text: "返回实体时，未裁剪的 required 非敏感字段必须被覆盖；字段来源表必须属于 query 的表集合", implemented_by: [ query-entity-coverage ] }
+  - { id: query-output-fields, text: "object 返回必须有非空 output_fields；字段名唯一且出现在 SQL；不得同时写 return_columns", implemented_by: [ query-output-fields ] }
+  - { id: query-kind-sql, text: "execrows 必须以 INSERT/UPDATE/DELETE/WITH 开头；one/many 的写语句必须带 RETURNING", implemented_by: [ query-kind-sql ] }
+  - { id: query-no-select-star, text: "禁止 SELECT * 或 SELECT <alias>.*", implemented_by: [ query-no-select-star ] }
+  - { id: query-one-unique, text: "one 的 SELECT 非标量返回必须命中主键/唯一索引前缀，或 SQL 含 LIMIT 1", implemented_by: [ query-one-unique ] }
+  - { id: query-write-owner, text: "写查询的 module 必须等于所有涉及表的 owner_module", implemented_by: [ query-write-owner ] }
+  - { id: query-sensitive-columns, text: "never_expose 列不得被跨模块查询返回；同模块必须显式写 return_columns", implemented_by: [ query-sensitive-columns ] }
+  - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识；不得复制 _types.yaml 的 data.queries.do_not", implemented_by: [ query-do-not-specific ] }

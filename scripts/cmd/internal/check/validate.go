@@ -25,7 +25,8 @@ func validatePatterns(fields []Field) error {
 
 var schemaFieldTypes = map[string]bool{
 	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
-	"boolean": true, "any": true, "object": true, "list<string>": true, "list<object>": true,
+	"boolean": true, "any": true, "object": true,
+	"list<string>": true, "list<object>": true, "list<list<string>>": true,
 }
 
 // validateFieldTypes 校验 _meta 自身的 type 词汇；避免把列类型族的
@@ -117,6 +118,7 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			c.rulef("schema.type", "%s: must be list", path)
 			return
 		}
+		c.checkMinItems(l, f, path)
 		seen := map[string]bool{}
 		for i, item := range l {
 			s, ok := item.(string)
@@ -141,6 +143,7 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			c.rulef("schema.type", "%s: must be list", path)
 			return
 		}
+		c.checkMinItems(l, f, path)
 		for i, item := range l {
 			m, ok := asMap(item)
 			if !ok {
@@ -149,8 +152,37 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			}
 			c.validateDoc(m, f.ItemFields, fmt.Sprintf("%s[%d]", path, i))
 		}
+	case "list<list<string>>":
+		l, ok := asList2(v)
+		if !ok {
+			c.rulef("schema.type", "%s: must be list", path)
+			return
+		}
+		c.checkMinItems(l, f, path)
+		for i, item := range l {
+			inner, ok := asList2(item)
+			if !ok {
+				c.rulef("schema.type", "%s[%d]: must be list", path, i)
+				continue
+			}
+			for j, raw := range inner {
+				if _, ok := raw.(string); !ok {
+					c.rulef("schema.type", "%s[%d][%d]: must be string", path, i, j)
+				}
+			}
+		}
 	default:
 		c.rulef("schema.type", "%s: unknown schema type %q", path, f.Type)
+	}
+}
+
+// checkMinItems 校验 list 的最小长度；min_items 只约束列表，不约束字符串。
+func (c *Checker) checkMinItems(l []any, f Field, path string) {
+	if f.MinItems == nil {
+		return
+	}
+	if n, ok := toInt(f.MinItems); ok && len(l) < n {
+		c.rulef("schema.range", "%s: %d items < min_items %d", path, len(l), n)
 	}
 }
 

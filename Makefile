@@ -66,7 +66,7 @@ gen-client: ## 合并 spec → apps/web/packages/api-client（P2）
 contract-new: ## 按 _meta 字段规范生成契约骨架（type=data.tables name=note module=notes [column_type=decimal]）
 	@./scripts/contract/scaffold.sh "$(type)" "$(name)" "$(module)" "$(summary)" "$(column_type)"
 
-contract-check: ## 校验契约结构与 used_by（试点：data.tables/data.enums）
+contract-check: ## 校验契约结构与 used_by（data.tables/enums/entities/queries）
 	@./scripts/contract/validate.sh
 
 gen-rule-ids: ## 从 checker 的 rulef(...) 生成 rule_ids_gen.go

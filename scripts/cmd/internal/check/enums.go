@@ -161,40 +161,39 @@ func (c *Checker) enumUsages() map[string]*enumUsage {
 			continue
 		}
 		entityID, _ := doc["id"].(string)
-		tableID, _ := doc["table"].(string)
-		refs := map[string]bool{}
-		collectEnumRefs(doc, refs)
-		for enumID := range refs {
-			u := usages[enumID]
+		tables := tableRefs(doc)
+		// 只统计字段上的枚举引用；来源表按 column 或单表实体确定。
+		for _, raw := range asList(doc["fields"]) {
+			m, ok := asMap(raw)
+			if !ok {
+				continue
+			}
+			typ, _ := m["type"].(string)
+			if !strings.HasPrefix(typ, "data.enums.") {
+				continue
+			}
+			u := usages[typ]
 			if u == nil {
 				u = &enumUsage{entities: map[string]bool{}, tables: map[string]bool{}}
-				usages[enumID] = u
+				usages[typ] = u
 			}
 			if entityID != "" {
 				u.entities[entityID] = true
 			}
-			if tableID != "" {
-				u.tables[tableID] = true
+			src := ""
+			if ref, _ := m["column"].(string); ref != "" {
+				if t, _, ok := splitColumnRef(ref); ok {
+					src = t
+				}
+			} else if len(tables) == 1 {
+				src = tables[0]
+			}
+			if src != "" {
+				u.tables[src] = true
 			}
 		}
 	}
 	return usages
-}
-
-// collectEnumRefs 递归收集任意层级的 type: data.enums.*。
-func collectEnumRefs(v any, out map[string]bool) {
-	if m, ok := asMap(v); ok {
-		if t, ok := m["type"].(string); ok && strings.HasPrefix(t, "data.enums.") {
-			out[t] = true
-		}
-		for _, child := range m {
-			collectEnumRefs(child, out)
-		}
-		return
-	}
-	for _, child := range asList(v) {
-		collectEnumRefs(child, out)
-	}
 }
 
 // checkEnumUsedBy 要求 used_by.entities/tables 与 entity 实际引用完全一致。

@@ -12,9 +12,9 @@ summary: "认证查询集"
 stability: draft
 module: auth
 do_not:
-  - "不要让普通业务查询引用本文件"
-  - "不要返回 password_hash / access_token / refresh_token 给非认证调用方"
-  - "不要写 SELECT *"
+  - "auth 之外的普通业务查询不要引用本文件"
+  - "auth 查询不要返回 password_hash / access_token / refresh_token 给非认证调用方"
+  - "auth 查询不要写 SELECT *"
 
 queries:
   - id: data.queries.auth.get_auth_pwd_by_username

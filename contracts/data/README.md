@@ -13,7 +13,7 @@
 |---|---|---|
 | `tables/_base.yaml` | 表结构基类：5 列 + `do_not`（单例，字段树与规则复用 `data.tables`） | 无（不生成 DDL、不建实体、不落存储） |
 | `tables/<file>.yaml` | 物理表：字段、类型、约束、索引、分区、保留期 | `schema.sql`、增量 `migrations/*.sql`、sqlc 输入 |
-| `entities/<entity>.yaml` | 逻辑数据实体：身份、字段、关系、复杂校验 | Go/TS 类型 |
+| `entities/<entity>.yaml` | 读模型：身份、字段、关系、复杂校验 | Go/TS 类型 |
 | `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
 | `queries/<module>.yaml` | 查询契约：id、参数、返回、SQL、语义 | `queries/*.sql`、sqlc 代码 |
 | `storage.yaml` | 项目级存储引擎、部署拓扑、连接与锁 | 配置校验、运维约束 |
@@ -37,13 +37,13 @@
 | 表（table） | 持久化 | `data/tables/<file>.yaml` | 字段、类型、可空、默认值、CHECK/UNIQUE/EXCLUDE、索引、分区、`used_by`、`redundancy` |
 | 实体（entity） | 业务 | `data/entities/<entity>.yaml` | 身份、字段、关系、`validation`（数据库表达不了的复杂校验） |
 
-两者不是 1:1，所以不合并：
+实体是**读模型**，不是表的第二份写模型：
 
-- **一张表不一定是一个实体**：`tokens`、`audit_logs`、关联表只有结构，没有业务不变量
-- **一个实体可能跨多表**：账号与 `auth_*` / `tokens` 是聚合关系
-- **约束层次不同**：`CHECK (char_length(number) > 0)` 是 DDL；「已软删的账号不可修改」是业务不变量
+- **每张物理表至少被一个 entity 映射**；否则数据没有业务出口。基类不是物理表，不参与映射。
+- **一个实体可以跨多表**：合成只读，JOIN 条件写在 query，entity 只声明字段来源。
+- **约束层次不同**：`CHECK (char_length(number) > 0)` 是 DDL；「已软删的账号不可修改」是业务不变量。
 
-关联方式是 `ref`：实体通过 `table: data.tables.account` 指回表，字段通过 `column:` 指回列（同名可省略）。
+关联方式是 `table` / `tables` + `column`：单表实体可省略 `column`（按字段名匹配列），多表合成必须写 `column: data.tables.<t>.col.<c>`。实体字段不重复物理长度参数，也不允许聚合/计算字段；统计结果放 query 的 `output_fields`。
 
 ### 1.3 约束与校验的分界
 
@@ -99,9 +99,10 @@ redundancy: { group: account_own_type, role: copy, ref: data.tables.account.col.
 - 每个内层列表必须按顺序匹配某条索引的最左前缀，或匹配主键（主键是隐式索引）；
 - 匹配的显式索引必须在 `used_by` 中列出该 query；
 - 反之，索引 `used_by` 中的 query 必须有一个内层列表能匹配该索引的最左前缀；
-- `index_columns` 的列必须存在于当前表。
+- `index_columns` 的列必须存在于当前表，且必须出现在 SQL 中；
+- 单表查询必须写 `index_columns`；多表/JOIN 查询不得写，也不得出现在 `indexes[].used_by` 中。
 
-所以 `list_accounts` 可以同时声明游标索引 `[created_at, id]` 和归属过滤索引 `[own_type]`；索引列更多时，query 只写自己需要的前缀，剩余列由索引覆盖。
+所以 `list_accounts` 可以同时声明游标索引 `[created_at, id]` 和归属过滤索引 `[own_type]`；索引列更多时，query 只写自己需要的前缀，剩余列由索引覆盖。多表查询的索引性能由 `EXPLAIN` 与评审负责，契约层不假装能表达。
 
 ---
 
@@ -137,7 +138,10 @@ data/storage.yaml ────> 配置校验 + 运维约束
 12. **表级 `used_by` 是生成物**：由 `make gen-graph` 写入，禁止手改；结构固定为 `entities` / `queries` 两个列表，只记**直接入边**。`queries` 记录查询项 ID（`data.queries.<module>.<query>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明，不是生成物；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
 13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
 14. **冗余字段必须声明**：`columns[].redundancy` 的 `source`/`copy` 同组，`copy` 必须写 `ref` 指向同组 `source`，`type`/`nullable` 一致；同组只能有一个 `source`。
-15. **query 必须声明 `index_columns`**：每个内层列表按顺序匹配表索引最左前缀或主键；匹配的索引必须把 query 写进 `used_by`，反向也校验。
+15. **单表 query 必须声明 `index_columns`**：每个内层列表按顺序匹配表索引最左前缀或主键；匹配的索引必须把 query 写进 `used_by`，反向也校验。多表 query 不写 `index_columns`，也不进索引 `used_by`。
+16. **entity 字段必须能投影回列**：单表实体无 `column` 时按字段名匹配；多表合成必须写 `column`，且每张表至少被一个字段引用。字段的 `required` 必须等价于来源列非空，`pii`/`never_expose` 不得放松。
+17. **query 返回实体时必须完整**：`returns: data.entities.*` 的 `return_columns`（省略表示全字段）必须覆盖 required 非敏感字段；`never_expose` 字段只有同模块 query 可以返回。返回实体的 query 会写入 `entity.used_by.queries`。
+18. **entity.used_by 是生成物**：`queries` 记录 `returns` 本实体的 query 项 ID，`entities` 记录通过 relations 指向本实体的 entity ID；禁止手改，`contract-check` 对账。
 
 ---
 

@@ -8,6 +8,7 @@ import (
 type tableIndex struct {
 	name    string
 	columns []string
+	unique  bool
 	usedBy  map[string]bool
 }
 
@@ -51,8 +52,9 @@ func (c *Checker) loadTableIndexes(tableIDs map[string]string) {
 					used[s] = true
 				}
 			}
+			unique, _ := m["unique"].(bool)
 			c.tableIndexes[tableID] = append(c.tableIndexes[tableID], tableIndex{
-				name: name, columns: cols, usedBy: used,
+				name: name, columns: cols, unique: unique, usedBy: used,
 			})
 		}
 	}
@@ -87,13 +89,18 @@ func stringGroups(v any) [][]string {
 //   - 反向：索引 used_by 的查询必须有对应的 index_columns 前缀组。
 func (c *Checker) checkQueryIndexColumns(tableIDs map[string]string, cols map[string]map[string]bool) {
 	for qid, groups := range c.queryIndexCols {
-		if len(groups) == 0 {
-			c.rulef("query-index-columns", "query %s: must declare index_columns", qid)
+		tables := c.queryTables[qid]
+		if len(tables) == 0 {
+			continue // 表引用缺失由 query-table-shape 报出
+		}
+		if len(tables) > 1 {
+			if len(groups) > 0 {
+				c.rulef("query-index-columns", "query %s: multi-table query must not declare index_columns", qid)
+			}
 			continue
 		}
-		tables := c.queryTables[qid]
-		if len(tables) != 1 {
-			c.rulef("query-index-columns", "query %s: index_columns requires exactly one table, got %v", qid, sortedKeys(tables))
+		if len(groups) == 0 {
+			c.rulef("query-index-columns", "query %s: must declare index_columns", qid)
 			continue
 		}
 		var tableID string
@@ -136,6 +143,10 @@ func (c *Checker) checkQueryIndexColumns(tableIDs map[string]string, cols map[st
 	for _, indexes := range c.tableIndexes {
 		for _, idx := range indexes {
 			for qid := range idx.usedBy {
+				if t := c.queryTables[qid]; len(t) > 1 {
+					c.rulef("query-index-columns", "query %s: multi-table query must not appear in index.used_by", qid)
+					continue
+				}
 				groups := c.queryIndexCols[qid]
 				if len(groups) == 0 {
 					c.rulef("query-index-columns", "query %s: index %s uses it but index_columns is missing", qid, idx.name)

@@ -13,7 +13,9 @@ contracts/_meta/
 ├── README.md             # 本文件：AI 入口
 ├── _types.yaml            # 每类契约的默认元数据（enforcement / consumers / 通用 do_not）
 ├── data.tables.yaml      # data.tables 的字段树 + 值域 + 说明
-└── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
+├── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
+├── data.entities.yaml    # data.entities 的字段树 + 值域 + 说明
+└── data.queries.yaml     # data.queries 的字段树 + 值域 + 说明
 
 scripts/contract/
 ├── scaffold.sh           # make contract-new
@@ -55,13 +57,13 @@ scripts/cmd/
 |---|---|---|
 | `make contract-new type=data.tables name=note module=notes summary="备注表"` | 按 `_meta/data.tables.yaml` 生成最小表骨架；`column_type=decimal` 可指定第一列类型并带出扩展字段 | 新建表前 |
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
-| `make contract-check` | 结构 / ID / 约束 / 索引 / used_by / owner / persistence.queries | 每次改完契约 |
+| `make contract-check` | 结构 / ID / 约束 / 索引 / used_by / owner / entity 投影 / query 参数与返回 / persistence.queries | 每次改完契约 |
 | `make gen` | 生成 DDL / OpenAPI / 类型 / graph | `contract-check` 通过后 |
 | `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 单独投影 | 按需 |
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 当前只渲染 `data.tables` / `data.enums`；`data.entities` / `data.queries` 的骨架渲染在后续批次接入，字段规范已先行。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -108,14 +110,31 @@ scripts/cmd/
   - `summary` 非空；`stability: stable` 不得含 TODO/FIXME
   - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
   - `used_by.entities/tables` 必须与 entity 字段引用完全一致；只列 data.entities/data.tables，capability/feature 引用不写入 used_by，空列表合法
+- `data/entities/*.yaml`
+  - 结构按 `_meta/data.entities.yaml`；`table`/`tables` 二选一；每张物理表至少一个 entity 映射
+  - 字段必须投影回列：单表可省略 `column`，多表必须写；同一列不得被两个字段引用
+  - `required` 必须等价于来源列非空；`pii`/`never_expose` 不得放松；显式类型必须与列类型族一致
+  - `identity` 必须是 required、mutable:false、主表主键
+  - `relations` 的 target/via/方向/类型一致性；eager 必须有索引且不得成环
+  - `validation` 的 id 前缀、expr 非空、`on_violation` 必须存在
+  - `used_by.queries` 与 returns 本实体的 query 完全一致；`used_by.entities` 与 relations 入边一致
+- `data/queries/*.yaml`
+  - 结构按 `_meta/data.queries.yaml`；query id 前缀、name=PascalCase、name 全局唯一
+  - `table`/`tables` 二选一；SQL 必须出现声明的物理表名
+  - params 与 SQL 双向一致；`nullable` 与 `sqlc.narg` 严格对应
+  - `returns` DSL：表行 / 实体 / 标量 / object；`[]` 与 kind 一致；object 必须有 output_fields
+  - `return_columns` 必须是表列或实体字段；实体返回必须覆盖 required 非敏感字段
+  - 单表 query 必须有 `index_columns` 且列出现在 SQL；多表 query 不得写，也不得进索引 `used_by`
+  - 写查询的 module 必须等于所写表 `owner_module`；`never_expose` 列只有同模块可返回
+  - 禁止 `SELECT *`；`one` 非标量返回必须命中唯一索引或 `LIMIT 1`
 - 实体/查询/能力对表的引用存在
-- 查询 `return_columns` 必须是表列
-- `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复
+- 查询 `return_columns` 必须是表列（实体返回时是实体字段）
+- `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复；entities/queries 文件必须登记
 
 **尚未机器化**（写在 `_meta` 的 `description` / `caution` / `rules` / `schema_rules`，靠 review）：
 
 - 命名品味、业务语义、跨模块读归属是否最小化
-- 全类型规范（entities/queries/http/services/...）
+- 其余契约类型规范（http/services/...）
 - `graph.json` 越层/循环/孤儿
 - `generated/` diff
 
@@ -133,7 +152,7 @@ scripts/cmd/
 | `description` | 字段的准确含义 |
 | `generates` | 生成器会产出什么 / 怎么消费 |
 | `caution` | AI 最容易写错的用法 |
-| `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` | 结构约束 |
+| `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`min_items` 只约束 list，`list<list<string>>` 用于 `index_columns` |
 | `examples` | 示例值；`contract-new` 可用于生成 |
 | `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
 | `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；`require_col` 中的前缀必须带 `.col.`；不是类型族，也不是外键；表列不引用 `data.enums.*` |

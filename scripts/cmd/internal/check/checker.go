@@ -4,17 +4,19 @@
 //   - contracts 下文本字段（description/comment/summary/do_not 等）双引号强制
 //   - data.tables / data.tables.base 的结构、ID/文件、基类 5 列、列/约束/索引、used_by、do_not 具体性
 //   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、code int32 范围、stability 与 summary
+//   - data.entities 的投影、identity、relations、validation、used_by
+//   - data.queries 的 ID/名称、表、params、returns、SQL 形态、写归属与敏感列
 //   - 表列引用的 column_refs 前缀是否存在；表列不引用 data.enums.*
 //   - 任意契约中的 data.enums.* 类型引用必须存在
 //   - status 由基类提供且为 integer；物理表不得重声明；枚举只在 entity
 //   - 禁止 foreign_key；unique 约束与唯一索引的软删语义区分
-//   - owner_module 写归属（capabilities.persistence）
-//   - entity/query/capability 的表引用是否存在
+//   - owner_module 写归属（capabilities.persistence / data.queries 写查询）
+//   - entity/query/capability 的表引用是否存在；每张物理表至少一个 entity
 //
 // 不覆盖（后续扩展）：
-//   - 全类型 schema
 //   - graph.json / 越层引用
 //   - generated diff
+//   - SQL 语义（交给 sqlc / EXPLAIN）
 package check
 
 import (
@@ -52,6 +54,18 @@ type Checker struct {
 	tableObjects    map[string]map[string]bool
 	objectNames     map[string]string
 	objectKinds     map[string]string
+
+	// 实体与查询解析索引。
+	tableColumns  map[string]map[string]columnMeta
+	tablePhysical map[string]string
+	entityDocs    []entityDoc
+	entities      map[string]*entityInfo
+	entityOrder   []string
+	queries       map[string]*queryInfo
+	queryDocs     []queryDoc
+	queryOrder    []string
+	queryDupIDs   map[string]bool
+	errCodeSet    map[string]bool
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -83,20 +97,37 @@ func (c *Checker) run() {
 		c.rulef("schema.load", "load enums schema: %v", err)
 		return
 	}
+	entitySchema, err := c.loadSchemaByType("data.entities")
+	if err != nil {
+		c.rulef("schema.load", "load entities schema: %v", err)
+		return
+	}
+	querySchema, err := c.loadSchemaByType("data.queries")
+	if err != nil {
+		c.rulef("schema.load", "load queries schema: %v", err)
+		return
+	}
 
-	c.loadQueryIndex()
+	c.loadQueryIndex(querySchema)
 	tableIDs, cols := c.checkTables(tableSchema)
+	c.loadTableColumns(tableIDs)
+	c.loadEntities(entitySchema)
 	c.checkRedundancy(tableIDs, cols)
 	c.loadTableIndexes(tableIDs)
 	c.checkQueryIndexColumns(tableIDs, cols)
 	enumValues := c.checkEnums(enumSchema)
 	c.checkRules(tableSchema)
 	c.checkRules(enumSchema)
+	c.checkRules(entitySchema)
+	c.checkRules(querySchema)
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues, tableSchema.ColumnRefs)
 	c.checkCrossFileTableRefs(tableIDs, cols)
+	c.checkEntities(entitySchema)
+	c.checkQueries(querySchema)
+	c.checkEntityUsedByQueries()
 	c.checkUsedBy(tableIDs)
-	c.checkIndex(tableIDs, enumSchema)
+	c.checkIndex(tableIDs, enumSchema, entitySchema, querySchema)
 }
 
 // checkContractProseQuotes 强制 contracts 下文本字段使用双引号，

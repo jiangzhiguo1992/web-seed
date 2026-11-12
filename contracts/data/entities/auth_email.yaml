@@ -11,16 +11,16 @@ stability: stable
 table: data.tables.auth_email
 identity: id
 do_not:
-  - "不要把完整邮箱写进账号主表"
-  - "不要在日志里输出完整邮箱"
+  - "auth_email.domain 不要写进账号主表"
+  - "auth_email 的完整邮箱不要出现在日志"
 
 fields:
-  - { name: id, type: string, max_len: 36, required: true, mutable: false }
-  - { name: account_id, type: string, max_len: 36, required: true, mutable: false }
-  - { name: username, type: string, min_len: 1, max_len: 64, required: true, pii: true }
-  - { name: domain, type: string, min_len: 1, max_len: 190, required: true }
-  - { name: entity, type: string, max_len: 190 }
-  - { name: tld, type: string, max_len: 32 }
+  - { name: id, type: string, required: true, mutable: false }
+  - { name: account_id, type: string, required: true, mutable: false }
+  - { name: username, type: string, required: true, pii: true }
+  - { name: domain, type: string, required: true }
+  - { name: entity, type: string }
+  - { name: tld, type: string }
   - { name: status, type: data.enums.auth_status, required: true }
   - { name: created_at, type: timestamp, required: true, mutable: false }
   - { name: updated_at, type: timestamp, required: true, mutable: false }
@@ -33,3 +33,7 @@ validation:
   - id: data.entities.auth_email.domain_parts
     expr: "tld == nil || domain endsWith('.' + tld)"
     on_violation: platform.errors.AUTH_EMAIL_INVALID
+
+used_by:
+  queries: []
+  entities: [ data.entities.account ]

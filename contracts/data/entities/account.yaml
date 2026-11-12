@@ -1,7 +1,7 @@
 # 账号数据实体。物理表在 tables/account.yaml；认证信息在 auth_* / tokens。
 #
 # 边界：
-#   - 实体只描述业务可用的字段与关系，不写 DDL。
+#   - 实体只描述业务可读的字段与关系，不写 DDL。
 #   - 密码、手机号、邮箱、令牌不在本实体出现；通过关系实体访问。
 #   - 复杂校验写 validation；数据库能表达的约束留在 tables。
 
@@ -12,18 +12,18 @@ stability: stable
 table: data.tables.account
 identity: id
 do_not:
-  - "禁止在本实体上放密码、手机号、邮箱、令牌字段"
-  - "认证标识只能通过 auth_* 实体访问"
+  - "account 实体禁止放密码、手机号、邮箱、令牌字段"
+  - "account 的认证标识只能通过 auth_* 实体访问"
   - "own_type/own_id 是数据归属，user_id 是关联用户；两者不得互相替代"
-  - "不要在 validation 里写 DDL"
+  - "account.validation 不要写 DDL"
 
 fields:
-  - { name: id, type: string, max_len: 36, required: true, mutable: false }
-  - { name: own_type, type: string, max_len: 32, required: true }
-  - { name: own_id, type: string, max_len: 36, required: true }
-  - { name: number, type: string, min_len: 4, max_len: 64, required: true, note: "账号编号，存储前大写归一" }
-  - { name: nickname, type: string, min_len: 1, max_len: 100, required: true, pii: true }
-  - { name: user_id, type: string, max_len: 36 }
+  - { name: id, type: string, required: true, mutable: false }
+  - { name: own_type, type: string, required: true }
+  - { name: own_id, type: string, required: true }
+  - { name: number, type: string, required: true, note: "账号编号，存储前大写归一" }
+  - { name: nickname, type: string, required: true, pii: true }
+  - { name: user_id, type: string }
   - { name: status, type: data.enums.account_status, required: true }
   - { name: version, type: integer, required: true, note: "乐观锁" }
   - { name: created_at, type: timestamp, required: true, mutable: false }
@@ -35,3 +35,15 @@ relations:
   - { name: auth_pwd, target: data.entities.auth_pwd, kind: one_to_one, via: data.tables.auth_pwd.col.account_id }
   - { name: auth_phone, target: data.entities.auth_phone, kind: one_to_many, via: data.tables.auth_phone.col.account_id }
   - { name: auth_email, target: data.entities.auth_email, kind: one_to_many, via: data.tables.auth_email.col.account_id }
+
+used_by:
+  queries:
+    - data.queries.account.get_account
+    - data.queries.account.get_account_by_number
+    - data.queries.account.list_accounts
+    - data.queries.account.create_account
+  entities:
+    - data.entities.auth_pwd
+    - data.entities.auth_phone
+    - data.entities.auth_email
+    - data.entities.token

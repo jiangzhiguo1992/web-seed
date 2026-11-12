@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 契约校验入口。当前试点覆盖 data.tables / data.enums。
-# 后续扩展：全类型 schema、graph.json、generated diff。
+# 契约校验入口。当前覆盖 data.tables / data.enums / data.entities / data.queries。
+# 后续扩展：其余契约类型、graph.json、generated diff。
 
 set -euo pipefail
 

@@ -1,0 +1,119 @@
+# data.entities 的单一规范：字段树 + 值域 + 硬规则。
+# 通用字段语义见 _types.yaml 的 schema_semantics；本文件只写 data.entities 特有内容。
+# 实体是读模型：字段必须能投影回物理列，不反推 DDL，不承载统计聚合。
+
+id: meta.data.entities
+type: data.entities
+title: "逻辑数据实体契约"
+targets:
+  dir: "contracts/data/entities"
+  glob: "*.yaml"
+  id: "data.entities.<file>"
+  naming: "snake_case"
+
+fields:
+  - { name: schema_version, type: integer, required: true, const: 1, description: "契约格式版本，固定 1", generates: "无", caution: "必须是整数 1" }
+
+  - name: id
+    type: string
+    required: true
+    pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
+    description: "由 targets.id 模板派生（<file> 替换为文件 stem）"
+    generates: "契约 ID、图节点"
+    caution: "不要手写与文件不一致的 ID；checker 以文件名为源"
+
+  - { name: summary, type: string, required: true, description: "一句话说明这个实体是什么", generates: "index 摘要", caution: "不要写字段清单" }
+  - { name: stability, type: string, required: true, enum: [ stable, draft, deprecated ], default: draft, description: "契约稳定度", generates: "index 摘要", caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改" }
+
+  - name: table
+    type: string
+    required: false
+    pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
+    description: "单表实体的物理表；与 tables 二选一"
+    generates: "实体到表的读边"
+    caution: "不得指向 data.tables.base；与 tables 同时出现即失败"
+
+  - name: tables
+    type: list<string>
+    required: false
+    min_items: 1
+    unique: true
+    pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
+    description: "多表合成实体的物理表列表；第一张是主表"
+    generates: "实体到多表的读边"
+    caution: "仅合成读模型使用；字段必须用 column 指明来源；每张表至少被一个字段引用"
+
+  - { name: identity, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "身份字段名；必须是 fields 中的字段", generates: "实体主键、缓存键、关系默认目标", caution: "必须是 required、mutable:false，且来源列是主表主键" }
+  - { name: do_not, type: list<string>, required: false, description: "实例级负向约束；每条含本实体标识", generates: "AI 反例", caution: "通用规则在 _types.yaml，禁止复制到这里" }
+
+  - name: fields
+    type: list<object>
+    required: true
+    min_items: 1
+    description: "实体的逻辑字段；必须能投影回表列"
+    generates: "Go/TS 类型、JSON 形状"
+    caution: "不写物理长度参数（min_len/max_len/pattern）；不写聚合/计算字段；不写 data.tables.* 行类型"
+    item_fields:
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名；也是默认列名", caution: "同一实体内唯一" }
+      - { name: column, type: string, required: false, pattern: '^data\.tables\..+\.col\.[a-z][a-z0-9_]*$', description: "来源列；单表可省略（按 name 匹配），多表必填", caution: "表必须属于本实体；同一列不得被两个字段引用" }
+      - { name: type, type: string, required: false, description: "逻辑类型；省略则继承来源列类型族；可写 data.enums.*", caution: "显式类型必须与来源列兼容；枚举只能映射 integer 列" }
+      - { name: required, type: boolean, required: false, default: false, description: "读取结果是否必然有值", caution: "必须等价于来源列非空；不要用业务必填替代物理非空" }
+      - { name: mutable, type: boolean, required: false, default: true, description: "创建后是否允许修改", caution: "identity 与三个时间列必须 false" }
+      - { name: pii, type: boolean, required: false, description: "逻辑层个人敏感信息", caution: "来源列 pii 为 true 时不得省略" }
+      - { name: never_expose, type: boolean, required: false, description: "禁止进入普通 DTO/日志/事件", caution: "来源列 never_expose 为 true 时必须标记；只有同模块 query 可读取" }
+      - { name: note, type: string, required: false, description: "字段补充说明" }
+
+  - name: relations
+    type: list<object>
+    required: false
+    description: "实体间关系；默认不装载，避免额外 SQL"
+    generates: "嵌套对象类型、批量装载查询"
+    caution: "eager 会引入额外查询；必须满足索引与无环约束；自引用只能 lazy"
+    item_fields:
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "关系名；也是嵌套字段名" }
+      - { name: target, type: string, required: true, pattern: '^data\.entities\.', description: "目标实体 ID" }
+      - { name: kind, type: string, required: true, enum: [ one_to_one, one_to_many, many_to_one ], description: "基数；方向由 via 所在表决定", caution: "many_to_one 的 via 在本端；one_to_many 的 via 在目标端；one_to_one 两边均可" }
+      - { name: via, type: string, required: true, pattern: '^data\.tables\..+\.col\.[a-z][a-z0-9_]*$', description: "连接列；默认引用对方 identity", caution: "必须属于本端或目标端的表，且类型与对方 identity 一致" }
+      - { name: load, type: string, required: false, enum: [ eager, lazy ], default: lazy, description: "装载策略；默认 lazy", caution: "eager 的查询侧列必须有索引；eager 链不得成环" }
+      - { name: note, type: string, required: false, description: "关系补充说明" }
+
+  - name: validation
+    type: list<object>
+    required: false
+    description: "数据库表达不了的跨字段校验"
+    generates: "校验骨架、测试"
+    caution: "不要写 DDL；不要写业务行为规则（属于 business.rules）"
+    item_fields:
+      - { name: id, type: string, required: true, description: "校验 ID，等于 <entity-id>.<name>" }
+      - { name: expr, type: string, required: true, description: "可执行的布尔表达式" }
+      - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "失败时映射的错误码" }
+
+  - name: used_by
+    type: object
+    required: true
+    generated: true
+    write: forbidden
+    description: "反向索引；只记 query 装载与 relation 引用"
+    generates: "used_by、inbound"
+    caution: "生成物，禁止手改；必须与实际入边一致"
+    fields:
+      - { name: queries, type: list<string>, required: true, unique: true, description: "returns 本实体的 query 项 ID" }
+      - { name: entities, type: list<string>, required: true, unique: true, description: "通过 relations 指向本实体的 entity ID" }
+
+rules:
+  - { id: entity-table-shape, text: "table 与 tables 必须恰好出现一个；表必须存在、去重、不得指向 data.tables.base；tables[0] 是主表", implemented_by: [ entity-table-shape ] }
+  - { id: entity-table-covered, text: "每张物理表必须被至少一个 entity 映射", implemented_by: [ entity-table-covered ] }
+  - { id: entity-identity, text: "identity 必须是 fields 中的字段，required:true、mutable:false，且来源列是主表主键", implemented_by: [ entity-identity ] }
+  - { id: entity-field-column, text: "字段来源列必须存在且属于本实体的表；单表可省略 column，多表必填；同一列不得被两个字段引用", implemented_by: [ entity-field-column ] }
+  - { id: entity-field-type, text: "显式 type 必须与来源列类型族一致；data.enums.* 只能映射 integer 列；禁止列表类型", implemented_by: [ entity-field-type ] }
+  - { id: entity-field-required, text: "required 必须等价于来源列非空", implemented_by: [ entity-field-required ] }
+  - { id: entity-field-mutable, text: "identity、created_at、updated_at、deleted_at 必须 mutable:false", implemented_by: [ entity-field-mutable ] }
+  - { id: entity-field-sensitive, text: "来源列的 pii/never_expose 不得在 entity 被放松；允许加严", implemented_by: [ entity-field-sensitive ] }
+  - { id: entity-relation-target, text: "relation.target 必须是已存在的 entity；目标不得为空", implemented_by: [ entity-relation-target ] }
+  - { id: entity-relation-via, text: "relation.via 必须是本端或目标端的表列，且与对方 identity 类型一致", implemented_by: [ entity-relation-via ] }
+  - { id: entity-relation-direction, text: "many_to_one 的 via 在本端；one_to_many 的 via 在目标端；one_to_one 两边均可", implemented_by: [ entity-relation-direction ] }
+  - { id: entity-relation-eager-index, text: "eager 关系的查询侧列必须有索引或主键", implemented_by: [ entity-relation-eager-index ] }
+  - { id: entity-relation-eager-cycle, text: "eager 关系链不得成环；自引用不得 eager", implemented_by: [ entity-relation-eager-cycle ] }
+  - { id: entity-validation, text: "validation.id 必须是 <entity-id>.<name>；expr 非空；on_violation 必须存在", implemented_by: [ entity-validation ] }
+  - { id: entity-used-by, text: "used_by.queries 必须等于 returns 本实体的 query 集合；used_by.entities 必须等于 relations 指向本实体的 entity 集合", implemented_by: [ entity-used-by ] }
+  - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识；不得复制 _types.yaml 的 data.entities.do_not", implemented_by: [ entity-do-not-specific ] }

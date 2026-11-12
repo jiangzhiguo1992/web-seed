@@ -73,6 +73,7 @@ type Field struct {
 	Allowed     []any   `yaml:"allowed"`
 	Min         any     `yaml:"min"`
 	Max         any     `yaml:"max"`
+	MinItems    any     `yaml:"min_items"`
 	Pattern     string  `yaml:"pattern"`
 	Description string  `yaml:"description"`
 	Generates   string  `yaml:"generates"`

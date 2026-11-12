@@ -12,9 +12,9 @@ summary: "账号查询集"
 stability: stable
 module: accounts
 do_not:
-  - "邮箱/手机号/密码查询不要写在这里，去 data.queries.auth"
-  - "number 唯一性查询必须带 deleted_at IS NULL"
-  - "不要写 SELECT *；返回列必须显式列出"
+  - "account 之外的邮箱/手机号/密码查询不要写在这里，去 data.queries.auth"
+  - "account.number 唯一性查询必须带 deleted_at IS NULL"
+  - "account 查询不要写 SELECT *；返回列必须显式列出"
 
 queries:
   - id: data.queries.account.get_account
@@ -23,8 +23,8 @@ queries:
     table: data.tables.account
     params:
       - { name: id, type: text }
-    returns: data.tables.account.row
-    semantics: "已软删视为不存在"
+    returns: data.entities.account
+    semantics: "已软删视为不存在；直接投影为账号实体"
     index_columns: [[id]]
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
@@ -38,8 +38,8 @@ queries:
     table: data.tables.account
     params:
       - { name: number, type: text }
-    returns: data.tables.account.row
-    semantics: "按账号编号精确查询；已软删视为不存在"
+    returns: data.entities.account
+    semantics: "按账号编号精确查询；已软删视为不存在；投影为账号实体"
     index_columns: [[number]]
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
@@ -72,8 +72,8 @@ queries:
       - { name: cursor_created_at, type: timestamp, nullable: true }
       - { name: cursor_id, type: text, nullable: true }
       - { name: page_size, type: integer, max: 100, default: 20 }
-    returns: "[]data.tables.account.row"
-    semantics: "按 created_at DESC, id DESC 游标分页；status/own_type 为空不过滤"
+    returns: "[]data.entities.account"
+    semantics: "按 created_at DESC, id DESC 游标分页；status/own_type 为空不过滤；投影为账号实体"
     index_columns: [[created_at, id], [own_type]]
     sql: |
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
@@ -100,8 +100,8 @@ queries:
       - { name: number, type: text }
       - { name: nickname, type: text }
       - { name: user_id, type: text, nullable: true }
-    returns: data.tables.account.row
-    semantics: "初始状态 pending(0)；number 入库前大写归一"
+    returns: data.entities.account
+    semantics: "初始状态 pending(0)；number 入库前大写归一；RETURNING 投影为账号实体"
     index_columns: [[number]]
     sql: |
       INSERT INTO accounts (id, own_type, own_id, number, nickname, user_id, status)

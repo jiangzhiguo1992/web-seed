@@ -8,7 +8,7 @@ schema_version: 1
 # 所有契约类型共享的字段节点语义。
 # 该段是文档与 AI 入口；硬约束的实现仍在 scripts/cmd/internal/check。
 schema_semantics:
-  field_keys_hard: [name, type, required, enum, allowed, pattern, const, unique, min, max, fields, item_fields, default]
+  field_keys_hard: [name, type, required, enum, allowed, pattern, const, unique, min, max, min_items, fields, item_fields, default]
   field_keys_soft: [description, caution, generates, examples, generated, write]
   type_keys: [title, targets, rules]
   required: "契约必须显式声明；缺失即校验失败"
@@ -75,8 +75,10 @@ types:
     consumers: [api]
     generates: [queries_sql, sqlc]
     do_not:
-      - "每个 query 必须有显式 id：data.queries.<module>.<query_id>"
+      - "每个 query 必须有显式 id：data.queries.<file>.<query_id>"
       - "每个 query 必须声明 table 或 tables，供图校验推导血缘"
+      - "返回实体用 returns: data.entities.*；统计结果用 output_fields"
+      - "写查询的 module 必须等于所写表的 owner_module"
       - "不要在 repo 层手写 SQL"
       - "不要写 SELECT *；敏感表必须用 return_columns 显式列出返回列"
       - "nullable 参数在 SQL 中使用 sqlc.narg('name')"
@@ -86,10 +88,11 @@ types:
     consumers: [api, web/admin]
     generates: [go_type, ts_type]
     do_not:
-      - "不要在实体文件里写 DDL（物理结构在 data/tables）"
+      - "实体是读模型：字段必须能投影回物理列，不写聚合/计算字段"
+      - "多表合成只读；JOIN 条件写在 query，不要写进 entity"
+      - "每张物理表必须至少被一个 entity 映射；table/tables 二选一"
       - "不要写状态机、业务规则（属于 business）"
       - "数据库表达不了的复杂校验写在 validation，不要搬到 tables"
-      - "实体必须用 table: data.tables.<file> 指回物理表"
       - "不要引用 business.*"
 
   data.enums:
