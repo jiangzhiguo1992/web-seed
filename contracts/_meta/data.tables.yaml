@@ -128,7 +128,7 @@ fields:
     default: [ data.tables.base ]
     description: "契约继承基类 5 列"
     generates: "展开基类列"
-    caution: "只能写 data.tables.base"
+    caution: "allowed 必须与 targets.exception 的 base ID 同步；物理表只能继承 base"
 
   - name: do_not
     type: list<string>
@@ -261,7 +261,7 @@ fields:
       - { name: capabilities, type: list<string>, required: true, unique: true, description: "能力 ID 列表" }
 
 rules:
-  - { id: base-only, text: "extends 只能是 targets.exception 声明的 base ID", implemented_by: [ base-only ] }
+  - { id: base-only, text: "extends 不得为空；值域与唯一性由 fields.extends 的 allowed/unique 保证（当前为 base ID）", implemented_by: [ base-only ] }
   - { id: no-base-columns, text: "物理表不得重声明 id/created_at/updated_at/deleted_at", implemented_by: [ no-base-columns ] }
   - { id: status-integer, text: "物理表必须声明 status，且类型为 integer；枚举只在 entity", implemented_by: [ status-integer ] }
   - { id: base-file, text: "kind: base 必须位于 targets.exception 声明的文件，且 ID 与例外一致", implemented_by: [ base-file ] }
@@ -273,7 +273,7 @@ rules:
   - { id: no-foreign-key, text: "禁止 foreign_key；跨表一致性由应用/业务规则保证", implemented_by: [ no-foreign-key ] }
   - { id: unique-scope, text: "UNIQUE 约束覆盖软删行；唯一索引必须带 where: deleted_at IS NULL（软删后可复用）；全局唯一用 UNIQUE 约束", implemented_by: [ unique-scope ] }
   - { id: constraint-fields, text: "check/exclude 用 expr；unique 用 columns", implemented_by: [ constraint-fields ] }
-  - { id: index-order, text: "order 只能与 columns 配合，长度一致，值为 asc/desc", implemented_by: [ index-order ] }
+  - { id: index-order, text: "order 只能与 columns 配合，且长度必须一致", implemented_by: [ index-order ] }
   - { id: large-index-concurrently, text: "size_class=large 时索引不得显式 concurrently: \"false\"", implemented_by: [ large-index-concurrently ] }
   - { id: partition, text: "partition.columns 非空；range 必须有 interval，其他策略不得有", implemented_by: [ partition ] }
   - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；queries 记录查询项 ID，不是查询文件 ID", implemented_by: [ used-by-generated ] }

@@ -720,11 +720,36 @@ func TestCheckTablesUsesTargets(t *testing.T) {
 func TestErrorsHaveRuleIDs(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
-	doc["extends"] = []any{"other"}
+	doc["extends"] = []any{}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "[base-only]") {
 		t.Fatalf("rule id missing: %s", errs)
+	}
+}
+
+func TestBaseOnlyDoesNotDuplicateAllowed(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := loadYAML(filepath.Join(root, "contracts/data/tables/account.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc["extends"] = []any{"data.tables.other"}
+	c := &Checker{}
+	c.checkPhysicalTable(doc, "contracts/data/tables/account.yaml", schema)
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[schema.enum]") {
+		t.Fatalf("extends allowed not enforced: %v", c.errs)
+	}
+	if strings.Contains(errs, "[base-only]") {
+		t.Fatalf("extends value reported twice: %v", c.errs)
 	}
 }
 

@@ -369,12 +369,12 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	} else if id != want {
 		c.rulef("id-from-file", "%s: id must be %s, got %s (file name is the source)", rel, want, id)
 	}
-	ext := asList(doc["extends"])
-	base, ok := schema.Targets.Base()
-	if !ok {
-		c.rulef("base-only", "%s: targets.exception must declare kind: base", rel)
-	} else if len(ext) != 1 || ext[0] != base.ID {
-		c.rulef("base-only", "%s: extends must be [%s]", rel, base.ID)
+	// extends 的值域/唯一性由 fields.extends.allowed + unique 保证；
+	// 这里只补字段树无法表达的空列表约束，避免同一错误重复报两次。
+	if raw, ok := doc["extends"]; ok {
+		if list, isList := raw.([]any); isList && len(list) == 0 {
+			c.rulef("base-only", "%s: extends must not be empty", rel)
+		}
 	}
 	table, _ := asMap(doc["table"])
 	if table != nil {
