@@ -788,9 +788,12 @@ enums:
 		t.Fatal(err)
 	}
 	entity := `id: data.entities.account
-table: data.tables.account
+model:
+  name: account
+  extends: [ data.entities.base ]
+  tables: [ data.tables.account ]
 fields:
-  - { name: status, type: data.enums.account_status }
+  - { name: Status, json_name: status, type: data.enums.account_status }
 `
 	if err := os.WriteFile(entityPath, []byte(entity), 0o644); err != nil {
 		t.Fatal(err)

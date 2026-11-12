@@ -161,7 +161,7 @@ func (c *Checker) enumUsages() map[string]*enumUsage {
 			continue
 		}
 		entityID, _ := doc["id"].(string)
-		tables := tableRefs(doc)
+		tables := entityTableRefs(doc)
 		// 只统计字段上的枚举引用；来源表按 column 或单表实体确定。
 		for _, raw := range asList(doc["fields"]) {
 			m, ok := asMap(raw)

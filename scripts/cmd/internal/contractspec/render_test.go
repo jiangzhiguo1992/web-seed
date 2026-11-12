@@ -95,7 +95,7 @@ func loadSchemaByType(t *testing.T, typ string) *Schema {
 
 func TestRenderEntity(t *testing.T) {
 	s := loadSchemaByType(t, "data.entities")
-	b, err := RenderEntity(s, "account_preview", "account", "账号预览")
+	b, err := RenderEntity(s, "account_preview", "account", "accounts", "账号预览")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,12 +103,16 @@ func TestRenderEntity(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
 	}
-	if doc["id"] != "data.entities.account_preview" || doc["name"] != "accountPreview" {
+	if doc["id"] != "data.entities.account_preview" || doc["owner_module"] != "accounts" {
 		t.Fatalf("unexpected top-level: %#v", doc)
 	}
-	tables, _ := doc["tables"].([]any)
+	model, _ := doc["model"].(map[string]any)
+	if model["name"] != "accountPreview" {
+		t.Fatalf("model.name not scaffolded: %#v", model)
+	}
+	tables, _ := model["tables"].([]any)
 	if len(tables) != 1 || tables[0] != "data.tables.account" {
-		t.Fatalf("tables not scaffolded: %#v", doc["tables"])
+		t.Fatalf("model.tables not scaffolded: %#v", model["tables"])
 	}
 	if _, ok := doc["table"]; ok {
 		t.Fatalf("single table field must not be generated: %#v", doc)
@@ -116,9 +120,9 @@ func TestRenderEntity(t *testing.T) {
 	if _, ok := doc["identity"]; ok {
 		t.Fatalf("identity must not be generated: %#v", doc)
 	}
-	extends, _ := doc["extends"].([]any)
+	extends, _ := model["extends"].([]any)
 	if len(extends) != 1 || extends[0] != "data.entities.base" {
-		t.Fatalf("extends must be [data.entities.base]: %#v", doc["extends"])
+		t.Fatalf("model.extends must be [data.entities.base]: %#v", model["extends"])
 	}
 	fields, _ := doc["fields"].([]any)
 	if len(fields) != 0 {

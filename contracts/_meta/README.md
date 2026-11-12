@@ -68,7 +68,7 @@ scripts/cmd/
 |---|---|---|
 | `make contract-new type=data.tables name=note module=notes summary="备注表"` | 按 `_meta/data.tables.yaml` 生成最小表骨架；`column_type=decimal` 可指定第一列类型并带出扩展字段 | 新建表前 |
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
-| `make contract-new type=data.entities name=note table=note` | 按 `_meta/data.entities.yaml` 生成单表读模型骨架（目标表必须已存在） | 新建实体时 |
+| `make contract-new type=data.entities name=note table=note` | 按 `_meta/data.entities.yaml` 生成单表读模型骨架；owner_module 从目标表读取（目标表必须已存在） | 新建实体时 |
 | `make contract-new type=data.queries name=note module=notes table=note` | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在） | 新建查询集时 |
 | `make gen-graph` | 按引用计算并写回 table/entity 的 `used_by` | 改完表/实体/查询后 |
 | `make gen-graph-check` | 只校验 `used_by` 是否最新（CI） | CI |
@@ -78,7 +78,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `name`，需要 public 时改成 PascalCase；query 默认生成只依赖主键的 `SELECT EXISTS`，不会伪造业务字段。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成只依赖主键的 `SELECT EXISTS`，不会伪造业务字段。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -129,20 +129,20 @@ scripts/cmd/
   - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
   - `used_by.entities/tables` 必须与 entity 字段引用完全一致；只列 data.entities/data.tables，capability/feature 引用不写入 used_by，空列表合法
 - `data.entities.base`（`contracts/data/entities/_base.yaml`，单例）
-  - 路径/ID 由 checker 写死识别；5 个字段固定为 `id` / `status` / `created_at` / `updated_at` / `deleted_at`
+  - 路径/ID 由 checker 写死识别；5 个字段固定为 `ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`
   - `ID` string 非空、`Status` integer 非空、时间列 timestamp（`CreatedAt`/`UpdatedAt` 非空、`DeletedAt` 可空）；`ID` 与三个时间列 `mutable:false`
   - `do_not` 直接写在 `_base.yaml`，承载 `data.entities` 类型级通用规则；具体实体 `do_not` 必须含本实体标识
 - `data/entities/*.yaml`
-  - 结构按 `_meta/data.entities.yaml`；`extends` 必须是 `[data.entities.base]`；具体实体不得重声明基类字段，`status` 可用 `data.enums.*` 特化
-  - `tables` 必填、非空、去重；`tables[0]` 是主表；每张物理表至少一个 entity 映射
+  - 结构按 `_meta/data.entities.yaml`；`model.extends` 必须是 `[data.entities.base]`；具体实体不得重声明基类字段，`Status` 可用 `data.enums.*` 特化
+  - `model.tables` 必填、非空、去重；`model.tables[0]` 是主表；每张物理表至少一个 entity 映射
+  - `owner_module` 必填且必须等于主表 `model.tables[0]` 的 `owner_module`
   - 字段必须投影回列：单表可省略 `column`，多表必须写；同一列不得被两个字段引用
   - `required` 必须等价于来源列非空；`pii`/`never_expose` 不得放松；显式类型复用 `data.tables` 类型族，或 `data.enums.*`
-  - 实体 `name` 是 Go 类型名：首字母大写 public，小写 internal；不得重名
-  - 实体 `name` 是 Go 类型名：首字母大写 public，小写 internal
+  - 实体 `model.name` 是 Go 类型名：首字母大写 public，小写 internal；`model` 顺序为 name/extends/tables；不得重名
   - `ID` 是所有实体的唯一主键：来自主表 `id` 列，required、mutable:false、唯一主键
   - 字段 `name` 是 Go 字段名：首字母大写导出，小写不导出；`never_expose` 字段必须小写开头
-  - 默认列名/JSON 名是 `snake_case(name)`；可用 `column` / `json_name` 覆盖
-  - 字段可声明生成语义：`json_name`、`examples`、`description`；`json_name` 在同一实体内唯一，`examples` 元素类型必须与字段类型一致
+  - 默认列名是 `snake_case(name)`，可用 `column` 覆盖；`json_name` 必填且同实体唯一
+  - 字段可声明生成语义：`examples`、`description`；`examples` 元素类型必须与字段类型一致
   - `relations` 的 target/via/方向/类型一致性；eager 必须有索引且不得成环
   - `validation` 的 id 前缀、expr 非空、`on_violation` 必须存在
   - `used_by.queries` 与 returns 本实体的 query 完全一致；`used_by.entities` 与 relations 入边一致

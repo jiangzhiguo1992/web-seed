@@ -66,6 +66,35 @@ type tableDoc struct {
 	doc map[string]any
 }
 
+// tableKeyOrder 是表契约的固定顶层键顺序。
+var tableKeyOrder = []string{
+	"id", "summary", "owner_module", "extends", "schema_version", "stability",
+	"do_not", "table", "columns", "constraints", "indexes", "used_by",
+}
+
+// checkTableKeyOrder 校验表契约顶层键顺序；基类文件不参与。
+func (c *Checker) checkTableKeyOrder(rel string) {
+	keys, err := loadYAMLKeys(filepath.Join(c.root, rel))
+	if err != nil {
+		return
+	}
+	pos := map[string]int{}
+	for i, k := range tableKeyOrder {
+		pos[k] = i
+	}
+	last, lastKey := -1, ""
+	for _, k := range keys {
+		i, ok := pos[k]
+		if !ok {
+			continue
+		}
+		if i < last {
+			c.rulef("table-key-order", "%s: key %s must come before %s", rel, k, lastKey)
+		}
+		last, lastKey = i, k
+	}
+}
+
 func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map[string]bool) {
 	c.checkTargets(schema)
 	c.checkColumnRefs(schema)
@@ -121,6 +150,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 			c.rulef("schema.contract-id-unique", "%s: duplicate contract id %s (also %s)", rel, id, prev)
 		}
 		tableIDs[id] = rel
+		c.checkTableKeyOrder(rel)
 		physical = append(physical, tableDoc{id: id, rel: rel, doc: doc})
 	}
 

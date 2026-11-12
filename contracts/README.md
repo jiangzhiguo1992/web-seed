@@ -186,7 +186,7 @@ feature ──> business ──> capabilities ──> data
 | capabilities/http → capabilities/services | HTTP operation | `x-service` |
 | capabilities/service → data | service 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
 | data.queries → data.tables | 查询项 | `sql.from` / `sql.into` / `sql.joins[].table` |
-| data.entities → data.tables | 实体 | `tables` / `column` |
+| data.entities → data.tables | 实体 | `model.tables` / `column` |
 | data.tables → 上游（反向） | 表文件 | `used_by.{entities,queries}`（生成物，`make gen-graph` 写入） |
 
 ### 3.2.1 capabilities 不引用 business

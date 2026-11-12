@@ -123,6 +123,16 @@ func isColumnRefType(t string, refs ColumnRefs) bool {
 }
 
 // queryTableRefs 从结构化 sql 子句推导查询引用的表；查询不再手写 table/tables。
+
+// entityTableRefs 读取实体 model.tables；model 外的 tables 不再合法。
+func entityTableRefs(m map[string]any) []string {
+	model, _ := asMap(m["model"])
+	if model == nil {
+		return nil
+	}
+	return stringList(model["tables"])
+}
+
 func queryTableRefs(m map[string]any) []string {
 	sql, _ := asMap(m["sql"])
 	if sql == nil {

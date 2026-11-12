@@ -1,11 +1,11 @@
 # 令牌表。访问令牌与刷新令牌；只允许认证模块读写。
 
-schema_version: 1
 id: data.tables.token
 summary: "令牌表"
-stability: stable
 owner_module: auth
 extends: [ data.tables.base ]
+schema_version: 1
+stability: stable
 do_not:
   - "access_token_hash / refresh_token_hash 只存哈希，禁止出现在普通响应、日志、事件；原文只在 /auth/login、/auth/refresh 的 TokenPair 返回一次"
 

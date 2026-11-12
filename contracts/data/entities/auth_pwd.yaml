@@ -5,37 +5,46 @@
 #   - password_hash 只服务认证流程；新密码必须使用 argon2id。
 #   - 本实体只服务认证流程，不得被普通业务查询引用。
 
-schema_version: 1
 id: data.entities.auth_pwd
 summary: "密码认证数据实体"
+owner_module: auth
+schema_version: 1
 stability: stable
-name: authPwd
-extends: [ data.entities.base ]
-tables: [ data.tables.auth_pwd ]
 do_not:
   - "auth_pwd.passwordHash 禁止出现在任何 DTO、日志、事件"
   - "auth_pwd 不写密码强度规则；规则在 platform/security/auth_policy"
 
+model:
+  name: authPwd
+  extends: [ data.entities.base ]
+  tables: [ data.tables.auth_pwd ]
+
 fields:
   - name: AccountID
+    json_name: account_id
     type: string
     required: true
     mutable: false
   - name: Username
+    json_name: username
     type: string
     required: true
     pii: true
   - name: passwordHash
+    json_name: password_hash
     type: string
     pii: true
     never_expose: true
     description: "argon2id；新密码写入此列"
   - name: FailedLoginCount
+    json_name: failed_login_count
     type: integer
     required: true
   - name: LockedUntil
+    json_name: locked_until
     type: timestamp
   - name: Status
+    json_name: status
     type: data.enums.auth_status
 
 relations:

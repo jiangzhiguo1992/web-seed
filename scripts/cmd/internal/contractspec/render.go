@@ -11,12 +11,12 @@ import (
 )
 
 type tableScaffold struct {
-	SchemaVersion int             `yaml:"schema_version"`
 	ID            string          `yaml:"id"`
 	Summary       string          `yaml:"summary"`
-	Stability     string          `yaml:"stability"`
 	OwnerModule   string          `yaml:"owner_module"`
-	Extends       []string        `yaml:"extends"`
+	Extends       flowStrings     `yaml:"extends"`
+	SchemaVersion int             `yaml:"schema_version"`
+	Stability     string          `yaml:"stability"`
 	DoNot         []string        `yaml:"do_not"`
 	Table         tableDef        `yaml:"table"`
 	Columns       []columnDef     `yaml:"columns"`
@@ -72,15 +72,21 @@ type enumValueScaffold struct {
 }
 
 type entityScaffold struct {
-	SchemaVersion int                   `yaml:"schema_version"`
 	ID            string                `yaml:"id"`
 	Summary       string                `yaml:"summary"`
-	Name          string                `yaml:"name"`
+	OwnerModule   string                `yaml:"owner_module"`
+	SchemaVersion int                   `yaml:"schema_version"`
 	Stability     string                `yaml:"stability"`
-	Extends       []string              `yaml:"extends"`
-	Tables        flowStrings           `yaml:"tables"`
+	DoNot         []string              `yaml:"do_not,omitempty"`
+	Model         entityModelScaffold   `yaml:"model"`
 	Fields        []entityFieldScaffold `yaml:"fields"`
 	UsedBy        entityUsedByScaffold  `yaml:"used_by"`
+}
+
+type entityModelScaffold struct {
+	Name    string      `yaml:"name"`
+	Extends flowStrings `yaml:"extends"`
+	Tables  flowStrings `yaml:"tables"`
 }
 
 type entityFieldScaffold struct {
@@ -211,7 +217,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		Summary:       summary,
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		OwnerModule:   module,
-		Extends:       []string{baseTableID},
+		Extends:       flowStrings{baseTableID},
 		DoNot:         []string{},
 		Table: tableDef{
 			Comment:   "TODO: 表说明",
@@ -276,19 +282,22 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 }
 
 // RenderEntity 生成单表读模型的最小骨架；目标表必须已存在。
-func RenderEntity(s *Schema, name, table, summary string) ([]byte, error) {
+func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, error) {
 	if s == nil || s.Type != "data.entities" {
 		return nil, fmt.Errorf("RenderEntity: want data.entities schema")
 	}
 	if !validName(name) || !validName(table) {
 		return nil, fmt.Errorf("RenderEntity: invalid name/table (snake_case required)")
 	}
+	if !validName(ownerModule) {
+		return nil, fmt.Errorf("RenderEntity: invalid owner_module (snake_case required)")
+	}
 	if strings.TrimSpace(summary) == "" {
 		return nil, fmt.Errorf("RenderEntity: summary must not be empty")
 	}
 	top := map[string]bool{
-		"schema_version": true, "id": true, "summary": true, "name": true, "stability": true,
-		"extends": true, "tables": true, "fields": true, "used_by": true,
+		"id": true, "summary": true, "owner_module": true, "schema_version": true,
+		"stability": true, "do_not": true, "model": true, "fields": true, "used_by": true,
 	}
 	if err := requireSupported(s.Fields, top, "data.entities"); err != nil {
 		return nil, err
@@ -318,15 +327,18 @@ func RenderEntity(s *Schema, name, table, summary string) ([]byte, error) {
 		return nil, fmt.Errorf("RenderEntity: cannot derive id from targets.id")
 	}
 	doc := entityScaffold{
-		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            entityID,
 		Summary:       summary,
-		Name:          lowerCamel(name),
+		OwnerModule:   ownerModule,
+		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		Stability:     defaultString(s.Fields, "stability", "draft"),
-		Extends:       []string{"data.entities.base"},
-		Tables:        flowStrings{"data.tables." + table},
-		Fields:        []entityFieldScaffold{},
-		UsedBy:        entityUsedByScaffold{Queries: []string{}, Entities: []string{}},
+		Model: entityModelScaffold{
+			Name:    lowerCamel(name),
+			Extends: flowStrings{"data.entities.base"},
+			Tables:  flowStrings{"data.tables." + table},
+		},
+		Fields: []entityFieldScaffold{},
+		UsedBy: entityUsedByScaffold{Queries: []string{}, Entities: []string{}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {

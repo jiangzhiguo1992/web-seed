@@ -3,32 +3,40 @@
 # 边界：
 #   - 基类字段在 entities/_base.yaml；本文件只写手机号认证业务字段。
 
-schema_version: 1
 id: data.entities.auth_phone
 summary: "手机号认证数据实体"
+owner_module: auth
+schema_version: 1
 stability: stable
-name: authPhone
-extends: [ data.entities.base ]
-tables: [ data.tables.auth_phone ]
 do_not:
   - "auth_phone.number 不要写进账号主表"
   - "auth_phone.number 不要出现在日志"
 
+model:
+  name: authPhone
+  extends: [ data.entities.base ]
+  tables: [ data.tables.auth_phone ]
+
 fields:
   - name: AccountID
+    json_name: account_id
     type: string
     required: true
     mutable: false
   - name: Code
+    json_name: code
     type: string
     required: true
   - name: Number
+    json_name: number
     type: string
     required: true
     pii: true
   - name: Operator
+    json_name: operator
     type: string
   - name: Status
+    json_name: status
     type: data.enums.auth_status
 
 relations:

@@ -1,11 +1,11 @@
 # 邮箱认证表。一个账号只能绑定一个邮箱，邮箱拆分为 username/domain/entity/tld，便于检索与域名聚合。
 
-schema_version: 1
 id: data.tables.auth_email
 summary: "邮箱认证表"
-stability: stable
 owner_module: auth
 extends: [ data.tables.base ]
+schema_version: 1
+stability: stable
 do_not:
   - "domain 必须小写归一后再存储"
 

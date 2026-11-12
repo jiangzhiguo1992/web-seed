@@ -90,7 +90,7 @@ func Compute(root string) (*Snapshot, error) {
 		entityDocs[id] = doc
 	}
 	for id, doc := range entityDocs {
-		for _, t := range tableRefs(doc) {
+		for _, t := range entityTableRefs(doc) {
 			if ts := tables[t]; ts != nil {
 				ts.entities[id] = true
 			}
@@ -408,6 +408,16 @@ func asList(v any) []any {
 }
 
 // queryTableRefs 从结构化 sql 子句推导查询表；query 契约不再手写 table/tables。
+
+// entityTableRefs 读取实体 model.tables。
+func entityTableRefs(m map[string]any) []string {
+	model, _ := asMap(m["model"])
+	if model == nil {
+		return nil
+	}
+	return stringList(model["tables"])
+}
+
 func queryTableRefs(m map[string]any) []string {
 	sql, _ := asMap(m["sql"])
 	if sql == nil {

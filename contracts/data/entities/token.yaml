@@ -5,50 +5,63 @@
 #   - access_token_hash / refresh_token_hash 标记 never_expose，只能出现在认证流程。
 #   - 实体不描述签发算法、签名、刷新策略；这些在 platform/security/auth_policy。
 
-schema_version: 1
 id: data.entities.token
 summary: "令牌数据实体"
+owner_module: auth
+schema_version: 1
 stability: stable
-name: token
-extends: [ data.entities.base ]
-tables: [ data.tables.token ]
 do_not:
   - "token 的哈希字段禁止出现在任何 DTO、日志、事件"
   - "token 实体不要写 JWT 签发或校验逻辑"
   - "token 原文只在签发响应返回一次，数据库不存原文"
 
+model:
+  name: token
+  extends: [ data.entities.base ]
+  tables: [ data.tables.token ]
+
 fields:
   - name: OwnType
+    json_name: own_type
     type: string
     required: true
   - name: OwnID
+    json_name: own_id
     type: string
     required: true
   - name: AccountID
+    json_name: account_id
     type: string
     required: true
     mutable: false
   - name: DeviceID
+    json_name: device_id
     type: string
   - name: UserID
+    json_name: user_id
     type: string
   - name: accessTokenHash
+    json_name: access_token_hash
     type: string
     required: true
     pii: true
     never_expose: true
   - name: refreshTokenHash
+    json_name: refresh_token_hash
     type: string
     required: true
     pii: true
     never_expose: true
   - name: AccessExpireAt
+    json_name: access_expire_at
     type: timestamp
     required: true
   - name: RefreshExpireAt
+    json_name: refresh_expire_at
     type: timestamp
     required: true
   - name: Status
+    json_name: status
     type: data.enums.token_status
 
 relations:

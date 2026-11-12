@@ -5,34 +5,43 @@
 #   - 邮箱拆分为 username/domain/entity/tld，便于检索与域名聚合。
 #   - 完整邮箱 = username + "@" + domain；entity/tld 由 domain 派生，可为空。
 
-schema_version: 1
 id: data.entities.auth_email
 summary: "邮箱认证数据实体"
+owner_module: auth
+schema_version: 1
 stability: stable
-name: authEmail
-extends: [ data.entities.base ]
-tables: [ data.tables.auth_email ]
 do_not:
   - "auth_email.domain 不要写进账号主表"
   - "auth_email 的完整邮箱不要出现在日志"
 
+model:
+  name: authEmail
+  extends: [ data.entities.base ]
+  tables: [ data.tables.auth_email ]
+
 fields:
   - name: AccountID
+    json_name: account_id
     type: string
     required: true
     mutable: false
   - name: Username
+    json_name: username
     type: string
     required: true
     pii: true
   - name: Domain
+    json_name: domain
     type: string
     required: true
   - name: Entity
+    json_name: entity
     type: string
   - name: TLD
+    json_name: tld
     type: string
   - name: Status
+    json_name: status
     type: data.enums.auth_status
 
 relations:

@@ -255,6 +255,58 @@ func loadSchema(path string) (*Schema, error) {
 	return s, nil
 }
 
+// loadYAMLKeys 读取 YAML 顶层键顺序；yaml.Unmarshal 到 map 会丢失顺序。
+func loadYAMLKeys(path string) ([]string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var node yaml.Node
+	if err := yaml.Unmarshal(b, &node); err != nil {
+		return nil, err
+	}
+	if len(node.Content) == 0 || len(node.Content[0].Content) == 0 {
+		return nil, nil
+	}
+	var keys []string
+	m := node.Content[0]
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		keys = append(keys, m.Content[i].Value)
+	}
+	return keys, nil
+}
+
+// loadYAMLChildKeys 读取嵌套 mapping 的键顺序；用于 model 这类固定顺序。
+func loadYAMLChildKeys(path, parent string) ([]string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var node yaml.Node
+	if err := yaml.Unmarshal(b, &node); err != nil {
+		return nil, err
+	}
+	if len(node.Content) == 0 || len(node.Content[0].Content) == 0 {
+		return nil, nil
+	}
+	m := node.Content[0]
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value != parent {
+			continue
+		}
+		v := m.Content[i+1]
+		if v.Kind != yaml.MappingNode {
+			return nil, nil
+		}
+		var keys []string
+		for j := 0; j+1 < len(v.Content); j += 2 {
+			keys = append(keys, v.Content[j].Value)
+		}
+		return keys, nil
+	}
+	return nil, nil
+}
+
 func loadYAML(path string) (map[string]any, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {

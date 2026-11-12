@@ -21,23 +21,24 @@ func writeTable(t *testing.T, root, name, body string) {
 func TestLoadTableContract(t *testing.T) {
 	root := t.TempDir()
 	writeTable(t, root, "note", `id: data.tables.note
+owner_module: notes
 table:
   name: notes
 `)
-	physical, err := loadTableContract(root, "note")
+	physical, owner, err := loadTableContract(root, "note")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if physical != "notes" {
-		t.Fatalf("physical = %q, want notes", physical)
+	if physical != "notes" || owner != "notes" {
+		t.Fatalf("physical/owner = %q/%q, want notes/notes", physical, owner)
 	}
 
-	if _, err := loadTableContract(root, "missing"); err == nil || !strings.Contains(err.Error(), "not found") {
+	if _, _, err := loadTableContract(root, "missing"); err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("missing table not reported: %v", err)
 	}
 
 	writeTable(t, root, "bad", "id: data.tables.other\n")
-	if _, err := loadTableContract(root, "bad"); err == nil || !strings.Contains(err.Error(), "id must be") {
+	if _, _, err := loadTableContract(root, "bad"); err == nil || !strings.Contains(err.Error(), "id must be") {
 		t.Fatalf("id mismatch not reported: %v", err)
 	}
 }

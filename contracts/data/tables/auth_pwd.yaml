@@ -1,11 +1,11 @@
 # 密码认证表。一个账号一条密码记录；只允许认证模块读写。
 
-schema_version: 1
 id: data.tables.auth_pwd
 summary: "密码认证表"
-stability: stable
 owner_module: auth
 extends: [ data.tables.base ]
+schema_version: 1
+stability: stable
 do_not:
   - "password_hash 禁止出现在响应、日志、事件"
 

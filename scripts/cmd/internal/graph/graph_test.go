@@ -34,13 +34,19 @@ used_by:
 `)
 	writeFixture(t, root, "contracts/data/entities/e1.yaml", `# entity e1
 id: data.entities.e1
-tables: [ data.tables.a ]
+model:
+  name: e1
+  extends: [ data.entities.base ]
+  tables: [ data.tables.a ]
 relations:
   - { name: e2, target: data.entities.e2, kind: many_to_one, via: data.tables.a.col.id }
 `)
 	writeFixture(t, root, "contracts/data/entities/e2.yaml", `# entity e2
 id: data.entities.e2
-tables: [ data.tables.b ]
+model:
+  name: e2
+  extends: [ data.entities.base ]
+  tables: [ data.tables.b ]
 used_by:
   queries: []
   entities: [ data.entities.e1 ]

@@ -5,39 +5,54 @@
 #   - 密码、手机号、邮箱、令牌不在本实体出现；通过关系实体访问。
 #   - 复杂校验写 validation；数据库能表达的约束留在 tables。
 
-schema_version: 1
 id: data.entities.account
 summary: "账号数据实体"
+owner_module: accounts
+schema_version: 1
 stability: stable
-name: Account
-extends: [ data.entities.base ]
-tables: [ data.tables.account ]
 do_not:
-  - "account 实体禁止放密码、手机号、邮箱、令牌字段"
   - "account 的认证标识只能通过 auth_* 实体访问"
   - "OwnType/OwnID 是数据归属，userID 是关联用户；两者不得互相替代"
   - "account.validation 不要写 DDL"
 
+model:
+  name: Account
+  extends: [ data.entities.base ]
+  tables: [ data.tables.account ]
+
 fields:
   - name: OwnType
+    json_name: own_type
     type: string
     required: true
+
   - name: OwnID
+    json_name: own_id
     type: string
     required: true
+
   - name: Number
+    json_name: number
     type: string
     required: true
     description: "账号编号，存储前大写归一"
+
   - name: Nickname
+    json_name: nickname
     type: string
     required: true
     pii: true
+
   - name: userID
+    json_name: user_id
     type: string
+
   - name: Status
+    json_name: status
     type: data.enums.account_status
+
   - name: Version
+    json_name: version
     type: integer
     required: true
     description: "乐观锁"

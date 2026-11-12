@@ -1,11 +1,11 @@
 # 手机号认证表。一个账号只能绑定一个手机号；只允许认证模块读写。
 
-schema_version: 1
 id: data.tables.auth_phone
 summary: "手机号认证表"
-stability: stable
 owner_module: auth
 extends: [ data.tables.base ]
+schema_version: 1
+stability: stable
 do_not:
 
 table:

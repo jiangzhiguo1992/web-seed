@@ -43,11 +43,13 @@
 - **一个实体可以跨多表**：合成只读，JOIN 条件写在 query，entity 只声明字段来源。
 - **约束层次不同**：`CHECK (char_length(number) > 0)` 是 DDL；「已软删的账号不可修改」是业务不变量。
 
-5 个通用字段（`ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`）在 `entities/_base.yaml`；具体实体写 `extends: [data.entities.base]`，只写业务字段。基类字段不得重声明；`Status` 允许用 `data.enums.*` 特化类型。
+5 个通用字段（`ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`）在 `entities/_base.yaml`；具体实体在 `model.extends` 写 `[data.entities.base]`，只写业务字段。基类字段不得重声明；`Status` 允许用 `data.enums.*` 特化类型。
 
-实体和字段名都是 Go 标识符：实体 `name` 首字母大写表示 public、小写表示 internal；字段 `name` 同理，首字母大写导出、小写不导出。`never_expose` 字段必须小写开头。默认列名/JSON 名是 `snake_case(name)`，可用 `column` / `json_name` 覆盖。字段不再有 `visibility` / `read_only` / `write_only` / `format` / `deprecated`。类型不另起一套：显式 `type` 复用 `data.tables` 的 `column_types.families`，或写 `data.enums.*`。
+实体顶层固定顺序：`id` → `summary` → `owner_module` → `schema_version` → `stability` → `do_not` → `model` → `fields` → `relations` → `validation` → `used_by`。`model` 内顺序固定为 `name` → `extends` → `tables`。`owner_module` 必须等于主表的 `owner_module`。
 
-关联方式是 `tables` + `column`：单表实体可省略 `column`（按 `snake_case(name)` 匹配列），多表合成必须写 `column: data.tables.<t>.col.<c>`。`tables[0]` 是主表，`ID` 必须来自主表 `id` 列。实体字段不重复物理长度参数，也不允许聚合/计算字段；统计结果放 query 的 `output_fields`。
+实体和字段名都是 Go 标识符：实体 `model.name` 首字母大写表示 public、小写表示 internal；字段 `name` 同理，首字母大写导出、小写不导出。`never_expose` 字段必须小写开头。默认列名是 `snake_case(name)`，可用 `column` 覆盖；`json_name` 必须显式声明（Go 的 json tag 不能从大小写推导）。字段不再有 `visibility` / `read_only` / `write_only` / `format` / `deprecated`。类型不另起一套：显式 `type` 复用 `data.tables` 的 `column_types.families`，或写 `data.enums.*`。
+
+关联方式是 `model.tables` + `column`：单表实体可省略 `column`（按 `snake_case(name)` 匹配列），多表合成必须写 `column: data.tables.<t>.col.<c>`。`model.tables[0]` 是主表，`ID` 必须来自主表 `id` 列。实体字段不重复物理长度参数，也不允许聚合/计算字段；统计结果放 query 的 `output_fields`。
 
 ### 1.3 约束与校验的分界
 

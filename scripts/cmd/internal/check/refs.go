@@ -42,7 +42,7 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			continue
 		}
 		rel := relPath(c.root, f)
-		for _, t := range tableRefs(doc) {
+		for _, t := range entityTableRefs(doc) {
 			if c.isBaseTableRef(t) {
 				c.rulef("base-file", "%s: base contract is not a physical table", rel)
 			} else if _, ok := tableIDs[t]; !ok {
@@ -221,7 +221,7 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 			continue
 		}
 		id, _ := doc["id"].(string)
-		for _, t := range tableRefs(doc) {
+		for _, t := range entityTableRefs(doc) {
 			if inbound[t] != nil {
 				inbound[t]["entities"][id] = true
 			}

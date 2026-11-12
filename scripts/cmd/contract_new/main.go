@@ -71,17 +71,18 @@ func main() {
 		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
 
 	case "data.entities":
-		if _, err := loadTableContract(abs, *table); err != nil {
+		_, owner, err := loadTableContract(abs, *table)
+		if err != nil {
 			fail(err)
 		}
-		b, err := contractspec.RenderEntity(schema, *name, *table, *summary)
+		b, err := contractspec.RenderEntity(schema, *name, *table, owner, *summary)
 		if err != nil {
 			fail(err)
 		}
 		writeOut(*out, b, "next: add business fields; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
 
 	case "data.queries":
-		physical, err := loadTableContract(abs, *table)
+		physical, _, err := loadTableContract(abs, *table)
 		if err != nil {
 			fail(err)
 		}
@@ -121,29 +122,34 @@ func writeOut(out string, b []byte, next string) {
 	fmt.Printf("%s\n", next)
 }
 
-// loadTableContract 校验目标表契约存在，并返回物理表名。
-func loadTableContract(root, table string) (string, error) {
+// loadTableContract 校验目标表契约存在，并返回物理表名与 owner_module。
+func loadTableContract(root, table string) (string, string, error) {
 	path := filepath.Join(root, "contracts/data/tables", table+".yaml")
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("table contract not found: %s (create it first: make contract-new type=data.tables name=%s)", path, table)
+		return "", "", fmt.Errorf("table contract not found: %s (create it first: make contract-new type=data.tables name=%s)", path, table)
 	}
 	var doc struct {
-		ID    string `yaml:"id"`
-		Table struct {
+		ID          string `yaml:"id"`
+		OwnerModule string `yaml:"owner_module"`
+		Table       struct {
 			Name string `yaml:"name"`
 		} `yaml:"table"`
 	}
 	if err := yaml.Unmarshal(b, &doc); err != nil {
-		return "", fmt.Errorf("%s: %w", path, err)
+		return "", "", fmt.Errorf("%s: %w", path, err)
 	}
 	if doc.ID != "data.tables."+table {
-		return "", fmt.Errorf("%s: id must be data.tables.%s, got %s", path, table, doc.ID)
+		return "", "", fmt.Errorf("%s: id must be data.tables.%s, got %s", path, table, doc.ID)
 	}
-	if doc.Table.Name == "" {
-		return table, nil
+	if doc.OwnerModule == "" {
+		return "", "", fmt.Errorf("%s: owner_module is required", path)
 	}
-	return doc.Table.Name, nil
+	physical := table
+	if doc.Table.Name != "" {
+		physical = doc.Table.Name
+	}
+	return physical, doc.OwnerModule, nil
 }
 
 func fail(err error) {

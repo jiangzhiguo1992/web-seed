@@ -63,6 +63,7 @@ type entityInfo struct {
 	Rel         string
 	Doc         map[string]any
 	Name        string
+	OwnerModule string
 	Tables      []string
 	Primary     string
 	Fields      []entityFieldInfo
@@ -74,9 +75,11 @@ type entityInfo struct {
 
 // entityDoc 保存原始文件，供结构校验使用。
 type entityDoc struct {
-	rel    string
-	fileID string
-	doc    map[string]any
+	rel       string
+	fileID    string
+	doc       map[string]any
+	keys      []string
+	modelKeys []string
 }
 
 func baseColumnMeta() map[string]columnMeta {
@@ -194,11 +197,13 @@ func (c *Checker) loadEntities(schema *Schema) {
 		if err != nil {
 			continue
 		}
+		keys, _ := loadYAMLKeys(file)
+		modelKeys, _ := loadYAMLChildKeys(file, "model")
 		fileID := schema.Targets.FileID(filepath.Base(file))
 		if fileID == "" {
 			fileID = strings.TrimSuffix(rel, filepath.Ext(rel))
 		}
-		c.entityDocs = append(c.entityDocs, entityDoc{rel: rel, fileID: fileID, doc: doc})
+		c.entityDocs = append(c.entityDocs, entityDoc{rel: rel, fileID: fileID, doc: doc, keys: keys, modelKeys: modelKeys})
 		e := c.parseEntity(doc, rel)
 		if e.ID == "" {
 			continue
@@ -249,8 +254,11 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		UsedByEnt:   map[string]bool{},
 	}
 	e.ID, _ = doc["id"].(string)
-	e.Name, _ = doc["name"].(string)
-	e.Tables = stringList(doc["tables"])
+	e.OwnerModule, _ = doc["owner_module"].(string)
+	if model, ok := asMap(doc["model"]); ok {
+		e.Name, _ = model["name"].(string)
+		e.Tables = stringList(model["tables"])
+	}
 	if len(e.Tables) > 0 {
 		e.Primary = e.Tables[0]
 	}
@@ -403,16 +411,22 @@ func (c *Checker) checkEntities(schema *Schema) {
 		} else if id != "" {
 			seenIDs[id] = ed.rel
 		}
-		if name, _ := ed.doc["name"].(string); name != "" {
-			if prev, ok := seenNames[name]; ok {
-				c.rulef("entity-name-unique", "%s: duplicate entity name %s (also %s)", ed.rel, name, prev)
-			} else {
-				seenNames[name] = ed.rel
+		if model, ok := asMap(ed.doc["model"]); ok {
+			if name, _ := model["name"].(string); name != "" {
+				if prev, ok := seenNames[name]; ok {
+					c.rulef("entity-name-unique", "%s: duplicate entity name %s (also %s)", ed.rel, name, prev)
+				} else {
+					seenNames[name] = ed.rel
+				}
 			}
 		}
+		c.checkEntityKeyOrder(ed)
 		short := strings.TrimSuffix(filepath.Base(ed.rel), filepath.Ext(ed.rel))
 		c.checkEntityDoNot(ed, short)
-		ext := stringList(ed.doc["extends"])
+		var ext []string
+		if model, ok := asMap(ed.doc["model"]); ok {
+			ext = stringList(model["extends"])
+		}
 		if len(ext) != 1 || ext[0] != baseEntityID {
 			c.rulef("entity-base-only", "%s: extends must be [%s], got %v", ed.rel, baseEntityID, ext)
 		}
@@ -420,7 +434,8 @@ func (c *Checker) checkEntities(schema *Schema) {
 
 	expectedEnt := map[string]map[string]bool{}
 	for _, e := range c.entities {
-		c.checkEntityShape(e)
+		c.checkEntityModel(e)
+		c.checkEntityOwnerModule(e)
 		c.checkEntityFields(e)
 		c.checkEntityID(e)
 		c.checkEntityName(e)
@@ -574,7 +589,7 @@ func (c *Checker) checkEntityBase(schema *Schema) {
 	}
 }
 
-func (c *Checker) checkEntityShape(e *entityInfo) {
+func (c *Checker) checkEntityModel(e *entityInfo) {
 	if len(e.Tables) == 0 {
 		c.rulef("entity-table-shape", "%s: tables must not be empty", e.Rel)
 		return
@@ -728,6 +743,55 @@ func (c *Checker) checkEntityID(e *entityInfo) {
 	}
 }
 
+// entityKeyOrder 是实体文件的固定顶层键顺序；生成器与 checker 共用同一顺序。
+var entityKeyOrder = []string{
+	"id", "summary", "owner_module", "schema_version", "stability",
+	"do_not", "model", "fields", "relations", "validation", "used_by",
+}
+
+// checkEntityKeyOrder 校验实体顶层键顺序；YAML map 会丢序，所以使用原始键列表。
+func (c *Checker) checkEntityKeyOrder(ed entityDoc) {
+	pos := map[string]int{}
+	for i, k := range entityKeyOrder {
+		pos[k] = i
+	}
+	last := -1
+	lastKey := ""
+	for _, k := range ed.keys {
+		i, ok := pos[k]
+		if !ok {
+			continue
+		}
+		if i < last {
+			c.rulef("entity-key-order", "%s: key %s must come before %s", ed.rel, k, lastKey)
+		}
+		last = i
+		lastKey = k
+	}
+	modelPos := map[string]int{"name": 0, "extends": 1, "tables": 2}
+	lastModel, lastModelKey := -1, ""
+	for _, k := range ed.modelKeys {
+		i, ok := modelPos[k]
+		if !ok {
+			continue
+		}
+		if i < lastModel {
+			c.rulef("entity-model-order", "%s: model.%s must come before model.%s", ed.rel, k, lastModelKey)
+		}
+		lastModel, lastModelKey = i, k
+	}
+}
+
+// checkEntityOwnerModule 要求实体归属与主表 owner_module 一致。
+func (c *Checker) checkEntityOwnerModule(e *entityInfo) {
+	if e.OwnerModule == "" || e.Primary == "" {
+		return
+	}
+	if owner := c.tableOwners[e.Primary]; owner != "" && owner != e.OwnerModule {
+		c.rulef("entity-owner-module", "%s: owner_module %s must equal primary table owner %s", e.Rel, e.OwnerModule, owner)
+	}
+}
+
 // checkEntityName 校验实体名是 Go 标识符；首字母大小写表达 public/internal。
 func (c *Checker) checkEntityName(e *entityInfo) {
 	if e.Name == "" {
@@ -778,7 +842,8 @@ func (c *Checker) checkEntityFieldMetadata(e *entityInfo) {
 		}
 		jsonName := f.JSONName
 		if jsonName == "" {
-			jsonName = snakeCase(f.Name)
+			c.rulef("entity-field-json-name", "%s: json_name is required", where)
+			continue
 		}
 		if prev, ok := jsonNames[jsonName]; ok {
 			c.rulef("entity-field-json-name", "%s: json_name %q already used by field %s", where, jsonName, prev)

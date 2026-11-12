@@ -92,9 +92,12 @@ func TestEntityBaseMerge(t *testing.T) {
 		},
 	}
 	doc := map[string]any{
-		"id":      "data.entities.x",
-		"extends": []any{"data.entities.base"},
-		"tables":  []any{"data.tables.x"},
+		"id": "data.entities.x",
+		"model": map[string]any{
+			"name":    "x",
+			"extends": []any{"data.entities.base"},
+			"tables":  []any{"data.tables.x"},
+		},
 		"fields": []any{
 			map[string]any{"name": "Status", "type": "data.enums.x_status"},
 			map[string]any{"name": "Own", "type": "string", "required": true},
@@ -586,12 +589,12 @@ func TestEntityFieldMetadata(t *testing.T) {
 	e := &entityInfo{
 		ID: "data.entities.x", Rel: "contracts/data/entities/x.yaml",
 		Fields: []entityFieldInfo{
-			{Name: "ID", Type: "string"},
+			{Name: "ID", Type: "string", JSONName: "id"},
 			{Name: "Email", Type: "string", JSONName: "emailAddress"},
 			{Name: "DupJSON", Type: "string", JSONName: "emailAddress"},
-			{Name: "BadExample", Type: "integer", Examples: []any{"x"}},
-			{Name: "type", Type: "string"},
-			{Name: "Status", Type: "data.enums.x_status", Examples: []any{1}},
+			{Name: "BadExample", Type: "integer", JSONName: "bad_example", Examples: []any{"x"}},
+			{Name: "type", Type: "string", JSONName: "type"},
+			{Name: "Status", Type: "data.enums.x_status", JSONName: "status", Examples: []any{1}},
 		},
 	}
 	c.checkEntityFieldMetadata(e)
@@ -624,10 +627,14 @@ func TestStatusOverrideInheritsBaseMetadata(t *testing.T) {
 		},
 	}
 	doc := map[string]any{
-		"id":     "data.entities.x",
-		"tables": []any{"data.tables.x"},
+		"id": "data.entities.x",
+		"model": map[string]any{
+			"name":    "x",
+			"extends": []any{"data.entities.base"},
+			"tables":  []any{"data.tables.x"},
+		},
 		"fields": []any{
-			map[string]any{"name": "Status", "type": "data.enums.x_status"},
+			map[string]any{"name": "Status", "json_name": "status", "type": "data.enums.x_status"},
 		},
 	}
 	e := c.parseEntity(doc, "contracts/data/entities/x.yaml")
