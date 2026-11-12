@@ -29,12 +29,10 @@ cd "$ROOT/scripts/cmd"
 
 case "$type" in
   data.tables)
-    target="$ROOT/contracts/data/tables/$name.yaml"
-    [[ -e "$target" ]] && { echo "already exists: ${target#$ROOT/}" >&2; exit 1; }
     if [[ -n "$column_type" ]]; then
-      go run ./contract_new -root "$ROOT" -type data.tables -name "$name" -module "$module" -summary "$summary" -column-type "$column_type" -out "$target"
+      go run ./contract_new -root "$ROOT" -type data.tables -name "$name" -module "$module" -summary "$summary" -column-type "$column_type" -out auto
     else
-      go run ./contract_new -root "$ROOT" -type data.tables -name "$name" -module "$module" -summary "$summary" -out "$target"
+      go run ./contract_new -root "$ROOT" -type data.tables -name "$name" -module "$module" -summary "$summary" -out auto
     fi
     ;;
 

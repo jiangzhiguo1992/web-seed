@@ -22,12 +22,12 @@ func main() {
 	name := flag.String("name", "", "snake_case name")
 	module := flag.String("module", "", "owner_module (default: name)")
 	summary := flag.String("summary", "", "summary (default: name)")
-	out := flag.String("out", "", "output file (data.tables); empty prints to stdout")
+	out := flag.String("out", "", "output file (data.tables); empty prints to stdout; auto uses targets.dir")
 	columnType := flag.String("column-type", "", "first column type family (default: schema default)")
 	flag.Parse()
 
 	if *typ == "" || *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums -name <name> [-module <module>] [-summary <text>] [-column-type <family>] [-out <file>]")
+		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums -name <name> [-module <module>] [-summary <text>] [-column-type <family>] [-out <file|auto>]")
 		os.Exit(2)
 	}
 	if *module == "" {
@@ -41,9 +41,15 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	schema, err := contractspec.LoadSchema(filepath.Join(abs, "contracts/_meta", *typ+".yaml"))
+	schema, _, err := contractspec.LoadSchemaByType(abs, *typ)
 	if err != nil {
 		fail(err)
+	}
+	if *typ == "data.tables" && *out == "auto" {
+		if schema.Targets.Dir == "" {
+			fail(fmt.Errorf("targets.dir is empty"))
+		}
+		*out = filepath.Join(abs, schema.Targets.Dir, *name+".yaml")
 	}
 
 	switch *typ {
@@ -66,7 +72,7 @@ func main() {
 			fail(err)
 		}
 		fmt.Printf("created %s\n", *out)
-		fmt.Printf("next: replace TODO; register in contracts/index.yaml; add data.enums.%s_status if missing; make contract-check; make gen\n", *name)
+		fmt.Printf("next: replace TODO; register in contracts/index.yaml; add the entity status enum mapping if missing; make contract-check; make gen\n")
 
 	case "data.enums":
 		b, err := contractspec.RenderEnumItem(schema, *name)

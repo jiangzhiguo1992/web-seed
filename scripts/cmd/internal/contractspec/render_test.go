@@ -75,6 +75,9 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	if strings.Contains(string(b), "data.enums.") {
 		t.Fatalf("table scaffold must not reference enums:\n%s", b)
 	}
+	if !strings.Contains(string(b), `comment: "TODO: 表说明"`) {
+		t.Fatalf("scaffold prose must be double-quoted:\n%s", b)
+	}
 }
 
 func TestRenderTableDecimalFamilyParams(t *testing.T) {

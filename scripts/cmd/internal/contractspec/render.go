@@ -92,26 +92,34 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		return nil, err
 	}
 	tableField, _ := FindField(s.Fields, "table")
-	if err := requireSupported(tableField.Fields, map[string]bool{"comment": true, "size_class": true}, "data.tables.table"); err != nil {
+	if err := requireSupported(tableField.Fields, map[string]bool{"comment": true, "size_class": true}, s.Type+".table"); err != nil {
 		return nil, err
 	}
 	columnField, _ := FindField(s.Fields, "columns")
 	if err := requireSupported(columnField.ItemFields, map[string]bool{
 		"name": true, "type": true, "nullable": true, "comment": true,
-	}, "data.tables.columns"); err != nil {
+	}, s.Type+".columns"); err != nil {
 		return nil, err
 	}
 	constraintsField, _ := FindField(s.Fields, "constraints")
 	if err := requireSupported(constraintsField.ItemFields, map[string]bool{
 		"name": true, "type": true, "expr": true, "columns": true,
-	}, "data.tables.constraints"); err != nil {
+	}, s.Type+".constraints"); err != nil {
 		return nil, err
 	}
 	usedByField, _ := FindField(s.Fields, "used_by")
 	if err := requireSupported(usedByField.Fields, map[string]bool{
 		"entities": true, "queries": true, "capabilities": true,
-	}, "data.tables.used_by"); err != nil {
+	}, s.Type+".used_by"); err != nil {
 		return nil, err
+	}
+	tableID := s.Targets.FileID(name + ".yaml")
+	if tableID == "" {
+		return nil, fmt.Errorf("RenderTable: cannot derive id from targets.id")
+	}
+	base, ok := s.Targets.Base()
+	if !ok {
+		return nil, fmt.Errorf("RenderTable: targets.exception must declare kind: base")
 	}
 	columnName := firstExample(columnField.ItemFields, "name", "name")
 	columnType := defaultString(columnField.ItemFields, "type", "string")
@@ -130,11 +138,11 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 
 	doc := tableScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
-		ID:            "data.tables." + name,
+		ID:            tableID,
 		Summary:       summary,
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		OwnerModule:   module,
-		Extends:       defaultList(s.Fields, "extends", []string{"data.tables.base"}),
+		Extends:       []string{base.ID},
 		DoNot:         []string{},
 		Table: tableDef{
 			Comment:   "TODO: 表说明",
@@ -152,7 +160,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；替换 TODO 占位符。\n# 字段规范见 contracts/_meta/data.tables.yaml。\n\n", summary)
+	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；替换 TODO 占位符。\n# 字段规范见 %s。\n\n", summary, s.ID)
 	return append([]byte(header), b...), nil
 }
 
@@ -167,16 +175,16 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	if err := requireSupported(enumsField.ItemFields, map[string]bool{
 		"id": true, "name": true, "description": true,
 		"go_type": true, "ts_type": true, "values": true,
-	}, "data.enums.enums"); err != nil {
+	}, s.Type+".enums"); err != nil {
 		return nil, err
 	}
 	valuesField, _ := FindField(enumsField.ItemFields, "values")
-	if err := requireSupported(valuesField.ItemFields, map[string]bool{"value": true, "code": true, "description": true}, "data.enums.enums.values"); err != nil {
+	if err := requireSupported(valuesField.ItemFields, map[string]bool{"value": true, "code": true, "description": true}, s.Type+".enums.values"); err != nil {
 		return nil, err
 	}
 	pc := pascal(name)
 	doc := enumItemScaffold{
-		ID:          "data.enums." + name,
+		ID:          s.Type + "." + name,
 		Name:        name,
 		Description: name,
 		GoType:      pc,
@@ -187,7 +195,7 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	header := "# 追加到 contracts/data/enums.yaml 的 enums 列表。\n\n"
+	header := fmt.Sprintf("# 追加到 %s 的 enums 列表。\n\n", s.Targets.File)
 	return append([]byte(header), b...), nil
 }
 
@@ -275,34 +283,6 @@ func nestedDefaultString(fields []Field, parent, child, fallback string) string 
 	return defaultString(p.Fields, child, fallback)
 }
 
-func defaultList(fields []Field, name string, fallback []string) []string {
-	f, ok := FindField(fields, name)
-	if !ok {
-		return fallback
-	}
-	switch v := f.Default.(type) {
-	case []any:
-		out := make([]string, 0, len(v))
-		for _, x := range v {
-			if s, ok := x.(string); ok {
-				out = append(out, s)
-			}
-		}
-		if len(out) > 0 {
-			return out
-		}
-	case []string:
-		if len(v) > 0 {
-			return v
-		}
-	case string:
-		if v != "" {
-			return []string{v}
-		}
-	}
-	return fallback
-}
-
 func defaultBool(fields []Field, name string, fallback bool) bool {
 	f, ok := FindField(fields, name)
 	if !ok {
@@ -351,8 +331,8 @@ func requireSupported(fields []Field, supported map[string]bool, where string) e
 }
 
 func marshal2(v any) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := yaml.NewEncoder(&buf)
+	var raw bytes.Buffer
+	enc := yaml.NewEncoder(&raw)
 	enc.SetIndent(2)
 	if err := enc.Encode(v); err != nil {
 		return nil, err
@@ -360,5 +340,54 @@ func marshal2(v any) ([]byte, error) {
 	if err := enc.Close(); err != nil {
 		return nil, err
 	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw.Bytes(), &doc); err != nil {
+		return nil, err
+	}
+	quoteScaffoldProse(&doc)
+	var buf bytes.Buffer
+	enc = yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
 	return buf.Bytes(), nil
+}
+
+var scaffoldProseKeys = map[string]bool{
+	"comment": true, "description": true, "note": true, "reason": true,
+	"summary": true, "text": true, "title": true,
+}
+
+var scaffoldProseListKeys = map[string]bool{"do_not": true}
+
+// quoteScaffoldProse 让 contract-new 产物满足 contract-check 的双引号规则。
+func quoteScaffoldProse(n *yaml.Node) {
+	if n == nil {
+		return
+	}
+	switch n.Kind {
+	case yaml.DocumentNode, yaml.SequenceNode:
+		for _, child := range n.Content {
+			quoteScaffoldProse(child)
+		}
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k, v := n.Content[i], n.Content[i+1]
+			if scaffoldProseKeys[k.Value] && v.Kind == yaml.ScalarNode {
+				v.Style = yaml.DoubleQuotedStyle
+			}
+			if scaffoldProseListKeys[k.Value] && v.Kind == yaml.SequenceNode {
+				for _, item := range v.Content {
+					if item.Kind == yaml.ScalarNode {
+						item.Style = yaml.DoubleQuotedStyle
+					}
+				}
+			}
+			quoteScaffoldProse(v)
+		}
+	}
 }

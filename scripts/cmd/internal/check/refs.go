@@ -14,7 +14,7 @@ func checkColumnRef(c *Checker, ref string, tableIDs map[string]string, cols map
 	}
 	parts := strings.Split(ref, ".col.")
 	if len(parts) != 2 {
-		c.rulef("schema.ref", "%s: column ref must be data.tables.<file>.col.<column>, got %s", where, ref)
+		c.rulef("schema.ref", "%s: column ref must be <table-id>.col.<column>, got %s", where, ref)
 		return
 	}
 	tid, col := parts[0], parts[1]
@@ -28,9 +28,9 @@ func checkColumnRef(c *Checker, ref string, tableIDs map[string]string, cols map
 }
 
 // isBaseTableRef 判断引用是否指向非物理的基类表。
-// 基类只提供列定义，不能被实体、查询、能力或外键当作物理表引用。
-func isBaseTableRef(ref string) bool {
-	return ref == "data.tables.base" || strings.HasPrefix(ref, "data.tables.base.col.")
+// 基类只提供列定义，不能被实体、查询或能力当作物理表引用。
+func (c *Checker) isBaseTableRef(ref string) bool {
+	return c.baseID != "" && (ref == c.baseID || strings.HasPrefix(ref, c.baseID+".col."))
 }
 
 func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[string]map[string]bool) {
@@ -43,8 +43,8 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 		}
 		rel := relPath(c.root, f)
 		if t, _ := doc["table"].(string); t != "" {
-			if isBaseTableRef(t) {
-				c.rulef("base-file", "%s: data.tables.base is not a physical table", rel)
+			if c.isBaseTableRef(t) {
+				c.rulef("base-file", "%s: base contract is not a physical table", rel)
 			} else if _, ok := tableIDs[t]; !ok {
 				c.rulef("schema.ref", "%s: table %s not found", rel, t)
 			}
@@ -57,8 +57,8 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 				continue
 			}
 			if via, _ := m["via"].(string); via != "" {
-				if isBaseTableRef(via) {
-					c.rulef("base-file", "%s: relations[%d]: data.tables.base is not a physical table", rel, i)
+				if c.isBaseTableRef(via) {
+					c.rulef("base-file", "%s: relations[%d]: base contract is not a physical table", rel, i)
 					continue
 				}
 				checkColumnRef(c, via, tableIDs, cols, fmt.Sprintf("%s: relations[%d]", rel, i))
@@ -85,8 +85,8 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			}
 			ts := tableRefs(m)
 			for _, t := range ts {
-				if isBaseTableRef(t) {
-					c.rulef("base-file", "%s: queries[%d] (%s): data.tables.base is not a physical table", rel, i, qid)
+				if c.isBaseTableRef(t) {
+					c.rulef("base-file", "%s: queries[%d] (%s): base contract is not a physical table", rel, i, qid)
 				} else if _, ok := tableIDs[t]; !ok {
 					c.rulef("schema.ref", "%s: queries[%d] (%s): table %s not found", rel, i, qid, t)
 				}
@@ -141,8 +141,8 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			}
 		}
 		for _, t := range tableRefs(p) {
-			if isBaseTableRef(t) {
-				c.rulef("base-file", "%s: data.tables.base is not a physical table", rel)
+			if c.isBaseTableRef(t) {
+				c.rulef("base-file", "%s: base contract is not a physical table", rel)
 			} else if _, ok := tableIDs[t]; !ok {
 				c.rulef("schema.ref", "%s: persistence references unknown table %s", rel, t)
 			}
@@ -177,7 +177,7 @@ func (c *Checker) checkPersistenceOwnership(doc, p map[string]any, rel string) {
 func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 	inbound := map[string]map[string]map[string]bool{}
 	for id := range tableIDs {
-		if id == "data.tables.base" {
+		if id == c.baseID {
 			continue
 		}
 		inbound[id] = map[string]map[string]bool{
@@ -238,7 +238,7 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 	}
 
 	for id, rel := range tableIDs {
-		if id == "data.tables.base" {
+		if id == c.baseID {
 			continue
 		}
 		doc, err := loadYAML(filepath.Join(c.root, rel))

@@ -14,14 +14,84 @@ import (
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
+var targetNamingPatterns = map[string]*regexp.Regexp{
+	"snake_case": regexp.MustCompile(`^[a-z][a-z0-9_]*$`),
+}
+
+func (c *Checker) checkTargets(schema *Schema) {
+	t := schema.Targets
+	where := schema.ID
+	if t.Dir == "" || t.Glob == "" {
+		c.rulef("schema.targets", "%s: targets.dir/glob must not be empty", where)
+	}
+	if t.ID == "" || !strings.Contains(t.ID, "<file>") {
+		c.rulef("schema.targets", "%s: targets.id must contain <file>", where)
+	}
+	if _, ok := targetNamingPatterns[t.Naming]; !ok {
+		c.rulef("schema.targets", "%s: targets.naming must be snake_case", where)
+	}
+	baseCount := 0
+	files := map[string]bool{}
+	ids := map[string]bool{}
+	for _, ex := range t.Exception {
+		if ex.File == "" || ex.ID == "" {
+			c.rulef("schema.targets", "%s: targets.exception entries need file and id", where)
+			continue
+		}
+		if files[ex.File] {
+			c.rulef("schema.targets", "%s: duplicate targets.exception file %s", where, ex.File)
+		}
+		if ids[ex.ID] {
+			c.rulef("schema.targets", "%s: duplicate targets.exception id %s", where, ex.ID)
+		}
+		files[ex.File] = true
+		ids[ex.ID] = true
+		switch ex.Kind {
+		case "":
+		case "base":
+			baseCount++
+		default:
+			c.rulef("schema.targets", "%s: targets.exception kind must be base, got %q", where, ex.Kind)
+		}
+	}
+	if baseCount != 1 {
+		c.rulef("schema.targets", "%s: targets.exception must declare exactly one kind: base", where)
+	}
+}
+
+func (c *Checker) checkTargetFileName(schema *Schema, file, rel string) {
+	if _, ok := schema.Targets.ExceptionFor(file); ok {
+		return
+	}
+	re := targetNamingPatterns[schema.Targets.Naming]
+	if re != nil && !re.MatchString(strings.TrimSuffix(file, filepath.Ext(file))) {
+		c.rulef("schema.targets", "%s: file name %q does not match targets.naming %s", rel, file, schema.Targets.Naming)
+	}
+}
+
+func (c *Checker) checkColumnRefs(schema *Schema) {
+	for _, p := range schema.ColumnRefs.RequireCol {
+		if p == "" || !containsString(schema.ColumnRefs.Prefixes, p) {
+			c.rulef("schema.column-refs", "%s: column_refs.require_col %q must also appear in prefixes", schema.ID, p)
+		}
+	}
+	for _, p := range schema.ColumnRefs.Prefixes {
+		if p == "" || !strings.HasSuffix(p, ".") {
+			c.rulef("schema.column-refs", "%s: column_refs.prefixes %q must end with '.'", schema.ID, p)
+		}
+	}
+}
+
 func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map[string]bool) {
+	c.checkTargets(schema)
+	c.checkColumnRefs(schema)
 	dir := schema.Targets.Dir
 	globPattern := schema.Targets.Glob
-	if dir == "" {
-		dir = "contracts/data/tables"
+	if dir == "" || globPattern == "" {
+		return map[string]string{}, map[string]map[string]bool{}
 	}
-	if globPattern == "" {
-		globPattern = "*.yaml"
+	if base, ok := schema.Targets.Base(); ok {
+		c.baseID = base.ID
 	}
 	files, _ := filepath.Glob(filepath.Join(c.root, dir, globPattern))
 	sort.Strings(files)
@@ -32,8 +102,11 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	cols := map[string]map[string]bool{}
 	physicalNames := map[string]string{}
 	c.tableOwners = map[string]string{}
+	hasBaseContract := false
 	for _, file := range files {
 		rel := relPath(c.root, file)
+		baseFile := filepath.Base(file)
+		c.checkTargetFileName(schema, baseFile, rel)
 		doc, err := loadYAML(file)
 		if err != nil {
 			c.rulef("schema.load", "%s: %v", rel, err)
@@ -45,23 +118,23 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 			continue
 		}
 		if prev, ok := tableIDs[id]; ok {
-			c.rulef("table-id-unique", "%s: duplicate table id %s (also %s)", rel, id, prev)
+			c.rulef("contract-id-unique", "%s: duplicate contract id %s (also %s)", rel, id, prev)
 		}
 		tableIDs[id] = rel
 
-		baseFile := filepath.Base(rel) == "_base.yaml"
-		if id == "data.tables.base" && !baseFile {
-			c.rulef("base-file", "%s: data.tables.base must live in _base.yaml", rel)
+		if ex, ok := schema.Targets.ExceptionFor(baseFile); ok && doc["kind"] != "base" {
+			c.rulef("base-file", "%s: exception file %s requires kind: base", rel, ex.File)
 		}
 
 		if doc["kind"] == "base" {
+			hasBaseContract = true
 			c.checkBaseTable(doc, schema, rel)
 		} else {
 			c.checkPhysicalTable(doc, rel, schema)
 			if owner, _ := doc["owner_module"].(string); owner != "" {
 				c.tableOwners[id] = owner
 			}
-			phys := strings.TrimSuffix(filepath.Base(rel), ".yaml")
+			phys := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
 			if table, _ := asMap(doc["table"]); table != nil {
 				if n, ok := table["name"].(string); ok && n != "" {
 					phys = n
@@ -89,8 +162,8 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 		}
 		cols[id] = set
 	}
-	if _, ok := tableIDs["data.tables.base"]; !ok {
-		c.rulef("base-file", "%s: missing data.tables.base", filepath.Join(dir, "_base.yaml"))
+	if !hasBaseContract {
+		c.rulef("base-file", "%s: missing base contract (targets.exception kind: base)", dir)
 	}
 	return tableIDs, cols
 }
@@ -132,8 +205,13 @@ func stripForeignKeys(doc map[string]any) map[string]any {
 }
 
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
-	if filepath.Base(rel) != "_base.yaml" {
-		c.rulef("base-file", "%s: base table must live in _base.yaml", rel)
+	base, ok := schema.Targets.Base()
+	if !ok {
+		c.rulef("base-file", "%s: targets.exception must declare kind: base", rel)
+		return
+	}
+	if filepath.Base(rel) != base.File {
+		c.rulef("base-file", "%s: base contract must live in %s", rel, base.File)
 	}
 	allowed := map[string]bool{
 		"schema_version": true, "id": true, "kind": true, "summary": true,
@@ -147,8 +225,8 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 	if doc["kind"] != "base" {
 		c.rulef("base-file", "%s: base table kind must be base", rel)
 	}
-	if doc["id"] != "data.tables.base" {
-		c.rulef("base-file", "%s: base table id must be data.tables.base", rel)
+	if doc["id"] != base.ID {
+		c.rulef("base-file", "%s: base table id must be %s, got %v", rel, base.ID, doc["id"])
 	}
 	names := []string{}
 	for _, raw := range asList(doc["columns"]) {
@@ -199,13 +277,18 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 	}
 	c.checkStability(doc, rel)
-	stem := strings.TrimSuffix(filepath.Base(rel), ".yaml")
-	if want := "data.tables." + stem; id != want {
+	want := schema.Targets.FileID(filepath.Base(rel))
+	if want == "" {
+		c.rulef("schema.targets", "%s: cannot derive contract id from targets.id", rel)
+	} else if id != want {
 		c.rulef("id-from-file", "%s: id must be %s, got %s (file name is the source)", rel, want, id)
 	}
 	ext := asList(doc["extends"])
-	if len(ext) != 1 || ext[0] != "data.tables.base" {
-		c.rulef("base-only", "%s: extends must be [data.tables.base]", rel)
+	base, ok := schema.Targets.Base()
+	if !ok {
+		c.rulef("base-only", "%s: targets.exception must declare kind: base", rel)
+	} else if len(ext) != 1 || ext[0] != base.ID {
+		c.rulef("base-only", "%s: extends must be [%s]", rel, base.ID)
 	}
 	table, _ := asMap(doc["table"])
 	if table != nil {
@@ -257,7 +340,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.rulef("default-vs-default-sql", "%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, name)
 			}
 		}
-		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes, schema.ColumnRefs.Prefixes) {
+		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes, schema.ColumnRefs) {
 			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (families %v or column_refs.prefixes %v)", rel, i, name, t, familyNames(schema.ColumnTypes), schema.ColumnRefs.Prefixes)
 		} else {
 			c.checkFamilyParams(m, t, rel, i, name, schema)
@@ -398,7 +481,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		unique, _ := m["unique"].(bool)
 		if unique {
 			if !strings.HasPrefix(name, "uq_") {
-				c.rulef("unique-names", "%s: indexes[%d] (%s): unique name must start with uq_", rel, i, name)
+				c.rulef("index-definition", "%s: indexes[%d] (%s): unique name must start with uq_", rel, i, name)
 			}
 			where, _ := m["where"].(string)
 			if !strings.Contains(where, "deleted_at IS NULL") {
@@ -408,7 +491,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.rulef("index-definition", "%s: indexes[%d] (%s): non-unique name must start with idx_", rel, i, name)
 		}
 	}
-	c.checkDoNotSpecificity(doc, rel, stem, table, colNames, constraintNames, indexNames)
+	c.checkDoNotSpecificity(doc, rel, strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel)), table, colNames, constraintNames, indexNames)
 }
 
 // checkDoNotSpecificity 落实 contracts/README §4.5.1：
@@ -630,7 +713,7 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 }
 
 // checkColumnDefaultType 校验字面量 default 的 YAML 类型与列类型族兼容。
-// 枚举列的默认值由 checkEnumRefs 结合枚举值校验；表列引用暂不展开校验。
+// 引用列（column_refs 前缀 + .col.）的具体类型暂不递归展开。
 func (c *Checker) checkColumnDefaultType(m map[string]any, t, rel string, i int, name string) {
 	def, ok := m["default"]
 	if !ok || def == nil {

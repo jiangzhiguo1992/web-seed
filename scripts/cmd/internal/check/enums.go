@@ -8,7 +8,11 @@ import (
 )
 
 func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
-	path := filepath.Join(c.root, "contracts/data/enums.yaml")
+	if schema.Targets.File == "" {
+		c.rulef("schema.targets", "%s: targets.file must not be empty", schema.ID)
+		return map[string]map[string]bool{}
+	}
+	path := filepath.Join(c.root, schema.Targets.File)
 	rel := relPath(c.root, path)
 	doc, err := loadYAML(path)
 	if err != nil {
@@ -69,10 +73,11 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		}
 		enums[id] = values
 	}
+	c.checkEnumAppendOnly(rel)
 	return enums
 }
 
-func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[string]bool, enums map[string]map[string]bool) {
+func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[string]bool, enums map[string]map[string]bool, refs ColumnRefs) {
 	for _, rel := range tableIDs {
 		doc, err := loadYAML(filepath.Join(c.root, rel))
 		if err != nil {
@@ -83,7 +88,7 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 			if !ok {
 				continue
 			}
-			if t, _ := m["type"].(string); strings.HasPrefix(t, "data.tables.") {
+			if t, _ := m["type"].(string); isColumnRefType(t, refs) {
 				checkColumnRef(c, t, tableIDs, cols, fmt.Sprintf("%s: columns[%d] (%s)", rel, i, m["name"]))
 			}
 		}

@@ -84,15 +84,37 @@ func hasNonEmptyString(m map[string]any, key string) bool {
 	return ok && strings.TrimSpace(s) != ""
 }
 
-func isColumnType(t string, ct ColumnTypes, refPrefixes []string) bool {
+func isColumnType(t string, ct ColumnTypes, refs ColumnRefs) bool {
 	if _, ok := ct.ValueTypeFamilies[t]; ok {
 		return true
 	}
-	for _, p := range refPrefixes {
+	for _, p := range refs.Prefixes {
 		if !strings.HasPrefix(t, p) || t == p {
 			continue
 		}
-		if p == "data.tables." {
+		if containsString(refs.RequireCol, p) {
+			return strings.Contains(t, ".col.") && !strings.HasSuffix(t, ".col.")
+		}
+		return true
+	}
+	return false
+}
+
+func containsString(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+func isColumnRefType(t string, refs ColumnRefs) bool {
+	for _, p := range refs.Prefixes {
+		if !strings.HasPrefix(t, p) || t == p {
+			continue
+		}
+		if containsString(refs.RequireCol, p) {
 			return strings.Contains(t, ".col.") && !strings.HasSuffix(t, ".col.")
 		}
 		return true

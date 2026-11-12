@@ -4,7 +4,7 @@
 //   - contracts 下文本字段（description/comment/summary/do_not 等）双引号强制
 //   - data.tables/*.yaml 的结构、ID/文件、基类继承、列/约束/索引、used_by、do_not 具体性
 //   - data/enums.yaml 的结构、item ID、值唯一性、code 唯一性
-//   - 表列引用的 data.tables.*.col.* 是否存在；表列不引用 data.enums.*
+//   - 表列引用的 column_refs 前缀是否存在；表列不引用 data.enums.*
 //   - status 必须是 integer；枚举只在 entity
 //   - 禁止 foreign_key；unique 约束与唯一索引的软删语义区分
 //   - owner_module 写归属（capabilities.persistence）
@@ -27,7 +27,9 @@ import (
 
 type Schema = contractspec.Schema
 type Targets = contractspec.Targets
+type TargetException = contractspec.TargetException
 type ColumnTypes = contractspec.ColumnTypes
+type Rule = contractspec.Rule
 type ColumnRefs = contractspec.ColumnRefs
 type ValueTypeFamily = contractspec.ValueTypeFamily
 type Field = contractspec.Field
@@ -35,9 +37,11 @@ type Field = contractspec.Field
 var baseColumns = []string{"id", "status", "created_at", "updated_at", "deleted_at"}
 
 type Checker struct {
-	root        string
-	errs        []string
-	tableOwners map[string]string
+	root            string
+	errs            []string
+	tableOwners     map[string]string
+	baseID          string
+	declaredRuleIDs map[string]bool
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -55,12 +59,12 @@ func (c *Checker) rulef(rule, format string, args ...any) {
 func (c *Checker) run() {
 	c.checkContractProseQuotes()
 	c.checkTypeMeta()
-	tableSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/data.tables.yaml"))
+	tableSchema, err := c.loadSchemaByType("data.tables")
 	if err != nil {
 		c.rulef("schema.load", "load tables schema: %v", err)
 		return
 	}
-	enumSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/data.enums.yaml"))
+	enumSchema, err := c.loadSchemaByType("data.enums")
 	if err != nil {
 		c.rulef("schema.load", "load enums schema: %v", err)
 		return
@@ -68,7 +72,9 @@ func (c *Checker) run() {
 
 	tableIDs, cols := c.checkTables(tableSchema)
 	enumValues := c.checkEnums(enumSchema)
-	c.checkEnumRefs(tableIDs, cols, enumValues)
+	c.checkRules(tableSchema)
+	c.checkRules(enumSchema)
+	c.checkEnumRefs(tableIDs, cols, enumValues, tableSchema.ColumnRefs)
 	c.checkCrossFileTableRefs(tableIDs, cols)
 	c.checkUsedBy(tableIDs)
 	c.checkIndex(tableIDs)
@@ -150,8 +156,9 @@ type typeMeta struct {
 		SoftFields []string `yaml:"soft_fields"`
 	} `yaml:"schema_semantics"`
 	SchemaRules []struct {
-		ID   string `yaml:"id"`
-		Text string `yaml:"text"`
+		ID            string   `yaml:"id"`
+		Text          string   `yaml:"text"`
+		ImplementedBy []string `yaml:"implemented_by"`
 	} `yaml:"schema_rules"`
 	Types map[string]struct {
 		Generates []string `yaml:"generates"`
@@ -189,7 +196,38 @@ func (c *Checker) checkTypeMeta() {
 			c.rulef("schema.meta", "contracts/_meta/_types.yaml: duplicate schema rule %q", r.ID)
 		}
 		seenRule[r.ID] = true
+		c.checkImplementedBy(r.ID, "contracts/_meta/_types.yaml: schema_rules["+fmt.Sprint(i)+"]", r.ImplementedBy)
 	}
+}
+
+// checkRules 校验类型级 rules：id/text 非空、id 唯一、implemented_by 有实际输出。
+func (c *Checker) checkRules(schema *Schema) {
+	seen := map[string]bool{}
+	for i, r := range schema.Rules {
+		if r.ID == "" || r.Text == "" {
+			c.rulef("schema.rules", "%s: rules[%d] must have id and text", schema.ID, i)
+		}
+		if seen[r.ID] {
+			c.rulef("schema.rules", "%s: duplicate rule id %q", schema.ID, r.ID)
+		}
+		seen[r.ID] = true
+		c.checkImplementedBy(fmt.Sprintf("%s: rules[%d]", schema.ID, i), r.ImplementedBy)
+	}
+}
+
+// loadSchemaByType 按 type 从 contracts/_meta registry 加载并做工具侧自检。
+func (c *Checker) loadSchemaByType(typ string) (*Schema, error) {
+	s, path, err := contractspec.LoadSchemaByType(c.root, typ)
+	if err != nil {
+		return nil, err
+	}
+	if err := validatePatterns(s.Fields); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if err := validateFieldTypes(s.Fields); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	return s, nil
 }
 
 func loadSchema(path string) (*Schema, error) {

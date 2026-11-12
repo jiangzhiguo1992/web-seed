@@ -39,8 +39,8 @@ fields:
           - { name: description, type: string, required: false, description: "枚举值说明" }
 
 rules:
-  - { id: enum-id, text: "集合 id 固定为 data.enums" }
-  - { id: enum-id-matches-name, text: "item.id 必须等于 data.enums.<item.name>" }
-  - { id: enum-values-unique, text: "同一枚举的 values 不得重复" }
-  - { id: enum-code-unique, text: "同一枚举的 code 不得重复" }
-  - { id: enum-append-only, text: "枚举值只能追加；code 一旦分配不得复用或修改" }
+  - { id: enum-id, text: "集合 id 固定为 data.enums", implemented_by: [enum-id] }
+  - { id: enum-id-matches-name, text: "item.id 必须等于 data.enums.<item.name>", implemented_by: [enum-id-matches-name] }
+  - { id: enum-values-unique, text: "同一枚举的 values 不得重复", implemented_by: [enum-values-unique] }
+  - { id: enum-code-unique, text: "同一枚举的 code 不得重复", implemented_by: [enum-code-unique] }
+  - { id: enum-append-only, text: "枚举值只能追加；code 一旦分配不得复用或修改", implemented_by: [enum-append-only] }
