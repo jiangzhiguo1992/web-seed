@@ -3,7 +3,6 @@
 id: data.tables.account
 summary: "账号主表"
 owner_module: accounts
-extends: [ data.tables.base ]
 schema_version: 1
 stability: stable
 do_not:
@@ -15,8 +14,7 @@ do_not:
 table:
   name: accounts
   comment: "账号（业务主体）"
-  size_class: large
-  retention: { unit: days, pending: 7, soft_delete: 30, hard_delete: 90 }
+  extends: [ data.tables.base ]
 
 columns:
   - name: own_type

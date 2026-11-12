@@ -3,7 +3,6 @@
 id: data.tables.auth_pwd
 summary: "密码认证表"
 owner_module: auth
-extends: [ data.tables.base ]
 schema_version: 1
 stability: stable
 do_not:
@@ -11,8 +10,7 @@ do_not:
 
 table:
   comment: "密码认证"
-  size_class: small
-  retention: { unit: days, soft_delete: 30, hard_delete: 90 }
+  extends: [ data.tables.base ]
 
 columns:
   - name: account_id

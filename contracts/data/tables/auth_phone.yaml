@@ -3,15 +3,13 @@
 id: data.tables.auth_phone
 summary: "手机号认证表"
 owner_module: auth
-extends: [ data.tables.base ]
 schema_version: 1
 stability: stable
 do_not:
 
 table:
   comment: "手机号认证"
-  size_class: small
-  retention: { unit: days, soft_delete: 30, hard_delete: 90 }
+  extends: [ data.tables.base ]
 
 columns:
   - name: account_id

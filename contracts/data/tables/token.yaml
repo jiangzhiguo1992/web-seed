@@ -3,7 +3,6 @@
 id: data.tables.token
 summary: "令牌表"
 owner_module: auth
-extends: [ data.tables.base ]
 schema_version: 1
 stability: stable
 do_not:
@@ -12,8 +11,7 @@ do_not:
 table:
   name: tokens
   comment: "令牌（访问令牌与刷新令牌）"
-  size_class: large
-  retention: { unit: days, ttl: 30 }
+  extends: [ data.tables.base ]
 
 columns:
   - name: own_type
