@@ -121,16 +121,6 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 					}
 				}
 			}
-			if m["type"] == "foreign_key" {
-				for _, ref := range asList(m["references"]) {
-					s, _ := ref.(string)
-					if isBaseTableRef(s) {
-						c.errf("%s: constraints[%d] (%s): data.tables.base is not a physical table", rel, i, m["name"])
-						continue
-					}
-					checkColumnRef(c, s, tableIDs, cols, fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, m["name"]))
-				}
-			}
 		}
 	}
 	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {

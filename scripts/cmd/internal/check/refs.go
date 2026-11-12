@@ -14,16 +14,16 @@ func checkColumnRef(c *Checker, ref string, tableIDs map[string]string, cols map
 	}
 	parts := strings.Split(ref, ".col.")
 	if len(parts) != 2 {
-		c.errf("%s: references must be data.tables.<file>.col.<column>, got %s", where, ref)
+		c.errf("%s: column ref must be data.tables.<file>.col.<column>, got %s", where, ref)
 		return
 	}
 	tid, col := parts[0], parts[1]
 	if _, ok := tableIDs[tid]; !ok {
-		c.errf("%s: references unknown table %s", where, tid)
+		c.errf("%s: column ref points to unknown table %s", where, tid)
 		return
 	}
 	if set := cols[tid]; set != nil && !set[col] {
-		c.errf("%s: references unknown column %s.%s", where, tid, col)
+		c.errf("%s: column ref points to unknown column %s.%s", where, tid, col)
 	}
 }
 
@@ -130,12 +130,14 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 }
 
 // checkPersistenceOwnership 校验 capability 的写表归属：
+//   - read_only_tables 已移除，跨模块读必须通过 persistence.queries；
 //   - 写表（table/tables）的 owner_module 必须等于 capability 的 module；
-//   - read_only_tables 只用于跨模块读，不得同时出现在写表里；
 //   - 有写表但没有 module 时无法判断归属，直接报错。
 func (c *Checker) checkPersistenceOwnership(doc, p map[string]any, rel string) {
-	writes := writeTableRefs(p)
-	reads := readOnlyTableRefs(p)
+	if _, ok := p["read_only_tables"]; ok {
+		c.errf("%s: read_only_tables is not supported; use persistence.queries for cross-module reads", rel)
+	}
+	writes := tableRefs(p)
 	if len(writes) == 0 {
 		return
 	}
@@ -144,13 +146,9 @@ func (c *Checker) checkPersistenceOwnership(doc, p map[string]any, rel string) {
 		c.errf("%s: persistence requires module to verify write ownership", rel)
 		return
 	}
-	readSet := stringSetOf(reads)
 	for _, t := range writes {
 		if owner := c.tableOwners[t]; owner != "" && owner != module {
 			c.errf("%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
-		}
-		if readSet[t] {
-			c.errf("%s: table %s is listed as both writable and read_only", rel, t)
 		}
 	}
 }

@@ -9,7 +9,7 @@ do_not:
   - 只清理 pending 状态，不要碰 active / suspended
   - 必须保留审计事件，不要静默删除
   - 多实例部署时必须持有分布式锁，不能只靠 max_in_flight
-  - 清理阈值必须与 data.tables.account.retention.pending_days 保持一致
+  - 本任务按天清理；data.tables.account.retention.unit 必须为 days，阈值读 retention.pending
 
 trigger:
   type: cron
@@ -20,7 +20,7 @@ input:
   type: object
   additionalProperties: false
   properties:
-    older_than_days: { type: integer, minimum: 1, default: 7, x-source: data.tables.account.retention.pending_days }
+    older_than_days: { type: integer, minimum: 1, default: 7, x-source: data.tables.account.retention.pending }
     batch_size: { type: integer, minimum: 1, maximum: 1000, default: 100 }
 
 output:

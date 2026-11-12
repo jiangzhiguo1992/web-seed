@@ -4,7 +4,6 @@ package check
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -13,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
-	"gopkg.in/yaml.v3"
 )
 
 func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map[string]bool) {
@@ -131,19 +129,18 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 }
 
 // constraintAllowedFields 声明每种约束允许出现的字段。
-// 约束是平铺的 union，必须按 type 收窄，避免把 on_delete 写在 check 上。
+// 约束是平铺的 union，必须按 type 收窄，避免把 expr 写在 unique 上。
 var constraintAllowedFields = map[string]map[string]bool{
-	"check":       {"name": true, "type": true, "expr": true},
-	"enum":        {"name": true, "type": true, "column": true, "enum": true},
-	"foreign_key": {"name": true, "type": true, "columns": true, "references": true, "on_delete": true, "on_update": true},
-	"exclude":     {"name": true, "type": true, "expr": true},
+	"check":   {"name": true, "type": true, "expr": true},
+	"enum":    {"name": true, "type": true, "column": true, "enum": true},
+	"unique":  {"name": true, "type": true, "columns": true},
+	"exclude": {"name": true, "type": true, "expr": true},
 }
 
 // constraintKnownFields 是 item_fields 的并集；完全未知的字段交给 validateDoc 报错，
 // 这里只处理“字段存在但不适用于当前 type”的情况，避免重复报错。
 var constraintKnownFields = map[string]bool{
-	"name": true, "type": true, "expr": true, "column": true, "enum": true,
-	"columns": true, "references": true, "on_delete": true, "on_update": true,
+	"name": true, "type": true, "expr": true, "column": true, "enum": true, "columns": true,
 }
 
 func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema) {
@@ -291,17 +288,14 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			if !strings.HasPrefix(name, "ck_") {
 				c.errf("%s: constraints[%d] (%s): enum name must start with ck_", rel, i, name)
 			}
-		case "foreign_key":
+		case "unique":
 			cols := asList(m["columns"])
-			refs := asList(m["references"])
-			if len(cols) == 0 || len(refs) == 0 {
-				c.errf("%s: constraints[%d] (%s): foreign_key requires columns and references", rel, i, name)
-			} else if len(cols) != len(refs) {
-				c.errf("%s: constraints[%d] (%s): columns and references must have the same length", rel, i, name)
+			if len(cols) == 0 {
+				c.errf("%s: constraints[%d] (%s): unique requires columns", rel, i, name)
 			}
 			checkCols(fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, name), cols)
-			if !strings.HasPrefix(name, "fk_") {
-				c.errf("%s: constraints[%d] (%s): foreign_key name must start with fk_", rel, i, name)
+			if !strings.HasPrefix(name, "uq_") {
+				c.errf("%s: constraints[%d] (%s): unique name must start with uq_", rel, i, name)
 			}
 		case "exclude":
 			if !hasNonEmptyString(m, "expr") {
@@ -455,46 +449,6 @@ func (c *Checker) checkStability(doc map[string]any, rel string) {
 			}
 		}
 	}
-	if prev, ok := c.headStability(rel); ok && !stabilityTransitionAllowed(prev, stability) {
-		c.errf("%s: invalid stability transition %s -> %s", rel, prev, stability)
-	}
-}
-
-// stabilityTransitionAllowed 只允许向前流转：
-// draft → stable、draft → deprecated、stable → deprecated。
-// deprecated 不能回到 draft/stable；stable 不能回退到 draft。
-func stabilityTransitionAllowed(prev, cur string) bool {
-	if prev == cur {
-		return true
-	}
-	switch prev {
-	case "draft":
-		return cur == "stable" || cur == "deprecated"
-	case "stable":
-		return cur == "deprecated"
-	case "deprecated":
-		return false
-	}
-	return true
-}
-
-// headStability 读取 HEAD 版本的状态；没有历史或不是 git 仓库时返回 false，
-// 不阻断本地编辑和新文件。
-func (c *Checker) headStability(rel string) (string, bool) {
-	if c.root == "" {
-		return "", false
-	}
-	out, err := exec.Command("git", "-C", c.root, "show", "HEAD:"+rel).Output()
-	if err != nil {
-		return "", false
-	}
-	var prev struct {
-		Stability string `yaml:"stability"`
-	}
-	if yaml.Unmarshal(out, &prev) != nil || prev.Stability == "" {
-		return "", false
-	}
-	return prev.Stability, true
 }
 
 // commonColumnFields 从 schema 的 columns.item_fields 派生通用列字段。

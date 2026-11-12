@@ -5,6 +5,17 @@
 
 schema_version: 1
 
+# 所有契约类型共享的字段节点语义。
+# 该段是文档与 AI 入口；硬约束的实现仍在 scripts/cmd/internal/check。
+schema_semantics:
+  hard_fields: [type, required, enum, allowed, pattern, const, unique, min, max, fields, item_fields]
+  soft_fields: [description, caution, generates, examples, default, title, targets, rules]
+  required: "契约必须显式声明；缺失即校验失败"
+  default: "required 字段上只影响 contract-new 骨架；optional 字段上表示省略时的语义默认值；contract-check 不补值"
+  stability: "draft/stable/deprecated 可双向流转；stable 文件不得含 TODO/FIXME"
+  rules: "规则清单；声称硬约束的规则必须在 scripts/cmd/internal/check 有对应实现"
+  quote: "description、generates、caution 必须使用双引号"
+
 # 类型由 ID 前两段推导：data.tables.account → data.tables
 # platform 组统一映射为 platform.*
 types:
@@ -28,10 +39,11 @@ types:
       - 不要手写 migrations，改本文件后运行 make gen-db
       - "物理表必须 extends: [data.tables.base]；不得重复声明 id/created_at/updated_at/deleted_at；status 必须重声明为 data.enums.*"
       - 不要绕过软删过滤（deleted_at IS NULL）
-      - 唯一性用 indexes[].unique + where: deleted_at IS NULL；禁止 UNIQUE 约束（无法带软删过滤）
+      - "UNIQUE 约束包含软删行；需软删后复用时用 indexes[].unique + where: deleted_at IS NULL"
+      - 禁止数据库外键（foreign_key）；跨表一致性由应用/业务规则保证
       - 不要用未结构化字段塞原生 DDL；分区用 table.partition，表达式索引用 indexes[].expression
       - used_by 是生成物，禁止手改；queries 记录查询项 ID，不是查询文件 ID
-      - 只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读表写入 persistence.read_only_tables
+      - 只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读通过 persistence.queries
       - never_expose 列禁止进入普通 OpenAPI/TS/事件/普通 entity；认证 query 与 x-auth-response 是唯一例外
 
   data.queries:
@@ -110,7 +122,7 @@ types:
       - 只登记跨模块调用的方法
       - 不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型
       - 必须声明 persistence（表、字段映射、查询、约束错误映射）
-      - 跨模块读表必须写 persistence.read_only_tables，写表必须属于 owner_module
+      - 跨模块读通过 persistence.queries；写表必须属于 owner_module
       - 不要引用 business.*（规则/事件由 business 侧锚点）
       - 返回 data.entities.*，不要返回表行 data.tables.*.row
       - field_map 只写命名不同的字段，同名不写

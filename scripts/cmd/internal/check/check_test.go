@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestIsColumnType(t *testing.T) {
@@ -86,24 +88,12 @@ func TestCheckStability(t *testing.T) {
 }
 
 func TestStabilityTransition(t *testing.T) {
-	cases := []struct {
-		prev, cur string
-		want      bool
-	}{
-		{"draft", "draft", true},
-		{"draft", "stable", true},
-		{"draft", "deprecated", true},
-		{"stable", "stable", true},
-		{"stable", "deprecated", true},
-		{"stable", "draft", false},
-		{"deprecated", "deprecated", true},
-		{"deprecated", "draft", false},
-		{"deprecated", "stable", false},
-	}
-	for _, tc := range cases {
-		if got := stabilityTransitionAllowed(tc.prev, tc.cur); got != tc.want {
-			t.Errorf("stabilityTransitionAllowed(%q, %q) = %v, want %v", tc.prev, tc.cur, got, tc.want)
-		}
+	// stability 现在允许双向流转；contract-check 只校验 stable 文件的 TODO/FIXME。
+	c := &Checker{}
+	c.checkStability(map[string]any{"stability": "draft"}, "x.yaml")
+	c.checkStability(map[string]any{"stability": "deprecated"}, "x.yaml")
+	if len(c.errs) != 0 {
+		t.Fatalf("non-stable stability reported: %v", c.errs)
 	}
 }
 
@@ -226,10 +216,9 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 		},
 		"constraints": []any{
 			map[string]any{
-				"name":       "fk_x_other",
-				"type":       "foreign_key",
-				"columns":    []any{"missing"},
-				"references": []any{"data.tables.other.col.id"},
+				"name":    "uq_x_missing",
+				"type":    "unique",
+				"columns": []any{"missing"},
 			},
 		},
 		"indexes": []any{
@@ -359,40 +348,48 @@ func TestTableRulesConstraintFields(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["constraints"] = []any{map[string]any{
-		"name": "ck_x_code", "type": "check", "expr": "true", "on_delete": "cascade",
+		"name": "uq_x_code", "type": "unique", "columns": []any{"code"}, "expr": "true",
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), `field "on_delete" is not allowed for type check`) {
+	if !strings.Contains(strings.Join(c.errs, "\n"), `field "expr" is not allowed for type unique`) {
 		t.Fatalf("constraint field not narrowed by type: %v", c.errs)
 	}
 }
 
-func TestTableRulesUniqueConstraintRejected(t *testing.T) {
+func TestTableRulesUniqueConstraint(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["constraints"] = []any{map[string]any{
 		"name": "uq_x_code", "type": "unique", "columns": []any{"code"},
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), `unknown type "unique"`) {
-		t.Fatalf("unique constraint not rejected: %v", c.errs)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid unique constraint reported: %v", c.errs)
 	}
 }
 
-func TestTableRulesForeignKeyColumnCount(t *testing.T) {
+func TestTableRulesUniqueConstraintRequiresColumns(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
-	doc["columns"] = append(doc["columns"].([]any),
-		map[string]any{"name": "a", "type": "string"},
-		map[string]any{"name": "b", "type": "string"},
-	)
 	doc["constraints"] = []any{map[string]any{
-		"name": "fk_x_other", "type": "foreign_key",
-		"columns": []any{"a", "b"}, "references": []any{"data.tables.other.col.id"},
+		"name": "uq_x_code", "type": "unique",
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "columns and references must have the same length") {
-		t.Fatalf("fk column/reference count mismatch not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unique requires columns") {
+		t.Fatalf("unique without columns not reported: %v", c.errs)
+	}
+}
+
+func TestTableRulesForeignKeyRejected(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["constraints"] = []any{map[string]any{
+		"name": "fk_x_other", "type": "foreign_key",
+		"columns": []any{"code"}, "references": []any{"data.tables.other.col.id"},
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), `unknown type "foreign_key"`) {
+		t.Fatalf("foreign_key not rejected: %v", c.errs)
 	}
 }
 
@@ -506,16 +503,24 @@ func TestPersistenceOwnership(t *testing.T) {
 	}}
 	doc := map[string]any{"module": "auth"}
 	p := map[string]any{
-		"tables":           []any{"data.tables.account", "data.tables.auth_pwd"},
+		"tables": []any{"data.tables.account", "data.tables.auth_pwd"},
+	}
+	c.checkPersistenceOwnership(doc, p, "contracts/capabilities/services/auth.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `cannot write data.tables.account`) {
+		t.Fatalf("cross-module write not reported: %v", c.errs)
+	}
+}
+
+func TestPersistenceReadOnlyRejected(t *testing.T) {
+	c := &Checker{tableOwners: map[string]string{"data.tables.auth_pwd": "auth"}}
+	doc := map[string]any{"module": "auth"}
+	p := map[string]any{
+		"tables":           []any{"data.tables.auth_pwd"},
 		"read_only_tables": []any{"data.tables.account"},
 	}
 	c.checkPersistenceOwnership(doc, p, "contracts/capabilities/services/auth.yaml")
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, `cannot write data.tables.account`) {
-		t.Fatalf("cross-module write not reported: %v", c.errs)
-	}
-	if !strings.Contains(errs, "both writable and read_only") {
-		t.Fatalf("write/read contradiction not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "read_only_tables is not supported") {
+		t.Fatalf("read_only_tables not rejected: %v", c.errs)
 	}
 }
 
@@ -609,5 +614,29 @@ constraints:
 	}
 	if !strings.Contains(errs, "must be data.enums.*") {
 		t.Fatalf("enum constraint on non-enum column not checked: %v", c.errs)
+	}
+}
+
+func TestMetaProseIsDoubleQuoted(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkMetaQuotes()
+	if len(c.errs) != 0 {
+		t.Fatalf("meta prose quoting failed:\n%s", strings.Join(c.errs, "\n"))
+	}
+}
+
+func TestProseQuoteCheckDetectsPlainScalar(t *testing.T) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte("description: plain\n"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{}
+	c.checkProseQuotes(&doc, "x")
+	if len(c.errs) == 0 {
+		t.Fatal("plain description not reported")
 	}
 }

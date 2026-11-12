@@ -1,41 +1,42 @@
 # data.enums 类型的单一规范：字段树 + 值域 + 字段说明。
+# 通用字段语义见 _types.yaml 的 schema_semantics。
 #
 # 集合契约：文件 id 为 data.enums；每个枚举项 id 为 data.enums.<name>。
 # 该文件同时是 contract-new 的字段来源；不要另写模板。
 
 id: meta.data.enums
 type: data.enums
-title: 跨端枚举契约
+title: "跨端枚举契约"
 targets:
-  file: contracts/data/enums.yaml
-  id: data.enums
+  file: "contracts/data/enums.yaml"
+  id: "data.enums"
   naming: "文件固定为 data/enums.yaml；枚举项用显式 id data.enums.<name>"
 
 fields:
-  - { name: schema_version, type: integer, required: true, const: 1, description: 契约格式版本，固定 1 }
-  - { name: id, type: string, required: true, const: data.enums, description: 集合文件 ID }
-  - { name: summary, type: string, required: true, description: 一句话说明枚举集合 }
-  - { name: stability, type: string, required: true, enum: [stable, draft, deprecated], description: 契约稳定度 }
+  - { name: schema_version, type: integer, required: true, const: 1, description: "契约格式版本，固定 1" }
+  - { name: id, type: string, required: true, const: data.enums, description: "集合文件 ID" }
+  - { name: summary, type: string, required: true, description: "一句话说明枚举集合" }
+  - { name: stability, type: string, required: true, enum: [stable, draft, deprecated], description: "契约稳定度" }
   - name: enums
     type: list<object>
     required: true
-    description: 跨前后端枚举；模块内部枚举不进本文件
-    generates: Go 常量 + TS union + DB CHECK
-    caution: 不要收只在一个模块内部使用的枚举
+    description: "跨前后端枚举；模块内部枚举不进本文件"
+    generates: "Go 常量、TS union、DB CHECK"
+    caution: "不要收只在一个模块内部使用的枚举"
     item_fields:
-      - { name: id, type: string, required: true, pattern: '^data\.enums\.[a-z][a-z0-9_]*$', description: 枚举项 ID，等于 data.enums.<name> }
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: 枚举名，snake_case }
-      - { name: description, type: string, required: false, description: 枚举用途说明 }
-      - { name: db_type, type: string, required: true, const: text, description: 数据库存储类型，固定 text }
-      - { name: go_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: Go 类型名，PascalCase }
-      - { name: ts_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: TS 类型名，PascalCase }
+      - { name: id, type: string, required: true, pattern: '^data\.enums\.[a-z][a-z0-9_]*$', description: "枚举项 ID，等于 data.enums.<name>" }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "枚举名，snake_case" }
+      - { name: description, type: string, required: false, description: "枚举用途说明" }
+      - { name: db_type, type: string, required: true, const: text, description: "数据库存储类型，固定 text" }
+      - { name: go_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "Go 类型名，PascalCase" }
+      - { name: ts_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "TS 类型名，PascalCase" }
       - name: values
         type: list<object>
         required: true
-        description: 枚举值列表；只能追加，不能改名或删除
+        description: "枚举值列表；只能追加，不能改名或删除"
         item_fields:
-          - { name: value, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: 枚举值，snake_case }
-          - { name: description, type: string, required: false, description: 枚举值说明 }
+          - { name: value, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "枚举值，snake_case" }
+          - { name: description, type: string, required: false, description: "枚举值说明" }
 
 rules:
   - { id: enum-id-matches-name, text: "item.id 必须等于 data.enums.<item.name>" }

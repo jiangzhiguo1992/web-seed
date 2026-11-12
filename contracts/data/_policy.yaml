@@ -11,7 +11,7 @@ naming:
     example: "20261111T093000_add_token_table.sql"
   table: "契约文件名/ID 用 snake_case（data.tables.account）；物理表名默认等于文件段，需要不同名时用 table.name 覆盖（accounts）"
   index: "idx_<table>_<cols>；唯一 uq_<table>_<cols>"
-  constraint: "fk_<table>_<ref> / ck_<table>_<rule> / ex_<table>_<rule>"
+  constraint: "ck_<table>_<rule> / uq_<table>_<cols> / ex_<table>_<rule>"
   query: "snake_case；每个 query 必须有显式 id data.queries.<module>.<query_id>"
 
 base:
@@ -43,11 +43,11 @@ columns:
 constraints:
   physical_in: data/tables/*.yaml
   business_in: data/entities/*.yaml + business/rules/*.yaml
-  rule: 数据库能表达的约束（check/foreign_key/enum/exclude）留在 tables；唯一性用 indexes[].unique；跨字段、跨表、业务不变量写 entities.validation 或 business.rules
+  rule: 数据库能表达的约束（check/enum/unique/exclude）留在 tables；禁止 foreign_key；唯一性按 scope 选择约束或索引；跨字段、跨表、业务不变量写 entities.validation 或 business.rules
   types:
     - check
-    - foreign_key
     - enum
+    - unique
     - exclude
   naming_id: "data.tables.<file>.constraint.<constraint.name>"
 
@@ -64,13 +64,12 @@ indexes:
 
 soft_delete:
   column: deleted_at
-  rule: 软删表必须有 deleted_at；唯一性必须用 indexes[].unique + WHERE deleted_at IS NULL 表达，禁止 UNIQUE 约束
+  rule: 软删表必须有 deleted_at；全局唯一（含软删行）用 constraints.unique；软删后可复用用 indexes[].unique + WHERE deleted_at IS NULL
   consistency: 若 status 也有 deleted 值，必须加 CHECK (status = 'deleted') = (deleted_at IS NOT NULL)
 
 ownership:
   field: owner_module
-  rule: 只有 owner_module 对应的 cap.services/cap.async 可以写表；其他模块只能经 service 读；跨模块直读表视为越层
-  read_only: 跨模块引用表时必须写 persistence.read_only_tables；写表必须属于 owner_module
+  rule: 只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读通过 persistence.queries，不直接引用表
 
 used_by:
   generated: true
@@ -86,6 +85,9 @@ size:
   rule: large 表的建索引默认 CONCURRENTLY；small 表允许事务内建索引
 
 forbidden:
+  - id: no_foreign_key
+    rule: 禁止数据库外键（foreign_key）
+    instead: 跨表一致性由应用/业务规则保证
   - id: no_drop_column
     rule: 禁止直接 DROP COLUMN
     instead: 先标 deprecated，停止写入一个版本后再删

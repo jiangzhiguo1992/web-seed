@@ -14,7 +14,7 @@ table:
   name: tokens
   comment: 令牌（访问令牌与刷新令牌）
   size_class: large
-  retention: { expired_days: 30 }
+  retention: { unit: days, ttl: 30 }
 
 columns:
   - name: own_type
@@ -83,13 +83,6 @@ columns:
     comment: 令牌状态
 
 constraints:
-  - name: fk_tokens_account
-    type: foreign_key
-    columns: [account_id]
-    references: [data.tables.account.col.id]
-    on_delete: cascade
-    on_update: no_action
-
   - name: ck_tokens_expire_order
     type: check
     expr: "refresh_expire_at > access_expire_at"

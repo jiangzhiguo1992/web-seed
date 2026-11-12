@@ -35,7 +35,7 @@
 
 | 概念 | 视角 | 位置 | 内容 |
 |---|---|---|---|
-| 表（table） | 持久化 | `data/tables/<file>.yaml` | 字段、类型、可空、默认值、CHECK/FK/EXCLUDE、唯一索引、分区、`used_by` |
+| 表（table） | 持久化 | `data/tables/<file>.yaml` | 字段、类型、可空、默认值、CHECK/UNIQUE/EXCLUDE、索引、分区、`used_by` |
 | 实体（entity） | 业务 | `data/entities/<entity>.yaml` | 身份、字段、关系、`validation`（数据库表达不了的复杂校验） |
 
 两者不是 1:1，所以不合并：
@@ -50,7 +50,7 @@
 
 | 类型 | 写在哪 | 例子 |
 |---|---|---|
-| 数据库能表达的约束 | `tables/*.yaml` 的 `constraints` | `CHECK`、`FOREIGN KEY`、枚举 `CHECK`、`EXCLUDE`；唯一性用 `indexes[].unique` |
+| 数据库能表达的约束 | `tables/*.yaml` 的 `constraints` | `CHECK`、枚举 `CHECK`、`UNIQUE`、`EXCLUDE`；软删后可复用的唯一性用 `indexes[].unique` + `where` |
 | 跨字段/跨表/业务不变量 | `entities/*.yaml` 的 `validation` | 邮箱拆分一致性、令牌过期顺序 |
 | 业务行为规则 | `business/rules/*.yaml` | 编号唯一、仅本人可改 |
 
@@ -81,13 +81,14 @@ data/storage.yaml ────> 配置校验 + 运维约束
 3. **字段类型用契约内逻辑类型**：`string`、`boolean`、`integer`、`float`、`decimal`、`datetime`、`timestamp`、`json`、`bytes`、`data.enums.<name>`、`data.tables.<file>.col.<col>`。
 4. **类型族扩展字段写在列上**：`string` 用 `min_len`/`max_len`/`fixed`/`pattern`/`normalize`，`bytes` 用 `min_len`/`max_len`/`fixed`，`integer` 用 `bits`/`unsigned`/`min`/`max`，`float` 用 `bits`/`min`/`max`，`decimal` 用 `precision`/`scale`/`min`/`max`，`datetime` 用 `mode`/`timezone`，`timestamp` 用 `timezone`/`fractional_seconds`，`json` 用 `binary`。字段定义与 `required` 在 `contracts/_meta/data.tables.yaml` 的 `column_types.families`。
 5. **时间统一 `timestamp`**，应用层只用 UTC。
-6. **软删表必须有 `deleted_at`**，唯一性必须用唯一索引表达，并带 `where: "deleted_at IS NULL"`；不要用 UNIQUE 约束（无法带软删过滤）。
+6. **软删表必须有 `deleted_at`**。全局唯一（含软删行）用 `constraints.unique`；软删后可复用用唯一索引 + `where: "deleted_at IS NULL"`。
 7. **枚举用 `string + check`**，不用数据库原生 enum；枚举值只能追加。
 8. **索引必须写 `reason`**；表达式索引用 `expression`，大表用 `concurrently: auto`。
 9. **主键默认由应用层生成 UUIDv7**（`generated_by: application`），数据库不设 default。
-10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表，其他模块只能经 service 读。
+10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；跨模块读通过 `persistence.queries`。
 11. **禁止未结构化 DDL 字段**：分区、表达式索引、CONCURRENTLY 必须用结构化字段表达（`table.partition`、`indexes[].expression`、`indexes[].concurrently`），不要塞原生 SQL。
 12. **`used_by` 是生成物**：由 `make gen-graph` 写入，禁止手改；结构固定为 `entities` / `queries` / `capabilities` 三个列表，只记**直接入边**。`queries` 记录查询项 ID（`data.queries.<module>.<query>`），不是查询文件 ID。完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
+13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
 
 ---
 
@@ -154,7 +155,7 @@ indexes:
 - 契约文件：snake_case（`tables/account.yaml` → `data.tables.account`）
 - 物理表名：默认等于契约文件段；需要不同名时用 `table.name` 覆盖（`accounts`、`tokens`）
 - 索引：`idx_<physical_table>_<cols>`；唯一：`uq_<physical_table>_<cols>`
-- 外键：`fk_<physical_table>_<ref>`；检查：`ck_<physical_table>_<rule>`
+- 唯一约束：`uq_<physical_table>_<cols>`；检查：`ck_<physical_table>_<rule>`；排除：`ex_<physical_table>_<rule>`
 - 查询：`data.queries.<module>.<snake_case>`
 
 ---

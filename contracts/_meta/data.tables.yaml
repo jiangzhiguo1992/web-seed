@@ -1,17 +1,12 @@
-# data.tables 类型的单一规范：字段树 + 值域 + 字段说明。
-#
-# 这是契约的元规范（meta），不是业务契约，不登记在 index.yaml。
-# - 硬字段：type / required / enum / pattern / const / allowed / unique / min / max / fields / item_fields，由 contract-check 校验。
-# - 软字段：description / caution / generates / examples / default / title / targets / rules，供 AI、contract-new、生成器与 review 使用；contract-check 不会用 schema 的 default 自动补值。
-# - required 表示契约必须显式声明；default 在 required 字段上只影响 contract-new 骨架，在 optional 字段上表示省略时的语义默认值，contract-check 不补值。
-# - rules 是规则清单：声称硬约束的规则必须在 scripts/cmd/internal/check 有对应实现。
-# - 该文件同时是 contract-new 的字段来源；不要另写模板。
+# data.tables 的字段树 + 值域 + 字段说明。
+# 通用字段语义见 _types.yaml 的 schema_semantics；本文件只写 data.tables 特有内容。
+# 本文件同时是 contract-new 的字段来源；不要另写模板。
 
 id: meta.data.tables
 type: data.tables
-title: 物理表契约
+title: "物理表契约"
 targets:
-  dir: contracts/data/tables
+  dir: "contracts/data/tables"
   glob: "*.yaml"
   id: "data.tables.<file>"
   naming: "文件名 snake_case"
@@ -22,105 +17,105 @@ column_refs:
 column_types:
   families:
     string:
-      description: 字符序列；覆盖 char / varchar / text
+      description: "字符序列；覆盖 char/varchar/text"
       params:
-        min_len: { type: integer, required: false, min: 0 }
-        max_len: { type: integer, required: false, min: 1 }
-        fixed: { type: boolean, required: false, default: false }
-        pattern: { type: string, required: false }
-        normalize: { type: string, required: false, enum: [ lower, upper ] }
+        min_len: { type: integer, required: false, min: 0, description: "最小字符数" }
+        max_len: { type: integer, required: false, min: 1, description: "最大字符数" }
+        fixed: { type: boolean, required: false, default: false, description: "固定长度；为 true 时必须写 max_len" }
+        pattern: { type: string, required: false, description: "写入前校验的正则" }
+        normalize: { type: string, required: false, enum: [ lower, upper ], description: "写入前归一方式" }
     boolean:
-      description: 布尔值；覆盖 bool / tinyint(1)
+      description: "布尔值；覆盖 bool/tinyint(1)"
       params: { }
     integer:
-      description: 整数；覆盖 int8 / int16 / int32 / int64
+      description: "整数；覆盖 int8/16/32/64"
       params:
-        bits: { type: integer, required: false, enum: [ 8, 16, 32, 64 ], default: 64 }
-        unsigned: { type: boolean, required: false, default: false }
-        min: { type: integer, required: false }
-        max: { type: integer, required: false }
+        bits: { type: integer, required: false, enum: [ 8, 16, 32, 64 ], default: 64, description: "存储位宽" }
+        unsigned: { type: boolean, required: false, default: false, description: "是否无符号" }
+        min: { type: integer, required: false, description: "闭区间下限" }
+        max: { type: integer, required: false, description: "闭区间上限" }
     float:
-      description: 浮点数；覆盖 real / double
+      description: "浮点数；覆盖 real/double"
       params:
-        bits: { type: integer, required: false, enum: [ 32, 64 ], default: 64 }
-        min: { type: float, required: false }
-        max: { type: float, required: false }
+        bits: { type: integer, required: false, enum: [ 32, 64 ], default: 64, description: "存储位宽" }
+        min: { type: float, required: false, description: "闭区间下限" }
+        max: { type: float, required: false, description: "闭区间上限" }
     decimal:
-      description: 精确小数；覆盖 decimal / numeric
+      description: "精确小数；覆盖 decimal/numeric"
       params:
-        precision: { type: integer, required: true, min: 1, examples: [ 19 ] }
-        scale: { type: integer, required: false, default: 0, min: 0 }
-        min: { type: decimal, required: false }
-        max: { type: decimal, required: false }
+        precision: { type: integer, required: true, min: 1, examples: [ 19 ], description: "总位数" }
+        scale: { type: integer, required: false, default: 0, min: 0, description: "小数位数" }
+        min: { type: decimal, required: false, description: "闭区间下限" }
+        max: { type: decimal, required: false, description: "闭区间上限" }
     datetime:
-      description: 日期/时间；覆盖 date / time / datetime
+      description: "日期/时间；覆盖 date/time/datetime"
       params:
-        mode: { type: string, required: false, enum: [ date, time, datetime ], default: datetime }
-        timezone: { type: boolean, required: false, default: false }
+        mode: { type: string, required: false, enum: [ date, time, datetime ], default: datetime, description: "日期/时间模式" }
+        timezone: { type: boolean, required: false, default: false, description: "是否带时区" }
     timestamp:
-      description: 绝对时间点
+      description: "绝对时间点"
       params:
-        timezone: { type: boolean, required: false, default: true }
-        fractional_seconds: { type: integer, required: false, default: 6, min: 0, max: 9 }
+        timezone: { type: boolean, required: false, default: true, description: "是否带时区" }
+        fractional_seconds: { type: integer, required: false, default: 6, min: 0, max: 9, description: "小数秒精度" }
     json:
-      description: JSON 文档；覆盖 json / jsonb
+      description: "JSON 文档；覆盖 json/jsonb"
       params:
-        binary: { type: boolean, required: false, default: false }
+        binary: { type: boolean, required: false, default: false, description: "是否使用 jsonb" }
     bytes:
-      description: 二进制；覆盖 binary / varbinary / blob / bytea
+      description: "二进制；覆盖 binary/varbinary/blob/bytea"
       params:
-        min_len: { type: integer, required: false, min: 0 }
-        max_len: { type: integer, required: false, min: 1 }
-        fixed: { type: boolean, required: false, default: false }
+        min_len: { type: integer, required: false, min: 0, description: "最小字节数" }
+        max_len: { type: integer, required: false, min: 1, description: "最大字节数" }
+        fixed: { type: boolean, required: false, default: false, description: "固定长度；为 true 时必须写 max_len" }
 
 fields:
   - name: schema_version
     type: integer
     required: true
     const: 1
-    description: 契约格式版本；当前固定 1
-    generates: 无
-    caution: 不要写字符串 "1"
+    description: "契约格式版本，固定 1"
+    generates: "无"
+    caution: "必须是整数 1"
 
   - name: id
     type: string
     required: true
     pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
-    description: 由文件路径派生
-    generates: 契约 ID、图节点
-    caution: 不要写 data.table.*；_base.yaml 例外为 data.tables.base
+    description: "由 file stem 派生"
+    generates: "契约 ID、图节点"
+    caution: "不要写 data.table.*；_base.yaml 例外为 data.tables.base"
 
   - name: summary
     type: string
     required: true
-    description: 一句话说明这张表是什么
-    generates: index 摘要
-    caution: 不要写字段清单
+    description: "一句话说明这张表是什么"
+    generates: "index 摘要"
+    caution: "不要写字段清单"
 
   - name: stability
     type: string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
-    description: 契约稳定度；draft 可含 TODO，stable 必须通过 contract-check 且无 TODO，deprecated 表示已废弃
-    generates: index 摘要
-    caution: 只能按 draft→stable、draft→deprecated、stable→deprecated 流转
+    description: "契约稳定度"
+    generates: "index 摘要"
+    caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
 
   - name: kind
     type: string
     required: false
     enum: [ base ]
-    description: 仅 tables/_base.yaml 使用；物理表不写
-    generates: 生成器跳过 DDL
-    caution: "不要把普通表标成 base；kind: base 只能出现在 _base.yaml"
+    description: "仅 tables/_base.yaml 使用"
+    generates: "跳过 DDL"
+    caution: "物理表不写"
 
   - name: owner_module
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: 唯一写归属模块；只有 owner_module 相同的 cap.services/cap.async 可以写表
-    generates: 模块归属校验、repo 目录
-    caution: 不是文件路径；不是 owner user；跨模块读表写入 persistence.read_only_tables
+    description: "唯一写归属模块"
+    generates: "归属校验"
+    caution: "只有同模块 cap.services/cap.async 可写表"
 
   - name: extends
     type: list<string>
@@ -128,161 +123,158 @@ fields:
     allowed: [ data.tables.base ]
     unique: true
     default: [ data.tables.base ]
-    description: 契约层继承基类 5 列；生成器把基类列展开到物理表
-    generates: expand_base_columns
-    caution: 不是数据库继承、外键或组合；不要写其他表
+    description: "契约继承基类 5 列"
+    generates: "展开基类列"
+    caution: "只能写 data.tables.base"
 
   - name: do_not
     type: list<string>
     required: false
-    description: 实例级负向约束；每条必须含本表的具体标识（文件段、物理表名、非基类列名、约束/索引名或枚举名）
-    generates: AI 反例索引
-    caution: 通用规则在 contracts/_meta/_types.yaml，禁止复制到这里
+    description: "实例级负向约束；每条含本表标识"
+    generates: "AI 反例"
+    caution: "通用规则在 _meta/_types.yaml，禁止复制到这里"
 
   - name: table
     type: object
     required: true
-    description: 物理表元数据
-    generates: DDL 表名、注释、保留期、分区
-    caution: 不是契约 ID
+    description: "物理表元数据"
+    generates: "表名、COMMENT、保留、分区"
+    caution: "不是契约 ID"
     fields:
       - name: name
         type: string
         required: false
         pattern: '^[a-z][a-z0-9_]*$'
-        description: 物理表名；默认等于文件段，需要不同名时显式覆盖
-        generates: DDL 表名、SQL FROM 目标
+        description: "物理表名；默认 file stem"
+        generates: "DDL 表名、SQL FROM"
       - name: comment
         type: string
         required: true
-        description: 写入数据库 COMMENT
-        generates: DDL COMMENT
-        caution: 不要和 summary 重复
+        description: "数据库 COMMENT"
+        generates: "DDL COMMENT"
+        caution: "不要复制 summary"
       - name: size_class
         type: string
         required: true
         enum: [ small, large ]
         default: small
-        description: 表量级；large 决定索引默认 CONCURRENTLY
-        generates: index_concurrently_policy
-        caution: 不是性能承诺；不要按当前数据量随意写；required 表示必须显式声明，default 只用于 contract-new 骨架
+        description: "表量级；large 索引默认 CONCURRENTLY"
+        generates: "索引并发策略"
+        caution: "不是性能承诺；按预期量级写"
       - name: retention
         type: object
         required: false
-        description: 数据保留与清理策略；cleanup 任务的唯一来源
-        generates: cleanup_job_policy
-        caution: 不是数据库 TTL
+        description: "保留/清理策略；cleanup 任务唯一来源"
+        generates: "cleanup 策略"
+        caution: "不是数据库自动 TTL"
         fields:
-          - { name: pending_days, type: integer, required: false, min: 1, description: 待处理数据保留天数（>= 1） }
-          - { name: soft_delete_days, type: integer, required: false, min: 1, description: 软删除数据保留天数（>= 1） }
-          - { name: hard_delete_days, type: integer, required: false, min: 1, description: 硬删除数据保留天数（>= 1） }
-          - { name: expired_days, type: integer, required: false, min: 1, description: 过期数据保留天数（>= 1） }
+          - { name: unit, type: string, required: false, default: days, enum: [ minutes, hours, days ], description: "所有时长的单位" }
+          - { name: pending, type: integer, required: false, min: 1, description: "待处理状态清理阈值" }
+          - { name: soft_delete, type: integer, required: false, min: 1, description: "软删记录保留时长" }
+          - { name: hard_delete, type: integer, required: false, min: 1, description: "硬删记录保留时长" }
+          - { name: ttl, type: integer, required: false, min: 1, description: "记录过期时长（TTL）" }
       - name: partition
         type: object
         required: false
-        description: 分区策略；替代 ddl_ext
-        generates: DDL PARTITION BY
-        caution: 不要用原生 SQL 字段；range 必须写 interval，list/hash 不支持 interval。list/hash 的分区值/模数尚未建模，生成器落地前不要使用。
+        description: "分区策略；替代原生 DDL"
+        generates: "DDL PARTITION BY"
+        caution: "range 必填 interval；list/hash 暂不支持"
         fields:
-          - { name: strategy, type: string, required: true, enum: [ range, list, hash ], description: 分区策略 }
-          - { name: columns, type: list<string>, required: true, description: 分区键列名（不是列 ID） }
-          - { name: interval, type: string, required: false, description: range 分区的间隔表达式，例如 "1 month" }
+          - { name: strategy, type: string, required: true, enum: [ range, list, hash ], description: "分区策略" }
+          - { name: columns, type: list<string>, required: true, description: "分区键列名" }
+          - { name: interval, type: string, required: false, description: "range 间隔，如 \"1 month\"" }
 
   - name: columns
     type: list<object>
     required: true
-    description: 物理列；id/status/created_at/updated_at/deleted_at 不重复声明
-    generates: DDL 列、sqlc 输入、Go 类型
-    caution: 不要声明 id/created_at/updated_at/deleted_at；status 必须覆盖为 data.enums.*
+    description: "物理列；id/created_at/updated_at/deleted_at 不重声明，status 必须重声明为枚举"
+    generates: "DDL 列、sqlc、Go 类型"
+    caution: "status 必须引用 data.enums.*"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', examples: [ "name" ], description: 列名 }
-      - { name: type, type: string, required: true, default: string, description: "列类型；类型族键，或 column_refs.prefixes 允许的引用", caution: 引用类型不能再写类型族扩展字段（min_len 等），扩展字段由被引用列定义 }
-      - { name: nullable, type: boolean, required: false, default: false, description: 是否允许 NULL；未写视为 false }
-      - { name: primary_key, type: boolean, required: false, description: 是否主键；主键列不可空, caution: 基类 id 已是主键；物理表只有确需复合主键时才使用 }
-      - { name: generated_by, type: string, required: false, enum: [ application, database ], description: 初始值由应用还是数据库生成 }
-      - { name: default, type: any, required: false, description: 字面量默认值；与 default_sql 互斥；YAML 类型必须与列类型兼容 }
-      - { name: default_sql, type: string, required: false, description: SQL 表达式默认值；与 default 互斥 }
-      # 类型族扩展字段由 column_types.families.params 注入
-      - { name: pii, type: boolean, required: false, description: 是否包含个人敏感信息 }
-      - { name: never_expose, type: boolean, required: false, description: 是否禁止进入普通 API/TS/事件/entity }
-      - { name: managed_by, type: string, required: false, enum: [ application, database ], description: 后续写入由应用还是数据库维护 }
-      - { name: comment, type: string, required: false, description: 列说明；写入 DDL COMMENT }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', examples: [ "name" ], description: "列名" }
+      - { name: type, type: string, required: true, default: string, description: "类型族键，或 data.enums.* / data.tables.*.col.* 引用", caution: "引用类型不可带类型族参数" }
+      - { name: nullable, type: boolean, required: false, default: false, description: "是否可空；默认 false" }
+      - { name: primary_key, type: boolean, required: false, description: "是否主键；主键不可空", caution: "基类 id 已是主键；仅复合主键时使用" }
+      - { name: generated_by, type: string, required: false, enum: [ application, database ], description: "初始值由应用/数据库生成" }
+      - { name: default, type: any, required: false, description: "字面量默认值；与 default_sql 互斥" }
+      - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值；与 default 互斥" }
+      # 类型族参数由 column_types.families.params 注入
+      - { name: pii, type: boolean, required: false, description: "个人敏感信息" }
+      - { name: never_expose, type: boolean, required: false, description: "禁止进入普通 API/TS/事件/entity" }
+      - { name: managed_by, type: string, required: false, enum: [ application, database ], description: "后续维护方" }
+      - { name: comment, type: string, required: false, description: "列 COMMENT" }
 
   - name: constraints
     type: list<object>
     required: false
-    description: 数据库能表达的 DDL 约束（check / foreign_key / enum / exclude）；唯一性用 indexes[].unique
-    generates: DDL CHECK/FK/EXCLUDE
-    caution: 唯一性不要写 UNIQUE 约束（无法带软删过滤）；业务不变量不要写在这里，去 entities.validation 或 business.rules
+    description: "DDL 约束：check/enum/unique/exclude"
+    generates: "DDL CHECK/UNIQUE/EXCLUDE"
+    caution: "UNIQUE 含软删行；需软删后复用请用唯一索引"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^(ck|fk|ex)_[a-z][a-z0-9_]*$', description: 约束名；check/enum 用 ck_，foreign_key 用 fk_，exclude 用 ex_ }
-      - { name: type, type: string, required: true, enum: [ check, foreign_key, enum, exclude ], description: 约束类型 }
-      - { name: expr, type: string, required: false, description: check/exclude 的 SQL 表达式 }
-      - { name: column, type: string, required: false, description: enum 约束的列名 }
-      - { name: enum, type: string, required: false, description: enum 约束引用的 data.enums.*；必须等于 column 的类型 }
-      - { name: columns, type: list<string>, required: false, description: foreign_key 的列名；与 references 一一对应 }
-      - { name: references, type: list<string>, required: false, description: "foreign_key 目标列 ID 列表（data.tables.<file>.col.<col>），与 columns 一一对应" }
-      - { name: on_delete, type: string, required: false, enum: [ cascade, restrict, no_action, set_null, set_default ], default: no_action, description: 删除动作 }
-      - { name: on_update, type: string, required: false, enum: [ cascade, restrict, no_action, set_null, set_default ], default: no_action, description: 更新动作 }
+      - { name: name, type: string, required: true, pattern: '^(ck|uq|ex)_[a-z][a-z0-9_]*$', description: "约束名；check/enum=ck_, unique=uq_, exclude=ex_" }
+      - { name: type, type: string, required: true, enum: [ check, enum, unique, exclude ], description: "约束类型" }
+      - { name: expr, type: string, required: false, description: "check/exclude 的 SQL 表达式" }
+      - { name: column, type: string, required: false, description: "enum 约束的列名" }
+      - { name: enum, type: string, required: false, description: "enum 约束引用的 data.enums.*；须与列类型一致" }
+      - { name: columns, type: list<string>, required: false, description: "unique 约束的列名" }
 
   - name: indexes
     type: list<object>
     required: false
-    description: 索引；每条必须有 reason
-    generates: DDL INDEX
-    caution: 不要写无理由索引；唯一索引必须带软删过滤
+    description: "索引；每条必须有 reason"
+    generates: "DDL INDEX"
+    caution: "唯一索引必须带软删过滤"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: 索引名；普通索引 idx_，唯一索引 uq_ }
-      - { name: columns, type: list<string>, required: false, description: 索引列；与 expression 二选一 }
-      - { name: expression, type: string, required: false, description: 表达式索引；与 columns 二选一 }
-      - { name: unique, type: boolean, required: false, description: 是否唯一索引 }
-      - { name: where, type: string, required: false, description: 部分索引条件；唯一索引必须含 deleted_at IS NULL }
-      - { name: order, type: list<string>, required: false, allowed: [ asc, desc ], description: 与 columns 一一对应的排序方向；仅 columns 索引可用 }
-      - { name: reason, type: string, required: true, description: 为什么需要这个索引 }
-      - { name: method, type: string, required: false, enum: [ btree, hash, gin, gist, brin ], default: btree, description: 索引方法 }
-      - { name: concurrently, type: string, required: false, enum: [ auto, "true", "false" ], default: auto, description: 是否并发创建；必须写成字符串 auto/"true"/"false" }
-      - { name: include, type: list<string>, required: false, description: 覆盖索引的附加列 }
+      - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名；普通 idx_，唯一 uq_" }
+      - { name: columns, type: list<string>, required: false, description: "索引列；与 expression 二选一" }
+      - { name: expression, type: string, required: false, description: "表达式索引；与 columns 二选一" }
+      - { name: unique, type: boolean, required: false, description: "是否唯一" }
+      - { name: where, type: string, required: false, description: "部分索引条件" }
+      - { name: order, type: list<string>, required: false, allowed: [ asc, desc ], description: "与 columns 一一对应的方向" }
+      - { name: reason, type: string, required: true, description: "为什么需要" }
+      - { name: method, type: string, required: false, enum: [ btree, hash, gin, gist, brin ], default: btree, description: "索引方法" }
+      - { name: concurrently, type: string, required: false, enum: [ auto, "true", "false" ], default: auto, description: "是否并发；写字符串 auto/\"true\"/\"false\"" }
+      - { name: include, type: list<string>, required: false, description: "覆盖索引附加列" }
 
   - name: used_by
     type: object
     required: true
     generated: true
     write: forbidden
-    description: 反向索引；只记直接入边
-    generates: used_by / generated/inbound.yaml
-    caution: 禁止手改；不是业务字段
+    description: "反向索引；只记直接入边"
+    generates: "used_by、inbound"
+    caution: "生成物，禁止手改"
     fields:
-      - { name: entities, type: list<string>, required: true, unique: true, description: 引用该表的实体 ID 列表（data.entities.*） }
-      - { name: queries, type: list<string>, required: true, unique: true, description: "引用该表的查询项 ID 列表（data.queries.<module>.<query>），不是查询文件 ID" }
-      - { name: capabilities, type: list<string>, required: true, unique: true, description: 引用该表的能力 ID 列表（cap.services.* / cap.async.*） }
+      - { name: entities, type: list<string>, required: true, unique: true, description: "实体 ID 列表" }
+      - { name: queries, type: list<string>, required: true, unique: true, description: "查询项 ID 列表" }
+      - { name: capabilities, type: list<string>, required: true, unique: true, description: "能力 ID 列表" }
 
 rules:
   - { id: base-only, text: "extends 只能是 [data.tables.base]" }
   - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 必须重声明为 data.enums.*" }
-  - { id: status-enum, text: "物理表必须声明 status，且 status 列必须引用 data.enums.*" }
+  - { id: status-enum, text: "物理表必须声明 status，且引用 data.enums.*" }
   - { id: base-file, text: "kind: base 与 data.tables.base 只能出现在 tables/_base.yaml" }
   - { id: primary-key-nullable, text: "primary_key: true 的列不得 nullable: true" }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥" }
-  - { id: default-type, text: "default 的 YAML 类型必须与列类型族兼容；枚举默认值必须存在于引用的 data.enums.*" }
-  - { id: column-type, text: "列类型必须是 column_types.families 的键，或匹配 column_refs.prefixes" }
-  - { id: family-params, text: "列的扩展字段必须属于该 type 的类型族；类型族中 required: true 的参数必须出现" }
-  - { id: family-length, text: "min_len <= max_len；fixed: true 必须写 max_len，min_len 若存在必须等于 max_len；default 长度必须在 min_len/max_len 内" }
-  - { id: family-range, text: "min <= max；unsigned integer 的 min/default 不得为负；default 必须在 min/max 内" }
+  - { id: default-type, text: "default 的类型、长度、范围必须与列类型兼容；枚举默认值必须存在" }
+  - { id: column-type, text: "列类型必须是类型族键，或匹配 column_refs.prefixes" }
+  - { id: family-params, text: "列参数必须属于该类型族；required 参数必须出现" }
+  - { id: family-length, text: "min_len <= max_len；fixed 必须写 max_len 且 min_len 等于 max_len" }
+  - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内" }
   - { id: family-decimal, text: "scale <= precision" }
-  - { id: unique-soft-delete, text: "唯一性用 indexes[].unique + where: deleted_at IS NULL；禁止 UNIQUE 约束" }
-  - { id: constraint-fields, text: "约束字段按 type 使用：check/exclude 用 expr；enum 用 column+enum；foreign_key 用 columns+references+on_delete/on_update" }
+  - { id: no-foreign-key, text: "禁止 foreign_key；跨表一致性由应用/业务规则保证" }
+  - { id: unique-scope, text: "UNIQUE 约束含软删行；唯一索引 + where 只约束未删行，按业务选择" }
+  - { id: constraint-fields, text: "check/exclude 用 expr；enum 用 column+enum；unique 用 columns" }
   - { id: enum-column-match, text: "enum 约束的 enum 必须等于 column 的 data.enums.* 类型" }
-  - { id: fk-column-count, text: "foreign_key 的 columns 与 references 数量相同且一一对应" }
-  - { id: index-order, text: "indexes[].order 只能与 columns 配合，长度一致且值为 asc/desc" }
-  - { id: large-index-concurrently, text: 'size_class=large 时索引不得显式 concurrently: "false"；auto 解析为 true' }
-  - { id: partition, text: "table.partition.columns 非空；strategy=range 必须写 interval，其他策略不得写 interval" }
-  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入；contract-check 校验它等于实际入边" }
-  - { id: used-by-query-id, text: "used_by.queries 记录查询项 ID（data.queries.<module>.<query>），不是查询文件 ID" }
-  - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读表写入 persistence.read_only_tables" }
-  - { id: id-from-file, text: "id 必须等于 data.tables.<file stem>；_base.yaml 例外为 data.tables.base" }
-  - { id: unique-names, text: "列名不重复；约束名与索引名各自唯一，前缀保证两者不冲突" }
+  - { id: index-order, text: "order 只能与 columns 配合，长度一致，值为 asc/desc" }
+  - { id: large-index-concurrently, text: "size_class=large 时索引不得显式 concurrently: \"false\"" }
+  - { id: partition, text: "partition.columns 非空；range 必须有 interval，其他策略不得有" }
+  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，contract-check 校验" }
+  - { id: used-by-query-id, text: "used_by.queries 记录查询项 ID，不是查询文件 ID" }
+  - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表" }
+  - { id: id-from-file, text: "id 必须等于 data.tables.<file stem>；_base.yaml 例外" }
+  - { id: unique-names, text: "列名不重复；约束名与索引名各自唯一" }
   - { id: physical-name-unique, text: "物理表名全局唯一" }
-  - { id: retention-positive, text: "table.retention 的值必须是 >= 1 的整数" }
-  - { id: do-not-specific, text: "do_not 每条必须包含本表的具体标识（文件段、物理表名、非基类列名、约束/索引名或枚举名）" }
-  - { id: stability-stable, text: "stable 前必须替换 TODO/FIXME 并跑 contract-check" }
-  - { id: stability-transition, text: "stability 只能 draft→stable、draft→deprecated、stable→deprecated；禁止回退" }
+  - { id: retention-positive, text: "retention 的数值 >= 1，unit 只能是 minutes/hours/days" }
+  - { id: do-not-specific, text: "do_not 每条必须含本表标识" }
+  - { id: stability-stable, text: "stable 不得含 TODO/FIXME" }

@@ -101,27 +101,11 @@ func isColumnType(t string, ct ColumnTypes, refPrefixes []string) bool {
 }
 
 func tableRefs(m map[string]any) []string {
-	return append(writeTableRefs(m), readOnlyTableRefs(m)...)
-}
-
-// writeTableRefs 返回 capability.persistence 中声明为可写的表。
-func writeTableRefs(m map[string]any) []string {
 	var out []string
 	if t, ok := m["table"].(string); ok && t != "" {
 		out = append(out, t)
 	}
 	for _, x := range asList(m["tables"]) {
-		if s, ok := x.(string); ok && s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-// readOnlyTableRefs 返回 capability.persistence 中声明为只读的表。
-func readOnlyTableRefs(m map[string]any) []string {
-	var out []string
-	for _, x := range asList(m["read_only_tables"]) {
 		if s, ok := x.(string); ok && s != "" {
 			out = append(out, s)
 		}
@@ -135,14 +119,6 @@ func stringSet(list []any) map[string]bool {
 		if s, ok := x.(string); ok {
 			out[s] = true
 		}
-	}
-	return out
-}
-
-func stringSetOf(list []string) map[string]bool {
-	out := map[string]bool{}
-	for _, s := range list {
-		out[s] = true
 	}
 	return out
 }

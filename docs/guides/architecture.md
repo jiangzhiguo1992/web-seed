@@ -410,8 +410,8 @@ apps:
 - 业务表可选 `version` 做乐观锁；不是基类字段
 - 存储引擎、部署拓扑、连接池、锁在 `data/storage.yaml`，禁止逐表声明 engine
 - 枚举用 `string + check`，不用 PG enum（迁移困难）
-- 软删的唯一约束必须用部分索引：`WHERE deleted_at IS NULL`
-- 索引命名 `idx_<table>_<cols>`；外键默认加，热点表可评估去掉
+- 软删后可复用的唯一性用部分唯一索引：`WHERE deleted_at IS NULL`；全局唯一（含软删行）用 `UNIQUE` 约束
+- 索引命名 `idx_<table>_<cols>`；禁止数据库外键，跨表一致性由应用/业务规则保证
 - 迁移只前进；零停机三步：加可空列 → 回填 → 加约束
 - 软删默认过滤，必须在 repo 层统一，禁止每处手写
 - 分区/表达式索引/`CONCURRENTLY` 用结构化字段；不设未结构化 DDL 字段

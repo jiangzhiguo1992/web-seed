@@ -16,7 +16,7 @@ table:
   name: accounts
   comment: 账号（业务主体）
   size_class: large
-  retention: { pending_days: 7, soft_delete_days: 30, hard_delete_days: 90 }
+  retention: { unit: days, pending: 7, soft_delete: 30, hard_delete: 90 }
 
 columns:
   - name: own_type
@@ -53,7 +53,7 @@ columns:
     type: string
     max_len: 36
     nullable: true
-    comment: 关联用户 ID；user 模块落地后补外键
+    comment: 关联用户 ID；不做数据库外键
 
   - name: status
     type: data.enums.account_status
@@ -114,4 +114,4 @@ used_by:
     - data.queries.account.soft_delete_account
     - data.queries.account.list_stale_pending_accounts
     - data.queries.account.soft_delete_stale_pending_accounts
-  capabilities: [cap.services.account, cap.services.auth]
+  capabilities: [cap.services.account]

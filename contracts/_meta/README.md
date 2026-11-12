@@ -77,13 +77,15 @@ scripts/cmd/
   - `default` / `default_sql` 互斥；`default` 的 YAML 类型、长度、范围与列类型族兼容
   - 列 / 约束 / 索引重名；`do_not` 每条必须含本表具体标识
   - `constraints` 的 `type`、按类型允许的字段、必填子字段与列引用；enum 约束与列类型一致
-  - 外键 `columns` 与 `references` 数量一致，目标表/列存在
+  - 禁止 `foreign_key`；跨表一致性由应用/业务规则保证
+  - `unique` 约束与唯一索引的软删语义不同：约束含软删行，唯一索引按 `where` 过滤
   - `indexes` 的 `reason`、`columns` xor `expression`、`order` 长度/方向、唯一索引软删过滤、命名前缀、列引用；large 表不得显式禁用 `concurrently`
   - `table.partition.columns` 存在；range 必须有 `interval`，其他策略不得有
-  - `table.retention` 的值 >= 1
+  - `table.retention` 的数值 >= 1，`unit` 只能是 minutes/hours/days
   - `used_by` 三列表与实际入边一致；`queries` 记录查询项 ID
-  - `owner_module` 与 capabilities 写表归属一致；写表不得同时列在 `read_only_tables`
+  - `owner_module` 与 capabilities 写表归属一致；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
   - `data.enums.*` 引用存在；枚举列 `default` 必须是已有枚举值
+  - `_meta` 的 `description` / `generates` / `caution` 必须使用双引号（`contract-check` 校验）
 - `data/enums.yaml`
   - 集合 ID、item ID = `data.enums.<name>`、值唯一、`db_type: text`
 - 实体/查询/能力对表的引用存在
@@ -103,7 +105,8 @@ scripts/cmd/
 
 ## 5. 字段节点怎么读
 
-每个字段固定包含：
+字段节点的硬/软分类、`required`、`default`、`stability` 等通用语义见
+`_types.yaml` 的 `schema_semantics`。本文件只保留 data.tables 特有的 `column_types` / `column_refs`。
 
 | 键 | 用途 |
 |---|---|
@@ -111,39 +114,26 @@ scripts/cmd/
 | `generates` | 生成器会产出什么 / 怎么消费 |
 | `caution` | AI 最容易写错的用法 |
 | `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` | 结构约束 |
-| `default` | required 字段上只影响 `contract-new` 骨架；optional 字段上表示省略时的语义默认值；`contract-check` 不补值 |
 | `examples` | 示例值；`contract-new` 可用于生成 |
-| `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；每个参数可带 `required`、`min`、`max`、`enum`、`default`；`min`/`max` 的 `type` 使用所属族名（integer / float / decimal），不使用抽象 number；不是数据库物理类型 |
-| `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；不是类型族，也不是外键；与 `column_types` 分开 |
+| `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
+| `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；不是类型族，也不是外键 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
-| `rules` | 跨字段规则的声明式清单；声称硬约束的规则必须在 `scripts/cmd/internal/check` 有对应实现，否则只是文档 |
+| `rules` | 跨字段规则的声明式清单；声称硬约束的规则必须在 `scripts/cmd/internal/check` 有对应实现 |
 
 **先读 `description` 和 `caution`，不要只按字段名猜。**
 
 ### 5.1 `stability` 流转
 
-| 状态 | 进入条件 | 退出条件 |
+| 状态 | 含义 | 进入条件 |
 |---|---|---|
-| `draft` | 默认；正在编写 | 替换所有 `TODO`/`FIXME`，`make contract-check` 通过后改 `stable` |
-| `stable` | 评审通过、无 TODO | 改 `deprecated`，停止新增引用，准备移除 |
-| `deprecated` | 已废弃；不再新增引用 | 所有入边迁完并删除契约文件 |
+| `draft` | 正在编写 | 默认状态；允许 TODO/FIXME |
+| `stable` | 评审通过、无 TODO | 替换所有 TODO/FIXME，`make contract-check` 通过 |
+| `deprecated` | 已废弃 | 停止新增引用，准备移除 |
 
-状态只允许向前流转：
+状态可双向流转：`stable → draft` 表示重新修改；`deprecated → stable` 表示恢复。
+`contract-check` 只校验 `stable` 文件不得含 `TODO` / `FIXME`，不阻止状态回退。
 
-```text
-draft → stable
-draft → deprecated
-stable → deprecated
-```
-
-`deprecated` 不能回到 `draft` 或 `stable`；`stable` 不能回退到 `draft`。
-
-`contract-check` 能校验：
-
-- `stable` 文件不得含 `TODO` / `FIXME`；
-- 用 `git show HEAD:<file>` 对比上一版，禁止非法回退。
-
-状态的**判断**仍由 PR 评审负责；`contract-check` 只负责当前状态自洽和方向不回退。
+状态的**判断**仍由 PR 评审负责；`contract-check` 只负责当前状态自洽。
 
 ---
 
@@ -155,5 +145,6 @@ stable → deprecated
 - 不要手写 `used_by`；它由 `make gen-graph` 写入，`contract-check` 校验。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不在 `contract-check` 实现；`rules` 是清单，不是执行器。
+- 不要在 `data.tables.yaml` 重复 `_types.yaml` 的通用字段语义；类型文件只写类型特有内容。
 - 不要在 `contracts/_meta/` 里写业务实例；它只描述类型。
 - 不要为单个表/页面各写一份规范；按类型一份。

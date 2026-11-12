@@ -1,10 +1,12 @@
 // Package check 实现契约校验：结构、ID、基类、列/约束/索引、引用、used_by、index 与 stability。
 //
 // 当前覆盖：
+//   - _meta 的 description/generates/caution 双引号强制
 //   - data.tables/*.yaml 的结构、ID/文件、基类继承、列/约束/索引、used_by、do_not 具体性
 //   - data/enums.yaml 的结构、item ID、值唯一性
 //   - 表列引用的 data.enums.* / data.tables.*.col.* 是否存在
 //   - 枚举默认值、enum 约束与列类型一致
+//   - 禁止 foreign_key；unique 约束与唯一索引的软删语义区分
 //   - owner_module 写归属（capabilities.persistence）
 //   - entity/query/capability 的表引用是否存在
 //
@@ -18,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
@@ -49,6 +52,8 @@ func (c *Checker) errf(format string, args ...any) {
 }
 
 func (c *Checker) run() {
+	c.checkMetaQuotes()
+	c.checkTypeMeta()
 	tableSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/data.tables.yaml"))
 	if err != nil {
 		c.errf("load tables schema: %v", err)
@@ -66,6 +71,70 @@ func (c *Checker) run() {
 	c.checkCrossFileTableRefs(tableIDs, cols)
 	c.checkUsedBy(tableIDs)
 	c.checkIndex(tableIDs)
+}
+
+// checkMetaQuotes 强制 _meta 的 description/generates/caution 使用双引号，
+// 避免 AI/正则按未加引号的字符串解析时出现歧义。
+func (c *Checker) checkMetaQuotes() {
+	files, _ := filepath.Glob(filepath.Join(c.root, "contracts/_meta/*.yaml"))
+	sort.Strings(files)
+	for _, file := range files {
+		rel := relPath(c.root, file)
+		b, err := os.ReadFile(file)
+		if err != nil {
+			c.errf("%s: %v", rel, err)
+			continue
+		}
+		var doc yaml.Node
+		if err := yaml.Unmarshal(b, &doc); err != nil {
+			c.errf("%s: %v", rel, err)
+			continue
+		}
+		c.checkProseQuotes(&doc, rel)
+	}
+}
+
+func (c *Checker) checkProseQuotes(n *yaml.Node, rel string) {
+	switch n.Kind {
+	case yaml.DocumentNode, yaml.SequenceNode:
+		for _, child := range n.Content {
+			c.checkProseQuotes(child, rel)
+		}
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k, v := n.Content[i], n.Content[i+1]
+			switch k.Value {
+			case "description", "generates", "caution":
+				if v.Kind == yaml.ScalarNode && v.Style != yaml.DoubleQuotedStyle {
+					c.errf("%s: %s must be double-quoted", rel, k.Value)
+				}
+			}
+			c.checkProseQuotes(v, rel)
+		}
+	}
+}
+
+type typeMeta struct {
+	Types map[string]struct {
+		Generates []string `yaml:"generates"`
+		DoNot     []string `yaml:"do_not"`
+	} `yaml:"types"`
+}
+
+// checkTypeMeta 校验 _types.yaml 能按预期形状解析：
+// do_not 必须是字符串列表，generates 必须是字符串列表。
+// 这类文件不被 schema loader 读取，但 AI 会直接读；形状错误必须显式报出。
+func (c *Checker) checkTypeMeta() {
+	path := filepath.Join(c.root, "contracts/_meta/_types.yaml")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		c.errf("contracts/_meta/_types.yaml: %v", err)
+		return
+	}
+	var meta typeMeta
+	if err := yaml.Unmarshal(b, &meta); err != nil {
+		c.errf("contracts/_meta/_types.yaml: %v", err)
+	}
 }
 
 func loadSchema(path string) (*Schema, error) {

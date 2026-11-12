@@ -12,7 +12,7 @@ do_not:
 table:
   comment: 手机号认证
   size_class: small
-  retention: { soft_delete_days: 30, hard_delete_days: 90 }
+  retention: { unit: days, soft_delete: 30, hard_delete: 90 }
 
 columns:
   - name: account_id
@@ -50,13 +50,6 @@ columns:
     comment: 认证记录状态
 
 constraints:
-  - name: fk_auth_phone_account
-    type: foreign_key
-    columns: [account_id]
-    references: [data.tables.account.col.id]
-    on_delete: cascade
-    on_update: no_action
-
   - name: ck_auth_phone_status
     type: enum
     column: status
