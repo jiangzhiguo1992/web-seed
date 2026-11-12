@@ -113,7 +113,14 @@ type queryItemScaffold struct {
 	Returns      string               `yaml:"returns"`
 	Semantics    string               `yaml:"semantics"`
 	IndexColumns [][]string           `yaml:"index_columns"`
-	SQL          string               `yaml:"sql"`
+	SQL          querySQLScaffold     `yaml:"sql"`
+}
+
+type querySQLScaffold struct {
+	Statement string   `yaml:"statement"`
+	From      string   `yaml:"from"`
+	Select    []string `yaml:"select"`
+	Where     []string `yaml:"where,omitempty"`
 }
 
 type queryParamScaffold struct {
@@ -377,7 +384,11 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 			Returns:      "boolean",
 			Semantics:    "TODO: 查询语义",
 			IndexColumns: [][]string{{"id"}},
-			SQL:          fmt.Sprintf("SELECT EXISTS (\n  SELECT 1\n  FROM %s\n  WHERE id = @id\n);\n", physical),
+			SQL: querySQLScaffold{
+				Statement: "select",
+				From:      "data.tables." + table,
+				Select:    []string{fmt.Sprintf("EXISTS (SELECT 1 FROM %s WHERE id = @id)", physical)},
+			},
 		}},
 	}
 	b, err := marshal2(doc)

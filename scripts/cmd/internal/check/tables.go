@@ -114,11 +114,11 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 		}
 		id, _ := doc["id"].(string)
 		if id == "" {
-			c.rulef("id-from-file", "%s: missing id", rel)
+			c.rulef("schema.id-from-file", "%s: missing id", rel)
 			continue
 		}
 		if prev, ok := tableIDs[id]; ok {
-			c.rulef("contract-id-unique", "%s: duplicate contract id %s (also %s)", rel, id, prev)
+			c.rulef("schema.contract-id-unique", "%s: duplicate contract id %s (also %s)", rel, id, prev)
 		}
 		tableIDs[id] = rel
 		physical = append(physical, tableDoc{id: id, rel: rel, doc: doc})
@@ -548,7 +548,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	if want == "" {
 		c.rulef("schema.targets", "%s: cannot derive contract id from targets.id", rel)
 	} else if id != want {
-		c.rulef("id-from-file", "%s: id must be %s, got %s (file name is the source)", rel, want, id)
+		c.rulef("schema.id-from-file", "%s: id must be %s, got %s (file name is the source)", rel, want, id)
 	}
 	// extends 的值域由 fields.extends.pattern + unique 保证；
 	// 这里只补字段树无法表达的空列表约束，避免同一错误重复报两次。
@@ -586,7 +586,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		}
 		name, _ := m["name"].(string)
 		if colNames[name] {
-			c.rulef("unique-names", "%s: columns[%d]: duplicate column %q", rel, i, name)
+			c.rulef("schema.unique-names", "%s: columns[%d]: duplicate column %q", rel, i, name)
 		}
 		colNames[name] = true
 		allCols[name] = true
@@ -655,7 +655,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if !constraintNames[name] {
 			constraintNames[name] = true
 		} else {
-			c.rulef("unique-names", "%s: constraints[%d]: duplicate constraint %q", rel, i, name)
+			c.rulef("schema.unique-names", "%s: constraints[%d]: duplicate constraint %q", rel, i, name)
 		}
 		if allowed, known := constraintAllowedFields[typ]; known {
 			for k := range m {
@@ -711,7 +711,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if !indexNames[name] {
 			indexNames[name] = true
 		} else {
-			c.rulef("unique-names", "%s: indexes[%d]: duplicate index %q", rel, i, name)
+			c.rulef("schema.unique-names", "%s: indexes[%d]: duplicate index %q", rel, i, name)
 		}
 		c.checkIndexUsedBy(m, want, rel, i, name)
 		if _, ok := m["reason"]; ok && !hasNonEmptyString(m, "reason") {
@@ -803,7 +803,7 @@ func sqlMentionsAny(sql string, columns []any) bool {
 }
 
 // checkDoNotSpecificity 落实 contracts/README §4.5.1：
-// 每条 do_not 必须含本表的具体标识，通用规则应上移 _types.yaml。
+// 每条 do_not 必须含本表的具体标识，通用规则应上移组 README 或 _base。
 func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, table map[string]any, allCols, constraintNames, indexNames map[string]bool) {
 	tokens := map[string]bool{}
 	add := func(s string) {

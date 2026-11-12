@@ -61,8 +61,11 @@ func TestFieldPlacement(t *testing.T) {
 	if !strings.Contains(errs, "_meta must not declare do_not") {
 		t.Fatalf("meta do_not not reported: %v", c.errs)
 	}
-	if strings.Count(errs, "concrete contract must not declare rules") != 3 {
-		t.Fatalf("want entity + other platform + nested reported: %v", c.errs)
+	if strings.Count(errs, "must not declare top-level rules") != 2 {
+		t.Fatalf("want entity + other platform reported: %v", c.errs)
+	}
+	if strings.Contains(errs, "nested.yaml") {
+		t.Fatalf("nested data property rules wrongly reported: %v", c.errs)
 	}
 	if strings.Count(errs, "top-level fields must be block style") != 3 {
 		t.Fatalf("want three flow-style files reported: %v", c.errs)

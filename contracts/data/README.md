@@ -15,7 +15,7 @@
 | `tables/<file>.yaml` | 物理表：字段、类型、约束、索引、分区、保留期 | `schema.sql`、增量 `migrations/*.sql`、sqlc 输入 |
 | `entities/<entity>.yaml` | 读模型：身份、字段、关系、复杂校验 | Go/TS 类型 |
 | `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
-| `queries/<module>.yaml` | 查询契约：id、参数、返回、SQL、语义 | `queries/*.sql`、sqlc 代码 |
+| `queries/<module>.yaml` | 查询契约：id、参数、返回、结构化 SQL、语义 | `queries/*.sql`、sqlc 代码 |
 | `storage.yaml` | 项目级存储引擎、部署拓扑、连接与锁 | 配置校验、运维约束 |
 
 ### 1.1 基类不是物理表
@@ -86,7 +86,7 @@ redundancy: { group: account_own_type, role: copy, ref: data.tables.account.col.
 
 ### 1.5 查询声明索引列：`index_columns`
 
-`data/queries/*.yaml` 的每个 query 必须写 `index_columns`，声明 SQL 过滤/连接/排序需要的列；每个内层列表是一个**最左前缀要求**：
+`data/queries/*.yaml` 的每个 query 必须写 `index_columns`，声明 sql 表达式过滤/连接/排序需要的列；每个内层列表是一个**最左前缀要求**：
 
 ```yaml
 - id: data.queries.account.list_accounts
@@ -101,10 +101,31 @@ redundancy: { group: account_own_type, role: copy, ref: data.tables.account.col.
 - 每个内层列表必须按顺序匹配某条索引的最左前缀，或匹配主键（主键是隐式索引）；
 - 匹配的显式索引必须在 `used_by` 中列出该 query；
 - 反之，索引 `used_by` 中的 query 必须有一个内层列表能匹配该索引的最左前缀；
-- `index_columns` 的列必须存在于当前表，且必须出现在 SQL 中；
+- `index_columns` 的列必须存在于当前表，且必须出现在 sql 表达式中；
 - 单表查询必须写 `index_columns`；多表/JOIN 查询不得写，也不得出现在 `indexes[].used_by` 中。
 
 所以 `list_accounts` 可以同时声明游标索引 `[created_at, id]` 和归属过滤索引 `[own_type]`；索引列更多时，query 只写自己需要的前缀，剩余列由索引覆盖。多表查询的索引性能由 `EXPLAIN` 与评审负责，契约层不假装能表达。
+
+### 1.6 查询 SQL 是对象
+
+`sql` 不是一整段字符串，而是按语句类型拆开的对象：
+
+```yaml
+sql:
+  statement: select          # select / insert / update / delete
+  from: data.tables.account  # select/update/delete
+  select: [id, number]       # 纯列名；表/实体返回必须逐列列出
+  where:
+    - "id = @id"
+    - "deleted_at IS NULL"
+  order_by: ["created_at DESC"]
+  limit: "@page_size"
+```
+
+- `from` / `into` / `joins[].table` 用 `data.tables.*`，不再写物理表名；
+- `select` / `returning` 的表/实体返回必须是纯列名，禁止 `*`；复杂表达式可放字符串并写 `AS alias`；
+- `columns` / `values` / `set` 只用于写语句，`columns` 与 `values` 数量必须一致；
+- `where` / `order_by` / `limit` / `values` 是表达式字符串，方言相关；结构性约束（表、列、参数、写归属、返回覆盖）由 checker 硬校验，表达式语义仍交给 sqlc / EXPLAIN。
 
 ---
 
@@ -150,7 +171,7 @@ data/storage.yaml ────> 配置校验 + 运维约束
 
 ## 3.1 迁移禁止操作
 
-以下操作生成器直接报错，不会产出迁移（机器可读部分见 `_types.yaml` 的 `types.data.tables.migration`）：
+以下操作生成器直接报错，不会产出迁移（机器可读部分见 `_meta/data.tables.yaml` 的 `migration`）：
 
 迁移文件名：`<utc_timestamp>_<snake_case_name>.sql`。
 
@@ -194,7 +215,7 @@ indexes:
 -- manual-adjust: CONCURRENTLY 无法在事务内执行
 ```
 
-`manual_adjust` 与 `verification` 的机器可读定义在 `_types.yaml` 的 `types.data.tables.migration`。
+`manual_adjust` 与 `verification` 的机器可读定义在 `_meta/data.tables.yaml` 的 `migration`。
 
 ### 3.3 类型级负向约束
 
@@ -282,6 +303,6 @@ indexes:
 ## 7. 诚实边界
 
 生产在线 DDL（大表加索引需 `CONCURRENTLY`、数据回填分步）无法全自动。
-契约约束**最终态**，迁移**过程**允许人工介入，机器规则见 `_types.yaml` 的 `types.data.tables.migration`。
+契约约束**最终态**，迁移**过程**允许人工介入，机器规则见 `_meta/data.tables.yaml` 的 `migration`。
 
 P2 生成器尚未实现：当前的 `generated+tested` 是目标值，不代表已有闸门；生成器落地后以 `make gen` / `make gen-db` / `make gen-graph` 为准。

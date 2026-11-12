@@ -95,7 +95,6 @@ func cloneColumnMeta(src map[string]columnMeta) map[string]columnMeta {
 // loadTableColumns 构建每张物理表的有效列（含继承），并记录物理表名。
 func (c *Checker) loadTableColumns(tableIDs map[string]string) {
 	c.tableColumns = map[string]map[string]columnMeta{}
-	c.tablePhysical = map[string]string{}
 	docs := map[string]map[string]any{}
 	for id, rel := range tableIDs {
 		if id == c.baseID {
@@ -106,13 +105,6 @@ func (c *Checker) loadTableColumns(tableIDs map[string]string) {
 			continue
 		}
 		docs[id] = doc
-		phys := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
-		if tbl, _ := asMap(doc["table"]); tbl != nil {
-			if n, _ := tbl["name"].(string); n != "" {
-				phys = n
-			}
-		}
-		c.tablePhysical[id] = phys
 	}
 	base := baseColumnMeta()
 	var resolve func(id string, stack map[string]bool) map[string]columnMeta
@@ -378,10 +370,10 @@ func (c *Checker) checkEntities(schema *Schema) {
 		id, _ := ed.doc["id"].(string)
 		want := schema.Targets.FileID(filepath.Base(ed.rel))
 		if want != "" && id != want {
-			c.rulef("id-from-file", "%s: id must be %s, got %s (file name is the source)", ed.rel, want, id)
+			c.rulef("schema.id-from-file", "%s: id must be %s, got %s (file name is the source)", ed.rel, want, id)
 		}
 		if prev, ok := seenIDs[id]; ok {
-			c.rulef("contract-id-unique", "%s: duplicate contract id %s (also %s)", ed.rel, id, prev)
+			c.rulef("schema.contract-id-unique", "%s: duplicate contract id %s (also %s)", ed.rel, id, prev)
 		} else if id != "" {
 			seenIDs[id] = ed.rel
 		}
@@ -586,7 +578,7 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 	cols := map[string]string{}
 	for _, f := range e.Fields {
 		if names[f.Name] {
-			c.rulef("unique-names", "%s: duplicate field name %s", e.Rel, f.Name)
+			c.rulef("schema.unique-names", "%s: duplicate field name %s", e.Rel, f.Name)
 		}
 		names[f.Name] = true
 		where := fmt.Sprintf("%s: fields.%s", e.Rel, f.Name)
@@ -717,7 +709,7 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 	for _, r := range e.Relations {
 		where := fmt.Sprintf("%s: relations.%s", e.Rel, r.Name)
 		if names[r.Name] {
-			c.rulef("unique-names", "%s: duplicate relation name %s", e.Rel, r.Name)
+			c.rulef("schema.unique-names", "%s: duplicate relation name %s", e.Rel, r.Name)
 		}
 		names[r.Name] = true
 		target := c.entities[r.Target]
@@ -831,7 +823,7 @@ func (c *Checker) checkEntityValidation(e *entityInfo) {
 			c.rulef("entity-validation", "%s: id must start with %s.", where, e.ID)
 		}
 		if seen[id] {
-			c.rulef("unique-names", "%s: duplicate validation id %s", e.Rel, id)
+			c.rulef("schema.unique-names", "%s: duplicate validation id %s", e.Rel, id)
 		}
 		seen[id] = true
 		if s, _ := m["expr"].(string); strings.TrimSpace(s) == "" {

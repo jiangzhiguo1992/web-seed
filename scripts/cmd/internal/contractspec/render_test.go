@@ -144,8 +144,16 @@ func TestRenderQuery(t *testing.T) {
 	if q["returns"] != "boolean" || q["table"] != "data.tables.account" {
 		t.Fatalf("query returns/table not scaffolded: %#v", q)
 	}
-	if !strings.Contains(q["sql"].(string), "FROM accounts") {
-		t.Fatalf("physical table not used: %#v", q["sql"])
+	sqlMap, ok := q["sql"].(map[string]any)
+	if !ok {
+		t.Fatalf("sql must be an object: %#v", q["sql"])
+	}
+	if sqlMap["statement"] != "select" || sqlMap["from"] != "data.tables.account" {
+		t.Fatalf("sql statement/from not scaffolded: %#v", sqlMap)
+	}
+	selects, _ := sqlMap["select"].([]any)
+	if len(selects) != 1 || !strings.Contains(selects[0].(string), "FROM accounts") {
+		t.Fatalf("physical table not used: %#v", sqlMap["select"])
 	}
 	if !strings.Contains(string(b), `semantics: "TODO: 查询语义"`) {
 		t.Fatalf("semantics must be double-quoted:\n%s", b)

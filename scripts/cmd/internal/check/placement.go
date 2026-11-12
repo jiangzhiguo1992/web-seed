@@ -45,15 +45,14 @@ func (c *Checker) checkFieldPlacement() {
 			}
 			continue
 		}
-		if nodeHasKey(&doc, "rules") && !rulesAllowed(rel) {
-			c.rulef("schema.meta-placement", "%s: concrete contract must not declare rules; type rules belong in _meta", rel)
+		if topLevelHasKey(&doc, "rules") && !rulesAllowed(rel) {
+			c.rulef("schema.meta-placement", "%s: concrete contract must not declare top-level rules; type rules belong in _meta", rel)
 		}
 	}
 }
 
 // checkDoNotDuplicates 防止把组级指导重新抄回具体契约。
 func (c *Checker) checkDoNotDuplicates() {
-	guidance := c.guidanceLines()
 	seen := map[string]string{}
 	for _, file := range walkYAML(c.root, "contracts") {
 		rel := relPath(c.root, file)
@@ -67,6 +66,11 @@ func (c *Checker) checkDoNotDuplicates() {
 		if err != nil {
 			continue
 		}
+		group := ""
+		if parts := strings.Split(rel, "/"); len(parts) > 1 {
+			group = parts[1]
+		}
+		guidance := c.guidanceLines(group)
 		for _, raw := range asList(doc["do_not"]) {
 			s, _ := raw.(string)
 			s = strings.TrimSpace(s)
@@ -86,9 +90,9 @@ func (c *Checker) checkDoNotDuplicates() {
 	}
 }
 
-func (c *Checker) guidanceLines() map[string]bool {
+func (c *Checker) guidanceLines(group string) map[string]bool {
 	out := map[string]bool{}
-	files := append(glob(c.root, "contracts/README.md"), glob(c.root, "contracts/*/README.md")...)
+	files := append(glob(c.root, "contracts/README.md"), glob(c.root, "contracts/"+group+"/README.md")...)
 	for _, file := range files {
 		b, err := os.ReadFile(file)
 		if err != nil {
@@ -103,14 +107,16 @@ func (c *Checker) guidanceLines() map[string]bool {
 			}
 		}
 	}
-	for _, rel := range []string{"contracts/data/tables/_base.yaml", baseEntityPath} {
-		doc, err := loadYAML(filepath.Join(c.root, rel))
-		if err != nil {
-			continue
-		}
-		for _, raw := range asList(doc["do_not"]) {
-			if s, ok := raw.(string); ok && strings.TrimSpace(s) != "" {
-				out[strings.TrimSpace(s)] = true
+	if group == "data" {
+		for _, rel := range []string{"contracts/data/tables/_base.yaml", baseEntityPath} {
+			doc, err := loadYAML(filepath.Join(c.root, rel))
+			if err != nil {
+				continue
+			}
+			for _, raw := range asList(doc["do_not"]) {
+				if s, ok := raw.(string); ok && strings.TrimSpace(s) != "" {
+					out[strings.TrimSpace(s)] = true
+				}
 			}
 		}
 	}
@@ -148,6 +154,9 @@ func topLevelFieldsFlow(n *yaml.Node) bool {
 			continue
 		}
 		v := n.Content[i+1]
+		if v.Kind == yaml.SequenceNode && len(v.Content) == 0 {
+			return false
+		}
 		if v.Style == yaml.FlowStyle {
 			return true
 		}
@@ -160,6 +169,27 @@ func topLevelFieldsFlow(n *yaml.Node) bool {
 			}
 		}
 		return false
+	}
+	return false
+}
+
+func topLevelHasKey(n *yaml.Node, key string) bool {
+	if n == nil {
+		return false
+	}
+	if n.Kind == yaml.DocumentNode {
+		if len(n.Content) == 0 {
+			return false
+		}
+		return topLevelHasKey(n.Content[0], key)
+	}
+	if n.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value == key {
+			return true
+		}
 	}
 	return false
 }

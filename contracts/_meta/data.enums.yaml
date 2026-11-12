@@ -1,5 +1,5 @@
 # data.enums 类型的单一规范：字段树 + 值域 + 字段说明。
-# 通用字段语义见 _types.yaml 的 schema_semantics。
+# 通用字段语义见 _meta/README.md。
 #
 # 集合契约：文件 id 为 data.enums；每个枚举项 id 为 data.enums.<name>。
 # 该文件同时是 contract-new 的字段来源；不要另写模板。

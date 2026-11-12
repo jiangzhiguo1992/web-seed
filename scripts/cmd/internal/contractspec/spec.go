@@ -21,6 +21,34 @@ type Schema struct {
 	ColumnRefs  ColumnRefs  `yaml:"column_refs"`
 	Fields      []Field     `yaml:"fields"`
 	Rules       []Rule      `yaml:"rules"`
+	Migration   Migration   `yaml:"migration"`
+}
+
+// Migration 描述表契约到迁移文件的生成策略；只用于 data.tables。
+type Migration struct {
+	Naming       string                  `yaml:"naming"`
+	Forbidden    []MigrationForbidden    `yaml:"forbidden"`
+	ManualAdjust MigrationManualAdjust   `yaml:"manual_adjust"`
+	Verification []MigrationVerification `yaml:"verification"`
+}
+
+type MigrationForbidden struct {
+	ID      string `yaml:"id"`
+	Rule    string `yaml:"rule"`
+	Instead string `yaml:"instead"`
+}
+
+type MigrationManualAdjust struct {
+	Prefix         string   `yaml:"prefix"`
+	RequiredReason bool     `yaml:"required_reason"`
+	AllowedCases   []string `yaml:"allowed_cases"`
+	ReviewRequired bool     `yaml:"review_required"`
+}
+
+type MigrationVerification struct {
+	ID      string `yaml:"id"`
+	Command string `yaml:"command"`
+	Rule    string `yaml:"rule"`
 }
 
 type Rule struct {
@@ -88,7 +116,7 @@ type Field struct {
 }
 
 // LoadSchemaByType 在 contracts/_meta/*.yaml 中按 type 查找 meta。
-// 文件本身即 registry，不维护第二份类型映射；_types.yaml 等无 type 的文件跳过。
+// 文件本身即 registry，不维护第二份类型映射；无 type 的辅助文件跳过。
 func LoadSchemaByType(root, typ string) (*Schema, string, error) {
 	dir := filepath.Join(root, "contracts/_meta")
 	files, err := filepath.Glob(filepath.Join(dir, "*.yaml"))

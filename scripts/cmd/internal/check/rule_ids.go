@@ -43,7 +43,7 @@ func (c *Checker) declareRuleID(id string) {
 }
 
 // checkUndeclaredRuleIDs 反向校验：checker 实际输出的非 schema.* 错误码
-// 必须出现在某个 rules/schema_rules 的 implemented_by 中。
+// 必须出现在某个类型 rules 的 implemented_by 中。
 func (c *Checker) checkUndeclaredRuleIDs() {
 	for id := range knownRuleIDs {
 		if strings.HasPrefix(id, "schema.") {

@@ -1,5 +1,5 @@
-# data.tables 的字段树 + 值域 + 字段说明。
-# 通用字段语义见 _types.yaml 的 schema_semantics；通用规则见 schema_rules；本文件只写 data.tables 特有内容。
+# data.tables 的字段树 + 值域 + 字段说明 + 迁移策略。
+# 通用字段语义见 _meta/README.md；本文件只写 data.tables 特有内容（含 migration 策略）。
 # targets 决定扫描路径、ID 模板与命名规则；基类固定为 data/tables/_base.yaml，由 checker 写死识别。
 # 本文件同时是 contract-new 的字段来源；不要另写模板。
 
@@ -68,6 +68,27 @@ column_types:
         min_len: { type: integer, required: false, min: 0, description: "最小字节数" }
         max_len: { type: integer, required: false, min: 1, description: "最大字节数" }
         fixed: { type: boolean, required: false, default: false, description: "固定长度；为 true 时必须写 max_len" }
+
+migration:
+  naming: "<utc_timestamp>_<snake_case_name>.sql"
+  forbidden:
+    - { id: no_drop_column, rule: "禁止直接 DROP COLUMN", instead: "先标 deprecated，停止写入一个版本后再删" }
+    - { id: no_rename_column, rule: "禁止 RENAME COLUMN", instead: "加新列 → 双写 → 回填 → 切读 → 删旧列" }
+    - { id: no_not_null_without_default, rule: "禁止给已有数据的表加 NOT NULL 且无默认值", instead: "加可空 → 回填 → 加约束" }
+    - { id: no_type_change_in_place, rule: "禁止原地改列类型", instead: "新列 + 回填 + 切换" }
+    - { id: no_lock_heavy_index, rule: "size_class=large 禁止非 CONCURRENTLY 建索引", instead: "CREATE INDEX CONCURRENTLY（transaction: false）" }
+  manual_adjust:
+    prefix: "-- manual-adjust:"
+    required_reason: true
+    allowed_cases:
+      - "CREATE INDEX CONCURRENTLY"
+      - "ALTER TABLE ... VALIDATE CONSTRAINT"
+      - "数据回填的分批与限速"
+    review_required: true
+  verification:
+    - { id: empty_db_replay, command: "make db-verify", rule: "空库 apply 全部迁移 → dump schema 必须等于 data/tables 生成的目标态" }
+    - { id: contract_diff, command: "make gen-db && git diff --exit-code", rule: "契约变更必须伴随迁移生成" }
+    - { id: used_by_sync, command: "make gen-graph && git diff --exit-code", rule: "used_by 必须等于实际入边集合" }
 
 fields:
   - name: schema_version

@@ -76,7 +76,6 @@ contracts/
 ├── index.yaml                # 契约地图：所有条目的 ID / 路径 / 消费者 / 强度
 ├── _meta/                    # 契约元规范（非业务契约，不登记 index）
 │   ├── README.md             #   AI 入口：写前读什么、写后跑什么
-│   ├── _types.yaml           #   每类契约的默认元数据（enforcement / consumers / generates）
 │   ├── data.tables.yaml      #   物理表字段树 + 值域 + 规则（单一源）
 │   ├── data.entities.yaml    #   实体字段树 + 值域 + 规则
 │   ├── data.queries.yaml     #   查询字段树 + 值域 + 规则
@@ -88,7 +87,7 @@ contracts/
 │   ├── tables/<file>.yaml     #   物理表结构（文件名决定 ID，物理表名可独立覆盖）
 │   ├── entities/_base.yaml   #   实体字段基类：5 列 + 类型级 do_not
 │   ├── entities/<entity>.yaml#   读模型：继承 _base，只写业务字段、关系、validation
-│   ├── queries/<module>.yaml #   查询契约（SQL 是契约字段，.sql 是产物）
+│   ├── queries/<module>.yaml #   查询契约（结构化 SQL 对象，.sql 是产物）
 │   ├── enums.yaml            #   跨端枚举集合（data.enums + data.enums.<name>）
 │   └── storage.yaml          #   项目级存储引擎与部署拓扑（单例）
 │
@@ -278,12 +277,11 @@ business.states.account ─subject→ data.entities.account ─table→ data.tab
 
 `_meta/` 是契约字段规范与脚本入口，不登记 `index.yaml`；`generated/` 只放产物，也不登记为业务契约。
 
-### 4.1 文件结构（三层）
+### 4.1 文件结构（按职责分层）
 
 | 层 | 位置 | 内容 |
 |---|---|---|
-| 类型默认值 | `_meta/_types.yaml` | 每类契约的 `enforcement` / `consumers` / `generates` |
-| 类型规则 | `_meta/<type>.yaml` 的 `rules` | 可机器校验的类型级规则 |
+| 类型规范 | `_meta/<type>.yaml` | 字段树 + 值域 + 可机器校验的类型级 `rules` |
 | 类型指导 | `<group>/README.md` 或 `<type>/_base.yaml` 的 `do_not` | 不可机器化的通用反例 |
 | 实例元数据 | 文件正文 | `id` / `summary` / `stability` / 实例级 `do_not` |
 | 人类注释 | 文件第一行 | 一句 `# <用途>`，不承载机器信息 |
@@ -304,8 +302,8 @@ table:
 
 - 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖
 - `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 前必须替换 TODO 并跑 `make contract-check`；状态可双向流转，`stable → draft` 表示重新修改
-- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` 按完整 ID 匹配 `_meta/_types.yaml`；`data.tables.base` / `data.entities.base` 由 checker 固定识别），文件无需声明 `type`
-- 生效元数据 = `_meta/_types.yaml` + `_meta/<type>.yaml` + 继承的 `_base` 字段 + 文件字段覆盖
+- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` 按完整 ID 匹配 `_meta/<type>.yaml`；`data.tables.base` / `data.entities.base` 由 checker 固定识别），文件无需声明 `type`
+- 生效元数据 = `_meta/<type>.yaml` + 继承的 `_base` 字段 + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移
 - **不写 `refs`**：依赖关系由图校验器从 `ref` / `capability` / `use` / `emits` / `column` / `target` 等结构化字段自动推导
 
@@ -352,7 +350,7 @@ table:
 | **实例级** | 契约正文 `do_not` | "account.status 使用 integer；枚举只在 entity"、"游标分页要有 tiebreaker" | 就近，每个文件 1–3 条 |
 | **全局** | `index.yaml` 的 `global_notes` | "错误响应由生成器注入" | 跨文件坑，极少 |
 
-例外：`business/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不是类型规则清单；除此以外具体契约禁止顶层或嵌套 `rules`。
+例外：`business/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不是类型规则清单；除此以外具体契约禁止顶层 `rules`；嵌套的数据属性可以叫 `rules`，不视为契约规则。
 
 **不建目录级 index 汇总约束**，原因：
 
@@ -493,11 +491,11 @@ data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 
 P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器待实现。
 
-- **_meta**：`data.tables.yaml` / `data.enums.yaml` + `make contract-new` + `make contract-check`（试点；其余类型待补）
+- **_meta**：`data.tables.yaml` / `data.enums.yaml` / `data.entities.yaml` / `data.queries.yaml` + `make contract-new` + `make contract-check`
 - **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{account,auth}`、`storage`
 - **capabilities**：`http/{shared,account,auth}`、`async/account_cleanup`、`services/{account,auth}`（其余模块待建）
 - **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件
 
-> P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`contract-check` 目前覆盖 data.tables / data.enums / 跨文件引用 / used_by / owner 写归属，`gen` 与其余类型 schema 待补。`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。
+> P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`contract-check` 目前覆盖 data.tables / data.enums / data.entities / data.queries（含结构化 SQL 形状）、跨文件引用与 used_by；`gen` 与其余类型 schema 待补。`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。
 
-`_meta/_types.yaml` 是类型默认值，不是实例契约，不登记在 `index.yaml`。
+`_meta/<type>.yaml` 是字段规范，不是实例契约，不登记在 `index.yaml`。

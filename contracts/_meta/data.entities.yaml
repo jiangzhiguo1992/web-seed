@@ -1,5 +1,5 @@
 # data.entities 的单一规范：字段树 + 值域 + 硬规则。
-# 通用字段语义见 _types.yaml 的 schema_semantics；本文件只写 data.entities 特有内容。
+# 通用字段语义见 _meta/README.md；本文件只写 data.entities 特有内容。
 # 实体是读模型：字段必须能投影回物理列，不反推 DDL，不承载统计聚合。
 
 id: meta.data.entities

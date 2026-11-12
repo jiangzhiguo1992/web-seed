@@ -1,5 +1,5 @@
 # data.queries 的单一规范：字段树 + 值域 + 硬规则。
-# 通用字段语义见 _types.yaml 的 schema_semantics；本文件只写 data.queries 特有内容。
+# 通用字段语义见 _meta/README.md；本文件只写 data.queries 特有内容。
 # 查询是 entity 与 table 的桥：返回实体时负责投影，返回行时负责底层操作，统计结果走 output_fields。
 
 id: meta.data.queries
@@ -105,8 +105,34 @@ fields:
           - { name: note, type: string, required: false, description: "输出字段补充说明" }
 
       - { name: semantics, type: string, required: true, description: "查询语义：过滤、排序、软删、锁、幂等", generates: "生成器注释、测试断言", caution: "不要写实现步骤；不要与 SQL 重复" }
-      - { name: index_columns, type: list<list<string>>, required: false, description: "索引使用声明：每个内层列表是最左前缀要求；单表必填，多表不得写", generates: "索引校验", caution: "列必须出现在 SQL；匹配的索引必须在 used_by 中列出本 query" }
-      - { name: sql, type: string, required: true, description: "SQL 契约字段；queries/*.sql 由它生成", generates: "queries/*.sql、sqlc 代码", caution: "禁止 SELECT *；表名必须是物理名；参数只能来自 params" }
+      - { name: index_columns, type: list<list<string>>, required: false, description: "索引使用声明：每个内层列表是最左前缀要求；单表必填，多表不得写", generates: "索引校验", caution: "列必须出现在 sql 表达式中；匹配的索引必须在 used_by 中列出本 query" }
+      - name: sql
+        type: object
+        required: true
+        description: "结构化 SQL；按 statement 选择子句，表达式保持为字符串"
+        generates: "queries/*.sql、sqlc 代码"
+        caution: "表用 data.tables.*；实体/表返回的 select/returning 只能是纯列名；禁止 *"
+        fields:
+          - { name: statement, type: string, required: true, enum: [ select, insert, update, delete ], description: "语句类型" }
+          - { name: from, type: string, required: false, pattern: '^data\.tables\.', description: "SELECT/UPDATE/DELETE 的表" }
+          - { name: into, type: string, required: false, pattern: '^data\.tables\.', description: "INSERT 的表" }
+          - { name: distinct, type: boolean, required: false, default: false, description: "SELECT DISTINCT" }
+          - { name: select, type: list<string>, required: false, min_items: 1, description: "SELECT 表达式；实体/表返回必须是纯列名" }
+          - { name: where, type: list<string>, required: false, description: "WHERE 表达式，多条按 AND 连接" }
+          - { name: order_by, type: list<string>, required: false, description: "ORDER BY 表达式" }
+          - { name: limit, type: string, required: false, description: "LIMIT 表达式" }
+          - { name: columns, type: list<string>, required: false, min_items: 1, description: "INSERT 列名" }
+          - { name: values, type: list<string>, required: false, min_items: 1, description: "INSERT 值表达式；数量必须与 columns 一致" }
+          - { name: set, type: list<string>, required: false, min_items: 1, description: "UPDATE 赋值表达式，形如 col = expr" }
+          - { name: returning, type: list<string>, required: false, description: "RETURNING 表达式；实体/表返回必须是纯列名" }
+          - name: joins
+            type: list<object>
+            required: false
+            description: "JOIN 子句；主表在 from"
+            item_fields:
+              - { name: table, type: string, required: true, pattern: '^data\.tables\.', description: "JOIN 表" }
+              - { name: type, type: string, required: false, enum: [ inner, left, right, full ], default: inner, description: "JOIN 类型" }
+              - { name: on, type: list<string>, required: true, min_items: 1, description: "ON 表达式" }
 
 rules:
   - { id: query-id-prefix, text: "query.id 必须以 <文件 id>. 开头", implemented_by: [ query-id-prefix ] }
@@ -114,18 +140,19 @@ rules:
   - { id: query-name, text: "query.name 必须等于 query id 末段的 PascalCase", implemented_by: [ query-name ] }
   - { id: query-name-unique, text: "query.name 全局唯一，避免 sqlc 方法名冲突", implemented_by: [ query-name-unique ] }
   - { id: query-table-shape, text: "table 与 tables 必须恰好出现一个；表必须存在、去重、不得指向 data.tables.base", implemented_by: [ query-table-shape ] }
-  - { id: query-table-sql, text: "声明的每个物理表名必须出现在 SQL 中", implemented_by: [ query-table-sql ] }
+  - { id: query-table-sql, text: "table/tables 必须与 sql.from/into/joins 完全一致", implemented_by: [ query-table-sql ] }
   - { id: query-params, text: "params 的 name 不得重复", implemented_by: [ query-params ] }
-  - { id: query-param-sql, text: "SQL 中的参数与 params 必须双向一致", implemented_by: [ query-param-sql ] }
+  - { id: query-param-sql, text: "sql 表达式中的参数与 params 必须双向一致", implemented_by: [ query-param-sql ] }
   - { id: query-param-nullable, text: "nullable:true 必须且只能用 sqlc.narg；非 nullable 不得使用 sqlc.narg", implemented_by: [ query-param-nullable ] }
   - { id: query-returns, text: "returns DSL 必须合法，引用的表/实体必须存在", implemented_by: [ query-returns ] }
   - { id: query-returns-kind, text: "many 必须返回 [] 前缀；one 不得返回 []；affected_rows 只能配 execrows", implemented_by: [ query-returns-kind ] }
-  - { id: query-return-columns, text: "return_columns 必须是 returns 的列/字段，且出现在 SQL 中", implemented_by: [ query-return-columns ] }
-  - { id: query-entity-coverage, text: "返回实体时，required 非敏感字段必须被 return_columns 覆盖；未写 return_columns 时其字段名必须出现在 SQL（词匹配，sqlc 兜底）；字段来源表必须属于 query 的表集合", implemented_by: [ query-entity-coverage ] }
-  - { id: query-output-fields, text: "object 返回必须有非空 output_fields；字段名唯一且出现在 SQL；不得同时写 return_columns", implemented_by: [ query-output-fields ] }
-  - { id: query-kind-sql, text: "execrows 必须以 INSERT/UPDATE/DELETE/WITH 开头；one/many 的写语句必须带 RETURNING", implemented_by: [ query-kind-sql ] }
-  - { id: query-no-select-star, text: "禁止 SELECT * 或 SELECT <alias>.*", implemented_by: [ query-no-select-star ] }
-  - { id: query-one-unique, text: "one 的 SELECT 非标量返回必须命中主键/唯一索引前缀，或 SQL 含 LIMIT 1", implemented_by: [ query-one-unique ] }
-  - { id: query-write-owner, text: "写查询的 module 必须等于写目标表的 owner_module；读取表可以跨模块", implemented_by: [ query-write-owner ] }
+  - { id: query-return-columns, text: "return_columns 必须是 select/returning 中的列，且不超出返回类型", implemented_by: [ query-return-columns ] }
+  - { id: query-entity-coverage, text: "返回实体时，select/returning 必须覆盖 required 非敏感字段；return_columns 必须是 select 的子集；字段来源表必须属于 query 的表集合", implemented_by: [ query-entity-coverage ] }
+  - { id: query-output-fields, text: "object 返回必须有非空 output_fields；字段名必须是 select/returning 的 AS 别名；不得同时写 return_columns", implemented_by: [ query-output-fields ] }
+  - { id: query-kind-sql, text: "one/many 的写语句必须写 returning；execrows 的 statement 不能是 select", implemented_by: [ query-kind-sql ] }
+  - { id: query-no-select-star, text: "select/returning 禁止 *，COUNT(*) 除外", implemented_by: [ query-no-select-star ] }
+  - { id: query-one-unique, text: "one 的 SELECT 非标量返回必须命中主键/唯一索引前缀，或 sql.limit 为 1", implemented_by: [ query-one-unique ] }
+  - { id: query-sql-shape, text: "sql 必须是对象；statement 与子句匹配；from/into/joins 与 table/tables 一致；表/列必须存在；表/实体返回只能是纯列名", implemented_by: [ query-sql-shape ] }
+  - { id: query-write-owner, text: "写目标取自 sql.into/sql.from；module 必须等于 owner_module；读取表可以跨模块", implemented_by: [ query-write-owner ] }
   - { id: query-sensitive-columns, text: "never_expose 列不得被跨模块查询返回；同模块必须显式写 return_columns", implemented_by: [ query-sensitive-columns ] }
   - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识；通用规则放组 README，禁止复制", implemented_by: [ query-do-not-specific ] }

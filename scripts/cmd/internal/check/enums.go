@@ -52,10 +52,10 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 			c.rulef("enum-id-matches-name", "%s: enums[%d]: id must be %s%s, got %s", rel, i, prefix, name, id)
 		}
 		if _, ok := enums[id]; ok {
-			c.rulef("contract-id-unique", "%s: enums[%d]: duplicate id %s", rel, i, id)
+			c.rulef("schema.contract-id-unique", "%s: enums[%d]: duplicate id %s", rel, i, id)
 		}
 		if names[name] {
-			c.rulef("unique-names", "%s: enums[%d]: duplicate name %s", rel, i, name)
+			c.rulef("schema.unique-names", "%s: enums[%d]: duplicate name %s", rel, i, name)
 		}
 		names[name] = true
 		c.checkEnumTypeName(goTypes, "go_type", i, name, m, rel)

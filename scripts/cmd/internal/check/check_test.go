@@ -741,7 +741,7 @@ enums:
 	c := writeEnumContract(t, body)
 	c.checkEnums(loadEnumSchemaForTest(t))
 	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "[contract-id-unique]") || !strings.Contains(errs, "[unique-names]") {
+	if !strings.Contains(errs, "[schema.contract-id-unique]") || !strings.Contains(errs, "[schema.unique-names]") {
 		t.Fatalf("duplicate enum id/name must use generic rules: %v", c.errs)
 	}
 }
@@ -1242,22 +1242,6 @@ func TestValidateEnum(t *testing.T) {
 	}
 }
 
-func TestTypeMetaRequiresSchemaSemantics(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "contracts/_meta")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "_types.yaml"), []byte("types: {}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c := &Checker{root: root}
-	c.checkTypeMeta()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.meta]") {
-		t.Fatalf("missing schema_semantics not reported: %v", c.errs)
-	}
-}
-
 func TestForeignKeyReportsOnlyNoForeignKey(t *testing.T) {
 	root, err := filepath.Abs("../../../..")
 	if err != nil {
@@ -1287,24 +1271,6 @@ func TestForeignKeyReportsOnlyNoForeignKey(t *testing.T) {
 		if strings.Contains(errs, bad) {
 			t.Fatalf("foreign_key produced extra %s error:\n%s", bad, errs)
 		}
-	}
-}
-
-func TestTypeMetaRejectsDuplicateSchemaRule(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "contracts/_meta")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	body := "schema_semantics: {hard_fields: [name], soft_fields: [description]}\n" +
-		"schema_rules:\n  - {id: x, text: \"a\"}\n  - {id: x, text: \"b\"}\n"
-	if err := os.WriteFile(filepath.Join(dir, "_types.yaml"), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c := &Checker{root: root}
-	c.checkTypeMeta()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "duplicate schema rule") {
-		t.Fatalf("duplicate schema rule not reported: %v", c.errs)
 	}
 }
 
@@ -1406,7 +1372,7 @@ func TestUniqueColumnNames(t *testing.T) {
 		"name": "code", "type": "string",
 	})
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[unique-names]") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unique-names]") {
 		t.Fatalf("duplicate column name not checked: %v", c.errs)
 	}
 }
@@ -1424,7 +1390,7 @@ func TestContractIDUnique(t *testing.T) {
 	}
 	c := &Checker{root: root}
 	c.checkTables(&Schema{Targets: testTargets()})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[contract-id-unique]") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.contract-id-unique]") {
 		t.Fatalf("duplicate contract id not checked: %v", c.errs)
 	}
 }

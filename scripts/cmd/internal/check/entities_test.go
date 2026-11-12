@@ -243,21 +243,21 @@ func TestQueryParamsSQL(t *testing.T) {
 			{Name: "id", Type: "text"},
 			{Name: "status", Type: "integer", Nullable: true},
 		},
-		SQL: "SELECT id FROM x WHERE id = @id AND (sqlc.narg('status')::integer IS NULL OR status = sqlc.narg('status'))",
+		SQL: querySQL{Statement: "select", From: "data.tables.x", Select: []string{"id"}, Where: []string{"id = @id", "(sqlc.narg('status')::integer IS NULL OR status = sqlc.narg('status'))"}},
 	}
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid params reported: %v", c.errs)
 	}
 
-	q.SQL = "SELECT id FROM x WHERE id = @id AND status = @status"
+	q.SQL = querySQL{Statement: "select", From: "data.tables.x", Select: []string{"id"}, Where: []string{"id = @id", "status = @status"}}
 	c.checkQueryParams(q)
 	if !strings.Contains(entityErrs(c), "[query-param-nullable]") {
 		t.Fatalf("nullable @param not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
-	q.SQL = "SELECT id FROM x WHERE id = @id AND other = @missing"
+	q.SQL = querySQL{Statement: "select", From: "data.tables.x", Select: []string{"id"}, Where: []string{"id = @id", "other = @missing"}}
 	c.checkQueryParams(q)
 	if !strings.Contains(entityErrs(c), "[query-param-sql]") {
 		t.Fatalf("undeclared SQL param not reported: %v", c.errs)
@@ -295,7 +295,7 @@ func TestQueryEntityCoverageAndSensitivity(t *testing.T) {
 		ID: "data.queries.account.get", File: "account.yaml", Module: "accounts", Kind: "one",
 		Tables: []string{"data.tables.account"},
 		Return: queryReturn{Raw: "data.entities.account", Kind: "entity", EntityID: "data.entities.account"},
-		SQL:    "SELECT id, nickname FROM accounts WHERE id = @id",
+		SQL:    querySQL{Statement: "select", From: "data.tables.account", Select: []string{"id", "nickname"}, Where: []string{"id = @id"}},
 	}
 	c.checkQueryReturns(q)
 	c.checkQueryReturnColumns(q)
@@ -315,7 +315,7 @@ func TestQueryEntityCoverageAndSensitivity(t *testing.T) {
 		Tables:        []string{"data.tables.account"},
 		Return:        queryReturn{Raw: "data.entities.account", Kind: "entity", EntityID: "data.entities.account"},
 		ReturnColumns: []string{"id", "nickname", "secret"},
-		SQL:           "SELECT id, nickname, secret FROM accounts WHERE id = @id",
+		SQL:           querySQL{Statement: "select", From: "data.tables.account", Select: []string{"id", "nickname", "secret"}, Where: []string{"id = @id"}},
 	}
 	c.checkQueryReturnColumns(q)
 	if !strings.Contains(entityErrs(c), "[query-sensitive-columns]") {
@@ -327,28 +327,27 @@ func TestQueryKindSQLAndOneUnique(t *testing.T) {
 	c := &Checker{
 		tableOwners:     map[string]string{"data.tables.account": "accounts"},
 		tablePrimaryKey: map[string][]string{"data.tables.account": {"id"}},
-		tablePhysical:   map[string]string{"data.tables.account": "accounts"},
 		tableIndexes:    map[string][]tableIndex{},
 	}
 	entityReturn := queryReturn{Raw: "data.entities.account", Kind: "entity", EntityID: "data.entities.account"}
 	q := &queryInfo{
 		ID: "data.queries.account.create", File: "account.yaml", Module: "accounts", Kind: "one",
 		Tables: []string{"data.tables.account"}, Return: entityReturn,
-		SQL: "INSERT INTO accounts (id) VALUES (@id) RETURNING id",
+		SQL: querySQL{Statement: "insert", Into: "data.tables.account", Columns: []string{"id"}, Values: []string{"@id"}, Returning: []string{"id"}},
 	}
 	c.checkQueryKindSQL(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid INSERT RETURNING reported: %v", c.errs)
 	}
 
-	q.SQL = "INSERT INTO accounts (id) VALUES (@id)"
+	q.SQL = querySQL{Statement: "insert", Into: "data.tables.account", Columns: []string{"id"}, Values: []string{"@id"}}
 	c.checkQueryKindSQL(q)
 	if !strings.Contains(entityErrs(c), "must use RETURNING") {
 		t.Fatalf("missing RETURNING not reported: %v", c.errs)
 	}
 
 	c = &Checker{tableOwners: map[string]string{"data.tables.account": "accounts"}}
-	q = &queryInfo{ID: "data.queries.account.x", File: "account.yaml", Module: "auth", Kind: "execrows", Tables: []string{"data.tables.account"}, SQL: "UPDATE accounts SET x = 1"}
+	q = &queryInfo{ID: "data.queries.account.x", File: "account.yaml", Module: "auth", Kind: "execrows", Tables: []string{"data.tables.account"}, SQL: querySQL{Statement: "update", From: "data.tables.account", Set: []string{"x = 1"}, Where: []string{"id = @id"}}}
 	c.checkQueryKindSQL(q)
 	if !strings.Contains(entityErrs(c), "[query-write-owner]") {
 		t.Fatalf("cross-module write not reported: %v", c.errs)
@@ -360,7 +359,7 @@ func TestQueryKindSQLAndOneUnique(t *testing.T) {
 	q = &queryInfo{
 		ID: "data.queries.account.get", File: "account.yaml", Kind: "one",
 		Tables: []string{"data.tables.account"}, Return: entityReturn,
-		SQL: "SELECT id FROM accounts WHERE nickname = @nickname",
+		SQL: querySQL{Statement: "select", From: "data.tables.account", Select: []string{"id"}, Where: []string{"nickname = @nickname"}},
 	}
 	c.checkQueryKindSQL(q)
 	if !strings.Contains(entityErrs(c), "[query-one-unique]") {
@@ -375,13 +374,12 @@ func TestQueryKindSQLAndOneUnique(t *testing.T) {
 
 	// 写目标只校验被写的表；FROM/JOIN 的读表可以跨模块。
 	c = &Checker{
-		tableOwners:   map[string]string{"data.tables.account": "accounts", "data.tables.other": "other"},
-		tablePhysical: map[string]string{"data.tables.account": "accounts", "data.tables.other": "other"},
+		tableOwners: map[string]string{"data.tables.account": "accounts", "data.tables.other": "other"},
 	}
 	q = &queryInfo{
 		ID: "data.queries.account.update", File: "account.yaml", Module: "accounts", Kind: "execrows",
 		Tables: []string{"data.tables.account", "data.tables.other"},
-		SQL:    "UPDATE accounts SET x = 1 FROM other WHERE other.id = accounts.id",
+		SQL:    querySQL{Statement: "update", From: "data.tables.account", Set: []string{"x = 1"}, Where: []string{"id = @id"}, Joins: []queryJoin{{Table: "data.tables.other", On: []string{"other.id = account.id"}}}},
 	}
 	c.checkQueryKindSQL(q)
 	if strings.Contains(entityErrs(c), "[query-write-owner]") {
@@ -394,7 +392,7 @@ func TestQueryParamStringLiteralIgnored(t *testing.T) {
 	q := &queryInfo{
 		ID: "data.queries.x.q", File: "q.yaml",
 		Params: []queryParam{{Name: "id", Type: "text"}},
-		SQL:    "SELECT id FROM x WHERE id = @id AND note = 'a@b.com'",
+		SQL:    querySQL{Statement: "select", From: "data.tables.x", Select: []string{"id"}, Where: []string{"id = @id AND note = 'a@b.com'"}},
 	}
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
@@ -426,7 +424,7 @@ func TestQueryOutputFields(t *testing.T) {
 			{Name: "status", Type: "integer"},
 			{Name: "total", Type: "integer"},
 		},
-		SQL: "SELECT status, count(*) AS total FROM accounts GROUP BY status",
+		SQL: querySQL{Statement: "select", From: "data.tables.account", Select: []string{"status", "count(*) AS total"}, Where: []string{"status = @status"}},
 	}
 	c.checkQueryReturns(q)
 	c.checkQueryReturnColumns(q)
@@ -467,5 +465,61 @@ func TestListListStringMinItems(t *testing.T) {
 	c.validateValue([]any{[]any{1}}, Field{Type: "list<list<string>>"}, "index_columns")
 	if !strings.Contains(entityErrs(c), "[schema.type]") {
 		t.Fatalf("non-string inner list not reported: %v", c.errs)
+	}
+}
+
+func TestQuerySQLShape(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.account": {"id": {typ: "string"}, "nickname": {typ: "string"}},
+			"data.tables.token":   {"id": {typ: "string"}, "account_id": {typ: "string"}},
+		},
+	}
+	q := &queryInfo{
+		ID: "data.queries.account.get", File: "account.yaml", Kind: "one",
+		Tables: []string{"data.tables.account"},
+		Return: queryReturn{Raw: "data.entities.account", Kind: "entity"},
+		SQL: querySQL{
+			Statement: "select", From: "data.tables.account",
+			Select: []string{"id", "nickname"}, Where: []string{"id = @id"},
+		},
+	}
+	c.checkQuerySQLShape(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid select reported: %v", c.errs)
+	}
+
+	q.SQL.Raw = "SELECT * FROM accounts"
+	c.checkQuerySQLShape(q)
+	if !strings.Contains(entityErrs(c), "sql must be an object") {
+		t.Fatalf("raw sql not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.SQL = querySQL{Statement: "insert", Into: "data.tables.account", Columns: []string{"id"}, Values: []string{"@id", "@x"}}
+	c.checkQuerySQLShape(q)
+	if !strings.Contains(entityErrs(c), "columns/values length mismatch") {
+		t.Fatalf("value length mismatch not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.SQL = querySQL{Statement: "update", From: "data.tables.account", Set: []string{"nickname = @nickname"}}
+	c.checkQuerySQLShape(q)
+	if !strings.Contains(entityErrs(c), "update requires where") {
+		t.Fatalf("update without where not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.SQL = querySQL{Statement: "select", From: "data.tables.account", Select: []string{"*"}}
+	c.checkQuerySQLShape(q)
+	if !strings.Contains(entityErrs(c), "must not use *") {
+		t.Fatalf("select star not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.SQL = querySQL{Statement: "select", From: "data.tables.account", Select: []string{"id, nickname"}}
+	c.checkQuerySQLShape(q)
+	if !strings.Contains(entityErrs(c), "plain column") {
+		t.Fatalf("composite select not reported: %v", c.errs)
 	}
 }

@@ -19,7 +19,7 @@ func writeMeta(t *testing.T, root, name, body string) {
 
 func TestLoadSchemaByType(t *testing.T) {
 	root := t.TempDir()
-	writeMeta(t, root, "_types.yaml", "id: meta._types\n")
+	writeMeta(t, root, "_helpers.yaml", "id: meta._helpers\n")
 	writeMeta(t, root, "data.tables.yaml", `
 id: meta.data.tables
 type: data.tables

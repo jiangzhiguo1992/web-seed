@@ -106,7 +106,7 @@ make contract-check
 
 校验结构、ID、`extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`used_by` 的 entities/queries（直接入边）。不通过不要进入生成。
 
-修改 `rules` / `schema_rules` 的 `implemented_by` 后，运行 `make gen-rule-ids` 更新 `rule_ids_gen.go`；`make contract-check` 会拒绝过期的生成文件。
+修改 `rules` 的 `implemented_by` 后，运行 `make gen-rule-ids` 更新 `rule_ids_gen.go`；`make contract-check` 会拒绝过期的生成文件。
 
 ---
 

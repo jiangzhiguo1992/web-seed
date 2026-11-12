@@ -22,7 +22,6 @@ package check
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
@@ -57,7 +56,6 @@ type Checker struct {
 
 	// 实体与查询解析索引。
 	tableColumns     map[string]map[string]columnMeta
-	tablePhysical    map[string]string
 	entityDocs       []entityDoc
 	entityBaseDoc    map[string]any
 	entityBaseFields []entityFieldInfo
@@ -90,7 +88,6 @@ func (c *Checker) run() {
 	c.checkContractProseQuotes()
 	c.checkFieldPlacement()
 	c.checkDoNotDuplicates()
-	c.checkTypeMeta()
 	tableSchema, err := c.loadSchemaByType("data.tables")
 	if err != nil {
 		c.rulef("schema.load", "load tables schema: %v", err)
@@ -201,56 +198,6 @@ func (c *Checker) checkProseQuotes(n *yaml.Node, rel string) {
 			}
 			c.checkProseQuotes(v, rel)
 		}
-	}
-}
-
-type typeMeta struct {
-	SchemaSemantics struct {
-		FieldKeysHard []string `yaml:"field_keys_hard"`
-		FieldKeysSoft []string `yaml:"field_keys_soft"`
-		TypeKeys      []string `yaml:"type_keys"`
-	} `yaml:"schema_semantics"`
-	SchemaRules []struct {
-		ID            string   `yaml:"id"`
-		Text          string   `yaml:"text"`
-		ImplementedBy []string `yaml:"implemented_by"`
-	} `yaml:"schema_rules"`
-	Types map[string]struct {
-		Generates []string `yaml:"generates"`
-	} `yaml:"types"`
-}
-
-// checkTypeMeta 校验 _types.yaml 能按预期形状解析：
-// do_not 必须是字符串列表，generates 必须是字符串列表。
-// 这类文件不被 schema loader 读取，但 AI 会直接读；形状错误必须显式报出。
-func (c *Checker) checkTypeMeta() {
-	path := filepath.Join(c.root, "contracts/_meta/_types.yaml")
-	b, err := os.ReadFile(path)
-	if err != nil {
-		c.rulef("schema.load", "contracts/_meta/_types.yaml: %v", err)
-		return
-	}
-	var meta typeMeta
-	if err := yaml.Unmarshal(b, &meta); err != nil {
-		c.rulef("schema.load", "contracts/_meta/_types.yaml: %v", err)
-		return
-	}
-	if len(meta.SchemaSemantics.FieldKeysHard) == 0 || len(meta.SchemaSemantics.FieldKeysSoft) == 0 || len(meta.SchemaSemantics.TypeKeys) == 0 {
-		c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_semantics.field_keys_hard/field_keys_soft/type_keys must not be empty")
-	}
-	if len(meta.SchemaRules) == 0 {
-		c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_rules must not be empty")
-	}
-	seenRule := map[string]bool{}
-	for i, r := range meta.SchemaRules {
-		if r.ID == "" || r.Text == "" {
-			c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_rules[%d] must have id and text", i)
-		}
-		if seenRule[r.ID] {
-			c.rulef("schema.meta", "contracts/_meta/_types.yaml: duplicate schema rule %q", r.ID)
-		}
-		seenRule[r.ID] = true
-		c.checkImplementedBy(r.ID, "contracts/_meta/_types.yaml: schema_rules["+fmt.Sprint(i)+"]", r.ImplementedBy)
 	}
 }
 
