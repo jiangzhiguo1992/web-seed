@@ -637,6 +637,33 @@ enums:
 	}
 }
 
+func TestEnumCodeInt32Range(t *testing.T) {
+	body := `
+schema_version: 1
+id: data.enums
+summary: "x"
+stability: stable
+enums:
+  - id: data.enums.x_status
+    name: x_status
+    go_type: XStatus
+    ts_type: XStatus
+    used_by: { entities: [], tables: [] }
+    values:
+      - { value: active, code: 0 }
+      - { value: overflow, code: 2147483648 }
+      - { value: negative, code: -1 }
+`
+	c := writeEnumContract(t, body)
+	c.checkEnums(loadEnumSchemaForTest(t))
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[schema.range]") ||
+		!strings.Contains(errs, "2147483648 > max 2147483647") ||
+		!strings.Contains(errs, "-1 < min 0") {
+		t.Fatalf("enum code range not enforced from meta: %v", c.errs)
+	}
+}
+
 func loadEnumSchemaForTest(t *testing.T) *Schema {
 	t.Helper()
 	repoRoot, err := filepath.Abs("../../../..")

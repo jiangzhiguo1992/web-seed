@@ -182,6 +182,10 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	}, s.Type+".enums"); err != nil {
 		return nil, err
 	}
+	usedByField, _ := FindField(enumsField.ItemFields, "used_by")
+	if err := requireSupported(usedByField.Fields, map[string]bool{"entities": true, "tables": true}, s.Type+".enums.used_by"); err != nil {
+		return nil, err
+	}
 	valuesField, _ := FindField(enumsField.ItemFields, "values")
 	if err := requireSupported(valuesField.ItemFields, map[string]bool{"value": true, "code": true, "description": true}, s.Type+".enums.values"); err != nil {
 		return nil, err

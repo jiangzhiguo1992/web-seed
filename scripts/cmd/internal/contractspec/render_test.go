@@ -197,6 +197,32 @@ func TestRenderEnumItemUsesTargetsID(t *testing.T) {
 	}
 }
 
+func TestRenderEnumItemRejectsUnsupportedUsedByField(t *testing.T) {
+	path, err := filepath.Abs("../../../../contracts/_meta/data.enums.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := LoadSchema(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range s.Fields {
+		if s.Fields[i].Name != "enums" {
+			continue
+		}
+		for j := range s.Fields[i].ItemFields {
+			if s.Fields[i].ItemFields[j].Name == "used_by" {
+				s.Fields[i].ItemFields[j].Fields = append(s.Fields[i].ItemFields[j].Fields, Field{
+					Name: "capabilities", Type: "list<string>", Required: true,
+				})
+			}
+		}
+	}
+	if _, err := RenderEnumItem(s, "note_status"); err == nil {
+		t.Fatal("expected unsupported required used_by child to fail")
+	}
+}
+
 func TestRenderEnumItemRequiresTargets(t *testing.T) {
 	if _, err := RenderEnumItem(&Schema{Type: "data.enums"}, "note_status"); err == nil {
 		t.Fatal("expected missing targets to fail")

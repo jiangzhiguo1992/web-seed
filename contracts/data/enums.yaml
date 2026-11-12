@@ -3,6 +3,7 @@
 # 集合契约：文件 id 为 data.enums；每个枚举项有显式 id data.enums.<name>。
 # 表列不引用枚举；entity 字段用 data.enums.<name>，数据库存 values[].code 整数。
 # used_by 只列引用该枚举的 entity 及其物理表；不列 capability/feature。
+# 空 used_by 表示没有 entity/table 消费，不代表枚举未被 capability 引用。
 
 schema_version: 1
 id: data.enums

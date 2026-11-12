@@ -103,11 +103,11 @@ scripts/cmd/
   - `_meta/*.yaml` 以 `type` 作为类型 registry；checker/contract-new 按 type 查找，不再写死 meta 路径
   - 错误统一带 `[rule-id]` 前缀：表专有规则用 `data.tables.yaml` 的 `rules`，跨类型规则用 `_types.yaml` 的 `schema_rules` / `schema_semantics`，结构/格式用 `schema.*`（含 `schema.targets`）
 - `data/enums.yaml`
-  - 集合 ID、item ID = `data.enums.<name>`、值唯一、`code` 唯一且 >= 0
+  - 集合 ID、item ID = `data.enums.<name>`、值唯一、`code` 唯一且为 int32（0..2147483647）
   - `name` / `go_type` / `ts_type` 在集合内唯一；类型名冲突会让 Go/TS 产物互相覆盖
   - `summary` 非空；`stability: stable` 不得含 TODO/FIXME
   - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
-  - `used_by.entities/tables` 必须与 entity 实际引用完全一致；只列 data.entities/data.tables，不列 capability/feature
+  - `used_by.entities/tables` 必须与 entity 字段引用完全一致；只列 data.entities/data.tables，capability/feature 引用不写入 used_by，空列表合法
 - 实体/查询/能力对表的引用存在
 - 查询 `return_columns` 必须是表列
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复

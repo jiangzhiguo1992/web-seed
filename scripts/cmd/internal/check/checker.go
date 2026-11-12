@@ -3,7 +3,7 @@
 // 当前覆盖：
 //   - contracts 下文本字段（description/comment/summary/do_not 等）双引号强制
 //   - data.tables / data.tables.base 的结构、ID/文件、基类 5 列、列/约束/索引、used_by、do_not 具体性
-//   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、stability 与 summary
+//   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、code int32 范围、stability 与 summary
 //   - 表列引用的 column_refs 前缀是否存在；表列不引用 data.enums.*
 //   - 任意契约中的 data.enums.* 类型引用必须存在
 //   - status 由基类提供且为 integer；物理表不得重声明；枚举只在 entity

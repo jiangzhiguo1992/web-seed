@@ -31,18 +31,19 @@ fields:
       - name: used_by
         type: object
         required: true
-        description: "使用该枚举的 entity/table；只列 data.entities 与 data.tables"
-        caution: "不列 capability/feature；tables 由引用该枚举的 entity.table 推导"
+        description: "使用该枚举的 entity/table；只统计 entity 字段引用"
+        caution: "必须与 entity 实际引用完全一致；capability/feature 引用不写入 used_by，空列表不代表未使用"
         fields:
           - { name: entities, type: list<string>, required: true, unique: true, description: "引用该枚举的 entity ID" }
-          - { name: tables, type: list<string>, required: true, unique: true, description: "这些 entity 对应的物理表 ID" }
+          - { name: tables, type: list<string>, required: true, unique: true, description: "这些 entity 对应的物理表 ID；必须与 entity.table 一致" }
       - name: values
         type: list<object>
         required: true
-        description: "枚举值列表；可改名或删除"
+        description: "枚举值列表；value 对外，code 持久化"
+        caution: "stable 后改名/删除 value 属破坏性变更；删除值后其 code 不得复用（历史数据仍引用旧 code）"
         item_fields:
           - { name: value, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "对外字符串值（API/TS），snake_case；数据库存 code" }
-          - { name: code, type: integer, required: true, min: 0, description: "数据库整数码；entity 映射回枚举" }
+          - { name: code, type: integer, required: true, min: 0, max: 2147483647, description: "数据库整数码（int32）；entity 映射回枚举" }
           - { name: description, type: string, required: false, description: "枚举值说明" }
 
 rules:
@@ -51,4 +52,4 @@ rules:
   - { id: enum-values-unique, text: "同一枚举的 values 不得重复", implemented_by: [enum-values-unique] }
   - { id: enum-code-unique, text: "同一枚举的 code 不得重复", implemented_by: [enum-code-unique] }
   - { id: enum-type-unique, text: "同一集合内 go_type / ts_type 不得重复", implemented_by: [enum-type-unique] }
-  - { id: enum-used-by, text: "used_by 必须与引用该枚举的 entity/table 完全一致；不列 capability/feature", implemented_by: [enum-used-by] }
+  - { id: enum-used-by, text: "used_by 必须与 entity 字段引用完全一致；capability/feature 不写入 used_by，空列表合法", implemented_by: [enum-used-by] }
