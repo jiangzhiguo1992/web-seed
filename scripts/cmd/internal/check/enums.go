@@ -31,6 +31,7 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		c.rulef("enum-id", "%s: id must be %s", rel, schema.Targets.ID)
 	}
 	prefix := schema.Targets.ID + "."
+	usages := c.enumUsages()
 	enums := map[string]map[string]bool{}
 	names := map[string]bool{}
 	goTypes := map[string]string{}
@@ -84,8 +85,8 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 			}
 		}
 		enums[id] = values
+		c.checkEnumUsedBy(rel, i, id, m, usages[id])
 	}
-	c.checkEnumAppendOnly(rel)
 	return enums
 }
 
@@ -105,10 +106,19 @@ func (c *Checker) checkEnumSchema(schema *Schema) {
 	if !enums.Required {
 		c.rulef("schema.meta", "%s: enums must be required", schema.ID)
 	}
-	for _, name := range []string{"id", "name", "go_type", "ts_type", "values"} {
+	for _, name := range []string{"id", "name", "go_type", "ts_type", "used_by", "values"} {
 		f, ok := contractspec.FindField(enums.ItemFields, name)
 		if !ok || !f.Required {
 			c.rulef("schema.meta", "%s: enums.%s must be required", schema.ID, name)
+		}
+	}
+	usedBy, ok := contractspec.FindField(enums.ItemFields, "used_by")
+	if ok {
+		for _, name := range []string{"entities", "tables"} {
+			f, found := contractspec.FindField(usedBy.Fields, name)
+			if !found || !f.Required {
+				c.rulef("schema.meta", "%s: enums.used_by.%s must be required", schema.ID, name)
+			}
 		}
 	}
 	values, ok := contractspec.FindField(enums.ItemFields, "values")
@@ -134,6 +144,79 @@ func (c *Checker) checkEnumTypeName(seen map[string]string, field string, i int,
 		return
 	}
 	seen[typeName] = name
+}
+
+// enumUsage 记录一个枚举被哪些 entity 使用，以及这些 entity 对应的物理表。
+type enumUsage struct {
+	entities map[string]bool
+	tables   map[string]bool
+}
+
+// enumUsages 扫描 entity 字段中的 data.enums.* 引用，忽略 capability/feature。
+func (c *Checker) enumUsages() map[string]*enumUsage {
+	usages := map[string]*enumUsage{}
+	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {
+		doc, err := loadYAML(f)
+		if err != nil {
+			continue
+		}
+		entityID, _ := doc["id"].(string)
+		tableID, _ := doc["table"].(string)
+		refs := map[string]bool{}
+		collectEnumRefs(doc, refs)
+		for enumID := range refs {
+			u := usages[enumID]
+			if u == nil {
+				u = &enumUsage{entities: map[string]bool{}, tables: map[string]bool{}}
+				usages[enumID] = u
+			}
+			if entityID != "" {
+				u.entities[entityID] = true
+			}
+			if tableID != "" {
+				u.tables[tableID] = true
+			}
+		}
+	}
+	return usages
+}
+
+// collectEnumRefs 递归收集任意层级的 type: data.enums.*。
+func collectEnumRefs(v any, out map[string]bool) {
+	if m, ok := asMap(v); ok {
+		if t, ok := m["type"].(string); ok && strings.HasPrefix(t, "data.enums.") {
+			out[t] = true
+		}
+		for _, child := range m {
+			collectEnumRefs(child, out)
+		}
+		return
+	}
+	for _, child := range asList(v) {
+		collectEnumRefs(child, out)
+	}
+}
+
+// checkEnumUsedBy 要求 used_by.entities/tables 与 entity 实际引用完全一致。
+func (c *Checker) checkEnumUsedBy(rel string, i int, id string, m map[string]any, usage *enumUsage) {
+	ub, ok := asMap(m["used_by"])
+	if !ok {
+		return // schema.required 报缺失
+	}
+	declaredEntities := stringSet(asList(ub["entities"]))
+	declaredTables := stringSet(asList(ub["tables"]))
+	expectedEntities := map[string]bool{}
+	expectedTables := map[string]bool{}
+	if usage != nil {
+		expectedEntities = usage.entities
+		expectedTables = usage.tables
+	}
+	if !sameSet(declaredEntities, expectedEntities) {
+		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.entities must be %v, got %v", rel, i, id, sortedKeys(expectedEntities), sortedKeys(declaredEntities))
+	}
+	if !sameSet(declaredTables, expectedTables) {
+		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.tables must be %v, got %v", rel, i, id, sortedKeys(expectedTables), sortedKeys(declaredTables))
+	}
 }
 
 // checkEnumRefs 校验表列引用与所有契约中的 data.enums.* 类型引用。

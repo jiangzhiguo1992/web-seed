@@ -66,7 +66,7 @@ types:
       - "禁止数据库外键（foreign_key）；跨表一致性由应用/业务规则保证"
       - "表列不引用 data.enums.*；状态整数码用 integer，由 entity 映射为枚举"
       - "不要用未结构化字段塞原生 DDL；分区用 table.partition，表达式索引用 indexes[].expression"
-      - "used_by 是生成物，禁止手改；queries 记录查询项 ID，不是查询文件 ID"
+      - "used_by 是生成物，禁止手改；只记 entities 与 queries"
       - "只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读通过 persistence.queries"
       - "never_expose 列禁止进入普通 OpenAPI/TS/事件/普通 entity；认证 query 与 x-auth-response 是唯一例外"
 
@@ -97,7 +97,9 @@ types:
     consumers: [api, web/admin, worker]
     generates: [go_constants, ts_union]
     do_not:
-      - "枚举值只能追加，禁止改名或删除；code 一旦分配不得复用或修改"
+      - "枚举值可改名或删除；code 在当前枚举内唯一"
+      - "删除枚举值后不要复用其 code；历史数据仍引用旧 code"
+      - "每个枚举必须写 used_by，只列 data.entities/data.tables；不列 capability/feature"
       - "每个枚举项必须有显式 id：data.enums.<name>"
       - "不要收模块内部枚举"
 

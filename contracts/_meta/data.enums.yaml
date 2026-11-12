@@ -28,10 +28,18 @@ fields:
       - { name: description, type: string, required: false, description: "枚举用途说明" }
       - { name: go_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "Go 类型名，PascalCase；集合内唯一" }
       - { name: ts_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "TS 类型名，PascalCase；集合内唯一" }
+      - name: used_by
+        type: object
+        required: true
+        description: "使用该枚举的 entity/table；只列 data.entities 与 data.tables"
+        caution: "不列 capability/feature；tables 由引用该枚举的 entity.table 推导"
+        fields:
+          - { name: entities, type: list<string>, required: true, unique: true, description: "引用该枚举的 entity ID" }
+          - { name: tables, type: list<string>, required: true, unique: true, description: "这些 entity 对应的物理表 ID" }
       - name: values
         type: list<object>
         required: true
-        description: "枚举值列表；只能追加，不能改名或删除"
+        description: "枚举值列表；可改名或删除"
         item_fields:
           - { name: value, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "对外字符串值（API/TS），snake_case；数据库存 code" }
           - { name: code, type: integer, required: true, min: 0, description: "数据库整数码；entity 映射回枚举" }
@@ -43,4 +51,4 @@ rules:
   - { id: enum-values-unique, text: "同一枚举的 values 不得重复", implemented_by: [enum-values-unique] }
   - { id: enum-code-unique, text: "同一枚举的 code 不得重复", implemented_by: [enum-code-unique] }
   - { id: enum-type-unique, text: "同一集合内 go_type / ts_type 不得重复", implemented_by: [enum-type-unique] }
-  - { id: enum-append-only, text: "枚举值只能追加；code 一旦分配不得复用或修改", implemented_by: [enum-append-only] }
+  - { id: enum-used-by, text: "used_by 必须与引用该枚举的 entity/table 完全一致；不列 capability/feature", implemented_by: [enum-used-by] }

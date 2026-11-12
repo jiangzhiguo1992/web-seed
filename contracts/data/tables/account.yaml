@@ -109,4 +109,3 @@ used_by:
     - data.queries.account.soft_delete_account
     - data.queries.account.list_stale_pending_accounts
     - data.queries.account.soft_delete_stale_pending_accounts
-  capabilities: [ cap.services.account ]

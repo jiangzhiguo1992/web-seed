@@ -68,4 +68,3 @@ used_by:
   queries:
     - data.queries.auth.get_auth_email_by_username_domain
     - data.queries.auth.create_auth_email
-  capabilities: [ cap.services.auth ]

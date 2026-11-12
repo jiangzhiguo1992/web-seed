@@ -57,4 +57,3 @@ used_by:
   queries:
     - data.queries.auth.get_auth_phone_by_number
     - data.queries.auth.create_auth_phone
-  capabilities: [ cap.services.auth ]

@@ -2,6 +2,7 @@
 #
 # 集合契约：文件 id 为 data.enums；每个枚举项有显式 id data.enums.<name>。
 # 表列不引用枚举；entity 字段用 data.enums.<name>，数据库存 values[].code 整数。
+# used_by 只列引用该枚举的 entity 及其物理表；不列 capability/feature。
 
 schema_version: 1
 id: data.enums
@@ -14,6 +15,9 @@ enums:
     description: "账号状态"
     go_type: AccountStatus
     ts_type: AccountStatus
+    used_by:
+      entities: [ data.entities.account ]
+      tables: [ data.tables.account ]
     values:
       - { value: pending, code: 0, description: "待激活，不能登录" }
       - { value: active, code: 1, description: "正常，可登录" }
@@ -25,6 +29,9 @@ enums:
     description: "认证记录状态"
     go_type: AuthStatus
     ts_type: AuthStatus
+    used_by:
+      entities: [ data.entities.auth_email, data.entities.auth_phone, data.entities.auth_pwd ]
+      tables: [ data.tables.auth_email, data.tables.auth_phone, data.tables.auth_pwd ]
     values:
       - { value: active, code: 0, description: "可认证" }
       - { value: disabled, code: 1, description: "已停用" }
@@ -34,6 +41,9 @@ enums:
     description: "令牌状态"
     go_type: TokenStatus
     ts_type: TokenStatus
+    used_by:
+      entities: [ data.entities.token ]
+      tables: [ data.tables.token ]
     values:
       - { value: active, code: 0, description: "有效" }
       - { value: revoked, code: 1, description: "已吊销" }
@@ -41,9 +51,12 @@ enums:
 
   - id: data.enums.auth_type
     name: auth_type
-    description: "认证方式"
+    description: "认证方式；仅 API 输入，无 entity/table"
     go_type: AuthType
     ts_type: AuthType
+    used_by:
+      entities: []
+      tables: []
     values:
       - { value: pwd, code: 0, description: "密码认证" }
       - { value: phone, code: 1, description: "手机号认证" }
@@ -51,9 +64,12 @@ enums:
 
   - id: data.enums.audit_action
     name: audit_action
-    description: "审计日志动作"
+    description: "审计日志动作；暂无 entity/table 使用"
     go_type: AuditAction
     ts_type: AuditAction
+    used_by:
+      entities: []
+      tables: []
     values:
       - { value: create, code: 0 }
       - { value: update, code: 1 }

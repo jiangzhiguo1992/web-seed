@@ -2,7 +2,6 @@ package check
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -529,7 +528,7 @@ func TestPersistenceReadOnlyRejected(t *testing.T) {
 	}
 }
 
-func TestUsedByQueriesUseQueryIDs(t *testing.T) {
+func TestUsedByEntitiesAndQueries(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, body string) {
 		p := filepath.Join(root, rel)
@@ -550,8 +549,7 @@ queries:
 id: data.tables.x
 used_by:
   entities: []
-  queries: [data.queries.q.get_x]
-  capabilities: []
+  queries: [ data.queries.q.get_x ]
 `)
 	tableIDs := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
 
@@ -565,8 +563,7 @@ used_by:
 id: data.tables.x
 used_by:
   entities: []
-  queries: [data.queries.q]
-  capabilities: []
+  queries: [ data.queries.q ]
 `)
 	c = &Checker{root: root}
 	c.checkUsedBy(tableIDs)
@@ -738,6 +735,43 @@ func TestEnumSchemaShape(t *testing.T) {
 	}
 }
 
+func TestEnumUsedByMismatch(t *testing.T) {
+	body := `
+schema_version: 1
+id: data.enums
+summary: "x"
+stability: stable
+enums:
+  - id: data.enums.account_status
+    name: account_status
+    go_type: AccountStatus
+    ts_type: AccountStatus
+    used_by:
+      entities: []
+      tables: []
+    values:
+      - { value: active, code: 0 }
+`
+	c := writeEnumContract(t, body)
+	entityPath := filepath.Join(c.root, "contracts/data/entities/account.yaml")
+	if err := os.MkdirAll(filepath.Dir(entityPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	entity := `id: data.entities.account
+table: data.tables.account
+fields:
+  - { name: status, type: data.enums.account_status }
+`
+	if err := os.WriteFile(entityPath, []byte(entity), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c.checkEnums(loadEnumSchemaForTest(t))
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[enum-used-by]") || !strings.Contains(errs, "used_by.entities must be") {
+		t.Fatalf("enum used_by mismatch not reported: %v", c.errs)
+	}
+}
+
 func TestEnumSummaryAndStability(t *testing.T) {
 	body := `# TODO
 schema_version: 1
@@ -787,64 +821,6 @@ types:
 	c.checkEnumRefs(map[string]string{}, map[string]map[string]bool{}, map[string]map[string]bool{"data.enums.missing_status": {}}, ColumnRefs{})
 	if len(c.errs) != 0 {
 		t.Fatalf("known enum ref reported: %v", c.errs)
-	}
-}
-
-func TestEnumBaselineRef(t *testing.T) {
-	cases := map[string]string{
-		"abc":         "HEAD",
-		"abc def":     "HEAD",
-		"abc def ghi": "HEAD^1",
-	}
-	for in, want := range cases {
-		if got := enumBaselineRef(in); got != want {
-			t.Errorf("enumBaselineRef(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-func TestEnumAppendOnlyUsesMergeBaseline(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git not available")
-	}
-	root := t.TempDir()
-	runGit := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", root, "-c", "commit.gpgsign=false"}, args...)...)
-		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",
-			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com",
-		)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	writeEnums := func(values string) {
-		t.Helper()
-		path := filepath.Join(root, "contracts/data/enums.yaml")
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		body := "schema_version: 1\nid: data.enums\nsummary: \"x\"\nstability: stable\nenums:\n  - id: data.enums.x\n    name: x\n    go_type: X\n    ts_type: X\n    values:\n" + values
-		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	runGit("init", "-q")
-	runGit("symbolic-ref", "HEAD", "refs/heads/main")
-	writeEnums("      - { value: active, code: 0 }\n")
-	runGit("add", ".")
-	runGit("commit", "-q", "-m", "base")
-	runGit("checkout", "-q", "-b", "feature")
-	writeEnums("      - { value: added, code: 1 }\n")
-	runGit("commit", "-qam", "feature")
-	runGit("checkout", "-q", "main")
-	runGit("merge", "-q", "--no-ff", "-m", "merge", "feature")
-
-	c := &Checker{root: root}
-	c.checkEnumAppendOnly("contracts/data/enums.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "active was removed") {
-		t.Fatalf("merge baseline not used: %v", c.errs)
 	}
 }
 
@@ -1500,27 +1476,6 @@ func TestCheckRulesImplementedBy(t *testing.T) {
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "must declare implemented_by") || !strings.Contains(errs, `implemented_by "missing-id" is not emitted`) {
 		t.Fatalf("implemented_by not checked: %v", c.errs)
-	}
-}
-
-func TestEnumAppendOnlyRegressions(t *testing.T) {
-	oldDoc := map[string]any{"enums": []any{
-		map[string]any{"id": "data.enums.x", "values": []any{
-			map[string]any{"value": "active", "code": 0},
-			map[string]any{"value": "removed", "code": 1},
-		}},
-	}}
-	curDoc := map[string]any{"enums": []any{
-		map[string]any{"id": "data.enums.x", "values": []any{
-			map[string]any{"value": "active", "code": 9},
-			map[string]any{"value": "added", "code": 2},
-		}},
-	}}
-	c := &Checker{}
-	c.reportEnumRegressions(oldDoc, curDoc, "contracts/data/enums.yaml")
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "removed was removed") || !strings.Contains(errs, "code changed from 0 to 9") {
-		t.Fatalf("enum regressions not reported: %v", c.errs)
 	}
 }
 

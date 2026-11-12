@@ -92,7 +92,7 @@ scripts/cmd/
   - `data/queries/*.yaml` 的 `index_columns`：每个内层列表按顺序匹配表索引最左前缀或主键；匹配的显式索引必须在 `used_by` 中列出该 query
   - `table.partition.columns` 存在；range 必须有 `interval`，其他策略不得有
   - `table.retention` 的数值 >= 1，`unit` 只能是 minutes/hours/days
-  - `used_by` 三列表与实际入边一致；`queries` 记录查询项 ID
+  - `used_by` 只记 `entities` 与 `queries`，与实际入边一致
   - `owner_module` 与 capabilities 写表归属一致；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
   - `persistence.queries` 引用的查询项必须存在；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
   - 索引名与 `unique`/`exclude` 约束名共用 PG 索引命名空间，必须全局唯一
@@ -107,7 +107,7 @@ scripts/cmd/
   - `name` / `go_type` / `ts_type` 在集合内唯一；类型名冲突会让 Go/TS 产物互相覆盖
   - `summary` 非空；`stability: stable` 不得含 TODO/FIXME
   - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
-  - `enum-append-only` 对比 HEAD；PR merge ref 自动使用 HEAD^1（CI checkout 需完整历史）
+  - `used_by.entities/tables` 必须与 entity 实际引用完全一致；只列 data.entities/data.tables，不列 capability/feature
 - 实体/查询/能力对表的引用存在
 - 查询 `return_columns` 必须是表列
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复

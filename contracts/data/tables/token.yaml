@@ -124,4 +124,3 @@ used_by:
     - data.queries.auth.revoke_token
     - data.queries.auth.delete_expired_tokens
     - data.queries.auth.list_tokens_by_account
-  capabilities: [ cap.services.auth ]

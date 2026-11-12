@@ -46,9 +46,8 @@ type constraintDef struct {
 }
 
 type usedByDef struct {
-	Entities     []string `yaml:"entities"`
-	Queries      []string `yaml:"queries"`
-	Capabilities []string `yaml:"capabilities"`
+	Entities []string `yaml:"entities"`
+	Queries  []string `yaml:"queries"`
 }
 
 type enumItemScaffold struct {
@@ -57,7 +56,13 @@ type enumItemScaffold struct {
 	Description string              `yaml:"description"`
 	GoType      string              `yaml:"go_type"`
 	TSType      string              `yaml:"ts_type"`
+	UsedBy      enumUsedByScaffold  `yaml:"used_by"`
 	Values      []enumValueScaffold `yaml:"values"`
+}
+
+type enumUsedByScaffold struct {
+	Entities []string `yaml:"entities"`
+	Tables   []string `yaml:"tables"`
 }
 
 type enumValueScaffold struct {
@@ -109,7 +114,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	}
 	usedByField, _ := FindField(s.Fields, "used_by")
 	if err := requireSupported(usedByField.Fields, map[string]bool{
-		"entities": true, "queries": true, "capabilities": true,
+		"entities": true, "queries": true,
 	}, s.Type+".used_by"); err != nil {
 		return nil, err
 	}
@@ -150,7 +155,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		},
 		Constraints: []constraintDef{},
 		Indexes:     []any{},
-		UsedBy:      usedByDef{Entities: []string{}, Queries: []string{}, Capabilities: []string{}},
+		UsedBy:      usedByDef{Entities: []string{}, Queries: []string{}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
@@ -173,7 +178,7 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	enumsField, _ := FindField(s.Fields, "enums")
 	if err := requireSupported(enumsField.ItemFields, map[string]bool{
 		"id": true, "name": true, "description": true,
-		"go_type": true, "ts_type": true, "values": true,
+		"go_type": true, "ts_type": true, "used_by": true, "values": true,
 	}, s.Type+".enums"); err != nil {
 		return nil, err
 	}
@@ -188,6 +193,7 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 		Description: "TODO: 枚举用途",
 		GoType:      pc,
 		TSType:      pc,
+		UsedBy:      enumUsedByScaffold{Entities: []string{}, Tables: []string{}},
 		Values:      []enumValueScaffold{{Value: name, Code: -1, Description: "TODO: 枚举值说明"}},
 	}
 	b, err := marshal2(doc)

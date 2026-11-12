@@ -242,13 +242,12 @@ fields:
     required: true
     generated: true
     write: forbidden
-    description: "反向索引；只记直接入边"
+    description: "反向索引；只记直接 entity 与 query"
     generates: "used_by、inbound"
     caution: "生成物，禁止手改"
     fields:
       - { name: entities, type: list<string>, required: true, unique: true, description: "实体 ID 列表" }
       - { name: queries, type: list<string>, required: true, unique: true, description: "查询项 ID 列表" }
-      - { name: capabilities, type: list<string>, required: true, unique: true, description: "能力 ID 列表" }
 
 rules:
   - { id: base-file, text: "基类契约固定位于 contracts/data/tables/_base.yaml，ID 固定为 data.tables.base", implemented_by: [ base-file ] }
@@ -268,7 +267,7 @@ rules:
   - { id: index-order, text: "order 只能与 columns 配合，且长度必须一致", implemented_by: [ index-order ] }
   - { id: large-index-concurrently, text: "size_class=large 时索引不得显式 concurrently: \"false\"", implemented_by: [ large-index-concurrently ] }
   - { id: partition, text: "partition.columns 非空；range 必须有 interval，其他策略不得有", implemented_by: [ partition ] }
-  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；queries 记录查询项 ID，不是查询文件 ID", implemented_by: [ used-by-generated ] }
+  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；只记 entities 与 queries", implemented_by: [ used-by-generated ] }
   - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读取用 persistence.queries（read_only_tables 已移除）", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-reason, text: "索引必须写非空 reason", implemented_by: [ index-reason ] }

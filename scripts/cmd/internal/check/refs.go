@@ -208,7 +208,7 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 			continue
 		}
 		inbound[id] = map[string]map[string]bool{
-			"entities": {}, "queries": {}, "capabilities": {},
+			"entities": {}, "queries": {},
 		}
 	}
 	// entities
@@ -246,23 +246,6 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 			}
 		}
 	}
-	// capabilities
-	for _, f := range walkYAML(c.root, "contracts/capabilities") {
-		doc, err := loadYAML(f)
-		if err != nil || doc == nil {
-			continue
-		}
-		id, _ := doc["id"].(string)
-		p, _ := asMap(doc["persistence"])
-		if p == nil {
-			continue
-		}
-		for _, t := range tableRefs(p) {
-			if inbound[t] != nil {
-				inbound[t]["capabilities"][id] = true
-			}
-		}
-	}
 
 	for id, rel := range tableIDs {
 		if id == c.baseID {
@@ -277,7 +260,7 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 			c.rulef("used-by-generated", "%s: missing used_by", rel)
 			continue
 		}
-		for _, kind := range []string{"entities", "queries", "capabilities"} {
+		for _, kind := range []string{"entities", "queries"} {
 			got := stringSet(asList(u[kind]))
 			want := inbound[id][kind]
 			if !sameSet(got, want) {
