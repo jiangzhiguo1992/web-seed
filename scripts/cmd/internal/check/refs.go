@@ -345,6 +345,9 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 		}
 		for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
 			wantID := schema.Targets.FileID(filepath.Base(file))
+			if schema.Type == "data.entities" && filepath.Base(file) == "_base.yaml" {
+				wantID = baseEntityID
+			}
 			if wantID == "" {
 				continue
 			}

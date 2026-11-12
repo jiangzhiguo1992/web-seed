@@ -45,8 +45,17 @@ actions:
     on_success: "close_and_redirect(feature.routes.account_list)"
 
 fields:
-  - { name: identifier, type: string, required: true, maxLength: 254, autocomplete: username }
-  - { name: password, type: string, required: true, minLength: 12, autocomplete: current-password, secret: true }
+  - name: identifier
+    type: string
+    required: true
+    maxLength: 254
+    autocomplete: username
+  - name: password
+    type: string
+    required: true
+    minLength: 12
+    autocomplete: current-password
+    secret: true
 
 security:
   rate_limit_hint: "连续失败 5 次锁定 15 分钟（见 platform.security.auth_policy）"

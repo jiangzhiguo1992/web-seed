@@ -24,6 +24,43 @@ capabilities 是 business 的实现，**契约里不出现 `business.*`**：
 
 实现代码按 business 契约编写，但契约层不反向引用——两处都写必然漂移。
 
+## 1.2 类型级负向约束
+
+以下约束适用于该类型的所有契约；具体实例只写差异，不要再复制。
+
+**cap.http**
+
+- 不要在 handler 里直接读 `r.URL.Query()`
+- 不要逐接口重复声明默认错误响应
+- 响应 schema 必须 `additionalProperties: false`
+- 不要写 `business.rules.*` 或 `business.events.*`（由 business 侧锚点）
+- 每个 operation 必须写 `x-contract-id` 与 `x-service`
+- 字段长度/枚举以 data 契约为准；手写值只用于 OpenAPI 展开
+
+**cap.async**
+
+- 五要素必须齐全：`trigger` / `input` / `output` / `idempotency` / `retry`
+- 不要引用 `business.*`
+- 不要在任务里写业务规则，引用 `business.rules.*`
+- 多实例部署时必须声明分布式锁
+
+**cap.services**
+
+- 只登记跨模块调用的方法
+- 不要在 interface 里暴露 `*pgx.Tx` 或 HTTP 类型
+- 必须声明 `persistence`（表、字段映射、查询、约束错误映射）
+- 跨模块读通过 `persistence.queries`；写表必须属于 `owner_module`
+- 不要引用 `business.*`（规则/事件由 business 侧锚点）
+- 返回 `data.entities.*`，不要返回表行 `data.tables.*.row`
+- `field_map` 只写命名不同的字段，同名不写
+- 数据库约束到业务错误的映射写在 `constraint_errors`，不要写 `constraint_map`
+
+**cap.flows**
+
+- 只编排，不写调用代码
+- 流程编排属于实现层，不要放回 business
+- 只允许引用 `business.states/rules/events` 进行编排，不要复制规则逻辑
+
 ## 2. HTTP：拆分与组合
 
 ```

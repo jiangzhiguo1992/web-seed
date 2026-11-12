@@ -66,7 +66,7 @@ gen-client: ## 合并 spec → apps/web/packages/api-client（P2）
 	@exit 1
 
 contract-new: ## 生成契约骨架（type=data.tables|data.enums|data.entities|data.queries）
-	@./scripts/contract/scaffold.sh "$(type)" "$(name)" "$(module)" "$(summary)" "$(column_type)"
+	@./scripts/contract/scaffold.sh "$(type)" "$(name)" "$(module)" "$(summary)" "$(column_type)" "$(table)"
 
 contract-check: ## 校验契约结构与 used_by（data.tables/enums/entities/queries）
 	@./scripts/contract/validate.sh
@@ -77,8 +77,8 @@ gen-rule-ids: ## 从 checker 的 rulef(...) 生成 rule_ids_gen.go
 check-rule-ids: ## 校验 rule_ids_gen.go 是否最新
 	cd scripts/cmd && go run ./gen_rule_ids -check
 
-contract-lint: ## 契约 lint：do_not 重复、缺字段、YAML 引号（P2）
-	@echo "contract-lint: 尚未实现（P2）。检查项：do_not 与 _meta/_types.yaml 重复、缺具体标识、未引号的冒号值"
+contract-lint: ## 契约 lint：已并入 contract-check（schema.do-not-duplicate / prose-quotes）
+	@echo "contract-lint: 已并入 make contract-check；请直接运行 contract-check"
 	@exit 1
 
 contract-graph: ## 锚点图校验：重复/悬空/越层/循环/孤儿（P2）

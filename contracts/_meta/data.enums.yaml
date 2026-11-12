@@ -12,10 +12,36 @@ targets:
   id: "data.enums"
 
 fields:
-  - { name: schema_version, type: integer, required: true, const: 1, description: "契约格式版本，固定 1" }
-  - { name: id, type: string, required: true, const: data.enums, description: "集合文件 ID" }
-  - { name: summary, type: string, required: true, description: "一句话说明枚举集合" }
-  - { name: stability, type: string, required: true, enum: [stable, draft, deprecated], description: "契约稳定度" }
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "契约格式版本，固定 1"
+
+  - name: id
+    type: string
+    required: true
+    const: data.enums
+    description: "集合文件 ID"
+
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明枚举集合"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    description: "契约稳定度"
+
+  - name: do_not
+    type: list<string>
+    required: false
+    description: "实例级负向约束；每条含本枚举集合标识"
+    generates: "AI 反例"
+    caution: "通用规则放组 README，禁止复制到这里"
+
   - name: enums
     type: list<object>
     required: true

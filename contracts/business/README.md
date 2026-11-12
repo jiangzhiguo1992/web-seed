@@ -24,6 +24,35 @@
 5. **锚点单向**：`business → capabilities` 仅用于 `implemented_by`，语义是"这条规则由谁实现"。
 6. **术语表是唯一命名来源**：代码、契约、UI 文案必须与 `glossary.md` 一致。
 
+### 2.1 类型级负向约束
+
+以下约束适用于该类型的所有契约；具体实例只写差异，不要再复制。
+
+**business.states**
+
+- 不要在 handler/service 手写状态判断
+- 不要新增状态而不更新转换表
+- 非法转换清单必须与 transitions 同步维护
+- `archived` 与 `deleted` 不可混用
+
+**business.rules**
+
+- 不要写没有 given/when/then 的规则
+- 不要在 handler 里复制规则逻辑
+- 每条规则必须声明 `implemented_by`，否则视为未实现
+
+**business.events**
+
+- 不要在事件里放 PII
+- 破坏兼容必须升 version
+- payload 字段只能是 `data.entities.*` 字段的子集
+- 不要写 trigger 反向引用能力（由 capabilities 的 emits 声明）
+
+**business.glossary**
+
+- 术语表是唯一命名来源；代码、契约、UI 文案必须一致
+- 不要在本文件写实现细节
+
 ## 3. 引用方向
 
 ```

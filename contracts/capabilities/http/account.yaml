@@ -12,7 +12,6 @@ stability: stable
 do_not:
   - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
   - "x-contract-id 必须与 index 中的 operation 一一对应"
-  - "不要在 handler 里直接读 r.URL.Query()"
 
 module: accounts
 base_path: /v1

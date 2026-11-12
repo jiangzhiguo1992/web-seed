@@ -1,6 +1,7 @@
 # 令牌数据实体。物理表在 tables/token.yaml。
 #
 # 边界：
+#   - 基类字段在 entities/_base.yaml；本文件只写令牌业务字段。
 #   - access_token_hash / refresh_token_hash 标记 never_expose，只能出现在认证流程。
 #   - 实体不描述签发算法、签名、刷新策略；这些在 platform/security/auth_policy。
 
@@ -8,6 +9,7 @@ schema_version: 1
 id: data.entities.token
 summary: "令牌数据实体"
 stability: stable
+extends: [ data.entities.base ]
 table: data.tables.token
 identity: id
 do_not:
@@ -16,20 +18,38 @@ do_not:
   - "token 原文只在签发响应返回一次，数据库不存原文"
 
 fields:
-  - { name: id, type: string, required: true, mutable: false }
-  - { name: own_type, type: string, required: true }
-  - { name: own_id, type: string, required: true }
-  - { name: account_id, type: string, required: true, mutable: false }
-  - { name: device_id, type: string }
-  - { name: user_id, type: string }
-  - { name: access_token_hash, type: string, required: true, pii: true, never_expose: true }
-  - { name: refresh_token_hash, type: string, required: true, pii: true, never_expose: true }
-  - { name: access_expire_at, type: timestamp, required: true }
-  - { name: refresh_expire_at, type: timestamp, required: true }
-  - { name: status, type: data.enums.token_status, required: true }
-  - { name: created_at, type: timestamp, required: true, mutable: false }
-  - { name: updated_at, type: timestamp, required: true, mutable: false }
-  - { name: deleted_at, type: timestamp, mutable: false }
+  - name: own_type
+    type: string
+    required: true
+  - name: own_id
+    type: string
+    required: true
+  - name: account_id
+    type: string
+    required: true
+    mutable: false
+  - name: device_id
+    type: string
+  - name: user_id
+    type: string
+  - name: access_token_hash
+    type: string
+    required: true
+    pii: true
+    never_expose: true
+  - name: refresh_token_hash
+    type: string
+    required: true
+    pii: true
+    never_expose: true
+  - name: access_expire_at
+    type: timestamp
+    required: true
+  - name: refresh_expire_at
+    type: timestamp
+    required: true
+  - name: status
+    type: data.enums.token_status
 
 relations:
   - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.token.col.account_id }

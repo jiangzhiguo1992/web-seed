@@ -78,7 +78,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
+		writeOut(*out, b, "next: add business fields; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
 
 	case "data.queries":
 		physical, err := loadTableContract(abs, *table)

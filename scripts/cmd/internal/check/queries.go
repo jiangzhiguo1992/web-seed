@@ -231,7 +231,6 @@ func (c *Checker) checkQueries(schema *Schema) {
 }
 
 func (c *Checker) checkQueryDoNot(qd queryDoc) {
-	generic := c.typeDoNot("data.queries")
 	short := strings.TrimSuffix(filepath.Base(qd.rel), filepath.Ext(qd.rel))
 	names := map[string]bool{short: true, qd.fileID: true}
 	if m, _ := qd.doc["module"].(string); m != "" {
@@ -249,10 +248,6 @@ func (c *Checker) checkQueryDoNot(qd queryDoc) {
 		trimmed := strings.TrimSpace(s)
 		if trimmed == "" {
 			c.rulef("query-do-not-specific", "%s: do_not entries must not be empty", qd.rel)
-			continue
-		}
-		if containsString(generic, trimmed) {
-			c.rulef("query-do-not-specific", "%s: do_not duplicates _types.yaml data.queries.do_not: %s", qd.rel, trimmed)
 			continue
 		}
 		specific := false

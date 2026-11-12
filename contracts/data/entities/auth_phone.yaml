@@ -1,9 +1,13 @@
 # 手机号认证数据实体。物理表在 tables/auth_phone.yaml。
+#
+# 边界：
+#   - 基类字段在 entities/_base.yaml；本文件只写手机号认证业务字段。
 
 schema_version: 1
 id: data.entities.auth_phone
 summary: "手机号认证数据实体"
 stability: stable
+extends: [ data.entities.base ]
 table: data.tables.auth_phone
 identity: id
 do_not:
@@ -11,15 +15,21 @@ do_not:
   - "auth_phone.number 不要出现在日志"
 
 fields:
-  - { name: id, type: string, required: true, mutable: false }
-  - { name: account_id, type: string, required: true, mutable: false }
-  - { name: code, type: string, required: true }
-  - { name: number, type: string, required: true, pii: true }
-  - { name: operator, type: string }
-  - { name: status, type: data.enums.auth_status, required: true }
-  - { name: created_at, type: timestamp, required: true, mutable: false }
-  - { name: updated_at, type: timestamp, required: true, mutable: false }
-  - { name: deleted_at, type: timestamp, mutable: false }
+  - name: account_id
+    type: string
+    required: true
+    mutable: false
+  - name: code
+    type: string
+    required: true
+  - name: number
+    type: string
+    required: true
+    pii: true
+  - name: operator
+    type: string
+  - name: status
+    type: data.enums.auth_status
 
 relations:
   - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.auth_phone.col.account_id }

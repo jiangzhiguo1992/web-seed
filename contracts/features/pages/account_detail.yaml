@@ -58,15 +58,25 @@ actions:
     danger: true
 
 fields:
-  - { name: number, render: heading }
-  - { name: nickname, render: text }
-  - { name: own_type, render: tag }
-  - { name: own_id, render: code }
-  - { name: user_id, render: code }
-  - { name: status, enum: business.states.account.states, render: badge }
-  - { name: created_at, render: relative_time }
-  - { name: updated_at, render: relative_time }
-  - { name: version, render: hidden }
+  - name: number
+    render: heading
+  - name: nickname
+    render: text
+  - name: own_type
+    render: tag
+  - name: own_id
+    render: code
+  - name: user_id
+    render: code
+  - name: status
+    enum: business.states.account.states
+    render: badge
+  - name: created_at
+    render: relative_time
+  - name: updated_at
+    render: relative_time
+  - name: version
+    render: hidden
 
 transition_ui:
   source: business.states.account.transitions

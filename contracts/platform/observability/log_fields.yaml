@@ -16,27 +16,73 @@ required:
 
 fields:
   # ---------- 请求上下文 ----------
-  - { name: request_id, type: string, pii: false, required_for: [http] }
-  - { name: trace_id, type: string, pii: false, required_for: [http] }
-  - { name: span_id, type: string, pii: false }
-  - { name: method, type: string, pii: false, required_for: [http] }
-  - { name: path, type: string, pii: false, required_for: [http], note: "只记录路由模板，不记录真实参数" }
-  - { name: status, type: integer, pii: false, required_for: [http] }
-  - { name: duration_ms, type: integer, pii: false, required_for: [http] }
-  - { name: bytes, type: integer, pii: false }
+  - name: request_id
+    type: string
+    pii: false
+    required_for: [http]
+  - name: trace_id
+    type: string
+    pii: false
+    required_for: [http]
+  - name: span_id
+    type: string
+    pii: false
+  - name: method
+    type: string
+    pii: false
+    required_for: [http]
+  - name: path
+    type: string
+    pii: false
+    required_for: [http]
+    note: "只记录路由模板，不记录真实参数"
+  - name: status
+    type: integer
+    pii: false
+    required_for: [http]
+  - name: duration_ms
+    type: integer
+    pii: false
+    required_for: [http]
+  - name: bytes
+    type: integer
+    pii: false
 
   # ---------- 身份 ----------
-  - { name: user_id, type: string, pii: true, note: "仅记录哈希或 ID，不记录邮箱/手机号" }
-  - { name: role, type: string, pii: false }
-  - { name: app, type: string, pii: false, required_for: [http, job] }
+  - name: user_id
+    type: string
+    pii: true
+    note: "仅记录哈希或 ID，不记录邮箱/手机号"
+  - name: role
+    type: string
+    pii: false
+  - name: app
+    type: string
+    pii: false
+    required_for: [http, job]
 
   # ---------- 业务 ----------
-  - { name: module, type: string, pii: false }
-  - { name: entity, type: string, pii: false }
-  - { name: entity_id, type: string, pii: false }
-  - { name: error_code, type: string, pii: false, ref: platform.errors }
-  - { name: job, type: string, pii: false, required_for: [job] }
-  - { name: attempt, type: integer, pii: false, required_for: [job] }
+  - name: module
+    type: string
+    pii: false
+  - name: entity
+    type: string
+    pii: false
+  - name: entity_id
+    type: string
+    pii: false
+  - name: error_code
+    type: string
+    pii: false
+    ref: platform.errors
+  - name: job
+    type: string
+    pii: false
+    required_for: [job]
+  - name: attempt
+    type: integer
+    pii: false
+    required_for: [job]
 
 never_log:
   - password

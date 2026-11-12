@@ -1,7 +1,7 @@
 # 账号数据实体。物理表在 tables/account.yaml；认证信息在 auth_* / tokens。
 #
 # 边界：
-#   - 实体只描述业务可读的字段与关系，不写 DDL。
+#   - 基类字段在 entities/_base.yaml；本文件只写账号业务字段。
 #   - 密码、手机号、邮箱、令牌不在本实体出现；通过关系实体访问。
 #   - 复杂校验写 validation；数据库能表达的约束留在 tables。
 
@@ -9,6 +9,7 @@ schema_version: 1
 id: data.entities.account
 summary: "账号数据实体"
 stability: stable
+extends: [ data.entities.base ]
 table: data.tables.account
 identity: id
 do_not:
@@ -18,17 +19,28 @@ do_not:
   - "account.validation 不要写 DDL"
 
 fields:
-  - { name: id, type: string, required: true, mutable: false }
-  - { name: own_type, type: string, required: true }
-  - { name: own_id, type: string, required: true }
-  - { name: number, type: string, required: true, note: "账号编号，存储前大写归一" }
-  - { name: nickname, type: string, required: true, pii: true }
-  - { name: user_id, type: string }
-  - { name: status, type: data.enums.account_status, required: true }
-  - { name: version, type: integer, required: true, note: "乐观锁" }
-  - { name: created_at, type: timestamp, required: true, mutable: false }
-  - { name: updated_at, type: timestamp, required: true, mutable: false }
-  - { name: deleted_at, type: timestamp, mutable: false }
+  - name: own_type
+    type: string
+    required: true
+  - name: own_id
+    type: string
+    required: true
+  - name: number
+    type: string
+    required: true
+    note: "账号编号，存储前大写归一"
+  - name: nickname
+    type: string
+    required: true
+    pii: true
+  - name: user_id
+    type: string
+  - name: status
+    type: data.enums.account_status
+  - name: version
+    type: integer
+    required: true
+    note: "乐观锁"
 
 relations:
   - { name: tokens, target: data.entities.token, kind: one_to_many, via: data.tables.token.col.account_id }

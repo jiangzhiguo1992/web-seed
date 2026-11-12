@@ -5,7 +5,6 @@ id: feature.routes
 summary: "路由与菜单"
 stability: stable
 do_not:
-  - "不要手写路由表"
   - "不要在路由 meta 硬编码权限字符串，引用 platform.security.permissions.*"
 
 app: web/admin

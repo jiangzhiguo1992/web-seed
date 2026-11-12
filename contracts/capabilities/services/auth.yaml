@@ -8,9 +8,7 @@ do_not:
   - "不要在普通方法里暴露 password_hash / access_token / refresh_token；Login/Refresh 返回 TokenPair 是唯一例外"
   - "持久化 token 前必须哈希；数据库表只存 hash，不存原文"
   - "不要返回 data.tables.*.row；返回 data.entities.account 或 TokenPair"
-  - "不要引用 business.*（规则/事件由 business 侧锚点）"
   - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
-  - "数据库约束到业务错误的映射写在 constraint_errors"
 
 module: auth
 

@@ -35,13 +35,15 @@
 | 概念 | 视角 | 位置 | 内容 |
 |---|---|---|---|
 | 表（table） | 持久化 | `data/tables/<file>.yaml` | 字段、类型、可空、默认值、CHECK/UNIQUE/EXCLUDE、索引、分区、`used_by`、`redundancy` |
-| 实体（entity） | 业务 | `data/entities/<entity>.yaml` | 身份、字段、关系、`validation`（数据库表达不了的复杂校验） |
+| 实体（entity） | 业务 | `data/entities/<entity>.yaml` | 继承 `_base`、业务字段、关系、`validation`（数据库表达不了的复杂校验） |
 
 实体是**读模型**，不是表的第二份写模型：
 
 - **每张物理表至少被一个 entity 映射**；否则数据没有业务出口。基类不是物理表，不参与映射。
 - **一个实体可以跨多表**：合成只读，JOIN 条件写在 query，entity 只声明字段来源。
 - **约束层次不同**：`CHECK (char_length(number) > 0)` 是 DDL；「已软删的账号不可修改」是业务不变量。
+
+5 个通用字段（`id` / `status` / `created_at` / `updated_at` / `deleted_at`）在 `entities/_base.yaml`；具体实体写 `extends: [data.entities.base]`，只写业务字段。基类字段不得重声明；`status` 允许用 `data.enums.*` 特化类型。
 
 关联方式是 `table` / `tables` + `column`：单表实体可省略 `column`（按字段名匹配列），多表合成必须写 `column: data.tables.<t>.col.<c>`。实体字段不重复物理长度参数，也不允许聚合/计算字段；统计结果放 query 的 `output_fields`。
 
@@ -193,6 +195,43 @@ indexes:
 ```
 
 `manual_adjust` 与 `verification` 的机器可读定义在 `_types.yaml` 的 `types.data.tables.migration`。
+
+### 3.3 类型级负向约束
+
+以下约束适用于该类型的所有契约；具体实例只写差异，不要再复制。`data.entities` 的通用约束见 `entities/_base.yaml` 的 `do_not`。
+
+**data.tables**
+
+- 不要手写 migrations，改表契约后运行 `make gen-db`
+- 物理表必须 `extends` 一个或多个父表（最终到达 `data.tables.base`）；不得重复声明任何继承列
+- 不要绕过软删过滤（`deleted_at IS NULL`）
+- UNIQUE 约束包含软删行；需软删后复用时用 `indexes[].unique` + `where: deleted_at IS NULL`
+- 禁止数据库外键；跨表一致性由应用/业务规则保证
+- 表列不引用 `data.enums.*`；状态整数码用 `integer`，由 entity 映射为枚举
+- 不要用未结构化字段塞原生 DDL；分区用 `table.partition`，表达式索引用 `indexes[].expression`
+- `used_by` 是生成物，禁止手改；只记 entities 与 queries
+- 只有 `owner_module` 相同的 `cap.services` / `cap.async` 可以写表；跨模块读通过 `persistence.queries`
+- `never_expose` 列禁止进入普通 OpenAPI/TS/事件/普通 entity；认证 query 与 `x-auth-response` 是唯一例外
+
+**data.queries**
+
+- 每个 query 必须有显式 id：`data.queries.<file>.<query_id>`
+- 每个 query 必须声明 `table` 或 `tables`，供图校验推导血缘
+- 返回实体用 `returns: data.entities.*`；统计结果用 `output_fields`
+- 写查询的 module 必须等于写目标表的 `owner_module`
+- 不要在 repo 层手写 SQL
+- 不要写 `SELECT *`；敏感表必须用 `return_columns` 显式列出返回列
+- nullable 参数在 SQL 中使用 `sqlc.narg('name')`
+
+**data.enums**
+
+- 枚举值可改名或删除；`code` 在当前枚举内唯一
+- 删除枚举值后不要复用其 `code`；历史数据仍引用旧 code
+- 每个枚举必须写 `used_by`，只列 `data.entities` / `data.tables`；不列 capability/feature
+- 每个枚举项必须有显式 id：`data.enums.<name>`
+- 不要收模块内部枚举
+
+**data.storage**：见 `storage.yaml` 的 `do_not`（单例契约，类型级约束就近写在文件内）。
 
 ---
 

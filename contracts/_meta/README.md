@@ -11,7 +11,7 @@
 ```
 contracts/_meta/
 ├── README.md             # 本文件：AI 入口
-├── _types.yaml            # 每类契约的默认元数据（enforcement / consumers / 通用 do_not）
+├── _types.yaml            # 每类契约的默认元数据（enforcement / consumers / generates）
 ├── data.tables.yaml      # data.tables 的字段树 + 值域 + 说明
 ├── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
 ├── data.entities.yaml    # data.entities 的字段树 + 值域 + 说明
@@ -60,8 +60,8 @@ scripts/cmd/
 |---|---|---|
 | `make contract-new type=data.tables name=note module=notes summary="备注表"` | 按 `_meta/data.tables.yaml` 生成最小表骨架；`column_type=decimal` 可指定第一列类型并带出扩展字段 | 新建表前 |
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
-| `make contract-new type=data.entities name=note module=note` | 按 `_meta/data.entities.yaml` 生成单表读模型骨架（目标表必须已存在） | 新建实体时 |
-| `make contract-new type=data.queries name=note module=notes` | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在） | 新建查询集时 |
+| `make contract-new type=data.entities name=note table=note` | 按 `_meta/data.entities.yaml` 生成单表读模型骨架（目标表必须已存在） | 新建实体时 |
+| `make contract-new type=data.queries name=note module=notes table=note` | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在） | 新建查询集时 |
 | `make gen-graph` | 按引用计算并写回 table/entity 的 `used_by` | 改完表/实体/查询后 |
 | `make gen-graph-check` | 只校验 `used_by` 是否最新（CI） | CI |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / used_by / owner / entity 投影 / query 参数与返回 / persistence.queries | 每次改完契约 |
@@ -106,6 +106,9 @@ scripts/cmd/
   - `persistence.queries` 引用的查询项必须存在；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
   - 索引名与 `unique`/`exclude` 约束名共用 PG 索引命名空间，必须全局唯一
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
+  - 所有契约的顶层 `fields` 必须竖排（block style），嵌套 `item_fields` 不限制（`schema.fields-style`）
+  - 具体契约的 `do_not` 不得与组 README / `_base` 的指导重复（`schema.do-not-duplicate`）
+  - `rules` 只允许出现在 `_meta`；`business/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不属于类型规则清单。具体契约的 `do_not` 只写实例级；`_meta` 下不得出现 `do_not`（`schema.meta-placement`）
   - `rules` 的 `id`/`text` 非空、`id` 唯一；`implemented_by` 必须包含规则自身 ID，且每个值都指向 checker 实际输出的 `[rule-id]`（`schema.rules`）
   - checker 输出的非 `schema.*` 错误 ID 必须由某个 `rules`/`schema_rules` 声明，反向防止“有实现没规则”
   - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；`make contract-check` 校验它是否最新
@@ -117,8 +120,13 @@ scripts/cmd/
   - `summary` 非空；`stability: stable` 不得含 TODO/FIXME
   - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
   - `used_by.entities/tables` 必须与 entity 字段引用完全一致；只列 data.entities/data.tables，capability/feature 引用不写入 used_by，空列表合法
+- `data.entities.base`（`contracts/data/entities/_base.yaml`，单例）
+  - 路径/ID 由 checker 写死识别；5 个字段固定为 `id` / `status` / `created_at` / `updated_at` / `deleted_at`
+  - `id` string 非空、`status` integer 非空、时间列 timestamp（`created_at`/`updated_at` 非空、`deleted_at` 可空）；`id` 与三个时间列 `mutable:false`
+  - `do_not` 直接写在 `_base.yaml`，承载 `data.entities` 类型级通用规则；具体实体 `do_not` 必须含本实体标识
 - `data/entities/*.yaml`
-  - 结构按 `_meta/data.entities.yaml`；`table`/`tables` 二选一；每张物理表至少一个 entity 映射
+  - 结构按 `_meta/data.entities.yaml`；`extends` 必须是 `[data.entities.base]`；具体实体不得重声明基类字段，`status` 可用 `data.enums.*` 特化
+  - `table`/`tables` 二选一；每张物理表至少一个 entity 映射
   - 字段必须投影回列：单表可省略 `column`，多表必须写；同一列不得被两个字段引用
   - `required` 必须等价于来源列非空；`pii`/`never_expose` 不得放松；显式类型必须与列类型族一致
   - `identity` 必须是 required、mutable:false、主表主键
@@ -173,7 +181,7 @@ scripts/cmd/
 
 `_types.yaml` 的 `schema_rules` 只存放跨类型规则（`id-from-file`、`contract-id-unique`、`unique-names`）；`data.tables.yaml` 的 `rules` 保留基类规则与物理表专有规则，避免同一规则在多个类型文件中重复。`_base.yaml` 不再写实例级 `rules`。
 
-`_types.yaml` 的 `types.<type>` 承载类型级默认值（`enforcement` / `consumers` / `generates` / `do_not`）；`types.data.tables.migration` 还定义迁移生成策略（`naming` / `forbidden` / `manual_adjust` / `verification`）。
+`_types.yaml` 的 `types.<type>` 承载类型级默认值（`enforcement` / `consumers` / `generates`）；`types.data.tables.migration` 还定义迁移生成策略（`naming` / `forbidden` / `manual_adjust` / `verification`）。类型级 `do_not` 已移到组 README 或 `<type>/_base.yaml`，`_meta` 下禁止出现 `do_not`。
 
 ### 5.1 `stability` 流转
 
@@ -199,5 +207,6 @@ scripts/cmd/
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` / `schema_rules` 而不写 `implemented_by`；`contract-check` 会校验 `implemented_by` 必须包含规则自身 ID、每个 ID 都有实际输出，并反向检查所有非 `schema.*` 输出都已被规则声明；但不会判断检查逻辑本身是否正确（后者靠测试）。
 - 不要在 `data.tables.yaml` 重复 `_types.yaml` 的通用字段语义；类型文件只写类型特有内容。
+- 不要在 `_meta` 下写 `do_not`；不要在具体契约写顶层 `rules`（`business/rules` 与 `platform` 的领域规则集除外）。`contract-check` 的 `schema.meta-placement` 会拦住。
 - 不要在 `contracts/_meta/` 里写业务实例；它只描述类型。
 - 不要为单个表/页面各写一份规范；按类型一份。

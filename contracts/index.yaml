@@ -40,6 +40,7 @@ entries:
 
   # ---------- data ----------
   - { id: data.tables.base, path: data/tables/_base.yaml, summary: "表结构基类（5 个基础字段）", consumers: [tools], enforcement: generated, stability: stable }
+  - { id: data.entities.base, path: data/entities/_base.yaml, summary: "实体字段基类（5 个基础字段）", consumers: [tools], enforcement: generated, stability: stable }
   - { id: data.storage, path: data/storage.yaml, summary: "数据存储与部署（引擎/拓扑/锁）", consumers: [api, worker, ops], enforcement: tested, stability: stable }
   - id: data.tables.account
     path: data/tables/account.yaml
@@ -147,7 +148,7 @@ global_notes:
   - "data.entities 的字段名与表列名可能不同：entity 用 column 指明来源，cap.services.persistence.field_map 只描述 service 类型差异"
   - "领域事件由 business/events 的 emitted_by 声明，capabilities 不写 emits"
   - "capabilities 契约不引用 business.*（cap.flows 仅允许引用 business.states/rules/events 做编排）"
-  - "通用约束在 _meta/_types.yaml，组规则在 <group>/README.md，实例约束在正文 do_not"
+  - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table/entity 的 used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
 
 # 白名单：允许没有入边的根契约

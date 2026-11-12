@@ -70,11 +70,17 @@ actions:
     available_when: "row.status == pending || row.status == active"
 
 fields:
-  - { name: number, render: text }
-  - { name: nickname, render: text }
-  - { name: own_type, render: tag }
-  - { name: status, enum: business.states.account.states, render: badge }
-  - { name: created_at, render: relative_time }
+  - name: number
+    render: text
+  - name: nickname
+    render: text
+  - name: own_type
+    render: tag
+  - name: status
+    enum: business.states.account.states
+    render: badge
+  - name: created_at
+    render: relative_time
 
 filters:
   - { name: status, enum: business.states.account.states, multiple: false, label: "状态" }

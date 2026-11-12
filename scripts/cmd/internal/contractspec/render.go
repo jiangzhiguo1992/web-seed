@@ -76,6 +76,7 @@ type entityScaffold struct {
 	ID            string                `yaml:"id"`
 	Summary       string                `yaml:"summary"`
 	Stability     string                `yaml:"stability"`
+	Extends       []string              `yaml:"extends"`
 	Table         string                `yaml:"table"`
 	Identity      string                `yaml:"identity"`
 	Fields        []entityFieldScaffold `yaml:"fields"`
@@ -118,10 +119,6 @@ type queryItemScaffold struct {
 type queryParamScaffold struct {
 	Name string `yaml:"name"`
 	Type string `yaml:"type"`
-}
-
-func boolPtr(v bool) *bool {
-	return &v
 }
 
 func RenderTable(s *Schema, name, module, summary string) ([]byte, error) {
@@ -274,7 +271,7 @@ func RenderEntity(s *Schema, name, table, summary string) ([]byte, error) {
 	}
 	top := map[string]bool{
 		"schema_version": true, "id": true, "summary": true, "stability": true,
-		"table": true, "identity": true, "fields": true, "used_by": true,
+		"extends": true, "table": true, "identity": true, "fields": true, "used_by": true,
 	}
 	if err := requireSupported(s.Fields, top, "data.entities"); err != nil {
 		return nil, err
@@ -306,22 +303,17 @@ func RenderEntity(s *Schema, name, table, summary string) ([]byte, error) {
 		ID:            entityID,
 		Summary:       summary,
 		Stability:     defaultString(s.Fields, "stability", "draft"),
+		Extends:       []string{"data.entities.base"},
 		Table:         "data.tables." + table,
 		Identity:      "id",
-		Fields: []entityFieldScaffold{
-			{Name: "id", Type: "string", Required: true, Mutable: boolPtr(false)},
-			{Name: "status", Type: "integer", Required: true},
-			{Name: "created_at", Type: "timestamp", Required: true, Mutable: boolPtr(false)},
-			{Name: "updated_at", Type: "timestamp", Required: true, Mutable: boolPtr(false)},
-			{Name: "deleted_at", Type: "timestamp", Mutable: boolPtr(false)},
-		},
-		UsedBy: entityUsedByScaffold{Queries: []string{}, Entities: []string{}},
+		Fields:        []entityFieldScaffold{},
+		UsedBy:        entityUsedByScaffold{Queries: []string{}, Entities: []string{}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；替换 TODO 占位符。\n# 字段规范见 %s。\n\n", summary, s.ID)
+	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；基类字段已由 _base 继承，追加业务字段。\n# 字段规范见 %s。\n\n", summary, s.ID)
 	return append([]byte(header), b...), nil
 }
 
@@ -333,8 +325,8 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 	if !validName(name) || !validName(table) || !validName(module) {
 		return nil, fmt.Errorf("RenderQuery: invalid name/module/table (snake_case required)")
 	}
-	if strings.TrimSpace(physical) == "" {
-		return nil, fmt.Errorf("RenderQuery: physical table name must not be empty")
+	if !validName(physical) {
+		return nil, fmt.Errorf("RenderQuery: invalid physical table name %q (snake_case required)", physical)
 	}
 	if strings.TrimSpace(summary) == "" {
 		return nil, fmt.Errorf("RenderQuery: summary must not be empty")

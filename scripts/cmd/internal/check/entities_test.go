@@ -1,6 +1,7 @@
 package check
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -68,6 +69,77 @@ func TestEntityFieldProjectionRules(t *testing.T) {
 	c.checkEntityFields(e)
 	if !strings.Contains(entityErrs(c), "never_expose") {
 		t.Fatalf("never_expose relaxation not reported: %v", c.errs)
+	}
+}
+
+func TestEntityBaseMerge(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {
+				"id":         {typ: "string", primaryKey: true},
+				"status":     {typ: "integer"},
+				"created_at": {typ: "timestamp"},
+				"updated_at": {typ: "timestamp"},
+				"deleted_at": {typ: "timestamp", nullable: true},
+				"own":        {typ: "string"},
+			},
+		},
+		entityBaseFields: []entityFieldInfo{
+			{Name: "id", Type: "string", Required: true, Mutable: false, HasExplicitType: true, FromBase: true},
+			{Name: "status", Type: "integer", Required: true, Mutable: true, HasExplicitType: true, FromBase: true},
+			{Name: "created_at", Type: "timestamp", Required: true, Mutable: false, HasExplicitType: true, FromBase: true},
+			{Name: "updated_at", Type: "timestamp", Required: true, Mutable: false, HasExplicitType: true, FromBase: true},
+			{Name: "deleted_at", Type: "timestamp", Mutable: false, HasExplicitType: true, FromBase: true},
+		},
+	}
+	doc := map[string]any{
+		"id":       "data.entities.x",
+		"extends":  []any{"data.entities.base"},
+		"table":    "data.tables.x",
+		"identity": "id",
+		"fields": []any{
+			map[string]any{"name": "status", "type": "data.enums.x_status"},
+			map[string]any{"name": "own", "type": "string", "required": true},
+		},
+	}
+	e := c.parseEntity(doc, "contracts/data/entities/x.yaml")
+	if len(e.Fields) != 6 {
+		t.Fatalf("want 6 effective fields, got %d: %#v", len(e.Fields), e.Fields)
+	}
+	var status *entityFieldInfo
+	for i := range e.Fields {
+		if e.Fields[i].Name == "status" {
+			status = &e.Fields[i]
+		}
+	}
+	if status == nil || !status.OverridesBase || !status.Required || status.Column != "status" {
+		t.Fatalf("status override not merged: %#v", status)
+	}
+	if e.Fields[0].Name != "id" || !e.Fields[0].FromBase {
+		t.Fatalf("base id not inherited: %#v", e.Fields[0])
+	}
+}
+
+func TestEntityBaseShapeRejectsDrift(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.entities.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := loadYAML(filepath.Join(root, "contracts/data/entities/_base.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := asList(doc["fields"])
+	first, _ := asMap(fields[0])
+	first["mutable"] = true
+	c := &Checker{root: root, entityBaseDoc: doc}
+	c.checkEntityBase(schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[entity-base-shape]") {
+		t.Fatalf("base drift not reported: %v", c.errs)
 	}
 }
 

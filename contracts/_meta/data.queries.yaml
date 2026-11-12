@@ -12,7 +12,13 @@ targets:
   naming: "snake_case"
 
 fields:
-  - { name: schema_version, type: integer, required: true, const: 1, description: "契约格式版本，固定 1", generates: "无", caution: "必须是整数 1" }
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "契约格式版本，固定 1"
+    generates: "无"
+    caution: "必须是整数 1"
 
   - name: id
     type: string
@@ -22,10 +28,36 @@ fields:
     generates: "契约 ID、图节点"
     caution: "query 项 ID 必须以此 ID 加点为前缀；checker 以文件名为源"
 
-  - { name: summary, type: string, required: true, description: "一句话说明这个查询集负责什么", generates: "index 摘要", caution: "不要写单条 SQL 细节" }
-  - { name: stability, type: string, required: true, enum: [ stable, draft, deprecated ], default: draft, description: "契约稳定度", generates: "index 摘要", caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改" }
-  - { name: module, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "查询集归属模块", generates: "sqlc package、写归属校验", caution: "写查询的 module 必须等于所写表的 owner_module" }
-  - { name: do_not, type: list<string>, required: false, description: "实例级负向约束；每条含本查询集标识", generates: "AI 反例", caution: "通用规则在 _types.yaml，禁止复制到这里" }
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明这个查询集负责什么"
+    generates: "index 摘要"
+    caution: "不要写单条 SQL 细节"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "契约稳定度"
+    generates: "index 摘要"
+    caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
+
+  - name: module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "查询集归属模块"
+    generates: "sqlc package、写归属校验"
+    caution: "写查询的 module 必须等于写目标表的 owner_module"
+
+  - name: do_not
+    type: list<string>
+    required: false
+    description: "实例级负向约束；每条含本查询集标识"
+    generates: "AI 反例"
+    caution: "通用规则放组 README，禁止复制到这里"
 
   - name: queries
     type: list<object>
@@ -96,4 +128,4 @@ rules:
   - { id: query-one-unique, text: "one 的 SELECT 非标量返回必须命中主键/唯一索引前缀，或 SQL 含 LIMIT 1", implemented_by: [ query-one-unique ] }
   - { id: query-write-owner, text: "写查询的 module 必须等于写目标表的 owner_module；读取表可以跨模块", implemented_by: [ query-write-owner ] }
   - { id: query-sensitive-columns, text: "never_expose 列不得被跨模块查询返回；同模块必须显式写 return_columns", implemented_by: [ query-sensitive-columns ] }
-  - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识；不得复制 _types.yaml 的 data.queries.do_not", implemented_by: [ query-do-not-specific ] }
+  - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识；通用规则放组 README，禁止复制", implemented_by: [ query-do-not-specific ] }

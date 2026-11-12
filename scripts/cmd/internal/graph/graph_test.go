@@ -133,6 +133,68 @@ func TestWriteAndCheck(t *testing.T) {
 	}
 }
 
+func TestEmptyRoot(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "contracts/data/tables/.keep", "")
+	// 只有空表目录：合法空快照。
+	if _, err := Compute(root); err != nil {
+		t.Fatalf("empty tables dir should be valid: %v", err)
+	}
+	// 缺表目录：必须报错，避免 -root 指错时静默成功。
+	if _, err := Compute(t.TempDir()); err == nil {
+		t.Fatal("missing contracts/data/tables should fail")
+	}
+}
+
+func TestDuplicateIDs(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "contracts/data/tables/a.yaml", "id: data.tables.a\n")
+	writeFixture(t, root, "contracts/data/tables/b.yaml", "id: data.tables.a\n")
+	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate table id") {
+		t.Fatalf("duplicate table id not reported: %v", err)
+	}
+
+	root = t.TempDir()
+	writeFixture(t, root, "contracts/data/tables/.keep", "")
+	writeFixture(t, root, "contracts/data/entities/a.yaml", "id: data.entities.x\ntable: data.tables.a\n")
+	writeFixture(t, root, "contracts/data/entities/b.yaml", "id: data.entities.x\ntable: data.tables.a\n")
+	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate entity id") {
+		t.Fatalf("duplicate entity id not reported: %v", err)
+	}
+
+	root = t.TempDir()
+	writeFixture(t, root, "contracts/data/tables/.keep", "")
+	writeFixture(t, root, "contracts/data/queries/a.yaml", "queries:\n  - id: data.queries.x.q\n    table: data.tables.a\n")
+	writeFixture(t, root, "contracts/data/queries/b.yaml", "queries:\n  - id: data.queries.x.q\n    table: data.tables.a\n")
+	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate query id") {
+		t.Fatalf("duplicate query id not reported: %v", err)
+	}
+}
+
+func TestMalformedYAML(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "contracts/data/tables/a.yaml", "id: [\n")
+	if _, err := Compute(root); err == nil {
+		t.Fatal("malformed YAML should fail")
+	}
+}
+
+func TestUsedByNoTrailingNewline(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "contracts/data/tables/a.yaml", "id: data.tables.a\nused_by:\n  entities: []\n  queries: []")
+	src, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/a.yaml"))
+	out, err := applyUsedBy(src, renderUsedBy("table", []string{"data.entities.e"}, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(string(out), "\n") {
+		t.Fatalf("output must end with newline:\n%s", out)
+	}
+	if !strings.Contains(string(out), "data.entities.e") {
+		t.Fatalf("used_by not updated:\n%s", out)
+	}
+}
+
 func TestUsedByNotLast(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "contracts/data/tables/a.yaml", `id: data.tables.a

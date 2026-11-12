@@ -7,7 +7,6 @@ stability: stable
 do_not:
   - "deleted 是终态，不允许任何出边"
   - "封禁与软删不要混用：suspended 可恢复，deleted 不可"
-  - "不要在 handler/service 手写状态判断"
   - "suspended 不可直接删除；必须先解封再删除"
 
 machine: account

@@ -7,6 +7,8 @@
 #   ./scripts/contract/scaffold.sh data.entities <name> [table] [summary]
 #   ./scripts/contract/scaffold.sh data.queries  <name> [module] [summary] [table]
 #
+# make 层可用 table=<stem> 覆盖目标表（第 6 个参数）。
+#
 # 字段树来自 _meta/<type>.yaml；本脚本只负责参数与输出路径。
 
 set -euo pipefail
@@ -17,6 +19,7 @@ name="${2:-}"
 module="${3:-${name}}"
 summary="${4:-${name}}"
 column_type="${5:-}"
+table_override="${6:-}"
 
 usage() {
   echo "usage: $0 data.tables   <name> [module] [summary] [column-type]" >&2
@@ -45,7 +48,7 @@ case "$type" in
     ;;
 
   data.entities)
-    table="${3:-$name}"
+    table="${table_override:-${3:-$name}}"
     summary="${4:-$name}"
     go run ./contract_new -root "$ROOT" -type data.entities -name "$name" -table "$table" -summary "$summary" -out auto
     ;;
@@ -53,7 +56,7 @@ case "$type" in
   data.queries)
     query_module="${3:-$name}"
     summary="${4:-$name}"
-    table="${5:-$name}"
+    table="${table_override:-${5:-$name}}"
     go run ./contract_new -root "$ROOT" -type data.queries -name "$name" -module "$query_module" -table "$table" -summary "$summary" -out auto
     ;;
 

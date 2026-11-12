@@ -125,7 +125,7 @@ fields:
     required: false
     description: "实例级负向约束；每条含本表标识"
     generates: "AI 反例"
-    caution: "通用规则在 _meta/_types.yaml，禁止复制到这里"
+    caution: "通用规则放组 README 或 _base，禁止复制到这里"
 
   - name: table
     type: object
@@ -283,4 +283,4 @@ rules:
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
   - { id: default-type, text: "default 的类型、长度、范围必须与字段类型兼容", implemented_by: [ default-type ] }
   - { id: primary-key-nullable, text: "primary_key: true 的字段不得 nullable: true", implemented_by: [ primary-key-nullable ] }
-  - { id: do-not-specific, text: "物理表 do_not 每条必须含本表标识；通用规则上移 _types.yaml", implemented_by: [ do-not-specific ] }
+  - { id: do-not-specific, text: "物理表 do_not 每条必须含本表标识；通用规则上移组 README 或 _base", implemented_by: [ do-not-specific ] }

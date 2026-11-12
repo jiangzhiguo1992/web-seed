@@ -56,16 +56,18 @@ type Checker struct {
 	objectKinds     map[string]string
 
 	// 实体与查询解析索引。
-	tableColumns  map[string]map[string]columnMeta
-	tablePhysical map[string]string
-	entityDocs    []entityDoc
-	entities      map[string]*entityInfo
-	entityOrder   []string
-	queries       map[string]*queryInfo
-	queryDocs     []queryDoc
-	queryOrder    []string
-	queryDupIDs   map[string]bool
-	errCodeSet    map[string]bool
+	tableColumns     map[string]map[string]columnMeta
+	tablePhysical    map[string]string
+	entityDocs       []entityDoc
+	entityBaseDoc    map[string]any
+	entityBaseFields []entityFieldInfo
+	entities         map[string]*entityInfo
+	entityOrder      []string
+	queries          map[string]*queryInfo
+	queryDocs        []queryDoc
+	queryOrder       []string
+	queryDupIDs      map[string]bool
+	errCodeSet       map[string]bool
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -86,6 +88,8 @@ func (c *Checker) rulef(rule, format string, args ...any) {
 
 func (c *Checker) run() {
 	c.checkContractProseQuotes()
+	c.checkFieldPlacement()
+	c.checkDoNotDuplicates()
 	c.checkTypeMeta()
 	tableSchema, err := c.loadSchemaByType("data.tables")
 	if err != nil {
@@ -213,7 +217,6 @@ type typeMeta struct {
 	} `yaml:"schema_rules"`
 	Types map[string]struct {
 		Generates []string `yaml:"generates"`
-		DoNot     []string `yaml:"do_not"`
 	} `yaml:"types"`
 }
 

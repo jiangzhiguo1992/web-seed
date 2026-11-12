@@ -12,7 +12,13 @@ targets:
   naming: "snake_case"
 
 fields:
-  - { name: schema_version, type: integer, required: true, const: 1, description: "契约格式版本，固定 1", generates: "无", caution: "必须是整数 1" }
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "契约格式版本，固定 1"
+    generates: "无"
+    caution: "必须是整数 1"
 
   - name: id
     type: string
@@ -22,8 +28,32 @@ fields:
     generates: "契约 ID、图节点"
     caution: "不要手写与文件不一致的 ID；checker 以文件名为源"
 
-  - { name: summary, type: string, required: true, description: "一句话说明这个实体是什么", generates: "index 摘要", caution: "不要写字段清单" }
-  - { name: stability, type: string, required: true, enum: [ stable, draft, deprecated ], default: draft, description: "契约稳定度", generates: "index 摘要", caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改" }
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明这个实体是什么"
+    generates: "index 摘要"
+    caution: "不要写字段清单"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "契约稳定度"
+    generates: "index 摘要"
+    caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
+
+  - name: extends
+    type: list<string>
+    required: true
+    min_items: 1
+    unique: true
+    pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
+    default: [ data.entities.base ]
+    description: "继承的实体基类；当前只允许 data.entities.base"
+    generates: "展开基类字段"
+    caution: "不得引用普通 entity；基类字段不得重声明；status 可用 data.enums.* 特化"
 
   - name: table
     type: string
@@ -43,16 +73,27 @@ fields:
     generates: "实体到多表的读边"
     caution: "仅合成读模型使用；字段必须用 column 指明来源；每张表至少被一个字段引用"
 
-  - { name: identity, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "身份字段名；必须是 fields 中的字段", generates: "实体主键、缓存键、关系默认目标", caution: "必须是 required、mutable:false，且来源列是主表主键" }
-  - { name: do_not, type: list<string>, required: false, description: "实例级负向约束；每条含本实体标识", generates: "AI 反例", caution: "通用规则在 _types.yaml，禁止复制到这里" }
+  - name: identity
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "身份字段名；必须是 fields 或基类中的字段"
+    generates: "实体主键、缓存键、关系默认目标"
+    caution: "必须是 required、mutable:false，且来源列是主表主键"
+
+  - name: do_not
+    type: list<string>
+    required: false
+    description: "实例级负向约束；每条含本实体标识"
+    generates: "AI 反例"
+    caution: "通用规则放组 README 或 _base，禁止复制到这里"
 
   - name: fields
     type: list<object>
     required: true
-    min_items: 1
-    description: "实体的逻辑字段；必须能投影回表列"
+    description: "实体的业务字段；基类 5 字段由 _base 继承，不重复声明"
     generates: "Go/TS 类型、JSON 形状"
-    caution: "不写物理长度参数（min_len/max_len/pattern）；不写聚合/计算字段；不写 data.tables.* 行类型"
+    caution: "只写业务字段；不写物理长度参数；不写聚合/计算字段；status 可用枚举类型特化"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名；也是默认列名", caution: "同一实体内唯一" }
       - { name: column, type: string, required: false, pattern: '^data\.tables\..+\.col\.[a-z][a-z0-9_]*$', description: "来源列；单表可省略（按 name 匹配），多表必填", caution: "表必须属于本实体；同一列不得被两个字段引用" }
@@ -101,9 +142,13 @@ fields:
       - { name: entities, type: list<string>, required: true, unique: true, description: "通过 relations 指向本实体的 entity ID" }
 
 rules:
+  - { id: entity-base-file, text: "基类契约固定位于 contracts/data/entities/_base.yaml，ID 固定为 data.entities.base", implemented_by: [ entity-base-file ] }
+  - { id: entity-base-shape, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at；id/status/created_at/updated_at 非空，deleted_at 可空；id 与时间列 mutable:false", implemented_by: [ entity-base-shape ] }
+  - { id: entity-base-only, text: "extends 必须恰好是 [data.entities.base]", implemented_by: [ entity-base-only ] }
+  - { id: entity-no-base-fields, text: "具体实体不得重声明基类字段；status 允许用 data.enums.* 特化类型", implemented_by: [ entity-no-base-fields ] }
   - { id: entity-table-shape, text: "table 与 tables 必须恰好出现一个；表必须存在、去重、不得指向 data.tables.base；tables[0] 是主表", implemented_by: [ entity-table-shape ] }
   - { id: entity-table-covered, text: "每张物理表必须被至少一个 entity 映射", implemented_by: [ entity-table-covered ] }
-  - { id: entity-identity, text: "identity 必须是 fields 中的字段，required:true、mutable:false，且来源列是主表主键", implemented_by: [ entity-identity ] }
+  - { id: entity-identity, text: "identity 必须是 effective fields 中的字段，required:true、mutable:false，且来源列是主表主键", implemented_by: [ entity-identity ] }
   - { id: entity-field-column, text: "字段来源列必须存在且属于本实体的表；单表可省略 column，多表必填；同一列不得被两个字段引用；多表合成的每张表至少被一个字段引用", implemented_by: [ entity-field-column ] }
   - { id: entity-field-type, text: "显式 type 必须与来源列类型族一致；data.enums.* 只能映射 integer 列；禁止列表类型", implemented_by: [ entity-field-type ] }
   - { id: entity-field-required, text: "required 必须等价于来源列非空", implemented_by: [ entity-field-required ] }
@@ -116,4 +161,4 @@ rules:
   - { id: entity-relation-eager-cycle, text: "eager 关系链不得成环；自引用不得 eager", implemented_by: [ entity-relation-eager-cycle ] }
   - { id: entity-validation, text: "validation.id 必须是 <entity-id>.<name>；expr 非空；on_violation 必须存在", implemented_by: [ entity-validation ] }
   - { id: entity-used-by, text: "used_by.queries 必须等于 returns 本实体的 query 集合；used_by.entities 必须等于 relations 指向本实体的 entity 集合", implemented_by: [ entity-used-by ] }
-  - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识；不得复制 _types.yaml 的 data.entities.do_not", implemented_by: [ entity-do-not-specific ] }
+  - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

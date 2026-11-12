@@ -10,6 +10,11 @@ import (
 	"strings"
 )
 
+const (
+	baseEntityID   = "data.entities.base"
+	baseEntityPath = "contracts/data/entities/_base.yaml"
+)
+
 // columnMeta 是物理表的有效列元数据（含继承列）。
 type columnMeta struct {
 	typ         string
@@ -26,11 +31,16 @@ type entityFieldInfo struct {
 	Column          string
 	HasColumnRef    bool
 	HasExplicitType bool
+	HasRequired     bool
+	HasMutable      bool
 	Type            string
 	Required        bool
 	Mutable         bool
 	PII             bool
 	NeverExpose     bool
+	FromBase        bool
+	OverridesBase   bool
+	BaseRedeclared  bool
 }
 
 // entityRelationInfo 是实体关系的解析结果。
@@ -165,14 +175,23 @@ func splitColumnRef(ref string) (table, col string, ok bool) {
 // loadEntities 读取 entity 文件并建立解析索引；结构错误在 checkEntities 中报。
 func (c *Checker) loadEntities(schema *Schema) {
 	c.entityDocs = nil
+	c.entityBaseDoc = nil
+	c.entityBaseFields = nil
 	c.entities = map[string]*entityInfo{}
 	c.entityOrder = nil
+	if doc, err := loadYAML(filepath.Join(c.root, baseEntityPath)); err == nil {
+		c.entityBaseDoc = doc
+		c.entityBaseFields = parseEntityBaseFields(doc)
+	}
 	if schema.Targets.Dir == "" || schema.Targets.Glob == "" {
 		return
 	}
 	files := glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
 	sort.Strings(files)
 	for _, file := range files {
+		if filepath.Base(file) == "_base.yaml" {
+			continue
+		}
 		rel := relPath(c.root, file)
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -192,6 +211,32 @@ func (c *Checker) loadEntities(schema *Schema) {
 			c.entityOrder = append(c.entityOrder, e.ID)
 		}
 	}
+}
+
+func parseEntityBaseFields(doc map[string]any) []entityFieldInfo {
+	var out []entityFieldInfo
+	for _, raw := range asList(doc["fields"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		if name == "" {
+			continue
+		}
+		f := entityFieldInfo{Name: name, Mutable: true, HasExplicitType: true, FromBase: true}
+		f.Type, _ = m["type"].(string)
+		if v, ok := m["required"].(bool); ok {
+			f.Required = v
+			f.HasRequired = true
+		}
+		if v, ok := m["mutable"].(bool); ok {
+			f.Mutable = v
+			f.HasMutable = true
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
@@ -218,9 +263,11 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		f := entityFieldInfo{Name: name, Mutable: true}
 		if v, ok := m["required"].(bool); ok {
 			f.Required = v
+			f.HasRequired = true
 		}
 		if v, ok := m["mutable"].(bool); ok {
 			f.Mutable = v
+			f.HasMutable = true
 		}
 		f.PII, _ = m["pii"].(bool)
 		f.NeverExpose, _ = m["never_expose"].(bool)
@@ -241,6 +288,34 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		}
 		e.Fields = append(e.Fields, f)
 	}
+	// 基类字段由 _base 继承；status 允许用枚举类型特化。
+	byName := map[string]*entityFieldInfo{}
+	for i := range e.Fields {
+		byName[e.Fields[i].Name] = &e.Fields[i]
+	}
+	var inherited []entityFieldInfo
+	for _, bf := range c.entityBaseFields {
+		if cf := byName[bf.Name]; cf != nil {
+			if bf.Name == "status" && strings.HasPrefix(cf.Type, "data.enums.") {
+				cf.OverridesBase = true
+				if !cf.HasColumnRef && cf.ColumnTable == "" {
+					cf.ColumnTable, cf.Column = e.Primary, bf.Name
+				}
+				if !cf.HasRequired {
+					cf.Required = bf.Required
+				}
+				if !cf.HasMutable {
+					cf.Mutable = bf.Mutable
+				}
+			} else {
+				cf.BaseRedeclared = true
+			}
+			continue
+		}
+		bf.ColumnTable, bf.Column = e.Primary, bf.Name
+		inherited = append(inherited, bf)
+	}
+	e.Fields = append(inherited, e.Fields...)
 	for _, raw := range asList(doc["relations"]) {
 		m, ok := asMap(raw)
 		if !ok {
@@ -290,6 +365,7 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 // checkEntities 校验实体文件的结构与语义，并建立 relation 反向索引。
 func (c *Checker) checkEntities(schema *Schema) {
 	c.checkTargets(schema)
+	c.checkEntityBase(schema)
 	seenIDs := map[string]string{}
 	usedTables := map[string]bool{}
 	for _, ed := range c.entityDocs {
@@ -311,6 +387,10 @@ func (c *Checker) checkEntities(schema *Schema) {
 		}
 		short := strings.TrimSuffix(filepath.Base(ed.rel), filepath.Ext(ed.rel))
 		c.checkEntityDoNot(ed, short)
+		ext := stringList(ed.doc["extends"])
+		if len(ext) != 1 || ext[0] != baseEntityID {
+			c.rulef("entity-base-only", "%s: extends must be [%s], got %v", ed.rel, baseEntityID, ext)
+		}
 	}
 
 	expectedEnt := map[string]map[string]bool{}
@@ -350,9 +430,13 @@ func (c *Checker) checkEntities(schema *Schema) {
 }
 
 func (c *Checker) checkEntityDoNot(ed entityDoc, short string) {
-	generic := c.typeDoNot("data.entities")
 	// 实体可用自身短名、契约 ID 或任一字段名作为具体标识。
 	names := map[string]bool{short: true, "data.entities." + short: true}
+	for _, bf := range c.entityBaseFields {
+		if bf.Name != "" {
+			names[bf.Name] = true
+		}
+	}
 	for _, raw := range asList(ed.doc["fields"]) {
 		if m, ok := asMap(raw); ok {
 			if n, _ := m["name"].(string); n != "" {
@@ -367,10 +451,6 @@ func (c *Checker) checkEntityDoNot(ed entityDoc, short string) {
 			c.rulef("entity-do-not-specific", "%s: do_not entries must not be empty", ed.rel)
 			continue
 		}
-		if containsString(generic, trimmed) {
-			c.rulef("entity-do-not-specific", "%s: do_not duplicates _types.yaml data.entities.do_not: %s", ed.rel, trimmed)
-			continue
-		}
 		specific := false
 		for name := range names {
 			if strings.Contains(trimmed, name) {
@@ -380,6 +460,89 @@ func (c *Checker) checkEntityDoNot(ed entityDoc, short string) {
 		}
 		if !specific {
 			c.rulef("entity-do-not-specific", "%s: do_not must mention the entity or one of its fields: %s", ed.rel, trimmed)
+		}
+	}
+}
+
+type entityBaseFieldShape struct {
+	typ      string
+	required bool
+	mutable  bool
+}
+
+var entityBaseShape = map[string]entityBaseFieldShape{
+	"id":         {"string", true, false},
+	"status":     {"integer", true, true},
+	"created_at": {"timestamp", true, false},
+	"updated_at": {"timestamp", true, false},
+	"deleted_at": {"timestamp", false, false},
+}
+
+// checkEntityBase 校验基类路径/ID/5 字段形状；基类不参与实体映射和 used_by。
+func (c *Checker) checkEntityBase(schema *Schema) {
+	if c.entityBaseDoc == nil {
+		c.rulef("entity-base-file", "%s: missing base contract", baseEntityPath)
+		return
+	}
+	allowed := map[string]bool{
+		"schema_version": true, "id": true, "summary": true,
+		"stability": true, "do_not": true, "fields": true,
+	}
+	c.validateDoc(c.entityBaseDoc, filterFields(schema.Fields, allowed), baseEntityPath)
+	c.checkStability(c.entityBaseDoc, baseEntityPath)
+	if s, _ := c.entityBaseDoc["summary"].(string); strings.TrimSpace(s) == "" {
+		c.rulef("schema.non-empty", "%s: summary must not be empty", baseEntityPath)
+	}
+	if c.entityBaseDoc["id"] != baseEntityID {
+		c.rulef("entity-base-file", "%s: id must be %s, got %v", baseEntityPath, baseEntityID, c.entityBaseDoc["id"])
+	}
+	seen := map[string]bool{}
+	count := 0
+	for i, raw := range asList(c.entityBaseDoc["fields"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		if name == "" {
+			continue
+		}
+		count++
+		where := fmt.Sprintf("%s: fields[%d] (%s)", baseEntityPath, i, name)
+		shape, known := entityBaseShape[name]
+		if !known {
+			c.rulef("entity-base-shape", "%s: unexpected base field", where)
+			continue
+		}
+		if seen[name] {
+			c.rulef("entity-base-shape", "%s: duplicate base field", where)
+		}
+		seen[name] = true
+		typ, _ := m["type"].(string)
+		required, _ := m["required"].(bool)
+		mutable := true
+		if v, ok := m["mutable"].(bool); ok {
+			mutable = v
+		}
+		if typ != shape.typ {
+			c.rulef("entity-base-shape", "%s: type must be %s, got %s", where, shape.typ, typ)
+		}
+		if required != shape.required {
+			c.rulef("entity-base-shape", "%s: required must be %v", where, shape.required)
+		}
+		if mutable != shape.mutable {
+			c.rulef("entity-base-shape", "%s: mutable must be %v", where, shape.mutable)
+		}
+		if _, has := m["column"]; has {
+			c.rulef("entity-base-shape", "%s: base fields must not declare column", where)
+		}
+	}
+	if count != len(entityBaseShape) {
+		c.rulef("entity-base-shape", "%s: must declare exactly %d fields, got %d", baseEntityPath, len(entityBaseShape), count)
+	}
+	for name := range entityBaseShape {
+		if !seen[name] {
+			c.rulef("entity-base-shape", "%s: missing base field %s", baseEntityPath, name)
 		}
 	}
 }
@@ -427,6 +590,9 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 		}
 		names[f.Name] = true
 		where := fmt.Sprintf("%s: fields.%s", e.Rel, f.Name)
+		if f.BaseRedeclared {
+			c.rulef("entity-no-base-fields", "%s: redeclares base field; only status may specialize to data.enums.*", where)
+		}
 		meta, ok := c.tableColumns[f.ColumnTable][f.Column]
 		if f.ColumnTable == "" || f.Column == "" {
 			switch {
@@ -740,23 +906,6 @@ func (c *Checker) checkEntityUsedByQueries() {
 			c.rulef("entity-used-by", "%s: used_by.queries must be %v, got %v", e.Rel, sortedKeys(want), sortedKeys(got))
 		}
 	}
-}
-
-// typeDoNot 读取 _types.yaml 中某类型的通用 do_not。
-func (c *Checker) typeDoNot(typ string) []string {
-	doc, err := loadYAML(filepath.Join(c.root, "contracts/_meta/_types.yaml"))
-	if err != nil {
-		return nil
-	}
-	types, _ := asMap(doc["types"])
-	t, _ := asMap(types[typ])
-	var out []string
-	for _, raw := range asList(t["do_not"]) {
-		if s, ok := raw.(string); ok {
-			out = append(out, s)
-		}
-	}
-	return out
 }
 
 // errorCodes 读取 platform/errors.yaml 的错误码集合；文件缺失时返回空。

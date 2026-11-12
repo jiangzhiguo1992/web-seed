@@ -1,6 +1,7 @@
 # 密码认证数据实体。物理表在 tables/auth_pwd.yaml。
 #
 # 边界：
+#   - 基类字段在 entities/_base.yaml；本文件只写密码认证业务字段。
 #   - password_hash 只服务认证流程；新密码必须使用 argon2id。
 #   - 本实体只服务认证流程，不得被普通业务查询引用。
 
@@ -8,6 +9,7 @@ schema_version: 1
 id: data.entities.auth_pwd
 summary: "密码认证数据实体"
 stability: stable
+extends: [ data.entities.base ]
 table: data.tables.auth_pwd
 identity: id
 do_not:
@@ -15,16 +17,26 @@ do_not:
   - "auth_pwd 不写密码强度规则；规则在 platform/security/auth_policy"
 
 fields:
-  - { name: id, type: string, required: true, mutable: false }
-  - { name: account_id, type: string, required: true, mutable: false }
-  - { name: username, type: string, required: true, pii: true }
-  - { name: password_hash, type: string, pii: true, never_expose: true, note: "argon2id；新密码写入此列" }
-  - { name: failed_login_count, type: integer, required: true }
-  - { name: locked_until, type: timestamp }
-  - { name: status, type: data.enums.auth_status, required: true }
-  - { name: created_at, type: timestamp, required: true, mutable: false }
-  - { name: updated_at, type: timestamp, required: true, mutable: false }
-  - { name: deleted_at, type: timestamp, mutable: false }
+  - name: account_id
+    type: string
+    required: true
+    mutable: false
+  - name: username
+    type: string
+    required: true
+    pii: true
+  - name: password_hash
+    type: string
+    pii: true
+    never_expose: true
+    note: "argon2id；新密码写入此列"
+  - name: failed_login_count
+    type: integer
+    required: true
+  - name: locked_until
+    type: timestamp
+  - name: status
+    type: data.enums.auth_status
 
 relations:
   - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.auth_pwd.col.account_id }

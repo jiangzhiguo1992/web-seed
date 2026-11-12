@@ -43,6 +43,9 @@ type entitySet struct {
 
 // Compute 扫描 tables/entities/queries，计算 used_by 的目标集合。
 func Compute(root string) (*Snapshot, error) {
+	if info, err := os.Stat(filepath.Join(root, "contracts/data/tables")); err != nil || !info.IsDir() {
+		return nil, fmt.Errorf("%s: missing contracts/data/tables (not a contract root?)", root)
+	}
 	tables := map[string]*tableSet{}
 	entities := map[string]*entitySet{}
 	tableFiles := map[string]string{}
@@ -61,10 +64,16 @@ func Compute(root string) (*Snapshot, error) {
 		if id == "" {
 			continue
 		}
+		if prev, ok := tableFiles[id]; ok {
+			return nil, fmt.Errorf("duplicate table id %s: %s and %s", id, prev, rel(root, f))
+		}
 		tables[id] = &tableSet{entities: map[string]bool{}, queries: map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 	}
 	for _, f := range glob(root, "contracts/data/entities/*.yaml") {
+		if filepath.Base(f) == "_base.yaml" {
+			continue
+		}
 		doc, err := loadYAML(f)
 		if err != nil {
 			return nil, err
@@ -72,6 +81,9 @@ func Compute(root string) (*Snapshot, error) {
 		id, _ := doc["id"].(string)
 		if id == "" {
 			continue
+		}
+		if prev, ok := entityFiles[id]; ok {
+			return nil, fmt.Errorf("duplicate entity id %s: %s and %s", id, prev, rel(root, f))
 		}
 		entities[id] = &entitySet{queries: map[string]bool{}, entities: map[string]bool{}}
 		entityFiles[id] = rel(root, f)
@@ -94,6 +106,7 @@ func Compute(root string) (*Snapshot, error) {
 			}
 		}
 	}
+	seenQueries := map[string]string{}
 	for _, f := range glob(root, "contracts/data/queries/*.yaml") {
 		doc, err := loadYAML(f)
 		if err != nil {
@@ -108,6 +121,10 @@ func Compute(root string) (*Snapshot, error) {
 			if qid == "" {
 				continue
 			}
+			if prev, ok := seenQueries[qid]; ok {
+				return nil, fmt.Errorf("duplicate query id %s: %s and %s", qid, prev, rel(root, f))
+			}
+			seenQueries[qid] = rel(root, f)
 			for _, t := range tableRefs(m) {
 				if ts := tables[t]; ts != nil {
 					ts.queries[qid] = true
@@ -242,7 +259,25 @@ func syncFile(path, kind string, first, second []string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if err := os.WriteFile(path, out, info.Mode()); err != nil {
+	// 原子替换：避免进程中断留下半截契约。
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".usedby-*")
+	if err != nil {
+		return false, err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(out); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Chmod(info.Mode()); err != nil {
+		tmp.Close()
+		return false, err
+	}
+	if err := tmp.Close(); err != nil {
+		return false, err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
 		return false, err
 	}
 	return true, nil

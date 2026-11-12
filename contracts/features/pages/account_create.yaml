@@ -7,7 +7,6 @@ stability: draft
 do_not:
   - "不要在本页收集密码/手机号/邮箱；认证信息由 auth 模块单独创建"
   - "不要硬编码编号格式，引用 business.rules.account.number_format"
-  - "四态（loading/empty/error/forbidden）缺一不可"
 
 page: account_create
 route: feature.routes.account_create
@@ -46,8 +45,27 @@ actions:
     on_success: "navigate(feature.pages.account_detail)"
 
 fields:
-  - { name: own_type, type: string, required: true, maxLength: 32, label: "归属类型" }
-  - { name: own_id, type: string, required: true, label: "归属 ID" }
-  - { name: number, type: string, required: true, minLength: 4, maxLength: 64, label: "账号编号" }
-  - { name: nickname, type: string, required: true, maxLength: 100, label: "昵称" }
-  - { name: user_id, type: string, optional: true, label: "关联用户" }
+  - name: own_type
+    type: string
+    required: true
+    maxLength: 32
+    label: "归属类型"
+  - name: own_id
+    type: string
+    required: true
+    label: "归属 ID"
+  - name: number
+    type: string
+    required: true
+    minLength: 4
+    maxLength: 64
+    label: "账号编号"
+  - name: nickname
+    type: string
+    required: true
+    maxLength: 100
+    label: "昵称"
+  - name: user_id
+    type: string
+    optional: true
+    label: "关联用户"

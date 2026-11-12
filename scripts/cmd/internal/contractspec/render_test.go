@@ -106,13 +106,13 @@ func TestRenderEntity(t *testing.T) {
 	if doc["id"] != "data.entities.account_preview" || doc["table"] != "data.tables.account" || doc["identity"] != "id" {
 		t.Fatalf("unexpected top-level: %#v", doc)
 	}
-	fields, _ := doc["fields"].([]any)
-	if len(fields) != 5 {
-		t.Fatalf("want 5 base fields, got %d", len(fields))
+	extends, _ := doc["extends"].([]any)
+	if len(extends) != 1 || extends[0] != "data.entities.base" {
+		t.Fatalf("extends must be [data.entities.base]: %#v", doc["extends"])
 	}
-	first, _ := fields[0].(map[string]any)
-	if first["name"] != "id" || first["required"] != true || first["mutable"] != false {
-		t.Fatalf("id field not scaffolded: %#v", first)
+	fields, _ := doc["fields"].([]any)
+	if len(fields) != 0 {
+		t.Fatalf("entity scaffold must not repeat base fields: %#v", fields)
 	}
 	usedBy, _ := doc["used_by"].(map[string]any)
 	if _, ok := usedBy["queries"]; !ok {
@@ -149,6 +149,9 @@ func TestRenderQuery(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `semantics: "TODO: 查询语义"`) {
 		t.Fatalf("semantics must be double-quoted:\n%s", b)
+	}
+	if _, err := RenderQuery(s, "note", "notes", "note", "bad name", "x"); err == nil {
+		t.Fatal("invalid physical table name should fail")
 	}
 }
 

@@ -7,9 +7,7 @@ stability: stable
 do_not:
   - "返回 data.entities.account，不要返回表行"
   - "不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型"
-  - "不要引用 business.*（规则/事件由 business 侧锚点）"
   - "认证相关方法在 cap.services.auth，不要塞进本接口"
-  - "数据库约束到业务错误的映射写在 constraint_errors"
 
 module: accounts
 

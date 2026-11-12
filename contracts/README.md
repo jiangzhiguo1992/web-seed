@@ -76,15 +76,18 @@ contracts/
 ├── index.yaml                # 契约地图：所有条目的 ID / 路径 / 消费者 / 强度
 ├── _meta/                    # 契约元规范（非业务契约，不登记 index）
 │   ├── README.md             #   AI 入口：写前读什么、写后跑什么
-│   ├── _types.yaml           #   每类契约的默认元数据（enforcement / consumers / 通用 do_not）
-│   ├── data.tables.yaml      #   物理表字段树 + 值域 + 说明（单一源）
-│   └── data.enums.yaml       #   同上
+│   ├── _types.yaml           #   每类契约的默认元数据（enforcement / consumers / generates）
+│   ├── data.tables.yaml      #   物理表字段树 + 值域 + 规则（单一源）
+│   ├── data.entities.yaml    #   实体字段树 + 值域 + 规则
+│   ├── data.queries.yaml     #   查询字段树 + 值域 + 规则
+│   └── data.enums.yaml       #   枚举字段树 + 值域 + 规则
 ├── project.yaml              # 项目元信息 + 应用组合（derive 的唯一输入）
 │
 ├── data/                     # ① 数据契约（不感知业务）
 │   ├── tables/_base.yaml     #   表结构基类：5 列 + do_not（不生成 DDL、不建实体）
 │   ├── tables/<file>.yaml     #   物理表结构（文件名决定 ID，物理表名可独立覆盖）
-│   ├── entities/<entity>.yaml#   逻辑数据实体：身份、字段、关系、validation
+│   ├── entities/_base.yaml   #   实体字段基类：5 列 + 类型级 do_not
+│   ├── entities/<entity>.yaml#   读模型：继承 _base，只写业务字段、关系、validation
 │   ├── queries/<module>.yaml #   查询契约（SQL 是契约字段，.sql 是产物）
 │   ├── enums.yaml            #   跨端枚举集合（data.enums + data.enums.<name>）
 │   └── storage.yaml          #   项目级存储引擎与部署拓扑（单例）
@@ -279,7 +282,9 @@ business.states.account ─subject→ data.entities.account ─table→ data.tab
 
 | 层 | 位置 | 内容 |
 |---|---|---|
-| 类型默认值 | `_meta/_types.yaml` | 每类契约的 `enforcement` / `consumers` / `generates` / 通用 `do_not` |
+| 类型默认值 | `_meta/_types.yaml` | 每类契约的 `enforcement` / `consumers` / `generates` |
+| 类型规则 | `_meta/<type>.yaml` 的 `rules` | 可机器校验的类型级规则 |
+| 类型指导 | `<group>/README.md` 或 `<type>/_base.yaml` 的 `do_not` | 不可机器化的通用反例 |
 | 实例元数据 | 文件正文 | `id` / `summary` / `stability` / 实例级 `do_not` |
 | 人类注释 | 文件第一行 | 一句 `# <用途>`，不承载机器信息 |
 
@@ -289,7 +294,7 @@ business.states.account ─subject→ data.entities.account ─table→ data.tab
 id: data.tables.account
 summary: 账号主表
 stability: stable
-do_not:                        # 只写实例级；通用约束见 _meta/_types.yaml
+do_not:                        # 只写实例级；通用约束见组 README 或 _base
   - number 唯一索引必须带 WHERE deleted_at IS NULL
 
 table:
@@ -299,8 +304,8 @@ table:
 
 - 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖
 - `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 前必须替换 TODO 并跑 `make contract-check`；状态可双向流转，`stable → draft` 表示重新修改
-- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` 按完整 ID 匹配 `_meta/_types.yaml`；`data.tables.base` 由 checker 固定识别），文件无需声明 `type`
-- 生效元数据 = `_meta/_types.yaml` + 文件字段覆盖
+- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` 按完整 ID 匹配 `_meta/_types.yaml`；`data.tables.base` / `data.entities.base` 由 checker 固定识别），文件无需声明 `type`
+- 生效元数据 = `_meta/_types.yaml` + `_meta/<type>.yaml` + 继承的 `_base` 字段 + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移
 - **不写 `refs`**：依赖关系由图校验器从 `ref` / `capability` / `use` / `emits` / `column` / `target` 等结构化字段自动推导
 
@@ -333,7 +338,7 @@ table:
 - **1 个正例**：合法输入 + 期望输出
 - **1 个反例**：最容易被 AI 写错的用法
 
-没有示例的契约视为不完整——AI 会自行编造"合理但错误"的用法。反例写 `do_not`（实例级）或 `_meta/_types.yaml`（通用）。
+没有示例的契约视为不完整——AI 会自行编造"合理但错误"的用法。反例写 `do_not`（实例级）；通用反例写组 README 或 `_base`。
 
 ### 4.5 约束写在哪里
 
@@ -341,10 +346,13 @@ table:
 
 | 层 | 位置 | 例子 | 维护 |
 |---|---|---|---|
-| **类型级** | `_meta/_types.yaml` | "所有表不要手写 migrations" | 一处定义，全类继承 |
+| **类型级（可执行）** | `_meta/<type>.yaml` 的 `rules` | "所有表必须写 used_by" | 机器校验 |
+| **类型级（指导）** | `<group>/README.md` 或 `<type>/_base.yaml` 的 `do_not` | "所有表不要手写 migrations" | 一处定义，全类继承 |
 | **组级** | `<group>/README.md` | "business 不引用 data"、"实体在 data 层" | 手写，稳定 |
 | **实例级** | 契约正文 `do_not` | "account.status 使用 integer；枚举只在 entity"、"游标分页要有 tiebreaker" | 就近，每个文件 1–3 条 |
 | **全局** | `index.yaml` 的 `global_notes` | "错误响应由生成器注入" | 跨文件坑，极少 |
+
+例外：`business/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不是类型规则清单；除此以外具体契约禁止顶层或嵌套 `rules`。
 
 **不建目录级 index 汇总约束**，原因：
 
@@ -363,11 +371,15 @@ table:
 |---|---|
 | `account.status 使用 integer；枚举只在 entity` | ✅ 含字段名，实例级 |
 | `游标分页必须有唯一 tiebreaker（created_at, number）` | ✅ 含字段名，实例级 |
-| `不要手写 migrations` | ❌ 所有表都适用 → 上移 `_meta/_types.yaml` |
+| `不要手写 migrations` | ❌ 所有表都适用 → 上移组 README 或 `_base` |
 | `不要绕过软删过滤` | ❌ 所有软删表都适用 → 上移 |
 
-**同一句话只能出现一次**：在 `_meta/_types.yaml` 或某个契约文件里，不能两处都有。
-`make contract-lint` 会检查重复并报告。
+**同一句话只能出现一次**：在组 README / `_base` 或某个契约文件里，不能两处都有。
+`make contract-check` 的 `schema.do-not-duplicate` 会检查重复并报告。
+
+### 4.5.2 `fields` 的排版
+
+所有契约的顶层 `fields` 一律竖排（每个键一行）；嵌套 `item_fields` 不限制。`contract-check` 的 `schema.fields-style` 会拦住括号写法，避免 AI 在两种风格间来回切换。
 
 ### 4.6 人读视图自动生成
 

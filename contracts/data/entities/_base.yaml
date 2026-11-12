@@ -1,0 +1,38 @@
+# 实体字段基类。单例契约：5 个通用字段 + 类型级 do_not；不生成类型、不落表。
+# 字段树与规则见 _meta/data.entities.yaml；路径/ID 由 checker 写死识别。
+
+schema_version: 1
+id: data.entities.base
+summary: "实体字段基类"
+stability: stable
+do_not:
+  - "data.entities.base 不是实体：不生成类型、不落表、不建关系"
+  - "基类 5 列不得改名或删除"
+  - "实体是读模型：字段必须能投影回物理列，不写聚合/计算字段"
+  - "多表合成只读；JOIN 条件写在 query，不要写进 entity"
+  - "每张物理表必须至少被一个 entity 映射；table/tables 二选一"
+  - "不要写状态机、业务规则（属于 business）"
+  - "数据库表达不了的复杂校验写在 validation，不要搬到 tables"
+  - "不要引用 business.*"
+
+fields:
+  - name: id
+    type: string
+    required: true
+    mutable: false
+    note: "实体身份字段；来源列必须是主表主键"
+  - name: status
+    type: integer
+    required: true
+    note: "业务状态整数码；具体实体可用 data.enums.* 特化"
+  - name: created_at
+    type: timestamp
+    required: true
+    mutable: false
+  - name: updated_at
+    type: timestamp
+    required: true
+    mutable: false
+  - name: deleted_at
+    type: timestamp
+    mutable: false
