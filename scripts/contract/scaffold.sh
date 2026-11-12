@@ -2,8 +2,10 @@
 # 按 contracts/_meta 字段规范生成契约骨架。
 #
 # 用法：
-#   ./scripts/contract/scaffold.sh data.tables <name> [module] [summary] [column-type]
-#   ./scripts/contract/scaffold.sh data.enums  <name>
+#   ./scripts/contract/scaffold.sh data.tables   <name> [module] [summary] [column-type]
+#   ./scripts/contract/scaffold.sh data.enums    <name>
+#   ./scripts/contract/scaffold.sh data.entities <name> [table] [summary]
+#   ./scripts/contract/scaffold.sh data.queries  <name> [module] [summary] [table]
 #
 # 字段树来自 _meta/<type>.yaml；本脚本只负责参数与输出路径。
 
@@ -17,8 +19,10 @@ summary="${4:-${name}}"
 column_type="${5:-}"
 
 usage() {
-  echo "usage: $0 data.tables <name> [module] [summary] [column-type]" >&2
-  echo "       $0 data.enums  <name>" >&2
+  echo "usage: $0 data.tables   <name> [module] [summary] [column-type]" >&2
+  echo "       $0 data.enums    <name>" >&2
+  echo "       $0 data.entities <name> [table] [summary]" >&2
+  echo "       $0 data.queries  <name> [module] [summary] [table]" >&2
   exit 2
 }
 
@@ -38,6 +42,19 @@ case "$type" in
 
   data.enums)
     go run ./contract_new -root "$ROOT" -type data.enums -name "$name"
+    ;;
+
+  data.entities)
+    table="${3:-$name}"
+    summary="${4:-$name}"
+    go run ./contract_new -root "$ROOT" -type data.entities -name "$name" -table "$table" -summary "$summary" -out auto
+    ;;
+
+  data.queries)
+    query_module="${3:-$name}"
+    summary="${4:-$name}"
+    table="${5:-$name}"
+    go run ./contract_new -root "$ROOT" -type data.queries -name "$name" -module "$query_module" -table "$table" -summary "$summary" -out auto
     ;;
 
   *)

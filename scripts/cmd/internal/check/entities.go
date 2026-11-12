@@ -429,7 +429,14 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 		where := fmt.Sprintf("%s: fields.%s", e.Rel, f.Name)
 		meta, ok := c.tableColumns[f.ColumnTable][f.Column]
 		if f.ColumnTable == "" || f.Column == "" {
-			c.rulef("entity-field-column", "%s: cannot resolve source column; multi-table entity requires column", where)
+			switch {
+			case f.HasColumnRef:
+				c.rulef("entity-field-column", "%s: malformed column ref", where)
+			case len(e.Tables) > 1:
+				c.rulef("entity-field-column", "%s: multi-table entity field must declare column", where)
+			default:
+				c.rulef("entity-field-column", "%s: cannot resolve source column", where)
+			}
 			continue
 		}
 		if !containsString(e.Tables, f.ColumnTable) {
@@ -481,6 +488,20 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 		if f.Name == "created_at" || f.Name == "updated_at" || f.Name == "deleted_at" {
 			if f.Mutable {
 				c.rulef("entity-field-mutable", "%s: %s must be mutable:false", where, f.Name)
+			}
+		}
+	}
+	// 多表合成的每张表都必须真正提供字段，否则该表在 entity 中是多余的。
+	if len(e.Tables) > 1 {
+		used := map[string]bool{}
+		for _, f := range e.Fields {
+			if f.ColumnTable != "" {
+				used[f.ColumnTable] = true
+			}
+		}
+		for _, t := range e.Tables {
+			if !used[t] {
+				c.rulef("entity-field-column", "%s: table %s is declared but no field references it", e.Rel, t)
 			}
 		}
 	}

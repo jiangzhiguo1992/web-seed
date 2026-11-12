@@ -115,6 +115,7 @@ data/tables/_base.yaml + tables/*.yaml ──> schema.sql（目标态）
 
 data/enums.yaml ──────> Go 常量 + TS union + entity 整数映射
 data/queries/*.yaml ──> queries/*.sql ──> sqlc 代码
+data/{tables,entities,queries} ──> make gen-graph ──> used_by 反向索引
 data/storage.yaml ────> 配置校验 + 运维约束
 ```
 
@@ -135,13 +136,13 @@ data/storage.yaml ────> 配置校验 + 运维约束
 9. **主键默认由应用层生成 UUIDv7**（`generated_by: application`），数据库不设 default。
 10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；跨模块读通过 `persistence.queries`。
 11. **禁止未结构化 DDL 字段**：分区、表达式索引、CONCURRENTLY 必须用结构化字段表达（`table.partition`、`indexes[].expression`、`indexes[].concurrently`），不要塞原生 SQL。
-12. **表级 `used_by` 是生成物**：由 `make gen-graph` 写入，禁止手改；结构固定为 `entities` / `queries` 两个列表，只记**直接入边**。`queries` 记录查询项 ID（`data.queries.<module>.<query>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明，不是生成物；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
+12. **表级 `used_by` 是生成物**：由 `make gen-graph` 按引用计算并写回，禁止手改；结构固定为 `entities` / `queries` 两个列表，只记**直接入边**。`queries` 记录查询项 ID（`data.queries.<module>.<query>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明，不是生成物；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
 13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
 14. **冗余字段必须声明**：`columns[].redundancy` 的 `source`/`copy` 同组，`copy` 必须写 `ref` 指向同组 `source`，`type`/`nullable` 一致；同组只能有一个 `source`。
 15. **单表 query 必须声明 `index_columns`**：每个内层列表按顺序匹配表索引最左前缀或主键；匹配的索引必须把 query 写进 `used_by`，反向也校验。多表 query 不写 `index_columns`，也不进索引 `used_by`。
 16. **entity 字段必须能投影回列**：单表实体无 `column` 时按字段名匹配；多表合成必须写 `column`，且每张表至少被一个字段引用。字段的 `required` 必须等价于来源列非空，`pii`/`never_expose` 不得放松。
 17. **query 返回实体时必须完整**：`returns: data.entities.*` 的 `return_columns`（省略表示全字段）必须覆盖 required 非敏感字段；`never_expose` 字段只有同模块 query 可以返回。返回实体的 query 会写入 `entity.used_by.queries`。
-18. **entity.used_by 是生成物**：`queries` 记录 `returns` 本实体的 query 项 ID，`entities` 记录通过 relations 指向本实体的 entity ID；禁止手改，`contract-check` 对账。
+18. **entity.used_by 是生成物**：`queries` 记录 `returns` 本实体的 query 项 ID，`entities` 记录通过 relations 指向本实体的 entity ID；由 `make gen-graph` 写回，禁止手改，`contract-check` 对账。
 
 ---
 
@@ -204,7 +205,7 @@ indexes:
 | 查询未登记 | 每个 `.sql` 必须能追溯到 `data/queries/*.yaml` 条目 |
 | 枚举两端一致 | Go 常量集合 == TS union 集合 |
 | 索引无理由 | `reason` 缺失即警告 |
-| `used_by` 漂移 | `make gen-graph && git diff --exit-code` |
+| `used_by` 漂移 | `make gen-graph-check` |
 | 敏感字段外泄 | `never_expose` 列不得出现在普通 OpenAPI/TS/事件/普通 entity；认证 query 与 `x-auth-response` 是唯一例外 |
 
 ---

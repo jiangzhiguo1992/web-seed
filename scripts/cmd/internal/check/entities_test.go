@@ -255,6 +255,7 @@ func TestQueryKindSQLAndOneUnique(t *testing.T) {
 	c := &Checker{
 		tableOwners:     map[string]string{"data.tables.account": "accounts"},
 		tablePrimaryKey: map[string][]string{"data.tables.account": {"id"}},
+		tablePhysical:   map[string]string{"data.tables.account": "accounts"},
 		tableIndexes:    map[string][]tableIndex{},
 	}
 	entityReturn := queryReturn{Raw: "data.entities.account", Kind: "entity", EntityID: "data.entities.account"}
@@ -298,6 +299,34 @@ func TestQueryKindSQLAndOneUnique(t *testing.T) {
 	c.checkQueryKindSQL(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("unique prefix reported: %v", c.errs)
+	}
+
+	// 写目标只校验被写的表；FROM/JOIN 的读表可以跨模块。
+	c = &Checker{
+		tableOwners:   map[string]string{"data.tables.account": "accounts", "data.tables.other": "other"},
+		tablePhysical: map[string]string{"data.tables.account": "accounts", "data.tables.other": "other"},
+	}
+	q = &queryInfo{
+		ID: "data.queries.account.update", File: "account.yaml", Module: "accounts", Kind: "execrows",
+		Tables: []string{"data.tables.account", "data.tables.other"},
+		SQL:    "UPDATE accounts SET x = 1 FROM other WHERE other.id = accounts.id",
+	}
+	c.checkQueryKindSQL(q)
+	if strings.Contains(entityErrs(c), "[query-write-owner]") {
+		t.Fatalf("read-only join table should not trigger write owner: %v", c.errs)
+	}
+}
+
+func TestQueryParamStringLiteralIgnored(t *testing.T) {
+	c := &Checker{}
+	q := &queryInfo{
+		ID: "data.queries.x.q", File: "q.yaml",
+		Params: []queryParam{{Name: "id", Type: "text"}},
+		SQL:    "SELECT id FROM x WHERE id = @id AND note = 'a@b.com'",
+	}
+	c.checkQueryParams(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("string literal treated as param: %v", c.errs)
 	}
 }
 

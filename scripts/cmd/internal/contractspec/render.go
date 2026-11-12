@@ -71,6 +71,59 @@ type enumValueScaffold struct {
 	Description string `yaml:"description"`
 }
 
+type entityScaffold struct {
+	SchemaVersion int                   `yaml:"schema_version"`
+	ID            string                `yaml:"id"`
+	Summary       string                `yaml:"summary"`
+	Stability     string                `yaml:"stability"`
+	Table         string                `yaml:"table"`
+	Identity      string                `yaml:"identity"`
+	Fields        []entityFieldScaffold `yaml:"fields"`
+	UsedBy        entityUsedByScaffold  `yaml:"used_by"`
+}
+
+type entityFieldScaffold struct {
+	Name     string `yaml:"name"`
+	Type     string `yaml:"type"`
+	Required bool   `yaml:"required,omitempty"`
+	Mutable  *bool  `yaml:"mutable,omitempty"`
+}
+
+type entityUsedByScaffold struct {
+	Queries  []string `yaml:"queries"`
+	Entities []string `yaml:"entities"`
+}
+
+type queryFileScaffold struct {
+	SchemaVersion int                 `yaml:"schema_version"`
+	ID            string              `yaml:"id"`
+	Summary       string              `yaml:"summary"`
+	Stability     string              `yaml:"stability"`
+	Module        string              `yaml:"module"`
+	Queries       []queryItemScaffold `yaml:"queries"`
+}
+
+type queryItemScaffold struct {
+	ID           string               `yaml:"id"`
+	Name         string               `yaml:"name"`
+	Kind         string               `yaml:"kind"`
+	Table        string               `yaml:"table"`
+	Params       []queryParamScaffold `yaml:"params"`
+	Returns      string               `yaml:"returns"`
+	Semantics    string               `yaml:"semantics"`
+	IndexColumns [][]string           `yaml:"index_columns"`
+	SQL          string               `yaml:"sql"`
+}
+
+type queryParamScaffold struct {
+	Name string `yaml:"name"`
+	Type string `yaml:"type"`
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}
+
 func RenderTable(s *Schema, name, module, summary string) ([]byte, error) {
 	return RenderTableWithColumnType(s, name, module, summary, "")
 }
@@ -205,6 +258,141 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 		return nil, err
 	}
 	header := fmt.Sprintf("# 追加到 %s 的 enums 列表（每条以 `- ` 开头并缩进 2 空格）。\n# 示例 value/code 仅占位：替换后再提交；code 必须 >= 0。\n\n", s.Targets.File)
+	return append([]byte(header), b...), nil
+}
+
+// RenderEntity 生成单表读模型的最小骨架；目标表必须已存在。
+func RenderEntity(s *Schema, name, table, summary string) ([]byte, error) {
+	if s == nil || s.Type != "data.entities" {
+		return nil, fmt.Errorf("RenderEntity: want data.entities schema")
+	}
+	if !validName(name) || !validName(table) {
+		return nil, fmt.Errorf("RenderEntity: invalid name/table (snake_case required)")
+	}
+	if strings.TrimSpace(summary) == "" {
+		return nil, fmt.Errorf("RenderEntity: summary must not be empty")
+	}
+	top := map[string]bool{
+		"schema_version": true, "id": true, "summary": true, "stability": true,
+		"table": true, "identity": true, "fields": true, "used_by": true,
+	}
+	if err := requireSupported(s.Fields, top, "data.entities"); err != nil {
+		return nil, err
+	}
+	fieldsField, ok := FindField(s.Fields, "fields")
+	if !ok {
+		return nil, fmt.Errorf("RenderEntity: fields is missing in schema")
+	}
+	if err := requireSupported(fieldsField.ItemFields, map[string]bool{
+		"name": true, "type": true, "required": true, "mutable": true,
+	}, "data.entities.fields"); err != nil {
+		return nil, err
+	}
+	usedByField, ok := FindField(s.Fields, "used_by")
+	if !ok {
+		return nil, fmt.Errorf("RenderEntity: used_by is missing in schema")
+	}
+	if err := requireSupported(usedByField.Fields, map[string]bool{
+		"queries": true, "entities": true,
+	}, "data.entities.used_by"); err != nil {
+		return nil, err
+	}
+	entityID := s.Targets.FileID(name + ".yaml")
+	if entityID == "" {
+		return nil, fmt.Errorf("RenderEntity: cannot derive id from targets.id")
+	}
+	doc := entityScaffold{
+		SchemaVersion: intConst(s.Fields, "schema_version", 1),
+		ID:            entityID,
+		Summary:       summary,
+		Stability:     defaultString(s.Fields, "stability", "draft"),
+		Table:         "data.tables." + table,
+		Identity:      "id",
+		Fields: []entityFieldScaffold{
+			{Name: "id", Type: "string", Required: true, Mutable: boolPtr(false)},
+			{Name: "status", Type: "integer", Required: true},
+			{Name: "created_at", Type: "timestamp", Required: true, Mutable: boolPtr(false)},
+			{Name: "updated_at", Type: "timestamp", Required: true, Mutable: boolPtr(false)},
+			{Name: "deleted_at", Type: "timestamp", Mutable: boolPtr(false)},
+		},
+		UsedBy: entityUsedByScaffold{Queries: []string{}, Entities: []string{}},
+	}
+	b, err := marshal2(doc)
+	if err != nil {
+		return nil, err
+	}
+	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；替换 TODO 占位符。\n# 字段规范见 %s。\n\n", summary, s.ID)
+	return append([]byte(header), b...), nil
+}
+
+// RenderQuery 生成查询文件的最小合法骨架：SELECT EXISTS 只依赖主键 id。
+func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]byte, error) {
+	if s == nil || s.Type != "data.queries" {
+		return nil, fmt.Errorf("RenderQuery: want data.queries schema")
+	}
+	if !validName(name) || !validName(table) || !validName(module) {
+		return nil, fmt.Errorf("RenderQuery: invalid name/module/table (snake_case required)")
+	}
+	if strings.TrimSpace(physical) == "" {
+		return nil, fmt.Errorf("RenderQuery: physical table name must not be empty")
+	}
+	if strings.TrimSpace(summary) == "" {
+		return nil, fmt.Errorf("RenderQuery: summary must not be empty")
+	}
+	top := map[string]bool{
+		"schema_version": true, "id": true, "summary": true, "stability": true,
+		"module": true, "queries": true,
+	}
+	if err := requireSupported(s.Fields, top, "data.queries"); err != nil {
+		return nil, err
+	}
+	queriesField, ok := FindField(s.Fields, "queries")
+	if !ok {
+		return nil, fmt.Errorf("RenderQuery: queries is missing in schema")
+	}
+	if err := requireSupported(queriesField.ItemFields, map[string]bool{
+		"id": true, "name": true, "kind": true, "table": true, "params": true,
+		"returns": true, "semantics": true, "index_columns": true, "sql": true,
+	}, "data.queries.queries"); err != nil {
+		return nil, err
+	}
+	paramsField, ok := FindField(queriesField.ItemFields, "params")
+	if !ok {
+		return nil, fmt.Errorf("RenderQuery: params is missing in schema")
+	}
+	if err := requireSupported(paramsField.ItemFields, map[string]bool{
+		"name": true, "type": true,
+	}, "data.queries.queries.params"); err != nil {
+		return nil, err
+	}
+	fileID := s.Targets.FileID(name + ".yaml")
+	if fileID == "" {
+		return nil, fmt.Errorf("RenderQuery: cannot derive id from targets.id")
+	}
+	queryID := fileID + ".exists_" + name
+	doc := queryFileScaffold{
+		SchemaVersion: intConst(s.Fields, "schema_version", 1),
+		ID:            fileID,
+		Summary:       summary,
+		Stability:     defaultString(s.Fields, "stability", "draft"),
+		Module:        module,
+		Queries: []queryItemScaffold{{
+			ID:           queryID,
+			Name:         "Exists" + pascal(name),
+			Kind:         "one",
+			Table:        "data.tables." + table,
+			Params:       []queryParamScaffold{{Name: "id", Type: "text"}},
+			Returns:      "boolean",
+			Semantics:    "TODO: 查询语义",
+			IndexColumns: [][]string{{"id"}},
+			SQL:          fmt.Sprintf("SELECT EXISTS (\n  SELECT 1\n  FROM %s\n  WHERE id = @id\n);\n", physical),
+		}},
+	}
+	b, err := marshal2(doc)
+	if err != nil {
+		return nil, err
+	}
+	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；把 EXISTS 换成真实查询并保留 index_columns。\n# 字段规范见 %s。\n\n", summary, s.ID)
 	return append([]byte(header), b...), nil
 }
 
@@ -369,6 +557,7 @@ func marshal2(v any) ([]byte, error) {
 var scaffoldProseKeys = map[string]bool{
 	"comment": true, "description": true, "note": true, "reason": true,
 	"summary": true, "text": true, "title": true,
+	"semantics": true, "caution": true, "generates": true,
 }
 
 var scaffoldProseListKeys = map[string]bool{"do_not": true}

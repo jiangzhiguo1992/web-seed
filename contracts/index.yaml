@@ -148,6 +148,7 @@ global_notes:
   - "领域事件由 business/events 的 emitted_by 声明，capabilities 不写 emits"
   - "capabilities 契约不引用 business.*（cap.flows 仅允许引用 business.states/rules/events 做编排）"
   - "通用约束在 _meta/_types.yaml，组规则在 <group>/README.md，实例约束在正文 do_not"
+  - "table/entity 的 used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
 
 # 白名单：允许没有入边的根契约
 orphan_whitelist:

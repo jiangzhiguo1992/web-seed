@@ -244,7 +244,7 @@ fields:
     write: forbidden
     description: "反向索引；只记直接 entity 与 query"
     generates: "used_by、inbound"
-    caution: "生成物，禁止手改"
+    caution: "生成物，禁止手改；必须是文件最后一个顶层键"
     fields:
       - { name: entities, type: list<string>, required: true, unique: true, description: "实体 ID 列表" }
       - { name: queries, type: list<string>, required: true, unique: true, description: "查询项 ID 列表" }

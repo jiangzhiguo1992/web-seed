@@ -165,6 +165,9 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 				c.rulef("schema.type", "%s[%d]: must be list", path, i)
 				continue
 			}
+			if len(inner) == 0 {
+				c.rulef("schema.non-empty", "%s[%d]: must not be empty", path, i)
+			}
 			for j, raw := range inner {
 				if _, ok := raw.(string); !ok {
 					c.rulef("schema.type", "%s[%d][%d]: must be string", path, i, j)

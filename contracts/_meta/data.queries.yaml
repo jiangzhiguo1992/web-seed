@@ -89,11 +89,11 @@ rules:
   - { id: query-returns, text: "returns DSL 必须合法，引用的表/实体必须存在", implemented_by: [ query-returns ] }
   - { id: query-returns-kind, text: "many 必须返回 [] 前缀；one 不得返回 []；affected_rows 只能配 execrows", implemented_by: [ query-returns-kind ] }
   - { id: query-return-columns, text: "return_columns 必须是 returns 的列/字段，且出现在 SQL 中", implemented_by: [ query-return-columns ] }
-  - { id: query-entity-coverage, text: "返回实体时，未裁剪的 required 非敏感字段必须被覆盖；字段来源表必须属于 query 的表集合", implemented_by: [ query-entity-coverage ] }
+  - { id: query-entity-coverage, text: "返回实体时，required 非敏感字段必须被 return_columns 覆盖；未写 return_columns 时其字段名必须出现在 SQL（词匹配，sqlc 兜底）；字段来源表必须属于 query 的表集合", implemented_by: [ query-entity-coverage ] }
   - { id: query-output-fields, text: "object 返回必须有非空 output_fields；字段名唯一且出现在 SQL；不得同时写 return_columns", implemented_by: [ query-output-fields ] }
   - { id: query-kind-sql, text: "execrows 必须以 INSERT/UPDATE/DELETE/WITH 开头；one/many 的写语句必须带 RETURNING", implemented_by: [ query-kind-sql ] }
   - { id: query-no-select-star, text: "禁止 SELECT * 或 SELECT <alias>.*", implemented_by: [ query-no-select-star ] }
   - { id: query-one-unique, text: "one 的 SELECT 非标量返回必须命中主键/唯一索引前缀，或 SQL 含 LIMIT 1", implemented_by: [ query-one-unique ] }
-  - { id: query-write-owner, text: "写查询的 module 必须等于所有涉及表的 owner_module", implemented_by: [ query-write-owner ] }
+  - { id: query-write-owner, text: "写查询的 module 必须等于写目标表的 owner_module；读取表可以跨模块", implemented_by: [ query-write-owner ] }
   - { id: query-sensitive-columns, text: "never_expose 列不得被跨模块查询返回；同模块必须显式写 return_columns", implemented_by: [ query-sensitive-columns ] }
   - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识；不得复制 _types.yaml 的 data.queries.do_not", implemented_by: [ query-do-not-specific ] }

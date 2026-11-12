@@ -24,9 +24,11 @@ scripts/contract/
 scripts/cmd/
 ├── go.mod                # 契约工具独立 Go module
 ├── internal/contractspec/ # schema 解析 + 骨架渲染
-├── internal/check/       # 契约校验实现（tables / enums / refs）
+├── internal/check/       # 契约校验实现（tables / enums / entities / queries / refs）
+├── internal/graph/       # used_by 入边计算与写回
 ├── contract_new/
-└── contract_check/
+├── contract_check/
+└── gen_graph/
 ```
 
 **没有 `schema/`、没有 `templates/`。**
@@ -41,9 +43,10 @@ scripts/cmd/
 2. 读 contracts/_meta/<type>.yaml（字段含义、值域、生成行为、易错点）
 3. 新建：make contract-new type=data.tables name=note module=notes
 4. 改 YAML（只改契约，不写生成物）
-5. make contract-check
-6. make gen
-7. git diff --exit-code
+5. make gen-graph（写回 table/entity used_by）
+6. make contract-check
+7. make gen
+8. git diff --exit-code
 ```
 
 **`make gen` 是“契约 → 产物”的投影，不是“生成契约”。**
@@ -57,13 +60,17 @@ scripts/cmd/
 |---|---|---|
 | `make contract-new type=data.tables name=note module=notes summary="备注表"` | 按 `_meta/data.tables.yaml` 生成最小表骨架；`column_type=decimal` 可指定第一列类型并带出扩展字段 | 新建表前 |
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
+| `make contract-new type=data.entities name=note module=note` | 按 `_meta/data.entities.yaml` 生成单表读模型骨架（目标表必须已存在） | 新建实体时 |
+| `make contract-new type=data.queries name=note module=notes` | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在） | 新建查询集时 |
+| `make gen-graph` | 按引用计算并写回 table/entity 的 `used_by` | 改完表/实体/查询后 |
+| `make gen-graph-check` | 只校验 `used_by` 是否最新（CI） | CI |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / used_by / owner / entity 投影 / query 参数与返回 / persistence.queries | 每次改完契约 |
 | `make gen` | 生成 DDL / OpenAPI / 类型 / graph | `contract-check` 通过后 |
 | `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 单独投影 | 按需 |
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 当前只渲染 `data.tables` / `data.enums`；`data.entities` / `data.queries` 的骨架渲染在后续批次接入，字段规范已先行。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；entity/query 骨架要求目标表契约已存在，query 默认生成只依赖主键的 `SELECT EXISTS`，不会伪造业务字段。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 

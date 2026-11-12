@@ -4,7 +4,7 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
-        gen gen-openapi gen-db gen-graph gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
+        gen gen-openapi gen-db gen-graph gen-graph-check gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
         gen-rule-ids check-rule-ids dev api-dev web-dev compose-up compose-down doctor derive check-docs
 
 help: ## 显示可用目标
@@ -43,8 +43,8 @@ lint-tools: ## 契约工具 vet + 格式检查
 typecheck: ## 前端类型检查
 	pnpm -r --if-present typecheck
 
-gen: ## 重新生成全部契约产物（P2 实现）
-	@echo "gen: 尚未实现（P2）。子命令：gen-openapi / gen-db / gen-graph / gen-client / gen-env"
+gen: ## 重新生成全部契约产物（gen-graph 已实现，其余 P2）
+	@echo "gen: 部分实现。已实现：gen-graph。待实现：gen-openapi / gen-db / gen-client / gen-env"
 	@exit 1
 
 gen-openapi: ## 合并 capabilities/http/* + apps/* → generated/openapi（P2）
@@ -55,15 +55,17 @@ gen-db: ## data/tables/* → schema.sql + migrations（P2）
 	@echo "gen-db: 尚未实现（P2）"
 	@exit 1
 
-gen-graph: ## refs → generated/{manifest.json,graph.json,lineage.md}（P2）
-	@echo "gen-graph: 尚未实现（P2）"
-	@exit 1
+gen-graph: ## 按引用计算并写回 table/entity 的 used_by
+	cd scripts/cmd && go run ./gen_graph -root "$(CURDIR)"
+
+gen-graph-check: ## 校验 used_by 是否最新（CI）
+	cd scripts/cmd && go run ./gen_graph -root "$(CURDIR)" -check
 
 gen-client: ## 合并 spec → apps/web/packages/api-client（P2）
 	@echo "gen-client: 尚未实现（P2）"
 	@exit 1
 
-contract-new: ## 按 _meta 字段规范生成契约骨架（type=data.tables name=note module=notes [column_type=decimal]）
+contract-new: ## 生成契约骨架（type=data.tables|data.enums|data.entities|data.queries）
 	@./scripts/contract/scaffold.sh "$(type)" "$(name)" "$(module)" "$(summary)" "$(column_type)"
 
 contract-check: ## 校验契约结构与 used_by（data.tables/enums/entities/queries）

@@ -44,6 +44,7 @@ type queryInfo struct {
 	ReturnColumns []string
 	OutputFields  []queryOutputField
 	IndexColumns  [][]string
+	Semantics     string
 	SQL           string
 	Doc           map[string]any
 }
@@ -124,6 +125,7 @@ func parseQuery(m map[string]any, rel, fileID, module string) *queryInfo {
 	q.ID, _ = m["id"].(string)
 	q.Name, _ = m["name"].(string)
 	q.Kind, _ = m["kind"].(string)
+	q.Semantics, _ = m["semantics"].(string)
 	q.SQL, _ = m["sql"].(string)
 	q.HasTable = false
 	q.HasTables = false
@@ -212,6 +214,12 @@ func (c *Checker) checkQueries(schema *Schema) {
 	names := map[string]string{}
 	for _, id := range c.queryOrder {
 		q := c.queries[id]
+		if strings.TrimSpace(q.SQL) == "" {
+			c.rulef("schema.non-empty", "%s: query %s sql must not be empty", q.File, q.ID)
+		}
+		if strings.TrimSpace(q.Semantics) == "" {
+			c.rulef("schema.non-empty", "%s: query %s semantics must not be empty", q.File, q.ID)
+		}
 		c.checkQueryIdentity(q, names)
 		c.checkQueryTable(q)
 		c.checkQueryParams(q)
@@ -328,6 +336,9 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 			c.rulef("query-params", "%s: query %s duplicate param %s", q.File, q.ID, p.Name)
 		}
 		seen[p.Name] = true
+		if strings.TrimSpace(p.Type) == "" {
+			c.rulef("schema.non-empty", "%s: query %s param %s type must not be empty", q.File, q.ID, p.Name)
+		}
 	}
 	uses := sqlParamUses(q.SQL)
 	for _, p := range q.Params {
@@ -362,19 +373,21 @@ type sqlParamUse struct {
 }
 
 func sqlParamUses(sql string) map[string]sqlParamUse {
-	clean := stripSQLComments(sql)
+	raw := stripSQLComments(sql)
 	out := map[string]sqlParamUse{}
-	for _, m := range sqlParamNargRe.FindAllStringSubmatch(clean, -1) {
+	// sqlc.narg/arg 的引号是函数语法，不能按字符串字面量剥离。
+	for _, m := range sqlParamNargRe.FindAllStringSubmatch(raw, -1) {
 		u := out[m[1]]
 		u.narg = true
 		out[m[1]] = u
 	}
-	for _, m := range sqlParamArgRe.FindAllStringSubmatch(clean, -1) {
+	for _, m := range sqlParamArgRe.FindAllStringSubmatch(raw, -1) {
 		u := out[m[1]]
 		u.arg = true
 		out[m[1]] = u
 	}
-	for _, m := range sqlParamAtRe.FindAllStringSubmatch(clean, -1) {
+	// @name 扫描避开真正的字符串字面量。
+	for _, m := range sqlParamAtRe.FindAllStringSubmatch(stripSQLStrings(raw), -1) {
 		u := out[m[1]]
 		u.at = true
 		out[m[1]] = u
@@ -390,6 +403,33 @@ func stripSQLComments(sql string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// stripSQLStrings 去掉单引号字符串字面量，避免参数/表名扫描把字符串内容当 SQL。
+func stripSQLStrings(sql string) string {
+	var b strings.Builder
+	b.Grow(len(sql))
+	inString := false
+	for i := 0; i < len(sql); i++ {
+		c := sql[i]
+		if c == '\'' {
+			if inString && i+1 < len(sql) && sql[i+1] == '\'' {
+				i++ // 转义的单引号
+				continue
+			}
+			inString = !inString
+			continue
+		}
+		if !inString {
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
+}
+
+// cleanSQL 去掉字符串字面量与行注释；所有 SQL 词法检查共用。
+func cleanSQL(sql string) string {
+	return stripSQLComments(stripSQLStrings(sql))
 }
 
 // checkQueryIndexSQL 防止 index_columns 声明了 SQL 根本没用的列。
@@ -587,23 +627,80 @@ func (c *Checker) checkQueryKindSQL(q *queryInfo) {
 			c.rulef("query-kind-sql", "%s: query %s kind execrows must write, got %s", q.File, q.ID, keyword)
 		}
 	}
-	if sqlSelectStarRe.MatchString(stripSQLComments(q.SQL)) {
+	if sqlSelectStarRe.MatchString(cleanSQL(q.SQL)) {
 		c.rulef("query-no-select-star", "%s: query %s uses SELECT *", q.File, q.ID)
 	}
 	if q.Kind == "one" && (q.Return.Kind == "table" || q.Return.Kind == "entity") &&
 		(keyword == "SELECT" || keyword == "WITH") &&
-		!sqlWriteKeywordRe.MatchString(stripSQLComments(q.SQL)) {
+		!sqlWriteKeywordRe.MatchString(cleanSQL(q.SQL)) {
 		if !strings.Contains(strings.ToLower(q.SQL), "limit 1") && !c.hasUniquePrefix(q) {
 			c.rulef("query-one-unique", "%s: query %s kind one requires a unique index prefix or LIMIT 1", q.File, q.ID)
 		}
 	}
 	if isWriteQuery(q) && q.Module != "" {
-		for _, t := range q.Tables {
-			if owner := c.tableOwners[t]; owner != "" && owner != q.Module {
-				c.rulef("query-write-owner", "%s: query %s module %s cannot write %s (owner_module %s)", q.File, q.ID, q.Module, t, owner)
+		target := sqlWriteTarget(q.SQL)
+		if target == "" {
+			c.rulef("query-write-owner", "%s: query %s cannot determine write target", q.File, q.ID)
+			return
+		}
+		tableID := c.tableIDByPhysical(target, q.Tables)
+		if tableID == "" {
+			c.rulef("query-write-owner", "%s: query %s write target %s is not declared in table/tables", q.File, q.ID, target)
+			return
+		}
+		if owner := c.tableOwners[tableID]; owner != "" && owner != q.Module {
+			c.rulef("query-write-owner", "%s: query %s module %s cannot write %s (owner_module %s)", q.File, q.ID, q.Module, tableID, owner)
+		}
+	}
+}
+
+var (
+	sqlInsertTargetRe = regexp.MustCompile(`(?is)\binsert\s+into\s+(?:[a-z_][a-z0-9_]*\.)?([a-z_][a-z0-9_]*)`)
+	sqlUpdateTargetRe = regexp.MustCompile(`(?is)\bupdate\s+(?:[a-z_][a-z0-9_]*\.)?([a-z_][a-z0-9_]*)`)
+	sqlDeleteTargetRe = regexp.MustCompile(`(?is)\bdelete\s+from\s+(?:[a-z_][a-z0-9_]*\.)?([a-z_][a-z0-9_]*)`)
+)
+
+// sqlWriteTarget 只解析写目标表；JOIN/FROM 的读表不参与 owner 校验。
+func sqlWriteTarget(sql string) string {
+	clean := cleanSQL(sql)
+	switch sqlFirstKeyword(clean) {
+	case "INSERT":
+		if m := sqlInsertTargetRe.FindStringSubmatch(clean); m != nil {
+			return m[1]
+		}
+	case "UPDATE":
+		if m := sqlUpdateTargetRe.FindStringSubmatch(clean); m != nil {
+			return m[1]
+		}
+	case "DELETE":
+		if m := sqlDeleteTargetRe.FindStringSubmatch(clean); m != nil {
+			return m[1]
+		}
+	case "WITH":
+		best := -1
+		var bestRe *regexp.Regexp
+		for _, re := range []*regexp.Regexp{sqlInsertTargetRe, sqlUpdateTargetRe, sqlDeleteTargetRe} {
+			if loc := re.FindStringIndex(clean); loc != nil && (best == -1 || loc[0] < best) {
+				best = loc[0]
+				bestRe = re
+			}
+		}
+		if bestRe != nil {
+			if m := bestRe.FindStringSubmatch(clean); m != nil {
+				return m[1]
 			}
 		}
 	}
+	return ""
+}
+
+func (c *Checker) tableIDByPhysical(physical string, candidates []string) string {
+	for _, t := range candidates {
+		if c.tablePhysical[t] == physical {
+			return t
+		}
+	}
+	return ""
 }
 
 func isWriteQuery(q *queryInfo) bool {
@@ -614,7 +711,7 @@ func isWriteQuery(q *queryInfo) bool {
 	if q.Kind == "execrows" {
 		return true
 	}
-	return keyword == "WITH" && sqlWriteKeywordRe.MatchString(stripSQLComments(q.SQL))
+	return keyword == "WITH" && sqlWriteKeywordRe.MatchString(cleanSQL(q.SQL))
 }
 
 func (c *Checker) hasUniquePrefix(q *queryInfo) bool {
@@ -636,7 +733,7 @@ func (c *Checker) hasUniquePrefix(q *queryInfo) bool {
 }
 
 func sqlFirstKeyword(sql string) string {
-	clean := strings.TrimSpace(stripSQLComments(sql))
+	clean := strings.TrimSpace(cleanSQL(sql))
 	if clean == "" {
 		return ""
 	}
@@ -652,5 +749,6 @@ func sqlHasWord(sql, word string) bool {
 		return false
 	}
 	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(word) + `\b`)
+	// 只去注释：列名/表名可能出现在 sqlc.narg('x') 的引号里，剥字符串会漏检。
 	return re.MatchString(stripSQLComments(sql))
 }

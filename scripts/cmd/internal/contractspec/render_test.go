@@ -80,6 +80,78 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	}
 }
 
+func loadSchemaByType(t *testing.T, typ string) *Schema {
+	t.Helper()
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, _, err := LoadSchemaByType(root, typ)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestRenderEntity(t *testing.T) {
+	s := loadSchemaByType(t, "data.entities")
+	b, err := RenderEntity(s, "account_preview", "account", "账号预览")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
+	}
+	if doc["id"] != "data.entities.account_preview" || doc["table"] != "data.tables.account" || doc["identity"] != "id" {
+		t.Fatalf("unexpected top-level: %#v", doc)
+	}
+	fields, _ := doc["fields"].([]any)
+	if len(fields) != 5 {
+		t.Fatalf("want 5 base fields, got %d", len(fields))
+	}
+	first, _ := fields[0].(map[string]any)
+	if first["name"] != "id" || first["required"] != true || first["mutable"] != false {
+		t.Fatalf("id field not scaffolded: %#v", first)
+	}
+	usedBy, _ := doc["used_by"].(map[string]any)
+	if _, ok := usedBy["queries"]; !ok {
+		t.Fatalf("used_by.queries missing: %#v", usedBy)
+	}
+}
+
+func TestRenderQuery(t *testing.T) {
+	s := loadSchemaByType(t, "data.queries")
+	b, err := RenderQuery(s, "account", "accounts", "account", "accounts", "账号查询")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
+	}
+	if doc["id"] != "data.queries.account" || doc["module"] != "accounts" {
+		t.Fatalf("unexpected top-level: %#v", doc)
+	}
+	queries, _ := doc["queries"].([]any)
+	if len(queries) != 1 {
+		t.Fatalf("want 1 query, got %d", len(queries))
+	}
+	q, _ := queries[0].(map[string]any)
+	if q["id"] != "data.queries.account.exists_account" || q["name"] != "ExistsAccount" {
+		t.Fatalf("query id/name not scaffolded: %#v", q)
+	}
+	if q["returns"] != "boolean" || q["table"] != "data.tables.account" {
+		t.Fatalf("query returns/table not scaffolded: %#v", q)
+	}
+	if !strings.Contains(q["sql"].(string), "FROM accounts") {
+		t.Fatalf("physical table not used: %#v", q["sql"])
+	}
+	if !strings.Contains(string(b), `semantics: "TODO: 查询语义"`) {
+		t.Fatalf("semantics must be double-quoted:\n%s", b)
+	}
+}
+
 func TestRenderTableDecimalFamilyParams(t *testing.T) {
 	s := loadTestSchema(t)
 	b, err := RenderTableWithColumnType(s, "note", "notes", "备注表", "decimal")

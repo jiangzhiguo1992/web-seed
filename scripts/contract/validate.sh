@@ -8,6 +8,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT/scripts/cmd"
 
 go run ./gen_rule_ids -check
+go run ./gen_graph -root "$ROOT" -check
 
 tmp="$(mktemp "${TMPDIR:-/tmp}/contractcheck.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
