@@ -55,7 +55,7 @@ scripts/cmd/
 |---|---|---|
 | `make contract-new type=data.tables name=note module=notes summary="备注表"` | 按 `_meta/data.tables.yaml` 生成最小表骨架；`column_type=decimal` 可指定第一列类型并带出扩展字段 | 新建表前 |
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
-| `make contract-check` | 结构 / ID / 基类 / 约束 / 索引 / used_by | 每次改完契约 |
+| `make contract-check` | 结构 / ID / 约束 / 索引 / used_by / owner / persistence.queries | 每次改完契约 |
 | `make gen` | 生成 DDL / OpenAPI / 类型 / graph | `contract-check` 通过后 |
 | `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 单独投影 | 按需 |
 
@@ -70,6 +70,7 @@ scripts/cmd/
 `contract-check` 当前覆盖：
 
 - `data.tables/*.yaml`
+  - `targets.dir/glob` 决定扫描路径；改扫描目录或后缀只改 meta
   - 必填字段、类型、枚举、`const`、`pattern`、`allowed`、`unique`
   - `id` 与文件名一致；`_base.yaml` 特例；`kind: base` 只能出现在 `_base.yaml`
   - 物理表 `extends: [data.tables.base]`；不得重复基类列；`status` 必须重声明为 `data.enums.*`
@@ -84,8 +85,10 @@ scripts/cmd/
   - `table.retention` 的数值 >= 1，`unit` 只能是 minutes/hours/days
   - `used_by` 三列表与实际入边一致；`queries` 记录查询项 ID
   - `owner_module` 与 capabilities 写表归属一致；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
+  - `persistence.queries` 引用的查询项必须存在
   - `data.enums.*` 引用存在；枚举列 `default` 必须是已有枚举值
   - `_meta` 的 `description` / `generates` / `caution` 必须使用双引号（`contract-check` 校验）
+  - 错误统一带 `[rule-id]` 前缀：表规则用 `rules` 的 id，通用结构规则用 `schema.*`
 - `data/enums.yaml`
   - 集合 ID、item ID = `data.enums.<name>`、值唯一、`db_type: text`
 - 实体/查询/能力对表的引用存在
@@ -118,7 +121,7 @@ scripts/cmd/
 | `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
 | `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；不是类型族，也不是外键 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
-| `rules` | 跨字段规则的声明式清单；声称硬约束的规则必须在 `scripts/cmd/internal/check` 有对应实现 |
+| `rules` | 跨字段规则的声明式清单；声称硬约束的规则必须在 `scripts/cmd/internal/check` 有对应实现；错误输出用 `[rule-id]` 前缀 |
 
 **先读 `description` 和 `caution`，不要只按字段名猜。**
 

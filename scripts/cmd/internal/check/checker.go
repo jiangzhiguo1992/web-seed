@@ -27,6 +27,7 @@ import (
 )
 
 type Schema = contractspec.Schema
+type Targets = contractspec.Targets
 type ColumnTypes = contractspec.ColumnTypes
 type ColumnRefs = contractspec.ColumnRefs
 type ValueTypeFamily = contractspec.ValueTypeFamily
@@ -47,8 +48,9 @@ func Run(root string) []string {
 	return c.errs
 }
 
-func (c *Checker) errf(format string, args ...any) {
-	c.errs = append(c.errs, fmt.Sprintf(format, args...))
+// rulef 追加带稳定规则 ID 的错误，AI/CI 可直接按 [rule-id] 检索。
+func (c *Checker) rulef(rule, format string, args ...any) {
+	c.errs = append(c.errs, fmt.Sprintf("[%s] %s", rule, fmt.Sprintf(format, args...)))
 }
 
 func (c *Checker) run() {
@@ -56,12 +58,12 @@ func (c *Checker) run() {
 	c.checkTypeMeta()
 	tableSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/data.tables.yaml"))
 	if err != nil {
-		c.errf("load tables schema: %v", err)
+		c.rulef("schema.load", "load tables schema: %v", err)
 		return
 	}
 	enumSchema, err := loadSchema(filepath.Join(c.root, "contracts/_meta/data.enums.yaml"))
 	if err != nil {
-		c.errf("load enums schema: %v", err)
+		c.rulef("schema.load", "load enums schema: %v", err)
 		return
 	}
 
@@ -82,12 +84,12 @@ func (c *Checker) checkMetaQuotes() {
 		rel := relPath(c.root, file)
 		b, err := os.ReadFile(file)
 		if err != nil {
-			c.errf("%s: %v", rel, err)
+			c.rulef("schema.load", "%s: %v", rel, err)
 			continue
 		}
 		var doc yaml.Node
 		if err := yaml.Unmarshal(b, &doc); err != nil {
-			c.errf("%s: %v", rel, err)
+			c.rulef("schema.load", "%s: %v", rel, err)
 			continue
 		}
 		c.checkProseQuotes(&doc, rel)
@@ -104,9 +106,16 @@ func (c *Checker) checkProseQuotes(n *yaml.Node, rel string) {
 		for i := 0; i+1 < len(n.Content); i += 2 {
 			k, v := n.Content[i], n.Content[i+1]
 			switch k.Value {
-			case "description", "generates", "caution":
+			case "description", "caution":
+				if v.Kind != yaml.ScalarNode {
+					c.rulef("schema.quote", "%s: %s must be a double-quoted string", rel, k.Value)
+				} else if v.Style != yaml.DoubleQuotedStyle {
+					c.rulef("schema.quote", "%s: %s must be double-quoted", rel, k.Value)
+				}
+			case "generates":
+				// _types.yaml 的 generates 是生成物列表；标量时必须双引号。
 				if v.Kind == yaml.ScalarNode && v.Style != yaml.DoubleQuotedStyle {
-					c.errf("%s: %s must be double-quoted", rel, k.Value)
+					c.rulef("schema.quote", "%s: %s must be double-quoted", rel, k.Value)
 				}
 			}
 			c.checkProseQuotes(v, rel)
@@ -115,6 +124,10 @@ func (c *Checker) checkProseQuotes(n *yaml.Node, rel string) {
 }
 
 type typeMeta struct {
+	SchemaSemantics struct {
+		HardFields []string `yaml:"hard_fields"`
+		SoftFields []string `yaml:"soft_fields"`
+	} `yaml:"schema_semantics"`
 	Types map[string]struct {
 		Generates []string `yaml:"generates"`
 		DoNot     []string `yaml:"do_not"`
@@ -128,12 +141,16 @@ func (c *Checker) checkTypeMeta() {
 	path := filepath.Join(c.root, "contracts/_meta/_types.yaml")
 	b, err := os.ReadFile(path)
 	if err != nil {
-		c.errf("contracts/_meta/_types.yaml: %v", err)
+		c.rulef("schema.load", "contracts/_meta/_types.yaml: %v", err)
 		return
 	}
 	var meta typeMeta
 	if err := yaml.Unmarshal(b, &meta); err != nil {
-		c.errf("contracts/_meta/_types.yaml: %v", err)
+		c.rulef("schema.load", "contracts/_meta/_types.yaml: %v", err)
+		return
+	}
+	if len(meta.SchemaSemantics.HardFields) == 0 || len(meta.SchemaSemantics.SoftFields) == 0 {
+		c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_semantics.hard_fields/soft_fields must not be empty")
 	}
 }
 

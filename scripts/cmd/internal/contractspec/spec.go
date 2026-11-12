@@ -12,9 +12,19 @@ type Schema struct {
 	ID          string      `yaml:"id"`
 	Type        string      `yaml:"type"`
 	Title       string      `yaml:"title"`
+	Targets     Targets     `yaml:"targets"`
 	ColumnTypes ColumnTypes `yaml:"column_types"`
 	ColumnRefs  ColumnRefs  `yaml:"column_refs"`
 	Fields      []Field     `yaml:"fields"`
+}
+
+// Targets 描述契约实例的落盘位置与命名规则；checkTables 使用 Dir/Glob。
+type Targets struct {
+	Dir       string `yaml:"dir"`
+	Glob      string `yaml:"glob"`
+	ID        string `yaml:"id"`
+	Naming    string `yaml:"naming"`
+	Exception string `yaml:"exception"`
 }
 
 type ColumnTypes struct {

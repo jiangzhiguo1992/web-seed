@@ -39,7 +39,7 @@ fields:
           - { name: description, type: string, required: false, description: "枚举值说明" }
 
 rules:
+  - { id: enum-id, text: "集合 id 固定为 data.enums" }
   - { id: enum-id-matches-name, text: "item.id 必须等于 data.enums.<item.name>" }
   - { id: enum-values-unique, text: "同一枚举的 values 不得重复" }
-  - { id: enum-db-type-text, text: "db_type 固定 text；不用 PostgreSQL enum" }
   - { id: enum-append-only, text: "枚举值只能追加，禁止改名或删除" }

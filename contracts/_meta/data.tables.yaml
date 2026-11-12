@@ -1,6 +1,6 @@
 # data.tables 的字段树 + 值域 + 字段说明。
 # 通用字段语义见 _types.yaml 的 schema_semantics；本文件只写 data.tables 特有内容。
-# 本文件同时是 contract-new 的字段来源；不要另写模板。
+# targets.dir/glob 由 contract-check 使用；本文件同时是 contract-new 的字段来源；不要另写模板。
 
 id: meta.data.tables
 type: data.tables
@@ -269,12 +269,14 @@ rules:
   - { id: index-order, text: "order 只能与 columns 配合，长度一致，值为 asc/desc" }
   - { id: large-index-concurrently, text: "size_class=large 时索引不得显式 concurrently: \"false\"" }
   - { id: partition, text: "partition.columns 非空；range 必须有 interval，其他策略不得有" }
-  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，contract-check 校验" }
-  - { id: used-by-query-id, text: "used_by.queries 记录查询项 ID，不是查询文件 ID" }
+  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；queries 记录查询项 ID，不是查询文件 ID" }
   - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表" }
   - { id: id-from-file, text: "id 必须等于 data.tables.<file stem>；_base.yaml 例外" }
+  - { id: table-id-unique, text: "表 ID 全局唯一" }
+  - { id: base-columns, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at" }
   - { id: unique-names, text: "列名不重复；约束名与索引名各自唯一" }
   - { id: physical-name-unique, text: "物理表名全局唯一" }
-  - { id: retention-positive, text: "retention 的数值 >= 1，unit 只能是 minutes/hours/days" }
+  - { id: index-reason, text: "索引必须写非空 reason" }
+  - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型" }
   - { id: do-not-specific, text: "do_not 每条必须含本表标识" }
   - { id: stability-stable, text: "stable 不得含 TODO/FIXME" }

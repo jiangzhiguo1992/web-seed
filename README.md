@@ -180,7 +180,7 @@ make build-web        # apps/web/admin/dist
 | `make gen` | 重新生成全部契约产物（P2 实现，当前会失败） |
 | `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 分项生成（P2） |
 | `make contract-new type=data.tables name=note` | 从 `_meta` 生成契约骨架 |
-| `make contract-check` | 校验契约结构、ID、约束/索引、`used_by`、`owner_module` 写归属（data.tables / data.enums 试点） |
+| `make contract-check` | 校验契约结构、ID、约束/索引、`used_by`、`owner_module` 写归属、`persistence.queries`（data.tables / data.enums 试点） |
 | `make contract-graph` | 锚点图校验（P2） |
 | `make contract-impact id=<id>` | 影响面分析（P2） |
 | `make contract-compat` | 破坏性变更检测（P5） |

@@ -8,8 +8,8 @@ schema_version: 1
 # 所有契约类型共享的字段节点语义。
 # 该段是文档与 AI 入口；硬约束的实现仍在 scripts/cmd/internal/check。
 schema_semantics:
-  hard_fields: [type, required, enum, allowed, pattern, const, unique, min, max, fields, item_fields]
-  soft_fields: [description, caution, generates, examples, default, title, targets, rules]
+  hard_fields: [name, type, required, enum, allowed, pattern, const, unique, min, max, fields, item_fields]
+  soft_fields: [description, caution, generates, examples, default, generated, write, title, targets, rules]
   required: "契约必须显式声明；缺失即校验失败"
   default: "required 字段上只影响 contract-new 骨架；optional 字段上表示省略时的语义默认值；contract-check 不补值"
   stability: "draft/stable/deprecated 可双向流转；stable 文件不得含 TODO/FIXME"

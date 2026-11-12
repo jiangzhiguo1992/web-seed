@@ -388,8 +388,12 @@ func TestTableRulesForeignKeyRejected(t *testing.T) {
 		"columns": []any{"code"}, "references": []any{"data.tables.other.col.id"},
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), `unknown type "foreign_key"`) {
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, `unknown type "foreign_key"`) {
 		t.Fatalf("foreign_key not rejected: %v", c.errs)
+	}
+	if !strings.Contains(errs, "[no-foreign-key]") {
+		t.Fatalf("foreign_key rule id missing: %v", c.errs)
 	}
 }
 
@@ -638,5 +642,104 @@ func TestProseQuoteCheckDetectsPlainScalar(t *testing.T) {
 	c.checkProseQuotes(&doc, "x")
 	if len(c.errs) == 0 {
 		t.Fatal("plain description not reported")
+	}
+}
+
+func TestProseQuoteCheckDetectsMapping(t *testing.T) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte("description:\n  key: value\n"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{}
+	c.checkProseQuotes(&doc, "x")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must be a double-quoted string") {
+		t.Fatalf("description mapping not reported: %v", c.errs)
+	}
+}
+
+func TestCheckTablesUsesTargets(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "custom/tables")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "x.yaml"), []byte("id: data.tables.x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	schema := &Schema{Targets: Targets{Dir: "custom/tables", Glob: "*.yaml"}}
+	c := &Checker{root: root}
+	tableIDs, _ := c.checkTables(schema)
+	if tableIDs["data.tables.x"] == "" {
+		t.Fatalf("targets.dir/glob not used: %v", tableIDs)
+	}
+}
+
+func TestErrorsHaveRuleIDs(t *testing.T) {
+	c := &Checker{}
+	doc := minimalTableDoc()
+	doc["extends"] = []any{"other"}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[base-only]") {
+		t.Fatalf("rule id missing: %s", errs)
+	}
+}
+
+func TestPersistenceQueriesExist(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("contracts/data/queries/q.yaml", `
+id: data.queries.q
+queries:
+  - id: data.queries.q.get
+    table: data.tables.x
+`)
+	write("contracts/capabilities/services/x.yaml", `
+id: cap.services.x
+module: x
+persistence:
+  table: data.tables.x
+  queries:
+    get: data.queries.q.missing
+`)
+	c := &Checker{root: root}
+	c.checkCrossFileTableRefs(
+		map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"},
+		map[string]map[string]bool{"data.tables.x": {"id": true}},
+	)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown query data.queries.q.missing") {
+		t.Fatalf("missing persistence query not reported: %v", c.errs)
+	}
+}
+
+func TestValidateEnum(t *testing.T) {
+	c := &Checker{}
+	c.validateValue("weeks", Field{Type: "string", Enum: []any{"minutes", "hours", "days"}}, "retention.unit")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `"weeks" not in enum`) {
+		t.Fatalf("enum value not checked: %v", c.errs)
+	}
+}
+
+func TestTypeMetaRequiresSchemaSemantics(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/_meta")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "_types.yaml"), []byte("types: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkTypeMeta()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.meta]") {
+		t.Fatalf("missing schema_semantics not reported: %v", c.errs)
 	}
 }
