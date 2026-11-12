@@ -84,6 +84,7 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 		}
 		c.checkConst(v, f, path)
 		c.checkNumericEnum(fmt.Sprint(n), f, path)
+		c.checkNumericAllowed(fmt.Sprint(n), f, path)
 		c.checkIntRange(n, f, path)
 	case "number", "float", "decimal":
 		n, ok := toFloat(v)
@@ -93,11 +94,14 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 		}
 		c.checkConst(v, f, path)
 		c.checkNumericEnum(fmt.Sprint(n), f, path)
+		c.checkNumericAllowed(fmt.Sprint(n), f, path)
 		c.checkFloatRange(n, f, path)
 	case "boolean":
 		if _, ok := v.(bool); !ok {
 			c.rulef("schema.type", "%s: must be boolean", path)
+			return
 		}
+		c.checkConst(v, f, path)
 	case "any":
 		c.checkConst(v, f, path)
 	case "object":
@@ -154,6 +158,9 @@ func (c *Checker) checkScalar(s string, f Field, path string) {
 	if len(f.Enum) > 0 && !inList(f.Enum, s) {
 		c.rulef("schema.enum", "%s: %q not in enum %v", path, s, f.Enum)
 	}
+	if len(f.Allowed) > 0 && !inList(f.Allowed, s) {
+		c.rulef("schema.enum", "%s: %q not allowed (allowed: %v)", path, s, f.Allowed)
+	}
 	if f.Pattern != "" && !match(f.Pattern, s) {
 		c.rulef("schema.pattern", "%s: %q does not match %s", path, s, f.Pattern)
 	}
@@ -172,6 +179,12 @@ func (c *Checker) checkConst(v any, f Field, path string) {
 func (c *Checker) checkNumericEnum(s string, f Field, path string) {
 	if len(f.Enum) > 0 && !inList(f.Enum, s) {
 		c.rulef("schema.enum", "%s: %s not in enum %v", path, s, f.Enum)
+	}
+}
+
+func (c *Checker) checkNumericAllowed(s string, f Field, path string) {
+	if len(f.Allowed) > 0 && !inList(f.Allowed, s) {
+		c.rulef("schema.enum", "%s: %s not allowed (allowed: %v)", path, s, f.Allowed)
 	}
 }
 

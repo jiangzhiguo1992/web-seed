@@ -48,6 +48,9 @@ type Checker struct {
 	queryIndexCols  map[string][][]string
 	tableIndexes    map[string][]tableIndex
 	tablePrimaryKey map[string][]string
+	tableObjects    map[string]map[string]bool
+	objectNames     map[string]string
+	objectKinds     map[string]string
 }
 
 // Run 执行全部契约校验并返回错误列表。

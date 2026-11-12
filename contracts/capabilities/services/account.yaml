@@ -132,7 +132,6 @@ persistence:
     soft_delete_stale_pending: data.queries.account.soft_delete_stale_pending_accounts
   constraint_errors:
     uq_accounts_number: platform.errors.ACCOUNT_NUMBER_TAKEN
-    ck_accounts_status: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     ck_accounts_deleted_consistent: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
 types:

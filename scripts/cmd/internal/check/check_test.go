@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -1277,5 +1278,137 @@ func TestQueryIndexColumns(t *testing.T) {
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "no index on data.tables.x starts with") {
 		t.Fatalf("wrong index order not reported: %v", c.errs)
+	}
+}
+
+func TestTableIDPatternApplied(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	idField, ok := contractspec.FindField(schema.Fields, "id")
+	if !ok || idField.Pattern == "" {
+		t.Fatal("id field pattern is missing")
+	}
+	c := &Checker{}
+	c.validateValue("data.table.account", idField, "id")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.pattern]") {
+		t.Fatalf("id pattern not applied: %v", c.errs)
+	}
+	c = &Checker{}
+	c.validateValue("data.tables.account", idField, "id")
+	if len(c.errs) != 0 {
+		t.Fatalf("valid id reported: %v", c.errs)
+	}
+}
+
+func TestValidateScalarAllowedAndBooleanConst(t *testing.T) {
+	c := &Checker{}
+	c.validateValue("x", Field{Type: "string", Allowed: []any{"a", "b"}}, "f")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `"x" not allowed`) {
+		t.Fatalf("scalar allowed not checked: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.validateValue(1, Field{Type: "integer", Allowed: []any{2, 3}}, "n")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "1 not allowed") {
+		t.Fatalf("numeric allowed not checked: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.validateValue(true, Field{Type: "boolean", Const: false}, "b")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.const]") {
+		t.Fatalf("boolean const not checked: %v", c.errs)
+	}
+}
+
+func TestBaseColumnShapeRejectsDrift(t *testing.T) {
+	c := &Checker{}
+	doc := map[string]any{
+		"id": "data.tables.base", "kind": "base", "summary": "base", "stability": "stable",
+		"columns": []any{
+			map[string]any{"name": "id", "type": "integer", "primary_key": true},
+			map[string]any{"name": "status", "type": "integer"},
+			map[string]any{"name": "created_at", "type": "timestamp"},
+			map[string]any{"name": "updated_at", "type": "timestamp"},
+			map[string]any{"name": "deleted_at", "type": "timestamp"},
+		},
+	}
+	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/_base.yaml")
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, `base column "id" must be string`) {
+		t.Fatalf("base id type drift not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, `base column "deleted_at" nullable must be true`) {
+		t.Fatalf("base deleted_at nullability drift not reported: %v", c.errs)
+	}
+}
+
+func TestCollectTableObjectsGlobalNames(t *testing.T) {
+	c := &Checker{
+		tableObjects: map[string]map[string]bool{},
+		objectNames:  map[string]string{},
+		objectKinds:  map[string]string{},
+	}
+	c.collectTableObjects(map[string]any{
+		"constraints": []any{map[string]any{"name": "uq_a_code", "type": "unique"}},
+		"indexes":     []any{map[string]any{"name": "idx_a_code"}},
+	}, "contracts/data/tables/a.yaml", "data.tables.a")
+	if !c.tableObjects["data.tables.a"]["uq_a_code"] || !c.tableObjects["data.tables.a"]["idx_a_code"] {
+		t.Fatalf("table objects not collected: %v", c.tableObjects["data.tables.a"])
+	}
+	if len(c.errs) != 0 {
+		t.Fatalf("first table reported: %v", c.errs)
+	}
+
+	c.collectTableObjects(map[string]any{
+		"indexes": []any{map[string]any{"name": "idx_a_code"}},
+	}, "contracts/data/tables/b.yaml", "data.tables.b")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[index-name-unique]") {
+		t.Fatalf("global index name collision not reported: %v", c.errs)
+	}
+}
+
+func TestConstraintErrorRef(t *testing.T) {
+	root := t.TempDir()
+	p := filepath.Join(root, "contracts/capabilities/services/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `
+id: cap.services.x
+module: x
+persistence:
+  table: data.tables.x
+  constraint_errors:
+    ck_missing: platform.errors.X
+`
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tableIDs := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
+	cols := map[string]map[string]bool{"data.tables.x": {"id": true}}
+	c := &Checker{
+		root:         root,
+		tableOwners:  map[string]string{"data.tables.x": "x"},
+		tableObjects: map[string]map[string]bool{"data.tables.x": {"uq_x_code": true}},
+	}
+	c.checkCrossFileTableRefs(tableIDs, cols)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[constraint-error-ref]") {
+		t.Fatalf("dangling constraint_errors key not reported: %v", c.errs)
+	}
+
+	c = &Checker{
+		root:         root,
+		tableOwners:  map[string]string{"data.tables.x": "x"},
+		tableObjects: map[string]map[string]bool{"data.tables.x": {"ck_missing": true}},
+	}
+	c.checkCrossFileTableRefs(tableIDs, cols)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid constraint_errors key reported: %v", c.errs)
 	}
 }

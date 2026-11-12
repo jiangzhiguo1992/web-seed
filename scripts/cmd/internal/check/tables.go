@@ -102,6 +102,9 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	cols := map[string]map[string]bool{}
 	physicalNames := map[string]string{}
 	c.tableOwners = map[string]string{}
+	c.tableObjects = map[string]map[string]bool{}
+	c.objectNames = map[string]string{}
+	c.objectKinds = map[string]string{}
 	hasBaseContract := false
 	for _, file := range files {
 		rel := relPath(c.root, file)
@@ -131,6 +134,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 			c.checkBaseTable(doc, schema, rel)
 		} else {
 			c.checkPhysicalTable(doc, rel, schema)
+			c.collectTableObjects(doc, rel, id)
 			if owner, _ := doc["owner_module"].(string); owner != "" {
 				c.tableOwners[id] = owner
 			}
@@ -168,6 +172,55 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	return tableIDs, cols
 }
 
+// collectTableObjects 记录表上可被 capabilities 引用的约束/索引名，
+// 同时校验 PG 索引命名空间内的全局唯一性。
+func (c *Checker) collectTableObjects(doc map[string]any, rel, tableID string) {
+	objects := map[string]bool{}
+	for _, raw := range asList(doc["constraints"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		if name == "" {
+			continue
+		}
+		objects[name] = true
+		switch typ, _ := m["type"].(string); typ {
+		case "unique", "exclude":
+			c.recordObjectName(name, rel, "constraint")
+		}
+	}
+	for _, raw := range asList(doc["indexes"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		if name == "" {
+			continue
+		}
+		objects[name] = true
+		c.recordObjectName(name, rel, "index")
+	}
+	c.tableObjects[tableID] = objects
+}
+
+// recordObjectName 校验索引名与 unique/exclude 约束名的全局唯一性。
+// 同一文件同一类对象的重复已由 unique-names 报出，这里不重复报。
+func (c *Checker) recordObjectName(name, rel, kind string) {
+	prevRel, seen := c.objectNames[name]
+	if !seen {
+		c.objectNames[name] = rel
+		c.objectKinds[name] = kind
+		return
+	}
+	if prevRel == rel && c.objectKinds[name] == kind {
+		return
+	}
+	c.rulef("index-name-unique", "%s: %s %q shares the index namespace with %s %q in %s", rel, kind, name, c.objectKinds[name], name, prevRel)
+}
+
 // checkPhysicalTable 先按 schema 校验结构，再跑表级规则。
 // foreign_key 已禁用：先从结构校验视图中剥离，避免同一错误被拆成
 // unknown field / pattern / enum 多条；表级规则只报一条 [no-foreign-key]。
@@ -202,6 +255,19 @@ func stripForeignKeys(doc map[string]any) map[string]any {
 	}
 	cp["constraints"] = kept
 	return cp
+}
+
+// baseColumnShape 固定基类四列的物理形状；status 的类型由 status-integer 单独校验。
+// 基类漂移会改变所有表的 DDL，必须在契约层拦截。
+var baseColumnShape = map[string]struct {
+	typ      string
+	primary  bool
+	nullable bool
+}{
+	"id":         {"string", true, false},
+	"created_at": {"timestamp", false, false},
+	"updated_at": {"timestamp", false, false},
+	"deleted_at": {"timestamp", false, true},
 }
 
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
@@ -241,10 +307,30 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 				if t, _ := m["type"].(string); t != "integer" {
 					c.rulef("status-integer", "%s: base status must be integer, got %q", rel, t)
 				}
+				if pk, _ := m["primary_key"].(bool); pk {
+					c.rulef("base-columns", "%s: base status must not be primary key", rel)
+				}
+				if nullable, _ := m["nullable"].(bool); nullable {
+					c.rulef("base-columns", "%s: base status must not be nullable", rel)
+				}
 			}
 			if pk, _ := m["primary_key"].(bool); pk {
 				if nullable, _ := m["nullable"].(bool); nullable {
 					c.rulef("primary-key-nullable", "%s: column %q: primary_key column must not be nullable", rel, n)
+				}
+			}
+			if shape, ok := baseColumnShape[n]; ok {
+				typ, _ := m["type"].(string)
+				pk, _ := m["primary_key"].(bool)
+				nullable, _ := m["nullable"].(bool)
+				if typ != shape.typ {
+					c.rulef("base-columns", "%s: base column %q must be %s, got %q", rel, n, shape.typ, typ)
+				}
+				if pk != shape.primary {
+					c.rulef("base-columns", "%s: base column %q primary_key must be %v", rel, n, shape.primary)
+				}
+				if nullable != shape.nullable {
+					c.rulef("base-columns", "%s: base column %q nullable must be %v", rel, n, shape.nullable)
 				}
 			}
 		}
@@ -582,7 +668,7 @@ func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, ta
 			}
 		}
 		if !found {
-			c.rulef("do-not-specific", "%s: do_not[%d] must mention a specific identifier of table %q (file stem, physical name, column, constraint, index or enum)", rel, i, stem)
+			c.rulef("do-not-specific", "%s: do_not[%d] must mention a specific identifier of table %q (file stem, physical name, column, constraint or index)", rel, i, stem)
 		}
 	}
 }

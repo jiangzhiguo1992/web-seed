@@ -140,6 +140,23 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 				}
 			}
 		}
+		if rawCE, ok := p["constraint_errors"]; ok {
+			ce, ok := asMap(rawCE)
+			if !ok {
+				c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
+			} else {
+				tables := tableRefs(p)
+				for name := range ce {
+					if name == "" {
+						c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
+						continue
+					}
+					if !c.tableObjectExists(tables, name) {
+						c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
+					}
+				}
+			}
+		}
 		for _, t := range tableRefs(p) {
 			if c.isBaseTableRef(t) {
 				c.rulef("base-file", "%s: base contract is not a physical table", rel)
@@ -172,6 +189,16 @@ func (c *Checker) checkPersistenceOwnership(doc, p map[string]any, rel string) {
 			c.rulef("owner-write", "%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
 		}
 	}
+}
+
+// tableObjectExists 判断约束/索引名是否属于给定表列表中的任一表。
+func (c *Checker) tableObjectExists(tables []string, name string) bool {
+	for _, t := range tables {
+		if c.tableObjects[t][name] {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Checker) checkUsedBy(tableIDs map[string]string) {

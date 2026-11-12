@@ -46,3 +46,20 @@ func TestLoadSchemaByTypeDuplicate(t *testing.T) {
 		t.Fatal("duplicate meta type must fail")
 	}
 }
+
+func TestLoadSchemaRejectsUnknownField(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "data.tables.yaml")
+	body := `
+id: meta.data.tables
+type: data.tables
+fields:
+  - { name: id, type: string, requred: true }
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSchema(path); err == nil {
+		t.Fatal("unknown meta field must fail instead of being ignored")
+	}
+}

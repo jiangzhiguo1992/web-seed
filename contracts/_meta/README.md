@@ -61,7 +61,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。
+`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。
 
 ---
 
@@ -69,12 +69,14 @@ scripts/cmd/
 
 `contract-check` 当前覆盖：
 
+- `_meta/<type>.yaml` 字段规范按 `KnownFields` 严格解析：未知字段（如 `requred`）直接失败，不再静默忽略
 - `data.tables/*.yaml`
   - `targets.dir/glob` 决定扫描路径；`targets.id/naming/exception` 由 checker 校验（ID 模板、snake_case、基类例外）
   - `column_refs.prefixes` 必须以 `.` 结尾；`require_col` 必须是 `prefixes` 的子集
   - 必填字段、类型、枚举、`const`、`pattern`、`allowed`、`unique`
   - `id` 按 `targets.id` 模板生成；例外按 `targets.exception`；`kind: base` 只能出现在 base 例外文件
   - 物理表 `extends` 必须等于 `targets.exception` 的 base ID；不得重复基类列；`status` 必须重声明为 `integer`
+  - 基类必须且只能是 5 列：`id` string 主键、`status` integer 非空、三个时间列 timestamp（`created_at`/`updated_at` 非空、`deleted_at` 可空）
   - `primary_key` 列不得可空
   - `default` / `default_sql` 互斥；`default` 的 YAML 类型、长度、范围与列类型族兼容
   - 列 / 约束 / 索引重名；`do_not` 每条必须含本表具体标识
@@ -88,7 +90,8 @@ scripts/cmd/
   - `table.retention` 的数值 >= 1，`unit` 只能是 minutes/hours/days
   - `used_by` 三列表与实际入边一致；`queries` 记录查询项 ID
   - `owner_module` 与 capabilities 写表归属一致；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
-  - `persistence.queries` 引用的查询项必须存在
+  - `persistence.queries` 引用的查询项必须存在；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
+  - 索引名与 `unique`/`exclude` 约束名共用 PG 索引命名空间，必须全局唯一
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
   - `rules` 的 `id`/`text` 非空、`id` 唯一；`implemented_by` 必须包含规则自身 ID，且每个值都指向 checker 实际输出的 `[rule-id]`（`schema.rules`）
   - checker 输出的非 `schema.*` 错误 ID 必须由某个 `rules`/`schema_rules` 声明，反向防止“有实现没规则”

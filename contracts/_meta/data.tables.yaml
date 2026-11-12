@@ -84,9 +84,9 @@ fields:
     type: string
     required: true
     pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
-    description: "由 file stem 派生"
+    description: "由 targets.id 模板派生（<file> 替换为文件 stem）；例外见 targets.exception"
     generates: "契约 ID、图节点"
-    caution: "不要写 data.table.*；_base.yaml 例外为 data.tables.base"
+    caution: "不要写 data.table.*；pattern 与 targets.id 同步；_base.yaml 例外为 data.tables.base"
 
   - name: summary
     type: string
@@ -262,29 +262,31 @@ fields:
 
 rules:
   - { id: base-only, text: "extends 只能是 targets.exception 声明的 base ID", implemented_by: [ base-only ] }
-  - { id: no-base-columns, text: "物理表不得声明 id/created_at/updated_at/deleted_at；status 必须重声明为 integer", implemented_by: [ no-base-columns ] }
+  - { id: no-base-columns, text: "物理表不得重声明 id/created_at/updated_at/deleted_at", implemented_by: [ no-base-columns ] }
   - { id: status-integer, text: "物理表必须声明 status，且类型为 integer；枚举只在 entity", implemented_by: [ status-integer ] }
   - { id: base-file, text: "kind: base 必须位于 targets.exception 声明的文件，且 ID 与例外一致", implemented_by: [ base-file ] }
   - { id: column-type, text: "列类型必须是类型族键，或匹配 column_refs.prefixes；表列不引用 data.enums.*", implemented_by: [ column-type ] }
   - { id: family-params, text: "列参数必须属于该类型族；required 参数必须出现", implemented_by: [ family-params ] }
-  - { id: family-length, text: "min_len <= max_len；fixed 必须写 max_len 且 min_len 等于 max_len", implemented_by: [ family-length ] }
+  - { id: family-length, text: "min_len <= max_len；fixed 为 true 时必须写 max_len，若写 min_len 必须等于 max_len", implemented_by: [ family-length ] }
   - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内", implemented_by: [ family-range ] }
   - { id: family-decimal, text: "scale <= precision", implemented_by: [ family-decimal ] }
   - { id: no-foreign-key, text: "禁止 foreign_key；跨表一致性由应用/业务规则保证", implemented_by: [ no-foreign-key ] }
-  - { id: unique-scope, text: "UNIQUE 约束含软删行；唯一索引 + where 只约束未删行，按业务选择", implemented_by: [ unique-scope ] }
+  - { id: unique-scope, text: "UNIQUE 约束覆盖软删行；唯一索引必须带 where: deleted_at IS NULL（软删后可复用）；全局唯一用 UNIQUE 约束", implemented_by: [ unique-scope ] }
   - { id: constraint-fields, text: "check/exclude 用 expr；unique 用 columns", implemented_by: [ constraint-fields ] }
   - { id: index-order, text: "order 只能与 columns 配合，长度一致，值为 asc/desc", implemented_by: [ index-order ] }
   - { id: large-index-concurrently, text: "size_class=large 时索引不得显式 concurrently: \"false\"", implemented_by: [ large-index-concurrently ] }
   - { id: partition, text: "partition.columns 非空；range 必须有 interval，其他策略不得有", implemented_by: [ partition ] }
   - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；queries 记录查询项 ID，不是查询文件 ID", implemented_by: [ used-by-generated ] }
-  - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表", implemented_by: [ owner-write ] }
-  - { id: base-columns, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at", implemented_by: [ base-columns ] }
+  - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读取用 persistence.queries（read_only_tables 已移除）", implemented_by: [ owner-write ] }
+  - { id: base-columns, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at；id 为 string 主键、status 非空且非主键、三个时间列为 timestamp（created_at/updated_at 非空、deleted_at 可空）", implemented_by: [ base-columns ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-reason, text: "索引必须写非空 reason", implemented_by: [ index-reason ] }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型", implemented_by: [ index-definition ] }
   - { id: index-used-by, text: "每条索引必须声明 used_by，至少引用一个查询项 ID", implemented_by: [ index-used-by ] }
-  - { id: index-used-by-ref, text: "index.used_by 必须指向 data.queries.* 项，且该查询引用当前表", implemented_by: [ index-used-by-ref ] }
-  - { id: query-index-columns, text: "query.index_columns 每组列必须匹配同表索引最左前缀或主键", implemented_by: [ query-index-columns ] }
+  - { id: index-used-by-ref, text: "index.used_by 必须指向 data.queries.* 项；该查询必须引用当前表，SQL 必须提及索引列", implemented_by: [ index-used-by-ref ] }
+  - { id: index-name-unique, text: "索引名与 unique/exclude 约束名共用 PG 索引命名空间，同一 schema 内必须唯一", implemented_by: [ index-name-unique ] }
+  - { id: constraint-error-ref, text: "capabilities.persistence.constraint_errors 的键必须是所写表声明的约束或索引名", implemented_by: [ constraint-error-ref ] }
+  - { id: query-index-columns, text: "query.index_columns 每组列必须匹配同表索引最左前缀或主键；一个 query 只能对应一张表", implemented_by: [ query-index-columns ] }
   - { id: query-index-used-by, text: "query.index_columns 匹配的索引必须在 used_by 中列出该查询", implemented_by: [ query-index-used-by ] }
   - { id: redundant-group, text: "同一 redundancy.group 必须且只能有一个 source，且至少有一个 copy", implemented_by: [ redundant-group ] }
   - { id: redundant-ref, text: "copy 必须写 ref 指向同组 source；类型与可空必须一致", implemented_by: [ redundant-ref ] }

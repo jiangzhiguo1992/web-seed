@@ -2,6 +2,7 @@
 package contractspec
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -162,9 +163,13 @@ func LoadSchema(path string) (*Schema, error) {
 	if err != nil {
 		return nil, err
 	}
+	// 字段规范自身也必须严格：拼错的键（如 requred）若被静默忽略，
+	// 会把硬约束降级成无效文本，且不会触发任何 contract 实例错误。
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	dec.KnownFields(true)
 	var s Schema
-	if err := yaml.Unmarshal(b, &s); err != nil {
-		return nil, err
+	if err := dec.Decode(&s); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if s.Type == "" || len(s.Fields) == 0 {
 		return nil, fmt.Errorf("%s: empty schema (type/fields)", path)
