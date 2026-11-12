@@ -55,12 +55,10 @@ indexes:
     columns: [ code, number ]
     unique: true
     where: "deleted_at IS NULL"
+    used_by:
+      - data.queries.auth.get_auth_phone_by_number
+      - data.queries.auth.create_auth_phone
     reason: "手机号在未删除记录内唯一"
-
-  - name: idx_auth_phone_account_id
-    columns: [ account_id ]
-    where: "deleted_at IS NULL"
-    reason: "按账号查手机号"
 
 used_by:
   entities: [ data.entities.auth_phone ]

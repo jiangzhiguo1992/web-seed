@@ -205,6 +205,15 @@ fields:
       - { name: pii, type: boolean, required: false, description: "个人敏感信息" }
       - { name: never_expose, type: boolean, required: false, description: "禁止进入普通 API/TS/事件/entity" }
       - { name: managed_by, type: string, required: false, enum: [ application, database ], description: "后续维护方" }
+      - name: redundancy
+        type: object
+        required: false
+        description: "冗余字段声明；非冗余列不写"
+        caution: "source 与 copy 必须同组；copy 必须写 ref 指向 source；source 不写 ref"
+        fields:
+          - { name: group, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "冗余组稳定 ID" }
+          - { name: role, type: string, required: true, enum: [ source, copy ], description: "source=权威来源；copy=冗余副本" }
+          - { name: ref, type: string, required: false, description: "copy 必填，指向 source 列" }
       - { name: comment, type: string, required: false, description: "列 COMMENT" }
 
   - name: constraints
@@ -236,6 +245,7 @@ fields:
       - { name: method, type: string, required: false, enum: [ btree, hash, gin, gist, brin ], default: btree, description: "索引方法" }
       - { name: concurrently, type: string, required: false, enum: [ auto, "true", "false" ], default: auto, description: "是否并发；写字符串 auto/\"true\"/\"false\"" }
       - { name: include, type: list<string>, required: false, description: "覆盖索引附加列" }
+      - { name: used_by, type: list<string>, required: true, unique: true, description: "使用该索引的查询项 ID；至少一个，防空索引", caution: "写 data.queries.* 项，不是查询文件；查询必须引用当前表" }
 
   - name: used_by
     type: object
@@ -272,3 +282,7 @@ rules:
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-reason, text: "索引必须写非空 reason", implemented_by: [ index-reason ] }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型", implemented_by: [ index-definition ] }
+  - { id: index-used-by, text: "每条索引必须声明 used_by，至少引用一个查询项 ID", implemented_by: [ index-used-by ] }
+  - { id: index-used-by-ref, text: "index.used_by 必须指向 data.queries.* 项，且该查询引用当前表", implemented_by: [ index-used-by-ref ] }
+  - { id: redundant-group, text: "同一 redundancy.group 必须且只能有一个 source，且至少有一个 copy", implemented_by: [ redundant-group ] }
+  - { id: redundant-ref, text: "copy 必须写 ref 指向同组 source；类型与可空必须一致", implemented_by: [ redundant-ref ] }

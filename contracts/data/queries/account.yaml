@@ -75,7 +75,7 @@ queries:
              created_at, updated_at, deleted_at
       FROM accounts
       WHERE deleted_at IS NULL
-        AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
+        AND (sqlc.narg('status')::integer IS NULL OR status = sqlc.narg('status'))
         AND (sqlc.narg('own_type')::text IS NULL OR own_type = sqlc.narg('own_type'))
         AND (
           sqlc.narg('cursor_created_at')::timestamp IS NULL
@@ -96,10 +96,10 @@ queries:
       - { name: nickname, type: text }
       - { name: user_id, type: text, nullable: true }
     returns: data.tables.account.row
-    semantics: "初始状态 pending；number 入库前大写归一"
+    semantics: "初始状态 pending(0)；number 入库前大写归一"
     sql: |
       INSERT INTO accounts (id, own_type, own_id, number, nickname, user_id, status)
-      VALUES (@id, @own_type, @own_id, upper(@number), @nickname, sqlc.narg('user_id'), 'pending')
+      VALUES (@id, @own_type, @own_id, upper(@number), @nickname, sqlc.narg('user_id'), 0)
       RETURNING id, own_type, own_id, number, nickname, user_id, status, version,
                 created_at, updated_at, deleted_at;
 
@@ -127,14 +127,14 @@ queries:
       - { name: status, type: integer }
       - { name: version, type: integer }
     returns: affected_rows
-    semantics: "只允许非 deleted 状态；deleted 只能走 soft_delete_account"
+    semantics: "只允许非 deleted(3) 状态；deleted 只能走 soft_delete_account"
     sql: |
       UPDATE accounts
       SET status = @status, updated_at = now(), version = version + 1
       WHERE id = @id AND version = @version
         AND deleted_at IS NULL
-        AND status <> 'deleted'
-        AND @status <> 'deleted';
+        AND status <> 3
+        AND @status <> 3;
 
   - id: data.queries.account.soft_delete_account
     name: SoftDeleteAccount
@@ -144,10 +144,10 @@ queries:
       - { name: id, type: text }
       - { name: version, type: integer }
     returns: affected_rows
-    semantics: "软删；同时写 status=deleted 与 deleted_at，保证两者一致；幂等（已删返回 0）"
+    semantics: "软删；同时写 status=3 与 deleted_at，保证两者一致；幂等（已删返回 0）"
     sql: |
       UPDATE accounts
-      SET status = 'deleted', deleted_at = now(), updated_at = now(), version = version + 1
+      SET status = 3, deleted_at = now(), updated_at = now(), version = version + 1
       WHERE id = @id AND version = @version AND deleted_at IS NULL;
 
   - id: data.queries.account.list_stale_pending_accounts
@@ -163,7 +163,7 @@ queries:
       SELECT id, own_type, own_id, number, nickname, user_id, status, version,
              created_at, updated_at, deleted_at
       FROM accounts
-      WHERE status = 'pending'
+      WHERE status = 0
         AND deleted_at IS NULL
         AND created_at < now() - make_interval(days => @older_than_days)
       ORDER BY created_at
@@ -179,7 +179,7 @@ queries:
     semantics: "批量软删 pending 账号；只处理仍为 pending 且未删除的记录"
     sql: |
       UPDATE accounts
-      SET status = 'deleted', deleted_at = now(), updated_at = now()
+      SET status = 3, deleted_at = now(), updated_at = now()
       WHERE id = ANY(@ids::text[])
-        AND status = 'pending'
+        AND status = 0
         AND deleted_at IS NULL;

@@ -47,7 +47,7 @@ queries:
     sql: |
       INSERT INTO auth_pwd (id, account_id, username, password_hash, password_md5, status)
       VALUES (@id, @account_id, @username,
-              sqlc.narg('password_hash'), sqlc.narg('password_md5'), 'active')
+              sqlc.narg('password_hash'), sqlc.narg('password_md5'), 0)
       RETURNING id, account_id, username, status, created_at, updated_at;
 
   - id: data.queries.auth.update_auth_pwd_hash
@@ -123,7 +123,7 @@ queries:
     semantics: "绑定手机号"
     sql: |
       INSERT INTO auth_phone (id, account_id, code, number, operator, status)
-      VALUES (@id, @account_id, @code, @number, sqlc.narg('operator'), 'active')
+      VALUES (@id, @account_id, @code, @number, sqlc.narg('operator'), 0)
       RETURNING id, account_id, code, number, operator, status, created_at, updated_at;
 
   - id: data.queries.auth.get_auth_email_by_username_domain
@@ -158,7 +158,7 @@ queries:
     sql: |
       INSERT INTO auth_email (id, account_id, username, domain, entity, tld, status)
       VALUES (@id, @account_id, @username, lower(@domain),
-              sqlc.narg('entity'), sqlc.narg('tld'), 'active')
+              sqlc.narg('entity'), sqlc.narg('tld'), 0)
       RETURNING id, account_id, username, domain, entity, tld, status, created_at, updated_at;
 
   - id: data.queries.auth.create_token
@@ -187,7 +187,7 @@ queries:
       VALUES (
         @id, @own_type, @own_id, @account_id,
         sqlc.narg('device_id'), sqlc.narg('user_id'),
-        @access_token_hash, @refresh_token_hash, @access_expire_at, @refresh_expire_at, 'active'
+        @access_token_hash, @refresh_token_hash, @access_expire_at, @refresh_expire_at, 0
       )
       RETURNING id, account_id, device_id, access_expire_at, refresh_expire_at, status;
 
@@ -231,10 +231,10 @@ queries:
     semantics: "吊销单个刷新令牌；幂等"
     sql: |
       UPDATE tokens
-      SET status = 'revoked', updated_at = now()
+      SET status = 1, updated_at = now()
       WHERE refresh_token_hash = @refresh_token_hash
         AND deleted_at IS NULL
-        AND status = 'active';
+        AND status = 0;
 
   - id: data.queries.auth.delete_expired_tokens
     name: DeleteExpiredTokens
@@ -246,7 +246,7 @@ queries:
     semantics: "软删过期令牌；供清理任务使用"
     sql: |
       UPDATE tokens
-      SET deleted_at = now(), updated_at = now(), status = 'expired'
+      SET deleted_at = now(), updated_at = now(), status = 2
       WHERE id IN (
         SELECT id FROM tokens
         WHERE refresh_expire_at < now() AND deleted_at IS NULL
@@ -267,5 +267,5 @@ queries:
       SELECT id, account_id, device_id, access_expire_at, refresh_expire_at,
              status, created_at, updated_at
       FROM tokens
-      WHERE account_id = @account_id AND deleted_at IS NULL AND status = 'active'
+      WHERE account_id = @account_id AND deleted_at IS NULL AND status = 0
       ORDER BY created_at DESC;

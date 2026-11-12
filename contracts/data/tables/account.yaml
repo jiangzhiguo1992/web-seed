@@ -11,6 +11,7 @@ do_not:
   - "uq_accounts_number 必须带 WHERE deleted_at IS NULL"
   - "account.status 使用 integer；0=pending/1=active/2=suspended/3=deleted；枚举只在 entity"
   - "own_type/own_id 表示数据归属，user_id 表示关联用户；不要把 user_id 当作 own_id 的别名"
+  - "own_type/own_id/user_id 是冗余 source；token 的 copy 必须 ref 到这里"
 
 table:
   name: accounts
@@ -24,12 +25,14 @@ columns:
     nullable: false
     min_len: 1
     max_len: 32
+    redundancy: { group: account_own_type, role: source }
     comment: "归属类型（user/tenant/system；跨模块共享时升级为枚举）"
 
   - name: own_id
     type: string
     max_len: 36
     nullable: false
+    redundancy: { group: account_own_id, role: source }
     comment: "归属 ID；与 own_type 组成归属主体"
 
   - name: number
@@ -53,6 +56,7 @@ columns:
     type: string
     max_len: 36
     nullable: true
+    redundancy: { group: account_user_id, role: source }
     comment: "关联用户 ID；不做数据库外键"
 
   - name: status
@@ -79,22 +83,25 @@ indexes:
     columns: [ number ]
     unique: true
     where: "deleted_at IS NULL"
+    used_by:
+      - data.queries.account.get_account_by_number
+      - data.queries.account.exists_account_number
+      - data.queries.account.create_account
     reason: "账号编号在未删除账号内唯一"
 
   - name: idx_accounts_own_type_own_id
     columns: [ own_type, own_id ]
     where: "deleted_at IS NULL"
+    used_by: [ data.queries.account.list_accounts ]
     reason: "按归属主体查询"
-
-  - name: idx_accounts_user_id
-    columns: [ user_id ]
-    where: "deleted_at IS NULL AND user_id IS NOT NULL"
-    reason: "按用户反查账号"
 
   - name: idx_accounts_created_at_id
     columns: [ created_at, id ]
     order: [ desc, desc ]
     where: "deleted_at IS NULL"
+    used_by:
+      - data.queries.account.list_accounts
+      - data.queries.account.list_stale_pending_accounts
     reason: "列表游标分页"
 
 used_by:

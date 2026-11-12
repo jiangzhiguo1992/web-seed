@@ -67,17 +67,10 @@ indexes:
     columns: [ username, domain ]
     unique: true
     where: "deleted_at IS NULL"
+    used_by:
+      - data.queries.auth.get_auth_email_by_username_domain
+      - data.queries.auth.create_auth_email
     reason: "邮箱在未删除记录内唯一"
-
-  - name: idx_auth_email_domain
-    columns: [ domain ]
-    where: "deleted_at IS NULL"
-    reason: "按域名聚合与检索"
-
-  - name: idx_auth_email_account_id
-    columns: [ account_id ]
-    where: "deleted_at IS NULL"
-    reason: "按账号查邮箱"
 
 used_by:
   entities: [ data.entities.auth_email ]

@@ -79,12 +79,16 @@ indexes:
     columns: [ username ]
     unique: true
     where: "deleted_at IS NULL"
+    used_by:
+      - data.queries.auth.get_auth_pwd_by_username
+      - data.queries.auth.create_auth_pwd
     reason: "登录名在未删除记录内唯一"
 
   - name: uq_auth_pwd_account
     columns: [ account_id ]
     unique: true
     where: "deleted_at IS NULL"
+    used_by: [ data.queries.auth.create_auth_pwd ]
     reason: "一个账号只有一条密码记录"
 
 used_by:

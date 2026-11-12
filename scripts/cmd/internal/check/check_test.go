@@ -1151,3 +1151,95 @@ func TestGeneratedRuleIDsCoverDynamicCalls(t *testing.T) {
 		}
 	}
 }
+
+func TestIndexUsedBy(t *testing.T) {
+	schema := minimalTableSchema()
+	base := func(usedBy any) map[string]any {
+		m := minimalTableDoc()
+		m["indexes"] = []any{map[string]any{
+			"name": "idx_x_code", "columns": []any{"code"}, "reason": "test", "used_by": usedBy,
+		}}
+		return m
+	}
+	c := &Checker{
+		queryIDs:    map[string]string{"data.queries.x.q": "contracts/data/queries/x.yaml"},
+		queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
+	}
+	c.checkTableRules(base([]any{"data.queries.x.q"}), "contracts/data/tables/x.yaml", schema)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid index used_by reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkTableRules(base(nil), "contracts/data/tables/x.yaml", schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[index-used-by]") {
+		t.Fatalf("missing index used_by not reported: %v", c.errs)
+	}
+
+	c = &Checker{queryIDs: map[string]string{}, queryTables: map[string]map[string]bool{}}
+	c.checkTableRules(base([]any{"data.queries.missing.q"}), "contracts/data/tables/x.yaml", schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown query") {
+		t.Fatalf("unknown index query not reported: %v", c.errs)
+	}
+
+	c = &Checker{
+		queryIDs:    map[string]string{"data.queries.x.q": "contracts/data/queries/x.yaml"},
+		queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.other": true}},
+	}
+	c.checkTableRules(base([]any{"data.queries.x.q"}), "contracts/data/tables/x.yaml", schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "does not reference table") {
+		t.Fatalf("wrong-table index query not reported: %v", c.errs)
+	}
+
+	c = &Checker{
+		queryIDs:    map[string]string{"data.queries.x.q": "contracts/data/queries/x.yaml"},
+		queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
+		querySQL:    map[string]string{"data.queries.x.q": "SELECT 1"},
+	}
+	c.checkTableRules(base([]any{"data.queries.x.q"}), "contracts/data/tables/x.yaml", schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "SQL does not mention index columns") {
+		t.Fatalf("index query SQL mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestRedundancyValidation(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data/tables")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := `id: data.tables.a
+columns:
+  - name: x
+    type: string
+    redundancy: { group: g, role: source }
+  - name: no_copy
+    type: string
+    redundancy: { group: g2, role: source }
+`
+	b := `id: data.tables.b
+columns:
+  - name: x
+    type: integer
+    redundancy: { group: g, role: copy, ref: data.tables.a.col.x }
+  - name: no_ref
+    type: string
+    redundancy: { group: g3, role: copy }
+`
+	for name, body := range map[string]string{"a.yaml": a, "b.yaml": b} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := &Checker{root: root}
+	c.checkRedundancy(
+		map[string]string{"data.tables.a": "contracts/data/tables/a.yaml", "data.tables.b": "contracts/data/tables/b.yaml"},
+		map[string]map[string]bool{"data.tables.a": {"x": true, "no_copy": true}, "data.tables.b": {"x": true, "no_ref": true}},
+	)
+	errs := strings.Join(c.errs, "\n")
+	for _, want := range []string{"copy type/nullable", "copy requires ref", "has a source but no copy", "has copies but no source"} {
+		if !strings.Contains(errs, want) {
+			t.Fatalf("missing %q in redundancy errors: %v", want, c.errs)
+		}
+	}
+}

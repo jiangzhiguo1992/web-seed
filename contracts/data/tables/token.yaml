@@ -9,6 +9,7 @@ extends: [ data.tables.base ]
 do_not:
   - "access_token_hash / refresh_token_hash 只存哈希，禁止出现在普通响应、日志、事件；原文只在 /auth/login、/auth/refresh 的 TokenPair 返回一次"
   - "uq_tokens_access_hash / uq_tokens_refresh_hash 必须带 WHERE deleted_at IS NULL"
+  - "own_type/own_id/user_id 是冗余 copy；必须 ref account 对应列，禁止独立演化"
 
 table:
   name: tokens
@@ -22,13 +23,15 @@ columns:
     nullable: false
     min_len: 1
     max_len: 32
-    comment: "归属类型"
+    redundancy: { group: account_own_type, role: copy, ref: data.tables.account.col.own_type }
+    comment: "归属类型（冗余自 account.own_type）"
 
   - name: own_id
     type: string
     max_len: 36
     nullable: false
-    comment: "归属 ID"
+    redundancy: { group: account_own_id, role: copy, ref: data.tables.account.col.own_id }
+    comment: "归属 ID（冗余自 account.own_id）"
 
   - name: account_id
     type: string
@@ -46,7 +49,8 @@ columns:
     type: string
     max_len: 36
     nullable: true
-    comment: "关联用户 ID"
+    redundancy: { group: account_user_id, role: copy, ref: data.tables.account.col.user_id }
+    comment: "关联用户 ID（冗余自 account.user_id）"
 
   - name: access_token_hash
     type: string
@@ -93,28 +97,29 @@ indexes:
     columns: [ access_token_hash ]
     unique: true
     where: "deleted_at IS NULL"
+    used_by: [ data.queries.auth.get_token_by_access ]
     reason: "访问令牌哈希查找"
 
   - name: uq_tokens_refresh_hash
     columns: [ refresh_token_hash ]
     unique: true
     where: "deleted_at IS NULL"
+    used_by:
+      - data.queries.auth.get_token_by_refresh
+      - data.queries.auth.revoke_token
     reason: "刷新令牌哈希查找"
 
   - name: idx_tokens_account_id
     columns: [ account_id ]
     where: "deleted_at IS NULL"
+    used_by: [ data.queries.auth.list_tokens_by_account ]
     reason: "按账号列出令牌"
 
   - name: idx_tokens_refresh_expire_at
     columns: [ refresh_expire_at ]
     where: "deleted_at IS NULL"
+    used_by: [ data.queries.auth.delete_expired_tokens ]
     reason: "过期令牌清理"
-
-  - name: idx_tokens_account_id_device_id
-    columns: [ account_id, device_id ]
-    where: "deleted_at IS NULL"
-    reason: "按设备吊销令牌"
 
 used_by:
   entities: [ data.entities.token ]

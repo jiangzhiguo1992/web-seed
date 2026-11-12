@@ -39,6 +39,8 @@ columns:
   sensitive:
     pii: true 的列由生成器汇总进 platform/observability/log_fields.never_log
     never_expose: true 的列禁止进入普通 OpenAPI/TS/事件/普通 entity；认证 query 的 return_columns 与 x-auth-response 响应是唯一例外
+  redundancy:
+    rule: "冗余列必须声明 columns[].redundancy；同组只能有一个 source，copy 必须写 ref 指向同组 source，且 type/nullable 一致"
 
 constraints:
   physical_in: data/tables/*.yaml
@@ -52,6 +54,9 @@ constraints:
 
 indexes:
   reason_required: true
+  used_by:
+    rule: "每条索引必须写 used_by，至少指向一个存在的 data.queries.* 项；空索引不允许"
+    structure: "query item ID 列表，必须引用当前表"
   method_default: btree
   expression:
     rule: "表达式索引用 indexes[].expression，不要塞原生 SQL"

@@ -97,7 +97,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	}
 	columnField, _ := FindField(s.Fields, "columns")
 	if err := requireSupported(columnField.ItemFields, map[string]bool{
-		"name": true, "type": true, "nullable": true, "comment": true,
+		"name": true, "type": true, "nullable": true, "comment": true, "redundancy": true,
 	}, s.Type+".columns"); err != nil {
 		return nil, err
 	}

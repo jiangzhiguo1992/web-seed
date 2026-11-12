@@ -35,7 +35,7 @@
 
 | 概念 | 视角 | 位置 | 内容 |
 |---|---|---|---|
-| 表（table） | 持久化 | `data/tables/<file>.yaml` | 字段、类型、可空、默认值、CHECK/UNIQUE/EXCLUDE、索引、分区、`used_by` |
+| 表（table） | 持久化 | `data/tables/<file>.yaml` | 字段、类型、可空、默认值、CHECK/UNIQUE/EXCLUDE、索引、分区、`used_by`、`redundancy` |
 | 实体（entity） | 业务 | `data/entities/<entity>.yaml` | 身份、字段、关系、`validation`（数据库表达不了的复杂校验） |
 
 两者不是 1:1，所以不合并：
@@ -55,6 +55,33 @@
 | 业务行为规则 | `business/rules/*.yaml` | 编号唯一、仅本人可改 |
 
 **不要把 DDL 搬到 entities，也不要把业务规则塞进 tables。**
+
+### 1.4 索引必须有查询，冗余列必须互相指向
+
+**索引不是“将来可能有用”的占位符。** `indexes[].used_by` 至少列一个查询项 ID，`contract-check` 校验：
+
+- 每个索引都有 `used_by`；
+- 每个 ID 都是已存在的 `data.queries.*` 项；
+- 该查询的 `table` / `tables` 包含当前表。
+
+因此 `uq_*` 也要写 `used_by`（插入/唯一性校验也是使用方）；没有查询的索引直接删除，不要写一个假 ID。
+
+**冗余字段是显式设计，不是随手复制。** 需要冗余时写：
+
+```yaml
+redundancy: { group: account_own_type, role: source }
+# 副本表：
+redundancy: { group: account_own_type, role: copy, ref: data.tables.account.col.own_type }
+```
+
+约束：
+
+- 同一 `group` 只能有一个 `source`，且至少有一个 `copy`；
+- `copy` 必须写 `ref` 指向同组 `source`；
+- `copy` 与 `source` 的 `type` / `nullable` 必须一致；
+- `source` 不写 `ref`。
+
+`group` 是双方共享的稳定 ID，等价于“互相指向”；权威数据只保留在 `source`，避免双向引用产生第二个事实源。
 
 ---
 
@@ -83,12 +110,13 @@ data/storage.yaml ────> 配置校验 + 运维约束
 5. **时间统一 `timestamp`**，应用层只用 UTC。
 6. **软删表必须有 `deleted_at`**。全局唯一（含软删行）用 `constraints.unique`；软删后可复用用唯一索引 + `where: "deleted_at IS NULL"`。
 7. **表不使用枚举**：`status` 等状态列用 `integer`，`data/enums.yaml` 的 `values[].code` 是数据库整数码，entity 负责 code ↔ 枚举映射；枚举值只能追加。
-8. **索引必须写 `reason`**；表达式索引用 `expression`，大表用 `concurrently: auto`。
+8. **索引必须写 `reason` 与 `used_by`**；`used_by` 至少一个查询项 ID，且查询引用当前表；表达式索引用 `expression`，大表用 `concurrently: auto`。没有查询的索引直接删除。
 9. **主键默认由应用层生成 UUIDv7**（`generated_by: application`），数据库不设 default。
 10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；跨模块读通过 `persistence.queries`。
 11. **禁止未结构化 DDL 字段**：分区、表达式索引、CONCURRENTLY 必须用结构化字段表达（`table.partition`、`indexes[].expression`、`indexes[].concurrently`），不要塞原生 SQL。
-12. **`used_by` 是生成物**：由 `make gen-graph` 写入，禁止手改；结构固定为 `entities` / `queries` / `capabilities` 三个列表，只记**直接入边**。`queries` 记录查询项 ID（`data.queries.<module>.<query>`），不是查询文件 ID。完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
+12. **表级 `used_by` 是生成物**：由 `make gen-graph` 写入，禁止手改；结构固定为 `entities` / `queries` / `capabilities` 三个列表，只记**直接入边**。`queries` 记录查询项 ID（`data.queries.<module>.<query>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明，不是生成物；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
 13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
+14. **冗余字段必须声明**：`columns[].redundancy` 的 `source`/`copy` 同组，`copy` 必须写 `ref` 指向同组 `source`，`type`/`nullable` 一致；同组只能有一个 `source`。
 
 ---
 

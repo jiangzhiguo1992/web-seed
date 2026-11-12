@@ -454,6 +454,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		} else {
 			c.rulef("unique-names", "%s: indexes[%d]: duplicate index %q", rel, i, name)
 		}
+		c.checkIndexUsedBy(m, want, rel, i, name)
 		if _, ok := m["reason"]; ok && !hasNonEmptyString(m, "reason") {
 			c.rulef("index-reason", "%s: indexes[%d] (%s): reason must not be empty", rel, i, name)
 		}
@@ -492,6 +493,54 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		}
 	}
 	c.checkDoNotSpecificity(doc, rel, strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel)), table, colNames, constraintNames, indexNames)
+}
+
+// checkIndexUsedBy 校验索引的 used_by：至少一个查询项，且查询存在并引用当前表。
+// 这是“防空索引”的最低可执行约束；不是数据库查询计划器，不判断索引是否真被命中。
+func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int, name string) {
+	usedBy := asList(m["used_by"])
+	if len(usedBy) == 0 {
+		c.rulef("index-used-by", "%s: indexes[%d] (%s): used_by must list at least one query item", rel, i, name)
+		return
+	}
+	seen := map[string]bool{}
+	for _, raw := range usedBy {
+		qid, ok := raw.(string)
+		if !ok || qid == "" || !strings.HasPrefix(qid, "data.queries.") {
+			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): used_by must be data.queries.* item IDs, got %v", rel, i, name, raw)
+			continue
+		}
+		if seen[qid] {
+			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): duplicate query %s", rel, i, name, qid)
+			continue
+		}
+		seen[qid] = true
+		if _, ok := c.queryIDs[qid]; !ok {
+			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): unknown query %s", rel, i, name, qid)
+			continue
+		}
+		if !c.queryTables[qid][tableID] {
+			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): query %s does not reference table %s", rel, i, name, qid, tableID)
+			continue
+		}
+		if cols := asList(m["columns"]); len(cols) > 0 && !sqlMentionsAny(c.querySQL[qid], cols) {
+			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): query %s SQL does not mention index columns", rel, i, name, qid)
+		}
+	}
+}
+
+func sqlMentionsAny(sql string, columns []any) bool {
+	if sql == "" {
+		return true
+	}
+	lower := strings.ToLower(sql)
+	for _, raw := range columns {
+		col, ok := raw.(string)
+		if ok && col != "" && strings.Contains(lower, strings.ToLower(col)) {
+			return true
+		}
+	}
+	return false
 }
 
 // checkDoNotSpecificity 落实 contracts/README §4.5.1：
