@@ -1,15 +1,18 @@
-// enums.go 校验 data.enums 集合、code 唯一性与 entity 枚举引用。
+// enums.go 校验 data.enums 集合结构、ID/名称/类型名唯一性、code 唯一性与全仓枚举引用。
 package check
 
 import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
-	if schema.Targets.File == "" {
-		c.rulef("schema.targets", "%s: targets.file must not be empty", schema.ID)
+	c.checkEnumSchema(schema)
+	if schema.Targets.File == "" || schema.Targets.ID == "" {
+		c.rulef("schema.targets", "%s: targets.file and targets.id must not be empty", schema.ID)
 		return map[string]map[string]bool{}
 	}
 	path := filepath.Join(c.root, schema.Targets.File)
@@ -20,11 +23,18 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		return map[string]map[string]bool{}
 	}
 	c.validateDoc(doc, schema.Fields, rel)
-	if doc["id"] != "data.enums" {
-		c.rulef("enum-id", "%s: id must be data.enums", rel)
+	c.checkStability(doc, rel)
+	if s, ok := doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
+		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 	}
+	if doc["id"] != schema.Targets.ID {
+		c.rulef("enum-id", "%s: id must be %s", rel, schema.Targets.ID)
+	}
+	prefix := schema.Targets.ID + "."
 	enums := map[string]map[string]bool{}
 	names := map[string]bool{}
+	goTypes := map[string]string{}
+	tsTypes := map[string]string{}
 	rawEnums := asList(doc["enums"])
 	if len(rawEnums) == 0 {
 		c.rulef("schema.non-empty", "%s: enums must not be empty", rel)
@@ -37,16 +47,18 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		}
 		id, _ := m["id"].(string)
 		name, _ := m["name"].(string)
-		if id != "data.enums."+name {
-			c.rulef("enum-id-matches-name", "%s: enums[%d]: id must be data.enums.%s, got %s", rel, i, name, id)
+		if id != prefix+name {
+			c.rulef("enum-id-matches-name", "%s: enums[%d]: id must be %s%s, got %s", rel, i, prefix, name, id)
 		}
 		if _, ok := enums[id]; ok {
-			c.rulef("enum-id-matches-name", "%s: enums[%d]: duplicate id %s", rel, i, id)
+			c.rulef("contract-id-unique", "%s: enums[%d]: duplicate id %s", rel, i, id)
 		}
 		if names[name] {
-			c.rulef("enum-id-matches-name", "%s: enums[%d]: duplicate name %s", rel, i, name)
+			c.rulef("unique-names", "%s: enums[%d]: duplicate name %s", rel, i, name)
 		}
 		names[name] = true
+		c.checkEnumTypeName(goTypes, "go_type", i, name, m, rel)
+		c.checkEnumTypeName(tsTypes, "ts_type", i, name, m, rel)
 		values := map[string]bool{}
 		codes := map[int]bool{}
 		rawValues := asList(m["values"])
@@ -77,6 +89,55 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 	return enums
 }
 
+// checkEnumSchema 防止 meta 字段树被误删；硬校验依赖这些 required 字段。
+func (c *Checker) checkEnumSchema(schema *Schema) {
+	for _, name := range []string{"schema_version", "id", "summary", "stability"} {
+		f, ok := contractspec.FindField(schema.Fields, name)
+		if !ok || !f.Required {
+			c.rulef("schema.meta", "%s: %s must be required", schema.ID, name)
+		}
+	}
+	enums, ok := contractspec.FindField(schema.Fields, "enums")
+	if !ok {
+		c.rulef("schema.meta", "%s: fields.enums is missing", schema.ID)
+		return
+	}
+	if !enums.Required {
+		c.rulef("schema.meta", "%s: enums must be required", schema.ID)
+	}
+	for _, name := range []string{"id", "name", "go_type", "ts_type", "values"} {
+		f, ok := contractspec.FindField(enums.ItemFields, name)
+		if !ok || !f.Required {
+			c.rulef("schema.meta", "%s: enums.%s must be required", schema.ID, name)
+		}
+	}
+	values, ok := contractspec.FindField(enums.ItemFields, "values")
+	if !ok {
+		return
+	}
+	for _, name := range []string{"value", "code"} {
+		f, ok := contractspec.FindField(values.ItemFields, name)
+		if !ok || !f.Required {
+			c.rulef("schema.meta", "%s: values.%s must be required", schema.ID, name)
+		}
+	}
+}
+
+// checkEnumTypeName 保证生成类型名在集合内唯一；重名会让 Go/TS 产物互相覆盖。
+func (c *Checker) checkEnumTypeName(seen map[string]string, field string, i int, name string, m map[string]any, rel string) {
+	typeName, _ := m[field].(string)
+	if typeName == "" {
+		return
+	}
+	if prev, ok := seen[typeName]; ok {
+		c.rulef("enum-type-unique", "%s: enums[%d] (%s): duplicate %s %s (also %s)", rel, i, name, field, typeName, prev)
+		return
+	}
+	seen[typeName] = name
+}
+
+// checkEnumRefs 校验表列引用与所有契约中的 data.enums.* 类型引用。
+// 表列不引用枚举；枚举引用可出现在 entity / capability / feature 等任意契约。
 func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[string]bool, enums map[string]map[string]bool, refs ColumnRefs) {
 	for _, rel := range tableIDs {
 		doc, err := loadYAML(filepath.Join(c.root, rel))
@@ -93,22 +154,44 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 			}
 		}
 	}
-	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {
-		doc, err := loadYAML(f)
-		if err != nil {
+	for _, f := range walkYAML(c.root, "contracts") {
+		rel := relPath(c.root, f)
+		if strings.HasPrefix(rel, "contracts/_meta/") ||
+			strings.HasPrefix(rel, "contracts/data/tables/") ||
+			strings.HasPrefix(rel, "contracts/generated/") {
 			continue
 		}
-		rel := relPath(c.root, f)
-		for i, raw := range asList(doc["fields"]) {
-			m, ok := asMap(raw)
-			if !ok {
-				continue
+		doc, err := loadYAML(f)
+		if err != nil {
+			c.rulef("schema.load", "%s: %v", rel, err)
+			continue
+		}
+		c.scanEnumTypeRefs(doc, rel, "", enums)
+	}
+}
+
+// scanEnumTypeRefs 递归查找任意层级的 type: data.enums.* 引用。
+func (c *Checker) scanEnumTypeRefs(v any, rel, path string, enums map[string]map[string]bool) {
+	if m, ok := asMap(v); ok {
+		for k, child := range m {
+			childPath := k
+			if path != "" {
+				childPath = path + "." + k
 			}
-			if t, _ := m["type"].(string); strings.HasPrefix(t, "data.enums.") {
-				if _, ok := enums[t]; !ok {
-					c.rulef("schema.ref", "%s: fields[%d] (%s): unknown enum %s", rel, i, m["name"], t)
+			if k == "type" {
+				if t, ok := child.(string); ok && strings.HasPrefix(t, "data.enums.") {
+					if _, found := enums[t]; !found {
+						c.rulef("schema.ref", "%s: %s: unknown enum %s", rel, childPath, t)
+					}
 				}
 			}
+			c.scanEnumTypeRefs(child, rel, childPath, enums)
+		}
+		return
+	}
+	if list, ok := asList2(v); ok {
+		for i, child := range list {
+			c.scanEnumTypeRefs(child, rel, fmt.Sprintf("%s[%d]", path, i), enums)
 		}
 	}
 }

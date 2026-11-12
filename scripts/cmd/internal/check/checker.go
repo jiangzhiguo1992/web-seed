@@ -3,8 +3,9 @@
 // 当前覆盖：
 //   - contracts 下文本字段（description/comment/summary/do_not 等）双引号强制
 //   - data.tables/*.yaml 的结构、ID/文件、基类继承、列/约束/索引、used_by、do_not 具体性
-//   - data/enums.yaml 的结构、item ID、值唯一性、code 唯一性
+//   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、stability 与 summary
 //   - 表列引用的 column_refs 前缀是否存在；表列不引用 data.enums.*
+//   - 任意契约中的 data.enums.* 类型引用必须存在
 //   - status 必须是 integer；枚举只在 entity
 //   - 禁止 foreign_key；unique 约束与唯一索引的软删语义区分
 //   - owner_module 写归属（capabilities.persistence）
@@ -95,7 +96,7 @@ func (c *Checker) run() {
 	c.checkEnumRefs(tableIDs, cols, enumValues, tableSchema.ColumnRefs)
 	c.checkCrossFileTableRefs(tableIDs, cols)
 	c.checkUsedBy(tableIDs)
-	c.checkIndex(tableIDs)
+	c.checkIndex(tableIDs, enumSchema)
 }
 
 // checkContractProseQuotes 强制 contracts 下文本字段使用双引号，

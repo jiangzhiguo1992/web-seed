@@ -2,6 +2,7 @@ package check
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -659,6 +660,214 @@ enums:
 	c.checkEnums(schema)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[enum-code-unique]") {
 		t.Fatalf("duplicate enum code not reported: %v", c.errs)
+	}
+}
+
+func loadEnumSchemaForTest(t *testing.T) *Schema {
+	t.Helper()
+	repoRoot, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(repoRoot, "contracts/_meta/data.enums.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return schema
+}
+
+func writeEnumContract(t *testing.T, body string) *Checker {
+	t.Helper()
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "enums.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return &Checker{root: root}
+}
+
+func TestEnumTypeNamesUnique(t *testing.T) {
+	body := `
+schema_version: 1
+id: data.enums
+summary: "x"
+stability: stable
+enums:
+  - id: data.enums.x_status
+    name: x_status
+    go_type: Status
+    ts_type: Status
+    values:
+      - { value: active, code: 0 }
+  - id: data.enums.y_status
+    name: y_status
+    go_type: Status
+    ts_type: Status
+    values:
+      - { value: active, code: 0 }
+`
+	c := writeEnumContract(t, body)
+	c.checkEnums(loadEnumSchemaForTest(t))
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[enum-type-unique]") || !strings.Contains(errs, "duplicate go_type Status") || !strings.Contains(errs, "duplicate ts_type Status") {
+		t.Fatalf("duplicate enum type names not reported: %v", c.errs)
+	}
+}
+
+func TestEnumDuplicateNameAndIDRules(t *testing.T) {
+	body := `
+schema_version: 1
+id: data.enums
+summary: "x"
+stability: stable
+enums:
+  - id: data.enums.x_status
+    name: x_status
+    go_type: XStatus
+    ts_type: XStatus
+    values:
+      - { value: active, code: 0 }
+  - id: data.enums.x_status
+    name: x_status
+    go_type: YStatus
+    ts_type: YStatus
+    values:
+      - { value: active, code: 0 }
+`
+	c := writeEnumContract(t, body)
+	c.checkEnums(loadEnumSchemaForTest(t))
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[contract-id-unique]") || !strings.Contains(errs, "[unique-names]") {
+		t.Fatalf("duplicate enum id/name must use generic rules: %v", c.errs)
+	}
+}
+
+func TestEnumSchemaShape(t *testing.T) {
+	schema := &Schema{ID: "meta.data.enums", Fields: []Field{{
+		Name: "enums", Type: "list<object>", ItemFields: []Field{
+			{Name: "id", Required: true},
+			{Name: "name", Required: true},
+			{Name: "values", Required: true, ItemFields: []Field{{Name: "value", Required: true}}},
+		},
+	}}}
+	c := &Checker{}
+	c.checkEnumSchema(schema)
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "enums.go_type must be required") || !strings.Contains(errs, "values.code must be required") {
+		t.Fatalf("enum schema erosion not reported: %v", c.errs)
+	}
+}
+
+func TestEnumSummaryAndStability(t *testing.T) {
+	body := `# TODO
+schema_version: 1
+id: data.enums
+summary: ""
+stability: stable
+enums:
+  - id: data.enums.x_status
+    name: x_status
+    go_type: XStatus
+    ts_type: XStatus
+    values:
+      - { value: active, code: 0 }
+`
+	c := writeEnumContract(t, body)
+	c.checkEnums(loadEnumSchemaForTest(t))
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[schema.non-empty]") || !strings.Contains(errs, "[schema.stability]") {
+		t.Fatalf("enum summary/stability not checked: %v", c.errs)
+	}
+}
+
+func TestEnumRefsScanAllContracts(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "contracts/capabilities/services/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `
+id: cap.services.x
+types:
+  Input:
+    type: object
+    properties:
+      status: { type: data.enums.missing_status }
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkEnumRefs(map[string]string{}, map[string]map[string]bool{}, map[string]map[string]bool{}, ColumnRefs{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown enum data.enums.missing_status") {
+		t.Fatalf("enum ref outside entity not checked: %v", c.errs)
+	}
+
+	c = &Checker{root: root}
+	c.checkEnumRefs(map[string]string{}, map[string]map[string]bool{}, map[string]map[string]bool{"data.enums.missing_status": {}}, ColumnRefs{})
+	if len(c.errs) != 0 {
+		t.Fatalf("known enum ref reported: %v", c.errs)
+	}
+}
+
+func TestEnumBaselineRef(t *testing.T) {
+	cases := map[string]string{
+		"abc":         "HEAD",
+		"abc def":     "HEAD",
+		"abc def ghi": "HEAD^1",
+	}
+	for in, want := range cases {
+		if got := enumBaselineRef(in); got != want {
+			t.Errorf("enumBaselineRef(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestEnumAppendOnlyUsesMergeBaseline(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	root := t.TempDir()
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root, "-c", "commit.gpgsign=false"}, args...)...)
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",
+			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com",
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	writeEnums := func(values string) {
+		t.Helper()
+		path := filepath.Join(root, "contracts/data/enums.yaml")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := "schema_version: 1\nid: data.enums\nsummary: \"x\"\nstability: stable\nenums:\n  - id: data.enums.x\n    name: x\n    go_type: X\n    ts_type: X\n    values:\n" + values
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runGit("init", "-q")
+	runGit("symbolic-ref", "HEAD", "refs/heads/main")
+	writeEnums("      - { value: active, code: 0 }\n")
+	runGit("add", ".")
+	runGit("commit", "-q", "-m", "base")
+	runGit("checkout", "-q", "-b", "feature")
+	writeEnums("      - { value: added, code: 1 }\n")
+	runGit("commit", "-qam", "feature")
+	runGit("checkout", "-q", "main")
+	runGit("merge", "-q", "--no-ff", "-m", "merge", "feature")
+
+	c := &Checker{root: root}
+	c.checkEnumAppendOnly("contracts/data/enums.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "active was removed") {
+		t.Fatalf("merge baseline not used: %v", c.errs)
 	}
 }
 

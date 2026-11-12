@@ -59,6 +59,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # enum-append-only 对比 HEAD^1，需要 PR merge commit 的父提交
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: scripts/cmd/go.mod

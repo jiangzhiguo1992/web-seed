@@ -1,17 +1,22 @@
-// enums_history.go 校验枚举只追加：对比 HEAD 与当前 data/enums.yaml，
+// enums_history.go 校验枚举只追加：对比基线版本与当前 data/enums.yaml，
 // 禁止删除/改名已发布枚举值，禁止复用或修改已分配的 code。
 package check
 
 import (
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-// checkEnumAppendOnly 读取 HEAD 版本并比较；仓库无 git 历史时跳过。
+// checkEnumAppendOnly 读取基线版本并比较；仓库无 git 历史时跳过。
 func (c *Checker) checkEnumAppendOnly(rel string) {
-	out, err := exec.Command("git", "-C", c.root, "show", "HEAD:"+rel).Output()
+	baseline := "HEAD"
+	if out, err := exec.Command("git", "-C", c.root, "rev-list", "--parents", "-n", "1", "HEAD").Output(); err == nil {
+		baseline = enumBaselineRef(string(out))
+	}
+	out, err := exec.Command("git", "-C", c.root, "show", baseline+":"+rel).Output()
 	if err != nil {
 		return
 	}
@@ -24,6 +29,17 @@ func (c *Checker) checkEnumAppendOnly(rel string) {
 		return
 	}
 	c.reportEnumRegressions(oldDoc, curDoc, rel)
+}
+
+// enumBaselineRef 选择 append-only 的对比基线：
+//   - 普通提交：HEAD 就是当前改动前的版本（pre-commit 场景）；
+//   - PR merge ref：HEAD 是平台生成的 merge commit，HEAD^1 才是基线；
+//   - 浅克隆缺少父提交时 rev-list 只返回自身，退回 HEAD，避免误报。
+func enumBaselineRef(revList string) string {
+	if len(strings.Fields(revList)) > 2 {
+		return "HEAD^1"
+	}
+	return "HEAD"
 }
 
 type enumValueCode struct {

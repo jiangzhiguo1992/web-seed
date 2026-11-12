@@ -21,7 +21,7 @@ target_semantics:
   dir: "扫描目录"
   glob: "文件 glob"
   file: "单文件契约的固定路径"
-  id: "实例 ID 模板，<file> 替换为文件 stem"
+  id: "实例 ID 模板，<file> 替换为文件 stem；单例契约直接写固定 ID"
   naming: "文件名规则；当前支持 snake_case"
   exception: "显式 {file, id, kind} 例外；kind: base 标记基类"
 
@@ -60,7 +60,7 @@ types:
       - "不要绕过软删过滤（deleted_at IS NULL）"
       - "UNIQUE 约束包含软删行；需软删后复用时用 indexes[].unique + where: deleted_at IS NULL"
       - "禁止数据库外键（foreign_key）；跨表一致性由应用/业务规则保证"
-      - "表列不引用 data.enums.*；枚举只在 entity，status 等用 integer + entity 映射"
+      - "表列不引用 data.enums.*；状态整数码用 integer，由 entity 映射为枚举"
       - "不要用未结构化字段塞原生 DDL；分区用 table.partition，表达式索引用 indexes[].expression"
       - "used_by 是生成物，禁止手改；queries 记录查询项 ID，不是查询文件 ID"
       - "只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读通过 persistence.queries"

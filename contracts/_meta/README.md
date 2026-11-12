@@ -61,7 +61,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。
+`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -99,8 +99,11 @@ scripts/cmd/
   - `_meta/*.yaml` 以 `type` 作为类型 registry；checker/contract-new 按 type 查找，不再写死 meta 路径
   - 错误统一带 `[rule-id]` 前缀：表专有规则用 `data.tables.yaml` 的 `rules`，跨类型规则用 `_types.yaml` 的 `schema_rules` / `schema_semantics`，结构/格式用 `schema.*`（含 `schema.targets`）
 - `data/enums.yaml`
-  - 集合 ID、item ID = `data.enums.<name>`、值唯一、`code` 唯一；表列不引用枚举
-- entity 字段引用的 `data.enums.*` 必须存在
+  - 集合 ID、item ID = `data.enums.<name>`、值唯一、`code` 唯一且 >= 0
+  - `name` / `go_type` / `ts_type` 在集合内唯一；类型名冲突会让 Go/TS 产物互相覆盖
+  - `summary` 非空；`stability: stable` 不得含 TODO/FIXME
+  - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
+  - `enum-append-only` 对比 HEAD；PR merge ref 自动使用 HEAD^1（CI checkout 需完整历史）
 - 实体/查询/能力对表的引用存在
 - 查询 `return_columns` 必须是表列
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复
@@ -130,7 +133,7 @@ scripts/cmd/
 | `examples` | 示例值；`contract-new` 可用于生成 |
 | `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
 | `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；`require_col` 中的前缀必须带 `.col.`；不是类型族，也不是外键；表列不引用 `data.enums.*` |
-| `targets` | `dir`/`glob` 扫描路径；`id` 是 ID 模板（`<file>` → 文件 stem）；`naming` 是文件名规则（`snake_case`）；`exception` 是 `{file,id,kind}` 例外，`kind: base` 标记基类 |
+| `targets` | `dir`/`glob` 扫描路径；`id` 是 ID 模板（`<file>` → 文件 stem；单例契约直接写固定 ID）；`naming` 是文件名规则（`snake_case`）；`exception` 是 `{file,id,kind}` 例外，`kind: base` 标记基类 |
 | `columns[].redundancy` | 冗余字段声明：`group`/`role`（source/copy）/`ref`；copy 指向同组 source |
 | `indexes[].used_by` | 使用该索引的 query item ID 列表；至少一个，防空索引 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |

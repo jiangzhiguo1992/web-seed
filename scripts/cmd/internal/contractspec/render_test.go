@@ -185,3 +185,24 @@ func TestRenderEnumItem(t *testing.T) {
 		t.Fatalf("unexpected enum item: %#v", doc)
 	}
 }
+
+func TestRenderEnumItemUsesTargetsID(t *testing.T) {
+	s := &Schema{Type: "data.enums", Targets: Targets{ID: "data.enums", File: "contracts/data/enums.yaml"}}
+	b, err := RenderEnumItem(s, "note_status")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
+	}
+	if doc["id"] != "data.enums.note_status" {
+		t.Fatalf("id must derive from targets.id: %#v", doc)
+	}
+}
+
+func TestRenderEnumItemRequiresTargets(t *testing.T) {
+	if _, err := RenderEnumItem(&Schema{Type: "data.enums"}, "note_status"); err == nil {
+		t.Fatal("expected missing targets to fail")
+	}
+}

@@ -287,7 +287,7 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 	}
 }
 
-func (c *Checker) checkIndex(tableIDs map[string]string) {
+func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema *Schema) {
 	path := filepath.Join(c.root, "contracts/index.yaml")
 	rel := relPath(c.root, path)
 	doc, err := loadYAML(path)
@@ -343,9 +343,12 @@ func (c *Checker) checkIndex(tableIDs map[string]string) {
 			c.rulef("schema.index", "%s: path %s has id %s, expected %s", rel, p, got, id)
 		}
 	}
-	if got, ok := byPath["data/enums.yaml"]; !ok {
-		c.rulef("schema.index", "%s: missing entry for data/enums.yaml", rel)
-	} else if got != "data.enums" {
-		c.rulef("schema.index", "%s: data/enums.yaml has id %s, expected data.enums", rel, got)
+	if enumSchema.Targets.File != "" && enumSchema.Targets.ID != "" {
+		p := strings.TrimPrefix(enumSchema.Targets.File, "contracts/")
+		if got, ok := byPath[p]; !ok {
+			c.rulef("schema.index", "%s: missing entry for %s", rel, p)
+		} else if got != enumSchema.Targets.ID {
+			c.rulef("schema.index", "%s: %s has id %s, expected %s", rel, p, got, enumSchema.Targets.ID)
+		}
 	}
 }

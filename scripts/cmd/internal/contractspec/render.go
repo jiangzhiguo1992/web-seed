@@ -171,6 +171,9 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	if !validName(name) {
 		return nil, fmt.Errorf("RenderEnumItem: invalid name %q (snake_case required)", name)
 	}
+	if s.Targets.ID == "" || s.Targets.File == "" {
+		return nil, fmt.Errorf("RenderEnumItem: targets.id and targets.file must not be empty")
+	}
 	enumsField, _ := FindField(s.Fields, "enums")
 	if err := requireSupported(enumsField.ItemFields, map[string]bool{
 		"id": true, "name": true, "description": true,
@@ -184,18 +187,18 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	}
 	pc := pascal(name)
 	doc := enumItemScaffold{
-		ID:          s.Type + "." + name,
+		ID:          s.Targets.ID + "." + name,
 		Name:        name,
-		Description: name,
+		Description: "TODO: 枚举用途",
 		GoType:      pc,
 		TSType:      pc,
-		Values:      []enumValueScaffold{{Value: name, Code: 0, Description: name}},
+		Values:      []enumValueScaffold{{Value: name, Code: -1, Description: "TODO: 枚举值说明"}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# 追加到 %s 的 enums 列表。\n\n", s.Targets.File)
+	header := fmt.Sprintf("# 追加到 %s 的 enums 列表（每条以 `- ` 开头并缩进 2 空格）。\n# 示例 value/code 仅占位：替换后再提交；code 必须 >= 0。\n\n", s.Targets.File)
 	return append([]byte(header), b...), nil
 }
 

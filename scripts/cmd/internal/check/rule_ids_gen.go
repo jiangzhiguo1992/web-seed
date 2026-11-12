@@ -17,6 +17,7 @@ var knownRuleIDs = map[string]bool{
 	"enum-code-unique":         true,
 	"enum-id":                  true,
 	"enum-id-matches-name":     true,
+	"enum-type-unique":         true,
 	"enum-values-unique":       true,
 	"family-decimal":           true,
 	"family-length":            true,
