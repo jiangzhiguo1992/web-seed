@@ -4,6 +4,7 @@
 #   - 敏感表必须显式写 return_columns；不得 SELECT *。
 #   - password_md5 / token 字段只能由认证流程使用。
 #   - 每个 query 必须有显式 id；capabilities 只能引用 id。
+#   - 每个 query 必须写 index_columns；内层列表按顺序匹配索引最左前缀或主键。
 
 schema_version: 1
 id: data.queries.auth
@@ -25,6 +26,7 @@ queries:
     returns: data.tables.auth_pwd.row
     return_columns: [id, account_id, username, password_hash, password_md5, failed_login_count, locked_until, status]
     semantics: "仅供登录校验；包含 password_hash 与遗留 password_md5"
+    index_columns: [[username]]
     sql: |
       SELECT id, account_id, username, password_hash, password_md5,
              failed_login_count, locked_until, status
@@ -44,6 +46,7 @@ queries:
     returns: data.tables.auth_pwd.row
     return_columns: [id, account_id, username, status, created_at, updated_at]
     semantics: "创建密码认证记录；password_hash/password_md5 至少一个，均不返回"
+    index_columns: [[username], [account_id]]
     sql: |
       INSERT INTO auth_pwd (id, account_id, username, password_hash, password_md5, status)
       VALUES (@id, @account_id, @username,
@@ -59,6 +62,7 @@ queries:
       - { name: password_hash, type: text }
     returns: affected_rows
     semantics: "设置新 argon2id 哈希并清空遗留 MD5；成功后应吊销该账号全部令牌"
+    index_columns: [[id]]
     sql: |
       UPDATE auth_pwd
       SET password_hash = @password_hash, password_md5 = NULL, updated_at = now()
@@ -72,6 +76,7 @@ queries:
       - { name: id, type: text }
     returns: affected_rows
     semantics: "成功登录后重置失败计数与锁定"
+    index_columns: [[id]]
     sql: |
       UPDATE auth_pwd
       SET failed_login_count = 0, locked_until = NULL, updated_at = now()
@@ -86,6 +91,7 @@ queries:
       - { name: lock_until, type: timestamp, nullable: true }
     returns: affected_rows
     semantics: "失败计数 +1；达到阈值时设置 locked_until"
+    index_columns: [[id]]
     sql: |
       UPDATE auth_pwd
       SET failed_login_count = failed_login_count + 1,
@@ -103,6 +109,7 @@ queries:
     returns: data.tables.auth_phone.row
     return_columns: [id, account_id, code, number, operator, status]
     semantics: "按区号 + 手机号登录/校验"
+    index_columns: [[code, number]]
     sql: |
       SELECT id, account_id, code, number, operator, status
       FROM auth_phone
@@ -121,6 +128,7 @@ queries:
     returns: data.tables.auth_phone.row
     return_columns: [id, account_id, code, number, operator, status, created_at, updated_at]
     semantics: "绑定手机号"
+    index_columns: [[code, number]]
     sql: |
       INSERT INTO auth_phone (id, account_id, code, number, operator, status)
       VALUES (@id, @account_id, @code, @number, sqlc.narg('operator'), 0)
@@ -136,6 +144,7 @@ queries:
     returns: data.tables.auth_email.row
     return_columns: [id, account_id, username, domain, entity, tld, status]
     semantics: "按邮箱本地部分 + 域名登录/校验"
+    index_columns: [[username, domain]]
     sql: |
       SELECT id, account_id, username, domain, entity, tld, status
       FROM auth_email
@@ -155,6 +164,7 @@ queries:
     returns: data.tables.auth_email.row
     return_columns: [id, account_id, username, domain, entity, tld, status, created_at, updated_at]
     semantics: "绑定邮箱；domain 入库前小写归一"
+    index_columns: [[username, domain]]
     sql: |
       INSERT INTO auth_email (id, account_id, username, domain, entity, tld, status)
       VALUES (@id, @account_id, @username, lower(@domain),
@@ -179,6 +189,7 @@ queries:
     returns: data.tables.token.row
     return_columns: [id, account_id, device_id, access_expire_at, refresh_expire_at, status]
     semantics: "创建令牌对；数据库只存哈希，原文由调用方返回一次"
+    index_columns: [[access_token_hash], [refresh_token_hash]]
     sql: |
       INSERT INTO tokens (
         id, own_type, own_id, account_id, device_id, user_id,
@@ -200,6 +211,7 @@ queries:
     returns: data.tables.token.row
     return_columns: [id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status]
     semantics: "仅供刷新流程；按哈希查找，不返回哈希原文"
+    index_columns: [[refresh_token_hash]]
     sql: |
       SELECT id, account_id, device_id, user_id, access_expire_at,
              refresh_expire_at, status
@@ -215,6 +227,7 @@ queries:
     returns: data.tables.token.row
     return_columns: [id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status]
     semantics: "校验访问令牌；按哈希查找"
+    index_columns: [[access_token_hash]]
     sql: |
       SELECT id, account_id, device_id, user_id, access_expire_at,
              refresh_expire_at, status
@@ -229,6 +242,7 @@ queries:
       - { name: refresh_token_hash, type: text }
     returns: affected_rows
     semantics: "吊销单个刷新令牌；幂等"
+    index_columns: [[refresh_token_hash]]
     sql: |
       UPDATE tokens
       SET status = 1, updated_at = now()
@@ -244,6 +258,7 @@ queries:
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
     returns: affected_rows
     semantics: "软删过期令牌；供清理任务使用"
+    index_columns: [[refresh_expire_at]]
     sql: |
       UPDATE tokens
       SET deleted_at = now(), updated_at = now(), status = 2
@@ -263,6 +278,7 @@ queries:
     returns: "[]data.tables.token.row"
     return_columns: [id, account_id, device_id, access_expire_at, refresh_expire_at, status, created_at, updated_at]
     semantics: "列出账号的设备令牌；不返回 token 原文"
+    index_columns: [[account_id]]
     sql: |
       SELECT id, account_id, device_id, access_expire_at, refresh_expire_at,
              status, created_at, updated_at

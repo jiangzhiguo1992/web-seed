@@ -14,6 +14,11 @@ naming:
   constraint: "ck_<table>_<rule> / uq_<table>_<cols> / ex_<table>_<rule>"
   query: "snake_case；每个 query 必须有显式 id data.queries.<module>.<query_id>"
 
+queries:
+  index_columns:
+    rule: "每个 query 必须写 index_columns；每个内层列表按顺序匹配表索引最左前缀或主键"
+    structure: "list<list<string>>；一个 query 可以声明多个索引前缀组"
+
 base:
   id: data.tables.base
   required: true

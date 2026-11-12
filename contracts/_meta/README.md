@@ -83,6 +83,7 @@ scripts/cmd/
   - `unique` 约束与唯一索引的软删语义不同：约束含软删行，唯一索引按 `where` 过滤
   - `indexes` 的 `reason`、`columns` xor `expression`、`order` 长度/方向、唯一索引软删过滤、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表且 SQL 提及索引列；large 表不得显式禁用 `concurrently`
   - `columns.redundancy`：同组唯一 `source`、至少一个 `copy`；`copy.ref` 指向同组 `source`，`type`/`nullable` 一致
+  - `data/queries/*.yaml` 的 `index_columns`：每个内层列表按顺序匹配表索引最左前缀或主键；匹配的显式索引必须在 `used_by` 中列出该 query
   - `table.partition.columns` 存在；range 必须有 `interval`，其他策略不得有
   - `table.retention` 的数值 >= 1，`unit` 只能是 minutes/hours/days
   - `used_by` 三列表与实际入边一致；`queries` 记录查询项 ID

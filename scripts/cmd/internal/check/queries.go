@@ -6,6 +6,7 @@ func (c *Checker) loadQueryIndex() {
 	c.queryIDs = map[string]string{}
 	c.queryTables = map[string]map[string]bool{}
 	c.querySQL = map[string]string{}
+	c.queryIndexCols = map[string][][]string{}
 	for _, f := range glob(c.root, "contracts/data/queries/*.yaml") {
 		doc, err := loadYAML(f)
 		if err != nil {
@@ -23,6 +24,7 @@ func (c *Checker) loadQueryIndex() {
 			}
 			c.queryIDs[qid] = rel
 			c.querySQL[qid], _ = m["sql"].(string)
+			c.queryIndexCols[qid] = stringGroups(m["index_columns"])
 			tables := map[string]bool{}
 			for _, t := range tableRefs(m) {
 				tables[t] = true

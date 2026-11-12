@@ -83,6 +83,27 @@ redundancy: { group: account_own_type, role: copy, ref: data.tables.account.col.
 
 `group` 是双方共享的稳定 ID，等价于“互相指向”；权威数据只保留在 `source`，避免双向引用产生第二个事实源。
 
+### 1.5 查询声明索引列：`index_columns`
+
+`data/queries/*.yaml` 的每个 query 必须写 `index_columns`，声明 SQL 过滤/连接/排序需要的列；每个内层列表是一个**最左前缀要求**：
+
+```yaml
+- id: data.queries.account.list_accounts
+  table: data.tables.account
+  index_columns:
+    - [created_at, id]
+    - [own_type]
+```
+
+校验规则：
+
+- 每个内层列表必须按顺序匹配某条索引的最左前缀，或匹配主键（主键是隐式索引）；
+- 匹配的显式索引必须在 `used_by` 中列出该 query；
+- 反之，索引 `used_by` 中的 query 必须有一个内层列表能匹配该索引的最左前缀；
+- `index_columns` 的列必须存在于当前表。
+
+所以 `list_accounts` 可以同时声明游标索引 `[created_at, id]` 和归属过滤索引 `[own_type]`；索引列更多时，query 只写自己需要的前缀，剩余列由索引覆盖。
+
 ---
 
 ## 2. 生成链
@@ -117,6 +138,7 @@ data/storage.yaml ────> 配置校验 + 运维约束
 12. **表级 `used_by` 是生成物**：由 `make gen-graph` 写入，禁止手改；结构固定为 `entities` / `queries` / `capabilities` 三个列表，只记**直接入边**。`queries` 记录查询项 ID（`data.queries.<module>.<query>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明，不是生成物；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
 13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
 14. **冗余字段必须声明**：`columns[].redundancy` 的 `source`/`copy` 同组，`copy` 必须写 `ref` 指向同组 `source`，`type`/`nullable` 一致；同组只能有一个 `source`。
+15. **query 必须声明 `index_columns`**：每个内层列表按顺序匹配表索引最左前缀或主键；匹配的索引必须把 query 写进 `used_by`，反向也校验。
 
 ---
 

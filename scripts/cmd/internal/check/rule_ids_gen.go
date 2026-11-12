@@ -34,6 +34,8 @@ var knownRuleIDs = map[string]bool{
 	"partition":                true,
 	"physical-name-unique":     true,
 	"primary-key-nullable":     true,
+	"query-index-columns":      true,
+	"query-index-used-by":      true,
 	"redundant-group":          true,
 	"redundant-ref":            true,
 	"schema.column-refs":       true,

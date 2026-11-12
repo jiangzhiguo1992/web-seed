@@ -45,6 +45,9 @@ type Checker struct {
 	queryIDs        map[string]string
 	queryTables     map[string]map[string]bool
 	querySQL        map[string]string
+	queryIndexCols  map[string][][]string
+	tableIndexes    map[string][]tableIndex
+	tablePrimaryKey map[string][]string
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -80,6 +83,8 @@ func (c *Checker) run() {
 	c.loadQueryIndex()
 	tableIDs, cols := c.checkTables(tableSchema)
 	c.checkRedundancy(tableIDs, cols)
+	c.loadTableIndexes(tableIDs)
+	c.checkQueryIndexColumns(tableIDs, cols)
 	enumValues := c.checkEnums(enumSchema)
 	c.checkRules(tableSchema)
 	c.checkRules(enumSchema)

@@ -284,5 +284,7 @@ rules:
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型", implemented_by: [ index-definition ] }
   - { id: index-used-by, text: "每条索引必须声明 used_by，至少引用一个查询项 ID", implemented_by: [ index-used-by ] }
   - { id: index-used-by-ref, text: "index.used_by 必须指向 data.queries.* 项，且该查询引用当前表", implemented_by: [ index-used-by-ref ] }
+  - { id: query-index-columns, text: "query.index_columns 每组列必须匹配同表索引最左前缀或主键", implemented_by: [ query-index-columns ] }
+  - { id: query-index-used-by, text: "query.index_columns 匹配的索引必须在 used_by 中列出该查询", implemented_by: [ query-index-used-by ] }
   - { id: redundant-group, text: "同一 redundancy.group 必须且只能有一个 source，且至少有一个 copy", implemented_by: [ redundant-group ] }
   - { id: redundant-ref, text: "copy 必须写 ref 指向同组 source；类型与可空必须一致", implemented_by: [ redundant-ref ] }

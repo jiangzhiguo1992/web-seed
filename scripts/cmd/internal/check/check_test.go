@@ -1243,3 +1243,39 @@ columns:
 		}
 	}
 }
+
+func TestQueryIndexColumns(t *testing.T) {
+	c := &Checker{
+		queryIndexCols: map[string][][]string{
+			"data.queries.x.q": {[]string{"created_at", "id"}, []string{"own_type"}},
+		},
+		queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
+		tableIndexes: map[string][]tableIndex{"data.tables.x": {
+			{name: "idx_created", columns: []string{"created_at", "id"}, usedBy: map[string]bool{"data.queries.x.q": true}},
+			{name: "idx_own", columns: []string{"own_type", "own_id"}, usedBy: map[string]bool{"data.queries.x.q": true}},
+		}},
+		tablePrimaryKey: map[string][]string{"data.tables.x": {"id"}},
+	}
+	c.checkQueryIndexColumns(
+		map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"},
+		map[string]map[string]bool{"data.tables.x": {"id": true, "created_at": true, "own_type": true, "own_id": true}},
+	)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid query index columns reported: %v", c.errs)
+	}
+
+	c = &Checker{
+		queryIndexCols:  map[string][][]string{"data.queries.x.q": {[]string{"own_type", "created_at"}}},
+		queryTables:     map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
+		tableIndexes:    map[string][]tableIndex{},
+		tablePrimaryKey: map[string][]string{"data.tables.x": {"id"}},
+	}
+	c.checkQueryIndexColumns(
+		map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"},
+		map[string]map[string]bool{"data.tables.x": {"id": true, "created_at": true, "own_type": true}},
+	)
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "no index on data.tables.x starts with") {
+		t.Fatalf("wrong index order not reported: %v", c.errs)
+	}
+}
