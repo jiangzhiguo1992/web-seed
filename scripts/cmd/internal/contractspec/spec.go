@@ -39,11 +39,10 @@ type Targets struct {
 	Exception []TargetException `yaml:"exception"`
 }
 
-// TargetException 显式覆盖某个文件的 ID；Kind: base 标记基类。
+// TargetException 显式覆盖某个文件的 ID。
 type TargetException struct {
 	File string `yaml:"file"`
 	ID   string `yaml:"id"`
-	Kind string `yaml:"kind"`
 }
 
 // ExceptionFor 返回指定文件名对应的显式例外。
@@ -66,16 +65,6 @@ func (t Targets) FileID(file string) string {
 	}
 	stem := strings.TrimSuffix(file, filepath.Ext(file))
 	return strings.ReplaceAll(t.ID, "<file>", stem)
-}
-
-// Base 返回 kind: base 的例外；没有则返回 false。
-func (t Targets) Base() (TargetException, bool) {
-	for _, ex := range t.Exception {
-		if ex.Kind == "base" {
-			return ex, true
-		}
-	}
-	return TargetException{}, false
 }
 
 type ColumnTypes struct {

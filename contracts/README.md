@@ -77,18 +77,18 @@ contracts/
 ├── _meta/                    # 契约元规范（非业务契约，不登记 index）
 │   ├── README.md             #   AI 入口：写前读什么、写后跑什么
 │   ├── _types.yaml           #   每类契约的默认元数据（enforcement / consumers / 通用 do_not）
-│   ├── data.tables.yaml      #   字段树 + 值域 + 说明（单一源）
+│   ├── data.tables.yaml      #   物理表字段树 + 值域 + 说明（单一源）
+│   ├── data.tables.base.yaml #   基类契约的字段树 + 规则（单例）
 │   └── data.enums.yaml       #   同上
 ├── project.yaml              # 项目元信息 + 应用组合（derive 的唯一输入）
 │
 ├── data/                     # ① 数据契约（不感知业务）
-│   ├── tables/_base.yaml     #   表结构基类：id/status/时间戳（不生成 DDL、不建实体）
+│   ├── tables/_base.yaml     #   表结构基类：5 列 + do_not（不生成 DDL、不建实体）
 │   ├── tables/<file>.yaml     #   物理表结构（文件名决定 ID，物理表名可独立覆盖）
 │   ├── entities/<entity>.yaml#   逻辑数据实体：身份、字段、关系、validation
 │   ├── queries/<module>.yaml #   查询契约（SQL 是契约字段，.sql 是产物）
 │   ├── enums.yaml            #   跨端枚举集合（data.enums + data.enums.<name>）
-│   ├── storage.yaml          #   项目级存储引擎与部署拓扑（单例）
-│   └── _policy.yaml          #   组级规则：命名、继承、禁止操作、校验命令
+│   └── storage.yaml          #   项目级存储引擎与部署拓扑（单例）
 │
 ├── capabilities/             # ② 实现层
 │   ├── http/<module>.yaml    #   OpenAPI，按业务模块拆
@@ -136,7 +136,7 @@ contracts/
 
 | 组 | 示例 |
 |---|---|
-| data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_accounts_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base`、`data.policy` |
+| data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_accounts_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
 | capabilities | `cap.http.account.create`、`cap.async.account_cleanup`、`cap.services.account` |
 | business | `business.states.account`、`business.rules.account.number_format`、`business.events.account.created` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
@@ -158,7 +158,7 @@ contracts/
 | `platform/security/permissions.yaml` | `platform.security.permissions` | `platform.security.permissions.<code>` |
 | `platform/security/roles.yaml` | `platform.security.roles` | `platform.security.roles.<code>` |
 
-`data.storage`、`data.policy`、`data.tables.base` 是单例契约，没有项 ID。文件名前的 `_` 不进入 ID：`tables/_base.yaml` → `data.tables.base`，`data/_policy.yaml` → `data.policy`。
+`data.storage`、`data.tables.base` 是单例契约，没有项 ID。文件名前的 `_` 不进入 ID：`tables/_base.yaml` → `data.tables.base`。
 
 ### 3.2 唯一顺序：单向链
 
@@ -300,7 +300,7 @@ table:
 
 - 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖
 - `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 前必须替换 TODO 并跑 `make contract-check`；状态可双向流转，`stable → draft` 表示重新修改
-- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` / `data.tables.base` 按完整 ID 匹配 `_meta/_types.yaml`），文件无需声明 `type`
+- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.tables.base` 有独立的 `_meta/<type>.yaml`；`data.storage` 按完整 ID 匹配 `_meta/_types.yaml`），文件无需声明 `type`
 - 生效元数据 = `_meta/_types.yaml` + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移
 - **不写 `refs`**：依赖关系由图校验器从 `ref` / `capability` / `use` / `emits` / `column` / `target` 等结构化字段自动推导
@@ -459,7 +459,7 @@ data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 | CI 双向校验 | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
 | 结构化 DDL | 分区用 `table.partition`，表达式索引用 `indexes[].expression`，大表索引用 `concurrently`；**不设未结构化 DDL 字段** |
 
-**诚实边界**：生产环境的在线 DDL（大表加索引、数据回填）无法全自动。契约约束**最终态**，迁移**过程**允许人工介入并在 `data/_policy.yaml` 中声明。
+**诚实边界**：生产环境的在线 DDL（大表加索引、数据回填）无法全自动。契约约束**最终态**，迁移**过程**允许人工介入，并用 `-- manual-adjust: <原因>` 显式声明。
 
 ---
 
@@ -483,7 +483,7 @@ data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器待实现。
 
 - **_meta**：`data.tables.yaml` / `data.enums.yaml` + `make contract-new` + `make contract-check`（试点；其余类型待补）
-- **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{account,auth}`、`storage`、`_policy`
+- **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{account,auth}`、`storage`
 - **capabilities**：`http/{shared,account,auth}`、`async/account_cleanup`、`services/{account,auth}`（其余模块待建）
 - **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件
 

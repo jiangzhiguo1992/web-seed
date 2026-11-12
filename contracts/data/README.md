@@ -11,13 +11,12 @@
 
 | 文件 | 内容 | 产物 |
 |---|---|---|
-| `tables/_base.yaml` | 表结构基类：`id/status/created_at/updated_at/deleted_at` | 无（不生成 DDL、不建实体、不落存储） |
+| `tables/_base.yaml` | 表结构基类：5 列 + `do_not`（字段与规则见 `_meta/data.tables.base.yaml`） | 无（不生成 DDL、不建实体、不落存储） |
 | `tables/<file>.yaml` | 物理表：字段、类型、约束、索引、分区、保留期 | `schema.sql`、增量 `migrations/*.sql`、sqlc 输入 |
 | `entities/<entity>.yaml` | 逻辑数据实体：身份、字段、关系、复杂校验 | Go/TS 类型 |
 | `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
 | `queries/<module>.yaml` | 查询契约：id、参数、返回、SQL、语义 | `queries/*.sql`、sqlc 代码 |
 | `storage.yaml` | 项目级存储引擎、部署拓扑、连接与锁 | 配置校验、运维约束 |
-| `_policy.yaml` | **组级配置**（非实例契约）：命名、继承、禁止操作、校验命令 | 约束生成器 |
 
 ### 1.1 基类不是物理表
 
@@ -29,7 +28,7 @@
 - `updated_at`：应用写入
 - `deleted_at`：软删时间；为空表示未删除
 
-物理表必须声明 `extends: [data.tables.base]`，不得重复声明 `id/created_at/updated_at/deleted_at`；`status` 必须重声明为 `integer`，枚举映射只在 entity。
+基类的字段树与规则在 `_meta/data.tables.base.yaml`；`do_not` 只写基类自身约束。物理表必须声明 `extends: [data.tables.base]`，不得重复声明 `id/created_at/updated_at/deleted_at`；`status` 必须重声明为 `integer`，枚举映射只在 entity。
 
 ### 1.2 表与实体是两层
 
@@ -144,7 +143,9 @@ data/storage.yaml ────> 配置校验 + 运维约束
 
 ## 3.1 迁移禁止操作
 
-以下操作生成器直接报错，不会产出迁移（机器可读部分见 `_policy.yaml`）：
+以下操作生成器直接报错，不会产出迁移（机器可读部分见 `_types.yaml` 的 `types.data.tables.migration`）：
+
+迁移文件名：`<utc_timestamp>_<snake_case_name>.sql`。
 
 | 禁止 | 替代做法 |
 |---|---|
@@ -155,6 +156,8 @@ data/storage.yaml ────> 配置校验 + 运维约束
 | `size_class=large` 的表非 `CONCURRENTLY` 建索引 | `CREATE INDEX CONCURRENTLY`（`transaction: false`） |
 
 零停机三步：加可空列 → 分批回填 → 加约束（`NOT VALID` 后 `VALIDATE`）。
+
+软删状态由 entity 映射；如保留 DB CHECK，用整数码（如 account 的 `deleted = 3`），不要写枚举名。
 
 ### 3.2 结构化 DDL（替代未结构化字段）
 
@@ -183,6 +186,8 @@ indexes:
 ```sql
 -- manual-adjust: CONCURRENTLY 无法在事务内执行
 ```
+
+`manual_adjust` 与 `verification` 的机器可读定义在 `_types.yaml` 的 `types.data.tables.migration`。
 
 ---
 
@@ -233,6 +238,6 @@ indexes:
 ## 7. 诚实边界
 
 生产在线 DDL（大表加索引需 `CONCURRENTLY`、数据回填分步）无法全自动。
-契约约束**最终态**，迁移**过程**允许人工介入，机器规则见 `_policy.yaml`。
+契约约束**最终态**，迁移**过程**允许人工介入，机器规则见 `_types.yaml` 的 `types.data.tables.migration`。
 
 P2 生成器尚未实现：当前的 `generated+tested` 是目标值，不代表已有闸门；生成器落地后以 `make gen` / `make gen-db` / `make gen-graph` 为准。

@@ -5,6 +5,10 @@ id: data.tables.base
 kind: base
 summary: "表结构基类"
 stability: stable
+do_not:
+  - "本文件不是物理表：不生成 DDL、不建实体、不落存储"
+  - "不要给基类加业务字段"
+  - "基类 5 列不得改名或删除"
 
 columns:
   - name: id

@@ -8,8 +8,9 @@ schema_version: 1
 # 所有契约类型共享的字段节点语义。
 # 该段是文档与 AI 入口；硬约束的实现仍在 scripts/cmd/internal/check。
 schema_semantics:
-  hard_fields: [name, type, required, enum, allowed, pattern, const, unique, min, max, fields, item_fields]
-  soft_fields: [description, caution, generates, examples, default, generated, write, title, targets, rules]
+  field_keys_hard: [name, type, required, enum, allowed, pattern, const, unique, min, max, fields, item_fields, default]
+  field_keys_soft: [description, caution, generates, examples, generated, write]
+  type_keys: [title, targets, rules]
   required: "契约必须显式声明；缺失即校验失败"
   default: "required 字段上只影响 contract-new 骨架；optional 字段上表示省略时的语义默认值；contract-check 不补值"
   stability: "draft/stable/deprecated 可双向流转；stable 文件不得含 TODO/FIXME"
@@ -23,17 +24,13 @@ target_semantics:
   file: "单文件契约的固定路径"
   id: "实例 ID 模板，<file> 替换为文件 stem；单例契约直接写固定 ID"
   naming: "文件名规则；当前支持 snake_case"
-  exception: "显式 {file, id, kind} 例外；kind: base 标记基类"
+  exception: "显式 {file, id} 例外"
 
 # 跨类型通用的规则；表/实体等专有规则留在各自的 _meta/<type>.yaml。
 schema_rules:
   - { id: id-from-file, text: "契约 id 必须等于 targets.id 模板（<file> 替换为文件 stem）；例外按 targets.exception", implemented_by: [id-from-file] }
   - { id: contract-id-unique, text: "契约 ID 全局唯一", implemented_by: [contract-id-unique] }
   - { id: unique-names, text: "同一契约内 name 不重复", implemented_by: [unique-names] }
-  - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [default-vs-default-sql] }
-  - { id: default-type, text: "default 的类型、长度、范围必须与字段类型兼容", implemented_by: [default-type] }
-  - { id: primary-key-nullable, text: "primary_key: true 的字段不得 nullable: true", implemented_by: [primary-key-nullable] }
-  - { id: do-not-specific, text: "do_not 每条必须含本实例标识，不得写类型级通用规则", implemented_by: [do-not-specific] }
 
 # 类型由 ID 前两段推导：data.tables.account → data.tables
 # platform 组统一映射为 platform.*
@@ -42,18 +39,31 @@ types:
     enforcement: generated
     consumers: [tools]
     generates: []
-    do_not:
-      - "本文件不是物理表：不生成 DDL、不建实体、不落存储"
-      - "物理表必须 extends: [data.tables.base]"
-      - "不要给基类加业务字段"
-      - "基类 5 列不得改名或删除"
 
   data.tables:
     enforcement: generated+tested
     consumers: [api]
     generates: [schema_sql, migrations, sqlc]
-    schema: contracts/_meta/data.tables.yaml
-    check: make contract-check
+    migration:
+      naming: "<utc_timestamp>_<snake_case_name>.sql"
+      forbidden:
+        - { id: no_drop_column, rule: "禁止直接 DROP COLUMN", instead: "先标 deprecated，停止写入一个版本后再删" }
+        - { id: no_rename_column, rule: "禁止 RENAME COLUMN", instead: "加新列 → 双写 → 回填 → 切读 → 删旧列" }
+        - { id: no_not_null_without_default, rule: "禁止给已有数据的表加 NOT NULL 且无默认值", instead: "加可空 → 回填 → 加约束" }
+        - { id: no_type_change_in_place, rule: "禁止原地改列类型", instead: "新列 + 回填 + 切换" }
+        - { id: no_lock_heavy_index, rule: "size_class=large 禁止非 CONCURRENTLY 建索引", instead: "CREATE INDEX CONCURRENTLY（transaction: false）" }
+      manual_adjust:
+        prefix: "-- manual-adjust:"
+        required_reason: true
+        allowed_cases:
+          - "CREATE INDEX CONCURRENTLY"
+          - "ALTER TABLE ... VALIDATE CONSTRAINT"
+          - "数据回填的分批与限速"
+        review_required: true
+      verification:
+        - { id: empty_db_replay, command: "make db-verify", rule: "空库 apply 全部迁移 → dump schema 必须等于 data/tables 生成的目标态" }
+        - { id: contract_diff, command: "make gen-db && git diff --exit-code", rule: "契约变更必须伴随迁移生成" }
+        - { id: used_by_sync, command: "make gen-graph && git diff --exit-code", rule: "used_by 必须等于实际入边集合" }
     do_not:
       - "不要手写 migrations，改本文件后运行 make gen-db"
       - "物理表必须 extends: [data.tables.base]；不得重复声明 id/created_at/updated_at/deleted_at；status 必须重声明为 integer"
@@ -92,8 +102,6 @@ types:
     enforcement: generated
     consumers: [api, web/admin, worker]
     generates: [go_constants, ts_union]
-    schema: contracts/_meta/data.enums.yaml
-    check: make contract-check
     do_not:
       - "枚举值只能追加，禁止改名或删除；code 一旦分配不得复用或修改"
       - "每个枚举项必须有显式 id：data.enums.<name>"
@@ -107,10 +115,6 @@ types:
       - "存储引擎只在本文件定义，禁止在 tables 里逐表声明 engine"
       - "未列出的引擎与拓扑一律视为不支持"
       - "Redis 不是表存储"
-
-  data.policy:
-    enforcement: generated
-    consumers: [tools]
 
   cap.http:
     enforcement: generated+tested

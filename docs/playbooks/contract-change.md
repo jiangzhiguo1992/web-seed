@@ -175,7 +175,7 @@ make db-verify      # 空库 apply 全部迁移 → dump → 与契约目标态�
   ```sql
   -- manual-adjust: CONCURRENTLY 无法在事务内执行
   ```
-- 禁止 `DROP COLUMN` / `RENAME COLUMN` / 原地改类型（见 `data/_policy.yaml`）
+- 禁止 `DROP COLUMN` / `RENAME COLUMN` / 原地改类型（见 `contracts/data/README.md` §3.1）
 
 ---
 
@@ -231,4 +231,4 @@ PR 描述模板已包含上述清单。
 - 类型规范：[`contracts/_meta/`](../../contracts/_meta/)
 - 一致性机制：[`docs/guides/architecture.md`](../../docs/guides/architecture.md) 附录 A
 - 数据规范：[`contracts/data/README.md`](../../contracts/data/README.md)
-- 迁移策略：[`contracts/data/_policy.yaml`](../../contracts/data/_policy.yaml)
+- 迁移策略：[`contracts/data/README.md`](../../contracts/data/README.md)（§3.1 / §3.2）

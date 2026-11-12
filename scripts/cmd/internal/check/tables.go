@@ -1,4 +1,4 @@
-// tables.go 校验 data.tables：基类、列、约束、索引与物理表名。
+// tables.go 校验 data.tables / data.tables.base：基类、列、约束、索引与物理表名。
 package check
 
 import (
@@ -21,6 +21,12 @@ var targetNamingPatterns = map[string]*regexp.Regexp{
 func (c *Checker) checkTargets(schema *Schema) {
 	t := schema.Targets
 	where := schema.ID
+	if t.File != "" {
+		if t.ID == "" {
+			c.rulef("schema.targets", "%s: targets.id must not be empty", where)
+		}
+		return
+	}
 	if t.Dir == "" || t.Glob == "" {
 		c.rulef("schema.targets", "%s: targets.dir/glob must not be empty", where)
 	}
@@ -30,7 +36,6 @@ func (c *Checker) checkTargets(schema *Schema) {
 	if _, ok := targetNamingPatterns[t.Naming]; !ok {
 		c.rulef("schema.targets", "%s: targets.naming must be snake_case", where)
 	}
-	baseCount := 0
 	files := map[string]bool{}
 	ids := map[string]bool{}
 	for _, ex := range t.Exception {
@@ -46,16 +51,6 @@ func (c *Checker) checkTargets(schema *Schema) {
 		}
 		files[ex.File] = true
 		ids[ex.ID] = true
-		switch ex.Kind {
-		case "":
-		case "base":
-			baseCount++
-		default:
-			c.rulef("schema.targets", "%s: targets.exception kind must be base, got %q", where, ex.Kind)
-		}
-	}
-	if baseCount != 1 {
-		c.rulef("schema.targets", "%s: targets.exception must declare exactly one kind: base", where)
 	}
 }
 
@@ -82,21 +77,13 @@ func (c *Checker) checkColumnRefs(schema *Schema) {
 	}
 }
 
-func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map[string]bool) {
+func (c *Checker) checkTables(schema *Schema, baseSchema *Schema) (map[string]string, map[string]map[string]bool) {
 	c.checkTargets(schema)
 	c.checkColumnRefs(schema)
 	dir := schema.Targets.Dir
 	globPattern := schema.Targets.Glob
 	if dir == "" || globPattern == "" {
 		return map[string]string{}, map[string]map[string]bool{}
-	}
-	if base, ok := schema.Targets.Base(); ok {
-		c.baseID = base.ID
-	}
-	files, _ := filepath.Glob(filepath.Join(c.root, dir, globPattern))
-	sort.Strings(files)
-	if len(files) == 0 {
-		c.rulef("schema.load", "no contract files match %s/%s", dir, globPattern)
 	}
 	tableIDs := map[string]string{}
 	cols := map[string]map[string]bool{}
@@ -105,9 +92,33 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	c.tableObjects = map[string]map[string]bool{}
 	c.objectNames = map[string]string{}
 	c.objectKinds = map[string]string{}
-	hasBaseContract := false
+	c.baseID = ""
+	hasBase := false
+	if baseSchema != nil {
+		c.checkTargets(baseSchema)
+		c.checkBaseSchema(baseSchema)
+		c.baseID = baseSchema.Targets.ID
+		baseRel := baseSchema.Targets.File
+		baseDoc, err := loadYAML(filepath.Join(c.root, baseRel))
+		if err != nil {
+			c.rulef("schema.load", "%s: %v", baseRel, err)
+		} else {
+			hasBase = true
+			c.checkBaseTable(baseDoc, baseSchema, baseRel)
+			tableIDs[baseSchema.Targets.ID] = baseRel
+			cols[baseSchema.Targets.ID] = columnSet(baseDoc)
+		}
+	}
+	files, _ := filepath.Glob(filepath.Join(c.root, dir, globPattern))
+	sort.Strings(files)
+	if len(files) == 0 {
+		c.rulef("schema.load", "no contract files match %s/%s", dir, globPattern)
+	}
 	for _, file := range files {
 		rel := relPath(c.root, file)
+		if baseSchema != nil && rel == baseSchema.Targets.File {
+			continue
+		}
 		baseFile := filepath.Base(file)
 		c.checkTargetFileName(schema, baseFile, rel)
 		doc, err := loadYAML(file)
@@ -125,51 +136,46 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 		}
 		tableIDs[id] = rel
 
-		if ex, ok := schema.Targets.ExceptionFor(baseFile); ok && doc["kind"] != "base" {
-			c.rulef("base-file", "%s: exception file %s requires kind: base", rel, ex.File)
+		c.checkPhysicalTable(doc, rel, schema)
+		c.collectTableObjects(doc, rel, id)
+		if owner, _ := doc["owner_module"].(string); owner != "" {
+			c.tableOwners[id] = owner
 		}
-
-		if doc["kind"] == "base" {
-			hasBaseContract = true
-			c.checkBaseTable(doc, schema, rel)
+		phys := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
+		if table, _ := asMap(doc["table"]); table != nil {
+			if n, ok := table["name"].(string); ok && n != "" {
+				phys = n
+			}
+		}
+		if prev, ok := physicalNames[phys]; ok {
+			c.rulef("physical-name-unique", "%s: physical table %q already declared by %s", rel, phys, prev)
 		} else {
-			c.checkPhysicalTable(doc, rel, schema)
-			c.collectTableObjects(doc, rel, id)
-			if owner, _ := doc["owner_module"].(string); owner != "" {
-				c.tableOwners[id] = owner
-			}
-			phys := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
-			if table, _ := asMap(doc["table"]); table != nil {
-				if n, ok := table["name"].(string); ok && n != "" {
-					phys = n
-				}
-			}
-			if prev, ok := physicalNames[phys]; ok {
-				c.rulef("physical-name-unique", "%s: physical table %q already declared by %s", rel, phys, prev)
-			} else {
-				physicalNames[phys] = rel
-			}
+			physicalNames[phys] = rel
 		}
-
-		set := map[string]bool{}
-		for _, name := range baseColumns {
-			set[name] = true
-		}
-		for _, raw := range asList(doc["columns"]) {
-			m, ok := asMap(raw)
-			if !ok {
-				continue
-			}
-			if n, ok := m["name"].(string); ok {
-				set[n] = true
-			}
-		}
-		cols[id] = set
+		cols[id] = columnSet(doc)
 	}
-	if !hasBaseContract {
-		c.rulef("base-file", "%s: missing base contract (targets.exception kind: base)", dir)
+	if baseSchema != nil && !hasBase {
+		c.rulef("base-file", "%s: missing base contract (%s)", dir, baseSchema.Targets.File)
 	}
 	return tableIDs, cols
+}
+
+// columnSet 返回表声明的列名集合；基类 5 列始终计入，供列引用校验使用。
+func columnSet(doc map[string]any) map[string]bool {
+	set := map[string]bool{}
+	for _, name := range baseColumns {
+		set[name] = true
+	}
+	for _, raw := range asList(doc["columns"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		if n, ok := m["name"].(string); ok {
+			set[n] = true
+		}
+	}
+	return set
 }
 
 // collectTableObjects 记录表上可被 capabilities 引用的约束/索引名，
@@ -257,27 +263,50 @@ func stripForeignKeys(doc map[string]any) map[string]any {
 	return cp
 }
 
-// baseColumnShape 固定基类四列的物理形状；status 的类型由 status-integer 单独校验。
-// 基类漂移会改变所有表的 DDL，必须在契约层拦截。
+// checkBaseSchema 防止基类 meta 字段树/规则被误删；硬校验依赖这些 required 字段。
+func (c *Checker) checkBaseSchema(schema *Schema) {
+	for _, name := range []string{"schema_version", "id", "kind", "summary", "stability", "columns"} {
+		f, ok := contractspec.FindField(schema.Fields, name)
+		if !ok || !f.Required {
+			c.rulef("schema.meta", "%s: %s must be required", schema.ID, name)
+		}
+	}
+	for _, id := range []string{"base-file", "base-columns"} {
+		if !hasRule(schema.Rules, id) {
+			c.rulef("schema.meta", "%s: rules must declare %s", schema.ID, id)
+		}
+	}
+}
+
+func hasRule(rules []Rule, id string) bool {
+	for _, r := range rules {
+		if r.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// baseColumnShape 固定基类 5 列的物理形状；基类漂移会改变所有表的 DDL。
 var baseColumnShape = map[string]struct {
 	typ      string
 	primary  bool
 	nullable bool
 }{
 	"id":         {"string", true, false},
+	"status":     {"integer", false, false},
 	"created_at": {"timestamp", false, false},
 	"updated_at": {"timestamp", false, false},
 	"deleted_at": {"timestamp", false, true},
 }
 
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
-	base, ok := schema.Targets.Base()
-	if !ok {
-		c.rulef("base-file", "%s: targets.exception must declare kind: base", rel)
+	if schema.Targets.File == "" || schema.Targets.ID == "" {
+		c.rulef("base-file", "%s: base schema targets.file/id must not be empty", rel)
 		return
 	}
-	if filepath.Base(rel) != base.File {
-		c.rulef("base-file", "%s: base contract must live in %s", rel, base.File)
+	if rel != schema.Targets.File {
+		c.rulef("base-file", "%s: base contract must live in %s", rel, filepath.Base(schema.Targets.File))
 	}
 	allowed := map[string]bool{
 		"schema_version": true, "id": true, "kind": true, "summary": true,
@@ -288,11 +317,8 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 	if s, ok := doc["summary"].(string); ok && s == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 	}
-	if doc["kind"] != "base" {
-		c.rulef("base-file", "%s: base table kind must be base", rel)
-	}
-	if doc["id"] != base.ID {
-		c.rulef("base-file", "%s: base table id must be %s, got %v", rel, base.ID, doc["id"])
+	if doc["id"] != schema.Targets.ID {
+		c.rulef("base-file", "%s: base table id must be %s, got %v", rel, schema.Targets.ID, doc["id"])
 	}
 	names := []string{}
 	for _, raw := range asList(doc["columns"]) {
@@ -301,37 +327,23 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 			c.rulef("schema.type", "%s: columns must be objects", rel)
 			continue
 		}
-		if n, ok := m["name"].(string); ok {
-			names = append(names, n)
-			if n == "status" {
-				if t, _ := m["type"].(string); t != "integer" {
-					c.rulef("status-integer", "%s: base status must be integer, got %q", rel, t)
-				}
-				if pk, _ := m["primary_key"].(bool); pk {
-					c.rulef("base-columns", "%s: base status must not be primary key", rel)
-				}
-				if nullable, _ := m["nullable"].(bool); nullable {
-					c.rulef("base-columns", "%s: base status must not be nullable", rel)
-				}
+		n, ok := m["name"].(string)
+		if !ok {
+			continue
+		}
+		names = append(names, n)
+		if shape, ok := baseColumnShape[n]; ok {
+			typ, _ := m["type"].(string)
+			pk, _ := m["primary_key"].(bool)
+			nullable, _ := m["nullable"].(bool)
+			if typ != shape.typ {
+				c.rulef("base-columns", "%s: base column %q must be %s, got %q", rel, n, shape.typ, typ)
 			}
-			if pk, _ := m["primary_key"].(bool); pk {
-				if nullable, _ := m["nullable"].(bool); nullable {
-					c.rulef("primary-key-nullable", "%s: column %q: primary_key column must not be nullable", rel, n)
-				}
+			if pk != shape.primary {
+				c.rulef("base-columns", "%s: base column %q primary_key must be %v", rel, n, shape.primary)
 			}
-			if shape, ok := baseColumnShape[n]; ok {
-				typ, _ := m["type"].(string)
-				pk, _ := m["primary_key"].(bool)
-				nullable, _ := m["nullable"].(bool)
-				if typ != shape.typ {
-					c.rulef("base-columns", "%s: base column %q must be %s, got %q", rel, n, shape.typ, typ)
-				}
-				if pk != shape.primary {
-					c.rulef("base-columns", "%s: base column %q primary_key must be %v", rel, n, shape.primary)
-				}
-				if nullable != shape.nullable {
-					c.rulef("base-columns", "%s: base column %q nullable must be %v", rel, n, shape.nullable)
-				}
+			if nullable != shape.nullable {
+				c.rulef("base-columns", "%s: base column %q nullable must be %v", rel, n, shape.nullable)
 			}
 		}
 	}

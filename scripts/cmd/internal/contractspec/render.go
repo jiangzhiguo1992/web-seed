@@ -117,9 +117,18 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	if tableID == "" {
 		return nil, fmt.Errorf("RenderTable: cannot derive id from targets.id")
 	}
-	base, ok := s.Targets.Base()
-	if !ok {
-		return nil, fmt.Errorf("RenderTable: targets.exception must declare kind: base")
+	extendsField, _ := FindField(s.Fields, "extends")
+	baseID := ""
+	if len(extendsField.Allowed) > 0 {
+		baseID, _ = extendsField.Allowed[0].(string)
+	}
+	if baseID == "" {
+		if list, ok := extendsField.Default.([]any); ok && len(list) > 0 {
+			baseID, _ = list[0].(string)
+		}
+	}
+	if baseID == "" {
+		return nil, fmt.Errorf("RenderTable: fields.extends.allowed must declare the base ID")
 	}
 	columnName := firstExample(columnField.ItemFields, "name", "name")
 	columnType := defaultString(columnField.ItemFields, "type", "string")
@@ -142,7 +151,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		Summary:       summary,
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		OwnerModule:   module,
-		Extends:       []string{base.ID},
+		Extends:       []string{baseID},
 		DoNot:         []string{},
 		Table: tableDef{
 			Comment:   "TODO: 表说明",

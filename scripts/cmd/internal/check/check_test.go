@@ -18,9 +18,13 @@ func testTargets() Targets {
 		ID:     "data.tables.<file>",
 		Naming: "snake_case",
 		Exception: []TargetException{
-			{File: "_base.yaml", ID: "data.tables.base", Kind: "base"},
+			{File: "_base.yaml", ID: "data.tables.base"},
 		},
 	}
+}
+
+func testBaseTargets() Targets {
+	return Targets{File: "contracts/data/tables/_base.yaml", ID: "data.tables.base"}
 }
 
 func TestIsColumnType(t *testing.T) {
@@ -289,7 +293,7 @@ func TestCheckColumnRef(t *testing.T) {
 }
 
 func TestBaseRequiresSummary(t *testing.T) {
-	schema := &Schema{Targets: testTargets(), Fields: []Field{
+	schema := &Schema{Targets: testBaseTargets(), Fields: []Field{
 		{Name: "schema_version", Type: "integer", Required: true, Const: 1},
 		{Name: "id", Type: "string", Required: true},
 		{Name: "kind", Type: "string", Enum: []any{"base"}},
@@ -502,7 +506,7 @@ func TestBaseTableMustLiveInBaseFile(t *testing.T) {
 			map[string]any{"name": "deleted_at"},
 		},
 	}
-	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/foo.yaml")
+	c.checkBaseTable(doc, &Schema{Targets: testBaseTargets()}, "contracts/data/tables/foo.yaml")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "base contract must live in _base.yaml") {
 		t.Fatalf("base file location not reported: %v", c.errs)
 	}
@@ -518,9 +522,18 @@ func TestBasePrimaryKeyNullable(t *testing.T) {
 			map[string]any{"name": "updated_at"}, map[string]any{"name": "deleted_at"},
 		},
 	}
-	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/_base.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "primary_key column must not be nullable") {
+	c.checkBaseTable(doc, &Schema{Targets: testBaseTargets()}, "contracts/data/tables/_base.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `base column "id" nullable must be false`) {
 		t.Fatalf("nullable base primary key not reported: %v", c.errs)
+	}
+}
+
+func TestBaseSchemaShape(t *testing.T) {
+	c := &Checker{}
+	c.checkBaseSchema(&Schema{ID: "meta.data.tables.base", Fields: []Field{{Name: "id", Required: true}}, Rules: []Rule{{ID: "base-file", Text: "x"}}})
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "kind must be required") || !strings.Contains(errs, "rules must declare base-columns") {
+		t.Fatalf("base schema erosion not reported: %v", c.errs)
 	}
 }
 
@@ -920,7 +933,7 @@ func TestCheckTablesUsesTargets(t *testing.T) {
 	targets.Dir = "custom/tables"
 	schema := &Schema{Targets: targets}
 	c := &Checker{root: root}
-	tableIDs, _ := c.checkTables(schema)
+	tableIDs, _ := c.checkTables(schema, nil)
 	if tableIDs["data.tables.x"] == "" {
 		t.Fatalf("targets.dir/glob not used: %v", tableIDs)
 	}
@@ -1059,7 +1072,7 @@ func TestTypeMetaRejectsDuplicateSchemaRule(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := "schema_semantics: {hard_fields: [name], soft_fields: [description]}\n" +
+	body := "schema_semantics: {field_keys_hard: [name], field_keys_soft: [description], type_keys: [title]}\n" +
 		"schema_rules:\n  - {id: x, text: \"a\"}\n  - {id: x, text: \"b\"}\n"
 	if err := os.WriteFile(filepath.Join(dir, "_types.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -1106,8 +1119,8 @@ func TestTargetIDAndException(t *testing.T) {
 	if got := targets.FileID("_base.yaml"); got != "data.tables.base" {
 		t.Fatalf("exception id = %q", got)
 	}
-	if _, ok := targets.Base(); !ok {
-		t.Fatal("base exception not found")
+	if ex, ok := targets.ExceptionFor("_base.yaml"); !ok || ex.ID != "data.tables.base" {
+		t.Fatalf("base exception not found: %#v", ex)
 	}
 }
 
@@ -1121,7 +1134,7 @@ func TestTargetNamingRejectsBadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
-	c.checkTables(&Schema{Targets: testTargets()})
+	c.checkTables(&Schema{Targets: testTargets()}, nil)
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "[schema.targets]") || !strings.Contains(errs, "does not match targets.naming") {
 		t.Fatalf("target naming not reported: %v", c.errs)
@@ -1189,7 +1202,7 @@ func TestContractIDUnique(t *testing.T) {
 		}
 	}
 	c := &Checker{root: root}
-	c.checkTables(&Schema{Targets: testTargets()})
+	c.checkTables(&Schema{Targets: testTargets()}, nil)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[contract-id-unique]") {
 		t.Fatalf("duplicate contract id not checked: %v", c.errs)
 	}
@@ -1207,16 +1220,6 @@ func TestRulesShape(t *testing.T) {
 	}
 }
 
-func TestTargetsRequireBaseException(t *testing.T) {
-	c := &Checker{}
-	targets := testTargets()
-	targets.Exception = nil
-	c.checkTargets(&Schema{ID: "meta.x", Targets: targets})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "must declare exactly one kind: base") {
-		t.Fatalf("missing base exception not reported: %v", c.errs)
-	}
-}
-
 func TestTargetsDuplicateException(t *testing.T) {
 	c := &Checker{}
 	targets := testTargets()
@@ -1225,38 +1228,6 @@ func TestTargetsDuplicateException(t *testing.T) {
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "duplicate targets.exception file") {
 		t.Fatalf("duplicate exception file not reported: %v", c.errs)
-	}
-}
-
-func TestBaseExceptionFileMismatch(t *testing.T) {
-	c := &Checker{}
-	doc := map[string]any{
-		"id": "data.tables.base", "kind": "base", "summary": "base", "stability": "stable",
-		"columns": []any{
-			map[string]any{"name": "id"}, map[string]any{"name": "status"},
-			map[string]any{"name": "created_at"}, map[string]any{"name": "updated_at"},
-			map[string]any{"name": "deleted_at"},
-		},
-	}
-	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/foo.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "base contract must live in _base.yaml") {
-		t.Fatalf("base exception file mismatch not reported: %v", c.errs)
-	}
-}
-
-func TestExceptionFileRequiresBaseKind(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "contracts/data/tables")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "_base.yaml"), []byte("id: data.tables.base\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c := &Checker{root: root}
-	c.checkTables(&Schema{Targets: testTargets()})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "exception file _base.yaml requires kind: base") {
-		t.Fatalf("exception kind mismatch not reported: %v", c.errs)
 	}
 }
 
@@ -1270,7 +1241,8 @@ func TestMissingBaseContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
-	c.checkTables(&Schema{Targets: testTargets()})
+	baseSchema := &Schema{ID: "meta.data.tables.base", Targets: testBaseTargets()}
+	c.checkTables(&Schema{Targets: testTargets()}, baseSchema)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "missing base contract") {
 		t.Fatalf("missing base contract not reported: %v", c.errs)
 	}
@@ -1572,7 +1544,7 @@ func TestBaseColumnShapeRejectsDrift(t *testing.T) {
 			map[string]any{"name": "deleted_at", "type": "timestamp"},
 		},
 	}
-	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/_base.yaml")
+	c.checkBaseTable(doc, &Schema{Targets: testBaseTargets()}, "contracts/data/tables/_base.yaml")
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, `base column "id" must be string`) {
 		t.Fatalf("base id type drift not reported: %v", c.errs)

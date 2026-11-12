@@ -64,7 +64,6 @@ entries:
   - { id: data.queries.account, path: data/queries/account.yaml, summary: "账号查询集", consumers: [api], enforcement: generated+tested, stability: stable }
   - { id: data.queries.auth, path: data/queries/auth.yaml, summary: "认证查询集（密码/手机/邮箱/令牌）", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.enums, path: data/enums.yaml, summary: "跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated, stability: stable }
-  - { id: data.policy, path: data/_policy.yaml, summary: "数据契约机器可读规则", consumers: [tools], enforcement: generated, stability: stable }
 
   # ---------- capabilities ----------
   - { id: cap.http.shared, path: capabilities/http/shared.yaml, summary: "HTTP 共享组件", consumers: [api, web/admin], enforcement: generated, stability: stable }

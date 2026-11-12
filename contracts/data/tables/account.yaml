@@ -1,4 +1,4 @@
-# 账号主表。账号是业务主体，不承载密码、手机号、邮箱、令牌；认证信息在 auth_* / tokens。
+# 账号主表。账号是业务主体，认证信息在 auth_* / tokens。
 
 schema_version: 1
 id: data.tables.account
@@ -8,8 +8,7 @@ owner_module: accounts
 extends: [ data.tables.base ]
 do_not:
   - "account 表禁止写入密码/手机号/邮箱/令牌；这些在 auth_* / token 表"
-  - "uq_accounts_number 必须带 WHERE deleted_at IS NULL"
-  - "account.status 使用 integer；0=pending/1=active/2=suspended/3=deleted；枚举只在 entity"
+  - "account.status 使用 integer；具体枚举只在 entity 定义"
   - "own_type/own_id 表示数据归属，user_id 表示关联用户；不要把 user_id 当作 own_id 的别名"
   - "own_type/own_id/user_id 是冗余 source；token 的 copy 必须 ref 到这里"
 

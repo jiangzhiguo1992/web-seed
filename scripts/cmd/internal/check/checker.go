@@ -2,7 +2,7 @@
 //
 // 当前覆盖：
 //   - contracts 下文本字段（description/comment/summary/do_not 等）双引号强制
-//   - data.tables/*.yaml 的结构、ID/文件、基类继承、列/约束/索引、used_by、do_not 具体性
+//   - data.tables / data.tables.base 的结构、ID/文件、基类 5 列、列/约束/索引、used_by、do_not 具体性
 //   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、stability 与 summary
 //   - 表列引用的 column_refs 前缀是否存在；表列不引用 data.enums.*
 //   - 任意契约中的 data.enums.* 类型引用必须存在
@@ -78,6 +78,11 @@ func (c *Checker) run() {
 		c.rulef("schema.load", "load tables schema: %v", err)
 		return
 	}
+	baseSchema, err := c.loadSchemaByType("data.tables.base")
+	if err != nil {
+		c.rulef("schema.load", "load base tables schema: %v", err)
+		return
+	}
 	enumSchema, err := c.loadSchemaByType("data.enums")
 	if err != nil {
 		c.rulef("schema.load", "load enums schema: %v", err)
@@ -85,12 +90,13 @@ func (c *Checker) run() {
 	}
 
 	c.loadQueryIndex()
-	tableIDs, cols := c.checkTables(tableSchema)
+	tableIDs, cols := c.checkTables(tableSchema, baseSchema)
 	c.checkRedundancy(tableIDs, cols)
 	c.loadTableIndexes(tableIDs)
 	c.checkQueryIndexColumns(tableIDs, cols)
 	enumValues := c.checkEnums(enumSchema)
 	c.checkRules(tableSchema)
+	c.checkRules(baseSchema)
 	c.checkRules(enumSchema)
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues, tableSchema.ColumnRefs)
@@ -171,8 +177,9 @@ func (c *Checker) checkProseQuotes(n *yaml.Node, rel string) {
 
 type typeMeta struct {
 	SchemaSemantics struct {
-		HardFields []string `yaml:"hard_fields"`
-		SoftFields []string `yaml:"soft_fields"`
+		FieldKeysHard []string `yaml:"field_keys_hard"`
+		FieldKeysSoft []string `yaml:"field_keys_soft"`
+		TypeKeys      []string `yaml:"type_keys"`
 	} `yaml:"schema_semantics"`
 	SchemaRules []struct {
 		ID            string   `yaml:"id"`
@@ -200,8 +207,8 @@ func (c *Checker) checkTypeMeta() {
 		c.rulef("schema.load", "contracts/_meta/_types.yaml: %v", err)
 		return
 	}
-	if len(meta.SchemaSemantics.HardFields) == 0 || len(meta.SchemaSemantics.SoftFields) == 0 {
-		c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_semantics.hard_fields/soft_fields must not be empty")
+	if len(meta.SchemaSemantics.FieldKeysHard) == 0 || len(meta.SchemaSemantics.FieldKeysSoft) == 0 || len(meta.SchemaSemantics.TypeKeys) == 0 {
+		c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_semantics.field_keys_hard/field_keys_soft/type_keys must not be empty")
 	}
 	if len(meta.SchemaRules) == 0 {
 		c.rulef("schema.meta", "contracts/_meta/_types.yaml: schema_rules must not be empty")

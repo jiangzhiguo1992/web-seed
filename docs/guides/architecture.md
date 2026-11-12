@@ -274,7 +274,7 @@ web-seed/
 ├── contracts/                        [C] 五组契约（唯一真相源）
 │   ├── index.yaml                    #   契约地图（AI 入口）
 │   ├── project.yaml                  #   项目元信息（derive 输入）
-│   ├── data/                         #   tables(_base) / entities / queries / storage / _policy
+│   ├── data/                         #   tables(_base) / entities / queries / storage
 │   ├── capabilities/                 #   http / async / services / flows
 │   ├── business/                       #   states / rules / events / glossary
 │   ├── features/                     #   routes / pages / flows

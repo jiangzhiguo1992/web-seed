@@ -1,5 +1,4 @@
-# 邮箱认证表。邮箱拆分为 username/domain/entity/tld，便于检索与域名聚合。
-# 一个账号可绑定多个邮箱；只允许认证模块读写。
+# 邮箱认证表。一个账号只能绑定一个邮箱，邮箱拆分为 username/domain/entity/tld，便于检索与域名聚合。
 
 schema_version: 1
 id: data.tables.auth_email
@@ -8,7 +7,6 @@ stability: stable
 owner_module: auth
 extends: [ data.tables.base ]
 do_not:
-  - "uq_auth_email_username_domain 必须带 WHERE deleted_at IS NULL"
   - "domain 必须小写归一后再存储"
 
 table:

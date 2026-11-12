@@ -1,6 +1,6 @@
 # data.tables 的字段树 + 值域 + 字段说明。
 # 通用字段语义见 _types.yaml 的 schema_semantics；通用规则见 schema_rules；本文件只写 data.tables 特有内容。
-# targets 决定扫描路径、ID 模板、命名规则与基类例外；通用语义见 _types.yaml 的 target_semantics。
+# targets 决定扫描路径、ID 模板与命名规则；基类有独立的 data.tables.base 规范。
 # 本文件同时是 contract-new 的字段来源；不要另写模板。
 
 id: meta.data.tables
@@ -11,8 +11,6 @@ targets:
   glob: "*.yaml"
   id: "data.tables.<file>"
   naming: "snake_case"
-  exception:
-    - { file: "_base.yaml", id: "data.tables.base", kind: base }
 
 column_refs:
   prefixes: [ "data.tables." ]
@@ -84,9 +82,9 @@ fields:
     type: string
     required: true
     pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
-    description: "由 targets.id 模板派生（<file> 替换为文件 stem）；例外见 targets.exception"
+    description: "由 targets.id 模板派生（<file> 替换为文件 stem）"
     generates: "契约 ID、图节点"
-    caution: "不要写 data.table.*；pattern 与 targets.id 同步；_base.yaml 例外为 data.tables.base"
+    caution: "不要写 data.table.*；pattern 与 targets.id 同步；基类契约见 data.tables.base"
 
   - name: summary
     type: string
@@ -104,14 +102,6 @@ fields:
     generates: "index 摘要"
     caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
 
-  - name: kind
-    type: string
-    required: false
-    enum: [ base ]
-    description: "仅 tables/_base.yaml 使用"
-    generates: "跳过 DDL"
-    caution: "物理表不写"
-
   - name: owner_module
     type: string
     required: true
@@ -128,7 +118,7 @@ fields:
     default: [ data.tables.base ]
     description: "契约继承基类 5 列"
     generates: "展开基类列"
-    caution: "allowed 必须与 targets.exception 的 base ID 同步；物理表只能继承 base"
+    caution: "allowed 必须是 data.tables.base；物理表只能继承基类"
 
   - name: do_not
     type: list<string>
@@ -261,10 +251,9 @@ fields:
       - { name: capabilities, type: list<string>, required: true, unique: true, description: "能力 ID 列表" }
 
 rules:
-  - { id: base-only, text: "extends 不得为空；值域与唯一性由 fields.extends 的 allowed/unique 保证（当前为 base ID）", implemented_by: [ base-only ] }
+  - { id: base-only, text: "extends 不得为空；值域与唯一性由 fields.extends 的 allowed/unique 保证（当前为 data.tables.base）", implemented_by: [ base-only ] }
   - { id: no-base-columns, text: "物理表不得重声明 id/created_at/updated_at/deleted_at", implemented_by: [ no-base-columns ] }
   - { id: status-integer, text: "物理表必须声明 status，且类型为 integer；枚举只在 entity", implemented_by: [ status-integer ] }
-  - { id: base-file, text: "kind: base 必须位于 targets.exception 声明的文件，且 ID 与例外一致", implemented_by: [ base-file ] }
   - { id: column-type, text: "列类型必须是类型族键，或匹配 column_refs.prefixes；表列不引用 data.enums.*", implemented_by: [ column-type ] }
   - { id: family-params, text: "列参数必须属于该类型族；required 参数必须出现", implemented_by: [ family-params ] }
   - { id: family-length, text: "min_len <= max_len；fixed 为 true 时必须写 max_len，若写 min_len 必须等于 max_len", implemented_by: [ family-length ] }
@@ -278,7 +267,6 @@ rules:
   - { id: partition, text: "partition.columns 非空；range 必须有 interval，其他策略不得有", implemented_by: [ partition ] }
   - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；queries 记录查询项 ID，不是查询文件 ID", implemented_by: [ used-by-generated ] }
   - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读取用 persistence.queries（read_only_tables 已移除）", implemented_by: [ owner-write ] }
-  - { id: base-columns, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at；id 为 string 主键、status 非空且非主键、三个时间列为 timestamp（created_at/updated_at 非空、deleted_at 可空）", implemented_by: [ base-columns ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-reason, text: "索引必须写非空 reason", implemented_by: [ index-reason ] }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型", implemented_by: [ index-definition ] }
@@ -290,3 +278,7 @@ rules:
   - { id: query-index-used-by, text: "query.index_columns 匹配的索引必须在 used_by 中列出该查询", implemented_by: [ query-index-used-by ] }
   - { id: redundant-group, text: "同一 redundancy.group 必须且只能有一个 source，且至少有一个 copy", implemented_by: [ redundant-group ] }
   - { id: redundant-ref, text: "copy 必须写 ref 指向同组 source；类型与可空必须一致", implemented_by: [ redundant-ref ] }
+  - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
+  - { id: default-type, text: "default 的类型、长度、范围必须与字段类型兼容", implemented_by: [ default-type ] }
+  - { id: primary-key-nullable, text: "primary_key: true 的字段不得 nullable: true", implemented_by: [ primary-key-nullable ] }
+  - { id: do-not-specific, text: "物理表 do_not 每条必须含本表标识；通用规则上移 _types.yaml", implemented_by: [ do-not-specific ] }
