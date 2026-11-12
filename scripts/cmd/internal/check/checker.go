@@ -6,7 +6,7 @@
 //   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、stability 与 summary
 //   - 表列引用的 column_refs 前缀是否存在；表列不引用 data.enums.*
 //   - 任意契约中的 data.enums.* 类型引用必须存在
-//   - status 必须是 integer；枚举只在 entity
+//   - status 由基类提供且为 integer；物理表不得重声明；枚举只在 entity
 //   - 禁止 foreign_key；unique 约束与唯一索引的软删语义区分
 //   - owner_module 写归属（capabilities.persistence）
 //   - entity/query/capability 的表引用是否存在
@@ -28,7 +28,6 @@ import (
 
 type Schema = contractspec.Schema
 type Targets = contractspec.Targets
-type TargetException = contractspec.TargetException
 type ColumnTypes = contractspec.ColumnTypes
 type Rule = contractspec.Rule
 type ColumnRefs = contractspec.ColumnRefs
@@ -42,6 +41,7 @@ type Checker struct {
 	errs            []string
 	tableOwners     map[string]string
 	baseID          string
+	inheritedCols   map[string]map[string]bool
 	declaredRuleIDs map[string]bool
 	queryIDs        map[string]string
 	queryTables     map[string]map[string]bool
@@ -78,11 +78,6 @@ func (c *Checker) run() {
 		c.rulef("schema.load", "load tables schema: %v", err)
 		return
 	}
-	baseSchema, err := c.loadSchemaByType("data.tables.base")
-	if err != nil {
-		c.rulef("schema.load", "load base tables schema: %v", err)
-		return
-	}
 	enumSchema, err := c.loadSchemaByType("data.enums")
 	if err != nil {
 		c.rulef("schema.load", "load enums schema: %v", err)
@@ -90,13 +85,12 @@ func (c *Checker) run() {
 	}
 
 	c.loadQueryIndex()
-	tableIDs, cols := c.checkTables(tableSchema, baseSchema)
+	tableIDs, cols := c.checkTables(tableSchema)
 	c.checkRedundancy(tableIDs, cols)
 	c.loadTableIndexes(tableIDs)
 	c.checkQueryIndexColumns(tableIDs, cols)
 	enumValues := c.checkEnums(enumSchema)
 	c.checkRules(tableSchema)
-	c.checkRules(baseSchema)
 	c.checkRules(enumSchema)
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues, tableSchema.ColumnRefs)
@@ -228,16 +222,21 @@ func (c *Checker) checkTypeMeta() {
 
 // checkRules 校验类型级 rules：id/text 非空、id 唯一、implemented_by 有实际输出。
 func (c *Checker) checkRules(schema *Schema) {
+	c.checkRuleList(schema.Rules, schema.ID)
+}
+
+// checkRuleList 是 meta rules 的共用校验。
+func (c *Checker) checkRuleList(rules []Rule, where string) {
 	seen := map[string]bool{}
-	for i, r := range schema.Rules {
+	for i, r := range rules {
 		if r.ID == "" || r.Text == "" {
-			c.rulef("schema.rules", "%s: rules[%d] must have id and text", schema.ID, i)
+			c.rulef("schema.rules", "%s: rules[%d] must have id and text", where, i)
 		}
 		if seen[r.ID] {
-			c.rulef("schema.rules", "%s: duplicate rule id %q", schema.ID, r.ID)
+			c.rulef("schema.rules", "%s: duplicate rule id %q", where, r.ID)
 		}
 		seen[r.ID] = true
-		c.checkImplementedBy(r.ID, fmt.Sprintf("%s: rules[%d]", schema.ID, i), r.ImplementedBy)
+		c.checkImplementedBy(r.ID, fmt.Sprintf("%s: rules[%d]", where, i), r.ImplementedBy)
 	}
 }
 

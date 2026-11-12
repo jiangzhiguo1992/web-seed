@@ -50,13 +50,6 @@ columns:
     nullable: true
     comment: "锁定截止时间；为空表示未锁定"
 
-  - name: status
-    type: integer
-    bits: 32
-    nullable: false
-    default: 0
-    comment: "认证记录状态整数码；0=active 1=disabled"
-
 constraints:
   - name: ck_auth_pwd_password_present
     type: check

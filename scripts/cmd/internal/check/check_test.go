@@ -17,14 +17,7 @@ func testTargets() Targets {
 		Glob:   "*.yaml",
 		ID:     "data.tables.<file>",
 		Naming: "snake_case",
-		Exception: []TargetException{
-			{File: "_base.yaml", ID: "data.tables.base"},
-		},
 	}
-}
-
-func testBaseTargets() Targets {
-	return Targets{File: "contracts/data/tables/_base.yaml", ID: "data.tables.base"}
 }
 
 func TestIsColumnType(t *testing.T) {
@@ -234,7 +227,6 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 		"owner_module": "x",
 		"table":        map[string]any{"comment": "x", "size_class": "small"},
 		"columns": []any{
-			map[string]any{"name": "status", "type": "integer"},
 			map[string]any{"name": "name", "type": "string"},
 		},
 		"constraints": []any{
@@ -293,10 +285,9 @@ func TestCheckColumnRef(t *testing.T) {
 }
 
 func TestBaseRequiresSummary(t *testing.T) {
-	schema := &Schema{Targets: testBaseTargets(), Fields: []Field{
+	schema := &Schema{Targets: testTargets(), Fields: []Field{
 		{Name: "schema_version", Type: "integer", Required: true, Const: 1},
 		{Name: "id", Type: "string", Required: true},
-		{Name: "kind", Type: "string", Enum: []any{"base"}},
 		{Name: "summary", Type: "string", Required: true},
 		{Name: "stability", Type: "string", Required: true, Enum: []any{"stable"}},
 		{Name: "do_not", Type: "list<string>"},
@@ -305,7 +296,6 @@ func TestBaseRequiresSummary(t *testing.T) {
 	doc := map[string]any{
 		"schema_version": 1,
 		"id":             "data.tables.base",
-		"kind":           "base",
 		"stability":      "stable",
 		"columns": []any{
 			map[string]any{"name": "id"},
@@ -343,7 +333,6 @@ func minimalTableDoc() map[string]any {
 		"extends":      []any{"data.tables.base"},
 		"table":        map[string]any{"comment": "x", "size_class": "small"},
 		"columns": []any{
-			map[string]any{"name": "status", "type": "integer"},
 			map[string]any{"name": "code", "type": "string"},
 		},
 	}
@@ -496,44 +485,19 @@ func TestDoNotSpecificity(t *testing.T) {
 	}
 }
 
-func TestBaseTableMustLiveInBaseFile(t *testing.T) {
-	c := &Checker{}
-	doc := map[string]any{
-		"id": "data.tables.base", "kind": "base", "summary": "base", "stability": "stable",
-		"columns": []any{
-			map[string]any{"name": "id"}, map[string]any{"name": "status"},
-			map[string]any{"name": "created_at"}, map[string]any{"name": "updated_at"},
-			map[string]any{"name": "deleted_at"},
-		},
-	}
-	c.checkBaseTable(doc, &Schema{Targets: testBaseTargets()}, "contracts/data/tables/foo.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "base contract must live in _base.yaml") {
-		t.Fatalf("base file location not reported: %v", c.errs)
-	}
-}
-
 func TestBasePrimaryKeyNullable(t *testing.T) {
 	c := &Checker{}
 	doc := map[string]any{
-		"id": "data.tables.base", "kind": "base", "summary": "base", "stability": "stable",
+		"id": "data.tables.base", "summary": "base", "stability": "stable",
 		"columns": []any{
 			map[string]any{"name": "id", "primary_key": true, "nullable": true},
 			map[string]any{"name": "status"}, map[string]any{"name": "created_at"},
 			map[string]any{"name": "updated_at"}, map[string]any{"name": "deleted_at"},
 		},
 	}
-	c.checkBaseTable(doc, &Schema{Targets: testBaseTargets()}, "contracts/data/tables/_base.yaml")
+	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/_base.yaml")
 	if !strings.Contains(strings.Join(c.errs, "\n"), `base column "id" nullable must be false`) {
 		t.Fatalf("nullable base primary key not reported: %v", c.errs)
-	}
-}
-
-func TestBaseSchemaShape(t *testing.T) {
-	c := &Checker{}
-	c.checkBaseSchema(&Schema{ID: "meta.data.tables.base", Fields: []Field{{Name: "id", Required: true}}, Rules: []Rule{{ID: "base-file", Text: "x"}}})
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "kind must be required") || !strings.Contains(errs, "rules must declare base-columns") {
-		t.Fatalf("base schema erosion not reported: %v", c.errs)
 	}
 }
 
@@ -625,16 +589,16 @@ func TestTableEnumTypeRejected(t *testing.T) {
 	}
 }
 
-func TestTableStatusMustBeInteger(t *testing.T) {
+func TestStatusMustNotBeRedeclared(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["columns"] = []any{
-		map[string]any{"name": "status", "type": "string"},
+		map[string]any{"name": "status", "type": "integer"},
 		map[string]any{"name": "code", "type": "string"},
 	}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[status-integer]") {
-		t.Fatalf("non-integer status not rejected: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[no-base-columns]") {
+		t.Fatalf("status redeclare not rejected: %v", c.errs)
 	}
 }
 
@@ -933,7 +897,7 @@ func TestCheckTablesUsesTargets(t *testing.T) {
 	targets.Dir = "custom/tables"
 	schema := &Schema{Targets: targets}
 	c := &Checker{root: root}
-	tableIDs, _ := c.checkTables(schema, nil)
+	tableIDs, _ := c.checkTables(schema)
 	if tableIDs["data.tables.x"] == "" {
 		t.Fatalf("targets.dir/glob not used: %v", tableIDs)
 	}
@@ -950,28 +914,285 @@ func TestErrorsHaveRuleIDs(t *testing.T) {
 	}
 }
 
-func TestBaseOnlyDoesNotDuplicateAllowed(t *testing.T) {
-	root, err := filepath.Abs("../../../..")
-	if err != nil {
+func TestExtendsChainInheritsColumns(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data/tables")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
-	if err != nil {
-		t.Fatal(err)
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	doc, err := loadYAML(filepath.Join(root, "contracts/data/tables/account.yaml"))
-	if err != nil {
-		t.Fatal(err)
+	write("_base.yaml", `id: data.tables.base
+summary: "base"
+stability: "stable"
+columns:
+  - { name: id, type: string, primary_key: true, nullable: false }
+  - { name: status, type: integer, nullable: false }
+  - { name: created_at, type: timestamp, nullable: false }
+  - { name: updated_at, type: timestamp, nullable: false }
+  - { name: deleted_at, type: timestamp, nullable: true }
+rules:
+  - { id: base-file, text: "x", implemented_by: [base-file] }
+  - { id: base-columns, text: "x", implemented_by: [base-columns] }
+`)
+	write("parent.yaml", `id: data.tables.parent
+extends: [ data.tables.base ]
+columns:
+   - { name: code, type: string, nullable: false }
+`)
+	write("child.yaml", `id: data.tables.child
+extends: [ data.tables.parent ]
+columns:
+   - { name: code, type: string, nullable: false }
+`)
+	write("grandchild.yaml", `id: data.tables.grandchild
+extends: [ data.tables.child ]
+columns:
+   - { name: extra, type: string, nullable: false }
+`)
+	c := &Checker{root: root}
+	_, cols := c.checkTables(&Schema{Targets: testTargets()})
+	if !cols["data.tables.child"]["code"] {
+		t.Fatalf("child did not inherit parent column: %v", cols["data.tables.child"])
 	}
-	doc["extends"] = []any{"data.tables.other"}
-	c := &Checker{}
-	c.checkPhysicalTable(doc, "contracts/data/tables/account.yaml", schema)
+	if !cols["data.tables.grandchild"]["code"] || !cols["data.tables.grandchild"]["extra"] {
+		t.Fatalf("grandchild did not inherit chain columns: %v", cols["data.tables.grandchild"])
+	}
 	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "[schema.enum]") {
-		t.Fatalf("extends allowed not enforced: %v", c.errs)
+	if !strings.Contains(errs, "[no-base-columns]") || !strings.Contains(errs, `column "code"`) {
+		t.Fatalf("inherited column redeclare not reported: %v", c.errs)
+	}
+}
+
+func TestExtendsMultipleParents(t *testing.T) {
+	root := t.TempDir()
+	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
+	writeTableFixture(t, root, "left.yaml", `id: data.tables.left
+extends: [ data.tables.base ]
+columns:
+   - { name: code, type: string, nullable: false }
+`)
+	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
+extends: [ data.tables.base ]
+columns:
+   - { name: name, type: string, nullable: false }
+`)
+	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
+extends: [ data.tables.left, data.tables.right ]
+columns:
+   - { name: extra, type: string, nullable: false }
+`)
+	c := &Checker{root: root}
+	_, cols := c.checkTables(&Schema{Targets: testTargets()})
+	if !cols["data.tables.child"]["code"] || !cols["data.tables.child"]["name"] {
+		t.Fatalf("child did not inherit both parents: %v", cols["data.tables.child"])
+	}
+	if strings.Contains(strings.Join(c.errs, "\n"), "[extends-conflict]") {
+		t.Fatalf("distinct parent columns reported as conflict: %v", c.errs)
+	}
+}
+
+func TestExtendsConflict(t *testing.T) {
+	root := t.TempDir()
+	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
+	writeTableFixture(t, root, "left.yaml", `id: data.tables.left
+extends: [ data.tables.base ]
+columns:
+   - { name: code, type: string, nullable: false }
+`)
+	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
+extends: [ data.tables.base ]
+columns:
+   - { name: code, type: string, nullable: false }
+`)
+	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
+extends: [ data.tables.left, data.tables.right ]
+columns:
+ `)
+	c := &Checker{root: root}
+	c.checkTables(&Schema{Targets: testTargets()})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[extends-conflict]") {
+		t.Fatalf("same-name different-origin column not reported: %v", c.errs)
+	}
+}
+
+func TestExtendsDiamond(t *testing.T) {
+	root := t.TempDir()
+	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
+	writeTableFixture(t, root, "root.yaml", `id: data.tables.root
+extends: [ data.tables.base ]
+columns:
+   - { name: code, type: string, nullable: false }
+`)
+	writeTableFixture(t, root, "left.yaml", `id: data.tables.left
+extends: [ data.tables.root ]
+columns:
+ `)
+	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
+extends: [ data.tables.root ]
+columns:
+ `)
+	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
+extends: [ data.tables.left, data.tables.right ]
+columns:
+ `)
+	c := &Checker{root: root}
+	_, cols := c.checkTables(&Schema{Targets: testTargets()})
+	if !cols["data.tables.child"]["code"] {
+		t.Fatalf("diamond inheritance lost root column: %v", cols["data.tables.child"])
+	}
+	if strings.Contains(strings.Join(c.errs, "\n"), "[extends-conflict]") {
+		t.Fatalf("diamond inheritance must not conflict: %v", c.errs)
+	}
+}
+
+func writeTableFixture(t *testing.T, root, name, body string) {
+	t.Helper()
+	dir := filepath.Join(root, "contracts/data/tables")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExtendsCycle(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data/tables")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
+	write("g.yaml", `id: data.tables.g
+extends: [ data.tables.base ]
+columns:
+   - { name: gcol, type: string, nullable: false }
+`)
+	write("a.yaml", `id: data.tables.a
+extends: [ data.tables.b, data.tables.g ]
+columns:
+   - { name: acol, type: string, nullable: false }
+`)
+	write("b.yaml", `id: data.tables.b
+extends: [ data.tables.a ]
+columns:
+   - { name: bcol, type: string, nullable: false }
+`)
+	write("c.yaml", `id: data.tables.c
+extends: [ data.tables.b ]
+columns:
+ `)
+	c := &Checker{root: root}
+	_, cols := c.checkTables(&Schema{Targets: testTargets()})
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[extends-ref]") {
+		t.Fatalf("extends cycle not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, "data.tables.a -> data.tables.b -> data.tables.a") {
+		t.Fatalf("cycle path not reported: %v", c.errs)
+	}
+	if !cols["data.tables.c"]["id"] || !cols["data.tables.c"]["deleted_at"] {
+		t.Fatalf("downstream table lost base columns: %v", cols["data.tables.c"])
+	}
+	if !cols["data.tables.c"]["acol"] || !cols["data.tables.c"]["bcol"] || !cols["data.tables.c"]["gcol"] {
+		t.Fatalf("downstream table lost non-base ancestor columns: %v", cols["data.tables.c"])
+	}
+}
+
+func TestExtendsUnknownParent(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data/tables")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
+	write("x.yaml", "id: data.tables.x\nextends: [ data.tables.missing ]\n")
+	c := &Checker{root: root}
+	c.checkTables(&Schema{Targets: testTargets()})
+	if !strings.Contains(strings.Join(c.errs, "\n"), `extends "data.tables.missing" is not a data.tables contract`) {
+		t.Fatalf("unknown extend parent not reported: %v", c.errs)
+	}
+}
+
+func TestExtendsCycleRedeclare(t *testing.T) {
+	root := t.TempDir()
+	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
+	writeTableFixture(t, root, "a.yaml", `id: data.tables.a
+extends: [ data.tables.b ]
+columns:
+   - { name: x, type: string, nullable: false }
+`)
+	writeTableFixture(t, root, "b.yaml", `id: data.tables.b
+extends: [ data.tables.a ]
+columns:
+   - { name: x, type: string, nullable: false }
+`)
+	c := &Checker{root: root}
+	c.checkTables(&Schema{Targets: testTargets()})
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[no-base-columns]") || !strings.Contains(errs, `column "x"`) {
+		t.Fatalf("cycle redeclare not reported: %v", c.errs)
+	}
+}
+
+func TestExtendsScalarIsTypeErrorNotBaseOnly(t *testing.T) {
+	schema := &Schema{Targets: testTargets(), Fields: []Field{
+		{Name: "extends", Type: "list<string>"},
+	}}
+	doc := map[string]any{"id": "data.tables.x", "extends": "data.tables.base"}
+	c := &Checker{}
+	c.checkPhysicalTable(doc, "contracts/data/tables/x.yaml", schema)
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[schema.type]") {
+		t.Fatalf("scalar extends type error not reported: %v", c.errs)
 	}
 	if strings.Contains(errs, "[base-only]") {
-		t.Fatalf("extends value reported twice: %v", c.errs)
+		t.Fatalf("scalar extends must not be reported as empty: %v", c.errs)
+	}
+}
+
+func TestDoNotSpecificityUsesInheritedColumns(t *testing.T) {
+	root := t.TempDir()
+	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
+	writeTableFixture(t, root, "parent.yaml", `id: data.tables.parent
+extends: [ data.tables.base ]
+columns:
+   - { name: code, type: string, nullable: false }
+`)
+	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
+extends: [ data.tables.parent ]
+do_not:
+  - "code 必须小写"
+columns:
+ `)
+	c := &Checker{root: root}
+	c.checkTables(&Schema{Targets: testTargets()})
+	if strings.Contains(strings.Join(c.errs, "\n"), "[do-not-specific]") {
+		t.Fatalf("inherited column must count as a specific token: %v", c.errs)
+	}
+}
+
+func TestMissingBaseKeepsPhysicalCols(t *testing.T) {
+	root := t.TempDir()
+	writeTableFixture(t, root, "x.yaml", "id: data.tables.x\n")
+	c := &Checker{root: root}
+	_, cols := c.checkTables(&Schema{Targets: testTargets()})
+	if !cols["data.tables.x"]["id"] || !cols["data.tables.x"]["deleted_at"] {
+		t.Fatalf("missing base must not erase physical base columns: %v", cols["data.tables.x"])
 	}
 }
 
@@ -1072,7 +1293,7 @@ func TestTypeMetaRejectsDuplicateSchemaRule(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := "schema_semantics: {field_keys_hard: [name], field_keys_soft: [description], type_keys: [title]}\n" +
+	body := "schema_semantics: {hard_fields: [name], soft_fields: [description]}\n" +
 		"schema_rules:\n  - {id: x, text: \"a\"}\n  - {id: x, text: \"b\"}\n"
 	if err := os.WriteFile(filepath.Join(dir, "_types.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -1111,16 +1332,13 @@ func TestProseQuoteCheckDetectsList(t *testing.T) {
 	}
 }
 
-func TestTargetIDAndException(t *testing.T) {
+func TestTargetID(t *testing.T) {
 	targets := testTargets()
 	if got := targets.FileID("note.yaml"); got != "data.tables.note" {
 		t.Fatalf("template id = %q", got)
 	}
-	if got := targets.FileID("_base.yaml"); got != "data.tables.base" {
-		t.Fatalf("exception id = %q", got)
-	}
-	if ex, ok := targets.ExceptionFor("_base.yaml"); !ok || ex.ID != "data.tables.base" {
-		t.Fatalf("base exception not found: %#v", ex)
+	if got := targets.FileID("_base.yaml"); got != "data.tables._base" {
+		t.Fatalf("base file must not get a special id, got %q", got)
 	}
 }
 
@@ -1134,7 +1352,7 @@ func TestTargetNamingRejectsBadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
-	c.checkTables(&Schema{Targets: testTargets()}, nil)
+	c.checkTables(&Schema{Targets: testTargets()})
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "[schema.targets]") || !strings.Contains(errs, "does not match targets.naming") {
 		t.Fatalf("target naming not reported: %v", c.errs)
@@ -1202,7 +1420,7 @@ func TestContractIDUnique(t *testing.T) {
 		}
 	}
 	c := &Checker{root: root}
-	c.checkTables(&Schema{Targets: testTargets()}, nil)
+	c.checkTables(&Schema{Targets: testTargets()})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[contract-id-unique]") {
 		t.Fatalf("duplicate contract id not checked: %v", c.errs)
 	}
@@ -1220,14 +1438,19 @@ func TestRulesShape(t *testing.T) {
 	}
 }
 
-func TestTargetsDuplicateException(t *testing.T) {
+func TestBaseFileMustBeFixed(t *testing.T) {
 	c := &Checker{}
-	targets := testTargets()
-	targets.Exception = append(targets.Exception, targets.Exception[0])
-	c.checkTargets(&Schema{ID: "meta.x", Targets: targets})
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "duplicate targets.exception file") {
-		t.Fatalf("duplicate exception file not reported: %v", c.errs)
+	doc := map[string]any{
+		"id": "data.tables.base", "summary": "base", "stability": "stable",
+		"columns": []any{
+			map[string]any{"name": "id"}, map[string]any{"name": "status"},
+			map[string]any{"name": "created_at"}, map[string]any{"name": "updated_at"},
+			map[string]any{"name": "deleted_at"},
+		},
+	}
+	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/foo.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "base contract must live in _base.yaml") {
+		t.Fatalf("base file location not reported: %v", c.errs)
 	}
 }
 
@@ -1241,8 +1464,7 @@ func TestMissingBaseContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
-	baseSchema := &Schema{ID: "meta.data.tables.base", Targets: testBaseTargets()}
-	c.checkTables(&Schema{Targets: testTargets()}, baseSchema)
+	c.checkTables(&Schema{Targets: testTargets()})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "missing base contract") {
 		t.Fatalf("missing base contract not reported: %v", c.errs)
 	}
@@ -1535,7 +1757,7 @@ func TestValidateScalarAllowedAndBooleanConst(t *testing.T) {
 func TestBaseColumnShapeRejectsDrift(t *testing.T) {
 	c := &Checker{}
 	doc := map[string]any{
-		"id": "data.tables.base", "kind": "base", "summary": "base", "stability": "stable",
+		"id": "data.tables.base", "summary": "base", "stability": "stable",
 		"columns": []any{
 			map[string]any{"name": "id", "type": "integer", "primary_key": true},
 			map[string]any{"name": "status", "type": "integer"},
@@ -1544,7 +1766,7 @@ func TestBaseColumnShapeRejectsDrift(t *testing.T) {
 			map[string]any{"name": "deleted_at", "type": "timestamp"},
 		},
 	}
-	c.checkBaseTable(doc, &Schema{Targets: testBaseTargets()}, "contracts/data/tables/_base.yaml")
+	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/_base.yaml")
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, `base column "id" must be string`) {
 		t.Fatalf("base id type drift not reported: %v", c.errs)

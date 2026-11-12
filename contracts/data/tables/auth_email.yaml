@@ -48,13 +48,6 @@ columns:
     max_len: 32
     comment: "顶级域，例如 com"
 
-  - name: status
-    type: integer
-    bits: 32
-    nullable: false
-    default: 0
-    comment: "认证记录状态整数码；0=active 1=disabled"
-
 constraints:
   - name: ck_auth_email_domain_lowercase
     type: check

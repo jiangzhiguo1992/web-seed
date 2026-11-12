@@ -29,37 +29,17 @@ type Rule struct {
 	ImplementedBy []string `yaml:"implemented_by"`
 }
 
-// Targets 描述契约实例的落盘位置、ID 模板与例外；checker/contract-new 共用。
+// Targets 描述契约实例的落盘位置、ID 模板与命名。
 type Targets struct {
-	Dir       string            `yaml:"dir"`
-	Glob      string            `yaml:"glob"`
-	File      string            `yaml:"file"`
-	ID        string            `yaml:"id"`
-	Naming    string            `yaml:"naming"`
-	Exception []TargetException `yaml:"exception"`
+	Dir    string `yaml:"dir"`
+	Glob   string `yaml:"glob"`
+	File   string `yaml:"file"`
+	ID     string `yaml:"id"`
+	Naming string `yaml:"naming"`
 }
 
-// TargetException 显式覆盖某个文件的 ID。
-type TargetException struct {
-	File string `yaml:"file"`
-	ID   string `yaml:"id"`
-}
-
-// ExceptionFor 返回指定文件名对应的显式例外。
-func (t Targets) ExceptionFor(file string) (TargetException, bool) {
-	for _, ex := range t.Exception {
-		if ex.File == file {
-			return ex, true
-		}
-	}
-	return TargetException{}, false
-}
-
-// FileID 按 targets.id 模板生成实例 ID；例外优先。
+// FileID 按 targets.id 模板生成实例 ID。
 func (t Targets) FileID(file string) string {
-	if ex, ok := t.ExceptionFor(file); ok {
-		return ex.ID
-	}
 	if t.ID == "" || !strings.Contains(t.ID, "<file>") {
 		return ""
 	}

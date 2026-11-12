@@ -13,7 +13,6 @@ contracts/_meta/
 ├── README.md             # 本文件：AI 入口
 ├── _types.yaml            # 每类契约的默认元数据（enforcement / consumers / 通用 do_not）
 ├── data.tables.yaml      # data.tables 的字段树 + 值域 + 说明
-├── data.tables.base.yaml # data.tables.base 的字段树 + 规则（单例）
 └── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
 
 scripts/contract/
@@ -75,16 +74,16 @@ scripts/cmd/
   - `targets.dir/glob` 决定扫描路径；`targets.id/naming` 由 checker 校验（ID 模板、snake_case）
   - `column_refs.prefixes` 必须以 `.` 结尾；`require_col` 必须是 `prefixes` 的子集
   - 必填字段、类型、枚举、`const`、`pattern`、`allowed`、`unique`
-  - `id` 按 `targets.id` 模板生成；物理表不得写 `kind: base`
-  - 物理表 `extends` 必须等于 `data.tables.base`；不得重复基类列；`status` 必须重声明为 `integer`
+  - `id` 按 `targets.id` 模板生成；基类 `_base.yaml` 的路径/ID 写死在 checker，不参与模板
+  - 物理表 `extends` 是父表列表：可指向 `data.tables.base` 或任意已存在的表；多父同名列只有来源相同（钻石继承）才允许；链不得成环且必须到达基类；不得重复任何继承列
   - `primary_key` 列不得可空
   - `default` / `default_sql` 互斥；`default` 的 YAML 类型、长度、范围与列类型族兼容
   - 列 / 约束 / 索引重名；`do_not` 每条必须含本表具体标识
-- `data.tables.base`（`contracts/data/tables/_base.yaml`）
-  - `targets.file/id` 固定；`kind: base` 与 ID 由字段 `const` 校验
+- `data.tables.base`（`contracts/data/tables/_base.yaml`，单例）
+  - 路径/ID 由 checker 写死识别；YAML 无 `kind`/`targets` 特殊配置
   - 基类必须且只能是 5 列：`id` string 主键、`status` integer 非空且非主键、三个时间列 timestamp（`created_at`/`updated_at` 非空、`deleted_at` 可空）
-  - 基类 `do_not` 允许类型级通用规则；物理表 `do_not` 必须含本表标识
-  - 规则：`base-file`、`base-columns`（`_meta/data.tables.base.yaml`）
+  - `do_not` 直接写在 `_base.yaml`；基类 `do_not` 允许类型级通用规则，物理表 `do_not` 必须含本表标识
+  - 规则 `base-file`、`base-columns` 在 `_meta/data.tables.yaml` 的 `rules` 中声明
   - `constraints` 的 `type`、按类型允许的字段、必填子字段与列引用；表不使用 enum 约束
   - 禁止 `foreign_key`；跨表一致性由应用/业务规则保证
   - `unique` 约束与唯一索引的软删语义不同：约束含软删行，唯一索引按 `where` 过滤
@@ -138,7 +137,7 @@ scripts/cmd/
 | `examples` | 示例值；`contract-new` 可用于生成 |
 | `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
 | `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；`require_col` 中的前缀必须带 `.col.`；不是类型族，也不是外键；表列不引用 `data.enums.*` |
-| `targets` | `dir`/`glob` 扫描路径；`id` 是 ID 模板（`<file>` → 文件 stem；单例契约直接写固定 ID）；`naming` 是文件名规则（`snake_case`）；`exception` 是 `{file,id}` 例外 |
+| `targets` | `dir`/`glob` 扫描路径；`file` 是单文件契约的固定路径；`id` 是 ID 模板（`<file>` → 文件 stem；单例契约直接写固定 ID）；`naming` 是文件名规则（`snake_case`）；基类固定 `_base.yaml`，不在此声明 |
 | `columns[].redundancy` | 冗余字段声明：`group`/`role`（source/copy）/`ref`；copy 指向同组 source |
 | `indexes[].used_by` | 使用该索引的 query item ID 列表；至少一个，防空索引 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
@@ -146,7 +145,7 @@ scripts/cmd/
 
 **先读 `description` 和 `caution`，不要只按字段名猜。**
 
-`_types.yaml` 的 `schema_rules` 只存放跨类型规则（`id-from-file`、`contract-id-unique`、`unique-names`）；`data.tables.yaml` 的 `rules` 只保留物理表专有规则，`data.tables.base.yaml` 的 `rules` 只保留基类规则，避免同一规则在多个类型文件中重复。
+`_types.yaml` 的 `schema_rules` 只存放跨类型规则（`id-from-file`、`contract-id-unique`、`unique-names`）；`data.tables.yaml` 的 `rules` 保留基类规则与物理表专有规则，避免同一规则在多个类型文件中重复。`_base.yaml` 不再写实例级 `rules`。
 
 `_types.yaml` 的 `types.<type>` 承载类型级默认值（`enforcement` / `consumers` / `generates` / `do_not`）；`types.data.tables.migration` 还定义迁移生成策略（`naming` / `forbidden` / `manual_adjust` / `verification`）。
 

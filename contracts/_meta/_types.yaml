@@ -24,22 +24,16 @@ target_semantics:
   file: "单文件契约的固定路径"
   id: "实例 ID 模板，<file> 替换为文件 stem；单例契约直接写固定 ID"
   naming: "文件名规则；当前支持 snake_case"
-  exception: "显式 {file, id} 例外"
 
 # 跨类型通用的规则；表/实体等专有规则留在各自的 _meta/<type>.yaml。
 schema_rules:
-  - { id: id-from-file, text: "契约 id 必须等于 targets.id 模板（<file> 替换为文件 stem）；例外按 targets.exception", implemented_by: [id-from-file] }
+  - { id: id-from-file, text: "契约 id 必须等于 targets.id 模板（<file> 替换为文件 stem）", implemented_by: [id-from-file] }
   - { id: contract-id-unique, text: "契约 ID 全局唯一", implemented_by: [contract-id-unique] }
   - { id: unique-names, text: "同一契约内 name 不重复", implemented_by: [unique-names] }
 
 # 类型由 ID 前两段推导：data.tables.account → data.tables
 # platform 组统一映射为 platform.*
 types:
-  data.tables.base:
-    enforcement: generated
-    consumers: [tools]
-    generates: []
-
   data.tables:
     enforcement: generated+tested
     consumers: [api]
@@ -66,7 +60,7 @@ types:
         - { id: used_by_sync, command: "make gen-graph && git diff --exit-code", rule: "used_by 必须等于实际入边集合" }
     do_not:
       - "不要手写 migrations，改本文件后运行 make gen-db"
-      - "物理表必须 extends: [data.tables.base]；不得重复声明 id/created_at/updated_at/deleted_at；status 必须重声明为 integer"
+      - "物理表必须 extends 一个或多个父表（最终到达 data.tables.base）；不得重复声明任何继承列"
       - "不要绕过软删过滤（deleted_at IS NULL）"
       - "UNIQUE 约束包含软删行；需软删后复用时用 indexes[].unique + where: deleted_at IS NULL"
       - "禁止数据库外键（foreign_key）；跨表一致性由应用/业务规则保证"

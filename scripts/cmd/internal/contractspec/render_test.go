@@ -56,21 +56,21 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	if doc["id"] != "data.tables.note" || doc["stability"] != "stable" {
 		t.Fatalf("unexpected top-level: %#v", doc)
 	}
+	extends, _ := doc["extends"].([]any)
+	if len(extends) != 1 || extends[0] != "data.tables.base" {
+		t.Fatalf("extends must be hardcoded to [data.tables.base]: %#v", doc["extends"])
+	}
 	table, _ := doc["table"].(map[string]any)
 	if table["size_class"] != "large" {
 		t.Fatalf("size_class not from schema: %#v", table)
 	}
 	cols, _ := doc["columns"].([]any)
-	if len(cols) != 2 {
-		t.Fatalf("want 2 columns, got %d", len(cols))
+	if len(cols) != 1 {
+		t.Fatalf("want 1 column, got %d", len(cols))
 	}
 	first, _ := cols[0].(map[string]any)
 	if first["name"] != "custom_name" {
 		t.Fatalf("column name not from schema examples: %#v", first)
-	}
-	status, _ := cols[1].(map[string]any)
-	if status["type"] != "integer" || status["bits"] != 32 {
-		t.Fatalf("status must be integer with bits 32: %#v", status)
 	}
 	if strings.Contains(string(b), "data.enums.") {
 		t.Fatalf("table scaffold must not reference enums:\n%s", b)
@@ -134,7 +134,7 @@ func TestRenderTableRejectsUnsupportedRequired(t *testing.T) {
 	}
 }
 
-func TestRenderTableStatusWithoutDefault(t *testing.T) {
+func TestRenderTableOmitsInheritedStatus(t *testing.T) {
 	s := loadTestSchema(t)
 	b, err := RenderTable(s, "note", "notes", "备注表")
 	if err != nil {
@@ -148,13 +148,9 @@ func TestRenderTableStatusWithoutDefault(t *testing.T) {
 	for _, raw := range cols {
 		col, _ := raw.(map[string]any)
 		if col["name"] == "status" {
-			if _, ok := col["default"]; ok {
-				t.Fatalf("status must not get an implicit default: %#v", col)
-			}
-			return
+			t.Fatalf("status is inherited from base and must not be scaffolded: %#v", col)
 		}
 	}
-	t.Fatal("status column missing")
 }
 
 func TestRenderEnumItemRejectsInvalidName(t *testing.T) {

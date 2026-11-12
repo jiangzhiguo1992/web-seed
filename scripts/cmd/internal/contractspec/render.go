@@ -117,19 +117,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	if tableID == "" {
 		return nil, fmt.Errorf("RenderTable: cannot derive id from targets.id")
 	}
-	extendsField, _ := FindField(s.Fields, "extends")
-	baseID := ""
-	if len(extendsField.Allowed) > 0 {
-		baseID, _ = extendsField.Allowed[0].(string)
-	}
-	if baseID == "" {
-		if list, ok := extendsField.Default.([]any); ok && len(list) > 0 {
-			baseID, _ = list[0].(string)
-		}
-	}
-	if baseID == "" {
-		return nil, fmt.Errorf("RenderTable: fields.extends.allowed must declare the base ID")
-	}
+	const baseTableID = "data.tables.base"
 	columnName := firstExample(columnField.ItemFields, "name", "name")
 	columnType := defaultString(columnField.ItemFields, "type", "string")
 	if columnTypeOverride != "" {
@@ -151,7 +139,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		Summary:       summary,
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		OwnerModule:   module,
-		Extends:       []string{baseID},
+		Extends:       []string{baseTableID},
 		DoNot:         []string{},
 		Table: tableDef{
 			Comment:   "TODO: 表说明",
@@ -159,7 +147,6 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		},
 		Columns: []columnDef{
 			{Name: columnName, Type: columnType, Nullable: columnNullable, Comment: "TODO: 列说明", Params: columnParams},
-			{Name: "status", Type: "integer", Nullable: false, Comment: "TODO: 状态整数码；枚举在 entity", Params: map[string]any{"bits": 32}},
 		},
 		Constraints: []constraintDef{},
 		Indexes:     []any{},

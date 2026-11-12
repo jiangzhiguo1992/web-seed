@@ -11,7 +11,7 @@
 
 | 文件 | 内容 | 产物 |
 |---|---|---|
-| `tables/_base.yaml` | 表结构基类：5 列 + `do_not`（字段与规则见 `_meta/data.tables.base.yaml`） | 无（不生成 DDL、不建实体、不落存储） |
+| `tables/_base.yaml` | 表结构基类：5 列 + `do_not`（单例，字段树与规则复用 `data.tables`） | 无（不生成 DDL、不建实体、不落存储） |
 | `tables/<file>.yaml` | 物理表：字段、类型、约束、索引、分区、保留期 | `schema.sql`、增量 `migrations/*.sql`、sqlc 输入 |
 | `entities/<entity>.yaml` | 逻辑数据实体：身份、字段、关系、复杂校验 | Go/TS 类型 |
 | `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
@@ -23,12 +23,12 @@
 `tables/_base.yaml` 只收敛 5 个字段：
 
 - `id`：UUIDv7，应用生成，主键
-- `status`：业务状态整数码；物理表沿用 `integer`，枚举映射在 entity
+- `status`：业务状态整数码；由基类统一提供，枚举映射在 entity
 - `created_at`：数据库默认 `now()`
 - `updated_at`：应用写入
 - `deleted_at`：软删时间；为空表示未删除
 
-基类的字段树与规则在 `_meta/data.tables.base.yaml`；`do_not` 只写基类自身约束。物理表必须声明 `extends: [data.tables.base]`，不得重复声明 `id/created_at/updated_at/deleted_at`；`status` 必须重声明为 `integer`，枚举映射只在 entity。
+基类的 `do_not` 直接写在 `_base.yaml`；列字段树与规则沿用 `data.tables` 的 meta。物理表必须声明 `extends`（可多父，链最终到达 `data.tables.base`）；不得重复声明任何继承列；枚举映射只在 entity。
 
 ### 1.2 表与实体是两层
 
@@ -229,7 +229,7 @@ indexes:
 
 ### 6.1 凭据与令牌
 
-- `auth_pwd.password_hash` 是 argon2id 主路径；`password_md5` 只做遗留兼容。登录成功后应升级为 `password_hash` 并清空 MD5。
+- `auth_pwd.password_hash` 是 argon2id 唯一路径；不保留 MD5 遗留字段。
 - `token` 表只存 `access_token_hash` / `refresh_token_hash`，不存原文；原文只在 `/auth/login`、`/auth/refresh` 的响应中返回一次。
 - 哈希算法与 TTL 由 `platform/security/auth_policy.yaml` 定义，data 层不复制。
 

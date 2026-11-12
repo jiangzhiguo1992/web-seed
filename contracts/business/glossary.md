@@ -10,7 +10,7 @@
 | 归属 | own_type / own_id | 数据归属主体类型与 ID（user/tenant/system），决定数据隔离与责任人 | owner（易与模块归属混淆） |
 | 关联用户 | user_id | 账号关联的用户 ID；与归属 ID 可不同，不等于 own_id 的别名 | owner_id、uid |
 | 账号编号 | number | 账号的业务唯一编号 | code、sn（易与区号/序列号混淆） |
-| 密码认证 | auth_pwd | 账号的密码登录记录；遗留字段 `password_md5` | password、pwd（作为实体名） |
+| 密码认证 | auth_pwd | 账号的密码登录记录 | password、pwd（作为实体名） |
 | 手机认证 | auth_phone | 账号绑定的手机号记录 | mobile、phone（作为实体名） |
 | 邮箱认证 | auth_email | 账号绑定的邮箱记录，拆分为 username/domain/entity/tld | mail |
 | 令牌 | token | 访问令牌与刷新令牌记录 | session（session 是登录态） |
@@ -19,7 +19,7 @@
 | 已封禁 | suspended | 违规被封禁，可解封 | banned、disabled |
 | 锁定 | locked | 连续登录失败的临时状态，到期自动解除 | suspended |
 | 软删 | soft delete | 标记 `deleted_at`，数据保留 | 硬删、物理删 |
-| 密码哈希 | password_hash | argon2id 结果；遗留系统可用 password_md5，但禁止新用 | password、pwd、secret |
+| 密码哈希 | password_hash | argon2id 结果；禁止新用 MD5 | password、pwd、secret |
 | 版本号 | version | 乐观锁计数，每次写入 +1 | revision、rev、etag |
 | 幂等键 | idempotency key | 客户端生成的请求唯一标识 | request key、dedup key |
 | 权限点 | permission | 形如 `account_read` 的最小授权单元 | scope、role（role 是权限集合） |

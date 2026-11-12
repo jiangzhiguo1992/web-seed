@@ -39,7 +39,7 @@ entries:
   - { id: project, path: project.yaml, summary: "项目元信息与 derive 输入", consumers: [ops, tools], enforcement: generated, stability: stable }
 
   # ---------- data ----------
-  - { id: data.tables.base, path: data/tables/_base.yaml, kind: base, summary: "表结构基类（5 个基础字段）", consumers: [tools], enforcement: generated, stability: stable }
+  - { id: data.tables.base, path: data/tables/_base.yaml, summary: "表结构基类（5 个基础字段）", consumers: [tools], enforcement: generated, stability: stable }
   - { id: data.storage, path: data/storage.yaml, summary: "数据存储与部署（引擎/拓扑/锁）", consumers: [api, worker, ops], enforcement: tested, stability: stable }
   - id: data.tables.account
     path: data/tables/account.yaml

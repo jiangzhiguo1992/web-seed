@@ -42,13 +42,6 @@ columns:
     max_len: 32
     comment: "运营商"
 
-  - name: status
-    type: integer
-    bits: 32
-    nullable: false
-    default: 0
-    comment: "认证记录状态整数码；0=active 1=disabled"
-
 indexes:
   - name: uq_auth_phone_number
     columns: [ code, number ]

@@ -58,13 +58,6 @@ columns:
     redundancy: { group: account_user_id, role: source }
     comment: "关联用户 ID；不做数据库外键"
 
-  - name: status
-    type: integer
-    bits: 32
-    nullable: false
-    default: 0
-    comment: "账号状态整数码；0=pending 1=active 2=suspended 3=deleted"
-
   - name: version
     type: integer
     nullable: false

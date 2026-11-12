@@ -1,4 +1,4 @@
-// tables.go 校验 data.tables / data.tables.base：基类、列、约束、索引与物理表名。
+// tables.go 校验 data.tables：基类、列、约束、索引与物理表名。
 package check
 
 import (
@@ -18,15 +18,16 @@ var targetNamingPatterns = map[string]*regexp.Regexp{
 	"snake_case": regexp.MustCompile(`^[a-z][a-z0-9_]*$`),
 }
 
+// 基类是固定单例：路径/ID 写死，不通过 targets 配置。
+const (
+	baseContractID   = "data.tables.base"
+	baseContractFile = "_base.yaml"
+	baseContractPath = "contracts/data/tables/_base.yaml"
+)
+
 func (c *Checker) checkTargets(schema *Schema) {
 	t := schema.Targets
 	where := schema.ID
-	if t.File != "" {
-		if t.ID == "" {
-			c.rulef("schema.targets", "%s: targets.id must not be empty", where)
-		}
-		return
-	}
 	if t.Dir == "" || t.Glob == "" {
 		c.rulef("schema.targets", "%s: targets.dir/glob must not be empty", where)
 	}
@@ -36,28 +37,9 @@ func (c *Checker) checkTargets(schema *Schema) {
 	if _, ok := targetNamingPatterns[t.Naming]; !ok {
 		c.rulef("schema.targets", "%s: targets.naming must be snake_case", where)
 	}
-	files := map[string]bool{}
-	ids := map[string]bool{}
-	for _, ex := range t.Exception {
-		if ex.File == "" || ex.ID == "" {
-			c.rulef("schema.targets", "%s: targets.exception entries need file and id", where)
-			continue
-		}
-		if files[ex.File] {
-			c.rulef("schema.targets", "%s: duplicate targets.exception file %s", where, ex.File)
-		}
-		if ids[ex.ID] {
-			c.rulef("schema.targets", "%s: duplicate targets.exception id %s", where, ex.ID)
-		}
-		files[ex.File] = true
-		ids[ex.ID] = true
-	}
 }
 
 func (c *Checker) checkTargetFileName(schema *Schema, file, rel string) {
-	if _, ok := schema.Targets.ExceptionFor(file); ok {
-		return
-	}
 	re := targetNamingPatterns[schema.Targets.Naming]
 	if re != nil && !re.MatchString(strings.TrimSuffix(file, filepath.Ext(file))) {
 		c.rulef("schema.targets", "%s: file name %q does not match targets.naming %s", rel, file, schema.Targets.Naming)
@@ -77,14 +59,23 @@ func (c *Checker) checkColumnRefs(schema *Schema) {
 	}
 }
 
-func (c *Checker) checkTables(schema *Schema, baseSchema *Schema) (map[string]string, map[string]map[string]bool) {
+// tableDoc 保存物理表文档，供继承解析二次遍历。
+type tableDoc struct {
+	id  string
+	rel string
+	doc map[string]any
+}
+
+func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map[string]bool) {
 	c.checkTargets(schema)
 	c.checkColumnRefs(schema)
+	c.baseID = baseContractID
 	dir := schema.Targets.Dir
 	globPattern := schema.Targets.Glob
 	if dir == "" || globPattern == "" {
 		return map[string]string{}, map[string]map[string]bool{}
 	}
+
 	tableIDs := map[string]string{}
 	cols := map[string]map[string]bool{}
 	physicalNames := map[string]string{}
@@ -92,35 +83,30 @@ func (c *Checker) checkTables(schema *Schema, baseSchema *Schema) (map[string]st
 	c.tableObjects = map[string]map[string]bool{}
 	c.objectNames = map[string]string{}
 	c.objectKinds = map[string]string{}
-	c.baseID = ""
-	hasBase := false
-	if baseSchema != nil {
-		c.checkTargets(baseSchema)
-		c.checkBaseSchema(baseSchema)
-		c.baseID = baseSchema.Targets.ID
-		baseRel := baseSchema.Targets.File
-		baseDoc, err := loadYAML(filepath.Join(c.root, baseRel))
-		if err != nil {
-			c.rulef("schema.load", "%s: %v", baseRel, err)
-		} else {
-			hasBase = true
-			c.checkBaseTable(baseDoc, baseSchema, baseRel)
-			tableIDs[baseSchema.Targets.ID] = baseRel
-			cols[baseSchema.Targets.ID] = columnSet(baseDoc)
-		}
+	c.inheritedCols = map[string]map[string]bool{}
+
+	// 基类固定单例：路径/ID 写死，不通过 targets 配置。
+	if doc, err := loadYAML(filepath.Join(c.root, baseContractPath)); err != nil {
+		c.rulef("base-file", "%s: missing base contract: %v", baseContractPath, err)
+	} else {
+		tableIDs[baseContractID] = baseContractPath
+		c.checkBaseTable(doc, schema, baseContractPath)
+		cols[baseContractID] = baseFullSet()
 	}
+
 	files, _ := filepath.Glob(filepath.Join(c.root, dir, globPattern))
 	sort.Strings(files)
 	if len(files) == 0 {
 		c.rulef("schema.load", "no contract files match %s/%s", dir, globPattern)
 	}
+	var physical []tableDoc
 	for _, file := range files {
 		rel := relPath(c.root, file)
-		if baseSchema != nil && rel == baseSchema.Targets.File {
-			continue
+		name := filepath.Base(file)
+		if name == baseContractFile {
+			continue // 基类已按固定路径加载
 		}
-		baseFile := filepath.Base(file)
-		c.checkTargetFileName(schema, baseFile, rel)
+		c.checkTargetFileName(schema, name, rel)
 		doc, err := loadYAML(file)
 		if err != nil {
 			c.rulef("schema.load", "%s: %v", rel, err)
@@ -135,47 +121,252 @@ func (c *Checker) checkTables(schema *Schema, baseSchema *Schema) (map[string]st
 			c.rulef("contract-id-unique", "%s: duplicate contract id %s (also %s)", rel, id, prev)
 		}
 		tableIDs[id] = rel
+		physical = append(physical, tableDoc{id: id, rel: rel, doc: doc})
+	}
 
-		c.checkPhysicalTable(doc, rel, schema)
-		c.collectTableObjects(doc, rel, id)
-		if owner, _ := doc["owner_module"].(string); owner != "" {
-			c.tableOwners[id] = owner
+	full, ancestors := c.checkInheritance(physical, extendsPattern(schema))
+	c.inheritedCols = make(map[string]map[string]bool, len(physical))
+	for _, td := range physical {
+		c.inheritedCols[td.id] = ancestors[td.id]
+		c.checkPhysicalTable(td.doc, td.rel, schema)
+		c.collectTableObjects(td.doc, td.rel, td.id)
+		if owner, _ := td.doc["owner_module"].(string); owner != "" {
+			c.tableOwners[td.id] = owner
 		}
-		phys := strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel))
-		if table, _ := asMap(doc["table"]); table != nil {
+		phys := strings.TrimSuffix(filepath.Base(td.rel), filepath.Ext(td.rel))
+		if table, _ := asMap(td.doc["table"]); table != nil {
 			if n, ok := table["name"].(string); ok && n != "" {
 				phys = n
 			}
 		}
 		if prev, ok := physicalNames[phys]; ok {
-			c.rulef("physical-name-unique", "%s: physical table %q already declared by %s", rel, phys, prev)
+			c.rulef("physical-name-unique", "%s: physical table %q already declared by %s", td.rel, phys, prev)
 		} else {
-			physicalNames[phys] = rel
+			physicalNames[phys] = td.rel
 		}
-		cols[id] = columnSet(doc)
-	}
-	if baseSchema != nil && !hasBase {
-		c.rulef("base-file", "%s: missing base contract (%s)", dir, baseSchema.Targets.File)
+		cols[td.id] = full[td.id]
 	}
 	return tableIDs, cols
 }
 
-// columnSet 返回表声明的列名集合；基类 5 列始终计入，供列引用校验使用。
-func columnSet(doc map[string]any) map[string]bool {
-	set := map[string]bool{}
+// checkInheritance 解析多父 extends，返回每张表的完整列名与祖先列名。
+// 继承列按“列名 -> 声明表 ID”合并：同一来源（钻石继承）可重复，不同来源报 extends-conflict。
+// status 不参与继承，每张物理表必须重声明。
+//
+// 分两遍：先单独做父表/环检测（避免把截断结果当完整结果），
+// 再用 cycle-safe 的可达集合计算列，保证环外下游表仍能得到完整祖先列。
+func (c *Checker) checkInheritance(docs []tableDoc, pattern *regexp.Regexp) (map[string]map[string]bool, map[string]map[string]bool) {
+	byID := make(map[string]tableDoc, len(docs))
+	for _, td := range docs {
+		byID[td.id] = td
+	}
+
+	// 第一遍：只校验父表存在性与环，不产出列。
+	state := map[string]int{}
+	var stack []string
+	var walk func(td tableDoc)
+	walk = func(td tableDoc) {
+		if state[td.id] == 2 {
+			return
+		}
+		if state[td.id] == 1 {
+			c.rulef("extends-ref", "%s: extends cycle: %s", td.rel, cyclePath(stack, td.id))
+			return
+		}
+		state[td.id] = 1
+		stack = append(stack, td.id)
+		for _, parent := range extendsList(td.doc) {
+			if parent == baseContractID {
+				continue
+			}
+			if !isTableRef(pattern, parent) {
+				continue // 非法 ID 由 schema.pattern 报出
+			}
+			p, ok := byID[parent]
+			if !ok {
+				c.rulef("extends-ref", "%s: extends %q is not a data.tables contract", td.rel, parent)
+				continue
+			}
+			walk(p)
+		}
+		state[td.id] = 2
+		stack = stack[:len(stack)-1]
+	}
+	for _, td := range docs {
+		walk(td)
+	}
+
+	// 第二遍：cycle-safe 计算完整列（含环内节点）。
+	// fullOf 返回某张表除 status 外的完整列来源；exclude 用于剔除调用方自己的声明，
+	// 这样环内父表不会把调用方的列当作“祖先列”带回来。
+	fullOf := func(id, exclude string) map[string]string {
+		out := baseFullOrigins()
+		visited := map[string]bool{}
+		var collect func(string)
+		collect = func(id string) {
+			if visited[id] {
+				return
+			}
+			visited[id] = true
+			if id == baseContractID {
+				return
+			}
+			td, ok := byID[id]
+			if !ok {
+				return
+			}
+			for _, parent := range extendsList(td.doc) {
+				if parent == baseContractID || !isTableRef(pattern, parent) {
+					continue
+				}
+				collect(parent)
+			}
+			if id == exclude {
+				return // 只遍历其父链，不收调用方自己的列
+			}
+			for _, raw := range asList(td.doc["columns"]) {
+				m, ok := asMap(raw)
+				if !ok {
+					continue
+				}
+				name, _ := m["name"].(string)
+				if name == "" {
+					continue
+				}
+				if _, exists := out[name]; !exists {
+					out[name] = id
+				}
+			}
+		}
+		collect(id)
+		return out
+	}
+
+	fullNames := map[string]map[string]bool{}
+	inheritedNames := map[string]map[string]bool{}
+	for _, td := range docs {
+		merged := baseFullOrigins()
+		for _, parent := range extendsList(td.doc) {
+			if parent == baseContractID || !isTableRef(pattern, parent) {
+				continue
+			}
+			if _, ok := byID[parent]; !ok {
+				continue
+			}
+			for name, origin := range fullOf(parent, td.id) {
+				if prev, ok := merged[name]; ok {
+					if prev != origin {
+						c.rulef("extends-conflict", "%s: column %q inherited from both %s and %s", td.rel, name, prev, origin)
+					}
+					continue
+				}
+				merged[name] = origin
+			}
+		}
+		inheritedNames[td.id] = namesOf(merged)
+
+		full := copyOrigins(merged)
+		for _, raw := range asList(td.doc["columns"]) {
+			m, ok := asMap(raw)
+			if !ok {
+				continue
+			}
+			name, _ := m["name"].(string)
+			if name == "" {
+				continue
+			}
+			if _, inherited := merged[name]; !inherited {
+				merged[name] = td.id
+				full[name] = td.id
+			}
+		}
+		fullNames[td.id] = namesOf(full)
+	}
+	return fullNames, inheritedNames
+}
+
+// cyclePath 返回从首次出现到当前节点的环路径：A -> B -> A。
+func cyclePath(stack []string, id string) string {
+	start := 0
+	for i, name := range stack {
+		if name == id {
+			start = i
+			break
+		}
+	}
+	path := append(append([]string{}, stack[start:]...), id)
+	return strings.Join(path, " -> ")
+}
+
+// extendsList 提取 extends 列表中的非空父表 ID；类型错误由 schema 校验。
+func extendsList(doc map[string]any) []string {
+	var out []string
+	for _, raw := range asList(doc["extends"]) {
+		if s, ok := raw.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// extendsPattern 从字段规范读取 extends 的 pattern，避免 checker 与 meta 各写一份正则。
+func extendsPattern(schema *Schema) *regexp.Regexp {
+	for _, f := range schema.Fields {
+		if f.Name != "extends" || f.Pattern == "" {
+			continue
+		}
+		re, err := regexp.Compile(f.Pattern)
+		if err == nil {
+			return re
+		}
+	}
+	return nil
+}
+
+func isTableRef(pattern *regexp.Regexp, id string) bool {
+	return pattern == nil || pattern.MatchString(id)
+}
+
+// baseFullOrigins 返回基类 5 列的来源集合。
+func baseFullOrigins() map[string]string {
+	set := make(map[string]string, len(baseColumns))
+	for _, name := range baseColumns {
+		set[name] = baseContractID
+	}
+	return set
+}
+
+func namesOf(origins map[string]string) map[string]bool {
+	set := make(map[string]bool, len(origins))
+	for name := range origins {
+		set[name] = true
+	}
+	return set
+}
+
+func copyOrigins(src map[string]string) map[string]string {
+	dst := make(map[string]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+// baseFullSet 返回基类自身的 5 列。
+func baseFullSet() map[string]bool {
+	set := make(map[string]bool, len(baseColumns))
 	for _, name := range baseColumns {
 		set[name] = true
 	}
-	for _, raw := range asList(doc["columns"]) {
-		m, ok := asMap(raw)
-		if !ok {
-			continue
-		}
-		if n, ok := m["name"].(string); ok {
-			set[n] = true
-		}
-	}
 	return set
+}
+
+func copySet(src map[string]bool) map[string]bool {
+	dst := make(map[string]bool, len(src))
+	for k := range src {
+		dst[k] = true
+	}
+	return dst
 }
 
 // collectTableObjects 记录表上可被 capabilities 引用的约束/索引名，
@@ -263,30 +454,6 @@ func stripForeignKeys(doc map[string]any) map[string]any {
 	return cp
 }
 
-// checkBaseSchema 防止基类 meta 字段树/规则被误删；硬校验依赖这些 required 字段。
-func (c *Checker) checkBaseSchema(schema *Schema) {
-	for _, name := range []string{"schema_version", "id", "kind", "summary", "stability", "columns"} {
-		f, ok := contractspec.FindField(schema.Fields, name)
-		if !ok || !f.Required {
-			c.rulef("schema.meta", "%s: %s must be required", schema.ID, name)
-		}
-	}
-	for _, id := range []string{"base-file", "base-columns"} {
-		if !hasRule(schema.Rules, id) {
-			c.rulef("schema.meta", "%s: rules must declare %s", schema.ID, id)
-		}
-	}
-}
-
-func hasRule(rules []Rule, id string) bool {
-	for _, r := range rules {
-		if r.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
 // baseColumnShape 固定基类 5 列的物理形状；基类漂移会改变所有表的 DDL。
 var baseColumnShape = map[string]struct {
 	typ      string
@@ -301,24 +468,21 @@ var baseColumnShape = map[string]struct {
 }
 
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
-	if schema.Targets.File == "" || schema.Targets.ID == "" {
-		c.rulef("base-file", "%s: base schema targets.file/id must not be empty", rel)
-		return
-	}
-	if rel != schema.Targets.File {
-		c.rulef("base-file", "%s: base contract must live in %s", rel, filepath.Base(schema.Targets.File))
+	if filepath.Base(rel) != baseContractFile {
+		c.rulef("base-file", "%s: base contract must live in %s", rel, baseContractFile)
 	}
 	allowed := map[string]bool{
-		"schema_version": true, "id": true, "kind": true, "summary": true,
+		"schema_version": true, "id": true, "summary": true,
 		"stability": true, "do_not": true, "columns": true,
 	}
-	c.validateDoc(doc, filterFields(schema.Fields, allowed), rel)
+	fields := filterFields(schema.Fields, allowed)
+	c.validateDoc(doc, fields, rel)
 	c.checkStability(doc, rel)
 	if s, ok := doc["summary"].(string); ok && s == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 	}
-	if doc["id"] != schema.Targets.ID {
-		c.rulef("base-file", "%s: base table id must be %s, got %v", rel, schema.Targets.ID, doc["id"])
+	if doc["id"] != baseContractID {
+		c.rulef("base-file", "%s: base table id must be %s, got %v", rel, baseContractID, doc["id"])
 	}
 	names := []string{}
 	for _, raw := range asList(doc["columns"]) {
@@ -344,6 +508,11 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 			}
 			if nullable != shape.nullable {
 				c.rulef("base-columns", "%s: base column %q nullable must be %v", rel, n, shape.nullable)
+			}
+		}
+		if n == "status" {
+			if d, ok := m["default"].(int); !ok || d != 0 {
+				c.rulef("base-columns", "%s: base status default must be 0", rel)
 			}
 		}
 	}
@@ -381,7 +550,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	} else if id != want {
 		c.rulef("id-from-file", "%s: id must be %s, got %s (file name is the source)", rel, want, id)
 	}
-	// extends 的值域/唯一性由 fields.extends.allowed + unique 保证；
+	// extends 的值域由 fields.extends.pattern + unique 保证；
 	// 这里只补字段树无法表达的空列表约束，避免同一错误重复报两次。
 	if raw, ok := doc["extends"]; ok {
 		if list, isList := raw.([]any); isList && len(list) == 0 {
@@ -402,11 +571,13 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	if len(columns) == 0 {
 		c.rulef("schema.non-empty", "%s: columns must not be empty", rel)
 	}
-	colNames := map[string]bool{}
-	allCols := map[string]bool{}
-	for _, name := range baseColumns {
-		allCols[name] = true
+	inherited := copySet(c.inheritedCols[id])
+	// 基类 4 列始终是继承列；即使 extends 非法，也按基类语义报重声明。
+	for name := range baseFullSet() {
+		inherited[name] = true
 	}
+	colNames := map[string]bool{}
+	allCols := copySet(inherited)
 	for i, raw := range columns {
 		m, ok := asMap(raw)
 		if !ok {
@@ -419,14 +590,8 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		}
 		colNames[name] = true
 		allCols[name] = true
-		switch name {
-		case "id", "created_at", "updated_at", "deleted_at":
-			c.rulef("no-base-columns", "%s: columns[%d]: base column %q must not be redeclared", rel, i, name)
-		case "status":
-			t, _ := m["type"].(string)
-			if t != "integer" {
-				c.rulef("status-integer", "%s: columns[%d]: status must be integer, got %q", rel, i, t)
-			}
+		if inherited[name] {
+			c.rulef("no-base-columns", "%s: columns[%d]: inherited column %q must not be redeclared", rel, i, name)
 		}
 		if pk, _ := m["primary_key"].(bool); pk {
 			if nullable, _ := m["nullable"].(bool); nullable {
@@ -444,10 +609,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.checkFamilyParams(m, t, rel, i, name, schema)
 		}
 	}
-	if !colNames["status"] {
-		c.rulef("status-integer", "%s: status column must be declared and typed integer", rel)
-	}
-
 	checkCols := func(rule, where string, list []any) {
 		for _, x := range list {
 			s, ok := x.(string)
@@ -590,7 +751,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.rulef("index-definition", "%s: indexes[%d] (%s): non-unique name must start with idx_", rel, i, name)
 		}
 	}
-	c.checkDoNotSpecificity(doc, rel, strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel)), table, colNames, constraintNames, indexNames)
+	c.checkDoNotSpecificity(doc, rel, strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel)), table, allCols, constraintNames, indexNames)
 }
 
 // checkIndexUsedBy 校验索引的 used_by：至少一个查询项，且查询存在并引用当前表。
@@ -643,7 +804,7 @@ func sqlMentionsAny(sql string, columns []any) bool {
 
 // checkDoNotSpecificity 落实 contracts/README §4.5.1：
 // 每条 do_not 必须含本表的具体标识，通用规则应上移 _types.yaml。
-func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, table map[string]any, colNames, constraintNames, indexNames map[string]bool) {
+func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, table map[string]any, allCols, constraintNames, indexNames map[string]bool) {
 	tokens := map[string]bool{}
 	add := func(s string) {
 		if utf8.RuneCountInString(s) >= 3 {
@@ -656,7 +817,7 @@ func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, ta
 			add(n)
 		}
 	}
-	for n := range colNames {
+	for n := range allCols {
 		if !isBaseColumn(n) {
 			add(n)
 		}

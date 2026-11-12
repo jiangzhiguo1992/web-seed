@@ -7,7 +7,7 @@ id: business.events.account
 summary: "账号领域事件"
 stability: stable
 do_not:
-  - "payload 禁止包含 password_md5、token、邮箱、手机号"
+  - "payload 禁止包含 password_hash、token、邮箱、手机号"
   - "破坏兼容必须升 version，不要原地改"
   - "登录失败事件不要带原始密码或哈希"
   - "事件 payload 字段只能是 data.entities.account 字段的子集"

@@ -2,7 +2,7 @@
 #
 # 规则：
 #   - 敏感表必须显式写 return_columns；不得 SELECT *。
-#   - password_md5 / token 字段只能由认证流程使用。
+#   - password_hash / token 字段只能由认证流程使用。
 #   - 每个 query 必须有显式 id；capabilities 只能引用 id。
 #   - 每个 query 必须写 index_columns；内层列表按顺序匹配索引最左前缀或主键。
 
@@ -13,7 +13,7 @@ stability: draft
 module: auth
 do_not:
   - "不要让普通业务查询引用本文件"
-  - "不要返回 password_md5 / access_token / refresh_token 给非认证调用方"
+  - "不要返回 password_hash / access_token / refresh_token 给非认证调用方"
   - "不要写 SELECT *"
 
 queries:
@@ -24,11 +24,11 @@ queries:
     params:
       - { name: username, type: text }
     returns: data.tables.auth_pwd.row
-    return_columns: [id, account_id, username, password_hash, password_md5, failed_login_count, locked_until, status]
-    semantics: "仅供登录校验；包含 password_hash 与遗留 password_md5"
+    return_columns: [id, account_id, username, password_hash, failed_login_count, locked_until, status]
+    semantics: "仅供登录校验；包含 password_hash"
     index_columns: [[username]]
     sql: |
-      SELECT id, account_id, username, password_hash, password_md5,
+      SELECT id, account_id, username, password_hash,
              failed_login_count, locked_until, status
       FROM auth_pwd
       WHERE username = @username AND deleted_at IS NULL;
@@ -41,16 +41,15 @@ queries:
       - { name: id, type: text }
       - { name: account_id, type: text }
       - { name: username, type: text }
-      - { name: password_hash, type: text, nullable: true }
-      - { name: password_md5, type: text, nullable: true }
+      - { name: password_hash, type: text }
     returns: data.tables.auth_pwd.row
     return_columns: [id, account_id, username, status, created_at, updated_at]
-    semantics: "创建密码认证记录；password_hash/password_md5 至少一个，均不返回"
+    semantics: "创建密码认证记录；password_hash 必填，不返回"
     index_columns: [[username], [account_id]]
     sql: |
-      INSERT INTO auth_pwd (id, account_id, username, password_hash, password_md5, status)
+      INSERT INTO auth_pwd (id, account_id, username, password_hash, status)
       VALUES (@id, @account_id, @username,
-              sqlc.narg('password_hash'), sqlc.narg('password_md5'), 0)
+              @password_hash, 0)
       RETURNING id, account_id, username, status, created_at, updated_at;
 
   - id: data.queries.auth.update_auth_pwd_hash
@@ -61,11 +60,11 @@ queries:
       - { name: id, type: text }
       - { name: password_hash, type: text }
     returns: affected_rows
-    semantics: "设置新 argon2id 哈希并清空遗留 MD5；成功后应吊销该账号全部令牌"
+    semantics: "设置新 argon2id 哈希；成功后应吊销该账号全部令牌"
     index_columns: [[id]]
     sql: |
       UPDATE auth_pwd
-      SET password_hash = @password_hash, password_md5 = NULL, updated_at = now()
+      SET password_hash = @password_hash, updated_at = now()
       WHERE id = @id AND deleted_at IS NULL;
 
   - id: data.queries.auth.record_auth_pwd_login_success

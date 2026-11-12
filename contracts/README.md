@@ -78,7 +78,6 @@ contracts/
 │   ├── README.md             #   AI 入口：写前读什么、写后跑什么
 │   ├── _types.yaml           #   每类契约的默认元数据（enforcement / consumers / 通用 do_not）
 │   ├── data.tables.yaml      #   物理表字段树 + 值域 + 说明（单一源）
-│   ├── data.tables.base.yaml #   基类契约的字段树 + 规则（单例）
 │   └── data.enums.yaml       #   同上
 ├── project.yaml              # 项目元信息 + 应用组合（derive 的唯一输入）
 │
@@ -158,7 +157,7 @@ contracts/
 | `platform/security/permissions.yaml` | `platform.security.permissions` | `platform.security.permissions.<code>` |
 | `platform/security/roles.yaml` | `platform.security.roles` | `platform.security.roles.<code>` |
 
-`data.storage`、`data.tables.base` 是单例契约，没有项 ID。文件名前的 `_` 不进入 ID：`tables/_base.yaml` → `data.tables.base`。
+`data.storage` 是单例契约，没有项 ID；`tables/_base.yaml` 的 ID 固定为 `data.tables.base`，由 checker 写死识别。
 
 ### 3.2 唯一顺序：单向链
 
@@ -300,7 +299,7 @@ table:
 
 - 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖
 - `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 前必须替换 TODO 并跑 `make contract-check`；状态可双向流转，`stable → draft` 表示重新修改
-- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.tables.base` 有独立的 `_meta/<type>.yaml`；`data.storage` 按完整 ID 匹配 `_meta/_types.yaml`），文件无需声明 `type`
+- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` 按完整 ID 匹配 `_meta/_types.yaml`；`data.tables.base` 由 checker 固定识别），文件无需声明 `type`
 - 生效元数据 = `_meta/_types.yaml` + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移
 - **不写 `refs`**：依赖关系由图校验器从 `ref` / `capability` / `use` / `emits` / `column` / `target` 等结构化字段自动推导

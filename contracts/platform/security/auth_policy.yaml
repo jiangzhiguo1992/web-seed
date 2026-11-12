@@ -52,9 +52,6 @@ password:
   max_attempts: 5
   lockout: 15m
   breach_check: true
-  legacy:
-    field: data.tables.auth_pwd.col.password_md5
-    note: "仅兼容遗留系统；新密码写入 password_hash，登录成功后清除 MD5"
 
 mfa:
   required_for_roles: [admin]
