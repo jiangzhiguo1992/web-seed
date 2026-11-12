@@ -1,5 +1,5 @@
 // tables.go 校验 data.tables：基类、列、约束、索引与物理表名。
-package main
+package check
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yourorg/web-seed/apps/api/internal/contractspec"
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
 )
 

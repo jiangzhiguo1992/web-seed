@@ -34,7 +34,7 @@ contracts/capabilities/http/
 
 生成时合并 ──> contracts/generated/openapi/admin.yaml（完整 spec）
            ──> apps/api/internal/generated/openapi/（Go 类型）
-           ──> packages/api-client/src/generated/（TS 类型）
+           ──> apps/web/packages/api-client/src/generated/（TS 类型）
 ```
 
 **为什么先拆再合并**：AI 改 account 只读 `account.yaml`（≤200 行），不需要读整个 spec。组合文件是产物，禁止手改。

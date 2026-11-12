@@ -79,7 +79,7 @@
 | A4 | pnpm `-r build` 严格按拓扑先构建 tokens/ui | 否则 app 构建拿不到 theme.css | P1 |
 | A5 | `golang:1.27-alpine` / `node:26-alpine` 镜像 tag 可用 | 镜像构建失败 | P3 真实 Docker |
 
-> A3 / A4 已于 P1 实测通过：`packages/ui-kit/styles.css` 的 `@source "./src"` 生效，`pnpm -r build` 先构建 tokens。
+> A3 / A4 已于 P1 实测通过：`apps/web/packages/ui-kit/styles.css` 的 `@source "./src"` 生效，`pnpm -r build` 先构建 tokens。
 
 #### P1 仓库骨架
 
@@ -88,8 +88,8 @@
 - [x] `contracts/` 五组目录 + `index.yaml` + `project.yaml` + `README.md`
 - [x] `apps/api` 骨架（`cmd/` `internal/{platform,modules,composition,generated}`、`composition/<app>/handlers/`、`migrations/` `queries/`）
 - [x] `apps/web/admin` 骨架（`src/{app,pages,features,shared}`）
-- [x] `packages/{api-client,ui-kit,design-tokens,tsconfig,eslint-config}`
-- [x] `infra/compose.yaml`（profiles: core/data/mail/object/observability）
+- [x] `apps/web/packages/{api-client,ui-kit,design-tokens,tsconfig,eslint-config}`
+- [x] `compose.yaml`（profiles: core/data/mail/object/observability）
 - [x] `scripts/{derive,doctor,check-docs,gen-env}.sh` 空壳 + `make help`
 - [x] `Makefile` 预留 `gen` target（P2 实现），空跑时提示未配置
 
@@ -230,7 +230,7 @@ data/tables/*.yaml
 capabilities/http/*.yaml + shared.yaml
   ├─ 合并 ─────────> generated/openapi/admin.yaml
   ├─ oapi-codegen ─> apps/api/internal/generated/openapi/
-  └─ openapi-typescript ─> packages/api-client/src/generated/
+  └─ openapi-typescript ─> apps/web/packages/api-client/src/generated/
 
 data/queries/*.yaml ──> queries/*.sql ──> sqlc
 
@@ -301,14 +301,16 @@ web-seed/
 │   │   ├── sqlc.yaml  codegen/  Dockerfile
 │   │   └── ...
 │   └── web/
-│       └── admin/                    [C] 模板默认端
-│           ├── AGENTS.md  vite.config.ts  Dockerfile
-│           └── src/{app,pages,features,shared}
-│           # user 端为派生时按需新增（非模板默认）
+│       ├── admin/                    [C] 模板默认端
+│       │   ├── AGENTS.md  vite.config.ts  Dockerfile
+│       │   └── src/{app,pages,features,shared}
+│       │   # user 端为派生时按需新增（非模板默认）
+│       └── packages/{api-client,ui-kit,design-tokens,tsconfig,eslint-config}
 │
-├── packages/{api-client,ui-kit,design-tokens,tsconfig,eslint-config}
-├── infra/compose.yaml                [O] profiles: core/data/mail/object/observability
+├── compose.yaml                      [O] profiles: core/data/mail/object/observability
 ├── scripts/{derive,doctor,check-docs,gen-env}.sh
+├── scripts/contract/{scaffold,validate}.sh
+├── scripts/cmd/                    # 契约工具 Go module
 ├── .opencode/skills/                 # AI 行为入口（薄封装 playbook，见第 10 节）
 └── .github/{workflows/{ci,template-selftest}.yml, PULL_REQUEST_TEMPLATE.md, ISSUE_TEMPLATE/}
 ```
@@ -332,7 +334,7 @@ internal/platform/             与业务无关的基础设施
 1. `cmd/*` 只能 import `internal/composition/*`，不许直接碰 `modules`
 2. `modules/*` 之间禁止横向 import，跨模块走 service 接口或事件
 3. `composition/*` 只允许"选择 + 组装 + 配置"，出现 `if/for` 业务分支即违规
-4. `apps/web/*` 之间禁止互相 import，共享只能走 `packages/*`
+4. `apps/web/*` 之间禁止互相 import，共享只能走 `apps/web/packages/*`
 5. `modules/*` 禁止 import `internal/generated/http`；sqlc 产物在 `internal/generated/db`，仅 `modules/*/repo` 可 import
 
 ### 4.3 装配方式
@@ -448,7 +450,7 @@ src/
 
 ### 6.2 约定
 
-- 类型只能来自 `packages/api-client`，禁止手写 API 类型
+- 类型只能来自 `apps/web/packages/api-client`，禁止手写 API 类型
 - 页面只能通过 `capability` 引用接口，禁止直接写 URL，更禁止引用 `data.*`
 - 禁止绕过 client 直连 `fetch`
 - 时间统一 UTC 传输、本地展示；金额整数分 + 币种
@@ -456,7 +458,7 @@ src/
 - 路由与页面骨架由 `features/**` 契约生成，禁止手写路由表
 - 运行时配置由 `public/config.js` 注入，前端启动时 zod 校验 → 同一镜像多环境
 - 主题走 CSS 变量，暗色模式为 token 的第二组值
-- **Tailwind v4 不自动扫描 workspace 共享包**：由 `packages/ui-kit` 自备 `styles.css`（内含 `@source "./src"`），app 只 `@import "@webseed/ui-kit/styles.css"`，避免路径耦合；`@theme` 变量默认只输出被使用的
+- **Tailwind v4 不自动扫描 workspace 共享包**：由 `apps/web/packages/ui-kit` 自备 `styles.css`（内含 `@source "./src"`），app 只 `@import "@webseed/ui-kit/styles.css"`，避免路径耦合；`@theme` 变量默认只输出被使用的
 
 ### 6.3 埋点
 
@@ -479,7 +481,7 @@ src/
 | 任务入口 | `Makefile` | 唯一入口，`make help` 自文档 |
 | 钩子 | `lefthook` | 单二进制，跨语言 |
 | Go lint | `golangci-lint` | |
-| 前端 lint | ESLint + Prettier | 共享 `packages/eslint-config` |
+| 前端 lint | ESLint + Prettier | 共享 `apps/web/packages/eslint-config` |
 | 架构校验 | `go-arch-lint` / `dependency-cruiser` | |
 | 契约兼容 | `oasdiff` | |
 | 测试 | testify / Vitest / Playwright | |

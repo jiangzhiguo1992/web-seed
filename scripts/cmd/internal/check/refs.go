@@ -1,5 +1,5 @@
 // refs.go 校验跨文件表引用、used_by 与 index.yaml。
-package main
+package check
 
 import (
 	"fmt"

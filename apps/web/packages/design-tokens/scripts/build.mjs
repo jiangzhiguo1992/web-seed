@@ -5,7 +5,7 @@
 // 支持两层结构：color.brand.500 → --color-brand-500。
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const tokens = JSON.parse(readFileSync(new URL('../../../contracts/platform/design/tokens.json', import.meta.url), 'utf8'))
+const tokens = JSON.parse(readFileSync(new URL('../../../../../contracts/platform/design/tokens.json', import.meta.url), 'utf8'))
 
 const lines = ['/* 生成物：由 scripts/build.mjs 从 tokens.json 生成，禁止手改。 */', '@theme {']
 

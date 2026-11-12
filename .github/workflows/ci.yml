@@ -40,11 +40,26 @@ jobs:
       - uses: actions/checkout@v4
       - run: ./scripts/check-docs.sh
 
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: scripts/cmd/go.mod
+      - name: build / vet / test
+        working-directory: scripts/cmd
+        run: |
+          go build ./...
+          go vet ./...
+          test -z "$(gofmt -l .)"
+          go test ./...
+
   contracts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: apps/api/go.mod
+          go-version-file: scripts/cmd/go.mod
       - run: make contract-check

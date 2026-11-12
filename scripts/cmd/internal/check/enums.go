@@ -1,5 +1,5 @@
 // enums.go 校验 data.enums 集合与枚举引用。
-package main
+package check
 
 import (
 	"fmt"

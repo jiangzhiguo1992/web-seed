@@ -1,10 +1,10 @@
 // contractnew 从 _meta 字段规范渲染契约骨架。
 //
-// 用法（在 apps/api 下）：
+// 用法（在 scripts/cmd 下）：
 //
-//	go run ./cmd/contractnew -root ../.. -type data.tables -name note -module notes -summary "备注表"
-//	go run ./cmd/contractnew -root ../.. -type data.tables -name balance -module accounts -column-type decimal
-//	go run ./cmd/contractnew -root ../.. -type data.enums  -name note_status
+//	go run ./contract_new -root ../.. -type data.tables -name note -module notes -summary "备注表"
+//	go run ./contract_new -root ../.. -type data.tables -name balance -module accounts -column-type decimal
+//	go run ./contract_new -root ../.. -type data.enums  -name note_status
 package main
 
 import (
@@ -13,7 +13,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/yourorg/web-seed/apps/api/internal/contractspec"
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 	flag.Parse()
 
 	if *typ == "" || *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: contractnew -type data.tables|data.enums -name <name> [-module <module>] [-summary <text>] [-column-type <family>] [-out <file>]")
+		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums -name <name> [-module <module>] [-summary <text>] [-column-type <family>] [-out <file>]")
 		os.Exit(2)
 	}
 	if *module == "" {

@@ -20,11 +20,20 @@ fi
 echo "== docs =="
 ./scripts/check-docs.sh
 
+echo "== contract tools =="
+(cd scripts/cmd && go build ./... && go vet ./...)
+unformatted=$(cd scripts/cmd && gofmt -l .)
+if [[ -n "$unformatted" ]]; then
+  echo "contract tools gofmt required:"
+  echo "$unformatted"
+  exit 1
+fi
+
 echo "== contracts =="
 ./scripts/contract/validate.sh
 
 echo "== design tokens =="
-if [[ ! -f packages/design-tokens/theme.css ]]; then
+if [[ ! -f apps/web/packages/design-tokens/theme.css ]]; then
   echo "theme.css missing; run: pnpm --filter @webseed/design-tokens build"
   exit 1
 fi

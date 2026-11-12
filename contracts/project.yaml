@@ -39,7 +39,7 @@ apps:
     generated:
       spec: generated/openapi/admin.yaml
       server: apps/api/internal/generated/openapi
-      client: packages/api-client/src/generated
+      client: apps/web/packages/api-client/src/generated
 
   web-admin:
     kind: web

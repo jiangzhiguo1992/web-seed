@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 APP_API := apps/api
 
-.PHONY: help build build-api build-web test test-api test-web test-e2e lint lint-api typecheck \
+.PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
         gen gen-openapi gen-db gen-graph gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
         dev api-dev web-dev compose-up compose-down doctor derive check-docs
 
@@ -18,10 +18,13 @@ build-api: ## 构建 Go API
 build-web: ## 构建前端（按拓扑：tokens/ui 先于 app）
 	pnpm -r build
 
-test: test-api ## 运行测试（P1 仅 Go）
+test: test-api test-tools ## 运行测试（API + 契约工具）
 
 test-api: ## Go 测试
 	cd $(APP_API) && go test ./...
+
+test-tools: ## 契约工具测试
+	cd scripts/cmd && go test ./...
 
 test-race: ## Go 竞态测试
 	cd $(APP_API) && go test -race ./...
@@ -29,10 +32,13 @@ test-race: ## Go 竞态测试
 test-web: ## 前端测试（P1 未接入）
 	@echo "web tests: 尚未配置（P7 接入 Vitest）"
 
-lint: lint-api typecheck ## 静态检查
+lint: lint-api lint-tools typecheck ## 静态检查
 
 lint-api: ## Go vet + 格式检查
 	cd $(APP_API) && go vet ./... && test -z "$$(gofmt -l .)"
+
+lint-tools: ## 契约工具 vet + 格式检查
+	cd scripts/cmd && go vet ./... && test -z "$$(gofmt -l .)"
 
 typecheck: ## 前端类型检查
 	pnpm -r --if-present typecheck
@@ -53,7 +59,7 @@ gen-graph: ## refs → generated/{manifest.json,graph.json,lineage.md}（P2）
 	@echo "gen-graph: 尚未实现（P2）"
 	@exit 1
 
-gen-client: ## 合并 spec → packages/api-client（P2）
+gen-client: ## 合并 spec → apps/web/packages/api-client（P2）
 	@echo "gen-client: 尚未实现（P2）"
 	@exit 1
 
@@ -97,10 +103,10 @@ web-dev: ## 启动前端
 	pnpm --filter @webseed/admin dev
 
 compose-up: ## 启动本地依赖（PG）
-	docker compose -f infra/compose.yaml --profile core up -d
+	docker compose -f compose.yaml --profile core up -d
 
 compose-down: ## 停止本地依赖
-	docker compose -f infra/compose.yaml --profile core down
+	docker compose -f compose.yaml --profile core down
 
 doctor: ## 仓库健康检查
 	./scripts/doctor.sh

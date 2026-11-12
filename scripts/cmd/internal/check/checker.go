@@ -1,4 +1,4 @@
-// contractcheck 是契约试点校验器。
+// Package check 实现契约校验：结构、ID、基类、列/约束/索引、引用、used_by、index 与 stability。
 //
 // 当前覆盖：
 //   - data.tables/*.yaml 的结构、ID/文件、基类继承、列/约束/索引、used_by
@@ -10,19 +10,14 @@
 //   - 全类型 schema
 //   - graph.json / 越层引用
 //   - generated diff
-//
-// 用法（在 apps/api 下）：
-//
-//	go run ./cmd/contractcheck -root ../..
-package main
+package check
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/yourorg/web-seed/apps/api/internal/contractspec"
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,24 +34,11 @@ type Checker struct {
 	errs []string
 }
 
-func main() {
-	root := flag.String("root", "../..", "repo root")
-	flag.Parse()
-	abs, err := filepath.Abs(*root)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "contract-check:", err)
-		os.Exit(1)
-	}
-	c := &Checker{root: abs}
+// Run 执行全部契约校验并返回错误列表。
+func Run(root string) []string {
+	c := &Checker{root: root}
 	c.run()
-	if len(c.errs) > 0 {
-		fmt.Fprintf(os.Stderr, "contract-check: FAILED (%d error(s))\n", len(c.errs))
-		for _, e := range c.errs {
-			fmt.Fprintln(os.Stderr, "  -", e)
-		}
-		os.Exit(1)
-	}
-	fmt.Println("contract-check: OK")
+	return c.errs
 }
 
 func (c *Checker) errf(format string, args ...any) {

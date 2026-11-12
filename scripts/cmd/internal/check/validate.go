@@ -1,5 +1,5 @@
 // validate.go 通用 schema 校验与正则自检。
-package main
+package check
 
 import (
 	"fmt"

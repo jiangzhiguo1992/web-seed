@@ -177,13 +177,13 @@ importers:
     dependencies:
       '@webseed/api-client':
         specifier: workspace:*
-        version: link:../../../packages/api-client
+        version: link:../packages/api-client
       '@webseed/design-tokens':
         specifier: workspace:*
-        version: link:../../../packages/design-tokens
+        version: link:../packages/design-tokens
       '@webseed/ui-kit':
         specifier: workspace:*
-        version: link:../../../packages/ui-kit
+        version: link:../packages/ui-kit
       vue:
         specifier: ^3.5.0
         version: 3.5.45(typescript@5.9.3)
@@ -196,7 +196,7 @@ importers:
         version: 6.0.10(vite@7.3.8(jiti@2.7.0)(lightningcss@1.33.0))(vue@3.5.45(typescript@5.9.3))
       '@webseed/tsconfig':
         specifier: workspace:*
-        version: link:../../../packages/tsconfig
+        version: link:../packages/tsconfig
       tailwindcss:
         specifier: ^4.0.0
         version: 4.3.5
@@ -204,15 +204,15 @@ importers:
         specifier: ^7.0.0
         version: 7.3.8(jiti@2.7.0)(lightningcss@1.33.0)
 
-  packages/api-client: {}
+  apps/web/packages/api-client: {}
 
-  packages/design-tokens: {}
+  apps/web/packages/design-tokens: {}
 
-  packages/eslint-config: {}
+  apps/web/packages/eslint-config: {}
 
-  packages/tsconfig: {}
+  apps/web/packages/tsconfig: {}
 
-  packages/ui-kit:
+  apps/web/packages/ui-kit:
     dependencies:
       class-variance-authority:
         specifier: ^0.7.1

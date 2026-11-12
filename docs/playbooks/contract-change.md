@@ -120,7 +120,7 @@ make gen
 make gen-openapi   # capabilities/http/* + apps/* → generated/openapi/<app>.yaml
 make gen-db        # data/tables/* → schema.sql + migrations
 make gen-graph     # refs → generated/{manifest.json,graph.json,lineage.md}
-make gen-client    # 合并 spec → packages/api-client/src/generated
+make gen-client    # 合并 spec → apps/web/packages/api-client/src/generated
 ```
 
 > 生成物入库。**禁止手改** `contracts/generated/`、`apps/api/internal/generated/`、`apps/api/migrations/`。
@@ -135,7 +135,7 @@ make gen-client    # 合并 spec → packages/api-client/src/generated
 |---|---|---|
 | `*Server` does not implement `StrictServerInterface` | 新端点没实现 | 在 `composition/<app>/handlers` 补方法 |
 | 字段未定义 / 类型不匹配 | 结构体与契约不符 | 改实现，不改生成物 |
-| TS 类型缺失 | 前端未接新接口 | 用 `packages/api-client` 的生成类型 |
+| TS 类型缺失 | 前端未接新接口 | 用 `apps/web/packages/api-client` 的生成类型 |
 | sqlc 参数类型不符 | 查询契约改了 | 改 `data/queries`，不要手改 `.sql` |
 
 **不要通过改生成物来消除报错。**

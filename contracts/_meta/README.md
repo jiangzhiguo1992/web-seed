@@ -18,6 +18,13 @@ contracts/_meta/
 scripts/contract/
 ├── scaffold.sh           # make contract-new
 └── validate.sh           # make contract-check
+
+scripts/cmd/
+├── go.mod                # 契约工具独立 Go module
+├── internal/contractspec/ # schema 解析 + 骨架渲染
+├── internal/check/       # 契约校验实现（tables / enums / refs）
+├── contract_new/
+└── contract_check/
 ```
 
 **没有 `schema/`、没有 `templates/`。**

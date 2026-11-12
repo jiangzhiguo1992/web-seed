@@ -80,22 +80,21 @@ web-seed/
 │   │   └── go.mod  Dockerfile
 │   │
 │   └── web/
-│       └── admin/               [C] 管理端前端（模板默认端）
-│           ├── src/app/         [P] router / providers / layouts
-│           ├── src/pages/       [P] 路由级视图
-│           ├── src/features/    [P] 用户动作
-│           ├── src/shared/      [P] ui / api / lib
-│           └── vite.config.ts  tsconfig.json  Dockerfile
+│       ├── admin/               [C] 管理端前端（模板默认端）
+│       │   ├── src/app/         [P] router / providers / layouts
+│       │   ├── src/pages/       [P] 路由级视图
+│       │   ├── src/features/    [P] 用户动作
+│       │   ├── src/shared/      [P] ui / api / lib
+│       │   └── vite.config.ts  tsconfig.json  Dockerfile
+│       └── packages/            [C] 前端共享包
+│           ├── api-client/      [C] 契约生成的客户端（P2 填充）
+│           ├── ui-kit/          [C] primitives（Button、cn、styles）
+│           ├── design-tokens/   [C] tokens.json → theme.css 生成器与产物
+│           ├── tsconfig/        [C] 共享 TS 配置
+│           └── eslint-config/   [P] ESLint flat config（P7 接入）
 │
-├── packages/                    [C] 前端共享包
-│   ├── api-client/              [C] 契约生成的客户端（P2 填充）
-│   ├── ui-kit/                  [C] primitives（Button、cn、styles）
-│   ├── design-tokens/           [C] tokens.json → theme.css 生成器与产物
-│   ├── tsconfig/                [C] 共享 TS 配置
-│   └── eslint-config/           [P] ESLint flat config（P7 接入）
-│
-├── infra/compose.yaml           [C] 本地依赖（PG，profiles: core）
-├── scripts/                     [C] derive / doctor / check-docs / gen-env
+├── compose.yaml                 [C] 本地依赖（PG，profiles: core）
+├── scripts/                     [C] derive / doctor / check-docs / gen-env / contract / cmd
 ├── .opencode/skills/            [P] AI 适配层（由 playbook 生成，P7）
 └── .github/                     [C] CI（contract/api/web/e2e/docs/self）+ PR 模板
 ```
@@ -111,7 +110,7 @@ web-seed/
 | `apps/api/internal/modules` | 业务能力 | 依赖 HTTP 契约、跨模块横向 import |
 | `apps/api/internal/platform` | 基础设施 | 依赖业务 |
 | `apps/web/*/src/app` | 应用装配 | 业务规则 |
-| `packages/ui-kit` | 无业务的基础组件 | 业务组件、请求 |
+| `apps/web/packages/ui-kit` | 无业务的基础组件 | 业务组件、请求 |
 
 ---
 
@@ -128,7 +127,7 @@ web-seed/
 | 日志 | slog（JSON） | 已用 |
 | 前端 | Vue 3.5 + Vite 7 + TypeScript 5.9 | 已用 |
 | 样式 | Tailwind v4（CSS-first） | 已用 |
-| 组件 | shadcn-vue（primitives 落在 `packages/ui-kit`） | P3 |
+| 组件 | shadcn-vue（primitives 落在 `apps/web/packages/ui-kit`） | P3 |
 | 状态与数据 | Pinia + TanStack Query | P3 |
 | 包管理 | pnpm 12 workspace | 已用 |
 | 测试 | Go testing / Vitest / Playwright | P4/P7 |
@@ -214,7 +213,7 @@ make build-web        # apps/web/admin/dist
 - 契约是唯一真相源，**migrations / queries 由 `data/` 生成**，禁止手写
 - 禁止先写实现后补契约
 - 禁止手改 `generated/`
-- 禁止绕过 `packages/api-client` 直连 `fetch`
+- 禁止绕过 `apps/web/packages/api-client` 直连 `fetch`
 - 禁止在 `features` 契约里直接引用 `data.*`（页面必须走 capability）
 - CI 必须 `make gen && git diff --exit-code` + `make contract-check` + `make contract-graph`
 

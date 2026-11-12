@@ -1,5 +1,5 @@
 // util.go YAML、集合与路径辅助函数。
-package main
+package check
 
 import (
 	"fmt"

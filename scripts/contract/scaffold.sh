@@ -25,21 +25,21 @@ usage() {
 [[ -n "$type" && -n "$name" ]] || usage
 [[ "$name" =~ ^[a-z][a-z0-9_]*$ ]] || { echo "invalid name: $name (snake_case required)" >&2; exit 2; }
 
-cd "$ROOT/apps/api"
+cd "$ROOT/scripts/cmd"
 
 case "$type" in
   data.tables)
     target="$ROOT/contracts/data/tables/$name.yaml"
     [[ -e "$target" ]] && { echo "already exists: ${target#$ROOT/}" >&2; exit 1; }
     if [[ -n "$column_type" ]]; then
-      go run ./cmd/contractnew -root "$ROOT" -type data.tables -name "$name" -module "$module" -summary "$summary" -column-type "$column_type" -out "$target"
+      go run ./contract_new -root "$ROOT" -type data.tables -name "$name" -module "$module" -summary "$summary" -column-type "$column_type" -out "$target"
     else
-      go run ./cmd/contractnew -root "$ROOT" -type data.tables -name "$name" -module "$module" -summary "$summary" -out "$target"
+      go run ./contract_new -root "$ROOT" -type data.tables -name "$name" -module "$module" -summary "$summary" -out "$target"
     fi
     ;;
 
   data.enums)
-    go run ./cmd/contractnew -root "$ROOT" -type data.enums -name "$name"
+    go run ./contract_new -root "$ROOT" -type data.enums -name "$name"
     ;;
 
   *)

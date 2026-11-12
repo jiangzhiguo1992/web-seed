@@ -5,9 +5,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT/apps/api"
+cd "$ROOT/scripts/cmd"
 
 tmp="$(mktemp "${TMPDIR:-/tmp}/contractcheck.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
-go build -o "$tmp" ./cmd/contractcheck
+go build -o "$tmp" ./contract_check
 "$tmp" -root "$ROOT"

@@ -9,10 +9,12 @@
 .opencode
 .history
 
-# CI 与文档（构建镜像不需要）
+# 不需要进入 Web 构建上下文
 .github
 docs
-infra
+compose.yaml
+apps/api
+scripts
 
 # 依赖与构建产物
 **/node_modules
@@ -29,4 +31,4 @@ infra
 **/.DS_Store
 
 # 注意：contracts/ 必须保留（设计令牌在构建时被读取）
-# 注意：packages/ 与 apps/ 必须保留（workspace 依赖）
+# 注意：apps/web/packages/ 与 apps/ 必须保留（workspace 依赖）
