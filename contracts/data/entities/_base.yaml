@@ -2,15 +2,15 @@
 # 字段树与规则见 _meta/data.entities.yaml；路径/ID 由 checker 写死识别。
 # 字段名是 Go 标识符：首字母大写导出，小写不导出；type 的 * 前缀表达可空。
 
-schema_version: 1
 id: data.entities.base
 summary: "实体字段基类"
+schema_version: 1
 stability: stable
 do_not:
   - "data.entities.base 不是实体：不生成类型、不落表、不建关系"
   - "基类 5 列不得改名或删除"
   - "实体是读模型：字段必须能投影回物理列或声明 computed，不写业务行为"
-  - "多表合成只读；JOIN 条件写在 query，不要写进 entity"
+  - "多表合成只读；关系连接列写在 entity 的 fields，SQL JOIN 条件写在 query"
   - "每张物理表必须至少被一个 entity 映射；tables 必填"
   - "entity 只定义数据结构，不定义函数/方法；行为放 capabilities/business"
   - "不要写状态机、业务规则（属于 business）"
@@ -19,36 +19,26 @@ do_not:
 
 fields:
   - name: ID
-    type: string
-    mutable: false
-    description: "实体唯一主键；来自主表 id 列"
+    description: "实体唯一主键；来自主表 id 列（integer）"
     source: { column: data.tables.base.col.id }
     validation: { column: data.tables.base.col.id }
 
   - name: Status
-    type: integer
-    examples: [ 0, 1 ]
     description: "业务状态整数码；具体实体可用 data.enums.* 特化"
     source: { column: data.tables.base.col.status }
     validation: { column: data.tables.base.col.status }
 
   - name: CreatedAt
-    type: timestamp
-    mutable: false
     description: "创建时间"
     source: { column: data.tables.base.col.created_at }
     validation: { column: data.tables.base.col.created_at }
 
   - name: UpdatedAt
-    type: timestamp
-    mutable: false
     description: "更新时间"
     source: { column: data.tables.base.col.updated_at }
     validation: { column: data.tables.base.col.updated_at }
 
   - name: DeletedAt
-    type: "*timestamp"
-    mutable: false
     description: "软删时间；为空表示未删除"
     source: { column: data.tables.base.col.deleted_at }
     validation: { column: data.tables.base.col.deleted_at }
