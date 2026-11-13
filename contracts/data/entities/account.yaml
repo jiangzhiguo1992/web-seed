@@ -1,9 +1,9 @@
-# 账号数据实体。物理表在 tables/account.yaml；认证信息在 auth_* / tokens。
+# 账号数据实体。物理表在 tables/account.yaml；认证信息在 auth_* / token。
 # 只写语义增量：来源列、枚举映射、关系；类型/校验/描述/敏感标记从来源列派生。
 
 id: data.entities.account
 summary: "账号数据实体"
-owner_module: accounts
+owner_module: account
 schema_version: 1
 stability: stable
 do_not:
@@ -25,53 +25,57 @@ model:
 
 fields:
   - name: OwnType
+    type: data.enums.own_type
+    description: "数据归属主体类型"
     source: { column: data.tables.account.col.own_type }
+
   - name: OwnID
     source: { column: data.tables.account.col.own_id }
+
   - name: Number
     source: { column: data.tables.account.col.number }
+
   - name: Nickname
     source: { column: data.tables.account.col.nickname }
+
   - name: userID
     source: { column: data.tables.account.col.user_id }
+
   - name: Status
     type: data.enums.account_status
-    source: { column: data.tables.account.col.status }
     description: "账号状态"
+    source: { column: data.tables.account.col.status }
+
   - name: Version
     source: { column: data.tables.account.col.version }
 
   - name: Tokens
-    target: data.tables.token
     type: data.entities.token
+    description: "账号的设备令牌"
     join_column_from: data.tables.account.col.id
     join_column_to: data.tables.token.col.account_id
     load: lazy
-    description: "账号的设备令牌"
 
   - name: AuthPwd
-    target: data.tables.auth_pwd
     type: data.entities.auth_pwd
+    description: "账号的密码认证记录"
     join_column_from: data.tables.account.col.id
     join_column_to: data.tables.auth_pwd.col.account_id
     load: lazy
-    description: "账号的密码认证记录"
 
   - name: AuthPhone
-    target: data.tables.auth_phone
     type: data.entities.auth_phone
+    description: "账号绑定的手机号"
     join_column_from: data.tables.account.col.id
     join_column_to: data.tables.auth_phone.col.account_id
     load: lazy
-    description: "账号绑定的手机号"
 
   - name: AuthEmail
-    target: data.tables.auth_email
     type: data.entities.auth_email
+    description: "账号绑定的邮箱"
     join_column_from: data.tables.account.col.id
     join_column_to: data.tables.auth_email.col.account_id
     load: lazy
-    description: "账号绑定的邮箱"
 
 used_by:
   queries:

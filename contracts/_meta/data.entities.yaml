@@ -2,8 +2,8 @@
 # 通用字段语义见 _meta/README.md；本文件只写 data.entities 特有内容。
 # 实体是读模型：字段必须能投影回物理列或声明为计算字段，不反推 DDL，不承载业务行为。
 # 实体/字段名是 Go 标识符：首字母大写导出（public），小写不导出（internal）。
-# 实体类型复用 data.tables 的 column_types.families，不维护第二套类型词表。
-# fields 同时承载标量字段与关系字段：标量用 source，关系用 relationship，二者互斥。
+# 实体类型复用 _meta/_types.yaml 的 column_types.families，不维护第二套类型词表。
+# fields 同时承载标量字段与关系字段：标量用 source，关系用 type/join_column_from/join_column_to，二者互斥。
 
 id: meta.data.entities
 type: data.entities
@@ -15,14 +15,6 @@ targets:
   naming: "snake_case"
 
 fields:
-  - name: schema_version
-    type: integer
-    required: true
-    const: 1
-    description: "契约格式版本，固定 1"
-    generates: "无"
-    caution: "必须是整数 1"
-
   - name: id
     type: string
     required: true
@@ -38,6 +30,22 @@ fields:
     generates: "index 摘要"
     caution: "不要写字段清单"
 
+  - name: owner_module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "实体所属模块；必须等于主表的 owner_module"
+    generates: "包/模块归属、生成目录"
+    caution: "不要写 capability 名；多表实体以 tables[0] 的主表为准"
+
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "契约格式版本，固定 1"
+    generates: "无"
+    caution: "必须是整数 1"
+
   - name: stability
     type: string
     required: true
@@ -47,26 +55,6 @@ fields:
     generates: "index 摘要"
     caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
 
-  - name: owner_module
-    type: string
-    required: true
-    pattern: '^[a-z][a-z0-9_]*$'
-    description: "实体所属模块；必须等于主表的 owner_module"
-    generates: "包/模块归属、生成目录"
-    caution: "不要写 capability 名；多表实体以 tables[0] 的主表为准"
-
-  - name: model
-    type: object
-    required: true
-    description: "Go 类型声明：名称、继承、映射表；字段本身在顶层 fields"
-    generates: "Go/TS 类型声明"
-    caution: "顺序固定为 name/extends/tables/included_by；不要在这里塞字段"
-    fields:
-      - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名；首字母大写 public，小写 internal", caution: "必须是合法非关键字 Go 标识符；全局唯一" }
-      - { name: extends, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', default: [ data.entities.base ], description: "继承的实体基类；当前只允许 data.entities.base", caution: "不得引用普通 entity；基类字段不得重声明；Status 可用 data.enums.* 特化" }
-      - { name: tables, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "实体映射的物理表列表；第一张是主表，单表也写成列表", caution: "不得指向 data.tables.base；多表时字段必须用 source.column 指明来源；每张表至少被一个字段引用" }
-      - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "通过关系字段指向本实体的 entity ID 列表；必须与关系字段 target 双向一致", caution: "显式声明；checker 校验每一处引用，悬空或缺失都报错" }
-
   - name: do_not
     type: list<string>
     required: false
@@ -74,17 +62,29 @@ fields:
     generates: "AI 反例"
     caution: "通用规则放组 README 或 _base，禁止复制到这里"
 
+  - name: model
+    type: object
+    required: true
+    description: "Go 类型声明：名称、继承、映射表；字段本身在顶层 fields"
+    generates: "Go/TS 类型声明"
+    caution: "内层顺序以本文件 model.fields 为准；不要在这里塞字段"
+    fields:
+      - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名；首字母大写 public，小写 internal", caution: "必须是合法非关键字 Go 标识符；全局唯一" }
+      - { name: extends, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', default: [ data.entities.base ], description: "继承的实体基类；当前只允许 data.entities.base", caution: "不得引用普通 entity；基类字段不得重声明；Status 可用 data.enums.* 特化" }
+      - { name: tables, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "实体映射的物理表列表；第一张是主表，单表也写成列表", caution: "不得指向 data.tables.base；多表时字段必须用 source.column 指明来源；每张表至少被一个字段引用" }
+      - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "通过关系字段指向本实体的 entity ID 列表；必须与关系字段 type 双向一致", caution: "显式声明；checker 校验每一处引用，悬空或缺失都报错" }
+
   - name: fields
     type: list<object>
     required: true
     description: "实体的业务字段与关系字段；只写语义增量，机械事实从来源列派生"
     generates: "Go/TS 类型、JSON 形状、关系装载"
-    caution: "每项二选一：标量字段（source）或关系字段（target + type + join_column_from + join_column_to），不得混用"
+    caution: "每项二选一：标量字段（source）或关系字段（type + join_column_from + join_column_to），不得混用"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名；首字母大写导出，小写不导出", caution: "同一实体内唯一；never_expose 字段必须小写开头" }
+      - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名；首字母大写导出，小写不导出", caution: "同一实体内唯一；sensitivity: secret 的字段必须小写开头" }
+      - { name: type, type: string, required: false, description: "标量字段的逻辑类型；关系字段写目标 entity ID（data.entities.*）；前缀 * 表示指针", generates: "Go/TS 字段类型", caution: "标量：来源列字段可省略并按列类型+nullable 派生，computed 必填；关系：必须是 data.entities.* 且不得为指针" }
       - { name: json_name, type: string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "生成的 JSON 字段名；省略时取 snake_case(name)", generates: "JSON tag、TS 属性名", caution: "同一实体内必须唯一；只有自定义命名才需要写" }
       - { name: description, type: string, required: false, description: "字段说明；来源列字段省略时取列 comment", caution: "写语义，不要重复列名或物理长度；computed/关系字段必须显式声明" }
-      - { name: type, type: string, required: false, description: "标量字段的逻辑类型；关系字段写目标 entity ID（data.entities.*）；前缀 * 表示指针", generates: "Go/TS 字段类型", caution: "标量：来源列字段可省略并按列类型+nullable 派生，computed 必填；关系：必须是 data.entities.* 且不得为指针" }
       - name: source
         type: object
         required: false
@@ -105,12 +105,10 @@ fields:
           - { name: pattern, type: string, required: false, description: "字段级硬正则", caution: "只允许 string 字段；checker 编译校验" }
           - { name: soft, type: string, required: false, description: "无法脚本化的软校验表达式", caution: "非空；生成测试提示，不做机器判定" }
       - { name: mutable, type: boolean, required: false, default: true, description: "创建后数据是否允许修改", caution: "computed 省略时默认 false；ID/CreatedAt/UpdatedAt/DeletedAt 必须 false" }
-      - { name: pii, type: boolean, required: false, description: "逻辑层个人敏感信息", caution: "省略时继承来源列；来源列 pii 为 true 时不得显式 false" }
-      - { name: never_expose, type: boolean, required: false, description: "禁止进入普通读 DTO/日志/事件", caution: "省略时继承来源列；来源列 never_expose 为 true 时不得显式 false；字段名必须小写开头" }
+      - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], description: "字段敏感级别；标量字段省略时继承来源列，computed 省略时默认 public", caution: "不得低于来源列；secret 字段名必须小写开头；关系字段不得写" }
       - { name: examples, type: list<any>, required: false, min_items: 1, description: "生成文档/测试的示例值", generates: "OpenAPI example、测试夹具", caution: "元素类型必须与字段 type 一致；关系字段不写" }
-      - { name: target, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "关系目标表 ID；关系字段必填", caution: "必须是 type 指向的 entity 映射的表" }
       - { name: join_column_from, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "本端连接列；关系字段必填", caution: "必须属于当前 entity 的 model.tables" }
-      - { name: join_column_to, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标端连接列；关系字段必填", caution: "必须属于 target 表，且与 from 列类型一致" }
+      - { name: join_column_to, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标端连接列；关系字段必填", caution: "必须属于 relation.type 映射的表，且与 from 列类型一致" }
       - { name: load, type: string, required: false, enum: [ eager, lazy ], default: lazy, description: "装载策略；默认 lazy，表示不默认关联查询", caution: "eager 的查询侧列必须有索引；eager 链不得成环；自引用只能 lazy" }
 
   - name: validation
@@ -146,22 +144,22 @@ rules:
   - { id: entity-field-name, text: "字段 name 必须是合法 Go 标识符（非关键字）；首字母大小写表达导出性", implemented_by: [ entity-field-name ] }
   - { id: entity-name-unique, text: "entity.model.name 必须全局唯一，避免生成 Go 类型冲突", implemented_by: [ entity-name-unique ] }
   - { id: entity-owner-module, text: "owner_module 必须等于主表 model.tables[0] 的 owner_module", implemented_by: [ entity-owner-module ] }
-  - { id: entity-key-order, text: "实体顶层键顺序固定为 id/summary/owner_module/schema_version/stability/do_not/model/fields/validation/used_by", implemented_by: [ entity-key-order ] }
-  - { id: entity-model-order, text: "model 键顺序固定为 name/extends/tables/included_by", implemented_by: [ entity-model-order ] }
+  - { id: entity-key-order, text: "实体契约字段顺序必须与 _meta/data.entities.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ entity-key-order ] }
+  - { id: entity-model-order, text: "model 内字段顺序必须与 _meta/data.entities.yaml 的 model.fields 一致", implemented_by: [ entity-model-order ] }
   - { id: entity-id, text: "ID 是所有实体的唯一主键：必须来自主表 id 列、非指针、mutable:false，且是唯一主键", implemented_by: [ entity-id ] }
-  - { id: entity-field-variant, text: "字段二选一：标量字段必须有 source 且不得写 target/join_column_from/join_column_to/load；关系字段必须有 target/type/join_column_from/join_column_to，且不得写 source/validation/mutable/pii/never_expose/examples", implemented_by: [ entity-field-variant ] }
+  - { id: entity-field-variant, text: "字段二选一：标量字段必须有 source 且不得写 join_column_from/join_column_to/load；关系字段必须有 type/join_column_from/join_column_to，且不得写 source/validation/mutable/sensitivity/examples", implemented_by: [ entity-field-variant ] }
   - { id: entity-field-source, text: "source 必须二选一：column 指向本实体表的列（基类字段由 _base 继承并映射到主表）；computed 非空、必须使用指针类型 *T、不得引用 @param，且必须 mutable:false", implemented_by: [ entity-field-source ] }
   - { id: entity-field-type, text: "来源列字段的 type 可省略，省略时按列类型+nullable 派生；computed 必填；显式 type 的 * 前缀必须与来源列 nullable 一致；枚举只能映射 integer 列；禁止列表类型和 data.tables.* 行类型", implemented_by: [ entity-field-type ] }
   - { id: entity-field-column, text: "source.column 必须存在且属于本实体的表；同一列不得被两个字段引用；多表合成的每张表至少被一个字段引用", implemented_by: [ entity-field-column ] }
   - { id: entity-field-validation, text: "validation 可省略，省略时默认复用 source.column；显式时三选一：column 指向存在的列；pattern 是合法正则且字段为 string；soft 非空", implemented_by: [ entity-field-validation ] }
   - { id: entity-field-description, text: "字段描述可省略：来源列字段默认取列 comment；computed/关系字段必须显式；最终必须非空", implemented_by: [ entity-field-description ] }
   - { id: entity-field-mutable, text: "computed 省略 mutable 时默认 false；CreatedAt、UpdatedAt、DeletedAt 必须 mutable:false；ID 由 entity-id 校验", implemented_by: [ entity-field-mutable ] }
-  - { id: entity-field-sensitive, text: "pii/never_expose 省略时继承来源列；来源列为 true 时不得显式 false；never_expose 字段名必须小写开头", implemented_by: [ entity-field-sensitive ] }
+  - { id: entity-field-sensitive, text: "sensitivity 省略时继承来源列；显式值不得低于来源列；secret 字段名必须小写开头", implemented_by: [ entity-field-sensitive ] }
   - { id: entity-field-json-name, text: "json_name 可省略，默认取 snake_case(name)；同一实体内 JSON 名必须唯一", implemented_by: [ entity-field-json-name ] }
   - { id: entity-field-examples, text: "examples 元素必须与字段 type 兼容；枚举字段的示例必须是整数；关系字段不得写 examples", implemented_by: [ entity-field-examples ] }
   - { id: entity-relation-type, text: "relation.type 必须是 data.entities.* ID，且不得为指针", implemented_by: [ entity-relation-type ] }
-  - { id: entity-relation-target, text: "relation.target 必须是已存在的表，且该表被 relation.type 对应的 entity 映射；relation.type 必须是已存在的 entity", implemented_by: [ entity-relation-target ] }
-  - { id: entity-relation-via, text: "join_column_from 必须属于当前 entity 的表；join_column_to 必须属于 relation.target 表；两列类型族必须一致", implemented_by: [ entity-relation-via ] }
+  - { id: entity-relation-target, text: "relation.type 必须是已存在的 entity，且 join_column_to 的表必须被该 entity 映射", implemented_by: [ entity-relation-target ] }
+  - { id: entity-relation-via, text: "join_column_from 必须属于当前 entity 的表；join_column_to 必须属于 relation.type 映射的表；两列类型族必须一致", implemented_by: [ entity-relation-via ] }
   - { id: entity-relation-cardinality, text: "关系基数由两端列唯一性推断：两端唯一 one_to_one；from 唯一 one_to_many；to 唯一 many_to_one；两端都不唯一则不允许", implemented_by: [ entity-relation-cardinality ] }
   - { id: entity-relation-eager-index, text: "eager 关系的 join_column_to 必须有索引或主键", implemented_by: [ entity-relation-eager-index ] }
   - { id: entity-relation-eager-cycle, text: "eager 关系链不得成环；自引用不得 eager", implemented_by: [ entity-relation-eager-cycle ] }
