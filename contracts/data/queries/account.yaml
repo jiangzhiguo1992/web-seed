@@ -42,7 +42,7 @@ queries:
       - data.tables.account
     params:
       - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
-      - { name: own_type, type: integer, column: data.tables.account.col.own_type, nullable: true }
+      - { name: own_type, type: data.enums.own_type, column: data.tables.account.col.own_type, nullable: true }
       - { name: offset, type: integer, nullable: true, default: 0 }
       - { name: limit, type: integer, nullable: true, default: 20 }
     returns:
@@ -56,7 +56,7 @@ queries:
       - data.tables.account
     params:
       - { name: id, type: integer, column: data.tables.account.col.id }
-      - { name: own_type, type: integer, column: data.tables.account.col.own_type }
+      - { name: own_type, type: data.enums.own_type, column: data.tables.account.col.own_type }
       - { name: own_id, type: integer, column: data.tables.account.col.own_id }
       - { name: number, type: text, column: data.tables.account.col.number }
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
@@ -71,7 +71,6 @@ queries:
     params:
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
-      - { name: version, type: integer, column: data.tables.account.col.version }
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]
@@ -82,7 +81,6 @@ queries:
     params:
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: status, type: integer, column: data.tables.account.col.status }
-      - { name: version, type: integer, column: data.tables.account.col.version }
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]
@@ -92,7 +90,6 @@ queries:
       - data.tables.account
     params:
       - { name: id, type: integer, column: data.tables.account.col.id }
-      - { name: version, type: integer, column: data.tables.account.col.version }
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]

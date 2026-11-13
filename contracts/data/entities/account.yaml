@@ -53,11 +53,6 @@ fields:
     source: { column: data.tables.account.col.user_id }
     validation: { column: data.tables.account.col.user_id }
 
-  - name: Version
-    description: "乐观锁；非业务字段"
-    source: { column: data.tables.account.col.version }
-    validation: { column: data.tables.account.col.version }
-
   - name: Tokens
     type: data.entities.token
     description: "账号的设备令牌"

@@ -176,7 +176,7 @@ queries:
       - data.tables.token
     params:
       - { name: id, type: integer, column: data.tables.token.col.id }
-      - { name: own_type, type: integer, column: data.tables.token.col.own_type }
+      - { name: own_type, type: data.enums.own_type, column: data.tables.token.col.own_type }
       - { name: own_id, type: integer, column: data.tables.token.col.own_id }
       - { name: account_id, type: integer, column: data.tables.token.col.account_id }
       - { name: device_id, type: text, column: data.tables.token.col.device_id, nullable: true }

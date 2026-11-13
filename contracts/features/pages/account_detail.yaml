@@ -75,8 +75,6 @@ fields:
     render: relative_time
   - name: updated_at
     render: relative_time
-  - name: version
-    render: hidden
 
 transition_ui:
   source: business.states.account.transitions

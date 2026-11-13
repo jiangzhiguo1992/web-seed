@@ -33,7 +33,6 @@ errors:
   - { code: ACCOUNT_SUSPENDED, status: 403, retryable: false, i18n: errors.account.suspended, message: "账号已被封禁" }
   - { code: ACCOUNT_ILLEGAL_TRANSITION, status: 409, retryable: false, i18n: errors.account.illegal_transition, message: "当前状态不允许该操作" }
   - { code: ACCOUNT_ALREADY_DELETED, status: 409, retryable: false, i18n: errors.account.already_deleted, message: "账号已删除" }
-  - { code: ACCOUNT_VERSION_CONFLICT, status: 409, retryable: true, i18n: errors.account.version_conflict, message: "内容已被修改，请刷新后重试" }
 
   # ---------- 认证 ----------
   - { code: AUTH_INVALID_CREDENTIALS, status: 401, retryable: false, i18n: errors.auth.invalid_credentials, message: "账号标识或凭据不正确" }

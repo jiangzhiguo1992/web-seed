@@ -64,7 +64,6 @@ interface:
         - { name: err, type: error }
       errors:
         - platform.errors.ACCOUNT_NOT_FOUND
-        - platform.errors.ACCOUNT_VERSION_CONFLICT
         - platform.errors.COMMON_FORBIDDEN
       transaction: required
 
@@ -73,14 +72,12 @@ interface:
       params:
         - { name: ctx, type: context.Context }
         - { name: id, type: integer }
-        - { name: version, type: integer }
       returns:
         - { name: account, type: data.entities.account }
         - { name: err, type: error }
       errors:
         - platform.errors.ACCOUNT_NOT_FOUND
         - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-        - platform.errors.ACCOUNT_VERSION_CONFLICT
       transaction: required
 
     - name: Suspend
@@ -89,14 +86,12 @@ interface:
         - { name: ctx, type: context.Context }
         - { name: id, type: integer }
         - { name: reason, type: string }
-        - { name: version, type: integer }
       returns:
         - { name: account, type: data.entities.account }
         - { name: err, type: error }
       errors:
         - platform.errors.ACCOUNT_NOT_FOUND
         - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-        - platform.errors.ACCOUNT_VERSION_CONFLICT
       transaction: required
 
     - name: Delete
@@ -104,12 +99,10 @@ interface:
       params:
         - { name: ctx, type: context.Context }
         - { name: id, type: integer }
-        - { name: version, type: integer }
       returns:
         - { name: err, type: error }
       errors:
         - platform.errors.ACCOUNT_NOT_FOUND
-        - platform.errors.ACCOUNT_VERSION_CONFLICT
         - platform.errors.COMMON_FORBIDDEN
       transaction: required
 
@@ -162,10 +155,9 @@ types:
   UpdateAccountInput:
     type: object
     additionalProperties: false
-    required: [nickname, version]
+    required: [nickname]
     properties:
       nickname: { type: string, minLength: 1, maxLength: 100 }
-      version: { type: integer, minimum: 1 }
 
 consumers:
   - module: audit

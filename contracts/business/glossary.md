@@ -20,7 +20,6 @@
 | 锁定 | locked | 连续登录失败的临时状态，到期自动解除 | suspended |
 | 软删 | soft delete | 标记 `deleted_at`，数据保留 | 硬删、物理删 |
 | 密码哈希 | password_hash | argon2id 结果；禁止新用 MD5 | password、pwd、secret |
-| 版本号 | version | 乐观锁计数，每次写入 +1 | revision、rev、etag |
 | 幂等键 | idempotency key | 客户端生成的请求唯一标识 | request key、dedup key |
 | 权限点 | permission | 形如 `account_read` 的最小授权单元 | scope、role（role 是权限集合） |
 | 角色 | role | 权限点的集合 | group、team |

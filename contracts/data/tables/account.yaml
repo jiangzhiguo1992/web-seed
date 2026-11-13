@@ -53,13 +53,6 @@ columns:
     redundancy: account_user_id
     comment: "关联用户 ID；不做数据库外键"
 
-  - name: version
-    type: integer
-    nullable: false
-    default: 1
-    min: 1
-    comment: "乐观锁；非业务字段"
-
 constraints:
   - name: ck_account_deleted_consistent
     type: check

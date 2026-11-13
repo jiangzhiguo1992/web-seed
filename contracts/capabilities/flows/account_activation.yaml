@@ -29,7 +29,6 @@ steps:
   - id: persist
     action: "持久化状态变更"
     use: data.queries.account.set_account_status
-    on_error: [platform.errors.ACCOUNT_VERSION_CONFLICT]
 
   - id: emit
     action: "发出领域事件"

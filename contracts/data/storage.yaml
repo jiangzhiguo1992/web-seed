@@ -3,7 +3,7 @@
 id: data.storage
 summary: "数据存储约束"
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "未列出的引擎与拓扑一律视为不支持，禁止自行引入"
   - "Redis 不是表存储；表数据只能落在 supported_engines 中的引擎"
