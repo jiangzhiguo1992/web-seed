@@ -38,8 +38,8 @@ model:
   name: e1
   extends: [ data.entities.base ]
   tables: [ data.tables.a ]
-relations:
-  - { name: e2, target: data.entities.e2, kind: many_to_one, via: data.tables.a.col.id }
+fields:
+  - { name: E2, json_name: e2, relationship: many_to_one, target: data.entities.e2, join_column: data.tables.a.col.id, description: "e2" }
 `)
 	writeFixture(t, root, "contracts/data/entities/e2.yaml", `# entity e2
 id: data.entities.e2
@@ -55,16 +55,12 @@ used_by:
 queries:
   - id: data.queries.q.get_a
     returns: data.entities.e1
-    sql:
-      statement: select
-      from: data.tables.a
-      select: [ id ]
+    statement: select
+    targets: [ data.tables.a ]
   - id: data.queries.q.get_b
     returns: boolean
-    sql:
-      statement: select
-      from: data.tables.b
-      select: [ id ]
+    statement: select
+    targets: [ data.tables.b ]
 `)
 	return root
 }

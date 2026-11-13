@@ -78,7 +78,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成只依赖主键的 `SELECT EXISTS`，不会伪造业务字段。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`table.retention`、`table.partition`、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成只依赖主键的 `COUNT(*) > 0`，不会伪造业务字段。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`storage.tables` 的 retention/partition、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -92,7 +92,7 @@ scripts/cmd/
   - `column_refs.prefixes` 必须以 `.` 结尾；`require_col` 必须是 `prefixes` 的子集
   - 必填字段、类型、枚举、`const`、`pattern`、`allowed`、`unique`
   - `id` 按 `targets.id` 模板生成；基类 `_base.yaml` 的路径/ID 写死在 checker，不参与模板
-  - 物理表 `extends` 是父表列表：可指向 `data.tables.base` 或任意已存在的表；多父同名列只有来源相同（钻石继承）才允许；链不得成环且必须到达基类；不得重复任何继承列
+  - 物理表 `table.extends` 是父表列表：可指向 `data.tables.base` 或任意已存在的表；多父同名列只有来源相同（钻石继承）才允许；链不得成环且必须到达基类；不得重复任何继承列
   - `primary_key` 列不得可空
   - `default` / `default_sql` 互斥；`default` 的 YAML 类型、长度、范围与列类型族兼容
   - 列 / 约束 / 索引重名；`do_not` 每条必须含本表具体标识
@@ -104,11 +104,10 @@ scripts/cmd/
   - `constraints` 的 `type`、按类型允许的字段、必填子字段与列引用；表不使用 enum 约束
   - 禁止 `foreign_key`；跨表一致性由应用/业务规则保证
   - `unique` 约束与唯一索引的软删语义不同：约束含软删行，唯一索引按 `where` 过滤
-  - `indexes` 的 `reason`、`columns` xor `expression`、`order` 长度/方向、唯一索引软删过滤、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表且 SQL 提及索引列；large 表不得显式禁用 `concurrently`
+  - `indexes` 的 `reason`、`columns` xor `expression`、`order` 长度/方向、唯一索引软删过滤、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表且表达式提及索引列；large 表不得显式禁用 `concurrently`
   - `columns.redundancy`：同组唯一 `source`、至少一个 `copy`；`copy.ref` 指向同组 `source`，`type`/`nullable` 一致
-  - `data/queries/*.yaml` 的 `index_columns`：每个内层列表按顺序匹配表索引最左前缀或主键；匹配的显式索引必须在 `used_by` 中列出该 query
-  - `table.partition.columns` 存在；range 必须有 `interval`，其他策略不得有
-  - `table.retention` 的数值 >= 1，`unit` 只能是 minutes/hours/days
+  - `data/queries/*.yaml` 的 `index_ref`：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须在 `used_by` 中列出该 query
+  - `data/storage.yaml` 的 `tables`：覆盖每张物理表且无孤儿；engine/size_class/retention/partition 的结构与取值
   - `used_by` 只记 `entities` 与 `queries`，与实际入边一致
   - `owner_module` 与 capabilities 写表归属一致；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
   - `persistence.queries` 引用的查询项必须存在；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
@@ -130,31 +129,34 @@ scripts/cmd/
   - `used_by.entities/tables` 必须与 entity 字段引用完全一致；只列 data.entities/data.tables，capability/feature 引用不写入 used_by，空列表合法
 - `data.entities.base`（`contracts/data/entities/_base.yaml`，单例）
   - 路径/ID 由 checker 写死识别；5 个字段固定为 `ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`
-  - `ID` string 非空、`Status` integer 非空、时间列 timestamp（`CreatedAt`/`UpdatedAt` 非空、`DeletedAt` 可空）；`ID` 与三个时间列 `mutable:false`
+  - `ID` string、`Status` integer、`CreatedAt`/`UpdatedAt` timestamp、`DeletedAt` *timestamp；`ID` 与三个时间列 `mutable:false`；每个基类字段必须写 `source`/`validation`/`description`
   - `do_not` 直接写在 `_base.yaml`，承载 `data.entities` 类型级通用规则；具体实体 `do_not` 必须含本实体标识
 - `data/entities/*.yaml`
   - 结构按 `_meta/data.entities.yaml`；`model.extends` 必须是 `[data.entities.base]`；具体实体不得重声明基类字段，`Status` 可用 `data.enums.*` 特化
   - `model.tables` 必填、非空、去重；`model.tables[0]` 是主表；每张物理表至少一个 entity 映射
   - `owner_module` 必填且必须等于主表 `model.tables[0]` 的 `owner_module`
-  - 字段必须投影回列：单表可省略 `column`，多表必须写；同一列不得被两个字段引用
-  - `required` 必须等价于来源列非空；`pii`/`never_expose` 不得放松；显式类型复用 `data.tables` 类型族，或 `data.enums.*`
+  - 字段二选一：标量字段（`source` + `type`）或关系字段（`relationship` + `target` + `join_column` + `load`）；两套键不得混用
+  - 标量字段必须有 `source`、`type`、`validation`、`description`；`source.column` 必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用
+  - `type` 的 `*` 前缀表示指针，必须与来源列 `nullable` 完全一致；类型复用 `data.tables` 类型族，或 `data.enums.*`；`computed` 字段必须使用指针类型 `*T`、`mutable:false`，且不得引用 `@param`
+  - `validation` 三选一：`column`（指向存在的列）、`pattern`（string 字段的合法正则）、`soft`（非空软表达式）
   - 实体 `model.name` 是 Go 类型名：首字母大写 public，小写 internal；`model` 顺序为 name/extends/tables；不得重名
-  - `ID` 是所有实体的唯一主键：来自主表 `id` 列，required、mutable:false、唯一主键
-  - 字段 `name` 是 Go 字段名：首字母大写导出，小写不导出；`never_expose` 字段必须小写开头
-  - 默认列名是 `snake_case(name)`，可用 `column` 覆盖；`json_name` 必填且同实体唯一
-  - 字段可声明生成语义：`examples`、`description`；`examples` 元素类型必须与字段类型一致
-  - `relations` 的 target/via/方向/类型一致性；eager 必须有索引且不得成环
+  - `ID` 是所有实体的唯一主键：来自主表 `id` 列、非指针、mutable:false、唯一主键
+  - 字段 `name` 是 Go 字段名：首字母大写导出，小写不导出；`never_expose` 字段必须小写开头；`json_name` 必填且同实体唯一
+  - 关系字段的 target/join_column/方向/类型一致性；eager 必须有索引且不得成环
   - `validation` 的 id 前缀、expr 非空、`on_violation` 必须存在
-  - `used_by.queries` 与 returns 本实体的 query 完全一致；`used_by.entities` 与 relations 入边一致
+  - `used_by.queries` 与 returns 本实体的 query 完全一致；`used_by.entities` 与关系字段入边一致
 - `data/queries/*.yaml`
   - 结构按 `_meta/data.queries.yaml`；query id 前缀、name=PascalCase、name 全局唯一
-  - 不再手写 `table`/`tables`：表从 `sql.from` / `sql.into` / `sql.joins[].table` 推导；SQL 必须声明 from/into，表必须存在
-  - params 与 SQL 双向一致；`nullable` 与 `sqlc.narg` 严格对应
-  - `returns` DSL：表行 / 实体 / 标量 / object；`[]` 与 kind 一致；object 必须有 output_fields
-  - `return_columns` 必须是物理列；实体返回必须覆盖 required 非敏感字段
-  - 单表 query 必须有 `index_columns` 且列出现在 SQL；多表 query 不得写，也不得进索引 `used_by`
-  - 写查询的 module 必须等于所写表 `owner_module`；`never_expose` 列只有同模块可返回
-  - 禁止 `SELECT *`；`one` 非标量返回必须命中唯一索引或 `sql.limit: "1"`
+  - 表从 `targets` / `joins[].table` 推导；写语句只能一张目标表，JOIN 表必须同时出现在 targets
+  - `statement` 与子句匹配：select 不写 values；insert/update 必须写 values；update/delete 必须写 where；joins/order_by/limit 只用于 select
+  - `values` 的键必须是目标表列；`order_by` 必须是 `<列> ASC|DESC`
+  - params 与所有表达式双向一致；`nullable` 与 `sqlc.narg` 严格对应；`params[].column` 绑定列后类型族必须与列一致
+  - `where` 的对象谓词：列存在、`op` 合法、比较谓词二选一 `param`/`value`、`in` 用数组参数、谓词参数绑定同名列、`is_null` 只用于可空列
+  - `returns` DSL：表行 / 实体 / 标量 / object；`[]` 与 kind 一致；object 必须有带 `expr` 的 output_fields；标量必须有 `expr`
+  - 投影不写 `select`：表行/实体返回由 returns 推导；`return_columns` 必须是物理列，实体返回必须覆盖非指针非敏感字段
+  - 单表 query 至少一个 `index_ref`；显式索引必须与 `used_by` 双向一致
+  - 写查询的 `owner_module` 必须等于目标表 `owner_module`；`never_expose` 列只有同模块可显式返回
+  - `one` 非标量返回必须命中 PK/唯一索引或 `limit: "1"`
 - 实体/查询/能力对表的引用存在
 - 查询 `return_columns` 必须是物理列（实体返回也按列名）
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复；entities/queries 文件必须登记
@@ -180,13 +182,15 @@ scripts/cmd/
 | `description` | 字段的准确含义 |
 | `generates` | 生成器会产出什么 / 怎么消费 |
 | `caution` | AI 最容易写错的用法 |
-| `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`min_items` 只约束 list，`list<list<string>>` 用于 `index_columns` |
+| `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`min_items` 只约束 list；`map<string>` 用于列名 → 表达式映射（`queries[].values`） |
 | `examples` | 示例值；`contract-new` 可用于生成 |
 | `column_types` | 类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
 | `column_refs` | `prefixes` 是 `columns[].type` 允许的引用命名空间；`require_col` 中的前缀必须带 `.col.`；不是类型族，也不是外键；表列不引用 `data.enums.*` |
 | `targets` | `dir`/`glob` 扫描路径；`file` 是单文件契约的固定路径；`id` 是 ID 模板（`<file>` → 文件 stem；单例契约直接写固定 ID）；`naming` 是文件名规则（`snake_case`）；基类固定 `_base.yaml`，不在此声明 |
 | `columns[].redundancy` | 冗余字段声明：`group`/`role`（source/copy）/`ref`；copy 指向同组 source |
 | `indexes[].used_by` | 使用该索引的 query item ID 列表；至少一个，防空索引 |
+| `queries[].index_ref` | query 使用的索引：`data.tables.<t>.pk` 或 `data.tables.<t>.<index-name>`；与 `indexes[].used_by` 双向一致 |
+| `data/storage.yaml` 的 `tables` | 每张物理表的 engine/size_class/retention/partition；表契约不再承载这些物理事实 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
 | `rules` | 本类型的专有规则；每条必须写 `implemented_by`（含规则自身 ID，指向 checker 实际输出的 `[rule-id]`）；通用结构规则由 checker 代码强制 |
 

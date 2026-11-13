@@ -6,6 +6,7 @@ package check
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -25,36 +26,36 @@ type columnMeta struct {
 	neverExpose bool
 }
 
-// entityFieldInfo 是实体字段的解析结果；ColumnTable/Column 为空表示无法解析。
+// entityFieldInfo 是实体字段（标量或关系）的解析结果。
 type entityFieldInfo struct {
 	Name            string
 	ColumnTable     string
 	Column          string
-	HasColumnRef    bool
-	HasExplicitType bool
-	HasRequired     bool
-	HasMutable      bool
+	SourceColumnRef string
+	SourceComputed  string
+	HasType         bool
 	Type            string
-	Required        bool
+	ValidationKind  string
+	ValidationRef   string
+	ValidationCount int
 	Mutable         bool
+	HasMutable      bool
 	PII             bool
 	NeverExpose     bool
 	JSONName        string
 	Examples        []any
 	Description     string
+	IsRelation      bool
+	Relationship    string
+	Target          string
+	JoinColumnRef   string
+	JoinTable       string
+	JoinColumn      string
+	Load            string
+	HasLoad         bool
 	FromBase        bool
 	OverridesBase   bool
 	BaseRedeclared  bool
-}
-
-// entityRelationInfo 是实体关系的解析结果。
-type entityRelationInfo struct {
-	Name      string
-	Target    string
-	Kind      string
-	ViaTable  string
-	ViaColumn string
-	Load      string
 }
 
 // entityInfo 保存单个 entity 的解析结果，供跨文件检查复用。
@@ -67,7 +68,6 @@ type entityInfo struct {
 	Tables      []string
 	Primary     string
 	Fields      []entityFieldInfo
-	Relations   []entityRelationInfo
 	Validation  []string
 	UsedByQuery map[string]bool
 	UsedByEnt   map[string]bool
@@ -222,28 +222,67 @@ func parseEntityBaseFields(doc map[string]any) []entityFieldInfo {
 		if !ok {
 			continue
 		}
-		name, _ := m["name"].(string)
-		if name == "" {
+		f := parseEntityField(m)
+		if f == nil {
 			continue
 		}
-		f := entityFieldInfo{Name: name, Mutable: true, HasExplicitType: true, FromBase: true}
-		f.Type, _ = m["type"].(string)
-		f.JSONName, _ = m["json_name"].(string)
-		for _, x := range asList(m["examples"]) {
-			f.Examples = append(f.Examples, x)
-		}
-		f.Description, _ = m["description"].(string)
-		if v, ok := m["required"].(bool); ok {
-			f.Required = v
-			f.HasRequired = true
-		}
-		if v, ok := m["mutable"].(bool); ok {
-			f.Mutable = v
-			f.HasMutable = true
-		}
-		out = append(out, f)
+		f.FromBase = true
+		out = append(out, *f)
 	}
 	return out
+}
+
+// parseEntityField 解析字段的公共部分；标量/关系变体在 checkEntityFields 中收窄。
+func parseEntityField(m map[string]any) *entityFieldInfo {
+	name, _ := m["name"].(string)
+	if name == "" {
+		return nil
+	}
+	f := &entityFieldInfo{Name: name, Mutable: true, Load: "lazy"}
+	f.JSONName, _ = m["json_name"].(string)
+	f.Description, _ = m["description"].(string)
+	if v, ok := m["type"].(string); ok && v != "" {
+		f.Type, f.HasType = v, true
+	}
+	if src, ok := asMap(m["source"]); ok {
+		f.SourceColumnRef, _ = src["column"].(string)
+		f.SourceComputed, _ = src["computed"].(string)
+		if t, col, ok := splitColumnRef(f.SourceColumnRef); ok {
+			f.ColumnTable, f.Column = t, col
+		}
+	}
+	if val, ok := asMap(m["validation"]); ok {
+		for _, kind := range []string{"column", "pattern", "soft"} {
+			if v, ok := val[kind].(string); ok && v != "" {
+				f.ValidationCount++
+				f.ValidationKind, f.ValidationRef = kind, v
+			}
+		}
+	}
+	if v, ok := m["mutable"].(bool); ok {
+		f.Mutable, f.HasMutable = v, true
+	}
+	f.PII, _ = m["pii"].(bool)
+	f.NeverExpose, _ = m["never_expose"].(bool)
+	for _, x := range asList(m["examples"]) {
+		f.Examples = append(f.Examples, x)
+	}
+	if v, ok := m["relationship"].(string); ok && v != "" {
+		f.Relationship, f.IsRelation = v, true
+	}
+	if v, ok := m["target"].(string); ok && v != "" {
+		f.Target, f.IsRelation = v, true
+	}
+	if v, ok := m["join_column"].(string); ok && v != "" {
+		f.JoinColumnRef, f.IsRelation = v, true
+		if t, col, ok := splitColumnRef(v); ok {
+			f.JoinTable, f.JoinColumn = t, col
+		}
+	}
+	if v, ok := m["load"].(string); ok && v != "" {
+		f.Load, f.HasLoad = v, true
+	}
+	return f
 }
 
 func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
@@ -267,42 +306,9 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		if !ok {
 			continue
 		}
-		name, _ := m["name"].(string)
-		if name == "" {
-			continue
+		if f := parseEntityField(m); f != nil {
+			e.Fields = append(e.Fields, *f)
 		}
-		f := entityFieldInfo{Name: name, Mutable: true}
-		if v, ok := m["required"].(bool); ok {
-			f.Required = v
-			f.HasRequired = true
-		}
-		if v, ok := m["mutable"].(bool); ok {
-			f.Mutable = v
-			f.HasMutable = true
-		}
-		f.PII, _ = m["pii"].(bool)
-		f.NeverExpose, _ = m["never_expose"].(bool)
-		f.JSONName, _ = m["json_name"].(string)
-		for _, x := range asList(m["examples"]) {
-			f.Examples = append(f.Examples, x)
-		}
-		f.Description, _ = m["description"].(string)
-		f.Type, _ = m["type"].(string)
-		f.HasExplicitType = f.Type != ""
-		if ref, _ := m["column"].(string); ref != "" {
-			f.HasColumnRef = true
-			if t, col, ok := splitColumnRef(ref); ok {
-				f.ColumnTable, f.Column = t, col
-			}
-		} else if len(e.Tables) == 1 {
-			f.ColumnTable, f.Column = e.Tables[0], snakeCase(name)
-		}
-		if f.ColumnTable != "" {
-			if meta, ok := c.tableColumns[f.ColumnTable][f.Column]; ok && f.Type == "" {
-				f.Type = meta.typ
-			}
-		}
-		e.Fields = append(e.Fields, f)
 	}
 	// 基类字段由 _base 继承；Status 允许用枚举类型特化。
 	byName := map[string]*entityFieldInfo{}
@@ -312,16 +318,21 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 	var inherited []entityFieldInfo
 	for _, bf := range c.entityBaseFields {
 		if cf := byName[bf.Name]; cf != nil {
-			if bf.Name == "Status" && strings.HasPrefix(cf.Type, "data.enums.") {
+			if bf.Name == "Status" && isEnumType(cf.Type) {
 				cf.OverridesBase = true
-				if !cf.HasColumnRef && cf.ColumnTable == "" {
+				// 未显式写 source/validation 时继承基类定义，并映射到主表。
+				if cf.SourceColumnRef == "" {
+					cf.SourceColumnRef = "data.tables.base.col." + snakeCase(bf.Name)
 					cf.ColumnTable, cf.Column = e.Primary, snakeCase(bf.Name)
 				}
-				if !cf.HasRequired {
-					cf.Required = bf.Required
+				if cf.ValidationCount == 0 {
+					cf.ValidationKind, cf.ValidationRef, cf.ValidationCount = "column", bf.ValidationRef, 1
 				}
-				if !cf.HasMutable {
-					cf.Mutable = bf.Mutable
+				if !cf.HasType {
+					cf.Type, cf.HasType = bf.Type, true
+				}
+				if !cf.HasMutable && bf.HasMutable {
+					cf.Mutable, cf.HasMutable = bf.Mutable, true
 				}
 				if cf.Description == "" {
 					cf.Description = bf.Description
@@ -337,32 +348,13 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 			}
 			continue
 		}
-		bf.ColumnTable, bf.Column = e.Primary, snakeCase(bf.Name)
-		inherited = append(inherited, bf)
+		nf := bf
+		if nf.Column != "" {
+			nf.ColumnTable = e.Primary
+		}
+		inherited = append(inherited, nf)
 	}
 	e.Fields = append(inherited, e.Fields...)
-	for _, raw := range asList(doc["relations"]) {
-		m, ok := asMap(raw)
-		if !ok {
-			continue
-		}
-		name, _ := m["name"].(string)
-		if name == "" {
-			continue
-		}
-		r := entityRelationInfo{Name: name, Load: "lazy"}
-		r.Target, _ = m["target"].(string)
-		r.Kind, _ = m["kind"].(string)
-		if v, _ := m["load"].(string); v != "" {
-			r.Load = v
-		}
-		if via, _ := m["via"].(string); via != "" {
-			if t, col, ok := splitColumnRef(via); ok {
-				r.ViaTable, r.ViaColumn = t, col
-			}
-		}
-		e.Relations = append(e.Relations, r)
-	}
 	for _, raw := range asList(doc["validation"]) {
 		m, ok := asMap(raw)
 		if !ok {
@@ -385,6 +377,20 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		}
 	}
 	return e
+}
+
+// isEnumType 判断类型（可带 * 前缀）是否引用 data.enums.*。
+func isEnumType(typ string) bool {
+	base, _ := splitPointer(typ)
+	return strings.HasPrefix(base, "data.enums.")
+}
+
+// splitPointer 拆分 type 的 * 前缀；* 表示指针（等价可空）。
+func splitPointer(typ string) (string, bool) {
+	if strings.HasPrefix(typ, "*") {
+		return strings.TrimPrefix(typ, "*"), true
+	}
+	return typ, false
 }
 
 // checkEntities 校验实体文件的结构与语义，并建立 relation 反向索引。
@@ -507,17 +513,16 @@ func (c *Checker) checkEntityDoNot(ed entityDoc, short string) {
 }
 
 type entityBaseFieldShape struct {
-	typ      string
-	required bool
-	mutable  bool
+	typ     string
+	mutable bool
 }
 
 var entityBaseShape = map[string]entityBaseFieldShape{
-	"ID":        {"string", true, false},
-	"Status":    {"integer", true, true},
-	"CreatedAt": {"timestamp", true, false},
-	"UpdatedAt": {"timestamp", true, false},
-	"DeletedAt": {"timestamp", false, false},
+	"ID":        {"string", false},
+	"Status":    {"integer", true},
+	"CreatedAt": {"timestamp", false},
+	"UpdatedAt": {"timestamp", false},
+	"DeletedAt": {"*timestamp", false},
 }
 
 // checkEntityBase 校验基类路径/ID/5 字段形状；基类不参与实体映射和 used_by。
@@ -560,23 +565,25 @@ func (c *Checker) checkEntityBase(schema *Schema) {
 			c.rulef("entity-base-shape", "%s: duplicate base field", where)
 		}
 		seen[name] = true
-		typ, _ := m["type"].(string)
-		required, _ := m["required"].(bool)
-		mutable := true
-		if v, ok := m["mutable"].(bool); ok {
-			mutable = v
+		f := parseEntityField(m)
+		if f == nil {
+			continue
 		}
-		if typ != shape.typ {
-			c.rulef("entity-base-shape", "%s: type must be %s, got %s", where, shape.typ, typ)
+		ref := "data.tables.base.col." + snakeCase(name)
+		if f.Type != shape.typ {
+			c.rulef("entity-base-shape", "%s: type must be %s, got %s", where, shape.typ, f.Type)
 		}
-		if required != shape.required {
-			c.rulef("entity-base-shape", "%s: required must be %v", where, shape.required)
-		}
-		if mutable != shape.mutable {
+		if f.Mutable != shape.mutable {
 			c.rulef("entity-base-shape", "%s: mutable must be %v", where, shape.mutable)
 		}
-		if _, has := m["column"]; has {
-			c.rulef("entity-base-shape", "%s: base fields must not declare column", where)
+		if f.SourceColumnRef != ref || f.SourceComputed != "" {
+			c.rulef("entity-base-shape", "%s: source must be %s", where, ref)
+		}
+		if f.ValidationCount != 1 || f.ValidationKind != "column" || f.ValidationRef != ref {
+			c.rulef("entity-base-shape", "%s: validation must be column %s", where, ref)
+		}
+		if strings.TrimSpace(f.Description) == "" {
+			c.rulef("entity-base-shape", "%s: description must not be empty", where)
 		}
 	}
 	if count != len(entityBaseShape) {
@@ -637,78 +644,20 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 		if f.BaseRedeclared {
 			c.rulef("entity-no-base-fields", "%s: redeclares base field; only status may specialize to data.enums.*", where)
 		}
-		meta, ok := c.tableColumns[f.ColumnTable][f.Column]
-		if f.ColumnTable == "" || f.Column == "" {
-			switch {
-			case f.HasColumnRef:
-				c.rulef("entity-field-column", "%s: malformed column ref", where)
-			case len(e.Tables) > 1:
-				c.rulef("entity-field-column", "%s: multi-table entity field must declare column", where)
-			default:
-				c.rulef("entity-field-column", "%s: cannot resolve source column", where)
-			}
+		if strings.TrimSpace(f.Description) == "" {
+			c.rulef("entity-field-description", "%s: description must not be empty", where)
+		}
+		if f.IsRelation {
+			c.checkRelationFieldShape(f, where)
 			continue
 		}
-		if !containsString(e.Tables, f.ColumnTable) {
-			c.rulef("entity-field-column", "%s: column %s.%s does not belong to entity tables %v", where, f.ColumnTable, f.Column, e.Tables)
-			continue
-		}
-		if !ok {
-			c.rulef("entity-field-column", "%s: column %s.%s not found", where, f.ColumnTable, f.Column)
-			continue
-		}
-		key := f.ColumnTable + "." + f.Column
-		if prev, ok := cols[key]; ok {
-			c.rulef("entity-field-column", "%s: column %s already used by field %s", where, key, prev)
-		}
-		cols[key] = f.Name
-
-		colType := c.resolvedColumnType(meta.typ)
-		typ := f.Type
-		if f.HasExplicitType && typ != "" {
-			switch {
-			case strings.Contains(typ, "[]") || strings.HasPrefix(typ, "list<"):
-				c.rulef("entity-field-type", "%s: list types are not allowed in entity fields", where)
-			case strings.HasPrefix(typ, "data.enums."):
-				if colType != "integer" {
-					c.rulef("entity-field-type", "%s: enum requires integer column, got %s", where, colType)
-				}
-			case strings.HasPrefix(typ, "data.tables."):
-				c.rulef("entity-field-type", "%s: entity fields must not reference table row types", where)
-			case c.isEntityType(typ):
-				if colType != typ {
-					c.rulef("entity-field-type", "%s: type %s does not match column type %s", where, typ, colType)
-				}
-			default:
-				c.rulef("entity-field-type", "%s: unknown entity type %s", where, typ)
-			}
-		}
-		if f.Required && meta.nullable {
-			c.rulef("entity-field-required", "%s: required field maps to nullable column", where)
-		}
-		if !f.Required && !meta.nullable {
-			c.rulef("entity-field-required", "%s: non-null column must be required:true", where)
-		}
-		if meta.pii && !f.PII {
-			c.rulef("entity-field-sensitive", "%s: column is pii; entity field must set pii:true", where)
-		}
-		if meta.neverExpose && !f.NeverExpose {
-			c.rulef("entity-field-sensitive", "%s: column is never_expose; entity field must set never_expose:true", where)
-		}
-		if f.NeverExpose && isExportedName(f.Name) {
-			c.rulef("entity-field-sensitive", "%s: never_expose field must start lowercase (unexported)", where)
-		}
-		if f.Name == "CreatedAt" || f.Name == "UpdatedAt" || f.Name == "DeletedAt" {
-			if f.Mutable {
-				c.rulef("entity-field-mutable", "%s: %s must be mutable:false", where, f.Name)
-			}
-		}
+		c.checkScalarField(e, f, where, cols)
 	}
 	// 多表合成的每张表都必须真正提供字段，否则该表在 entity 中是多余的。
 	if len(e.Tables) > 1 {
 		used := map[string]bool{}
 		for _, f := range e.Fields {
-			if f.ColumnTable != "" {
+			if !f.IsRelation && f.ColumnTable != "" {
 				used[f.ColumnTable] = true
 			}
 		}
@@ -720,14 +669,152 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 	}
 }
 
+// checkRelationFieldShape 校验关系字段的键集合与必填项。
+func (c *Checker) checkRelationFieldShape(f entityFieldInfo, where string) {
+	if f.SourceColumnRef != "" || f.SourceComputed != "" || f.HasType || f.ValidationCount > 0 ||
+		f.HasMutable || f.PII || f.NeverExpose || len(f.Examples) > 0 {
+		c.rulef("entity-field-variant", "%s: relation field must not declare source/type/validation/mutable/pii/never_expose/examples", where)
+	}
+	if f.Relationship == "" || f.Target == "" || f.JoinColumnRef == "" {
+		c.rulef("entity-field-variant", "%s: relation field requires relationship/target/join_column", where)
+	}
+}
+
+// checkScalarField 校验标量字段：来源、类型、指针/可空、敏感标记与字段校验。
+func (c *Checker) checkScalarField(e *entityInfo, f entityFieldInfo, where string, cols map[string]string) {
+	if f.Relationship != "" || f.Target != "" || f.JoinColumnRef != "" || f.HasLoad {
+		c.rulef("entity-field-variant", "%s: scalar field must not declare relationship/target/join_column/load", where)
+	}
+	hasCol := f.SourceColumnRef != ""
+	hasComputed := f.SourceComputed != ""
+	if hasCol == hasComputed {
+		c.rulef("entity-field-source", "%s: source must declare exactly one of column/computed", where)
+	}
+	if !f.HasType {
+		c.rulef("entity-field-type", "%s: type is required", where)
+		return
+	}
+	base, pointer := splitPointer(f.Type)
+	if base == "" {
+		c.rulef("entity-field-type", "%s: empty type", where)
+		return
+	}
+	if strings.Contains(base, "[]") || strings.HasPrefix(base, "list<") {
+		c.rulef("entity-field-type", "%s: list types are not allowed in entity fields", where)
+		return
+	}
+	if strings.HasPrefix(base, "data.tables.") {
+		c.rulef("entity-field-type", "%s: entity fields must not reference table row types", where)
+		return
+	}
+	enumRef := strings.HasPrefix(base, "data.enums.")
+	if !enumRef && !c.isEntityType(base) {
+		c.rulef("entity-field-type", "%s: unknown entity type %s", where, base)
+		return
+	}
+	if hasComputed {
+		if !pointer {
+			c.rulef("entity-field-source", "%s: computed field must use a pointer type (*T) because queries may not load it", where)
+		}
+		if !f.HasMutable || f.Mutable {
+			c.rulef("entity-field-source", "%s: computed field must set mutable:false", where)
+		}
+		if sqlParamAtRe.MatchString(f.SourceComputed) || sqlParamNargRe.MatchString(f.SourceComputed) || sqlParamArgRe.MatchString(f.SourceComputed) {
+			c.rulef("entity-field-source", "%s: computed expression must not reference @params", where)
+		}
+	} else if hasCol {
+		meta, ok := c.tableColumns[f.ColumnTable][f.Column]
+		switch {
+		case f.ColumnTable == "" || f.Column == "":
+			c.rulef("entity-field-column", "%s: malformed column ref %q", where, f.SourceColumnRef)
+		case !containsString(e.Tables, f.ColumnTable):
+			c.rulef("entity-field-column", "%s: column %s.%s does not belong to entity tables %v", where, f.ColumnTable, f.Column, e.Tables)
+		case !ok:
+			c.rulef("entity-field-column", "%s: column %s.%s not found", where, f.ColumnTable, f.Column)
+		default:
+			key := f.ColumnTable + "." + f.Column
+			if prev, ok := cols[key]; ok {
+				c.rulef("entity-field-column", "%s: column %s already used by field %s", where, key, prev)
+			}
+			cols[key] = f.Name
+			colType := c.resolvedColumnType(meta.typ)
+			if enumRef {
+				if colType != "integer" {
+					c.rulef("entity-field-type", "%s: enum requires integer column, got %s", where, colType)
+				}
+			} else if base != colType {
+				c.rulef("entity-field-type", "%s: type %s does not match column type %s", where, base, colType)
+			}
+			if pointer != meta.nullable {
+				c.rulef("entity-field-type", "%s: pointer type %q must match column nullable=%v", where, f.Type, meta.nullable)
+			}
+			if meta.pii && !f.PII {
+				c.rulef("entity-field-sensitive", "%s: column is pii; entity field must set pii:true", where)
+			}
+			if meta.neverExpose && !f.NeverExpose {
+				c.rulef("entity-field-sensitive", "%s: column is never_expose; entity field must set never_expose:true", where)
+			}
+		}
+	}
+	if f.NeverExpose && isExportedName(f.Name) {
+		c.rulef("entity-field-sensitive", "%s: never_expose field must start lowercase (unexported)", where)
+	}
+	if f.Name == "CreatedAt" || f.Name == "UpdatedAt" || f.Name == "DeletedAt" {
+		if f.Mutable {
+			c.rulef("entity-field-mutable", "%s: %s must be mutable:false", where, f.Name)
+		}
+	}
+	c.checkFieldValidation(e, f, where, base)
+}
+
+// checkFieldValidation 校验 validation 三选一以及列/正则引用。
+func (c *Checker) checkFieldValidation(e *entityInfo, f entityFieldInfo, where, baseType string) {
+	if f.ValidationCount != 1 {
+		c.rulef("entity-field-validation", "%s: validation must declare exactly one of column/pattern/soft", where)
+		return
+	}
+	switch f.ValidationKind {
+	case "column":
+		t, col, ok := splitColumnRef(f.ValidationRef)
+		if !ok || t == "" || col == "" {
+			c.rulef("entity-field-validation", "%s: malformed validation column %q", where, f.ValidationRef)
+			return
+		}
+		if t == c.baseID {
+			if !isBaseColumn(col) {
+				c.rulef("entity-field-validation", "%s: validation column %s not found", where, f.ValidationRef)
+			}
+			return
+		}
+		if !containsString(e.Tables, t) {
+			c.rulef("entity-field-validation", "%s: validation column %s does not belong to entity tables", where, f.ValidationRef)
+			return
+		}
+		if _, ok := c.tableColumns[t][col]; !ok {
+			c.rulef("entity-field-validation", "%s: validation column %s not found", where, f.ValidationRef)
+		}
+	case "pattern":
+		if baseType != "string" {
+			c.rulef("entity-field-validation", "%s: pattern validation requires string type, got %s", where, baseType)
+		}
+		if _, err := regexp.Compile(f.ValidationRef); err != nil {
+			c.rulef("entity-field-validation", "%s: invalid pattern %q: %v", where, f.ValidationRef, err)
+		}
+	case "soft":
+		if strings.TrimSpace(f.ValidationRef) == "" {
+			c.rulef("entity-field-validation", "%s: soft validation must not be empty", where)
+		}
+	}
+}
+
 func (c *Checker) checkEntityID(e *entityInfo) {
 	idField := findEntityField(e, "ID")
 	if idField == nil {
 		c.rulef("entity-id", "%s: base ID field is missing", e.Rel)
 		return
 	}
-	if !idField.Required {
-		c.rulef("entity-id", "%s: ID must be required:true", e.Rel)
+	if _, pointer := splitPointer(idField.Type); pointer {
+		c.rulef("entity-id", "%s: ID must not be a pointer type", e.Rel)
 	}
 	if idField.Mutable {
 		c.rulef("entity-id", "%s: ID must be mutable:false", e.Rel)
@@ -746,7 +833,7 @@ func (c *Checker) checkEntityID(e *entityInfo) {
 // entityKeyOrder 是实体文件的固定顶层键顺序；生成器与 checker 共用同一顺序。
 var entityKeyOrder = []string{
 	"id", "summary", "owner_module", "schema_version", "stability",
-	"do_not", "model", "fields", "relations", "validation", "used_by",
+	"do_not", "model", "fields", "validation", "used_by",
 }
 
 // checkEntityKeyOrder 校验实体顶层键顺序；YAML map 会丢序，所以使用原始键列表。
@@ -850,8 +937,12 @@ func (c *Checker) checkEntityFieldMetadata(e *entityInfo) {
 		} else {
 			jsonNames[jsonName] = f.Name
 		}
+		if f.IsRelation {
+			continue
+		}
+		base, _ := splitPointer(f.Type)
 		for _, ex := range f.Examples {
-			if !entityExampleMatches(f.Type, ex) {
+			if !entityExampleMatches(base, ex) {
 				c.rulef("entity-field-examples", "%s: example %v does not match type %s", where, ex, f.Type)
 			}
 		}
@@ -898,13 +989,11 @@ func isIntegerExample(v any) bool {
 }
 
 func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[string]bool) {
-	names := map[string]bool{}
-	for _, r := range e.Relations {
-		where := fmt.Sprintf("%s: relations.%s", e.Rel, r.Name)
-		if names[r.Name] {
-			c.rulef("schema.unique-names", "%s: duplicate relation name %s", e.Rel, r.Name)
+	for _, r := range e.Fields {
+		if !r.IsRelation {
+			continue
 		}
-		names[r.Name] = true
+		where := fmt.Sprintf("%s: fields.%s", e.Rel, r.Name)
 		target := c.entities[r.Target]
 		if target == nil {
 			c.rulef("entity-relation-target", "%s: target %s not found", where, r.Target)
@@ -915,37 +1004,37 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 		}
 		expected[r.Target][e.ID] = true
 
-		vmeta, vok := c.tableColumns[r.ViaTable][r.ViaColumn]
-		if r.ViaTable == "" || r.ViaColumn == "" || !vok {
-			c.rulef("entity-relation-via", "%s: via %s.%s not found", where, r.ViaTable, r.ViaColumn)
+		vmeta, vok := c.tableColumns[r.JoinTable][r.JoinColumn]
+		if r.JoinTable == "" || r.JoinColumn == "" || !vok {
+			c.rulef("entity-relation-via", "%s: join_column %s.%s not found", where, r.JoinTable, r.JoinColumn)
 			continue
 		}
-		inSelf := containsString(e.Tables, r.ViaTable)
-		inTarget := containsString(target.Tables, r.ViaTable)
+		inSelf := containsString(e.Tables, r.JoinTable)
+		inTarget := containsString(target.Tables, r.JoinTable)
 		if !inSelf && !inTarget {
-			c.rulef("entity-relation-via", "%s: via table %s belongs to neither %s nor %s", where, r.ViaTable, e.ID, target.ID)
+			c.rulef("entity-relation-via", "%s: join_column table %s belongs to neither %s nor %s", where, r.JoinTable, e.ID, target.ID)
 			continue
 		}
-		switch r.Kind {
+		switch r.Relationship {
 		case "many_to_one":
 			if !inSelf {
-				c.rulef("entity-relation-direction", "%s: many_to_one via must be on %s", where, e.ID)
+				c.rulef("entity-relation-direction", "%s: many_to_one join_column must be on %s", where, e.ID)
 			}
 		case "one_to_many":
 			if !inTarget {
-				c.rulef("entity-relation-direction", "%s: one_to_many via must be on %s", where, target.ID)
+				c.rulef("entity-relation-direction", "%s: one_to_many join_column must be on %s", where, target.ID)
 			}
 		case "one_to_one":
 			// 两边均可
 		default:
-			c.rulef("entity-relation-direction", "%s: unknown kind %s", where, r.Kind)
+			c.rulef("entity-relation-direction", "%s: unknown relationship %s", where, r.Relationship)
 		}
 		counterpart := c.counterpartID(e, target, inSelf)
 		if counterpart != nil {
 			if meta, ok := c.tableColumns[counterpart.ColumnTable][counterpart.Column]; ok {
 				counterType := c.resolvedColumnType(meta.typ)
 				if counterType != c.resolvedColumnType(vmeta.typ) {
-					c.rulef("entity-relation-via", "%s: via type %s does not match %s.%s type %s", where, c.resolvedColumnType(vmeta.typ), counterpart.ColumnTable, counterpart.Column, counterType)
+					c.rulef("entity-relation-via", "%s: join_column type %s does not match %s.%s type %s", where, c.resolvedColumnType(vmeta.typ), counterpart.ColumnTable, counterpart.Column, counterType)
 				}
 			}
 		}
@@ -954,8 +1043,8 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 				c.rulef("entity-relation-eager-cycle", "%s: self relation must be lazy", where)
 			}
 			if inTarget {
-				if !c.hasIndex(r.ViaTable, r.ViaColumn) {
-					c.rulef("entity-relation-eager-index", "%s: eager relation requires index on %s.%s", where, r.ViaTable, r.ViaColumn)
+				if !c.hasIndex(r.JoinTable, r.JoinColumn) {
+					c.rulef("entity-relation-eager-index", "%s: eager relation requires index on %s.%s", where, r.JoinTable, r.JoinColumn)
 				}
 			}
 		}
@@ -970,7 +1059,7 @@ func (c *Checker) counterpartID(e, target *entityInfo, inSelf bool) *entityField
 	} else {
 		owner = e
 	}
-	return findEntityField(owner, "id")
+	return findEntityField(owner, "ID")
 }
 
 // resolvedColumnType 把列引用解析为实际类型族；非引用原样返回。
@@ -1029,8 +1118,8 @@ func (c *Checker) checkEntityValidation(e *entityInfo) {
 func (c *Checker) checkEagerCycles() {
 	adj := map[string][]string{}
 	for id, e := range c.entities {
-		for _, r := range e.Relations {
-			if r.Load == "eager" && r.Target != "" {
+		for _, r := range e.Fields {
+			if r.IsRelation && r.Load == "eager" && r.Target != "" {
 				adj[id] = append(adj[id], r.Target)
 			}
 		}

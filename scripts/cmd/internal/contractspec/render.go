@@ -14,7 +14,6 @@ type tableScaffold struct {
 	ID            string          `yaml:"id"`
 	Summary       string          `yaml:"summary"`
 	OwnerModule   string          `yaml:"owner_module"`
-	Extends       flowStrings     `yaml:"extends"`
 	SchemaVersion int             `yaml:"schema_version"`
 	Stability     string          `yaml:"stability"`
 	DoNot         []string        `yaml:"do_not"`
@@ -26,8 +25,8 @@ type tableScaffold struct {
 }
 
 type tableDef struct {
-	Comment   string `yaml:"comment"`
-	SizeClass string `yaml:"size_class"`
+	Comment string      `yaml:"comment"`
+	Extends flowStrings `yaml:"extends"`
 }
 
 type columnDef struct {
@@ -106,26 +105,22 @@ type queryFileScaffold struct {
 	ID            string              `yaml:"id"`
 	Summary       string              `yaml:"summary"`
 	Stability     string              `yaml:"stability"`
-	Module        string              `yaml:"module"`
+	OwnerModule   string              `yaml:"owner_module"`
 	Queries       []queryItemScaffold `yaml:"queries"`
 }
 
 type queryItemScaffold struct {
-	ID           string               `yaml:"id"`
-	Name         string               `yaml:"name"`
-	Kind         string               `yaml:"kind"`
-	Params       []queryParamScaffold `yaml:"params"`
-	Returns      string               `yaml:"returns"`
-	Semantics    string               `yaml:"semantics"`
-	IndexColumns [][]string           `yaml:"index_columns"`
-	SQL          querySQLScaffold     `yaml:"sql"`
-}
-
-type querySQLScaffold struct {
-	Statement string      `yaml:"statement"`
-	From      string      `yaml:"from"`
-	Select    flowStrings `yaml:"select"`
-	Where     []string    `yaml:"where,omitempty"`
+	ID        string               `yaml:"id"`
+	Name      string               `yaml:"name"`
+	Kind      string               `yaml:"kind"`
+	Statement string               `yaml:"statement"`
+	Targets   flowStrings          `yaml:"targets"`
+	Params    []queryParamScaffold `yaml:"params"`
+	Returns   string               `yaml:"returns"`
+	Expr      string               `yaml:"expr"`
+	Where     []any                `yaml:"where,omitempty"`
+	IndexRef  flowStrings          `yaml:"index_ref"`
+	Semantics string               `yaml:"semantics"`
 }
 
 // flowStrings 以 YAML flow list 输出，保持 query sql 的列清单横排。
@@ -140,8 +135,9 @@ func (s flowStrings) MarshalYAML() (any, error) {
 }
 
 type queryParamScaffold struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"`
+	Name   string `yaml:"name"`
+	Type   string `yaml:"type"`
+	Column string `yaml:"column,omitempty"`
 }
 
 func RenderTable(s *Schema, name, module, summary string) ([]byte, error) {
@@ -163,14 +159,14 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	}
 	top := map[string]bool{
 		"schema_version": true, "id": true, "summary": true, "stability": true,
-		"owner_module": true, "extends": true, "do_not": true, "table": true,
+		"owner_module": true, "do_not": true, "table": true,
 		"columns": true, "constraints": true, "indexes": true, "used_by": true,
 	}
 	if err := requireSupported(s.Fields, top, "data.tables"); err != nil {
 		return nil, err
 	}
 	tableField, _ := FindField(s.Fields, "table")
-	if err := requireSupported(tableField.Fields, map[string]bool{"comment": true, "size_class": true}, s.Type+".table"); err != nil {
+	if err := requireSupported(tableField.Fields, map[string]bool{"comment": true, "extends": true}, s.Type+".table"); err != nil {
 		return nil, err
 	}
 	columnField, _ := FindField(s.Fields, "columns")
@@ -209,19 +205,16 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		return nil, err
 	}
 	columnNullable := defaultBool(columnField.ItemFields, "nullable", false)
-	sizeClass := nestedDefaultString(s.Fields, "table", "size_class", "small")
-
 	doc := tableScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            tableID,
 		Summary:       summary,
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		OwnerModule:   module,
-		Extends:       flowStrings{baseTableID},
 		DoNot:         []string{},
 		Table: tableDef{
-			Comment:   "TODO: 表说明",
-			SizeClass: sizeClass,
+			Comment: "TODO: 表说明",
+			Extends: flowStrings{baseTableID},
 		},
 		Columns: []columnDef{
 			{Name: columnName, Type: columnType, Nullable: columnNullable, Comment: "TODO: 列说明", Params: columnParams},
@@ -234,7 +227,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；替换 TODO 占位符。\n# 字段规范见 %s。\n\n", summary, s.ID)
+	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；替换 TODO 占位符。\n# 新表还需在 contracts/data/storage.yaml 的 tables 下登记。\n# 字段规范见 %s。\n\n", summary, s.ID)
 	return append([]byte(header), b...), nil
 }
 
@@ -307,9 +300,10 @@ func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, 
 		return nil, fmt.Errorf("RenderEntity: fields is missing in schema")
 	}
 	if err := requireSupported(fieldsField.ItemFields, map[string]bool{
-		"name": true, "column": true, "type": true, "required": true, "mutable": true,
-		"pii": true, "never_expose": true, "json_name": true,
-		"examples": true, "description": true,
+		"name": true, "json_name": true, "description": true, "type": true,
+		"source": true, "validation": true, "mutable": true, "pii": true,
+		"never_expose": true, "examples": true,
+		"relationship": true, "target": true, "join_column": true, "load": true,
 	}, "data.entities.fields"); err != nil {
 		return nil, err
 	}
@@ -364,7 +358,7 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 	}
 	top := map[string]bool{
 		"schema_version": true, "id": true, "summary": true, "stability": true,
-		"module": true, "queries": true,
+		"owner_module": true, "queries": true,
 	}
 	if err := requireSupported(s.Fields, top, "data.queries"); err != nil {
 		return nil, err
@@ -374,8 +368,9 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		return nil, fmt.Errorf("RenderQuery: queries is missing in schema")
 	}
 	if err := requireSupported(queriesField.ItemFields, map[string]bool{
-		"id": true, "name": true, "kind": true, "params": true,
-		"returns": true, "semantics": true, "index_columns": true, "sql": true,
+		"id": true, "name": true, "kind": true, "statement": true, "targets": true,
+		"params": true, "returns": true, "expr": true, "where": true,
+		"index_ref": true, "semantics": true,
 	}, "data.queries.queries"); err != nil {
 		return nil, err
 	}
@@ -398,27 +393,26 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		ID:            fileID,
 		Summary:       summary,
 		Stability:     defaultString(s.Fields, "stability", "draft"),
-		Module:        module,
+		OwnerModule:   module,
 		Queries: []queryItemScaffold{{
-			ID:           queryID,
-			Name:         "Exists" + pascal(name),
-			Kind:         "one",
-			Params:       []queryParamScaffold{{Name: "id", Type: "text"}},
-			Returns:      "boolean",
-			Semantics:    "TODO: 查询语义",
-			IndexColumns: [][]string{{"id"}},
-			SQL: querySQLScaffold{
-				Statement: "select",
-				From:      "data.tables." + table,
-				Select:    flowStrings{fmt.Sprintf("EXISTS (SELECT 1 FROM %s WHERE id = @id)", physical)},
-			},
+			ID:        queryID,
+			Name:      "Exists" + pascal(name),
+			Kind:      "one",
+			Statement: "select",
+			Targets:   flowStrings{"data.tables." + table},
+			Params:    []queryParamScaffold{{Name: "id", Type: "text", Column: "data.tables." + table + ".col.id"}},
+			Returns:   "boolean",
+			Expr:      "COUNT(*) > 0",
+			Where:     []any{map[string]any{"column": "id", "op": "eq", "param": "id"}},
+			IndexRef:  flowStrings{"data.tables." + table + ".pk"},
+			Semantics: "TODO: 查询语义",
 		}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；把 EXISTS 换成真实查询并保留 index_columns。\n# 字段规范见 %s。\n\n", summary, s.ID)
+	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；把 COUNT(*) > 0 换成真实查询并保留 index_ref。\n# 字段规范见 %s。\n\n", summary, s.ID)
 	return append([]byte(header), b...), nil
 }
 
@@ -496,14 +490,6 @@ func defaultString(fields []Field, name, fallback string) string {
 		}
 	}
 	return fallback
-}
-
-func nestedDefaultString(fields []Field, parent, child, fallback string) string {
-	p, ok := FindField(fields, parent)
-	if !ok {
-		return fallback
-	}
-	return defaultString(p.Fields, child, fallback)
 }
 
 func defaultBool(fields []Field, name string, fallback bool) bool {

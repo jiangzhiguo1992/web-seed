@@ -68,7 +68,7 @@ type tableDoc struct {
 
 // tableKeyOrder 是表契约的固定顶层键顺序。
 var tableKeyOrder = []string{
-	"id", "summary", "owner_module", "extends", "schema_version", "stability",
+	"id", "summary", "owner_module", "schema_version", "stability",
 	"do_not", "table", "columns", "constraints", "indexes", "used_by",
 }
 
@@ -110,6 +110,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	physicalNames := map[string]string{}
 	c.tableOwners = map[string]string{}
 	c.tableObjects = map[string]map[string]bool{}
+	c.tableDocs = map[string]map[string]any{}
 	c.objectNames = map[string]string{}
 	c.objectKinds = map[string]string{}
 	c.inheritedCols = map[string]map[string]bool{}
@@ -158,6 +159,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	c.inheritedCols = make(map[string]map[string]bool, len(physical))
 	for _, td := range physical {
 		c.inheritedCols[td.id] = ancestors[td.id]
+		c.tableDocs[td.id] = td.doc
 		c.checkPhysicalTable(td.doc, td.rel, schema)
 		c.collectTableObjects(td.doc, td.rel, td.id)
 		if owner, _ := td.doc["owner_module"].(string); owner != "" {
@@ -328,10 +330,11 @@ func cyclePath(stack []string, id string) string {
 	return strings.Join(path, " -> ")
 }
 
-// extendsList 提取 extends 列表中的非空父表 ID；类型错误由 schema 校验。
+// extendsList 提取 table.extends 列表中的非空父表 ID；类型错误由 schema 校验。
 func extendsList(doc map[string]any) []string {
+	table, _ := asMap(doc["table"])
 	var out []string
-	for _, raw := range asList(doc["extends"]) {
+	for _, raw := range asList(table["extends"]) {
 		if s, ok := raw.(string); ok && s != "" {
 			out = append(out, s)
 		}
@@ -339,9 +342,13 @@ func extendsList(doc map[string]any) []string {
 	return out
 }
 
-// extendsPattern 从字段规范读取 extends 的 pattern，避免 checker 与 meta 各写一份正则。
+// extendsPattern 从字段规范读取 table.extends 的 pattern，避免 checker 与 meta 各写一份正则。
 func extendsPattern(schema *Schema) *regexp.Regexp {
-	for _, f := range schema.Fields {
+	table, ok := contractspec.FindField(schema.Fields, "table")
+	if !ok {
+		return nil
+	}
+	for _, f := range table.Fields {
 		if f.Name != "extends" || f.Pattern == "" {
 			continue
 		}
@@ -580,13 +587,8 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	} else if id != want {
 		c.rulef("schema.id-from-file", "%s: id must be %s, got %s (file name is the source)", rel, want, id)
 	}
-	// extends 的值域由 fields.extends.pattern + unique 保证；
+	// table.extends 的值域由 fields.table.fields.extends.pattern + unique 保证；
 	// 这里只补字段树无法表达的空列表约束，避免同一错误重复报两次。
-	if raw, ok := doc["extends"]; ok {
-		if list, isList := raw.([]any); isList && len(list) == 0 {
-			c.rulef("base-only", "%s: extends must not be empty", rel)
-		}
-	}
 	table, _ := asMap(doc["table"])
 	if table != nil {
 		if n, ok := table["name"].(string); ok && n == "" {
@@ -594,6 +596,9 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		}
 		if _, ok := table["comment"]; ok && !hasNonEmptyString(table, "comment") {
 			c.rulef("schema.non-empty", "%s: table.comment must not be empty", rel)
+		}
+		if list, isList := table["extends"].([]any); isList && len(list) == 0 {
+			c.rulef("base-only", "%s: table.extends must not be empty", rel)
 		}
 	}
 
@@ -648,23 +653,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			}
 			if !allCols[s] {
 				c.rulef(rule, "%s: unknown column %q", where, s)
-			}
-		}
-	}
-	if table != nil {
-		if p, ok := asMap(table["partition"]); ok {
-			pcols := asList(p["columns"])
-			if len(pcols) == 0 {
-				c.rulef("partition", "%s: table.partition.columns must not be empty", rel)
-			}
-			checkCols("partition", fmt.Sprintf("%s: table.partition", rel), pcols)
-			strategy, _ := p["strategy"].(string)
-			interval, _ := p["interval"].(string)
-			if strategy == "range" && strings.TrimSpace(interval) == "" {
-				c.rulef("partition", "%s: table.partition.interval is required for range", rel)
-			}
-			if strategy != "range" && strings.TrimSpace(interval) != "" {
-				c.rulef("partition", "%s: table.partition.interval is only allowed for range", rel)
 			}
 		}
 	}
@@ -727,10 +715,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	}
 
 	indexNames := map[string]bool{}
-	sizeClass := ""
-	if table != nil {
-		sizeClass, _ = table["size_class"].(string)
-	}
 	for i, raw := range asList(doc["indexes"]) {
 		m, ok := asMap(raw)
 		if !ok {
@@ -760,11 +744,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.rulef("index-order", "%s: indexes[%d] (%s): order requires columns", rel, i, name)
 			} else if len(order) != len(asList(m["columns"])) {
 				c.rulef("index-order", "%s: indexes[%d] (%s): order length must match columns", rel, i, name)
-			}
-		}
-		if sizeClass == "large" {
-			if conc, _ := m["concurrently"].(string); conc == "false" {
-				c.rulef("large-index-concurrently", "%s: indexes[%d] (%s): large table must not disable CONCURRENTLY", rel, i, name)
 			}
 		}
 		checkCols("index-definition", fmt.Sprintf("%s: indexes[%d] (%s).include", rel, i, name), asList(m["include"]))
@@ -812,7 +791,7 @@ func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int,
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): query %s does not reference table %s", rel, i, name, qid, tableID)
 			continue
 		}
-		if cols := asList(m["columns"]); len(cols) > 0 && !sqlMentionsAny(c.querySQL[qid], cols) {
+		if cols := asList(m["columns"]); len(cols) > 0 && !sqlMentionsAny(c.queryText[qid], cols) {
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): query %s SQL does not mention index columns", rel, i, name, qid)
 		}
 	}

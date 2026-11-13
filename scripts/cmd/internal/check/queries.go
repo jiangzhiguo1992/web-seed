@@ -1,4 +1,4 @@
-// queries.go 校验 data.queries：ID/名称、表、参数、返回、SQL 形态与写归属。
+// queries.go 校验 data.queries：ID/名称、目标表、参数、返回、伪 SQL 子句与写归属。
 // 同时建立查询索引，供 index.used_by 与跨文件引用校验使用。
 package check
 
@@ -13,7 +13,18 @@ import (
 type queryParam struct {
 	Name     string
 	Type     string
+	Column   string
 	Nullable bool
+}
+
+// queryPredicate 是 where 的结构化谓词；字符串项仍是软表达式。
+type queryPredicate struct {
+	Column   string
+	Op       string
+	Param    string
+	Value    any
+	HasValue bool
+	raw      map[string]any
 }
 
 type queryReturn struct {
@@ -28,42 +39,7 @@ type queryOutputField struct {
 	Name     string
 	Type     string
 	Nullable bool
-}
-
-type queryInfo struct {
-	ID            string
-	Name          string
-	FileID        string
-	File          string
-	Module        string
-	Kind          string
-	Tables        []string
-	Params        []queryParam
-	Return        queryReturn
-	ReturnColumns []string
-	OutputFields  []queryOutputField
-	IndexColumns  [][]string
-	Semantics     string
-	SQL           querySQL
-	Doc           map[string]any
-}
-
-// querySQL 是结构化 SQL：子句是字符串表达式，表和返回列是结构化引用。
-type querySQL struct {
-	Statement string
-	From      string
-	Into      string
-	Distinct  bool
-	Select    []string
-	Where     []string
-	OrderBy   []string
-	Limit     string
-	Columns   []string
-	Values    []string
-	Set       []string
-	Returning []string
-	Joins     []queryJoin
-	Raw       string
+	Expr     string
 }
 
 type queryJoin struct {
@@ -72,19 +48,81 @@ type queryJoin struct {
 	On    []string
 }
 
+type queryInfo struct {
+	ID            string
+	Name          string
+	FileID        string
+	File          string
+	OwnerModule   string
+	Kind          string
+	Statement     string
+	Targets       []string
+	Joins         []queryJoin
+	Params        []queryParam
+	Return        queryReturn
+	ReturnColumns []string
+	OutputFields  []queryOutputField
+	Expr          string
+	Values        map[string]string
+	Where         []string
+	Predicates    []queryPredicate
+	BadWhere      []any
+	OrderBy       []string
+	Limit         string
+	IndexRef      []string
+	Semantics     string
+	Doc           map[string]any
+}
+
 type queryDoc struct {
 	rel    string
 	fileID string
 	doc    map[string]any
+	keys   []string
 }
 
 var sqlParamAtRe = regexp.MustCompile(`@([a-z_][a-z0-9_]*)`)
+var sqlAliasSuffixRe = regexp.MustCompile(`(?is)\s+as\s+[a-z_][a-z0-9_]*\s*$`)
 var sqlParamNargRe = regexp.MustCompile(`sqlc\.narg\('([a-z_][a-z0-9_]*)'\)`)
 var sqlParamArgRe = regexp.MustCompile(`sqlc\.arg\('([a-z_][a-z0-9_]*)'\)`)
 
 var sqlScalarReturns = map[string]bool{
 	"boolean": true, "integer": true, "string": true, "float": true,
 	"decimal": true, "timestamp": true, "datetime": true, "json": true,
+}
+
+// exprText 把所有伪 SQL 表达式拼成一段，供参数扫描与索引列提及校验使用。
+func (q *queryInfo) exprText() string {
+	parts := []string{q.Expr, q.Limit}
+	parts = append(parts, q.Where...)
+	for _, p := range q.Predicates {
+		parts = append(parts, p.Column)
+	}
+	parts = append(parts, q.OrderBy...)
+	for _, j := range q.Joins {
+		parts = append(parts, j.On...)
+	}
+	for col, v := range q.Values {
+		parts = append(parts, col, v)
+	}
+	for _, f := range q.OutputFields {
+		parts = append(parts, f.Expr)
+	}
+	return strings.Join(parts, "\n")
+}
+
+// tableSet 返回查询读写的表集合：targets + joins。
+func (q *queryInfo) tableSet() map[string]bool {
+	out := map[string]bool{}
+	for _, t := range q.Targets {
+		out[t] = true
+	}
+	for _, j := range q.Joins {
+		if j.Table != "" {
+			out[j.Table] = true
+		}
+	}
+	return out
 }
 
 // loadQueryIndex 解析查询文件；结构错误在 checkQueries 中报。
@@ -95,8 +133,7 @@ func (c *Checker) loadQueryIndex(schema *Schema) {
 	c.queryDupIDs = map[string]bool{}
 	c.queryIDs = map[string]string{}
 	c.queryTables = map[string]map[string]bool{}
-	c.querySQL = map[string]string{}
-	c.queryIndexCols = map[string][][]string{}
+	c.queryText = map[string]string{}
 	if schema.Targets.Dir == "" || schema.Targets.Glob == "" {
 		return
 	}
@@ -108,18 +145,19 @@ func (c *Checker) loadQueryIndex(schema *Schema) {
 		if err != nil {
 			continue
 		}
+		keys, _ := loadYAMLKeys(file)
 		fileID := schema.Targets.FileID(filepath.Base(file))
 		if fileID == "" {
 			fileID = strings.TrimSuffix(rel, filepath.Ext(rel))
 		}
-		c.queryDocs = append(c.queryDocs, queryDoc{rel: rel, fileID: fileID, doc: doc})
-		module, _ := doc["module"].(string)
+		c.queryDocs = append(c.queryDocs, queryDoc{rel: rel, fileID: fileID, doc: doc, keys: keys})
+		owner, _ := doc["owner_module"].(string)
 		for _, raw := range asList(doc["queries"]) {
 			m, ok := asMap(raw)
 			if !ok {
 				continue
 			}
-			q := parseQuery(m, rel, fileID, module)
+			q := parseQuery(m, rel, fileID, owner)
 			if q.ID == "" {
 				continue
 			}
@@ -130,25 +168,45 @@ func (c *Checker) loadQueryIndex(schema *Schema) {
 			c.queries[q.ID] = q
 			c.queryOrder = append(c.queryOrder, q.ID)
 			c.queryIDs[q.ID] = rel
-			c.querySQL[q.ID] = q.SQL.Text()
-			c.queryIndexCols[q.ID] = q.IndexColumns
-			tables := map[string]bool{}
-			for _, t := range q.Tables {
-				tables[t] = true
-			}
-			c.queryTables[q.ID] = tables
+			c.queryText[q.ID] = q.exprText()
+			c.queryTables[q.ID] = q.tableSet()
 		}
 	}
 }
 
-func parseQuery(m map[string]any, rel, fileID, module string) *queryInfo {
-	q := &queryInfo{File: rel, FileID: fileID, Module: module, Doc: m}
+func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
+	q := &queryInfo{File: rel, FileID: fileID, OwnerModule: owner, Doc: m}
 	q.ID, _ = m["id"].(string)
 	q.Name, _ = m["name"].(string)
 	q.Kind, _ = m["kind"].(string)
+	q.Statement, _ = m["statement"].(string)
 	q.Semantics, _ = m["semantics"].(string)
-	q.SQL = parseQuerySQL(m["sql"])
-	q.Tables = q.SQL.TableRefs()
+	q.Targets = stringList(m["targets"])
+	q.Expr = stringAt(m, "expr")
+	q.Limit = stringAt(m, "limit")
+	for _, raw := range asList(m["where"]) {
+		switch v := raw.(type) {
+		case string:
+			q.Where = append(q.Where, v)
+		case map[string]any:
+			q.Predicates = append(q.Predicates, parsePredicate(v))
+		default:
+			q.BadWhere = append(q.BadWhere, raw)
+		}
+	}
+	q.OrderBy = stringList(m["order_by"])
+	q.IndexRef = stringList(m["index_ref"])
+	for _, raw := range asList(m["joins"]) {
+		jm, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		j := queryJoin{Table: stringAt(jm, "table"), Type: stringAt(jm, "type"), On: stringList(jm["on"])}
+		if j.Type == "" {
+			j.Type = "inner"
+		}
+		q.Joins = append(q.Joins, j)
+	}
 	for _, raw := range asList(m["params"]) {
 		pm, ok := asMap(raw)
 		if !ok {
@@ -157,6 +215,7 @@ func parseQuery(m map[string]any, rel, fileID, module string) *queryInfo {
 		p := queryParam{}
 		p.Name, _ = pm["name"].(string)
 		p.Type, _ = pm["type"].(string)
+		p.Column, _ = pm["column"].(string)
 		p.Nullable, _ = pm["nullable"].(bool)
 		q.Params = append(q.Params, p)
 	}
@@ -172,133 +231,33 @@ func parseQuery(m map[string]any, rel, fileID, module string) *queryInfo {
 		f.Name, _ = om["name"].(string)
 		f.Type, _ = om["type"].(string)
 		f.Nullable, _ = om["nullable"].(bool)
+		f.Expr, _ = om["expr"].(string)
 		q.OutputFields = append(q.OutputFields, f)
 	}
-	q.IndexColumns = stringGroups(m["index_columns"])
+	q.Values = map[string]string{}
+	if vm, ok := asMap(m["values"]); ok {
+		for k, raw := range vm {
+			if s, ok := raw.(string); ok {
+				q.Values[k] = s
+			}
+		}
+	}
 	return q
 }
 
-func parseQuerySQL(v any) querySQL {
-	m, ok := asMap(v)
-	if !ok {
-		if s, ok := v.(string); ok {
-			return querySQL{Raw: s}
-		}
-		return querySQL{}
-	}
-	q := querySQL{
-		Statement: stringAt(m, "statement"),
-		From:      stringAt(m, "from"),
-		Into:      stringAt(m, "into"),
-		Limit:     stringAt(m, "limit"),
-		Select:    stringList(m["select"]),
-		Where:     stringList(m["where"]),
-		OrderBy:   stringList(m["order_by"]),
-		Columns:   stringList(m["columns"]),
-		Values:    stringList(m["values"]),
-		Set:       stringList(m["set"]),
-		Returning: stringList(m["returning"]),
-	}
-	q.Distinct, _ = m["distinct"].(bool)
-	for _, raw := range asList(m["joins"]) {
-		jm, ok := asMap(raw)
-		if !ok {
-			continue
-		}
-		j := queryJoin{Table: stringAt(jm, "table"), Type: stringAt(jm, "type"), On: stringList(jm["on"])}
-		if j.Type == "" {
-			j.Type = "inner"
-		}
-		q.Joins = append(q.Joins, j)
-	}
-	return q
+// parsePredicate 解析结构化谓词；值域与列引用在 checkQueryWhere 中校验。
+func parsePredicate(m map[string]any) queryPredicate {
+	p := queryPredicate{raw: m}
+	p.Column, _ = m["column"].(string)
+	p.Op, _ = m["op"].(string)
+	p.Param, _ = m["param"].(string)
+	p.Value, p.HasValue = m["value"]
+	return p
 }
 
 func stringAt(m map[string]any, key string) string {
 	s, _ := m[key].(string)
 	return strings.TrimSpace(s)
-}
-
-// Text 把所有表达式拼成一段，供参数/词法级校验使用；不是可执行 SQL。
-func (q querySQL) Text() string {
-	if q.Raw != "" {
-		return q.Raw
-	}
-	var parts []string
-	parts = append(parts, q.Select...)
-	parts = append(parts, q.Where...)
-	parts = append(parts, q.OrderBy...)
-	parts = append(parts, q.Columns...)
-	parts = append(parts, q.Values...)
-	parts = append(parts, q.Set...)
-	parts = append(parts, q.Returning...)
-	for _, j := range q.Joins {
-		parts = append(parts, j.On...)
-	}
-	if q.Limit != "" {
-		parts = append(parts, q.Limit)
-	}
-	return strings.Join(parts, "\n")
-}
-
-// TableRefs 返回 SQL 子句声明的表；from 是主表，into 用于 INSERT。
-func (q querySQL) TableRefs() []string {
-	out := []string{}
-	if q.From != "" {
-		out = append(out, q.From)
-	}
-	if q.Into != "" {
-		out = append(out, q.Into)
-	}
-	for _, j := range q.Joins {
-		if j.Table != "" {
-			out = append(out, j.Table)
-		}
-	}
-	return out
-}
-
-// SelectedColumns 返回 select/returning 中的纯列名；表达式不参与实体覆盖判断。
-func (q querySQL) SelectedColumns() []string {
-	out := []string{}
-	for _, item := range append(append([]string{}, q.Select...), q.Returning...) {
-		if simpleSQLIdent(item) {
-			out = append(out, item)
-		}
-	}
-	return out
-}
-
-// SelectAliases 返回 select/returning 中的输出名：纯列名或 AS 别名。
-func (q querySQL) SelectAliases() []string {
-	out := []string{}
-	for _, item := range append(append([]string{}, q.Select...), q.Returning...) {
-		item = strings.TrimSpace(item)
-		if simpleSQLIdent(item) {
-			out = append(out, item)
-			continue
-		}
-		if _, alias, ok := splitSQLAlias(item); ok {
-			out = append(out, alias)
-		}
-	}
-	return out
-}
-
-var simpleSQLIdentRe = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
-
-func simpleSQLIdent(s string) bool {
-	return simpleSQLIdentRe.MatchString(strings.TrimSpace(s))
-}
-
-var sqlAliasRe = regexp.MustCompile(`(?is)^(.+?)\s+as\s+([a-z_][a-z0-9_]*)$`)
-
-func splitSQLAlias(s string) (expr, alias string, ok bool) {
-	m := sqlAliasRe.FindStringSubmatch(strings.TrimSpace(s))
-	if m == nil {
-		return "", "", false
-	}
-	return strings.TrimSpace(m[1]), m[2], true
 }
 
 func parseQueryReturn(raw string) queryReturn {
@@ -328,6 +287,10 @@ func parseQueryReturn(raw string) queryReturn {
 	return r
 }
 
+var queryKeyOrder = []string{
+	"id", "summary", "owner_module", "schema_version", "stability", "do_not", "queries",
+}
+
 func (c *Checker) checkQueries(schema *Schema) {
 	c.checkTargets(schema)
 	for _, qd := range c.queryDocs {
@@ -337,6 +300,7 @@ func (c *Checker) checkQueries(schema *Schema) {
 		if s, _ := qd.doc["summary"].(string); strings.TrimSpace(s) == "" {
 			c.rulef("schema.non-empty", "%s: summary must not be empty", qd.rel)
 		}
+		c.checkQueryKeyOrder(qd)
 		id, _ := qd.doc["id"].(string)
 		want := schema.Targets.FileID(filepath.Base(qd.rel))
 		if want != "" && id != want {
@@ -350,27 +314,46 @@ func (c *Checker) checkQueries(schema *Schema) {
 	names := map[string]string{}
 	for _, id := range c.queryOrder {
 		q := c.queries[id]
-		if strings.TrimSpace(q.SQL.Text()) == "" && strings.TrimSpace(q.SQL.Raw) == "" {
-			c.rulef("schema.non-empty", "%s: query %s sql must not be empty", q.File, q.ID)
-		}
 		if strings.TrimSpace(q.Semantics) == "" {
 			c.rulef("schema.non-empty", "%s: query %s semantics must not be empty", q.File, q.ID)
 		}
 		c.checkQueryIdentity(q, names)
-		c.checkQuerySQLShape(q)
+		c.checkQueryShape(q)
 		c.checkQueryTable(q)
+		c.checkQueryValues(q)
+		c.checkQueryWhere(q)
+		c.checkQueryOrderBy(q)
+		c.checkQueryParamColumns(q)
 		c.checkQueryParams(q)
-		c.checkQueryIndexSQL(q)
 		c.checkQueryReturns(q)
+		c.checkQueryOutputFields(q)
 		c.checkQueryReturnColumns(q)
-		c.checkQueryKindSQL(q)
+		c.checkQueryKind(q)
+	}
+}
+
+func (c *Checker) checkQueryKeyOrder(qd queryDoc) {
+	pos := map[string]int{}
+	for i, k := range queryKeyOrder {
+		pos[k] = i
+	}
+	last, lastKey := -1, ""
+	for _, k := range qd.keys {
+		i, ok := pos[k]
+		if !ok {
+			continue
+		}
+		if i < last {
+			c.rulef("query-key-order", "%s: key %s must come before %s", qd.rel, k, lastKey)
+		}
+		last, lastKey = i, k
 	}
 }
 
 func (c *Checker) checkQueryDoNot(qd queryDoc) {
 	short := strings.TrimSuffix(filepath.Base(qd.rel), filepath.Ext(qd.rel))
 	names := map[string]bool{short: true, qd.fileID: true}
-	if m, _ := qd.doc["module"].(string); m != "" {
+	if m, _ := qd.doc["owner_module"].(string); m != "" {
 		names[m] = true
 	}
 	for _, raw := range asList(qd.doc["queries"]) {
@@ -433,139 +416,447 @@ func pascalCase(s string) string {
 	return strings.Join(parts, "")
 }
 
-// checkQuerySQLShape 校验 sql 对象：statement 与子句匹配、表和列存在、
-// select/returning 对表/实体返回必须是纯列名、禁止 SELECT *。
-func (c *Checker) checkQuerySQLShape(q *queryInfo) {
-	s := q.SQL
-	if s.Raw != "" {
-		c.rulef("query-sql-shape", "%s: query %s sql must be an object, not a string", q.File, q.ID)
-		return
-	}
+// hasWhere 判断是否声明了任意形式的 WHERE（软表达式或结构化谓词）。
+func hasWhere(q *queryInfo) bool {
+	return len(q.Where) > 0 || len(q.Predicates) > 0 || len(q.BadWhere) > 0
+}
+
+// checkQueryShape 校验 statement 与子句/返回形态的匹配。
+func (c *Checker) checkQueryShape(q *queryInfo) {
 	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
-	switch s.Statement {
+	switch q.Statement {
 	case "select":
-		if s.From == "" || len(s.Select) == 0 {
-			c.rulef("query-sql-shape", "%s: select requires from and select", where)
-		}
-		if s.Into != "" || len(s.Columns) > 0 || len(s.Values) > 0 || len(s.Set) > 0 || len(s.Returning) > 0 {
-			c.rulef("query-sql-shape", "%s: select must not declare insert/update/returning fields", where)
+		if len(q.Values) > 0 {
+			c.rulef("query-shape", "%s: select must not declare values", where)
 		}
 	case "insert":
-		if s.Into == "" || len(s.Columns) == 0 || len(s.Values) == 0 {
-			c.rulef("query-sql-shape", "%s: insert requires into/columns/values", where)
+		if len(q.Values) == 0 {
+			c.rulef("query-shape", "%s: insert requires values", where)
 		}
-		if s.From != "" || len(s.Select) > 0 || len(s.Set) > 0 {
-			c.rulef("query-sql-shape", "%s: insert must not declare from/select/set", where)
-		}
-		if len(s.Columns) != len(s.Values) {
-			c.rulef("query-sql-shape", "%s: insert columns/values length mismatch (%d/%d)", where, len(s.Columns), len(s.Values))
+		if hasWhere(q) || len(q.OrderBy) > 0 || q.Limit != "" {
+			c.rulef("query-shape", "%s: insert must not declare where/order_by/limit", where)
 		}
 	case "update":
-		if s.From == "" || len(s.Set) == 0 {
-			c.rulef("query-sql-shape", "%s: update requires from/set", where)
+		if len(q.Values) == 0 || !hasWhere(q) {
+			c.rulef("query-shape", "%s: update requires values and where", where)
 		}
-		if len(s.Where) == 0 {
-			c.rulef("query-sql-shape", "%s: update requires where (no full-table update)", where)
-		}
-		if s.Into != "" || len(s.Select) > 0 || len(s.Columns) > 0 || len(s.Values) > 0 {
-			c.rulef("query-sql-shape", "%s: update must not declare into/select/columns/values", where)
+		if len(q.OrderBy) > 0 || q.Limit != "" {
+			c.rulef("query-shape", "%s: update must not declare order_by/limit", where)
 		}
 	case "delete":
-		if s.From == "" || len(s.Where) == 0 {
-			c.rulef("query-sql-shape", "%s: delete requires from/where", where)
+		if len(q.Values) > 0 {
+			c.rulef("query-shape", "%s: delete must not declare values", where)
 		}
-		if s.Into != "" || len(s.Select) > 0 || len(s.Columns) > 0 || len(s.Values) > 0 || len(s.Set) > 0 {
-			c.rulef("query-sql-shape", "%s: delete must not declare into/select/columns/values/set", where)
+		if !hasWhere(q) {
+			c.rulef("query-shape", "%s: delete requires where (no full-table delete)", where)
+		}
+		if len(q.OrderBy) > 0 || q.Limit != "" {
+			c.rulef("query-shape", "%s: delete must not declare order_by/limit", where)
 		}
 	default:
-		c.rulef("query-sql-shape", "%s: statement must be select/insert/update/delete", where)
+		c.rulef("query-shape", "%s: statement must be select/insert/update/delete", where)
 		return
 	}
-	if s.Distinct && s.Statement != "select" {
-		c.rulef("query-sql-shape", "%s: distinct is only allowed for select", where)
+	if len(q.Joins) > 0 && q.Statement != "select" {
+		c.rulef("query-shape", "%s: joins are only allowed for select", where)
 	}
-	if s.Limit != "" && s.Statement != "select" {
-		c.rulef("query-sql-shape", "%s: limit is only allowed for select", where)
+	switch q.Return.Kind {
+	case "scalar":
+		if q.Return.Raw == "affected_rows" {
+			if q.Expr != "" {
+				c.rulef("query-shape", "%s: affected_rows must not declare expr", where)
+			}
+		} else {
+			if q.Expr == "" {
+				c.rulef("query-shape", "%s: scalar returns require expr", where)
+			} else if sqlAliasSuffixRe.MatchString(q.Expr) {
+				c.rulef("query-shape", "%s: expr must not declare AS alias", where)
+			}
+			if len(q.Values) > 0 {
+				c.rulef("query-shape", "%s: scalar returns must not declare values", where)
+			}
+			if q.Statement != "select" {
+				c.rulef("query-shape", "%s: scalar returns must use select", where)
+			}
+		}
+	case "object", "table", "entity":
+		if q.Expr != "" {
+			c.rulef("query-shape", "%s: %s returns must not declare expr", where, q.Return.Kind)
+		}
 	}
+}
 
-	if len(s.TableRefs()) == 0 {
-		c.rulef("query-table-shape", "%s: sql must declare from or into", where)
+func (c *Checker) checkQueryTable(q *queryInfo) {
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	if len(q.Targets) == 0 {
+		c.rulef("query-table-shape", "%s: targets must not be empty", where)
+		return
 	}
-	for _, t := range s.TableRefs() {
+	seen := map[string]bool{}
+	for _, t := range q.Targets {
+		if seen[t] {
+			c.rulef("query-table-shape", "%s: duplicate target table %s", where, t)
+		}
+		seen[t] = true
 		if t == c.baseID {
-			c.rulef("query-table-shape", "%s: sql references data.tables.base", where)
+			c.rulef("query-table-shape", "%s: targets references data.tables.base", where)
 			continue
 		}
 		if _, ok := c.tableColumns[t]; !ok {
-			c.rulef("query-table-shape", "%s: sql table %s not found", where, t)
+			c.rulef("query-table-shape", "%s: target table %s not found", where, t)
 		}
 	}
+	if q.Statement != "select" && len(q.Targets) != 1 {
+		c.rulef("query-table-shape", "%s: write statements require exactly one target", where)
+	}
+	joinSeen := map[string]bool{}
+	for _, j := range q.Joins {
+		if j.Table == "" || len(j.On) == 0 {
+			c.rulef("query-table-shape", "%s: join requires table/on", where)
+		}
+		if joinSeen[j.Table] {
+			c.rulef("query-table-shape", "%s: duplicate join table %s", where, j.Table)
+		}
+		joinSeen[j.Table] = true
+		if !seen[j.Table] {
+			c.rulef("query-table-shape", "%s: join table %s is not listed in targets", where, j.Table)
+		}
+		if j.Table == q.Targets[0] {
+			c.rulef("query-table-shape", "%s: join table %s must not be the primary target", where, j.Table)
+		}
+	}
+	if q.Statement == "select" {
+		for _, t := range q.Targets[1:] {
+			if !joinSeen[t] {
+				c.rulef("query-table-shape", "%s: target %s has no join declaration", where, t)
+			}
+		}
+	}
+}
 
-	target := s.From
-	if target == "" {
-		target = s.Into
+// checkQueryValues 校验写语句的列赋值：键必须是目标表列，表达式非空。
+func (c *Checker) checkQueryValues(q *queryInfo) {
+	if len(q.Values) == 0 {
+		return
 	}
-	plainRequired := q.Return.Kind == "table" || q.Return.Kind == "entity"
-	for _, item := range append(append([]string{}, s.Select...), s.Returning...) {
-		if hasSelectStar(item) {
-			c.rulef("query-no-select-star", "%s: select/returning must not use *", where)
+	if len(q.Targets) == 0 {
+		return // 缺失 targets 由 query-table-shape 报出，避免越界
+	}
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	target := q.Targets[0]
+	cols := make([]string, 0, len(q.Values))
+	for col := range q.Values {
+		cols = append(cols, col)
+	}
+	sort.Strings(cols)
+	for _, col := range cols {
+		if !c.columnInTables(col, []string{target}) {
+			c.rulef("query-values", "%s: column %s not found in %s", where, col, target)
 		}
-		if plainRequired && !simpleSQLIdent(item) {
-			c.rulef("query-sql-shape", "%s: table/entity returns require plain column select/returning, got %q", where, item)
+		if strings.TrimSpace(q.Values[col]) == "" {
+			c.rulef("query-values", "%s: value for %s must not be empty", where, col)
 		}
 	}
-	for _, col := range s.SelectedColumns() {
-		if !c.columnInTables(col, s.TableRefs()) {
-			c.rulef("query-sql-shape", "%s: selected column %s not found in sql tables", where, col)
-		}
+}
+
+var predicateOps = map[string]bool{
+	"eq": true, "ne": true, "lt": true, "lte": true, "gt": true, "gte": true,
+	"in": true, "is_null": true, "is_not_null": true,
+}
+
+// checkQueryWhere 校验结构化谓词；字符串项仍是软表达式，不解析。
+func (c *Checker) checkQueryWhere(q *queryInfo) {
+	if len(q.Targets) == 0 {
+		return // 缺失 targets 由 query-table-shape 报出
 	}
-	for _, col := range s.Columns {
-		if target != "" && !c.columnInTables(col, []string{target}) {
-			c.rulef("query-sql-shape", "%s: insert column %s not found in %s", where, col, target)
-		}
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	for i, raw := range q.BadWhere {
+		c.rulef("query-where", "%s: where[%d] must be a string expression or an object predicate, got %T", where, i, raw)
 	}
-	for _, assignment := range s.Set {
-		col := strings.TrimSpace(strings.SplitN(assignment, "=", 2)[0])
-		if !simpleSQLIdent(col) {
-			c.rulef("query-sql-shape", "%s: update set must start with a column name, got %q", where, assignment)
+	params := map[string]queryParam{}
+	for _, p := range q.Params {
+		params[p.Name] = p
+	}
+	for i, p := range q.Predicates {
+		w := fmt.Sprintf("%s: where[%d]", where, i)
+		allowed := map[string]bool{"column": true, "op": true, "param": true, "value": true}
+		for k := range p.raw {
+			if !allowed[k] {
+				c.rulef("query-where", "%s: unknown predicate field %q", w, k)
+			}
+		}
+		if p.Column == "" {
+			c.rulef("query-where", "%s: column is required", w)
 			continue
 		}
-		if target != "" && !c.columnInTables(col, []string{target}) {
-			c.rulef("query-sql-shape", "%s: update column %s not found in %s", where, col, target)
+		table, col, kind := c.resolveQueryColumn(q, p.Column)
+		switch kind {
+		case "missing":
+			c.rulef("query-where", "%s: column %s not found in query tables", w, p.Column)
+			continue
+		case "ambiguous":
+			c.rulef("query-where", "%s: column %s is ambiguous; use data.tables.<t>.col.<c>", w, p.Column)
+			continue
 		}
-	}
-	for _, j := range s.Joins {
-		if j.Table == "" || len(j.On) == 0 {
-			c.rulef("query-sql-shape", "%s: join requires table/on", where)
+		meta, ok := c.tableColumns[table][col]
+		if !ok {
+			c.rulef("query-where", "%s: column %s not found", w, p.Column)
+			continue
+		}
+		family := c.resolvedColumnType(meta.typ)
+		if !predicateOps[p.Op] {
+			c.rulef("query-where", "%s: unsupported op %q", w, p.Op)
+			continue
+		}
+		switch p.Op {
+		case "is_null", "is_not_null":
+			if p.Param != "" || p.HasValue {
+				c.rulef("query-where", "%s: %s must not declare param/value", w, p.Op)
+			}
+			if p.Op == "is_null" && !meta.nullable {
+				c.rulef("query-where", "%s: is_null requires a nullable column", w)
+			}
+		case "in":
+			if p.Param == "" || p.HasValue {
+				c.rulef("query-where", "%s: in requires param and no value", w)
+				continue
+			}
+			pp, ok := params[p.Param]
+			if !ok {
+				c.rulef("query-where", "%s: unknown param %s", w, p.Param)
+				continue
+			}
+			if !strings.HasPrefix(pp.Type, "[]") {
+				c.rulef("query-where", "%s: in requires an array param", w)
+				continue
+			}
+			c.checkPredicateParam(pp, table, col, family, w)
+		default:
+			hasParam, hasValue := p.Param != "", p.HasValue
+			if hasParam == hasValue {
+				c.rulef("query-where", "%s: exactly one of param/value is required", w)
+				continue
+			}
+			if hasParam {
+				pp, ok := params[p.Param]
+				if !ok {
+					c.rulef("query-where", "%s: unknown param %s", w, p.Param)
+					continue
+				}
+				if strings.HasPrefix(pp.Type, "[]") {
+					c.rulef("query-where", "%s: comparison param must not be an array", w)
+					continue
+				}
+				c.checkPredicateParam(pp, table, col, family, w)
+				continue
+			}
+			if !valueMatchesFamily(p.Value, family) {
+				c.rulef("query-where", "%s: value %v is not compatible with column type %s", w, p.Value, family)
+			}
 		}
 	}
 }
 
-func hasSelectStar(item string) bool {
-	clean := strings.TrimSpace(item)
-	if strings.Contains(strings.ToLower(clean), "count(*)") {
-		return false
+// checkPredicateParam 校验结构化谓词引用的参数：必须绑定同名列且类型族兼容。
+func (c *Checker) checkPredicateParam(p queryParam, table, col, family, where string) {
+	if p.Nullable {
+		c.rulef("query-where", "%s: predicate param %s must not be nullable; use a string expression for optional filters", where, p.Name)
 	}
-	return clean == "*" || strings.HasPrefix(clean, "*") || strings.HasSuffix(clean, ".*") || strings.Contains(clean, ", *")
+	if p.Column == "" {
+		c.rulef("query-where", "%s: param %s in a predicate must declare column", where, p.Name)
+		return
+	}
+	t, ccol, ok := splitColumnRef(p.Column)
+	if !ok || t != table || ccol != col {
+		c.rulef("query-where", "%s: param %s column %s must match predicate column %s.col.%s", where, p.Name, p.Column, table, col)
+		return
+	}
+	pfam, _, ok := paramFamily(p.Type)
+	if !ok {
+		c.rulef("query-param-column", "%s: param %s type %q cannot bind a column", where, p.Name, p.Type)
+		return
+	}
+	if !familyCompatible(pfam, family) {
+		c.rulef("query-param-column", "%s: param %s type %s is not compatible with column %s", where, p.Name, p.Type, family)
+	}
 }
 
-func (c *Checker) columnInTables(col string, tables []string) bool {
+// resolveQueryColumn 解析谓词列：裸列名要求唯一，或写完整 data.tables.<t>.col.<c>。
+func (c *Checker) resolveQueryColumn(q *queryInfo, ref string) (table, col, kind string) {
+	if strings.Contains(ref, ".col.") {
+		t, ccol, ok := splitColumnRef(ref)
+		if !ok || !q.tableSet()[t] {
+			return "", "", "missing"
+		}
+		if _, ok := c.tableColumns[t][ccol]; !ok {
+			return "", "", "missing"
+		}
+		return t, ccol, ""
+	}
+	tables := make([]string, 0, len(q.tableSet()))
+	for t := range q.tableSet() {
+		tables = append(tables, t)
+	}
+	sort.Strings(tables)
+	found := ""
 	for _, t := range tables {
-		if _, ok := c.tableColumns[t][col]; ok {
+		if _, ok := c.tableColumns[t][ref]; ok {
+			if found != "" {
+				return "", "", "ambiguous"
+			}
+			found = t
+		}
+	}
+	if found == "" {
+		return "", "", "missing"
+	}
+	return found, ref, ""
+}
+
+// checkQueryParamColumns 校验 params[].column 的列存在性与类型族兼容。
+func (c *Checker) checkQueryParamColumns(q *queryInfo) {
+	if len(q.Targets) == 0 {
+		return // 缺失 targets 由 query-table-shape 报出
+	}
+	for _, p := range q.Params {
+		if p.Column == "" {
+			continue
+		}
+		where := fmt.Sprintf("%s: query %s param %s", q.File, q.ID, p.Name)
+		t, col, ok := splitColumnRef(p.Column)
+		if !ok {
+			c.rulef("query-param-column", "%s: malformed column %q", where, p.Column)
+			continue
+		}
+		if !q.tableSet()[t] {
+			c.rulef("query-param-column", "%s: column %s does not belong to query tables", where, p.Column)
+			continue
+		}
+		meta, ok := c.tableColumns[t][col]
+		if !ok {
+			c.rulef("query-param-column", "%s: column %s not found", where, p.Column)
+			continue
+		}
+		family, _, ok := paramFamily(p.Type)
+		if !ok {
+			c.rulef("query-param-column", "%s: type %q cannot bind a column", where, p.Type)
+			continue
+		}
+		if !familyCompatible(family, c.resolvedColumnType(meta.typ)) {
+			c.rulef("query-param-column", "%s: type %s is not compatible with column %s (%s)", where, p.Type, p.Column, c.resolvedColumnType(meta.typ))
+		}
+	}
+}
+
+// paramFamily 把 sqlc 参数类型映射到 column_types 类型族；数组返回元素类型族。
+func paramFamily(typ string) (family string, array bool, ok bool) {
+	array = strings.HasPrefix(typ, "[]")
+	base := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(typ, "[]")))
+	switch base {
+	case "text", "varchar", "character varying", "char", "bpchar":
+		return "string", array, true
+	case "integer", "int", "int4", "int8", "bigint", "smallint":
+		return "integer", array, true
+	case "boolean", "bool":
+		return "boolean", array, true
+	case "timestamp", "timestamptz", "timestamp with time zone", "datetime":
+		return "timestamp", array, true
+	case "float", "float4", "float8", "double", "double precision", "real":
+		return "float", array, true
+	case "decimal", "numeric":
+		return "decimal", array, true
+	case "json", "jsonb":
+		return "json", array, true
+	case "bytea", "bytes":
+		return "bytes", array, true
+	}
+	return "", array, false
+}
+
+func familyCompatible(param, column string) bool {
+	if param == column {
+		return true
+	}
+	return (param == "timestamp" && column == "datetime") || (param == "datetime" && column == "timestamp")
+}
+
+func valueMatchesFamily(v any, family string) bool {
+	switch family {
+	case "string", "bytes", "timestamp", "datetime":
+		_, ok := v.(string)
+		return ok
+	case "integer":
+		_, ok := toInt(v)
+		return ok
+	case "float", "decimal":
+		if _, ok := toFloat(v); ok {
 			return true
 		}
+		_, ok := toInt(v)
+		return ok
+	case "boolean":
+		_, ok := v.(bool)
+		return ok
+	case "json":
+		return true
 	}
 	return false
 }
 
-func (c *Checker) checkQueryTable(q *queryInfo) {
-	seen := map[string]bool{}
-	for _, t := range q.Tables {
-		if seen[t] {
-			c.rulef("query-table-shape", "%s: query %s duplicate table %s", q.File, q.ID, t)
+var orderByRe = regexp.MustCompile(`(?i)^\s*([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)\s+(asc|desc)\s*$`)
+
+// checkQueryOrderBy 只允许 <列> ASC|DESC（可带 <表> 限定）；列必须属于查询的表。
+func (c *Checker) checkQueryOrderBy(q *queryInfo) {
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	tables := q.tableSet()
+	for _, item := range q.OrderBy {
+		m := orderByRe.FindStringSubmatch(item)
+		if m == nil {
+			c.rulef("query-order-by", "%s: %q must be <column> ASC|DESC", where, item)
+			continue
 		}
-		seen[t] = true
+		qualifier, col := "", m[1]
+		if i := strings.LastIndex(col, "."); i >= 0 {
+			qualifier, col = col[:i], col[i+1:]
+		}
+		if qualifier != "" {
+			table := c.resolveOrderTable(q, qualifier)
+			if table == "" {
+				c.rulef("query-order-by", "%s: qualifier %s is not a query table", where, qualifier)
+				continue
+			}
+			if _, ok := c.tableColumns[table][col]; !ok {
+				c.rulef("query-order-by", "%s: order column %s not found in %s", where, col, table)
+			}
+			continue
+		}
+		matches := 0
+		for t := range tables {
+			if _, ok := c.tableColumns[t][col]; ok {
+				matches++
+			}
+		}
+		if matches == 0 {
+			c.rulef("query-order-by", "%s: order column %s not found in query tables", where, col)
+		} else if matches > 1 {
+			c.rulef("query-order-by", "%s: order column %s is ambiguous; use <table>.<column>", where, col)
+		}
 	}
+}
+
+// resolveOrderTable 接受完整表 ID、data.tables 后缀或物理表名。
+func (c *Checker) resolveOrderTable(q *queryInfo, qualifier string) string {
+	for t := range q.tableSet() {
+		if t == qualifier || strings.TrimPrefix(t, "data.tables.") == qualifier {
+			return t
+		}
+		if table, ok := asMap(c.tableDocs[t]["table"]); ok {
+			if name, _ := table["name"].(string); name != "" && name == qualifier {
+				return t
+			}
+		}
+	}
+	return ""
 }
 
 func (c *Checker) checkQueryParams(q *queryInfo) {
@@ -579,11 +870,21 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 			c.rulef("schema.non-empty", "%s: query %s param %s type must not be empty", q.File, q.ID, p.Name)
 		}
 	}
-	uses := sqlParamUses(q.SQL.Text())
+	uses := sqlParamUses(q.exprText())
+	predUses := map[string]bool{}
+	for _, p := range q.Predicates {
+		if p.Param != "" {
+			predUses[p.Param] = true
+		}
+	}
 	for _, p := range q.Params {
 		u, ok := uses[p.Name]
 		if !ok {
-			c.rulef("query-param-sql", "%s: query %s param %s is not used in SQL", q.File, q.ID, p.Name)
+			// 结构化谓词由生成器按列/op 拼接 SQL；nullable 已在 checkQueryWhere 拒绝，
+			// 因此这里只需确认参数被谓词引用，不扫描 narg/arg 文本。
+			if !predUses[p.Name] {
+				c.rulef("query-param-sql", "%s: query %s param %s is not used in expressions", q.File, q.ID, p.Name)
+			}
 			continue
 		}
 		if p.Nullable {
@@ -596,13 +897,9 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 			c.rulef("query-param-nullable", "%s: query %s non-nullable param %s must not use sqlc.narg", q.File, q.ID, p.Name)
 		}
 	}
-	declared := map[string]bool{}
-	for _, p := range q.Params {
-		declared[p.Name] = true
-	}
 	for name := range uses {
-		if !declared[name] {
-			c.rulef("query-param-sql", "%s: query %s SQL param %s is not declared", q.File, q.ID, name)
+		if !seen[name] {
+			c.rulef("query-param-sql", "%s: query %s param %s is not declared", q.File, q.ID, name)
 		}
 	}
 }
@@ -666,97 +963,86 @@ func stripSQLStrings(sql string) string {
 	return b.String()
 }
 
-// checkQueryIndexSQL 防止 index_columns 声明了 SQL 根本没用的列。
-func (c *Checker) checkQueryIndexSQL(q *queryInfo) {
-	for _, group := range q.IndexColumns {
-		for _, col := range group {
-			if !sqlHasWord(q.SQL.Text(), col) {
-				c.rulef("query-index-columns", "%s: query %s index_columns references %s but SQL never mentions it", q.File, q.ID, col)
-			}
+func (c *Checker) checkQueryReturns(q *queryInfo) {
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	switch q.Return.Kind {
+	case "invalid", "":
+		c.rulef("query-returns", "%s: invalid returns %q", where, q.Return.Raw)
+		return
+	case "table":
+		if _, ok := c.tableColumns[q.Return.TableID]; !ok {
+			c.rulef("query-returns", "%s: returns unknown table %s", where, q.Return.TableID)
+			return
+		}
+		if len(q.Targets) == 0 || q.Targets[0] != q.Return.TableID {
+			c.rulef("query-returns", "%s: table returns must match targets[0] %s", where, q.Return.TableID)
+		}
+	case "entity":
+		if c.entities[q.Return.EntityID] == nil {
+			c.rulef("query-returns", "%s: returns unknown entity %s", where, q.Return.EntityID)
+			return
+		}
+	case "object":
+		// output_fields 在 checkQueryOutputFields 校验
+	}
+	switch {
+	case q.Kind == "many" && !q.Return.IsList:
+		c.rulef("query-returns-kind", "%s: kind many requires [] returns", where)
+	case q.Kind == "one" && q.Return.IsList:
+		c.rulef("query-returns-kind", "%s: kind one must not return a list", where)
+	case q.Kind == "execrows" && q.Return.Raw != "affected_rows":
+		c.rulef("query-returns-kind", "%s: kind execrows requires affected_rows", where)
+	case q.Return.Raw == "affected_rows" && q.Kind != "execrows":
+		c.rulef("query-returns-kind", "%s: affected_rows requires kind execrows", where)
+	case q.Kind != "execrows" && q.Statement != "" && q.Statement != "select":
+		if q.Return.Kind != "table" && q.Return.Kind != "entity" {
+			c.rulef("query-returns-kind", "%s: write with kind %s must return a table row or entity", where, q.Kind)
 		}
 	}
 }
 
-func (c *Checker) checkQueryReturns(q *queryInfo) {
-	switch q.Return.Kind {
-	case "invalid", "":
-		c.rulef("query-returns", "%s: query %s has invalid returns %q", q.File, q.ID, q.Return.Raw)
+func (c *Checker) checkQueryOutputFields(q *queryInfo) {
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	if len(q.OutputFields) == 0 {
+		if q.Return.Kind == "object" {
+			c.rulef("query-output-fields", "%s: returns object but output_fields is empty", where)
+		}
 		return
-	case "table":
-		if _, ok := c.tableColumns[q.Return.TableID]; !ok {
-			c.rulef("query-returns", "%s: query %s returns unknown table %s", q.File, q.ID, q.Return.TableID)
-			return
-		}
-		target := q.SQL.From
-		if target == "" {
-			target = q.SQL.Into
-		}
-		if len(q.Tables) != 1 || q.Tables[0] != q.Return.TableID || target != q.Return.TableID {
-			c.rulef("query-returns", "%s: query %s table returns must match its single table %s", q.File, q.ID, q.Return.TableID)
-		}
-	case "entity":
-		if c.entities[q.Return.EntityID] == nil {
-			c.rulef("query-returns", "%s: query %s returns unknown entity %s", q.File, q.ID, q.Return.EntityID)
-			return
-		}
-	case "object":
-		// output_fields 在学生效验
 	}
-	switch {
-	case q.Kind == "many" && !q.Return.IsList:
-		c.rulef("query-returns-kind", "%s: query %s kind many requires [] returns", q.File, q.ID)
-	case q.Kind == "one" && q.Return.IsList:
-		c.rulef("query-returns-kind", "%s: query %s kind one must not return a list", q.File, q.ID)
-	case q.Kind == "execrows" && q.Return.Raw != "affected_rows":
-		c.rulef("query-returns-kind", "%s: query %s kind execrows requires affected_rows", q.File, q.ID)
-	case q.Return.Raw == "affected_rows" && q.Kind != "execrows":
-		c.rulef("query-returns-kind", "%s: query %s affected_rows requires kind execrows", q.File, q.ID)
+	if q.Return.Kind != "object" {
+		c.rulef("query-output-fields", "%s: output_fields requires returns object", where)
+	}
+	if len(q.ReturnColumns) > 0 {
+		c.rulef("query-output-fields", "%s: must not combine output_fields with return_columns", where)
+	}
+	seen := map[string]bool{}
+	for _, f := range q.OutputFields {
+		if seen[f.Name] {
+			c.rulef("query-output-fields", "%s: duplicate output field %s", where, f.Name)
+		}
+		seen[f.Name] = true
+		if f.Type == "" {
+			c.rulef("query-output-fields", "%s: output field %s missing type", where, f.Name)
+		} else if !strings.HasPrefix(f.Type, "data.enums.") && !c.isEntityType(f.Type) {
+			c.rulef("query-output-fields", "%s: output field %s has unsupported type %s", where, f.Name, f.Type)
+		}
+		if strings.TrimSpace(f.Expr) == "" {
+			c.rulef("query-output-fields", "%s: output field %s missing expr", where, f.Name)
+		} else if sqlAliasSuffixRe.MatchString(f.Expr) {
+			c.rulef("query-output-fields", "%s: output field %s expr must not declare AS alias; use the field name", where, f.Name)
+		}
 	}
 }
 
 func (c *Checker) checkQueryReturnColumns(q *queryInfo) {
-	if len(q.OutputFields) > 0 {
-		if q.Return.Kind != "object" {
-			c.rulef("query-output-fields", "%s: query %s output_fields requires returns object", q.File, q.ID)
-		}
-		if len(q.ReturnColumns) > 0 {
-			c.rulef("query-output-fields", "%s: query %s must not combine output_fields with return_columns", q.File, q.ID)
-		}
-		aliases := map[string]bool{}
-		for _, a := range q.SQL.SelectAliases() {
-			aliases[a] = true
-		}
-		seen := map[string]bool{}
-		for _, f := range q.OutputFields {
-			if seen[f.Name] {
-				c.rulef("query-output-fields", "%s: query %s duplicate output field %s", q.File, q.ID, f.Name)
-			}
-			seen[f.Name] = true
-			switch {
-			case f.Type == "":
-				c.rulef("query-output-fields", "%s: query %s output field %s missing type", q.File, q.ID, f.Name)
-			case strings.HasPrefix(f.Type, "data.enums."):
-				// 枚举存在性由全局 enum 引用扫描校验。
-			case !c.isEntityType(f.Type):
-				c.rulef("query-output-fields", "%s: query %s output field %s has unsupported type %s", q.File, q.ID, f.Name, f.Type)
-			}
-			if f.Name != "" && !aliases[f.Name] {
-				c.rulef("query-output-fields", "%s: query %s output field %s is not selected in SQL", q.File, q.ID, f.Name)
-			}
-		}
-	}
-	if q.Return.Kind == "object" && len(q.OutputFields) == 0 {
-		c.rulef("query-output-fields", "%s: query %s returns object but output_fields is empty", q.File, q.ID)
-	}
-	selected := q.SQL.SelectedColumns()
-	selectedSet := map[string]bool{}
-	for _, col := range selected {
-		selectedSet[col] = true
-	}
-	if len(q.ReturnColumns) == 0 {
-		c.checkSensitiveWithoutColumns(q, selectedSet)
-		c.checkEntityCoverage(q, selected, selected)
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	if len(q.ReturnColumns) > 0 && q.Return.Kind != "table" && q.Return.Kind != "entity" {
+		c.rulef("query-return-columns", "%s: return_columns is only allowed for table/entity returns", where)
 		return
+	}
+	selected := map[string]bool{}
+	for _, col := range q.ReturnColumns {
+		selected[col] = true
 	}
 	switch q.Return.Kind {
 	case "table":
@@ -764,14 +1050,11 @@ func (c *Checker) checkQueryReturnColumns(q *queryInfo) {
 		for _, col := range q.ReturnColumns {
 			meta, ok := cols[col]
 			if !ok {
-				c.rulef("query-return-columns", "%s: query %s return column %s not found in %s", q.File, q.ID, col, q.Return.TableID)
+				c.rulef("query-return-columns", "%s: return column %s not found in %s", where, col, q.Return.TableID)
 				continue
 			}
-			if !selectedSet[col] {
-				c.rulef("query-return-columns", "%s: query %s return column %s is not selected in SQL", q.File, q.ID, col)
-			}
-			if meta.neverExpose && q.Module != c.tableOwners[q.Return.TableID] {
-				c.rulef("query-sensitive-columns", "%s: query %s returns never_expose column %s outside module %s", q.File, q.ID, col, c.tableOwners[q.Return.TableID])
+			if meta.neverExpose && q.OwnerModule != c.tableOwners[q.Return.TableID] {
+				c.rulef("query-sensitive-columns", "%s: returns never_expose column %s outside module %s", where, col, c.tableOwners[q.Return.TableID])
 			}
 		}
 	case "entity":
@@ -782,68 +1065,56 @@ func (c *Checker) checkQueryReturnColumns(q *queryInfo) {
 		for _, col := range q.ReturnColumns {
 			f := findEntityFieldByColumn(e, col)
 			if f == nil {
-				c.rulef("query-return-columns", "%s: query %s return column %s not found in %s", q.File, q.ID, col, e.ID)
+				c.rulef("query-return-columns", "%s: return column %s not found in %s", where, col, e.ID)
 				continue
 			}
-			if !selectedSet[col] {
-				c.rulef("query-return-columns", "%s: query %s return column %s is not selected in SQL", q.File, q.ID, col)
-			}
-			if f.NeverExpose && q.Module != c.tableOwners[f.ColumnTable] {
-				c.rulef("query-sensitive-columns", "%s: query %s returns never_expose field %s outside module %s", q.File, q.ID, f.Name, c.tableOwners[f.ColumnTable])
+			if f.NeverExpose && q.OwnerModule != c.tableOwners[f.ColumnTable] {
+				c.rulef("query-sensitive-columns", "%s: returns never_expose field %s outside module %s", where, f.Name, c.tableOwners[f.ColumnTable])
 			}
 		}
-		c.checkEntityCoverage(q, selected, q.ReturnColumns)
-	default:
-		c.rulef("query-return-columns", "%s: query %s return_columns is only allowed for table/entity returns", q.File, q.ID)
+		c.checkEntityCoverage(q, e, selected)
 	}
 }
 
-func (c *Checker) checkSensitiveWithoutColumns(q *queryInfo, selected map[string]bool) {
-	switch q.Return.Kind {
-	case "table":
-		for col, meta := range c.tableColumns[q.Return.TableID] {
-			if meta.neverExpose && selected[col] {
-				c.rulef("query-sensitive-columns", "%s: query %s must list return_columns to exclude never_expose column %s", q.File, q.ID, col)
-			}
-		}
-	case "entity":
-		e := c.entities[q.Return.EntityID]
-		if e == nil {
-			return
-		}
-		for _, f := range e.Fields {
-			if f.NeverExpose && selected[f.Column] {
-				c.rulef("query-sensitive-columns", "%s: query %s must list return_columns to exclude never_expose field %s", q.File, q.ID, f.Name)
-			}
-		}
-	}
-}
-
-func (c *Checker) checkEntityCoverage(q *queryInfo, selected, required []string) {
-	e := c.entities[q.Return.EntityID]
-	if e == nil {
-		return
-	}
-	sel := map[string]bool{}
-	for _, s := range selected {
-		sel[s] = true
-	}
-	req := map[string]bool{}
-	for _, s := range required {
-		req[s] = true
+// checkEntityCoverage 校验实体返回的投影：来源表必须在查询表集合内，裁剪不得丢失必填字段。
+func (c *Checker) checkEntityCoverage(q *queryInfo, e *entityInfo, selected map[string]bool) {
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	tables := q.tableSet()
+	missing := map[string]bool{}
+	owner := e.OwnerModule
+	if owner == "" {
+		owner = c.tableOwners[e.Primary]
 	}
 	for _, f := range e.Fields {
-		if !sel[f.Column] {
+		if f.IsRelation {
 			continue
 		}
-		if f.ColumnTable != "" && !containsString(q.Tables, f.ColumnTable) {
-			c.rulef("query-entity-coverage", "%s: query %s returns %s but does not read its source table %s", q.File, q.ID, e.ID, f.ColumnTable)
+		if f.SourceComputed != "" {
+			// computed 字段无法通过 return_columns 裁剪；跨模块返回 never_expose 直接报错。
+			if f.NeverExpose && q.OwnerModule != owner {
+				c.rulef("query-sensitive-columns", "%s: returns computed never_expose field %s outside module %s", where, f.Name, owner)
+			}
+			continue
+		}
+		if f.Column == "" {
+			continue
+		}
+		if len(selected) == 0 {
+			if f.NeverExpose {
+				continue
+			}
+		} else if !selected[f.Column] {
+			if !f.NeverExpose && !strings.HasPrefix(f.Type, "*") {
+				c.rulef("query-entity-coverage", "%s: omits required field %s", where, f.Name)
+			}
+			continue
+		}
+		if !tables[f.ColumnTable] {
+			missing[f.ColumnTable] = true
 		}
 	}
-	for _, f := range e.Fields {
-		if f.Required && !f.NeverExpose && !req[f.Column] {
-			c.rulef("query-entity-coverage", "%s: query %s omits required field %s", q.File, q.ID, f.Name)
-		}
+	for _, table := range sortedKeys(missing) {
+		c.rulef("query-entity-coverage", "%s: returns %s but does not read its source table %s", where, e.ID, table)
 	}
 }
 
@@ -858,66 +1129,79 @@ func findEntityField(e *entityInfo, name string) *entityFieldInfo {
 
 func findEntityFieldByColumn(e *entityInfo, column string) *entityFieldInfo {
 	for i := range e.Fields {
-		if e.Fields[i].Column == column {
+		if !e.Fields[i].IsRelation && e.Fields[i].Column == column {
 			return &e.Fields[i]
 		}
 	}
 	return nil
 }
 
-func (c *Checker) checkQueryKindSQL(q *queryInfo) {
-	s := q.SQL
-	switch q.Kind {
-	case "one", "many":
-		if s.Statement != "select" && len(s.Returning) == 0 {
-			c.rulef("query-kind-sql", "%s: query %s kind %s write SQL must use RETURNING", q.File, q.ID, q.Kind)
+func (c *Checker) checkQueryKind(q *queryInfo) {
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	if q.Kind == "one" && q.Statement == "select" && (q.Return.Kind == "table" || q.Return.Kind == "entity") {
+		table := q.Return.TableID
+		if q.Return.Kind == "entity" {
+			if e := c.entities[q.Return.EntityID]; e != nil {
+				table = e.Primary
+			}
 		}
-	case "execrows":
-		if s.Statement == "select" || s.Statement == "" {
-			c.rulef("query-kind-sql", "%s: query %s kind execrows must write, got %s", q.File, q.ID, s.Statement)
-		}
-	}
-	if q.Kind == "one" && (q.Return.Kind == "table" || q.Return.Kind == "entity") && s.Statement == "select" {
-		if s.Limit != "1" && !c.hasUniquePrefix(q) {
-			c.rulef("query-one-unique", "%s: query %s kind one requires a unique index prefix or limit 1", q.File, q.ID)
+		if q.Limit != "1" && (table == "" || !c.hasUniqueIndexRef(q, table)) {
+			c.rulef("query-kind-sql", "%s: kind one requires a unique index ref on %s or limit 1", where, table)
 		}
 	}
-	if isWriteQuery(q) && q.Module != "" {
-		target := s.Into
-		if s.Statement != "insert" {
-			target = s.From
+	if q.Kind == "execrows" && q.Statement == "select" {
+		c.rulef("query-kind-sql", "%s: kind execrows must write, got select", where)
+	}
+	if q.Statement != "select" && q.OwnerModule != "" {
+		if len(q.Targets) != 1 {
+			return // 缺失/多目标由 query-table-shape 报出
 		}
-		if target == "" {
-			c.rulef("query-write-owner", "%s: query %s cannot determine write target", q.File, q.ID)
-			return
-		}
-		if !containsString(q.Tables, target) {
-			c.rulef("query-write-owner", "%s: query %s write target %s is not declared in table/tables", q.File, q.ID, target)
-			return
-		}
-		if owner := c.tableOwners[target]; owner != "" && owner != q.Module {
-			c.rulef("query-write-owner", "%s: query %s module %s cannot write %s (owner_module %s)", q.File, q.ID, q.Module, target, owner)
+		target := q.Targets[0]
+		if owner := c.tableOwners[target]; owner != "" && owner != q.OwnerModule {
+			c.rulef("query-write-owner", "%s: owner_module %s cannot write %s (owner_module %s)", where, q.OwnerModule, target, owner)
 		}
 	}
 }
 
-func isWriteQuery(q *queryInfo) bool {
-	return q.SQL.Statement != "" && q.SQL.Statement != "select"
-}
-
-func (c *Checker) hasUniquePrefix(q *queryInfo) bool {
-	if len(q.Tables) != 1 {
+// hasUniqueIndexRef 判断 one 查询是否命中指定表的主键或唯一索引。
+func (c *Checker) hasUniqueIndexRef(q *queryInfo, table string) bool {
+	if table == "" {
 		return false
 	}
-	tableID := q.Tables[0]
-	for _, group := range q.IndexColumns {
-		if hasPrefix(group, c.tablePrimaryKey[tableID]) {
+	for _, ref := range q.IndexRef {
+		t, name, ok := splitIndexRef(ref)
+		if !ok || t != table {
+			continue
+		}
+		if name == "pk" {
 			return true
 		}
-		for _, idx := range c.tableIndexes[tableID] {
-			if idx.unique && hasPrefix(group, idx.columns) {
+		for _, idx := range c.tableIndexes[table] {
+			if idx.name == name && idx.unique {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// splitIndexRef 拆分 data.tables.<t>.<pk|index-name>。
+func splitIndexRef(ref string) (table, name string, ok bool) {
+	i := strings.LastIndex(ref, ".")
+	if i <= 0 || i+1 >= len(ref) {
+		return "", "", false
+	}
+	table, name = ref[:i], ref[i+1:]
+	if !strings.HasPrefix(table, "data.tables.") {
+		return "", "", false
+	}
+	return table, name, true
+}
+
+func (c *Checker) columnInTables(col string, tables []string) bool {
+	for _, t := range tables {
+		if _, ok := c.tableColumns[t][col]; ok {
+			return true
 		}
 	}
 	return false

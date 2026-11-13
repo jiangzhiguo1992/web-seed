@@ -30,12 +30,6 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 		switch s.Fields[i].Name {
 		case "stability":
 			s.Fields[i].Default = "stable"
-		case "table":
-			for j := range s.Fields[i].Fields {
-				if s.Fields[i].Fields[j].Name == "size_class" {
-					s.Fields[i].Fields[j].Default = "large"
-				}
-			}
 		case "columns":
 			for j := range s.Fields[i].ItemFields {
 				if s.Fields[i].ItemFields[j].Name == "name" {
@@ -56,13 +50,13 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	if doc["id"] != "data.tables.note" || doc["stability"] != "stable" {
 		t.Fatalf("unexpected top-level: %#v", doc)
 	}
-	extends, _ := doc["extends"].([]any)
-	if len(extends) != 1 || extends[0] != "data.tables.base" {
-		t.Fatalf("extends must be hardcoded to [data.tables.base]: %#v", doc["extends"])
+	if _, ok := doc["extends"]; ok {
+		t.Fatalf("extends must live under table: %#v", doc)
 	}
 	table, _ := doc["table"].(map[string]any)
-	if table["size_class"] != "large" {
-		t.Fatalf("size_class not from schema: %#v", table)
+	extends, _ := table["extends"].([]any)
+	if len(extends) != 1 || extends[0] != "data.tables.base" {
+		t.Fatalf("table.extends must be hardcoded to [data.tables.base]: %#v", table["extends"])
 	}
 	cols, _ := doc["columns"].([]any)
 	if len(cols) != 1 {
@@ -144,7 +138,7 @@ func TestRenderQuery(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
 	}
-	if doc["id"] != "data.queries.account" || doc["module"] != "accounts" {
+	if doc["id"] != "data.queries.account" || doc["owner_module"] != "accounts" {
 		t.Fatalf("unexpected top-level: %#v", doc)
 	}
 	queries, _ := doc["queries"].([]any)
@@ -158,22 +152,19 @@ func TestRenderQuery(t *testing.T) {
 	if q["returns"] != "boolean" {
 		t.Fatalf("query returns not scaffolded: %#v", q)
 	}
-	if _, ok := q["table"]; ok {
-		t.Fatalf("query must not scaffold table: %#v", q)
+	targets, _ := q["targets"].([]any)
+	if len(targets) != 1 || targets[0] != "data.tables.account" {
+		t.Fatalf("targets not scaffolded: %#v", q["targets"])
 	}
-	sqlMap, ok := q["sql"].(map[string]any)
-	if !ok {
-		t.Fatalf("sql must be an object: %#v", q["sql"])
+	if q["statement"] != "select" || q["expr"] != "COUNT(*) > 0" {
+		t.Fatalf("statement/expr not scaffolded: %#v", q)
 	}
-	if sqlMap["statement"] != "select" || sqlMap["from"] != "data.tables.account" {
-		t.Fatalf("sql statement/from not scaffolded: %#v", sqlMap)
+	refs, _ := q["index_ref"].([]any)
+	if len(refs) != 1 || refs[0] != "data.tables.account.pk" {
+		t.Fatalf("index_ref not scaffolded: %#v", q["index_ref"])
 	}
-	selects, _ := sqlMap["select"].([]any)
-	if len(selects) != 1 || !strings.Contains(selects[0].(string), "FROM accounts") {
-		t.Fatalf("physical table not used: %#v", sqlMap["select"])
-	}
-	if !strings.Contains(string(b), "select: [") {
-		t.Fatalf("sql.select must be a flow list:\n%s", b)
+	if _, ok := q["sql"]; ok {
+		t.Fatalf("query must not scaffold sql: %#v", q)
 	}
 	if !strings.Contains(string(b), `semantics: "TODO: 查询语义"`) {
 		t.Fatalf("semantics must be double-quoted:\n%s", b)

@@ -169,6 +169,7 @@ func (c *Checker) enumUsages() map[string]*enumUsage {
 				continue
 			}
 			typ, _ := m["type"].(string)
+			typ = strings.TrimPrefix(typ, "*")
 			if !strings.HasPrefix(typ, "data.enums.") {
 				continue
 			}
@@ -181,11 +182,14 @@ func (c *Checker) enumUsages() map[string]*enumUsage {
 				u.entities[entityID] = true
 			}
 			src := ""
-			if ref, _ := m["column"].(string); ref != "" {
-				if t, _, ok := splitColumnRef(ref); ok {
-					src = t
+			if source, ok := asMap(m["source"]); ok {
+				if ref, _ := source["column"].(string); ref != "" {
+					if t, _, ok := splitColumnRef(ref); ok {
+						src = t
+					}
 				}
-			} else if len(tables) == 1 {
+			}
+			if src == "" && len(tables) == 1 {
 				src = tables[0]
 			}
 			if src != "" {
@@ -261,9 +265,12 @@ func (c *Checker) scanEnumTypeRefs(v any, rel, path string, enums map[string]map
 				childPath = path + "." + k
 			}
 			if k == "type" {
-				if t, ok := child.(string); ok && strings.HasPrefix(t, "data.enums.") {
-					if _, found := enums[t]; !found {
-						c.rulef("schema.ref", "%s: %s: unknown enum %s", rel, childPath, t)
+				if t, ok := child.(string); ok {
+					t = strings.TrimPrefix(t, "*")
+					if strings.HasPrefix(t, "data.enums.") {
+						if _, found := enums[t]; !found {
+							c.rulef("schema.ref", "%s: %s: unknown enum %s", rel, childPath, t)
+						}
 					}
 				}
 			}

@@ -69,7 +69,7 @@ make contract-impact id=<被修改的 ID>
 | 应用包含哪些接口 | `contracts/project.yaml` 的 `apps` 段 |
 | 定时任务 / 消费者 | `contracts/capabilities/async/<job>.yaml` |
 | 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
-| 表结构 | `contracts/data/tables/<file>.yaml` |
+| 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables` |
 | 查询 | `contracts/data/queries/<module>.yaml` |
 | 枚举 | `contracts/data/enums.yaml` |
 | 实体 / 状态机 / 规则 / 流程 | `contracts/business/**` |
@@ -96,7 +96,7 @@ make contract-new type=data.enums  name=note_status
 
 `column_type` 可选；指定后第一列使用该类型族，并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
 
-生成后替换所有 `<...>` 占位符。字段规范：`contracts/_meta/data.tables.yaml`。
+生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables` 下登记**（engine/size_class/retention/partition），否则 `contract-check` 会报 `[storage-registry]`。字段规范：`contracts/_meta/data.tables.yaml`。
 
 ### 3.2 校验
 
@@ -104,7 +104,7 @@ make contract-new type=data.enums  name=note_status
 make contract-check
 ```
 
-校验结构、ID、`extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`used_by` 的 entities/queries（直接入边）。不通过不要进入生成。
+校验结构、ID、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`used_by` 的 entities/queries（直接入边）。不通过不要进入生成。
 
 修改 `rules` 的 `implemented_by` 后，运行 `make gen-rule-ids` 更新 `rule_ids_gen.go`；`make contract-check` 会拒绝过期的生成文件。
 

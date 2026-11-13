@@ -4,7 +4,8 @@
 #   - 存储引擎、部署拓扑、连接方式都是项目级事实，不是某张表的属性。
 #   - 未列出的引擎/拓扑即为不支持；AI 不得自行引入分库分表、多主、跨地域。
 #   - Redis 只作为缓存/会话/锁，不作为表存储；启用时在此登记。
-#   - 表级只声明会影响 DDL/查询的物理事实（size_class、retention、partition）。
+#   - 表级物理事实（engine/size_class/retention/partition）统一在 tables 下登记，
+#     表契约只保留业务结构（列/约束/索引/继承）。
 
 schema_version: 1
 id: data.storage
@@ -15,6 +16,7 @@ do_not:
   - "未列出的引擎与拓扑一律视为不支持，禁止自行引入"
   - "Redis 不是表存储；表数据只能落在当前 default_engine"
   - "多实例部署时，定时任务必须显式声明锁机制，不能只写 max_in_flight"
+  - "每张物理表必须在本文件 tables 下登记；未登记的表不生成 DDL"
 
 # 默认引擎，不等于唯一允许的引擎；切换时只改这里和对应 engine 配置。
 default_engine: postgres
@@ -60,7 +62,27 @@ deployment:
     distributed_lock: engine_advisory_lock
   migrations:
     strategy: forward_only
-    concurrent_index: auto       # 由 table.size_class 决定
+    concurrent_index: auto       # 由 storage.tables.size_class 决定
+
+# 每张物理表的存储事实；键是 data.tables.* 契约 ID。
+# engine 省略时用 default_engine；size_class 省略时为 small。
+tables:
+  data.tables.account:
+    size_class: large
+    retention: { unit: days, pending: 7, soft_delete: 30, hard_delete: 90 }
+
+  data.tables.token:
+    size_class: large
+    retention: { unit: days, ttl: 30 }
+
+  data.tables.auth_pwd:
+    retention: { unit: days, soft_delete: 30, hard_delete: 90 }
+
+  data.tables.auth_phone:
+    retention: { unit: days, soft_delete: 30, hard_delete: 90 }
+
+  data.tables.auth_email:
+    retention: { unit: days, soft_delete: 30, hard_delete: 90 }
 
 not_supported:
   - sharding

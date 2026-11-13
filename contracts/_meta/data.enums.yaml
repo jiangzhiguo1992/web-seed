@@ -61,7 +61,7 @@ fields:
         caution: "必须与 entity 实际引用完全一致；capability/feature 引用不写入 used_by，空列表不代表未使用"
         fields:
           - { name: entities, type: list<string>, required: true, unique: true, description: "引用该枚举的 entity ID" }
-          - { name: tables, type: list<string>, required: true, unique: true, description: "这些 entity 对应的物理表 ID；必须与 entity.table 一致" }
+          - { name: tables, type: list<string>, required: true, unique: true, description: "这些 entity 对应的物理表 ID；必须与 entity.model.tables 一致" }
       - name: values
         type: list<object>
         required: true

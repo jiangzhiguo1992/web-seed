@@ -95,7 +95,7 @@ func Compute(root string) (*Snapshot, error) {
 				ts.entities[id] = true
 			}
 		}
-		for _, raw := range asList(doc["relations"]) {
+		for _, raw := range asList(doc["fields"]) {
 			m, ok := asMap(raw)
 			if !ok {
 				continue
@@ -418,25 +418,22 @@ func entityTableRefs(m map[string]any) []string {
 	return stringList(model["tables"])
 }
 
+// queryTableRefs 从 targets + joins 推导查询表；query 契约不手写 SQL。
 func queryTableRefs(m map[string]any) []string {
-	sql, _ := asMap(m["sql"])
-	if sql == nil {
-		return nil
-	}
 	var out []string
-	add := func(v any) {
-		if s, ok := v.(string); ok && s != "" {
+	for _, raw := range asList(m["targets"]) {
+		if s, ok := raw.(string); ok && s != "" {
 			out = append(out, s)
 		}
 	}
-	add(sql["from"])
-	add(sql["into"])
-	for _, raw := range asList(sql["joins"]) {
+	for _, raw := range asList(m["joins"]) {
 		jm, ok := asMap(raw)
 		if !ok {
 			continue
 		}
-		add(jm["table"])
+		if s, ok := jm["table"].(string); ok && s != "" {
+			out = append(out, s)
+		}
 	}
 	return out
 }

@@ -49,18 +49,20 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 				c.rulef("schema.ref", "%s: table %s not found", rel, t)
 			}
 		}
-		for i, raw := range asList(doc["relations"]) {
+		for i, raw := range asList(doc["fields"]) {
 			m, ok := asMap(raw)
 			if !ok {
 				continue
 			}
-			if via, _ := m["via"].(string); via != "" {
-				if c.isBaseTableRef(via) {
-					c.rulef("base-file", "%s: relations[%d]: base contract is not a physical table", rel, i)
-					continue
-				}
-				checkColumnRef(c, via, tableIDs, cols, fmt.Sprintf("%s: relations[%d]", rel, i))
+			join, _ := m["join_column"].(string)
+			if join == "" {
+				continue
 			}
+			if c.isBaseTableRef(join) {
+				c.rulef("base-file", "%s: fields[%d]: base contract is not a physical table", rel, i)
+				continue
+			}
+			checkColumnRef(c, join, tableIDs, cols, fmt.Sprintf("%s: fields[%d]", rel, i))
 		}
 	}
 	// queries

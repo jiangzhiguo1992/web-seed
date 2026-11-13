@@ -23,29 +23,54 @@ fields:
   - name: AccountID
     json_name: account_id
     type: string
-    required: true
     mutable: false
+    source: { column: data.tables.auth_email.col.account_id }
+    validation: { column: data.tables.auth_email.col.account_id }
+    description: "关联账号"
+
   - name: Username
     json_name: username
     type: string
-    required: true
     pii: true
+    source: { column: data.tables.auth_email.col.username }
+    validation: { column: data.tables.auth_email.col.username }
+    description: "邮箱 @ 前的本地部分"
+
   - name: Domain
     json_name: domain
     type: string
-    required: true
+    source: { column: data.tables.auth_email.col.domain }
+    validation: { column: data.tables.auth_email.col.domain }
+    description: "完整域名，例如 example.com；小写归一"
+
   - name: Entity
     json_name: entity
-    type: string
+    type: "*string"
+    source: { column: data.tables.auth_email.col.entity }
+    validation: { column: data.tables.auth_email.col.entity }
+    description: "注册域/二级域，例如 example.com"
+
   - name: TLD
     json_name: tld
-    type: string
+    type: "*string"
+    source: { column: data.tables.auth_email.col.tld }
+    validation: { column: data.tables.auth_email.col.tld }
+    description: "顶级域，例如 com"
+
   - name: Status
     json_name: status
     type: data.enums.auth_status
+    source: { column: data.tables.auth_email.col.status }
+    validation: { column: data.tables.auth_email.col.status }
+    description: "认证记录状态"
 
-relations:
-  - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.auth_email.col.account_id }
+  - name: Account
+    json_name: account
+    relationship: many_to_one
+    target: data.entities.account
+    join_column: data.tables.auth_email.col.account_id
+    load: lazy
+    description: "邮箱所属账号"
 
 validation:
   - id: data.entities.auth_email.domain_parts

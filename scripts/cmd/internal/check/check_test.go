@@ -329,8 +329,7 @@ func minimalTableDoc() map[string]any {
 		"summary":      "x",
 		"stability":    "draft",
 		"owner_module": "x",
-		"extends":      []any{"data.tables.base"},
-		"table":        map[string]any{"comment": "x", "size_class": "small"},
+		"table":        map[string]any{"comment": "x", "extends": []any{"data.tables.base"}},
 		"columns": []any{
 			map[string]any{"name": "code", "type": "string"},
 		},
@@ -425,27 +424,112 @@ func TestTableRulesIndexOrder(t *testing.T) {
 	}
 }
 
-func TestTableRulesLargeIndexConcurrently(t *testing.T) {
-	c := &Checker{}
-	doc := minimalTableDoc()
-	doc["table"].(map[string]any)["size_class"] = "large"
-	doc["indexes"] = []any{map[string]any{
-		"name": "idx_x_code", "columns": []any{"code"}, "reason": "test", "concurrently": "false",
+func TestStorageLargeIndexConcurrently(t *testing.T) {
+	c := &Checker{tableDocs: map[string]map[string]any{
+		"data.tables.x": {"indexes": []any{map[string]any{
+			"name": "idx_x_code", "concurrently": "false",
+		}}},
 	}}
-	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "large table must not disable CONCURRENTLY") {
+	c.checkStorageLargeIndexes(map[string]map[string]any{
+		"data.tables.x": {"size_class": "large"},
+	}, "contracts/data/storage.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "disables CONCURRENTLY") {
 		t.Fatalf("large-table concurrently=false not reported: %v", c.errs)
 	}
 }
 
-func TestTableRulesPartitionRangeInterval(t *testing.T) {
-	c := &Checker{}
-	doc := minimalTableDoc()
-	doc["table"].(map[string]any)["partition"] = map[string]any{
-		"strategy": "range", "columns": []any{"created_at"},
+func TestStorageRegistryAndEngine(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "table.partition.interval is required for range") {
+	body := `default_engine: postgres
+supported_engines: [postgres]
+engines:
+  postgres: { enabled: true }
+tables:
+  data.tables.x: { engine: mysql }
+  data.tables.z: { size_class: small }
+`
+	if err := os.WriteFile(filepath.Join(dir, "storage.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkStorage(map[string]string{"data.tables.x": "x.yaml", "data.tables.y": "y.yaml"})
+	errs := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"physical table data.tables.y is not registered",
+		"does not match any data.tables contract",
+		"engine \"mysql\" is not supported",
+	} {
+		if !strings.Contains(errs, want) {
+			t.Fatalf("missing %q in:\n%s", want, errs)
+		}
+	}
+}
+
+func TestStorageDocShape(t *testing.T) {
+	c := &Checker{}
+	doc := map[string]any{
+		"default_engine":    "postgres",
+		"supported_engines": []any{"postgres", 1},
+		"engines":           map[string]any{"postgres": map[string]any{"enabled": "false"}},
+		"deploymnet":        map[string]any{},
+	}
+	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
+	errs := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"unknown top-level field \"deploymnet\"",
+		"engines.postgres.enabled must be a bool",
+		"supported_engines[1] must be a non-empty string",
+	} {
+		if !strings.Contains(errs, want) {
+			t.Fatalf("missing %q in:\n%s", want, errs)
+		}
+	}
+	if c.storageEngineEnabled(doc, "postgres") {
+		t.Fatal("non-bool enabled must not count as enabled")
+	}
+
+	c.errs = nil
+	doc["supported_engines"] = "postgres"
+	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "supported_engines must be a list") {
+		t.Fatalf("non-list supported_engines not reported: %v", c.errs)
+	}
+}
+
+func TestStorageRetentionUnitType(t *testing.T) {
+	c := &Checker{}
+	c.checkStorageEntry(map[string]any{}, "data.tables.x", map[string]any{
+		"retention": map[string]any{"unit": 5},
+	}, "contracts/data/storage.yaml")
+	if !strings.Contains(entityErrs(c), "retention.unit must be a string") {
+		t.Fatalf("non-string retention unit not reported: %v", c.errs)
+	}
+}
+
+func TestStoragePartitionIntervalType(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.x": {"created_at": {typ: "timestamp"}},
+	}}
+	c.checkStorageEntry(map[string]any{}, "data.tables.x", map[string]any{
+		"partition": map[string]any{"strategy": "range", "columns": []any{"created_at"}, "interval": 5},
+	}, "contracts/data/storage.yaml")
+	if !strings.Contains(entityErrs(c), "partition.interval must be a string") {
+		t.Fatalf("non-string partition interval not reported: %v", c.errs)
+	}
+}
+
+func TestStoragePartitionRangeInterval(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.x": {"created_at": {typ: "timestamp"}},
+	}}
+	c.checkStorageEntry(map[string]any{}, "data.tables.x", map[string]any{
+		"partition": map[string]any{"strategy": "range", "columns": []any{"created_at"}},
+	}, "contracts/data/storage.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "partition.interval is required for range") {
 		t.Fatalf("range partition without interval not reported: %v", c.errs)
 	}
 }
@@ -543,10 +627,8 @@ func TestUsedByEntitiesAndQueries(t *testing.T) {
 id: data.queries.q
 queries:
   - id: data.queries.q.get_x
-    sql:
-      statement: select
-      from: data.tables.x
-      select: [ id ]
+    statement: select
+    targets: [ data.tables.x ]
 `)
 	write("contracts/data/tables/x.yaml", `
 id: data.tables.x
@@ -805,6 +887,78 @@ fields:
 	}
 }
 
+func TestEnumMultiTableSource(t *testing.T) {
+	root := t.TempDir()
+	entityPath := filepath.Join(root, "contracts/data/entities/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(entityPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	entity := `id: data.entities.x
+model:
+  name: x
+  extends: [ data.entities.base ]
+  tables: [ data.tables.a, data.tables.b ]
+fields:
+  - name: ID
+    json_name: id
+    type: string
+    source: { column: data.tables.a.col.id }
+    validation: { column: data.tables.a.col.id }
+    description: "id"
+  - name: Status
+    json_name: status
+    type: data.enums.x_status
+    source: { column: data.tables.b.col.status }
+    validation: { column: data.tables.b.col.status }
+    description: "status"
+`
+	if err := os.WriteFile(entityPath, []byte(entity), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	u := c.enumUsages()["data.enums.x_status"]
+	if u == nil || !u.tables["data.tables.b"] || u.tables["data.tables.a"] {
+		t.Fatalf("multi-table enum source not attributed to source.column: %#v", u)
+	}
+}
+
+func TestEnumPointerUsage(t *testing.T) {
+	root := t.TempDir()
+	entityPath := filepath.Join(root, "contracts/data/entities/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(entityPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	entity := `id: data.entities.x
+model:
+  name: x
+  extends: [ data.entities.base ]
+  tables: [ data.tables.x ]
+fields:
+  - name: Status
+    json_name: status
+    type: "*data.enums.x_status"
+    source: { column: data.tables.x.col.status }
+    validation: { column: data.tables.x.col.status }
+    description: "status"
+`
+	if err := os.WriteFile(entityPath, []byte(entity), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	usages := c.enumUsages()
+	u := usages["data.enums.x_status"]
+	if u == nil || !u.entities["data.entities.x"] || !u.tables["data.tables.x"] {
+		t.Fatalf("pointer enum usage not recorded: %#v", usages)
+	}
+
+	c.scanEnumTypeRefs(map[string]any{
+		"fields": []any{map[string]any{"type": "*data.enums.missing"}},
+	}, "x.yaml", "", map[string]map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown enum data.enums.missing") {
+		t.Fatalf("pointer enum ref not checked: %v", c.errs)
+	}
+}
+
 func TestEnumSummaryAndStability(t *testing.T) {
 	body := `# TODO
 schema_version: 1
@@ -915,7 +1069,7 @@ func TestCheckTablesUsesTargets(t *testing.T) {
 func TestErrorsHaveRuleIDs(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
-	doc["extends"] = []any{}
+	doc["table"].(map[string]any)["extends"] = []any{}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "[base-only]") {
@@ -948,17 +1102,20 @@ rules:
   - { id: base-columns, text: "x", implemented_by: [base-columns] }
 `)
 	write("parent.yaml", `id: data.tables.parent
-extends: [ data.tables.base ]
+table:
+  extends: [ data.tables.base ]
 columns:
    - { name: code, type: string, nullable: false }
 `)
 	write("child.yaml", `id: data.tables.child
-extends: [ data.tables.parent ]
+table:
+  extends: [ data.tables.parent ]
 columns:
    - { name: code, type: string, nullable: false }
 `)
 	write("grandchild.yaml", `id: data.tables.grandchild
-extends: [ data.tables.child ]
+table:
+  extends: [ data.tables.child ]
 columns:
    - { name: extra, type: string, nullable: false }
 `)
@@ -980,17 +1137,20 @@ func TestExtendsMultipleParents(t *testing.T) {
 	root := t.TempDir()
 	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
 	writeTableFixture(t, root, "left.yaml", `id: data.tables.left
-extends: [ data.tables.base ]
+table:
+  extends: [ data.tables.base ]
 columns:
    - { name: code, type: string, nullable: false }
 `)
 	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
-extends: [ data.tables.base ]
+table:
+  extends: [ data.tables.base ]
 columns:
    - { name: name, type: string, nullable: false }
 `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
-extends: [ data.tables.left, data.tables.right ]
+table:
+  extends: [ data.tables.left, data.tables.right ]
 columns:
    - { name: extra, type: string, nullable: false }
 `)
@@ -1008,17 +1168,20 @@ func TestExtendsConflict(t *testing.T) {
 	root := t.TempDir()
 	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
 	writeTableFixture(t, root, "left.yaml", `id: data.tables.left
-extends: [ data.tables.base ]
+table:
+  extends: [ data.tables.base ]
 columns:
    - { name: code, type: string, nullable: false }
 `)
 	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
-extends: [ data.tables.base ]
+table:
+  extends: [ data.tables.base ]
 columns:
    - { name: code, type: string, nullable: false }
 `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
-extends: [ data.tables.left, data.tables.right ]
+table:
+  extends: [ data.tables.left, data.tables.right ]
 columns:
  `)
 	c := &Checker{root: root}
@@ -1032,20 +1195,24 @@ func TestExtendsDiamond(t *testing.T) {
 	root := t.TempDir()
 	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
 	writeTableFixture(t, root, "root.yaml", `id: data.tables.root
-extends: [ data.tables.base ]
+table:
+  extends: [ data.tables.base ]
 columns:
    - { name: code, type: string, nullable: false }
 `)
 	writeTableFixture(t, root, "left.yaml", `id: data.tables.left
-extends: [ data.tables.root ]
+table:
+  extends: [ data.tables.root ]
 columns:
  `)
 	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
-extends: [ data.tables.root ]
+table:
+  extends: [ data.tables.root ]
 columns:
  `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
-extends: [ data.tables.left, data.tables.right ]
+table:
+  extends: [ data.tables.left, data.tables.right ]
 columns:
  `)
 	c := &Checker{root: root}
@@ -1082,22 +1249,26 @@ func TestExtendsCycle(t *testing.T) {
 	}
 	write("_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
 	write("g.yaml", `id: data.tables.g
-extends: [ data.tables.base ]
+table:
+  extends: [ data.tables.base ]
 columns:
    - { name: gcol, type: string, nullable: false }
 `)
 	write("a.yaml", `id: data.tables.a
-extends: [ data.tables.b, data.tables.g ]
+table:
+  extends: [ data.tables.b, data.tables.g ]
 columns:
    - { name: acol, type: string, nullable: false }
 `)
 	write("b.yaml", `id: data.tables.b
-extends: [ data.tables.a ]
+table:
+  extends: [ data.tables.a ]
 columns:
    - { name: bcol, type: string, nullable: false }
 `)
 	write("c.yaml", `id: data.tables.c
-extends: [ data.tables.b ]
+table:
+  extends: [ data.tables.b ]
 columns:
  `)
 	c := &Checker{root: root}
@@ -1129,7 +1300,7 @@ func TestExtendsUnknownParent(t *testing.T) {
 		}
 	}
 	write("_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
-	write("x.yaml", "id: data.tables.x\nextends: [ data.tables.missing ]\n")
+	write("x.yaml", "id: data.tables.x\ntable:\n  extends: [ data.tables.missing ]\n")
 	c := &Checker{root: root}
 	c.checkTables(&Schema{Targets: testTargets()})
 	if !strings.Contains(strings.Join(c.errs, "\n"), `extends "data.tables.missing" is not a data.tables contract`) {
@@ -1141,12 +1312,14 @@ func TestExtendsCycleRedeclare(t *testing.T) {
 	root := t.TempDir()
 	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
 	writeTableFixture(t, root, "a.yaml", `id: data.tables.a
-extends: [ data.tables.b ]
+table:
+  extends: [ data.tables.b ]
 columns:
    - { name: x, type: string, nullable: false }
 `)
 	writeTableFixture(t, root, "b.yaml", `id: data.tables.b
-extends: [ data.tables.a ]
+table:
+  extends: [ data.tables.a ]
 columns:
    - { name: x, type: string, nullable: false }
 `)
@@ -1160,9 +1333,9 @@ columns:
 
 func TestExtendsScalarIsTypeErrorNotBaseOnly(t *testing.T) {
 	schema := &Schema{Targets: testTargets(), Fields: []Field{
-		{Name: "extends", Type: "list<string>"},
+		{Name: "table", Type: "object", Fields: []Field{{Name: "extends", Type: "list<string>"}}},
 	}}
-	doc := map[string]any{"id": "data.tables.x", "extends": "data.tables.base"}
+	doc := map[string]any{"id": "data.tables.x", "table": map[string]any{"extends": "data.tables.base"}}
 	c := &Checker{}
 	c.checkPhysicalTable(doc, "contracts/data/tables/x.yaml", schema)
 	errs := strings.Join(c.errs, "\n")
@@ -1178,12 +1351,14 @@ func TestDoNotSpecificityUsesInheritedColumns(t *testing.T) {
 	root := t.TempDir()
 	writeTableFixture(t, root, "_base.yaml", "id: data.tables.base\nsummary: \"base\"\nstability: \"stable\"\ncolumns: []\n")
 	writeTableFixture(t, root, "parent.yaml", `id: data.tables.parent
-extends: [ data.tables.base ]
+table:
+  extends: [ data.tables.base ]
 columns:
    - { name: code, type: string, nullable: false }
 `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
-extends: [ data.tables.parent ]
+table:
+  extends: [ data.tables.parent ]
 do_not:
   - "code 必须小写"
 columns:
@@ -1528,7 +1703,7 @@ func TestRulefRejectsUnregisteredID(t *testing.T) {
 }
 
 func TestGeneratedRuleIDsCoverDynamicCalls(t *testing.T) {
-	for _, id := range []string{"partition", "constraint-fields", "index-definition", "schema.targets"} {
+	for _, id := range []string{"storage-registry", "constraint-fields", "index-definition", "schema.targets"} {
 		if !knownRuleIDs[id] {
 			t.Fatalf("generated rule_ids_gen.go missing %q", id)
 		}
@@ -1577,10 +1752,10 @@ func TestIndexUsedBy(t *testing.T) {
 	c = &Checker{
 		queryIDs:    map[string]string{"data.queries.x.q": "contracts/data/queries/x.yaml"},
 		queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
-		querySQL:    map[string]string{"data.queries.x.q": "SELECT 1"},
+		queryText:   map[string]string{"data.queries.x.q": "SELECT 1"},
 	}
 	c.checkTableRules(base([]any{"data.queries.x.q"}), "contracts/data/tables/x.yaml", schema)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "SQL does not mention index columns") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "index columns") {
 		t.Fatalf("index query SQL mismatch not reported: %v", c.errs)
 	}
 }
@@ -1627,39 +1802,62 @@ columns:
 	}
 }
 
-func TestQueryIndexColumns(t *testing.T) {
-	c := &Checker{
-		queryIndexCols: map[string][][]string{
-			"data.queries.x.q": {[]string{"created_at", "id"}, []string{"own_type"}},
-		},
-		queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
-		tableIndexes: map[string][]tableIndex{"data.tables.x": {
-			{name: "idx_created", columns: []string{"created_at", "id"}, usedBy: map[string]bool{"data.queries.x.q": true}},
-			{name: "idx_own", columns: []string{"own_type", "own_id"}, usedBy: map[string]bool{"data.queries.x.q": true}},
-		}},
-		tablePrimaryKey: map[string][]string{"data.tables.x": {"id"}},
-	}
-	c.checkQueryIndexColumns(
-		map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"},
-		map[string]map[string]bool{"data.tables.x": {"id": true, "created_at": true, "own_type": true, "own_id": true}},
-	)
-	if len(c.errs) != 0 {
-		t.Fatalf("valid query index columns reported: %v", c.errs)
+func TestQueryIndexRefs(t *testing.T) {
+	newChecker := func() *Checker {
+		return &Checker{
+			queryOrder: []string{"data.queries.x.q"},
+			queries: map[string]*queryInfo{
+				"data.queries.x.q": {ID: "data.queries.x.q", Targets: []string{"data.tables.x"}, IndexRef: []string{"data.tables.x.pk", "data.tables.x.idx_x_code"}},
+			},
+			queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
+			tableIndexes: map[string][]tableIndex{"data.tables.x": {
+				{name: "idx_x_code", columns: []string{"code"}, usedBy: map[string]bool{"data.queries.x.q": true}},
+			}},
+		}
 	}
 
-	c = &Checker{
-		queryIndexCols:  map[string][][]string{"data.queries.x.q": {[]string{"own_type", "created_at"}}},
-		queryTables:     map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
-		tableIndexes:    map[string][]tableIndex{},
-		tablePrimaryKey: map[string][]string{"data.tables.x": {"id"}},
+	c := newChecker()
+	c.checkQueryIndexRefs()
+	if len(c.errs) != 0 {
+		t.Fatalf("valid index ref reported: %v", c.errs)
 	}
-	c.checkQueryIndexColumns(
-		map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"},
-		map[string]map[string]bool{"data.tables.x": {"id": true, "created_at": true, "own_type": true}},
-	)
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "no index on data.tables.x starts with") {
-		t.Fatalf("wrong index order not reported: %v", c.errs)
+
+	c = newChecker()
+	c.queries["data.queries.x.q"].IndexRef = nil
+	c.checkQueryIndexRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must declare at least one index_ref") {
+		t.Fatalf("missing index_ref not reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.queries["data.queries.x.q"].IndexRef = []string{"data.tables.x.idx_missing"}
+	c.checkQueryIndexRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "is not declared") {
+		t.Fatalf("unknown index ref not reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.queries["data.queries.x.q"].IndexRef = []string{"data.tables.x.idx_x_code"}
+	c.checkQueryIndexRefs()
+	if len(c.errs) != 0 {
+		t.Fatalf("explicit index ref with used_by reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.tableIndexes["data.tables.x"][0].usedBy = map[string]bool{}
+	c.checkQueryIndexRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "does not list the query in used_by") {
+		t.Fatalf("index ref without used_by not reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.queries["data.queries.x.q"].IndexRef = nil
+	c.tableIndexes["data.tables.x"] = []tableIndex{
+		{name: "idx_x_code", columns: []string{"code"}, usedBy: map[string]bool{"data.queries.x.q": true}},
+	}
+	c.checkQueryIndexRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "lists the query but index_ref does not") {
+		t.Fatalf("reverse index ref mismatch not reported: %v", c.errs)
 	}
 }
 

@@ -24,48 +24,85 @@ fields:
   - name: OwnType
     json_name: own_type
     type: string
-    required: true
+    source: { column: data.tables.token.col.own_type }
+    validation: { column: data.tables.token.col.own_type }
+    description: "归属类型（冗余自 account.own_type）"
+
   - name: OwnID
     json_name: own_id
     type: string
-    required: true
+    source: { column: data.tables.token.col.own_id }
+    validation: { column: data.tables.token.col.own_id }
+    description: "归属 ID（冗余自 account.own_id）"
+
   - name: AccountID
     json_name: account_id
     type: string
-    required: true
     mutable: false
+    source: { column: data.tables.token.col.account_id }
+    validation: { column: data.tables.token.col.account_id }
+    description: "关联账号"
+
   - name: DeviceID
     json_name: device_id
-    type: string
+    type: "*string"
+    source: { column: data.tables.token.col.device_id }
+    validation: { column: data.tables.token.col.device_id }
+    description: "设备标识；多端登录时区分设备"
+
   - name: UserID
     json_name: user_id
-    type: string
+    type: "*string"
+    source: { column: data.tables.token.col.user_id }
+    validation: { column: data.tables.token.col.user_id }
+    description: "关联用户 ID（冗余自 account.user_id）"
+
   - name: accessTokenHash
     json_name: access_token_hash
     type: string
-    required: true
     pii: true
     never_expose: true
+    source: { column: data.tables.token.col.access_token_hash }
+    validation: { column: data.tables.token.col.access_token_hash }
+    description: "访问令牌哈希；只存哈希"
+
   - name: refreshTokenHash
     json_name: refresh_token_hash
     type: string
-    required: true
     pii: true
     never_expose: true
+    source: { column: data.tables.token.col.refresh_token_hash }
+    validation: { column: data.tables.token.col.refresh_token_hash }
+    description: "刷新令牌哈希；只存哈希"
+
   - name: AccessExpireAt
     json_name: access_expire_at
     type: timestamp
-    required: true
+    source: { column: data.tables.token.col.access_expire_at }
+    validation: { column: data.tables.token.col.access_expire_at }
+    description: "访问令牌过期时间"
+
   - name: RefreshExpireAt
     json_name: refresh_expire_at
     type: timestamp
-    required: true
+    source: { column: data.tables.token.col.refresh_expire_at }
+    validation: { column: data.tables.token.col.refresh_expire_at }
+    description: "刷新令牌过期时间"
+
   - name: Status
     json_name: status
     type: data.enums.token_status
+    source: { column: data.tables.token.col.status }
+    validation: { column: data.tables.token.col.status }
+    description: "令牌状态"
 
-relations:
-  - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.token.col.account_id }
+  - name: Account
+    json_name: account
+    relationship: many_to_one
+    target: data.entities.account
+    join_column: data.tables.token.col.account_id
+    load: lazy
+    description: "令牌所属账号"
 
 used_by:
   queries: []

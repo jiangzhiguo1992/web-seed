@@ -122,7 +122,25 @@ func isColumnRefType(t string, refs ColumnRefs) bool {
 	return false
 }
 
-// queryTableRefs 从结构化 sql 子句推导查询引用的表；查询不再手写 table/tables。
+// queryTableRefs 从 targets + joins 推导查询引用的表；查询不再手写 SQL。
+func queryTableRefs(m map[string]any) []string {
+	var out []string
+	for _, raw := range asList(m["targets"]) {
+		if s, ok := raw.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	for _, raw := range asList(m["joins"]) {
+		jm, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		if s, ok := jm["table"].(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
 
 // entityTableRefs 读取实体 model.tables；model 外的 tables 不再合法。
 func entityTableRefs(m map[string]any) []string {
@@ -131,29 +149,6 @@ func entityTableRefs(m map[string]any) []string {
 		return nil
 	}
 	return stringList(model["tables"])
-}
-
-func queryTableRefs(m map[string]any) []string {
-	sql, _ := asMap(m["sql"])
-	if sql == nil {
-		return nil
-	}
-	var out []string
-	add := func(v any) {
-		if s, ok := v.(string); ok && s != "" {
-			out = append(out, s)
-		}
-	}
-	add(sql["from"])
-	add(sql["into"])
-	for _, raw := range asList(sql["joins"]) {
-		jm, ok := asMap(raw)
-		if !ok {
-			continue
-		}
-		add(jm["table"])
-	}
-	return out
 }
 
 // snakeCase 把 Go 导出的字段名转换为默认物理列名/JSON 名。

@@ -4,8 +4,9 @@
 //   - contracts 下文本字段（description/comment/summary/do_not 等）双引号强制
 //   - data.tables / data.tables.base 的结构、ID/文件、基类 5 列、列/约束/索引、used_by、do_not 具体性
 //   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、code int32 范围、stability 与 summary
-//   - data.entities 的投影、ID、name、relations、validation、used_by
-//   - data.queries 的 ID/名称、表、params、returns、SQL 形态、写归属与敏感列
+//   - data.entities 的字段来源（column/computed）、指针/可空、字段校验、关系字段、used_by
+//   - data.queries 的 ID/名称、targets/joins、params、returns、伪 SQL 子句、index_ref、写归属与敏感列
+//   - data.storage 的表级物理事实（engine/size_class/retention/partition）
 //   - 表列引用的 column_refs 前缀是否存在；表列不引用 data.enums.*
 //   - 任意契约中的 data.enums.* 类型引用必须存在
 //   - status 由基类提供且为 integer；物理表不得重声明；枚举只在 entity
@@ -46,8 +47,7 @@ type Checker struct {
 	declaredRuleIDs map[string]bool
 	queryIDs        map[string]string
 	queryTables     map[string]map[string]bool
-	querySQL        map[string]string
-	queryIndexCols  map[string][][]string
+	queryText       map[string]string
 	tableIndexes    map[string][]tableIndex
 	tablePrimaryKey map[string][]string
 	tableObjects    map[string]map[string]bool
@@ -56,6 +56,7 @@ type Checker struct {
 
 	// 实体与查询解析索引。
 	tableColumns      map[string]map[string]columnMeta
+	tableDocs         map[string]map[string]any
 	tableTypeFamilies map[string]bool
 	entityDocs        []entityDoc
 	entityBaseDoc     map[string]any
@@ -117,10 +118,11 @@ func (c *Checker) run() {
 	}
 	tableIDs, cols := c.checkTables(tableSchema)
 	c.loadTableColumns(tableIDs)
+	c.checkStorage(tableIDs)
 	c.loadEntities(entitySchema)
 	c.checkRedundancy(tableIDs, cols)
 	c.loadTableIndexes(tableIDs)
-	c.checkQueryIndexColumns(tableIDs, cols)
+	c.checkQueryIndexRefs()
 	enumValues := c.checkEnums(enumSchema)
 	c.checkRules(tableSchema)
 	c.checkRules(enumSchema)

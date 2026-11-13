@@ -21,26 +21,47 @@ fields:
   - name: AccountID
     json_name: account_id
     type: string
-    required: true
     mutable: false
+    source: { column: data.tables.auth_phone.col.account_id }
+    validation: { column: data.tables.auth_phone.col.account_id }
+    description: "关联账号"
+
   - name: Code
     json_name: code
     type: string
-    required: true
+    source: { column: data.tables.auth_phone.col.code }
+    validation: { column: data.tables.auth_phone.col.code }
+    description: "国际区号，例如 +86"
+
   - name: Number
     json_name: number
     type: string
-    required: true
     pii: true
+    source: { column: data.tables.auth_phone.col.number }
+    validation: { column: data.tables.auth_phone.col.number }
+    description: "手机号"
+
   - name: Operator
     json_name: operator
-    type: string
+    type: "*string"
+    source: { column: data.tables.auth_phone.col.operator }
+    validation: { column: data.tables.auth_phone.col.operator }
+    description: "运营商"
+
   - name: Status
     json_name: status
     type: data.enums.auth_status
+    source: { column: data.tables.auth_phone.col.status }
+    validation: { column: data.tables.auth_phone.col.status }
+    description: "认证记录状态"
 
-relations:
-  - { name: account, target: data.entities.account, kind: many_to_one, via: data.tables.auth_phone.col.account_id }
+  - name: Account
+    json_name: account
+    relationship: many_to_one
+    target: data.entities.account
+    join_column: data.tables.auth_phone.col.account_id
+    load: lazy
+    description: "手机号所属账号"
 
 used_by:
   queries: []

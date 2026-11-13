@@ -27,6 +27,7 @@ var schemaFieldTypes = map[string]bool{
 	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
 	"boolean": true, "any": true, "object": true,
 	"list<string>": true, "list<object>": true, "list<list<string>>": true, "list<any>": true,
+	"map<string>": true,
 }
 
 // validateFieldTypes 校验 _meta 自身的 type 词汇；避免把列类型族的
@@ -179,6 +180,21 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 				if _, ok := raw.(string); !ok {
 					c.rulef("schema.type", "%s[%d][%d]: must be string", path, i, j)
 				}
+			}
+		}
+	case "map<string>":
+		m, ok := asMap(v)
+		if !ok {
+			c.rulef("schema.type", "%s: must be map", path)
+			return
+		}
+		for k, item := range m {
+			if k == "" {
+				c.rulef("schema.non-empty", "%s: map key must not be empty", path)
+				continue
+			}
+			if _, ok := item.(string); !ok {
+				c.rulef("schema.type", "%s.%s: must be string", path, k)
 			}
 		}
 	default:

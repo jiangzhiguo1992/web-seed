@@ -1,8 +1,9 @@
-// query_indexes.go 校验 query.index_columns 与表索引的最左前缀。
+// query_indexes.go 校验 query.index_ref 与表索引的双向引用。
 package check
 
 import (
 	"path/filepath"
+	"sort"
 )
 
 type tableIndex struct {
@@ -12,7 +13,7 @@ type tableIndex struct {
 	usedBy  map[string]bool
 }
 
-// loadTableIndexes 收集物理表的显式索引与主键，供 query.index_columns 校验。
+// loadTableIndexes 收集物理表的显式索引与主键，供 query.index_ref 校验。
 func (c *Checker) loadTableIndexes(tableIDs map[string]string) {
 	c.tableIndexes = map[string][]tableIndex{}
 	c.tablePrimaryKey = map[string][]string{}
@@ -42,9 +43,6 @@ func (c *Checker) loadTableIndexes(tableIDs map[string]string) {
 				continue
 			}
 			cols := stringList(m["columns"])
-			if len(cols) == 0 {
-				continue
-			}
 			name, _ := m["name"].(string)
 			used := map[string]bool{}
 			for _, q := range asList(m["used_by"]) {
@@ -71,110 +69,79 @@ func stringList(v any) []string {
 	return out
 }
 
-func stringGroups(v any) [][]string {
-	list := asList(v)
-	out := make([][]string, 0, len(list))
-	for _, raw := range list {
-		if g := stringList(raw); len(g) > 0 {
-			out = append(out, g)
-		}
-	}
-	return out
-}
-
-// checkQueryIndexColumns 校验：
-//   - 每个 query 必须写 index_columns，且只对应一张表；
-//   - 每组列必须是主键前缀，或某条显式索引的最左前缀；
-//   - 匹配的显式索引必须在 used_by 中列出该查询；
-//   - 反向：索引 used_by 的查询必须有对应的 index_columns 前缀组。
-func (c *Checker) checkQueryIndexColumns(tableIDs map[string]string, cols map[string]map[string]bool) {
-	for qid, groups := range c.queryIndexCols {
+// checkQueryIndexRefs 校验：
+//   - 单表 query 至少声明一个 index_ref；
+//   - 每个 ref 指向查询表的 PK 或 indexes[].name；
+//   - 显式索引必须在 used_by 中列出该查询；
+//   - 反向：索引 used_by 的查询必须在 index_ref 中引用该索引。
+func (c *Checker) checkQueryIndexRefs() {
+	for _, qid := range c.queryOrder {
+		q := c.queries[qid]
 		tables := c.queryTables[qid]
 		if len(tables) == 0 {
 			continue // 表引用缺失由 query-table-shape 报出
 		}
-		if len(tables) > 1 {
-			if len(groups) > 0 {
-				c.rulef("query-index-columns", "query %s: multi-table query must not declare index_columns", qid)
-			}
+		if len(q.Targets) == 1 && len(q.IndexRef) == 0 {
+			c.rulef("query-index-used-by", "query %s: single-table query must declare at least one index_ref", qid)
 			continue
 		}
-		if len(groups) == 0 {
-			c.rulef("query-index-columns", "query %s: must declare index_columns", qid)
-			continue
-		}
-		var tableID string
-		for t := range tables {
-			tableID = t
-		}
-		if _, ok := tableIDs[tableID]; !ok {
-			c.rulef("query-index-columns", "query %s: unknown table %s", qid, tableID)
-			continue
-		}
-		for _, group := range groups {
-			if len(group) == 0 {
-				c.rulef("query-index-columns", "query %s: empty index_columns group", qid)
+		for _, ref := range q.IndexRef {
+			table, name, ok := splitIndexRef(ref)
+			if !ok {
+				c.rulef("query-index-ref", "query %s: malformed index_ref %q", qid, ref)
 				continue
 			}
-			for _, col := range group {
-				if set := cols[tableID]; set != nil && !set[col] {
-					c.rulef("query-index-columns", "query %s: index_columns references unknown column %s.%s", qid, tableID, col)
-				}
-			}
-			if hasPrefix(group, c.tablePrimaryKey[tableID]) {
+			if !tables[table] {
+				c.rulef("query-index-ref", "query %s: index_ref table %s is not read by the query", qid, table)
 				continue
 			}
-			matched := false
-			for _, idx := range c.tableIndexes[tableID] {
-				if !hasPrefix(group, idx.columns) {
-					continue
-				}
-				matched = true
-				if !idx.usedBy[qid] {
-					c.rulef("query-index-used-by", "query %s: index %s starts with %v but does not list query in used_by", qid, idx.name, group)
-				}
+			if name == "pk" {
+				continue
 			}
-			if !matched {
-				c.rulef("query-index-columns", "query %s: no index on %s starts with %v", qid, tableID, group)
+			idx := c.findTableIndex(table, name)
+			if idx == nil {
+				c.rulef("query-index-ref", "query %s: index %s is not declared on %s", qid, name, table)
+				continue
+			}
+			if !idx.usedBy[qid] {
+				c.rulef("query-index-ref", "query %s: index %s does not list the query in used_by", qid, name)
 			}
 		}
 	}
-	// 反向：索引 used_by 的查询必须有一个能匹配该索引的最左前缀组。
-	for _, indexes := range c.tableIndexes {
-		for _, idx := range indexes {
-			for qid := range idx.usedBy {
-				if t := c.queryTables[qid]; len(t) > 1 {
-					c.rulef("query-index-columns", "query %s: multi-table query must not appear in index.used_by", qid)
-					continue
+	tableIDs := make([]string, 0, len(c.tableIndexes))
+	for table := range c.tableIndexes {
+		tableIDs = append(tableIDs, table)
+	}
+	sort.Strings(tableIDs)
+	for _, table := range tableIDs {
+		for _, idx := range c.tableIndexes[table] {
+			for _, qid := range sortedKeys(idx.usedBy) {
+				q := c.queries[qid]
+				if q == nil || !c.queryTables[qid][table] {
+					continue // 未知查询/表不匹配由 index-used-by-ref 报出
 				}
-				groups := c.queryIndexCols[qid]
-				if len(groups) == 0 {
-					c.rulef("query-index-columns", "query %s: index %s uses it but index_columns is missing", qid, idx.name)
-					continue
-				}
-				matched := false
-				for _, group := range groups {
-					if hasPrefix(group, idx.columns) {
-						matched = true
-						break
-					}
-				}
-				if !matched {
-					c.rulef("query-index-columns", "query %s: index_columns %v does not match index %s %v", qid, groups, idx.name, idx.columns)
+				if !refInList(q.IndexRef, table+"."+idx.name) {
+					c.rulef("query-index-used-by", "query %s: index %s lists the query but index_ref does not", qid, idx.name)
 				}
 			}
 		}
 	}
 }
 
-func hasPrefix(group, columns []string) bool {
-	if len(group) == 0 || len(group) > len(columns) {
-		return false
-	}
-	for i := range group {
-		if group[i] != columns[i] {
-			return false
+func (c *Checker) findTableIndex(table, name string) *tableIndex {
+	for i := range c.tableIndexes[table] {
+		if c.tableIndexes[table][i].name == name {
+			return &c.tableIndexes[table][i]
 		}
 	}
-	return true
+	return nil
+}
+
+func refInList(refs []string, want string) bool {
+	for _, ref := range refs {
+		if ref == want {
+			return true
+		}
+	}
+	return false
 }

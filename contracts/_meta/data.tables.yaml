@@ -238,6 +238,7 @@ rules:
   - { id: storage-registry, text: "storage.yaml 的 tables 必须覆盖每张物理表，且只引用已存在的表；基类不是物理表", implemented_by: [ storage-registry ] }
   - { id: storage-entry, text: "storage.tables 条目只允许 engine/size_class/retention/partition；size_class 只能是 small/large", implemented_by: [ storage-entry ] }
   - { id: storage-engine, text: "storage.tables 的 engine 必须在 supported_engines 中且该引擎已启用", implemented_by: [ storage-engine ] }
+  - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/default_engine/supported_engines/engines/deployment/tables/not_supported；engines.<name>.enabled 必须是 bool，supported_engines 必须是非空字符串列表", implemented_by: [ storage-doc ] }
   - { id: storage-retention, text: "retention.unit 只能是 minutes/hours/days；各保留时长必须 >= 1", implemented_by: [ storage-retention ] }
   - { id: storage-partition, text: "partition.columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
   - { id: large-index-concurrently, text: "storage.tables.<id>.size_class=large 时索引不得显式 concurrently: \"false\"", implemented_by: [ large-index-concurrently ] }

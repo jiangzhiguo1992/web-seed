@@ -1,9 +1,4 @@
 # 账号数据实体。物理表在 tables/account.yaml；认证信息在 auth_* / tokens。
-#
-# 边界：
-#   - 基类字段在 entities/_base.yaml；本文件只写账号业务字段。
-#   - 密码、手机号、邮箱、令牌不在本实体出现；通过关系实体访问。
-#   - 复杂校验写 validation；数据库能表达的约束留在 tables。
 
 id: data.entities.account
 summary: "账号数据实体"
@@ -24,44 +19,84 @@ fields:
   - name: OwnType
     json_name: own_type
     type: string
-    required: true
+    source: { column: data.tables.account.col.own_type }
+    validation: { column: data.tables.account.col.own_type }
+    description: "归属类型（user/tenant/system）"
 
   - name: OwnID
     json_name: own_id
     type: string
-    required: true
+    source: { column: data.tables.account.col.own_id }
+    validation: { column: data.tables.account.col.own_id }
+    description: "归属 ID；与 OwnType 组成归属主体"
 
   - name: Number
     json_name: number
     type: string
-    required: true
+    source: { column: data.tables.account.col.number }
+    validation: { column: data.tables.account.col.number }
     description: "账号编号，存储前大写归一"
 
   - name: Nickname
     json_name: nickname
     type: string
-    required: true
     pii: true
+    source: { column: data.tables.account.col.nickname }
+    validation: { column: data.tables.account.col.nickname }
+    description: "昵称"
 
   - name: userID
     json_name: user_id
-    type: string
+    type: "*string"
+    source: { column: data.tables.account.col.user_id }
+    validation: { column: data.tables.account.col.user_id }
+    description: "关联用户 ID；不做数据库外键"
 
   - name: Status
     json_name: status
     type: data.enums.account_status
+    source: { column: data.tables.account.col.status }
+    validation: { column: data.tables.account.col.status }
+    description: "账号状态"
 
   - name: Version
     json_name: version
     type: integer
-    required: true
-    description: "乐观锁"
+    source: { column: data.tables.account.col.version }
+    validation: { column: data.tables.account.col.version }
+    description: "乐观锁版本"
 
-relations:
-  - { name: tokens, target: data.entities.token, kind: one_to_many, via: data.tables.token.col.account_id }
-  - { name: auth_pwd, target: data.entities.auth_pwd, kind: one_to_one, via: data.tables.auth_pwd.col.account_id }
-  - { name: auth_phone, target: data.entities.auth_phone, kind: one_to_many, via: data.tables.auth_phone.col.account_id }
-  - { name: auth_email, target: data.entities.auth_email, kind: one_to_many, via: data.tables.auth_email.col.account_id }
+  - name: Tokens
+    json_name: tokens
+    relationship: one_to_many
+    target: data.entities.token
+    join_column: data.tables.token.col.account_id
+    load: lazy
+    description: "账号的设备令牌"
+
+  - name: AuthPwd
+    json_name: auth_pwd
+    relationship: one_to_one
+    target: data.entities.auth_pwd
+    join_column: data.tables.auth_pwd.col.account_id
+    load: lazy
+    description: "账号的密码认证记录"
+
+  - name: AuthPhone
+    json_name: auth_phone
+    relationship: one_to_many
+    target: data.entities.auth_phone
+    join_column: data.tables.auth_phone.col.account_id
+    load: lazy
+    description: "账号绑定的手机号"
+
+  - name: AuthEmail
+    json_name: auth_email
+    relationship: one_to_many
+    target: data.entities.auth_email
+    join_column: data.tables.auth_email.col.account_id
+    load: lazy
+    description: "账号绑定的邮箱"
 
 used_by:
   queries:
