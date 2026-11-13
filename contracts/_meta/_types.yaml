@@ -1,0 +1,60 @@
+# 共享值类型：所有契约共用的逻辑类型族。
+# 只定义类型族与参数，不绑定具体存储引擎；data.tables / data.entities / data.queries 共用。
+# 字段语义见 _meta/README.md；本文件不是契约实例，不登记 index.yaml。
+
+id: meta.types
+title: "共享值类型"
+
+column_types:
+  families:
+    string:
+      description: "字符序列；覆盖 char/varchar/text"
+      params:
+        min_len: { type: integer, required: false, min: 0, description: "最小字符数" }
+        max_len: { type: integer, required: false, min: 1, description: "最大字符数" }
+        fixed: { type: boolean, required: false, default: false, description: "固定长度；为 true 时必须写 max_len" }
+        pattern: { type: string, required: false, description: "写入前校验的正则" }
+        normalize: { type: string, required: false, enum: [ lower, upper ], description: "写入前归一方式" }
+    boolean:
+      description: "布尔值；覆盖 bool/tinyint(1)"
+      params: { }
+    integer:
+      description: "整数；覆盖 int8/16/32/64"
+      params:
+        bits: { type: integer, required: false, enum: [ 8, 16, 32, 64 ], default: 64, description: "存储位宽" }
+        unsigned: { type: boolean, required: false, default: false, description: "是否无符号" }
+        min: { type: integer, required: false, description: "闭区间下限" }
+        max: { type: integer, required: false, description: "闭区间上限" }
+    float:
+      description: "浮点数；覆盖 real/double"
+      params:
+        bits: { type: integer, required: false, enum: [ 32, 64 ], default: 64, description: "存储位宽" }
+        min: { type: float, required: false, description: "闭区间下限" }
+        max: { type: float, required: false, description: "闭区间上限" }
+    decimal:
+      description: "精确小数；覆盖 decimal/numeric"
+      params:
+        precision: { type: integer, required: true, min: 1, examples: [ 19 ], description: "总位数" }
+        scale: { type: integer, required: false, default: 0, min: 0, description: "小数位数" }
+        min: { type: decimal, required: false, description: "闭区间下限" }
+        max: { type: decimal, required: false, description: "闭区间上限" }
+    datetime:
+      description: "日期/时间；覆盖 date/time/datetime"
+      params:
+        mode: { type: string, required: false, enum: [ date, time, datetime ], default: datetime, description: "日期/时间模式" }
+        timezone: { type: boolean, required: false, default: false, description: "是否带时区" }
+    timestamp:
+      description: "绝对时间点"
+      params:
+        timezone: { type: boolean, required: false, default: true, description: "是否带时区" }
+        fractional_seconds: { type: integer, required: false, default: 6, min: 0, max: 9, description: "小数秒精度" }
+    json:
+      description: "JSON 文档；覆盖 json/jsonb"
+      params:
+        binary: { type: boolean, required: false, default: false, description: "是否使用 jsonb" }
+    bytes:
+      description: "二进制；覆盖 binary/varbinary/blob/bytea"
+      params:
+        min_len: { type: integer, required: false, min: 0, description: "最小字节数" }
+        max_len: { type: integer, required: false, min: 1, description: "最大字节数" }
+        fixed: { type: boolean, required: false, default: false, description: "固定长度；为 true 时必须写 max_len" }
