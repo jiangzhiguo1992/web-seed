@@ -49,6 +49,7 @@ fields:
     type: string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "契约稳定度"
     generates: "index 摘要"
     caution: "stable 只能用户手动设置/降级；生成器只产出 draft，且不得含 TODO/FIXME"
