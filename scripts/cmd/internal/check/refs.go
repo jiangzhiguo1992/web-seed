@@ -98,32 +98,6 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 					c.rulef("schema.ref", "%s: queries[%d] (%s): table %s not found", rel, i, qid, t)
 				}
 			}
-			// 返回实体时 return_columns 是实体字段名，由 checkQueries 校验；
-			// 这里只校验表行返回的列。
-			returns, _ := m["returns"].(string)
-			returns = strings.TrimSpace(returns)
-			if strings.HasPrefix(returns, "List<") && strings.HasSuffix(returns, ">") {
-				returns = strings.TrimSuffix(strings.TrimPrefix(returns, "List<"), ">")
-			}
-			if !strings.HasPrefix(returns, "data.entities.") {
-				for _, rc := range asList(m["return_columns"]) {
-					col, ok := rc.(string)
-					if !ok {
-						c.rulef("schema.type", "%s: queries[%d] (%s): return_columns must be strings", rel, i, qid)
-						continue
-					}
-					found := false
-					for _, t := range ts {
-						if cols[t] != nil && cols[t][col] {
-							found = true
-							break
-						}
-					}
-					if !found {
-						c.rulef("schema.ref", "%s: queries[%d] (%s): return column %s not found in %v", rel, i, qid, col, ts)
-					}
-				}
-			}
 		}
 	}
 	// capabilities
@@ -205,7 +179,7 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 	}
 	for _, qid := range c.queryOrder {
 		q := c.queries[qid]
-		if q != nil && q.Return.Raw == "affected_rows" && !c.declaredWrites[qid] {
+		if q != nil && queryReturnsAffectedRows(q) && !c.declaredWrites[qid] {
 			c.rulef("owner-write", "query %s returns affected_rows but is not declared in any capability write list", qid)
 		}
 	}
@@ -292,7 +266,7 @@ func (c *Checker) checkWriteQueries(doc map[string]any, raw []any, declared map[
 		}
 		target := q.Targets[0]
 		if len(tables) > 0 && !containsString(tables, target) {
-			c.rulef("owner-write", "%s: write query %s targets %s outside persistence.table/tables", rel, qid, target)
+			c.rulef("owner-write", "%s: write query %s tables %s outside persistence.table/tables", rel, qid, target)
 		}
 		if module != "" {
 			if owner := c.tableOwners[target]; owner != "" && owner != module {

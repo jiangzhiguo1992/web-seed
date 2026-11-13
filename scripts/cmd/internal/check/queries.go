@@ -12,45 +12,42 @@ import (
 )
 
 type queryParam struct {
-	Name     string
-	Type     string
-	Column   string
-	Nullable bool
+	Name         string
+	Type         string
+	Column       string
+	Expr         string
+	Nullable     bool
+	HasDefault   bool
+	DefaultValue any
 }
 
 type queryReturn struct {
-	Raw      string
-	IsList   bool
-	Kind     string // table / entity / scalar / object / invalid
-	TableID  string
-	EntityID string
-}
-
-type queryOutputField struct {
 	Name     string
+	Kind     string // column / entity / table / scalar / affected_rows
+	Column   string
+	Entity   string
+	Table    string
 	Type     string
+	Columns  []string
 	Nullable bool
+	List     bool
 }
 
 type queryInfo struct {
-	ID            string
-	Name          string
-	PreviousNames []string
-	File          string
-	OwnerModule   string
-	Targets       []string
-	Params        []queryParam
-	Return        queryReturn
-	ReturnColumns []string
-	OutputFields  []queryOutputField
-	IndexRef      []string
+	ID          string
+	Name        string
+	File        string
+	OwnerModule string
+	Targets     []string
+	Params      []queryParam
+	Returns     []queryReturn
+	IndexRef    []string
 }
 
 type queryDoc struct {
 	rel    string
 	fileID string
 	doc    map[string]any
-	keys   []string
 }
 
 var sqlScalarReturns = map[string]bool{
@@ -70,8 +67,6 @@ func (q *queryInfo) tableSet() map[string]bool {
 // loadQueryIndex 解析查询文件；结构错误在 checkQueries 中报。
 func (c *Checker) loadQueryIndex(schema *Schema) {
 	c.queries = map[string]*queryInfo{}
-	c.queryAliases = map[string]string{}
-	c.queryAliasDup = map[string]bool{}
 	c.queryDocs = nil
 	c.queryOrder = nil
 	c.queryIDs = map[string]string{}
@@ -88,12 +83,11 @@ func (c *Checker) loadQueryIndex(schema *Schema) {
 		if err != nil {
 			continue
 		}
-		keys, _ := loadYAMLKeys(file)
 		fileID := schema.Targets.FileID(filepath.Base(file))
 		if fileID == "" {
 			fileID = strings.TrimSuffix(rel, filepath.Ext(rel))
 		}
-		c.queryDocs = append(c.queryDocs, queryDoc{rel: rel, fileID: fileID, doc: doc, keys: keys})
+		c.queryDocs = append(c.queryDocs, queryDoc{rel: rel, fileID: fileID, doc: doc})
 		owner, _ := doc["owner_module"].(string)
 		for _, raw := range asList(doc["queries"]) {
 			m, ok := asMap(raw)
@@ -112,23 +106,6 @@ func (c *Checker) loadQueryIndex(schema *Schema) {
 			c.queryOrder = append(c.queryOrder, q.ID)
 			c.queryIDs[q.ID] = rel
 			c.queryTables[q.ID] = q.tableSet()
-			for _, prev := range q.PreviousNames {
-				oldID := contractspec.QueryID(fileID, prev)
-				if oldID == "" || oldID == q.ID {
-					c.queryAliasDup[oldID] = true
-					continue
-				}
-				if target, ok := c.queryAliases[oldID]; ok && target != q.ID {
-					c.queryAliasDup[oldID] = true
-					continue
-				}
-				c.queryAliases[oldID] = q.ID
-			}
-		}
-	}
-	for oldID := range c.queryAliases {
-		if _, ok := c.queryIDs[oldID]; ok {
-			c.queryAliasDup[oldID] = true
 		}
 	}
 }
@@ -137,8 +114,7 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 	q := &queryInfo{File: rel, OwnerModule: owner}
 	q.Name, _ = m["name"].(string)
 	q.ID = contractspec.QueryID(fileID, q.Name)
-	q.PreviousNames = stringList(m["previous_names"])
-	q.Targets = stringList(m["targets"])
+	q.Targets = stringList(m["tables"])
 	q.IndexRef = stringList(m["index_ref"])
 	for _, raw := range asList(m["params"]) {
 		pm, ok := asMap(raw)
@@ -149,56 +125,31 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		p.Name, _ = pm["name"].(string)
 		p.Type, _ = pm["type"].(string)
 		p.Column, _ = pm["column"].(string)
+		p.Expr, _ = pm["expr"].(string)
 		p.Nullable, _ = pm["nullable"].(bool)
+		if v, ok := pm["default"]; ok {
+			p.HasDefault, p.DefaultValue = true, v
+		}
 		q.Params = append(q.Params, p)
 	}
-	rawReturn, _ := m["returns"].(string)
-	q.Return = parseQueryReturn(rawReturn)
-	q.ReturnColumns = stringList(m["return_columns"])
-	for _, raw := range asList(m["output_fields"]) {
-		om, ok := asMap(raw)
+	for _, raw := range asList(m["returns"]) {
+		rm, ok := asMap(raw)
 		if !ok {
 			continue
 		}
-		f := queryOutputField{}
-		f.Name, _ = om["name"].(string)
-		f.Type, _ = om["type"].(string)
-		f.Nullable, _ = om["nullable"].(bool)
-		q.OutputFields = append(q.OutputFields, f)
+		r := queryReturn{}
+		r.Name, _ = rm["name"].(string)
+		r.Kind, _ = rm["kind"].(string)
+		r.Column, _ = rm["column"].(string)
+		r.Entity, _ = rm["entity"].(string)
+		r.Table, _ = rm["table"].(string)
+		r.Type, _ = rm["type"].(string)
+		r.Columns = stringList(rm["columns"])
+		r.Nullable, _ = rm["nullable"].(bool)
+		r.List, _ = rm["list"].(bool)
+		q.Returns = append(q.Returns, r)
 	}
 	return q
-}
-
-func parseQueryReturn(raw string) queryReturn {
-	r := queryReturn{Raw: strings.TrimSpace(raw)}
-	if r.Raw == "" {
-		return r
-	}
-	base := r.Raw
-	if strings.HasPrefix(base, "List<") && strings.HasSuffix(base, ">") {
-		r.IsList = true
-		base = strings.TrimSuffix(strings.TrimPrefix(base, "List<"), ">")
-	}
-	r.Raw = base
-	switch {
-	case strings.HasPrefix(base, "data.tables.") && strings.HasSuffix(base, ".row"):
-		r.Kind = "table"
-		r.TableID = strings.TrimSuffix(base, ".row")
-	case strings.HasPrefix(base, "data.entities."):
-		r.Kind = "entity"
-		r.EntityID = base
-	case base == "object":
-		r.Kind = "object"
-	case sqlScalarReturns[base] || base == "affected_rows":
-		r.Kind = "scalar"
-	default:
-		r.Kind = "invalid"
-	}
-	return r
-}
-
-var queryKeyOrder = []string{
-	"id", "summary", "owner_module", "schema_version", "stability", "do_not", "queries",
 }
 
 func (c *Checker) checkQueries(schema *Schema) {
@@ -210,7 +161,10 @@ func (c *Checker) checkQueries(schema *Schema) {
 		if s, _ := qd.doc["summary"].(string); strings.TrimSpace(s) == "" {
 			c.rulef("schema.non-empty", "%s: summary must not be empty", qd.rel)
 		}
-		c.checkQueryKeyOrder(qd)
+		if len(asList(qd.doc["queries"])) == 0 {
+			c.rulef("schema.non-empty", "%s: queries must not be empty", qd.rel)
+		}
+		c.checkFieldOrder(qd.rel, schema.Fields, orderRules{top: "query-key-order", nested: "query-key-order"})
 		id, _ := qd.doc["id"].(string)
 		want := schema.Targets.FileID(filepath.Base(qd.rel))
 		if want != "" && id != want {
@@ -221,38 +175,16 @@ func (c *Checker) checkQueries(schema *Schema) {
 	for id := range c.queryDupIDs {
 		c.rulef("query-name-unique", "duplicate query name/derived id %s", id)
 	}
-	for id := range c.queryAliasDup {
-		c.rulef("query-name-unique", "query previous name collides on derived id %s", id)
-	}
 	names := map[string]string{}
 	for _, id := range c.queryOrder {
 		q := c.queries[id]
 		c.checkQueryIdentity(q, names)
 		c.checkQueryShape(q)
 		c.checkQueryTable(q)
-		c.checkQueryParamColumns(q)
+		c.checkQueryPagination(q)
 		c.checkQueryParams(q)
+		c.checkQueryParamColumns(q)
 		c.checkQueryReturns(q)
-		c.checkQueryOutputFields(q)
-		c.checkQueryReturnColumns(q)
-	}
-}
-
-func (c *Checker) checkQueryKeyOrder(qd queryDoc) {
-	pos := map[string]int{}
-	for i, k := range queryKeyOrder {
-		pos[k] = i
-	}
-	last, lastKey := -1, ""
-	for _, k := range qd.keys {
-		i, ok := pos[k]
-		if !ok {
-			continue
-		}
-		if i < last {
-			c.rulef("query-key-order", "%s: key %s must come before %s", qd.rel, k, lastKey)
-		}
-		last, lastKey = i, k
 	}
 }
 
@@ -267,10 +199,6 @@ func (c *Checker) checkQueryDoNot(qd queryDoc) {
 			if name, _ := m["name"].(string); name != "" {
 				names[name] = true
 				names[contractspec.QueryID(qd.fileID, name)] = true
-			}
-			for _, prev := range stringList(m["previous_names"]) {
-				names[prev] = true
-				names[contractspec.QueryID(qd.fileID, prev)] = true
 			}
 		}
 	}
@@ -306,28 +234,6 @@ func (c *Checker) checkQueryIdentity(q *queryInfo, names map[string]string) {
 	} else {
 		names[q.Name] = q.ID
 	}
-	for _, prev := range q.PreviousNames {
-		if prev == q.Name {
-			c.rulef("query-name-unique", "%s: previous_names must not repeat current name %s", q.File, prev)
-			continue
-		}
-		if owner, ok := names[prev]; ok {
-			c.rulef("query-name-unique", "%s: previous name %s already used by %s", q.File, prev, owner)
-			continue
-		}
-		names[prev] = q.ID
-	}
-}
-
-// resolveQueryID 把 previous_names 派生的旧 ID 解析到当前 query 项 ID。
-func (c *Checker) resolveQueryID(id string) string {
-	if _, ok := c.queries[id]; ok {
-		return id
-	}
-	if target, ok := c.queryAliases[id]; ok {
-		return target
-	}
-	return id
 }
 
 func pascalCase(s string) string {
@@ -341,24 +247,38 @@ func pascalCase(s string) string {
 	return strings.Join(parts, "")
 }
 
-// checkQueryShape 校验 returns 的接口形状；读写归属在 capabilities 层。
+// checkQueryShape 校验返回形状：affected_rows 单值、table 结果不能与其它项混用。
 func (c *Checker) checkQueryShape(q *queryInfo) {
 	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
-	if q.Return.Raw != "affected_rows" {
+	if len(q.Returns) == 0 {
+		c.rulef("query-returns", "%s: returns must not be empty", where)
 		return
 	}
-	if q.Return.IsList {
+	hasAffected := false
+	hasTable := false
+	for _, r := range q.Returns {
+		if r.Kind == "affected_rows" {
+			hasAffected = true
+		}
+		if r.Kind == "table" {
+			hasTable = true
+		}
+	}
+	if hasAffected && len(q.Returns) > 1 {
+		c.rulef("query-shape", "%s: affected_rows must be the only return item", where)
+	}
+	if hasAffected && len(q.Returns) == 1 && q.Returns[0].List {
 		c.rulef("query-shape", "%s: affected_rows must not be a list", where)
 	}
-	if len(q.ReturnColumns) > 0 || len(q.OutputFields) > 0 {
-		c.rulef("query-shape", "%s: affected_rows must not declare return_columns/output_fields", where)
+	if hasTable && len(q.Returns) > 1 {
+		c.rulef("query-shape", "%s: table return must be the only return item", where)
 	}
 }
 
 func (c *Checker) checkQueryTable(q *queryInfo) {
 	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
 	if len(q.Targets) == 0 {
-		c.rulef("query-table-shape", "%s: targets must not be empty", where)
+		c.rulef("query-table-shape", "%s: tables must not be empty", where)
 		return
 	}
 	seen := map[string]bool{}
@@ -368,7 +288,7 @@ func (c *Checker) checkQueryTable(q *queryInfo) {
 		}
 		seen[t] = true
 		if t == c.baseID {
-			c.rulef("query-table-shape", "%s: targets references data.tables.base", where)
+			c.rulef("query-table-shape", "%s: tables references data.tables.base", where)
 			continue
 		}
 		if _, ok := c.tableColumns[t]; !ok {
@@ -377,10 +297,86 @@ func (c *Checker) checkQueryTable(q *queryInfo) {
 	}
 }
 
+// checkQueryPagination 要求 list 返回声明标准分页参数，并校验保留参数形状。
+func (c *Checker) checkQueryPagination(q *queryInfo) {
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	byName := map[string]queryParam{}
+	for _, p := range q.Params {
+		byName[p.Name] = p
+	}
+	for _, name := range []string{"offset", "limit"} {
+		if p, ok := byName[name]; ok {
+			c.checkPaginationParam(name, p, where)
+		}
+	}
+	hasList := false
+	for _, r := range q.Returns {
+		if r.List {
+			hasList = true
+			break
+		}
+	}
+	if !hasList {
+		return
+	}
+	for _, name := range []string{"offset", "limit"} {
+		if _, ok := byName[name]; !ok {
+			c.rulef("query-pagination", "%s: list return requires %s param", where, name)
+		}
+	}
+}
+
+func (c *Checker) checkPaginationParam(name string, p queryParam, where string) {
+	if p.Type != "integer" {
+		c.rulef("query-pagination", "%s: %s must have type integer", where, name)
+	}
+	if !p.Nullable {
+		c.rulef("query-pagination", "%s: %s must set nullable:true", where, name)
+	}
+	if !p.HasDefault {
+		c.rulef("query-pagination", "%s: %s must declare default", where, name)
+		return
+	}
+	n, ok := toInt(p.DefaultValue)
+	if !ok {
+		c.rulef("query-pagination", "%s: %s default must be an integer", where, name)
+		return
+	}
+	if name == "offset" && n != 0 {
+		c.rulef("query-pagination", "%s: offset default must be 0", where)
+	}
+	if name == "limit" && n <= 0 {
+		c.rulef("query-pagination", "%s: limit default must be positive", where)
+	}
+}
+
+func (c *Checker) checkQueryParams(q *queryInfo) {
+	seen := map[string]bool{}
+	for _, p := range q.Params {
+		where := fmt.Sprintf("%s: query %s param %s", q.File, q.ID, p.Name)
+		if seen[p.Name] {
+			c.rulef("query-params", "%s: duplicate param", where)
+		}
+		seen[p.Name] = true
+		if strings.TrimSpace(p.Type) == "" {
+			c.rulef("query-params", "%s: type must not be empty", where)
+		}
+		if p.Column != "" && p.Expr != "" {
+			c.rulef("query-params", "%s: column and expr are mutually exclusive", where)
+		}
+		if p.Expr != "" && strings.TrimSpace(p.Expr) == "" {
+			c.rulef("query-params", "%s: expr must not be blank", where)
+		}
+		if p.HasDefault && !p.Nullable {
+			c.rulef("query-params", "%s: default requires nullable:true (null means use default)", where)
+		}
+	}
+}
+
 // checkQueryParamColumns 校验 params[].column 的列存在性与类型族兼容。
 func (c *Checker) checkQueryParamColumns(q *queryInfo) {
 	if len(q.Targets) == 0 {
-		return // 缺失 targets 由 query-table-shape 报出
+		return // 缺失 tables 由 query-table-shape 报出
 	}
 	for _, p := range q.Params {
 		if p.Column == "" {
@@ -448,115 +444,150 @@ func familyCompatible(param, column string) bool {
 	return (param == "timestamp" && column == "datetime") || (param == "datetime" && column == "timestamp")
 }
 
-func (c *Checker) checkQueryParams(q *queryInfo) {
-	seen := map[string]bool{}
-	for _, p := range q.Params {
-		if seen[p.Name] {
-			c.rulef("query-params", "%s: query %s duplicate param %s", q.File, q.ID, p.Name)
-		}
-		seen[p.Name] = true
-		if strings.TrimSpace(p.Type) == "" {
-			c.rulef("query-params", "%s: query %s param %s type must not be empty", q.File, q.ID, p.Name)
-		}
-	}
-}
-
+// checkQueryReturns 校验 returns 每项的 kind、专属字段、互斥字段与 list 一致性。
 func (c *Checker) checkQueryReturns(q *queryInfo) {
 	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
-	switch q.Return.Kind {
-	case "invalid", "":
-		c.rulef("query-returns", "%s: invalid returns %q", where, q.Return.Raw)
-		return
-	case "table":
-		if _, ok := c.tableColumns[q.Return.TableID]; !ok {
-			c.rulef("query-returns", "%s: returns unknown table %s", where, q.Return.TableID)
-			return
+	if len(q.Returns) == 0 {
+		return // query-returns 已报
+	}
+	names := map[string]bool{}
+	var listSet bool
+	var hasList bool
+	for i, r := range q.Returns {
+		rw := fmt.Sprintf("%s returns[%d]", where, i)
+		if r.Name == "" {
+			c.rulef("query-returns", "%s: name must not be empty", rw)
+		} else if names[r.Name] {
+			c.rulef("query-returns", "%s: duplicate return name %s", rw, r.Name)
 		}
-		if len(q.Targets) == 0 || q.Targets[0] != q.Return.TableID {
-			c.rulef("query-returns", "%s: table returns must match targets[0] %s", where, q.Return.TableID)
+		names[r.Name] = true
+		if hasList && r.List != listSet {
+			c.rulef("query-returns", "%s: list must be consistent across return items", rw)
 		}
-	case "entity":
-		e := c.entities[q.Return.EntityID]
-		if e == nil {
-			c.rulef("query-returns", "%s: returns unknown entity %s", where, q.Return.EntityID)
-			return
+		listSet, hasList = r.List, true
+
+		switch r.Kind {
+		case "column":
+			if r.Column == "" {
+				c.rulef("query-returns", "%s: kind=column requires column", rw)
+				continue
+			}
+			if r.Entity != "" || r.Table != "" || r.Type != "" || len(r.Columns) > 0 {
+				c.rulef("query-returns", "%s: kind=column forbids entity/table/type/columns", rw)
+			}
+			c.checkReturnColumn(rw, q, r.Column, r.Columns)
+		case "entity":
+			if r.Entity == "" {
+				c.rulef("query-returns", "%s: kind=entity requires entity", rw)
+				continue
+			}
+			if r.Column != "" || r.Table != "" || r.Type != "" {
+				c.rulef("query-returns", "%s: kind=entity forbids column/table/type", rw)
+			}
+			e := c.entities[r.Entity]
+			if e == nil {
+				c.rulef("query-returns", "%s: unknown entity %s", rw, r.Entity)
+				continue
+			}
+			if e.Primary != "" && !q.tableSet()[e.Primary] {
+				c.rulef("query-returns", "%s: entity %s primary table %s not in tables", rw, e.ID, e.Primary)
+			}
+			c.checkEntityReturnColumns(rw, q, e, r.Columns)
+		case "table":
+			if r.Table == "" {
+				c.rulef("query-returns", "%s: kind=table requires table", rw)
+				continue
+			}
+			if r.Column != "" || r.Entity != "" || r.Type != "" {
+				c.rulef("query-returns", "%s: kind=table forbids column/entity/type", rw)
+			}
+			if len(q.Targets) == 0 || q.Targets[0] != r.Table {
+				c.rulef("query-returns", "%s: table must match tables[0]", rw)
+			}
+			if _, ok := c.tableColumns[r.Table]; !ok {
+				c.rulef("query-returns", "%s: unknown table %s", rw, r.Table)
+				continue
+			}
+			c.checkTableReturnColumns(rw, q, r.Table, r.Columns)
+		case "scalar":
+			if r.Type == "" {
+				c.rulef("query-returns", "%s: kind=scalar requires type", rw)
+				continue
+			}
+			if r.Column != "" || r.Entity != "" || r.Table != "" || len(r.Columns) > 0 {
+				c.rulef("query-returns", "%s: kind=scalar forbids column/entity/table/columns", rw)
+			}
+			if !c.scalarReturnType(r.Type) {
+				c.rulef("query-returns", "%s: unsupported scalar type %s", rw, r.Type)
+			}
+		case "affected_rows":
+			if r.List {
+				c.rulef("query-shape", "%s: affected_rows must not be a list", rw)
+			}
+			if r.Column != "" || r.Entity != "" || r.Table != "" || r.Type != "" || len(r.Columns) > 0 {
+				c.rulef("query-shape", "%s: affected_rows forbids column/entity/table/type/columns", rw)
+			}
+		default:
+			c.rulef("query-returns", "%s: invalid kind %q", rw, r.Kind)
 		}
-		if e.Primary != "" && !q.tableSet()[e.Primary] {
-			c.rulef("query-returns", "%s: returns entity %s but does not target its primary table %s", where, e.ID, e.Primary)
-		}
-	case "object":
-		// output_fields 在 checkQueryOutputFields 校验
 	}
 }
 
-func (c *Checker) checkQueryOutputFields(q *queryInfo) {
-	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
-	if len(q.OutputFields) == 0 {
-		if q.Return.Kind == "object" {
-			c.rulef("query-output-fields", "%s: returns object but output_fields is empty", where)
-		}
+func (c *Checker) scalarReturnType(typ string) bool {
+	base := strings.TrimPrefix(strings.TrimSpace(typ), "*")
+	if strings.HasPrefix(base, "data.enums.") {
+		return true // 枚举存在性由 checkEnumRefs 全仓校验
+	}
+	return sqlScalarReturns[base]
+}
+
+func (c *Checker) checkReturnColumn(where string, q *queryInfo, ref string, _ []string) {
+	t, col, ok := splitColumnRef(ref)
+	if !ok {
+		c.rulef("query-return-columns", "%s: malformed column %q", where, ref)
 		return
 	}
-	if q.Return.Kind != "object" {
-		c.rulef("query-output-fields", "%s: output_fields requires returns object", where)
+	if !q.tableSet()[t] {
+		c.rulef("query-return-columns", "%s: column %s does not belong to query tables", where, ref)
+		return
 	}
-	if len(q.ReturnColumns) > 0 {
-		c.rulef("query-output-fields", "%s: must not combine output_fields with return_columns", where)
+	meta, ok := c.tableColumns[t][col]
+	if !ok {
+		c.rulef("query-return-columns", "%s: column %s not found", where, ref)
+		return
 	}
-	seen := map[string]bool{}
-	for _, f := range q.OutputFields {
-		if seen[f.Name] {
-			c.rulef("query-output-fields", "%s: duplicate output field %s", where, f.Name)
+	if normalizeSensitivity(meta.sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[t] {
+		c.rulef("query-sensitive-columns", "%s: returns secret column %s outside module %s", where, col, c.tableOwners[t])
+	}
+}
+
+func (c *Checker) checkTableReturnColumns(where string, q *queryInfo, table string, columns []string) {
+	for _, col := range columns {
+		meta, ok := c.tableColumns[table][col]
+		if !ok {
+			c.rulef("query-return-columns", "%s: return column %s not found in %s", where, col, table)
+			continue
 		}
-		seen[f.Name] = true
-		if strings.TrimSpace(f.Type) == "" {
-			c.rulef("query-output-fields", "%s: output field %s missing type", where, f.Name)
-		} else if !strings.HasPrefix(f.Type, "data.enums.") && !c.isEntityType(f.Type) {
-			c.rulef("query-output-fields", "%s: output field %s has unsupported type %s", where, f.Name, f.Type)
+		if normalizeSensitivity(meta.sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[table] {
+			c.rulef("query-sensitive-columns", "%s: returns secret column %s outside module %s", where, col, c.tableOwners[table])
 		}
 	}
 }
 
-func (c *Checker) checkQueryReturnColumns(q *queryInfo) {
-	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
-	if len(q.ReturnColumns) > 0 && q.Return.Kind != "table" && q.Return.Kind != "entity" {
-		c.rulef("query-return-columns", "%s: return_columns is only allowed for table/entity returns", where)
-		return
-	}
+func (c *Checker) checkEntityReturnColumns(where string, q *queryInfo, e *entityInfo, columns []string) {
 	selected := map[string]bool{}
-	for _, col := range q.ReturnColumns {
+	for _, col := range columns {
 		selected[col] = true
+		f := findEntityFieldByColumn(e, col)
+		if f == nil {
+			c.rulef("query-return-columns", "%s: return column %s not found in %s", where, col, e.ID)
+			continue
+		}
+		if normalizeSensitivity(f.Sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[f.ColumnTable] {
+			c.rulef("query-sensitive-columns", "%s: returns secret field %s outside module %s", where, f.Name, c.tableOwners[f.ColumnTable])
+		}
 	}
-	switch q.Return.Kind {
-	case "table":
-		cols := c.tableColumns[q.Return.TableID]
-		for _, col := range q.ReturnColumns {
-			meta, ok := cols[col]
-			if !ok {
-				c.rulef("query-return-columns", "%s: return column %s not found in %s", where, col, q.Return.TableID)
-				continue
-			}
-			if meta.neverExpose && q.OwnerModule != c.tableOwners[q.Return.TableID] {
-				c.rulef("query-sensitive-columns", "%s: returns never_expose column %s outside module %s", where, col, c.tableOwners[q.Return.TableID])
-			}
-		}
-	case "entity":
-		e := c.entities[q.Return.EntityID]
-		if e == nil {
-			return
-		}
-		for _, col := range q.ReturnColumns {
-			f := findEntityFieldByColumn(e, col)
-			if f == nil {
-				c.rulef("query-return-columns", "%s: return column %s not found in %s", where, col, e.ID)
-				continue
-			}
-			if f.NeverExpose && q.OwnerModule != c.tableOwners[f.ColumnTable] {
-				c.rulef("query-sensitive-columns", "%s: returns never_expose field %s outside module %s", where, f.Name, c.tableOwners[f.ColumnTable])
-			}
-		}
-		c.checkEntityCoverage(q, e, selected)
-	}
+	c.checkEntityCoverage(q, e, selected)
 }
 
 // checkEntityCoverage 校验实体返回的投影：来源表必须在查询表集合内，裁剪不得丢失必填字段。
@@ -573,9 +604,8 @@ func (c *Checker) checkEntityCoverage(q *queryInfo, e *entityInfo, selected map[
 			continue
 		}
 		if f.SourceComputed != "" {
-			// computed 字段无法通过 return_columns 裁剪；跨模块返回 never_expose 直接报错。
-			if f.NeverExpose && q.OwnerModule != owner {
-				c.rulef("query-sensitive-columns", "%s: returns computed never_expose field %s outside module %s", where, f.Name, owner)
+			if normalizeSensitivity(f.Sensitivity) == sensitivitySecret && q.OwnerModule != owner {
+				c.rulef("query-sensitive-columns", "%s: returns computed secret field %s outside module %s", where, f.Name, owner)
 			}
 			continue
 		}
@@ -583,11 +613,11 @@ func (c *Checker) checkEntityCoverage(q *queryInfo, e *entityInfo, selected map[
 			continue
 		}
 		if len(selected) == 0 {
-			if f.NeverExpose {
+			if normalizeSensitivity(f.Sensitivity) == sensitivitySecret {
 				continue
 			}
 		} else if !selected[f.Column] {
-			if !f.NeverExpose && !strings.HasPrefix(f.Type, "*") {
+			if normalizeSensitivity(f.Sensitivity) != sensitivitySecret && !strings.HasPrefix(f.Type, "*") {
 				c.rulef("query-entity-coverage", "%s: omits required field %s", where, f.Name)
 			}
 			continue
@@ -618,6 +648,18 @@ func findEntityFieldByColumn(e *entityInfo, column string) *entityFieldInfo {
 	}
 	return nil
 }
+
+func queryReturnsAffectedRows(q *queryInfo) bool {
+	for _, r := range q.Returns {
+		if r.Kind == "affected_rows" {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveQueryID 保留调用点兼容；query ID 已是规范值。
+func (c *Checker) resolveQueryID(id string) string { return id }
 
 // splitIndexRef 拆分 data.tables.<t>.<pk|index-name>。
 func splitIndexRef(ref string) (table, name string, ok bool) {

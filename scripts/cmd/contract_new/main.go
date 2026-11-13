@@ -3,7 +3,7 @@
 // 用法（在 scripts/cmd 下）：
 //
 //	go run ./contract_new -root ../.. -type data.tables -name note -module notes -summary "备注表"
-//	go run ./contract_new -root ../.. -type data.tables -name balance -module accounts -column-type decimal
+//	go run ./contract_new -root ../.. -type data.tables -name balance -module account -column-type decimal
 //	go run ./contract_new -root ../.. -type data.enums  -name note_status
 //	go run ./contract_new -root ../.. -type data.entities -name note -table note -summary "备注实体"
 //	go run ./contract_new -root ../.. -type data.queries -name note -module notes -table note -summary "备注查询"

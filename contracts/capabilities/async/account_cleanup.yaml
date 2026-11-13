@@ -4,7 +4,7 @@ schema_version: 1
 id: cap.async.account_cleanup
 summary: "未激活账号清理任务"
 stability: draft
-module: accounts
+module: account
 do_not:
   - "只清理 pending 状态，不要碰 active / suspended"
   - "必须保留审计事件，不要静默删除"

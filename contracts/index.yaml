@@ -17,7 +17,7 @@ read_order:
 
 groups:
   data:
-    description: "数据契约。tables 是物理结构真相源（含 base 基类，migrations 由它生成），entities 是读模型，queries 是实体与表之间的装载桥，storage 是项目级存储与部署。"
+    description: "数据契约。tables 是物理结构真相源（含 base 基类，migrations 由它生成），entities 是读模型，queries 是实体与表之间的装载桥，storage 是项目级存储、部署与冗余组。"
     layers: [tables, entities, queries, storage, policy]
   capabilities:
     description: "能力契约。HTTP / 异步 / 跨模块 service。"
@@ -109,7 +109,7 @@ entries:
     enforcement: generated+tested
     stability: stable
     common_mistakes:
-      - "手写 /v1/accounts 而不是引用 capability"
+      - "手写 /v1/account 而不是引用 capability"
       - "漏掉 forbidden 态"
       - "在页面里直接引用 data.*"
   - { id: feature.pages.account_detail, path: features/pages/account_detail.yaml, summary: "账号详情页", consumers: [web/admin], enforcement: generated+tested, stability: stable }
@@ -144,13 +144,13 @@ entries:
 # 跨文件的坑：不属于任何单一契约，但 AI 最容易犯
 global_notes:
   - "错误响应由 capabilities/http 的 default_error_responses 注入，不要逐接口声明"
-  - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.output_fields"
+  - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.returns"
   - "data.entities 的字段名与表列名可能不同：entity 用 source.column 指明来源，cap.services.persistence.field_map 只描述 service 类型差异"
   - "领域事件由 business/events 的 emitted_by 声明，capabilities 不写 emits"
   - "capabilities 契约不引用 business.*（cap.flows 仅允许引用 business.states/rules/events 做编排）"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table/entity 的 used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
-  - "表级物理事实（engine/size_class/retention/partition）只在 data/storage.yaml 的 tables 下声明"
+  - "表级物理事实（engine/size_class/retention/partition）与冗余组只在 data/storage.yaml 声明（tables / redundancy_groups）"
 
 # 白名单：允许没有入边的根契约
 orphan_whitelist:

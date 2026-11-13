@@ -12,14 +12,12 @@ table:
   comment: "密码认证"
   extends:
     - data.tables.base
-
   entities:
     - data.entities.auth_pwd
 
 columns:
   - name: account_id
-    type: string
-    max_len: 36
+    type: integer
     nullable: false
     comment: "关联账号"
 
@@ -28,7 +26,7 @@ columns:
     nullable: false
     min_len: 1
     max_len: 254
-    pii: true
+    sensitivity: pii
     comment: "登录名；唯一"
 
   - name: password_hash
@@ -36,15 +34,14 @@ columns:
     nullable: true
     min_len: 20
     max_len: 255
-    pii: true
-    never_expose: true
+    sensitivity: secret
     comment: "argon2id 口令哈希；新密码写入此列"
 
   - name: failed_login_count
     type: integer
     nullable: false
-    min: 0
     default: 0
+    min: 0
     comment: "连续失败次数；成功登录后归零"
 
   - name: locked_until
@@ -61,18 +58,18 @@ indexes:
   - name: uq_auth_pwd_username
     columns: [ username ]
     unique: true
-    where: "deleted_at IS NULL"
+    live_only: true
+    comment: "登录名在未删除记录内唯一"
     used_by:
       - data.queries.auth.get_auth_pwd_by_username
       - data.queries.auth.create_auth_pwd
-    reason: "登录名在未删除记录内唯一"
 
   - name: uq_auth_pwd_account
     columns: [ account_id ]
     unique: true
-    where: "deleted_at IS NULL"
+    live_only: true
+    comment: "一个账号只有一条密码记录"
     used_by: [ data.queries.auth.create_auth_pwd ]
-    reason: "一个账号只有一条密码记录"
 
 used_by:
   queries:

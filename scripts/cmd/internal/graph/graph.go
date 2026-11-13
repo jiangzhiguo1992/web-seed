@@ -1,7 +1,7 @@
-// Package graph 计算 query 入边并写回 table/entity 的 used_by.queries。
+// Package graph 计算 query/capability 入边并写回 table/entity 的 used_by。
 //
 // table.entities 与 model.included_by 是显式映射，由 checker 校验；
-// gen-graph 只维护生成物 used_by.queries。
+// gen-graph 只维护生成物 used_by.queries（table/entity）与 used_by.capabilities（entity）。
 package graph
 
 import (
@@ -21,7 +21,8 @@ type TableUsedBy struct {
 }
 
 type EntityUsedBy struct {
-	Queries []string
+	Queries      []string
+	Capabilities []string
 }
 
 type Snapshot struct {
@@ -36,7 +37,8 @@ type tableSet struct {
 }
 
 type entitySet struct {
-	queries map[string]bool
+	queries      map[string]bool
+	capabilities map[string]bool
 }
 
 // Compute 扫描 tables/entities/queries，计算 used_by.queries。
@@ -82,7 +84,7 @@ func Compute(root string) (*Snapshot, error) {
 		if prev, ok := entityFiles[id]; ok {
 			return nil, fmt.Errorf("duplicate entity id %s: %s and %s", id, prev, rel(root, f))
 		}
-		entities[id] = &entitySet{queries: map[string]bool{}}
+		entities[id] = &entitySet{queries: map[string]bool{}, capabilities: map[string]bool{}}
 		entityFiles[id] = rel(root, f)
 	}
 	seenQueries := map[string]string{}
@@ -111,10 +113,25 @@ func Compute(root string) (*Snapshot, error) {
 					ts.queries[qid] = true
 				}
 			}
-			if e := returnsEntity(m); e != "" {
+			for _, e := range returnsEntities(m) {
 				if es := entities[e]; es != nil {
 					es.queries[qid] = true
 				}
+			}
+		}
+	}
+	for _, f := range walkYAML(root, "contracts/capabilities") {
+		doc, err := loadYAML(f)
+		if err != nil {
+			return nil, err
+		}
+		capabilityID, _ := doc["id"].(string)
+		if capabilityID == "" {
+			continue
+		}
+		for _, entityID := range capabilityEntityRefs(doc) {
+			if es := entities[entityID]; es != nil {
+				es.capabilities[capabilityID] = true
 			}
 		}
 	}
@@ -129,7 +146,10 @@ func Compute(root string) (*Snapshot, error) {
 		snap.Tables[id] = TableUsedBy{Queries: sortedKeys(ts.queries)}
 	}
 	for id, es := range entities {
-		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries)}
+		snap.Entities[id] = EntityUsedBy{
+			Queries:      sortedKeys(es.queries),
+			Capabilities: sortedKeys(es.capabilities),
+		}
 	}
 	return snap, nil
 }
@@ -149,7 +169,8 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	}
 	for _, id := range sortedFileKeys(s.EntityFiles) {
 		file := s.EntityFiles[id]
-		ok, err := syncUsedByFile(filepath.Join(root, file), s.Entities[id].Queries)
+		e := s.Entities[id]
+		ok, err := syncEntityUsedByFile(filepath.Join(root, file), e.Queries, e.Capabilities)
 		if err != nil {
 			return changed, err
 		}
@@ -183,12 +204,14 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		got := usedByQueries(doc)
-		want := s.Entities[id].Queries
-		if !usedByOnlyQueries(doc) {
-			drift = append(drift, fmt.Sprintf("%s: used_by must only contain queries", file))
-		} else if !sameSet(got, want) {
-			drift = append(drift, fmt.Sprintf("%s: used_by.queries must be %v, got %v", file, want, got))
+		gotQueries, gotCapabilities, ok := entityUsedBy(doc)
+		want := s.Entities[id]
+		if !ok {
+			drift = append(drift, fmt.Sprintf("%s: used_by must contain queries/capabilities only", file))
+		} else if !sameSet(gotQueries, want.Queries) {
+			drift = append(drift, fmt.Sprintf("%s: used_by.queries must be %v, got %v", file, want.Queries, gotQueries))
+		} else if !sameSet(gotCapabilities, want.Capabilities) {
+			drift = append(drift, fmt.Sprintf("%s: used_by.capabilities must be %v, got %v", file, want.Capabilities, gotCapabilities))
 		}
 	}
 	return drift, nil
@@ -207,6 +230,26 @@ func syncUsedByFile(path string, queries []string) (bool, error) {
 		return false, nil
 	}
 	out, err := applyUsedBy(src, renderUsedByQueries(queries))
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	return true, writeAtomic(path, out)
+}
+
+func syncEntityUsedByFile(path string, queries, capabilities []string) (bool, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	doc := map[string]any{}
+	if err := yaml.Unmarshal(src, &doc); err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	gotQueries, gotCapabilities, ok := entityUsedBy(doc)
+	if ok && sameSet(gotQueries, queries) && sameSet(gotCapabilities, capabilities) {
+		return false, nil
+	}
+	out, err := applyUsedBy(src, renderEntityUsedBy(queries, capabilities))
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
@@ -241,15 +284,27 @@ func writeAtomic(path string, out []byte) error {
 func renderUsedByQueries(queries []string) string {
 	var b strings.Builder
 	b.WriteString("used_by:\n")
-	if len(queries) == 0 {
-		b.WriteString("  queries: []\n")
-		return b.String()
-	}
-	b.WriteString("  queries:\n")
-	for _, q := range queries {
-		fmt.Fprintf(&b, "    - %s\n", q)
-	}
+	renderList(&b, "queries", queries)
 	return b.String()
+}
+
+func renderEntityUsedBy(queries, capabilities []string) string {
+	var b strings.Builder
+	b.WriteString("used_by:\n")
+	renderList(&b, "queries", queries)
+	renderList(&b, "capabilities", capabilities)
+	return b.String()
+}
+
+func renderList(b *strings.Builder, key string, values []string) {
+	if len(values) == 0 {
+		fmt.Fprintf(b, "  %s: []\n", key)
+		return
+	}
+	fmt.Fprintf(b, "  %s:\n", key)
+	for _, v := range values {
+		fmt.Fprintf(b, "    - %s\n", v)
+	}
 }
 
 // applyUsedBy 替换最后一个顶层键 used_by；缺失时追加到文件末尾。
@@ -313,6 +368,84 @@ func usedByQueries(doc map[string]any) []string {
 	return stringList(ub["queries"])
 }
 
+// entityUsedBy 读取 entity 的 used_by；必须同时包含 queries/capabilities，且不得有其他键。
+func entityUsedBy(doc map[string]any) ([]string, []string, bool) {
+	ub, ok := asMap(doc["used_by"])
+	if !ok {
+		return nil, nil, false
+	}
+	if _, ok := ub["queries"]; !ok {
+		return nil, nil, false
+	}
+	if _, ok := ub["capabilities"]; !ok {
+		return nil, nil, false
+	}
+	for k := range ub {
+		if k != "queries" && k != "capabilities" {
+			return nil, nil, false
+		}
+	}
+	return stringList(ub["queries"]), stringList(ub["capabilities"]), true
+}
+
+// capabilityEntityRefs 收集 capability 中 type/x-entity/returns 的实体引用。
+func capabilityEntityRefs(doc map[string]any) []string {
+	seen := map[string]bool{}
+	var out []string
+	collectEntityRefs(doc, func(id string) {
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	})
+	return out
+}
+
+func collectEntityRefs(v any, fn func(string)) {
+	if m, ok := v.(map[string]any); ok {
+		for k, child := range m {
+			if k == "type" || k == "x-entity" || k == "returns" {
+				if s, ok := child.(string); ok {
+					if id, ok := entityRef(s); ok {
+						fn(id)
+					}
+				}
+			}
+			collectEntityRefs(child, fn)
+		}
+		return
+	}
+	for _, item := range asList(v) {
+		collectEntityRefs(item, fn)
+	}
+}
+
+func entityRef(s string) (string, bool) {
+	s = strings.TrimPrefix(strings.TrimSpace(s), "*")
+	if strings.HasPrefix(s, "List<") && strings.HasSuffix(s, ">") {
+		s = strings.TrimSuffix(strings.TrimPrefix(s, "List<"), ">")
+	}
+	if strings.HasPrefix(s, "data.entities.") {
+		return s, true
+	}
+	return "", false
+}
+
+func walkYAML(root, dir string) []string {
+	var files []string
+	_ = filepath.Walk(filepath.Join(root, dir), func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	sort.Strings(files)
+	return files
+}
+
 func usedByOnlyQueries(doc map[string]any) bool {
 	ub, ok := asMap(doc["used_by"])
 	if !ok {
@@ -362,10 +495,10 @@ func asList(v any) []any {
 	return l
 }
 
-// queryTableRefs 读取查询的 targets。
+// queryTableRefs 读取查询的 tables。
 func queryTableRefs(m map[string]any) []string {
 	var out []string
-	for _, raw := range asList(m["targets"]) {
+	for _, raw := range asList(m["tables"]) {
 		if s, ok := raw.(string); ok && s != "" {
 			out = append(out, s)
 		}
@@ -373,16 +506,20 @@ func queryTableRefs(m map[string]any) []string {
 	return out
 }
 
-func returnsEntity(m map[string]any) string {
-	raw, _ := m["returns"].(string)
-	s := strings.TrimSpace(raw)
-	if strings.HasPrefix(s, "List<") && strings.HasSuffix(s, ">") {
-		s = strings.TrimSuffix(strings.TrimPrefix(s, "List<"), ">")
+func returnsEntities(m map[string]any) []string {
+	var out []string
+	for _, raw := range asList(m["returns"]) {
+		r, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		kind, _ := r["kind"].(string)
+		entity, _ := r["entity"].(string)
+		if kind == "entity" && entity != "" {
+			out = append(out, entity)
+		}
 	}
-	if strings.HasPrefix(s, "data.entities.") {
-		return s
-	}
-	return ""
+	return out
 }
 
 func stringList(v any) []string {

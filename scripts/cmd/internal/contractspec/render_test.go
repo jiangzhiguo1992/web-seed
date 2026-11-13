@@ -23,9 +23,6 @@ func loadTestSchema(t *testing.T) *Schema {
 
 func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	s := loadTestSchema(t)
-	if len(s.ColumnRefs.Prefixes) == 0 {
-		t.Fatal("column_refs.prefixes not loaded")
-	}
 	for i := range s.Fields {
 		switch s.Fields[i].Name {
 		case "stability":
@@ -92,7 +89,7 @@ func loadSchemaByType(t *testing.T, typ string) *Schema {
 
 func TestRenderEntity(t *testing.T) {
 	s := loadSchemaByType(t, "data.entities")
-	b, err := RenderEntity(s, "account_preview", "account", "accounts", "账号预览")
+	b, err := RenderEntity(s, "account_preview", "account", "account", "账号预览")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +97,7 @@ func TestRenderEntity(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
 	}
-	if doc["id"] != "data.entities.account_preview" || doc["owner_module"] != "accounts" {
+	if doc["id"] != "data.entities.account_preview" || doc["owner_module"] != "account" {
 		t.Fatalf("unexpected top-level: %#v", doc)
 	}
 	model, _ := doc["model"].(map[string]any)
@@ -132,11 +129,14 @@ func TestRenderEntity(t *testing.T) {
 	if _, ok := usedBy["queries"]; !ok {
 		t.Fatalf("used_by.queries missing: %#v", usedBy)
 	}
+	if _, ok := usedBy["capabilities"]; !ok {
+		t.Fatalf("used_by.capabilities missing: %#v", usedBy)
+	}
 }
 
 func TestRenderQuery(t *testing.T) {
 	s := loadSchemaByType(t, "data.queries")
-	b, err := RenderQuery(s, "account", "accounts", "account", "accounts", "账号查询")
+	b, err := RenderQuery(s, "account", "account", "account", "account", "账号查询")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,8 +144,11 @@ func TestRenderQuery(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
 	}
-	if doc["id"] != "data.queries.account" || doc["owner_module"] != "accounts" {
+	if doc["id"] != "data.queries.account" || doc["owner_module"] != "account" {
 		t.Fatalf("unexpected top-level: %#v", doc)
+	}
+	if strings.Index(string(b), "id: data.queries.account") > strings.Index(string(b), "schema_version") {
+		t.Fatalf("query scaffold must follow template order (id before schema_version):\n%s", b)
 	}
 	queries, _ := doc["queries"].([]any)
 	if len(queries) != 1 {
@@ -158,12 +161,17 @@ func TestRenderQuery(t *testing.T) {
 	if _, ok := q["id"]; ok {
 		t.Fatalf("query item id must not be scaffolded: %#v", q)
 	}
-	if q["returns"] != "boolean" {
+	returns, _ := q["returns"].([]any)
+	if len(returns) != 1 {
 		t.Fatalf("query returns not scaffolded: %#v", q)
 	}
-	targets, _ := q["targets"].([]any)
+	ret, _ := returns[0].(map[string]any)
+	if ret["kind"] != "scalar" || ret["type"] != "boolean" {
+		t.Fatalf("query return shape not scaffolded: %#v", ret)
+	}
+	targets, _ := q["tables"].([]any)
 	if len(targets) != 1 || targets[0] != "data.tables.account" {
-		t.Fatalf("targets not scaffolded: %#v", q["targets"])
+		t.Fatalf("tables not scaffolded: %#v", q["tables"])
 	}
 	if _, ok := q["access"]; ok {
 		t.Fatalf("access must be omitted for read scaffold: %#v", q)
@@ -280,12 +288,12 @@ func TestRenderEnumItem(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
 	}
-	if doc["id"] != "data.enums.note_status" || doc["go_type"] != "NoteStatus" {
-		t.Fatalf("unexpected enum item: %#v", doc)
+	if doc["id"] != nil || doc["name"] != "note_status" || doc["go_type"] != "NoteStatus" {
+		t.Fatalf("enum item must not carry id and must keep name: %#v", doc)
 	}
 }
 
-func TestRenderEnumItemUsesTargetsID(t *testing.T) {
+func TestRenderEnumItemUsesNameAsIDSource(t *testing.T) {
 	s := &Schema{Type: "data.enums", Targets: Targets{ID: "data.enums", File: "contracts/data/enums.yaml"}}
 	b, err := RenderEnumItem(s, "note_status")
 	if err != nil {
@@ -295,8 +303,15 @@ func TestRenderEnumItemUsesTargetsID(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
 	}
-	if doc["id"] != "data.enums.note_status" {
-		t.Fatalf("id must derive from targets.id: %#v", doc)
+	if doc["id"] != nil || doc["name"] != "note_status" {
+		t.Fatalf("item id is derived from name and must not be rendered: %#v", doc)
+	}
+	usedBy, ok := doc["used_by"].(map[string]any)
+	if !ok || usedBy["capabilities"] == nil {
+		t.Fatalf("used_by.capabilities must be scaffolded: %#v", doc)
+	}
+	if strings.Index(string(b), "values:") > strings.Index(string(b), "used_by:") {
+		t.Fatalf("scaffold must follow template order (values before used_by):\n%s", b)
 	}
 }
 
@@ -316,7 +331,7 @@ func TestRenderEnumItemRejectsUnsupportedUsedByField(t *testing.T) {
 		for j := range s.Fields[i].ItemFields {
 			if s.Fields[i].ItemFields[j].Name == "used_by" {
 				s.Fields[i].ItemFields[j].Fields = append(s.Fields[i].ItemFields[j].Fields, Field{
-					Name: "capabilities", Type: "list<string>", Required: true,
+					Name: "tables", Type: "list<string>", Required: true,
 				})
 			}
 		}

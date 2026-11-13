@@ -13,12 +13,12 @@ do_not:
   - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
   - "x-contract-id 必须与 index 中的 operation 一一对应"
 
-module: accounts
+module: account
 base_path: /v1
 default_error_responses: [400, 401, 403, 404, 409, 422, 429, 500]
 
 paths:
-  /accounts:
+  /account:
     get:
       operationId: listAccounts
       x-contract-id: cap.http.account.list
@@ -29,7 +29,7 @@ paths:
       x-rate-limit: { requests: 60, window_seconds: 60 }
       parameters:
         - { name: status, in: query, required: false, schema: { type: string, enum: [pending, active, suspended, deleted] } }
-        - { name: own_type, in: query, required: false, schema: { type: string, maxLength: 32 } }
+        - { name: own_type, in: query, required: false, schema: { type: string, enum: [user, tenant, system] } }
         - { name: cursor, in: query, required: false, schema: { type: string } }
         - { name: page_size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
@@ -48,7 +48,7 @@ paths:
                   page: { $ref: "#/components/schemas/PageInfo" }
               example:
                 items:
-                  - { id: "0190f5c2-7d3a-7c3e-9b6a-2f5b1c8d9e01", own_type: user, own_id: "0190f5c2-7d3a-7c3e-9b6a-2f5b1c8d9e02", number: "ACC-0001", nickname: "管理员", status: active, version: 1, created_at: "2026-11-11T09:30:00Z" }
+                  - { id: 1, own_type: user, own_id: 2, number: "ACC-0001", nickname: "管理员", status: active, version: 1, created_at: "2026-11-11T09:30:00Z" }
                 page: { has_more: false, next_cursor: null }
 
     post:
@@ -71,12 +71,12 @@ paths:
               additionalProperties: false
               required: [own_type, own_id, number, nickname]
               properties:
-                own_type: { type: string, minLength: 1, maxLength: 32 }
-                own_id: { type: string, format: uuid }
+                own_type: { type: string, enum: [user, tenant, system] }
+                own_id: { type: integer }
                 number: { type: string, minLength: 4, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" }
                 nickname: { type: string, minLength: 1, maxLength: 100 }
-                user_id: { type: string, format: uuid, nullable: true }
-            example: { own_type: user, own_id: "0190f5c2-7d3a-7c3e-9b6a-2f5b1c8d9e02", number: "ACC-0001", nickname: "管理员" }
+                user_id: { type: integer, nullable: true }
+            example: { own_type: user, own_id: 2, number: "ACC-0001", nickname: "管理员" }
       responses:
         "201":
           description: "已创建"
@@ -84,7 +84,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Account" }
 
-  /accounts/{id}:
+  /account/{id}:
     get:
       operationId: getAccount
       x-contract-id: cap.http.account.get
@@ -92,7 +92,7 @@ paths:
       summary: "获取账号"
       x-preconditions: [platform.security.permissions.account_read]
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
         "200":
           description: "成功"
@@ -108,7 +108,7 @@ paths:
       x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
       requestBody:
         required: true
         content:
@@ -136,12 +136,12 @@ paths:
       x-preconditions: [platform.security.permissions.account_delete]
       x-audit: true
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
         - { name: version, in: query, required: true, schema: { type: integer, minimum: 1 } }
       responses:
         "204": { description: "已删除" }
 
-  /accounts/{id}/activate:
+  /account/{id}/activate:
     post:
       operationId: activateAccount
       x-contract-id: cap.http.account.activate
@@ -150,7 +150,7 @@ paths:
       x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
         - { name: version, in: query, required: true, schema: { type: integer, minimum: 1 } }
       responses:
         "200":
@@ -159,7 +159,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Account" }
 
-  /accounts/{id}/suspend:
+  /account/{id}/suspend:
     post:
       operationId: suspendAccount
       x-contract-id: cap.http.account.suspend
@@ -168,7 +168,7 @@ paths:
       x-preconditions: [platform.security.permissions.account_write]
       x-audit: true
       parameters:
-        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: id, in: path, required: true, schema: { type: integer } }
         - { name: version, in: query, required: true, schema: { type: integer, minimum: 1 } }
       requestBody:
         required: true
@@ -195,20 +195,20 @@ components:
       x-entity: data.entities.account
       required: [id, own_type, own_id, number, nickname, status, version, created_at]
       properties:
-        id: { type: string, format: uuid }
-        own_type: { type: string, maxLength: 32 }
-        own_id: { type: string, format: uuid }
+        id: { type: integer }
+        own_type: { type: string, enum: [user, tenant, system] }
+        own_id: { type: integer }
         number: { type: string, maxLength: 64 }
         nickname: { type: string, maxLength: 100 }
-        user_id: { type: string, format: uuid, nullable: true }
+        user_id: { type: integer, nullable: true }
         status: { type: string, enum: [pending, active, suspended, deleted] }
         version: { type: integer, minimum: 1 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
       example:
-        id: "0190f5c2-7d3a-7c3e-9b6a-2f5b1c8d9e01"
+        id: 1
         own_type: user
-        own_id: "0190f5c2-7d3a-7c3e-9b6a-2f5b1c8d9e02"
+        own_id: 2
         number: "ACC-0001"
         nickname: "管理员"
         status: active

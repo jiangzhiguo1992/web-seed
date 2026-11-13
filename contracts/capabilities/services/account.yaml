@@ -9,17 +9,17 @@ do_not:
   - "不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型"
   - "认证相关方法在 cap.services.auth，不要塞进本接口"
 
-module: accounts
+module: account
 
 interface:
-  name: AccountsService
-  package: internal/modules/accounts
+  name: AccountService
+  package: internal/modules/account
   methods:
     - name: Get
       summary: "按 ID 获取账号"
       params:
         - { name: ctx, type: context.Context }
-        - { name: id, type: string }
+        - { name: id, type: integer }
       returns:
         - { name: account, type: data.entities.account }
         - { name: err, type: error }
@@ -57,7 +57,7 @@ interface:
       summary: "更新账号资料"
       params:
         - { name: ctx, type: context.Context }
-        - { name: id, type: string }
+        - { name: id, type: integer }
         - { name: input, type: UpdateAccountInput }
       returns:
         - { name: account, type: data.entities.account }
@@ -72,7 +72,7 @@ interface:
       summary: "激活或解封账号"
       params:
         - { name: ctx, type: context.Context }
-        - { name: id, type: string }
+        - { name: id, type: integer }
         - { name: version, type: integer }
       returns:
         - { name: account, type: data.entities.account }
@@ -87,7 +87,7 @@ interface:
       summary: "封禁账号"
       params:
         - { name: ctx, type: context.Context }
-        - { name: id, type: string }
+        - { name: id, type: integer }
         - { name: reason, type: string }
         - { name: version, type: integer }
       returns:
@@ -103,7 +103,7 @@ interface:
       summary: "软删账号"
       params:
         - { name: ctx, type: context.Context }
-        - { name: id, type: string }
+        - { name: id, type: integer }
         - { name: version, type: integer }
       returns:
         - { name: err, type: error }
@@ -135,8 +135,8 @@ persistence:
     list_stale_pending: data.queries.account.list_stale_pending_accounts
     soft_delete_stale_pending: data.queries.account.soft_delete_stale_pending_accounts
   constraint_errors:
-    uq_accounts_number: platform.errors.ACCOUNT_NUMBER_TAKEN
-    ck_accounts_deleted_consistent: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    uq_account_number: platform.errors.ACCOUNT_NUMBER_TAKEN
+    ck_account_deleted_consistent: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
 types:
   ListAccountsFilter:
@@ -144,7 +144,7 @@ types:
     additionalProperties: false
     properties:
       status: { type: data.enums.account_status, nullable: true }
-      own_type: { type: string, nullable: true, maxLength: 32 }
+      own_type: { type: data.enums.own_type, nullable: true }
       cursor: { type: string, nullable: true }
       page_size: { type: integer, minimum: 1, maximum: 100, default: 20 }
 
@@ -153,11 +153,11 @@ types:
     additionalProperties: false
     required: [own_type, own_id, number, nickname]
     properties:
-      own_type: { type: string, minLength: 1, maxLength: 32 }
-      own_id: { type: string, format: uuid }
+      own_type: { type: data.enums.own_type }
+      own_id: { type: integer }
       number: { type: string, minLength: 4, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" }
       nickname: { type: string, minLength: 1, maxLength: 100 }
-      user_id: { type: string, format: uuid, nullable: true }
+      user_id: { type: integer, nullable: true }
 
   UpdateAccountInput:
     type: object

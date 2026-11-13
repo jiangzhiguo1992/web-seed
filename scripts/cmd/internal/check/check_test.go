@@ -25,7 +25,6 @@ func TestIsColumnType(t *testing.T) {
 			"string": {}, "timestamp": {}, "integer": {}, "datetime": {}, "decimal": {}, "float": {},
 		},
 	}
-	refs := ColumnRefs{Prefixes: []string{"data.enums.", "data.tables."}, RequireCol: []string{"data.tables."}}
 	cases := []struct {
 		in   string
 		want bool
@@ -45,14 +44,15 @@ func TestIsColumnType(t *testing.T) {
 		{"int", false},
 		{"int32", false},
 		{"double", false},
-		{"data.enums.account_status", true},
+		{"data.enums.account_status", false},
 		{"data.enums.", false},
 		{"data.tables.account.col.id", true},
 		{"data.tables.account", false},
 		{"data.tables.account.col.", false},
+		{"data.tables.Account.col.id", false},
 	}
 	for _, tc := range cases {
-		if got := isColumnType(tc.in, ct, refs); got != tc.want {
+		if got := isColumnType(tc.in, ct); got != tc.want {
 			t.Errorf("isColumnType(%q) = %v, want %v", tc.in, got, tc.want)
 		}
 	}
@@ -67,6 +67,62 @@ func TestValidateFieldTypes(t *testing.T) {
 	}
 	if err := validateFieldTypes([]Field{{Name: "x", Type: "decimal"}}); err != nil {
 		t.Fatalf("decimal schema type reported: %v", err)
+	}
+}
+
+func TestFieldOrderUsesTemplate(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "contracts/data/enums.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `schema_version: 1
+summary: "x"
+id: data.enums
+stability: stable
+enums:
+  - name: x
+    go_type: X
+    ts_type: X
+    values:
+      - { code: 0, value: x }
+    used_by: { entities: [], capabilities: [] }
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fields := []Field{
+		{Name: "id"},
+		{Name: "summary"},
+		{Name: "schema_version"},
+		{Name: "stability"},
+		{Name: "enums", ItemFields: []Field{
+			{Name: "name"}, {Name: "go_type"}, {Name: "ts_type"},
+			{Name: "values", ItemFields: []Field{{Name: "value"}, {Name: "code"}}},
+			{Name: "used_by", Fields: []Field{{Name: "entities"}, {Name: "capabilities"}}},
+		}},
+	}
+	c := &Checker{root: root}
+	c.checkFieldOrder("contracts/data/enums.yaml", fields, orderRules{top: "enum-key-order", nested: "enum-key-order"})
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[enum-key-order]") ||
+		!strings.Contains(errs, "field summary must come before schema_version") ||
+		!strings.Contains(errs, "field id must come before summary") ||
+		!strings.Contains(errs, "field value must come before code") {
+		t.Fatalf("template order not checked: %v", c.errs)
+	}
+}
+
+func TestCheckSharedTypes(t *testing.T) {
+	c := &Checker{}
+	c.checkSharedTypes(&Schema{ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
+		"string": {
+			Description: "string",
+			Params:      map[string]Field{"bad": {Type: "integre"}},
+		},
+	}}})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.types]") {
+		t.Fatalf("bad type family param not reported: %v", c.errs)
 	}
 }
 
@@ -218,7 +274,6 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 				}},
 			},
 		},
-		ColumnRefs: ColumnRefs{Prefixes: []string{"data.enums."}},
 	}
 	doc := map[string]any{
 		"id":           "data.tables.x",
@@ -230,24 +285,24 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 		},
 		"constraints": []any{
 			map[string]any{
-				"name":    "uq_x_missing",
-				"type":    "unique",
-				"columns": []any{"missing"},
+				"name": "ck_x_missing",
+				"type": "check",
+				"expr": "missing",
 			},
 		},
 		"indexes": []any{
 			map[string]any{
 				"name":    "idx_x_missing",
 				"columns": []any{"missing"},
-				"reason":  "test",
+				"comment": "test",
 			},
 		},
 	}
 	c := &Checker{}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", schema)
 	errs := strings.Join(c.errs, "\n")
-	if strings.Count(errs, `unknown column "missing"`) != 2 {
-		t.Fatalf("expected two unknown-column errors, got:\n%s", errs)
+	if strings.Count(errs, `unknown column "missing"`) != 1 {
+		t.Fatalf("expected one unknown-column error, got:\n%s", errs)
 	}
 }
 
@@ -343,7 +398,6 @@ func minimalTableSchema() *Schema {
 			"string":  {},
 			"integer": {},
 		}},
-		ColumnRefs: ColumnRefs{Prefixes: []string{"data.tables."}, RequireCol: []string{"data.tables."}},
 	}
 }
 
@@ -359,39 +413,28 @@ func TestTableRulesPrimaryKeyNullable(t *testing.T) {
 	}
 }
 
-func TestTableRulesConstraintFields(t *testing.T) {
+func TestTableRulesConstraintRequiresExpr(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["constraints"] = []any{map[string]any{
-		"name": "uq_x_code", "type": "unique", "columns": []any{"code"}, "expr": "true",
+		"name": "ck_x_code", "type": "check",
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), `field "expr" is not allowed for type unique`) {
-		t.Fatalf("constraint field not narrowed by type: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "check requires expr") {
+		t.Fatalf("check without expr not reported: %v", c.errs)
 	}
 }
 
-func TestTableRulesUniqueConstraint(t *testing.T) {
-	c := &Checker{}
-	doc := minimalTableDoc()
-	doc["constraints"] = []any{map[string]any{
-		"name": "uq_x_code", "type": "unique", "columns": []any{"code"},
-	}}
-	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if len(c.errs) != 0 {
-		t.Fatalf("valid unique constraint reported: %v", c.errs)
-	}
-}
-
-func TestTableRulesUniqueConstraintRequiresColumns(t *testing.T) {
+func TestTableRulesUniqueConstraintRejected(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["constraints"] = []any{map[string]any{
 		"name": "uq_x_code", "type": "unique",
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "unique requires columns") {
-		t.Fatalf("unique without columns not reported: %v", c.errs)
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, `unknown type "unique"`) || !strings.Contains(errs, "[constraint-fields]") {
+		t.Fatalf("unique constraint not rejected: %v", c.errs)
 	}
 }
 
@@ -412,29 +455,31 @@ func TestTableRulesForeignKeyRejected(t *testing.T) {
 	}
 }
 
-func TestTableRulesIndexOrder(t *testing.T) {
-	c := &Checker{}
+func TestUniqueIndexLiveOnlyOptional(t *testing.T) {
+	c := &Checker{
+		queryIDs:    map[string]string{"data.queries.x.q": "contracts/data/queries/x.yaml"},
+		queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
+	}
 	doc := minimalTableDoc()
 	doc["indexes"] = []any{map[string]any{
-		"name": "idx_x_code", "columns": []any{"code"}, "order": []any{"desc", "asc"}, "reason": "test",
+		"name": "uq_x_code", "columns": []any{"code"}, "unique": true, "comment": "test",
+		"used_by": []any{"data.queries.x.q"},
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "order length must match columns") {
-		t.Fatalf("index order length mismatch not reported: %v", c.errs)
+	if len(c.errs) != 0 {
+		t.Fatalf("unique index without live_only reported: %v", c.errs)
 	}
 }
 
-func TestStorageLargeIndexConcurrently(t *testing.T) {
-	c := &Checker{tableDocs: map[string]map[string]any{
-		"data.tables.x": {"indexes": []any{map[string]any{
-			"name": "idx_x_code", "concurrently": "false",
-		}}},
-	}}
-	c.checkStorageLargeIndexes(map[string]map[string]any{
-		"data.tables.x": {"size_class": "large"},
-	}, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "disables CONCURRENTLY") {
-		t.Fatalf("large-table concurrently=false not reported: %v", c.errs)
+func TestIndexLiveOnlyRequiresDeletedAt(t *testing.T) {
+	c := &Checker{
+		baseID:       "data.tables.base",
+		tableDocs:    map[string]map[string]any{"data.tables.x": {"indexes": []any{map[string]any{"name": "idx_x_code", "live_only": true}}}},
+		tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"code": {typ: "string"}}},
+	}
+	c.checkIndexLiveOnly(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[index-live-only]") {
+		t.Fatalf("live_only without deleted_at not reported: %v", c.errs)
 	}
 }
 
@@ -586,7 +631,7 @@ func TestBasePrimaryKeyNullable(t *testing.T) {
 
 func TestPersistenceOwnership(t *testing.T) {
 	c := &Checker{tableOwners: map[string]string{
-		"data.tables.account":  "accounts",
+		"data.tables.account":  "account",
 		"data.tables.auth_pwd": "auth",
 	}}
 	doc := map[string]any{"module": "auth"}
@@ -647,7 +692,7 @@ func TestUsedByEntitiesAndQueries(t *testing.T) {
 id: data.queries.q
 queries:
   - name: GetX
-    targets: [ data.tables.x ]
+    tables: [ data.tables.x ]
 `)
 	write("contracts/data/tables/x.yaml", `
 id: data.tables.x
@@ -685,7 +730,6 @@ func TestTableEnumTypeRejected(t *testing.T) {
 		"name": "bad", "type": "data.enums.x_status",
 	})
 	schema := minimalTableSchema()
-	schema.ColumnRefs = ColumnRefs{Prefixes: []string{"data.tables."}, RequireCol: []string{"data.tables."}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", schema)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[column-type]") {
 		t.Fatalf("table enum column not rejected: %v", c.errs)
@@ -705,16 +749,11 @@ func TestStatusMustNotBeRedeclared(t *testing.T) {
 	}
 }
 
-func TestEnumCodeUnique(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "contracts/data")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
+func TestEnumItemIDRejected(t *testing.T) {
 	body := `
-schema_version: 1
 id: data.enums
 summary: "x"
+schema_version: 1
 stability: stable
 enums:
   - id: data.enums.x_status
@@ -723,7 +762,34 @@ enums:
     ts_type: XStatus
     values:
       - { value: active, code: 0 }
+    used_by: { entities: [], capabilities: [] }
+`
+	c := writeEnumContract(t, body)
+	c.checkEnums(loadEnumSchemaForTest(t))
+	if !strings.Contains(strings.Join(c.errs, "\n"), `unknown field "id"`) {
+		t.Fatalf("enum item id must be rejected: %v", c.errs)
+	}
+}
+
+func TestEnumCodeUnique(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `
+id: data.enums
+summary: "x"
+schema_version: 1
+stability: stable
+enums:
+  - name: x_status
+    go_type: XStatus
+    ts_type: XStatus
+    values:
+      - { value: active, code: 0 }
       - { value: disabled, code: 0 }
+    used_by: { entities: [], capabilities: [] }
 `
 	if err := os.WriteFile(filepath.Join(dir, "enums.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -745,20 +811,19 @@ enums:
 
 func TestEnumCodeInt32Range(t *testing.T) {
 	body := `
-schema_version: 1
 id: data.enums
 summary: "x"
+schema_version: 1
 stability: stable
 enums:
-  - id: data.enums.x_status
-    name: x_status
+  - name: x_status
     go_type: XStatus
     ts_type: XStatus
-    used_by: { entities: [], tables: [] }
     values:
       - { value: active, code: 0 }
       - { value: overflow, code: 2147483648 }
       - { value: negative, code: -1 }
+    used_by: { entities: [], capabilities: [] }
 `
 	c := writeEnumContract(t, body)
 	c.checkEnums(loadEnumSchemaForTest(t))
@@ -798,23 +863,23 @@ func writeEnumContract(t *testing.T, body string) *Checker {
 
 func TestEnumTypeNamesUnique(t *testing.T) {
 	body := `
-schema_version: 1
 id: data.enums
 summary: "x"
+schema_version: 1
 stability: stable
 enums:
-  - id: data.enums.x_status
-    name: x_status
+  - name: x_status
     go_type: Status
     ts_type: Status
     values:
       - { value: active, code: 0 }
-  - id: data.enums.y_status
-    name: y_status
+    used_by: { entities: [], capabilities: [] }
+  - name: y_status
     go_type: Status
     ts_type: Status
     values:
       - { value: active, code: 0 }
+    used_by: { entities: [], capabilities: [] }
 `
 	c := writeEnumContract(t, body)
 	c.checkEnums(loadEnumSchemaForTest(t))
@@ -824,38 +889,37 @@ enums:
 	}
 }
 
-func TestEnumDuplicateNameAndIDRules(t *testing.T) {
+func TestEnumDuplicateName(t *testing.T) {
 	body := `
-schema_version: 1
 id: data.enums
 summary: "x"
+schema_version: 1
 stability: stable
 enums:
-  - id: data.enums.x_status
-    name: x_status
+  - name: x_status
     go_type: XStatus
     ts_type: XStatus
     values:
       - { value: active, code: 0 }
-  - id: data.enums.x_status
-    name: x_status
+    used_by: { entities: [], capabilities: [] }
+  - name: x_status
     go_type: YStatus
     ts_type: YStatus
     values:
       - { value: active, code: 0 }
+    used_by: { entities: [], capabilities: [] }
 `
 	c := writeEnumContract(t, body)
 	c.checkEnums(loadEnumSchemaForTest(t))
 	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "[schema.contract-id-unique]") || !strings.Contains(errs, "[schema.unique-names]") {
-		t.Fatalf("duplicate enum id/name must use generic rules: %v", c.errs)
+	if !strings.Contains(errs, "[schema.unique-names]") {
+		t.Fatalf("duplicate enum name must use generic rule: %v", c.errs)
 	}
 }
 
 func TestEnumSchemaShape(t *testing.T) {
 	schema := &Schema{ID: "meta.data.enums", Fields: []Field{{
 		Name: "enums", Type: "list<object>", ItemFields: []Field{
-			{Name: "id", Required: true},
 			{Name: "name", Required: true},
 			{Name: "values", Required: true, ItemFields: []Field{{Name: "value", Required: true}}},
 		},
@@ -870,20 +934,19 @@ func TestEnumSchemaShape(t *testing.T) {
 
 func TestEnumUsedByMismatch(t *testing.T) {
 	body := `
-schema_version: 1
 id: data.enums
 summary: "x"
+schema_version: 1
 stability: stable
 enums:
-  - id: data.enums.account_status
-    name: account_status
+  - name: account_status
     go_type: AccountStatus
     ts_type: AccountStatus
-    used_by:
-      entities: []
-      tables: []
     values:
       - { value: active, code: 0 }
+    used_by:
+      entities: []
+      capabilities: []
 `
 	c := writeEnumContract(t, body)
 	entityPath := filepath.Join(c.root, "contracts/data/entities/account.yaml")
@@ -908,38 +971,26 @@ fields:
 	}
 }
 
-func TestEnumMultiTableSource(t *testing.T) {
+func TestEnumCapabilityUsage(t *testing.T) {
 	root := t.TempDir()
-	entityPath := filepath.Join(root, "contracts/data/entities/x.yaml")
-	if err := os.MkdirAll(filepath.Dir(entityPath), 0o755); err != nil {
+	capPath := filepath.Join(root, "contracts/capabilities/services/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(capPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	entity := `id: data.entities.x
-model:
-  name: x
-  extends: [ data.entities.base ]
-  tables: [ data.tables.a, data.tables.b ]
-fields:
-  - name: ID
-    json_name: id
-    type: string
-    source: { column: data.tables.a.col.id }
-    validation: { column: data.tables.a.col.id }
-    description: "id"
-  - name: Status
-    json_name: status
-    type: data.enums.x_status
-    source: { column: data.tables.b.col.status }
-    validation: { column: data.tables.b.col.status }
-    description: "status"
+	capability := `id: cap.services.x
+types:
+  Filter:
+    type: object
+    properties:
+      status: { type: data.enums.x_status }
 `
-	if err := os.WriteFile(entityPath, []byte(entity), 0o644); err != nil {
+	if err := os.WriteFile(capPath, []byte(capability), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
 	u := c.enumUsages()["data.enums.x_status"]
-	if u == nil || !u.tables["data.tables.b"] || u.tables["data.tables.a"] {
-		t.Fatalf("multi-table enum source not attributed to source.column: %#v", u)
+	if u == nil || !u.capabilities["cap.services.x"] {
+		t.Fatalf("capability enum usage not recorded: %#v", u)
 	}
 }
 
@@ -968,7 +1019,7 @@ fields:
 	c := &Checker{root: root}
 	usages := c.enumUsages()
 	u := usages["data.enums.x_status"]
-	if u == nil || !u.entities["data.entities.x"] || !u.tables["data.tables.x"] {
+	if u == nil || !u.entities["data.entities.x"] {
 		t.Fatalf("pointer enum usage not recorded: %#v", usages)
 	}
 
@@ -982,17 +1033,19 @@ fields:
 
 func TestEnumSummaryAndStability(t *testing.T) {
 	body := `# TODO
-schema_version: 1
 id: data.enums
 summary: ""
+schema_version: 1
 stability: stable
 enums:
-  - id: data.enums.x_status
-    name: x_status
+  - name: x_status
     go_type: XStatus
     ts_type: XStatus
     values:
       - { value: active, code: 0 }
+    used_by:
+      entities: []
+      capabilities: []
 `
 	c := writeEnumContract(t, body)
 	c.checkEnums(loadEnumSchemaForTest(t))
@@ -1020,13 +1073,13 @@ types:
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
-	c.checkEnumRefs(map[string]string{}, map[string]map[string]bool{}, map[string]map[string]bool{}, ColumnRefs{})
+	c.checkEnumRefs(map[string]string{}, map[string]map[string]bool{}, map[string]map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown enum data.enums.missing_status") {
 		t.Fatalf("enum ref outside entity not checked: %v", c.errs)
 	}
 
 	c = &Checker{root: root}
-	c.checkEnumRefs(map[string]string{}, map[string]map[string]bool{}, map[string]map[string]bool{"data.enums.missing_status": {}}, ColumnRefs{})
+	c.checkEnumRefs(map[string]string{}, map[string]map[string]bool{}, map[string]map[string]bool{"data.enums.missing_status": {}})
 	if len(c.errs) != 0 {
 		t.Fatalf("known enum ref reported: %v", c.errs)
 	}
@@ -1458,7 +1511,7 @@ func TestForeignKeyReportsOnlyNoForeignKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	doc["constraints"] = append(asList(doc["constraints"]), map[string]any{
-		"name":       "fk_accounts_x",
+		"name":       "fk_account_x",
 		"type":       "foreign_key",
 		"columns":    []any{"account_id"},
 		"references": []any{"data.tables.account.col.id"},
@@ -1674,18 +1727,6 @@ func TestCheckRulesImplementedBy(t *testing.T) {
 	}
 }
 
-func TestColumnRefsRequireColSubset(t *testing.T) {
-	c := &Checker{}
-	c.checkColumnRefs(&Schema{ID: "meta.x", ColumnRefs: ColumnRefs{
-		Prefixes:   []string{"data.tables"},
-		RequireCol: []string{"data.enums."},
-	}})
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "must end with '.'") || !strings.Contains(errs, "must also appear in prefixes") {
-		t.Fatalf("column_refs shape not checked: %v", c.errs)
-	}
-}
-
 func TestImplementedByMustIncludeRuleID(t *testing.T) {
 	c := &Checker{}
 	c.checkImplementedBy("base-only", "meta.x: rules[0]", []string{"no-foreign-key"})
@@ -1736,7 +1777,7 @@ func TestIndexUsedBy(t *testing.T) {
 	base := func(usedBy any) map[string]any {
 		m := minimalTableDoc()
 		m["indexes"] = []any{map[string]any{
-			"name": "idx_x_code", "columns": []any{"code"}, "reason": "test", "used_by": usedBy,
+			"name": "idx_x_code", "columns": []any{"code"}, "comment": "test", "used_by": usedBy,
 		}}
 		return m
 	}
@@ -1773,41 +1814,56 @@ func TestIndexUsedBy(t *testing.T) {
 }
 
 func TestRedundancyValidation(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "contracts/data/tables")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
+	valid := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "string"}},
+		},
+		tableDocs: map[string]map[string]any{
+			"data.tables.a": {"columns": []any{map[string]any{"name": "x", "redundancy": "g"}}},
+			"data.tables.b": {"columns": []any{map[string]any{"name": "x", "redundancy": "g"}}},
+		},
 	}
-	a := `id: data.tables.a
-columns:
-  - name: x
-    type: string
-    redundancy: { group: g, role: source }
-  - name: no_copy
-    type: string
-    redundancy: { group: g2, role: source }
-`
-	b := `id: data.tables.b
-columns:
-  - name: x
-    type: integer
-    redundancy: { group: g, role: copy, ref: data.tables.a.col.x }
-  - name: no_ref
-    type: string
-    redundancy: { group: g3, role: copy }
-`
-	for name, body := range map[string]string{"a.yaml": a, "b.yaml": b} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	valid.checkRedundancyGroups(map[string]any{"redundancy_groups": map[string]any{
+		"g": map[string]any{"source": "data.tables.a.col.x", "copies": []any{"data.tables.b.col.x"}},
+	}}, "contracts/data/storage.yaml")
+	valid.checkRedundancy(map[string]string{
+		"data.tables.a": "contracts/data/tables/a.yaml",
+		"data.tables.b": "contracts/data/tables/b.yaml",
+	})
+	if len(valid.errs) != 0 {
+		t.Fatalf("valid redundancy group reported: %v", valid.errs)
 	}
-	c := &Checker{root: root}
-	c.checkRedundancy(
-		map[string]string{"data.tables.a": "contracts/data/tables/a.yaml", "data.tables.b": "contracts/data/tables/b.yaml"},
-		map[string]map[string]bool{"data.tables.a": {"x": true, "no_copy": true}, "data.tables.b": {"x": true, "no_ref": true}},
-	)
+
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}, "no_copy": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "integer"}},
+		},
+		tableDocs: map[string]map[string]any{
+			"data.tables.a": {"columns": []any{
+				map[string]any{"name": "x", "redundancy": "g"},
+				map[string]any{"name": "no_copy", "redundancy": "g2"},
+			}},
+			"data.tables.b": {"columns": []any{map[string]any{"name": "x", "redundancy": "g"}}},
+		},
+	}
+	c.checkRedundancyGroups(map[string]any{"redundancy_groups": map[string]any{
+		"g":  map[string]any{"source": "data.tables.a.col.x", "copies": []any{"data.tables.b.col.x"}},
+		"g2": map[string]any{"source": "data.tables.a.col.no_copy"},
+		"g3": map[string]any{"source": "data.tables.a.col.missing", "copies": []any{"data.tables.b.col.x"}},
+	}}, "contracts/data/storage.yaml")
+	c.checkRedundancy(map[string]string{
+		"data.tables.a": "contracts/data/tables/a.yaml",
+		"data.tables.b": "contracts/data/tables/b.yaml",
+	})
 	errs := strings.Join(c.errs, "\n")
-	for _, want := range []string{"copy type/nullable", "copy requires ref", "has a source but no copy", "has copies but no source"} {
+	for _, want := range []string{
+		"type/nullable",
+		"copies must list at least one copy",
+		"is not a table column",
+		"not defined in storage.redundancy_groups",
+	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in redundancy errors: %v", want, c.errs)
 		}
@@ -1923,7 +1979,7 @@ func TestBaseColumnShapeRejectsDrift(t *testing.T) {
 	doc := map[string]any{
 		"id": "data.tables.base", "summary": "base", "stability": "stable",
 		"columns": []any{
-			map[string]any{"name": "id", "type": "integer", "primary_key": true},
+			map[string]any{"name": "id", "type": "string", "primary_key": true},
 			map[string]any{"name": "status", "type": "integer"},
 			map[string]any{"name": "created_at", "type": "timestamp"},
 			map[string]any{"name": "updated_at", "type": "timestamp"},
@@ -1932,7 +1988,7 @@ func TestBaseColumnShapeRejectsDrift(t *testing.T) {
 	}
 	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/_base.yaml")
 	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, `base column "id" must be string`) {
+	if !strings.Contains(errs, `base column "id" must be integer`) {
 		t.Fatalf("base id type drift not reported: %v", c.errs)
 	}
 	if !strings.Contains(errs, `base column "deleted_at" nullable must be true`) {
@@ -1944,13 +2000,12 @@ func TestCollectTableObjectsGlobalNames(t *testing.T) {
 	c := &Checker{
 		tableObjects: map[string]map[string]bool{},
 		objectNames:  map[string]string{},
-		objectKinds:  map[string]string{},
 	}
 	c.collectTableObjects(map[string]any{
-		"constraints": []any{map[string]any{"name": "uq_a_code", "type": "unique"}},
+		"constraints": []any{map[string]any{"name": "ck_a_code", "type": "check"}},
 		"indexes":     []any{map[string]any{"name": "idx_a_code"}},
 	}, "contracts/data/tables/a.yaml", "data.tables.a")
-	if !c.tableObjects["data.tables.a"]["uq_a_code"] || !c.tableObjects["data.tables.a"]["idx_a_code"] {
+	if !c.tableObjects["data.tables.a"]["ck_a_code"] || !c.tableObjects["data.tables.a"]["idx_a_code"] {
 		t.Fatalf("table objects not collected: %v", c.tableObjects["data.tables.a"])
 	}
 	if len(c.errs) != 0 {

@@ -95,9 +95,9 @@ never_log:
   - "*_title"         # 任何 pii: true 的标题字段
   - "*_body"          # 用户正文内容
 
-pii_source: "生成器汇总所有 data/tables/*.yaml 中 pii: true 的列，自动加入 never_log"
+pii_source: "生成器汇总所有 data/tables/*.yaml 中 sensitivity: pii|secret 的列，自动加入 never_log"
 
 rules:
-  - "路径记录路由模板（/v1/accounts/{id}），不记录实际值"
+  - "路径记录路由模板（/v1/account/{id}），不记录实际值"
   - "错误日志必须带 request_id 与 error_code"
   - "生产 level >= warn，debug 仅 dev 环境"

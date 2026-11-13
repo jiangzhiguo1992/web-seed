@@ -27,7 +27,7 @@
 | P1 | 仓库骨架 | `make help`/`build`/`lint`/`doctor` 全通过 | `[x]` |
 | P2 | 契约生成链 | `make gen` 幂等、CI diff 通过 | `[~]` 契约层 + `_meta` 校验试点已落盘，生成器待实现 |
 | P3 | 后端地基 | platform 六件套可用 | `[ ]` |
-| P4 | 最小纵切 | accounts 全链路跑通（DB→API→页面） | `[ ]` |
+| P4 | 最小纵切 | account 全链路跑通（DB→API→页面） | `[ ]` |
 | P5 | 一致性闸门 | 七道闸门全部生效 | `[~]` 闸门 1–3 原型已验证 |
 | P6 | 可选模块 | auth/rbac/audit 可摘除地接入 | `[ ]` |
 | P7 | 治理与文档 | derive/doctor/ADR/playbooks 齐备 | `[ ]` |
@@ -83,7 +83,7 @@
 
 #### P1 仓库骨架
 
-- [x] 根文件：`Makefile` `lefthook.yml` `.editorconfig` `.gitattributes` `.nvmrc` `pnpm-workspace.yaml` `package.json`
+- [x] 根文件：`Makefile` `lefthook.yml` `.editorconfig` `.gitattributes` `.nvmrc`；前端包管理在 `apps/web`（`package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml`）
 - [x] `docs/{index.md,adr/,playbooks/,guides/,reference/}`
 - [x] `contracts/` 五组目录 + `index.yaml` + `project.yaml` + `README.md`
 - [x] `apps/api` 骨架（`cmd/` `internal/{platform,modules,composition,generated}`、`composition/<app>/handlers/`、`migrations/` `queries/`）
@@ -122,11 +122,11 @@
 - [ ] 优雅关闭：信号 → 停收 → 等在途 → 关池
 - [ ] `/healthz`（不查依赖）与 `/readyz`（查 DB）分离
 
-#### P4 最小纵切（示例模块 accounts）
+#### P4 最小纵切（示例模块 account）
 
 - [ ] 由 `data/tables/_base.yaml` + `account.yaml` 生成 schema 与迁移（含软删、乐观锁、部分唯一索引）
 - [ ] 由 `data/queries/account.yaml` 生成 `.sql` 并跑 sqlc
-- [ ] `internal/modules/accounts`（service + repo，不含 HTTP）
+- [ ] `internal/modules/account`（service + repo，不含 HTTP）
 - [ ] `internal/composition/adminapi/handlers`（实现 StrictServerInterface）
 - [ ] `routes_test.go`：路由集合 == 契约集合 + 响应 schema 校验
 - [ ] 由 `features/**` 生成路由与页面骨架，补齐四态
@@ -268,7 +268,7 @@ platform/** ──> 配置校验 / 常量 / CSS 变量
 web-seed/
 ├── AGENTS.md  README.md  CONTRIBUTING.md  SECURITY.md  CHANGELOG.md
 ├── Makefile  lefthook.yml  .editorconfig  .gitattributes  .nvmrc
-├── pnpm-workspace.yaml  package.json
+├── apps/web/            # package.json · pnpm-workspace.yaml · pnpm-lock.yaml
 ├── .env.example                      # 生成物，禁止手改
 │
 ├── contracts/                        [C] 五组契约（唯一真相源）
@@ -293,7 +293,7 @@ web-seed/
 │   │   ├── cmd/adminapi/main.go
 │   │   ├── internal/
 │   │   │   ├── platform/{config,httpserver,database,observability,security,storage}
-│   │   │   ├── modules/{health,auth[O],rbac[O],audit[O],user[O],upload[O],notification[O],webhook[O],accounts[E]}
+│   │   │   ├── modules/{health,auth[O],rbac[O],audit[O],user[O],upload[O],notification[O],webhook[O],account[E]}
 │   │   │   │   └── registry.go       # 唯一注册表
 │   │   │   ├── composition/adminapi/  # app.go / routes.go / routes_test.go
 │   │   │   └── generated/            # 生成物入库
@@ -406,15 +406,15 @@ apps:
 ### 5.4 数据规范（`contracts/data/README.md`）
 
 - 表结构基类 `data/tables/_base.yaml`：`id / status / created_at / updated_at / deleted_at` 五列，所有物理表继承
-- 主键 UUIDv7；时间列 `timestamp`，统一 UTC；`updated_at` 由应用写入
+- 主键 integer（bits: 64）；时间列 `timestamp`，统一 UTC；`updated_at` 由应用写入
 - 业务表可选 `version` 做乐观锁；不是基类字段
 - 存储引擎、部署拓扑、连接池、锁在 `data/storage.yaml`，禁止逐表声明 engine
 - 表不使用枚举：`status` 等状态列用 `integer`，枚举只在 entity，`data/enums.yaml` 的 `values[].code` 是 DB 整数码
-- 软删后可复用的唯一性用部分唯一索引：`WHERE deleted_at IS NULL`；全局唯一（含软删行）用 `UNIQUE` 约束
+- 唯一性统一用唯一索引：`live_only: true` 只约束未软删行（软删后可复用）；`false`/省略约束全表（含软删行）
 - 索引命名 `idx_<table>_<cols>`；禁止数据库外键，跨表一致性由应用/业务规则保证
 - 迁移只前进；零停机三步：加可空列 → 回填 → 加约束
 - 软删默认过滤，必须在 repo 层统一，禁止每处手写
-- 分区/表达式索引/`CONCURRENTLY` 用结构化字段；不设未结构化 DDL 字段
+- 分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`；并发建索引策略在 `storage.deployment.migrations.concurrent_index`；不设未结构化 DDL 字段
 
 ### 5.5 请求治理
 

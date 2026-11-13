@@ -24,7 +24,7 @@ events:
       additionalProperties: false
       required: [id, number, status, created_at]
       properties:
-        id: { type: string, format: uuid }
+        id: { type: integer }
         number: { type: string }
         status: { type: string, enum: [pending, active] }
         created_at: { type: string, format: date-time }
@@ -38,7 +38,7 @@ events:
       additionalProperties: false
       required: [id, activated_at]
       properties:
-        id: { type: string, format: uuid }
+        id: { type: integer }
         activated_at: { type: string, format: date-time }
     trigger: [cap.services.account.activate]
 
@@ -50,7 +50,7 @@ events:
       additionalProperties: false
       required: [id, suspended_at, reason]
       properties:
-        id: { type: string, format: uuid }
+        id: { type: integer }
         reason: { type: string }
         suspended_at: { type: string, format: date-time }
     trigger: [cap.services.account.suspend]
@@ -63,7 +63,7 @@ events:
       additionalProperties: false
       required: [id, reactivated_at]
       properties:
-        id: { type: string, format: uuid }
+        id: { type: integer }
         reactivated_at: { type: string, format: date-time }
     trigger: [cap.services.account.activate]
 
@@ -75,7 +75,7 @@ events:
       additionalProperties: false
       required: [id, deleted_at]
       properties:
-        id: { type: string, format: uuid }
+        id: { type: integer }
         deleted_at: { type: string, format: date-time }
     trigger: [cap.services.account.delete]
 
@@ -87,7 +87,7 @@ events:
       additionalProperties: false
       required: [id, login_at]
       properties:
-        id: { type: string, format: uuid }
+        id: { type: integer }
         ip: { type: string }
         user_agent: { type: string }
         login_at: { type: string, format: date-time }
@@ -101,13 +101,13 @@ events:
       additionalProperties: false
       required: [reason, failed_at]
       properties:
-        account_id: { type: string, format: uuid, nullable: true }
+        account_id: { type: integer, nullable: true }
         reason: { type: string, enum: [bad_password, locked, suspended, not_found] }
         failed_at: { type: string, format: date-time }
     trigger: [cap.services.auth.login]
 
   - id: business.events.account.cleaned
-    name: accounts.cleaned
+    name: account.cleaned
     version: 1
     payload:
       type: object

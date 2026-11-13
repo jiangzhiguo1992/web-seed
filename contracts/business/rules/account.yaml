@@ -38,7 +38,7 @@ rules:
     summary: "own_type 与 own_id 必须同时存在"
     severity: error
     on_violation: platform.errors.ACCOUNT_OWN_INVALID
-    given: "own_type = '' 或 own_id = nil"
+    given: "own_type = nil 或 own_id = nil"
     when: "create"
     then: "拒绝，返回 ACCOUNT_OWN_INVALID"
     implemented_by: [cap.services.account.create]

@@ -46,19 +46,6 @@ func (c *Checker) checkTargetFileName(schema *Schema, file, rel string) {
 	}
 }
 
-func (c *Checker) checkColumnRefs(schema *Schema) {
-	for _, p := range schema.ColumnRefs.RequireCol {
-		if p == "" || !containsString(schema.ColumnRefs.Prefixes, p) {
-			c.rulef("schema.column-refs", "%s: column_refs.require_col %q must also appear in prefixes", schema.ID, p)
-		}
-	}
-	for _, p := range schema.ColumnRefs.Prefixes {
-		if p == "" || !strings.HasSuffix(p, ".") {
-			c.rulef("schema.column-refs", "%s: column_refs.prefixes %q must end with '.'", schema.ID, p)
-		}
-	}
-}
-
 // tableDoc 保存物理表文档，供继承解析二次遍历。
 type tableDoc struct {
 	id  string
@@ -66,38 +53,8 @@ type tableDoc struct {
 	doc map[string]any
 }
 
-// tableKeyOrder 是表契约的固定顶层键顺序。
-var tableKeyOrder = []string{
-	"id", "summary", "owner_module", "schema_version", "stability",
-	"do_not", "table", "columns", "constraints", "indexes", "used_by",
-}
-
-// checkTableKeyOrder 校验表契约顶层键顺序；基类文件不参与。
-func (c *Checker) checkTableKeyOrder(rel string) {
-	keys, err := loadYAMLKeys(filepath.Join(c.root, rel))
-	if err != nil {
-		return
-	}
-	pos := map[string]int{}
-	for i, k := range tableKeyOrder {
-		pos[k] = i
-	}
-	last, lastKey := -1, ""
-	for _, k := range keys {
-		i, ok := pos[k]
-		if !ok {
-			continue
-		}
-		if i < last {
-			c.rulef("table-key-order", "%s: key %s must come before %s", rel, k, lastKey)
-		}
-		last, lastKey = i, k
-	}
-}
-
 func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map[string]bool) {
 	c.checkTargets(schema)
-	c.checkColumnRefs(schema)
 	c.baseID = baseContractID
 	dir := schema.Targets.Dir
 	globPattern := schema.Targets.Glob
@@ -112,7 +69,6 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	c.tableObjects = map[string]map[string]bool{}
 	c.tableDocs = map[string]map[string]any{}
 	c.objectNames = map[string]string{}
-	c.objectKinds = map[string]string{}
 	c.inheritedCols = map[string]map[string]bool{}
 
 	// 基类固定单例：路径/ID 写死，不通过 targets 配置。
@@ -151,7 +107,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 			c.rulef("schema.contract-id-unique", "%s: duplicate contract id %s (also %s)", rel, id, prev)
 		}
 		tableIDs[id] = rel
-		c.checkTableKeyOrder(rel)
+		c.checkFieldOrder(rel, schema.Fields, orderRules{top: "table-key-order", nested: "table-key-order"})
 		physical = append(physical, tableDoc{id: id, rel: rel, doc: doc})
 	}
 
@@ -406,8 +362,8 @@ func copySet(src map[string]bool) map[string]bool {
 	return dst
 }
 
-// collectTableObjects 记录表上可被 capabilities 引用的约束/索引名，
-// 同时校验 PG 索引命名空间内的全局唯一性。
+// collectTableObjects 记录表上可被 capabilities 引用的约束/索引名；
+// 索引名同时校验全局唯一，check 约束不占用 PG 索引命名空间。
 func (c *Checker) collectTableObjects(doc map[string]any, rel, tableID string) {
 	objects := map[string]bool{}
 	for _, raw := range asList(doc["constraints"]) {
@@ -420,10 +376,6 @@ func (c *Checker) collectTableObjects(doc map[string]any, rel, tableID string) {
 			continue
 		}
 		objects[name] = true
-		switch typ, _ := m["type"].(string); typ {
-		case "unique", "exclude":
-			c.recordObjectName(name, rel, "constraint")
-		}
 	}
 	for _, raw := range asList(doc["indexes"]) {
 		m, ok := asMap(raw)
@@ -435,24 +387,23 @@ func (c *Checker) collectTableObjects(doc map[string]any, rel, tableID string) {
 			continue
 		}
 		objects[name] = true
-		c.recordObjectName(name, rel, "index")
+		c.recordIndexName(name, rel)
 	}
 	c.tableObjects[tableID] = objects
 }
 
-// recordObjectName 校验索引名与 unique/exclude 约束名的全局唯一性。
-// 同一文件同一类对象的重复已由 unique-names 报出，这里不重复报。
-func (c *Checker) recordObjectName(name, rel, kind string) {
+// recordIndexName 校验索引名全局唯一（PG 索引命名空间）。
+// 同一文件内的重复索引名已由 unique-names 报出，这里不重复报。
+func (c *Checker) recordIndexName(name, rel string) {
 	prevRel, seen := c.objectNames[name]
 	if !seen {
 		c.objectNames[name] = rel
-		c.objectKinds[name] = kind
 		return
 	}
-	if prevRel == rel && c.objectKinds[name] == kind {
+	if prevRel == rel {
 		return
 	}
-	c.rulef("index-name-unique", "%s: %s %q shares the index namespace with %s %q in %s", rel, kind, name, c.objectKinds[name], name, prevRel)
+	c.rulef("index-name-unique", "%s: index %q already declared in %s", rel, name, prevRel)
 }
 
 // checkPhysicalTable 先按 schema 校验结构，再跑表级规则。
@@ -497,7 +448,7 @@ var baseColumnShape = map[string]struct {
 	primary  bool
 	nullable bool
 }{
-	"id":         {"string", true, false},
+	"id":         {"integer", true, false},
 	"status":     {"integer", false, false},
 	"created_at": {"timestamp", false, false},
 	"updated_at": {"timestamp", false, false},
@@ -505,6 +456,7 @@ var baseColumnShape = map[string]struct {
 }
 
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
+	c.checkFieldOrder(rel, schema.Fields, orderRules{top: "table-key-order", nested: "table-key-order"})
 	if filepath.Base(rel) != baseContractFile {
 		c.rulef("base-file", "%s: base contract must live in %s", rel, baseContractFile)
 	}
@@ -559,20 +511,6 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 	if strings.Join(names, ",") != strings.Join(want, ",") {
 		c.rulef("base-columns", "%s: base columns must be %v, got %v", rel, want, names)
 	}
-}
-
-// constraintAllowedFields 声明每种约束允许出现的字段。
-// 约束是平铺的 union，必须按 type 收窄，避免把 expr 写在 unique 上。
-var constraintAllowedFields = map[string]map[string]bool{
-	"check":   {"name": true, "type": true, "expr": true},
-	"unique":  {"name": true, "type": true, "columns": true},
-	"exclude": {"name": true, "type": true, "expr": true},
-}
-
-// constraintKnownFields 是 item_fields 的并集；完全未知的字段交给 validateDoc 报错，
-// 这里只处理“字段存在但不适用于当前 type”的情况，避免重复报错。
-var constraintKnownFields = map[string]bool{
-	"name": true, "type": true, "expr": true, "columns": true,
 }
 
 func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema) {
@@ -638,8 +576,8 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.rulef("default-vs-default-sql", "%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, name)
 			}
 		}
-		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes, schema.ColumnRefs) {
-			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (families %v or column_refs.prefixes %v)", rel, i, name, t, familyNames(schema.ColumnTypes), schema.ColumnRefs.Prefixes)
+		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes) {
+			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (families %v or data.tables.<t>.col.<c>)", rel, i, name, t, familyNames(schema.ColumnTypes))
 		} else {
 			c.checkFamilyParams(m, t, rel, i, name, schema)
 		}
@@ -675,16 +613,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		} else {
 			c.rulef("schema.unique-names", "%s: constraints[%d]: duplicate constraint %q", rel, i, name)
 		}
-		if allowed, known := constraintAllowedFields[typ]; known {
-			for k := range m {
-				if !constraintKnownFields[k] {
-					continue
-				}
-				if !allowed[k] {
-					c.rulef("constraint-fields", "%s: constraints[%d] (%s): field %q is not allowed for type %s", rel, i, name, k, typ)
-				}
-			}
-		}
 		switch typ {
 		case "check":
 			if !hasNonEmptyString(m, "expr") {
@@ -692,22 +620,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			}
 			if !strings.HasPrefix(name, "ck_") {
 				c.rulef("constraint-fields", "%s: constraints[%d] (%s): check name must start with ck_", rel, i, name)
-			}
-		case "unique":
-			cols := asList(m["columns"])
-			if len(cols) == 0 {
-				c.rulef("constraint-fields", "%s: constraints[%d] (%s): unique requires columns", rel, i, name)
-			}
-			checkCols("constraint-fields", fmt.Sprintf("%s: constraints[%d] (%s)", rel, i, name), cols)
-			if !strings.HasPrefix(name, "uq_") {
-				c.rulef("constraint-fields", "%s: constraints[%d] (%s): unique name must start with uq_", rel, i, name)
-			}
-		case "exclude":
-			if !hasNonEmptyString(m, "expr") {
-				c.rulef("constraint-fields", "%s: constraints[%d] (%s): exclude requires expr", rel, i, name)
-			}
-			if !strings.HasPrefix(name, "ex_") {
-				c.rulef("constraint-fields", "%s: constraints[%d] (%s): exclude name must start with ex_", rel, i, name)
 			}
 		default:
 			c.rulef("constraint-fields", "%s: constraints[%d] (%s): unknown type %q", rel, i, name, typ)
@@ -728,8 +640,8 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.rulef("schema.unique-names", "%s: indexes[%d]: duplicate index %q", rel, i, name)
 		}
 		c.checkIndexUsedBy(m, want, rel, i, name)
-		if _, ok := m["reason"]; ok && !hasNonEmptyString(m, "reason") {
-			c.rulef("index-reason", "%s: indexes[%d] (%s): reason must not be empty", rel, i, name)
+		if _, ok := m["comment"]; ok && !hasNonEmptyString(m, "comment") {
+			c.rulef("index-comment", "%s: indexes[%d] (%s): comment must not be empty", rel, i, name)
 		}
 		hasCols := len(asList(m["columns"])) > 0
 		hasExpr := hasNonEmptyString(m, "expression")
@@ -739,22 +651,10 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if hasCols {
 			checkCols("index-definition", fmt.Sprintf("%s: indexes[%d] (%s)", rel, i, name), asList(m["columns"]))
 		}
-		if order := asList(m["order"]); len(order) > 0 {
-			if !hasCols {
-				c.rulef("index-order", "%s: indexes[%d] (%s): order requires columns", rel, i, name)
-			} else if len(order) != len(asList(m["columns"])) {
-				c.rulef("index-order", "%s: indexes[%d] (%s): order length must match columns", rel, i, name)
-			}
-		}
-		checkCols("index-definition", fmt.Sprintf("%s: indexes[%d] (%s).include", rel, i, name), asList(m["include"]))
 		unique, _ := m["unique"].(bool)
 		if unique {
 			if !strings.HasPrefix(name, "uq_") {
 				c.rulef("index-definition", "%s: indexes[%d] (%s): unique name must start with uq_", rel, i, name)
-			}
-			where, _ := m["where"].(string)
-			if !strings.Contains(where, "deleted_at IS NULL") {
-				c.rulef("unique-scope", "%s: indexes[%d] (%s): unique index must filter deleted_at IS NULL", rel, i, name)
 			}
 		} else if !strings.HasPrefix(name, "idx_") {
 			c.rulef("index-definition", "%s: indexes[%d] (%s): non-unique name must start with idx_", rel, i, name)
@@ -791,6 +691,31 @@ func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int,
 		if !c.queryTables[canonical][tableID] {
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): query %s does not reference table %s", rel, i, name, qid, tableID)
 			continue
+		}
+	}
+}
+
+// checkIndexLiveOnly 在列元数据加载后校验 live_only 依赖 nullable deleted_at。
+func (c *Checker) checkIndexLiveOnly(tableIDs map[string]string) {
+	for id, rel := range tableIDs {
+		if id == c.baseID {
+			continue
+		}
+		doc := c.tableDocs[id]
+		for i, raw := range asList(doc["indexes"]) {
+			m, ok := asMap(raw)
+			if !ok {
+				continue
+			}
+			liveOnly, _ := m["live_only"].(bool)
+			if !liveOnly {
+				continue
+			}
+			name, _ := m["name"].(string)
+			meta, ok := c.tableColumns[id]["deleted_at"]
+			if !ok || !meta.nullable {
+				c.rulef("index-live-only", "%s: indexes[%d] (%s): live_only requires nullable deleted_at", rel, i, name)
+			}
 		}
 	}
 }
@@ -883,6 +808,40 @@ func commonColumnFields(schema *Schema) map[string]bool {
 		}
 	}
 	return out
+}
+
+// checkSharedTypes 校验 _meta/_types.yaml 的类型族定义本身：
+// 未使用的族也必须可解析，避免拼错 type 后只在某列使用时才暴露。
+func (c *Checker) checkSharedTypes(schema *Schema) {
+	if len(schema.ColumnTypes.ValueTypeFamilies) == 0 {
+		c.rulef("schema.types", "types: column_types.families must not be empty")
+		return
+	}
+	for _, name := range familyNames(schema.ColumnTypes) {
+		fam := schema.ColumnTypes.ValueTypeFamilies[name]
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(fam.Description) == "" {
+			c.rulef("schema.types", "types.families.%s: name and description must not be empty", name)
+		}
+		paramNames := make([]string, 0, len(fam.Params))
+		for pname := range fam.Params {
+			paramNames = append(paramNames, pname)
+		}
+		sort.Strings(paramNames)
+		for _, pname := range paramNames {
+			def := fam.Params[pname]
+			if strings.TrimSpace(pname) == "" {
+				c.rulef("schema.types", "types.families.%s: param name must not be empty", name)
+			}
+			if err := validateFieldTypes([]Field{{Name: pname, Type: def.Type}}); err != nil {
+				c.rulef("schema.types", "types.families.%s.params.%s: %v", name, pname, err)
+			}
+			if def.Pattern != "" {
+				if _, err := regexp.Compile(def.Pattern); err != nil {
+					c.rulef("schema.types", "types.families.%s.params.%s: invalid pattern: %v", name, pname, err)
+				}
+			}
+		}
+	}
 }
 
 func familyNames(ct ColumnTypes) []string {
@@ -1014,7 +973,7 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 }
 
 // checkColumnDefaultType 校验字面量 default 的 YAML 类型与列类型族兼容。
-// 引用列（column_refs 前缀 + .col.）的具体类型暂不递归展开。
+// 引用列（data.tables.<t>.col.<c>）的具体类型暂不递归展开。
 func (c *Checker) checkColumnDefaultType(m map[string]any, t, rel string, i int, name string) {
 	def, ok := m["default"]
 	if !ok || def == nil {

@@ -15,6 +15,9 @@ required=(
   "contracts/index.yaml"
   "contracts/data/README.md"
   "apps/api/go.mod"
+  "apps/web/package.json"
+  "apps/web/pnpm-workspace.yaml"
+  "apps/web/pnpm-lock.yaml"
   "apps/web/admin/package.json"
 )
 

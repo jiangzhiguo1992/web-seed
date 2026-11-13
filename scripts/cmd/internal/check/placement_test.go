@@ -63,6 +63,80 @@ func TestModelTableListStyle(t *testing.T) {
 	}
 }
 
+func TestEnumUsedByListStyle(t *testing.T) {
+	flow := t.TempDir()
+	writePlacementFile(t, flow, "contracts/data/enums.yaml", `id: data.enums
+summary: "x"
+schema_version: 1
+stability: stable
+enums:
+  - name: x_status
+    go_type: XStatus
+    ts_type: XStatus
+    values:
+      - { value: active, code: 0 }
+    used_by:
+      entities: [ data.entities.x ]
+      capabilities: [ cap.services.x ]
+`)
+	c := &Checker{root: flow}
+	c.checkFieldPlacement()
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "enums[].used_by.entities") || !strings.Contains(errs, "enums[].used_by.capabilities") {
+		t.Fatalf("enum used_by flow lists not reported: %v", c.errs)
+	}
+
+	block := t.TempDir()
+	writePlacementFile(t, block, "contracts/data/enums.yaml", `id: data.enums
+summary: "x"
+schema_version: 1
+stability: stable
+enums:
+  - name: x_status
+    go_type: XStatus
+    ts_type: XStatus
+    values:
+      - { value: active, code: 0 }
+    used_by:
+      entities:
+        - data.entities.x
+      capabilities:
+        - cap.services.x
+`)
+	c = &Checker{root: block}
+	c.checkFieldPlacement()
+	if strings.Contains(strings.Join(c.errs, "\n"), "used_by") {
+		t.Fatalf("block-style enum used_by wrongly reported: %v", c.errs)
+	}
+}
+
+func TestQueryTablesListStyle(t *testing.T) {
+	flow := t.TempDir()
+	writePlacementFile(t, flow, "contracts/data/queries/q.yaml", `id: data.queries.q
+queries:
+  - name: GetX
+    tables: [ data.tables.x ]
+`)
+	c := &Checker{root: flow}
+	c.checkFieldPlacement()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "queries[].tables must be block style") {
+		t.Fatalf("flow tables not reported: %v", c.errs)
+	}
+
+	block := t.TempDir()
+	writePlacementFile(t, block, "contracts/data/queries/q.yaml", `id: data.queries.q
+queries:
+  - name: GetX
+    tables:
+      - data.tables.x
+`)
+	c = &Checker{root: block}
+	c.checkFieldPlacement()
+	if strings.Contains(strings.Join(c.errs, "\n"), "queries[].tables") {
+		t.Fatalf("block tables wrongly reported: %v", c.errs)
+	}
+}
+
 func TestFieldPlacement(t *testing.T) {
 	root := t.TempDir()
 	writePlacementFile(t, root, "contracts/_meta/ok.yaml", "rules:\n  - { id: x }\n")

@@ -18,8 +18,7 @@ table:
 
 columns:
   - name: account_id
-    type: string
-    max_len: 36
+    type: integer
     nullable: false
     comment: "关联账号"
 
@@ -28,7 +27,7 @@ columns:
     nullable: false
     min_len: 1
     max_len: 64
-    pii: true
+    sensitivity: pii
     comment: "邮箱 @ 前的本地部分"
 
   - name: domain
@@ -59,11 +58,11 @@ indexes:
   - name: uq_auth_email_username_domain
     columns: [ username, domain ]
     unique: true
-    where: "deleted_at IS NULL"
+    live_only: true
+    comment: "邮箱在未删除记录内唯一"
     used_by:
       - data.queries.auth.get_auth_email_by_username_domain
       - data.queries.auth.create_auth_email
-    reason: "邮箱在未删除记录内唯一"
 
 used_by:
   queries:

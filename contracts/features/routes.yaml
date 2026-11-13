@@ -15,7 +15,7 @@ layout:
 
 routes:
   - id: feature.routes.account_list
-    path: /accounts
+    path: /account
     name: account-list
     page: feature.pages.account_list
     layout: default
@@ -29,7 +29,7 @@ routes:
       title: "账号列表"
 
   - id: feature.routes.account_create
-    path: /accounts/new
+    path: /account/new
     name: account-create
     page: feature.pages.account_create
     layout: default
@@ -39,7 +39,7 @@ routes:
       title: "新建账号"
 
   - id: feature.routes.account_detail
-    path: /accounts/:id
+    path: /account/:id
     name: account-detail
     page: feature.pages.account_detail
     layout: default
@@ -60,7 +60,7 @@ routes:
       public: true
 
 redirects:
-  - { from: /, to: /accounts }
+  - { from: /, to: /account }
 
 not_found:
   page: feature.pages.not_found

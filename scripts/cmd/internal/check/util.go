@@ -86,20 +86,18 @@ func hasNonEmptyString(m map[string]any, key string) bool {
 	return ok && strings.TrimSpace(s) != ""
 }
 
-func isColumnType(t string, ct ColumnTypes, refs ColumnRefs) bool {
+// tableColumnTypeRe 是表列类型引用的硬约束：只允许 data.tables.<t>.col.<c>。
+var tableColumnTypeRe = regexp.MustCompile(`^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$`)
+
+func isColumnType(t string, ct ColumnTypes) bool {
 	if _, ok := ct.ValueTypeFamilies[t]; ok {
 		return true
 	}
-	for _, p := range refs.Prefixes {
-		if !strings.HasPrefix(t, p) || t == p {
-			continue
-		}
-		if containsString(refs.RequireCol, p) {
-			return strings.Contains(t, ".col.") && !strings.HasSuffix(t, ".col.")
-		}
-		return true
-	}
-	return false
+	return isTableColumnType(t)
+}
+
+func isTableColumnType(t string) bool {
+	return tableColumnTypeRe.MatchString(t)
 }
 
 func containsString(list []string, want string) bool {
@@ -111,23 +109,10 @@ func containsString(list []string, want string) bool {
 	return false
 }
 
-func isColumnRefType(t string, refs ColumnRefs) bool {
-	for _, p := range refs.Prefixes {
-		if !strings.HasPrefix(t, p) || t == p {
-			continue
-		}
-		if containsString(refs.RequireCol, p) {
-			return strings.Contains(t, ".col.") && !strings.HasSuffix(t, ".col.")
-		}
-		return true
-	}
-	return false
-}
-
-// queryTableRefs 读取查询的 targets；查询契约不写 SQL/joins。
+// queryTableRefs 读取查询的 tables；查询契约不写 SQL/joins。
 func queryTableRefs(m map[string]any) []string {
 	var out []string
-	for _, raw := range asList(m["targets"]) {
+	for _, raw := range asList(m["tables"]) {
 		if s, ok := raw.(string); ok && s != "" {
 			out = append(out, s)
 		}

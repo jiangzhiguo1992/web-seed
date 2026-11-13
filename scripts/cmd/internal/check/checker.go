@@ -5,9 +5,9 @@
 //   - data.tables / data.tables.base 的结构、ID/文件、基类 5 列、列/约束/索引、used_by、do_not 具体性
 //   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、code int32 范围、stability 与 summary
 //   - data.entities 的字段来源（column/computed）、指针/可空、字段校验、关系字段、used_by
-//   - data.queries 的 ID/名称、targets/joins、params、returns、伪 SQL 子句、index_ref、写归属与敏感列
+//   - data.queries 的 ID/名称、tables/joins、params、returns、伪 SQL 子句、index_ref、写归属与敏感列
 //   - data.storage 的表级物理事实（engine/size_class/retention/partition）
-//   - 表列引用的 column_refs 前缀是否存在；表列不引用 data.enums.*
+//   - 表列引用的 data.tables.<t>.col.<c> 是否存在；表列不引用 data.enums.*
 //   - 任意契约中的 data.enums.* 类型引用必须存在
 //   - status 由基类提供且为 integer；物理表不得重声明；枚举只在 entity
 //   - 禁止 foreign_key；unique 约束与唯一索引的软删语义区分
@@ -32,7 +32,6 @@ type Schema = contractspec.Schema
 type Targets = contractspec.Targets
 type ColumnTypes = contractspec.ColumnTypes
 type Rule = contractspec.Rule
-type ColumnRefs = contractspec.ColumnRefs
 type ValueTypeFamily = contractspec.ValueTypeFamily
 type Field = contractspec.Field
 
@@ -51,21 +50,19 @@ type Checker struct {
 	tablePrimaryKey map[string][]string
 	tableObjects    map[string]map[string]bool
 	objectNames     map[string]string
-	objectKinds     map[string]string
 
 	// 实体与查询解析索引。
 	tableColumns      map[string]map[string]columnMeta
 	tableDocs         map[string]map[string]any
 	tableTypeFamilies map[string]bool
+	redundancyGroups  map[string]*redundancyGroup
 	entityDocs        []entityDoc
 	entityBaseDoc     map[string]any
 	entityBaseFields  []entityFieldInfo
 	entities          map[string]*entityInfo
 	entityOrder       []string
 	queries           map[string]*queryInfo
-	queryAliases      map[string]string
 	declaredWrites    map[string]bool
-	queryAliasDup     map[string]bool
 	queryDocs         []queryDoc
 	queryDupIDs       map[string]bool
 	queryOrder        []string
@@ -113,6 +110,7 @@ func (c *Checker) run() {
 		return
 	}
 
+	c.checkSharedTypes(tableSchema)
 	c.loadQueryIndex(querySchema)
 	c.tableTypeFamilies = map[string]bool{}
 	for name := range tableSchema.ColumnTypes.ValueTypeFamilies {
@@ -120,9 +118,10 @@ func (c *Checker) run() {
 	}
 	tableIDs, cols := c.checkTables(tableSchema)
 	c.loadTableColumns(tableIDs)
+	c.checkIndexLiveOnly(tableIDs)
 	c.checkStorage(tableIDs)
 	c.loadEntities(entitySchema)
-	c.checkRedundancy(tableIDs, cols)
+	c.checkRedundancy(tableIDs)
 	c.loadTableIndexes(tableIDs)
 	c.checkQueryIndexRefs()
 	enumValues := c.checkEnums(enumSchema)
@@ -131,11 +130,11 @@ func (c *Checker) run() {
 	c.checkRules(entitySchema)
 	c.checkRules(querySchema)
 	c.checkUndeclaredRuleIDs()
-	c.checkEnumRefs(tableIDs, cols, enumValues, tableSchema.ColumnRefs)
+	c.checkEnumRefs(tableIDs, cols, enumValues)
 	c.checkCrossFileTableRefs(tableIDs, cols)
 	c.checkEntities(entitySchema)
 	c.checkQueries(querySchema)
-	c.checkEntityUsedByQueries()
+	c.checkEntityUsedBy()
 	c.checkUsedBy(tableIDs)
 	c.checkIndex(tableIDs, enumSchema, entitySchema, querySchema)
 }
@@ -257,58 +256,6 @@ func loadSchema(path string) (*Schema, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return s, nil
-}
-
-// loadYAMLKeys 读取 YAML 顶层键顺序；yaml.Unmarshal 到 map 会丢失顺序。
-func loadYAMLKeys(path string) ([]string, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var node yaml.Node
-	if err := yaml.Unmarshal(b, &node); err != nil {
-		return nil, err
-	}
-	if len(node.Content) == 0 || len(node.Content[0].Content) == 0 {
-		return nil, nil
-	}
-	var keys []string
-	m := node.Content[0]
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		keys = append(keys, m.Content[i].Value)
-	}
-	return keys, nil
-}
-
-// loadYAMLChildKeys 读取嵌套 mapping 的键顺序；用于 model 这类固定顺序。
-func loadYAMLChildKeys(path, parent string) ([]string, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var node yaml.Node
-	if err := yaml.Unmarshal(b, &node); err != nil {
-		return nil, err
-	}
-	if len(node.Content) == 0 || len(node.Content[0].Content) == 0 {
-		return nil, nil
-	}
-	m := node.Content[0]
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value != parent {
-			continue
-		}
-		v := m.Content[i+1]
-		if v.Kind != yaml.MappingNode {
-			return nil, nil
-		}
-		var keys []string
-		for j := 0; j+1 < len(v.Content); j += 2 {
-			keys = append(keys, v.Content[j].Value)
-		}
-		return keys, nil
-	}
-	return nil, nil
 }
 
 func loadYAML(path string) (map[string]any, error) {

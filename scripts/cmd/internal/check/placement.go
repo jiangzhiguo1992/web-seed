@@ -53,6 +53,16 @@ func (c *Checker) checkFieldPlacement() {
 				}
 			}
 		}
+		if strings.HasPrefix(rel, "contracts/data/queries/") && flowListInSequenceAt(&doc, "queries", "tables") {
+			c.rulef("schema.list-style", "%s: queries[].tables must be block style (one item per line)", rel)
+		}
+		if rel == "contracts/data/enums.yaml" {
+			for _, key := range []string{"entities", "capabilities"} {
+				if flowListInSequenceAt(&doc, "enums", "used_by", key) {
+					c.rulef("schema.list-style", "%s: enums[].used_by.%s must be block style (one item per line)", rel, key)
+				}
+			}
+		}
 		if strings.HasPrefix(rel, "contracts/_meta/") {
 			if nodeHasKey(&doc, "do_not") {
 				c.rulef("schema.meta-placement", "%s: _meta must not declare do_not; put instance negatives in concrete contracts", rel)
@@ -155,7 +165,37 @@ func flowListAt(doc *yaml.Node, path ...string) bool {
 	if len(doc.Content) == 0 {
 		return false
 	}
+	return flowListAtNode(doc.Content[0], path...)
+}
+
+// flowListInSequenceAt 判断 seqKey 列表的每个 item 下指定路径是否为 flow style 列表。
+func flowListInSequenceAt(doc *yaml.Node, seqKey string, path ...string) bool {
+	if len(doc.Content) == 0 {
+		return false
+	}
 	node := doc.Content[0]
+	if node.Kind != yaml.MappingNode {
+		return false
+	}
+	var seq *yaml.Node
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == seqKey {
+			seq = node.Content[i+1]
+			break
+		}
+	}
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		return false
+	}
+	for _, item := range seq.Content {
+		if item.Kind == yaml.MappingNode && flowListAtNode(item, path...) {
+			return true
+		}
+	}
+	return false
+}
+
+func flowListAtNode(node *yaml.Node, path ...string) bool {
 	for _, key := range path {
 		if node.Kind != yaml.MappingNode {
 			return false

@@ -20,37 +20,52 @@ model:
     - data.entities.account
 
 fields:
-  - name: AccountID
-    mutable: false
-    source: { column: data.tables.auth_pwd.col.account_id }
-  - name: Username
-    source: { column: data.tables.auth_pwd.col.username }
-  - name: passwordHash
-    source: { column: data.tables.auth_pwd.col.password_hash }
-  - name: FailedLoginCount
-    source: { column: data.tables.auth_pwd.col.failed_login_count }
-  - name: LockedUntil
-    source: { column: data.tables.auth_pwd.col.locked_until }
   - name: Status
     type: data.enums.auth_status
-    source: { column: data.tables.auth_pwd.col.status }
     description: "认证记录状态"
+    source: { column: data.tables.auth_pwd.col.status }
+    validation: { column: data.tables.auth_pwd.col.status }
+
+  - name: AccountID
+    description: "关联账号"
+    source: { column: data.tables.auth_pwd.col.account_id }
+    validation: { column: data.tables.auth_pwd.col.account_id }
+
+  - name: Username
+    description: "登录名；唯一"
+    source: { column: data.tables.auth_pwd.col.username }
+    validation: { column: data.tables.auth_pwd.col.username }
+
+  - name: passwordHash
+    description: "argon2id 口令哈希；新密码写入此列"
+    source: { column: data.tables.auth_pwd.col.password_hash }
+    validation: { column: data.tables.auth_pwd.col.password_hash }
+
+  - name: FailedLoginCount
+    description: "连续失败次数；成功登录后归零"
+    source: { column: data.tables.auth_pwd.col.failed_login_count }
+    validation: { column: data.tables.auth_pwd.col.failed_login_count }
+
+  - name: LockedUntil
+    description: "锁定截止时间；为空表示未锁定"
+    source: { column: data.tables.auth_pwd.col.locked_until }
+    validation: { column: data.tables.auth_pwd.col.locked_until }
 
   - name: Account
-    target: data.tables.account
     type: data.entities.account
+    description: "所属账号"
     join_column_from: data.tables.auth_pwd.col.account_id
     join_column_to: data.tables.account.col.id
     load: lazy
-    description: "所属账号"
 
 validation:
-  - id: data.entities.auth_pwd.password_present
+  - name: password_present
     expr: "PasswordHash != nil"
     on_violation: platform.errors.AUTH_INVALID_CREDENTIALS
-  - id: data.entities.auth_pwd.lock_consistency
+  - name: lock_consistency
     expr: "LockedUntil == nil || FailedLoginCount > 0"
     on_violation: platform.errors.AUTH_LOCKED
 
 used_by:
   queries: []
+  capabilities: []

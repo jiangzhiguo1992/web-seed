@@ -17,8 +17,7 @@ table:
 
 columns:
   - name: account_id
-    type: string
-    max_len: 36
+    type: integer
     nullable: false
     comment: "关联账号"
 
@@ -35,7 +34,7 @@ columns:
     nullable: false
     min_len: 1
     max_len: 32
-    pii: true
+    sensitivity: pii
     comment: "手机号"
 
   - name: operator
@@ -48,11 +47,11 @@ indexes:
   - name: uq_auth_phone_number
     columns: [ code, number ]
     unique: true
-    where: "deleted_at IS NULL"
+    live_only: true
+    comment: "手机号在未删除记录内唯一"
     used_by:
       - data.queries.auth.get_auth_phone_by_number
       - data.queries.auth.create_auth_phone
-    reason: "手机号在未删除记录内唯一"
 
 used_by:
   queries:

@@ -40,7 +40,7 @@ rules:
 
 # 具体模块的允许依赖（覆盖通用规则）
 module_dependencies:
-  accounts: [platform, generated]
+  account: [platform, generated]
   auth: [platform, generated]
   audit: [platform, generated]
   notification: [platform, generated]

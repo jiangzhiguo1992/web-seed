@@ -1,4 +1,4 @@
-// enums.go 校验 data.enums 集合结构、ID/名称/类型名唯一性、code 唯一性与全仓枚举引用。
+// enums.go 校验 data.enums 集合结构、名称/类型名唯一性、code 唯一性、used_by 与全仓枚举引用。
 package check
 
 import (
@@ -23,6 +23,7 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		return map[string]map[string]bool{}
 	}
 	c.validateDoc(doc, schema.Fields, rel)
+	c.checkFieldOrder(rel, schema.Fields, orderRules{top: "enum-key-order", nested: "enum-key-order"})
 	c.checkStability(doc, rel)
 	if s, ok := doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
@@ -46,14 +47,8 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 			c.rulef("schema.type", "%s: enums[%d] must be an object", rel, i)
 			continue
 		}
-		id, _ := m["id"].(string)
 		name, _ := m["name"].(string)
-		if id != prefix+name {
-			c.rulef("enum-id-matches-name", "%s: enums[%d]: id must be %s%s, got %s", rel, i, prefix, name, id)
-		}
-		if _, ok := enums[id]; ok {
-			c.rulef("schema.contract-id-unique", "%s: enums[%d]: duplicate id %s", rel, i, id)
-		}
+		id := prefix + name
 		if names[name] {
 			c.rulef("schema.unique-names", "%s: enums[%d]: duplicate name %s", rel, i, name)
 		}
@@ -106,7 +101,7 @@ func (c *Checker) checkEnumSchema(schema *Schema) {
 	if !enums.Required {
 		c.rulef("schema.meta", "%s: enums must be required", schema.ID)
 	}
-	for _, name := range []string{"id", "name", "go_type", "ts_type", "used_by", "values"} {
+	for _, name := range []string{"name", "go_type", "ts_type", "used_by", "values"} {
 		f, ok := contractspec.FindField(enums.ItemFields, name)
 		if !ok || !f.Required {
 			c.rulef("schema.meta", "%s: enums.%s must be required", schema.ID, name)
@@ -114,7 +109,7 @@ func (c *Checker) checkEnumSchema(schema *Schema) {
 	}
 	usedBy, ok := contractspec.FindField(enums.ItemFields, "used_by")
 	if ok {
-		for _, name := range []string{"entities", "tables"} {
+		for _, name := range []string{"entities", "capabilities"} {
 			f, found := contractspec.FindField(usedBy.Fields, name)
 			if !found || !f.Required {
 				c.rulef("schema.meta", "%s: enums.used_by.%s must be required", schema.ID, name)
@@ -146,13 +141,13 @@ func (c *Checker) checkEnumTypeName(seen map[string]string, field string, i int,
 	seen[typeName] = name
 }
 
-// enumUsage 记录一个枚举被哪些 entity 使用，以及这些 entity 对应的物理表。
+// enumUsage 记录一个枚举被哪些 entity / capability 使用。
 type enumUsage struct {
-	entities map[string]bool
-	tables   map[string]bool
+	entities     map[string]bool
+	capabilities map[string]bool
 }
 
-// enumUsages 扫描 entity 字段中的 data.enums.* 引用，忽略 capability/feature。
+// enumUsages 扫描 entity 字段和 capability 中的 data.enums.* 引用。
 func (c *Checker) enumUsages() map[string]*enumUsage {
 	usages := map[string]*enumUsage{}
 	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {
@@ -161,8 +156,9 @@ func (c *Checker) enumUsages() map[string]*enumUsage {
 			continue
 		}
 		entityID, _ := doc["id"].(string)
-		tables := entityTableRefs(doc)
-		// 只统计字段上的枚举引用；来源表按 column 或单表实体确定。
+		if entityID == "" {
+			continue
+		}
 		for _, raw := range asList(doc["fields"]) {
 			m, ok := asMap(raw)
 			if !ok {
@@ -173,58 +169,82 @@ func (c *Checker) enumUsages() map[string]*enumUsage {
 			if !strings.HasPrefix(typ, "data.enums.") {
 				continue
 			}
-			u := usages[typ]
-			if u == nil {
-				u = &enumUsage{entities: map[string]bool{}, tables: map[string]bool{}}
-				usages[typ] = u
-			}
-			if entityID != "" {
-				u.entities[entityID] = true
-			}
-			src := ""
-			if source, ok := asMap(m["source"]); ok {
-				if ref, _ := source["column"].(string); ref != "" {
-					if t, _, ok := splitColumnRef(ref); ok {
-						src = t
-					}
-				}
-			}
-			if src == "" && len(tables) == 1 {
-				src = tables[0]
-			}
-			if src != "" {
-				u.tables[src] = true
-			}
+			enumUsageFor(usages, typ).entities[entityID] = true
 		}
+	}
+	for _, f := range walkYAML(c.root, "contracts/capabilities") {
+		doc, err := loadYAML(f)
+		if err != nil {
+			continue
+		}
+		capabilityID, _ := doc["id"].(string)
+		if capabilityID == "" {
+			continue
+		}
+		c.collectEnumRefs(doc, func(enumID string) {
+			enumUsageFor(usages, enumID).capabilities[capabilityID] = true
+		})
 	}
 	return usages
 }
 
-// checkEnumUsedBy 要求 used_by.entities/tables 与 entity 实际引用完全一致。
+func enumUsageFor(usages map[string]*enumUsage, id string) *enumUsage {
+	u := usages[id]
+	if u == nil {
+		u = &enumUsage{entities: map[string]bool{}, capabilities: map[string]bool{}}
+		usages[id] = u
+	}
+	return u
+}
+
+// collectEnumRefs 收集任意层级 type: data.enums.* 引用；只收集，不报错。
+func (c *Checker) collectEnumRefs(v any, fn func(string)) {
+	if m, ok := asMap(v); ok {
+		for k, child := range m {
+			if k == "type" {
+				if t, ok := child.(string); ok {
+					t = strings.TrimPrefix(t, "*")
+					if strings.HasPrefix(t, "data.enums.") {
+						fn(t)
+					}
+				}
+			}
+			c.collectEnumRefs(child, fn)
+		}
+		return
+	}
+	if list, ok := asList2(v); ok {
+		for _, item := range list {
+			c.collectEnumRefs(item, fn)
+		}
+	}
+}
+
+// checkEnumUsedBy 要求 used_by.entities/capabilities 与实际引用完全一致。
 func (c *Checker) checkEnumUsedBy(rel string, i int, id string, m map[string]any, usage *enumUsage) {
 	ub, ok := asMap(m["used_by"])
 	if !ok {
 		return // schema.required 报缺失
 	}
 	declaredEntities := stringSet(asList(ub["entities"]))
-	declaredTables := stringSet(asList(ub["tables"]))
+	declaredCapabilities := stringSet(asList(ub["capabilities"]))
 	expectedEntities := map[string]bool{}
-	expectedTables := map[string]bool{}
+	expectedCapabilities := map[string]bool{}
 	if usage != nil {
 		expectedEntities = usage.entities
-		expectedTables = usage.tables
+		expectedCapabilities = usage.capabilities
 	}
 	if !sameSet(declaredEntities, expectedEntities) {
 		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.entities must be %v, got %v", rel, i, id, sortedKeys(expectedEntities), sortedKeys(declaredEntities))
 	}
-	if !sameSet(declaredTables, expectedTables) {
-		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.tables must be %v, got %v", rel, i, id, sortedKeys(expectedTables), sortedKeys(declaredTables))
+	if !sameSet(declaredCapabilities, expectedCapabilities) {
+		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.capabilities must be %v, got %v", rel, i, id, sortedKeys(expectedCapabilities), sortedKeys(declaredCapabilities))
 	}
 }
 
 // checkEnumRefs 校验表列引用与所有契约中的 data.enums.* 类型引用。
 // 表列不引用枚举；枚举引用可出现在 entity / capability / feature 等任意契约。
-func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[string]bool, enums map[string]map[string]bool, refs ColumnRefs) {
+func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[string]bool, enums map[string]map[string]bool) {
 	for _, rel := range tableIDs {
 		doc, err := loadYAML(filepath.Join(c.root, rel))
 		if err != nil {
@@ -235,7 +255,7 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 			if !ok {
 				continue
 			}
-			if t, _ := m["type"].(string); isColumnRefType(t, refs) {
+			if t, _ := m["type"].(string); isTableColumnType(t) {
 				checkColumnRef(c, t, tableIDs, cols, fmt.Sprintf("%s: columns[%d] (%s)", rel, i, m["name"]))
 			}
 		}

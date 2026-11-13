@@ -25,7 +25,7 @@ defaults:
   timezone: UTC
   locale: zh-CN
   currency: CNY
-  id_strategy: uuid_v7
+  id_strategy: integer
 
 # 应用拓扑：每个应用包含哪些能力。生成器按此合并 OpenAPI。
 apps:

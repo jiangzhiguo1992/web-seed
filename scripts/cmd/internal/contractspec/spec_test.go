@@ -20,6 +20,13 @@ func writeMeta(t *testing.T, root, name, body string) {
 func TestLoadSchemaByType(t *testing.T) {
 	root := t.TempDir()
 	writeMeta(t, root, "_helpers.yaml", "id: meta._helpers\n")
+	writeMeta(t, root, "_types.yaml", `
+id: meta.types
+column_types:
+  families:
+    string:
+      description: "string"
+`)
 	writeMeta(t, root, "data.tables.yaml", `
 id: meta.data.tables
 type: data.tables
@@ -35,6 +42,19 @@ fields:
 	}
 	if _, _, err := LoadSchemaByType(root, "missing"); err == nil {
 		t.Fatal("missing type must fail")
+	}
+}
+
+func TestLoadSchemaByTypeRequiresSharedTypes(t *testing.T) {
+	root := t.TempDir()
+	writeMeta(t, root, "data.tables.yaml", `
+id: meta.data.tables
+type: data.tables
+fields:
+  - { name: id, type: string }
+`)
+	if _, _, err := LoadSchemaByType(root, "data.tables"); err == nil {
+		t.Fatal("missing _types.yaml must fail for data.tables")
 	}
 }
 

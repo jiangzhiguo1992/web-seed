@@ -20,27 +20,39 @@ model:
     - data.entities.account
 
 fields:
-  - name: AccountID
-    mutable: false
-    source: { column: data.tables.auth_phone.col.account_id }
-  - name: Code
-    source: { column: data.tables.auth_phone.col.code }
-  - name: Number
-    source: { column: data.tables.auth_phone.col.number }
-  - name: Operator
-    source: { column: data.tables.auth_phone.col.operator }
   - name: Status
     type: data.enums.auth_status
-    source: { column: data.tables.auth_phone.col.status }
     description: "认证记录状态"
+    source: { column: data.tables.auth_phone.col.status }
+    validation: { column: data.tables.auth_phone.col.status }
+
+  - name: AccountID
+    description: "关联账号"
+    source: { column: data.tables.auth_phone.col.account_id }
+    validation: { column: data.tables.auth_phone.col.account_id }
+
+  - name: Code
+    description: "国际区号，例如 +86"
+    source: { column: data.tables.auth_phone.col.code }
+    validation: { column: data.tables.auth_phone.col.code }
+
+  - name: Number
+    description: "手机号"
+    source: { column: data.tables.auth_phone.col.number }
+    validation: { column: data.tables.auth_phone.col.number }
+
+  - name: Operator
+    description: "运营商"
+    source: { column: data.tables.auth_phone.col.operator }
+    validation: { column: data.tables.auth_phone.col.operator }
 
   - name: Account
-    target: data.tables.account
     type: data.entities.account
+    description: "所属账号"
     join_column_from: data.tables.auth_phone.col.account_id
     join_column_to: data.tables.account.col.id
     load: lazy
-    description: "所属账号"
 
 used_by:
   queries: []
+  capabilities: []

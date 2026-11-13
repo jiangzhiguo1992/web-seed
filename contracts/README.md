@@ -76,6 +76,7 @@ contracts/
 ├── index.yaml                # 契约地图：所有条目的 ID / 路径 / 消费者 / 强度
 ├── _meta/                    # 契约元规范（非业务契约，不登记 index）
 │   ├── README.md             #   AI 入口：写前读什么、写后跑什么
+│   ├── _types.yaml           #   共享值类型：类型族与参数（所有契约共用）
 │   ├── data.tables.yaml      #   物理表字段树 + 值域 + 规则（单一源）
 │   ├── data.entities.yaml    #   实体字段树 + 值域 + 规则
 │   ├── data.queries.yaml     #   查询字段树 + 值域 + 规则
@@ -137,7 +138,7 @@ contracts/
 
 | 组 | 示例 |
 |---|---|
-| data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_accounts_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
+| data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_account_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
 | capabilities | `cap.http.account.create`、`cap.async.account_cleanup`、`cap.services.account` |
 | business | `business.states.account`、`business.rules.account.number_format`、`business.events.account.created` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
@@ -155,7 +156,7 @@ contracts/
 |---|---|---|
 | `data/tables/<file>.yaml` | `data.tables.<file>` | `data.tables.<file>.col.<column>` / `data.tables.<file>.constraint.<name>` |
 | `data/queries/<module>.yaml` | `data.queries.<module>` | `data.queries.<module>.<snake_case(name)>`（name 显式） |
-| `data/enums.yaml` | `data.enums` | `data.enums.<name>` |
+| `data/enums.yaml` | `data.enums` | `data.enums.<name>`（name 派生，不写 id） |
 | `platform/security/permissions.yaml` | `platform.security.permissions` | `platform.security.permissions.<code>` |
 | `platform/security/roles.yaml` | `platform.security.roles` | `platform.security.roles.<code>` |
 
@@ -185,8 +186,8 @@ feature ──> business ──> capabilities ──> data
 | business → capabilities | 规则 / 状态机 / 事件 | `implemented_by` / `emitted_by` |
 | capabilities/http → capabilities/services | HTTP operation | `x-service` |
 | capabilities/service → data | service 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
-| data.queries → data.tables | 查询项 | `targets` / `index_ref` |
-| data.entities → data.tables | 实体 | `model.tables` / `source.column` / `target` + `type` + `join_column_from/to` |
+| data.queries → data.tables | 查询项 | `tables` / `index_ref` |
+| data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `join_column_from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `used_by.queries`（生成物） |
 | data.entities → 上游（反向） | 实体文件 | `model.included_by`（显式，checker 校验） / `used_by.queries`（生成物） |
 
@@ -294,14 +295,14 @@ id: data.tables.account
 summary: 账号主表
 stability: stable
 do_not:                        # 只写实例级；通用约束见组 README 或 _base
-  - number 唯一索引必须带 WHERE deleted_at IS NULL
+  - number 唯一索引必须 live_only: true
 
 table:
-  name: accounts                 # 物理表名；默认等于文件段，需要不同名时显式覆盖
+  name: account                  # 物理表名；默认等于文件段，本仓库保持单数
   ...
 ```
 
-- 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖
+- 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段；本仓库统一单数，不再覆盖为复数
 - `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 前必须替换 TODO 并跑 `make contract-check`；状态可双向流转，`stable → draft` 表示重新修改
 - 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` 按完整 ID 匹配 `_meta/<type>.yaml`；`data.tables.base` / `data.entities.base` 由 checker 固定识别），文件无需声明 `type`
 - 生效元数据 = `_meta/<type>.yaml` + 继承的 `_base` 字段 + 文件字段覆盖
@@ -467,7 +468,7 @@ data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 | 禁止手写迁移 | 改 `tables/*.yaml` 后跑 `make gen-db` |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验 | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
-| 结构化 DDL | 分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`，大表索引用 `concurrently`；**不设未结构化 DDL 字段** |
+| 结构化 DDL | 分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`；大表索引的并发策略由 `storage.deployment.migrations.concurrent_index` 决定；**不设未结构化 DDL 字段** |
 
 **诚实边界**：生产环境的在线 DDL（大表加索引、数据回填）无法全自动。契约约束**最终态**，迁移**过程**允许人工介入，并用 `-- manual-adjust: <原因>` 显式声明。
 
@@ -492,7 +493,7 @@ data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 
 P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器待实现。
 
-- **_meta**：`data.tables.yaml` / `data.enums.yaml` / `data.entities.yaml` / `data.queries.yaml` + `make contract-new` + `make contract-check`
+- **_meta**：`_types.yaml` / `data.tables.yaml` / `data.enums.yaml` / `data.entities.yaml` / `data.queries.yaml` + `make contract-new` + `make contract-check`
 - **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{account,auth}`、`storage`
 - **capabilities**：`http/{shared,account,auth}`、`async/account_cleanup`、`services/{account,auth}`（其余模块待建）
 - **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件

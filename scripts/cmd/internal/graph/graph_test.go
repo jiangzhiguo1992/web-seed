@@ -66,11 +66,20 @@ used_by:
 	writeFixture(t, root, "contracts/data/queries/q.yaml", `id: data.queries.q
 queries:
   - name: GetA
-    returns: data.entities.e1
-    targets: [ data.tables.a ]
+    returns:
+      - { name: e1, kind: entity, entity: data.entities.e1 }
+    tables: [ data.tables.a ]
   - name: GetB
-    returns: boolean
-    targets: [ data.tables.b ]
+    returns:
+      - { name: exists, kind: scalar, type: boolean }
+    tables: [ data.tables.b ]
+`)
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+interface:
+  methods:
+    - name: Get
+      returns:
+        - { name: e, type: data.entities.e1 }
 `)
 	return root
 }
@@ -86,6 +95,9 @@ func TestCompute(t *testing.T) {
 	}
 	if got := snap.Entities["data.entities.e1"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("entity e1 queries = %v", got)
+	}
+	if got := snap.Entities["data.entities.e1"].Capabilities; len(got) != 1 || got[0] != "cap.services.x" {
+		t.Fatalf("entity e1 capabilities = %v", got)
 	}
 }
 
@@ -119,7 +131,7 @@ func TestWriteAndCheck(t *testing.T) {
 		t.Fatalf("table b used_by not written:\n%s", b)
 	}
 	e1, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e1.yaml"))
-	if !strings.Contains(string(e1), "used_by:\n  queries:\n    - data.queries.q.get_a\n") {
+	if !strings.Contains(string(e1), "used_by:\n  queries:\n    - data.queries.q.get_a\n  capabilities:\n    - cap.services.x\n") {
 		t.Fatalf("entity used_by not written:\n%s", e1)
 	}
 
@@ -170,8 +182,8 @@ func TestDuplicateIDs(t *testing.T) {
 
 	root = t.TempDir()
 	writeFixture(t, root, "contracts/data/tables/.keep", "")
-	writeFixture(t, root, "contracts/data/queries/a.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    targets: [ data.tables.a ]\n")
-	writeFixture(t, root, "contracts/data/queries/b.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    targets: [ data.tables.a ]\n")
+	writeFixture(t, root, "contracts/data/queries/a.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    tables: [ data.tables.a ]\n")
+	writeFixture(t, root, "contracts/data/queries/b.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    tables: [ data.tables.a ]\n")
 	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate query id") {
 		t.Fatalf("duplicate query id not reported: %v", err)
 	}

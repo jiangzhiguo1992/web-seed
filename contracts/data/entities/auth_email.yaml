@@ -20,34 +20,49 @@ model:
     - data.entities.account
 
 fields:
-  - name: AccountID
-    mutable: false
-    source: { column: data.tables.auth_email.col.account_id }
-  - name: Username
-    source: { column: data.tables.auth_email.col.username }
-  - name: Domain
-    source: { column: data.tables.auth_email.col.domain }
-  - name: Entity
-    source: { column: data.tables.auth_email.col.entity }
-  - name: TLD
-    source: { column: data.tables.auth_email.col.tld }
   - name: Status
     type: data.enums.auth_status
-    source: { column: data.tables.auth_email.col.status }
     description: "认证记录状态"
+    source: { column: data.tables.auth_email.col.status }
+    validation: { column: data.tables.auth_email.col.status }
+
+  - name: AccountID
+    description: "关联账号"
+    source: { column: data.tables.auth_email.col.account_id }
+    validation: { column: data.tables.auth_email.col.account_id }
+
+  - name: Username
+    description: "邮箱 @ 前的本地部分"
+    source: { column: data.tables.auth_email.col.username }
+    validation: { column: data.tables.auth_email.col.username }
+
+  - name: Domain
+    description: "完整域名，例如 example.com；小写归一"
+    source: { column: data.tables.auth_email.col.domain }
+    validation: { column: data.tables.auth_email.col.domain }
+
+  - name: Entity
+    description: "注册域/二级域，例如 example.com"
+    source: { column: data.tables.auth_email.col.entity }
+    validation: { column: data.tables.auth_email.col.entity }
+
+  - name: TLD
+    description: "顶级域，例如 com"
+    source: { column: data.tables.auth_email.col.tld }
+    validation: { column: data.tables.auth_email.col.tld }
 
   - name: Account
-    target: data.tables.account
     type: data.entities.account
+    description: "所属账号"
     join_column_from: data.tables.auth_email.col.account_id
     join_column_to: data.tables.account.col.id
     load: lazy
-    description: "所属账号"
 
 validation:
-  - id: data.entities.auth_email.domain_parts
+  - name: domain_parts
     expr: "TLD == nil || Domain endsWith('.' + TLD)"
     on_violation: platform.errors.AUTH_EMAIL_INVALID
 
 used_by:
   queries: []
+  capabilities: []
