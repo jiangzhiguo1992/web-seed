@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 type queryParam struct {
@@ -33,18 +35,15 @@ type queryOutputField struct {
 type queryInfo struct {
 	ID            string
 	Name          string
-	FileID        string
+	PreviousNames []string
 	File          string
 	OwnerModule   string
-	Access        string
-	Kind          string
 	Targets       []string
 	Params        []queryParam
 	Return        queryReturn
 	ReturnColumns []string
 	OutputFields  []queryOutputField
 	IndexRef      []string
-	Doc           map[string]any
 }
 
 type queryDoc struct {
@@ -71,11 +70,13 @@ func (q *queryInfo) tableSet() map[string]bool {
 // loadQueryIndex 解析查询文件；结构错误在 checkQueries 中报。
 func (c *Checker) loadQueryIndex(schema *Schema) {
 	c.queries = map[string]*queryInfo{}
+	c.queryAliases = map[string]string{}
+	c.queryAliasDup = map[string]bool{}
 	c.queryDocs = nil
 	c.queryOrder = nil
-	c.queryDupIDs = map[string]bool{}
 	c.queryIDs = map[string]string{}
 	c.queryTables = map[string]map[string]bool{}
+	c.queryDupIDs = map[string]bool{}
 	if schema.Targets.Dir == "" || schema.Targets.Glob == "" {
 		return
 	}
@@ -111,16 +112,32 @@ func (c *Checker) loadQueryIndex(schema *Schema) {
 			c.queryOrder = append(c.queryOrder, q.ID)
 			c.queryIDs[q.ID] = rel
 			c.queryTables[q.ID] = q.tableSet()
+			for _, prev := range q.PreviousNames {
+				oldID := contractspec.QueryID(fileID, prev)
+				if oldID == "" || oldID == q.ID {
+					c.queryAliasDup[oldID] = true
+					continue
+				}
+				if target, ok := c.queryAliases[oldID]; ok && target != q.ID {
+					c.queryAliasDup[oldID] = true
+					continue
+				}
+				c.queryAliases[oldID] = q.ID
+			}
+		}
+	}
+	for oldID := range c.queryAliases {
+		if _, ok := c.queryIDs[oldID]; ok {
+			c.queryAliasDup[oldID] = true
 		}
 	}
 }
 
 func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
-	q := &queryInfo{File: rel, FileID: fileID, OwnerModule: owner, Doc: m}
-	q.ID, _ = m["id"].(string)
+	q := &queryInfo{File: rel, OwnerModule: owner}
 	q.Name, _ = m["name"].(string)
-	q.Access, _ = m["access"].(string)
-	q.Kind, _ = m["kind"].(string)
+	q.ID = contractspec.QueryID(fileID, q.Name)
+	q.PreviousNames = stringList(m["previous_names"])
 	q.Targets = stringList(m["targets"])
 	q.IndexRef = stringList(m["index_ref"])
 	for _, raw := range asList(m["params"]) {
@@ -158,10 +175,11 @@ func parseQueryReturn(raw string) queryReturn {
 		return r
 	}
 	base := r.Raw
-	if strings.HasPrefix(base, "[]") {
+	if strings.HasPrefix(base, "List<") && strings.HasSuffix(base, ">") {
 		r.IsList = true
-		base = strings.TrimPrefix(base, "[]")
+		base = strings.TrimSuffix(strings.TrimPrefix(base, "List<"), ">")
 	}
+	r.Raw = base
 	switch {
 	case strings.HasPrefix(base, "data.tables.") && strings.HasSuffix(base, ".row"):
 		r.Kind = "table"
@@ -201,7 +219,10 @@ func (c *Checker) checkQueries(schema *Schema) {
 		c.checkQueryDoNot(qd)
 	}
 	for id := range c.queryDupIDs {
-		c.rulef("query-id-unique", "duplicate query id %s", id)
+		c.rulef("query-name-unique", "duplicate query name/derived id %s", id)
+	}
+	for id := range c.queryAliasDup {
+		c.rulef("query-name-unique", "query previous name collides on derived id %s", id)
 	}
 	names := map[string]string{}
 	for _, id := range c.queryOrder {
@@ -214,7 +235,6 @@ func (c *Checker) checkQueries(schema *Schema) {
 		c.checkQueryReturns(q)
 		c.checkQueryOutputFields(q)
 		c.checkQueryReturnColumns(q)
-		c.checkQueryKind(q)
 	}
 }
 
@@ -244,8 +264,13 @@ func (c *Checker) checkQueryDoNot(qd queryDoc) {
 	}
 	for _, raw := range asList(qd.doc["queries"]) {
 		if m, ok := asMap(raw); ok {
-			if id, _ := m["id"].(string); id != "" {
-				names[id] = true
+			if name, _ := m["name"].(string); name != "" {
+				names[name] = true
+				names[contractspec.QueryID(qd.fileID, name)] = true
+			}
+			for _, prev := range stringList(m["previous_names"]) {
+				names[prev] = true
+				names[contractspec.QueryID(qd.fileID, prev)] = true
 			}
 		}
 	}
@@ -270,25 +295,39 @@ func (c *Checker) checkQueryDoNot(qd queryDoc) {
 }
 
 func (c *Checker) checkQueryIdentity(q *queryInfo, names map[string]string) {
-	if !strings.HasPrefix(q.ID, q.FileID+".") {
-		c.rulef("query-id-prefix", "%s: query id must start with %s., got %s", q.File, q.FileID, q.ID)
-	}
-	last := q.ID
-	if i := strings.LastIndex(q.ID, "."); i >= 0 {
-		last = q.ID[i+1:]
-	}
-	wantName := pascalCase(last)
-	if q.Name != wantName {
-		c.rulef("query-name", "%s: query %s name must be %s, got %s", q.File, q.ID, wantName, q.Name)
-	}
 	if q.Name == "" {
 		return
+	}
+	if pascalCase(q.Name) != q.Name {
+		c.rulef("query-name", "%s: query name must be PascalCase, got %s", q.File, q.Name)
 	}
 	if prev, ok := names[q.Name]; ok {
 		c.rulef("query-name-unique", "%s: query name %s already used by %s", q.File, q.Name, prev)
 	} else {
 		names[q.Name] = q.ID
 	}
+	for _, prev := range q.PreviousNames {
+		if prev == q.Name {
+			c.rulef("query-name-unique", "%s: previous_names must not repeat current name %s", q.File, prev)
+			continue
+		}
+		if owner, ok := names[prev]; ok {
+			c.rulef("query-name-unique", "%s: previous name %s already used by %s", q.File, prev, owner)
+			continue
+		}
+		names[prev] = q.ID
+	}
+}
+
+// resolveQueryID 把 previous_names 派生的旧 ID 解析到当前 query 项 ID。
+func (c *Checker) resolveQueryID(id string) string {
+	if _, ok := c.queries[id]; ok {
+		return id
+	}
+	if target, ok := c.queryAliases[id]; ok {
+		return target
+	}
+	return id
 }
 
 func pascalCase(s string) string {
@@ -302,38 +341,17 @@ func pascalCase(s string) string {
 	return strings.Join(parts, "")
 }
 
-// checkQueryShape 校验 access/kind/returns 的接口形状。
+// checkQueryShape 校验 returns 的接口形状；读写归属在 capabilities 层。
 func (c *Checker) checkQueryShape(q *queryInfo) {
 	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
-	if q.Access != "read" && q.Access != "write" {
-		c.rulef("query-shape", "%s: access must be read or write, got %q", where, q.Access)
+	if q.Return.Raw != "affected_rows" {
+		return
 	}
-	switch q.Kind {
-	case "exec":
-		if q.Access != "write" {
-			c.rulef("query-shape", "%s: exec must be write", where)
-		}
-		if q.Return.Raw != "affected_rows" {
-			c.rulef("query-shape", "%s: exec must return affected_rows", where)
-		}
-		if len(q.ReturnColumns) > 0 || len(q.OutputFields) > 0 {
-			c.rulef("query-shape", "%s: exec must not declare return_columns/output_fields", where)
-		}
-	case "one", "many":
-		if q.Return.Raw == "affected_rows" {
-			c.rulef("query-shape", "%s: %s must not return affected_rows", where, q.Kind)
-		}
-		if q.Access == "write" && q.Return.Kind != "table" && q.Return.Kind != "entity" {
-			c.rulef("query-shape", "%s: write %s must return a table row or entity", where, q.Kind)
-		}
-	default:
-		c.rulef("query-shape", "%s: kind must be one/many/exec, got %q", where, q.Kind)
+	if q.Return.IsList {
+		c.rulef("query-shape", "%s: affected_rows must not be a list", where)
 	}
-	if q.Kind == "many" && !q.Return.IsList {
-		c.rulef("query-shape", "%s: kind many requires [] returns", where)
-	}
-	if q.Kind != "many" && q.Return.IsList {
-		c.rulef("query-shape", "%s: kind %s must not return a list", where, q.Kind)
+	if len(q.ReturnColumns) > 0 || len(q.OutputFields) > 0 {
+		c.rulef("query-shape", "%s: affected_rows must not declare return_columns/output_fields", where)
 	}
 }
 
@@ -356,9 +374,6 @@ func (c *Checker) checkQueryTable(q *queryInfo) {
 		if _, ok := c.tableColumns[t]; !ok {
 			c.rulef("query-table-shape", "%s: target table %s not found", where, t)
 		}
-	}
-	if q.Access == "write" && len(q.Targets) != 1 {
-		c.rulef("query-table-shape", "%s: write requires exactly one target", where)
 	}
 }
 
@@ -399,8 +414,12 @@ func (c *Checker) checkQueryParamColumns(q *queryInfo) {
 
 // paramFamily 把参数类型映射到 column_types 类型族；数组返回元素类型族。
 func paramFamily(typ string) (family string, array bool, ok bool) {
-	array = strings.HasPrefix(typ, "[]")
-	base := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(typ, "[]")))
+	base := strings.TrimSpace(typ)
+	if strings.HasPrefix(base, "List<") && strings.HasSuffix(base, ">") {
+		array = true
+		base = strings.TrimSuffix(strings.TrimPrefix(base, "List<"), ">")
+	}
+	base = strings.ToLower(strings.TrimSpace(base))
 	switch base {
 	case "text", "varchar", "character varying", "char", "bpchar":
 		return "string", array, true
@@ -598,59 +617,6 @@ func findEntityFieldByColumn(e *entityInfo, column string) *entityFieldInfo {
 		}
 	}
 	return nil
-}
-
-func (c *Checker) checkQueryKind(q *queryInfo) {
-	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
-	if q.Kind == "one" && q.Access == "read" && (q.Return.Kind == "table" || q.Return.Kind == "entity") {
-		table := q.Return.TableID
-		if q.Return.Kind == "entity" {
-			if e := c.entities[q.Return.EntityID]; e != nil {
-				table = e.Primary
-			}
-		}
-		if table == "" || !c.hasUniqueIndexRef(q, table) {
-			c.rulef("query-kind", "%s: one read requires a unique index ref on %s", where, table)
-		}
-	}
-	if q.Access == "write" && q.OwnerModule != "" {
-		if len(q.Targets) != 1 {
-			return // 缺失/多目标由 query-table-shape 报出
-		}
-		target := q.Targets[0]
-		if owner := c.tableOwners[target]; owner != "" && owner != q.OwnerModule {
-			c.rulef("query-write-owner", "%s: owner_module %s cannot write %s (owner_module %s)", where, q.OwnerModule, target, owner)
-		}
-	}
-}
-
-// hasUniqueIndexRef 判断是否命中指定表的主键或唯一索引。
-func (c *Checker) hasUniqueIndexRef(q *queryInfo, table string) bool {
-	if table == "" {
-		return false
-	}
-	for _, ref := range q.IndexRef {
-		t, name, ok := splitIndexRef(ref)
-		if !ok || t != table {
-			continue
-		}
-		if c.uniqueIndexRef(t, name) {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *Checker) uniqueIndexRef(table, name string) bool {
-	if name == "pk" {
-		return true
-	}
-	for _, idx := range c.tableIndexes[table] {
-		if idx.name == name && idx.unique {
-			return true
-		}
-	}
-	return false
 }
 
 // splitIndexRef 拆分 data.tables.<t>.<pk|index-name>。

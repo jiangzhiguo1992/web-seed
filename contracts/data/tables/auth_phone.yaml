@@ -9,7 +9,11 @@ do_not:
 
 table:
   comment: "手机号认证"
-  extends: [ data.tables.base ]
+  extends:
+    - data.tables.base
+
+  entities:
+    - data.entities.auth_phone
 
 columns:
   - name: account_id
@@ -51,7 +55,6 @@ indexes:
     reason: "手机号在未删除记录内唯一"
 
 used_by:
-  entities: [ data.entities.auth_phone ]
   queries:
-    - data.queries.auth.get_auth_phone_by_number
     - data.queries.auth.create_auth_phone
+    - data.queries.auth.get_auth_phone_by_number

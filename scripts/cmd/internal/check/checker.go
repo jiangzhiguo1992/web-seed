@@ -63,9 +63,12 @@ type Checker struct {
 	entities          map[string]*entityInfo
 	entityOrder       []string
 	queries           map[string]*queryInfo
+	queryAliases      map[string]string
+	declaredWrites    map[string]bool
+	queryAliasDup     map[string]bool
 	queryDocs         []queryDoc
-	queryOrder        []string
 	queryDupIDs       map[string]bool
+	queryOrder        []string
 	errCodeSet        map[string]bool
 }
 

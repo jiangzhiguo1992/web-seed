@@ -1,4 +1,4 @@
-# 账号查询集。只声明接口：入参、结果、目标表、索引与读写属性。
+# 账号查询集。只声明接口：入参、结果、目标表与索引。
 
 id: data.queries.account
 summary: "账号查询集"
@@ -11,40 +11,28 @@ do_not:
   - "account 查询不要返回未声明的列；返回列由 returns + return_columns 决定"
 
 queries:
-  - id: data.queries.account.get_account
-    name: GetAccount
-    access: read
-    kind: one
+  - name: GetAccount
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
     returns: data.entities.account
     index_ref: [ data.tables.account.pk ]
 
-  - id: data.queries.account.get_account_by_number
-    name: GetAccountByNumber
-    access: read
-    kind: one
+  - name: GetAccountByNumber
     targets: [ data.tables.account ]
     params:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns: data.entities.account
     index_ref: [ data.tables.account.uq_accounts_number ]
 
-  - id: data.queries.account.exists_account_number
-    name: ExistsAccountNumber
-    access: read
-    kind: one
+  - name: ExistsAccountNumber
     targets: [ data.tables.account ]
     params:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns: boolean
     index_ref: [ data.tables.account.uq_accounts_number ]
 
-  - id: data.queries.account.list_accounts
-    name: ListAccounts
-    access: read
-    kind: many
+  - name: ListAccounts
     targets: [ data.tables.account ]
     params:
       - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
@@ -52,15 +40,12 @@ queries:
       - { name: cursor_created_at, type: timestamp, column: data.tables.account.col.created_at, nullable: true }
       - { name: cursor_id, type: text, column: data.tables.account.col.id, nullable: true }
       - { name: page_size, type: integer, max: 100, default: 20 }
-    returns: "[]data.entities.account"
+    returns: List<data.entities.account>
     index_ref:
       - data.tables.account.idx_accounts_created_at_id
       - data.tables.account.idx_accounts_own_type_own_id
 
-  - id: data.queries.account.create_account
-    name: CreateAccount
-    access: write
-    kind: one
+  - name: CreateAccount
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
@@ -72,10 +57,7 @@ queries:
     returns: data.entities.account
     index_ref: [ data.tables.account.uq_accounts_number ]
 
-  - id: data.queries.account.update_account
-    name: UpdateAccount
-    access: write
-    kind: exec
+  - name: UpdateAccount
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
@@ -84,10 +66,7 @@ queries:
     returns: affected_rows
     index_ref: [ data.tables.account.pk ]
 
-  - id: data.queries.account.set_account_status
-    name: SetAccountStatus
-    access: write
-    kind: exec
+  - name: SetAccountStatus
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
@@ -96,10 +75,7 @@ queries:
     returns: affected_rows
     index_ref: [ data.tables.account.pk ]
 
-  - id: data.queries.account.soft_delete_account
-    name: SoftDeleteAccount
-    access: write
-    kind: exec
+  - name: SoftDeleteAccount
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
@@ -107,23 +83,17 @@ queries:
     returns: affected_rows
     index_ref: [ data.tables.account.pk ]
 
-  - id: data.queries.account.list_stale_pending_accounts
-    name: ListStalePendingAccounts
-    access: read
-    kind: many
+  - name: ListStalePendingAccounts
     targets: [ data.tables.account ]
     params:
       - { name: older_than_days, type: integer, min: 1 }
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
-    returns: "[]data.tables.account.row"
+    returns: List<data.tables.account.row>
     index_ref: [ data.tables.account.idx_accounts_created_at_id ]
 
-  - id: data.queries.account.soft_delete_stale_pending_accounts
-    name: SoftDeleteStalePendingAccounts
-    access: write
-    kind: exec
+  - name: SoftDeleteStalePendingAccounts
     targets: [ data.tables.account ]
     params:
-      - { name: ids, type: "[]text", column: data.tables.account.col.id }
+      - { name: ids, type: List<text>, column: data.tables.account.col.id }
     returns: affected_rows
     index_ref: [ data.tables.account.pk ]

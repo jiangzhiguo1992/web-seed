@@ -612,6 +612,26 @@ func TestPersistenceReadOnlyRejected(t *testing.T) {
 	}
 }
 
+func TestTableEntitiesMismatch(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("contracts/data/tables/x.yaml", "id: data.tables.x\ntable:\n  entities: [ data.entities.wrong ]\nused_by:\n  queries: []\n")
+	write("contracts/data/entities/e.yaml", "id: data.entities.e\nmodel:\n  tables: [ data.tables.x ]\n")
+	c := &Checker{root: root}
+	c.checkUsedBy(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[table-entities]") {
+		t.Fatalf("table.entities mismatch not reported: %v", c.errs)
+	}
+}
+
 func TestUsedByEntitiesAndQueries(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, body string) {
@@ -626,14 +646,14 @@ func TestUsedByEntitiesAndQueries(t *testing.T) {
 	write("contracts/data/queries/q.yaml", `
 id: data.queries.q
 queries:
-  - id: data.queries.q.get_x
-    statement: select
+  - name: GetX
     targets: [ data.tables.x ]
 `)
 	write("contracts/data/tables/x.yaml", `
 id: data.tables.x
-used_by:
+table:
   entities: []
+used_by:
   queries: [ data.queries.q.get_x ]
 `)
 	tableIDs := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
@@ -646,8 +666,9 @@ used_by:
 
 	write("contracts/data/tables/x.yaml", `
 id: data.tables.x
-used_by:
+table:
   entities: []
+used_by:
   queries: [ data.queries.q ]
 `)
 	c = &Checker{root: root}

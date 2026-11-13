@@ -40,6 +40,29 @@ func TestDoNotDuplicate(t *testing.T) {
 	}
 }
 
+func TestModelTableListStyle(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("contracts/data/tables/x.yaml", "id: data.tables.x\ntable:\n  extends: [ data.tables.base ]\n  entities: [ data.entities.x ]\n")
+	write("contracts/data/entities/x.yaml", "id: data.entities.x\nmodel:\n  extends: [ data.entities.base ]\n  tables: [ data.tables.x ]\n  included_by: [ data.entities.y ]\n")
+	c := &Checker{root: root}
+	c.checkFieldPlacement()
+	errs := strings.Join(c.errs, "\n")
+	for _, want := range []string{"table.extends", "table.entities", "model.extends", "model.tables", "model.included_by"} {
+		if !strings.Contains(errs, want) {
+			t.Fatalf("missing %s in %s", want, errs)
+		}
+	}
+}
+
 func TestFieldPlacement(t *testing.T) {
 	root := t.TempDir()
 	writePlacementFile(t, root, "contracts/_meta/ok.yaml", "rules:\n  - { id: x }\n")

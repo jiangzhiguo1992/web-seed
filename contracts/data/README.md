@@ -15,7 +15,7 @@
 | `tables/<file>.yaml` | 物理表：字段、类型、约束、索引、继承 | `schema.sql`、增量 `migrations/*.sql`、sqlc 输入 |
 | `entities/<entity>.yaml` | 读模型：Go 类型 `name`、表映射、语义字段（来源/关系/枚举/computed）、复杂校验 | Go/TS 类型 |
 | `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
-| `queries/<module>.yaml` | 查询契约：id、入参、结果、目标表、索引、读写属性 | 查询接口、sqlc 代码 |
+| `queries/<module>.yaml` | 查询契约：入参、结果、目标表、索引 | 查询接口、sqlc 代码 |
 | `storage.yaml` | 项目级存储引擎、部署拓扑、连接与锁；每张表的 engine/size_class/retention/partition | 配置校验、运维约束 |
 
 ### 1.1 基类不是物理表
@@ -45,14 +45,14 @@
 
 5 个通用字段（`ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`）在 `entities/_base.yaml`；具体实体在 `model.extends` 写 `[data.entities.base]`，只写业务字段。基类字段不得重声明；`Status` 允许用 `data.enums.*` 特化类型。
 
-实体顶层固定顺序：`id` → `summary` → `owner_module` → `schema_version` → `stability` → `do_not` → `model` → `fields` → `validation` → `used_by`。`model` 内顺序固定为 `name` → `extends` → `tables`。`owner_module` 必须等于主表的 `owner_module`。
+实体顶层固定顺序：`id` → `summary` → `owner_module` → `schema_version` → `stability` → `do_not` → `model` → `fields` → `validation` → `used_by`。`model` 内顺序固定为 `name` → `extends` → `tables` → `included_by`。`owner_module` 必须等于主表的 `owner_module`。
 
-实体和字段名都是 Go 标识符：实体 `model.name` 首字母大写表示 public、小写表示 internal；字段 `name` 同理，首字母大写导出、小写不导出。`never_expose` 字段必须小写开头。`json_name` 必须显式声明（Go 的 json tag 不能从大小写推导）。字段不再有 `visibility` / `read_only` / `write_only` / `format` / `deprecated`。类型不另起一套：显式 `type` 复用 `data.tables` 的 `column_types.families`，或写 `data.enums.*`。
+实体和字段名都是 Go 标识符：实体 `model.name` 首字母大写表示 public、小写表示 internal；字段 `name` 同理，首字母大写导出、小写不导出。`never_expose` 字段必须小写开头。`json_name` 省略时取 `snake_case(name)`；只有自定义命名才需要写。字段不再有 `visibility` / `read_only` / `write_only` / `format` / `deprecated`。类型不另起一套：显式 `type` 复用 `data.tables` 的 `column_types.families`，或写 `data.enums.*`。
 
 `fields` 同时承载两种字段，二者互斥：
 
 - **标量字段**：`type` + `source` + `validation` + `description` 必填。`source` 二选一：`column: data.tables.<t>.col.<c>`（数据库列来源）或 `computed: "<表达式>"`（计算/聚合来源，必须使用指针类型 `*T`、`mutable: false`，且不得引用 `@param`）。`type` 前缀 `*` 表示指针，必须与来源列 `nullable` 完全一致；枚举字段只能映射 integer 列。`validation` 三选一：`column`（复用列规则）、`pattern`（字符串硬正则）、`soft`（脚本无法验证的软表达式）。
-- **关系字段**：`relationship`（one_to_one/one_to_many/many_to_one）+ `target` + `join_column` + `load`（eager/lazy，默认 lazy）必填；不得写 `source`/`type`/`validation`/`mutable`/`pii`/`never_expose`/`examples`。`load: lazy` 表示默认不关联查询。
+- **关系字段**：`target`（表）+ `type`（entity）+ `join_column_from` + `join_column_to` + `load`（eager/lazy，默认 lazy）必填；基数由两端列唯一性推断；不得写 `source`/`validation`/`mutable`/`pii`/`never_expose`/`examples`。`load: lazy` 表示默认不关联查询。
 
 `model.tables[0]` 是主表，`ID` 必须来自主表 `id` 列。实体字段不重复物理长度参数；统计口径不同时用 query 的 `output_fields`，不要把查询专属聚合塞进实体。
 
@@ -98,7 +98,7 @@ redundancy: { group: account_own_type, role: copy, ref: data.tables.account.col.
 `data/queries/*.yaml` 的每个 query 用 `index_ref` 指向表契约里已有的索引，而不是重新声明列前缀：
 
 ```yaml
-- id: data.queries.account.list_accounts
+- name: ListAccounts
   index_ref:
     - data.tables.account.idx_accounts_created_at_id
     - data.tables.account.idx_accounts_own_type_own_id
@@ -111,31 +111,28 @@ redundancy: { group: account_own_type, role: copy, ref: data.tables.account.col.
 
 ### 1.6 查询是接口契约
 
-查询只声明**入参、结果、目标表、索引引用与读写属性**；SQL 如何执行不在契约里，由实现负责。
+查询只声明**入参、结果、目标表与索引引用**；SQL 如何执行不在契约里，由实现负责；读写归属在 capabilities 层。
 
 ```yaml
-- id: data.queries.account.list_accounts
-  name: ListAccounts
-  access: read
-  kind: many
+- name: ListAccounts
   targets: [ data.tables.account ]
   params:
     - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
     - { name: page_size, type: integer, default: 20 }
-  returns: "[]data.entities.account"
+  returns: List<data.entities.account>
   index_ref:
     - data.tables.account.idx_accounts_created_at_id
     - data.tables.account.idx_accounts_own_type_own_id
 ```
 
-- `access: read | write`：write 有副作用，只能有一张目标表，`owner_module` 必须等于目标表归属；
-- `kind: one | many | exec`：`exec` 只返回 `affected_rows`；`one` 的读必须命中唯一索引/主键；
-- `targets`：查询读写的表，第一个是主表；write 只能一张；
-- `params`：接口入参；`column` 可把参数绑定到物理列，绑定后类型族必须与列一致；
-- `returns`：表行 `data.tables.<t>.row`、实体 `data.entities.<e>`、标量、`object`；`[]` 前缀表示列表；
+- `returns` 决定结果：`List<T>` 是列表，`affected_rows` 是写语句结果，非列表是单条结果；
+- `targets`：查询读写的表，第一个是主表；可以多表；
+- `params`：接口入参；数组统一用 `List<T>`；`column` 可把参数绑定到物理列，绑定后类型族必须与列一致；
+- `returns`：表行 `data.tables.<t>.row`、实体 `data.entities.<e>`、标量、`object`；`List<T>` 表示列表；
 - `return_columns`：表行/实体的结果投影，省略表示默认投影；敏感列只有同模块可显式列出；
 - `output_fields`：`object` 结果的字段清单（`name`/`type`），不是 SQL 表达式；
-- `index_ref`：查询依赖的索引；单表查询至少一个；显式索引与 `indexes[].used_by` 双向校验；是否真正命中由 `EXPLAIN` 验证。
+- `index_ref`：查询依赖的索引；单表查询至少一个；显式索引与 `indexes[].used_by` 双向校验；是否真正命中由 `EXPLAIN` 验证；
+- `previous_names`：仅用于重命名过渡；旧 `name` 派生的 ID 仍解析到本查询，消费者迁移后删除。
 
 **不写** `statement` / `where` / `order_by` / `limit` / `values` / `expr` / `joins` / `semantics`。这些是 SQL 实现细节，写进契约只会制造第二份真相，且 checker 无法真正验证 SQL 语义。
 
@@ -161,7 +158,7 @@ data/storage.yaml ────> 配置校验 + 运维约束
 ## 3. 硬规则
 
 1. **一表一文件**，不按字段拆分；基类列不重复声明。
-2. **每个可寻址项必须有稳定 ID**：表 `data.tables.<file>`、列 `data.tables.<file>.col.<col>`、约束 `data.tables.<file>.constraint.<constraint.name>`、查询 `data.queries.<module>.<query_id>`、枚举 `data.enums.<name>`。查询/枚举必须显式写 `id`；列/约束用 `name` 派生，不得改名。契约文件名决定 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖（如 `account.yaml` 的 `table.name: accounts`）。
+2. **每个可寻址项必须有稳定 ID**：表 `data.tables.<file>`、列 `data.tables.<file>.col.<col>`、约束 `data.tables.<file>.constraint.<constraint.name>`、查询 `data.queries.<module>.<snake_case(name)>`、枚举 `data.enums.<name>`。查询项不写 `id`（由显式 `name` 派生，`name` 是稳定键，改名即新 ID）；枚举必须显式写 `id`；列/约束用 `name` 派生，不得改名。契约文件名决定 ID；物理表名默认等于文件段，需要不同名时用 `table.name` 覆盖（如 `account.yaml` 的 `table.name: accounts`）。
 3. **字段类型用契约内逻辑类型**：`string`、`boolean`、`integer`、`float`、`decimal`、`datetime`、`timestamp`、`json`、`bytes`、`data.tables.<file>.col.<col>`。表列不引用 `data.enums.*`；entity 字段才用枚举。
 4. **类型族扩展字段写在列上**：`string` 用 `min_len`/`max_len`/`fixed`/`pattern`/`normalize`，`bytes` 用 `min_len`/`max_len`/`fixed`，`integer` 用 `bits`/`unsigned`/`min`/`max`，`float` 用 `bits`/`min`/`max`，`decimal` 用 `precision`/`scale`/`min`/`max`，`datetime` 用 `mode`/`timezone`，`timestamp` 用 `timezone`/`fractional_seconds`，`json` 用 `binary`。字段定义与 `required` 在 `contracts/_meta/data.tables.yaml` 的 `column_types.families`。
 5. **时间统一 `timestamp`**，应用层只用 UTC。
@@ -169,15 +166,15 @@ data/storage.yaml ────> 配置校验 + 运维约束
 7. **表不使用枚举**：`status` 等状态列用 `integer`，`data/enums.yaml` 的 `values[].code` 是数据库整数码，entity 负责 code ↔ 枚举映射；枚举值可改名或删除，code 在当前枚举内唯一。
 8. **索引必须写 `reason` 与 `used_by`**；`used_by` 至少一个查询项 ID，且查询引用当前表；表达式索引用 `expression`，大表用 `concurrently: auto`。没有查询的索引直接删除。
 9. **主键默认由应用层生成 UUIDv7**（`generated_by: application`），数据库不设 default。
-10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；跨模块读通过 `persistence.queries`。
+10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；写查询用 `persistence.write_queries` / `writes` 显式登记，checker 校验单表与归属；跨模块读通过 `persistence.queries`。
 11. **禁止未结构化 DDL 字段**：分区写在 `data/storage.yaml` 的 `tables.<id>.partition`，表达式索引/CONCURRENTLY 用 `indexes[].expression` / `indexes[].concurrently`，不要塞原生 SQL。
-12. **表级 `used_by` 是生成物**：由 `make gen-graph` 按引用计算并写回，禁止手改；结构固定为 `entities` / `queries` 两个列表，只记**直接入边**。`queries` 记录查询项 ID（`data.queries.<module>.<query>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明，不是生成物；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
+12. **反向映射分两类**：`table.entities` 与 `model.included_by` 是**显式声明**，checker 双向校验；`used_by.queries` 是**生成物**，由 `make gen-graph` 按 query 引用计算并写回，禁止手改。三者都只记**直接入边**。`used_by.queries` 记录查询项 ID（`data.queries.<module>.<snake_case(name)>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
 13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
 14. **冗余字段必须声明**：`columns[].redundancy` 的 `source`/`copy` 同组，`copy` 必须写 `ref` 指向同组 `source`，`type`/`nullable` 一致；同组只能有一个 `source`。
 15. **单表 query 必须声明 `index_ref`**：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须把 query 写进 `used_by`，反向也校验。多表 query 可省略，也可引用任一查询表的索引。
-16. **entity 只写语义增量**：`source.column` 或 `source.computed` 二选一；`source.column` 必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用。`type`/`json_name`/`validation`/`description`/`pii`/`never_expose` 可省略，默认从来源列派生；显式 `type` 的 `*` 必须与列 `nullable` 一致；`computed` 必须显式 `type`、默认 `mutable:false`；`pii`/`never_expose` 不得放松。表↔实体的多对多映射由 `model.tables` + 每个字段的 `source.column` 明确，反向 `used_by.entities` 由生成器维护。
+16. **entity 只写语义增量**：`source.column` 或 `source.computed` 二选一；`source.column` 必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用。`json_name` 省略时取 `snake_case(name)`；`type`/`validation`/`description`/`pii`/`never_expose` 可省略，默认从来源列派生；显式 `type` 的 `*` 必须与列 `nullable` 一致；`computed` 必须显式 `type`、默认 `mutable:false`；`pii`/`never_expose` 不得放松。表↔实体的多对多映射由 `model.tables` + 每个字段的 `source.column` 明确；反向映射写在 `table.entities`，checker 校验双向一致。
 17. **query 返回实体时必须完整**：`returns: data.entities.*` 的 `return_columns` 省略表示默认投影（全部非敏感列）；显式时必须覆盖非指针、非敏感列字段；`never_expose` 字段默认不进入投影，只有同模块 query 通过 `return_columns` 显式列出才可返回。返回实体的 query 会写入 `entity.used_by.queries`。
-18. **entity.used_by 是生成物**：`queries` 记录 `returns` 本实体的 query 项 ID，`entities` 记录通过关系字段指向本实体的 entity ID；由 `make gen-graph` 写回，禁止手改，`contract-check` 对账。
+18. **反向映射必须对账**：`table.entities` 记录映射本表的 entity；`model.included_by` 记录通过关系字段指向本实体的 entity；`used_by.queries` 记录返回本实体的 query。前两者显式声明，`used_by.queries` 由 `make gen-graph` 写回；`contract-check` 对三者逐一校验，悬空或缺失都报错。
 
 ---
 
@@ -245,16 +242,16 @@ indexes:
 - 禁止数据库外键；跨表一致性由应用/业务规则保证
 - 表列不引用 `data.enums.*`；状态整数码用 `integer`，由 entity 映射为枚举
 - 不要用未结构化字段塞原生 DDL；分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`
-- `used_by` 是生成物，禁止手改；只记 entities 与 queries
+- `table.entities` / `model.included_by` 显式声明；`used_by.queries` 是生成物，禁止手改
 - 只有 `owner_module` 相同的 `cap.services` / `cap.async` 可以写表；跨模块读通过 `persistence.queries`
 - `never_expose` 列禁止进入普通 OpenAPI/TS/事件/普通 entity；认证 query 与 `x-auth-response` 是唯一例外
 
 **data.queries**
 
-- 每个 query 必须有显式 id：`data.queries.<file>.<query_id>`
+- 每个 query 不写 item id；用显式 `name`（PascalCase），项 ID 派生为 `data.queries.<file>.<snake_case(name)>`
 - 每个 query 的表从 `targets` 推导，供图校验推导血缘
 - 返回实体用 `returns: data.entities.*`；统计结果用 `output_fields`
-- 写查询的 `owner_module` 必须等于写目标表的 `owner_module`
+- 写查询在 capabilities 的 `persistence.write_queries` / `cap.async.writes` 中声明；必须已在 `persistence.queries` / `uses` 中登记，目标单表且归属与 capability 模块一致
 - 不要在 repo 层手写 SQL
 - 投影由 `returns` 推导；敏感表必须用 `return_columns` 显式裁剪返回列
 - nullable 参数在 SQL 中使用 `sqlc.narg('name')`

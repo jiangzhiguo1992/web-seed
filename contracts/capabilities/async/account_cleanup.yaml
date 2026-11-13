@@ -33,6 +33,8 @@ output:
 uses:
   - data.queries.account.list_stale_pending_accounts
   - data.queries.account.soft_delete_stale_pending_accounts
+writes:
+  - data.queries.account.soft_delete_stale_pending_accounts
 
 idempotency:
   key: "account_cleanup:{date}:{older_than_days}"

@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func match(pattern, s string) bool {
@@ -142,25 +144,9 @@ func entityTableRefs(m map[string]any) []string {
 	return stringList(model["tables"])
 }
 
-// snakeCase 把 Go 导出的字段名转换为默认物理列名/JSON 名。
-// 例：ID→id、OwnID→own_id、userID→user_id、TLD→tld、CreatedAt→created_at。
+// snakeCase 保留包内调用名；实现统一在 contractspec.SnakeCase。
 func snakeCase(s string) string {
-	rs := []rune(s)
-	var b strings.Builder
-	for i, r := range rs {
-		if r >= 'A' && r <= 'Z' {
-			if i > 0 {
-				prev := rs[i-1]
-				if (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9') {
-					b.WriteByte('_')
-				}
-			}
-			b.WriteRune(r + ('a' - 'A'))
-			continue
-		}
-		b.WriteRune(r)
-	}
-	return b.String()
+	return contractspec.SnakeCase(s)
 }
 
 func tableRefs(m map[string]any) []string {

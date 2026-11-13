@@ -49,7 +49,7 @@ capabilities 是 business 的实现，**契约里不出现 `business.*`**：
 - 只登记跨模块调用的方法
 - 不要在 interface 里暴露 `*pgx.Tx` 或 HTTP 类型
 - 必须声明 `persistence`（表、字段映射、查询、约束错误映射）
-- 跨模块读通过 `persistence.queries`；写表必须属于 `owner_module`
+- 跨模块读通过 `persistence.queries`；写表必须属于 `owner_module`；写查询用 `persistence.write_queries`（service）或 `writes`（async）显式登记
 - 不要引用 `business.*`（规则/事件由 business 侧锚点）
 - 返回 `data.entities.*`，不要返回表行 `data.tables.*.row`
 - `field_map` 只写命名不同的字段，同名不写

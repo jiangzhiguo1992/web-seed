@@ -29,10 +29,12 @@ func baseScalarField(name, typ string, mutable bool) entityFieldInfo {
 	return f
 }
 
-func relationField(name, rel, target, joinTable, joinCol, load string) entityFieldInfo {
+func relationField(name, targetTable, targetEntity, fromTable, fromCol, toTable, toCol, load string) entityFieldInfo {
 	return entityFieldInfo{
-		Name: name, IsRelation: true, Relationship: rel, Target: target,
-		JoinColumnRef: joinTable + ".col." + joinCol, JoinTable: joinTable, JoinColumn: joinCol,
+		Name: name, IsRelation: true, Target: targetTable,
+		Type: targetEntity, HasType: true,
+		JoinFromRef: fromTable + ".col." + fromCol, JoinFromTable: fromTable, JoinFromColumn: fromCol,
+		JoinToRef: toTable + ".col." + toCol, JoinToTable: toTable, JoinToColumn: toCol,
 		Load: load, Description: name, Mutable: true,
 	}
 }
@@ -287,7 +289,7 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 
 	c := newChecker(true)
 	e := c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Tokens", "one_to_many", "data.entities.token", "data.tables.token", "account_id", "eager"))
+	e.Fields = append(e.Fields, relationField("Tokens", "data.tables.token", "data.entities.token", "data.tables.account", "id", "data.tables.token", "account_id", "eager"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid eager relation reported: %v", c.errs)
@@ -295,18 +297,24 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 
 	c = newChecker(false)
 	e = c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Tokens", "one_to_many", "data.entities.token", "data.tables.token", "account_id", "eager"))
+	e.Fields = append(e.Fields, relationField("Tokens", "data.tables.token", "data.entities.token", "data.tables.account", "id", "data.tables.token", "account_id", "eager"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-eager-index]") {
 		t.Fatalf("missing eager index not reported: %v", c.errs)
 	}
 
 	c = newChecker(true)
-	e = c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Tokens", "many_to_one", "data.entities.token", "data.tables.token", "account_id", "lazy"))
+	e = c.entities["data.entities.token"]
+	e.Fields = append(e.Fields, relationField("Account", "data.tables.account", "data.entities.account", "data.tables.token", "account_id", "data.tables.account", "id", "lazy"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
-	if !strings.Contains(entityErrs(c), "[entity-relation-direction]") {
-		t.Fatalf("wrong relation direction not reported: %v", c.errs)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid many_to_one reported: %v", c.errs)
+	}
+	if got := c.relationCardinality(&entityFieldInfo{
+		JoinFromTable: "data.tables.token", JoinFromColumn: "account_id",
+		JoinToTable: "data.tables.token", JoinToColumn: "account_id",
+	}); got != "" {
+		t.Fatalf("non-unique both sides should be invalid, got %s", got)
 	}
 }
 
@@ -332,7 +340,7 @@ func TestEntityRelationJoinColumnTypeMismatch(t *testing.T) {
 		},
 	}
 	e := c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Tokens", "one_to_many", "data.entities.token", "data.tables.token", "account_id", "lazy"))
+	e.Fields = append(e.Fields, relationField("Tokens", "data.tables.token", "data.entities.token", "data.tables.account", "id", "data.tables.token", "account_id", "lazy"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-via]") || !strings.Contains(entityErrs(c), "does not match") {
 		t.Fatalf("join_column type mismatch not reported: %v", c.errs)
@@ -369,8 +377,8 @@ func TestEagerCycles(t *testing.T) {
 	c := &Checker{
 		entityOrder: []string{"a", "b"},
 		entities: map[string]*entityInfo{
-			"a": {ID: "a", Fields: []entityFieldInfo{relationField("B", "one_to_one", "b", "data.tables.a", "b_id", "eager")}},
-			"b": {ID: "b", Fields: []entityFieldInfo{relationField("A", "one_to_one", "a", "data.tables.a", "b_id", "eager")}},
+			"a": {ID: "a", Fields: []entityFieldInfo{relationField("B", "data.tables.b", "b", "data.tables.a", "b_id", "data.tables.b", "a_id", "eager")}},
+			"b": {ID: "b", Fields: []entityFieldInfo{relationField("A", "data.tables.a", "a", "data.tables.b", "a_id", "data.tables.a", "b_id", "eager")}},
 		},
 	}
 	c.checkEagerCycles()
@@ -413,7 +421,7 @@ func TestQueryEntityCoverageAndSensitivity(t *testing.T) {
 
 	c := newChecker(false)
 	q := &queryInfo{
-		ID: "data.queries.account.get", File: "account.yaml", OwnerModule: "accounts", Kind: "one",
+		ID: "data.queries.account.get", File: "account.yaml", OwnerModule: "accounts",
 		Targets: []string{"data.tables.account"},
 		Return:  queryReturn{Raw: "data.entities.account", Kind: "entity", EntityID: "data.entities.account"},
 	}
@@ -431,7 +439,7 @@ func TestQueryEntityCoverageAndSensitivity(t *testing.T) {
 
 	c = newChecker(true)
 	q = &queryInfo{
-		ID: "data.queries.account.get", File: "account.yaml", OwnerModule: "other", Kind: "one",
+		ID: "data.queries.account.get", File: "account.yaml", OwnerModule: "other",
 		Targets:       []string{"data.tables.account"},
 		Return:        queryReturn{Raw: "data.entities.account", Kind: "entity", EntityID: "data.entities.account"},
 		ReturnColumns: []string{"id", "nickname", "secret"},
@@ -471,59 +479,6 @@ func TestEntityCoverageComputedSensitive(t *testing.T) {
 	}
 }
 
-func TestQueryKindAndOneUnique(t *testing.T) {
-	c := &Checker{
-		tableOwners:     map[string]string{"data.tables.account": "accounts"},
-		tablePrimaryKey: map[string][]string{"data.tables.account": {"id"}},
-		tableIndexes:    map[string][]tableIndex{},
-		entities:        map[string]*entityInfo{"data.entities.account": {ID: "data.entities.account", Tables: []string{"data.tables.account"}, Primary: "data.tables.account"}},
-	}
-	entityReturn := queryReturn{Raw: "data.entities.account", Kind: "entity", EntityID: "data.entities.account"}
-	q := &queryInfo{
-		ID: "data.queries.account.create", File: "account.yaml", OwnerModule: "accounts", Access: "write", Kind: "one",
-		Targets: []string{"data.tables.account"}, Return: entityReturn,
-	}
-	c.checkQueryReturns(q)
-	c.checkQueryKind(q)
-	if len(c.errs) != 0 {
-		t.Fatalf("valid write returning entity reported: %v", c.errs)
-	}
-
-	q.Return = queryReturn{Raw: "boolean", Kind: "scalar"}
-	c.checkQueryShape(q)
-	if !strings.Contains(entityErrs(c), "must return a table row or entity") {
-		t.Fatalf("write with scalar return not reported: %v", c.errs)
-	}
-
-	c = &Checker{tableOwners: map[string]string{"data.tables.account": "accounts"}}
-	q = &queryInfo{ID: "data.queries.account.x", File: "account.yaml", OwnerModule: "auth", Access: "write", Kind: "exec",
-		Targets: []string{"data.tables.account"}, Return: queryReturn{Raw: "affected_rows", Kind: "scalar"}}
-	c.checkQueryKind(q)
-	if !strings.Contains(entityErrs(c), "[query-write-owner]") {
-		t.Fatalf("cross-module write not reported: %v", c.errs)
-	}
-
-	c = &Checker{
-		tablePrimaryKey: map[string][]string{"data.tables.account": {"id"}},
-		tableIndexes:    map[string][]tableIndex{},
-		entities:        map[string]*entityInfo{"data.entities.account": {ID: "data.entities.account", Tables: []string{"data.tables.account"}, Primary: "data.tables.account"}},
-	}
-	q = &queryInfo{
-		ID: "data.queries.account.get", File: "account.yaml", Access: "read", Kind: "one",
-		Targets: []string{"data.tables.account"}, Return: entityReturn,
-	}
-	c.checkQueryKind(q)
-	if !strings.Contains(entityErrs(c), "[query-kind]") {
-		t.Fatalf("non-unique one query not reported: %v", c.errs)
-	}
-	q.IndexRef = []string{"data.tables.account.pk"}
-	c.errs = nil
-	c.checkQueryKind(q)
-	if len(c.errs) != 0 {
-		t.Fatalf("unique index ref reported: %v", c.errs)
-	}
-}
-
 func TestQueryIndexRefAllowsMultiTable(t *testing.T) {
 	c := &Checker{
 		queryOrder: []string{"data.queries.x.q"},
@@ -552,7 +507,7 @@ func TestQueryIndexRefAllowsMultiTable(t *testing.T) {
 func TestQueryOutputFields(t *testing.T) {
 	c := &Checker{tableTypeFamilies: map[string]bool{"integer": true}}
 	q := &queryInfo{
-		ID: "data.queries.account.count", File: "account.yaml", Kind: "many",
+		ID: "data.queries.account.count", File: "account.yaml",
 		Return: queryReturn{Raw: "[]object", IsList: true, Kind: "object"},
 		OutputFields: []queryOutputField{
 			{Name: "status", Type: "integer"},
@@ -635,47 +590,10 @@ func TestQueryParamColumnBinding(t *testing.T) {
 	}
 
 	c.errs = nil
-	q.Params[0] = queryParam{Name: "ids", Type: "[]text", Column: "data.tables.x.col.id"}
+	q.Params[0] = queryParam{Name: "ids", Type: "List<text>", Column: "data.tables.x.col.id"}
 	c.checkQueryParamColumns(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("array param element binding reported: %v", c.errs)
-	}
-}
-
-func TestQueryMissingTargetsNoPanic(t *testing.T) {
-	c := &Checker{}
-	q := &queryInfo{ID: "q", File: "q.yaml", Access: "write", Kind: "exec", OwnerModule: "x",
-		Return: queryReturn{Raw: "affected_rows", Kind: "scalar"}}
-	c.checkQueryKind(q)
-	if len(c.errs) != 0 {
-		t.Fatalf("empty targets should be left to query-table-shape: %v", c.errs)
-	}
-}
-
-func TestQueryOneUniqueTableScoped(t *testing.T) {
-	c := &Checker{
-		entities: map[string]*entityInfo{
-			"data.entities.x": {ID: "data.entities.x", Tables: []string{"data.tables.x"}, Primary: "data.tables.x"},
-		},
-		tableIndexes: map[string][]tableIndex{
-			"data.tables.x": {{name: "idx_x_code", columns: []string{"code"}}},
-			"data.tables.y": {{name: "uq_y_code", columns: []string{"code"}, unique: true}},
-		},
-	}
-	q := &queryInfo{ID: "q", File: "q.yaml", Access: "read", Kind: "one",
-		Targets:  []string{"data.tables.x", "data.tables.y"},
-		Return:   queryReturn{Raw: "data.entities.x", Kind: "entity", EntityID: "data.entities.x"},
-		IndexRef: []string{"data.tables.y.uq_y_code"}}
-	c.checkQueryKind(q)
-	if !strings.Contains(entityErrs(c), "unique index ref on data.tables.x") {
-		t.Fatalf("joined-table unique index must not satisfy one: %v", c.errs)
-	}
-
-	q.IndexRef = []string{"data.tables.x.idx_x_code"}
-	c.errs = nil
-	c.checkQueryKind(q)
-	if !strings.Contains(entityErrs(c), "unique index ref") {
-		t.Fatalf("non-unique index must not satisfy one: %v", c.errs)
 	}
 }
 
@@ -704,6 +622,63 @@ func TestEntityFieldDefaults(t *testing.T) {
 	}
 }
 
+func TestQueryPreviousNames(t *testing.T) {
+	q := parseQuery(map[string]any{
+		"name":           "GetAccount",
+		"previous_names": []any{"OldAccount"},
+	}, "q.yaml", "data.queries.account", "accounts")
+	if q.ID != "data.queries.account.get_account" || len(q.PreviousNames) != 1 {
+		t.Fatalf("previous_names not parsed: %#v", q)
+	}
+	c := &Checker{
+		queries:      map[string]*queryInfo{q.ID: q},
+		queryAliases: map[string]string{"data.queries.account.old_account": q.ID},
+	}
+	if got := c.resolveQueryID("data.queries.account.old_account"); got != q.ID {
+		t.Fatalf("alias resolved to %q", got)
+	}
+	if got := c.resolveQueryID(q.ID); got != q.ID {
+		t.Fatalf("current id resolved to %q", got)
+	}
+
+	names := map[string]string{}
+	c.checkQueryIdentity(q, names)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid previous_names reported: %v", c.errs)
+	}
+	q.PreviousNames = []string{"GetAccount"}
+	c.errs = nil
+	c.checkQueryIdentity(q, names)
+	if !strings.Contains(entityErrs(c), "must not repeat current name") {
+		t.Fatalf("previous name equal to current not reported: %v", c.errs)
+	}
+}
+
+func TestWriteQueries(t *testing.T) {
+	q := &queryInfo{ID: "data.queries.x.create", Targets: []string{"data.tables.x"}}
+	c := &Checker{
+		tableOwners: map[string]string{"data.tables.x": "x"},
+		queries:     map[string]*queryInfo{q.ID: q},
+	}
+	declared := map[string]bool{q.ID: true}
+	c.checkWriteQueries(map[string]any{"module": "x"}, []any{q.ID}, declared, []string{"data.tables.x"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
+	if len(c.errs) != 0 {
+		t.Fatalf("valid write query reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkWriteQueries(map[string]any{"module": "other"}, []any{q.ID}, declared, []string{"data.tables.x"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
+	if !strings.Contains(entityErrs(c), "cannot write") {
+		t.Fatalf("cross-module write not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkWriteQueries(map[string]any{"module": "x"}, []any{q.ID}, map[string]bool{}, []string{"data.tables.x"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
+	if !strings.Contains(entityErrs(c), "must be listed") {
+		t.Fatalf("undeclared write query not reported: %v", c.errs)
+	}
+}
+
 func TestQueryTableShape(t *testing.T) {
 	c := &Checker{
 		baseID: "data.tables.base",
@@ -712,65 +687,84 @@ func TestQueryTableShape(t *testing.T) {
 			"data.tables.y": {"id": {typ: "string", primaryKey: true}},
 		},
 	}
-	q := &queryInfo{ID: "q", File: "q.yaml", Access: "read", Kind: "many", Targets: []string{"data.tables.x", "data.tables.y"}}
+	q := &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.x", "data.tables.y"}}
 	c.checkQueryTable(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("multi-table read reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	q.Access = "write"
-	c.checkQueryTable(q)
-	if !strings.Contains(entityErrs(c), "write requires exactly one target") {
-		t.Fatalf("multi-table write not reported: %v", c.errs)
-	}
-
-	c.errs = nil
-	q = &queryInfo{ID: "q", File: "q.yaml", Access: "read", Kind: "many", Targets: []string{"data.tables.base"}}
+	q = &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.base"}}
 	c.checkQueryTable(q)
 	if !strings.Contains(entityErrs(c), "targets references data.tables.base") {
 		t.Fatalf("base target not reported: %v", c.errs)
 	}
 }
 
+func TestQueryIndexRefAlias(t *testing.T) {
+	current := "data.queries.x.get"
+	old := "data.queries.x.old_get"
+	c := &Checker{
+		queryOrder:   []string{current},
+		queries:      map[string]*queryInfo{current: {ID: current, Targets: []string{"data.tables.x"}, IndexRef: []string{"data.tables.x.idx_x_code"}}},
+		queryAliases: map[string]string{old: current},
+		queryTables:  map[string]map[string]bool{current: {"data.tables.x": true}},
+		tableIndexes: map[string][]tableIndex{"data.tables.x": {
+			{name: "idx_x_code", columns: []string{"code"}, usedBy: map[string]bool{old: true}},
+		}},
+	}
+	c.checkQueryIndexRefs()
+	if len(c.errs) != 0 {
+		t.Fatalf("alias in index.used_by reported: %v", c.errs)
+	}
+}
+
+func TestQueryDerivedIDAndListSyntax(t *testing.T) {
+	q := parseQuery(map[string]any{"name": "GetAccount"}, "q.yaml", "data.queries.account", "accounts")
+	if q.ID != "data.queries.account.get_account" {
+		t.Fatalf("derived query id = %q", q.ID)
+	}
+	r := parseQueryReturn("List<data.entities.account>")
+	if !r.IsList || r.Kind != "entity" || r.EntityID != "data.entities.account" {
+		t.Fatalf("List<entity> parsed as %#v", r)
+	}
+	r = parseQueryReturn("List<object>")
+	if !r.IsList || r.Kind != "object" {
+		t.Fatalf("List<object> parsed as %#v", r)
+	}
+	if r := parseQueryReturn("List<affected_rows>"); !r.IsList || r.Raw != "affected_rows" {
+		t.Fatalf("List<affected_rows> parsed as %#v", r)
+	}
+}
+
 func TestQueryClauseShape(t *testing.T) {
 	c := &Checker{}
-	q := &queryInfo{ID: "q", File: "q.yaml", Access: "read", Kind: "one", Targets: []string{"data.tables.x"},
+	q := &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.x"},
 		Return: queryReturn{Raw: "boolean", Kind: "scalar"}}
 	c.checkQueryShape(q)
 	if len(c.errs) != 0 {
-		t.Fatalf("valid read one reported: %v", c.errs)
+		t.Fatalf("valid scalar reported: %v", c.errs)
 	}
 
-	q.Kind = "exec"
-	c.errs = nil
+	q.Return = queryReturn{Raw: "affected_rows", Kind: "scalar"}
 	c.checkQueryShape(q)
-	if !strings.Contains(entityErrs(c), "exec must be write") || !strings.Contains(entityErrs(c), "exec must return affected_rows") {
-		t.Fatalf("read exec not reported: %v", c.errs)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid affected_rows reported: %v", c.errs)
 	}
 
-	q = &queryInfo{ID: "q", File: "q.yaml", Access: "write", Kind: "one", Targets: []string{"data.tables.x"},
-		Return: queryReturn{Raw: "boolean", Kind: "scalar"}}
+	q.Return.IsList = true
 	c.errs = nil
 	c.checkQueryShape(q)
-	if !strings.Contains(entityErrs(c), "write one must return a table row or entity") {
-		t.Fatalf("write scalar return not reported: %v", c.errs)
+	if !strings.Contains(entityErrs(c), "affected_rows must not be a list") {
+		t.Fatalf("list affected_rows not reported: %v", c.errs)
 	}
 
-	q = &queryInfo{ID: "q", File: "q.yaml", Access: "read", Kind: "many", Targets: []string{"data.tables.x"},
-		Return: queryReturn{Raw: "data.tables.x.row", Kind: "table"}}
+	q = &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.x"},
+		Return: queryReturn{Raw: "affected_rows", Kind: "scalar"}, ReturnColumns: []string{"id"}}
 	c.errs = nil
 	c.checkQueryShape(q)
-	if !strings.Contains(entityErrs(c), "many requires []") {
-		t.Fatalf("many without list not reported: %v", c.errs)
-	}
-
-	q = &queryInfo{ID: "q", File: "q.yaml", Access: "read", Kind: "one", Targets: []string{"data.tables.x"},
-		Return: queryReturn{Raw: "[]data.tables.x.row", IsList: true, Kind: "table"}}
-	c.errs = nil
-	c.checkQueryShape(q)
-	if !strings.Contains(entityErrs(c), "must not return a list") {
-		t.Fatalf("one with list not reported: %v", c.errs)
+	if !strings.Contains(entityErrs(c), "must not declare return_columns") {
+		t.Fatalf("affected_rows with return_columns not reported: %v", c.errs)
 	}
 }
 

@@ -14,7 +14,10 @@ do_not:
 table:
   name: accounts
   comment: "账号（业务主体）"
-  extends: [ data.tables.base ]
+  extends:
+    - data.tables.base
+  entities:
+    - data.entities.account
 
 columns:
   - name: own_type
@@ -82,7 +85,8 @@ indexes:
   - name: idx_accounts_own_type_own_id
     columns: [ own_type, own_id ]
     where: "deleted_at IS NULL"
-    used_by: [ data.queries.account.list_accounts ]
+    used_by:
+      - data.queries.account.list_accounts
     reason: "按归属主体查询"
 
   - name: idx_accounts_created_at_id
@@ -95,15 +99,14 @@ indexes:
     reason: "列表游标分页"
 
 used_by:
-  entities: [ data.entities.account ]
   queries:
+    - data.queries.account.create_account
+    - data.queries.account.exists_account_number
     - data.queries.account.get_account
     - data.queries.account.get_account_by_number
-    - data.queries.account.exists_account_number
     - data.queries.account.list_accounts
-    - data.queries.account.create_account
-    - data.queries.account.update_account
+    - data.queries.account.list_stale_pending_accounts
     - data.queries.account.set_account_status
     - data.queries.account.soft_delete_account
-    - data.queries.account.list_stale_pending_accounts
     - data.queries.account.soft_delete_stale_pending_accounts
+    - data.queries.account.update_account

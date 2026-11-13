@@ -58,6 +58,9 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	if len(extends) != 1 || extends[0] != "data.tables.base" {
 		t.Fatalf("table.extends must be hardcoded to [data.tables.base]: %#v", table["extends"])
 	}
+	if !strings.Contains(string(b), "  extends:\n    - data.tables.base\n") {
+		t.Fatalf("table.extends must be block style:\n%s", b)
+	}
 	cols, _ := doc["columns"].([]any)
 	if len(cols) != 1 {
 		t.Fatalf("want 1 column, got %d", len(cols))
@@ -118,6 +121,9 @@ func TestRenderEntity(t *testing.T) {
 	if len(extends) != 1 || extends[0] != "data.entities.base" {
 		t.Fatalf("model.extends must be [data.entities.base]: %#v", model["extends"])
 	}
+	if !strings.Contains(string(b), "  extends:\n    - data.entities.base\n") {
+		t.Fatalf("model.extends must be block style:\n%s", b)
+	}
 	fields, _ := doc["fields"].([]any)
 	if len(fields) != 0 {
 		t.Fatalf("entity scaffold must not repeat base fields: %#v", fields)
@@ -146,8 +152,11 @@ func TestRenderQuery(t *testing.T) {
 		t.Fatalf("want 1 query, got %d", len(queries))
 	}
 	q, _ := queries[0].(map[string]any)
-	if q["id"] != "data.queries.account.exists_account" || q["name"] != "ExistsAccount" {
-		t.Fatalf("query id/name not scaffolded: %#v", q)
+	if q["name"] != "ExistsAccount" {
+		t.Fatalf("query name not scaffolded: %#v", q)
+	}
+	if _, ok := q["id"]; ok {
+		t.Fatalf("query item id must not be scaffolded: %#v", q)
 	}
 	if q["returns"] != "boolean" {
 		t.Fatalf("query returns not scaffolded: %#v", q)
@@ -156,8 +165,11 @@ func TestRenderQuery(t *testing.T) {
 	if len(targets) != 1 || targets[0] != "data.tables.account" {
 		t.Fatalf("targets not scaffolded: %#v", q["targets"])
 	}
-	if q["access"] != "read" || q["kind"] != "one" {
-		t.Fatalf("access/kind not scaffolded: %#v", q)
+	if _, ok := q["access"]; ok {
+		t.Fatalf("access must be omitted for read scaffold: %#v", q)
+	}
+	if _, ok := q["kind"]; ok {
+		t.Fatalf("query kind must not be scaffolded: %#v", q)
 	}
 	refs, _ := q["index_ref"].([]any)
 	if len(refs) != 1 || refs[0] != "data.tables.account.pk" {

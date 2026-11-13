@@ -11,7 +11,11 @@ do_not:
 table:
   name: tokens
   comment: "令牌（访问令牌与刷新令牌）"
-  extends: [ data.tables.base ]
+  extends:
+    - data.tables.base
+
+  entities:
+    - data.entities.token
 
 columns:
   - name: own_type
@@ -114,11 +118,10 @@ indexes:
     reason: "过期令牌清理"
 
 used_by:
-  entities: [ data.entities.token ]
   queries:
     - data.queries.auth.create_token
-    - data.queries.auth.get_token_by_refresh
-    - data.queries.auth.get_token_by_access
-    - data.queries.auth.revoke_token
     - data.queries.auth.delete_expired_tokens
+    - data.queries.auth.get_token_by_access
+    - data.queries.auth.get_token_by_refresh
     - data.queries.auth.list_tokens_by_account
+    - data.queries.auth.revoke_token

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func checkColumnRef(c *Checker, ref string, tableIDs map[string]string, cols map[string]map[string]bool, where string) {
@@ -34,6 +36,7 @@ func (c *Checker) isBaseTableRef(ref string) bool {
 }
 
 func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[string]map[string]bool) {
+	c.declaredWrites = map[string]bool{}
 	// entities
 	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {
 		doc, err := loadYAML(f)
@@ -54,15 +57,17 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			if !ok {
 				continue
 			}
-			join, _ := m["join_column"].(string)
-			if join == "" {
-				continue
+			for _, key := range []string{"join_column_from", "join_column_to"} {
+				join, _ := m[key].(string)
+				if join == "" {
+					continue
+				}
+				if c.isBaseTableRef(join) {
+					c.rulef("base-file", "%s: fields[%d]: base contract is not a physical table", rel, i)
+					continue
+				}
+				checkColumnRef(c, join, tableIDs, cols, fmt.Sprintf("%s: fields[%d]", rel, i))
 			}
-			if c.isBaseTableRef(join) {
-				c.rulef("base-file", "%s: fields[%d]: base contract is not a physical table", rel, i)
-				continue
-			}
-			checkColumnRef(c, join, tableIDs, cols, fmt.Sprintf("%s: fields[%d]", rel, i))
 		}
 	}
 	// queries
@@ -74,12 +79,14 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			continue
 		}
 		rel := relPath(c.root, f)
+		fileID, _ := doc["id"].(string)
 		for i, raw := range asList(doc["queries"]) {
 			m, ok := asMap(raw)
 			if !ok {
 				continue
 			}
-			qid, _ := m["id"].(string)
+			name, _ := m["name"].(string)
+			qid := contractspec.QueryID(fileID, name)
 			if qid != "" {
 				queryIDs[qid] = true
 			}
@@ -94,7 +101,11 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			// 返回实体时 return_columns 是实体字段名，由 checkQueries 校验；
 			// 这里只校验表行返回的列。
 			returns, _ := m["returns"].(string)
-			if !strings.HasPrefix(strings.TrimPrefix(returns, "[]"), "data.entities.") {
+			returns = strings.TrimSpace(returns)
+			if strings.HasPrefix(returns, "List<") && strings.HasSuffix(returns, ">") {
+				returns = strings.TrimSuffix(strings.TrimPrefix(returns, "List<"), ">")
+			}
+			if !strings.HasPrefix(returns, "data.entities.") {
 				for _, rc := range asList(m["return_columns"]) {
 					col, ok := rc.(string)
 					if !ok {
@@ -123,6 +134,28 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			continue
 		}
 		rel := relPath(c.root, f)
+		if rawWrites, ok := doc["writes"]; ok {
+			uses := map[string]bool{}
+			for _, x := range asList(doc["uses"]) {
+				if s, ok := x.(string); ok && s != "" {
+					uses[c.resolveQueryID(s)] = true
+				}
+			}
+			list, ok := rawWrites.([]any)
+			if !ok {
+				c.rulef("schema.type", "%s: writes must be a list", rel)
+			} else {
+				if module, _ := doc["module"].(string); module == "" {
+					c.rulef("owner-write", "%s: writes requires module to verify write ownership", rel)
+				}
+				for _, x := range list {
+					if qid, ok := x.(string); ok && qid != "" {
+						c.declaredWrites[c.resolveQueryID(qid)] = true
+					}
+				}
+				c.checkWriteQueries(doc, list, uses, nil, "writes", "uses", rel)
+			}
+		}
 		p, _ := asMap(doc["persistence"])
 		if p == nil {
 			continue
@@ -139,7 +172,7 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 						c.rulef("schema.required", "%s: persistence.queries.%s must be a query ID", rel, alias)
 						continue
 					}
-					if !queryIDs[qid] {
+					if !queryIDs[c.resolveQueryID(qid)] {
 						c.rulef("schema.ref", "%s: persistence.queries.%s references unknown query %s", rel, alias, qid)
 					}
 				}
@@ -170,28 +203,101 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			}
 		}
 	}
+	for _, qid := range c.queryOrder {
+		q := c.queries[qid]
+		if q != nil && q.Return.Raw == "affected_rows" && !c.declaredWrites[qid] {
+			c.rulef("owner-write", "query %s returns affected_rows but is not declared in any capability write list", qid)
+		}
+	}
 }
 
-// checkPersistenceOwnership 校验 capability 的写表归属：
+// checkPersistenceOwnership 校验 capability 的写表与写查询归属：
 //   - read_only_tables 已移除，跨模块读必须通过 persistence.queries；
 //   - 写表（table/tables）的 owner_module 必须等于 capability 的 module；
-//   - 有写表但没有 module 时无法判断归属，直接报错。
+//   - write_queries 必须已在 persistence.queries 中登记、单表、目标表归属一致。
 func (c *Checker) checkPersistenceOwnership(doc, p map[string]any, rel string) {
 	if _, ok := p["read_only_tables"]; ok {
 		c.rulef("owner-write", "%s: read_only_tables is not supported; use persistence.queries for cross-module reads", rel)
 	}
+	if rawTables, ok := p["tables"]; ok {
+		if _, ok := rawTables.([]any); !ok {
+			c.rulef("schema.type", "%s: persistence.tables must be a list", rel)
+		}
+	}
 	writes := tableRefs(p)
-	if len(writes) == 0 {
-		return
-	}
 	module, _ := doc["module"].(string)
-	if module == "" {
-		c.rulef("owner-write", "%s: persistence requires module to verify write ownership", rel)
+	if len(writes) > 0 {
+		if module == "" {
+			c.rulef("owner-write", "%s: persistence requires module to verify write ownership", rel)
+		} else {
+			for _, t := range writes {
+				if owner := c.tableOwners[t]; owner != "" && owner != module {
+					c.rulef("owner-write", "%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
+				}
+			}
+		}
+	}
+	declared := map[string]bool{}
+	if qm, ok := asMap(p["queries"]); ok {
+		for _, raw := range qm {
+			if qid, ok := raw.(string); ok && qid != "" {
+				declared[c.resolveQueryID(qid)] = true
+			}
+		}
+	}
+	rawWrites, ok := p["write_queries"]
+	if !ok {
 		return
 	}
-	for _, t := range writes {
-		if owner := c.tableOwners[t]; owner != "" && owner != module {
-			c.rulef("owner-write", "%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
+	list, ok := rawWrites.([]any)
+	if !ok {
+		c.rulef("schema.type", "%s: persistence.write_queries must be a list", rel)
+		return
+	}
+	if module == "" {
+		c.rulef("owner-write", "%s: persistence.write_queries requires module to verify write ownership", rel)
+	}
+	for _, x := range list {
+		if qid, ok := x.(string); ok && qid != "" {
+			c.declaredWrites[c.resolveQueryID(qid)] = true
+		}
+	}
+	c.checkWriteQueries(doc, list, declared, writes, "persistence.write_queries", "persistence.queries", rel)
+}
+
+// checkWriteQueries 校验 capability 声明的写查询：
+//   - 必须已在 declared 列表（persistence.queries / uses）中登记；
+//   - 必须存在且恰好写一张表；
+//   - 目标表必须在 persistence.table/tables 中，且 owner_module 与 capability 一致。
+func (c *Checker) checkWriteQueries(doc map[string]any, raw []any, declared map[string]bool, tables []string, field, declaredName, rel string) {
+	module, _ := doc["module"].(string)
+	for i, x := range raw {
+		qid, ok := x.(string)
+		if !ok || qid == "" {
+			c.rulef("owner-write", "%s: %s[%d] must be a query ID", rel, field, i)
+			continue
+		}
+		canonical := c.resolveQueryID(qid)
+		if !declared[canonical] {
+			c.rulef("owner-write", "%s: write query %s must be listed in %s", rel, qid, declaredName)
+		}
+		q := c.queries[canonical]
+		if q == nil {
+			c.rulef("owner-write", "%s: unknown write query %s", rel, qid)
+			continue
+		}
+		if len(q.Targets) != 1 {
+			c.rulef("owner-write", "%s: write query %s requires exactly one target", rel, qid)
+			continue
+		}
+		target := q.Targets[0]
+		if len(tables) > 0 && !containsString(tables, target) {
+			c.rulef("owner-write", "%s: write query %s targets %s outside persistence.table/tables", rel, qid, target)
+		}
+		if module != "" {
+			if owner := c.tableOwners[target]; owner != "" && owner != module {
+				c.rulef("owner-write", "%s: module %q cannot write %s via %s (owner_module %q)", rel, module, target, qid, owner)
+			}
 		}
 	}
 }
@@ -207,16 +313,16 @@ func (c *Checker) tableObjectExists(tables []string, name string) bool {
 }
 
 func (c *Checker) checkUsedBy(tableIDs map[string]string) {
-	inbound := map[string]map[string]map[string]bool{}
+	tableEntities := map[string]map[string]bool{}
+	tableQueries := map[string]map[string]bool{}
 	for id := range tableIDs {
 		if id == c.baseID {
 			continue
 		}
-		inbound[id] = map[string]map[string]bool{
-			"entities": {}, "queries": {},
-		}
+		tableEntities[id] = map[string]bool{}
+		tableQueries[id] = map[string]bool{}
 	}
-	// entities
+	// entities：table.entities 来自 entity.model.tables
 	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {
 		doc, err := loadYAML(f)
 		if err != nil || doc == nil {
@@ -224,8 +330,8 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 		}
 		id, _ := doc["id"].(string)
 		for _, t := range entityTableRefs(doc) {
-			if inbound[t] != nil {
-				inbound[t]["entities"][id] = true
+			if tableEntities[t] != nil {
+				tableEntities[t][id] = true
 			}
 		}
 	}
@@ -236,19 +342,21 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 			continue
 		}
 		rel := relPath(c.root, f)
+		fileID, _ := doc["id"].(string)
 		for i, raw := range asList(doc["queries"]) {
 			m, ok := asMap(raw)
 			if !ok {
 				continue
 			}
-			qid, _ := m["id"].(string)
+			name, _ := m["name"].(string)
+			qid := contractspec.QueryID(fileID, name)
 			if qid == "" {
-				c.rulef("schema.required", "%s: queries[%d]: missing id", rel, i)
+				c.rulef("schema.required", "%s: queries[%d]: missing name", rel, i)
 				continue
 			}
 			for _, t := range queryTableRefs(m) {
-				if inbound[t] != nil {
-					inbound[t]["queries"][qid] = true
+				if tableQueries[t] != nil {
+					tableQueries[t][qid] = true
 				}
 			}
 		}
@@ -262,17 +370,19 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 		if err != nil {
 			continue
 		}
-		u, _ := asMap(doc["used_by"])
-		if u == nil {
+		table, _ := asMap(doc["table"])
+		gotEntities := stringSet(asList(table["entities"]))
+		if !sameSet(gotEntities, tableEntities[id]) {
+			c.rulef("table-entities", "%s: table.entities mismatch: declared %v, actual %v", rel, sortedKeys(gotEntities), sortedKeys(tableEntities[id]))
+		}
+		ub, _ := asMap(doc["used_by"])
+		if ub == nil {
 			c.rulef("used-by-generated", "%s: missing used_by", rel)
 			continue
 		}
-		for _, kind := range []string{"entities", "queries"} {
-			got := stringSet(asList(u[kind]))
-			want := inbound[id][kind]
-			if !sameSet(got, want) {
-				c.rulef("used-by-generated", "%s: used_by.%s mismatch: declared %v, actual %v", rel, kind, sortedKeys(got), sortedKeys(want))
-			}
+		gotQueries := stringSet(asList(ub["queries"]))
+		if !sameSet(gotQueries, tableQueries[id]) {
+			c.rulef("used-by-generated", "%s: used_by.queries mismatch: declared %v, actual %v", rel, sortedKeys(gotQueries), sortedKeys(tableQueries[id]))
 		}
 	}
 }

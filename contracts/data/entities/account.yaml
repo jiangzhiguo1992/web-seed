@@ -13,8 +13,15 @@ do_not:
 
 model:
   name: Account
-  extends: [ data.entities.base ]
-  tables: [ data.tables.account ]
+  extends:
+    - data.entities.base
+  tables:
+    - data.tables.account
+  included_by:
+    - data.entities.auth_pwd
+    - data.entities.auth_phone
+    - data.entities.auth_email
+    - data.entities.token
 
 fields:
   - name: OwnType
@@ -35,34 +42,34 @@ fields:
     source: { column: data.tables.account.col.version }
 
   - name: Tokens
-    json_name: tokens
-    relationship: one_to_many
-    target: data.entities.token
-    join_column: data.tables.token.col.account_id
+    target: data.tables.token
+    type: data.entities.token
+    join_column_from: data.tables.account.col.id
+    join_column_to: data.tables.token.col.account_id
     load: lazy
     description: "账号的设备令牌"
 
   - name: AuthPwd
-    json_name: auth_pwd
-    relationship: one_to_one
-    target: data.entities.auth_pwd
-    join_column: data.tables.auth_pwd.col.account_id
+    target: data.tables.auth_pwd
+    type: data.entities.auth_pwd
+    join_column_from: data.tables.account.col.id
+    join_column_to: data.tables.auth_pwd.col.account_id
     load: lazy
     description: "账号的密码认证记录"
 
   - name: AuthPhone
-    json_name: auth_phone
-    relationship: one_to_many
-    target: data.entities.auth_phone
-    join_column: data.tables.auth_phone.col.account_id
+    target: data.tables.auth_phone
+    type: data.entities.auth_phone
+    join_column_from: data.tables.account.col.id
+    join_column_to: data.tables.auth_phone.col.account_id
     load: lazy
     description: "账号绑定的手机号"
 
   - name: AuthEmail
-    json_name: auth_email
-    relationship: one_to_many
-    target: data.entities.auth_email
-    join_column: data.tables.auth_email.col.account_id
+    target: data.tables.auth_email
+    type: data.entities.auth_email
+    join_column_from: data.tables.account.col.id
+    join_column_to: data.tables.auth_email.col.account_id
     load: lazy
     description: "账号绑定的邮箱"
 
@@ -72,8 +79,3 @@ used_by:
     - data.queries.account.get_account_by_number
     - data.queries.account.list_accounts
     - data.queries.account.create_account
-  entities:
-    - data.entities.auth_pwd
-    - data.entities.auth_phone
-    - data.entities.auth_email
-    - data.entities.token

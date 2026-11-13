@@ -68,7 +68,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
+		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; add table.entities when an entity maps this table; make gen-graph; make contract-check; make gen")
 
 	case "data.entities":
 		_, owner, err := loadTableContract(abs, *table)
@@ -79,7 +79,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: add business fields; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
+		writeOut(*out, b, "next: add business fields; add this entity to table.entities and to target entity model.included_by; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
 
 	case "data.queries":
 		physical, _, err := loadTableContract(abs, *table)
@@ -90,7 +90,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace the EXISTS skeleton; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
+		writeOut(*out, b, "next: replace the EXISTS skeleton; declare write queries in capabilities persistence.write_queries/writes; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
 
 	case "data.enums":
 		b, err := contractspec.RenderEnumItem(schema, *name)

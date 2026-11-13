@@ -39,6 +39,20 @@ func (c *Checker) checkFieldPlacement() {
 		if topLevelFieldsFlow(&doc) {
 			c.rulef("schema.fields-style", "%s: top-level fields must be block style (one key per line)", rel)
 		}
+		if strings.HasPrefix(rel, "contracts/data/tables/") {
+			for _, path := range [][]string{{"table", "extends"}, {"table", "entities"}} {
+				if flowListAt(&doc, path...) {
+					c.rulef("schema.list-style", "%s: %s must be block style (one item per line)", rel, strings.Join(path, "."))
+				}
+			}
+		}
+		if strings.HasPrefix(rel, "contracts/data/entities/") {
+			for _, path := range [][]string{{"model", "extends"}, {"model", "tables"}, {"model", "included_by"}} {
+				if flowListAt(&doc, path...) {
+					c.rulef("schema.list-style", "%s: %s must be block style (one item per line)", rel, strings.Join(path, "."))
+				}
+			}
+		}
 		if strings.HasPrefix(rel, "contracts/_meta/") {
 			if nodeHasKey(&doc, "do_not") {
 				c.rulef("schema.meta-placement", "%s: _meta must not declare do_not; put instance negatives in concrete contracts", rel)
@@ -136,6 +150,31 @@ func rulesAllowed(rel string) bool {
 }
 
 // topLevelFieldsFlow 只检查顶层 fields：字段定义必须竖排；嵌套 item_fields 不限制。
+// flowListAt 判断指定路径的 sequence 是否使用 flow style；空列表不限制。
+func flowListAt(doc *yaml.Node, path ...string) bool {
+	if len(doc.Content) == 0 {
+		return false
+	}
+	node := doc.Content[0]
+	for _, key := range path {
+		if node.Kind != yaml.MappingNode {
+			return false
+		}
+		var next *yaml.Node
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value == key {
+				next = node.Content[i+1]
+				break
+			}
+		}
+		if next == nil {
+			return false
+		}
+		node = next
+	}
+	return node.Kind == yaml.SequenceNode && len(node.Content) > 0 && node.Style == yaml.FlowStyle
+}
+
 func topLevelFieldsFlow(n *yaml.Node) bool {
 	if n == nil {
 		return false

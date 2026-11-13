@@ -1,7 +1,7 @@
-// Package graph 计算契约入边并写回 table/entity 的 used_by。
+// Package graph 计算 query 入边并写回 table/entity 的 used_by.queries。
 //
-// used_by 是生成物：table 记录 entities/queries，entity 记录 queries/entities。
-// 写回时保留文件其余内容；used_by 约定为最后一个顶层键。
+// table.entities 与 model.included_by 是显式映射，由 checker 校验；
+// gen-graph 只维护生成物 used_by.queries。
 package graph
 
 import (
@@ -12,16 +12,16 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 type TableUsedBy struct {
-	Entities []string
-	Queries  []string
+	Queries []string
 }
 
 type EntityUsedBy struct {
-	Queries  []string
-	Entities []string
+	Queries []string
 }
 
 type Snapshot struct {
@@ -32,16 +32,14 @@ type Snapshot struct {
 }
 
 type tableSet struct {
-	entities map[string]bool
-	queries  map[string]bool
+	queries map[string]bool
 }
 
 type entitySet struct {
-	queries  map[string]bool
-	entities map[string]bool
+	queries map[string]bool
 }
 
-// Compute 扫描 tables/entities/queries，计算 used_by 的目标集合。
+// Compute 扫描 tables/entities/queries，计算 used_by.queries。
 func Compute(root string) (*Snapshot, error) {
 	if info, err := os.Stat(filepath.Join(root, "contracts/data/tables")); err != nil || !info.IsDir() {
 		return nil, fmt.Errorf("%s: missing contracts/data/tables (not a contract root?)", root)
@@ -50,7 +48,6 @@ func Compute(root string) (*Snapshot, error) {
 	entities := map[string]*entitySet{}
 	tableFiles := map[string]string{}
 	entityFiles := map[string]string{}
-	entityDocs := map[string]map[string]any{}
 
 	for _, f := range glob(root, "contracts/data/tables/*.yaml") {
 		if filepath.Base(f) == "_base.yaml" {
@@ -67,7 +64,7 @@ func Compute(root string) (*Snapshot, error) {
 		if prev, ok := tableFiles[id]; ok {
 			return nil, fmt.Errorf("duplicate table id %s: %s and %s", id, prev, rel(root, f))
 		}
-		tables[id] = &tableSet{entities: map[string]bool{}, queries: map[string]bool{}}
+		tables[id] = &tableSet{queries: map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 	}
 	for _, f := range glob(root, "contracts/data/entities/*.yaml") {
@@ -85,26 +82,8 @@ func Compute(root string) (*Snapshot, error) {
 		if prev, ok := entityFiles[id]; ok {
 			return nil, fmt.Errorf("duplicate entity id %s: %s and %s", id, prev, rel(root, f))
 		}
-		entities[id] = &entitySet{queries: map[string]bool{}, entities: map[string]bool{}}
+		entities[id] = &entitySet{queries: map[string]bool{}}
 		entityFiles[id] = rel(root, f)
-		entityDocs[id] = doc
-	}
-	for id, doc := range entityDocs {
-		for _, t := range entityTableRefs(doc) {
-			if ts := tables[t]; ts != nil {
-				ts.entities[id] = true
-			}
-		}
-		for _, raw := range asList(doc["fields"]) {
-			m, ok := asMap(raw)
-			if !ok {
-				continue
-			}
-			target, _ := m["target"].(string)
-			if es := entities[target]; es != nil {
-				es.entities[id] = true
-			}
-		}
 	}
 	seenQueries := map[string]string{}
 	for _, f := range glob(root, "contracts/data/queries/*.yaml") {
@@ -112,12 +91,14 @@ func Compute(root string) (*Snapshot, error) {
 		if err != nil {
 			return nil, err
 		}
+		fileID, _ := doc["id"].(string)
 		for _, raw := range asList(doc["queries"]) {
 			m, ok := asMap(raw)
 			if !ok {
 				continue
 			}
-			qid, _ := m["id"].(string)
+			name, _ := m["name"].(string)
+			qid := contractspec.QueryID(fileID, name)
 			if qid == "" {
 				continue
 			}
@@ -145,21 +126,20 @@ func Compute(root string) (*Snapshot, error) {
 		EntityFiles: entityFiles,
 	}
 	for id, ts := range tables {
-		snap.Tables[id] = TableUsedBy{Entities: sortedKeys(ts.entities), Queries: sortedKeys(ts.queries)}
+		snap.Tables[id] = TableUsedBy{Queries: sortedKeys(ts.queries)}
 	}
 	for id, es := range entities {
-		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries), Entities: sortedKeys(es.entities)}
+		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries)}
 	}
 	return snap, nil
 }
 
-// Write 把 used_by 写回文件，返回发生变化的相对路径。
+// Write 把 used_by.queries 写回文件，返回发生变化的相对路径。
 func (s *Snapshot) Write(root string) ([]string, error) {
 	var changed []string
 	for _, id := range sortedFileKeys(s.TableFiles) {
 		file := s.TableFiles[id]
-		want := s.Tables[id]
-		ok, err := syncFile(filepath.Join(root, file), "table", want.Entities, want.Queries)
+		ok, err := syncUsedByFile(filepath.Join(root, file), s.Tables[id].Queries)
 		if err != nil {
 			return changed, err
 		}
@@ -169,8 +149,7 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	}
 	for _, id := range sortedFileKeys(s.EntityFiles) {
 		file := s.EntityFiles[id]
-		want := s.Entities[id]
-		ok, err := syncFile(filepath.Join(root, file), "entity", want.Queries, want.Entities)
+		ok, err := syncUsedByFile(filepath.Join(root, file), s.Entities[id].Queries)
 		if err != nil {
 			return changed, err
 		}
@@ -181,7 +160,7 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	return changed, nil
 }
 
-// Check 返回与计算结果不一致的 used_by 描述；不写文件。
+// Check 返回与计算结果不一致的 used_by.queries；不写文件。
 func (s *Snapshot) Check(root string) ([]string, error) {
 	var drift []string
 	for _, id := range sortedFileKeys(s.TableFiles) {
@@ -190,17 +169,12 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		want := s.Tables[id]
-		ents, qs, ok := currentUsedBy(doc)
-		if !ok {
-			drift = append(drift, fmt.Sprintf("%s: missing used_by", file))
-			continue
-		}
-		if !sameSet(ents, want.Entities) {
-			drift = append(drift, fmt.Sprintf("%s: used_by.entities must be %v, got %v", file, want.Entities, ents))
-		}
-		if !sameSet(qs, want.Queries) {
-			drift = append(drift, fmt.Sprintf("%s: used_by.queries must be %v, got %v", file, want.Queries, qs))
+		got := usedByQueries(doc)
+		want := s.Tables[id].Queries
+		if !usedByOnlyQueries(doc) {
+			drift = append(drift, fmt.Sprintf("%s: used_by must only contain queries", file))
+		} else if !sameSet(got, want) {
+			drift = append(drift, fmt.Sprintf("%s: used_by.queries must be %v, got %v", file, want, got))
 		}
 	}
 	for _, id := range sortedFileKeys(s.EntityFiles) {
@@ -209,24 +183,18 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		want := s.Entities[id]
-		ents, qs, ok := currentUsedBy(doc)
-		if !ok {
-			drift = append(drift, fmt.Sprintf("%s: missing used_by", file))
-			continue
-		}
-		if !sameSet(qs, want.Queries) {
-			drift = append(drift, fmt.Sprintf("%s: used_by.queries must be %v, got %v", file, want.Queries, qs))
-		}
-		if !sameSet(ents, want.Entities) {
-			drift = append(drift, fmt.Sprintf("%s: used_by.entities must be %v, got %v", file, want.Entities, ents))
+		got := usedByQueries(doc)
+		want := s.Entities[id].Queries
+		if !usedByOnlyQueries(doc) {
+			drift = append(drift, fmt.Sprintf("%s: used_by must only contain queries", file))
+		} else if !sameSet(got, want) {
+			drift = append(drift, fmt.Sprintf("%s: used_by.queries must be %v, got %v", file, want, got))
 		}
 	}
 	return drift, nil
 }
 
-// syncFile 仅在 used_by 变化时重写文件。
-func syncFile(path, kind string, first, second []string) (bool, error) {
+func syncUsedByFile(path string, queries []string) (bool, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return false, err
@@ -235,76 +203,53 @@ func syncFile(path, kind string, first, second []string) (bool, error) {
 	if err := yaml.Unmarshal(src, &doc); err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
-	var haveFirst, haveSecond []string
-	ok := false
-	if ub, found := asMap(doc["used_by"]); found {
-		ok = true
-		if kind == "table" {
-			haveFirst = stringList(ub["entities"])
-			haveSecond = stringList(ub["queries"])
-		} else {
-			haveFirst = stringList(ub["queries"])
-			haveSecond = stringList(ub["entities"])
-		}
-	}
-	if ok && sameSet(haveFirst, first) && sameSet(haveSecond, second) {
+	if sameSet(usedByQueries(doc), queries) && usedByOnlyQueries(doc) {
 		return false, nil
 	}
-	block := renderUsedBy(kind, first, second)
-	out, err := applyUsedBy(src, block)
+	out, err := applyUsedBy(src, renderUsedByQueries(queries))
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
+	return true, writeAtomic(path, out)
+}
+
+func writeAtomic(path string, out []byte) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return false, err
+		return err
 	}
-	// 原子替换：避免进程中断留下半截契约。
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".usedby-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".graph-*")
 	if err != nil {
-		return false, err
+		return err
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
 	if _, err := tmp.Write(out); err != nil {
 		tmp.Close()
-		return false, err
+		return err
 	}
 	if err := tmp.Chmod(info.Mode()); err != nil {
 		tmp.Close()
-		return false, err
+		return err
 	}
 	if err := tmp.Close(); err != nil {
-		return false, err
+		return err
 	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return false, err
-	}
-	return true, nil
+	return os.Rename(tmpName, path)
 }
 
-func renderUsedBy(kind string, first, second []string) string {
+func renderUsedByQueries(queries []string) string {
 	var b strings.Builder
 	b.WriteString("used_by:\n")
-	if kind == "table" {
-		writeList(&b, "entities", first)
-		writeList(&b, "queries", second)
-	} else {
-		writeList(&b, "queries", first)
-		writeList(&b, "entities", second)
+	if len(queries) == 0 {
+		b.WriteString("  queries: []\n")
+		return b.String()
+	}
+	b.WriteString("  queries:\n")
+	for _, q := range queries {
+		fmt.Fprintf(&b, "    - %s\n", q)
 	}
 	return b.String()
-}
-
-func writeList(b *strings.Builder, name string, items []string) {
-	if len(items) == 0 {
-		fmt.Fprintf(b, "  %s: []\n", name)
-		return
-	}
-	fmt.Fprintf(b, "  %s:\n", name)
-	for _, item := range items {
-		fmt.Fprintf(b, "    - %s\n", item)
-	}
 }
 
 // applyUsedBy 替换最后一个顶层键 used_by；缺失时追加到文件末尾。
@@ -363,12 +308,22 @@ func usedByRange(src []byte) (int, int, bool, error) {
 	return 0, 0, false, nil
 }
 
-func currentUsedBy(doc map[string]any) ([]string, []string, bool) {
+func usedByQueries(doc map[string]any) []string {
+	ub, _ := asMap(doc["used_by"])
+	return stringList(ub["queries"])
+}
+
+func usedByOnlyQueries(doc map[string]any) bool {
 	ub, ok := asMap(doc["used_by"])
 	if !ok {
-		return nil, nil, false
+		return false
 	}
-	return stringList(ub["entities"]), stringList(ub["queries"]), true
+	for k := range ub {
+		if k != "queries" {
+			return false
+		}
+	}
+	return true
 }
 
 func glob(root, pattern string) []string {
@@ -407,18 +362,7 @@ func asList(v any) []any {
 	return l
 }
 
-// queryTableRefs 从结构化 sql 子句推导查询表；query 契约不再手写 table/tables。
-
-// entityTableRefs 读取实体 model.tables。
-func entityTableRefs(m map[string]any) []string {
-	model, _ := asMap(m["model"])
-	if model == nil {
-		return nil
-	}
-	return stringList(model["tables"])
-}
-
-// queryTableRefs 读取查询的 targets；查询契约不写 SQL/joins。
+// queryTableRefs 读取查询的 targets。
 func queryTableRefs(m map[string]any) []string {
 	var out []string
 	for _, raw := range asList(m["targets"]) {
@@ -429,23 +373,12 @@ func queryTableRefs(m map[string]any) []string {
 	return out
 }
 
-func tableRefs(m map[string]any) []string {
-	var out []string
-	if t, ok := m["table"].(string); ok && t != "" {
-		out = append(out, t)
-	}
-	for _, x := range asList(m["tables"]) {
-		if s, ok := x.(string); ok && s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 func returnsEntity(m map[string]any) string {
 	raw, _ := m["returns"].(string)
 	s := strings.TrimSpace(raw)
-	s = strings.TrimPrefix(s, "[]")
+	if strings.HasPrefix(s, "List<") && strings.HasSuffix(s, ">") {
+		s = strings.TrimSuffix(strings.TrimPrefix(s, "List<"), ">")
+	}
 	if strings.HasPrefix(s, "data.entities.") {
 		return s
 	}

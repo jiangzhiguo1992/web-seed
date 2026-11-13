@@ -103,7 +103,14 @@ func (c *Checker) checkQueryIndexRefs() {
 				c.rulef("query-index-ref", "query %s: index %s is not declared on %s", qid, name, table)
 				continue
 			}
-			if !idx.usedBy[qid] {
+			used := false
+			for usedID := range idx.usedBy {
+				if c.resolveQueryID(usedID) == qid {
+					used = true
+					break
+				}
+			}
+			if !used {
 				c.rulef("query-index-ref", "query %s: index %s does not list the query in used_by", qid, name)
 			}
 		}
@@ -116,8 +123,9 @@ func (c *Checker) checkQueryIndexRefs() {
 	for _, table := range tableIDs {
 		for _, idx := range c.tableIndexes[table] {
 			for _, qid := range sortedKeys(idx.usedBy) {
-				q := c.queries[qid]
-				if q == nil || !c.queryTables[qid][table] {
+				canonical := c.resolveQueryID(qid)
+				q := c.queries[canonical]
+				if q == nil || !c.queryTables[canonical][table] {
 					continue // 未知查询/表不匹配由 index-used-by-ref 报出
 				}
 				if !refInList(q.IndexRef, table+"."+idx.name) {

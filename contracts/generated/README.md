@@ -11,7 +11,7 @@
 |---|---|---|
 | `manifest.json` | 所有契约的 `generates` 字段汇总 | 生成物 → 来源契约映射 |
 | `graph.json` | 所有契约的 `refs` 字段 | 锚点图，供 AI 与影响面分析查询 |
-| `inbound.yaml` | `graph.json` 反向索引 | 每张表/契约被谁引用；写入 `tables/*.yaml` 的 `used_by.{entities,queries}`（`queries` 为查询项 ID） |
+| `inbound.yaml` | `graph.json` 反向索引 | 每张表/契约被谁引用；写入 `used_by.queries`（查询项 ID）；`table.entities` 与 `model.included_by` 是显式映射，不在此生成 |
 | `lineage.md` | `graph.json` 渲染 | 人读血缘报告 |
 | `openapi/admin.yaml` | `capabilities/http/*.yaml` + `shared.yaml` 合并 | 完整 OpenAPI spec，供 oapi-codegen / Swagger |
 
@@ -30,7 +30,7 @@ make gen-openapi  # 仅合并 spec
 | 生成物与契约不一致 | CI `git diff --exit-code` 失败 |
 | 手改生成物 | 文件头校验 + 重新生成 diff |
 | 图存在悬空/越层/循环 | `make contract-graph` 失败 |
-| `used_by` 与实际入边不一致 | `make gen-graph && git diff --exit-code` 失败（比较 `entities` / `queries` 两个列表） |
+| 反向映射与实际入边不一致 | `make gen-graph && git diff --exit-code` 失败（`used_by.queries`）；`contract-check` 校验 `table.entities` / `model.included_by` |
 
 ## 4. 为什么入库
 

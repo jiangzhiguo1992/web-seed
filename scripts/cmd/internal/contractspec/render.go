@@ -25,8 +25,9 @@ type tableScaffold struct {
 }
 
 type tableDef struct {
-	Comment string      `yaml:"comment"`
-	Extends flowStrings `yaml:"extends"`
+	Comment  string   `yaml:"comment"`
+	Extends  []string `yaml:"extends"`
+	Entities []string `yaml:"entities"`
 }
 
 type columnDef struct {
@@ -45,8 +46,7 @@ type constraintDef struct {
 }
 
 type usedByDef struct {
-	Entities []string `yaml:"entities"`
-	Queries  []string `yaml:"queries"`
+	Queries []string `yaml:"queries"`
 }
 
 type enumItemScaffold struct {
@@ -83,9 +83,10 @@ type entityScaffold struct {
 }
 
 type entityModelScaffold struct {
-	Name    string      `yaml:"name"`
-	Extends flowStrings `yaml:"extends"`
-	Tables  flowStrings `yaml:"tables"`
+	Name       string   `yaml:"name"`
+	Extends    []string `yaml:"extends"`
+	Tables     []string `yaml:"tables"`
+	IncludedBy []string `yaml:"included_by"`
 }
 
 type entityFieldScaffold struct {
@@ -96,8 +97,7 @@ type entityFieldScaffold struct {
 }
 
 type entityUsedByScaffold struct {
-	Queries  []string `yaml:"queries"`
-	Entities []string `yaml:"entities"`
+	Queries []string `yaml:"queries"`
 }
 
 type queryFileScaffold struct {
@@ -110,10 +110,7 @@ type queryFileScaffold struct {
 }
 
 type queryItemScaffold struct {
-	ID       string               `yaml:"id"`
 	Name     string               `yaml:"name"`
-	Access   string               `yaml:"access"`
-	Kind     string               `yaml:"kind"`
 	Targets  flowStrings          `yaml:"targets"`
 	Params   []queryParamScaffold `yaml:"params"`
 	Returns  string               `yaml:"returns"`
@@ -163,7 +160,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		return nil, err
 	}
 	tableField, _ := FindField(s.Fields, "table")
-	if err := requireSupported(tableField.Fields, map[string]bool{"comment": true, "extends": true}, s.Type+".table"); err != nil {
+	if err := requireSupported(tableField.Fields, map[string]bool{"comment": true, "extends": true, "entities": true}, s.Type+".table"); err != nil {
 		return nil, err
 	}
 	columnField, _ := FindField(s.Fields, "columns")
@@ -180,7 +177,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	}
 	usedByField, _ := FindField(s.Fields, "used_by")
 	if err := requireSupported(usedByField.Fields, map[string]bool{
-		"entities": true, "queries": true,
+		"queries": true,
 	}, s.Type+".used_by"); err != nil {
 		return nil, err
 	}
@@ -210,15 +207,16 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		OwnerModule:   module,
 		DoNot:         []string{},
 		Table: tableDef{
-			Comment: "TODO: 表说明",
-			Extends: flowStrings{baseTableID},
+			Comment:  "TODO: 表说明",
+			Extends:  []string{baseTableID},
+			Entities: []string{},
 		},
 		Columns: []columnDef{
 			{Name: columnName, Type: columnType, Nullable: columnNullable, Comment: "TODO: 列说明", Params: columnParams},
 		},
 		Constraints: []constraintDef{},
 		Indexes:     []any{},
-		UsedBy:      usedByDef{Entities: []string{}, Queries: []string{}},
+		UsedBy:      usedByDef{Queries: []string{}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
@@ -309,7 +307,7 @@ func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, 
 		return nil, fmt.Errorf("RenderEntity: used_by is missing in schema")
 	}
 	if err := requireSupported(usedByField.Fields, map[string]bool{
-		"queries": true, "entities": true,
+		"queries": true,
 	}, "data.entities.used_by"); err != nil {
 		return nil, err
 	}
@@ -324,12 +322,13 @@ func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, 
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		Model: entityModelScaffold{
-			Name:    lowerCamel(name),
-			Extends: flowStrings{"data.entities.base"},
-			Tables:  flowStrings{"data.tables." + table},
+			Name:       lowerCamel(name),
+			Extends:    []string{"data.entities.base"},
+			Tables:     []string{"data.tables." + table},
+			IncludedBy: []string{},
 		},
 		Fields: []entityFieldScaffold{},
-		UsedBy: entityUsedByScaffold{Queries: []string{}, Entities: []string{}},
+		UsedBy: entityUsedByScaffold{Queries: []string{}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
@@ -365,7 +364,7 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		return nil, fmt.Errorf("RenderQuery: queries is missing in schema")
 	}
 	if err := requireSupported(queriesField.ItemFields, map[string]bool{
-		"id": true, "name": true, "access": true, "kind": true, "targets": true,
+		"name": true, "targets": true,
 		"params": true, "returns": true, "return_columns": true,
 		"output_fields": true, "index_ref": true,
 	}, "data.queries.queries"); err != nil {
@@ -384,7 +383,6 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 	if fileID == "" {
 		return nil, fmt.Errorf("RenderQuery: cannot derive id from targets.id")
 	}
-	queryID := fileID + ".exists_" + name
 	doc := queryFileScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            fileID,
@@ -392,10 +390,7 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		OwnerModule:   module,
 		Queries: []queryItemScaffold{{
-			ID:       queryID,
 			Name:     "Exists" + pascal(name),
-			Access:   "read",
-			Kind:     "one",
 			Targets:  flowStrings{"data.tables." + table},
 			Params:   []queryParamScaffold{{Name: "id", Type: "text", Column: "data.tables." + table + ".col.id"}},
 			Returns:  "boolean",

@@ -12,8 +12,12 @@ do_not:
 
 model:
   name: authPhone
-  extends: [ data.entities.base ]
-  tables: [ data.tables.auth_phone ]
+  extends:
+    - data.entities.base
+  tables:
+    - data.tables.auth_phone
+  included_by:
+    - data.entities.account
 
 fields:
   - name: AccountID
@@ -31,13 +35,12 @@ fields:
     description: "认证记录状态"
 
   - name: Account
-    json_name: account
-    relationship: many_to_one
-    target: data.entities.account
-    join_column: data.tables.auth_phone.col.account_id
+    target: data.tables.account
+    type: data.entities.account
+    join_column_from: data.tables.auth_phone.col.account_id
+    join_column_to: data.tables.account.col.id
     load: lazy
-    description: "手机号所属账号"
+    description: "所属账号"
 
 used_by:
   queries: []
-  entities: [ data.entities.account ]

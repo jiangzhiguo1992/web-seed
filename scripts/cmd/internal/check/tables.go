@@ -783,11 +783,12 @@ func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int,
 			continue
 		}
 		seen[qid] = true
-		if _, ok := c.queryIDs[qid]; !ok {
+		canonical := c.resolveQueryID(qid)
+		if _, ok := c.queryIDs[canonical]; !ok {
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): unknown query %s", rel, i, name, qid)
 			continue
 		}
-		if !c.queryTables[qid][tableID] {
+		if !c.queryTables[canonical][tableID] {
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): query %s does not reference table %s", rel, i, name, qid, tableID)
 			continue
 		}

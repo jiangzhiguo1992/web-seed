@@ -13,8 +13,12 @@ do_not:
 
 model:
   name: token
-  extends: [ data.entities.base ]
-  tables: [ data.tables.token ]
+  extends:
+    - data.entities.base
+  tables:
+    - data.tables.token
+  included_by:
+    - data.entities.account
 
 fields:
   - name: OwnType
@@ -42,13 +46,12 @@ fields:
     description: "令牌状态"
 
   - name: Account
-    json_name: account
-    relationship: many_to_one
-    target: data.entities.account
-    join_column: data.tables.token.col.account_id
+    target: data.tables.account
+    type: data.entities.account
+    join_column_from: data.tables.token.col.account_id
+    join_column_to: data.tables.account.col.id
     load: lazy
-    description: "令牌所属账号"
+    description: "所属账号"
 
 used_by:
   queries: []
-  entities: [ data.entities.account ]

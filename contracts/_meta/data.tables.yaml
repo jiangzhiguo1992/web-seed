@@ -145,6 +145,14 @@ fields:
         description: "继承的父表 ID 列表；可多父，默认 data.tables.base"
         generates: "展开父表及基类列"
         caution: "父表必须存在且不得成环；同名列来源不同视为冲突；不得重声明任何继承列"
+      - name: entities
+        type: list<string>
+        required: true
+        unique: true
+        pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
+        description: "映射本表的 entity ID 列表；必须与 entity.model.tables 双向一致"
+        generates: "实体反向映射"
+        caution: "显式声明；checker 校验每一处引用，悬空或缺失都报错"
 
   - name: columns
     type: list<object>
@@ -211,11 +219,10 @@ fields:
     required: true
     generated: true
     write: forbidden
-    description: "反向索引；只记直接 entity 与 query"
+    description: "反向索引；只记直接 query"
     generates: "used_by、inbound"
     caution: "生成物，禁止手改；必须是文件最后一个顶层键"
     fields:
-      - { name: entities, type: list<string>, required: true, unique: true, description: "实体 ID 列表" }
       - { name: queries, type: list<string>, required: true, unique: true, description: "查询项 ID 列表" }
 
 rules:
@@ -242,8 +249,9 @@ rules:
   - { id: storage-retention, text: "retention.unit 只能是 minutes/hours/days；各保留时长必须 >= 1", implemented_by: [ storage-retention ] }
   - { id: storage-partition, text: "partition.columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
   - { id: large-index-concurrently, text: "storage.tables.<id>.size_class=large 时索引不得显式 concurrently: \"false\"", implemented_by: [ large-index-concurrently ] }
-  - { id: used-by-generated, text: "used_by 由 make gen-graph 写入，禁止手改；只记 entities 与 queries", implemented_by: [ used-by-generated ] }
-  - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表；跨模块读取用 persistence.queries（read_only_tables 已移除）", implemented_by: [ owner-write ] }
+  - { id: used-by-generated, text: "used_by.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ used-by-generated ] }
+  - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
+  - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表；写查询必须在 persistence.write_queries 或 cap.async.writes 中声明并指向单表；跨模块读取用 persistence.queries", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-reason, text: "索引必须写非空 reason", implemented_by: [ index-reason ] }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型", implemented_by: [ index-definition ] }

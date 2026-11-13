@@ -24,12 +24,21 @@ func fixtureRoot(t *testing.T) string {
 	writeFixture(t, root, "contracts/data/tables/a.yaml", `# table a
 id: data.tables.a
 summary: "a"
+table:
+  comment: "a"
+  extends: [ data.tables.base ]
+  entities: [ data.entities.e1 ]
+used_by:
+  queries: []
 `)
 	writeFixture(t, root, "contracts/data/tables/b.yaml", `# table b
 id: data.tables.b
 summary: "b"
+table:
+  comment: "b"
+  extends: [ data.tables.base ]
+  entities: []
 used_by:
-  entities: [ data.entities.wrong ]
   queries: []
 `)
 	writeFixture(t, root, "contracts/data/entities/e1.yaml", `# entity e1
@@ -38,8 +47,11 @@ model:
   name: e1
   extends: [ data.entities.base ]
   tables: [ data.tables.a ]
+  included_by: []
 fields:
-  - { name: E2, json_name: e2, relationship: many_to_one, target: data.entities.e2, join_column: data.tables.a.col.id, description: "e2" }
+  - { name: E2, target: data.tables.b, type: data.entities.e2, join_column_from: data.tables.a.col.id, join_column_to: data.tables.b.col.id, description: "e2" }
+used_by:
+  queries: []
 `)
 	writeFixture(t, root, "contracts/data/entities/e2.yaml", `# entity e2
 id: data.entities.e2
@@ -47,19 +59,17 @@ model:
   name: e2
   extends: [ data.entities.base ]
   tables: [ data.tables.b ]
+  included_by: [ data.entities.e1 ]
 used_by:
   queries: []
-  entities: [ data.entities.e1 ]
 `)
 	writeFixture(t, root, "contracts/data/queries/q.yaml", `id: data.queries.q
 queries:
-  - id: data.queries.q.get_a
+  - name: GetA
     returns: data.entities.e1
-    statement: select
     targets: [ data.tables.a ]
-  - id: data.queries.q.get_b
+  - name: GetB
     returns: boolean
-    statement: select
     targets: [ data.tables.b ]
 `)
 	return root
@@ -71,20 +81,11 @@ func TestCompute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := snap.Tables["data.tables.a"].Entities; len(got) != 1 || got[0] != "data.entities.e1" {
-		t.Fatalf("table a entities = %v", got)
-	}
 	if got := snap.Tables["data.tables.a"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("table a queries = %v", got)
 	}
-	if got := snap.Tables["data.tables.b"].Entities; len(got) != 1 || got[0] != "data.entities.e2" {
-		t.Fatalf("table b entities = %v", got)
-	}
 	if got := snap.Entities["data.entities.e1"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("entity e1 queries = %v", got)
-	}
-	if got := snap.Entities["data.entities.e2"].Entities; len(got) != 1 || got[0] != "data.entities.e1" {
-		t.Fatalf("entity e2 inbound entities = %v", got)
 	}
 }
 
@@ -113,12 +114,9 @@ func TestWriteAndCheck(t *testing.T) {
 	if !strings.Contains(string(a), "# table a") {
 		t.Fatalf("comment lost:\n%s", a)
 	}
-	if !strings.Contains(string(a), "used_by:\n  entities:\n    - data.entities.e1\n") {
-		t.Fatalf("table used_by not written:\n%s", a)
-	}
 	b, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/b.yaml"))
-	if strings.Contains(string(b), "data.entities.wrong") {
-		t.Fatalf("stale used_by not replaced:\n%s", b)
+	if !strings.Contains(string(b), "data.queries.q.get_b") {
+		t.Fatalf("table b used_by not written:\n%s", b)
 	}
 	e1, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e1.yaml"))
 	if !strings.Contains(string(e1), "used_by:\n  queries:\n    - data.queries.q.get_a\n") {
@@ -172,8 +170,8 @@ func TestDuplicateIDs(t *testing.T) {
 
 	root = t.TempDir()
 	writeFixture(t, root, "contracts/data/tables/.keep", "")
-	writeFixture(t, root, "contracts/data/queries/a.yaml", "queries:\n  - id: data.queries.x.q\n    table: data.tables.a\n")
-	writeFixture(t, root, "contracts/data/queries/b.yaml", "queries:\n  - id: data.queries.x.q\n    table: data.tables.a\n")
+	writeFixture(t, root, "contracts/data/queries/a.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    targets: [ data.tables.a ]\n")
+	writeFixture(t, root, "contracts/data/queries/b.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    targets: [ data.tables.a ]\n")
 	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate query id") {
 		t.Fatalf("duplicate query id not reported: %v", err)
 	}
@@ -187,18 +185,41 @@ func TestMalformedYAML(t *testing.T) {
 	}
 }
 
+func TestUsedByDropsLegacyEntities(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "contracts/data/tables/a.yaml", `id: data.tables.a
+used_by:
+  entities: [ data.entities.e ]
+  queries: []
+`)
+	snap, err := Compute(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := snap.Write(root); err != nil {
+		t.Fatal(err)
+	}
+	src, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/a.yaml"))
+	if strings.Contains(string(src), "entities:") {
+		t.Fatalf("legacy used_by.entities not removed:\n%s", src)
+	}
+	if !strings.Contains(string(src), "used_by:\n  queries: []\n") {
+		t.Fatalf("used_by.queries not written:\n%s", src)
+	}
+}
+
 func TestUsedByNoTrailingNewline(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "contracts/data/tables/a.yaml", "id: data.tables.a\nused_by:\n  entities: []\n  queries: []")
+	writeFixture(t, root, "contracts/data/tables/a.yaml", "id: data.tables.a\nused_by:\n  queries: []")
 	src, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/a.yaml"))
-	out, err := applyUsedBy(src, renderUsedBy("table", []string{"data.entities.e"}, nil))
+	out, err := applyUsedBy(src, renderUsedByQueries([]string{"data.queries.q.get_a"}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.HasSuffix(string(out), "\n") {
 		t.Fatalf("output must end with newline:\n%s", out)
 	}
-	if !strings.Contains(string(out), "data.entities.e") {
+	if !strings.Contains(string(out), "data.queries.q.get_a") {
 		t.Fatalf("used_by not updated:\n%s", out)
 	}
 }
@@ -207,12 +228,11 @@ func TestUsedByNotLast(t *testing.T) {
 	root := t.TempDir()
 	writeFixture(t, root, "contracts/data/tables/a.yaml", `id: data.tables.a
 used_by:
-  entities: []
   queries: []
 after: 1
 `)
 	src, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/a.yaml"))
-	out, err := applyUsedBy(src, renderUsedBy("table", []string{"data.entities.e"}, nil))
+	out, err := applyUsedBy(src, renderUsedByQueries([]string{"data.queries.q.get_a"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +240,7 @@ after: 1
 	if !strings.Contains(text, "after: 1") {
 		t.Fatalf("following key lost:\n%s", text)
 	}
-	if !strings.Contains(text, "data.entities.e") {
+	if !strings.Contains(text, "data.queries.q.get_a") {
 		t.Fatalf("used_by not replaced:\n%s", text)
 	}
 }

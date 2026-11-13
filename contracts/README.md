@@ -149,12 +149,12 @@ contracts/
 - **ID 一旦发布不可改名**；改名 = 新 ID + 旧 ID 标 `deprecated`
 - 跨文件引用一律写 ID，**禁止写文件路径**
 
-**集合契约 vs 项契约**：一个文件可以承载一组同类契约，但每个可寻址项必须有显式 `id`，禁止依赖 snake_case 隐式推导。
+**集合契约 vs 项契约**：一个文件可以承载一组同类契约。每个可寻址项必须有显式 `id`，或由文件 ID + 显式 `name` 确定性派生；禁止从文件内容猜名称。`data.queries` 的项采用后者：`name` 显式，项 ID = `<文件 id>.<snake_case(name)>`。
 
 | 集合文件 | 文件 ID | 项 ID |
 |---|---|---|
 | `data/tables/<file>.yaml` | `data.tables.<file>` | `data.tables.<file>.col.<column>` / `data.tables.<file>.constraint.<name>` |
-| `data/queries/<module>.yaml` | `data.queries.<module>` | `data.queries.<module>.<query_id>` |
+| `data/queries/<module>.yaml` | `data.queries.<module>` | `data.queries.<module>.<snake_case(name)>`（name 显式） |
 | `data/enums.yaml` | `data.enums` | `data.enums.<name>` |
 | `platform/security/permissions.yaml` | `platform.security.permissions` | `platform.security.permissions.<code>` |
 | `platform/security/roles.yaml` | `platform.security.roles` | `platform.security.roles.<code>` |
@@ -186,8 +186,9 @@ feature ──> business ──> capabilities ──> data
 | capabilities/http → capabilities/services | HTTP operation | `x-service` |
 | capabilities/service → data | service 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
 | data.queries → data.tables | 查询项 | `targets` / `index_ref` |
-| data.entities → data.tables | 实体 | `model.tables` / `source.column` / `join_column` |
-| data.tables → 上游（反向） | 表文件 | `used_by.{entities,queries}`（生成物，`make gen-graph` 写入） |
+| data.entities → data.tables | 实体 | `model.tables` / `source.column` / `target` + `type` + `join_column_from/to` |
+| data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `used_by.queries`（生成物） |
+| data.entities → 上游（反向） | 实体文件 | `model.included_by`（显式，checker 校验） / `used_by.queries`（生成物） |
 
 ### 3.2.1 capabilities 不引用 business
 

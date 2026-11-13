@@ -32,7 +32,7 @@ interface:
         - { name: ctx, type: context.Context }
         - { name: filter, type: ListAccountsFilter }
       returns:
-        - { name: accounts, type: "[]data.entities.account" }
+        - { name: accounts, type: List<data.entities.account> }
         - { name: next_cursor, type: string, nullable: true }
         - { name: err, type: error }
       errors: [platform.errors.COMMON_FORBIDDEN]
@@ -117,6 +117,12 @@ interface:
 persistence:
   table: data.tables.account
   field_map: {}                    # 实体字段名与列名一致，无差异
+  write_queries:
+    - data.queries.account.create_account
+    - data.queries.account.update_account
+    - data.queries.account.set_account_status
+    - data.queries.account.soft_delete_account
+    - data.queries.account.soft_delete_stale_pending_accounts
   queries:
     get: data.queries.account.get_account
     get_by_number: data.queries.account.get_account_by_number

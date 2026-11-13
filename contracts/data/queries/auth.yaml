@@ -1,5 +1,5 @@
 # 认证查询集。密码/手机/邮箱/令牌查询只在这里出现。
-# 只声明接口：入参、结果、目标表、索引与读写属性；SQL 由实现负责。
+# 只声明接口：入参、结果、目标表与索引；SQL 由实现负责。
 
 id: data.queries.auth
 summary: "认证查询集"
@@ -12,10 +12,7 @@ do_not:
   - "auth 查询不要绕过 return_columns 返回未声明的敏感列"
 
 queries:
-  - id: data.queries.auth.get_auth_pwd_by_username
-    name: GetAuthPwdByUsername
-    access: read
-    kind: one
+  - name: GetAuthPwdByUsername
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: username, type: text, column: data.tables.auth_pwd.col.username }
@@ -23,10 +20,7 @@ queries:
     return_columns: [ id, account_id, username, password_hash, failed_login_count, locked_until, status ]
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_username ]
 
-  - id: data.queries.auth.create_auth_pwd
-    name: CreateAuthPwd
-    access: write
-    kind: one
+  - name: CreateAuthPwd
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: id, type: text, column: data.tables.auth_pwd.col.id }
@@ -39,10 +33,7 @@ queries:
       - data.tables.auth_pwd.uq_auth_pwd_username
       - data.tables.auth_pwd.uq_auth_pwd_account
 
-  - id: data.queries.auth.update_auth_pwd_hash
-    name: UpdateAuthPwdHash
-    access: write
-    kind: exec
+  - name: UpdateAuthPwdHash
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: id, type: text, column: data.tables.auth_pwd.col.id }
@@ -50,20 +41,14 @@ queries:
     returns: affected_rows
     index_ref: [ data.tables.auth_pwd.pk ]
 
-  - id: data.queries.auth.record_auth_pwd_login_success
-    name: RecordAuthPwdLoginSuccess
-    access: write
-    kind: exec
+  - name: RecordAuthPwdLoginSuccess
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: id, type: text, column: data.tables.auth_pwd.col.id }
     returns: affected_rows
     index_ref: [ data.tables.auth_pwd.pk ]
 
-  - id: data.queries.auth.record_auth_pwd_login_failure
-    name: RecordAuthPwdLoginFailure
-    access: write
-    kind: exec
+  - name: RecordAuthPwdLoginFailure
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: id, type: text, column: data.tables.auth_pwd.col.id }
@@ -71,10 +56,7 @@ queries:
     returns: affected_rows
     index_ref: [ data.tables.auth_pwd.pk ]
 
-  - id: data.queries.auth.get_auth_phone_by_number
-    name: GetAuthPhoneByNumber
-    access: read
-    kind: one
+  - name: GetAuthPhoneByNumber
     targets: [ data.tables.auth_phone ]
     params:
       - { name: code, type: text, column: data.tables.auth_phone.col.code }
@@ -83,10 +65,7 @@ queries:
     return_columns: [ id, account_id, code, number, operator, status ]
     index_ref: [ data.tables.auth_phone.uq_auth_phone_number ]
 
-  - id: data.queries.auth.create_auth_phone
-    name: CreateAuthPhone
-    access: write
-    kind: one
+  - name: CreateAuthPhone
     targets: [ data.tables.auth_phone ]
     params:
       - { name: id, type: text, column: data.tables.auth_phone.col.id }
@@ -98,10 +77,7 @@ queries:
     return_columns: [ id, account_id, code, number, operator, status, created_at, updated_at ]
     index_ref: [ data.tables.auth_phone.uq_auth_phone_number ]
 
-  - id: data.queries.auth.get_auth_email_by_username_domain
-    name: GetAuthEmailByUsernameDomain
-    access: read
-    kind: one
+  - name: GetAuthEmailByUsernameDomain
     targets: [ data.tables.auth_email ]
     params:
       - { name: username, type: text, column: data.tables.auth_email.col.username }
@@ -110,10 +86,7 @@ queries:
     return_columns: [ id, account_id, username, domain, entity, tld, status ]
     index_ref: [ data.tables.auth_email.uq_auth_email_username_domain ]
 
-  - id: data.queries.auth.create_auth_email
-    name: CreateAuthEmail
-    access: write
-    kind: one
+  - name: CreateAuthEmail
     targets: [ data.tables.auth_email ]
     params:
       - { name: id, type: text, column: data.tables.auth_email.col.id }
@@ -126,10 +99,7 @@ queries:
     return_columns: [ id, account_id, username, domain, entity, tld, status, created_at, updated_at ]
     index_ref: [ data.tables.auth_email.uq_auth_email_username_domain ]
 
-  - id: data.queries.auth.create_token
-    name: CreateToken
-    access: write
-    kind: one
+  - name: CreateToken
     targets: [ data.tables.token ]
     params:
       - { name: id, type: text, column: data.tables.token.col.id }
@@ -148,10 +118,7 @@ queries:
       - data.tables.token.uq_tokens_access_hash
       - data.tables.token.uq_tokens_refresh_hash
 
-  - id: data.queries.auth.get_token_by_refresh
-    name: GetTokenByRefresh
-    access: read
-    kind: one
+  - name: GetTokenByRefresh
     targets: [ data.tables.token ]
     params:
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
@@ -159,10 +126,7 @@ queries:
     return_columns: [ id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status ]
     index_ref: [ data.tables.token.uq_tokens_refresh_hash ]
 
-  - id: data.queries.auth.get_token_by_access
-    name: GetTokenByAccess
-    access: read
-    kind: one
+  - name: GetTokenByAccess
     targets: [ data.tables.token ]
     params:
       - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
@@ -170,33 +134,24 @@ queries:
     return_columns: [ id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status ]
     index_ref: [ data.tables.token.uq_tokens_access_hash ]
 
-  - id: data.queries.auth.revoke_token
-    name: RevokeToken
-    access: write
-    kind: exec
+  - name: RevokeToken
     targets: [ data.tables.token ]
     params:
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
     returns: affected_rows
     index_ref: [ data.tables.token.uq_tokens_refresh_hash ]
 
-  - id: data.queries.auth.delete_expired_tokens
-    name: DeleteExpiredTokens
-    access: write
-    kind: exec
+  - name: DeleteExpiredTokens
     targets: [ data.tables.token ]
     params:
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
     returns: affected_rows
     index_ref: [ data.tables.token.idx_tokens_refresh_expire_at ]
 
-  - id: data.queries.auth.list_tokens_by_account
-    name: ListTokensByAccount
-    access: read
-    kind: many
+  - name: ListTokensByAccount
     targets: [ data.tables.token ]
     params:
       - { name: account_id, type: text, column: data.tables.token.col.account_id }
-    returns: "[]data.tables.token.row"
+    returns: List<data.tables.token.row>
     return_columns: [ id, account_id, device_id, access_expire_at, refresh_expire_at, status, created_at, updated_at ]
     index_ref: [ data.tables.token.idx_tokens_account_id ]

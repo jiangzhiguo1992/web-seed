@@ -19,7 +19,6 @@ do_not:
 
 fields:
   - name: ID
-    json_name: id
     type: string
     mutable: false
     description: "实体唯一主键；来自主表 id 列"
@@ -27,7 +26,6 @@ fields:
     validation: { column: data.tables.base.col.id }
 
   - name: Status
-    json_name: status
     type: integer
     examples: [ 0, 1 ]
     description: "业务状态整数码；具体实体可用 data.enums.* 特化"
@@ -35,7 +33,6 @@ fields:
     validation: { column: data.tables.base.col.status }
 
   - name: CreatedAt
-    json_name: created_at
     type: timestamp
     mutable: false
     description: "创建时间"
@@ -43,7 +40,6 @@ fields:
     validation: { column: data.tables.base.col.created_at }
 
   - name: UpdatedAt
-    json_name: updated_at
     type: timestamp
     mutable: false
     description: "更新时间"
@@ -51,7 +47,6 @@ fields:
     validation: { column: data.tables.base.col.updated_at }
 
   - name: DeletedAt
-    json_name: deleted_at
     type: "*timestamp"
     mutable: false
     description: "软删时间；为空表示未删除"

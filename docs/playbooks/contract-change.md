@@ -96,7 +96,7 @@ make contract-new type=data.enums  name=note_status
 
 `column_type` 可选；指定后第一列使用该类型族，并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
 
-生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables` 下登记**（engine/size_class/retention/partition），否则 `contract-check` 会报 `[storage-registry]`。字段规范：`contracts/_meta/data.tables.yaml`。
+生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables` 下登记**（engine/size_class/retention/partition），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体。新实体在 `model.included_by` 列出包含它的实体，两处由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`。
 
 ### 3.2 校验
 
@@ -104,7 +104,7 @@ make contract-new type=data.enums  name=note_status
 make contract-check
 ```
 
-校验结构、ID、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`used_by` 的 entities/queries（直接入边）。不通过不要进入生成。
+校验结构、ID、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`table.entities` / `model.included_by`（显式映射）与 `used_by.queries`（生成物）。不通过不要进入生成。
 
 修改 `rules` 的 `implemented_by` 后，运行 `make gen-rule-ids` 更新 `rule_ids_gen.go`；`make contract-check` 会拒绝过期的生成文件。
 
