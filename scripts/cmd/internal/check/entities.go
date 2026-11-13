@@ -38,17 +38,18 @@ type entityFieldInfo struct {
 	SourceColumnRef string
 	SourceComputed  string
 	SourceSoft      string
+	HasSource       bool
 	HasType         bool
 	Type            string
 	ValidationKind  string
 	ValidationRef   string
 	ValidationCount int
+	HasValidation   bool
 	Sensitivity     string
 	HasSensitivity  bool
 	JSONName        string
 	Description     string
 	IsRelation      bool
-	Relationship    string
 	JoinFromRef     string
 	JoinFromTable   string
 	JoinFromColumn  string
@@ -242,6 +243,7 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 		f.Type, f.HasType = v, true
 	}
 	if src, ok := asMap(m["source"]); ok {
+		f.HasSource = true
 		f.SourceColumnRef, _ = src["column"].(string)
 		f.SourceComputed, _ = src["computed"].(string)
 		f.SourceSoft, _ = src["soft"].(string)
@@ -250,6 +252,7 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 		}
 	}
 	if val, ok := asMap(m["validation"]); ok {
+		f.HasValidation = true
 		for _, kind := range []string{"column", "pattern", "soft"} {
 			if v, ok := val[kind].(string); ok && v != "" {
 				f.ValidationCount++
@@ -678,8 +681,7 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 
 // checkRelationFieldShape 校验关系字段的键集合与必填项。
 func (c *Checker) checkRelationFieldShape(f entityFieldInfo, where string) {
-	if f.SourceColumnRef != "" || f.SourceComputed != "" || f.SourceSoft != "" ||
-		f.ValidationCount > 0 || f.HasSensitivity {
+	if f.HasSource || f.HasValidation || f.HasSensitivity {
 		c.rulef("entity-field-variant", "%s: relation field must not declare source/validation/sensitivity", where)
 	}
 	if !f.HasType || f.JoinFromRef == "" || f.JoinToRef == "" {
@@ -960,7 +962,6 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			continue
 		}
 		card := c.relationCardinality(r)
-		r.Relationship = card
 		if card == "" {
 			c.rulef("entity-relation-cardinality", "%s: one side of join columns must be unique (PK or unique index)", where)
 			continue

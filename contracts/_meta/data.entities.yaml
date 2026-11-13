@@ -52,7 +52,6 @@ fields:
     type: string
     required: true
     enum: [ stable, draft, deprecated ]
-    default: draft
     description: "契约稳定度"
     generates: "index 摘要"
     caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
@@ -72,7 +71,7 @@ fields:
     caution: "内层顺序以本文件 model.fields 为准；不要在这里塞字段"
     fields:
       - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名；首字母大写 public，小写 internal", caution: "必须是合法非关键字 Go 标识符；全局唯一" }
-      - { name: extends, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', default: [ data.entities.base ], description: "继承的实体基类；当前只允许 data.entities.base", caution: "不得引用普通 entity；基类字段不得重声明；Status 可用 data.enums.* 特化" }
+      - { name: extends, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "继承的实体基类；当前只允许 data.entities.base", caution: "不得引用普通 entity；基类字段不得重声明；Status 可用 data.enums.* 特化" }
       - { name: tables, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "实体映射的物理表列表；第一张是主表，单表也写成列表", caution: "不得指向 data.tables.base；多表时字段必须用 source.column 指明来源；每张表至少被一个字段引用" }
       - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "通过关系字段指向本实体的 entity ID 列表；必须与关系字段 type 双向一致", caution: "显式声明；checker 校验每一处引用，悬空或缺失都报错" }
 
@@ -95,7 +94,7 @@ fields:
         caution: "标量字段必须显式；column 的校验/类型由来源列给出；computed 不占列；soft=外部传入或无法脚本化的来源说明"
         fields:
           - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "来源物理列；必须属于本实体的表", caution: "同一列不得被两个字段引用" }
-          - { name: computed, type: string, required: false, description: "计算/聚合表达式；标量字段的另一种来源", caution: "非空；必须使用指针类型 *T；不引用 @param；不同查询需要不同算法时改用 query.returns" }
+          - { name: computed, type: string, required: false, description: "计算/聚合表达式；标量字段的另一种来源", caution: "非空；必须使用指针类型 *T；不引用 @param；不同查询需要不同算法时改用 query.returns；表达式语义由实现验证" }
           - { name: soft, type: string, required: false, description: "外部传入或无法脚本化的来源说明", caution: "非空；必须显式 type；validation 不得使用 column" }
       - name: validation
         type: object
@@ -120,7 +119,7 @@ fields:
     caution: "不要写 DDL；不要写业务行为规则（属于 business.rules）"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "校验名；实体内唯一；ID 派生为 <entity-id>.<name>" }
-      - { name: expr, type: string, required: true, description: "可执行的布尔表达式" }
+      - { name: expr, type: string, required: true, description: "可执行的布尔表达式", caution: "checker 只校验非空；表达式语义由实现验证" }
       - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "失败时映射的错误码" }
 
   - name: used_by
@@ -150,7 +149,7 @@ rules:
   - { id: entity-key-order, text: "实体契约字段顺序必须与 _meta/data.entities.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ entity-key-order ] }
   - { id: entity-model-order, text: "model 内字段顺序必须与 _meta/data.entities.yaml 的 model.fields 一致", implemented_by: [ entity-model-order ] }
   - { id: entity-id, text: "ID 是所有实体的唯一主键：必须来自主表 id 列、非指针，且是唯一主键", implemented_by: [ entity-id ] }
-  - { id: entity-field-variant, text: "字段二选一：标量字段必须有 source 且不得写 join_column_from/join_column_to/load；关系字段必须有 type/join_column_from/join_column_to，且不得写 source/validation/sensitivity", implemented_by: [ entity-field-variant ] }
+  - { id: entity-field-variant, text: "字段二选一：标量字段必须有 source 且不得写 join_column_from/join_column_to/load；关系字段必须有 type/join_column_from/join_column_to，且不得写 source/validation/sensitivity（空对象也不允许）", implemented_by: [ entity-field-variant ] }
   - { id: entity-field-source, text: "source 必须三选一：column 指向本实体表的列；computed 非空、指针类型、不引用 @param；soft 非空且必须显式 type", implemented_by: [ entity-field-source ] }
   - { id: entity-field-type, text: "来源列字段的 type 可省略，省略时按列类型+nullable 派生；computed/soft 必填；显式 type 的 * 前缀必须与来源列 nullable 一致；枚举只能映射 integer 列；禁止列表类型和 data.tables.* 行类型", implemented_by: [ entity-field-type ] }
   - { id: entity-field-column, text: "source.column 必须存在且属于本实体的表；同一列不得被两个字段引用；多表合成的每张表至少被一个字段引用", implemented_by: [ entity-field-column ] }

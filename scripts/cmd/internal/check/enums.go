@@ -82,7 +82,36 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		enums[id] = values
 		c.checkEnumUsedBy(rel, i, id, m, usages[id])
 	}
+	c.checkEnumDoNot(doc, rel, schema.Targets.ID, names)
 	return enums
+}
+
+// checkEnumDoNot 要求 do_not 命中集合 ID 或本文件的枚举名，避免通用规则堆在实例。
+func (c *Checker) checkEnumDoNot(doc map[string]any, rel, setID string, enumNames map[string]bool) {
+	tokens := map[string]bool{setID: true}
+	for name := range enumNames {
+		if name != "" {
+			tokens[name] = true
+		}
+	}
+	for i, raw := range asList(doc["do_not"]) {
+		s, _ := raw.(string)
+		trimmed := strings.TrimSpace(s)
+		if trimmed == "" {
+			c.rulef("enum-do-not-specific", "%s: do_not[%d] must not be empty", rel, i)
+			continue
+		}
+		specific := false
+		for tok := range tokens {
+			if strings.Contains(trimmed, tok) {
+				specific = true
+				break
+			}
+		}
+		if !specific {
+			c.rulef("enum-do-not-specific", "%s: do_not[%d] must mention %s or an enum name: %s", rel, i, setID, trimmed)
+		}
+	}
 }
 
 // checkEnumSchema 防止 meta 字段树被误删；硬校验依赖这些 required 字段。
@@ -165,11 +194,9 @@ func (c *Checker) enumUsages() map[string]*enumUsage {
 				continue
 			}
 			typ, _ := m["type"].(string)
-			typ = strings.TrimPrefix(typ, "*")
-			if !strings.HasPrefix(typ, "data.enums.") {
-				continue
+			if enumID, ok := enumTypeRef(typ); ok {
+				enumUsageFor(usages, enumID).entities[entityID] = true
 			}
-			enumUsageFor(usages, typ).entities[entityID] = true
 		}
 	}
 	for _, f := range walkYAML(c.root, "contracts/capabilities") {
@@ -203,9 +230,8 @@ func (c *Checker) collectEnumRefs(v any, fn func(string)) {
 		for k, child := range m {
 			if k == "type" {
 				if t, ok := child.(string); ok {
-					t = strings.TrimPrefix(t, "*")
-					if strings.HasPrefix(t, "data.enums.") {
-						fn(t)
+					if enumID, ok := enumTypeRef(t); ok {
+						fn(enumID)
 					}
 				}
 			}
@@ -218,6 +244,19 @@ func (c *Checker) collectEnumRefs(v any, fn func(string)) {
 			c.collectEnumRefs(item, fn)
 		}
 	}
+}
+
+// enumTypeRef 提取 type 中的枚举 ID，兼容 *T 与 List<T>。
+func enumTypeRef(typ string) (string, bool) {
+	typ = strings.TrimPrefix(strings.TrimSpace(typ), "*")
+	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
+		typ = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"))
+		typ = strings.TrimPrefix(typ, "*")
+	}
+	if strings.HasPrefix(typ, "data.enums.") {
+		return typ, true
+	}
+	return "", false
 }
 
 // checkEnumUsedBy 要求 used_by.entities/capabilities 与实际引用完全一致。
@@ -286,10 +325,9 @@ func (c *Checker) scanEnumTypeRefs(v any, rel, path string, enums map[string]map
 			}
 			if k == "type" {
 				if t, ok := child.(string); ok {
-					t = strings.TrimPrefix(t, "*")
-					if strings.HasPrefix(t, "data.enums.") {
-						if _, found := enums[t]; !found {
-							c.rulef("schema.ref", "%s: %s: unknown enum %s", rel, childPath, t)
+					if enumID, ok := enumTypeRef(t); ok {
+						if _, found := enums[enumID]; !found {
+							c.rulef("schema.ref", "%s: %s: unknown enum %s", rel, childPath, enumID)
 						}
 					}
 				}

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func entityErrs(c *Checker) string {
@@ -346,6 +348,26 @@ func TestEntityRelationJoinColumnTypeMismatch(t *testing.T) {
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-via]") || !strings.Contains(entityErrs(c), "does not match") {
 		t.Fatalf("join_column type mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestEntityRelationRejectsEmptySourceAndValidation(t *testing.T) {
+	f := parseEntityField(map[string]any{
+		"name":             "Tokens",
+		"type":             "data.entities.token",
+		"description":      "tokens",
+		"source":           map[string]any{},
+		"validation":       map[string]any{},
+		"join_column_from": "data.tables.account.col.id",
+		"join_column_to":   "data.tables.token.col.account_id",
+	})
+	if f == nil || !f.HasSource || !f.HasValidation {
+		t.Fatalf("empty source/validation maps must still count as declared: %#v", f)
+	}
+	c := &Checker{}
+	c.checkRelationFieldShape(*f, "x")
+	if !strings.Contains(entityErrs(c), "[entity-field-variant]") {
+		t.Fatalf("empty source/validation on relation not reported: %v", c.errs)
 	}
 }
 
@@ -729,6 +751,93 @@ func TestQueryDefaultRequiresNullable(t *testing.T) {
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid nullable default reported: %v", c.errs)
+	}
+}
+
+func TestQueryParamTypeAndDefaultValidation(t *testing.T) {
+	c := &Checker{}
+	q := &queryInfo{ID: "q", File: "q.yaml", Params: []queryParam{
+		{Name: "mode", Type: "unknown_type"},
+	}}
+	c.checkQueryParams(q)
+	if !strings.Contains(entityErrs(c), "cannot map to a type family") {
+		t.Fatalf("unknown param type not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[0] = queryParam{Name: "status", Type: "data.enums.account_status"}
+	c.checkQueryParams(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("enum param reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[0] = queryParam{Name: "page_size", Type: "integer", Nullable: true, HasDefault: true, DefaultValue: "20"}
+	c.checkQueryParams(q)
+	if !strings.Contains(entityErrs(c), "default must be an integer") {
+		t.Fatalf("wrong default type not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[0] = queryParam{Name: "ids", Type: "List<integer>", Nullable: true, HasDefault: true, DefaultValue: 1}
+	c.checkQueryParams(q)
+	if !strings.Contains(entityErrs(c), "default must be a list") {
+		t.Fatalf("non-list default for array not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[0] = queryParam{Name: "since", Type: "timestamp", Nullable: true, HasDefault: true, DefaultValue: "2026-01-01T00:00:00Z"}
+	c.checkQueryParams(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid timestamp default reported: %v", c.errs)
+	}
+}
+
+func TestQueryEnumParamBindsIntegerColumn(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.x": {"status": {typ: "integer"}},
+	}}
+	q := &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.x"},
+		Params: []queryParam{{Name: "status", Type: "data.enums.x_status", Column: "data.tables.x.col.status"}}}
+	c.checkQueryParamColumns(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("enum param bound to integer column reported: %v", c.errs)
+	}
+}
+
+func TestRenderedQueryParamBindsIDColumn(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, _, err := contractspec.LoadSchemaByType(root, "data.queries")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := contractspec.RenderQuery(schema, "note", "notes", "note", "note", "备注查询")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "q.yaml")
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := loadYAML(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	queries := asList(doc["queries"])
+	if len(queries) != 1 {
+		t.Fatalf("rendered query count = %d", len(queries))
+	}
+	qm, _ := asMap(queries[0])
+	q := parseQuery(qm, "q.yaml", "data.queries.note", "notes")
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.note": {"id": {typ: "integer", primaryKey: true}},
+	}}
+	c.checkQueryParamColumns(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("rendered query param must bind the integer id column: %v", c.errs)
 	}
 }
 

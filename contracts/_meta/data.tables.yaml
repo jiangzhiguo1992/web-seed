@@ -48,7 +48,6 @@ fields:
     type: string
     required: true
     enum: [ stable, draft, deprecated ]
-    default: draft
     description: "契约稳定度"
     generates: "index 摘要"
     caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
@@ -84,8 +83,7 @@ fields:
         required: true
         pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
         unique: true
-        default: [ data.tables.base ]
-        description: "继承的父表 ID 列表；可多父，默认 data.tables.base"
+        description: "继承的父表 ID 列表；可多父；必须显式声明，通常为 data.tables.base"
         generates: "展开父表及基类列"
         caution: "父表必须存在且不得成环；同名列来源不同视为冲突；不得重声明任何继承列"
       - name: entities
@@ -105,11 +103,11 @@ fields:
     caution: "枚举映射只在 entity；status 由基类提供"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', examples: [ "name" ], description: "列名" }
-      - { name: type, type: string, required: true, default: string, description: "类型族键，或 data.tables.<t>.col.<c> 引用", caution: "引用规则硬编码：只允许 data.tables.<t>.col.<c>；表列不引用 data.enums.*；引用类型不可带类型族参数" }
+      - { name: type, type: string, required: true, description: "类型族键，或 data.tables.<t>.col.<c> 引用", caution: "引用规则硬编码：只允许 data.tables.<t>.col.<c>；表列不引用 data.enums.*；引用类型不可带类型族参数" }
       - { name: nullable, type: boolean, required: false, default: false, description: "是否可空；默认 false" }
-      - { name: primary_key, type: boolean, required: false, description: "是否主键；主键不可空", caution: "基类 id 已是主键；仅复合主键时使用" }
+      - { name: primary_key, type: boolean, required: false, description: "是否主键；主键不可空；仅基类 id 使用", caution: "物理表主键由基类 id 提供；不要声明复合主键（entity-id 要求唯一主键）" }
       - { name: default, type: any, required: false, description: "字面量默认值；与 default_sql 互斥" }
-      - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值；与 default 互斥" }
+      - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值；与 default 互斥", caution: "checker 只校验互斥；SQL 语义由生成器/数据库验证" }
       # 类型族参数由 _meta/_types.yaml 的 column_types.families.params 注入
       - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], default: public, description: "列敏感级别；public 可返回，pii 可脱敏返回，secret 禁止返回", caution: "secret 隐含 pii；继承到 entity 时只能收紧，不能降低" }
       - { name: redundancy, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "所属冗余组 ID；组定义与 source/copies 见 data/storage.yaml 的 redundancy_groups", caution: "列只写组 ID；source/copy 角色、类型与可空一致性由 checker 按 storage 校验" }
@@ -134,8 +132,8 @@ fields:
     caution: "唯一索引用 unique: true；live_only 决定唯一作用域；索引名同一 schema 内必须全局唯一"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名；普通 idx_，唯一 uq_" }
-      - { name: columns, type: list<string>, required: false, description: "索引列；与 expression 二选一" }
-      - { name: expression, type: string, required: false, description: "表达式索引；与 columns 二选一" }
+      - { name: columns, type: list<string>, required: false, unique: true, description: "索引列；与 expression 二选一" }
+      - { name: expression, type: string, required: false, description: "表达式索引；与 columns 二选一", caution: "checker 只校验互斥与非空；SQL 语义由生成器/数据库验证" }
       - { name: unique, type: boolean, required: false, description: "是否唯一" }
       - { name: live_only, type: boolean, required: false, default: false, description: "是否只约束未软删行（deleted_at IS NULL）", caution: "true=软删后可复用；false/省略=全表唯一（含软删行）" }
       - { name: comment, type: string, required: true, description: "索引用途；生成 COMMENT ON INDEX" }
@@ -181,12 +179,13 @@ rules:
   - { id: index-comment, text: "索引必须写非空 comment", implemented_by: [ index-comment ] }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；名称前缀匹配类型", implemented_by: [ index-definition ] }
   - { id: index-used-by, text: "每条索引必须声明 used_by，至少引用一个查询项 ID", implemented_by: [ index-used-by ] }
-  - { id: index-used-by-ref, text: "index.used_by 必须指向 data.queries.* 项；该查询必须引用当前表，且表达式提及索引列", implemented_by: [ index-used-by-ref ] }
+  - { id: index-used-by-ref, text: "index.used_by 必须指向存在的 data.queries.* 项，且该查询的 tables 必须包含当前表", implemented_by: [ index-used-by-ref ] }
   - { id: index-name-unique, text: "索引名同一 schema 内必须全局唯一", implemented_by: [ index-name-unique ] }
   - { id: constraint-error-ref, text: "capabilities.persistence.constraint_errors 的键必须是所写表声明的约束或索引名", implemented_by: [ constraint-error-ref ] }
   - { id: redundant-group, text: "storage.redundancy_groups 每个组必须有 source 和至少一个 copies；组 ID 唯一且为 snake_case", implemented_by: [ redundant-group ] }
   - { id: redundant-ref, text: "columns[].redundancy 必须与 storage.redundancy_groups 双向一致；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
-  - { id: default-type, text: "default 的类型、长度、范围必须与字段类型兼容", implemented_by: [ default-type ] }
+  - { id: default-type, text: "列 default 的 YAML 类型必须与列类型族兼容；长度/范围按本列声明的参数校验（不展开 data.tables.*.col.* 引用）", implemented_by: [ default-type ] }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
   - { id: primary-key-nullable, text: "primary_key: true 的字段不得 nullable: true", implemented_by: [ primary-key-nullable ] }
+  - { id: physical-primary-key, text: "物理表不得声明 primary_key；主键统一由基类 id 提供", implemented_by: [ physical-primary-key ] }
   - { id: do-not-specific, text: "物理表 do_not 每条必须含本表标识；通用规则上移组 README 或 _base", implemented_by: [ do-not-specific ] }

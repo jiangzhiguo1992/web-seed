@@ -88,9 +88,8 @@ type entityModelScaffold struct {
 }
 
 type entityFieldScaffold struct {
-	Name     string `yaml:"name"`
-	Type     string `yaml:"type"`
-	Required bool   `yaml:"required,omitempty"`
+	Name string `yaml:"name"`
+	Type string `yaml:"type"`
 }
 
 type entityUsedByScaffold struct {
@@ -293,6 +292,15 @@ func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, 
 	if err := requireSupported(s.Fields, top, "data.entities"); err != nil {
 		return nil, err
 	}
+	modelField, ok := FindField(s.Fields, "model")
+	if !ok {
+		return nil, fmt.Errorf("RenderEntity: model is missing in schema")
+	}
+	if err := requireSupported(modelField.Fields, map[string]bool{
+		"name": true, "extends": true, "tables": true, "included_by": true,
+	}, "data.entities.model"); err != nil {
+		return nil, err
+	}
 	fieldsField, ok := FindField(s.Fields, "fields")
 	if !ok {
 		return nil, fmt.Errorf("RenderEntity: fields is missing in schema")
@@ -380,6 +388,15 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 	}, "data.queries.queries.params"); err != nil {
 		return nil, err
 	}
+	returnsField, ok := FindField(queriesField.ItemFields, "returns")
+	if !ok {
+		return nil, fmt.Errorf("RenderQuery: returns is missing in schema")
+	}
+	if err := requireSupported(returnsField.ItemFields, map[string]bool{
+		"name": true, "kind": true,
+	}, "data.queries.queries.returns"); err != nil {
+		return nil, err
+	}
 	fileID := s.Targets.FileID(name + ".yaml")
 	if fileID == "" {
 		return nil, fmt.Errorf("RenderQuery: cannot derive id from targets.id")
@@ -393,7 +410,7 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		Queries: []queryItemScaffold{{
 			Name:     "Exists" + pascal(name),
 			Tables:   []string{"data.tables." + table},
-			Params:   []queryParamScaffold{{Name: "id", Type: "text", Column: "data.tables." + table + ".col.id"}},
+			Params:   []queryParamScaffold{{Name: "id", Type: "integer", Column: "data.tables." + table + ".col.id"}},
 			Returns:  []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}},
 			IndexRef: flowStrings{"data.tables." + table + ".pk"},
 		}},
@@ -473,11 +490,6 @@ func defaultString(fields []Field, name, fallback string) string {
 	}
 	if s, ok := f.Const.(string); ok && s != "" {
 		return s
-	}
-	if len(f.Enum) > 0 {
-		if s, ok := f.Enum[0].(string); ok && s != "" {
-			return s
-		}
 	}
 	return fallback
 }

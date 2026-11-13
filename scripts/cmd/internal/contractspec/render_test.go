@@ -165,6 +165,14 @@ func TestRenderQuery(t *testing.T) {
 	if len(returns) != 1 {
 		t.Fatalf("query returns not scaffolded: %#v", q)
 	}
+	params, _ := q["params"].([]any)
+	if len(params) != 1 {
+		t.Fatalf("query params not scaffolded: %#v", q)
+	}
+	param, _ := params[0].(map[string]any)
+	if param["type"] != "integer" || param["column"] != "data.tables.account.col.id" {
+		t.Fatalf("query id param must bind the integer primary key: %#v", param)
+	}
 	ret, _ := returns[0].(map[string]any)
 	if ret["kind"] != "scalar" || ret["type"] != "boolean" {
 		t.Fatalf("query return shape not scaffolded: %#v", ret)
@@ -188,6 +196,35 @@ func TestRenderQuery(t *testing.T) {
 	}
 	if _, err := RenderQuery(s, "note", "notes", "note", "bad name", "x"); err == nil {
 		t.Fatal("invalid physical table name should fail")
+	}
+}
+
+func TestRenderEntityRejectsUnsupportedModelRequired(t *testing.T) {
+	s := loadSchemaByType(t, "data.entities")
+	for i := range s.Fields {
+		if s.Fields[i].Name == "model" {
+			s.Fields[i].Fields = append(s.Fields[i].Fields, Field{Name: "new_required", Type: "string", Required: true})
+		}
+	}
+	if _, err := RenderEntity(s, "note", "note", "notes", "备注实体"); err == nil {
+		t.Fatal("expected unsupported required model field to fail")
+	}
+}
+
+func TestRenderQueryRejectsUnsupportedReturnRequired(t *testing.T) {
+	s := loadSchemaByType(t, "data.queries")
+	for i := range s.Fields {
+		if s.Fields[i].Name != "queries" {
+			continue
+		}
+		for j := range s.Fields[i].ItemFields {
+			if s.Fields[i].ItemFields[j].Name == "returns" {
+				s.Fields[i].ItemFields[j].ItemFields = append(s.Fields[i].ItemFields[j].ItemFields, Field{Name: "new_required", Type: "string", Required: true})
+			}
+		}
+	}
+	if _, err := RenderQuery(s, "note", "notes", "note", "note", "备注查询"); err == nil {
+		t.Fatal("expected unsupported required return field to fail")
 	}
 }
 

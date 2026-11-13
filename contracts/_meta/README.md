@@ -78,7 +78,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；类型族来自 `_meta/_types.yaml`。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`storage.tables` 的 retention/partition、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；类型族来自 `_meta/_types.yaml`。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.tables` 的 retention/partition、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -96,7 +96,7 @@ scripts/cmd/
   - 必填字段、类型、枚举、`const`、`pattern`、`allowed`、`unique`
   - `id` 按 `targets.id` 模板生成；基类 `_base.yaml` 的路径/ID 写死在 checker，不参与模板
   - 物理表 `table.extends` 是父表列表：可指向 `data.tables.base` 或任意已存在的表；多父同名列只有来源相同（钻石继承）才允许；链不得成环且必须到达基类；不得重复任何继承列
-  - `primary_key` 列不得可空
+  - 基类 `id` 的 `primary_key` 列不得可空；物理表不得声明 `primary_key`，主键统一由基类提供
   - `default` / `default_sql` 互斥；`default` 的 YAML 类型、长度、范围与列类型族兼容
   - 列 / 约束 / 索引重名；`do_not` 每条必须含本表具体标识
 - `data.tables.base`（`contracts/data/tables/_base.yaml`，单例）
@@ -112,7 +112,7 @@ scripts/cmd/
   - `data/queries/*.yaml` 的 `index_ref`：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须在 `used_by` 中列出该 query
   - `data/storage.yaml` 的 `tables`：覆盖每张物理表且无孤儿；engine/size_class/retention/partition 的结构与取值；`redundancy_groups` 的组 ID、source/copies 与列声明双向一致
   - `table.entities` 显式记录映射本表的实体，checker 校验；`used_by` 只记生成的 `queries`
-  - `owner_module` 与 capabilities 写表归属一致；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
+  - `owner_module` 与 capabilities 写表归属一致（只有 `cap.services` / `cap.async` 可写）；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
   - `persistence.queries` 引用的查询项必须存在；`persistence.write_queries`（service）与 `writes`（async）必须已在 queries/uses 中登记，且目标单表、归属一致；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
   - 索引名同一 schema 内必须全局唯一
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
@@ -130,6 +130,7 @@ scripts/cmd/
   - `summary` 非空；`stability: stable` 不得含 TODO/FIXME
   - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
   - `used_by.entities/capabilities` 必须与 entity 字段和 capability 引用完全一致；不列物理表或 feature，空列表合法；两个列表逐行竖排
+  - `do_not` 每条必须含集合 ID `data.enums` 或本文件枚举名；通用规则放组 README
 - `data.entities.base`（`contracts/data/entities/_base.yaml`，单例）
   - 路径/ID 由 checker 写死识别；5 个字段固定为 `ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`
   - `ID` / `Status` integer、`CreatedAt` / `UpdatedAt` timestamp、`DeletedAt` 可空 timestamp；类型从 `tables/_base.yaml` 继承，不在 `entities/_base.yaml` 重写；每个基类字段必须写 `source`/`validation`/`description`
@@ -152,8 +153,8 @@ scripts/cmd/
 - `data/queries/*.yaml`
   - 结构按 `_meta/data.queries.yaml`；item 不写 id，name=PascalCase 且全局唯一；项 ID 由 `<文件 id>.<snake_case(name)>` 派生
   - `tables` 是查询读写的表；必须存在、不是 `data.tables.base`；可以多表；实例必须竖排
-  - list 返回必须声明 `offset` / `limit` 两个 params：type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数
-  - `params` 只声明接口入参；name 唯一、type 非空；`column` 绑定列后类型族必须与列一致；`expr` 与 `column` 互斥；`default` 只在 `nullable: true` 时允许
+  - `offset` / `limit` 是保留分页参数名：出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数；list 返回必须同时声明两者
+  - `params` 只声明接口入参；name 唯一、type 非空；未绑定 `column` 时 type 必须映射到类型族或 `data.enums.*`；`column` 绑定列后类型族必须与列一致（`data.enums.*` 按 integer 列）；`expr` 与 `column` 互斥；`default` 只在 `nullable: true` 时允许，且 YAML 类型必须与 `type` 兼容
   - `returns` 是 list<object>：每项用 `kind` 区分 `column` / `entity` / `table` / `scalar` / `affected_rows`；kind 专属字段必须出现，互斥字段不得出现
   - 同一 query 的多项 `list` 必须一致；`affected_rows` 必须是唯一返回项且不得为列表
   - `columns` 只用于 `table` / `entity`；实体显式 `columns` 必须覆盖全部非指针、非 `secret` 字段
@@ -184,7 +185,7 @@ scripts/cmd/
 | `description` | 字段的准确含义 |
 | `generates` | 生成器会产出什么 / 怎么消费 |
 | `caution` | AI 最容易写错的用法 |
-| `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`min_items` 只约束 list；`map<string>` 用于列名 → 表达式映射（`queries[].values`） |
+| `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`min_items` 只约束 list；`map<string>` 是通用 schema 类型（键 → 字符串映射） |
 | `examples` | 列参数/骨架的示例值；实体字段不再支持 |
 | `column_types` | `_types.yaml` 中的类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
 | `columns[].type` | 类型族键，或硬编码的 `data.tables.<t>.col.<c>`；不是类型族，也不是外键；表列不引用 `data.enums.*` |

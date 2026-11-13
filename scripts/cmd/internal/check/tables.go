@@ -504,6 +504,16 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 				c.rulef("base-columns", "%s: base status default must be 0", rel)
 			}
 		}
+		if n == "id" {
+			if raw, ok := m["bits"]; ok {
+				if bits, ok := toInt(raw); !ok || bits != 64 {
+					c.rulef("base-columns", "%s: base id bits must be 64, got %v", rel, raw)
+				}
+			}
+			if unsigned, _ := m["unsigned"].(bool); unsigned {
+				c.rulef("base-columns", "%s: base id must not be unsigned", rel)
+			}
+		}
 	}
 	want := append([]string(nil), baseColumns...)
 	sort.Strings(names)
@@ -567,6 +577,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.rulef("no-base-columns", "%s: columns[%d]: inherited column %q must not be redeclared", rel, i, name)
 		}
 		if pk, _ := m["primary_key"].(bool); pk {
+			c.rulef("physical-primary-key", "%s: columns[%d] (%s): physical tables must not declare primary_key; base id is the primary key", rel, i, name)
 			if nullable, _ := m["nullable"].(bool); nullable {
 				c.rulef("primary-key-nullable", "%s: columns[%d] (%s): primary_key column must not be nullable", rel, i, name)
 			}

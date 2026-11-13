@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
@@ -52,7 +53,7 @@ type queryDoc struct {
 
 var sqlScalarReturns = map[string]bool{
 	"boolean": true, "integer": true, "string": true, "float": true,
-	"decimal": true, "timestamp": true, "datetime": true, "json": true,
+	"decimal": true, "timestamp": true, "datetime": true, "json": true, "bytes": true,
 }
 
 // tableSet 返回查询读写的表集合。
@@ -360,6 +361,10 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 		seen[p.Name] = true
 		if strings.TrimSpace(p.Type) == "" {
 			c.rulef("query-params", "%s: type must not be empty", where)
+		} else if p.Column == "" {
+			if _, _, _, ok := paramLogicalType(p.Type); !ok {
+				c.rulef("query-params", "%s: type %q cannot map to a type family or data.enums.*", where, p.Type)
+			}
 		}
 		if p.Column != "" && p.Expr != "" {
 			c.rulef("query-params", "%s: column and expr are mutually exclusive", where)
@@ -370,6 +375,53 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 		if p.HasDefault && !p.Nullable {
 			c.rulef("query-params", "%s: default requires nullable:true (null means use default)", where)
 		}
+		if p.HasDefault {
+			c.checkQueryParamDefault(p, where)
+		}
+	}
+}
+
+// checkQueryParamDefault 校验 default 的 YAML 类型与 param.type 兼容。
+// 枚举默认值可能是 value 或 code，无法脚本判定，交给生成器；数组只校验外层 list。
+func (c *Checker) checkQueryParamDefault(p queryParam, where string) {
+	if p.DefaultValue == nil {
+		return
+	}
+	family, array, enum, ok := paramLogicalType(p.Type)
+	if !ok || enum {
+		return
+	}
+	if array {
+		if _, ok := asList2(p.DefaultValue); !ok {
+			c.rulef("query-params", "%s: default must be a list for %s", where, p.Type)
+		}
+		return
+	}
+	switch family {
+	case "string", "bytes":
+		if _, ok := p.DefaultValue.(string); !ok {
+			c.rulef("query-params", "%s: default must be a string for %s", where, p.Type)
+		}
+	case "integer":
+		if _, ok := toInt(p.DefaultValue); !ok {
+			c.rulef("query-params", "%s: default must be an integer for %s", where, p.Type)
+		}
+	case "float", "decimal":
+		if _, ok := toFloat(p.DefaultValue); !ok {
+			c.rulef("query-params", "%s: default must be a number for %s", where, p.Type)
+		}
+	case "boolean":
+		if _, ok := p.DefaultValue.(bool); !ok {
+			c.rulef("query-params", "%s: default must be a boolean for %s", where, p.Type)
+		}
+	case "timestamp", "datetime":
+		switch p.DefaultValue.(type) {
+		case string, time.Time:
+		default:
+			c.rulef("query-params", "%s: default must be a string/time for %s", where, p.Type)
+		}
+	case "json":
+		// JSON 默认值允许任意 YAML 结构。
 	}
 }
 
@@ -397,7 +449,7 @@ func (c *Checker) checkQueryParamColumns(q *queryInfo) {
 			c.rulef("query-param-column", "%s: column %s not found", where, p.Column)
 			continue
 		}
-		family, _, ok := paramFamily(p.Type)
+		family, _, _, ok := paramLogicalType(p.Type)
 		if !ok {
 			c.rulef("query-param-column", "%s: type %q cannot bind a column", where, p.Type)
 			continue
@@ -406,6 +458,21 @@ func (c *Checker) checkQueryParamColumns(q *queryInfo) {
 			c.rulef("query-param-column", "%s: type %s is not compatible with column %s (%s)", where, p.Type, p.Column, c.resolvedColumnType(meta.typ))
 		}
 	}
+}
+
+// paramLogicalType 把参数类型映射到列类型族；数组类型返回元素类型族。
+// data.enums.* 持久化为 integer，因此按 integer 列绑定。
+func paramLogicalType(typ string) (family string, array, enum, ok bool) {
+	base := strings.TrimSpace(typ)
+	if strings.HasPrefix(base, "List<") && strings.HasSuffix(base, ">") {
+		array = true
+		base = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(base, "List<"), ">"))
+	}
+	if strings.HasPrefix(base, "data.enums.") {
+		return "integer", array, true, true
+	}
+	family, _, ok = paramFamily(base)
+	return family, array, false, ok
 }
 
 // paramFamily 把参数类型映射到 column_types 类型族；数组返回元素类型族。

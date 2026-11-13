@@ -109,6 +109,9 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 		}
 		rel := relPath(c.root, f)
 		if rawWrites, ok := doc["writes"]; ok {
+			if !capabilityMayWrite(doc) {
+				c.rulef("owner-write", "%s: only cap.services/cap.async may declare writes", rel)
+			}
 			uses := map[string]bool{}
 			for _, x := range asList(doc["uses"]) {
 				if s, ok := x.(string); ok && s != "" {
@@ -133,6 +136,9 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 		p, _ := asMap(doc["persistence"])
 		if p == nil {
 			continue
+		}
+		if !capabilityMayWrite(doc) && (len(tableRefs(p)) > 0 || p["write_queries"] != nil) {
+			c.rulef("owner-write", "%s: only cap.services/cap.async may declare table writes", rel)
 		}
 		c.checkPersistenceOwnership(doc, p, rel)
 		if rawQ, ok := p["queries"]; ok {
@@ -183,6 +189,12 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 			c.rulef("owner-write", "query %s returns affected_rows but is not declared in any capability write list", qid)
 		}
 	}
+}
+
+// capabilityMayWrite 只允许 service 与 async capability 声明写表/写查询。
+func capabilityMayWrite(doc map[string]any) bool {
+	id, _ := doc["id"].(string)
+	return strings.HasPrefix(id, "cap.services.") || strings.HasPrefix(id, "cap.async.")
 }
 
 // checkPersistenceOwnership 校验 capability 的写表与写查询归属：

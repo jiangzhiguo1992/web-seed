@@ -411,6 +411,9 @@ func TestTableRulesPrimaryKeyNullable(t *testing.T) {
 	if !strings.Contains(strings.Join(c.errs, "\n"), "primary_key column must not be nullable") {
 		t.Fatalf("nullable primary key not reported: %v", c.errs)
 	}
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[physical-primary-key]") {
+		t.Fatalf("physical primary key not reported: %v", c.errs)
+	}
 }
 
 func TestTableRulesConstraintRequiresExpr(t *testing.T) {
@@ -629,6 +632,40 @@ func TestBasePrimaryKeyNullable(t *testing.T) {
 	}
 }
 
+func TestCapabilityWriteLayer(t *testing.T) {
+	for id, want := range map[string]bool{
+		"cap.services.account":  true,
+		"cap.async.account_job": true,
+		"cap.http.account":      false,
+		"cap.features.account":  false,
+	} {
+		if got := capabilityMayWrite(map[string]any{"id": id}); got != want {
+			t.Fatalf("capabilityMayWrite(%s) = %v, want %v", id, got, want)
+		}
+	}
+}
+
+func TestHTTPCapabilityWriteLayerRejected(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "contracts/capabilities/http/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `id: cap.http.x
+module: x
+persistence:
+  tables: [ data.tables.x ]
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
+	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}, nil)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services/cap.async may declare table writes") {
+		t.Fatalf("http write layer not rejected: %v", c.errs)
+	}
+}
+
 func TestPersistenceOwnership(t *testing.T) {
 	c := &Checker{tableOwners: map[string]string{
 		"data.tables.account":  "account",
@@ -674,6 +711,54 @@ func TestTableEntitiesMismatch(t *testing.T) {
 	c.checkUsedBy(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[table-entities]") {
 		t.Fatalf("table.entities mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestTableEntitiesUnique(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tableField, ok := contractspec.FindField(schema.Fields, "table")
+	if !ok {
+		t.Fatal("table field missing")
+	}
+	entitiesField, ok := contractspec.FindField(tableField.Fields, "entities")
+	if !ok {
+		t.Fatal("table.entities field missing")
+	}
+	c := &Checker{}
+	c.validateValue([]any{"data.entities.a", "data.entities.a"}, entitiesField, "table.entities")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unique]") {
+		t.Fatalf("duplicate table.entities not reported: %v", c.errs)
+	}
+}
+
+func TestTableIndexColumnsUnique(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	indexesField, ok := contractspec.FindField(schema.Fields, "indexes")
+	if !ok {
+		t.Fatal("indexes field missing")
+	}
+	columnsField, ok := contractspec.FindField(indexesField.ItemFields, "columns")
+	if !ok {
+		t.Fatal("indexes.columns field missing")
+	}
+	c := &Checker{}
+	c.validateValue([]any{"code", "code"}, columnsField, "indexes.columns")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unique]") {
+		t.Fatalf("duplicate index columns not reported: %v", c.errs)
 	}
 }
 
@@ -859,6 +944,46 @@ func writeEnumContract(t *testing.T, body string) *Checker {
 		t.Fatal(err)
 	}
 	return &Checker{root: root}
+}
+
+func TestEnumDoNotSpecific(t *testing.T) {
+	body := `
+id: data.enums
+summary: "x"
+schema_version: 1
+stability: stable
+do_not:
+  - "枚举值 code 不得复用"
+enums:
+  - name: account_status
+    go_type: AccountStatus
+    ts_type: AccountStatus
+    values:
+      - { value: active, code: 0 }
+    used_by: { entities: [], capabilities: [] }
+`
+	c := writeEnumContract(t, body)
+	c.checkEnums(loadEnumSchemaForTest(t))
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[enum-do-not-specific]") {
+		t.Fatalf("generic enum do_not not reported: %v", c.errs)
+	}
+
+	body = strings.Replace(body, "枚举值 code 不得复用", "account_status 删除值后 code 不得复用", 1)
+	c = writeEnumContract(t, body)
+	c.checkEnums(loadEnumSchemaForTest(t))
+	if strings.Contains(strings.Join(c.errs, "\n"), "[enum-do-not-specific]") {
+		t.Fatalf("specific enum do_not reported: %v", c.errs)
+	}
+}
+
+func TestEnumListTypeRef(t *testing.T) {
+	c := &Checker{}
+	c.scanEnumTypeRefs(map[string]any{
+		"type": "List<data.enums.missing>",
+	}, "x.yaml", "", map[string]map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown enum data.enums.missing") {
+		t.Fatalf("List<enum> ref not checked: %v", c.errs)
+	}
 }
 
 func TestEnumTypeNamesUnique(t *testing.T) {
@@ -1993,6 +2118,24 @@ func TestBaseColumnShapeRejectsDrift(t *testing.T) {
 	}
 	if !strings.Contains(errs, `base column "deleted_at" nullable must be true`) {
 		t.Fatalf("base deleted_at nullability drift not reported: %v", c.errs)
+	}
+}
+
+func TestBaseIDBitsMustBe64(t *testing.T) {
+	c := &Checker{}
+	doc := map[string]any{
+		"id": "data.tables.base", "summary": "base", "stability": "stable",
+		"columns": []any{
+			map[string]any{"name": "id", "type": "integer", "primary_key": true, "bits": 32},
+			map[string]any{"name": "status", "type": "integer", "default": 0},
+			map[string]any{"name": "created_at", "type": "timestamp"},
+			map[string]any{"name": "updated_at", "type": "timestamp"},
+			map[string]any{"name": "deleted_at", "type": "timestamp", "nullable": true},
+		},
+	}
+	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/_base.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `base id bits must be 64`) {
+		t.Fatalf("base id bits drift not reported: %v", c.errs)
 	}
 }
 
