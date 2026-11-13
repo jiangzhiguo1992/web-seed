@@ -58,8 +58,8 @@ fields:
 
   - name: do_not
     type: list<string>
-    required: false
-    description: "实例级负向约束；每条含本实体标识"
+    required: true
+    description: "实例级负向约束；必填，每条含本实体标识"
     generates: "AI 反例"
     caution: "通用规则放组 README 或 _base，禁止复制到这里"
 
@@ -71,8 +71,8 @@ fields:
     caution: "内层顺序以本文件 model.fields 为准；不要在这里塞字段"
     fields:
       - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名；首字母大写 public，小写 internal", caution: "必须是合法非关键字 Go 标识符；全局唯一" }
-      - { name: extends, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "继承的实体基类；当前只允许 data.entities.base", caution: "不得引用普通 entity；基类字段不得重声明；Status 可用 data.enums.* 特化" }
-      - { name: tables, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "实体映射的物理表列表；第一张是主表，单表也写成列表", caution: "不得指向 data.tables.base；多表时字段必须用 source.column 指明来源；每张表至少被一个字段引用" }
+      - { name: extends, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "继承的实体基类；当前只允许 data.entities.base", caution: "不得引用普通 entity；基类字段不得重声明；Status 可用 data.enums.* 特化" }
+      - { name: tables, type: list<string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "实体映射的物理表列表；第一张是主表，单表也写成列表", caution: "不得指向 data.tables.base；多表时字段必须用 source.column 指明来源；每张表至少被一个字段引用" }
       - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "通过关系字段指向本实体的 entity ID 列表；必须与关系字段 type 双向一致", caution: "显式声明；checker 校验每一处引用，悬空或缺失都报错" }
 
   - name: fields
@@ -88,7 +88,7 @@ fields:
       - { name: description, type: string, required: true, description: "字段说明；必须显式，不继承列 comment", caution: "写语义，不要重复列名或物理长度" }
       - name: source
         type: object
-        required: false
+        required: true
         description: "标量字段的装载来源；column/computed/soft 三选一；标量必填，关系字段不得写"
         generates: "SQL 投影、字段装载"
         caution: "标量字段必须显式；column 的校验/类型由来源列给出；computed 不占列；soft=外部传入或无法脚本化的来源说明"
@@ -98,7 +98,7 @@ fields:
           - { name: soft, type: string, required: false, description: "外部传入或无法脚本化的来源说明", caution: "非空；必须显式 type；validation 不得使用 column" }
       - name: validation
         type: object
-        required: false
+        required: true
         description: "字段校验规则；标量必填；column/pattern/soft 三选一，默认语义为 column"
         generates: "输入校验、测试断言"
         caution: "column=复用列规则，必须与 source.column 相同；pattern=硬正则；soft=脚本无法验证的软表达式；soft 来源不得用 column"

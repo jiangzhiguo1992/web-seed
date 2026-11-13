@@ -100,6 +100,9 @@ func TestRenderEntity(t *testing.T) {
 	if doc["id"] != "data.entities.account_preview" || doc["owner_module"] != "account" {
 		t.Fatalf("unexpected top-level: %#v", doc)
 	}
+	if _, ok := doc["do_not"]; !ok {
+		t.Fatalf("do_not is required and must be scaffolded: %#v", doc)
+	}
 	model, _ := doc["model"].(map[string]any)
 	if model["name"] != "accountPreview" {
 		t.Fatalf("model.name not scaffolded: %#v", model)
@@ -146,6 +149,9 @@ func TestRenderQuery(t *testing.T) {
 	}
 	if doc["id"] != "data.queries.account" || doc["owner_module"] != "account" {
 		t.Fatalf("unexpected top-level: %#v", doc)
+	}
+	if _, ok := doc["do_not"]; !ok {
+		t.Fatalf("do_not is required and must be scaffolded: %#v", doc)
 	}
 	if strings.Index(string(b), "id: data.queries.account") > strings.Index(string(b), "schema_version") {
 		t.Fatalf("query scaffold must follow template order (id before schema_version):\n%s", b)

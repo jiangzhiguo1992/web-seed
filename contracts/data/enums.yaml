@@ -9,6 +9,8 @@ id: data.enums
 summary: "跨端枚举集合"
 schema_version: 1
 stability: stable
+do_not:
+  - "data.enums 的 value 删除后 code 不得复用；历史数据仍引用旧 code"
 
 enums:
   - name: account_status

@@ -74,7 +74,7 @@ type entityScaffold struct {
 	OwnerModule   string                `yaml:"owner_module"`
 	SchemaVersion int                   `yaml:"schema_version"`
 	Stability     string                `yaml:"stability"`
-	DoNot         []string              `yaml:"do_not,omitempty"`
+	DoNot         []string              `yaml:"do_not"`
 	Model         entityModelScaffold   `yaml:"model"`
 	Fields        []entityFieldScaffold `yaml:"fields"`
 	UsedBy        entityUsedByScaffold  `yaml:"used_by"`
@@ -103,6 +103,7 @@ type queryFileScaffold struct {
 	OwnerModule   string              `yaml:"owner_module"`
 	SchemaVersion int                 `yaml:"schema_version"`
 	Stability     string              `yaml:"stability"`
+	DoNot         []string            `yaml:"do_not"`
 	Queries       []queryItemScaffold `yaml:"queries"`
 }
 
@@ -331,6 +332,7 @@ func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, 
 		OwnerModule:   ownerModule,
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		Stability:     defaultString(s.Fields, "stability", "draft"),
+		DoNot:         []string{},
 		Model: entityModelScaffold{
 			Name:       lowerCamel(name),
 			Extends:    []string{"data.entities.base"},
@@ -364,7 +366,7 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 	}
 	top := map[string]bool{
 		"schema_version": true, "id": true, "summary": true, "stability": true,
-		"owner_module": true, "queries": true,
+		"owner_module": true, "do_not": true, "queries": true,
 	}
 	if err := requireSupported(s.Fields, top, "data.queries"); err != nil {
 		return nil, err
@@ -407,6 +409,7 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		Summary:       summary,
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		OwnerModule:   module,
+		DoNot:         []string{},
 		Queries: []queryItemScaffold{{
 			Name:     "Exists" + pascal(name),
 			Tables:   []string{"data.tables." + table},

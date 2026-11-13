@@ -54,8 +54,8 @@ fields:
 
   - name: do_not
     type: list<string>
-    required: false
-    description: "实例级负向约束；每条含本表标识"
+    required: true
+    description: "实例级负向约束；必填，每条含本表标识"
     generates: "AI 反例"
     caution: "通用规则放组 README 或 _base，禁止复制到这里"
 

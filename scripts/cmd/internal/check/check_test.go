@@ -1386,6 +1386,24 @@ func TestCheckTablesUsesTargets(t *testing.T) {
 	}
 }
 
+func TestDoNotRequiredForAllDataTypes(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, typ := range []string{"data.tables", "data.enums", "data.entities", "data.queries"} {
+		schema, _, err := contractspec.LoadSchemaByType(root, typ)
+		if err != nil {
+			t.Fatalf("%s: %v", typ, err)
+		}
+		c := &Checker{}
+		c.validateDoc(map[string]any{}, schema.Fields, typ+".yaml")
+		if !strings.Contains(strings.Join(c.errs, "\n"), `missing required field "do_not"`) {
+			t.Fatalf("%s: do_not not required: %v", typ, c.errs)
+		}
+	}
+}
+
 func TestErrorsHaveRuleIDs(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()

@@ -404,6 +404,20 @@ func TestEntityScalarRequiresExplicitMetadata(t *testing.T) {
 	}
 }
 
+func TestEntityModelTableDuplicateStillReported(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.x": {"id": {typ: "integer"}},
+	}}
+	e := &entityInfo{
+		ID: "data.entities.x", Rel: "x.yaml",
+		Tables: []string{"data.tables.x", "data.tables.x"},
+	}
+	c.checkEntityModel(e)
+	if !strings.Contains(entityErrs(c), "duplicate table data.tables.x") {
+		t.Fatalf("duplicate model.tables not reported without schema.unique: %v", c.errs)
+	}
+}
+
 func TestEntityValidationColumnMustMatchSource(t *testing.T) {
 	c := &Checker{tableColumns: map[string]map[string]columnMeta{
 		"data.tables.x": {"a": {typ: "string"}, "b": {typ: "string"}},
