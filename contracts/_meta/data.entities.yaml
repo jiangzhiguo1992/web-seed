@@ -54,7 +54,7 @@ fields:
     enum: [ stable, draft, deprecated ]
     description: "契约稳定度"
     generates: "index 摘要"
-    caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
+    caution: "stable 只能用户手动设置/降级；生成器只产出 draft，且不得含 TODO/FIXME"
 
   - name: do_not
     type: list<string>

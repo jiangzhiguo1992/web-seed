@@ -207,7 +207,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            tableID,
 		Summary:       summary,
-		Stability:     defaultString(s.Fields, "stability", "draft"),
+		Stability:     scaffoldStability,
 		OwnerModule:   module,
 		DoNot:         []string{},
 		Table: tableDef{
@@ -331,7 +331,7 @@ func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, 
 		Summary:       summary,
 		OwnerModule:   ownerModule,
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
-		Stability:     defaultString(s.Fields, "stability", "draft"),
+		Stability:     scaffoldStability,
 		DoNot:         []string{},
 		Model: entityModelScaffold{
 			Name:       lowerCamel(name),
@@ -407,7 +407,7 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            fileID,
 		Summary:       summary,
-		Stability:     defaultString(s.Fields, "stability", "draft"),
+		Stability:     scaffoldStability,
 		OwnerModule:   module,
 		DoNot:         []string{},
 		Queries: []queryItemScaffold{{
@@ -461,6 +461,9 @@ func scaffoldFamilyParams(s *Schema, columnType string) (map[string]any, error) 
 }
 
 var snakeNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// scaffoldStability 固定 draft：stable 的进入/退出必须由用户手动修改，生成器不得写入 stable。
+const scaffoldStability = "draft"
 
 func validName(s string) bool {
 	return snakeNamePattern.MatchString(s)

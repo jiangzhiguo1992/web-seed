@@ -303,7 +303,7 @@ table:
 ```
 
 - 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段；本仓库统一单数，不再覆盖为复数
-- `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 前必须替换 TODO 并跑 `make contract-check`；状态可双向流转，`stable → draft` 表示重新修改
+- `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 只能用户手动设置/降级，生成器只产出 `draft`；`stable` 前必须替换 TODO 并跑 `make contract-check`
 - 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` 按完整 ID 匹配 `_meta/<type>.yaml`；`data.tables.base` / `data.entities.base` 由 checker 固定识别），文件无需声明 `type`
 - 生效元数据 = `_meta/<type>.yaml` + 继承的 `_base` 字段 + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移

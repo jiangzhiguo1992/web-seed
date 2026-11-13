@@ -212,7 +212,7 @@ scripts/cmd/
 | `deprecated` | 已废弃 | 停止新增引用，准备移除 |
 
 状态可双向流转：`stable → draft` 表示重新修改；`deprecated → stable` 表示恢复。
-`contract-check` 只校验 `stable` 文件不得含 `TODO` / `FIXME`，不阻止状态回退。
+但 `stable` 的进入与退出只能由**用户手动修改**；`contract-new` 等生成器只产出 `draft`，AI 不得自动把文件改为 `stable`，也不得擅自把 `stable` 降级。`contract-check` 只能校验状态自洽（`stable` 不得含 `TODO` / `FIXME`），不能识别修改者，最终由 PR 评审把关。
 
 状态的**判断**仍由 PR 评审负责；`contract-check` 只负责当前状态自洽。
 

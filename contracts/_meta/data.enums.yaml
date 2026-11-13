@@ -34,6 +34,7 @@ fields:
     required: true
     enum: [ stable, draft, deprecated ]
     description: "契约稳定度"
+    caution: "stable 只能用户手动设置/降级；生成器只产出 draft"
 
   - name: do_not
     type: list<string>

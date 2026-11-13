@@ -44,8 +44,8 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatalf("generated YAML invalid: %v\n%s", err, b)
 	}
-	if doc["id"] != "data.tables.note" || doc["stability"] != "stable" {
-		t.Fatalf("unexpected top-level: %#v", doc)
+	if doc["id"] != "data.tables.note" || doc["stability"] != "draft" {
+		t.Fatalf("scaffold stability must stay draft even if meta default is stable: %#v", doc)
 	}
 	if _, ok := doc["extends"]; ok {
 		t.Fatalf("extends must live under table: %#v", doc)
@@ -327,6 +327,38 @@ func TestRenderTableFallbacks(t *testing.T) {
 	first, _ := cols[0].(map[string]any)
 	if first["type"] != "string" {
 		t.Fatalf("column type fallback must be string: %#v", first)
+	}
+}
+
+func TestScaffoldsNeverEmitStable(t *testing.T) {
+	cases := []struct {
+		typ    string
+		render func(*Schema) ([]byte, error)
+	}{
+		{"data.tables", func(s *Schema) ([]byte, error) { return RenderTable(s, "note", "notes", "备注表") }},
+		{"data.entities", func(s *Schema) ([]byte, error) { return RenderEntity(s, "note", "account", "account", "备注实体") }},
+		{"data.queries", func(s *Schema) ([]byte, error) {
+			return RenderQuery(s, "note", "notes", "account", "account", "备注查询")
+		}},
+	}
+	for _, tc := range cases {
+		s := loadSchemaByType(t, tc.typ)
+		for i := range s.Fields {
+			if s.Fields[i].Name == "stability" {
+				s.Fields[i].Default = "stable"
+			}
+		}
+		b, err := tc.render(s)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.typ, err)
+		}
+		var doc map[string]any
+		if err := yaml.Unmarshal(b, &doc); err != nil {
+			t.Fatalf("%s: generated YAML invalid: %v", tc.typ, err)
+		}
+		if doc["stability"] != "draft" {
+			t.Fatalf("%s: scaffold must emit draft, got %#v", tc.typ, doc["stability"])
+		}
 	}
 }
 

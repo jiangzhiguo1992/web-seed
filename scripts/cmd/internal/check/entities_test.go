@@ -418,6 +418,43 @@ func TestEntityModelTableDuplicateStillReported(t *testing.T) {
 	}
 }
 
+func TestEntityRelationFieldSkipsConditionalSourceValidation(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, _, err := contractspec.LoadSchemaByType(root, "data.entities")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{}
+	c.validateDoc(map[string]any{
+		"id":             "data.entities.x",
+		"summary":        "x",
+		"owner_module":   "x",
+		"schema_version": 1,
+		"stability":      "draft",
+		"do_not":         []any{},
+		"model": map[string]any{
+			"name":        "x",
+			"extends":     []any{"data.entities.base"},
+			"tables":      []any{"data.tables.x"},
+			"included_by": []any{},
+		},
+		"fields": []any{map[string]any{
+			"name":             "Account",
+			"type":             "data.entities.account",
+			"description":      "relation",
+			"join_column_from": "data.tables.x.col.id",
+			"join_column_to":   "data.tables.account.col.id",
+		}},
+		"used_by": map[string]any{"queries": []any{}, "capabilities": []any{}},
+	}, schema.Fields, "x.yaml")
+	if len(c.errs) != 0 {
+		t.Fatalf("relation field must not require source/validation at schema level: %v", c.errs)
+	}
+}
+
 func TestEntityValidationColumnMustMatchSource(t *testing.T) {
 	c := &Checker{tableColumns: map[string]map[string]columnMeta{
 		"data.tables.x": {"a": {typ: "string"}, "b": {typ: "string"}},

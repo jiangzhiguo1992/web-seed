@@ -139,6 +139,7 @@ redundancy_groups:
 - `params.offset` / `params.limit`：保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数；list 返回必须同时声明两者；
 - `params`：接口入参；数组统一用 `List<T>`；`column` 可把参数绑定到物理列，绑定后类型族必须与列一致（`data.enums.*` 按 integer 列）；未绑定 `column` 时 `type` 必须能映射到类型族或 `data.enums.*`；`expr` 用于不绑定单列的表达式，二者互斥；`default` 只在 `nullable: true` 时允许，checker 校验可判定的标量/数组外层，枚举值与数组元素交给生成器；
 - `returns`：list<object>；每项用 `kind` 区分 `column` / `entity` / `table` / `scalar` / `affected_rows`；
+- `kind: table` 用于认证/持久化行等精确投影；`kind: entity` 是完整读模型，默认投影排除 `secret`，显式 `columns` 必须覆盖全部非指针非 `secret` 字段。`auth` 查询需要 `password_hash` 等 `secret` 列，因此用 `table` + `columns`，不改成 `entity`；
 - `returns[].columns`：表行/实体的结果投影，省略表示默认投影；`secret` 列只有同模块可显式列出，`pii` 列可返回；
 - `returns[].list`：同一 query 的多项必须一致；`affected_rows` 不得为列表且必须是唯一返回项；
 - `index_ref`：查询依赖的索引；单表查询至少一个；显式索引与 `indexes[].used_by` 双向校验；是否真正命中由 `EXPLAIN` 验证。

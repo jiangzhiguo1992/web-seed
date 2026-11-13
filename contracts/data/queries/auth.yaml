@@ -1,5 +1,9 @@
 # 认证查询集。密码/手机/邮箱/令牌查询只在这里出现。
 # 只声明接口：入参、结果、目标表与索引；SQL 由实现负责。
+#
+# 返回用 kind: table + columns 是刻意的：这些是认证持久化行，不是实体读模型。
+# 登录需要 password_hash 等 secret 列，entity 默认投影会排除；
+# entity 返回还要求覆盖全部非指针非 secret 字段，会扩大这些内部查询的行形状。
 
 id: data.queries.auth
 summary: "认证查询集"
