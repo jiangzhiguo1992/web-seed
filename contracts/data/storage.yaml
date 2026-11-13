@@ -6,6 +6,7 @@
 #   - Redis 只作为缓存/会话/锁，不作为表存储；启用时在此登记。
 #   - 表级物理事实（engine/size_class/retention/partition）统一在 tables 下登记，
 #     表契约只保留业务结构（列/约束/索引/继承）。
+#   - 冗余组是跨表事实：组 ID 写在表列上，source/copies 明细统一在 redundancy_groups 登记。
 
 schema_version: 1
 id: data.storage
@@ -17,6 +18,7 @@ do_not:
   - "Redis 不是表存储；表数据只能落在当前 default_engine"
   - "多实例部署时，定时任务必须显式声明锁机制，不能只写 max_in_flight"
   - "每张物理表必须在本文件 tables 下登记；未登记的表不生成 DDL"
+  - "冗余组只在 redundancy_groups 定义；表列只写组 ID，不写 source/copies"
 
 # 默认引擎，不等于唯一允许的引擎；切换时只改这里和对应 engine 配置。
 default_engine: postgres
@@ -83,6 +85,24 @@ tables:
 
   data.tables.auth_email:
     retention: { unit: days, soft_delete: 30, hard_delete: 90 }
+
+# 冗余组：组 ID 在表列的 redundancy 上引用；source 是权威列，copies 是冗余副本。
+# 同组只能有一个 source、至少一个 copy；copy 与 source 的 type/nullable 必须一致。
+redundancy_groups:
+  account_own_type:
+    source: data.tables.account.col.own_type
+    copies:
+      - data.tables.token.col.own_type
+
+  account_own_id:
+    source: data.tables.account.col.own_id
+    copies:
+      - data.tables.token.col.own_id
+
+  account_user_id:
+    source: data.tables.account.col.user_id
+    copies:
+      - data.tables.token.col.user_id
 
 not_supported:
   - sharding
