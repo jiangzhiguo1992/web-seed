@@ -1,9 +1,9 @@
 # 跨前后端枚举集合。仅收两端都要用的枚举，模块内部枚举不进本文件。
 #
-# 集合契约：文件 id 为 data.enums；每个枚举项有显式 id data.enums.<name>。
+# 集合契约：文件 id 为 data.enums；枚举项不写 id，项 ID 由 name 派生为 data.enums.<name>。
 # 表列不引用枚举；entity 字段用 data.enums.<name>，数据库存 values[].code 整数。
-# used_by 只列引用该枚举的 entity 及其物理表；不列 capability/feature。
-# 空 used_by 表示没有 entity/table 消费，不代表枚举未被 capability 引用。
+# used_by 只列引用该枚举的 entity 和 capability；不列物理表或 feature。
+# 空列表表示该维度没有消费方，不代表枚举未被其他维度引用。
 
 id: data.enums
 summary: "跨端枚举集合"
@@ -11,8 +11,7 @@ schema_version: 1
 stability: stable
 
 enums:
-  - id: data.enums.account_status
-    name: account_status
+  - name: account_status
     description: "账号状态"
     go_type: AccountStatus
     ts_type: AccountStatus
@@ -22,11 +21,12 @@ enums:
       - { value: suspended, code: 2, description: "已封禁，不能登录" }
       - { value: deleted, code: 3, description: "已软删，终态；与 deleted_at 同步" }
     used_by:
-      - entities: [ data.entities.account ]
-      - tables: [ data.tables.account ]
+      entities:
+        - data.entities.account
+      capabilities:
+        - cap.services.account
 
-  - id: data.enums.own_type
-    name: own_type
+  - name: own_type
     description: "数据归属主体类型"
     go_type: OwnType
     ts_type: OwnType
@@ -35,11 +35,13 @@ enums:
       - { value: tenant, code: 1, description: "租户" }
       - { value: system, code: 2, description: "系统" }
     used_by:
-      - entities: [ data.entities.account, data.entities.token ]
-      - tables: [ data.tables.account, data.tables.token ]
+      entities:
+        - data.entities.account
+        - data.entities.token
+      capabilities:
+        - cap.services.account
 
-  - id: data.enums.auth_status
-    name: auth_status
+  - name: auth_status
     description: "认证记录状态"
     go_type: AuthStatus
     ts_type: AuthStatus
@@ -47,11 +49,13 @@ enums:
       - { value: active, code: 0, description: "可认证" }
       - { value: disabled, code: 1, description: "已停用" }
     used_by:
-      - entities: [ data.entities.auth_email, data.entities.auth_phone, data.entities.auth_pwd ]
-      - tables: [ data.tables.auth_email, data.tables.auth_phone, data.tables.auth_pwd ]
+      entities:
+        - data.entities.auth_email
+        - data.entities.auth_phone
+        - data.entities.auth_pwd
+      capabilities: []
 
-  - id: data.enums.token_status
-    name: token_status
+  - name: token_status
     description: "令牌状态"
     go_type: TokenStatus
     ts_type: TokenStatus
@@ -60,12 +64,12 @@ enums:
       - { value: revoked, code: 1, description: "已吊销" }
       - { value: expired, code: 2, description: "已过期" }
     used_by:
-      - entities: [ data.entities.token ]
-      - tables: [ data.tables.token ]
+      entities:
+        - data.entities.token
+      capabilities: []
 
-  - id: data.enums.auth_type
-    name: auth_type
-    description: "认证方式；仅 API 输入，无 entity/table"
+  - name: auth_type
+    description: "认证方式；仅 API 输入，无 entity"
     go_type: AuthType
     ts_type: AuthType
     values:
@@ -73,12 +77,12 @@ enums:
       - { value: phone, code: 1, description: "手机号认证" }
       - { value: email, code: 2, description: "邮箱认证" }
     used_by:
-      - entities: [ ]
-      - tables: [ ]
+      entities: []
+      capabilities:
+        - cap.services.auth
 
-  - id: data.enums.audit_action
-    name: audit_action
-    description: "审计日志动作；暂无 entity/table 使用"
+  - name: audit_action
+    description: "审计日志动作；暂无 entity/capability 使用"
     go_type: AuditAction
     ts_type: AuditAction
     values:
@@ -88,5 +92,5 @@ enums:
       - { value: login, code: 3 }
       - { value: logout, code: 4 }
     used_by:
-      - entities: [ ]
-      - tables: [ ]
+      entities: []
+      capabilities: []

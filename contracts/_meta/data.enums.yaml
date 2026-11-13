@@ -1,7 +1,7 @@
 # data.enums 类型的单一规范：字段树 + 值域 + 字段说明。
 # 通用字段语义见 _meta/README.md。
 #
-# 集合契约：文件 id 为 data.enums；每个枚举项 id 为 data.enums.<name>。
+# 集合契约：文件 id 为 data.enums；枚举项不写 id，项 ID 由 <name> 派生。
 # 该文件同时是 contract-new 的字段来源；不要另写模板。
 
 id: meta.data.enums
@@ -49,8 +49,7 @@ fields:
     generates: "Go 常量、TS union"
     caution: "不要收只在一个模块内部使用的枚举；表列不引用枚举"
     item_fields:
-      - { name: id, type: string, required: true, description: "枚举项 ID，等于 data.enums.<name>" }
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "枚举名，snake_case" }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "枚举名，snake_case；项 ID 由 data.enums.<name> 派生" }
       - { name: description, type: string, required: false, description: "枚举用途说明" }
       - { name: go_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "Go 类型名，PascalCase；集合内唯一" }
       - { name: ts_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "TS 类型名，PascalCase；集合内唯一" }
@@ -66,17 +65,16 @@ fields:
       - name: used_by
         type: object
         required: true
-        description: "使用该枚举的 entity/table；只统计 entity 字段引用"
-        caution: "必须与 entity 实际引用完全一致；capability/feature 引用不写入 used_by，空列表不代表未使用"
+        description: "使用该枚举的 entity / capability；不统计物理表"
+        caution: "必须与 entity 字段和 capability 引用完全一致；feature 引用不写入；空列表合法"
         fields:
           - { name: entities, type: list<string>, required: true, unique: true, description: "引用该枚举的 entity ID" }
-          - { name: tables, type: list<string>, required: true, unique: true, description: "这些 entity 对应的物理表 ID；必须与 entity.model.tables 一致" }
+          - { name: capabilities, type: list<string>, required: true, unique: true, description: "引用该枚举的 capability ID" }
 
 rules:
   - { id: enum-key-order, text: "枚举集合字段顺序必须与 _meta/data.enums.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [enum-key-order] }
   - { id: enum-id, text: "集合 id 固定为 data.enums", implemented_by: [enum-id] }
-  - { id: enum-id-matches-name, text: "item.id 必须等于 data.enums.<item.name>", implemented_by: [enum-id-matches-name] }
   - { id: enum-values-unique, text: "同一枚举的 values 不得重复", implemented_by: [enum-values-unique] }
   - { id: enum-code-unique, text: "同一枚举的 code 不得重复", implemented_by: [enum-code-unique] }
   - { id: enum-type-unique, text: "同一集合内 go_type / ts_type 不得重复", implemented_by: [enum-type-unique] }
-  - { id: enum-used-by, text: "used_by 必须与 entity 字段引用完全一致；capability/feature 不写入 used_by，空列表合法", implemented_by: [enum-used-by] }
+  - { id: enum-used-by, text: "used_by.entities/capabilities 必须与 entity 字段和 capability 引用完全一致；不统计物理表/feature；空列表合法", implemented_by: [enum-used-by] }
