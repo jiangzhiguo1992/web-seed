@@ -220,7 +220,7 @@ PR 描述模板已包含上述清单。
 | 一个 PR 只改契约 | CI 长期红，闸门失效 | 同一 PR 闭环 |
 | 删除契约文件不同步 index | 图校验报孤儿/悬空 | 同步 `index.yaml` |
 | 用 mock 验证契约一致性 | mock 永远符合契约，测不出漂移 | 真实 handler + `httptest` |
-| 凭字段名猜语义（如 `extends`） | 写成 PG `INHERITS` / 外键 / 组合 | 读 `_meta/<type>.yaml` 的 `description` / `caution` |
+| 凭字段名猜语义（如 `extends`） | 写成 PG `INHERITS` / 外键 / 组合 | 读 `_meta/<type>.yaml` 的 `description` / `rules` |
 
 ---
 

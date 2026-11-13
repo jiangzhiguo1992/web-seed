@@ -1,15 +1,13 @@
-# 账号业务规则集。每条规则必须有 given/when/then，否则不算规则。
-#
-# 边界：
-#   - 账号只关心业务主体；密码/手机/邮箱/令牌规则在认证策略与 auth 契约。
-#   - 数据库能表达的约束在 data/tables；这里写业务行为与不变量。
+# 账号业务规则集。
 
 schema_version: 1
 id: business.rules.account
 summary: "账号业务规则集"
 stability: stable
 do_not:
-  - "number_unique 必须限定在未删除账号内，不要写成全局唯一"
+  - "business.rules.account 每条规则必须有 given/when/then"
+  - "账号只关心业务主体；密码/手机/邮箱/令牌规则在认证策略与 auth 契约"
+  - "数据库能表达的约束在 data/tables；这里写业务行为与不变量"
   - "不要在 handler 里手写编号格式或归属校验"
   - "不要在本文件写密码强度规则（见 platform/security/auth_policy）"
 

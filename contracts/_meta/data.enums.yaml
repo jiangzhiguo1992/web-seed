@@ -1,12 +1,8 @@
-# data.enums 类型的单一规范：字段树 + 值域 + 字段说明。
-# 通用字段语义见 _meta/README.md。
-#
-# 集合契约：文件 id 为 data.enums；枚举项不写 id，项 ID 由 <name> 派生。
-# 该文件同时是 contract-new 的字段来源；不要另写模板。
+# data.enums 类型规范：跨前后端枚举集合；枚举项无 id。
 
 id: meta.data.enums
 type: data.enums
-title: "跨端枚举契约"
+title: "枚举集合契约"
 targets:
   file: "contracts/data/enums.yaml"
   id: "data.enums"
@@ -15,68 +11,61 @@ fields:
   - name: id
     type: string
     required: true
-    description: "集合文件 ID；值由 targets.id 给出"
+    description: "集合文件 ID"
 
   - name: summary
     type: string
     required: true
-    description: "一句话说明枚举集合"
+    description: "一句话说明"
 
   - name: schema_version
     type: integer
     required: true
     const: 1
-    description: "契约格式版本，固定 1"
+    description: "格式版本"
 
   - name: stability
     type: string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
-    description: "契约稳定度"
-    caution: "stable 只能用户手动设置/降级；生成器只产出 draft"
+    description: "稳定度"
 
   - name: do_not
     type: list<string>
     required: true
-    description: "实例级负向约束；必填，每条含 data.enums、枚举 name 或 go_type/ts_type"
-    generates: "AI 反例"
-    caution: "通用规则放组 README，禁止复制到这里"
+    description: "实例级负向约束"
 
   - name: enums
     type: list<object>
     required: true
-    description: "跨前后端枚举；模块内部枚举不进本文件"
-    generates: "Go 常量、TS union"
-    caution: "不要收只在一个模块内部使用的枚举；表列不引用枚举"
+    description: "枚举项列表"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "枚举名，snake_case；项 ID 由 data.enums.<name> 派生" }
-      - { name: description, type: string, required: false, description: "枚举用途说明" }
-      - { name: go_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "Go 类型名，PascalCase；集合内唯一" }
-      - { name: ts_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "TS 类型名，PascalCase；集合内唯一" }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "枚举名；项 ID 派生为 data.enums.<name>" }
+      - { name: description, type: string, required: false, description: "枚举用途" }
+      - { name: go_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "Go 类型名" }
+      - { name: ts_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "TS 类型名" }
       - name: values
         type: list<object>
         required: true
-        description: "枚举值列表；value 对外，code 持久化"
-        caution: "stable 后改名/删除 value 属破坏性变更；删除值后其 code 不得复用（历史数据仍引用旧 code）"
+        description: "枚举值列表"
         item_fields:
-          - { name: value, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "对外字符串值（API/TS），snake_case；数据库存 code" }
-          - { name: code, type: integer, required: true, min: 0, max: 2147483647, description: "数据库整数码（int32）；entity 映射回枚举" }
+          - { name: value, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "对外字符串值" }
+          - { name: code, type: integer, required: true, min: 0, max: 2147483647, description: "持久化整数码" }
           - { name: description, type: string, required: false, description: "枚举值说明" }
       - name: used_by
         type: object
         required: true
-        description: "使用该枚举的 entity / capability；不统计物理表"
-        caution: "必须与 entity 字段和 capability 引用完全一致；feature 引用不写入；空列表合法"
+        description: "使用该枚举的 entity / capability"
         fields:
-          - { name: entities, type: list<string>, required: true, unique: true, description: "引用该枚举的 entity ID" }
-          - { name: capabilities, type: list<string>, required: true, unique: true, description: "引用该枚举的 capability ID" }
+          - { name: entities, type: list<string>, required: true, unique: true, description: "entity ID 列表" }
+          - { name: capabilities, type: list<string>, required: true, unique: true, description: "capability ID 列表" }
 
 rules:
-  - { id: enum-key-order, text: "枚举集合字段顺序必须与 _meta/data.enums.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [enum-key-order] }
-  - { id: enum-id, text: "集合 id 固定为 data.enums", implemented_by: [enum-id] }
-  - { id: enum-values-unique, text: "同一枚举的 values 不得重复", implemented_by: [enum-values-unique] }
-  - { id: enum-code-unique, text: "同一枚举的 code 不得重复", implemented_by: [enum-code-unique] }
-  - { id: enum-type-unique, text: "同一集合内 go_type / ts_type 不得重复", implemented_by: [enum-type-unique] }
-  - { id: enum-used-by, text: "used_by.entities/capabilities 必须与 entity 字段和 capability 引用完全一致；不统计物理表/feature；空列表合法", implemented_by: [enum-used-by] }
-  - { id: enum-do-not-specific, text: "do_not 每条必须含集合 ID data.enums、枚举 name 或 go_type/ts_type；通用规则放组 README，禁止复制", implemented_by: [enum-do-not-specific] }
+  - { id: enum-key-order, text: "枚举集合字段顺序必须与 _meta/data.enums.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ enum-key-order ] }
+  - { id: enum-id, text: "集合 id 固定为 data.enums", implemented_by: [ enum-id ] }
+  - { id: enum-values-unique, text: "同一枚举的 values 不得重复", implemented_by: [ enum-values-unique ] }
+  - { id: enum-code-unique, text: "同一枚举的 code 不得重复", implemented_by: [ enum-code-unique ] }
+  - { id: enum-type-unique, text: "同一集合内 go_type / ts_type 不得重复", implemented_by: [ enum-type-unique ] }
+  - { id: enum-used-by, text: "used_by.entities/capabilities 必须与 entity 字段和 capability 引用完全一致；不统计物理表/feature；空列表合法", implemented_by: [ enum-used-by ] }
+  - { id: enum-do-not-specific, text: "do_not 每条必须含集合 ID data.enums、枚举 name 或 go_type/ts_type；通用规则放组 README，禁止复制", implemented_by: [ enum-do-not-specific ] }

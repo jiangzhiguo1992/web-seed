@@ -1,4 +1,4 @@
-# 密码认证表。一个账号一条密码记录；只允许认证模块读写。
+# 密码认证表。
 
 id: data.tables.auth_pwd
 summary: "密码认证表"
@@ -6,7 +6,7 @@ owner_module: auth
 schema_version: 1
 stability: draft
 do_not:
-  - "auth_pwd.password_hash 禁止出现在响应、日志、事件"
+  - "auth_pwd.password_hash 只存哈希，不存原文"
 
 table:
   name: auth_pwd

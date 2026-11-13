@@ -1,9 +1,4 @@
-# 跨前后端枚举集合。仅收两端都要用的枚举，模块内部枚举不进本文件。
-#
-# 集合契约：文件 id 为 data.enums；枚举项不写 id，项 ID 由 name 派生为 data.enums.<name>。
-# 表列不引用枚举；entity 字段用 data.enums.<name>，数据库存 values[].code 整数。
-# used_by 只列引用该枚举的 entity 和 capability；不列物理表或 feature。
-# 空列表表示该维度没有消费方，不代表枚举未被其他维度引用。
+# 跨前后端枚举集合；模块内部枚举不进本文件。
 
 id: data.enums
 summary: "跨端枚举集合"
@@ -11,6 +6,7 @@ schema_version: 1
 stability: stable
 do_not:
   - "data.enums 的 value 删除后 code 不得复用；历史数据仍引用旧 code"
+  - "data.enums stable 后改名/删除 value 属破坏性变更"
 
 enums:
   - name: account_status

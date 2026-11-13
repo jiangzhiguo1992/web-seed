@@ -1,33 +1,37 @@
 #!/usr/bin/env bash
 # 按 contracts/_meta 字段规范生成契约骨架。
 #
-# 用法：
-#   ./scripts/contract/scaffold.sh data.tables   <name> [module] [summary] [column-type]
-#   ./scripts/contract/scaffold.sh data.enums    <name>
-#   ./scripts/contract/scaffold.sh data.entities <name> [table] [summary]
-#   ./scripts/contract/scaffold.sh data.queries  <name> [module] [summary] [table]
+# 用法（命名参数，不接受位置参数）：
+#   type=data.entities name=note table=account summary="备注" ./scripts/contract/scaffold.sh
+#   make contract-new type=data.entities name=note table=account summary="备注"
 #
-# make 层可用 table=<stem> 覆盖目标表（第 6 个参数）。
+# type/name 必填；module 默认 name；summary 默认 name；table 默认 name。
+# data.entities 的 module/column_type 忽略；data.queries 的 column_type 忽略。
 #
 # 字段树来自 _meta/<type>.yaml；本脚本只负责参数与输出路径。
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-type="${1:-}"
-name="${2:-}"
-module="${3:-${name}}"
-summary="${4:-${name}}"
-column_type="${5:-}"
-table_override="${6:-}"
 
 usage() {
-  echo "usage: $0 data.tables   <name> [module] [summary] [column-type]" >&2
-  echo "       $0 data.enums    <name>" >&2
-  echo "       $0 data.entities <name> [table] [summary]" >&2
-  echo "       $0 data.queries  <name> [module] [summary] [table]" >&2
+  echo "usage: type=<type> name=<name> [module=<module>] [summary=<text>] [column_type=<family>] [table=<stem>] $0" >&2
+  echo "       make contract-new type=<type> name=<name> [module=...] [summary=...] [column_type=...] [table=...]" >&2
+  echo "  type: data.tables | data.enums | data.entities | data.queries" >&2
   exit 2
 }
+
+if [[ $# -gt 0 ]]; then
+  echo "positional arguments are not supported; use named parameters." >&2
+  usage
+fi
+
+type="${type:-}"
+name="${name:-}"
+module="${module:-${name}}"
+summary="${summary:-${name}}"
+column_type="${column_type:-}"
+table="${table:-${name}}"
 
 [[ -n "$type" && -n "$name" ]] || usage
 [[ "$name" =~ ^[a-z][a-z0-9_]*$ ]] || { echo "invalid name: $name (snake_case required)" >&2; exit 2; }
@@ -48,16 +52,11 @@ case "$type" in
     ;;
 
   data.entities)
-    table="${table_override:-${3:-$name}}"
-    summary="${4:-$name}"
     go run ./contract_new -root "$ROOT" -type data.entities -name "$name" -table "$table" -summary "$summary" -out auto
     ;;
 
   data.queries)
-    query_module="${3:-$name}"
-    summary="${4:-$name}"
-    table="${table_override:-${5:-$name}}"
-    go run ./contract_new -root "$ROOT" -type data.queries -name "$name" -module "$query_module" -table "$table" -summary "$summary" -out auto
+    go run ./contract_new -root "$ROOT" -type data.queries -name "$name" -module "$module" -table "$table" -summary "$summary" -out auto
     ;;
 
   *)

@@ -1,7 +1,4 @@
-# data.tables 的字段树 + 值域 + 字段说明。
-# 通用字段语义见 _meta/README.md；类型族在 _meta/_types.yaml；本文件只写 data.tables 特有内容。
-# targets 决定扫描路径、ID 模板与命名规则；基类固定为 data/tables/_base.yaml，由 checker 写死识别。
-# 本文件同时是 contract-new 的字段来源；不要另写模板。
+# data.tables 类型规范：表、列、约束、索引；类型族见 _types.yaml。
 
 id: meta.data.tables
 type: data.tables
@@ -17,139 +14,110 @@ fields:
     type: string
     required: true
     pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
-    description: "由 targets.id 模板派生（<file> 替换为文件 stem）"
-    generates: "契约 ID、图节点"
-    caution: "不要写 data.table.*；pattern 与 targets.id 同步；基类契约见 data.tables.base"
+    description: "契约 ID"
 
   - name: summary
     type: string
     required: true
-    description: "一句话说明这张表是什么"
-    generates: "index 摘要"
-    caution: "不要写字段清单"
+    description: "一句话说明"
 
   - name: owner_module
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "唯一写归属模块"
-    generates: "归属校验"
-    caution: "只有同模块 cap.services/cap.async 可写表"
+    description: "写归属模块"
 
   - name: schema_version
     type: integer
     required: true
     const: 1
-    description: "契约格式版本，固定 1"
-    generates: "无"
-    caution: "必须是整数 1"
+    description: "格式版本"
 
   - name: stability
     type: string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
-    description: "契约稳定度"
-    generates: "index 摘要"
-    caution: "stable 只能用户手动设置/降级；生成器只产出 draft，且不得含 TODO/FIXME"
+    description: "稳定度"
 
   - name: do_not
     type: list<string>
     required: true
-    description: "实例级负向约束；必填，每条含本表标识"
-    generates: "AI 反例"
-    caution: "通用规则放组 README 或 _base，禁止复制到这里"
+    description: "实例级负向约束"
 
   - name: table
     type: object
     required: true
-    description: "物理表元数据：表名、注释、继承"
-    generates: "表名、COMMENT、继承列"
-    caution: "不是契约 ID；engine/size_class/retention/partition 在 data/storage.yaml"
+    description: "物理表元数据（不含存储事实）"
     fields:
       - name: name
         type: string
         required: false
         pattern: '^[a-z][a-z0-9_]*$'
-        description: "物理表名；默认 file stem"
-        generates: "DDL 表名、SQL FROM"
+        description: "物理表名"
       - name: comment
         type: string
         required: true
         description: "数据库 COMMENT"
-        generates: "DDL COMMENT"
-        caution: "不要复制 summary"
       - name: extends
         type: list<string>
         required: true
         pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
         unique: true
-        description: "继承的父表 ID 列表；可多父；必须显式声明，通常为 data.tables.base"
-        generates: "展开父表及基类列"
-        caution: "父表必须存在且不得成环；同名列来源不同视为冲突；不得重声明任何继承列"
+        description: "父表 ID 列表"
       - name: entities
         type: list<string>
         required: true
         unique: true
         pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
-        description: "映射本表的 entity ID 列表；必须与 entity.model.tables 双向一致"
-        generates: "实体反向映射"
-        caution: "显式声明；checker 校验每一处引用，悬空或缺失都报错"
+        description: "映射本表的 entity ID 列表"
 
   - name: columns
     type: list<object>
     required: true
-    description: "物理列；基类 5 列与祖先业务列不重声明"
-    generates: "DDL 列、sqlc、Go 类型"
-    caution: "枚举映射只在 entity；status 由基类提供"
+    description: "物理列"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', examples: [ "name" ], description: "列名" }
-      - { name: type, type: string, required: true, description: "类型族键，或 data.tables.<t>.col.<c> 引用", caution: "引用规则硬编码：只允许 data.tables.<t>.col.<c>；表列不引用 data.enums.*；引用类型不可带类型族参数" }
-      - { name: nullable, type: boolean, required: false, default: false, description: "是否可空；默认 false" }
-      - { name: primary_key, type: boolean, required: false, description: "是否主键；仅基类 id 使用", caution: "物理表禁止声明 primary_key；主键统一由基类 id 提供，且 entity-id 要求唯一主键" }
-      - { name: default, type: any, required: false, description: "字面量默认值；与 default_sql 互斥" }
-      - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值；与 default 互斥", caution: "checker 只校验互斥；SQL 语义由生成器/数据库验证" }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "列名" }
+      - { name: type, type: string, required: true, description: "类型族键或列引用" }
+      - { name: nullable, type: boolean, required: false, default: false, description: "是否可空" }
+      - { name: primary_key, type: boolean, required: false, description: "是否主键" }
+      - { name: default, type: any, required: false, description: "字面量默认值" }
+      - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值" }
       # 类型族参数由 _meta/_types.yaml 的 column_types.families.params 注入
-      - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], default: public, description: "列敏感级别；public 可返回，pii 可脱敏返回，secret 禁止返回", caution: "secret 隐含 pii；继承到 entity 时只能收紧，不能降低" }
-      - { name: redundancy, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "所属冗余组 ID；组定义与 source/copies 见 data/redundancy.yaml 的 groups", caution: "列只写组 ID；source/copy 角色、类型与可空一致性由 checker 按 redundancy.yaml 校验" }
+      - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], default: public, description: "敏感级别：public 可返回，pii 脱敏返回，secret 禁止返回" }
+      - { name: redundancy, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "冗余组 ID" }
       - { name: comment, type: string, required: false, description: "列 COMMENT" }
 
   - name: constraints
     type: list<object>
     required: false
-    description: "DDL 约束：check"
-    generates: "DDL CHECK"
-    caution: "唯一性统一由 indexes[].unique 表达；只保留 check，exclude 已移除"
+    description: "DDL 约束；唯一性用 indexes[].unique"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^ck_[a-z][a-z0-9_]*$', description: "约束名；check 用 ck_" }
+      - { name: name, type: string, required: true, pattern: '^ck_[a-z][a-z0-9_]*$', description: "约束名" }
       - { name: type, type: string, required: true, enum: [ check ], description: "约束类型" }
-      - { name: expr, type: string, required: false, description: "check 的 SQL 表达式", caution: "checker 只校验非空；SQL 语义由生成器/数据库验证" }
+      - { name: expr, type: string, required: false, description: "check 表达式" }
 
   - name: indexes
     type: list<object>
     required: false
-    description: "索引；每条必须有 comment"
-    generates: "DDL INDEX、COMMENT ON INDEX"
-    caution: "唯一索引用 unique: true；live_only 决定唯一作用域；索引名同一 schema 内必须全局唯一"
+    description: "索引"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名；普通 idx_，唯一 uq_" }
-      - { name: columns, type: list<string>, required: false, unique: true, description: "索引列；与 expression 二选一" }
-      - { name: expression, type: string, required: false, description: "表达式索引；与 columns 二选一", caution: "checker 只校验互斥与非空；SQL 语义由生成器/数据库验证" }
+      - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名" }
+      - { name: columns, type: list<string>, required: false, unique: true, description: "索引列" }
+      - { name: expression, type: string, required: false, description: "表达式索引" }
       - { name: unique, type: boolean, required: false, description: "是否唯一" }
-      - { name: live_only, type: boolean, required: false, default: false, description: "是否只约束未软删行（deleted_at IS NULL）", caution: "true=软删后可复用；false/省略=全表唯一（含软删行）" }
-      - { name: comment, type: string, required: true, description: "索引用途；生成 COMMENT ON INDEX" }
-      - { name: used_by, type: list<string>, required: true, unique: true, description: "使用该索引的查询项 ID；至少一个，防空索引", caution: "写 data.queries.* 项，不是查询文件；查询必须引用当前表" }
+      - { name: live_only, type: boolean, required: false, default: false, description: "是否只约束未软删行；false 含软删行" }
+      - { name: comment, type: string, required: true, description: "索引用途" }
+      - { name: used_by, type: list<string>, required: true, unique: true, description: "使用该索引的 query 项 ID" }
 
   - name: used_by
     type: object
     required: true
     generated: true
     write: forbidden
-    description: "反向索引；只记直接 query"
-    generates: "used_by、inbound"
-    caution: "生成物，禁止手改；必须是文件最后一个顶层键"
+    description: "生成的反向 query 索引"
     fields:
-      - { name: queries, type: list<string>, required: true, unique: true, description: "查询项 ID 列表" }
+      - { name: queries, type: list<string>, required: true, unique: true, description: "query 项 ID" }
 
 rules:
   - { id: table-key-order, text: "表契约字段顺序必须与 _meta/data.tables.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ table-key-order ] }

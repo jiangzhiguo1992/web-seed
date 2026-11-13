@@ -133,11 +133,13 @@ func (c *Checker) checkStorageEntry(storageDoc map[string]any, id string, m map[
 		}
 	}
 	engine, ok := m["engine"]
+	supported := stringSet(asList(storageDoc["supported_engines"]))
 	if !ok {
 		c.rulef("storage-entry", "%s: tables.%s engine is required", rel, id)
 	} else if s, _ := engine.(string); s == "" {
 		c.rulef("storage-engine", "%s: tables.%s engine must not be empty", rel, id)
-	} else if !stringSet(asList(storageDoc["supported_engines"]))[s] {
+	} else if len(supported) > 0 && !supported[s] {
+		// supported_engines 缺失/非法时只报 storage-doc，避免每张表级联报 engine 不支持。
 		c.rulef("storage-engine", "%s: tables.%s engine %q is not supported", rel, id, s)
 	}
 	c.checkStorageRetention(id, m, rel)

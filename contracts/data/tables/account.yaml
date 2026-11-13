@@ -1,4 +1,4 @@
-# 账号主表。账号是业务主体，认证信息在 auth_* / token。
+# 账号主表。
 
 id: data.tables.account
 summary: "账号主表"
@@ -7,9 +7,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "account 表禁止写入密码/手机号/邮箱/令牌；这些在 auth_* / token 表"
-  - "account.status 使用 integer；具体枚举只在 entity 定义"
   - "own_type/own_id 表示数据归属，user_id 表示关联用户；不要把 user_id 当作 own_id 的别名"
-  - "own_type/own_id/user_id 是冗余组 source；source/copies 在 data/redundancy.yaml 的 groups 登记"
 
 table:
   name: account

@@ -5,7 +5,6 @@ id: platform.errors
 summary: "错误码与 HTTP 映射"
 stability: stable
 do_not:
-  - "新增错误码前先查重，总量不超过 50"
   - "错误码只增不改；改变含义必须新建 code"
   - "账号错误与认证错误分开，不要把认证失败塞进 ACCOUNT_*"
 

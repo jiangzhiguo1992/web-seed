@@ -1,4 +1,4 @@
-# 账号查询集。只声明接口：入参、结果、目标表与索引。
+# 账号查询集。
 
 id: data.queries.account
 summary: "账号查询集"
@@ -8,7 +8,6 @@ stability: draft
 do_not:
   - "account 之外的邮箱/手机号/密码查询不要写在这里，去 data.queries.auth"
   - "account.number 唯一性查询必须带 deleted_at IS NULL"
-  - "account 查询不要返回未声明的列；返回列由 returns 决定"
 
 queries:
   - name: GetAccount

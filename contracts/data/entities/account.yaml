@@ -1,5 +1,4 @@
-# 账号数据实体。物理表在 tables/account.yaml；认证信息在 auth_* / token。
-# 只写语义增量：来源列、枚举映射、关系；description/source/validation 必须显式，类型/敏感标记可从来源列派生。
+# 账号数据实体。
 
 id: data.entities.account
 summary: "账号数据实体"
@@ -8,8 +7,6 @@ schema_version: 1
 stability: draft
 do_not:
   - "account 的认证标识只能通过 auth_* 实体访问"
-  - "OwnType/OwnID 是数据归属，userID 是关联用户；两者不得互相替代"
-  - "account.validation 不要写 DDL"
 
 model:
   name: Account

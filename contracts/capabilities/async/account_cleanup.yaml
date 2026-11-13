@@ -1,4 +1,4 @@
-# 定期清理长期未激活的账号。五要素必须齐全，缺一即校验失败。
+# 定期清理长期未激活的账号。
 
 schema_version: 1
 id: cap.async.account_cleanup
@@ -10,6 +10,7 @@ do_not:
   - "必须保留审计事件，不要静默删除"
   - "多实例部署时必须持有分布式锁，不能只靠 max_in_flight"
   - "本任务按天清理；data.tables.account.retention.unit 必须为 days，阈值读 retention.pending"
+  - "cap.async.account_cleanup 必须有 trigger/input/output/uses/writes/idempotency"
 
 trigger:
   type: cron

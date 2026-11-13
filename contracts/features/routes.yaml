@@ -1,10 +1,11 @@
-# 路由与菜单。页面路由由本文件生成，禁止手写。
+# 路由与菜单。
 
 schema_version: 1
 id: feature.routes
 summary: "路由与菜单"
 stability: stable
 do_not:
+  - "页面路由由 feature.routes 生成，禁止手写"
   - "不要在路由 meta 硬编码权限字符串，引用 platform.security.permissions.*"
 
 app: web/admin

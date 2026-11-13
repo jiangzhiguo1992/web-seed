@@ -139,7 +139,7 @@ func (c *Checker) run() {
 	c.checkRules(querySchema)
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues)
-	c.checkCrossFileTableRefs(tableIDs)
+	c.checkCapabilityPersistence(tableIDs)
 	c.checkEntities(entitySchema)
 	c.checkQueries(querySchema)
 	c.checkEntityUsedBy()

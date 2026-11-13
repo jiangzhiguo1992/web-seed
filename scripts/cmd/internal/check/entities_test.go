@@ -608,7 +608,7 @@ func TestQueryEntityCoverageAndSensitivity(t *testing.T) {
 		t.Fatalf("valid entity query reported: %v", c.errs)
 	}
 
-	q.Returns[0].Columns = []string{"id"}
+	q.Returns[0].Columns = []string{"data.tables.account.col.id"}
 	c.checkQueryReturns(q)
 	if !strings.Contains(entityErrs(c), "omits required field Nickname") {
 		t.Fatalf("missing required coverage not reported: %v", c.errs)
@@ -618,11 +618,87 @@ func TestQueryEntityCoverageAndSensitivity(t *testing.T) {
 	q = &queryInfo{
 		ID: "data.queries.account.get", File: "account.yaml", OwnerModule: "other",
 		Targets: []string{"data.tables.account"},
-		Returns: []queryReturn{{Name: "account", Kind: "entity", Entity: "data.entities.account", Columns: []string{"id", "nickname", "secret"}}},
+		Returns: []queryReturn{{Name: "account", Kind: "entity", Entity: "data.entities.account", Columns: []string{
+			"data.tables.account.col.id", "data.tables.account.col.nickname", "data.tables.account.col.secret",
+		}}},
 	}
 	c.checkQueryReturns(q)
 	if !strings.Contains(entityErrs(c), "[query-sensitive-columns]") {
 		t.Fatalf("cross-module secret not reported: %v", c.errs)
+	}
+}
+
+func TestEntityReturnColumnsMultiTableQualified(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.a": {"account_id": {typ: "integer"}},
+			"data.tables.b": {"account_id": {typ: "integer"}},
+		},
+		tableOwners: map[string]string{"data.tables.a": "x", "data.tables.b": "x"},
+	}
+	e := &entityInfo{
+		ID: "data.entities.x", OwnerModule: "x",
+		Tables: []string{"data.tables.a", "data.tables.b"}, Primary: "data.tables.a",
+		Fields: []entityFieldInfo{
+			scalarField("AID", "integer", "data.tables.a", "account_id"),
+			scalarField("BID", "integer", "data.tables.b", "account_id"),
+		},
+	}
+	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "x",
+		Targets: []string{"data.tables.a", "data.tables.b"}}
+
+	c.checkEntityReturnColumns("q", q, e, []string{
+		"data.tables.a.col.account_id", "data.tables.b.col.account_id",
+	})
+	if len(c.errs) != 0 {
+		t.Fatalf("qualified multi-table entity columns reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkEntityReturnColumns("q", q, e, []string{"account_id"})
+	if len(c.errs) != 1 || !strings.Contains(entityErrs(c), "must be data.tables.<t>.col.<c>") {
+		t.Fatalf("bare multi-table entity column not rejected cleanly: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkEntityReturnColumns("q", q, e, []string{"data.tables.c.col.account_id"})
+	if len(c.errs) != 1 || !strings.Contains(entityErrs(c), "does not belong to entity tables") {
+		t.Fatalf("foreign entity column not rejected cleanly: %v", c.errs)
+	}
+}
+
+func TestTableReturnColumnsRejectQualified(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"id": {typ: "integer"}}},
+		tableOwners:  map[string]string{"data.tables.x": "x"},
+	}
+	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "x", Targets: []string{"data.tables.x"}}
+	c.checkTableReturnColumns("q", q, "data.tables.x", []string{"id"})
+	if len(c.errs) != 0 {
+		t.Fatalf("valid table column reported: %v", c.errs)
+	}
+	c.errs = nil
+	c.checkTableReturnColumns("q", q, "data.tables.x", []string{"data.tables.x.col.id"})
+	if len(c.errs) != 1 || !strings.Contains(c.errs[0], "bare") {
+		t.Fatalf("qualified table column not rejected cleanly: %v", c.errs)
+	}
+}
+
+func TestTableReturnColumnsSecretScope(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"secret": {typ: "string", sensitivity: sensitivitySecret}}},
+		tableOwners:  map[string]string{"data.tables.x": "x"},
+	}
+	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "other", Targets: []string{"data.tables.x"}}
+	c.checkTableReturnColumns("q", q, "data.tables.x", []string{"secret"})
+	if len(c.errs) != 1 || !strings.Contains(c.errs[0], "[query-sensitive-columns]") {
+		t.Fatalf("cross-module table secret not reported: %v", c.errs)
+	}
+	c.errs = nil
+	q.OwnerModule = "x"
+	c.checkTableReturnColumns("q", q, "data.tables.x", []string{"secret"})
+	if len(c.errs) != 0 {
+		t.Fatalf("same-module table secret reported: %v", c.errs)
 	}
 }
 

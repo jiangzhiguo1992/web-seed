@@ -1,15 +1,12 @@
-# 账号领域事件。状态转换与业务动作的副作用，供异步消费者订阅。
-#
-# 规则：payload 禁止包含 PII；账号事件只带 id/number 等非敏感标识。
+# 账号领域事件。
 
 schema_version: 1
 id: business.events.account
 summary: "账号领域事件"
 stability: stable
 do_not:
-  - "payload 禁止包含 password_hash、token、邮箱、手机号"
+  - "account 事件 payload 只带 id/number 等非敏感标识；禁止 password_hash、token、邮箱、手机号"
   - "破坏兼容必须升 version，不要原地改"
-  - "登录失败事件不要带原始密码或哈希"
   - "事件 payload 字段只能是 data.entities.account 字段的子集"
 
 scope: "account"

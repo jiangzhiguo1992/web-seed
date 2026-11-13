@@ -118,6 +118,7 @@ scripts/cmd/
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
   - 所有契约的顶层 `fields` 必须竖排（block style），嵌套 `item_fields` 不限制（`schema.fields-style`）；`table.extends/entities`、`model.extends/tables/included_by` 必须竖排（`schema.list-style`）
   - 具体契约的 `do_not` 不得与组 README / `_base` 的指导重复（`schema.do-not-duplicate`）
+  - `do_not` 只写脚本无法判定且非纯风格的业务/架构约束；字段形状、枚举、默认值、引用存在性等已由 `rules` / schema 强制，不重复
   - `rules` 只允许出现在 `_meta`；`business/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不属于类型规则清单。具体契约的 `do_not` 只写实例级；`_meta` 下不得出现 `do_not`（`schema.meta-placement`）
   - `rules` 的 `id`/`text` 非空、`id` 唯一；`implemented_by` 必须包含规则自身 ID，且每个值都指向 checker 实际输出的 `[rule-id]`（`schema.rules`）
   - checker 输出的非 `schema.*` 错误 ID 必须由某个类型的 `rules` 声明，反向防止“有实现没规则”
@@ -164,7 +165,7 @@ scripts/cmd/
 - 实体/查询/能力对表的引用存在
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复；entities/queries 文件必须登记
 
-**尚未机器化**（写在 `_meta` 的 `description` / `caution` / `rules`，靠 review）：
+**尚未机器化**（写在 `_meta` 的 `description` / `rules`，靠 review）：
 
 - 命名品味、业务语义、跨模块读归属是否最小化
 - 其余契约类型规范（http/services/...）
@@ -183,8 +184,6 @@ scripts/cmd/
 | 键 | 用途 |
 |---|---|
 | `description` | 字段的准确含义 |
-| `generates` | 生成器会产出什么 / 怎么消费 |
-| `caution` | AI 最容易写错的用法 |
 | `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`min_items` 只约束 list；`map<string>` 是通用 schema 类型（键 → 字符串映射） |
 | `examples` | 列参数/骨架的示例值；实体字段不再支持 |
 | `column_types` | `_types.yaml` 中的类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
@@ -199,7 +198,7 @@ scripts/cmd/
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
 | `rules` | 本类型的专有规则；每条必须写 `implemented_by`（含规则自身 ID，指向 checker 实际输出的 `[rule-id]`）；通用结构规则由 checker 代码强制 |
 
-**先读 `description` 和 `caution`，不要只按字段名猜。**
+**先读 `description` 和 `rules`，不要只按字段名猜。**
 
 通用结构规则（`schema.id-from-file`、`schema.contract-id-unique`、`schema.unique-names`、`schema.duplicate-key`）由 checker 代码强制，不再维护独立的 YAML 清单。实例的 `enforcement` / `consumers` 以 `index.yaml` 为准。类型级 `do_not` 已移到组 README 或 `<type>/_base.yaml`，`_meta` 下禁止出现 `do_not`。
 

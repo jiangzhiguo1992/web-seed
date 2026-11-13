@@ -714,7 +714,7 @@ persistence:
 		t.Fatal(err)
 	}
 	c := &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
-	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services/cap.async may declare table writes") {
 		t.Fatalf("http write layer not rejected: %v", c.errs)
 	}
@@ -728,7 +728,7 @@ writes:
 		t.Fatal(err)
 	}
 	c = &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
-	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services/cap.async may declare writes") {
 		t.Fatalf("http top-level writes not rejected: %v", c.errs)
 	}
@@ -1782,7 +1782,7 @@ persistence:
     get: data.queries.q.missing
 `)
 	c := &Checker{root: root, queryIDs: map[string]string{"data.queries.q.get": "contracts/data/queries/q.yaml"}}
-	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown query data.queries.q.missing") {
 		t.Fatalf("missing persistence query not reported: %v", c.errs)
 	}
@@ -2473,7 +2473,7 @@ persistence:
 		tableOwners:  map[string]string{"data.tables.x": "x"},
 		tableObjects: map[string]map[string]bool{"data.tables.x": {"uq_x_code": true}},
 	}
-	c.checkCrossFileTableRefs(tableIDs)
+	c.checkCapabilityPersistence(tableIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[constraint-error-ref]") {
 		t.Fatalf("dangling constraint_errors key not reported: %v", c.errs)
 	}
@@ -2483,7 +2483,7 @@ persistence:
 		tableOwners:  map[string]string{"data.tables.x": "x"},
 		tableObjects: map[string]map[string]bool{"data.tables.x": {"ck_missing": true}},
 	}
-	c.checkCrossFileTableRefs(tableIDs)
+	c.checkCapabilityPersistence(tableIDs)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid constraint_errors key reported: %v", c.errs)
 	}

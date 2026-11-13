@@ -1,7 +1,4 @@
-# 表结构基类。单例契约：5 列 + do_not；不生成 DDL、不建实体、不落存储。
-# 字段树与规则见 _meta/data.tables.yaml；路径/ID 由 checker 写死识别。
-# 生成约定：id 是 integer（bits: 64）；created_at 用数据库 now()；
-# updated_at / deleted_at 由应用写入。不要再用逐列标注表达这些固定语义。
+# 表结构基类：5 列 + 类型级 do_not；不是物理表。
 
 id: data.tables.base
 summary: "表结构基类"
@@ -10,7 +7,6 @@ stability: stable
 do_not:
   - "本文件不是物理表：不生成 DDL、不建实体、不落存储"
   - "不要给基类加业务字段"
-  - "基类 5 列不得改名或删除"
 
 columns:
   - name: id

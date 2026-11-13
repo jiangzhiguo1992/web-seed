@@ -1,6 +1,4 @@
-# 实体字段基类。单例契约：5 个通用字段 + 类型级 do_not；不生成类型、不落表。
-# 字段树与规则见 _meta/data.entities.yaml；路径/ID 由 checker 写死识别。
-# 字段名是 Go 标识符：首字母大写导出，小写不导出；type 的 * 前缀表达可空。
+# 实体字段基类：5 个通用字段；不是实体。
 
 id: data.entities.base
 summary: "实体字段基类"
@@ -8,12 +6,9 @@ schema_version: 1
 stability: stable
 do_not:
   - "data.entities.base 不是实体：不生成类型、不落表、不建关系"
-  - "基类 5 列不得改名或删除"
   - "实体是读模型：字段必须能投影回物理列或声明 computed，不写业务行为"
-  - "多表合成只读；关系连接列写在 entity 的 fields，SQL JOIN 条件写在 query"
-  - "每张物理表必须至少被一个 entity 映射；tables 必填"
-  - "entity 只定义数据结构，不定义函数/方法；行为放 capabilities/business"
-  - "不要写状态机、业务规则（属于 business）"
+  - "多表合成只读；关系连接列写在 fields，SQL JOIN 条件写在 query"
+  - "computed 表达式不随查询变化；不同查询的算法写在 query.returns"
   - "数据库表达不了的复杂校验写在 validation，不要搬到 tables"
   - "不要引用 business.*"
 

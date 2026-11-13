@@ -121,7 +121,7 @@ func Compute(root string) (*Snapshot, error) {
 	tableFiles := map[string]string{}
 	entityFiles := map[string]string{}
 
-	tableIDs := contractspec.Targets{ID: tableTarget.id}
+	tableIDTemplate := contractspec.Targets{ID: tableTarget.id}
 	for _, f := range glob(root, filepath.Join(tableTarget.dir, tableTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
 			continue
@@ -129,14 +129,14 @@ func Compute(root string) (*Snapshot, error) {
 		if _, err := loadYAML(f); err != nil {
 			return nil, err
 		}
-		id := tableIDs.FileID(filepath.Base(f))
+		id := tableIDTemplate.FileID(filepath.Base(f))
 		if id == "" {
 			continue
 		}
 		tables[id] = &tableSet{queries: map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 	}
-	entityIDs := contractspec.Targets{ID: entityTarget.id}
+	entityIDTemplate := contractspec.Targets{ID: entityTarget.id}
 	for _, f := range glob(root, filepath.Join(entityTarget.dir, entityTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
 			continue
@@ -144,21 +144,21 @@ func Compute(root string) (*Snapshot, error) {
 		if _, err := loadYAML(f); err != nil {
 			return nil, err
 		}
-		id := entityIDs.FileID(filepath.Base(f))
+		id := entityIDTemplate.FileID(filepath.Base(f))
 		if id == "" {
 			continue
 		}
 		entities[id] = &entitySet{queries: map[string]bool{}, capabilities: map[string]bool{}}
 		entityFiles[id] = rel(root, f)
 	}
-	queryIDs := contractspec.Targets{ID: queryTarget.id}
+	queryIDTemplate := contractspec.Targets{ID: queryTarget.id}
 	seenQueries := map[string]string{}
 	for _, f := range glob(root, filepath.Join(queryTarget.dir, queryTarget.glob)) {
 		doc, err := loadYAML(f)
 		if err != nil {
 			return nil, err
 		}
-		fileID := queryIDs.FileID(filepath.Base(f))
+		fileID := queryIDTemplate.FileID(filepath.Base(f))
 		for _, raw := range asList(doc["queries"]) {
 			m, ok := asMap(raw)
 			if !ok {

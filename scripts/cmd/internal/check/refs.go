@@ -33,7 +33,7 @@ func (c *Checker) isBaseTableRef(ref string) bool {
 	return c.baseID != "" && (ref == c.baseID || strings.HasPrefix(ref, c.baseID+".col."))
 }
 
-func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string) {
+func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 	c.declaredWrites = map[string]bool{}
 	// capabilities
 	for _, f := range walkYAML(c.root, "contracts/capabilities") {

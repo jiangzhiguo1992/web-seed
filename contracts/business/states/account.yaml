@@ -1,13 +1,12 @@
-# 账号状态机。所有合法转换必须穷举，未列出即为非法。
+# 账号状态机。
 
 schema_version: 1
 id: business.states.account
 summary: "账号状态机"
 stability: stable
 do_not:
-  - "deleted 是终态，不允许任何出边"
+  - "account 状态机必须穷举所有合法转换，未列出即非法"
   - "封禁与软删不要混用：suspended 可恢复，deleted 不可"
-  - "suspended 不可直接删除；必须先解封再删除"
 
 machine: account
 subject: data.entities.account

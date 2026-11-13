@@ -1,9 +1,4 @@
-# 账号 HTTP 接口。OpenAPI 片段，生成时与 shared.yaml / auth.yaml 合并。
-#
-# 规则：
-#   - 每个 operation 必须有 x-contract-id 与 x-service。
-#   - 账号响应不含任何认证字段；认证接口在 auth.yaml。
-#   - 字段长度/枚举以 data 契约为准，这里手写值只用于 OpenAPI 展开。
+# 账号 HTTP 接口（OpenAPI 片段）。
 
 schema_version: 1
 id: cap.http.account
@@ -12,6 +7,8 @@ stability: stable
 do_not:
   - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
   - "x-contract-id 必须与 index 中的 operation 一一对应"
+  - "account 每个 operation 必须有 x-service"
+  - "account 的字段长度/枚举以 data 契约为准，这里的手写值只用于 OpenAPI 展开"
 
 module: account
 base_path: /v1

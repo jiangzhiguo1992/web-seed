@@ -1,10 +1,6 @@
 # contract: index
-# summary: 契约地图。AI 的唯一入口：先读本文件摘要，再按 playbook 指令读正文。
-# enforcement: review-only（P2 生成器落地前人工维护；之后由 gen-graph 聚合生成）
-# do_not:
-#   - 不要把正文写进本文件，只放摘要与索引
-#   - 不要在本文件里写业务规则
-#   - 新增契约必须同步登记，否则 contract-graph 报孤儿错误
+# summary: 契约地图；先读摘要，再按 playbook 读正文。
+# do_not: 不写正文/业务规则；新增契约必须登记。
 
 schema_version: 1
 
@@ -17,19 +13,19 @@ read_order:
 
 groups:
   data:
-    description: "数据契约。tables 是物理结构真相源（含 base 基类，migrations 由它生成），entities 是读模型，queries 是实体与表之间的装载桥，storage 是表级存储约束，redundancy 是跨表冗余关系。"
+    description: "tables 物理结构，entities 读模型，queries 装载桥，storage/redundancy 表级约束。"
     layers: [tables, entities, queries, redundancy, storage, policy]
   capabilities:
-    description: "能力契约。HTTP / 异步 / 跨模块 service。"
+    description: "HTTP / 异步 / 跨模块 service。"
     layers: [http, async, services, flows]
   business:
-    description: "业务规格。状态机、规则、领域事件、术语；实体在 data 层。"
+    description: "状态机、规则、领域事件。"
     layers: [states, rules, events, glossary]
   features:
-    description: "功能契约。路由、页面、跨页旅程。"
+    description: "路由、页面、跨页旅程。"
     layers: [routes, pages, flows]
   platform:
-    description: "平台契约。环境、错误、配置、架构、设计、观测、埋点、安全。"
+    description: "平台约定：环境、错误、架构、观测、安全等。"
     layers: [environments, versioning, errors, http_conventions, quality, config, architecture, design, observability, analytics, security]
 
 # enforcement: generated | generated+tested | tested | review-only

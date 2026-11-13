@@ -1,5 +1,4 @@
-# 手机号认证数据实体。物理表在 tables/auth_phone.yaml。
-# 只写语义增量：来源列、枚举映射、关系；description/source/validation 必须显式，类型/敏感标记可从来源列派生。
+# 手机号认证数据实体。
 
 id: data.entities.auth_phone
 summary: "手机号认证数据实体"
@@ -7,7 +6,6 @@ owner_module: auth
 schema_version: 1
 stability: draft
 do_not:
-  - "auth_phone.number 不要写进账号主表"
   - "auth_phone.number 不要出现在日志"
 
 model:

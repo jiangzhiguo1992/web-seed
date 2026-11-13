@@ -226,7 +226,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；替换 TODO 占位符。\n# 新表还需在 contracts/data/storage.yaml 的 tables 下登记（engine 必填）。\n# 字段规范见 %s。\n\n", summary, s.ID)
+	header := fmt.Sprintf("# %s\n\n", summary)
 	return append([]byte(header), b...), nil
 }
 
@@ -268,7 +268,7 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# 追加到 %s 的 enums 列表（每条以 `- ` 开头并缩进 2 空格）。\n# 示例 value/code 仅占位：替换后再提交；code 必须 >= 0。\n\n", s.Targets.File)
+	header := fmt.Sprintf("# 追加到 %s 的 enums 列表；示例 value/code 需替换。\n\n", s.Targets.File)
 	return append([]byte(header), b...), nil
 }
 
@@ -346,7 +346,7 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；基类字段已由 _base 继承，追加业务字段。\n# 字段规范见 %s。\n\n", summary, s.ID)
+	header := fmt.Sprintf("# %s\n\n", summary)
 	return append([]byte(header), b...), nil
 }
 
@@ -419,7 +419,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；只声明接口（入参/结果/目标表/索引），SQL 由实现负责。\n# 字段规范见 %s。\n\n", summary, s.ID)
+	header := fmt.Sprintf("# %s\n\n", summary)
 	return append([]byte(header), b...), nil
 }
 

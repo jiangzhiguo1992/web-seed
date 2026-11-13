@@ -65,8 +65,8 @@ gen-client: ## 合并 spec → apps/web/packages/api-client（P2）
 	@echo "gen-client: 尚未实现（P2）"
 	@exit 1
 
-contract-new: ## 生成契约骨架（type=data.tables|data.enums|data.entities|data.queries）
-	@./scripts/contract/scaffold.sh "$(type)" "$(name)" "$(module)" "$(summary)" "$(column_type)" "$(table)"
+contract-new: ## 生成契约骨架（type=data.tables|data.enums|data.entities|data.queries；table=<stem> 可选）
+	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" ./scripts/contract/scaffold.sh
 
 contract-check: ## 校验契约结构与 used_by（data.tables/enums/entities/queries）
 	@./scripts/contract/validate.sh

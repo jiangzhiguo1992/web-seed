@@ -77,8 +77,6 @@ type Field struct {
 	MinItems    any     `yaml:"min_items"`
 	Pattern     string  `yaml:"pattern"`
 	Description string  `yaml:"description"`
-	Generates   string  `yaml:"generates"`
-	Caution     string  `yaml:"caution"`
 	Examples    []any   `yaml:"examples"`
 	Default     any     `yaml:"default"`
 	Generated   bool    `yaml:"generated"`

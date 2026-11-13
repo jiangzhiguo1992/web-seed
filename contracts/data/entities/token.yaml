@@ -1,5 +1,4 @@
-# 令牌数据实体。物理表在 tables/token.yaml。
-# 只写语义增量：来源列、枚举映射、关系；description/source/validation 必须显式，类型/敏感标记可从来源列派生。
+# 令牌数据实体。
 
 id: data.entities.token
 summary: "令牌数据实体"
@@ -9,7 +8,7 @@ stability: draft
 do_not:
   - "token 的哈希字段禁止出现在任何 DTO、日志、事件"
   - "token 实体不要写 JWT 签发或校验逻辑"
-  - "token 原文只在签发响应返回一次，数据库不存原文"
+  - "token 原文只在签发响应返回一次"
 
 model:
   name: token

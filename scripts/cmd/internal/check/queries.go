@@ -615,6 +615,10 @@ func (c *Checker) checkReturnColumn(where string, q *queryInfo, ref string) {
 
 func (c *Checker) checkTableReturnColumns(where string, q *queryInfo, table string, columns []string) {
 	for _, col := range columns {
+		if _, _, ok := splitColumnRef(col); ok {
+			c.rulef("query-return-columns", "%s: kind=table columns must be bare names, got %s", where, col)
+			continue
+		}
 		meta, ok := c.tableColumns[table][col]
 		if !ok {
 			c.rulef("query-return-columns", "%s: return column %s not found in %s", where, col, table)
@@ -628,16 +632,33 @@ func (c *Checker) checkTableReturnColumns(where string, q *queryInfo, table stri
 
 func (c *Checker) checkEntityReturnColumns(where string, q *queryInfo, e *entityInfo, columns []string) {
 	selected := map[string]bool{}
-	for _, col := range columns {
-		selected[col] = true
-		f := findEntityFieldByColumn(e, col)
+	invalid := false
+	for _, ref := range columns {
+		t, col, ok := splitColumnRef(ref)
+		if !ok {
+			c.rulef("query-return-columns", "%s: entity column %q must be data.tables.<t>.col.<c>", where, ref)
+			invalid = true
+			continue
+		}
+		selected[t+"."+col] = true
+		if !containsString(e.Tables, t) {
+			c.rulef("query-return-columns", "%s: column %s does not belong to entity tables %v", where, ref, e.Tables)
+			invalid = true
+			continue
+		}
+		f := findEntityFieldByColumn(e, t, col)
 		if f == nil {
-			c.rulef("query-return-columns", "%s: return column %s not found in %s", where, col, e.ID)
+			c.rulef("query-return-columns", "%s: return column %s not found in %s", where, ref, e.ID)
+			invalid = true
 			continue
 		}
 		if normalizeSensitivity(f.Sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[f.ColumnTable] {
 			c.rulef("query-sensitive-columns", "%s: returns secret field %s outside module %s", where, f.Name, c.tableOwners[f.ColumnTable])
 		}
+	}
+	if invalid {
+		// 投影本身非法时不再跑覆盖检查，避免同一处错误级联成“漏字段”噪音。
+		return
 	}
 	c.checkEntityCoverage(q, e, selected)
 }
@@ -664,11 +685,12 @@ func (c *Checker) checkEntityCoverage(q *queryInfo, e *entityInfo, selected map[
 		if f.Column == "" {
 			continue
 		}
+		key := f.ColumnTable + "." + f.Column
 		if len(selected) == 0 {
 			if normalizeSensitivity(f.Sensitivity) == sensitivitySecret {
 				continue
 			}
-		} else if !selected[f.Column] {
+		} else if !selected[key] {
 			if normalizeSensitivity(f.Sensitivity) != sensitivitySecret && !strings.HasPrefix(f.Type, "*") {
 				c.rulef("query-entity-coverage", "%s: omits required field %s", where, f.Name)
 			}
@@ -692,10 +714,11 @@ func findEntityField(e *entityInfo, name string) *entityFieldInfo {
 	return nil
 }
 
-func findEntityFieldByColumn(e *entityInfo, column string) *entityFieldInfo {
+func findEntityFieldByColumn(e *entityInfo, table, column string) *entityFieldInfo {
 	for i := range e.Fields {
-		if !e.Fields[i].IsRelation && e.Fields[i].Column == column {
-			return &e.Fields[i]
+		f := &e.Fields[i]
+		if !f.IsRelation && f.ColumnTable == table && f.Column == column {
+			return f
 		}
 	}
 	return nil
