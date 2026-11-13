@@ -1,7 +1,7 @@
 # data.queries 的单一规范：字段树 + 值域 + 硬规则。
+# 查询是接口：只声明入参、结果、目标表、索引引用与读写属性；
+# SQL 如何执行不在契约里，由实现/生成器负责。
 # 通用字段语义见 _meta/README.md；本文件只写 data.queries 特有内容。
-# 查询是 entity 与 table 的桥：返回实体时按实体字段投影，返回行时按表列投影，统计结果走 output_fields。
-# 不写完整 SQL：只写可脚本校验的伪 SQL（表/列/参数/索引引用 + 表达式字符串）。
 
 id: meta.data.queries
 type: data.queries
@@ -64,94 +64,68 @@ fields:
     type: list<object>
     required: true
     min_items: 1
-    description: "查询项列表；每条必须可直接生成 sqlc 代码"
-    generates: "queries/*.sql、sqlc 代码"
-    caution: "只写硬约束；表达式是伪 SQL，checker 只校验表/列/参数/索引引用"
+    description: "查询项列表；每条是一份可生成的接口契约"
+    generates: "查询接口、sqlc 代码、测试骨架"
+    caution: "只写入参/结果/目标表/索引引用；不写 SQL 子句"
     item_fields:
       - { name: id, type: string, required: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "查询项 ID：data.queries.<file>.<query>", caution: "必须以前缀 data.queries.<file>. 开头" }
-      - { name: name, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "sqlc 方法名", caution: "必须等于 query id 末段的 PascalCase；全局唯一" }
-      - { name: kind, type: string, required: true, enum: [ one, many, execrows ], description: "sqlc 返回形态", caution: "execrows 返回 affected_rows；one/many 的写语句必须返回表行或实体" }
-      - { name: statement, type: string, required: true, enum: [ select, insert, update, delete ], description: "语句类型", caution: "insert/update 必须写 values；update/delete 必须写 where" }
+      - { name: name, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "方法名", caution: "必须等于 query id 末段的 PascalCase；全局唯一" }
+      - { name: access, type: string, required: true, enum: [ read, write ], description: "读写属性；write 有副作用", caution: "write 只能有一个目标表，owner_module 必须等于目标表 owner_module" }
+      - { name: kind, type: string, required: true, enum: [ one, many, exec ], description: "结果基数；exec 只返回受影响行数", caution: "exec 必须是 write 且 returns=affected_rows；read 不得用 exec" }
 
-      - { name: targets, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.tables\.', description: "语句的目标表；第一个是主表，单表也写成列表", caution: "写语句只能有一张目标表；读取表可以跨模块，写表必须属于 owner_module" }
-
-      - name: joins
-        type: list<object>
-        required: false
-        description: "JOIN 子句；表必须同时出现在 targets 中"
-        caution: "只有 select 允许 joins；主表在 targets[0]"
-        item_fields:
-          - { name: table, type: string, required: true, pattern: '^data\.tables\.', description: "JOIN 表" }
-          - { name: type, type: string, required: false, enum: [ inner, left, right, full ], default: inner, description: "JOIN 类型" }
-          - { name: on, type: list<string>, required: true, min_items: 1, description: "ON 表达式" }
+      - { name: targets, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.tables\.', description: "查询读写到的表；第一个是主表，单表也写成列表", caution: "write 只能有一张目标表；read 可以多表；表必须存在且不是 data.tables.base" }
 
       - name: params
         type: list<object>
         required: false
-        description: "方法入参；所有表达式里的 @name/sqlc.arg/sqlc.narg 都必须在此声明"
-        generates: "sqlc 参数、校验"
-        caution: "nullable:true 必须用 sqlc.narg；非 nullable 不得用 sqlc.narg；结构化谓词的 param 必须 non-nullable（可选过滤用字符串表达式）"
+        description: "方法入参；接口的唯一入参声明"
+        generates: "方法签名、参数校验"
+        caution: "只声明接口参数；SQL 如何使用参数由实现负责"
         item_fields:
           - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: string, required: true, description: "SQL/sqlc 类型，如 text、integer、timestamp、[]text" }
-          - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "参数绑定的物理列；数组参数绑定元素列", caution: "列必须属于查询的 targets/joins；type 必须与列类型族兼容" }
-          - { name: nullable, type: boolean, required: false, default: false, description: "是否允许空值；结构化谓词的 param 必须 false" }
+          - { name: type, type: string, required: true, description: "逻辑类型，如 text、integer、timestamp、[]text" }
+          - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "参数绑定的物理列；数组参数绑定元素列", caution: "列必须属于查询的 targets；type 必须与列类型族兼容" }
+          - { name: nullable, type: boolean, required: false, default: false, description: "参数是否可为空" }
           - { name: default, type: any, required: false, description: "默认值；只影响生成骨架" }
           - { name: min, type: integer, required: false, description: "闭区间下限" }
           - { name: max, type: integer, required: false, description: "闭区间上限" }
           - { name: note, type: string, required: false, description: "参数补充说明" }
 
-      - { name: returns, type: string, required: true, description: "返回 DSL：data.tables.<t>.row、data.entities.<e>、[] 前缀、boolean/integer/string/float/decimal/timestamp、affected_rows、object", generates: "sqlc 返回类型", caution: "object 必须配 output_fields；affected_rows 只能配 execrows 写语句" }
-      - { name: return_columns, type: list<string>, required: false, unique: true, description: "显式返回列；用于裁剪敏感字段或实体字段", caution: "按物理列名写；object 用 output_fields，不用本字段" }
+      - { name: returns, type: string, required: true, description: "结果 DSL：data.tables.<t>.row、data.entities.<e>、[] 前缀、boolean/integer/string/float/decimal/timestamp/datetime/json、affected_rows、object", generates: "方法返回类型", caution: "object 必须配 output_fields；affected_rows 只能配 exec；many 必须写 [] 前缀" }
+      - { name: return_columns, type: list<string>, required: false, unique: true, description: "结果投影列；只用于表行/实体返回，按物理列名写", caution: "省略表示按返回类型的默认投影；敏感列只有同模块可显式列出" }
 
       - name: output_fields
         type: list<object>
         required: false
         min_items: 1
-        description: "统计/聚合查询的自定义输出字段；不进入 entity"
-        generates: "输出类型、sqlc 返回"
-        caution: "只有 returns 为 object/[]object 时出现；每项必须有 expr"
+        description: "object 结果的字段清单；结果形状，不是 SQL 表达式"
+        generates: "输出类型、方法返回"
+        caution: "只有 returns 为 object/[]object 时出现；每项只写 name/type"
         item_fields:
           - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出字段名" }
           - { name: type, type: string, required: true, description: "逻辑类型；可写 data.enums.*" }
           - { name: nullable, type: boolean, required: false, description: "是否可空" }
-          - { name: expr, type: string, required: true, description: "输出表达式；参数必须已在 params 声明", caution: "表达式引用 @param 时 checker 做双向校验" }
           - { name: note, type: string, required: false, description: "输出字段补充说明" }
 
-      - { name: expr, type: string, required: false, description: "标量返回的单表达式；SQL 生成 SELECT <expr> FROM <target> WHERE ...", caution: "只有 returns 是标量且不是 affected_rows 时必填" }
-      - { name: values, type: map<string>, required: false, description: "写语句的列赋值映射：列名 -> 表达式；insert 与 update 共用", caution: "键必须是目标表列；表达式参数必须已声明" }
-
-      - { name: where, type: list<any>, required: false, description: "WHERE 条件：字符串是软表达式，对象是结构化谓词", caution: "对象谓词：{column, op, param|value}；op=eq/ne/lt/lte/gt/gte/in/is_null/is_not_null；结构化谓词的 param 必须 non-nullable；时间字面量必须加引号" }
-      - { name: order_by, type: list<string>, required: false, description: "ORDER BY：<列> ASC|DESC", caution: "只允许列名 + 方向；多表时可用 <表别名>.<列> 形式" }
-      - { name: limit, type: string, required: false, description: "LIMIT 表达式", caution: "只有 select 允许 limit" }
-
-      - { name: index_ref, type: list<string>, required: false, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "使用的索引：data.tables.<t>.pk 或 data.tables.<t>.<index-name>", generates: "索引校验、EXPLAIN 提示", caution: "单表查询至少一个；显式索引必须在 indexes[].used_by 中列出本查询" }
-
-      - { name: semantics, type: string, required: true, description: "查询语义：过滤、排序、软删、锁、幂等", generates: "生成器注释、测试断言", caution: "不要写实现步骤；不要与表达式重复" }
+      - { name: index_ref, type: list<string>, required: false, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "查询依赖的索引：data.tables.<t>.pk 或 data.tables.<t>.<index-name>", generates: "索引校验、EXPLAIN 提示", caution: "单表查询至少一个；显式索引必须在 indexes[].used_by 中列出本查询" }
 
 rules:
   - { id: query-key-order, text: "查询文件顶层键顺序固定为 id/summary/owner_module/schema_version/stability/do_not/queries", implemented_by: [ query-key-order ] }
   - { id: query-id-prefix, text: "query.id 必须以 <文件 id>. 开头", implemented_by: [ query-id-prefix ] }
   - { id: query-id-unique, text: "query.id 在当前集合内唯一", implemented_by: [ query-id-unique ] }
   - { id: query-name, text: "query.name 必须等于 query id 末段的 PascalCase", implemented_by: [ query-name ] }
-  - { id: query-name-unique, text: "query.name 全局唯一，避免 sqlc 方法名冲突", implemented_by: [ query-name-unique ] }
-  - { id: query-shape, text: "statement 与子句必须匹配：select 不写 values；insert/update 必须写 values；update/delete 必须写 where；joins/order_by/limit 只用于 select；标量返回必须写 expr 且不写 values；expr 不得写 AS 别名", implemented_by: [ query-shape ] }
-  - { id: query-table-shape, text: "targets 非空、去重、不得指向 data.tables.base；写语句只能有一张目标表；joins 表必须存在于 targets", implemented_by: [ query-table-shape ] }
-  - { id: query-values, text: "values 的键必须是目标表列；同一列不得重复；表达式非空", implemented_by: [ query-values ] }
-  - { id: query-order-by, text: "order_by 必须是 <列> ASC|DESC；列必须属于查询的表", implemented_by: [ query-order-by ] }
-  - { id: query-params, text: "params 的 name 不得重复", implemented_by: [ query-params ] }
-  - { id: query-param-sql, text: "所有伪 SQL 表达式中的参数与 params 必须双向一致；结构化谓词的 param 也计入使用", implemented_by: [ query-param-sql ] }
-  - { id: query-param-column, text: "params[].column 必须属于查询的 targets/joins；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型）", implemented_by: [ query-param-column ] }
-  - { id: query-where, text: "where 的结构化谓词必须声明存在的列和合法 op；比较谓词二选一 param/value；in 必须是数组参数；结构化谓词引用的 param 必须绑定同名列且 non-nullable；is_null 只用于可空列", implemented_by: [ query-where ] }
-  - { id: query-param-nullable, text: "nullable:true 必须且只能用 sqlc.narg；非 nullable 不得使用 sqlc.narg；结构化谓词的 param 必须 non-nullable", implemented_by: [ query-param-nullable ] }
+  - { id: query-name-unique, text: "query.name 全局唯一，避免方法名冲突", implemented_by: [ query-name-unique ] }
+  - { id: query-shape, text: "access/kind/returns 必须匹配：exec 必须是 write 且返回 affected_rows；read 不得用 exec；one/many 不得返回 affected_rows；write 的 one/many 只能返回表行/实体；many 必须写 []，one/exec 不得写 []", implemented_by: [ query-shape ] }
+  - { id: query-table-shape, text: "targets 非空、去重、不得指向 data.tables.base；write 只能有一张目标表", implemented_by: [ query-table-shape ] }
+  - { id: query-params, text: "params 的 name 不得重复，type 不得为空", implemented_by: [ query-params ] }
+  - { id: query-param-column, text: "params[].column 必须属于查询的 targets；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型）", implemented_by: [ query-param-column ] }
   - { id: query-returns, text: "returns DSL 必须合法，引用的表/实体必须存在", implemented_by: [ query-returns ] }
-  - { id: query-returns-kind, text: "many 必须返回 [] 前缀；one 不得返回 []；affected_rows 只能配 execrows；写语句的 one/many 只能返回表行或实体", implemented_by: [ query-returns-kind ] }
-  - { id: query-return-columns, text: "return_columns 必须属于返回类型，且不超出投影范围；敏感列只允许同模块显式列出", implemented_by: [ query-return-columns ] }
-  - { id: query-entity-coverage, text: "返回实体时，非敏感列字段的来源表必须在查询的表集合中；return_columns 必须覆盖全部非指针、非敏感列字段", implemented_by: [ query-entity-coverage ] }
-  - { id: query-output-fields, text: "object 返回必须有非空 output_fields；每项必须写 expr 且不得写 AS 别名；不得同时写 return_columns", implemented_by: [ query-output-fields ] }
-  - { id: query-kind-sql, text: "execrows 必须是写语句且返回 affected_rows；one/many 的写语句必须返回表行或实体；one 的 SELECT 必须命中唯一索引/主键或 limit 为 1", implemented_by: [ query-kind-sql ] }
+  - { id: query-return-columns, text: "return_columns 必须属于返回类型；敏感列只允许同模块显式列出；exec 不得写 return_columns", implemented_by: [ query-return-columns ] }
+  - { id: query-entity-coverage, text: "返回实体时，字段的来源表必须在查询的 targets 中；return_columns 省略表示全部非敏感列，显式时必须覆盖全部非指针、非敏感列字段", implemented_by: [ query-entity-coverage ] }
+  - { id: query-output-fields, text: "object 返回必须有非空 output_fields；字段 name 唯一、type 非空；不得同时写 return_columns", implemented_by: [ query-output-fields ] }
+  - { id: query-kind, text: "one 的表行/实体读必须命中返回表/实体的唯一索引或主键", implemented_by: [ query-kind ] }
   - { id: query-index-ref, text: "index_ref 必须指向查询表上的 PK 或 indexes[].name；显式索引必须在 used_by 中列出该查询；单表查询至少一个 index_ref", implemented_by: [ query-index-ref ] }
-  - { id: query-index-used-by, text: "index.used_by 的查询必须存在、引用当前表，并在 index_ref 中引用该索引；表达式必须提及索引列", implemented_by: [ query-index-used-by ] }
-  - { id: query-write-owner, text: "写目标取自 targets[0]；owner_module 必须等于目标表 owner_module；读取表可以跨模块", implemented_by: [ query-write-owner ] }
+  - { id: query-index-used-by, text: "index.used_by 的查询必须存在、引用当前表，并在 index_ref 中引用该索引", implemented_by: [ query-index-used-by ] }
+  - { id: query-write-owner, text: "write 目标取自 targets[0]；owner_module 必须等于目标表 owner_module；read 可以跨模块", implemented_by: [ query-write-owner ] }
   - { id: query-sensitive-columns, text: "never_expose 列不得被跨模块查询返回；return_columns 省略时默认不投影，同模块需要时必须显式列出", implemented_by: [ query-sensitive-columns ] }
   - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识；通用规则放组 README，禁止复制", implemented_by: [ query-do-not-specific ] }

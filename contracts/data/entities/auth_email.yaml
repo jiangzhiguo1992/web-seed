@@ -1,9 +1,5 @@
 # 邮箱认证数据实体。物理表在 tables/auth_email.yaml。
-#
-# 边界：
-#   - 基类字段在 entities/_base.yaml；本文件只写邮箱认证业务字段。
-#   - 邮箱拆分为 username/domain/entity/tld，便于检索与域名聚合。
-#   - 完整邮箱 = username + "@" + domain；entity/tld 由 domain 派生，可为空。
+# 只写语义增量：来源列、枚举映射、关系；类型/校验/描述/敏感标记从来源列派生。
 
 id: data.entities.auth_email
 summary: "邮箱认证数据实体"
@@ -11,8 +7,8 @@ owner_module: auth
 schema_version: 1
 stability: stable
 do_not:
-  - "auth_email.domain 不要写进账号主表"
-  - "auth_email 的完整邮箱不要出现在日志"
+  - "auth_email 的 username/domain 不要写进账号主表"
+  - "auth_email.domain_parts 校验不要搬到数据库"
 
 model:
   name: authEmail
@@ -21,47 +17,19 @@ model:
 
 fields:
   - name: AccountID
-    json_name: account_id
-    type: string
     mutable: false
     source: { column: data.tables.auth_email.col.account_id }
-    validation: { column: data.tables.auth_email.col.account_id }
-    description: "关联账号"
-
   - name: Username
-    json_name: username
-    type: string
-    pii: true
     source: { column: data.tables.auth_email.col.username }
-    validation: { column: data.tables.auth_email.col.username }
-    description: "邮箱 @ 前的本地部分"
-
   - name: Domain
-    json_name: domain
-    type: string
     source: { column: data.tables.auth_email.col.domain }
-    validation: { column: data.tables.auth_email.col.domain }
-    description: "完整域名，例如 example.com；小写归一"
-
   - name: Entity
-    json_name: entity
-    type: "*string"
     source: { column: data.tables.auth_email.col.entity }
-    validation: { column: data.tables.auth_email.col.entity }
-    description: "注册域/二级域，例如 example.com"
-
   - name: TLD
-    json_name: tld
-    type: "*string"
     source: { column: data.tables.auth_email.col.tld }
-    validation: { column: data.tables.auth_email.col.tld }
-    description: "顶级域，例如 com"
-
   - name: Status
-    json_name: status
     type: data.enums.auth_status
     source: { column: data.tables.auth_email.col.status }
-    validation: { column: data.tables.auth_email.col.status }
     description: "认证记录状态"
 
   - name: Account

@@ -47,7 +47,6 @@ type Checker struct {
 	declaredRuleIDs map[string]bool
 	queryIDs        map[string]string
 	queryTables     map[string]map[string]bool
-	queryText       map[string]string
 	tableIndexes    map[string][]tableIndex
 	tablePrimaryKey map[string][]string
 	tableObjects    map[string]map[string]bool

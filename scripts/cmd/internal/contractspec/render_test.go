@@ -156,8 +156,8 @@ func TestRenderQuery(t *testing.T) {
 	if len(targets) != 1 || targets[0] != "data.tables.account" {
 		t.Fatalf("targets not scaffolded: %#v", q["targets"])
 	}
-	if q["statement"] != "select" || q["expr"] != "COUNT(*) > 0" {
-		t.Fatalf("statement/expr not scaffolded: %#v", q)
+	if q["access"] != "read" || q["kind"] != "one" {
+		t.Fatalf("access/kind not scaffolded: %#v", q)
 	}
 	refs, _ := q["index_ref"].([]any)
 	if len(refs) != 1 || refs[0] != "data.tables.account.pk" {
@@ -165,9 +165,6 @@ func TestRenderQuery(t *testing.T) {
 	}
 	if _, ok := q["sql"]; ok {
 		t.Fatalf("query must not scaffold sql: %#v", q)
-	}
-	if !strings.Contains(string(b), `semantics: "TODO: 查询语义"`) {
-		t.Fatalf("semantics must be double-quoted:\n%s", b)
 	}
 	if _, err := RenderQuery(s, "note", "notes", "note", "bad name", "x"); err == nil {
 		t.Fatal("invalid physical table name should fail")

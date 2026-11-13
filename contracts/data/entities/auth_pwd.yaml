@@ -1,9 +1,5 @@
 # 密码认证数据实体。物理表在 tables/auth_pwd.yaml。
-#
-# 边界：
-#   - 基类字段在 entities/_base.yaml；本文件只写密码认证业务字段。
-#   - password_hash 只服务认证流程；新密码必须使用 argon2id。
-#   - 本实体只服务认证流程，不得被普通业务查询引用。
+# 只写语义增量：来源列、枚举映射、关系；类型/校验/描述/敏感标记从来源列派生。
 
 id: data.entities.auth_pwd
 summary: "密码认证数据实体"
@@ -21,49 +17,19 @@ model:
 
 fields:
   - name: AccountID
-    json_name: account_id
-    type: string
     mutable: false
     source: { column: data.tables.auth_pwd.col.account_id }
-    validation: { column: data.tables.auth_pwd.col.account_id }
-    description: "关联账号"
-
   - name: Username
-    json_name: username
-    type: string
-    pii: true
     source: { column: data.tables.auth_pwd.col.username }
-    validation: { column: data.tables.auth_pwd.col.username }
-    description: "登录名"
-
   - name: passwordHash
-    json_name: password_hash
-    type: "*string"
-    pii: true
-    never_expose: true
     source: { column: data.tables.auth_pwd.col.password_hash }
-    validation: { column: data.tables.auth_pwd.col.password_hash }
-    description: "argon2id 口令哈希；新密码写入此列"
-
   - name: FailedLoginCount
-    json_name: failed_login_count
-    type: integer
     source: { column: data.tables.auth_pwd.col.failed_login_count }
-    validation: { column: data.tables.auth_pwd.col.failed_login_count }
-    description: "连续失败次数"
-
   - name: LockedUntil
-    json_name: locked_until
-    type: "*timestamp"
     source: { column: data.tables.auth_pwd.col.locked_until }
-    validation: { column: data.tables.auth_pwd.col.locked_until }
-    description: "锁定截止时间；为空表示未锁定"
-
   - name: Status
-    json_name: status
     type: data.enums.auth_status
     source: { column: data.tables.auth_pwd.col.status }
-    validation: { column: data.tables.auth_pwd.col.status }
     description: "认证记录状态"
 
   - name: Account

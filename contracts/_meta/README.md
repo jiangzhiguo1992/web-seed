@@ -78,7 +78,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成只依赖主键的 `COUNT(*) > 0`，不会伪造业务字段。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`storage.tables` 的 retention/partition、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `access: read` / `kind: one` / `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 只生成 `required` 字段和“含 required/default 的类型族扩展字段”；`storage.tables` 的 retention/partition、`columns.pii` 等可选字段不强行展开，避免生成无意义默认值。`status` 固定 `bits: 32`，不自动写 `default`（新表的状态整数码尚未确定）。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -104,7 +104,7 @@ scripts/cmd/
   - `constraints` 的 `type`、按类型允许的字段、必填子字段与列引用；表不使用 enum 约束
   - 禁止 `foreign_key`；跨表一致性由应用/业务规则保证
   - `unique` 约束与唯一索引的软删语义不同：约束含软删行，唯一索引按 `where` 过滤
-  - `indexes` 的 `reason`、`columns` xor `expression`、`order` 长度/方向、唯一索引软删过滤、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表且表达式提及索引列；large 表不得显式禁用 `concurrently`
+  - `indexes` 的 `reason`、`columns` xor `expression`、`order` 长度/方向、唯一索引软删过滤、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表；large 表不得显式禁用 `concurrently`
   - `columns.redundancy`：同组唯一 `source`、至少一个 `copy`；`copy.ref` 指向同组 `source`，`type`/`nullable` 一致
   - `data/queries/*.yaml` 的 `index_ref`：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须在 `used_by` 中列出该 query
   - `data/storage.yaml` 的 `tables`：覆盖每张物理表且无孤儿；engine/size_class/retention/partition 的结构与取值
@@ -135,28 +135,26 @@ scripts/cmd/
   - 结构按 `_meta/data.entities.yaml`；`model.extends` 必须是 `[data.entities.base]`；具体实体不得重声明基类字段，`Status` 可用 `data.enums.*` 特化
   - `model.tables` 必填、非空、去重；`model.tables[0]` 是主表；每张物理表至少一个 entity 映射
   - `owner_module` 必填且必须等于主表 `model.tables[0]` 的 `owner_module`
-  - 字段二选一：标量字段（`source` + `type`）或关系字段（`relationship` + `target` + `join_column` + `load`）；两套键不得混用
-  - 标量字段必须有 `source`、`type`、`validation`、`description`；`source.column` 必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用
-  - `type` 的 `*` 前缀表示指针，必须与来源列 `nullable` 完全一致；类型复用 `data.tables` 类型族，或 `data.enums.*`；`computed` 字段必须使用指针类型 `*T`、`mutable:false`，且不得引用 `@param`
-  - `validation` 三选一：`column`（指向存在的列）、`pattern`（string 字段的合法正则）、`soft`（非空软表达式）
+  - 字段二选一：标量字段（`source`）或关系字段（`relationship` + `target` + `join_column` + `load`）；两套键不得混用
+  - 标量字段必须有 `source`；`source.column` 必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用
+  - `type`/`json_name`/`validation`/`description`/`pii`/`never_expose` 可省略，默认从来源列派生；显式 `type` 的 `*` 必须与列 `nullable` 一致；`computed` 必须显式 `type`、默认 `mutable:false`，且不得引用 `@param`
+  - `validation` 显式时三选一：`column`（指向存在的列）、`pattern`（string 字段的合法正则）、`soft`（非空软表达式）
   - 实体 `model.name` 是 Go 类型名：首字母大写 public，小写 internal；`model` 顺序为 name/extends/tables；不得重名
   - `ID` 是所有实体的唯一主键：来自主表 `id` 列、非指针、mutable:false、唯一主键
-  - 字段 `name` 是 Go 字段名：首字母大写导出，小写不导出；`never_expose` 字段必须小写开头；`json_name` 必填且同实体唯一
+  - 字段 `name` 是 Go 字段名：首字母大写导出，小写不导出；`never_expose` 字段必须小写开头；`json_name` 省略时取来源列名，computed/关系必填，同实体唯一
   - 关系字段的 target/join_column/方向/类型一致性；eager 必须有索引且不得成环
   - `validation` 的 id 前缀、expr 非空、`on_violation` 必须存在
   - `used_by.queries` 与 returns 本实体的 query 完全一致；`used_by.entities` 与关系字段入边一致
 - `data/queries/*.yaml`
   - 结构按 `_meta/data.queries.yaml`；query id 前缀、name=PascalCase、name 全局唯一
-  - 表从 `targets` / `joins[].table` 推导；写语句只能一张目标表，JOIN 表必须同时出现在 targets
-  - `statement` 与子句匹配：select 不写 values；insert/update 必须写 values；update/delete 必须写 where；joins/order_by/limit 只用于 select
-  - `values` 的键必须是目标表列；`order_by` 必须是 `<列> ASC|DESC`
-  - params 与所有表达式双向一致；`nullable` 与 `sqlc.narg` 严格对应；`params[].column` 绑定列后类型族必须与列一致
-  - `where` 的对象谓词：列存在、`op` 合法、比较谓词二选一 `param`/`value`、`in` 用数组参数、谓词参数绑定同名列、`is_null` 只用于可空列
-  - `returns` DSL：表行 / 实体 / 标量 / object；`[]` 与 kind 一致；object 必须有带 `expr` 的 output_fields；标量必须有 `expr`
-  - 投影不写 `select`：表行/实体返回由 returns 推导；`return_columns` 必须是物理列，实体返回必须覆盖非指针非敏感字段
+  - `access: read | write`；`kind: one | many | exec`；`exec` 只返回 `affected_rows`，`write` 只能有一张目标表
+  - `targets` 是查询读写的表；必须存在、不是 `data.tables.base`；write 只能一张
+  - `params` 只声明接口入参；name 唯一、type 非空；`params[].column` 绑定列后类型族必须与列一致
+  - `returns` DSL：表行 / 实体 / 标量 / object；`[]` 与 kind 一致；object 必须有 `output_fields`（只写 name/type，不写 expr）
+  - `return_columns` 是物理列；实体返回省略时默认不投影 `never_expose`，显式时必须覆盖非指针非敏感字段
   - 单表 query 至少一个 `index_ref`；显式索引必须与 `used_by` 双向一致
   - 写查询的 `owner_module` 必须等于目标表 `owner_module`；`never_expose` 列只有同模块可显式返回
-  - `one` 非标量返回必须命中 PK/唯一索引或 `limit: "1"`
+  - `one` 的读必须命中 PK/唯一索引（不再有 `limit: "1"` 逃生口）
 - 实体/查询/能力对表的引用存在
 - 查询 `return_columns` 必须是物理列（实体返回也按列名）
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复；entities/queries 文件必须登记

@@ -1,10 +1,5 @@
 # 认证查询集。密码/手机/邮箱/令牌查询只在这里出现。
-#
-# 规则：
-#   - 敏感表必须用 return_columns 显式裁剪；不得返回未声明的敏感列。
-#   - password_hash / token 字段只能由认证流程使用。
-#   - 每个 query 必须有显式 id；capabilities 只能引用 id。
-#   - 每个 query 至少声明一个 index_ref（PK 或 indexes[].name）。
+# 只声明接口：入参、结果、目标表、索引与读写属性；SQL 由实现负责。
 
 id: data.queries.auth
 summary: "认证查询集"
@@ -19,23 +14,19 @@ do_not:
 queries:
   - id: data.queries.auth.get_auth_pwd_by_username
     name: GetAuthPwdByUsername
+    access: read
     kind: one
-    statement: select
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: username, type: text, column: data.tables.auth_pwd.col.username }
     returns: data.tables.auth_pwd.row
     return_columns: [ id, account_id, username, password_hash, failed_login_count, locked_until, status ]
-    where:
-      - { column: username, op: eq, param: username }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_username ]
-    semantics: "仅供登录校验；包含 password_hash"
 
   - id: data.queries.auth.create_auth_pwd
     name: CreateAuthPwd
+    access: write
     kind: one
-    statement: insert
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: id, type: text, column: data.tables.auth_pwd.col.id }
@@ -44,93 +35,58 @@ queries:
       - { name: password_hash, type: text, column: data.tables.auth_pwd.col.password_hash }
     returns: data.tables.auth_pwd.row
     return_columns: [ id, account_id, username, status, created_at, updated_at ]
-    values:
-      id: "@id"
-      account_id: "@account_id"
-      username: "@username"
-      password_hash: "@password_hash"
-      status: "0"
     index_ref:
       - data.tables.auth_pwd.uq_auth_pwd_username
       - data.tables.auth_pwd.uq_auth_pwd_account
-    semantics: "创建密码认证记录；password_hash 必填，不返回"
 
   - id: data.queries.auth.update_auth_pwd_hash
     name: UpdateAuthPwdHash
-    kind: execrows
-    statement: update
+    access: write
+    kind: exec
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: id, type: text, column: data.tables.auth_pwd.col.id }
       - { name: password_hash, type: text, column: data.tables.auth_pwd.col.password_hash }
     returns: affected_rows
-    values:
-      password_hash: "@password_hash"
-      updated_at: "now()"
-    where:
-      - { column: id, op: eq, param: id }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.auth_pwd.pk ]
-    semantics: "设置新 argon2id 哈希；成功后应吊销该账号全部令牌"
 
   - id: data.queries.auth.record_auth_pwd_login_success
     name: RecordAuthPwdLoginSuccess
-    kind: execrows
-    statement: update
+    access: write
+    kind: exec
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: id, type: text, column: data.tables.auth_pwd.col.id }
     returns: affected_rows
-    values:
-      failed_login_count: "0"
-      locked_until: "NULL"
-      updated_at: "now()"
-    where:
-      - { column: id, op: eq, param: id }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.auth_pwd.pk ]
-    semantics: "成功登录后重置失败计数与锁定"
 
   - id: data.queries.auth.record_auth_pwd_login_failure
     name: RecordAuthPwdLoginFailure
-    kind: execrows
-    statement: update
+    access: write
+    kind: exec
     targets: [ data.tables.auth_pwd ]
     params:
       - { name: id, type: text, column: data.tables.auth_pwd.col.id }
       - { name: lock_until, type: timestamp, column: data.tables.auth_pwd.col.locked_until, nullable: true }
     returns: affected_rows
-    values:
-      failed_login_count: "failed_login_count + 1"
-      locked_until: "COALESCE(sqlc.narg('lock_until'), locked_until)"
-      updated_at: "now()"
-    where:
-      - { column: id, op: eq, param: id }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.auth_pwd.pk ]
-    semantics: "失败计数 +1；达到阈值时设置 locked_until"
 
   - id: data.queries.auth.get_auth_phone_by_number
     name: GetAuthPhoneByNumber
+    access: read
     kind: one
-    statement: select
     targets: [ data.tables.auth_phone ]
     params:
       - { name: code, type: text, column: data.tables.auth_phone.col.code }
       - { name: number, type: text, column: data.tables.auth_phone.col.number }
     returns: data.tables.auth_phone.row
     return_columns: [ id, account_id, code, number, operator, status ]
-    where:
-      - { column: code, op: eq, param: code }
-      - { column: number, op: eq, param: number }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.auth_phone.uq_auth_phone_number ]
-    semantics: "按区号 + 手机号登录/校验"
 
   - id: data.queries.auth.create_auth_phone
     name: CreateAuthPhone
+    access: write
     kind: one
-    statement: insert
     targets: [ data.tables.auth_phone ]
     params:
       - { name: id, type: text, column: data.tables.auth_phone.col.id }
@@ -140,37 +96,24 @@ queries:
       - { name: operator, type: text, column: data.tables.auth_phone.col.operator, nullable: true }
     returns: data.tables.auth_phone.row
     return_columns: [ id, account_id, code, number, operator, status, created_at, updated_at ]
-    values:
-      id: "@id"
-      account_id: "@account_id"
-      code: "@code"
-      number: "@number"
-      operator: "sqlc.narg('operator')"
-      status: "0"
     index_ref: [ data.tables.auth_phone.uq_auth_phone_number ]
-    semantics: "绑定手机号"
 
   - id: data.queries.auth.get_auth_email_by_username_domain
     name: GetAuthEmailByUsernameDomain
+    access: read
     kind: one
-    statement: select
     targets: [ data.tables.auth_email ]
     params:
       - { name: username, type: text, column: data.tables.auth_email.col.username }
       - { name: domain, type: text, column: data.tables.auth_email.col.domain }
     returns: data.tables.auth_email.row
     return_columns: [ id, account_id, username, domain, entity, tld, status ]
-    where:
-      - { column: username, op: eq, param: username }
-      - { column: domain, op: eq, param: domain }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.auth_email.uq_auth_email_username_domain ]
-    semantics: "按邮箱本地部分 + 域名登录/校验"
 
   - id: data.queries.auth.create_auth_email
     name: CreateAuthEmail
+    access: write
     kind: one
-    statement: insert
     targets: [ data.tables.auth_email ]
     params:
       - { name: id, type: text, column: data.tables.auth_email.col.id }
@@ -181,21 +124,12 @@ queries:
       - { name: tld, type: text, column: data.tables.auth_email.col.tld, nullable: true }
     returns: data.tables.auth_email.row
     return_columns: [ id, account_id, username, domain, entity, tld, status, created_at, updated_at ]
-    values:
-      id: "@id"
-      account_id: "@account_id"
-      username: "@username"
-      domain: "lower(@domain)"
-      entity: "sqlc.narg('entity')"
-      tld: "sqlc.narg('tld')"
-      status: "0"
     index_ref: [ data.tables.auth_email.uq_auth_email_username_domain ]
-    semantics: "绑定邮箱；domain 入库前小写归一"
 
   - id: data.queries.auth.create_token
     name: CreateToken
+    access: write
     kind: one
-    statement: insert
     targets: [ data.tables.token ]
     params:
       - { name: id, type: text, column: data.tables.token.col.id }
@@ -210,102 +144,59 @@ queries:
       - { name: refresh_expire_at, type: timestamp, column: data.tables.token.col.refresh_expire_at }
     returns: data.tables.token.row
     return_columns: [ id, account_id, device_id, access_expire_at, refresh_expire_at, status ]
-    values:
-      id: "@id"
-      own_type: "@own_type"
-      own_id: "@own_id"
-      account_id: "@account_id"
-      device_id: "sqlc.narg('device_id')"
-      user_id: "sqlc.narg('user_id')"
-      access_token_hash: "@access_token_hash"
-      refresh_token_hash: "@refresh_token_hash"
-      access_expire_at: "@access_expire_at"
-      refresh_expire_at: "@refresh_expire_at"
-      status: "0"
     index_ref:
       - data.tables.token.uq_tokens_access_hash
       - data.tables.token.uq_tokens_refresh_hash
-    semantics: "创建令牌对；数据库只存哈希，原文由调用方返回一次"
 
   - id: data.queries.auth.get_token_by_refresh
     name: GetTokenByRefresh
+    access: read
     kind: one
-    statement: select
     targets: [ data.tables.token ]
     params:
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
     returns: data.tables.token.row
     return_columns: [ id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status ]
-    where:
-      - { column: refresh_token_hash, op: eq, param: refresh_token_hash }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.token.uq_tokens_refresh_hash ]
-    semantics: "仅供刷新流程；按哈希查找，不返回哈希原文"
 
   - id: data.queries.auth.get_token_by_access
     name: GetTokenByAccess
+    access: read
     kind: one
-    statement: select
     targets: [ data.tables.token ]
     params:
       - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
     returns: data.tables.token.row
     return_columns: [ id, account_id, device_id, user_id, access_expire_at, refresh_expire_at, status ]
-    where:
-      - { column: access_token_hash, op: eq, param: access_token_hash }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.token.uq_tokens_access_hash ]
-    semantics: "校验访问令牌；按哈希查找"
 
   - id: data.queries.auth.revoke_token
     name: RevokeToken
-    kind: execrows
-    statement: update
+    access: write
+    kind: exec
     targets: [ data.tables.token ]
     params:
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
     returns: affected_rows
-    values:
-      status: "1"
-      updated_at: "now()"
-    where:
-      - { column: refresh_token_hash, op: eq, param: refresh_token_hash }
-      - { column: deleted_at, op: is_null }
-      - { column: status, op: eq, value: 0 }
     index_ref: [ data.tables.token.uq_tokens_refresh_hash ]
-    semantics: "吊销单个刷新令牌；幂等"
 
   - id: data.queries.auth.delete_expired_tokens
     name: DeleteExpiredTokens
-    kind: execrows
-    statement: update
+    access: write
+    kind: exec
     targets: [ data.tables.token ]
     params:
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
     returns: affected_rows
-    values:
-      deleted_at: "now()"
-      updated_at: "now()"
-      status: "2"
-    where:
-      - "id IN (SELECT id FROM tokens WHERE refresh_expire_at < now() AND deleted_at IS NULL ORDER BY refresh_expire_at LIMIT @batch_size)"
     index_ref: [ data.tables.token.idx_tokens_refresh_expire_at ]
-    semantics: "软删过期令牌；供清理任务使用"
 
   - id: data.queries.auth.list_tokens_by_account
     name: ListTokensByAccount
+    access: read
     kind: many
-    statement: select
     targets: [ data.tables.token ]
     params:
       - { name: account_id, type: text, column: data.tables.token.col.account_id }
     returns: "[]data.tables.token.row"
     return_columns: [ id, account_id, device_id, access_expire_at, refresh_expire_at, status, created_at, updated_at ]
-    where:
-      - { column: account_id, op: eq, param: account_id }
-      - { column: deleted_at, op: is_null }
-      - { column: status, op: eq, value: 0 }
-    order_by:
-      - "created_at DESC"
     index_ref: [ data.tables.token.idx_tokens_account_id ]
-    semantics: "列出账号的设备令牌；不返回 token 原文"

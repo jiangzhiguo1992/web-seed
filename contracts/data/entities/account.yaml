@@ -1,4 +1,5 @@
 # 账号数据实体。物理表在 tables/account.yaml；认证信息在 auth_* / tokens。
+# 只写语义增量：来源列、枚举映射、关系；类型/校验/描述/敏感标记从来源列派生。
 
 id: data.entities.account
 summary: "账号数据实体"
@@ -17,54 +18,21 @@ model:
 
 fields:
   - name: OwnType
-    json_name: own_type
-    type: string
     source: { column: data.tables.account.col.own_type }
-    validation: { column: data.tables.account.col.own_type }
-    description: "归属类型（user/tenant/system）"
-
   - name: OwnID
-    json_name: own_id
-    type: string
     source: { column: data.tables.account.col.own_id }
-    validation: { column: data.tables.account.col.own_id }
-    description: "归属 ID；与 OwnType 组成归属主体"
-
   - name: Number
-    json_name: number
-    type: string
     source: { column: data.tables.account.col.number }
-    validation: { column: data.tables.account.col.number }
-    description: "账号编号，存储前大写归一"
-
   - name: Nickname
-    json_name: nickname
-    type: string
-    pii: true
     source: { column: data.tables.account.col.nickname }
-    validation: { column: data.tables.account.col.nickname }
-    description: "昵称"
-
   - name: userID
-    json_name: user_id
-    type: "*string"
     source: { column: data.tables.account.col.user_id }
-    validation: { column: data.tables.account.col.user_id }
-    description: "关联用户 ID；不做数据库外键"
-
   - name: Status
-    json_name: status
     type: data.enums.account_status
     source: { column: data.tables.account.col.status }
-    validation: { column: data.tables.account.col.status }
     description: "账号状态"
-
   - name: Version
-    json_name: version
-    type: integer
     source: { column: data.tables.account.col.version }
-    validation: { column: data.tables.account.col.version }
-    description: "乐观锁版本"
 
   - name: Tokens
     json_name: tokens

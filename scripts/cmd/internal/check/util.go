@@ -122,20 +122,11 @@ func isColumnRefType(t string, refs ColumnRefs) bool {
 	return false
 }
 
-// queryTableRefs 从 targets + joins 推导查询引用的表；查询不再手写 SQL。
+// queryTableRefs 读取查询的 targets；查询契约不写 SQL/joins。
 func queryTableRefs(m map[string]any) []string {
 	var out []string
 	for _, raw := range asList(m["targets"]) {
 		if s, ok := raw.(string); ok && s != "" {
-			out = append(out, s)
-		}
-	}
-	for _, raw := range asList(m["joins"]) {
-		jm, ok := asMap(raw)
-		if !ok {
-			continue
-		}
-		if s, ok := jm["table"].(string); ok && s != "" {
 			out = append(out, s)
 		}
 	}

@@ -17,6 +17,11 @@ const (
 	baseEntityPath = "contracts/data/entities/_base.yaml"
 )
 
+// computed 表达式不得引用方法入参；查询参数属于 query 契约。
+var sqlParamAtRe = regexp.MustCompile(`@([a-z_][a-z0-9_]*)`)
+var sqlParamNargRe = regexp.MustCompile(`sqlc\.narg\('([a-z_][a-z0-9_]*)'\)`)
+var sqlParamArgRe = regexp.MustCompile(`sqlc\.arg\('([a-z_][a-z0-9_]*)'\)`)
+
 // columnMeta 是物理表的有效列元数据（含继承列）。
 type columnMeta struct {
 	typ         string
@@ -24,6 +29,7 @@ type columnMeta struct {
 	primaryKey  bool
 	pii         bool
 	neverExpose bool
+	comment     string
 }
 
 // entityFieldInfo 是实体字段（标量或关系）的解析结果。
@@ -41,7 +47,9 @@ type entityFieldInfo struct {
 	Mutable         bool
 	HasMutable      bool
 	PII             bool
+	HasPII          bool
 	NeverExpose     bool
+	HasNeverExpose  bool
 	JSONName        string
 	Examples        []any
 	Description     string
@@ -84,11 +92,11 @@ type entityDoc struct {
 
 func baseColumnMeta() map[string]columnMeta {
 	return map[string]columnMeta{
-		"id":         {typ: "string", primaryKey: true},
-		"status":     {typ: "integer"},
-		"created_at": {typ: "timestamp"},
-		"updated_at": {typ: "timestamp"},
-		"deleted_at": {typ: "timestamp", nullable: true},
+		"id":         {typ: "string", primaryKey: true, comment: "主键 UUIDv7（36 字符字符串）"},
+		"status":     {typ: "integer", comment: "业务状态整数码；所有物理表继承，枚举映射在 entity 层"},
+		"created_at": {typ: "timestamp", comment: "创建时间"},
+		"updated_at": {typ: "timestamp", comment: "更新时间；应用层写入"},
+		"deleted_at": {typ: "timestamp", nullable: true, comment: "软删时间；为空表示未删除"},
 	}
 }
 
@@ -153,6 +161,7 @@ func (c *Checker) loadTableColumns(tableIDs map[string]string) {
 				meta.primaryKey, _ = m["primary_key"].(bool)
 				meta.pii, _ = m["pii"].(bool)
 				meta.neverExpose, _ = m["never_expose"].(bool)
+				meta.comment, _ = m["comment"].(string)
 				out[name] = meta
 			}
 		}
@@ -262,8 +271,12 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 	if v, ok := m["mutable"].(bool); ok {
 		f.Mutable, f.HasMutable = v, true
 	}
-	f.PII, _ = m["pii"].(bool)
-	f.NeverExpose, _ = m["never_expose"].(bool)
+	if v, ok := m["pii"].(bool); ok {
+		f.PII, f.HasPII = v, true
+	}
+	if v, ok := m["never_expose"].(bool); ok {
+		f.NeverExpose, f.HasNeverExpose = v, true
+	}
 	for _, x := range asList(m["examples"]) {
 		f.Examples = append(f.Examples, x)
 	}
@@ -355,6 +368,7 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		inherited = append(inherited, nf)
 	}
 	e.Fields = append(inherited, e.Fields...)
+	c.applyEntityFieldDefaults(e)
 	for _, raw := range asList(doc["validation"]) {
 		m, ok := asMap(raw)
 		if !ok {
@@ -377,6 +391,56 @@ func (c *Checker) parseEntity(doc map[string]any, rel string) *entityInfo {
 		}
 	}
 	return e
+}
+
+// applyEntityFieldDefaults 用来源列补齐实体字段的机械事实：
+// json_name/type/validation/description/pii/never_expose；显式值优先。
+// 只补可确定的事实，不猜语义（枚举/关系/computed 仍需显式）。
+func (c *Checker) applyEntityFieldDefaults(e *entityInfo) {
+	for i := range e.Fields {
+		f := &e.Fields[i]
+		if f.IsRelation {
+			continue
+		}
+		if f.SourceComputed != "" {
+			if !f.HasMutable {
+				f.Mutable, f.HasMutable = false, true
+			}
+			continue
+		}
+		if f.ColumnTable == "" || f.Column == "" {
+			continue // 缺失来源由 checkEntityFieldSource 报出
+		}
+		meta, ok := c.tableColumns[f.ColumnTable][f.Column]
+		if !ok {
+			continue
+		}
+		if f.JSONName == "" {
+			f.JSONName = f.Column
+		}
+		if !f.HasType {
+			typ := meta.typ
+			if meta.nullable {
+				typ = "*" + typ
+			}
+			f.Type, f.HasType = typ, true
+		}
+		if f.ValidationCount == 0 {
+			f.ValidationKind, f.ValidationRef, f.ValidationCount = "column", f.SourceColumnRef, 1
+		}
+		if f.Description == "" {
+			f.Description = meta.comment
+		}
+		if !f.HasMutable {
+			f.Mutable, f.HasMutable = true, true
+		}
+		if !f.HasPII {
+			f.PII = meta.pii
+		}
+		if !f.HasNeverExpose {
+			f.NeverExpose = meta.neverExpose
+		}
+	}
 }
 
 // isEnumType 判断类型（可带 * 前缀）是否引用 data.enums.*。

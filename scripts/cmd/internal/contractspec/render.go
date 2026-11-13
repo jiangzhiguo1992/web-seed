@@ -110,17 +110,14 @@ type queryFileScaffold struct {
 }
 
 type queryItemScaffold struct {
-	ID        string               `yaml:"id"`
-	Name      string               `yaml:"name"`
-	Kind      string               `yaml:"kind"`
-	Statement string               `yaml:"statement"`
-	Targets   flowStrings          `yaml:"targets"`
-	Params    []queryParamScaffold `yaml:"params"`
-	Returns   string               `yaml:"returns"`
-	Expr      string               `yaml:"expr"`
-	Where     []any                `yaml:"where,omitempty"`
-	IndexRef  flowStrings          `yaml:"index_ref"`
-	Semantics string               `yaml:"semantics"`
+	ID       string               `yaml:"id"`
+	Name     string               `yaml:"name"`
+	Access   string               `yaml:"access"`
+	Kind     string               `yaml:"kind"`
+	Targets  flowStrings          `yaml:"targets"`
+	Params   []queryParamScaffold `yaml:"params"`
+	Returns  string               `yaml:"returns"`
+	IndexRef flowStrings          `yaml:"index_ref"`
 }
 
 // flowStrings 以 YAML flow list 输出，保持 query sql 的列清单横排。
@@ -368,9 +365,9 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		return nil, fmt.Errorf("RenderQuery: queries is missing in schema")
 	}
 	if err := requireSupported(queriesField.ItemFields, map[string]bool{
-		"id": true, "name": true, "kind": true, "statement": true, "targets": true,
-		"params": true, "returns": true, "expr": true, "where": true,
-		"index_ref": true, "semantics": true,
+		"id": true, "name": true, "access": true, "kind": true, "targets": true,
+		"params": true, "returns": true, "return_columns": true,
+		"output_fields": true, "index_ref": true,
 	}, "data.queries.queries"); err != nil {
 		return nil, err
 	}
@@ -395,24 +392,21 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		Stability:     defaultString(s.Fields, "stability", "draft"),
 		OwnerModule:   module,
 		Queries: []queryItemScaffold{{
-			ID:        queryID,
-			Name:      "Exists" + pascal(name),
-			Kind:      "one",
-			Statement: "select",
-			Targets:   flowStrings{"data.tables." + table},
-			Params:    []queryParamScaffold{{Name: "id", Type: "text", Column: "data.tables." + table + ".col.id"}},
-			Returns:   "boolean",
-			Expr:      "COUNT(*) > 0",
-			Where:     []any{map[string]any{"column": "id", "op": "eq", "param": "id"}},
-			IndexRef:  flowStrings{"data.tables." + table + ".pk"},
-			Semantics: "TODO: 查询语义",
+			ID:       queryID,
+			Name:     "Exists" + pascal(name),
+			Access:   "read",
+			Kind:     "one",
+			Targets:  flowStrings{"data.tables." + table},
+			Params:   []queryParamScaffold{{Name: "id", Type: "text", Column: "data.tables." + table + ".col.id"}},
+			Returns:  "boolean",
+			IndexRef: flowStrings{"data.tables." + table + ".pk"},
 		}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；把 COUNT(*) > 0 换成真实查询并保留 index_ref。\n# 字段规范见 %s。\n\n", summary, s.ID)
+	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；只声明接口（入参/结果/目标表/索引），SQL 由实现负责。\n# 字段规范见 %s。\n\n", summary, s.ID)
 	return append([]byte(header), b...), nil
 }
 

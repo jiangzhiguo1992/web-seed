@@ -791,24 +791,7 @@ func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int,
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): query %s does not reference table %s", rel, i, name, qid, tableID)
 			continue
 		}
-		if cols := asList(m["columns"]); len(cols) > 0 && !sqlMentionsAny(c.queryText[qid], cols) {
-			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): query %s SQL does not mention index columns", rel, i, name, qid)
-		}
 	}
-}
-
-func sqlMentionsAny(sql string, columns []any) bool {
-	if sql == "" {
-		return true
-	}
-	lower := strings.ToLower(sql)
-	for _, raw := range columns {
-		col, ok := raw.(string)
-		if ok && col != "" && strings.Contains(lower, strings.ToLower(col)) {
-			return true
-		}
-	}
-	return false
 }
 
 // checkDoNotSpecificity 落实 contracts/README §4.5.1：

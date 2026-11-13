@@ -1,7 +1,5 @@
 # 手机号认证数据实体。物理表在 tables/auth_phone.yaml。
-#
-# 边界：
-#   - 基类字段在 entities/_base.yaml；本文件只写手机号认证业务字段。
+# 只写语义增量：来源列、枚举映射、关系；类型/校验/描述/敏感标记从来源列派生。
 
 id: data.entities.auth_phone
 summary: "手机号认证数据实体"
@@ -19,40 +17,17 @@ model:
 
 fields:
   - name: AccountID
-    json_name: account_id
-    type: string
     mutable: false
     source: { column: data.tables.auth_phone.col.account_id }
-    validation: { column: data.tables.auth_phone.col.account_id }
-    description: "关联账号"
-
   - name: Code
-    json_name: code
-    type: string
     source: { column: data.tables.auth_phone.col.code }
-    validation: { column: data.tables.auth_phone.col.code }
-    description: "国际区号，例如 +86"
-
   - name: Number
-    json_name: number
-    type: string
-    pii: true
     source: { column: data.tables.auth_phone.col.number }
-    validation: { column: data.tables.auth_phone.col.number }
-    description: "手机号"
-
   - name: Operator
-    json_name: operator
-    type: "*string"
     source: { column: data.tables.auth_phone.col.operator }
-    validation: { column: data.tables.auth_phone.col.operator }
-    description: "运营商"
-
   - name: Status
-    json_name: status
     type: data.enums.auth_status
     source: { column: data.tables.auth_phone.col.status }
-    validation: { column: data.tables.auth_phone.col.status }
     description: "认证记录状态"
 
   - name: Account

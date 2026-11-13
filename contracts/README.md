@@ -87,7 +87,7 @@ contracts/
 │   ├── tables/<file>.yaml     #   物理表结构（文件名决定 ID，物理表名可独立覆盖）
 │   ├── entities/_base.yaml   #   实体字段基类：5 列 + 类型级 do_not
 │   ├── entities/<entity>.yaml#   读模型：继承 _base，只写业务字段、关系、validation
-│   ├── queries/<module>.yaml #   查询契约（目标表 + 伪 SQL 子句，.sql 是产物）
+│   ├── queries/<module>.yaml #   查询接口（入参/结果/目标表/索引，.sql 是实现）
 │   ├── enums.yaml            #   跨端枚举集合（data.enums + data.enums.<name>）
 │   └── storage.yaml          #   项目级存储引擎与部署拓扑（单例）
 │
@@ -185,7 +185,7 @@ feature ──> business ──> capabilities ──> data
 | business → capabilities | 规则 / 状态机 / 事件 | `implemented_by` / `emitted_by` |
 | capabilities/http → capabilities/services | HTTP operation | `x-service` |
 | capabilities/service → data | service 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
-| data.queries → data.tables | 查询项 | `targets` / `joins[].table` / `index_ref` |
+| data.queries → data.tables | 查询项 | `targets` / `index_ref` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `join_column` |
 | data.tables → 上游（反向） | 表文件 | `used_by.{entities,queries}`（生成物，`make gen-graph` 写入） |
 

@@ -1,4 +1,4 @@
-# 账号查询集。只写硬约束（表/列/参数/索引引用），伪 SQL 表达式由生成器拼接。
+# 账号查询集。只声明接口：入参、结果、目标表、索引与读写属性。
 
 id: data.queries.account
 summary: "账号查询集"
@@ -13,51 +13,38 @@ do_not:
 queries:
   - id: data.queries.account.get_account
     name: GetAccount
+    access: read
     kind: one
-    statement: select
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
     returns: data.entities.account
-    where:
-      - { column: id, op: eq, param: id }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.account.pk ]
-    semantics: "已软删视为不存在；按实体字段投影为账号"
 
   - id: data.queries.account.get_account_by_number
     name: GetAccountByNumber
+    access: read
     kind: one
-    statement: select
     targets: [ data.tables.account ]
     params:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns: data.entities.account
-    where:
-      - "number = upper(@number)"
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.account.uq_accounts_number ]
-    semantics: "按账号编号精确查询；已软删视为不存在；投影为账号实体"
 
   - id: data.queries.account.exists_account_number
     name: ExistsAccountNumber
+    access: read
     kind: one
-    statement: select
     targets: [ data.tables.account ]
     params:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns: boolean
-    expr: "COUNT(*) > 0"
-    where:
-      - "number = upper(@number)"
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.account.uq_accounts_number ]
-    semantics: "未删除账号内编号是否存在"
 
   - id: data.queries.account.list_accounts
     name: ListAccounts
+    access: read
     kind: many
-    statement: select
     targets: [ data.tables.account ]
     params:
       - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
@@ -66,24 +53,14 @@ queries:
       - { name: cursor_id, type: text, column: data.tables.account.col.id, nullable: true }
       - { name: page_size, type: integer, max: 100, default: 20 }
     returns: "[]data.entities.account"
-    where:
-      - { column: deleted_at, op: is_null }
-      - "(sqlc.narg('status')::integer IS NULL OR status = sqlc.narg('status'))"
-      - "(sqlc.narg('own_type')::text IS NULL OR own_type = sqlc.narg('own_type'))"
-      - "(sqlc.narg('cursor_created_at')::timestamp IS NULL OR (created_at, id) < (sqlc.narg('cursor_created_at'), sqlc.narg('cursor_id')))"
-    order_by:
-      - "created_at DESC"
-      - "id DESC"
-    limit: "sqlc.arg('page_size')"
     index_ref:
       - data.tables.account.idx_accounts_created_at_id
       - data.tables.account.idx_accounts_own_type_own_id
-    semantics: "按 created_at DESC, id DESC 游标分页；status/own_type 为空不过滤；投影为账号实体"
 
   - id: data.queries.account.create_account
     name: CreateAccount
+    access: write
     kind: one
-    statement: insert
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
@@ -93,116 +70,60 @@ queries:
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
       - { name: user_id, type: text, column: data.tables.account.col.user_id, nullable: true }
     returns: data.entities.account
-    values:
-      id: "@id"
-      own_type: "@own_type"
-      own_id: "@own_id"
-      number: "upper(@number)"
-      nickname: "@nickname"
-      user_id: "sqlc.narg('user_id')"
-      status: "0"
     index_ref: [ data.tables.account.uq_accounts_number ]
-    semantics: "初始状态 pending(0)；number 入库前大写归一；返回投影实体"
 
   - id: data.queries.account.update_account
     name: UpdateAccount
-    kind: execrows
-    statement: update
+    access: write
+    kind: exec
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
       - { name: version, type: integer, column: data.tables.account.col.version }
     returns: affected_rows
-    values:
-      nickname: "@nickname"
-      updated_at: "now()"
-      version: "version + 1"
-    where:
-      - { column: id, op: eq, param: id }
-      - { column: version, op: eq, param: version }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.account.pk ]
-    semantics: "乐观锁；返回 0 表示版本冲突"
 
   - id: data.queries.account.set_account_status
     name: SetAccountStatus
-    kind: execrows
-    statement: update
+    access: write
+    kind: exec
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
       - { name: status, type: integer, column: data.tables.account.col.status }
       - { name: version, type: integer, column: data.tables.account.col.version }
     returns: affected_rows
-    values:
-      status: "@status"
-      updated_at: "now()"
-      version: "version + 1"
-    where:
-      - { column: id, op: eq, param: id }
-      - { column: version, op: eq, param: version }
-      - { column: deleted_at, op: is_null }
-      - { column: status, op: ne, value: 3 }
-      - "@status <> 3"
     index_ref: [ data.tables.account.pk ]
-    semantics: "只允许非 deleted(3) 状态；deleted 只能走 soft_delete_account"
 
   - id: data.queries.account.soft_delete_account
     name: SoftDeleteAccount
-    kind: execrows
-    statement: update
+    access: write
+    kind: exec
     targets: [ data.tables.account ]
     params:
       - { name: id, type: text, column: data.tables.account.col.id }
       - { name: version, type: integer, column: data.tables.account.col.version }
     returns: affected_rows
-    values:
-      status: "3"
-      deleted_at: "now()"
-      updated_at: "now()"
-      version: "version + 1"
-    where:
-      - { column: id, op: eq, param: id }
-      - { column: version, op: eq, param: version }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.account.pk ]
-    semantics: "软删；同时写 status=3 与 deleted_at，保证两者一致；幂等（已删返回 0）"
 
   - id: data.queries.account.list_stale_pending_accounts
     name: ListStalePendingAccounts
+    access: read
     kind: many
-    statement: select
     targets: [ data.tables.account ]
     params:
       - { name: older_than_days, type: integer, min: 1 }
       - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
     returns: "[]data.tables.account.row"
-    where:
-      - { column: status, op: eq, value: 0 }
-      - { column: deleted_at, op: is_null }
-      - "created_at < now() - make_interval(days => @older_than_days)"
-    order_by:
-      - "created_at ASC"
-    limit: "@batch_size"
     index_ref: [ data.tables.account.idx_accounts_created_at_id ]
-    semantics: "扫描超过保留期仍未激活的账号；供 account_cleanup 使用"
 
   - id: data.queries.account.soft_delete_stale_pending_accounts
     name: SoftDeleteStalePendingAccounts
-    kind: execrows
-    statement: update
+    access: write
+    kind: exec
     targets: [ data.tables.account ]
     params:
       - { name: ids, type: "[]text", column: data.tables.account.col.id }
     returns: affected_rows
-    values:
-      status: "3"
-      deleted_at: "now()"
-      updated_at: "now()"
-    where:
-      - { column: id, op: in, param: ids }
-      - { column: status, op: eq, value: 0 }
-      - { column: deleted_at, op: is_null }
     index_ref: [ data.tables.account.pk ]
-    semantics: "批量软删 pending 账号；只处理仍为 pending 且未删除的记录"

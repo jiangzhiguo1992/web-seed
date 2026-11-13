@@ -1749,15 +1749,6 @@ func TestIndexUsedBy(t *testing.T) {
 		t.Fatalf("wrong-table index query not reported: %v", c.errs)
 	}
 
-	c = &Checker{
-		queryIDs:    map[string]string{"data.queries.x.q": "contracts/data/queries/x.yaml"},
-		queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
-		queryText:   map[string]string{"data.queries.x.q": "SELECT 1"},
-	}
-	c.checkTableRules(base([]any{"data.queries.x.q"}), "contracts/data/tables/x.yaml", schema)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "index columns") {
-		t.Fatalf("index query SQL mismatch not reported: %v", c.errs)
-	}
 }
 
 func TestRedundancyValidation(t *testing.T) {
