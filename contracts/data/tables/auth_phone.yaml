@@ -6,12 +6,13 @@ owner_module: auth
 schema_version: 1
 stability: stable
 do_not:
+  - "auth_phone 只允许认证模块读写"
 
 table:
+  name: auth_phone
   comment: "手机号认证"
   extends:
     - data.tables.base
-
   entities:
     - data.entities.auth_phone
 

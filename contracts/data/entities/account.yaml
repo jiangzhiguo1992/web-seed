@@ -1,5 +1,5 @@
 # 账号数据实体。物理表在 tables/account.yaml；认证信息在 auth_* / token。
-# 只写语义增量：来源列、枚举映射、关系；类型/校验/描述/敏感标记从来源列派生。
+# 只写语义增量：来源列、枚举映射、关系；description/source/validation 必须显式，类型/敏感标记可从来源列派生。
 
 id: data.entities.account
 summary: "账号数据实体"

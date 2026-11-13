@@ -6,9 +6,10 @@ owner_module: auth
 schema_version: 1
 stability: stable
 do_not:
-  - "password_hash 禁止出现在响应、日志、事件"
+  - "auth_pwd.password_hash 禁止出现在响应、日志、事件"
 
 table:
+  name: auth_pwd
   comment: "密码认证"
   extends:
     - data.tables.base

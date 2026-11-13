@@ -6,13 +6,13 @@ owner_module: auth
 schema_version: 1
 stability: stable
 do_not:
-  - "domain 必须小写归一后再存储"
+  - "auth_email.domain 必须小写归一后再存储"
 
 table:
+  name: auth_email
   comment: "邮箱认证"
   extends:
     - data.tables.base
-
   entities:
     - data.entities.auth_email
 
