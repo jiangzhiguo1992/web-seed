@@ -1,9 +1,11 @@
 # 表结构基类。单例契约：5 列 + do_not；不生成 DDL、不建实体、不落存储。
 # 字段树与规则见 _meta/data.tables.yaml；路径/ID 由 checker 写死识别。
+# 生成约定：id 是 integer（bits: 64）；created_at 用数据库 now()；
+# updated_at / deleted_at 由应用写入。不要再用逐列标注表达这些固定语义。
 
-schema_version: 1
 id: data.tables.base
 summary: "表结构基类"
+schema_version: 1
 stability: stable
 do_not:
   - "本文件不是物理表：不生成 DDL、不建实体、不落存储"
@@ -12,36 +14,29 @@ do_not:
 
 columns:
   - name: id
-    type: string
-    max_len: 36
-    primary_key: true
-    generated_by: application
+    type: integer
     nullable: false
-    comment: "主键 UUIDv7（36 字符字符串）"
+    primary_key: true
+    bits: 64
+    comment: "主键 integer（bits: 64）；数据库自增方式生成"
 
   - name: status
     type: integer
-    bits: 32
     nullable: false
     default: 0
-    comment: "业务状态整数码；所有物理表继承，枚举映射在 entity 层"
+    comment: "业务状态整数码；枚举映射在 entity 层"
 
   - name: created_at
     type: timestamp
     nullable: false
-    default_sql: now()
-    managed_by: database
-    comment: "创建时间"
+    comment: "创建时间；数据库默认 now()"
 
   - name: updated_at
     type: timestamp
     nullable: false
-    default_sql: now()
-    managed_by: application
     comment: "更新时间；应用层写入"
 
   - name: deleted_at
     type: timestamp
     nullable: true
-    managed_by: application
-    comment: "软删时间；为空表示未删除"
+    comment: "软删时间；应用层写入；为空表示未删除"
