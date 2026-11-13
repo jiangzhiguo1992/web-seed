@@ -2,7 +2,7 @@
 
 id: data.queries.account
 summary: "账号查询集"
-owner_module: accounts
+owner_module: account
 schema_version: 1
 stability: stable
 do_not:
@@ -14,7 +14,7 @@ queries:
   - name: GetAccount
     targets: [ data.tables.account ]
     params:
-      - { name: id, type: text, column: data.tables.account.col.id }
+      - { name: id, type: integer, column: data.tables.account.col.id }
     returns: data.entities.account
     index_ref: [ data.tables.account.pk ]
 
@@ -23,44 +23,44 @@ queries:
     params:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns: data.entities.account
-    index_ref: [ data.tables.account.uq_accounts_number ]
+    index_ref: [ data.tables.account.uq_account_number ]
 
   - name: ExistsAccountNumber
     targets: [ data.tables.account ]
     params:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns: boolean
-    index_ref: [ data.tables.account.uq_accounts_number ]
+    index_ref: [ data.tables.account.uq_account_number ]
 
   - name: ListAccounts
     targets: [ data.tables.account ]
     params:
       - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
-      - { name: own_type, type: text, column: data.tables.account.col.own_type, nullable: true }
+      - { name: own_type, type: integer, column: data.tables.account.col.own_type, nullable: true }
       - { name: cursor_created_at, type: timestamp, column: data.tables.account.col.created_at, nullable: true }
-      - { name: cursor_id, type: text, column: data.tables.account.col.id, nullable: true }
-      - { name: page_size, type: integer, max: 100, default: 20 }
+      - { name: cursor_id, type: integer, column: data.tables.account.col.id, nullable: true }
+      - { name: page_size, type: integer, default: 20, max: 100 }
     returns: List<data.entities.account>
     index_ref:
-      - data.tables.account.idx_accounts_created_at_id
-      - data.tables.account.idx_accounts_own_type_own_id
+      - data.tables.account.idx_account_created_at_id
+      - data.tables.account.idx_account_own_type_own_id
 
   - name: CreateAccount
     targets: [ data.tables.account ]
     params:
-      - { name: id, type: text, column: data.tables.account.col.id }
-      - { name: own_type, type: text, column: data.tables.account.col.own_type }
-      - { name: own_id, type: text, column: data.tables.account.col.own_id }
+      - { name: id, type: integer, column: data.tables.account.col.id }
+      - { name: own_type, type: integer, column: data.tables.account.col.own_type }
+      - { name: own_id, type: integer, column: data.tables.account.col.own_id }
       - { name: number, type: text, column: data.tables.account.col.number }
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
-      - { name: user_id, type: text, column: data.tables.account.col.user_id, nullable: true }
+      - { name: user_id, type: integer, column: data.tables.account.col.user_id, nullable: true }
     returns: data.entities.account
-    index_ref: [ data.tables.account.uq_accounts_number ]
+    index_ref: [ data.tables.account.uq_account_number ]
 
   - name: UpdateAccount
     targets: [ data.tables.account ]
     params:
-      - { name: id, type: text, column: data.tables.account.col.id }
+      - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
       - { name: version, type: integer, column: data.tables.account.col.version }
     returns: affected_rows
@@ -69,7 +69,7 @@ queries:
   - name: SetAccountStatus
     targets: [ data.tables.account ]
     params:
-      - { name: id, type: text, column: data.tables.account.col.id }
+      - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: status, type: integer, column: data.tables.account.col.status }
       - { name: version, type: integer, column: data.tables.account.col.version }
     returns: affected_rows
@@ -78,7 +78,7 @@ queries:
   - name: SoftDeleteAccount
     targets: [ data.tables.account ]
     params:
-      - { name: id, type: text, column: data.tables.account.col.id }
+      - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: version, type: integer, column: data.tables.account.col.version }
     returns: affected_rows
     index_ref: [ data.tables.account.pk ]
@@ -87,13 +87,13 @@ queries:
     targets: [ data.tables.account ]
     params:
       - { name: older_than_days, type: integer, min: 1 }
-      - { name: batch_size, type: integer, min: 1, max: 1000, default: 100 }
+      - { name: batch_size, type: integer, default: 100, min: 1, max: 1000 }
     returns: List<data.tables.account.row>
-    index_ref: [ data.tables.account.idx_accounts_created_at_id ]
+    index_ref: [ data.tables.account.idx_account_created_at_id ]
 
   - name: SoftDeleteStalePendingAccounts
     targets: [ data.tables.account ]
     params:
-      - { name: ids, type: List<text>, column: data.tables.account.col.id }
+      - { name: ids, type: List<integer>, column: data.tables.account.col.id }
     returns: affected_rows
     index_ref: [ data.tables.account.pk ]

@@ -13,14 +13,6 @@ targets:
   naming: "snake_case"
 
 fields:
-  - name: schema_version
-    type: integer
-    required: true
-    const: 1
-    description: "契约格式版本，固定 1"
-    generates: "无"
-    caution: "必须是整数 1"
-
   - name: id
     type: string
     required: true
@@ -36,6 +28,22 @@ fields:
     generates: "index 摘要"
     caution: "不要写单条 SQL 细节"
 
+  - name: owner_module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "查询集归属模块"
+    generates: "sqlc package"
+    caution: "只表示查询集归属；读写归属在 capabilities 的 write_queries/writes 中声明"
+
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "契约格式版本，固定 1"
+    generates: "无"
+    caution: "必须是整数 1"
+
   - name: stability
     type: string
     required: true
@@ -44,14 +52,6 @@ fields:
     description: "契约稳定度"
     generates: "index 摘要"
     caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
-
-  - name: owner_module
-    type: string
-    required: true
-    pattern: '^[a-z][a-z0-9_]*$'
-    description: "查询集归属模块"
-    generates: "sqlc package"
-    caution: "只表示查询集归属；读写归属在 capabilities 的 write_queries/writes 中声明"
 
   - name: do_not
     type: list<string>
@@ -90,7 +90,7 @@ fields:
           - { name: note, type: string, required: false, description: "参数补充说明" }
 
       - { name: returns, type: string, required: true, description: "结果 DSL：data.tables.<t>.row、data.entities.<e>、List<T>（列表）、boolean/integer/string/float/decimal/timestamp/datetime/json、affected_rows、object", generates: "方法返回类型", caution: "object 必须配 output_fields；affected_rows 表示写语句结果；List<T> 表示列表" }
-      - { name: return_columns, type: list<string>, required: false, unique: true, description: "结果投影列；只用于表行/实体返回，按物理列名写", caution: "省略表示按返回类型的默认投影；敏感列只有同模块可显式列出" }
+      - { name: return_columns, type: list<string>, required: false, unique: true, description: "结果投影列；只用于表行/实体返回，按物理列名写", caution: "省略表示按返回类型的默认投影；secret 列只有同模块可显式列出，pii 列可返回" }
 
       - name: output_fields
         type: list<object>
@@ -108,7 +108,7 @@ fields:
       - { name: index_ref, type: list<string>, required: false, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "查询依赖的索引：data.tables.<t>.pk 或 data.tables.<t>.<index-name>", generates: "索引校验、EXPLAIN 提示", caution: "单表查询至少一个；显式索引必须在 indexes[].used_by 中列出本查询" }
 
 rules:
-  - { id: query-key-order, text: "查询文件顶层键顺序固定为 id/summary/owner_module/schema_version/stability/do_not/queries", implemented_by: [ query-key-order ] }
+  - { id: query-key-order, text: "查询契约字段顺序必须与 _meta/data.queries.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ query-key-order ] }
   - { id: query-name, text: "query.name/previous_names 必须是 PascalCase；当前项 ID 由 <文件 id>.<snake_case(name)> 派生，previous_names 的旧 ID 解析到本查询", implemented_by: [ query-name ] }
   - { id: query-name-unique, text: "query.name 与 previous_names 全局唯一，避免方法与派生 ID 冲突", implemented_by: [ query-name-unique ] }
   - { id: query-shape, text: "affected_rows 不得为列表，且不得声明 return_columns/output_fields；其余返回由 query-returns 校验", implemented_by: [ query-shape ] }
@@ -116,10 +116,10 @@ rules:
   - { id: query-params, text: "params 的 name 不得重复，type 不得为空", implemented_by: [ query-params ] }
   - { id: query-param-column, text: "params[].column 必须属于查询的 targets；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型）", implemented_by: [ query-param-column ] }
   - { id: query-returns, text: "returns DSL 必须合法，引用的表/实体必须存在", implemented_by: [ query-returns ] }
-  - { id: query-return-columns, text: "return_columns 必须属于返回类型；敏感列只允许同模块显式列出；affected_rows 不得写 return_columns", implemented_by: [ query-return-columns ] }
-  - { id: query-entity-coverage, text: "返回实体时，字段的来源表必须在查询的 targets 中；return_columns 省略表示全部非敏感列，显式时必须覆盖全部非指针、非敏感列字段", implemented_by: [ query-entity-coverage ] }
+  - { id: query-return-columns, text: "return_columns 必须属于返回类型；secret 列只允许同模块显式列出；affected_rows 不得写 return_columns", implemented_by: [ query-return-columns ] }
+  - { id: query-entity-coverage, text: "返回实体时，字段的来源表必须在查询的 targets 中；return_columns 省略表示全部非 secret 列，显式时必须覆盖全部非指针、非 secret 列字段", implemented_by: [ query-entity-coverage ] }
   - { id: query-output-fields, text: "object 返回必须有非空 output_fields；字段 name 唯一、type 非空；不得同时写 return_columns", implemented_by: [ query-output-fields ] }
   - { id: query-index-ref, text: "index_ref 必须指向查询表上的 PK 或 indexes[].name；显式索引必须在 used_by 中列出该查询；单表查询至少一个 index_ref", implemented_by: [ query-index-ref ] }
   - { id: query-index-used-by, text: "index.used_by 的查询必须存在、引用当前表，并在 index_ref 中引用该索引", implemented_by: [ query-index-used-by ] }
-  - { id: query-sensitive-columns, text: "never_expose 列不得被跨模块查询返回；return_columns 省略时默认不投影，同模块需要时必须显式列出", implemented_by: [ query-sensitive-columns ] }
+  - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回；return_columns 省略时默认不投影 secret，同模块需要时必须显式列出", implemented_by: [ query-sensitive-columns ] }
   - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识；通用规则放组 README，禁止复制", implemented_by: [ query-do-not-specific ] }

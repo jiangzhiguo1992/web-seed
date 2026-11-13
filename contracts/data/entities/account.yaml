@@ -24,6 +24,12 @@ model:
     - data.entities.token
 
 fields:
+  - name: Status
+    type: data.enums.account_status
+    description: "账号状态"
+    source: { column: data.tables.account.col.status }
+    validation: { column: data.tables.account.col.status }
+
   - name: OwnType
     type: data.enums.own_type
     description: "数据归属主体类型"
@@ -49,12 +55,6 @@ fields:
     description: "关联用户 ID；不做数据库外键"
     source: { column: data.tables.account.col.user_id }
     validation: { column: data.tables.account.col.user_id }
-
-  - name: Status
-    type: data.enums.account_status
-    description: "账号状态"
-    source: { column: data.tables.account.col.status }
-    validation: { column: data.tables.account.col.status }
 
   - name: Version
     description: "乐观锁；非业务字段"
