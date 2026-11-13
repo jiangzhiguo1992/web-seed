@@ -12,12 +12,6 @@ targets:
   id: "data.enums"
 
 fields:
-  - name: schema_version
-    type: integer
-    required: true
-    const: 1
-    description: "契约格式版本，固定 1"
-
   - name: id
     type: string
     required: true
@@ -28,6 +22,12 @@ fields:
     type: string
     required: true
     description: "一句话说明枚举集合"
+
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "契约格式版本，固定 1"
 
   - name: stability
     type: string
@@ -54,14 +54,6 @@ fields:
       - { name: description, type: string, required: false, description: "枚举用途说明" }
       - { name: go_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "Go 类型名，PascalCase；集合内唯一" }
       - { name: ts_type, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "TS 类型名，PascalCase；集合内唯一" }
-      - name: used_by
-        type: object
-        required: true
-        description: "使用该枚举的 entity/table；只统计 entity 字段引用"
-        caution: "必须与 entity 实际引用完全一致；capability/feature 引用不写入 used_by，空列表不代表未使用"
-        fields:
-          - { name: entities, type: list<string>, required: true, unique: true, description: "引用该枚举的 entity ID" }
-          - { name: tables, type: list<string>, required: true, unique: true, description: "这些 entity 对应的物理表 ID；必须与 entity.model.tables 一致" }
       - name: values
         type: list<object>
         required: true
@@ -71,8 +63,17 @@ fields:
           - { name: value, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "对外字符串值（API/TS），snake_case；数据库存 code" }
           - { name: code, type: integer, required: true, min: 0, max: 2147483647, description: "数据库整数码（int32）；entity 映射回枚举" }
           - { name: description, type: string, required: false, description: "枚举值说明" }
+      - name: used_by
+        type: object
+        required: true
+        description: "使用该枚举的 entity/table；只统计 entity 字段引用"
+        caution: "必须与 entity 实际引用完全一致；capability/feature 引用不写入 used_by，空列表不代表未使用"
+        fields:
+          - { name: entities, type: list<string>, required: true, unique: true, description: "引用该枚举的 entity ID" }
+          - { name: tables, type: list<string>, required: true, unique: true, description: "这些 entity 对应的物理表 ID；必须与 entity.model.tables 一致" }
 
 rules:
+  - { id: enum-key-order, text: "枚举集合字段顺序必须与 _meta/data.enums.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [enum-key-order] }
   - { id: enum-id, text: "集合 id 固定为 data.enums", implemented_by: [enum-id] }
   - { id: enum-id-matches-name, text: "item.id 必须等于 data.enums.<item.name>", implemented_by: [enum-id-matches-name] }
   - { id: enum-values-unique, text: "同一枚举的 values 不得重复", implemented_by: [enum-values-unique] }
