@@ -2,6 +2,7 @@
 # 查询是接口：只声明入参、结果、目标表与索引引用；
 # SQL 如何执行不在契约里，由实现/生成器负责。
 # 通用字段语义见 _meta/README.md；本文件只写 data.queries 特有内容。
+# 本文件同时是 contract-new 的字段来源；不要另写模板。
 
 id: meta.data.queries
 type: data.queries
@@ -63,15 +64,24 @@ fields:
   - name: queries
     type: list<object>
     required: true
-    min_items: 1
     description: "查询项列表；每条是一份可生成的接口契约"
     generates: "查询接口、sqlc 代码、测试骨架"
     caution: "只写入参/结果/目标表/索引引用；不写 SQL 子句"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "方法名", caution: "name 是稳定键：必须是 PascalCase；项 ID 由 <文件 id>.<snake_case(name)> 派生；全局唯一；改名即新 ID" }
-      - { name: previous_names, type: list<string>, required: false, unique: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "改名前的 name 列表；旧派生 ID 仍解析到本查询", caution: "只用于重命名过渡；不得与当前或历史 name 冲突；消费者迁移后删除" }
+      - name: name
+        type: string
+        required: true
+        pattern: '^[A-Z][A-Za-z0-9]*$'
+        description: "方法名"
+        caution: "name 是稳定键：必须是 PascalCase；项 ID 由 <文件 id>.<snake_case(name)> 派生；全局唯一；改名即新 ID"
 
-      - { name: targets, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^data\.tables\.', description: "查询读写到的表；第一个是主表，单表也写成列表", caution: "可以多表；表必须存在且不是 data.tables.base" }
+      - name: targets
+        type: list<string>
+        required: true
+        unique: true
+        pattern: '^data\.tables\.'
+        description: "查询读写到的表；第一个是主表，单表也写成列表"
+        caution: "可以多表；表必须存在且不是 data.tables.base"
 
       - name: params
         type: list<object>
@@ -80,46 +90,145 @@ fields:
         generates: "方法签名、参数校验"
         caution: "只声明接口参数；SQL 如何使用参数由实现负责"
         item_fields:
-          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: string, required: true, description: "逻辑类型，如 text、integer、timestamp、List<text>" }
-          - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "参数绑定的物理列；数组参数绑定元素列", caution: "列必须属于查询的 targets；type 必须与列类型族兼容" }
-          - { name: nullable, type: boolean, required: false, default: false, description: "参数是否可为空" }
-          - { name: default, type: any, required: false, description: "默认值；只影响生成骨架" }
-          - { name: min, type: integer, required: false, description: "闭区间下限" }
-          - { name: max, type: integer, required: false, description: "闭区间上限" }
-          - { name: note, type: string, required: false, description: "参数补充说明" }
+          - name: name
+            type: string
+            required: true
+            pattern: '^[a-z][a-z0-9_]*$'
+            description: "参数名"
 
-      - { name: returns, type: string, required: true, description: "结果 DSL：data.tables.<t>.row、data.entities.<e>、List<T>（列表）、boolean/integer/string/float/decimal/timestamp/datetime/json、affected_rows、object", generates: "方法返回类型", caution: "object 必须配 output_fields；affected_rows 表示写语句结果；List<T> 表示列表" }
-      - { name: return_columns, type: list<string>, required: false, unique: true, description: "结果投影列；只用于表行/实体返回，按物理列名写", caution: "省略表示按返回类型的默认投影；secret 列只有同模块可显式列出，pii 列可返回" }
+          - name: type
+            type: string
+            required: true
+            description: "逻辑类型，如 text、integer、timestamp、List<text>"
+            caution: "必须能映射到类型族或 data.enums.* / data.entities.*"
 
-      - name: output_fields
+          - name: column
+            type: string
+            required: false
+            pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
+            description: "参数绑定的物理列；数组参数绑定元素列"
+            caution: "列必须属于查询的 targets；type 必须与列类型族兼容"
+
+          - name: nullable
+            type: boolean
+            required: false
+            default: false
+            description: "参数是否可为空"
+
+          - name: default
+            type: any
+            required: false
+            description: "传入 null 时使用的默认值"
+            caution: "只有 nullable: true 时才允许；类型必须与 type 兼容"
+
+          - name: min
+            type: integer
+            required: false
+            description: "查询级闭区间下限"
+            caution: "这是接口参数约束，不是类型族参数；不要与 column 类型参数混用"
+
+          - name: max
+            type: integer
+            required: false
+            description: "查询级闭区间上限"
+            caution: "这是接口参数约束，不是类型族参数；不要与 column 类型参数混用"
+
+          - name: description
+            type: string
+            required: false
+            description: "参数说明"
+
+      - name: returns
         type: list<object>
-        required: false
-        min_items: 1
-        description: "object 结果的字段清单；结果形状，不是 SQL 表达式"
-        generates: "输出类型、方法返回"
-        caution: "只有 returns 为 object/List<object> 时出现；每项只写 name/type"
+        required: true
+        description: "结果形状；每项是一个返回字段/实体/表行/标量"
+        generates: "方法返回类型、投影列"
+        caution: "kind 区分 column/entity/table/scalar/affected_rows；同一 query 的多项 list 必须一致"
         item_fields:
-          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出字段名" }
-          - { name: type, type: string, required: true, description: "逻辑类型；可写 data.enums.*" }
-          - { name: nullable, type: boolean, required: false, description: "是否可空" }
-          - { name: note, type: string, required: false, description: "输出字段补充说明" }
+          - name: name
+            type: string
+            required: true
+            pattern: '^[a-z][a-z0-9_]*$'
+            description: "返回字段名"
 
-      - { name: index_ref, type: list<string>, required: false, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "查询依赖的索引：data.tables.<t>.pk 或 data.tables.<t>.<index-name>", generates: "索引校验、EXPLAIN 提示", caution: "单表查询至少一个；显式索引必须在 indexes[].used_by 中列出本查询" }
+          - name: kind
+            type: string
+            required: true
+            enum: [ column, entity, table, scalar, affected_rows ]
+            description: "返回项类型"
+
+          - name: column
+            type: string
+            required: false
+            pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
+            description: "kind=column 时的物理列"
+            caution: "必须属于查询的 targets"
+
+          - name: entity
+            type: string
+            required: false
+            pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
+            description: "kind=entity 时的实体 ID"
+            caution: "实体主表必须在 targets 中"
+
+          - name: table
+            type: string
+            required: false
+            pattern: '^data\.tables\.[a-z][a-z0-9_]*$'
+            description: "kind=table 时的表 ID"
+            caution: "必须是 targets[0]"
+
+          - name: type
+            type: string
+            required: false
+            description: "kind=scalar 时的逻辑类型；可写 data.enums.*"
+            caution: "只能用于 kind=scalar"
+
+          - name: columns
+            type: list<string>
+            required: false
+            unique: true
+            description: "kind=table/entity 时的投影物理列；省略表示默认投影"
+            caution: "只允许 table/entity；必须属于目标表/实体"
+
+          - name: nullable
+            type: boolean
+            required: false
+            default: false
+            description: "返回字段是否可空"
+
+          - name: description
+            type: string
+            required: false
+            description: "返回字段说明"
+
+          - name: list
+            type: boolean
+            required: false
+            default: false
+            description: "该返回项是否为列表；同一 query 的多项必须一致"
+
+      - name: index_ref
+        type: list<string>
+        required: false
+        unique: true
+        pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$'
+        description: "查询依赖的索引：data.tables.<t>.pk 或 data.tables.<t>.<index-name>"
+        generates: "索引校验、EXPLAIN 提示"
+        caution: "单表查询至少一个；显式索引必须在 indexes[].used_by 中列出本查询"
 
 rules:
   - { id: query-key-order, text: "查询契约字段顺序必须与 _meta/data.queries.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ query-key-order ] }
-  - { id: query-name, text: "query.name/previous_names 必须是 PascalCase；当前项 ID 由 <文件 id>.<snake_case(name)> 派生，previous_names 的旧 ID 解析到本查询", implemented_by: [ query-name ] }
-  - { id: query-name-unique, text: "query.name 与 previous_names 全局唯一，避免方法与派生 ID 冲突", implemented_by: [ query-name-unique ] }
-  - { id: query-shape, text: "affected_rows 不得为列表，且不得声明 return_columns/output_fields；其余返回由 query-returns 校验", implemented_by: [ query-shape ] }
+  - { id: query-name, text: "query.name 必须是 PascalCase；当前项 ID 由 <文件 id>.<snake_case(name)> 派生", implemented_by: [ query-name ] }
+  - { id: query-name-unique, text: "query.name 全局唯一，避免方法与派生 ID 冲突", implemented_by: [ query-name-unique ] }
+  - { id: query-shape, text: "affected_rows 不得为列表，必须是唯一返回项，且不得带 column/entity/table/type/columns", implemented_by: [ query-shape ] }
   - { id: query-table-shape, text: "targets 非空、去重、不得指向 data.tables.base", implemented_by: [ query-table-shape ] }
-  - { id: query-params, text: "params 的 name 不得重复，type 不得为空", implemented_by: [ query-params ] }
+  - { id: query-params, text: "params 的 name 不得重复，type 不得为空；default 只在 nullable:true 时允许", implemented_by: [ query-params ] }
   - { id: query-param-column, text: "params[].column 必须属于查询的 targets；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型）", implemented_by: [ query-param-column ] }
-  - { id: query-returns, text: "returns DSL 必须合法，引用的表/实体必须存在", implemented_by: [ query-returns ] }
-  - { id: query-return-columns, text: "return_columns 必须属于返回类型；secret 列只允许同模块显式列出；affected_rows 不得写 return_columns", implemented_by: [ query-return-columns ] }
-  - { id: query-entity-coverage, text: "返回实体时，字段的来源表必须在查询的 targets 中；return_columns 省略表示全部非 secret 列，显式时必须覆盖全部非指针、非 secret 列字段", implemented_by: [ query-entity-coverage ] }
-  - { id: query-output-fields, text: "object 返回必须有非空 output_fields；字段 name 唯一、type 非空；不得同时写 return_columns", implemented_by: [ query-output-fields ] }
+  - { id: query-returns, text: "returns 非空；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
+  - { id: query-return-columns, text: "column/table.columns/entity.columns 必须属于目标表/实体；secret 只允许同模块返回", implemented_by: [ query-return-columns ] }
+  - { id: query-entity-coverage, text: "entity 显式 columns 必须覆盖全部非指针、非 secret 字段；字段来源表必须在 targets 中", implemented_by: [ query-entity-coverage ] }
+  - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回；columns 省略时默认不投影 secret，同模块需要时必须显式列出", implemented_by: [ query-sensitive-columns ] }
   - { id: query-index-ref, text: "index_ref 必须指向查询表上的 PK 或 indexes[].name；显式索引必须在 used_by 中列出该查询；单表查询至少一个 index_ref", implemented_by: [ query-index-ref ] }
   - { id: query-index-used-by, text: "index.used_by 的查询必须存在、引用当前表，并在 index_ref 中引用该索引", implemented_by: [ query-index-used-by ] }
-  - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回；return_columns 省略时默认不投影 secret，同模块需要时必须显式列出", implemented_by: [ query-sensitive-columns ] }
   - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识；通用规则放组 README，禁止复制", implemented_by: [ query-do-not-specific ] }

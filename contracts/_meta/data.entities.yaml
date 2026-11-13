@@ -95,7 +95,7 @@ fields:
         caution: "标量字段必须显式；column 的校验/类型由来源列给出；computed 不占列；soft=外部传入或无法脚本化的来源说明"
         fields:
           - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "来源物理列；必须属于本实体的表", caution: "同一列不得被两个字段引用" }
-          - { name: computed, type: string, required: false, description: "计算/聚合表达式；标量字段的另一种来源", caution: "非空；必须使用指针类型 *T；不引用 @param；不同查询需要不同算法时改用 query.output_fields" }
+          - { name: computed, type: string, required: false, description: "计算/聚合表达式；标量字段的另一种来源", caution: "非空；必须使用指针类型 *T；不引用 @param；不同查询需要不同算法时改用 query.returns" }
           - { name: soft, type: string, required: false, description: "外部传入或无法脚本化的来源说明", caution: "非空；必须显式 type；validation 不得使用 column" }
       - name: validation
         type: object
