@@ -43,8 +43,6 @@ web-seed/
 ├── AGENTS.md                    [C] AI 宪法：优先级链、硬约束
 ├── README.md                    [C] 本文件
 ├── Makefile                     [C] 唯一任务入口，make help 自文档
-├── package.json                 [C] 根脚本与 devDeps
-├── pnpm-workspace.yaml          [C] 前端多应用 workspace
 ├── lefthook.yml                 [C] 提交/推送钩子
 ├── .editorconfig .gitattributes .nvmrc .dockerignore .gitignore
 │
@@ -79,7 +77,7 @@ web-seed/
 │   │   ├── queries/             [P]
 │   │   └── go.mod  Dockerfile
 │   │
-│   └── web/
+│   └── web/                     [C] 前端 workspace：package.json / pnpm-workspace.yaml / pnpm-lock.yaml
 │       ├── admin/               [C] 管理端前端（模板默认端）
 │       │   ├── src/app/         [P] router / providers / layouts
 │       │   ├── src/pages/       [P] 路由级视图

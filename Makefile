@@ -16,7 +16,7 @@ build-api: ## 构建 Go API
 	cd $(APP_API) && go build ./...
 
 build-web: ## 构建前端（按拓扑：tokens/ui 先于 app）
-	pnpm -r build
+	pnpm -C apps/web -r build
 
 test: test-api test-tools ## 运行测试（API + 契约工具）
 
@@ -41,7 +41,7 @@ lint-tools: ## 契约工具 vet + 格式检查
 	cd scripts/cmd && go vet ./... && test -z "$$(gofmt -l .)"
 
 typecheck: ## 前端类型检查
-	pnpm -r --if-present typecheck
+	pnpm -C apps/web -r --if-present typecheck
 
 gen: ## 重新生成全部契约产物（gen-graph 已实现，其余 P2）
 	@echo "gen: 部分实现。已实现：gen-graph。待实现：gen-openapi / gen-db / gen-client / gen-env"
@@ -108,7 +108,7 @@ api-dev: ## 启动 API
 	cd $(APP_API) && go run ./cmd/adminapi
 
 web-dev: ## 启动前端
-	pnpm --filter @webseed/admin dev
+	pnpm -C apps/web --filter @webseed/admin dev
 
 compose-up: ## 启动本地依赖（PG）
 	docker compose -f compose.yaml --profile core up -d

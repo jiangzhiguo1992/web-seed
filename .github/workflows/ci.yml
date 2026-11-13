@@ -26,13 +26,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+        working-directory: apps/web
       - run: pnpm -r build
+        working-directory: apps/web
       - run: pnpm -r --if-present typecheck
+        working-directory: apps/web
 
   docs:
     runs-on: ubuntu-latest

@@ -173,7 +173,7 @@ importers:
         specifier: ^3.0.0
         version: 3.3.14(typescript@5.9.3)
 
-  apps/web/admin:
+  admin:
     dependencies:
       '@webseed/api-client':
         specifier: workspace:*
@@ -204,15 +204,15 @@ importers:
         specifier: ^7.0.0
         version: 7.3.8(jiti@2.7.0)(lightningcss@1.33.0)
 
-  apps/web/packages/api-client: {}
+  packages/api-client: {}
 
-  apps/web/packages/design-tokens: {}
+  packages/design-tokens: {}
 
-  apps/web/packages/eslint-config: {}
+  packages/eslint-config: {}
 
-  apps/web/packages/tsconfig: {}
+  packages/tsconfig: {}
 
-  apps/web/packages/ui-kit:
+  packages/ui-kit:
     dependencies:
       class-variance-authority:
         specifier: ^0.7.1
