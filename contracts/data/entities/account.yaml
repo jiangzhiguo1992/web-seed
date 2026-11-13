@@ -28,26 +28,38 @@ fields:
     type: data.enums.own_type
     description: "数据归属主体类型"
     source: { column: data.tables.account.col.own_type }
+    validation: { column: data.tables.account.col.own_type }
 
   - name: OwnID
+    description: "归属 ID；与 own_type 组成归属主体"
     source: { column: data.tables.account.col.own_id }
+    validation: { column: data.tables.account.col.own_id }
 
   - name: Number
+    description: "账号编号；业务唯一；存储前大写归一"
     source: { column: data.tables.account.col.number }
+    validation: { column: data.tables.account.col.number }
 
   - name: Nickname
+    description: "昵称"
     source: { column: data.tables.account.col.nickname }
+    validation: { column: data.tables.account.col.nickname }
 
   - name: userID
+    description: "关联用户 ID；不做数据库外键"
     source: { column: data.tables.account.col.user_id }
+    validation: { column: data.tables.account.col.user_id }
 
   - name: Status
     type: data.enums.account_status
     description: "账号状态"
     source: { column: data.tables.account.col.status }
+    validation: { column: data.tables.account.col.status }
 
   - name: Version
+    description: "乐观锁；非业务字段"
     source: { column: data.tables.account.col.version }
+    validation: { column: data.tables.account.col.version }
 
   - name: Tokens
     type: data.entities.token
@@ -83,3 +95,7 @@ used_by:
     - data.queries.account.get_account_by_number
     - data.queries.account.list_accounts
     - data.queries.account.create_account
+  capabilities:
+    - cap.http.account
+    - cap.services.account
+    - cap.services.auth
