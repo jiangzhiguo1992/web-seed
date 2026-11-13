@@ -41,14 +41,13 @@ queries:
   - name: ListAccounts
     tables:
       - data.tables.account
-    limit: 20
     params:
       - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
       - { name: own_type, type: integer, column: data.tables.account.col.own_type, nullable: true }
-      - { name: cursor_created_at, type: timestamp, column: data.tables.account.col.created_at, nullable: true }
-      - { name: cursor_id, type: integer, column: data.tables.account.col.id, nullable: true }
+      - { name: offset, type: integer, nullable: true, default: 0 }
+      - { name: limit, type: integer, nullable: true, default: 20 }
     returns:
-      - { name: accounts, kind: entity, entity: data.entities.account, list: true }
+      - { name: accounts, list: true, kind: entity, entity: data.entities.account }
     index_ref:
       - data.tables.account.idx_account_created_at_id
       - data.tables.account.idx_account_own_type_own_id
@@ -102,11 +101,12 @@ queries:
   - name: ListStalePendingAccounts
     tables:
       - data.tables.account
-    limit: 100
     params:
       - { name: older_than_days, type: integer }
+      - { name: offset, type: integer, nullable: true, default: 0 }
+      - { name: limit, type: integer, nullable: true, default: 100 }
     returns:
-      - { name: accounts, kind: table, table: data.tables.account, list: true }
+      - { name: accounts, list: true, kind: table, table: data.tables.account }
     index_ref: [ data.tables.account.idx_account_created_at_id ]
 
   - name: SoftDeleteStalePendingAccounts
