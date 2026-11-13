@@ -1,111 +1,45 @@
-# 数据存储与部署。项目级单例，禁止在 tables/*.yaml 里逐表声明 engine。
+# 数据存储约束。项目级单例，禁止在 tables/*.yaml 里逐表声明 engine。
 #
 # 设计决策：
-#   - 存储引擎、部署拓扑、连接方式都是项目级事实，不是某张表的属性。
+#   - 本文件只约束数据落盘：允许的引擎、每张表的引擎/保留/分区、不支持的拓扑。
+#   - 引擎版本、扩展、连接池、迁移工具、部署副本/锁/读写分离属于运行时/部署配置，不写进契约。
 #   - 未列出的引擎/拓扑即为不支持；AI 不得自行引入分库分表、多主、跨地域。
-#   - Redis 只作为缓存/会话/锁，不作为表存储；启用时在此登记。
-#   - 表级物理事实（engine/size_class/retention/partition）统一在 tables 下登记，
-#     表契约只保留业务结构（列/约束/索引/继承）。
-#   - 冗余组是跨表事实：组 ID 写在表列上，source/copies 明细统一在 redundancy_groups 登记。
+#   - Redis 只作为缓存/会话/锁，不作为表存储。
 
-schema_version: 1
 id: data.storage
-summary: "数据存储与部署"
+summary: "数据存储约束"
 stability: stable
+schema_version: 1
 do_not:
   - "禁止在 data/tables/*.yaml 里声明 engine，存储引擎只在本文件定义"
   - "未列出的引擎与拓扑一律视为不支持，禁止自行引入"
-  - "Redis 不是表存储；表数据只能落在当前 default_engine"
-  - "多实例部署时，定时任务必须显式声明锁机制，不能只写 max_in_flight"
+  - "Redis 不是表存储；表数据只能落在 supported_engines 中的引擎"
   - "每张物理表必须在本文件 tables 下登记；未登记的表不生成 DDL"
-  - "冗余组只在 redundancy_groups 定义；表列只写组 ID，不写 source/copies"
+  - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
 
-# 默认引擎，不等于唯一允许的引擎；切换时只改这里和对应 engine 配置。
-default_engine: postgres
-supported_engines: [postgres, mysql, mongodb]
-
-engines:
-  postgres:
-    enabled: true
-    version: "18"
-    extensions: [pgcrypto]
-    timezone: UTC
-    pooler: none                 # none | pgbouncer；启用 transaction 模式时需评估 prepared statements
-    max_conns: 20
-    migration_tool: goose
-    transaction_default: true
-
-  mysql:
-    version: "8.4"
-    timezone: UTC
-    charset: utf8mb4
-    migration_tool: goose
-    note: "允许作为默认引擎；启用时改 default_engine"
-
-  mongodb:
-    version: "8"
-    model: document
-    note: "文档模型；允许作为默认引擎，但启用时 tables 契约需映射为 collection"
-
-  redis:
-    enabled: false
-    role: cache                  # cache | session | lock
-    note: "仅缓存/会话/锁；不作为表存储，启用时在此登记"
-
-deployment:
-  topology: single-primary
-  api: stateless_horizontal
-  database:
-    primary: 1
-    replicas: 0
-    read_split: false
-  jobs:
-    runner: single               # single | multi
-    distributed_lock: engine_advisory_lock
-  migrations:
-    strategy: forward_only
-    concurrent_index: auto       # 由 storage.tables.size_class 决定
+supported_engines: [mysql, postgres, mongodb]
 
 # 每张物理表的存储事实；键是 data.tables.* 契约 ID。
-# engine 省略时用 default_engine；size_class 省略时为 small。
+# engine 必须显式声明，且必须在 supported_engines 中；size_class 省略时为 small。
 tables:
   data.tables.account:
+    engine: mysql
     size_class: large
     retention: { unit: days, pending: 7, soft_delete: 30, hard_delete: 90 }
 
   data.tables.token:
+    engine: mysql
     size_class: large
     retention: { unit: days, ttl: 30 }
 
   data.tables.auth_pwd:
+    engine: mysql
     retention: { unit: days, soft_delete: 30, hard_delete: 90 }
 
   data.tables.auth_phone:
+    engine: mysql
     retention: { unit: days, soft_delete: 30, hard_delete: 90 }
 
   data.tables.auth_email:
+    engine: mysql
     retention: { unit: days, soft_delete: 30, hard_delete: 90 }
-
-# 冗余组：组 ID 在表列的 redundancy 上引用；source 是权威列，copies 是冗余副本。
-# 同组只能有一个 source、至少一个 copy；copy 与 source 的 type/nullable 必须一致。
-redundancy_groups:
-  account_own_type:
-    source: data.tables.account.col.own_type
-    copies:
-      - data.tables.token.col.own_type
-
-  account_own_id:
-    source: data.tables.account.col.own_id
-    copies:
-      - data.tables.token.col.own_id
-
-  account_user_id:
-    source: data.tables.account.col.user_id
-    copies:
-      - data.tables.token.col.user_id
-
-not_supported:
-  - sharding
-  - multi-primary
-  - cross-region
-  - outbox

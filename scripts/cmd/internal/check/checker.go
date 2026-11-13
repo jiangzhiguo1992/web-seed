@@ -126,6 +126,7 @@ func (c *Checker) run() {
 	c.loadTableColumns(tableIDs)
 	c.checkIndexLiveOnly(tableIDs)
 	c.checkStorage(tableIDs)
+	c.checkRedundancyFile()
 	c.loadEntities(entitySchema)
 	c.checkRedundancy(tableIDs)
 	c.loadTableIndexes(tableIDs)

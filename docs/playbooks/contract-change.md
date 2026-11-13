@@ -96,7 +96,7 @@ make contract-new type=data.enums  name=note_status
 
 `column_type` 可选；指定后第一列使用该类型族，并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
 
-生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables` 下登记**（engine/size_class/retention/partition），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体。新实体在 `model.included_by` 列出包含它的实体，两处由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`；类型族：`contracts/_meta/_types.yaml`。
+生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables` 下登记**（engine 必填，size_class/retention/partition 按需），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体。新实体在 `model.included_by` 列出包含它的实体，两处由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`；类型族：`contracts/_meta/_types.yaml`。
 
 ### 3.2 校验
 

@@ -16,7 +16,8 @@
 | `entities/<entity>.yaml` | 读模型：Go 类型 `name`、表映射、语义字段（来源/关系/枚举/computed）、复杂校验 | Go/TS 类型 |
 | `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
 | `queries/<module>.yaml` | 查询契约：入参、结果、目标表、索引 | 查询接口、sqlc 代码 |
-| `storage.yaml` | 项目级存储引擎、部署拓扑、连接与锁；每张表的 engine/size_class/retention/partition；跨表冗余组 | 配置校验、运维约束 |
+| `storage.yaml` | 每张表的 engine/size_class/retention/partition；允许的引擎与不支持拓扑 | DDL 生成约束、配置校验 |
+| `redundancy.yaml` | 跨表冗余列关系：组 ID、source/copies | 冗余校验 |
 
 ### 1.1 基类不是物理表
 
@@ -66,7 +67,7 @@
 
 **不要把 DDL 搬到 entities，也不要把业务规则塞进 tables。**
 
-### 1.4 索引必须有查询，冗余组必须在 storage 登记
+### 1.4 索引必须有查询，冗余组必须在 redundancy 登记
 
 **索引不是“将来可能有用”的占位符。** `indexes[].used_by` 至少列一个查询项 ID，`contract-check` 校验：
 
@@ -76,7 +77,7 @@
 
 因此 `uq_*` 也要写 `used_by`（插入/唯一性校验也是使用方）；没有查询的索引直接删除，不要写一个假 ID。
 
-**冗余是显式设计，不是随手复制。** 表列只写组 ID，组明细在 `data/storage.yaml`：
+**冗余是显式设计，不是随手复制。** 表列只写组 ID，组明细在 `data/redundancy.yaml`：
 
 ```yaml
 # data/tables/account.yaml
@@ -84,8 +85,8 @@ columns:
   - name: own_type
     redundancy: account_own_type
 
-# data/storage.yaml
-redundancy_groups:
+# data/redundancy.yaml
+groups:
   account_own_type:
     source: data.tables.account.col.own_type
     copies:
@@ -158,7 +159,8 @@ data/tables/_base.yaml + tables/*.yaml ──> schema.sql（目标态）
 data/enums.yaml ──────> Go 常量 + TS union + entity 整数映射
 data/queries/*.yaml ──> queries/*.sql ──> sqlc 代码
 data/{tables,entities,queries} ──> make gen-graph ──> used_by 反向索引
-data/storage.yaml ────> 配置校验 + 运维约束
+data/storage.yaml ────> DDL 生成约束 + 配置校验
+data/redundancy.yaml ─> 冗余组校验
 ```
 
 **初始数据**：当前表契约不提供 `initial_rows`；需要静态种子时，先扩展 `contracts/_meta/data.tables.yaml` 与生成器，不要在表文件里写未定义字段。RBAC 的 seed 由可选 `rbac` 模块负责，不在平台契约里承诺。
@@ -177,10 +179,10 @@ data/storage.yaml ────> 配置校验 + 运维约束
 8. **索引必须写 `comment` 与 `used_by`**；`used_by` 至少一个查询项 ID，且查询引用当前表；表达式索引用 `expression`。没有查询的索引直接删除。
 9. **主键类型是 integer（bits: 64）**，具体生成方式由实现决定；`created_at` 由数据库 `now()`，`updated_at` / `deleted_at` 由应用写入。
 10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；写查询用 `persistence.write_queries` / `writes` 显式登记，checker 校验单表与归属；跨模块读通过 `persistence.queries`。
-11. **禁止未结构化 DDL 字段**：分区写在 `data/storage.yaml` 的 `tables.<id>.partition`，表达式索引用 `indexes[].expression`；大表索引的并发策略由 `storage.deployment.migrations.concurrent_index` 决定，不要塞原生 SQL。
+11. **禁止未结构化 DDL 字段**：分区写在 `data/storage.yaml` 的 `tables.<id>.partition`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定，不要塞原生 SQL。
 12. **反向映射分两类**：`table.entities` 与 `model.included_by` 是**显式声明**，checker 双向校验；entity 的 `used_by.queries` / `used_by.capabilities` 是**生成物**，由 `make gen-graph` 按 query/capability 引用计算并写回，禁止手改。四类都只记**直接入边**。`used_by.queries` 记录查询项 ID（`data.queries.<module>.<snake_case(name)>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `generated/lineage.md` 查询。
 13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
-14. **冗余组必须登记**：`columns[].redundancy` 只写组 ID；`data/storage.yaml` 的 `redundancy_groups` 定义 `source`/`copies`，两边双向一致，`type`/`nullable` 一致；每组只能有一个 `source`。
+14. **冗余组必须登记**：`columns[].redundancy` 只写组 ID；`data/redundancy.yaml` 的 `groups` 定义 `source`/`copies`，两边双向一致，`type`/`nullable` 一致；每组只能有一个 `source`。
 15. **单表 query 必须声明 `index_ref`**：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须把 query 写进 `used_by`，反向也校验。多表 query 可省略，也可引用任一查询表的索引。
 16. **entity 字段必须显式**：标量字段必写 `description`/`source`/`validation`；`source` 三选一（`column`/`computed`/`soft`），`source.column` 必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用。`json_name` 省略时取 `snake_case(name)`；`type`/`sensitivity` 可省略并按来源列派生（`soft` 除外）；显式 `type` 的 `*` 必须与列 `nullable` 一致；`computed` 必须显式 `type`；`sensitivity` 不得放松。表↔实体的多对多映射由 `model.tables` + 每个字段的 `source.column` 明确；反向映射写在 `table.entities`，checker 校验双向一致。
 17. **query 返回实体时必须完整**：`returns[].kind: entity` 的 `columns` 省略表示默认投影（全部非 secret 列）；显式时必须覆盖非指针、非 secret 列字段；`sensitivity: secret` 字段默认不进入投影，只有同模块 query 通过 `columns` 显式列出才可返回。返回实体的 query 会写入 `entity.used_by.queries`。
@@ -273,7 +275,7 @@ indexes:
 - 每个枚举项只写 `name`，项 ID 派生为 `data.enums.<name>`；不得再写 `id`
 - 不要收模块内部枚举
 
-**data.storage**：见 `storage.yaml` 的 `do_not`（单例契约，类型级约束就近写在文件内）。
+**data.storage / data.redundancy**：见各自文件的 `do_not`（单例契约，类型级约束就近写在文件内）。
 
 ---
 
@@ -302,17 +304,19 @@ indexes:
 
 ---
 
-## 6. 存储与部署
+## 6. 存储与冗余
 
 `data/storage.yaml` 是项目级单例：
 
-- `supported_engines` / `default_engine`（postgres / mysql / mongodb）；`default_engine` 是当前项目选择，不是唯一允许引擎
-- 部署拓扑（single-primary / 副本数 / 读写分离）
-- 定时任务运行方式与分布式锁
+- `supported_engines`（postgres / mysql / mongodb）：允许的引擎集合
+- `tables.<id>.engine`：每张物理表必须显式声明存储引擎，且必须在 `supported_engines` 中
+- `tables.<id>.size_class` / `retention` / `partition`：表级保留与分区事实
 - `not_supported` 列表（sharding / multi-primary / cross-region / outbox）
 
-表级物理事实（`engine`、`size_class`、`retention`、`partition`）统一写在 `tables` 下；跨表冗余组写在 `redundancy_groups` 下；表契约不再承载。
+引擎版本、扩展、连接池、迁移工具、部署拓扑、副本/读写分离、任务锁属于运行时/部署配置，不写进 `storage.yaml`。
 **禁止在 `tables/*.yaml` 里逐表声明 engine。**
+
+跨表冗余组不在这里：`data/redundancy.yaml` 的 `groups` 定义 `source`/`copies`，表列只写 `redundancy` 组 ID。
 
 ### 6.1 凭据与令牌
 

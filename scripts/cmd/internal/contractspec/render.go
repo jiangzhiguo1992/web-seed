@@ -226,7 +226,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；替换 TODO 占位符。\n# 新表还需在 contracts/data/storage.yaml 的 tables 下登记。\n# 字段规范见 %s。\n\n", summary, s.ID)
+	header := fmt.Sprintf("# %s\n#\n# 使用 make contract-new 生成；替换 TODO 占位符。\n# 新表还需在 contracts/data/storage.yaml 的 tables 下登记（engine 必填）。\n# 字段规范见 %s。\n\n", summary, s.ID)
 	return append([]byte(header), b...), nil
 }
 

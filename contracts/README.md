@@ -90,7 +90,8 @@ contracts/
 │   ├── entities/<entity>.yaml#   读模型：继承 _base，只写业务字段、关系、validation
 │   ├── queries/<module>.yaml #   查询接口（入参/结果/目标表/索引，.sql 是实现）
 │   ├── enums.yaml            #   跨端枚举集合（data.enums + data.enums.<name>）
-│   └── storage.yaml          #   项目级存储引擎与部署拓扑（单例）
+│   ├── redundancy.yaml       #   跨表冗余列关系（groups: source/copies）
+│   └── storage.yaml          #   每张表的存储约束（engine/size_class/retention/partition）
 │
 ├── capabilities/             # ② 实现层
 │   ├── http/<module>.yaml    #   OpenAPI，按业务模块拆
@@ -460,7 +461,8 @@ AI 对负向约束的敏感度高于正向描述。
 data/tables/_base.yaml + tables/*.yaml ──> schema.sql（目标态）
                                              ├─ diff 当前 DB ──> migrations/<ts>_<name>.sql
                                              └─> sqlc 输入
-data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
+data/storage.yaml ──> 每张表的存储约束
+data/redundancy.yaml ──> 冗余组关系
 ```
 
 | 规则 | 说明 |
@@ -468,7 +470,7 @@ data/storage.yaml ──> 存储引擎 / 拓扑 / 锁约束
 | 禁止手写迁移 | 改 `tables/*.yaml` 后跑 `make gen-db` |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验 | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
-| 结构化 DDL | 分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`；大表索引的并发策略由 `storage.deployment.migrations.concurrent_index` 决定；**不设未结构化 DDL 字段** |
+| 结构化 DDL | 分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
 
 **诚实边界**：生产环境的在线 DDL（大表加索引、数据回填）无法全自动。契约约束**最终态**，迁移**过程**允许人工介入，并用 `-- manual-adjust: <原因>` 显式声明。
 

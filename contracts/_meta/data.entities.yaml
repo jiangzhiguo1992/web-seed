@@ -88,7 +88,7 @@ fields:
       - { name: description, type: string, required: true, description: "字段说明；必须显式，不继承列 comment", caution: "写语义，不要重复列名或物理长度" }
       - name: source
         type: object
-        required: true
+        required: false
         description: "标量字段的装载来源；column/computed/soft 三选一；标量必填，关系字段不得写"
         generates: "SQL 投影、字段装载"
         caution: "标量字段必须显式；column 的校验/类型由来源列给出；computed 不占列；soft=外部传入或无法脚本化的来源说明"
@@ -98,7 +98,7 @@ fields:
           - { name: soft, type: string, required: false, description: "外部传入或无法脚本化的来源说明", caution: "非空；必须显式 type；validation 不得使用 column" }
       - name: validation
         type: object
-        required: true
+        required: false
         description: "字段校验规则；标量必填；column/pattern/soft 三选一，默认语义为 column"
         generates: "输入校验、测试断言"
         caution: "column=复用列规则，必须与 source.column 相同；pattern=硬正则；soft=脚本无法验证的软表达式；soft 来源不得用 column"

@@ -493,24 +493,23 @@ func TestStorageRegistryAndEngine(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := `default_engine: postgres
-supported_engines: [postgres]
-engines:
-  postgres: { enabled: true }
+	body := `supported_engines: [postgres]
 tables:
   data.tables.x: { engine: mysql }
-  data.tables.z: { size_class: small }
+  data.tables.z: { engine: postgres, size_class: small }
+  data.tables.w: { size_class: small }
 `
 	if err := os.WriteFile(filepath.Join(dir, "storage.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
-	c.checkStorage(map[string]string{"data.tables.x": "x.yaml", "data.tables.y": "y.yaml"})
+	c.checkStorage(map[string]string{"data.tables.x": "x.yaml", "data.tables.y": "y.yaml", "data.tables.w": "w.yaml"})
 	errs := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"physical table data.tables.y is not registered",
 		"does not match any data.tables contract",
 		"engine \"mysql\" is not supported",
+		"tables.data.tables.w engine is required",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in:\n%s", want, errs)
@@ -530,15 +529,13 @@ func TestStorageDocShape(t *testing.T) {
 	errs := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"unknown top-level field \"deploymnet\"",
-		"engines.postgres.enabled must be a bool",
+		"unknown top-level field \"default_engine\"",
+		"unknown top-level field \"engines\"",
 		"supported_engines[1] must be a non-empty string",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in:\n%s", want, errs)
 		}
-	}
-	if c.storageEngineEnabled(doc, "postgres") {
-		t.Fatal("non-bool enabled must not count as enabled")
 	}
 
 	c.errs = nil
@@ -551,7 +548,8 @@ func TestStorageDocShape(t *testing.T) {
 
 func TestStorageRetentionUnitType(t *testing.T) {
 	c := &Checker{}
-	c.checkStorageEntry(map[string]any{}, "data.tables.x", map[string]any{
+	c.checkStorageEntry(map[string]any{"supported_engines": []any{"postgres"}}, "data.tables.x", map[string]any{
+		"engine":    "postgres",
 		"retention": map[string]any{"unit": 5},
 	}, "contracts/data/storage.yaml")
 	if !strings.Contains(entityErrs(c), "retention.unit must be a string") {
@@ -563,7 +561,8 @@ func TestStoragePartitionIntervalType(t *testing.T) {
 	c := &Checker{tableColumns: map[string]map[string]columnMeta{
 		"data.tables.x": {"created_at": {typ: "timestamp"}},
 	}}
-	c.checkStorageEntry(map[string]any{}, "data.tables.x", map[string]any{
+	c.checkStorageEntry(map[string]any{"supported_engines": []any{"postgres"}}, "data.tables.x", map[string]any{
+		"engine":    "postgres",
 		"partition": map[string]any{"strategy": "range", "columns": []any{"created_at"}, "interval": 5},
 	}, "contracts/data/storage.yaml")
 	if !strings.Contains(entityErrs(c), "partition.interval must be a string") {
@@ -575,7 +574,8 @@ func TestStoragePartitionRangeInterval(t *testing.T) {
 	c := &Checker{tableColumns: map[string]map[string]columnMeta{
 		"data.tables.x": {"created_at": {typ: "timestamp"}},
 	}}
-	c.checkStorageEntry(map[string]any{}, "data.tables.x", map[string]any{
+	c.checkStorageEntry(map[string]any{"supported_engines": []any{"postgres"}}, "data.tables.x", map[string]any{
+		"engine":    "postgres",
 		"partition": map[string]any{"strategy": "range", "columns": []any{"created_at"}},
 	}, "contracts/data/storage.yaml")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "partition.interval is required for range") {
@@ -2114,7 +2114,7 @@ func TestRedundancyValidation(t *testing.T) {
 			"data.tables.b": {"columns": []any{map[string]any{"name": "x", "redundancy": "g"}}},
 		},
 	}
-	valid.checkRedundancyGroups(map[string]any{"redundancy_groups": map[string]any{
+	valid.checkRedundancyGroups(map[string]any{"groups": map[string]any{
 		"g": map[string]any{"source": "data.tables.a.col.x", "copies": []any{"data.tables.b.col.x"}},
 	}}, "contracts/data/storage.yaml")
 	valid.checkRedundancy(map[string]string{
@@ -2138,7 +2138,7 @@ func TestRedundancyValidation(t *testing.T) {
 			"data.tables.b": {"columns": []any{map[string]any{"name": "x", "redundancy": "g"}}},
 		},
 	}
-	c.checkRedundancyGroups(map[string]any{"redundancy_groups": map[string]any{
+	c.checkRedundancyGroups(map[string]any{"groups": map[string]any{
 		"g":  map[string]any{"source": "data.tables.a.col.x", "copies": []any{"data.tables.b.col.x"}},
 		"g2": map[string]any{"source": "data.tables.a.col.no_copy"},
 		"g3": map[string]any{"source": "data.tables.a.col.missing", "copies": []any{"data.tables.b.col.x"}},
@@ -2152,10 +2152,33 @@ func TestRedundancyValidation(t *testing.T) {
 		"type/nullable",
 		"copies must list at least one copy",
 		"is not a table column",
-		"not defined in storage.redundancy_groups",
+		"not defined in data/redundancy.yaml",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in redundancy errors: %v", want, c.errs)
+		}
+	}
+}
+
+func TestRedundancyFileShape(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "id: data.redundancy\nsummary: \"x\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "redundancy.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkRedundancyFile()
+	errs := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		`missing required field "do_not"`,
+		"groups must be a map keyed by group id",
+	} {
+		if !strings.Contains(errs, want) {
+			t.Fatalf("missing %q in redundancy file errors: %v", want, c.errs)
 		}
 	}
 }

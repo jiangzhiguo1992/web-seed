@@ -110,7 +110,7 @@ fields:
       - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值；与 default 互斥", caution: "checker 只校验互斥；SQL 语义由生成器/数据库验证" }
       # 类型族参数由 _meta/_types.yaml 的 column_types.families.params 注入
       - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], default: public, description: "列敏感级别；public 可返回，pii 可脱敏返回，secret 禁止返回", caution: "secret 隐含 pii；继承到 entity 时只能收紧，不能降低" }
-      - { name: redundancy, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "所属冗余组 ID；组定义与 source/copies 见 data/storage.yaml 的 redundancy_groups", caution: "列只写组 ID；source/copy 角色、类型与可空一致性由 checker 按 storage 校验" }
+      - { name: redundancy, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "所属冗余组 ID；组定义与 source/copies 见 data/redundancy.yaml 的 groups", caution: "列只写组 ID；source/copy 角色、类型与可空一致性由 checker 按 redundancy.yaml 校验" }
       - { name: comment, type: string, required: false, description: "列 COMMENT" }
 
   - name: constraints
@@ -167,9 +167,9 @@ rules:
   - { id: index-live-only, text: "live_only: true 要求表存在 nullable 的 deleted_at 列；唯一索引的 live_only 决定唯一作用域", implemented_by: [ index-live-only ] }
   - { id: constraint-fields, text: "check 必须写非空 expr；check 名以 ck_ 开头", implemented_by: [ constraint-fields ] }
   - { id: storage-registry, text: "storage.yaml 的 tables 必须覆盖每张物理表，且只引用已存在的表；基类不是物理表", implemented_by: [ storage-registry ] }
-  - { id: storage-entry, text: "storage.tables 条目只允许 engine/size_class/retention/partition；size_class 只能是 small/large", implemented_by: [ storage-entry ] }
-  - { id: storage-engine, text: "storage.tables 的 engine 必须在 supported_engines 中且该引擎已启用", implemented_by: [ storage-engine ] }
-  - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/default_engine/supported_engines/engines/deployment/tables/redundancy_groups/not_supported；engines.<name>.enabled 必须是 bool，supported_engines 必须是非空字符串列表", implemented_by: [ storage-doc ] }
+  - { id: storage-entry, text: "storage.tables 条目只允许 engine/size_class/retention/partition；engine 必填，size_class 只能是 small/large", implemented_by: [ storage-entry ] }
+  - { id: storage-engine, text: "storage.tables 的 engine 必须在 supported_engines 中", implemented_by: [ storage-engine ] }
+  - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/supported_engines/tables/not_supported；supported_engines 必须是非空字符串列表", implemented_by: [ storage-doc ] }
   - { id: storage-retention, text: "retention.unit 只能是 minutes/hours/days；各保留时长必须 >= 1", implemented_by: [ storage-retention ] }
   - { id: storage-partition, text: "partition.columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
   - { id: used-by-generated, text: "used_by.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ used-by-generated ] }
@@ -182,8 +182,8 @@ rules:
   - { id: index-used-by-ref, text: "index.used_by 必须指向存在的 data.queries.* 项，且该查询的 tables 必须包含当前表", implemented_by: [ index-used-by-ref ] }
   - { id: index-name-unique, text: "索引名同一 schema 内必须全局唯一", implemented_by: [ index-name-unique ] }
   - { id: constraint-error-ref, text: "capabilities.persistence.constraint_errors 的键必须是所写表声明的约束或索引名", implemented_by: [ constraint-error-ref ] }
-  - { id: redundant-group, text: "storage.redundancy_groups 每个组必须有 source 和至少一个 copies；组 ID 唯一且为 snake_case", implemented_by: [ redundant-group ] }
-  - { id: redundant-ref, text: "columns[].redundancy 必须与 storage.redundancy_groups 双向一致；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
+  - { id: redundant-group, text: "data/redundancy.yaml 的 groups 每个组必须有 source 和至少一个 copies；组 ID 唯一且为 snake_case", implemented_by: [ redundant-group ] }
+  - { id: redundant-ref, text: "columns[].redundancy 必须与 data/redundancy.yaml 的 groups 双向一致；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
   - { id: default-type, text: "列 default 的 YAML 类型必须与列类型族兼容；长度/范围按本列声明的参数校验（不展开 data.tables.*.col.* 引用）", implemented_by: [ default-type ] }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
   - { id: physical-primary-key, text: "物理表不得声明 primary_key；主键统一由基类 id 提供", implemented_by: [ physical-primary-key ] }

@@ -212,7 +212,7 @@
 
 | 组 | 职责 | 真相源 |
 |---|---|---|
-| `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储与部署、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` |
+| `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储约束、冗余关系、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` + `data/redundancy.yaml` |
 | `capabilities/` | 实现层：HTTP、异步、跨模块 service、业务流程编排 | `capabilities/**` |
 | `business/` | 业务规格：状态机、规则、领域事件、术语（不含实体与实现） | `business/**` |
 | `features/` | 功能定义：路由、页面、用户旅程 | `features/**` |
@@ -408,13 +408,13 @@ apps:
 - 表结构基类 `data/tables/_base.yaml`：`id / status / created_at / updated_at / deleted_at` 五列，所有物理表继承
 - 主键 integer（bits: 64）；时间列 `timestamp`，统一 UTC；`updated_at` 由应用写入
 - 业务表可选 `version` 做乐观锁；不是基类字段
-- 存储引擎、部署拓扑、连接池、锁在 `data/storage.yaml`，禁止逐表声明 engine
+- 每张表的 engine/size_class/retention/partition 在 `data/storage.yaml`，禁止逐表声明 engine；部署拓扑、连接池、锁属于运行时配置，不写进契约
 - 表不使用枚举：`status` 等状态列用 `integer`，枚举只在 entity，`data/enums.yaml` 的 `values[].code` 是 DB 整数码
 - 唯一性统一用唯一索引：`live_only: true` 只约束未软删行（软删后可复用）；`false`/省略约束全表（含软删行）
 - 索引命名 `idx_<table>_<cols>`；禁止数据库外键，跨表一致性由应用/业务规则保证
 - 迁移只前进；零停机三步：加可空列 → 回填 → 加约束
 - 软删默认过滤，必须在 repo 层统一，禁止每处手写
-- 分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`；并发建索引策略在 `storage.deployment.migrations.concurrent_index`；不设未结构化 DDL 字段
+- 分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`；并发建索引策略由运行时迁移配置决定；不设未结构化 DDL 字段
 
 ### 5.5 请求治理
 

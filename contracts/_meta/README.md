@@ -108,9 +108,9 @@ scripts/cmd/
   - 禁止 `foreign_key`；跨表一致性由应用/业务规则保证
   - 唯一索引的 `live_only` 决定作用域：`true` 只约束未软删行（要求 nullable `deleted_at`），`false`/省略约束全表（含软删行）
   - `indexes` 的 `comment`、`columns` xor `expression`、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表
-  - `columns[].redundancy` 只写组 ID；`data/storage.yaml` 的 `redundancy_groups` 定义 `source`/`copies`，两边双向一致，`type`/`nullable` 一致
+  - `columns[].redundancy` 只写组 ID；`data/redundancy.yaml` 的 `groups` 定义 `source`/`copies`，两边双向一致，`type`/`nullable` 一致
   - `data/queries/*.yaml` 的 `index_ref`：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须在 `used_by` 中列出该 query
-  - `data/storage.yaml` 的 `tables`：覆盖每张物理表且无孤儿；engine/size_class/retention/partition 的结构与取值；`redundancy_groups` 的组 ID、source/copies 与列声明双向一致
+  - `data/storage.yaml` 的 `tables`：覆盖每张物理表且无孤儿；engine/size_class/retention/partition 的结构与取值；`data/redundancy.yaml` 的组 ID、source/copies 与列声明双向一致
   - `table.entities` 显式记录映射本表的实体，checker 校验；`used_by` 只记生成的 `queries`
   - `owner_module` 与 capabilities 写表归属一致（只有 `cap.services` / `cap.async` 可写）；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
   - `persistence.queries` 引用的查询项必须存在；`persistence.write_queries`（service）与 `writes`（async）必须已在 queries/uses 中登记，且目标单表、归属一致；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
@@ -190,12 +190,12 @@ scripts/cmd/
 | `column_types` | `_types.yaml` 中的类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
 | `columns[].type` | 类型族键，或硬编码的 `data.tables.<t>.col.<c>`；不是类型族，也不是外键；表列不引用 `data.enums.*` |
 | `targets` | `dir`/`glob` 扫描路径；`file` 是单文件契约的固定路径；`id` 是 ID 模板（`<file>` → 文件 stem；单例契约直接写固定 ID）；`naming` 是文件名规则（`snake_case`）；基类固定 `_base.yaml`，不在此声明 |
-| `columns[].redundancy` | 冗余组 ID；组明细（source/copies）在 `data/storage.yaml` 的 `redundancy_groups` |
+| `columns[].redundancy` | 冗余组 ID；组明细（source/copies）在 `data/redundancy.yaml` 的 `groups` |
 | `indexes[].comment` | 索引必须写非空用途说明；生成 `COMMENT ON INDEX` |
 | `indexes[].used_by` | 使用该索引的 query item ID 列表；至少一个，防空索引 |
 | `queries[].index_ref` | query 使用的索引：`data.tables.<t>.pk` 或 `data.tables.<t>.<index-name>`；与 `indexes[].used_by` 双向一致 |
-| `data/storage.yaml` 的 `tables` | 每张物理表的 engine/size_class/retention/partition；表契约不再承载这些物理事实 |
-| `data/storage.yaml` 的 `redundancy_groups` | 冗余组明细：`source` + `copies`；与表列上的 `redundancy` 双向一致 |
+| `data/storage.yaml` 的 `tables` | 每张物理表的 engine（必填）/size_class/retention/partition；表契约不再承载这些物理事实 |
+| `data/redundancy.yaml` 的 `groups` | 冗余组明细：`source` + `copies`；与表列上的 `redundancy` 双向一致 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
 | `rules` | 本类型的专有规则；每条必须写 `implemented_by`（含规则自身 ID，指向 checker 实际输出的 `[rule-id]`）；通用结构规则由 checker 代码强制 |
 

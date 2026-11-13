@@ -17,8 +17,8 @@ read_order:
 
 groups:
   data:
-    description: "数据契约。tables 是物理结构真相源（含 base 基类，migrations 由它生成），entities 是读模型，queries 是实体与表之间的装载桥，storage 是项目级存储、部署与冗余组。"
-    layers: [tables, entities, queries, storage, policy]
+    description: "数据契约。tables 是物理结构真相源（含 base 基类，migrations 由它生成），entities 是读模型，queries 是实体与表之间的装载桥，storage 是表级存储约束，redundancy 是跨表冗余关系。"
+    layers: [tables, entities, queries, redundancy, storage, policy]
   capabilities:
     description: "能力契约。HTTP / 异步 / 跨模块 service。"
     layers: [http, async, services, flows]
@@ -41,7 +41,8 @@ entries:
   # ---------- data ----------
   - { id: data.tables.base, path: data/tables/_base.yaml, summary: "表结构基类（5 个基础字段）", consumers: [tools], enforcement: generated, stability: stable }
   - { id: data.entities.base, path: data/entities/_base.yaml, summary: "实体字段基类（5 个基础字段）", consumers: [tools], enforcement: generated, stability: stable }
-  - { id: data.storage, path: data/storage.yaml, summary: "数据存储与部署（引擎/拓扑/锁）", consumers: [api, worker, ops], enforcement: tested, stability: stable }
+  - { id: data.storage, path: data/storage.yaml, summary: "数据存储约束（引擎/表级保留/分区）", consumers: [api, worker, ops], enforcement: tested, stability: stable }
+  - { id: data.redundancy, path: data/redundancy.yaml, summary: "跨表冗余列关系", consumers: [tools], enforcement: tested, stability: stable }
   - id: data.tables.account
     path: data/tables/account.yaml
     summary: "账号主表结构"
@@ -150,13 +151,14 @@ global_notes:
   - "capabilities 契约不引用 business.*（cap.flows 仅允许引用 business.states/rules/events 做编排）"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table/entity 的 used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
-  - "表级物理事实（engine/size_class/retention/partition）与冗余组只在 data/storage.yaml 声明（tables / redundancy_groups）"
+  - "表级物理事实（engine/size_class/retention/partition）只在 data/storage.yaml 的 tables 声明；冗余组只在 data/redundancy.yaml 的 groups 声明"
 
 # 白名单：允许没有入边的根契约
 orphan_whitelist:
   - project
   - data.tables.base
   - data.storage
+  - data.redundancy
   - platform.environments
   - platform.versioning
   - platform.quality
