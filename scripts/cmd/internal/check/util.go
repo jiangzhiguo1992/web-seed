@@ -109,26 +109,6 @@ func containsString(list []string, want string) bool {
 	return false
 }
 
-// queryTableRefs 读取查询的 tables；查询契约不写 SQL/joins。
-func queryTableRefs(m map[string]any) []string {
-	var out []string
-	for _, raw := range asList(m["tables"]) {
-		if s, ok := raw.(string); ok && s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-// entityTableRefs 读取实体 model.tables；model 外的 tables 不再合法。
-func entityTableRefs(m map[string]any) []string {
-	model, _ := asMap(m["model"])
-	if model == nil {
-		return nil
-	}
-	return stringList(model["tables"])
-}
-
 // snakeCase 保留包内调用名；实现统一在 contractspec.SnakeCase。
 func snakeCase(s string) string {
 	return contractspec.SnakeCase(s)

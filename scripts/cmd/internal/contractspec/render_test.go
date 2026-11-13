@@ -89,7 +89,7 @@ func loadSchemaByType(t *testing.T, typ string) *Schema {
 
 func TestRenderEntity(t *testing.T) {
 	s := loadSchemaByType(t, "data.entities")
-	b, err := RenderEntity(s, "account_preview", "account", "account", "账号预览")
+	b, err := RenderEntity(s, "account_preview", "data.tables.account", "account", "账号预览")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestRenderEntity(t *testing.T) {
 
 func TestRenderQuery(t *testing.T) {
 	s := loadSchemaByType(t, "data.queries")
-	b, err := RenderQuery(s, "account", "account", "account", "account", "账号查询")
+	b, err := RenderQuery(s, "account", "account", "data.tables.account", "账号查询")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,8 +200,8 @@ func TestRenderQuery(t *testing.T) {
 	if _, ok := q["sql"]; ok {
 		t.Fatalf("query must not scaffold sql: %#v", q)
 	}
-	if _, err := RenderQuery(s, "note", "notes", "note", "bad name", "x"); err == nil {
-		t.Fatal("invalid physical table name should fail")
+	if _, err := RenderQuery(s, "note", "notes", "", "x"); err == nil {
+		t.Fatal("empty table ID should fail")
 	}
 }
 
@@ -212,7 +212,7 @@ func TestRenderEntityRejectsUnsupportedModelRequired(t *testing.T) {
 			s.Fields[i].Fields = append(s.Fields[i].Fields, Field{Name: "new_required", Type: "string", Required: true})
 		}
 	}
-	if _, err := RenderEntity(s, "note", "note", "notes", "备注实体"); err == nil || !strings.Contains(err.Error(), "new_required") {
+	if _, err := RenderEntity(s, "note", "data.tables.note", "notes", "备注实体"); err == nil || !strings.Contains(err.Error(), "new_required") {
 		t.Fatalf("expected unsupported required model field to fail with field name, got %v", err)
 	}
 }
@@ -229,7 +229,7 @@ func TestRenderQueryRejectsUnsupportedReturnRequired(t *testing.T) {
 			}
 		}
 	}
-	if _, err := RenderQuery(s, "note", "notes", "note", "note", "备注查询"); err == nil || !strings.Contains(err.Error(), "new_required") {
+	if _, err := RenderQuery(s, "note", "notes", "data.tables.note", "备注查询"); err == nil || !strings.Contains(err.Error(), "new_required") {
 		t.Fatalf("expected unsupported required return field to fail with field name, got %v", err)
 	}
 }
@@ -336,9 +336,11 @@ func TestScaffoldsNeverEmitStable(t *testing.T) {
 		render func(*Schema) ([]byte, error)
 	}{
 		{"data.tables", func(s *Schema) ([]byte, error) { return RenderTable(s, "note", "notes", "备注表") }},
-		{"data.entities", func(s *Schema) ([]byte, error) { return RenderEntity(s, "note", "account", "account", "备注实体") }},
+		{"data.entities", func(s *Schema) ([]byte, error) {
+			return RenderEntity(s, "note", "data.tables.account", "account", "备注实体")
+		}},
 		{"data.queries", func(s *Schema) ([]byte, error) {
-			return RenderQuery(s, "note", "notes", "account", "account", "备注查询")
+			return RenderQuery(s, "note", "notes", "data.tables.account", "备注查询")
 		}},
 	}
 	for _, tc := range cases {

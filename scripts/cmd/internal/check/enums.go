@@ -28,7 +28,7 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 	if s, ok := doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 	}
-	if doc["id"] != schema.Targets.ID {
+	if id, ok := doc["id"].(string); ok && id != schema.Targets.ID {
 		c.rulef("enum-id", "%s: id must be %s", rel, schema.Targets.ID)
 	}
 	prefix := schema.Targets.ID + "."
@@ -38,7 +38,7 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 	goTypes := map[string]string{}
 	tsTypes := map[string]string{}
 	rawEnums := asList(doc["enums"])
-	if len(rawEnums) == 0 {
+	if _, present := doc["enums"]; present && len(rawEnums) == 0 {
 		c.rulef("schema.non-empty", "%s: enums must not be empty", rel)
 	}
 	for i, raw := range rawEnums {
@@ -58,7 +58,7 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		values := map[string]bool{}
 		codes := map[int]bool{}
 		rawValues := asList(m["values"])
-		if len(rawValues) == 0 {
+		if _, present := m["values"]; present && len(rawValues) == 0 {
 			c.rulef("schema.non-empty", "%s: enums[%d] (%s): values must not be empty", rel, i, name)
 		}
 		for j, rv := range rawValues {
@@ -182,26 +182,13 @@ type enumUsage struct {
 	capabilities map[string]bool
 }
 
-// enumUsages 扫描 entity 字段和 capability 中的 data.enums.* 引用。
+// enumUsages 扫描已解析的 entity 字段和 capability 中的 data.enums.* 引用。
 func (c *Checker) enumUsages() map[string]*enumUsage {
 	usages := map[string]*enumUsage{}
-	for _, f := range c.entityFiles() {
-		doc, err := loadYAML(f)
-		if err != nil {
-			continue
-		}
-		entityID, _ := doc["id"].(string)
-		if entityID == "" {
-			continue
-		}
-		for _, raw := range asList(doc["fields"]) {
-			m, ok := asMap(raw)
-			if !ok {
-				continue
-			}
-			typ, _ := m["type"].(string)
-			if enumID, ok := enumTypeRef(typ); ok {
-				enumUsageFor(usages, enumID).entities[entityID] = true
+	for _, e := range c.entities {
+		for _, f := range e.Fields {
+			if enumID, ok := enumTypeRef(f.Type); ok {
+				enumUsageFor(usages, enumID).entities[e.ID] = true
 			}
 		}
 	}
@@ -271,19 +258,23 @@ func (c *Checker) checkEnumUsedBy(rel string, i int, id string, m map[string]any
 	if !ok {
 		return // schema.required 报缺失
 	}
-	declaredEntities := stringSet(asList(ub["entities"]))
-	declaredCapabilities := stringSet(asList(ub["capabilities"]))
 	expectedEntities := map[string]bool{}
 	expectedCapabilities := map[string]bool{}
 	if usage != nil {
 		expectedEntities = usage.entities
 		expectedCapabilities = usage.capabilities
 	}
-	if !sameSet(declaredEntities, expectedEntities) {
-		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.entities must be %v, got %v", rel, i, id, sortedKeys(expectedEntities), sortedKeys(declaredEntities))
+	if raw, ok := ub["entities"]; ok {
+		declared := stringSet(asList(raw))
+		if !sameSet(declared, expectedEntities) {
+			c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.entities must be %v, got %v", rel, i, id, sortedKeys(expectedEntities), sortedKeys(declared))
+		}
 	}
-	if !sameSet(declaredCapabilities, expectedCapabilities) {
-		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.capabilities must be %v, got %v", rel, i, id, sortedKeys(expectedCapabilities), sortedKeys(declaredCapabilities))
+	if raw, ok := ub["capabilities"]; ok {
+		declared := stringSet(asList(raw))
+		if !sameSet(declared, expectedCapabilities) {
+			c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.capabilities must be %v, got %v", rel, i, id, sortedKeys(expectedCapabilities), sortedKeys(declared))
+		}
 	}
 }
 

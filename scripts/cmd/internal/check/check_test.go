@@ -429,16 +429,35 @@ func TestTableRulesConstraintRequiresExpr(t *testing.T) {
 	}
 }
 
-func TestTableRulesUniqueConstraintRejected(t *testing.T) {
+func TestConstraintTypeOwnedByMetaEnum(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	constraints, ok := contractspec.FindField(schema.Fields, "constraints")
+	if !ok {
+		t.Fatal("constraints field missing in meta")
+	}
+	typeField, ok := contractspec.FindField(constraints.ItemFields, "type")
+	if !ok {
+		t.Fatal("constraints.type field missing in meta")
+	}
 	c := &Checker{}
+	c.validateValue("unique", typeField, "constraints[0].type")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.enum]") {
+		t.Fatalf("constraint type must be rejected by meta enum: %v", c.errs)
+	}
+
+	c = &Checker{}
 	doc := minimalTableDoc()
-	doc["constraints"] = []any{map[string]any{
-		"name": "uq_x_code", "type": "unique",
-	}}
-	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, `unknown type "unique"`) || !strings.Contains(errs, "[constraint-fields]") {
-		t.Fatalf("unique constraint not rejected: %v", c.errs)
+	doc["constraints"] = []any{map[string]any{"name": "uq_x_code", "type": "unique"}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", schema)
+	if len(c.errs) != 0 {
+		t.Fatalf("constraint type must not be re-checked: %v", c.errs)
 	}
 }
 
@@ -543,6 +562,40 @@ func TestStorageDocShape(t *testing.T) {
 	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "supported_engines must be a list") {
 		t.Fatalf("non-list supported_engines not reported: %v", c.errs)
+	}
+}
+
+func TestStorageDocRequiresSupportedEngines(t *testing.T) {
+	c := &Checker{}
+	c.checkStorageDoc(map[string]any{"tables": map[string]any{}}, "contracts/data/storage.yaml")
+	if !strings.Contains(entityErrs(c), "supported_engines is required") {
+		t.Fatalf("missing supported_engines not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkStorageDoc(map[string]any{"supported_engines": []any{}}, "contracts/data/storage.yaml")
+	if !strings.Contains(entityErrs(c), "supported_engines must not be empty") {
+		t.Fatalf("empty supported_engines not reported: %v", c.errs)
+	}
+}
+
+func TestStorageRetentionRequiresUnitAndDuration(t *testing.T) {
+	c := &Checker{}
+	c.checkStorageEntry(map[string]any{"supported_engines": []any{"postgres"}}, "data.tables.x", map[string]any{
+		"engine":    "postgres",
+		"retention": map[string]any{"pending": 7},
+	}, "contracts/data/storage.yaml")
+	if !strings.Contains(entityErrs(c), "retention.unit is required") {
+		t.Fatalf("missing retention unit not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkStorageEntry(map[string]any{"supported_engines": []any{"postgres"}}, "data.tables.x", map[string]any{
+		"engine":    "postgres",
+		"retention": map[string]any{"unit": "days"},
+	}, "contracts/data/storage.yaml")
+	if !strings.Contains(entityErrs(c), "retention must declare at least one duration") {
+		t.Fatalf("retention without duration not reported: %v", c.errs)
 	}
 }
 
@@ -661,7 +714,7 @@ persistence:
 		t.Fatal(err)
 	}
 	c := &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
-	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}, nil)
+	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services/cap.async may declare table writes") {
 		t.Fatalf("http write layer not rejected: %v", c.errs)
 	}
@@ -675,7 +728,7 @@ writes:
 		t.Fatal(err)
 	}
 	c = &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
-	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}, nil)
+	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services/cap.async may declare writes") {
 		t.Fatalf("http top-level writes not rejected: %v", c.errs)
 	}
@@ -777,40 +830,28 @@ func TestTableIndexColumnsUnique(t *testing.T) {
 	}
 }
 
-func TestUsedByUsesEntityQueryTargets(t *testing.T) {
+func TestUsedByUsesParsedEntityAndQueryTargets(t *testing.T) {
 	root := t.TempDir()
-	write := func(rel, body string) {
-		p := filepath.Join(root, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	p := filepath.Join(root, "contracts/data/tables/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	write("contracts/data/tables/x.yaml", `id: data.tables.x
+	if err := os.WriteFile(p, []byte(`id: data.tables.x
 table:
   entities: [ data.entities.e ]
 used_by:
   queries: [ data.queries.q.get_x ]
-`)
-	write("custom/entities/e.yaml", `id: data.entities.e
-model:
-  tables: [ data.tables.x ]
-`)
-	write("custom/queries/q.yaml", `id: data.queries.q
-queries:
-  - name: GetX
-    tables: [ data.tables.x ]
-`)
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	c := &Checker{
-		root:          root,
-		entityTargets: contractspec.Targets{Dir: "custom/entities", Glob: "*.yaml"},
-		queryTargets:  contractspec.Targets{Dir: "custom/queries", Glob: "*.yaml"},
+		root:     root,
+		entities: map[string]*entityInfo{"data.entities.e": {ID: "data.entities.e", Tables: []string{"data.tables.x"}}},
+		queries:  map[string]*queryInfo{"data.queries.q.get_x": {ID: "data.queries.q.get_x", Targets: []string{"data.tables.x"}}},
 	}
 	c.checkUsedBy(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if len(c.errs) != 0 {
-		t.Fatalf("meta targets not used by used_by scan: %v", c.errs)
+		t.Fatalf("parsed entity/query targets not used by used_by scan: %v", c.errs)
 	}
 }
 
@@ -825,12 +866,6 @@ func TestUsedByEntitiesAndQueries(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("contracts/data/queries/q.yaml", `
-id: data.queries.q
-queries:
-  - name: GetX
-    tables: [ data.tables.x ]
-`)
 	write("contracts/data/tables/x.yaml", `
 id: data.tables.x
 table:
@@ -839,8 +874,15 @@ used_by:
   queries: [ data.queries.q.get_x ]
 `)
 	tableIDs := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
+	parsed := func() *Checker {
+		return &Checker{
+			root:     root,
+			entities: map[string]*entityInfo{},
+			queries:  map[string]*queryInfo{"data.queries.q.get_x": {ID: "data.queries.q.get_x", Targets: []string{"data.tables.x"}}},
+		}
+	}
 
-	c := &Checker{root: root}
+	c := parsed()
 	c.checkUsedBy(tableIDs)
 	if len(c.errs) != 0 {
 		t.Fatalf("query item ID not accepted: %v", c.errs)
@@ -853,7 +895,7 @@ table:
 used_by:
   queries: [ data.queries.q ]
 `)
-	c = &Checker{root: root}
+	c = parsed()
 	c.checkUsedBy(tableIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "used_by.queries mismatch") {
 		t.Fatalf("query file ID should not satisfy used_by: %v", c.errs)
@@ -1168,6 +1210,7 @@ fields:
 	if err := os.WriteFile(entityPath, []byte(entity), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	c.loadEntities(&Schema{Type: "data.entities", Targets: contractspec.Targets{Dir: "contracts/data/entities", Glob: "*.yaml"}})
 	c.checkEnums(loadEnumSchemaForTest(t))
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "[enum-used-by]") || !strings.Contains(errs, "used_by.entities must be") {
@@ -1221,6 +1264,7 @@ fields:
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
+	c.loadEntities(&Schema{Type: "data.entities", Targets: contractspec.Targets{Dir: "contracts/data/entities", Glob: "*.yaml"}})
 	usages := c.enumUsages()
 	u := usages["data.enums.x_status"]
 	if u == nil || !u.entities["data.entities.x"] {
@@ -1729,12 +1773,6 @@ func TestPersistenceQueriesExist(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("contracts/data/queries/q.yaml", `
-id: data.queries.q
-queries:
-  - id: data.queries.q.get
-    table: data.tables.x
-`)
 	write("contracts/capabilities/services/x.yaml", `
 id: cap.services.x
 module: x
@@ -1743,13 +1781,51 @@ persistence:
   queries:
     get: data.queries.q.missing
 `)
-	c := &Checker{root: root}
-	c.checkCrossFileTableRefs(
-		map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"},
-		map[string]map[string]bool{"data.tables.x": {"id": true}},
-	)
+	c := &Checker{root: root, queryIDs: map[string]string{"data.queries.q.get": "contracts/data/queries/q.yaml"}}
+	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown query data.queries.q.missing") {
 		t.Fatalf("missing persistence query not reported: %v", c.errs)
+	}
+}
+
+func TestResolvedColumnTypeFollowsReferences(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.a": {"x": {typ: "data.tables.b.col.y"}, "loop": {typ: "data.tables.a.col.loop"}},
+		"data.tables.b": {"y": {typ: "integer"}},
+	}}
+	if got := c.resolvedColumnType("data.tables.a.col.x"); got != "integer" {
+		t.Fatalf("chained reference = %q, want integer", got)
+	}
+	if got := c.resolvedColumnType("data.tables.a.col.loop"); got != "data.tables.a.col.loop" {
+		t.Fatalf("reference cycle must terminate with the ref, got %q", got)
+	}
+}
+
+func TestParamFamilyAcceptsFamilyKeysAndAliases(t *testing.T) {
+	for _, typ := range []string{
+		"string", "text", "varchar", "char",
+		"integer", "int", "bigint", "smallint",
+		"boolean", "bool",
+		"timestamp", "timestamptz", "datetime", "date", "time",
+		"float", "double", "decimal", "numeric",
+		"json", "jsonb", "bytes", "bytea",
+	} {
+		if _, ok := paramFamily(typ); !ok {
+			t.Fatalf("paramFamily(%q) rejected", typ)
+		}
+	}
+	if _, ok := paramFamily("weird"); ok {
+		t.Fatal("unknown param family accepted")
+	}
+
+	c := &Checker{}
+	for _, typ := range []string{"string", "text", "bytes", "data.enums.x_status"} {
+		if !c.scalarReturnType(typ) {
+			t.Fatalf("scalarReturnType(%q) rejected", typ)
+		}
+	}
+	if c.scalarReturnType("weird") {
+		t.Fatal("unknown scalar return type accepted")
 	}
 }
 
@@ -2081,9 +2157,9 @@ func TestIndexUsedBy(t *testing.T) {
 	}
 
 	c = &Checker{}
-	c.checkTableRules(base(nil), "contracts/data/tables/x.yaml", schema)
+	c.checkTableRules(base([]any{}), "contracts/data/tables/x.yaml", schema)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[index-used-by]") {
-		t.Fatalf("missing index used_by not reported: %v", c.errs)
+		t.Fatalf("empty index used_by not reported: %v", c.errs)
 	}
 
 	c = &Checker{queryIDs: map[string]string{}, queryTables: map[string]map[string]bool{}}
@@ -2175,7 +2251,7 @@ func TestRedundancyFileShape(t *testing.T) {
 	errs := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		`missing required field "do_not"`,
-		"groups must be a map keyed by group id",
+		`missing required field "groups"`,
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in redundancy file errors: %v", want, c.errs)
@@ -2392,13 +2468,12 @@ persistence:
 		t.Fatal(err)
 	}
 	tableIDs := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
-	cols := map[string]map[string]bool{"data.tables.x": {"id": true}}
 	c := &Checker{
 		root:         root,
 		tableOwners:  map[string]string{"data.tables.x": "x"},
 		tableObjects: map[string]map[string]bool{"data.tables.x": {"uq_x_code": true}},
 	}
-	c.checkCrossFileTableRefs(tableIDs, cols)
+	c.checkCrossFileTableRefs(tableIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[constraint-error-ref]") {
 		t.Fatalf("dangling constraint_errors key not reported: %v", c.errs)
 	}
@@ -2408,7 +2483,7 @@ persistence:
 		tableOwners:  map[string]string{"data.tables.x": "x"},
 		tableObjects: map[string]map[string]bool{"data.tables.x": {"ck_missing": true}},
 	}
-	c.checkCrossFileTableRefs(tableIDs, cols)
+	c.checkCrossFileTableRefs(tableIDs)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid constraint_errors key reported: %v", c.errs)
 	}

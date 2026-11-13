@@ -272,13 +272,13 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	return append([]byte(header), b...), nil
 }
 
-// RenderEntity 生成单表读模型的最小骨架；目标表必须已存在。
-func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, error) {
+// RenderEntity 生成单表读模型的最小骨架；tableID 是目标表契约 ID。
+func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte, error) {
 	if s == nil || s.Type != "data.entities" {
 		return nil, fmt.Errorf("RenderEntity: want data.entities schema")
 	}
-	if !validName(name) || !validName(table) {
-		return nil, fmt.Errorf("RenderEntity: invalid name/table (snake_case required)")
+	if !validName(name) || strings.TrimSpace(tableID) == "" {
+		return nil, fmt.Errorf("RenderEntity: invalid name/tableID")
 	}
 	if !validName(ownerModule) {
 		return nil, fmt.Errorf("RenderEntity: invalid owner_module (snake_case required)")
@@ -336,7 +336,7 @@ func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, 
 		Model: entityModelScaffold{
 			Name:       lowerCamel(name),
 			Extends:    []string{"data.entities.base"},
-			Tables:     []string{"data.tables." + table},
+			Tables:     []string{tableID},
 			IncludedBy: []string{},
 		},
 		Fields: []entityFieldScaffold{},
@@ -351,15 +351,12 @@ func RenderEntity(s *Schema, name, table, ownerModule, summary string) ([]byte, 
 }
 
 // RenderQuery 生成查询文件的最小合法骨架：SELECT EXISTS 只依赖主键 id。
-func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]byte, error) {
+func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, error) {
 	if s == nil || s.Type != "data.queries" {
 		return nil, fmt.Errorf("RenderQuery: want data.queries schema")
 	}
-	if !validName(name) || !validName(table) || !validName(module) {
-		return nil, fmt.Errorf("RenderQuery: invalid name/module/table (snake_case required)")
-	}
-	if !validName(physical) {
-		return nil, fmt.Errorf("RenderQuery: invalid physical table name %q (snake_case required)", physical)
+	if !validName(name) || !validName(module) || strings.TrimSpace(tableID) == "" {
+		return nil, fmt.Errorf("RenderQuery: invalid name/module/tableID")
 	}
 	if strings.TrimSpace(summary) == "" {
 		return nil, fmt.Errorf("RenderQuery: summary must not be empty")
@@ -412,10 +409,10 @@ func RenderQuery(s *Schema, name, module, table, physical, summary string) ([]by
 		DoNot:         []string{},
 		Queries: []queryItemScaffold{{
 			Name:     "Exists" + pascal(name),
-			Tables:   []string{"data.tables." + table},
-			Params:   []queryParamScaffold{{Name: "id", Type: "integer", Column: "data.tables." + table + ".col.id"}},
+			Tables:   []string{tableID},
+			Params:   []queryParamScaffold{{Name: "id", Type: "integer", Column: tableID + ".col.id"}},
 			Returns:  []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}},
-			IndexRef: flowStrings{"data.tables." + table + ".pk"},
+			IndexRef: flowStrings{tableID + ".pk"},
 		}},
 	}
 	b, err := marshal2(doc)

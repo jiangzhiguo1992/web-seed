@@ -475,11 +475,11 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 	if s, ok := doc["summary"].(string); ok && s == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 	}
-	if doc["id"] != baseContractID {
-		c.rulef("base-file", "%s: base table id must be %s, got %v", rel, baseContractID, doc["id"])
+	if id, ok := doc["id"].(string); ok && id != baseContractID {
+		c.rulef("base-file", "%s: base table id must be %s, got %s", rel, baseContractID, id)
 	}
 	names := []string{}
-	for _, raw := range asList(doc["columns"]) {
+	for i, raw := range asList(doc["columns"]) {
 		m, ok := asMap(raw)
 		if !ok {
 			c.rulef("schema.type", "%s: columns must be objects", rel)
@@ -507,6 +507,11 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 		if n == "status" {
 			if d, ok := m["default"].(int); !ok || d != 0 {
 				c.rulef("base-columns", "%s: base status default must be 0", rel)
+			}
+		}
+		if _, ok := m["default"]; ok {
+			if _, ok := m["default_sql"]; ok {
+				c.rulef("default-vs-default-sql", "%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, n)
 			}
 		}
 		if n == "id" {
@@ -556,7 +561,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	}
 
 	columns := asList(doc["columns"])
-	if len(columns) == 0 {
+	if _, present := doc["columns"]; present && len(columns) == 0 {
 		c.rulef("schema.non-empty", "%s: columns must not be empty", rel)
 	}
 	inherited := copySet(c.inheritedCols[id])
@@ -595,19 +600,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.checkFamilyParams(m, t, rel, i, name, schema)
 		}
 	}
-	checkCols := func(rule, where string, list []any) {
-		for _, x := range list {
-			s, ok := x.(string)
-			if !ok {
-				c.rulef("schema.type", "%s: column name must be string", where)
-				continue
-			}
-			if !allCols[s] {
-				c.rulef(rule, "%s: unknown column %q", where, s)
-			}
-		}
-	}
-
 	constraintNames := map[string]bool{}
 	for i, raw := range asList(doc["constraints"]) {
 		m, ok := asMap(raw)
@@ -626,16 +618,8 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		} else {
 			c.rulef("schema.unique-names", "%s: constraints[%d]: duplicate constraint %q", rel, i, name)
 		}
-		switch typ {
-		case "check":
-			if !hasNonEmptyString(m, "expr") {
-				c.rulef("constraint-fields", "%s: constraints[%d] (%s): check requires expr", rel, i, name)
-			}
-			if !strings.HasPrefix(name, "ck_") {
-				c.rulef("constraint-fields", "%s: constraints[%d] (%s): check name must start with ck_", rel, i, name)
-			}
-		default:
-			c.rulef("constraint-fields", "%s: constraints[%d] (%s): unknown type %q", rel, i, name, typ)
+		if typ == "check" && !hasNonEmptyString(m, "expr") {
+			c.rulef("constraint-fields", "%s: constraints[%d] (%s): check requires expr", rel, i, name)
 		}
 	}
 
@@ -662,7 +646,17 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.rulef("index-definition", "%s: indexes[%d] (%s): exactly one of columns/expression is required", rel, i, name)
 		}
 		if hasCols {
-			checkCols("index-definition", fmt.Sprintf("%s: indexes[%d] (%s)", rel, i, name), asList(m["columns"]))
+			where := fmt.Sprintf("%s: indexes[%d] (%s)", rel, i, name)
+			for _, x := range asList(m["columns"]) {
+				col, ok := x.(string)
+				if !ok {
+					c.rulef("schema.type", "%s: column name must be string", where)
+					continue
+				}
+				if !allCols[col] {
+					c.rulef("index-definition", "%s: unknown column %q", where, col)
+				}
+			}
 		}
 		unique, _ := m["unique"].(bool)
 		if unique {
@@ -679,7 +673,11 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 // checkIndexUsedBy 校验索引的 used_by：至少一个查询项，且查询存在并引用当前表。
 // 这是“防空索引”的最低可执行约束；不是数据库查询计划器，不判断索引是否真被命中。
 func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int, name string) {
-	usedBy := asList(m["used_by"])
+	raw, present := m["used_by"]
+	if !present || raw == nil {
+		return // 缺失由 schema.required 报出
+	}
+	usedBy := asList(raw)
 	if len(usedBy) == 0 {
 		c.rulef("index-used-by", "%s: indexes[%d] (%s): used_by must list at least one query item", rel, i, name)
 		return
@@ -690,12 +688,11 @@ func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int,
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): used_by must be data.queries.* item IDs, got %v", rel, i, name, raw)
 			continue
 		}
-		canonical := c.resolveQueryID(qid)
-		if _, ok := c.queryIDs[canonical]; !ok {
+		if _, ok := c.queryIDs[qid]; !ok {
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): unknown query %s", rel, i, name, qid)
 			continue
 		}
-		if !c.queryTables[canonical][tableID] {
+		if !c.queryTables[qid][tableID] {
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): query %s does not reference table %s", rel, i, name, qid, tableID)
 			continue
 		}

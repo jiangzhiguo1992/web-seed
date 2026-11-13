@@ -73,7 +73,6 @@ var knownRuleIDs = map[string]bool{
 	"query-index-ref":             true,
 	"query-index-used-by":         true,
 	"query-key-order":             true,
-	"query-name":                  true,
 	"query-name-unique":           true,
 	"query-pagination":            true,
 	"query-param-column":          true,

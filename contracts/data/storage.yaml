@@ -8,8 +8,8 @@
 
 id: data.storage
 summary: "数据存储约束"
-stability: stable
 schema_version: 1
+stability: stable
 do_not:
   - "禁止在 data/tables/*.yaml 里声明 engine，存储引擎只在本文件定义"
   - "未列出的引擎与拓扑一律视为不支持，禁止自行引入"

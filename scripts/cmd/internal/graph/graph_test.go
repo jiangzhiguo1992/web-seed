@@ -22,9 +22,9 @@ func writeFixture(t *testing.T, root, rel, body string) {
 // writeTargets 为 graph.Compute 提供三份 _meta targets，避免测试依赖生产回退。
 func writeTargets(t *testing.T, root, tableDir, entityDir, queryDir string) {
 	t.Helper()
-	writeFixture(t, root, "contracts/_meta/data.tables.yaml", fmt.Sprintf("type: data.tables\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n", tableDir))
-	writeFixture(t, root, "contracts/_meta/data.entities.yaml", fmt.Sprintf("type: data.entities\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n", entityDir))
-	writeFixture(t, root, "contracts/_meta/data.queries.yaml", fmt.Sprintf("type: data.queries\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n", queryDir))
+	writeFixture(t, root, "contracts/_meta/data.tables.yaml", fmt.Sprintf("type: data.tables\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n", tableDir))
+	writeFixture(t, root, "contracts/_meta/data.entities.yaml", fmt.Sprintf("type: data.entities\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.entities.<file>\"\n", entityDir))
+	writeFixture(t, root, "contracts/_meta/data.queries.yaml", fmt.Sprintf("type: data.queries\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.queries.<file>\"\n", queryDir))
 }
 
 func ensureDirs(t *testing.T, root string, dirs ...string) {
@@ -173,8 +173,8 @@ func TestComputeRejectsMalformedMeta(t *testing.T) {
 
 func TestComputeRejectsDuplicateMeta(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "contracts/_meta/a.yaml", "type: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n")
-	writeFixture(t, root, "contracts/_meta/b.yaml", "type: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n")
+	writeFixture(t, root, "contracts/_meta/a.yaml", "type: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n")
+	writeFixture(t, root, "contracts/_meta/b.yaml", "type: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n")
 	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate meta type") {
 		t.Fatalf("duplicate meta not reported: %v", err)
 	}
@@ -256,32 +256,13 @@ func TestEmptyRoot(t *testing.T) {
 	}
 }
 
-func TestDuplicateIDs(t *testing.T) {
+func TestDuplicateQueryIDs(t *testing.T) {
 	root := t.TempDir()
 	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
 	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
-	writeFixture(t, root, "contracts/data/tables/a.yaml", "id: data.tables.a\n")
-	writeFixture(t, root, "contracts/data/tables/b.yaml", "id: data.tables.a\n")
-	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate table id") {
-		t.Fatalf("duplicate table id not reported: %v", err)
-	}
-
-	root = t.TempDir()
-	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
-	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
-	writeFixture(t, root, "contracts/data/entities/a.yaml", "id: data.entities.x\ntable: data.tables.a\n")
-	writeFixture(t, root, "contracts/data/entities/b.yaml", "id: data.entities.x\ntable: data.tables.a\n")
-	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate entity id") {
-		t.Fatalf("duplicate entity id not reported: %v", err)
-	}
-
-	root = t.TempDir()
-	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
-	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
-	writeFixture(t, root, "contracts/data/queries/a.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    tables: [ data.tables.a ]\n")
-	writeFixture(t, root, "contracts/data/queries/b.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    tables: [ data.tables.a ]\n")
+	writeFixture(t, root, "contracts/data/queries/a.yaml", "queries:\n  - name: GetAccount\n    tables: [ data.tables.a ]\n  - name: GetACCOUNT\n    tables: [ data.tables.a ]\n")
 	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate query id") {
-		t.Fatalf("duplicate query id not reported: %v", err)
+		t.Fatalf("duplicate derived query id not reported: %v", err)
 	}
 }
 

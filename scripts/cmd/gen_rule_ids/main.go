@@ -61,6 +61,7 @@ func collect(dir string) ([]string, error) {
 	}
 	seen := map[string]bool{}
 	fset := token.NewFileSet()
+	var dynamic error
 	for _, file := range files {
 		name := filepath.Base(file)
 		if strings.HasSuffix(name, "_test.go") || name == "rule_ids_gen.go" {
@@ -81,7 +82,8 @@ func collect(dir string) ([]string, error) {
 			}
 			lit, ok := call.Args[0].(*ast.BasicLit)
 			if !ok || lit.Kind != token.STRING {
-				return true
+				dynamic = fmt.Errorf("%s: rulef first argument must be a string literal", fset.Position(call.Pos()))
+				return false
 			}
 			id, err := strconv.Unquote(lit.Value)
 			if err == nil && id != "" {
@@ -89,6 +91,9 @@ func collect(dir string) ([]string, error) {
 			}
 			return true
 		})
+	}
+	if dynamic != nil {
+		return nil, dynamic
 	}
 	ids := make([]string, 0, len(seen))
 	for id := range seen {

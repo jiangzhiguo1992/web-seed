@@ -45,19 +45,25 @@ func (c *Checker) checkRedundancyFile() {
 	}
 	for _, k := range sortedAnyKeys(doc) {
 		if !allowed[k] {
-			c.rulef("redundant-group", "%s: unknown top-level field %q", rel, k)
+			c.rulef("schema.unknown-field", "%s: unknown top-level field %q", rel, k)
 		}
 	}
-	if id, _ := doc["id"].(string); id != "data.redundancy" {
-		c.rulef("redundant-group", "%s: id must be data.redundancy, got %q", rel, id)
+	if id, ok := doc["id"].(string); !ok {
+		c.rulef("schema.required", "%s: missing required field \"id\"", rel)
+	} else if id != "data.redundancy" {
+		c.rulef("schema.const", "%s: id must be data.redundancy, got %q", rel, id)
 	}
-	if summary, _ := doc["summary"].(string); strings.TrimSpace(summary) == "" {
+	if _, ok := doc["summary"]; !ok {
+		c.rulef("schema.required", "%s: missing required field \"summary\"", rel)
+	} else if summary, _ := doc["summary"].(string); strings.TrimSpace(summary) == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 	}
 	if _, ok := doc["do_not"]; !ok {
 		c.rulef("schema.required", "%s: missing required field \"do_not\"", rel)
 	}
-	if _, ok := doc["groups"]; !ok {
+	if raw, ok := doc["groups"]; !ok {
+		c.rulef("schema.required", "%s: missing required field \"groups\"", rel)
+	} else if _, ok := asMap(raw); !ok {
 		c.rulef("redundant-group", "%s: groups must be a map keyed by group id", rel)
 	}
 	c.checkStability(doc, rel)
@@ -76,8 +82,7 @@ func (c *Checker) checkRedundancyGroups(doc map[string]any, rel string) {
 	}
 	groups, ok := asMap(raw)
 	if !ok {
-		c.rulef("redundant-group", "%s: groups must be a map keyed by group id", rel)
-		return
+		return // 类型错误由 checkRedundancyFile 报出
 	}
 	owners := map[string]string{}
 	for _, id := range sortedAnyKeys(groups) {
@@ -96,8 +101,12 @@ func (c *Checker) checkRedundancyGroups(doc map[string]any, rel string) {
 			}
 		}
 		source, _ := m["source"].(string)
+		if source == "" {
+			c.rulef("redundant-group", "%s: groups.%s.source is required", rel, id)
+			continue
+		}
 		srcTable, srcCol, srcOK := splitColumnRef(source)
-		if source == "" || !srcOK || !c.columnExists(srcTable, srcCol) {
+		if !srcOK || !c.columnExists(srcTable, srcCol) {
 			c.rulef("redundant-ref", "%s: groups.%s.source %q is not a table column", rel, id, source)
 			continue
 		}

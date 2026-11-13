@@ -73,7 +73,7 @@ fields:
     fields:
       - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名；首字母大写 public，小写 internal", caution: "必须是合法非关键字 Go 标识符；全局唯一" }
       - { name: extends, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "继承的实体基类；当前只允许 data.entities.base", caution: "不得引用普通 entity；基类字段不得重声明；Status 可用 data.enums.* 特化" }
-      - { name: tables, type: list<string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "实体映射的物理表列表；第一张是主表，单表也写成列表", caution: "不得指向 data.tables.base；多表时字段必须用 source.column 指明来源；每张表至少被一个字段引用" }
+      - { name: tables, type: list<string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "实体映射的物理表列表；第一张是主表，单表也写成列表", caution: "不得指向 data.tables.base；多表时字段必须用 source.column 指明来源，且每张表至少被一个字段引用" }
       - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "通过关系字段指向本实体的 entity ID 列表；必须与关系字段 type 双向一致", caution: "显式声明；checker 校验每一处引用，悬空或缺失都报错" }
 
   - name: fields
@@ -84,7 +84,7 @@ fields:
     caution: "每项二选一：标量字段（source）或关系字段（type + join_column_from + join_column_to），不得混用"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名；首字母大写导出，小写不导出", caution: "同一实体内唯一；sensitivity: secret 的字段必须小写开头" }
-      - { name: type, type: string, required: false, description: "标量字段的逻辑类型；关系字段写目标 entity ID（data.entities.*）；前缀 * 表示指针", generates: "Go/TS 字段类型", caution: "标量：来源列字段可省略并按列类型+nullable 派生，computed/soft 必填；关系：必须是 data.entities.* 且不得为指针" }
+      - { name: type, type: string, required: false, description: "标量字段的逻辑类型（类型族键）；关系字段写目标 entity ID（data.entities.*）；前缀 * 表示指针", generates: "Go/TS 字段类型", caution: "标量：来源列字段可省略并按列类型+nullable 派生，computed/soft 必填；关系：必须是 data.entities.* 且不得为指针" }
       - { name: json_name, type: string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "生成的 JSON 字段名；省略时取 snake_case(name)", generates: "JSON tag、TS 属性名", caution: "同一实体内必须唯一；只有自定义命名才需要写" }
       - { name: description, type: string, required: true, description: "字段说明；必须显式，不继承列 comment", caution: "写语义，不要重复列名或物理长度" }
       - name: source
@@ -100,7 +100,7 @@ fields:
       - name: validation
         type: object
         required: false
-        description: "字段校验规则；标量必填；column/pattern/soft 三选一，默认语义为 column"
+        description: "字段校验规则；标量必填；column/pattern/soft 三选一"
         generates: "输入校验、测试断言"
         caution: "column=复用列规则，必须与 source.column 相同；pattern=硬正则；soft=脚本无法验证的软表达式；soft 来源不得用 column"
         fields:
@@ -141,7 +141,7 @@ rules:
   - { id: entity-base-only, text: "model.extends 必须恰好是 [data.entities.base]", implemented_by: [ entity-base-only ] }
   - { id: entity-no-base-fields, text: "具体实体不得重声明基类字段；Status 允许用 data.enums.* 特化", implemented_by: [ entity-no-base-fields ] }
   - { id: entity-base-field-first, text: "重声明的基类字段（当前仅 Status）必须是 fields 第一项", implemented_by: [ entity-base-field-first ] }
-  - { id: entity-table-shape, text: "model.tables 必填、非空、去重、不得指向 data.tables.base；model.tables[0] 是主表", implemented_by: [ entity-table-shape ] }
+  - { id: entity-table-shape, text: "model.tables 非空、每张表必须存在、不得指向 data.tables.base；model.tables[0] 是主表", implemented_by: [ entity-table-shape ] }
   - { id: entity-table-covered, text: "每张物理表必须被至少一个 entity 映射", implemented_by: [ entity-table-covered ] }
   - { id: entity-name, text: "model.name 必须是合法 Go 标识符（非关键字）；首字母大写 public，小写 internal", implemented_by: [ entity-name ] }
   - { id: entity-field-name, text: "字段 name 必须是合法 Go 标识符（非关键字）；首字母大小写表达导出性", implemented_by: [ entity-field-name ] }
@@ -164,7 +164,7 @@ rules:
   - { id: entity-relation-cardinality, text: "关系基数由两端列唯一性推断：两端唯一 one_to_one；from 唯一 one_to_many；to 唯一 many_to_one；两端都不唯一则不允许", implemented_by: [ entity-relation-cardinality ] }
   - { id: entity-relation-eager-index, text: "eager 关系的 join_column_to 必须有索引或主键", implemented_by: [ entity-relation-eager-index ] }
   - { id: entity-relation-eager-cycle, text: "eager 关系链不得成环；自引用不得 eager", implemented_by: [ entity-relation-eager-cycle ] }
-  - { id: entity-validation, text: "validation.name 必须 snake_case 且实体内唯一，ID 派生为 <entity-id>.<name>；expr 非空；on_violation 必须存在", implemented_by: [ entity-validation ] }
+  - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；expr 非空；on_violation 必须存在", implemented_by: [ entity-validation ] }
   - { id: entity-used-by, text: "used_by.queries 必须等于 returns 本实体的 query 集合；used_by.capabilities 必须等于引用本实体的 capability 集合", implemented_by: [ entity-used-by ] }
   - { id: entity-included-by, text: "model.included_by 必须等于关系字段 type 指向本实体的 entity 集合；每个 entity 必须存在且确实指向本实体", implemented_by: [ entity-included-by ] }
-  - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }
+  - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

@@ -10,7 +10,7 @@
 //   - 表列引用的 data.tables.<t>.col.<c> 是否存在；表列不引用 data.enums.*
 //   - 任意契约中的 data.enums.* 类型引用必须存在
 //   - status 由基类提供且为 integer；物理表不得重声明；枚举只在 entity
-//   - 禁止 foreign_key；unique 约束与唯一索引的软删语义区分
+//   - 禁止 foreign_key；约束只允许 check；唯一性只由 indexes[].unique/live_only 表达
 //   - owner_module 写归属（capabilities.persistence / data.queries 写查询）
 //   - entity/query/capability 的表引用是否存在；每张物理表至少一个 entity
 //
@@ -23,6 +23,7 @@ package check
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
@@ -138,7 +139,7 @@ func (c *Checker) run() {
 	c.checkRules(querySchema)
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues)
-	c.checkCrossFileTableRefs(tableIDs, cols)
+	c.checkCrossFileTableRefs(tableIDs)
 	c.checkEntities(entitySchema)
 	c.checkQueries(querySchema)
 	c.checkEntityUsedBy()
@@ -162,7 +163,10 @@ func (c *Checker) checkContractProseQuotes() {
 			continue
 		}
 		c.checkDuplicateKeys(&doc, rel, "")
-		c.checkProseQuotes(&doc, rel)
+		// 生成物不遵循手写契约的双引号风格；重复键仍需拒绝。
+		if !strings.HasPrefix(rel, "contracts/generated/") {
+			c.checkProseQuotes(&doc, rel)
+		}
 	}
 }
 

@@ -20,7 +20,6 @@ const (
 var sqlParamAtRe = regexp.MustCompile(`@([a-z_][a-z0-9_]*)`)
 var sqlParamNargRe = regexp.MustCompile(`sqlc\.narg\('([a-z_][a-z0-9_]*)'\)`)
 var sqlParamArgRe = regexp.MustCompile(`sqlc\.arg\('([a-z_][a-z0-9_]*)'\)`)
-var entityValidationNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // columnMeta 是物理表的有效列元数据（含继承列）。
 type columnMeta struct {
@@ -49,6 +48,7 @@ type entityFieldInfo struct {
 	HasSensitivity  bool
 	JSONName        string
 	Description     string
+	HasDescription  bool
 	IsRelation      bool
 	JoinFromRef     string
 	JoinFromTable   string
@@ -238,6 +238,9 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 	}
 	f := &entityFieldInfo{Name: name, Load: "lazy"}
 	f.JSONName, _ = m["json_name"].(string)
+	if _, ok := m["description"]; ok {
+		f.HasDescription = true
+	}
 	f.Description, _ = m["description"].(string)
 	if v, ok := m["type"].(string); ok && v != "" {
 		f.Type, f.HasType = v, true
@@ -400,12 +403,12 @@ func (c *Checker) checkEntities(schema *Schema) {
 		c.checkTargetFileName(schema, filepath.Base(ed.rel), ed.rel)
 		c.validateDoc(ed.doc, schema.Fields, ed.rel)
 		c.checkStability(ed.doc, ed.rel)
-		if s, _ := ed.doc["summary"].(string); strings.TrimSpace(s) == "" {
+		if s, ok := ed.doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
 			c.rulef("schema.non-empty", "%s: summary must not be empty", ed.rel)
 		}
 		id, _ := ed.doc["id"].(string)
 		want := schema.Targets.FileID(filepath.Base(ed.rel))
-		if want != "" && id != want {
+		if want != "" && id != "" && id != want {
 			c.rulef("schema.id-from-file", "%s: id must be %s, got %s (file name is the source)", ed.rel, want, id)
 		}
 		if prev, ok := seenIDs[id]; ok {
@@ -545,11 +548,11 @@ func (c *Checker) checkEntityBase(schema *Schema) {
 	c.checkFieldOrder(baseEntityPath, schema.Fields, orderRules{top: "entity-key-order", nested: "entity-key-order", model: "entity-model-order"})
 	c.validateDoc(c.entityBaseDoc, filterFields(schema.Fields, allowed), baseEntityPath)
 	c.checkStability(c.entityBaseDoc, baseEntityPath)
-	if s, _ := c.entityBaseDoc["summary"].(string); strings.TrimSpace(s) == "" {
+	if s, ok := c.entityBaseDoc["summary"].(string); ok && strings.TrimSpace(s) == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", baseEntityPath)
 	}
-	if c.entityBaseDoc["id"] != baseEntityID {
-		c.rulef("entity-base-file", "%s: id must be %s, got %v", baseEntityPath, baseEntityID, c.entityBaseDoc["id"])
+	if id, ok := c.entityBaseDoc["id"].(string); ok && id != baseEntityID {
+		c.rulef("entity-base-file", "%s: id must be %s, got %s", baseEntityPath, baseEntityID, id)
 	}
 	seen := map[string]bool{}
 	count := 0
@@ -614,7 +617,6 @@ func (c *Checker) checkEntityModel(e *entityInfo) {
 		c.rulef("entity-table-shape", "%s: tables must not be empty", e.Rel)
 		return
 	}
-	seen := map[string]bool{}
 	for _, t := range e.Tables {
 		if t == c.baseID {
 			c.rulef("entity-table-shape", "%s: data.tables.base is not a physical table", e.Rel)
@@ -623,10 +625,6 @@ func (c *Checker) checkEntityModel(e *entityInfo) {
 		if _, ok := c.tableColumns[t]; !ok {
 			c.rulef("entity-table-shape", "%s: table %s not found", e.Rel, t)
 		}
-		if seen[t] {
-			c.rulef("entity-table-shape", "%s: duplicate table %s", e.Rel, t)
-		}
-		seen[t] = true
 	}
 }
 
@@ -657,7 +655,7 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 		if f.BaseRedeclared {
 			c.rulef("entity-no-base-fields", "%s: redeclares base field; only status may specialize to data.enums.*", where)
 		}
-		if strings.TrimSpace(f.Description) == "" {
+		if f.HasDescription && strings.TrimSpace(f.Description) == "" {
 			c.rulef("entity-field-description", "%s: description must not be empty", where)
 		}
 		if f.IsRelation {
@@ -715,6 +713,9 @@ func (c *Checker) checkScalarField(e *entityInfo, f entityFieldInfo, where strin
 	}
 	if hasSoft && strings.TrimSpace(f.SourceSoft) == "" {
 		c.rulef("entity-field-source", "%s: source soft must not be blank", where)
+	}
+	if hasComputed && strings.TrimSpace(f.SourceComputed) == "" {
+		c.rulef("entity-field-source", "%s: source computed must not be blank", where)
 	}
 	if !f.HasType {
 		c.rulef("entity-field-type", "%s: type is required", where)
@@ -1011,15 +1012,23 @@ func (c *Checker) columnUnique(table, col string) bool {
 	return false
 }
 
-// resolvedColumnType 把列引用解析为实际类型族；非引用原样返回。
+// resolvedColumnType 把列引用链解析为实际类型族；非引用/断链/成环时原样返回。
 func (c *Checker) resolvedColumnType(typ string) string {
-	if !strings.HasPrefix(typ, "data.tables.") {
-		return typ
-	}
-	if t, col, ok := splitColumnRef(typ); ok {
-		if meta, found := c.tableColumns[t][col]; found {
-			return meta.typ
+	seen := map[string]bool{}
+	for strings.HasPrefix(typ, "data.tables.") {
+		if seen[typ] {
+			return typ
 		}
+		seen[typ] = true
+		t, col, ok := splitColumnRef(typ)
+		if !ok {
+			return typ
+		}
+		meta, found := c.tableColumns[t][col]
+		if !found {
+			return typ
+		}
+		typ = meta.typ
 	}
 	return typ
 }
@@ -1045,15 +1054,14 @@ func (c *Checker) checkEntityValidation(e *entityInfo) {
 		}
 		name, _ := m["name"].(string)
 		where := fmt.Sprintf("%s: validation.%s", e.Rel, name)
-		if !entityValidationNameRe.MatchString(name) {
-			c.rulef("entity-validation", "%s: name must be snake_case", where)
-		}
 		if seen[name] {
 			c.rulef("schema.unique-names", "%s: duplicate validation name %s", e.Rel, name)
 		}
 		seen[name] = true
-		if s, _ := m["expr"].(string); strings.TrimSpace(s) == "" {
-			c.rulef("entity-validation", "%s: expr must not be empty", where)
+		if expr, present := m["expr"]; present {
+			if s, _ := expr.(string); strings.TrimSpace(s) == "" {
+				c.rulef("entity-validation", "%s: expr must not be empty", where)
+			}
 		}
 		if code, _ := m["on_violation"].(string); code != "" {
 			if errs := c.errorCodes(); len(errs) > 0 && !errs[strings.TrimPrefix(code, "platform.errors.")] {
@@ -1068,7 +1076,8 @@ func (c *Checker) checkEagerCycles() {
 	adj := map[string][]string{}
 	for id, e := range c.entities {
 		for _, r := range e.Fields {
-			if r.IsRelation && r.Load == "eager" && r.Type != "" {
+			// 自引用由 checkEntityRelations 报“self relation must be lazy”，这里只查多节点环。
+			if r.IsRelation && r.Load == "eager" && r.Type != "" && r.Type != id {
 				adj[id] = append(adj[id], r.Type)
 			}
 		}
@@ -1119,21 +1128,25 @@ func (c *Checker) checkEntityUsedBy() {
 		if !ok {
 			continue
 		}
-		gotQueries := stringSet(asList(ub["queries"]))
-		wantQueries := expectedQueries[id]
-		if wantQueries == nil {
-			wantQueries = map[string]bool{}
+		if raw, ok := ub["queries"]; ok {
+			gotQueries := stringSet(asList(raw))
+			wantQueries := expectedQueries[id]
+			if wantQueries == nil {
+				wantQueries = map[string]bool{}
+			}
+			if !sameSet(gotQueries, wantQueries) {
+				c.rulef("entity-used-by", "%s: used_by.queries must be %v, got %v", e.Rel, sortedKeys(wantQueries), sortedKeys(gotQueries))
+			}
 		}
-		if !sameSet(gotQueries, wantQueries) {
-			c.rulef("entity-used-by", "%s: used_by.queries must be %v, got %v", e.Rel, sortedKeys(wantQueries), sortedKeys(gotQueries))
-		}
-		gotCapabilities := stringSet(asList(ub["capabilities"]))
-		wantCapabilities := expectedCapabilities[id]
-		if wantCapabilities == nil {
-			wantCapabilities = map[string]bool{}
-		}
-		if !sameSet(gotCapabilities, wantCapabilities) {
-			c.rulef("entity-used-by", "%s: used_by.capabilities must be %v, got %v", e.Rel, sortedKeys(wantCapabilities), sortedKeys(gotCapabilities))
+		if raw, ok := ub["capabilities"]; ok {
+			gotCapabilities := stringSet(asList(raw))
+			wantCapabilities := expectedCapabilities[id]
+			if wantCapabilities == nil {
+				wantCapabilities = map[string]bool{}
+			}
+			if !sameSet(gotCapabilities, wantCapabilities) {
+				c.rulef("entity-used-by", "%s: used_by.capabilities must be %v, got %v", e.Rel, sortedKeys(wantCapabilities), sortedKeys(gotCapabilities))
+			}
 		}
 	}
 }

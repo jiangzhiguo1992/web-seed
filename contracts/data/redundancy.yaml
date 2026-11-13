@@ -3,8 +3,8 @@
 
 id: data.redundancy
 summary: "跨表冗余列关系"
-stability: stable
 schema_version: 1
+stability: stable
 do_not:
   - "组 ID 只写在表列 redundancy 上；source/copies 只在本文件定义"
 

@@ -6,6 +6,7 @@ package check
 import (
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 func (c *Checker) checkStorage(tableIDs map[string]string) {
@@ -60,15 +61,36 @@ func (c *Checker) checkStorageDoc(doc map[string]any, rel string) {
 			c.rulef("storage-doc", "%s: unknown top-level field %q", rel, k)
 		}
 	}
-	if raw, ok := doc["supported_engines"]; ok {
-		list, ok := asList2(raw)
-		if !ok {
-			c.rulef("storage-doc", "%s: supported_engines must be a list", rel)
-		}
-		for i, v := range list {
-			if s, _ := v.(string); s == "" {
-				c.rulef("storage-doc", "%s: supported_engines[%d] must be a non-empty string", rel, i)
-			}
+	if id, ok := doc["id"].(string); !ok {
+		c.rulef("schema.required", "%s: missing required field \"id\"", rel)
+	} else if id != "data.storage" {
+		c.rulef("schema.const", "%s: id must be data.storage, got %q", rel, id)
+	}
+	if _, ok := doc["summary"]; !ok {
+		c.rulef("schema.required", "%s: missing required field \"summary\"", rel)
+	} else if summary, _ := doc["summary"].(string); strings.TrimSpace(summary) == "" {
+		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
+	}
+	if _, ok := doc["do_not"]; !ok {
+		c.rulef("schema.required", "%s: missing required field \"do_not\"", rel)
+	}
+	c.checkStability(doc, rel)
+	raw, ok := doc["supported_engines"]
+	if !ok {
+		c.rulef("storage-doc", "%s: supported_engines is required", rel)
+		return
+	}
+	list, ok := asList2(raw)
+	if !ok {
+		c.rulef("storage-doc", "%s: supported_engines must be a list", rel)
+		return
+	}
+	if len(list) == 0 {
+		c.rulef("storage-doc", "%s: supported_engines must not be empty", rel)
+	}
+	for i, v := range list {
+		if s, _ := v.(string); s == "" {
+			c.rulef("storage-doc", "%s: supported_engines[%d] must be a non-empty string", rel, i)
 		}
 	}
 }
@@ -138,22 +160,27 @@ func (c *Checker) checkStorageRetention(id string, m map[string]any, rel string)
 			c.rulef("storage-retention", "%s: tables.%s retention unknown field %q", rel, id, k)
 		}
 	}
-	if raw, ok := r["unit"]; ok {
-		unit, ok := raw.(string)
-		if !ok {
-			c.rulef("storage-retention", "%s: tables.%s retention.unit must be a string", rel, id)
-		} else if unit != "" && unit != "minutes" && unit != "hours" && unit != "days" {
-			c.rulef("storage-retention", "%s: tables.%s retention.unit must be minutes/hours/days, got %q", rel, id, unit)
-		}
+	raw, hasUnit := r["unit"]
+	if !hasUnit {
+		c.rulef("storage-retention", "%s: tables.%s retention.unit is required", rel, id)
+	} else if unit, ok := raw.(string); !ok {
+		c.rulef("storage-retention", "%s: tables.%s retention.unit must be a string", rel, id)
+	} else if unit != "minutes" && unit != "hours" && unit != "days" {
+		c.rulef("storage-retention", "%s: tables.%s retention.unit must be minutes/hours/days, got %q", rel, id, unit)
 	}
+	hasDuration := false
 	for _, key := range []string{"pending", "soft_delete", "hard_delete", "ttl"} {
 		raw, ok := r[key]
 		if !ok {
 			continue
 		}
+		hasDuration = true
 		if n, ok := toInt(raw); !ok || n < 1 {
 			c.rulef("storage-retention", "%s: tables.%s retention.%s must be an integer >= 1", rel, id, key)
 		}
+	}
+	if !hasDuration {
+		c.rulef("storage-retention", "%s: tables.%s retention must declare at least one duration", rel, id)
 	}
 }
 

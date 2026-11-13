@@ -119,6 +119,7 @@ func TestEntityFieldProjectionRules(t *testing.T) {
 	c = newChecker()
 	e = newEntity()
 	e.Fields[1].Description = ""
+	e.Fields[1].HasDescription = true
 	c.checkEntityFields(e)
 	if !strings.Contains(entityErrs(c), "[entity-field-description]") {
 		t.Fatalf("missing description not reported: %v", c.errs)
@@ -389,11 +390,26 @@ func TestEntitySoftSource(t *testing.T) {
 	}
 }
 
+func TestEntityComputedBlankRejected(t *testing.T) {
+	c := &Checker{tableTypeFamilies: map[string]bool{"string": true}}
+	e := &entityInfo{ID: "data.entities.x", Rel: "x.yaml", Tables: []string{"data.tables.x"}}
+	f := entityFieldInfo{
+		Name: "Derived", Type: "*string", HasType: true,
+		SourceComputed: "  ", HasSource: true,
+		ValidationKind: "soft", ValidationRef: "non-empty", ValidationCount: 1,
+		Description: "derived",
+	}
+	c.checkScalarField(e, f, "x.yaml: fields.Derived", map[string]string{})
+	if !strings.Contains(entityErrs(c), "source computed must not be blank") {
+		t.Fatalf("blank computed source not reported: %v", c.errs)
+	}
+}
+
 func TestEntityScalarRequiresExplicitMetadata(t *testing.T) {
 	c := &Checker{tableTypeFamilies: map[string]bool{"string": true}}
 	e := &entityInfo{
 		ID: "data.entities.x", Rel: "x.yaml", Tables: []string{"data.tables.x"},
-		Fields: []entityFieldInfo{{Name: "Missing", Type: "string", HasType: true}},
+		Fields: []entityFieldInfo{{Name: "Missing", Type: "string", HasType: true, HasDescription: true}},
 	}
 	c.checkEntityFields(e)
 	errs := entityErrs(c)
@@ -404,17 +420,27 @@ func TestEntityScalarRequiresExplicitMetadata(t *testing.T) {
 	}
 }
 
-func TestEntityModelTableDuplicateStillReported(t *testing.T) {
-	c := &Checker{tableColumns: map[string]map[string]columnMeta{
-		"data.tables.x": {"id": {typ: "integer"}},
-	}}
-	e := &entityInfo{
-		ID: "data.entities.x", Rel: "x.yaml",
-		Tables: []string{"data.tables.x", "data.tables.x"},
+func TestEntityModelTableDuplicateRejectedBySchema(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
 	}
-	c.checkEntityModel(e)
-	if !strings.Contains(entityErrs(c), "duplicate table data.tables.x") {
-		t.Fatalf("duplicate model.tables not reported without schema.unique: %v", c.errs)
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.entities.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, ok := contractspec.FindField(schema.Fields, "model")
+	if !ok {
+		t.Fatal("model field missing in meta")
+	}
+	tables, ok := contractspec.FindField(model.Fields, "tables")
+	if !ok {
+		t.Fatal("model.tables field missing in meta")
+	}
+	c := &Checker{}
+	c.validateValue([]any{"data.tables.x", "data.tables.x"}, tables, "model.tables")
+	if !strings.Contains(entityErrs(c), "[schema.unique]") {
+		t.Fatalf("duplicate model.tables must be rejected by meta unique: %v", c.errs)
 	}
 }
 
@@ -436,17 +462,27 @@ func TestEntityValidationColumnMustMatchSource(t *testing.T) {
 	}
 }
 
-func TestEntityValidationNameSnakeCase(t *testing.T) {
-	c := &Checker{errCodeSet: map[string]bool{"X": true}}
-	e := &entityInfo{
-		ID: "data.entities.x", Rel: "x.yaml",
-		Doc: map[string]any{"validation": []any{map[string]any{
-			"name": "Bad-Name", "expr": "true", "on_violation": "platform.errors.X",
-		}}},
+func TestEntityValidationNameRejectedBySchema(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
 	}
-	c.checkEntityValidation(e)
-	if !strings.Contains(entityErrs(c), "name must be snake_case") {
-		t.Fatalf("invalid validation name not reported: %v", c.errs)
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.entities.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	validation, ok := contractspec.FindField(schema.Fields, "validation")
+	if !ok {
+		t.Fatal("validation field missing in meta")
+	}
+	name, ok := contractspec.FindField(validation.ItemFields, "name")
+	if !ok {
+		t.Fatal("validation.name field missing in meta")
+	}
+	c := &Checker{}
+	c.validateValue("Bad-Name", name, "validation.name")
+	if !strings.Contains(entityErrs(c), "[schema.pattern]") {
+		t.Fatalf("invalid validation name must be rejected by meta pattern: %v", c.errs)
 	}
 }
 
@@ -703,7 +739,7 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	c := &Checker{}
 	q := &queryInfo{
 		ID: "q", File: "q.yaml",
-		Params: []queryParam{{Name: "older_than_days", Type: "integer", Expr: "created_at < now()"}},
+		Params: []queryParam{{Name: "older_than_days", Type: "integer", Expr: "created_at < now()", HasExpr: true}},
 	}
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
@@ -715,6 +751,16 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	c.checkQueryParams(q)
 	if !strings.Contains(entityErrs(c), "mutually exclusive") {
 		t.Fatalf("column+expr not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	q = &queryInfo{
+		ID: "q", File: "q.yaml",
+		Params: []queryParam{{Name: "older_than_days", Type: "integer", Expr: "  ", HasExpr: true}},
+	}
+	c.checkQueryParams(q)
+	if !strings.Contains(entityErrs(c), "expr must not be blank") {
+		t.Fatalf("blank expr not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
@@ -854,7 +900,7 @@ func TestRenderedQueryParamBindsIDColumn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := contractspec.RenderQuery(schema, "note", "notes", "note", "note", "备注查询")
+	b, err := contractspec.RenderQuery(schema, "note", "notes", "data.tables.note", "备注查询")
 	if err != nil {
 		t.Fatal(err)
 	}

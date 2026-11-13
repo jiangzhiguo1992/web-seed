@@ -77,10 +77,6 @@ gen-rule-ids: ## 从 checker 的 rulef(...) 生成 rule_ids_gen.go
 check-rule-ids: ## 校验 rule_ids_gen.go 是否最新
 	cd scripts/cmd && go run ./gen_rule_ids -check
 
-contract-lint: ## 契约 lint：已并入 contract-check（schema.do-not-duplicate / prose-quotes）
-	@echo "contract-lint: 已并入 make contract-check；请直接运行 contract-check"
-	@exit 1
-
 contract-graph: ## 锚点图校验：重复/悬空/越层/循环/孤儿（P2）
 	@echo "contract-graph: 尚未实现（P2）"
 	@exit 1

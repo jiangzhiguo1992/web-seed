@@ -15,8 +15,7 @@ fields:
   - name: id
     type: string
     required: true
-    const: data.enums
-    description: "集合文件 ID"
+    description: "集合文件 ID；值由 targets.id 给出"
 
   - name: summary
     type: string

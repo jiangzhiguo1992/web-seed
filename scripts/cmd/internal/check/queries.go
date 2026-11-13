@@ -17,6 +17,7 @@ type queryParam struct {
 	Type         string
 	Column       string
 	Expr         string
+	HasExpr      bool
 	Nullable     bool
 	HasDefault   bool
 	DefaultValue any
@@ -40,8 +41,10 @@ type queryInfo struct {
 	File        string
 	OwnerModule string
 	Targets     []string
+	HasTables   bool
 	Params      []queryParam
 	Returns     []queryReturn
+	HasReturns  bool
 	IndexRef    []string
 }
 
@@ -49,11 +52,6 @@ type queryDoc struct {
 	rel    string
 	fileID string
 	doc    map[string]any
-}
-
-var sqlScalarReturns = map[string]bool{
-	"boolean": true, "integer": true, "string": true, "float": true,
-	"decimal": true, "timestamp": true, "datetime": true, "json": true,
 }
 
 // tableSet 返回查询读写的表集合。
@@ -115,7 +113,13 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 	q := &queryInfo{File: rel, OwnerModule: owner}
 	q.Name, _ = m["name"].(string)
 	q.ID = contractspec.QueryID(fileID, q.Name)
+	if _, ok := m["tables"]; ok {
+		q.HasTables = true
+	}
 	q.Targets = stringList(m["tables"])
+	if _, ok := m["returns"]; ok {
+		q.HasReturns = true
+	}
 	q.IndexRef = stringList(m["index_ref"])
 	for _, raw := range asList(m["params"]) {
 		pm, ok := asMap(raw)
@@ -126,6 +130,9 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		p.Name, _ = pm["name"].(string)
 		p.Type, _ = pm["type"].(string)
 		p.Column, _ = pm["column"].(string)
+		if _, ok := pm["expr"]; ok {
+			p.HasExpr = true
+		}
 		p.Expr, _ = pm["expr"].(string)
 		p.Nullable, _ = pm["nullable"].(bool)
 		if v, ok := pm["default"]; ok {
@@ -162,16 +169,16 @@ func (c *Checker) checkQueries(schema *Schema) {
 		c.checkTargetFileName(schema, filepath.Base(qd.rel), qd.rel)
 		c.validateDoc(qd.doc, schema.Fields, qd.rel)
 		c.checkStability(qd.doc, qd.rel)
-		if s, _ := qd.doc["summary"].(string); strings.TrimSpace(s) == "" {
+		if s, ok := qd.doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
 			c.rulef("schema.non-empty", "%s: summary must not be empty", qd.rel)
 		}
-		if len(asList(qd.doc["queries"])) == 0 {
+		if _, present := qd.doc["queries"]; present && len(asList(qd.doc["queries"])) == 0 {
 			c.rulef("schema.non-empty", "%s: queries must not be empty", qd.rel)
 		}
 		c.checkFieldOrder(qd.rel, schema.Fields, orderRules{top: "query-key-order", nested: "query-key-order"})
 		id, _ := qd.doc["id"].(string)
 		want := schema.Targets.FileID(filepath.Base(qd.rel))
-		if want != "" && id != want {
+		if want != "" && id != "" && id != want {
 			c.rulef("schema.id-from-file", "%s: id must be %s, got %s (file name is the source)", qd.rel, want, id)
 		}
 		c.checkQueryDoNot(qd)
@@ -179,10 +186,8 @@ func (c *Checker) checkQueries(schema *Schema) {
 	for id := range c.queryDupIDs {
 		c.rulef("query-name-unique", "duplicate query name/derived id %s", id)
 	}
-	names := map[string]string{}
 	for _, id := range c.queryOrder {
 		q := c.queries[id]
-		c.checkQueryIdentity(q, names)
 		c.checkQueryShape(q)
 		c.checkQueryTable(q)
 		c.checkQueryPagination(q)
@@ -226,36 +231,13 @@ func (c *Checker) checkQueryDoNot(qd queryDoc) {
 	}
 }
 
-func (c *Checker) checkQueryIdentity(q *queryInfo, names map[string]string) {
-	if q.Name == "" {
-		return
-	}
-	if pascalCase(q.Name) != q.Name {
-		c.rulef("query-name", "%s: query name must be PascalCase, got %s", q.File, q.Name)
-	}
-	if prev, ok := names[q.Name]; ok {
-		c.rulef("query-name-unique", "%s: query name %s already used by %s", q.File, q.Name, prev)
-	} else {
-		names[q.Name] = q.ID
-	}
-}
-
-func pascalCase(s string) string {
-	parts := strings.Split(s, "_")
-	for i, p := range parts {
-		if p == "" {
-			continue
-		}
-		parts[i] = strings.ToUpper(p[:1]) + p[1:]
-	}
-	return strings.Join(parts, "")
-}
-
 // checkQueryShape 校验返回形状：affected_rows 单值、table 结果不能与其它项混用。
 func (c *Checker) checkQueryShape(q *queryInfo) {
 	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
 	if len(q.Returns) == 0 {
-		c.rulef("query-returns", "%s: returns must not be empty", where)
+		if q.HasReturns {
+			c.rulef("query-returns", "%s: returns must not be empty", where)
+		}
 		return
 	}
 	hasAffected := false
@@ -282,15 +264,12 @@ func (c *Checker) checkQueryShape(q *queryInfo) {
 func (c *Checker) checkQueryTable(q *queryInfo) {
 	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
 	if len(q.Targets) == 0 {
-		c.rulef("query-table-shape", "%s: tables must not be empty", where)
+		if q.HasTables {
+			c.rulef("query-table-shape", "%s: tables must not be empty", where)
+		}
 		return
 	}
-	seen := map[string]bool{}
 	for _, t := range q.Targets {
-		if seen[t] {
-			c.rulef("query-table-shape", "%s: duplicate target table %s", where, t)
-		}
-		seen[t] = true
 		if t == c.baseID {
 			c.rulef("query-table-shape", "%s: tables references data.tables.base", where)
 			continue
@@ -369,10 +348,10 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 				c.rulef("query-params", "%s: type %q cannot map to a type family or data.enums.*", where, p.Type)
 			}
 		}
-		if p.Column != "" && p.Expr != "" {
+		if p.Column != "" && p.HasExpr {
 			c.rulef("query-params", "%s: column and expr are mutually exclusive", where)
 		}
-		if p.Expr != "" && strings.TrimSpace(p.Expr) == "" {
+		if p.HasExpr && strings.TrimSpace(p.Expr) == "" {
 			c.rulef("query-params", "%s: expr must not be blank", where)
 		}
 		if p.HasDefault && !p.Nullable && !isPaginationParam(p.Name) {
@@ -486,18 +465,20 @@ func paramLogicalType(typ string) (family string, array, enum, ok bool) {
 	return family, array, false, ok
 }
 
-// paramFamily 把非数组参数类型映射到 column_types 类型族。
+// paramFamily 把非数组参数/标量返回类型映射到 column_types 类型族。
 func paramFamily(typ string) (family string, ok bool) {
 	base := strings.ToLower(strings.TrimSpace(typ))
 	switch base {
-	case "text", "varchar", "character varying", "char", "bpchar":
+	case "string", "text", "varchar", "character varying", "char", "bpchar":
 		return "string", true
 	case "integer", "int", "int4", "int8", "bigint", "smallint":
 		return "integer", true
 	case "boolean", "bool":
 		return "boolean", true
-	case "timestamp", "timestamptz", "timestamp with time zone", "datetime":
+	case "timestamp", "timestamptz", "timestamp with time zone":
 		return "timestamp", true
+	case "datetime", "date", "time":
+		return "datetime", true
 	case "float", "float4", "float8", "double", "double precision", "real":
 		return "float", true
 	case "decimal", "numeric":
@@ -548,7 +529,7 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 			if r.Entity != "" || r.Table != "" || r.Type != "" || len(r.Columns) > 0 {
 				c.rulef("query-returns", "%s: kind=column forbids entity/table/type/columns", rw)
 			}
-			c.checkReturnColumn(rw, q, r.Column, r.Columns)
+			c.checkReturnColumn(rw, q, r.Column)
 		case "entity":
 			if r.Entity == "" {
 				c.rulef("query-returns", "%s: kind=entity requires entity", rw)
@@ -594,9 +575,6 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 				c.rulef("query-returns", "%s: unsupported scalar type %s", rw, r.Type)
 			}
 		case "affected_rows":
-			if r.List {
-				c.rulef("query-shape", "%s: affected_rows must not be a list", rw)
-			}
 			if r.Column != "" || r.Entity != "" || r.Table != "" || r.Type != "" || len(r.Columns) > 0 {
 				c.rulef("query-shape", "%s: affected_rows forbids column/entity/table/type/columns", rw)
 			}
@@ -611,10 +589,11 @@ func (c *Checker) scalarReturnType(typ string) bool {
 	if strings.HasPrefix(base, "data.enums.") {
 		return true // 枚举存在性由 checkEnumRefs 全仓校验
 	}
-	return sqlScalarReturns[base]
+	_, ok := paramFamily(base)
+	return ok
 }
 
-func (c *Checker) checkReturnColumn(where string, q *queryInfo, ref string, _ []string) {
+func (c *Checker) checkReturnColumn(where string, q *queryInfo, ref string) {
 	t, col, ok := splitColumnRef(ref)
 	if !ok {
 		c.rulef("query-return-columns", "%s: malformed column %q", where, ref)
@@ -730,9 +709,6 @@ func queryReturnsAffectedRows(q *queryInfo) bool {
 	}
 	return false
 }
-
-// resolveQueryID 保留调用点兼容；query ID 已是规范值。
-func (c *Checker) resolveQueryID(id string) string { return id }
 
 // splitIndexRef 拆分 data.tables.<t>.<pk|index-name>。
 func splitIndexRef(ref string) (table, name string, ok bool) {

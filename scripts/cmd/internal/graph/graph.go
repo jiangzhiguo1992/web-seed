@@ -41,10 +41,11 @@ type entitySet struct {
 	capabilities map[string]bool
 }
 
-// scanTarget 是 _meta targets 的扫描路径。
+// scanTarget 是 _meta targets 的扫描路径与 ID 模板。
 type scanTarget struct {
 	dir  string
 	glob string
+	id   string
 }
 
 // resolveTarget 从 contracts/_meta/*.yaml 读取类型 targets。
@@ -66,6 +67,7 @@ func resolveTarget(root, typ string) (scanTarget, error) {
 			Targets struct {
 				Dir  string `yaml:"dir"`
 				Glob string `yaml:"glob"`
+				ID   string `yaml:"id"`
 			} `yaml:"targets"`
 		}
 		if err := yaml.Unmarshal(b, &head); err != nil {
@@ -77,10 +79,13 @@ func resolveTarget(root, typ string) (scanTarget, error) {
 		if found != nil {
 			return scanTarget{}, fmt.Errorf("duplicate meta type %q: %s and %s", typ, foundPath, file)
 		}
-		if head.Targets.Dir == "" || head.Targets.Glob == "" {
-			return scanTarget{}, fmt.Errorf("%s: targets.dir/glob must not be empty", file)
+		if head.Targets.Dir == "" || head.Targets.Glob == "" || head.Targets.ID == "" {
+			return scanTarget{}, fmt.Errorf("%s: targets.dir/glob/id must not be empty", file)
 		}
-		found = &scanTarget{dir: head.Targets.Dir, glob: head.Targets.Glob}
+		if !strings.Contains(head.Targets.ID, "<file>") {
+			return scanTarget{}, fmt.Errorf("%s: targets.id must contain <file>", file)
+		}
+		found = &scanTarget{dir: head.Targets.Dir, glob: head.Targets.Glob, id: head.Targets.ID}
 		foundPath = file
 	}
 	if found == nil {
@@ -116,49 +121,44 @@ func Compute(root string) (*Snapshot, error) {
 	tableFiles := map[string]string{}
 	entityFiles := map[string]string{}
 
+	tableIDs := contractspec.Targets{ID: tableTarget.id}
 	for _, f := range glob(root, filepath.Join(tableTarget.dir, tableTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
 			continue
 		}
-		doc, err := loadYAML(f)
-		if err != nil {
+		if _, err := loadYAML(f); err != nil {
 			return nil, err
 		}
-		id, _ := doc["id"].(string)
+		id := tableIDs.FileID(filepath.Base(f))
 		if id == "" {
 			continue
-		}
-		if prev, ok := tableFiles[id]; ok {
-			return nil, fmt.Errorf("duplicate table id %s: %s and %s", id, prev, rel(root, f))
 		}
 		tables[id] = &tableSet{queries: map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 	}
+	entityIDs := contractspec.Targets{ID: entityTarget.id}
 	for _, f := range glob(root, filepath.Join(entityTarget.dir, entityTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
 			continue
 		}
-		doc, err := loadYAML(f)
-		if err != nil {
+		if _, err := loadYAML(f); err != nil {
 			return nil, err
 		}
-		id, _ := doc["id"].(string)
+		id := entityIDs.FileID(filepath.Base(f))
 		if id == "" {
 			continue
-		}
-		if prev, ok := entityFiles[id]; ok {
-			return nil, fmt.Errorf("duplicate entity id %s: %s and %s", id, prev, rel(root, f))
 		}
 		entities[id] = &entitySet{queries: map[string]bool{}, capabilities: map[string]bool{}}
 		entityFiles[id] = rel(root, f)
 	}
+	queryIDs := contractspec.Targets{ID: queryTarget.id}
 	seenQueries := map[string]string{}
 	for _, f := range glob(root, filepath.Join(queryTarget.dir, queryTarget.glob)) {
 		doc, err := loadYAML(f)
 		if err != nil {
 			return nil, err
 		}
-		fileID, _ := doc["id"].(string)
+		fileID := queryIDs.FileID(filepath.Base(f))
 		for _, raw := range asList(doc["queries"]) {
 			m, ok := asMap(raw)
 			if !ok {

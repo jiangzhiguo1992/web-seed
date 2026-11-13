@@ -71,22 +71,30 @@ func main() {
 		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; add an entity mapping for this table (table.entities + entity.model.tables); make gen-graph; make contract-check; make gen")
 
 	case "data.entities":
-		_, owner, err := loadTableContract(abs, *table)
+		tableSchema, err := loadTableSchema(abs)
 		if err != nil {
 			fail(err)
 		}
-		b, err := contractspec.RenderEntity(schema, *name, *table, owner, *summary)
+		owner, tableID, err := loadTableContract(abs, tableSchema, *table)
+		if err != nil {
+			fail(err)
+		}
+		b, err := contractspec.RenderEntity(schema, *name, tableID, owner, *summary)
 		if err != nil {
 			fail(err)
 		}
 		writeOut(*out, b, "next: add this entity to the table's table.entities; add business fields; declare entities pointing to this entity in model.included_by; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
 
 	case "data.queries":
-		physical, _, err := loadTableContract(abs, *table)
+		tableSchema, err := loadTableSchema(abs)
 		if err != nil {
 			fail(err)
 		}
-		b, err := contractspec.RenderQuery(schema, *name, *module, *table, physical, *summary)
+		_, tableID, err := loadTableContract(abs, tableSchema, *table)
+		if err != nil {
+			fail(err)
+		}
+		b, err := contractspec.RenderQuery(schema, *name, *module, tableID, *summary)
 		if err != nil {
 			fail(err)
 		}
@@ -122,9 +130,18 @@ func writeOut(out string, b []byte, next string) {
 	fmt.Printf("%s\n", next)
 }
 
-// loadTableContract 校验目标表契约存在，并返回物理表名与 owner_module。
-func loadTableContract(root, table string) (string, string, error) {
-	path := filepath.Join(root, "contracts/data/tables", table+".yaml")
+// loadTableSchema 读取 data.tables 的 targets，供实体/查询骨架定位目标表。
+func loadTableSchema(root string) (*contractspec.Schema, error) {
+	schema, _, err := contractspec.LoadSchemaByType(root, "data.tables")
+	return schema, err
+}
+
+// loadTableContract 按 data.tables.targets 校验目标表契约存在，并返回 owner_module 与表契约 ID。
+func loadTableContract(root string, schema *contractspec.Schema, table string) (string, string, error) {
+	if schema == nil || schema.Type != "data.tables" || schema.Targets.Dir == "" {
+		return "", "", fmt.Errorf("data.tables targets are missing")
+	}
+	path := filepath.Join(root, schema.Targets.Dir, table+".yaml")
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", "", fmt.Errorf("table contract not found: %s (create it first: make contract-new type=data.tables name=%s)", path, table)
@@ -132,24 +149,21 @@ func loadTableContract(root, table string) (string, string, error) {
 	var doc struct {
 		ID          string `yaml:"id"`
 		OwnerModule string `yaml:"owner_module"`
-		Table       struct {
-			Name string `yaml:"name"`
-		} `yaml:"table"`
 	}
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		return "", "", fmt.Errorf("%s: %w", path, err)
 	}
-	if doc.ID != "data.tables."+table {
-		return "", "", fmt.Errorf("%s: id must be data.tables.%s, got %s", path, table, doc.ID)
+	wantID := schema.Targets.FileID(table + ".yaml")
+	if wantID == "" {
+		return "", "", fmt.Errorf("%s: cannot derive table id from targets.id", path)
+	}
+	if doc.ID != wantID {
+		return "", "", fmt.Errorf("%s: id must be %s, got %s", path, wantID, doc.ID)
 	}
 	if doc.OwnerModule == "" {
 		return "", "", fmt.Errorf("%s: owner_module is required", path)
 	}
-	physical := table
-	if doc.Table.Name != "" {
-		physical = doc.Table.Name
-	}
-	return physical, doc.OwnerModule, nil
+	return doc.OwnerModule, doc.ID, nil
 }
 
 func fail(err error) {

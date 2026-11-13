@@ -5,7 +5,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
+
+func tableSchemaForTest() *contractspec.Schema {
+	return &contractspec.Schema{
+		Type:    "data.tables",
+		Targets: contractspec.Targets{Dir: "contracts/data/tables", Glob: "*.yaml", ID: "data.tables.<file>"},
+	}
+}
 
 func writeTable(t *testing.T, root, name, body string) {
 	t.Helper()
@@ -22,23 +31,21 @@ func TestLoadTableContract(t *testing.T) {
 	root := t.TempDir()
 	writeTable(t, root, "note", `id: data.tables.note
 owner_module: notes
-table:
-  name: notes
 `)
-	physical, owner, err := loadTableContract(root, "note")
+	owner, tableID, err := loadTableContract(root, tableSchemaForTest(), "note")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if physical != "notes" || owner != "notes" {
-		t.Fatalf("physical/owner = %q/%q, want notes/notes", physical, owner)
+	if owner != "notes" || tableID != "data.tables.note" {
+		t.Fatalf("owner/tableID = %q/%q, want notes/data.tables.note", owner, tableID)
 	}
 
-	if _, _, err := loadTableContract(root, "missing"); err == nil || !strings.Contains(err.Error(), "not found") {
+	if _, _, err := loadTableContract(root, tableSchemaForTest(), "missing"); err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("missing table not reported: %v", err)
 	}
 
 	writeTable(t, root, "bad", "id: data.tables.other\n")
-	if _, _, err := loadTableContract(root, "bad"); err == nil || !strings.Contains(err.Error(), "id must be") {
+	if _, _, err := loadTableContract(root, tableSchemaForTest(), "bad"); err == nil || !strings.Contains(err.Error(), "id must be") {
 		t.Fatalf("id mismatch not reported: %v", err)
 	}
 }
