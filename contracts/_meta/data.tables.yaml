@@ -70,14 +70,6 @@ column_types:
         fixed: { type: boolean, required: false, default: false, description: "固定长度；为 true 时必须写 max_len" }
 
 fields:
-  - name: schema_version
-    type: integer
-    required: true
-    const: 1
-    description: "契约格式版本，固定 1"
-    generates: "无"
-    caution: "必须是整数 1"
-
   - name: id
     type: string
     required: true
@@ -93,6 +85,22 @@ fields:
     generates: "index 摘要"
     caution: "不要写字段清单"
 
+  - name: owner_module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "唯一写归属模块"
+    generates: "归属校验"
+    caution: "只有同模块 cap.services/cap.async 可写表"
+
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "契约格式版本，固定 1"
+    generates: "无"
+    caution: "必须是整数 1"
+
   - name: stability
     type: string
     required: true
@@ -101,14 +109,6 @@ fields:
     description: "契约稳定度"
     generates: "index 摘要"
     caution: "stable 不得含 TODO/FIXME；可回退 draft 继续修改"
-
-  - name: owner_module
-    type: string
-    required: true
-    pattern: '^[a-z][a-z0-9_]*$'
-    description: "唯一写归属模块"
-    generates: "归属校验"
-    caution: "只有同模块 cap.services/cap.async 可写表"
 
   - name: do_not
     type: list<string>
@@ -165,13 +165,11 @@ fields:
       - { name: type, type: string, required: true, default: string, description: "类型族键，或 data.tables.*.col.* 引用", caution: "表列不引用 data.enums.*；引用类型不可带类型族参数" }
       - { name: nullable, type: boolean, required: false, default: false, description: "是否可空；默认 false" }
       - { name: primary_key, type: boolean, required: false, description: "是否主键；主键不可空", caution: "基类 id 已是主键；仅复合主键时使用" }
-      - { name: generated_by, type: string, required: false, enum: [ application, database ], description: "初始值由应用/数据库生成" }
       - { name: default, type: any, required: false, description: "字面量默认值；与 default_sql 互斥" }
       - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值；与 default 互斥" }
       # 类型族参数由 column_types.families.params 注入
       - { name: pii, type: boolean, required: false, description: "个人敏感信息" }
       - { name: never_expose, type: boolean, required: false, description: "禁止进入普通 API/TS/事件/entity" }
-      - { name: managed_by, type: string, required: false, enum: [ application, database ], description: "后续维护方" }
       - name: redundancy
         type: object
         required: false
@@ -200,14 +198,13 @@ fields:
     required: false
     description: "索引；每条必须有 reason"
     generates: "DDL INDEX"
-    caution: "唯一索引必须带软删过滤"
+    caution: "唯一索引必须 live_only: true；只索引未删除行"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名；普通 idx_，唯一 uq_" }
       - { name: columns, type: list<string>, required: false, description: "索引列；与 expression 二选一" }
       - { name: expression, type: string, required: false, description: "表达式索引；与 columns 二选一" }
       - { name: unique, type: boolean, required: false, description: "是否唯一" }
-      - { name: where, type: string, required: false, description: "部分索引条件" }
-      - { name: order, type: list<string>, required: false, allowed: [ asc, desc ], description: "与 columns 一一对应的方向" }
+      - { name: live_only, type: boolean, required: false, default: false, description: "是否只索引未软删行（deleted_at IS NULL）" }
       - { name: reason, type: string, required: true, description: "为什么需要" }
       - { name: method, type: string, required: false, enum: [ btree, hash, gin, gist, brin ], default: btree, description: "索引方法" }
       - { name: concurrently, type: string, required: false, enum: [ auto, "true", "false" ], default: auto, description: "是否并发；写字符串 auto/\"true\"/\"false\"" }
@@ -239,9 +236,9 @@ rules:
   - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内", implemented_by: [ family-range ] }
   - { id: family-decimal, text: "scale <= precision", implemented_by: [ family-decimal ] }
   - { id: no-foreign-key, text: "禁止 foreign_key；跨表一致性由应用/业务规则保证", implemented_by: [ no-foreign-key ] }
-  - { id: unique-scope, text: "UNIQUE 约束覆盖软删行；唯一索引必须带 where: deleted_at IS NULL（软删后可复用）；全局唯一用 UNIQUE 约束", implemented_by: [ unique-scope ] }
+  - { id: unique-scope, text: "UNIQUE 约束覆盖软删行；唯一索引必须 live_only: true（软删后可复用）；全局唯一用 UNIQUE 约束", implemented_by: [ unique-scope ] }
+  - { id: index-live-only, text: "live_only: true 要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
   - { id: constraint-fields, text: "check/exclude 用 expr；unique 用 columns", implemented_by: [ constraint-fields ] }
-  - { id: index-order, text: "order 只能与 columns 配合，且长度必须一致", implemented_by: [ index-order ] }
   - { id: storage-registry, text: "storage.yaml 的 tables 必须覆盖每张物理表，且只引用已存在的表；基类不是物理表", implemented_by: [ storage-registry ] }
   - { id: storage-entry, text: "storage.tables 条目只允许 engine/size_class/retention/partition；size_class 只能是 small/large", implemented_by: [ storage-entry ] }
   - { id: storage-engine, text: "storage.tables 的 engine 必须在 supported_engines 中且该引擎已启用", implemented_by: [ storage-engine ] }
@@ -261,7 +258,7 @@ rules:
   - { id: constraint-error-ref, text: "capabilities.persistence.constraint_errors 的键必须是所写表声明的约束或索引名", implemented_by: [ constraint-error-ref ] }
   - { id: redundant-group, text: "同一 redundancy.group 必须且只能有一个 source，且至少有一个 copy", implemented_by: [ redundant-group ] }
   - { id: redundant-ref, text: "copy 必须写 ref 指向同组 source；类型与可空必须一致", implemented_by: [ redundant-ref ] }
-  - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
   - { id: default-type, text: "default 的类型、长度、范围必须与字段类型兼容", implemented_by: [ default-type ] }
+  - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
   - { id: primary-key-nullable, text: "primary_key: true 的字段不得 nullable: true", implemented_by: [ primary-key-nullable ] }
   - { id: do-not-specific, text: "物理表 do_not 每条必须含本表标识；通用规则上移组 README 或 _base", implemented_by: [ do-not-specific ] }

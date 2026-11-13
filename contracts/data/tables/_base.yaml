@@ -29,11 +29,13 @@ columns:
   - name: created_at
     type: timestamp
     nullable: false
+    default_sql: now()
     comment: "创建时间；数据库默认 now()"
 
   - name: updated_at
     type: timestamp
     nullable: false
+    default_sql: now()
     comment: "更新时间；应用层写入"
 
   - name: deleted_at
