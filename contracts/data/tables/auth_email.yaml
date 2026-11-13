@@ -41,7 +41,7 @@ columns:
     type: string
     nullable: true
     max_len: 190
-    comment: "注册域/二级域，例如 example.com"
+    comment: "邮箱服务商，例如 163、gmail等"
 
   - name: tld
     type: string
