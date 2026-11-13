@@ -1,10 +1,10 @@
 # 跨表冗余列关系。组 ID 只写在表列 redundancy 上，source/copies 只在这里定义。
 # 与 storage 解耦：storage 只描述落盘方式，冗余关系集中在本文件便于审计。
 
-schema_version: 1
 id: data.redundancy
 summary: "跨表冗余列关系"
 stability: stable
+schema_version: 1
 do_not:
   - "组 ID 只写在表列 redundancy 上；source/copies 只在本文件定义"
 
