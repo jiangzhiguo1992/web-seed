@@ -266,6 +266,7 @@ queries:
       - { name: account_id, type: integer, column: data.tables.token.col.account_id }
     returns:
       - name: rows
+        list: true
         kind: table
         table: data.tables.token
         columns:
@@ -277,5 +278,4 @@ queries:
           - status
           - created_at
           - updated_at
-        list: true
     index_ref: [ data.tables.token.idx_token_account_id ]
