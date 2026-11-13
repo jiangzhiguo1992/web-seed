@@ -4,7 +4,7 @@ id: data.tables.account
 summary: "账号主表"
 owner_module: account
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "account 表禁止写入密码/手机号/邮箱/令牌；这些在 auth_* / token 表"
   - "account.status 使用 integer；具体枚举只在 entity 定义"

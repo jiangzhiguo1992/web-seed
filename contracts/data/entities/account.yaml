@@ -5,7 +5,7 @@ id: data.entities.account
 summary: "账号数据实体"
 owner_module: account
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "account 的认证标识只能通过 auth_* 实体访问"
   - "OwnType/OwnID 是数据归属，userID 是关联用户；两者不得互相替代"

@@ -4,7 +4,7 @@ id: data.queries.account
 summary: "账号查询集"
 owner_module: account
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "account 之外的邮箱/手机号/密码查询不要写在这里，去 data.queries.auth"
   - "account.number 唯一性查询必须带 deleted_at IS NULL"

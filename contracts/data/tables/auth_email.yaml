@@ -4,7 +4,7 @@ id: data.tables.auth_email
 summary: "邮箱认证表"
 owner_module: auth
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "auth_email.domain 必须小写归一后再存储"
 

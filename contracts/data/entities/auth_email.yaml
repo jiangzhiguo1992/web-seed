@@ -5,7 +5,7 @@ id: data.entities.auth_email
 summary: "邮箱认证数据实体"
 owner_module: auth
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "auth_email 的 username/domain 不要写进账号主表"
   - "auth_email.domain_parts 校验不要搬到数据库"

@@ -4,7 +4,7 @@ id: data.tables.auth_pwd
 summary: "密码认证表"
 owner_module: auth
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "auth_pwd.password_hash 禁止出现在响应、日志、事件"
 

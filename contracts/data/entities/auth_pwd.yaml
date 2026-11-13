@@ -5,7 +5,7 @@ id: data.entities.auth_pwd
 summary: "密码认证数据实体"
 owner_module: auth
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "auth_pwd.passwordHash 禁止出现在任何 DTO、日志、事件"
   - "auth_pwd 不写密码强度规则；规则在 platform/security/auth_policy"
