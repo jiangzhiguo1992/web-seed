@@ -206,8 +206,8 @@ func TestRenderEntityRejectsUnsupportedModelRequired(t *testing.T) {
 			s.Fields[i].Fields = append(s.Fields[i].Fields, Field{Name: "new_required", Type: "string", Required: true})
 		}
 	}
-	if _, err := RenderEntity(s, "note", "note", "notes", "备注实体"); err == nil {
-		t.Fatal("expected unsupported required model field to fail")
+	if _, err := RenderEntity(s, "note", "note", "notes", "备注实体"); err == nil || !strings.Contains(err.Error(), "new_required") {
+		t.Fatalf("expected unsupported required model field to fail with field name, got %v", err)
 	}
 }
 
@@ -223,8 +223,8 @@ func TestRenderQueryRejectsUnsupportedReturnRequired(t *testing.T) {
 			}
 		}
 	}
-	if _, err := RenderQuery(s, "note", "notes", "note", "note", "备注查询"); err == nil {
-		t.Fatal("expected unsupported required return field to fail")
+	if _, err := RenderQuery(s, "note", "notes", "note", "note", "备注查询"); err == nil || !strings.Contains(err.Error(), "new_required") {
+		t.Fatalf("expected unsupported required return field to fail with field name, got %v", err)
 	}
 }
 
@@ -298,6 +298,29 @@ func TestRenderTableOmitsInheritedStatus(t *testing.T) {
 		if col["name"] == "status" {
 			t.Fatalf("status is inherited from base and must not be scaffolded: %#v", col)
 		}
+	}
+}
+
+func TestRenderTableFallbacks(t *testing.T) {
+	s := loadSchemaByType(t, "data.tables")
+	b, err := RenderTable(s, "note", "notes", "备注表")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["stability"] != "draft" {
+		t.Fatalf("stability fallback must be draft: %#v", doc["stability"])
+	}
+	cols, _ := doc["columns"].([]any)
+	if len(cols) != 1 {
+		t.Fatalf("want one column: %#v", doc["columns"])
+	}
+	first, _ := cols[0].(map[string]any)
+	if first["type"] != "string" {
+		t.Fatalf("column type fallback must be string: %#v", first)
 	}
 }
 

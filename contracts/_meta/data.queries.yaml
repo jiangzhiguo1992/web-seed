@@ -94,7 +94,7 @@ fields:
           - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "参数绑定的物理列；数组参数绑定元素列", caution: "列必须属于查询的 tables；与 expr 互斥" }
           - { name: expr, type: string, required: false, description: "参数参与的 SQL 表达式；不绑定单个列时使用", caution: "与 column 互斥；checker 只校验非空，SQL 语义由实现验证" }
           - { name: nullable, type: boolean, required: false, default: false, description: "参数是否可为空" }
-          - { name: default, type: any, required: false, description: "传入 null 时使用的默认值", caution: "只有 nullable: true 时才允许；类型必须与 type 兼容" }
+          - { name: default, type: any, required: false, description: "传入 null 时使用的默认值", caution: "只有 nullable: true 时才允许；checker 校验可判定的标量类型/数组外层，枚举值与数组元素交给生成器" }
           - { name: description, type: string, required: false, description: "参数说明" }
 
       - name: returns
@@ -130,7 +130,7 @@ rules:
   - { id: query-name-unique, text: "query.name 全局唯一，避免方法与派生 ID 冲突", implemented_by: [ query-name-unique ] }
   - { id: query-shape, text: "affected_rows 不得为列表，必须是唯一返回项，且不得带 column/entity/table/type/columns；table 返回也必须是唯一返回项", implemented_by: [ query-shape ] }
   - { id: query-table-shape, text: "tables 非空、去重、不得指向 data.tables.base", implemented_by: [ query-table-shape ] }
-  - { id: query-params, text: "params 的 name 不得重复；type 不得为空，未绑定 column 时必须映射到类型族或 data.enums.*；column/expr 互斥；default 只在 nullable:true 时允许且 YAML 类型必须与 type 兼容；offset/limit 按 query-pagination 校验", implemented_by: [ query-params ] }
+  - { id: query-params, text: "params 的 name 不得重复；type 不得为空，未绑定 column 时必须映射到类型族或 data.enums.*；column/expr 互斥；default 只在 nullable:true 时允许；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器；offset/limit 按 query-pagination 校验", implemented_by: [ query-params ] }
   - { id: query-param-column, text: "params[].column 必须属于查询的 tables；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型；data.enums.* 按 integer 列校验）", implemented_by: [ query-param-column ] }
   - { id: query-pagination, text: "offset/limit 是保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；offset 默认 0，limit 默认必须为正数；list 返回必须同时声明两者", implemented_by: [ query-pagination ] }
   - { id: query-returns, text: "returns 非空；name 不得重复；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }

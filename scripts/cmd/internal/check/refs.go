@@ -38,7 +38,7 @@ func (c *Checker) isBaseTableRef(ref string) bool {
 func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[string]map[string]bool) {
 	c.declaredWrites = map[string]bool{}
 	// entities
-	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {
+	for _, f := range c.entityFiles() {
 		doc, err := loadYAML(f)
 		if err != nil {
 			c.rulef("schema.load", "%s: %v", relPath(c.root, f), err)
@@ -72,7 +72,7 @@ func (c *Checker) checkCrossFileTableRefs(tableIDs map[string]string, cols map[s
 	}
 	// queries
 	queryIDs := map[string]bool{}
-	for _, f := range glob(c.root, "contracts/data/queries/*.yaml") {
+	for _, f := range c.queryFiles() {
 		doc, err := loadYAML(f)
 		if err != nil {
 			c.rulef("schema.load", "%s: %v", relPath(c.root, f), err)
@@ -309,7 +309,7 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 		tableQueries[id] = map[string]bool{}
 	}
 	// entities：table.entities 来自 entity.model.tables
-	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {
+	for _, f := range c.entityFiles() {
 		doc, err := loadYAML(f)
 		if err != nil || doc == nil {
 			continue
@@ -322,7 +322,7 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 		}
 	}
 	// queries：按查询项 ID 记直接入边，而不是查询文件 ID。
-	for _, f := range glob(c.root, "contracts/data/queries/*.yaml") {
+	for _, f := range c.queryFiles() {
 		doc, err := loadYAML(f)
 		if err != nil || doc == nil {
 			continue

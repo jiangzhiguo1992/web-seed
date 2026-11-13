@@ -1,7 +1,7 @@
 // Package check 实现契约校验：结构、ID、基类、列/约束/索引、引用、used_by、index 与 stability。
 //
 // 当前覆盖：
-//   - contracts 下文本字段（description/comment/summary/do_not 等）双引号强制
+//   - contracts 下 YAML 重复键拒绝；文本字段（description/comment/summary/do_not 等）双引号强制
 //   - data.tables / data.tables.base 的结构、ID/文件、基类 5 列、列/约束/索引、used_by、do_not 具体性
 //   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、code int32 范围、stability 与 summary
 //   - data.entities 的字段来源（column/computed）、指针/可空、字段校验、关系字段、used_by
@@ -50,6 +50,9 @@ type Checker struct {
 	tablePrimaryKey map[string][]string
 	tableObjects    map[string]map[string]bool
 	objectNames     map[string]string
+	tableTargets    contractspec.Targets
+	entityTargets   contractspec.Targets
+	queryTargets    contractspec.Targets
 
 	// 实体与查询解析索引。
 	tableColumns      map[string]map[string]columnMeta
@@ -111,6 +114,9 @@ func (c *Checker) run() {
 	}
 
 	c.checkSharedTypes(tableSchema)
+	c.tableTargets = tableSchema.Targets
+	c.entityTargets = entitySchema.Targets
+	c.queryTargets = querySchema.Targets
 	c.loadQueryIndex(querySchema)
 	c.tableTypeFamilies = map[string]bool{}
 	for name := range tableSchema.ColumnTypes.ValueTypeFamilies {
@@ -140,7 +146,7 @@ func (c *Checker) run() {
 }
 
 // checkContractProseQuotes 强制 contracts 下文本字段使用双引号，
-// 避免正则/外部工具按未加引号的字符串解析时出现歧义。
+// 并顺带拒绝同一 mapping 的重复键，避免正则/外部工具按未加引号的字符串解析时出现歧义。
 func (c *Checker) checkContractProseQuotes() {
 	for _, file := range walkYAML(c.root, "contracts") {
 		rel := relPath(c.root, file)
@@ -154,8 +160,50 @@ func (c *Checker) checkContractProseQuotes() {
 			c.rulef("schema.load", "%s: %v", rel, err)
 			continue
 		}
+		c.checkDuplicateKeys(&doc, rel, "")
 		c.checkProseQuotes(&doc, rel)
 	}
+}
+
+// checkDuplicateKeys 拒绝同一 mapping 内的重复键，避免 yaml 静默 last-wins。
+func (c *Checker) checkDuplicateKeys(n *yaml.Node, rel, path string) {
+	if n == nil {
+		return
+	}
+	switch n.Kind {
+	case yaml.DocumentNode:
+		for _, child := range n.Content {
+			c.checkDuplicateKeys(child, rel, path)
+		}
+	case yaml.SequenceNode:
+		for i, child := range n.Content {
+			c.checkDuplicateKeys(child, rel, fmt.Sprintf("%s[%d]", path, i))
+		}
+	case yaml.MappingNode:
+		seen := map[string]bool{}
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			key := n.Content[i]
+			childPath := key.Value
+			if path != "" {
+				childPath = path + "." + key.Value
+			}
+			if keyID, ok := yamlKeyID(key); ok {
+				if seen[keyID] {
+					c.rulef("schema.duplicate-key", "%s: duplicate key %q at %s", rel, key.Value, childPath)
+				}
+				seen[keyID] = true
+			}
+			c.checkDuplicateKeys(n.Content[i+1], rel, childPath)
+		}
+	}
+}
+
+// yamlKeyID 区分 YAML 标量 tag，避免 200 与 "200" 被误判为同一键。
+func yamlKeyID(n *yaml.Node) (string, bool) {
+	if n.Kind != yaml.ScalarNode {
+		return "", false
+	}
+	return n.Tag + "\x00" + n.Value, true
 }
 
 var proseScalarFields = map[string]bool{

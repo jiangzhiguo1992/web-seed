@@ -389,6 +389,9 @@ func splitPointer(typ string) (string, bool) {
 // checkEntities 校验实体文件的结构与语义，并建立 relation 反向索引。
 func (c *Checker) checkEntities(schema *Schema) {
 	c.checkTargets(schema)
+	if len(c.entityFiles()) == 0 {
+		c.rulef("schema.load", "no contract files match %s/%s", schema.Targets.Dir, schema.Targets.Glob)
+	}
 	c.checkEntityBase(schema)
 	seenIDs := map[string]string{}
 	seenNames := map[string]string{}

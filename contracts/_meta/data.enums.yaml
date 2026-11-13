@@ -38,7 +38,7 @@ fields:
   - name: do_not
     type: list<string>
     required: false
-    description: "实例级负向约束；每条含 data.enums 或本文件枚举名"
+    description: "实例级负向约束；每条含 data.enums、枚举 name 或 go_type/ts_type"
     generates: "AI 反例"
     caution: "通用规则放组 README，禁止复制到这里"
 
@@ -78,4 +78,4 @@ rules:
   - { id: enum-code-unique, text: "同一枚举的 code 不得重复", implemented_by: [enum-code-unique] }
   - { id: enum-type-unique, text: "同一集合内 go_type / ts_type 不得重复", implemented_by: [enum-type-unique] }
   - { id: enum-used-by, text: "used_by.entities/capabilities 必须与 entity 字段和 capability 引用完全一致；不统计物理表/feature；空列表合法", implemented_by: [enum-used-by] }
-  - { id: enum-do-not-specific, text: "do_not 每条必须含集合 ID data.enums 或本文件枚举名；通用规则放组 README，禁止复制", implemented_by: [enum-do-not-specific] }
+  - { id: enum-do-not-specific, text: "do_not 每条必须含集合 ID data.enums、枚举 name 或 go_type/ts_type；通用规则放组 README，禁止复制", implemented_by: [enum-do-not-specific] }

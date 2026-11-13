@@ -82,17 +82,23 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		enums[id] = values
 		c.checkEnumUsedBy(rel, i, id, m, usages[id])
 	}
-	c.checkEnumDoNot(doc, rel, schema.Targets.ID, names)
+	c.checkEnumDoNot(doc, rel, schema.Targets.ID, names, goTypes, tsTypes)
 	return enums
 }
 
-// checkEnumDoNot 要求 do_not 命中集合 ID 或本文件的枚举名，避免通用规则堆在实例。
-func (c *Checker) checkEnumDoNot(doc map[string]any, rel, setID string, enumNames map[string]bool) {
+// checkEnumDoNot 要求 do_not 命中集合 ID、枚举 name 或 go_type/ts_type，避免通用规则堆在实例。
+func (c *Checker) checkEnumDoNot(doc map[string]any, rel, setID string, enumNames map[string]bool, goTypes, tsTypes map[string]string) {
 	tokens := map[string]bool{setID: true}
 	for name := range enumNames {
 		if name != "" {
 			tokens[name] = true
 		}
+	}
+	for name := range goTypes {
+		tokens[name] = true
+	}
+	for name := range tsTypes {
+		tokens[name] = true
 	}
 	for i, raw := range asList(doc["do_not"]) {
 		s, _ := raw.(string)
@@ -109,7 +115,7 @@ func (c *Checker) checkEnumDoNot(doc map[string]any, rel, setID string, enumName
 			}
 		}
 		if !specific {
-			c.rulef("enum-do-not-specific", "%s: do_not[%d] must mention %s or an enum name: %s", rel, i, setID, trimmed)
+			c.rulef("enum-do-not-specific", "%s: do_not[%d] must mention %s, an enum name, or go_type/ts_type: %s", rel, i, setID, trimmed)
 		}
 	}
 }
@@ -179,7 +185,7 @@ type enumUsage struct {
 // enumUsages 扫描 entity 字段和 capability 中的 data.enums.* 引用。
 func (c *Checker) enumUsages() map[string]*enumUsage {
 	usages := map[string]*enumUsage{}
-	for _, f := range glob(c.root, "contracts/data/entities/*.yaml") {
+	for _, f := range c.entityFiles() {
 		doc, err := loadYAML(f)
 		if err != nil {
 			continue
@@ -299,10 +305,11 @@ func (c *Checker) checkEnumRefs(tableIDs map[string]string, cols map[string]map[
 			}
 		}
 	}
-	for _, f := range walkYAML(c.root, "contracts") {
+	for _, f := range c.contractFiles() {
 		rel := relPath(c.root, f)
 		if strings.HasPrefix(rel, "contracts/_meta/") ||
-			strings.HasPrefix(rel, "contracts/data/tables/") ||
+			strings.HasPrefix(rel, c.tableDir()+"/") ||
+			strings.HasPrefix(rel, filepath.Dir(baseContractPath)+"/") ||
 			strings.HasPrefix(rel, "contracts/generated/") {
 			continue
 		}

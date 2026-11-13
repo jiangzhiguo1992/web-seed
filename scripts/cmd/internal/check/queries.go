@@ -53,7 +53,7 @@ type queryDoc struct {
 
 var sqlScalarReturns = map[string]bool{
 	"boolean": true, "integer": true, "string": true, "float": true,
-	"decimal": true, "timestamp": true, "datetime": true, "json": true, "bytes": true,
+	"decimal": true, "timestamp": true, "datetime": true, "json": true,
 }
 
 // tableSet 返回查询读写的表集合。
@@ -155,6 +155,9 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 
 func (c *Checker) checkQueries(schema *Schema) {
 	c.checkTargets(schema)
+	if len(c.queryFiles()) == 0 {
+		c.rulef("schema.load", "no contract files match %s/%s", schema.Targets.Dir, schema.Targets.Glob)
+	}
 	for _, qd := range c.queryDocs {
 		c.checkTargetFileName(schema, filepath.Base(qd.rel), qd.rel)
 		c.validateDoc(qd.doc, schema.Fields, qd.rel)
@@ -372,13 +375,18 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 		if p.Expr != "" && strings.TrimSpace(p.Expr) == "" {
 			c.rulef("query-params", "%s: expr must not be blank", where)
 		}
-		if p.HasDefault && !p.Nullable {
+		if p.HasDefault && !p.Nullable && !isPaginationParam(p.Name) {
 			c.rulef("query-params", "%s: default requires nullable:true (null means use default)", where)
 		}
-		if p.HasDefault {
+		if p.HasDefault && !isPaginationParam(p.Name) {
 			c.checkQueryParamDefault(p, where)
 		}
 	}
+}
+
+// isPaginationParam 标记保留分页参数名；其 default 形状由 checkQueryPagination 统一校验。
+func isPaginationParam(name string) bool {
+	return name == "offset" || name == "limit"
 }
 
 // checkQueryParamDefault 校验 default 的 YAML 类型与 param.type 兼容。
@@ -388,13 +396,16 @@ func (c *Checker) checkQueryParamDefault(p queryParam, where string) {
 		return
 	}
 	family, array, enum, ok := paramLogicalType(p.Type)
-	if !ok || enum {
+	if !ok {
 		return
 	}
 	if array {
 		if _, ok := asList2(p.DefaultValue); !ok {
 			c.rulef("query-params", "%s: default must be a list for %s", where, p.Type)
 		}
+		return
+	}
+	if enum {
 		return
 	}
 	switch family {
@@ -471,37 +482,32 @@ func paramLogicalType(typ string) (family string, array, enum, ok bool) {
 	if strings.HasPrefix(base, "data.enums.") {
 		return "integer", array, true, true
 	}
-	family, _, ok = paramFamily(base)
+	family, ok = paramFamily(base)
 	return family, array, false, ok
 }
 
-// paramFamily 把参数类型映射到 column_types 类型族；数组返回元素类型族。
-func paramFamily(typ string) (family string, array bool, ok bool) {
-	base := strings.TrimSpace(typ)
-	if strings.HasPrefix(base, "List<") && strings.HasSuffix(base, ">") {
-		array = true
-		base = strings.TrimSuffix(strings.TrimPrefix(base, "List<"), ">")
-	}
-	base = strings.ToLower(strings.TrimSpace(base))
+// paramFamily 把非数组参数类型映射到 column_types 类型族。
+func paramFamily(typ string) (family string, ok bool) {
+	base := strings.ToLower(strings.TrimSpace(typ))
 	switch base {
 	case "text", "varchar", "character varying", "char", "bpchar":
-		return "string", array, true
+		return "string", true
 	case "integer", "int", "int4", "int8", "bigint", "smallint":
-		return "integer", array, true
+		return "integer", true
 	case "boolean", "bool":
-		return "boolean", array, true
+		return "boolean", true
 	case "timestamp", "timestamptz", "timestamp with time zone", "datetime":
-		return "timestamp", array, true
+		return "timestamp", true
 	case "float", "float4", "float8", "double", "double precision", "real":
-		return "float", array, true
+		return "float", true
 	case "decimal", "numeric":
-		return "decimal", array, true
+		return "decimal", true
 	case "json", "jsonb":
-		return "json", array, true
+		return "json", true
 	case "bytea", "bytes":
-		return "bytes", array, true
+		return "bytes", true
 	}
-	return "", array, false
+	return "", false
 }
 
 func familyCompatible(param, column string) bool {

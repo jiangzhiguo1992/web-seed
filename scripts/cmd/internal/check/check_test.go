@@ -401,18 +401,19 @@ func minimalTableSchema() *Schema {
 	}
 }
 
-func TestTableRulesPrimaryKeyNullable(t *testing.T) {
+func TestPhysicalPrimaryKeyRejected(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["columns"] = append(doc["columns"].([]any), map[string]any{
 		"name": "pk", "type": "string", "primary_key": true, "nullable": true,
 	})
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "primary_key column must not be nullable") {
-		t.Fatalf("nullable primary key not reported: %v", c.errs)
-	}
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[physical-primary-key]") {
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "[physical-primary-key]") {
 		t.Fatalf("physical primary key not reported: %v", c.errs)
+	}
+	if strings.Contains(errs, "[primary-key-nullable]") {
+		t.Fatalf("redundant primary-key-nullable reported: %v", c.errs)
 	}
 }
 
@@ -664,6 +665,20 @@ persistence:
 	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services/cap.async may declare table writes") {
 		t.Fatalf("http write layer not rejected: %v", c.errs)
 	}
+
+	body = `id: cap.http.x
+module: x
+writes:
+  - data.queries.x.q
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c = &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
+	c.checkCrossFileTableRefs(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}, nil)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services/cap.async may declare writes") {
+		t.Fatalf("http top-level writes not rejected: %v", c.errs)
+	}
 }
 
 func TestPersistenceOwnership(t *testing.T) {
@@ -759,6 +774,43 @@ func TestTableIndexColumnsUnique(t *testing.T) {
 	c.validateValue([]any{"code", "code"}, columnsField, "indexes.columns")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unique]") {
 		t.Fatalf("duplicate index columns not reported: %v", c.errs)
+	}
+}
+
+func TestUsedByUsesEntityQueryTargets(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("contracts/data/tables/x.yaml", `id: data.tables.x
+table:
+  entities: [ data.entities.e ]
+used_by:
+  queries: [ data.queries.q.get_x ]
+`)
+	write("custom/entities/e.yaml", `id: data.entities.e
+model:
+  tables: [ data.tables.x ]
+`)
+	write("custom/queries/q.yaml", `id: data.queries.q
+queries:
+  - name: GetX
+    tables: [ data.tables.x ]
+`)
+	c := &Checker{
+		root:          root,
+		entityTargets: contractspec.Targets{Dir: "custom/entities", Glob: "*.yaml"},
+		queryTargets:  contractspec.Targets{Dir: "custom/queries", Glob: "*.yaml"},
+	}
+	c.checkUsedBy(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	if len(c.errs) != 0 {
+		t.Fatalf("meta targets not used by used_by scan: %v", c.errs)
 	}
 }
 
@@ -972,7 +1024,14 @@ enums:
 	c = writeEnumContract(t, body)
 	c.checkEnums(loadEnumSchemaForTest(t))
 	if strings.Contains(strings.Join(c.errs, "\n"), "[enum-do-not-specific]") {
-		t.Fatalf("specific enum do_not reported: %v", c.errs)
+		t.Fatalf("specific enum name do_not reported: %v", c.errs)
+	}
+
+	body = strings.Replace(body, "account_status 删除值后 code 不得复用", "AccountStatus 删除值后 code 不得复用", 1)
+	c = writeEnumContract(t, body)
+	c.checkEnums(loadEnumSchemaForTest(t))
+	if strings.Contains(strings.Join(c.errs, "\n"), "[enum-do-not-specific]") {
+		t.Fatalf("go_type do_not reported: %v", c.errs)
 	}
 }
 
@@ -983,6 +1042,26 @@ func TestEnumListTypeRef(t *testing.T) {
 	}, "x.yaml", "", map[string]map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown enum data.enums.missing") {
 		t.Fatalf("List<enum> ref not checked: %v", c.errs)
+	}
+}
+
+func TestEnumRefsUsesCustomEntityTarget(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "custom/entities/e.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `id: data.entities.e
+fields:
+  - { type: data.enums.missing }
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root, entityTargets: contractspec.Targets{Dir: "custom/entities", Glob: "*.yaml"}}
+	c.checkEnumRefs(map[string]string{}, map[string]map[string]bool{}, map[string]map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown enum data.enums.missing") {
+		t.Fatalf("custom target enum ref not scanned: %v", c.errs)
 	}
 }
 
@@ -1219,6 +1298,48 @@ func TestMetaProseIsDoubleQuoted(t *testing.T) {
 	c.checkContractProseQuotes()
 	if len(c.errs) != 0 {
 		t.Fatalf("meta prose quoting failed:\n%s", strings.Join(c.errs, "\n"))
+	}
+}
+
+func TestDuplicateYAMLKeys(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "contracts/data/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "id: data.tables.x\nid: data.tables.y\ntable:\n  comment: \"a\"\n  comment: \"b\"\nqueries:\n  - name: a\n    name: b\n  - name: a\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkContractProseQuotes()
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, `[schema.duplicate-key] contracts/data/x.yaml: duplicate key "id"`) ||
+		!strings.Contains(errs, `duplicate key "comment" at table.comment`) {
+		t.Fatalf("duplicate keys not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, `duplicate key "name" at queries[0].name`) {
+		t.Fatalf("sequence duplicate key not reported: %v", c.errs)
+	}
+	if strings.Count(errs, `duplicate key "name"`) != 1 {
+		t.Fatalf("same key in different sequence items must not be reported: %v", c.errs)
+	}
+}
+
+func TestDuplicateKeyDistinguishesTags(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "contracts/data/x.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "200: 1\n\"200\": 2\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkContractProseQuotes()
+	if strings.Contains(strings.Join(c.errs, "\n"), "[schema.duplicate-key]") {
+		t.Fatalf("typed keys wrongly treated as duplicates: %v", c.errs)
 	}
 }
 
@@ -1709,7 +1830,11 @@ func TestTargetNamingRejectsBadFile(t *testing.T) {
 }
 
 func TestTargetsValidation(t *testing.T) {
-	c := &Checker{}
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
 	targets := testTargets()
 	targets.ID = "bad"
 	targets.Naming = "camel"
@@ -1720,6 +1845,28 @@ func TestTargetsValidation(t *testing.T) {
 	}
 	if !strings.Contains(errs, "targets.naming must be snake_case") {
 		t.Fatalf("naming not checked: %v", c.errs)
+	}
+}
+
+func TestTargetsMissingDir(t *testing.T) {
+	c := &Checker{root: t.TempDir()}
+	c.checkTargets(&Schema{ID: "meta.x", Targets: testTargets()})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "is not a directory") {
+		t.Fatalf("missing target dir not reported: %v", c.errs)
+	}
+}
+
+func TestTargetsNoFiles(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkQueries(&Schema{
+		Targets: contractspec.Targets{Dir: "empty", Glob: "*.yaml", ID: "data.queries.<file>", Naming: "snake_case"},
+	})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "no contract files match empty/*.yaml") {
+		t.Fatalf("empty query target not reported: %v", c.errs)
 	}
 }
 
@@ -2018,8 +2165,8 @@ func TestQueryIndexRefs(t *testing.T) {
 	c = newChecker()
 	c.queries["data.queries.x.q"].IndexRef = nil
 	c.checkQueryIndexRefs()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "must declare at least one index_ref") {
-		t.Fatalf("missing index_ref not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[query-index-ref]") {
+		t.Fatalf("missing index_ref must use query-index-ref: %v", c.errs)
 	}
 
 	c = newChecker()
@@ -2122,20 +2269,43 @@ func TestBaseColumnShapeRejectsDrift(t *testing.T) {
 }
 
 func TestBaseIDBitsMustBe64(t *testing.T) {
-	c := &Checker{}
-	doc := map[string]any{
-		"id": "data.tables.base", "summary": "base", "stability": "stable",
-		"columns": []any{
-			map[string]any{"name": "id", "type": "integer", "primary_key": true, "bits": 32},
-			map[string]any{"name": "status", "type": "integer", "default": 0},
-			map[string]any{"name": "created_at", "type": "timestamp"},
-			map[string]any{"name": "updated_at", "type": "timestamp"},
-			map[string]any{"name": "deleted_at", "type": "timestamp", "nullable": true},
-		},
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
 	}
-	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/_base.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), `base id bits must be 64`) {
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	newDoc := func() map[string]any {
+		return map[string]any{
+			"id": "data.tables.base", "summary": "base", "schema_version": 1, "stability": "stable",
+			"columns": []any{
+				map[string]any{"name": "id", "type": "integer", "primary_key": true, "bits": 32},
+				map[string]any{"name": "status", "type": "integer", "default": 0},
+				map[string]any{"name": "created_at", "type": "timestamp"},
+				map[string]any{"name": "updated_at", "type": "timestamp"},
+				map[string]any{"name": "deleted_at", "type": "timestamp", "nullable": true},
+			},
+		}
+	}
+	c := &Checker{root: root}
+	c.checkBaseTable(newDoc(), schema, "contracts/data/tables/_base.yaml")
+	errs := strings.Join(c.errs, "\n")
+	if strings.Contains(errs, "unknown field") {
+		t.Fatalf("base test schema is incomplete: %v", c.errs)
+	}
+	if !strings.Contains(errs, `base id bits must be 64`) {
 		t.Fatalf("base id bits drift not reported: %v", c.errs)
+	}
+
+	doc := newDoc()
+	doc["columns"].([]any)[0].(map[string]any)["bits"] = 64
+	doc["columns"].([]any)[0].(map[string]any)["unsigned"] = true
+	c = &Checker{root: root}
+	c.checkBaseTable(doc, schema, "contracts/data/tables/_base.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "base id must not be unsigned") {
+		t.Fatalf("base id unsigned not reported: %v", c.errs)
 	}
 }
 

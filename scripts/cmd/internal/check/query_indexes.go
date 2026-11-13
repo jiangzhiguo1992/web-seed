@@ -82,7 +82,7 @@ func (c *Checker) checkQueryIndexRefs() {
 			continue // 表引用缺失由 query-table-shape 报出
 		}
 		if len(q.Targets) == 1 && len(q.IndexRef) == 0 {
-			c.rulef("query-index-used-by", "query %s: single-table query must declare at least one index_ref", qid)
+			c.rulef("query-index-ref", "query %s: single-table query must declare at least one index_ref", qid)
 			continue
 		}
 		for _, ref := range q.IndexRef {

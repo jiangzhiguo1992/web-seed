@@ -130,7 +130,7 @@ scripts/cmd/
   - `summary` 非空；`stability: stable` 不得含 TODO/FIXME
   - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
   - `used_by.entities/capabilities` 必须与 entity 字段和 capability 引用完全一致；不列物理表或 feature，空列表合法；两个列表逐行竖排
-  - `do_not` 每条必须含集合 ID `data.enums` 或本文件枚举名；通用规则放组 README
+  - `do_not` 每条必须含集合 ID `data.enums`、枚举 name 或 go_type/ts_type；通用规则放组 README
 - `data.entities.base`（`contracts/data/entities/_base.yaml`，单例）
   - 路径/ID 由 checker 写死识别；5 个字段固定为 `ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`
   - `ID` / `Status` integer、`CreatedAt` / `UpdatedAt` timestamp、`DeletedAt` 可空 timestamp；类型从 `tables/_base.yaml` 继承，不在 `entities/_base.yaml` 重写；每个基类字段必须写 `source`/`validation`/`description`
@@ -154,7 +154,7 @@ scripts/cmd/
   - 结构按 `_meta/data.queries.yaml`；item 不写 id，name=PascalCase 且全局唯一；项 ID 由 `<文件 id>.<snake_case(name)>` 派生
   - `tables` 是查询读写的表；必须存在、不是 `data.tables.base`；可以多表；实例必须竖排
   - `offset` / `limit` 是保留分页参数名：出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数；list 返回必须同时声明两者
-  - `params` 只声明接口入参；name 唯一、type 非空；未绑定 `column` 时 type 必须映射到类型族或 `data.enums.*`；`column` 绑定列后类型族必须与列一致（`data.enums.*` 按 integer 列）；`expr` 与 `column` 互斥；`default` 只在 `nullable: true` 时允许，且 YAML 类型必须与 `type` 兼容
+  - `params` 只声明接口入参；name 唯一、type 非空；未绑定 `column` 时 type 必须映射到类型族或 `data.enums.*`；`column` 绑定列后类型族必须与列一致（`data.enums.*` 按 integer 列）；`expr` 与 `column` 互斥；`default` 只在 `nullable: true` 时允许，checker 校验可判定的标量/数组外层，枚举值与数组元素交给生成器
   - `returns` 是 list<object>：每项用 `kind` 区分 `column` / `entity` / `table` / `scalar` / `affected_rows`；kind 专属字段必须出现，互斥字段不得出现
   - 同一 query 的多项 `list` 必须一致；`affected_rows` 必须是唯一返回项且不得为列表
   - `columns` 只用于 `table` / `entity`；实体显式 `columns` 必须覆盖全部非指针、非 `secret` 字段
@@ -201,7 +201,7 @@ scripts/cmd/
 
 **先读 `description` 和 `caution`，不要只按字段名猜。**
 
-通用结构规则（`schema.id-from-file`、`schema.contract-id-unique`、`schema.unique-names`）由 checker 代码强制，不再维护独立的 YAML 清单。实例的 `enforcement` / `consumers` 以 `index.yaml` 为准。类型级 `do_not` 已移到组 README 或 `<type>/_base.yaml`，`_meta` 下禁止出现 `do_not`。
+通用结构规则（`schema.id-from-file`、`schema.contract-id-unique`、`schema.unique-names`、`schema.duplicate-key`）由 checker 代码强制，不再维护独立的 YAML 清单。实例的 `enforcement` / `consumers` 以 `index.yaml` 为准。类型级 `do_not` 已移到组 README 或 `<type>/_base.yaml`，`_meta` 下禁止出现 `do_not`。
 
 ### 5.1 `stability` 流转
 

@@ -37,6 +37,11 @@ func (c *Checker) checkTargets(schema *Schema) {
 	if _, ok := targetNamingPatterns[t.Naming]; !ok {
 		c.rulef("schema.targets", "%s: targets.naming must be snake_case", where)
 	}
+	if t.Dir != "" {
+		if info, err := os.Stat(filepath.Join(c.root, t.Dir)); err != nil || !info.IsDir() {
+			c.rulef("schema.targets", "%s: targets.dir %q is not a directory", where, t.Dir)
+		}
+	}
 }
 
 func (c *Checker) checkTargetFileName(schema *Schema, file, rel string) {
@@ -578,9 +583,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		}
 		if pk, _ := m["primary_key"].(bool); pk {
 			c.rulef("physical-primary-key", "%s: columns[%d] (%s): physical tables must not declare primary_key; base id is the primary key", rel, i, name)
-			if nullable, _ := m["nullable"].(bool); nullable {
-				c.rulef("primary-key-nullable", "%s: columns[%d] (%s): primary_key column must not be nullable", rel, i, name)
-			}
 		}
 		if _, ok := m["default"]; ok {
 			if _, ok2 := m["default_sql"]; ok2 {
@@ -682,18 +684,12 @@ func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int,
 		c.rulef("index-used-by", "%s: indexes[%d] (%s): used_by must list at least one query item", rel, i, name)
 		return
 	}
-	seen := map[string]bool{}
 	for _, raw := range usedBy {
 		qid, ok := raw.(string)
 		if !ok || qid == "" || !strings.HasPrefix(qid, "data.queries.") {
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): used_by must be data.queries.* item IDs, got %v", rel, i, name, raw)
 			continue
 		}
-		if seen[qid] {
-			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): duplicate query %s", rel, i, name, qid)
-			continue
-		}
-		seen[qid] = true
 		canonical := c.resolveQueryID(qid)
 		if _, ok := c.queryIDs[canonical]; !ok {
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): unknown query %s", rel, i, name, qid)

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
@@ -715,6 +716,10 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	if len(c.errs) != 0 {
 		t.Fatalf("valid pagination reported: %v", c.errs)
 	}
+	c.checkQueryParams(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid pagination reported by params: %v", c.errs)
+	}
 
 	c = &Checker{}
 	q.Params[0].DefaultValue = 1
@@ -790,6 +795,27 @@ func TestQueryParamTypeAndDefaultValidation(t *testing.T) {
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid timestamp default reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[0] = queryParam{Name: "statuses", Type: "List<data.enums.account_status>", Nullable: true}
+	c.checkQueryParams(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("List<enum> param reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[0] = queryParam{Name: "statuses", Type: "List<data.enums.account_status>", Nullable: true, HasDefault: true, DefaultValue: "bad"}
+	c.checkQueryParams(q)
+	if !strings.Contains(entityErrs(c), "default must be a list") {
+		t.Fatalf("enum array default outer type not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[0] = queryParam{Name: "since", Type: "timestamp", Nullable: true, HasDefault: true, DefaultValue: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	c.checkQueryParams(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("time.Time default reported: %v", c.errs)
 	}
 }
 

@@ -153,7 +153,7 @@ fields:
 rules:
   - { id: table-key-order, text: "表契约字段顺序必须与 _meta/data.tables.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ table-key-order ] }
   - { id: base-file, text: "基类契约固定位于 contracts/data/tables/_base.yaml，ID 固定为 data.tables.base", implemented_by: [ base-file ] }
-  - { id: base-columns, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at；id 为 integer（bits: 64）主键、status 为非空 integer 且非主键（默认 0）、三个时间列为 timestamp（created_at/updated_at 非空、deleted_at 可空）", implemented_by: [ base-columns ] }
+  - { id: base-columns, text: "基类必须且只能是 id/status/created_at/updated_at/deleted_at；id 为 integer（bits: 64）、unsigned: false、主键，status 为非空 integer 且非主键（默认 0）、三个时间列为 timestamp（created_at/updated_at 非空、deleted_at 可空）", implemented_by: [ base-columns ] }
   - { id: base-only, text: "table.extends 不得为空；必须是 data.tables.* 契约 ID", implemented_by: [ base-only ] }
   - { id: extends-ref, text: "table.extends 的每个父表必须存在；不得自成环，继承链必须最终到达 data.tables.base", implemented_by: [ extends-ref ] }
   - { id: extends-conflict, text: "多个父表提供同名列时，只有来源相同（钻石继承）才允许；来源不同必须解决冲突", implemented_by: [ extends-conflict ] }
@@ -186,6 +186,5 @@ rules:
   - { id: redundant-ref, text: "columns[].redundancy 必须与 storage.redundancy_groups 双向一致；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
   - { id: default-type, text: "列 default 的 YAML 类型必须与列类型族兼容；长度/范围按本列声明的参数校验（不展开 data.tables.*.col.* 引用）", implemented_by: [ default-type ] }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
-  - { id: primary-key-nullable, text: "primary_key: true 的字段不得 nullable: true", implemented_by: [ primary-key-nullable ] }
   - { id: physical-primary-key, text: "物理表不得声明 primary_key；主键统一由基类 id 提供", implemented_by: [ physical-primary-key ] }
   - { id: do-not-specific, text: "物理表 do_not 每条必须含本表标识；通用规则上移组 README 或 _base", implemented_by: [ do-not-specific ] }

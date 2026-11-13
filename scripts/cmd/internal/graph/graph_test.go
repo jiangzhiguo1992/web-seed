@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,9 +19,27 @@ func writeFixture(t *testing.T, root, rel, body string) {
 	}
 }
 
+// writeTargets 为 graph.Compute 提供三份 _meta targets，避免测试依赖生产回退。
+func writeTargets(t *testing.T, root, tableDir, entityDir, queryDir string) {
+	t.Helper()
+	writeFixture(t, root, "contracts/_meta/data.tables.yaml", fmt.Sprintf("type: data.tables\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n", tableDir))
+	writeFixture(t, root, "contracts/_meta/data.entities.yaml", fmt.Sprintf("type: data.entities\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n", entityDir))
+	writeFixture(t, root, "contracts/_meta/data.queries.yaml", fmt.Sprintf("type: data.queries\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n", queryDir))
+}
+
+func ensureDirs(t *testing.T, root string, dirs ...string) {
+	t.Helper()
+	for _, dir := range dirs {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func fixtureRoot(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
+	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
 	writeFixture(t, root, "contracts/data/tables/a.yaml", `# table a
 id: data.tables.a
 summary: "a"
@@ -101,6 +120,75 @@ func TestCompute(t *testing.T) {
 	}
 }
 
+func TestComputeUsesTargets(t *testing.T) {
+	root := t.TempDir()
+	writeTargets(t, root, "custom/tables", "custom/entities", "custom/queries")
+	writeFixture(t, root, "custom/tables/a.yaml", `id: data.tables.a
+table:
+  entities: [ data.entities.e1 ]
+used_by:
+  queries: []
+`)
+	writeFixture(t, root, "custom/entities/e1.yaml", `id: data.entities.e1
+model:
+  tables: [ data.tables.a ]
+  included_by: []
+used_by:
+  queries: []
+`)
+	writeFixture(t, root, "custom/queries/q.yaml", `id: data.queries.q
+queries:
+  - name: GetA
+    tables: [ data.tables.a ]
+    returns:
+      - { name: e1, kind: entity, entity: data.entities.e1 }
+`)
+	snap, err := Compute(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := snap.Tables["data.tables.a"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
+		t.Fatalf("table edge not computed from custom targets: %v", got)
+	}
+	if got := snap.Entities["data.entities.e1"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
+		t.Fatalf("entity edge not computed from custom targets: %v", got)
+	}
+}
+
+func TestComputeRejectsMissingMeta(t *testing.T) {
+	root := t.TempDir()
+	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "no meta target") {
+		t.Fatalf("missing meta not reported: %v", err)
+	}
+}
+
+func TestComputeRejectsMalformedMeta(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "contracts/_meta/data.tables.yaml", "type: [\n")
+	if _, err := Compute(root); err == nil {
+		t.Fatal("malformed meta should fail")
+	}
+}
+
+func TestComputeRejectsDuplicateMeta(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "contracts/_meta/a.yaml", "type: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n")
+	writeFixture(t, root, "contracts/_meta/b.yaml", "type: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n")
+	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate meta type") {
+		t.Fatalf("duplicate meta not reported: %v", err)
+	}
+}
+
+func TestComputeRejectsMissingTargetDir(t *testing.T) {
+	root := t.TempDir()
+	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	ensureDirs(t, root, "contracts/data/entities", "contracts/data/queries")
+	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "missing data.tables target dir") {
+		t.Fatalf("missing table target dir not reported: %v", err)
+	}
+}
+
 func TestWriteAndCheck(t *testing.T) {
 	root := fixtureRoot(t)
 	snap, err := Compute(root)
@@ -153,19 +241,25 @@ func TestWriteAndCheck(t *testing.T) {
 
 func TestEmptyRoot(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "contracts/data/tables/.keep", "")
+	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
 	// 只有空表目录：合法空快照。
 	if _, err := Compute(root); err != nil {
 		t.Fatalf("empty tables dir should be valid: %v", err)
 	}
 	// 缺表目录：必须报错，避免 -root 指错时静默成功。
-	if _, err := Compute(t.TempDir()); err == nil {
+	missing := t.TempDir()
+	writeTargets(t, missing, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	ensureDirs(t, missing, "contracts/data/entities", "contracts/data/queries")
+	if _, err := Compute(missing); err == nil {
 		t.Fatal("missing contracts/data/tables should fail")
 	}
 }
 
 func TestDuplicateIDs(t *testing.T) {
 	root := t.TempDir()
+	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
 	writeFixture(t, root, "contracts/data/tables/a.yaml", "id: data.tables.a\n")
 	writeFixture(t, root, "contracts/data/tables/b.yaml", "id: data.tables.a\n")
 	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate table id") {
@@ -173,7 +267,8 @@ func TestDuplicateIDs(t *testing.T) {
 	}
 
 	root = t.TempDir()
-	writeFixture(t, root, "contracts/data/tables/.keep", "")
+	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
 	writeFixture(t, root, "contracts/data/entities/a.yaml", "id: data.entities.x\ntable: data.tables.a\n")
 	writeFixture(t, root, "contracts/data/entities/b.yaml", "id: data.entities.x\ntable: data.tables.a\n")
 	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate entity id") {
@@ -181,7 +276,8 @@ func TestDuplicateIDs(t *testing.T) {
 	}
 
 	root = t.TempDir()
-	writeFixture(t, root, "contracts/data/tables/.keep", "")
+	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
 	writeFixture(t, root, "contracts/data/queries/a.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    tables: [ data.tables.a ]\n")
 	writeFixture(t, root, "contracts/data/queries/b.yaml", "id: data.queries.x\nqueries:\n  - name: Q\n    tables: [ data.tables.a ]\n")
 	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate query id") {
@@ -191,6 +287,8 @@ func TestDuplicateIDs(t *testing.T) {
 
 func TestMalformedYAML(t *testing.T) {
 	root := t.TempDir()
+	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
 	writeFixture(t, root, "contracts/data/tables/a.yaml", "id: [\n")
 	if _, err := Compute(root); err == nil {
 		t.Fatal("malformed YAML should fail")
@@ -199,6 +297,8 @@ func TestMalformedYAML(t *testing.T) {
 
 func TestUsedByDropsLegacyEntities(t *testing.T) {
 	root := t.TempDir()
+	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
 	writeFixture(t, root, "contracts/data/tables/a.yaml", `id: data.tables.a
 used_by:
   entities: [ data.entities.e ]

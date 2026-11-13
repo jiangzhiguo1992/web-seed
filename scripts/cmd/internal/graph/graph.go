@@ -41,17 +41,82 @@ type entitySet struct {
 	capabilities map[string]bool
 }
 
+// scanTarget 是 _meta targets 的扫描路径。
+type scanTarget struct {
+	dir  string
+	glob string
+}
+
+// resolveTarget 从 contracts/_meta/*.yaml 读取类型 targets。
+// 生产路径必须严格：缺失/重复/解析失败/targets 不完整都直接报错，避免静默清空 used_by。
+func resolveTarget(root, typ string) (scanTarget, error) {
+	files, err := filepath.Glob(filepath.Join(root, "contracts/_meta/*.yaml"))
+	if err != nil {
+		return scanTarget{}, err
+	}
+	var found *scanTarget
+	var foundPath string
+	for _, file := range files {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return scanTarget{}, err
+		}
+		var head struct {
+			Type    string `yaml:"type"`
+			Targets struct {
+				Dir  string `yaml:"dir"`
+				Glob string `yaml:"glob"`
+			} `yaml:"targets"`
+		}
+		if err := yaml.Unmarshal(b, &head); err != nil {
+			return scanTarget{}, fmt.Errorf("%s: %w", file, err)
+		}
+		if head.Type != typ {
+			continue
+		}
+		if found != nil {
+			return scanTarget{}, fmt.Errorf("duplicate meta type %q: %s and %s", typ, foundPath, file)
+		}
+		if head.Targets.Dir == "" || head.Targets.Glob == "" {
+			return scanTarget{}, fmt.Errorf("%s: targets.dir/glob must not be empty", file)
+		}
+		found = &scanTarget{dir: head.Targets.Dir, glob: head.Targets.Glob}
+		foundPath = file
+	}
+	if found == nil {
+		return scanTarget{}, fmt.Errorf("no meta target for type %q under contracts/_meta", typ)
+	}
+	return *found, nil
+}
+
 // Compute 扫描 tables/entities/queries，计算 used_by.queries。
 func Compute(root string) (*Snapshot, error) {
-	if info, err := os.Stat(filepath.Join(root, "contracts/data/tables")); err != nil || !info.IsDir() {
-		return nil, fmt.Errorf("%s: missing contracts/data/tables (not a contract root?)", root)
+	tableTarget, err := resolveTarget(root, "data.tables")
+	if err != nil {
+		return nil, err
+	}
+	entityTarget, err := resolveTarget(root, "data.entities")
+	if err != nil {
+		return nil, err
+	}
+	queryTarget, err := resolveTarget(root, "data.queries")
+	if err != nil {
+		return nil, err
+	}
+	for name, target := range map[string]scanTarget{
+		"data.tables": tableTarget, "data.entities": entityTarget, "data.queries": queryTarget,
+	} {
+		info, err := os.Stat(filepath.Join(root, target.dir))
+		if err != nil || !info.IsDir() {
+			return nil, fmt.Errorf("%s: missing %s target dir %s", root, name, target.dir)
+		}
 	}
 	tables := map[string]*tableSet{}
 	entities := map[string]*entitySet{}
 	tableFiles := map[string]string{}
 	entityFiles := map[string]string{}
 
-	for _, f := range glob(root, "contracts/data/tables/*.yaml") {
+	for _, f := range glob(root, filepath.Join(tableTarget.dir, tableTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
 			continue
 		}
@@ -69,7 +134,7 @@ func Compute(root string) (*Snapshot, error) {
 		tables[id] = &tableSet{queries: map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 	}
-	for _, f := range glob(root, "contracts/data/entities/*.yaml") {
+	for _, f := range glob(root, filepath.Join(entityTarget.dir, entityTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
 			continue
 		}
@@ -88,7 +153,7 @@ func Compute(root string) (*Snapshot, error) {
 		entityFiles[id] = rel(root, f)
 	}
 	seenQueries := map[string]string{}
-	for _, f := range glob(root, "contracts/data/queries/*.yaml") {
+	for _, f := range glob(root, filepath.Join(queryTarget.dir, queryTarget.glob)) {
 		doc, err := loadYAML(f)
 		if err != nil {
 			return nil, err

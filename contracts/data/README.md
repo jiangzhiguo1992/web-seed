@@ -137,7 +137,7 @@ redundancy_groups:
 
 - `tables`：查询读写的表，第一个是主表；可以多表；实例必须竖排；
 - `params.offset` / `params.limit`：保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数；list 返回必须同时声明两者；
-- `params`：接口入参；数组统一用 `List<T>`；`column` 可把参数绑定到物理列，绑定后类型族必须与列一致（`data.enums.*` 按 integer 列）；未绑定 `column` 时 `type` 必须能映射到类型族或 `data.enums.*`；`expr` 用于不绑定单列的表达式，二者互斥；`default` 只在 `nullable: true` 时允许，且 YAML 类型必须与 `type` 兼容；
+- `params`：接口入参；数组统一用 `List<T>`；`column` 可把参数绑定到物理列，绑定后类型族必须与列一致（`data.enums.*` 按 integer 列）；未绑定 `column` 时 `type` 必须能映射到类型族或 `data.enums.*`；`expr` 用于不绑定单列的表达式，二者互斥；`default` 只在 `nullable: true` 时允许，checker 校验可判定的标量/数组外层，枚举值与数组元素交给生成器；
 - `returns`：list<object>；每项用 `kind` 区分 `column` / `entity` / `table` / `scalar` / `affected_rows`；
 - `returns[].columns`：表行/实体的结果投影，省略表示默认投影；`secret` 列只有同模块可显式列出，`pii` 列可返回；
 - `returns[].list`：同一 query 的多项必须一致；`affected_rows` 不得为列表且必须是唯一返回项；
@@ -268,7 +268,7 @@ indexes:
 - 枚举值可改名或删除；`code` 在当前枚举内唯一
 - 删除枚举值后不要复用其 `code`；历史数据仍引用旧 code
 - 每个枚举必须写 `used_by`，只列 `data.entities` / capability ID；不列物理表或 feature；列表逐行竖排
-- `do_not` 每条必须含集合 ID `data.enums` 或本文件枚举名；通用规则放组 README
+- `do_not` 每条必须含集合 ID `data.enums`、枚举 name 或 go_type/ts_type；通用规则放组 README
 - 每个枚举项只写 `name`，项 ID 派生为 `data.enums.<name>`；不得再写 `id`
 - 不要收模块内部枚举
 

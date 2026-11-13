@@ -13,7 +13,6 @@ table:
   comment: "令牌（访问令牌与刷新令牌）"
   extends:
     - data.tables.base
-
   entities:
     - data.entities.token
 
