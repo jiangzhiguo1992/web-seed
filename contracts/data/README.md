@@ -217,9 +217,8 @@ data/redundancy.yaml ─> 冗余组校验
 
 ```yaml
 # data/storage.yaml
-tables:
-  data.tables.account:
-    partition: { strategy: range, columns: [created_at], interval: "1 month" }
+partition:
+  data.tables.account: { strategy: range, columns: [created_at], interval: "1 month" }
 
 # data/tables/account.yaml
 indexes:
@@ -336,7 +335,7 @@ retention:
 ```
 
 引擎版本、扩展、连接池、迁移工具、部署拓扑、副本/读写分离、任务锁属于运行时/部署配置，不写进 `storage.yaml`。
-**禁止在 `tables/*.yaml` 里逐表声明 engine。**
+**禁止在 `tables/*.yaml` 里声明 engine/存储位置；引擎分组只在 `storage.yaml` 的 `tables.<engine>`。**
 
 跨表冗余组不在这里：`data/redundancy.yaml` 的 `groups` 定义 `source`/`copies`，表列只写 `redundancy` 组 ID。
 

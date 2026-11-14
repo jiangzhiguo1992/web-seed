@@ -68,7 +68,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; register in contracts/data/storage.yaml tables (engine required); add an entity mapping for this table (table.entities + entity.model.tables); make gen-graph; make contract-check")
+		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; add the table to contracts/data/storage.yaml tables.<engine>; add size_class/retention/partition if needed; add an entity mapping for this table (table.entities + entity.model.tables); make gen-graph; make contract-check")
 
 	case "data.entities":
 		tableSchema, err := loadTableSchema(abs)

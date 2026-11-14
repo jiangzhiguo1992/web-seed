@@ -6,7 +6,7 @@
 //   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、code int32 范围、stability 与 summary
 //   - data.entities 的字段来源（column/computed）、指针/可空、字段校验、关系字段、used_by
 //   - data.queries 的 ID/名称、tables/joins、params、returns、伪 SQL 子句、index_ref、写归属与敏感列
-//   - data.storage 的表级物理事实（engine/size_class/retention/partition）
+//   - data.storage 的引擎分组与表级物理事实（tables/size_class/retention/partition/caches）
 //   - 表列引用的 data.tables.<t>.col.<c> 是否存在；表列不引用 data.enums.*
 //   - 任意契约中的 data.enums.* 类型引用必须存在
 //   - status 由基类提供且为 integer；物理表不得重声明；枚举只在 entity

@@ -69,7 +69,7 @@ make contract-impact id=<被修改的 ID>
 | 应用包含哪些接口 | `contracts/project.yaml` 的 `apps` 段 |
 | 定时任务 / 消费者 | `contracts/capabilities/async/<job>.yaml` |
 | 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
-| 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables` |
+| 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables.<engine>` / `size_class` / `retention` / `partition` |
 | 查询 | `contracts/data/queries/<scope>.yaml` |
 | 枚举 | `contracts/data/enums.yaml` |
 | 实体 / 状态机 / 规则 / 流程 | `contracts/business/**` |
@@ -96,7 +96,7 @@ make contract-new type=data.enums  name=note_status
 
 `column_type` 可选；指定后第一列使用该类型族，并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
 
-生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables` 下登记**（engine 必填，size_class/retention/partition 按需），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体。新实体在 `model.included_by` 列出包含它的实体，两处由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`；类型族：`contracts/_meta/_types.yaml`。
+生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables.<engine>` 列表下登记**（`size_class` / `retention` / `partition` 按需写在顶层映射），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体。新实体在 `model.included_by` 列出包含它的实体，两处由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`；类型族：`contracts/_meta/_types.yaml`。
 
 ### 3.2 校验
 

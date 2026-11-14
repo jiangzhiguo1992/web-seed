@@ -158,7 +158,7 @@ global_notes:
   - "capabilities 契约不引用 business.*（cap.flows 仅允许引用 business.states/rules/events 做编排）"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table/entity 的 used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
-  - "表级物理事实（engine/size_class/retention/partition）只在 data/storage.yaml 的 tables 声明；冗余组只在 data/redundancy.yaml 的 groups 声明"
+  - "引擎分组与表级物理事实（tables.<engine>/caches/size_class/retention/partition）只在 data/storage.yaml 声明；冗余组只在 data/redundancy.yaml 的 groups 声明"
 
 # 白名单：允许没有入边的根契约
 orphan_whitelist:

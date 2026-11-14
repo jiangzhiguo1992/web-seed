@@ -409,7 +409,7 @@ apps:
 - 表结构基类 `data/tables/_base.yaml`：`id / status / created_at / updated_at / deleted_at` 五列，所有物理表继承
 - 主键 integer（bits: 64）；时间列 `timestamp`，统一 UTC；`updated_at` 由应用写入
 - 业务表可选 `version` 做乐观锁；不是基类字段
-- 每张表的 engine/size_class/retention/partition 在 `data/storage.yaml`，禁止逐表声明 engine；部署拓扑、连接池、锁属于运行时配置，不写进契约
+- 引擎分组和表级物理事实（`tables.<engine>` / `caches` / `size_class` / `retention` / `partition`）在 `data/storage.yaml`，禁止逐表声明 engine；部署拓扑、连接池、锁属于运行时配置，不写进契约
 - 表不使用枚举：`status` 等状态列用 `integer`，枚举只在 entity，`data/enums.yaml` 的 `values[].code` 是 DB 整数码
 - 唯一性统一用唯一索引：`live_only: true` 只约束未软删行（软删后可复用）；`false`/省略约束全表（含软删行）
 - 索引命名 `idx_<table>_<cols>`；禁止数据库外键，跨表一致性由应用/业务规则保证

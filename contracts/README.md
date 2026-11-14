@@ -91,7 +91,7 @@ contracts/
 │   ├── queries/<scope>.yaml #   查询接口（入参/结果/目标表/索引，.sql 是实现）
 │   ├── enums.yaml            #   跨端枚举集合（data.enums + data.enums.<name>）
 │   ├── redundancy.yaml       #   跨表冗余列关系（groups: source/copies）
-│   └── storage.yaml          #   每张表的存储约束（engine/size_class/retention/partition）
+│   └── storage.yaml          #   按引擎分组的表清单 + size_class/retention/partition
 │
 ├── capabilities/             # ② 实现层
 │   ├── http/<module>.yaml    #   OpenAPI，按业务模块拆
@@ -460,7 +460,7 @@ AI 对负向约束的敏感度高于正向描述。
 data/tables/_base.yaml + tables/*.yaml ──> schema.sql（目标态）
                                              ├─ diff 当前 DB ──> migrations/<ts>_<name>.sql
                                              └─> sqlc 输入
-data/storage.yaml ──> 每张表的存储约束
+data/storage.yaml ──> 按引擎分组的表清单 + 表级物理事实
 data/redundancy.yaml ──> 冗余组关系
 ```
 
