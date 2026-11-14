@@ -40,7 +40,7 @@ fields:
     validation: { column: data.tables.auth_email.col.domain }
 
   - name: Entity
-    description: "注册域/二级域，例如 example.com"
+    description: "邮箱服务商，例如 gmail、163"
     source: { column: data.tables.auth_email.col.entity }
     validation: { column: data.tables.auth_email.col.entity }
 

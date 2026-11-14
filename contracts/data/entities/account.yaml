@@ -39,7 +39,7 @@ fields:
     validation: { column: data.tables.account.col.own_id }
 
   - name: Number
-    description: "账号编号；业务唯一；存储前大写归一"
+    description: "账号编号"
     source: { column: data.tables.account.col.number }
     validation: { column: data.tables.account.col.number }
 
@@ -48,8 +48,8 @@ fields:
     source: { column: data.tables.account.col.nickname }
     validation: { column: data.tables.account.col.nickname }
 
-  - name: userID
-    description: "关联用户 ID；不做数据库外键"
+  - name: UserID
+    description: "关联用户 ID"
     source: { column: data.tables.account.col.user_id }
     validation: { column: data.tables.account.col.user_id }
 

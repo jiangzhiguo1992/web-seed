@@ -37,7 +37,7 @@ columns:
     max_len: 64
     pattern: "^[A-Za-z0-9_-]+$"
     normalize: upper
-    comment: "账号编号；业务唯一；存储前大写归一"
+    comment: "账号编号"
 
   - name: nickname
     type: string

@@ -123,7 +123,7 @@ groups:
 ```yaml
 - name: ListAccounts
   tables:
-    - data.tables.account
+    - table: data.tables.account
   params:
     - { name: offset, type: integer, nullable: true, default: 0 }
     - { name: limit, type: integer, nullable: true, default: 20 }
@@ -136,7 +136,8 @@ groups:
     - data.tables.account.idx_account_own_type_own_id
 ```
 
-- `tables`：查询读写的表，第一个是主表；可以多表；实例必须竖排；
+- `tables`：查询读写的表，第一个是主表；每项 `{table, write}`，`write: true` 表示写该表，省略为只读；可以多表；实例必须竖排；
+- 有写表的 query 必须在 capabilities 的 `persistence.write_queries` / `cap.async.writes` 中登记；每个写表必须在 `persistence.table/tables` 中且归属一致；
 - `params.offset` / `params.limit`：保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数；list 返回必须同时声明两者；
 - `params`：接口入参；数组统一用 `List<T>`；`column` 可把参数绑定到物理列，绑定后类型族必须与列一致（`data.enums.*` 按 integer 列）；未绑定 `column` 时 `type` 必须能映射到类型族或 `data.enums.*`；`expr` 用于不绑定单列的表达式，二者互斥；`default` 只在 `nullable: true` 时允许，checker 校验可判定的标量/数组外层，枚举值与数组元素交给生成器；
 - `returns`：list<object>；每项用 `kind` 区分 `column` / `entity` / `table` / `scalar` / `affected_rows`；
@@ -170,7 +171,7 @@ data/redundancy.yaml ─> 冗余组校验
 ## 3. 硬规则
 
 1. **一表一文件**，不按字段拆分；基类列不重复声明。
-2. **每个可寻址项必须有稳定 ID**：表 `data.tables.<file>`、列 `data.tables.<file>.col.<col>`、约束 `data.tables.<file>.constraint.<constraint.name>`、查询 `data.queries.<module>.<snake_case(name)>`、枚举 `data.enums.<name>`。查询项和枚举项不写 `id`（由显式 `name` 派生，`name` 是稳定键，改名即新 ID）；列/约束用 `name` 派生，不得改名。契约文件名决定 ID；物理表名默认等于文件段；本仓库统一使用单数，不再通过 `table.name` 覆盖为复数。
+2. **每个可寻址项必须有稳定 ID**：表 `data.tables.<file>`、列 `data.tables.<file>.col.<col>`、约束 `data.tables.<file>.constraint.<constraint.name>`、查询 `data.queries.<module>.<snake_case(name)>`、枚举 `data.enums.<name>`。查询项和枚举项不写 `id`（由显式 `name` 派生，`name` 是稳定键，改名即新 ID）；列/约束用 `name` 派生，不得改名。契约文件名决定 ID；物理表名必须显式声明；本仓库统一使用单数。
 3. **字段类型用契约内逻辑类型**：`string`、`boolean`、`integer`、`float`、`decimal`、`datetime`、`timestamp`、`json`、`bytes`、`data.tables.<file>.col.<col>`。表列不引用 `data.enums.*`；entity 字段才用枚举。
 4. **类型族扩展字段写在列上**：`string` 用 `min_len`/`max_len`/`fixed`/`pattern`/`normalize`，`bytes` 用 `min_len`/`max_len`/`fixed`，`integer` 用 `bits`/`unsigned`/`min`/`max`，`float` 用 `bits`/`min`/`max`，`decimal` 用 `precision`/`scale`/`min`/`max`，`datetime` 用 `mode`/`timezone`，`timestamp` 用 `timezone`/`fractional_seconds`，`json` 用 `binary`。字段定义与 `required` 在 `contracts/_meta/_types.yaml` 的 `column_types.families`。
 5. **时间统一 `timestamp`**，应用层只用 UTC。
@@ -296,7 +297,7 @@ indexes:
 ## 5. 命名
 
 - 契约文件：snake_case（`tables/account.yaml` → `data.tables.account`）
-- 物理表名：默认等于契约文件段；本仓库统一使用单数，不再通过 `table.name` 覆盖为复数
+- 物理表名：必须显式声明；本仓库统一使用单数
 - 索引：`idx_<physical_table>_<cols>`；唯一索引：`uq_<physical_table>_<cols>`
 - 检查约束：`ck_<physical_table>_<rule>`
 - 查询：`data.queries.<module>.<snake_case>`
@@ -308,7 +309,7 @@ indexes:
 
 `data/storage.yaml` 是项目级单例：
 
-- `supported_engines`（postgres / mysql / mongodb）：允许的引擎集合
+- `supported_engines`（mysql / postgres / mongodb；默认 mysql）：允许的引擎集合
 - `tables.<id>.engine`：每张物理表必须显式声明存储引擎，且必须在 `supported_engines` 中
 - `tables.<id>.size_class` / `retention` / `partition`：表级保留与分区事实
 - `not_supported` 列表（sharding / multi-primary / cross-region / outbox）

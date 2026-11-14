@@ -120,8 +120,8 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 	}
 	for _, qid := range c.queryOrder {
 		q := c.queries[qid]
-		if q != nil && queryReturnsAffectedRows(q) && !c.declaredWrites[qid] {
-			c.rulef("owner-write", "query %s returns affected_rows but is not declared in any capability write list", qid)
+		if q != nil && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) && !c.declaredWrites[qid] {
+			c.rulef("owner-write", "query %s has write tables or returns affected_rows but is not declared in any capability write list", qid)
 		}
 	}
 }
@@ -206,17 +206,23 @@ func (c *Checker) checkWriteQueries(doc map[string]any, raw []any, declared map[
 			c.rulef("owner-write", "%s: unknown write query %s", rel, qid)
 			continue
 		}
-		if len(q.Targets) != 1 {
-			c.rulef("owner-write", "%s: write query %s requires exactly one target", rel, qid)
+		if len(q.Writes) == 0 {
+			c.rulef("owner-write", "%s: write query %s must mark at least one table write:true", rel, qid)
 			continue
 		}
-		target := q.Targets[0]
-		if len(tables) > 0 && !containsString(tables, target) {
-			c.rulef("owner-write", "%s: write query %s tables %s outside persistence.table/tables", rel, qid, target)
-		}
-		if module != "" {
-			if owner := c.tableOwners[target]; owner != "" && owner != module {
-				c.rulef("owner-write", "%s: module %q cannot write %s via %s (owner_module %q)", rel, module, target, qid, owner)
+		seen := map[string]bool{}
+		for _, target := range q.Writes {
+			if seen[target] {
+				continue
+			}
+			seen[target] = true
+			if len(tables) > 0 && !containsString(tables, target) {
+				c.rulef("owner-write", "%s: write query %s table %s outside persistence.table/tables", rel, qid, target)
+			}
+			if module != "" {
+				if owner := c.tableOwners[target]; owner != "" && owner != module {
+					c.rulef("owner-write", "%s: module %q cannot write %s via %s (owner_module %q)", rel, module, target, qid, owner)
+				}
 			}
 		}
 	}
@@ -331,6 +337,18 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 		}
 		if _, err := os.Stat(filepath.Join(c.root, "contracts", p)); err != nil {
 			c.rulef("schema.ref", "%s: %s path missing %s", rel, id, p)
+			continue
+		}
+		// index 的 stability 是投影，必须与契约文件自身一致；文件未声明时跳过。
+		if raw, present := m["stability"]; present {
+			want, ok := raw.(string)
+			if !ok || (want != "stable" && want != "draft" && want != "deprecated") {
+				c.rulef("schema.index-stability", "%s: %s stability must be stable/draft/deprecated, got %v", rel, id, raw)
+			} else if doc, err := loadYAML(filepath.Join(c.root, "contracts", p)); err == nil {
+				if got, _ := doc["stability"].(string); got != "" && got != want {
+					c.rulef("schema.index-stability", "%s: %s stability %q must match %s (%q)", rel, id, want, p, got)
+				}
+			}
 		}
 	}
 	for id, file := range tableIDs {

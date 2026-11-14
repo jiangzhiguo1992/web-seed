@@ -6,7 +6,7 @@ owner_module: auth
 schema_version: 1
 stability: draft
 do_not:
-  - "auth_phone 同一账号只能绑定一个手机号"
+  - "auth_phone 同一账号只能绑定一个未删除的手机号"
 
 table:
   name: auth_phone
@@ -52,6 +52,14 @@ indexes:
     comment: "手机号在未删除记录内唯一"
     used_by:
       - data.queries.auth.get_auth_phone_by_number
+      - data.queries.auth.create_auth_phone
+
+  - name: uq_auth_phone_account
+    columns: [ account_id ]
+    unique: true
+    live_only: true
+    comment: "账号绑定唯一性"
+    used_by:
       - data.queries.auth.create_auth_phone
 
 used_by:

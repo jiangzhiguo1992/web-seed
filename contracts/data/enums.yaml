@@ -78,17 +78,3 @@ enums:
       entities: []
       capabilities:
         - cap.services.auth
-
-  - name: audit_action
-    description: "审计日志动作；暂无 entity/capability 使用"
-    go_type: AuditAction
-    ts_type: AuditAction
-    values:
-      - { value: create, code: 0 }
-      - { value: update, code: 1 }
-      - { value: delete, code: 2 }
-      - { value: login, code: 3 }
-      - { value: logout, code: 4 }
-    used_by:
-      entities: []
-      capabilities: []

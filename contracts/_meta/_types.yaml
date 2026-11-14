@@ -49,7 +49,7 @@ column_types:
     json:
       description: "JSON 文档"
       params:
-        binary: { type: boolean, required: false, default: false, description: "使用 jsonb" }
+        binary: { type: boolean, required: false, default: false, description: "使用二进制 JSON 存储（引擎映射）" }
     bytes:
       description: "二进制"
       params:

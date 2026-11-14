@@ -93,6 +93,24 @@ func (c *Checker) checkStorageDoc(doc map[string]any, rel string) {
 			c.rulef("storage-doc", "%s: supported_engines[%d] must be a non-empty string", rel, i)
 		}
 	}
+	raw, ok = doc["not_supported"]
+	if !ok {
+		return
+	}
+	list, ok = asList2(raw)
+	if !ok {
+		c.rulef("storage-doc", "%s: not_supported must be a list", rel)
+		return
+	}
+	if len(list) == 0 {
+		c.rulef("storage-doc", "%s: not_supported must not be empty when present", rel)
+		return
+	}
+	for i, v := range list {
+		if s, _ := v.(string); s == "" {
+			c.rulef("storage-doc", "%s: not_supported[%d] must be a non-empty string", rel, i)
+		}
+	}
 }
 
 // columnExists 判断列是否存在于已加载的物理表（含继承列）。

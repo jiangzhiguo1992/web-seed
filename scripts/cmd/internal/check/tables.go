@@ -144,7 +144,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 
 // checkInheritance 解析多父 extends，返回每张表的完整列名与祖先列名。
 // 继承列按“列名 -> 声明表 ID”合并：同一来源（钻石继承）可重复，不同来源报 extends-conflict。
-// status 不参与继承，每张物理表必须重声明。
+// 基类 5 列由 baseFullOrigins 统一提供，物理表不得重声明（no-base-columns）。
 //
 // 分两遍：先单独做父表/环检测（避免把截断结果当完整结果），
 // 再用 cycle-safe 的可达集合计算列，保证环外下游表仍能得到完整祖先列。
@@ -734,6 +734,7 @@ func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, ta
 		}
 	}
 	add(stem)
+	add("data.tables." + stem)
 	if table != nil {
 		if n, ok := table["name"].(string); ok {
 			add(n)

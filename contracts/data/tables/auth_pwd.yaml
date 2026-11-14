@@ -53,7 +53,7 @@ columns:
 constraints:
   - name: ck_auth_pwd_password_present
     type: check
-    expr: "num_nonnulls(password_hash) >= 1"
+    expr: "password_hash IS NOT NULL"
 
 indexes:
   - name: uq_auth_pwd_username
@@ -69,7 +69,7 @@ indexes:
     columns: [ account_id ]
     unique: true
     live_only: true
-    comment: "一个账号只有一条密码记录"
+    comment: "未删除记录内一个账号只有一条密码记录"
     used_by: [ data.queries.auth.create_auth_pwd ]
 
 used_by:

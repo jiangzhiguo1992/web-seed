@@ -43,6 +43,7 @@ fields:
   - name: do_not
     type: list<string>
     required: true
+    unique: true
     description: "实例级负向约束"
 
   - name: model
@@ -70,7 +71,7 @@ fields:
         description: "标量字段来源"
         fields:
           - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "来源物理列" }
-          - { name: computed, type: string, required: false, description: "计算/聚合表达式" }
+          - { name: computed, type: string, required: false, description: "计算/聚合表达式；不得引用 @param" }
           - { name: soft, type: string, required: false, description: "外部输入或无法脚本化的来源" }
       - name: validation
         type: object
@@ -80,7 +81,7 @@ fields:
           - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "复用该列的校验规则" }
           - { name: pattern, type: string, required: false, description: "字段级正则" }
           - { name: soft, type: string, required: false, description: "无法脚本化的软校验" }
-      - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], description: "敏感级别" }
+      - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], description: "敏感级别；省略时继承来源列，computed/soft 默认 public" }
       - { name: join_column_from, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "本端连接列" }
       - { name: join_column_to, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标端连接列" }
       - { name: load, type: string, required: false, enum: [ eager, lazy ], default: lazy, description: "装载策略" }
@@ -91,7 +92,7 @@ fields:
     description: "跨字段校验；不写 DDL 与业务规则"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "校验名" }
-      - { name: expr, type: string, required: true, description: "布尔表达式" }
+      - { name: expr, type: string, required: true, description: "布尔表达式文本；checker 只校验非空（不解析）" }
       - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "失败错误码" }
 
   - name: used_by
@@ -125,7 +126,7 @@ rules:
   - { id: entity-field-column, text: "source.column 必须存在且属于本实体的表；同一列不得被两个字段引用；多表合成的每张表至少被一个字段引用", implemented_by: [ entity-field-column ] }
   - { id: entity-field-validation, text: "标量字段必须显式 validation，三选一：column 指向存在且与本字段 source.column 相同的列；pattern 是合法正则且字段为 string；soft 非空；soft 来源不得用 column", implemented_by: [ entity-field-validation ] }
   - { id: entity-field-description, text: "字段描述必须显式且非空，不从列 comment 继承", implemented_by: [ entity-field-description ] }
-  - { id: entity-field-sensitive, text: "sensitivity 省略时继承来源列，computed 省略时默认 public；显式值不得低于来源列；secret 字段名必须小写开头", implemented_by: [ entity-field-sensitive ] }
+  - { id: entity-field-sensitive, text: "sensitivity 省略时继承来源列，computed/soft 省略时默认 public；显式值不得低于来源列；secret 字段名必须小写开头", implemented_by: [ entity-field-sensitive ] }
   - { id: entity-field-json-name, text: "json_name 可省略，默认取 snake_case(name)；同一实体内 JSON 名必须唯一", implemented_by: [ entity-field-json-name ] }
   - { id: entity-relation-type, text: "relation.type 必须是 data.entities.* ID，且不得为指针", implemented_by: [ entity-relation-type ] }
   - { id: entity-relation-target, text: "relation.type 必须是已存在的 entity，且 join_column_to 的表必须被该 entity 映射", implemented_by: [ entity-relation-target ] }

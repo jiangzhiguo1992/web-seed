@@ -299,11 +299,11 @@ do_not:                        # 只写实例级；通用约束见组 README 或
   - number 唯一索引必须 live_only: true
 
 table:
-  name: account                  # 物理表名；默认等于文件段，本仓库保持单数
+  name: account                  # 物理表名；必须显式声明，本仓库保持单数
   ...
 ```
 
-- 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名默认等于文件段；本仓库统一单数，不再覆盖为复数
+- 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名必须显式声明；本仓库统一单数
 - `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 只能用户手动设置/降级，生成器只产出 `draft`；`stable` 前必须替换 TODO 并跑 `make contract-check`
 - 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` 按完整 ID 匹配 `_meta/<type>.yaml`；`data.tables.base` / `data.entities.base` 由 checker 固定识别），文件无需声明 `type`
 - 生效元数据 = `_meta/<type>.yaml` + 继承的 `_base` 字段 + 文件字段覆盖
@@ -436,7 +436,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 
 AI 对负向约束的敏感度高于正向描述。
 
-- 每个契约必须写 `do_not`
+- 每个契约必须有 `do_not`；没有实例级反例时写空列表
 - **优先记录已经发生过的错误**，而不是想象出来的风险
 - `index.yaml` 的 `common_mistakes` 是跨文件反例索引，AI 可先扫这一层
 

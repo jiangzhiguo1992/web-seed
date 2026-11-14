@@ -68,7 +68,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; register in contracts/data/storage.yaml tables (engine required); add an entity mapping for this table (table.entities + entity.model.tables); make gen-graph; make contract-check; make gen")
+		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; register in contracts/data/storage.yaml tables (engine required); add an entity mapping for this table (table.entities + entity.model.tables); make gen-graph; make contract-check")
 
 	case "data.entities":
 		tableSchema, err := loadTableSchema(abs)
@@ -83,7 +83,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: add this entity to the table's table.entities; add business fields; declare entities pointing to this entity in model.included_by; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
+		writeOut(*out, b, "next: add this entity to the table's table.entities; add business fields; declare entities pointing to this entity in model.included_by; register in contracts/index.yaml; make gen-graph; make contract-check")
 
 	case "data.queries":
 		tableSchema, err := loadTableSchema(abs)
@@ -98,7 +98,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace the EXISTS skeleton; declare write queries in capabilities persistence.write_queries/writes; register in contracts/index.yaml; make gen-graph; make contract-check; make gen")
+		writeOut(*out, b, "next: replace the EXISTS skeleton; declare write queries in capabilities persistence.write_queries/writes; register in contracts/index.yaml; make gen-graph; make contract-check")
 
 	case "data.enums":
 		b, err := contractspec.RenderEnumItem(schema, *name)

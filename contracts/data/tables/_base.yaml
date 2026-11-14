@@ -14,7 +14,7 @@ columns:
     nullable: false
     primary_key: true
     bits: 64
-    comment: "主键 integer（bits: 64）；数据库自增方式生成"
+    comment: "主键 integer（bits: 64）；生成方式由实现决定"
 
   - name: status
     type: integer

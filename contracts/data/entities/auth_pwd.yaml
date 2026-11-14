@@ -6,7 +6,6 @@ owner_module: auth
 schema_version: 1
 stability: draft
 do_not:
-  - "auth_pwd.passwordHash 禁止出现在任何 DTO、日志、事件"
   - "auth_pwd 不写密码强度规则；规则在 platform/security/auth_policy"
 
 model:
@@ -36,7 +35,7 @@ fields:
     validation: { column: data.tables.auth_pwd.col.username }
 
   - name: passwordHash
-    description: "argon2id 口令哈希；新密码写入此列"
+    description: "口令哈希"
     source: { column: data.tables.auth_pwd.col.password_hash }
     validation: { column: data.tables.auth_pwd.col.password_hash }
 

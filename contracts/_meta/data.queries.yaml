@@ -43,6 +43,7 @@ fields:
   - name: do_not
     type: list<string>
     required: true
+    unique: true
     description: "实例级负向约束"
 
   - name: queries
@@ -51,16 +52,22 @@ fields:
     description: "查询项列表"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "方法名" }
-      - { name: tables, type: list<string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "读写的表；第一张为主表" }
+      - name: tables
+        type: list<object>
+        required: true
+        description: "读写的表；第一项为主表"
+        item_fields:
+          - { name: table, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "表 ID" }
+          - { name: write, type: boolean, required: false, default: false, description: "是否写该表；省略为只读" }
       - name: params
         type: list<object>
         required: false
         description: "方法入参"
         item_fields:
           - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: string, required: true, description: "类型族键、SQL 别名或 data.enums.*；List<T> 表示数组" }
+          - { name: type, type: string, required: true, description: "类型族键、受支持的 SQL 别名或 data.enums.*；List<T> 表示数组" }
           - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "绑定列；数组参数绑定元素列" }
-          - { name: expr, type: string, required: false, description: "参与表达式" }
+          - { name: expr, type: string, required: false, description: "参数表达式；与 column 互斥，checker 只校验非空" }
           - { name: nullable, type: boolean, required: false, default: false, description: "是否可空" }
           - { name: default, type: any, required: false, description: "null 时的默认值" }
           - { name: description, type: string, required: false, description: "参数说明" }
@@ -77,22 +84,21 @@ fields:
           - { name: table, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "kind=table 的表 ID" }
           - { name: type, type: string, required: false, description: "kind=scalar 的类型" }
           - { name: columns, type: list<string>, required: false, unique: true, min_items: 1, pattern: '^(?:[a-z][a-z0-9_]*|data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*)$', description: "投影列；省略表示默认投影；table 用裸列名，entity 用 data.tables.<t>.col.<c>" }
-          - { name: nullable, type: boolean, required: false, default: false, description: "是否可空" }
           - { name: description, type: string, required: false, description: "返回字段说明" }
-      - { name: index_ref, type: list<string>, required: false, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "依赖的索引：data.tables.<t>.pk 或 data.tables.<t>.<index-name>" }
+      - { name: index_ref, type: list<string>, required: false, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "依赖的索引：data.tables.<t>.pk 或 <index-name>" }
 
 rules:
   - { id: query-key-order, text: "查询契约字段顺序必须与 _meta/data.queries.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ query-key-order ] }
   - { id: query-name-unique, text: "query.name 派生的项 ID（<文件 id>.<snake_case(name)>）必须全局唯一；改名即新 ID；同一 name 或 snake_case 冲突都不允许", implemented_by: [ query-name-unique ] }
   - { id: query-shape, text: "affected_rows 不得为列表，必须是唯一返回项，且不得带 column/entity/table/type/columns；table 返回也必须是唯一返回项", implemented_by: [ query-shape ] }
-  - { id: query-table-shape, text: "tables 非空、每张表必须存在、不得指向 data.tables.base", implemented_by: [ query-table-shape ] }
-  - { id: query-params, text: "params 的 name 不得重复；type 不得为空，未绑定 column 时必须映射到类型族或 data.enums.*；column/expr 互斥且 expr 非空；default 只在 nullable:true 时允许；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器；offset/limit 按 query-pagination 校验", implemented_by: [ query-params ] }
+  - { id: query-table-shape, text: "tables 非空、表 ID 不得重复、每张表必须存在、不得指向 data.tables.base；第一项为主表", implemented_by: [ query-table-shape ] }
+  - { id: query-params, text: "params 的 name 不得重复；type 不得为空，未绑定 column 时必须映射到类型族（含别名）或 data.enums.*；column/expr 互斥且 expr 非空；default 只在 nullable:true 时允许；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器；offset/limit 按 query-pagination 校验", implemented_by: [ query-params ] }
   - { id: query-param-column, text: "params[].column 必须属于查询的 tables；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型；data.enums.* 按 integer 列校验）", implemented_by: [ query-param-column ] }
   - { id: query-pagination, text: "offset/limit 是保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；offset 默认 0，limit 默认必须为正数；list 返回必须同时声明两者", implemented_by: [ query-pagination ] }
-  - { id: query-returns, text: "returns 非空；name 不得重复；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的实体必须存在且主表在 tables 中；kind=table 的表必须存在且是 tables[0]；scalar.type 必须是受支持的类型族、其别名或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
+  - { id: query-returns, text: "returns 非空；name 不得重复；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的实体必须存在且主表在 tables 中；kind=table 的表必须存在且是 tables[0].table；scalar.type 必须是受支持的类型族、其别名或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
   - { id: query-return-columns, text: "kind=column 的 column、kind=table 的 columns（裸列名）、kind=entity 的 columns（data.tables.<t>.col.<c>）必须属于查询表/实体映射表", implemented_by: [ query-return-columns ] }
   - { id: query-entity-coverage, text: "entity 显式 columns 必须覆盖全部非指针、非 secret 字段；字段来源表必须在 tables 中", implemented_by: [ query-entity-coverage ] }
-  - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回；columns 省略时列来源 secret 默认不投影，computed secret 不参与列裁剪、跨模块一律拒绝；同模块需要时必须显式列出", implemented_by: [ query-sensitive-columns ] }
+  - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回或绑定为参数；kind=table 且目标表含 secret 列时必须显式写 columns；entity 默认投影排除 secret，computed secret 不参与列裁剪、跨模块一律拒绝；同模块需要时必须显式列出", implemented_by: [ query-sensitive-columns ] }
   - { id: query-index-ref, text: "index_ref 必须指向查询表上的 PK 或 indexes[].name；显式索引必须在 used_by 中列出该查询；单表查询至少一个 index_ref", implemented_by: [ query-index-ref ] }
   - { id: query-index-used-by, text: "index.used_by 的每个查询必须在 index_ref 中引用该索引", implemented_by: [ query-index-used-by ] }
   - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识、owner_module 或任一 query 名；通用规则放组 README，禁止复制", implemented_by: [ query-do-not-specific ] }

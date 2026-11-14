@@ -10,6 +10,7 @@ do_not:
   - "多表合成只读；关系连接列写在 fields，SQL JOIN 条件写在 query"
   - "computed 表达式不随查询变化；不同查询的算法写在 query.returns"
   - "数据库表达不了的复杂校验写在 validation，不要搬到 tables"
+  - "sensitivity: secret 字段禁止出现在 DTO、日志、事件"
   - "不要引用 business.*"
 
 fields:

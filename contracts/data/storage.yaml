@@ -1,4 +1,4 @@
-# 数据存储约束（项目级单例）；只约束落盘，不写运行时配置。
+# 数据存储约束（项目级单例）。
 
 id: data.storage
 summary: "数据存储约束"
@@ -10,9 +10,8 @@ do_not:
   - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
 
 supported_engines: [mysql, postgres, mongodb]
+not_supported: [sharding, multi-primary, cross-region, outbox]
 
-# 每张物理表的存储事实；键是 data.tables.* 契约 ID。
-# engine 必须显式声明，且必须在 supported_engines 中；size_class 省略时为 small。
 tables:
   data.tables.account:
     engine: mysql

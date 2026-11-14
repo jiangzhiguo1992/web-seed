@@ -51,6 +51,9 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 		t.Fatalf("extends must live under table: %#v", doc)
 	}
 	table, _ := doc["table"].(map[string]any)
+	if table["name"] != "note" {
+		t.Fatalf("table.name must be scaffolded: %#v", table)
+	}
 	extends, _ := table["extends"].([]any)
 	if len(extends) != 1 || extends[0] != "data.tables.base" {
 		t.Fatalf("table.extends must be hardcoded to [data.tables.base]: %#v", table["extends"])
@@ -184,8 +187,15 @@ func TestRenderQuery(t *testing.T) {
 		t.Fatalf("query return shape not scaffolded: %#v", ret)
 	}
 	targets, _ := q["tables"].([]any)
-	if len(targets) != 1 || targets[0] != "data.tables.account" {
-		t.Fatalf("tables not scaffolded: %#v", q["tables"])
+	if len(targets) != 1 {
+		t.Fatalf("tables not scaffolded as {table, write}: %#v", q["tables"])
+	}
+	firstTarget, _ := targets[0].(map[string]any)
+	if firstTarget["table"] != "data.tables.account" {
+		t.Fatalf("tables not scaffolded as {table, write}: %#v", q["tables"])
+	}
+	if _, ok := firstTarget["write"]; ok {
+		t.Fatalf("read scaffold must omit write: %#v", firstTarget)
 	}
 	if _, ok := q["access"]; ok {
 		t.Fatalf("access must be omitted for read scaffold: %#v", q)

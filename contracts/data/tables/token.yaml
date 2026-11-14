@@ -21,13 +21,13 @@ columns:
     type: integer
     nullable: false
     redundancy: account_own_type
-    comment: "归属类型整数码；冗余自 account.own_type，映射 data.enums.own_type"
+    comment: "归属类型整数码；映射 data.enums.own_type"
 
   - name: own_id
     type: integer
     nullable: false
     redundancy: account_own_id
-    comment: "归属 ID（冗余自 account.own_id）"
+    comment: "归属 ID"
 
   - name: account_id
     type: integer
@@ -44,7 +44,7 @@ columns:
     type: integer
     nullable: true
     redundancy: account_user_id
-    comment: "关联用户 ID（冗余自 account.user_id）"
+    comment: "关联用户 ID"
 
   - name: access_token_hash
     type: string
@@ -52,7 +52,7 @@ columns:
     min_len: 32
     max_len: 128
     sensitivity: secret
-    comment: "访问令牌哈希；只存哈希，禁止存原文"
+    comment: "访问令牌哈希"
 
   - name: refresh_token_hash
     type: string
@@ -60,7 +60,7 @@ columns:
     min_len: 32
     max_len: 128
     sensitivity: secret
-    comment: "刷新令牌哈希；只存哈希，禁止存原文"
+    comment: "刷新令牌哈希"
 
   - name: access_expire_at
     type: timestamp

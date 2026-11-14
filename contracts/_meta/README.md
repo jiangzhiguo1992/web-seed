@@ -113,7 +113,7 @@ scripts/cmd/
   - `data/storage.yaml` 的 `tables`：覆盖每张物理表且无孤儿；engine/size_class/retention/partition 的结构与取值；`data/redundancy.yaml` 的组 ID、source/copies 与列声明双向一致
   - `table.entities` 显式记录映射本表的实体，checker 校验；`used_by` 只记生成的 `queries`
   - `owner_module` 与 capabilities 写表归属一致（只有 `cap.services` / `cap.async` 可写）；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
-  - `persistence.queries` 引用的查询项必须存在；`persistence.write_queries`（service）与 `writes`（async）必须已在 queries/uses 中登记，且目标单表、归属一致；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
+  - `persistence.queries` 引用的查询项必须存在；`persistence.write_queries`（service）与 `writes`（async）必须已在 queries/uses 中登记，且每个写表在 `persistence.table/tables` 中、归属一致；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
   - 索引名同一 schema 内必须全局唯一
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
   - 所有契约的顶层 `fields` 必须竖排（block style），嵌套 `item_fields` 不限制（`schema.fields-style`）；`table.extends/entities`、`model.extends/tables/included_by` 必须竖排（`schema.list-style`）
@@ -153,7 +153,7 @@ scripts/cmd/
   - `model.included_by` 显式声明，checker 校验与关系字段入边一致；`used_by.queries` 与 returns 本实体的 query 完全一致，`used_by.capabilities` 与引用本实体的 capability 完全一致
 - `data/queries/*.yaml`
   - 结构按 `_meta/data.queries.yaml`；item 不写 id，name=PascalCase 且全局唯一；项 ID 由 `<文件 id>.<snake_case(name)>` 派生
-  - `tables` 是查询读写的表；必须存在、不是 `data.tables.base`；可以多表；实例必须竖排
+  - `tables` 是查询读写的表；每项 `{table, write}`，`write: true` 表示写该表；必须存在、不是 `data.tables.base`、不得重复；第一项为主表；可以多表；实例必须竖排
   - `offset` / `limit` 是保留分页参数名：出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数；list 返回必须同时声明两者
   - `params` 只声明接口入参；name 唯一、type 非空；未绑定 `column` 时 type 必须映射到类型族或 `data.enums.*`；`column` 绑定列后类型族必须与列一致（`data.enums.*` 按 integer 列）；`expr` 与 `column` 互斥；`default` 只在 `nullable: true` 时允许，checker 校验可判定的标量/数组外层，枚举值与数组元素交给生成器
   - `returns` 是 list<object>：每项用 `kind` 区分 `column` / `entity` / `table` / `scalar` / `affected_rows`；kind 专属字段必须出现，互斥字段不得出现
@@ -161,7 +161,7 @@ scripts/cmd/
   - `columns` 只用于 `table` / `entity`；实体显式 `columns` 必须覆盖全部非指针、非 `secret` 字段
   - 单表 query 至少一个 `index_ref`；显式索引必须与 `used_by` 双向一致
   - `sensitivity: secret` 列只有同模块可显式返回；`pii` 可返回
-  - 写查询在 capabilities 的 `persistence.write_queries`（service）或 `writes`（async）中声明；必须已在 queries/uses 中登记，checker 校验存在、单表、归属
+  - 写查询在 capabilities 的 `persistence.write_queries`（service）或 `writes`（async）中声明；查询必须有至少一个 `write: true` 的表；必须已在 queries/uses 中登记，checker 校验存在、每个写表归属
 - 实体/查询/能力对表的引用存在
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复；entities/queries 文件必须登记
 

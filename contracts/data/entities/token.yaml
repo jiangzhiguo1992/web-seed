@@ -6,7 +6,6 @@ owner_module: auth
 schema_version: 1
 stability: draft
 do_not:
-  - "token 的哈希字段禁止出现在任何 DTO、日志、事件"
   - "token 实体不要写 JWT 签发或校验逻辑"
   - "token 原文只在签发响应返回一次"
 
@@ -33,7 +32,7 @@ fields:
     validation: { column: data.tables.token.col.own_type }
 
   - name: OwnID
-    description: "归属 ID（冗余自 account.own_id）"
+    description: "归属 ID"
     source: { column: data.tables.token.col.own_id }
     validation: { column: data.tables.token.col.own_id }
 
@@ -48,17 +47,17 @@ fields:
     validation: { column: data.tables.token.col.device_id }
 
   - name: UserID
-    description: "关联用户 ID（冗余自 account.user_id）"
+    description: "关联用户 ID"
     source: { column: data.tables.token.col.user_id }
     validation: { column: data.tables.token.col.user_id }
 
   - name: accessTokenHash
-    description: "访问令牌哈希；只存哈希，禁止存原文"
+    description: "访问令牌哈希"
     source: { column: data.tables.token.col.access_token_hash }
     validation: { column: data.tables.token.col.access_token_hash }
 
   - name: refreshTokenHash
-    description: "刷新令牌哈希；只存哈希，禁止存原文"
+    description: "刷新令牌哈希"
     source: { column: data.tables.token.col.refresh_token_hash }
     validation: { column: data.tables.token.col.refresh_token_hash }
 

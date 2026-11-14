@@ -560,11 +560,19 @@ func asList(v any) []any {
 	return l
 }
 
-// queryTableRefs 读取查询的 tables。
+// queryTableRefs 读取查询的 tables；兼容旧 string 形状，生产契约使用 {table, write}。
 func queryTableRefs(m map[string]any) []string {
 	var out []string
 	for _, raw := range asList(m["tables"]) {
 		if s, ok := raw.(string); ok && s != "" {
+			out = append(out, s)
+			continue
+		}
+		tm, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		if s, _ := tm["table"].(string); s != "" {
 			out = append(out, s)
 		}
 	}

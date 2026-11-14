@@ -24,15 +24,15 @@ type queryParam struct {
 }
 
 type queryReturn struct {
-	Name     string
-	Kind     string // column / entity / table / scalar / affected_rows
-	Column   string
-	Entity   string
-	Table    string
-	Type     string
-	Columns  []string
-	Nullable bool
-	List     bool
+	Name       string
+	Kind       string // column / entity / table / scalar / affected_rows
+	Column     string
+	Entity     string
+	Table      string
+	Type       string
+	Columns    []string
+	HasColumns bool
+	List       bool
 }
 
 type queryInfo struct {
@@ -41,6 +41,7 @@ type queryInfo struct {
 	File        string
 	OwnerModule string
 	Targets     []string
+	Writes      []string
 	HasTables   bool
 	Params      []queryParam
 	Returns     []queryReturn
@@ -116,7 +117,20 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 	if _, ok := m["tables"]; ok {
 		q.HasTables = true
 	}
-	q.Targets = stringList(m["tables"])
+	for _, raw := range asList(m["tables"]) {
+		tm, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		table, _ := tm["table"].(string)
+		if table == "" {
+			continue
+		}
+		q.Targets = append(q.Targets, table)
+		if write, _ := tm["write"].(bool); write {
+			q.Writes = append(q.Writes, table)
+		}
+	}
 	if _, ok := m["returns"]; ok {
 		q.HasReturns = true
 	}
@@ -153,7 +167,7 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		r.Table, _ = rm["table"].(string)
 		r.Type, _ = rm["type"].(string)
 		r.Columns = stringList(rm["columns"])
-		r.Nullable, _ = rm["nullable"].(bool)
+		_, r.HasColumns = rm["columns"]
 		r.List, _ = rm["list"].(bool)
 		q.Returns = append(q.Returns, r)
 	}
@@ -269,7 +283,12 @@ func (c *Checker) checkQueryTable(q *queryInfo) {
 		}
 		return
 	}
+	seen := map[string]bool{}
 	for _, t := range q.Targets {
+		if seen[t] {
+			c.rulef("query-table-shape", "%s: duplicate table %s", where, t)
+		}
+		seen[t] = true
 		if t == c.baseID {
 			c.rulef("query-table-shape", "%s: tables references data.tables.base", where)
 			continue
@@ -439,6 +458,9 @@ func (c *Checker) checkQueryParamColumns(q *queryInfo) {
 			c.rulef("query-param-column", "%s: column %s not found", where, p.Column)
 			continue
 		}
+		if normalizeSensitivity(meta.sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[t] {
+			c.rulef("query-sensitive-columns", "%s: param binds secret column %s outside module %s", where, col, c.tableOwners[t])
+		}
 		family, _, _, ok := paramLogicalType(p.Type)
 		if !ok {
 			c.rulef("query-param-column", "%s: type %q cannot bind a column", where, p.Type)
@@ -562,6 +584,10 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 				c.rulef("query-returns", "%s: unknown table %s", rw, r.Table)
 				continue
 			}
+			// 显式 columns: [] 由 schema.min_items 报错；这里只拦“省略 columns”的默认投影。
+			if !r.HasColumns && len(r.Columns) == 0 && c.tableHasSecretColumns(r.Table) {
+				c.rulef("query-sensitive-columns", "%s: kind=table on %s requires explicit columns (table has secret columns)", rw, r.Table)
+			}
 			c.checkTableReturnColumns(rw, q, r.Table, r.Columns)
 		case "scalar":
 			if r.Type == "" {
@@ -611,6 +637,16 @@ func (c *Checker) checkReturnColumn(where string, q *queryInfo, ref string) {
 	if normalizeSensitivity(meta.sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[t] {
 		c.rulef("query-sensitive-columns", "%s: returns secret column %s outside module %s", where, col, c.tableOwners[t])
 	}
+}
+
+// tableHasSecretColumns 判断表上是否有 secret 列；有则 kind=table 必须显式裁剪投影。
+func (c *Checker) tableHasSecretColumns(table string) bool {
+	for _, meta := range c.tableColumns[table] {
+		if normalizeSensitivity(meta.sensitivity) == sensitivitySecret {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Checker) checkTableReturnColumns(where string, q *queryInfo, table string, columns []string) {

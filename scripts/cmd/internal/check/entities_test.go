@@ -702,6 +702,62 @@ func TestTableReturnColumnsSecretScope(t *testing.T) {
 	}
 }
 
+func TestTableReturnWithSecretColumnsRequiresProjection(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {
+				"id":     {typ: "integer", primaryKey: true},
+				"secret": {typ: "string", sensitivity: sensitivitySecret},
+			},
+		},
+		tableOwners: map[string]string{"data.tables.x": "x"},
+	}
+	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "x", Targets: []string{"data.tables.x"},
+		Returns: []queryReturn{{Name: "row", Kind: "table", Table: "data.tables.x"}}}
+	c.checkQueryReturns(q)
+	if !strings.Contains(entityErrs(c), "requires explicit columns") {
+		t.Fatalf("secret table without explicit projection not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Returns[0].Columns = []string{"id"}
+	c.checkQueryReturns(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("explicit safe projection reported: %v", c.errs)
+	}
+
+	// 显式 columns: [] 由 schema.min_items 报错，这里不应重复报 secret 投影。
+	c.errs = nil
+	q.Returns[0].Columns = nil
+	q.Returns[0].HasColumns = true
+	c.checkQueryReturns(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("explicit empty projection double-reported: %v", c.errs)
+	}
+}
+
+func TestQuerySecretParamScope(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {"secret": {typ: "string", sensitivity: sensitivitySecret}},
+		},
+		tableOwners: map[string]string{"data.tables.x": "x"},
+	}
+	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "other", Targets: []string{"data.tables.x"},
+		Params: []queryParam{{Name: "secret", Type: "text", Column: "data.tables.x.col.secret"}}}
+	c.checkQueryParamColumns(q)
+	if !strings.Contains(entityErrs(c), "param binds secret column") {
+		t.Fatalf("cross-module secret param not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.OwnerModule = "x"
+	c.checkQueryParamColumns(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("same-module secret param reported: %v", c.errs)
+	}
+}
+
 func TestEntityCoverageComputedSensitive(t *testing.T) {
 	e := &entityInfo{ID: "data.entities.x", OwnerModule: "account", Tables: []string{"data.tables.x"}, Primary: "data.tables.x",
 		Fields: []entityFieldInfo{
@@ -1065,7 +1121,7 @@ func TestEntityFieldDefaults(t *testing.T) {
 }
 
 func TestWriteQueries(t *testing.T) {
-	q := &queryInfo{ID: "data.queries.x.create", Targets: []string{"data.tables.x"}}
+	q := &queryInfo{ID: "data.queries.x.create", Targets: []string{"data.tables.x"}, Writes: []string{"data.tables.x"}}
 	c := &Checker{
 		tableOwners: map[string]string{"data.tables.x": "x"},
 		queries:     map[string]*queryInfo{q.ID: q},
@@ -1086,6 +1142,35 @@ func TestWriteQueries(t *testing.T) {
 	c.checkWriteQueries(map[string]any{"module": "x"}, []any{q.ID}, map[string]bool{}, []string{"data.tables.x"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
 	if !strings.Contains(entityErrs(c), "must be listed") {
 		t.Fatalf("undeclared write query not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Writes = nil
+	c.checkWriteQueries(map[string]any{"module": "x"}, []any{q.ID}, declared, []string{"data.tables.x"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
+	if !strings.Contains(entityErrs(c), "must mark at least one table write:true") {
+		t.Fatalf("write query without write table not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Writes = []string{"data.tables.x", "data.tables.y"}
+	c.tableOwners["data.tables.y"] = "x"
+	c.checkWriteQueries(map[string]any{"module": "x"}, []any{q.ID}, declared, []string{"data.tables.x", "data.tables.y"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
+	if len(c.errs) != 0 {
+		t.Fatalf("multi-table write reported: %v", c.errs)
+	}
+}
+
+func TestUndeclaredWriteQueryRejected(t *testing.T) {
+	c := &Checker{
+		root:       t.TempDir(),
+		queryOrder: []string{"data.queries.x.create"},
+		queries: map[string]*queryInfo{
+			"data.queries.x.create": {ID: "data.queries.x.create", Writes: []string{"data.tables.x"}},
+		},
+	}
+	c.checkCapabilityPersistence(map[string]string{})
+	if !strings.Contains(entityErrs(c), "not declared in any capability write list") {
+		t.Fatalf("undeclared write table query not reported: %v", c.errs)
 	}
 }
 
@@ -1108,6 +1193,29 @@ func TestQueryTableShape(t *testing.T) {
 	c.checkQueryTable(q)
 	if !strings.Contains(entityErrs(c), "tables references data.tables.base") {
 		t.Fatalf("base target not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q = &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.x", "data.tables.x"}}
+	c.checkQueryTable(q)
+	if !strings.Contains(entityErrs(c), "duplicate table data.tables.x") {
+		t.Fatalf("duplicate table not reported: %v", c.errs)
+	}
+}
+
+func TestQueryTablesWriteFlag(t *testing.T) {
+	q := parseQuery(map[string]any{
+		"name": "CreateX",
+		"tables": []any{
+			map[string]any{"table": "data.tables.x", "write": true},
+			map[string]any{"table": "data.tables.y"},
+		},
+	}, "q.yaml", "data.queries.x", "x")
+	if len(q.Targets) != 2 || q.Targets[0] != "data.tables.x" || q.Targets[1] != "data.tables.y" {
+		t.Fatalf("tables not parsed: %#v", q.Targets)
+	}
+	if len(q.Writes) != 1 || q.Writes[0] != "data.tables.x" {
+		t.Fatalf("write tables not parsed: %#v", q.Writes)
 	}
 }
 

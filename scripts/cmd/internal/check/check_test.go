@@ -563,6 +563,28 @@ func TestStorageDocShape(t *testing.T) {
 	if !strings.Contains(strings.Join(c.errs, "\n"), "supported_engines must be a list") {
 		t.Fatalf("non-list supported_engines not reported: %v", c.errs)
 	}
+
+	c.errs = nil
+	doc["supported_engines"] = []any{"postgres"}
+	doc["not_supported"] = "sharding"
+	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported must be a list") {
+		t.Fatalf("non-list not_supported not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	doc["not_supported"] = []any{"sharding", ""}
+	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported[1] must be a non-empty string") {
+		t.Fatalf("empty not_supported item not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	doc["not_supported"] = []any{}
+	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported must not be empty when present") {
+		t.Fatalf("empty not_supported list not reported: %v", c.errs)
+	}
 }
 
 func TestStorageDocRequiresSupportedEngines(t *testing.T) {
@@ -827,6 +849,77 @@ func TestTableIndexColumnsUnique(t *testing.T) {
 	c.validateValue([]any{"code", "code"}, columnsField, "indexes.columns")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unique]") {
 		t.Fatalf("duplicate index columns not reported: %v", c.errs)
+	}
+}
+
+func TestIndexStabilityMatchesContract(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("contracts/index.yaml", `
+schema_version: 1
+entries:
+  - { id: data.tables.x, path: data/tables/x.yaml, stability: stable }
+`)
+	write("contracts/data/tables/x.yaml", `
+id: data.tables.x
+stability: draft
+`)
+	c := &Checker{root: root}
+	c.checkIndex(map[string]string{}, &Schema{}, &Schema{}, &Schema{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.index-stability]") {
+		t.Fatalf("index stability mismatch not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	write("contracts/index.yaml", `
+schema_version: 1
+entries:
+  - { id: data.tables.x, path: data/tables/x.yaml, stability: 1 }
+`)
+	c.checkIndex(map[string]string{}, &Schema{}, &Schema{}, &Schema{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "stability must be stable/draft/deprecated") {
+		t.Fatalf("invalid index stability not reported: %v", c.errs)
+	}
+}
+
+func TestDoNotUnique(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.queries.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doNot, ok := contractspec.FindField(schema.Fields, "do_not")
+	if !ok {
+		t.Fatal("do_not field missing")
+	}
+	c := &Checker{}
+	c.validateValue([]any{}, doNot, "do_not")
+	if len(c.errs) != 0 {
+		t.Fatalf("empty do_not must be legal: %v", c.errs)
+	}
+	c.validateValue([]any{"x", "x"}, doNot, "do_not")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unique]") {
+		t.Fatalf("duplicate do_not not reported: %v", c.errs)
+	}
+}
+
+func TestDoNotSpecificityAcceptsContractID(t *testing.T) {
+	c := &Checker{}
+	doc := map[string]any{"do_not": []any{"data.tables.ab 不得为空"}}
+	c.checkDoNotSpecificity(doc, "contracts/data/tables/ab.yaml", "ab", nil, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	if len(c.errs) != 0 {
+		t.Fatalf("contract id token not accepted for short stem: %v", c.errs)
 	}
 }
 

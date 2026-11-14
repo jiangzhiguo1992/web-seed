@@ -12,7 +12,7 @@ do_not:
 queries:
   - name: GetAccount
     tables:
-      - data.tables.account
+      - { table: data.tables.account }
     params:
       - { name: id, type: integer, column: data.tables.account.col.id }
     returns:
@@ -21,7 +21,7 @@ queries:
 
   - name: GetAccountByNumber
     tables:
-      - data.tables.account
+      - { table: data.tables.account }
     params:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns:
@@ -30,7 +30,7 @@ queries:
 
   - name: ExistsAccountNumber
     tables:
-      - data.tables.account
+      - { table: data.tables.account }
     params:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns:
@@ -39,7 +39,7 @@ queries:
 
   - name: ListAccounts
     tables:
-      - data.tables.account
+      - { table: data.tables.account }
     params:
       - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
       - { name: own_type, type: data.enums.own_type, column: data.tables.account.col.own_type, nullable: true }
@@ -53,7 +53,7 @@ queries:
 
   - name: CreateAccount
     tables:
-      - data.tables.account
+      - { table: data.tables.account, write: true }
     params:
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: own_type, type: data.enums.own_type, column: data.tables.account.col.own_type }
@@ -67,7 +67,7 @@ queries:
 
   - name: UpdateAccount
     tables:
-      - data.tables.account
+      - { table: data.tables.account, write: true }
     params:
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
@@ -77,7 +77,7 @@ queries:
 
   - name: SetAccountStatus
     tables:
-      - data.tables.account
+      - { table: data.tables.account, write: true }
     params:
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: status, type: integer, column: data.tables.account.col.status }
@@ -87,7 +87,7 @@ queries:
 
   - name: SoftDeleteAccount
     tables:
-      - data.tables.account
+      - { table: data.tables.account, write: true }
     params:
       - { name: id, type: integer, column: data.tables.account.col.id }
     returns:
@@ -96,7 +96,7 @@ queries:
 
   - name: ListStalePendingAccounts
     tables:
-      - data.tables.account
+      - { table: data.tables.account }
     params:
       - { name: older_than_days, type: integer }
       - { name: offset, type: integer, nullable: true, default: 0 }
@@ -107,7 +107,7 @@ queries:
 
   - name: SoftDeleteStalePendingAccounts
     tables:
-      - data.tables.account
+      - { table: data.tables.account, write: true }
     params:
       - { name: ids, type: List<integer>, column: data.tables.account.col.id }
     returns:

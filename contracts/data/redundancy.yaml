@@ -1,4 +1,4 @@
-# 跨表冗余列关系；组 ID 只写在表列 redundancy 上。
+# 跨表冗余列关系（项目级单例）。
 
 id: data.redundancy
 summary: "跨表冗余列关系"

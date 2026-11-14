@@ -93,6 +93,7 @@ var knownRuleIDs = map[string]bool{
 	"schema.fields-style":         true,
 	"schema.id-from-file":         true,
 	"schema.index":                true,
+	"schema.index-stability":      true,
 	"schema.list-style":           true,
 	"schema.load":                 true,
 	"schema.meta":                 true,

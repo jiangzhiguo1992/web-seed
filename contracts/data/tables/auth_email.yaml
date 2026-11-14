@@ -6,7 +6,7 @@ owner_module: auth
 schema_version: 1
 stability: draft
 do_not:
-  - "auth_email 同一账号只能绑定一个邮箱"
+  - "auth_email 同一账号只能绑定一个未删除的邮箱"
 
 table:
   name: auth_email
@@ -62,6 +62,14 @@ indexes:
     comment: "邮箱在未删除记录内唯一"
     used_by:
       - data.queries.auth.get_auth_email_by_username_domain
+      - data.queries.auth.create_auth_email
+
+  - name: uq_auth_email_account
+    columns: [ account_id ]
+    unique: true
+    live_only: true
+    comment: "账号绑定唯一性"
+    used_by:
       - data.queries.auth.create_auth_email
 
 used_by:

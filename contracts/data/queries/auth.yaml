@@ -13,7 +13,7 @@ do_not:
 queries:
   - name: GetAuthPwdByUsername
     tables:
-      - data.tables.auth_pwd
+      - { table: data.tables.auth_pwd }
     params:
       - { name: username, type: text, column: data.tables.auth_pwd.col.username }
     returns:
@@ -32,7 +32,7 @@ queries:
 
   - name: CreateAuthPwd
     tables:
-      - data.tables.auth_pwd
+      - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: id, type: integer, column: data.tables.auth_pwd.col.id }
       - { name: account_id, type: integer, column: data.tables.auth_pwd.col.account_id }
@@ -55,7 +55,7 @@ queries:
 
   - name: UpdateAuthPwdHash
     tables:
-      - data.tables.auth_pwd
+      - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: id, type: integer, column: data.tables.auth_pwd.col.id }
       - { name: password_hash, type: text, column: data.tables.auth_pwd.col.password_hash }
@@ -65,7 +65,7 @@ queries:
 
   - name: RecordAuthPwdLoginSuccess
     tables:
-      - data.tables.auth_pwd
+      - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: id, type: integer, column: data.tables.auth_pwd.col.id }
     returns:
@@ -74,7 +74,7 @@ queries:
 
   - name: RecordAuthPwdLoginFailure
     tables:
-      - data.tables.auth_pwd
+      - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: id, type: integer, column: data.tables.auth_pwd.col.id }
       - { name: lock_until, type: timestamp, column: data.tables.auth_pwd.col.locked_until, nullable: true }
@@ -84,7 +84,7 @@ queries:
 
   - name: GetAuthPhoneByNumber
     tables:
-      - data.tables.auth_phone
+      - { table: data.tables.auth_phone }
     params:
       - { name: code, type: text, column: data.tables.auth_phone.col.code }
       - { name: number, type: text, column: data.tables.auth_phone.col.number }
@@ -103,7 +103,7 @@ queries:
 
   - name: CreateAuthPhone
     tables:
-      - data.tables.auth_phone
+      - { table: data.tables.auth_phone, write: true }
     params:
       - { name: id, type: integer, column: data.tables.auth_phone.col.id }
       - { name: account_id, type: integer, column: data.tables.auth_phone.col.account_id }
@@ -123,11 +123,13 @@ queries:
           - status
           - created_at
           - updated_at
-    index_ref: [ data.tables.auth_phone.uq_auth_phone_number ]
+    index_ref:
+      - data.tables.auth_phone.uq_auth_phone_number
+      - data.tables.auth_phone.uq_auth_phone_account
 
   - name: GetAuthEmailByUsernameDomain
     tables:
-      - data.tables.auth_email
+      - { table: data.tables.auth_email }
     params:
       - { name: username, type: text, column: data.tables.auth_email.col.username }
       - { name: domain, type: text, column: data.tables.auth_email.col.domain }
@@ -147,7 +149,7 @@ queries:
 
   - name: CreateAuthEmail
     tables:
-      - data.tables.auth_email
+      - { table: data.tables.auth_email, write: true }
     params:
       - { name: id, type: integer, column: data.tables.auth_email.col.id }
       - { name: account_id, type: integer, column: data.tables.auth_email.col.account_id }
@@ -169,11 +171,13 @@ queries:
           - status
           - created_at
           - updated_at
-    index_ref: [ data.tables.auth_email.uq_auth_email_username_domain ]
+    index_ref:
+      - data.tables.auth_email.uq_auth_email_username_domain
+      - data.tables.auth_email.uq_auth_email_account
 
   - name: CreateToken
     tables:
-      - data.tables.token
+      - { table: data.tables.token, write: true }
     params:
       - { name: id, type: integer, column: data.tables.token.col.id }
       - { name: own_type, type: data.enums.own_type, column: data.tables.token.col.own_type }
@@ -202,7 +206,7 @@ queries:
 
   - name: GetTokenByRefresh
     tables:
-      - data.tables.token
+      - { table: data.tables.token }
     params:
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
     returns:
@@ -221,7 +225,7 @@ queries:
 
   - name: GetTokenByAccess
     tables:
-      - data.tables.token
+      - { table: data.tables.token }
     params:
       - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
     returns:
@@ -240,7 +244,7 @@ queries:
 
   - name: RevokeToken
     tables:
-      - data.tables.token
+      - { table: data.tables.token, write: true }
     params:
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
     returns:
@@ -249,7 +253,7 @@ queries:
 
   - name: DeleteExpiredTokens
     tables:
-      - data.tables.token
+      - { table: data.tables.token, write: true }
     params:
       - { name: limit, type: integer, nullable: true, default: 100 }
     returns:
@@ -258,7 +262,7 @@ queries:
 
   - name: ListTokensByAccount
     tables:
-      - data.tables.token
+      - { table: data.tables.token }
     params:
       - { name: offset, type: integer, nullable: true, default: 0 }
       - { name: limit, type: integer, nullable: true, default: 20 }

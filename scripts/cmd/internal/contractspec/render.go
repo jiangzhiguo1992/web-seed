@@ -25,6 +25,7 @@ type tableScaffold struct {
 }
 
 type tableDef struct {
+	Name     string   `yaml:"name"`
 	Comment  string   `yaml:"comment"`
 	Extends  []string `yaml:"extends"`
 	Entities []string `yaml:"entities"`
@@ -109,10 +110,15 @@ type queryFileScaffold struct {
 
 type queryItemScaffold struct {
 	Name     string                `yaml:"name"`
-	Tables   []string              `yaml:"tables"`
+	Tables   []queryTableScaffold  `yaml:"tables"`
 	Params   []queryParamScaffold  `yaml:"params"`
 	Returns  []queryReturnScaffold `yaml:"returns"`
 	IndexRef flowStrings           `yaml:"index_ref"`
+}
+
+type queryTableScaffold struct {
+	Table string `yaml:"table"`
+	Write bool   `yaml:"write,omitempty"`
 }
 
 type queryReturnScaffold struct {
@@ -164,7 +170,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		return nil, err
 	}
 	tableField, _ := FindField(s.Fields, "table")
-	if err := requireSupported(tableField.Fields, map[string]bool{"comment": true, "extends": true, "entities": true}, s.Type+".table"); err != nil {
+	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "comment": true, "extends": true, "entities": true}, s.Type+".table"); err != nil {
 		return nil, err
 	}
 	columnField, _ := FindField(s.Fields, "columns")
@@ -211,6 +217,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		OwnerModule:   module,
 		DoNot:         []string{},
 		Table: tableDef{
+			Name:     name,
 			Comment:  "TODO: 表说明",
 			Extends:  []string{baseTableID},
 			Entities: []string{},
@@ -378,6 +385,15 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 	}, "data.queries.queries"); err != nil {
 		return nil, err
 	}
+	tablesField, ok := FindField(queriesField.ItemFields, "tables")
+	if !ok {
+		return nil, fmt.Errorf("RenderQuery: tables is missing in schema")
+	}
+	if err := requireSupported(tablesField.ItemFields, map[string]bool{
+		"table": true, "write": true,
+	}, "data.queries.queries.tables"); err != nil {
+		return nil, err
+	}
 	paramsField, ok := FindField(queriesField.ItemFields, "params")
 	if !ok {
 		return nil, fmt.Errorf("RenderQuery: params is missing in schema")
@@ -409,7 +425,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 		DoNot:         []string{},
 		Queries: []queryItemScaffold{{
 			Name:     "Exists" + pascal(name),
-			Tables:   []string{tableID},
+			Tables:   []queryTableScaffold{{Table: tableID}},
 			Params:   []queryParamScaffold{{Name: "id", Type: "integer", Column: tableID + ".col.id"}},
 			Returns:  []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}},
 			IndexRef: flowStrings{tableID + ".pk"},
