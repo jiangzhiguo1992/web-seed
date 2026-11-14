@@ -43,15 +43,15 @@ lint-tools: ## 契约工具 vet + 格式检查
 typecheck: ## 前端类型检查
 	pnpm -C apps/web -r --if-present typecheck
 
-gen: ## 重新生成全部契约产物（gen-graph 已实现，其余 P2）
+gen: contract-check ## 重新生成全部契约产物（gen-graph 已实现，其余 P2；生成前强制校验契约）
 	@echo "gen: 部分实现。已实现：gen-graph。待实现：gen-openapi / gen-db / gen-client / gen-env"
 	@exit 1
 
-gen-openapi: ## 合并 capabilities/http/* + apps/* → generated/openapi（P2）
+gen-openapi: contract-check ## 合并 capabilities/http/* + apps/* → generated/openapi（P2）
 	@echo "gen-openapi: 尚未实现（P2）"
 	@exit 1
 
-gen-db: ## data/tables/* → schema.sql + migrations（P2）
+gen-db: contract-check ## data/tables/* → schema.sql + migrations（P2）
 	@echo "gen-db: 尚未实现（P2）"
 	@exit 1
 
@@ -61,7 +61,7 @@ gen-graph: ## 按引用计算并写回 table/entity 的 used_by
 gen-graph-check: ## 校验 used_by 是否最新（CI）
 	cd scripts/cmd && go run ./gen_graph -root "$(CURDIR)" -check
 
-gen-client: ## 合并 spec → apps/web/packages/api-client（P2）
+gen-client: contract-check ## 合并 spec → apps/web/packages/api-client（P2）
 	@echo "gen-client: 尚未实现（P2）"
 	@exit 1
 

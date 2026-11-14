@@ -83,15 +83,13 @@ contracts/
 │   └── data.enums.yaml       #   枚举字段树 + 值域 + 规则
 ├── project.yaml              # 项目元信息 + 应用组合（derive 的唯一输入）
 │
-├── data/                     # ① 数据契约（不感知业务）
-│   ├── tables/_base.yaml     #   表结构基类：5 列 + do_not（不生成 DDL、不建实体）
-│   ├── tables/<file>.yaml     #   物理表结构（文件名决定 ID，物理表名可独立覆盖）
-│   ├── entities/_base.yaml   #   实体字段基类：5 列 + 类型级 do_not
-│   ├── entities/<entity>.yaml#   读模型：继承 _base，只写业务字段、关系、validation
-│   ├── queries/<scope>.yaml #   查询接口（入参/结果/目标表/索引，.sql 是实现）
-│   ├── enums.yaml            #   跨端枚举集合（data.enums + data.enums.<name>）
-│   ├── redundancy.yaml       #   跨表冗余列关系（groups: source/copies）
-│   └── storage.yaml          #   按引擎分组的表清单 + size_class/retention/partition
+├── data/                     # ① 数据契约（模型、边界与取舍见 data/README.md）
+│   ├── tables/<file>.yaml    #   物理表（_base.yaml 为基类，不是物理表）
+│   ├── entities/<file>.yaml  #   业务读模型（_base.yaml 为基类）
+│   ├── queries/<scope>.yaml  #   读写形状：入参/返回/索引引用，不含 SQL
+│   ├── enums.yaml            #   跨端枚举：integer code ↔ 名称
+│   ├── storage.yaml          #   单例：引擎归属 / size_class / 保留 / 分区
+│   └── redundancy.yaml       #   单例：跨表列复制关系
 │
 ├── capabilities/             # ② 实现层
 │   ├── http/<module>.yaml    #   OpenAPI，按业务模块拆
@@ -210,7 +208,9 @@ capabilities 契约里**不出现任何 `business.*`**：
 
 实现代码按 `business` 契约编写，但契约层不表达这种依赖。
 
-### 3.3 图校验
+### 3.3 图校验（⬜ P2）
+
+以下为 P2 目标；`make contract-graph` / `make contract-impact` 当前是占位目标（`exit 1`），尚未产生保护。
 
 ```bash
 make contract-graph     # 校验 + 按需生成 graph / lineage
@@ -245,7 +245,7 @@ business.states.account ─subject→ data.entities.account ─table→ data.tab
 1. 是否破坏兼容？是 → 升版本或走弃用流程
 2. 是否需要新版本？URL major（`/v1` → `/v2`）
 3. 是否需要数据迁移？先改 `data/tables`，再生成迁移
-4. 影响面是什么？`make contract-impact id=<id>` 输出受影响的 API、页面、测试、生成物
+4. 影响面是什么？`make contract-impact id=<id>` 输出受影响的 API、页面、测试、生成物（⬜ P2 未实现，当前靠人工检索）
 
 **变更必须原子**：一个 PR 内同时包含 契约 + 生成物 + 实现 + 测试。
 禁止"先合契约、实现下个 PR 补"——那会让 CI 长期红，闸门失效。
@@ -383,55 +383,40 @@ table:
 
 ### 4.6 人读视图自动生成
 
-`docs/contracts/generated/` 由契约生成，**禁止手写**：
+`docs/contracts/generated/` 下的视图由契约生成，**禁止手写**（生成器 ⬜ P2）：
 
-| 文件 | 来源 |
-|---|---|
-| `errors.md` | `platform/errors.yaml` |
-| `permissions.md` | `platform/security/permissions.yaml` |
-| `data.md` | `data/tables/*.yaml` |
-| `lineage.md` | 按需生成的 graph |
+| 文件 | 来源 | 状态 |
+|---|---|---|
+| `errors.md` | `platform/errors.yaml` | ⬜ P2 |
+| `permissions.md` | `platform/security/permissions.yaml` | ⬜ P2 |
+| `data.md` | `data/tables/*.yaml` | ⬜ P2 |
+| `lineage.md` | 按需生成的 graph | ⬜ P2 |
 
 AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 
 ---
 
-## 5. AI 工作流
+## 5. 契约层的 AI 规则
 
-```
-1. 读 docs/index.md                 获取地图
-2. 读对应 playbook                  获取本任务必读契约 ID 列表
-3. 写/改契约时读 _meta/README.md    字段语义、生成行为、易错点
-   并读 _meta/<type>.yaml
-4. 读 index.yaml 相关条目           只看 summary，不读正文
-5. 读 2–5 个契约文件                含 do_not / examples
-6. 新建契约：make contract-new ...  生成骨架，替换占位符
-7. 改完契约：make contract-check    结构 / ID / 约束 / 索引 / used_by
-8. make gen && make verify          生成 + 锚点图 + 测试
-9. PR 附 make contract-impact 报告
-```
+阅读顺序与读取预算见 `docs/index.md` §1；本节只写契约层特有的内容。
 
 契约不足 → 先改契约，再实现；禁止"先写代码后补契约"。
 `make gen` 是契约 → 产物，不是生成契约；新建契约用 `make contract-new`。
 
-### 5.1 读取预算
+### 5.1 生成器上限：6 个
 
-单个任务最多读 5 个契约文件。超过说明任务粒度太大，应拆任务，而不是硬读。
-
-### 5.2 生成器上限：6 个
-
-| 生成器 | 输出 |
-|---|---|
-| openapi | Go server 类型 + TS client |
-| db | DDL / migrations / sqlc 输入 |
-| business | 状态机、常量、断言、测试骨架 |
-| features | 路由、页面骨架、类型 |
-| platform | 配置校验、常量、CSS 变量 |
-| graph | 按需 graph；`lineage.md` 入 `docs/contracts/generated/` |
+| 生成器 | 输出 | 状态 |
+|---|---|---|
+| openapi | Go server 类型 + TS client | ⬜ P2 |
+| db | DDL / migrations / sqlc 输入 | ⬜ P2 |
+| business | 状态机、常量、断言、测试骨架 | ⬜ P2 |
+| features | 路由、页面骨架、类型 | ⬜ P2 |
+| platform | 配置校验、常量、CSS 变量 | ⬜ P2 |
+| graph | `used_by` 写回；`lineage.md` 入 `docs/contracts/generated/` | ✅ 写回 / ⬜ lineage |
 
 超过 6 个，维护成本会超过收益。
 
-### 5.3 反例优先
+### 5.2 反例优先
 
 AI 对负向约束的敏感度高于正向描述。
 
@@ -439,7 +424,7 @@ AI 对负向约束的敏感度高于正向描述。
 - **优先记录已经发生过的错误**，而不是想象出来的风险
 - `index.yaml` 的 `common_mistakes` 是跨文件反例索引，AI 可先扫这一层
 
-### 5.4 漂移回归
+### 5.3 漂移回归
 
 每次发现 AI 写错（绕过 API 直接查表、手写状态判断、改生成物、用未登记错误码），必须做且只做其中一件：
 
@@ -468,8 +453,22 @@ data/redundancy.yaml ──> 冗余组关系
 |---|---|
 | 禁止手写迁移 | 改 `tables/*.yaml` 后跑 `make gen-db` |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
-| CI 双向校验 | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
+| CI 双向校验（⬜ P5） | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
 | 结构化 DDL | 分区用 `storage.partition.<id>`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
+
+### 6.1 迁移禁止操作
+
+生成器落地后（P2），以下操作直接报错、不产出迁移；在此之前靠 review 拦截：
+
+| 禁止 | 替代做法 |
+|---|---|
+| `DROP COLUMN` | 先标 deprecated，停止写入一个版本后再删 |
+| `RENAME COLUMN` | 加新列 → 双写 → 回填 → 切读 → 删旧列 |
+| 给已有数据的表加 `NOT NULL` 且无默认值 | 加可空 → 回填 → 加约束 |
+| 原地改列类型 | 新列 + 回填 + 切换 |
+| `size_class.<table>=large` 的表非 `CONCURRENTLY` 建索引 | `CREATE INDEX CONCURRENTLY`（`transaction: false`） |
+
+迁移文件名：`<utc_timestamp>_<snake_case_name>.sql`。
 
 **诚实边界**：生产环境的在线 DDL（大表加索引、数据回填）无法全自动。契约约束**最终态**，迁移**过程**允许人工介入，并用 `-- manual-adjust: <原因>` 显式声明。
 
@@ -490,15 +489,10 @@ data/redundancy.yaml ──> 冗余组关系
 
 ---
 
-## 8. 当前状态
+## 8. 当前阶段
 
-P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器待实现。
+P2：契约与 `contract-check` 已可用，生成器待实现（逐项状态见 §5.1）。
 
-- **_meta**：`_types.yaml` / `data.tables.yaml` / `data.enums.yaml` / `data.entities.yaml` / `data.queries.yaml` + `make contract-new` + `make contract-check`
-- **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email` / `verification_body` / `verification_action`、`entities/*`、`enums`、`queries/{account,auth,token,verification}`、`storage`
-- **capabilities**：`http/{shared,account,auth}`、`async/{account_cleanup,verification_cleanup}`、`services/{account,auth}`（其余模块待建）
-- **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件
+`generated` / `tested` 是目标值，不代表已有闸门；每条契约的实际 enforcement 与 stability 以 `index.yaml` 为准。data 层已启用的闸门见 `data/README.md` §7。
 
-> P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`contract-check` 目前覆盖 data.tables / data.enums / data.entities / data.queries（含结构化 SQL 形状）、跨文件引用与 used_by；`gen` 与其余类型 schema 待补。`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。
-
-`_meta/<type>.yaml` 是字段规范，不是实例契约，不登记在 `index.yaml`。
+`_meta/<type>.yaml` 是字段规范，不是实例契约，不登记 `index.yaml`，也不进入 `generated/`。

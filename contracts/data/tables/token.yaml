@@ -7,6 +7,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "access_token_hash / refresh_token_hash 只存哈希，不存原文"
+  - "token 原文只在 /auth/login、/auth/refresh 的签发响应中返回一次；不落库、不写日志"
 
 table:
   name: token

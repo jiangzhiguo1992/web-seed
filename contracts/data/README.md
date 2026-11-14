@@ -1,91 +1,127 @@
 # 数据契约（data）
 
-> **`data/tables/*.yaml` 是表结构的唯一真相源。**
-> `apps/api/migrations/*.sql` 与 `apps/api/internal/generated/db/schema.sql` 都是生成物。
-> 禁止手写迁移；改表先改契约，再 `make gen-db`。
-> 字段语义与生成行为见 `contracts/_meta/_types.yaml` / `data.tables.yaml` / `data.enums.yaml`；新建表用 `make contract-new`，改完跑 `make contract-check`。
+> 数据层只回答两件事：**数据库里有什么**（`tables`）、**业务怎么读写与解释它**（`entities` / `queries` / `enums`）。
+> 字段语义、值域与生成行为以 `contracts/_meta/data.*.yaml` 为准；校验入口 `make contract-check`。
+> 全局契约规则（ID、依赖链、变更流程）与迁移政策在 `contracts/README.md`，本文件不复述。
+
+**标记约定**：`[强制: <rule-id>]` 表示该约束由 `contract-check` 强制；`[评审]` 表示无机器校验、靠 review。
 
 ---
 
-## 1. 文件职责
+## 1. 边界
 
-| 文件 | 内容 | 产物 |
-|---|---|---|
-| `tables/_base.yaml` | 表结构基类：5 列 + `do_not`（单例，字段树与规则复用 `data.tables`） | 无（不生成 DDL、不建实体、不落存储） |
-| `tables/<file>.yaml` | 物理表：字段、类型、约束、索引、继承 | `schema.sql`、增量 `migrations/*.sql`、sqlc 输入 |
-| `entities/<entity>.yaml` | 读模型：Go 类型 `name`、表映射、语义字段（来源/关系/枚举/computed）、复杂校验 | Go/TS 类型 |
-| `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
-| `queries/<scope>.yaml` | 查询契约：入参、结果、目标表、索引 | 查询接口、sqlc 代码 |
-| `storage.yaml` | 按引擎分组的表清单、size_class/retention/partition、允许的引擎与不支持拓扑 | DDL 生成约束、配置校验 |
-| `redundancy.yaml` | 跨表冗余列关系：组 ID、source/copies | 冗余校验 |
+data 在单向链末端，没有下游：
 
-### 1.1 基类不是物理表
+```
+feature ──> business ──> capabilities ──> data
+```
 
-`tables/_base.yaml` 只收敛 5 个字段：
+- 被 `capabilities` 通过 `persistence.queries` 读取、通过写查询修改；被 `business` 通过 `data.entities` 引用为业务主体。
+- **不负责**：业务不变量（`business/rules`）、写归属编排（`capabilities/services`）、部署与运行时（`platform`）。
+- 目录内只有五类契约。没有第六类；表达力不足时先扩展本层字段，不要新增平行概念。
 
-- `id`：integer（bits: 64），主键；具体生成方式由实现决定
-- `status`：业务状态整数码；由基类统一提供，枚举映射在 entity
-- `created_at`：数据库默认 `now()`
-- `updated_at`：应用写入
-- `deleted_at`：软删时间；为空表示未删除
+---
 
-基类的 `do_not` 直接写在 `_base.yaml`；列字段树与规则沿用 `data.tables` 的 meta。物理表必须在 `table.extends` 声明父表（可多父，链最终到达 `data.tables.base`）；不得重复声明任何继承列；枚举映射只在 entity。
+## 2. 五类契约
 
-### 1.2 表与实体是两层
-
-| 概念 | 视角 | 位置 | 内容 |
+| 契约 | 回答的问题 | 唯一职责 | 不是 |
 |---|---|---|---|
-| 表（table） | 持久化 | `data/tables/<file>.yaml` | 字段、类型、可空、默认值、CHECK、索引、`used_by`、冗余组 ID |
-| 实体（entity） | 业务 | `data/entities/<entity>.yaml` | 继承 `_base`、业务字段/关系字段、`validation`（数据库表达不了的复杂校验） |
+| `tables/<file>.yaml` | 数据库里有什么 | 列、类型、可空、默认、CHECK、索引、继承 | 不是 DDL 文本容器 |
+| `entities/<entity>.yaml` | 业务怎么读它 | Go 读模型：字段语义、关系、跨字段校验 | 不是写模型 |
+| `queries/<scope>.yaml` | 能怎么读写 | 入参、返回、目标表、索引引用 | 不是 SQL |
+| `enums.yaml` | 值是什么 | 跨端词汇：integer `code` ↔ 名称 | 不是表约束 |
+| `storage.yaml` / `redundancy.yaml` | 物理侧事实 | 引擎归属、`size_class`、保留、分区 / 跨表列复制 | 不是部署配置，也不是索引或视图 |
 
-实体是**读模型**，不是表的第二份写模型：
+`enums.yaml` / `storage.yaml` / `redundancy.yaml` 是**固定文件**：文件名不随实例增长。`storage` / `redundancy` 各自只有一个契约 ID；`enums.yaml` 承载多个 `data.enums.<name>` 项。`tables/` / `entities/` / `queries/` 按实例一文件一契约，实例清单以 `contracts/index.yaml` 为准，本文件不列举。
 
-- **每张物理表至少被一个 entity 映射**；否则数据没有业务出口。基类不是物理表，不参与映射。
-- **一个实体可以跨多表**：合成只读，JOIN 条件写在 query，entity 用 `source.column` 声明字段来源。
-- **约束层次不同**：`CHECK (char_length(number) > 0)` 是 DDL；「已软删的账号不可修改」是业务不变量。
+### 2.1 关系
 
-5 个通用字段（`ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`）在 `entities/_base.yaml`；类型从 `tables/_base.yaml` 继承，不在 `entities/_base.yaml` 重写。具体实体在 `model.extends` 写 `[data.entities.base]`，只写业务字段。基类字段不得重声明；`Status` 允许用 `data.enums.*` 特化类型，且必须是 `fields` 第一项。
+```
+queries    ──(tables / index_ref)──>  tables
+queries    ──(returns)─────────────>  entities
+entities   ──(source.column)───────>  tables
+entities   ──(type)────────────────>  enums
+storage    ──(tables / partition)──>  tables
+redundancy ──(source / copies)─────>  tables
+```
 
-实体字段顺序以 `contracts/_meta/data.entities.yaml` 的 `fields` 为准；`model` 内顺序以 `model.fields` 为准。`owner_module` 必须等于主表的 `owner_module`。
+六条边里五条直接落到 `tables`；`entities` 是唯一中转层——`queries` 经由它返回业务数据，`enums` 则被它引用为字段类型。**`tables` 是所有边的终点。**
 
-实体和字段名都是 Go 标识符：实体 `model.name` 首字母大写表示 public、小写表示 internal；字段 `name` 同理，首字母大写导出、小写不导出。`sensitivity: secret` 字段必须小写开头。`json_name` 省略时取 `snake_case(name)`；只有自定义命名才需要写。字段不再有 `visibility` / `read_only` / `write_only` / `format` / `deprecated`。类型不另起一套：显式 `type` 复用 `_meta/_types.yaml` 的 `column_types.families`，或写 `data.enums.*`。
+### 2.2 两个基类不是实例
 
-`fields` 同时承载两种字段，二者互斥：
+`tables/_base.yaml` 与 `entities/_base.yaml` 是两个固定单例，ID 由 checker 写死识别（`[强制: base-file]`、`[强制: entity-base-file]`）：
 
-- **标量字段**：`description` + `source` + `validation` 必填。`source` 三选一：`column: data.tables.<t>.col.<c>`（数据库列）、`computed: "<表达式>"`（计算/聚合，必须使用指针，且不得引用 `@param`）、`soft: "<说明>"`（外部传入或无法脚本化的来源）。指针用 `nullable: true` 表达，必须与来源列 `nullable` 完全一致；`type` 的 `*` 前缀是兼容写法，与 `nullable` 互斥；枚举字段只能映射 integer 列。`validation` 三选一：`column`（复用列规则，必须等于 `source.column`）、`pattern`（字符串硬正则）、`soft`（脚本无法验证的软表达式）；`soft` 来源不得用 `column`。
-- **关系字段**：`type`（目标 entity）+ `join_column_from` + `join_column_to` + `load`（eager/lazy，默认 lazy）必填；基数由两端列唯一性推断；不得写 `source`/`validation`/`sensitivity`（空对象也不允许）。`load: lazy` 表示默认不关联查询。
+- `data.tables.base`：5 列（`id` / `status` / `created_at` / `updated_at` / `deleted_at`）+ 类型级 `do_not`。**不是物理表**：不生成 DDL、不建实体、不落存储。
+- `data.entities.base`：5 个基类字段的实体声明；类型从 `tables/_base.yaml` 继承，不重写。
 
-`model.tables[0]` 是主表，`ID` 必须来自主表 `id` 列。实体字段不重复物理长度参数；统计口径不同时用 query 的 `returns`，不要把查询专属聚合塞进实体。
+物理表通过 `table.extends` 继承；实体通过 `model.extends: [data.entities.base]` 继承。基类列与字段不得重声明（`[强制: no-base-columns]`、`[强制: entity-no-base-fields]`）。
 
-### 1.3 约束与校验的分界
+---
 
-| 类型 | 写在哪 | 例子 |
+## 3. 为什么这样分层
+
+每一条都是取舍，不是风格。
+
+### 3.1 表不使用外键
+
+**选择**：跨表一致性由应用服务与 `business.rules` 保证（`[强制: no-foreign-key]`）。
+**理由**：外键把部署顺序、分库分表、软删语义绑死在数据库上；契约层要允许引擎替换（`storage.yaml` 的 `supported_engines`）。
+**代价**：一致性校验必须显式写，漏写不会报错。跨表不变量的落点是 `business.rules`，不是注释。
+
+### 3.2 表不使用枚举，只存 integer 码
+
+**选择**：`status` 等状态列是 `integer`；`data.enums.<name>.values[].code` 是数据库里的整数码，映射在 entity（`[强制: column-type]`）。
+**理由**：枚举值会改名、会增加；DDL 只认整数，改枚举不触发迁移。
+**代价**：entity 漏映射就是裸整数；新增枚举必须先定 `code`，且旧 `code` 不得复用（历史行仍引用）。
+
+### 3.3 entity 是读模型，不是第二份写模型
+
+**选择**：写模型只有 `tables` 一份；entity 只描述"读出来长什么样"。
+**理由**：两份写模型必然漂移。entity 承载数据库表达不了的东西：字段语义、关系、跨字段校验（`validation`）、枚举映射。
+**代价**：写路径的形状由 `queries` + `capabilities.persistence` 约束。不要给 entity 加 `CreateXxx` / `UpdateXxx` 这类写形状。
+
+### 3.4 query 不写 SQL
+
+**选择**：只声明 `tables` / `params` / `returns` / `index_ref`。
+**理由**：SQL 语义 checker 无法验证；写进契约就是第二份真相，必然与 `.sql` 实现漂移。
+**代价**：SQL 质量靠 `EXPLAIN` 与评审。契约只保证"这个查询被设计过、用的索引被登记过"。
+
+### 3.5 storage 独立成单例
+
+**选择**：引擎归属、`size_class`、`retention`、`partition` 不写在单表里。
+**理由**：这些是项目级物理事实，不是表的业务结构。放在单表里会让"换引擎"变成改 N 个文件。
+**代价**：新增表要登记两处（`tables/` + `storage.tables.<engine>`），漏登记被 `[强制: storage-registry]` 拦住。存储类特性用结构化字段表达（`partition` / `indexes[].expression`），不设 `ddl_ext` 逃生口。
+
+---
+
+## 4. 边界判据
+
+### 4.1 约束写在哪一层
+
+| 约束类型 | 写在哪 | 判据 |
 |---|---|---|
-| 数据库能表达的约束 | `tables/*.yaml` 的 `constraints` / `indexes` | `CHECK`、唯一索引；唯一性统一用 `indexes[].unique`；表不使用 enum 约束 |
-| 跨字段/跨表/业务不变量 | `entities/*.yaml` 的 `validation` | 邮箱拆分一致性、令牌过期顺序 |
-| 业务行为规则 | `business/rules/*.yaml` | 编号唯一、仅本人可改 |
+| 数据库能表达的 | `tables` 的 `constraints` / `indexes` | 单行、单表、DDL 可表达（`CHECK`、唯一索引） |
+| 跨字段 / 跨表不变量 | `entities` 的 `validation` | 需要多列或多表联合判断，但仍是数据形状 |
+| 业务行为规则 | `business/rules` | 涉及"谁可以做""什么时候可以做" |
 
-**不要把 DDL 搬到 entities，也不要把业务规则塞进 tables。**
+**不要把 DDL 搬进 entity，也不要把业务规则塞进 table。** 判据：这条约束失效时，该由数据库拒绝，还是由业务拒绝？
 
-### 1.4 索引必须有查询，冗余组必须在 redundancy 登记
+模块名用单数（`account`）；集合响应字段与动作名按语义保留复数（`accounts` / `listAccounts`）。**（`[评审]`）**
 
-**索引不是“将来可能有用”的占位符。** `indexes[].used_by` 至少列一个查询项 ID，`contract-check` 校验：
+时间列统一用 `timestamp`（应用层只处理 UTC），`datetime` 族不使用。**（`[评审]`）**
 
-- 每个索引都有 `used_by`；
-- 每个 ID 都是已存在的 `data.queries.*` 项；
-- 该查询的 `tables` 包含当前表。
+### 4.2 索引与冗余
 
-因此 `uq_*` 也要写 `used_by`（插入/唯一性校验也是使用方）；没有查询的索引直接删除，不要写一个假 ID。
-
-**冗余是显式设计，不是随手复制。** 表列只写组 ID，组明细在 `data/redundancy.yaml`：
+- **索引必须有查询**：`indexes[].used_by` 至少一个 `data.queries.*` 项，且该查询的 `tables` 包含本表（`[强制: index-used-by]`、`[强制: index-used-by-ref]`）。唯一索引也要写——插入与唯一性校验同样是使用方。没有查询的索引直接删除，不要写假 ID。
+- **冗余必须登记**：列上只写组 ID，组明细在 `redundancy.yaml` 的 `groups`（`[强制: redundant-ref]`）。权威数据只在 `source`，`copy` 的 `type` / `nullable` 必须一致。
 
 ```yaml
-# data/tables/account.yaml
+# tables/account.yaml
 columns:
   - name: own_type
     redundancy: account_own_type
 
-# data/redundancy.yaml
+# redundancy.yaml
 groups:
   account_own_type:
     source: data.tables.account.col.own_type
@@ -93,34 +129,49 @@ groups:
       - data.tables.token.col.own_type
 ```
 
-约束：
+### 4.3 哪些是手写，哪些是生成的
 
-- 每个组只能有一个 `source`，且至少有一个 `copy`；
-- 组内所有列必须写同一个 `redundancy` 组 ID，且组必须列出该列（双向一致）；
-- `copy` 与 `source` 的 `type` / `nullable` 必须一致；
-- 组 ID 是双方共享的稳定 ID；权威数据只保留在 `source`。
+反向映射与生成物是两类东西，混淆是最高频的错误：
 
-### 1.5 查询声明索引引用：`index_ref`
+| 字段 | 谁写 | 含义 |
+|---|---|---|
+| `table.entities` | 手写 | 映射本表的 entity 集合（`[强制: table-entities]`） |
+| `model.included_by` | 手写 | 通过关系字段指向本实体的 entity（`[强制: entity-included-by]`） |
+| `indexes[].used_by` | 手写 | 使用该索引的 query（设计声明） |
+| `used_by.queries` | `make gen-graph` | 返回本实体的 query（`[强制: used-by-generated]`，禁止手改） |
+| `used_by.capabilities` | `make gen-graph` | 引用本实体的 capability |
 
-`data/queries/*.yaml` 的每个 query 用 `index_ref` 指向表契约里已有的索引，而不是重新声明列前缀：
+这五个字段都只记**直接关系**，不展开传递闭包；完整影响面用 `make contract-impact id=<id>` 查询（P2 未实现）。
+
+### 4.4 保留策略是选择，不是枚举
+
+`retention.<table>` 不是从若干策略里四选一：`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只在确实存在对应清理策略时才写；主数据与认证绑定默认不写。**这是选择判据，`[评审]`。** 值域与约束由 `[强制: storage-retention]` 校验（含 `cache_ttl` 只能用于 `caches` 中的表且不得超过 `ttl`）。
+
+---
+
+## 5. 最小正例
+
+### 5.1 表：约束 + 唯一索引 + 使用方
 
 ```yaml
-- name: ListAccounts
-  index_ref:
-    - data.tables.account.idx_account_created_at_id
-    - data.tables.account.idx_account_own_type_own_id
+constraints:
+  - name: ck_account_deleted_consistent
+    type: check
+    expr: "(status = 3) = (deleted_at IS NOT NULL)"
+
+indexes:
+  - name: uq_account_number
+    columns: [ number ]
+    unique: true
+    live_only: true
+    comment: "账号编号在未删除账号内唯一"
+    used_by:
+      - data.queries.account.get_account_by_number
 ```
 
-- `data.tables.<t>.pk` 表示主键；`data.tables.<t>.<index-name>` 指向 `indexes[].name`；
-- 显式索引必须在 `indexes[].used_by` 中列出该 query，反向也校验；
-- 单表查询至少一个 `index_ref`；多表查询可省略，也可引用任一查询表上的索引；
-- 索引是否真正命中仍由 `EXPLAIN` 与评审负责，契约层只保证索引被设计和使用方登记。
+`live_only: true` 只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。
 
-### 1.6 查询是接口契约
-
-查询只声明**入参、结果、目标表与索引引用**；SQL 如何执行不在契约里，由实现负责；读写归属在 capabilities 层。
-
-查询集按领域拆分，不强制一个模块一个文件；`owner_module` 决定写归属，文件 stem 决定 `data.queries.<file>` 的 ID 前缀（例如 `queries/token.yaml` → `data.queries.token.*`，owner_module 仍为 `auth`）。
+### 5.2 查询：参数 + 返回 + 索引引用
 
 ```yaml
 - name: ListAccounts
@@ -129,231 +180,63 @@ groups:
   params:
     - { name: offset, type: integer, nullable: true, default: 0 }
     - { name: limit, type: integer, nullable: true, default: 20 }
-    - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
-    - { name: has_nickname, type: boolean, expr: "nickname IS NOT NULL" }
   returns:
     - { name: accounts, list: true, kind: entity, entity: data.entities.account }
   index_ref:
     - data.tables.account.idx_account_created_at_id
-    - data.tables.account.idx_account_own_type_own_id
 ```
 
-- `tables`：查询读写的表，第一个是主表；每项 `{table, write}`，`write: true` 表示写该表，省略为只读；可以多表；实例必须竖排；
-- 有写表的 query 必须在 capabilities 的 `persistence.write_queries` / `cap.async.writes` 中登记；每个写表必须在 `persistence.table/tables` 中且归属一致；
-- `params.offset` / `params.limit`：保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数；list 返回必须同时声明两者；
-- `params`：接口入参；数组统一用 `List<T>`；`column` 可把参数绑定到物理列，绑定后类型族必须与列一致（`data.enums.*` 按 integer 列）；未绑定 `column` 时 `type` 必须能映射到类型族或 `data.enums.*`；`expr` 用于不绑定单列的表达式，二者互斥；`default` 只在 `nullable: true` 时允许，checker 校验可判定的标量/数组外层，枚举值与数组元素交给生成器；
-- `returns`：list<object>；每项用 `kind` 区分 `column` / `entity` / `table` / `scalar` / `affected_rows`；
-- `kind: table` 用于认证/持久化行等精确投影；`kind: entity` 是完整读模型，默认投影排除 `secret`，显式 `columns` 必须覆盖全部非指针非 `secret` 字段。`auth` 查询需要 `password_hash` 等 `secret` 列，因此用 `table` + `columns`，不改成 `entity`；
-- `returns[].columns`：表行/实体的结果投影，省略表示默认投影；`secret` 列只有同模块可显式列出，`pii` 列可返回；
-- `returns[].list`：同一 query 的多项必须一致；`affected_rows` 不得为列表且必须是唯一返回项；
-- `index_ref`：查询依赖的索引；单表查询至少一个；显式索引与 `indexes[].used_by` 双向校验；是否真正命中由 `EXPLAIN` 验证。
+返回值用 `kind` 区分：`column` / `entity` / `table` / `scalar` / `affected_rows`。需要 `secret` 列（如认证查询的 `password_hash`）时用 `kind: table` + `columns` 显式列出，不要为它放宽 entity。
 
-**不写** `statement` / `where` / `order_by` / `values` / `joins` / `semantics`。这些是 SQL 实现细节，写进契约只会制造第二份真相，且 checker 无法真正验证 SQL 语义；`params.expr` 只允许作为参数表达式存在，不承载整段 SQL。
-
----
-
-## 2. 生成链
-
-```
-data/tables/_base.yaml + tables/*.yaml ──> schema.sql（目标态）
-                                             ├─ diff 当前 DB ──> migrations/<ts>_<name>.sql
-                                             └─> sqlc 输入 ──> Go 查询代码
-
-data/enums.yaml ──────> Go 常量 + TS union + entity 整数映射
-data/queries/*.yaml ──> queries/*.sql ──> sqlc 代码
-data/{tables,entities,queries} ──> make gen-graph ──> used_by 反向索引
-data/storage.yaml ────> DDL 生成约束 + 配置校验
-data/redundancy.yaml ─> 冗余组校验
-```
-
-**初始数据**：当前表契约不提供 `initial_rows`；需要静态种子时，先扩展 `contracts/_meta/data.tables.yaml` 与生成器，不要在表文件里写未定义字段。RBAC 的 seed 由可选 `rbac` 模块负责，不在平台契约里承诺。
-
----
-
-## 3. 硬规则
-
-1. **一表一文件**，不按字段拆分；基类列不重复声明。
-2. **每个可寻址项必须有稳定 ID**：表 `data.tables.<file>`、列 `data.tables.<file>.col.<col>`、约束 `data.tables.<file>.constraint.<constraint.name>`、查询 `data.queries.<module>.<snake_case(name)>`、枚举 `data.enums.<name>`。查询项和枚举项不写 `id`（由显式 `name` 派生，`name` 是稳定键，改名即新 ID）；列/约束用 `name` 派生，不得改名。契约文件名决定 ID；物理表名必须显式声明；本仓库统一使用单数。
-3. **字段类型用契约内逻辑类型**：`string`、`boolean`、`integer`、`float`、`decimal`、`datetime`、`timestamp`、`json`、`bytes`、`data.tables.<file>.col.<col>`。表列不引用 `data.enums.*`；entity 字段才用枚举。
-4. **类型族扩展字段写在列上**：`string` 用 `min_len`/`max_len`/`fixed`/`pattern`/`normalize`，`bytes` 用 `min_len`/`max_len`/`fixed`，`integer` 用 `bits`/`unsigned`/`min`/`max`，`float` 用 `bits`/`min`/`max`，`decimal` 用 `precision`/`scale`/`min`/`max`，`datetime` 用 `mode`/`timezone`，`timestamp` 用 `timezone`/`fractional_seconds`，`json` 用 `binary`。字段定义与 `required` 在 `contracts/_meta/_types.yaml` 的 `column_types.families`。
-5. **时间统一 `timestamp`**，应用层只用 UTC。
-6. **软删表必须有 `deleted_at`**。唯一性统一用唯一索引：`live_only: true` 只约束未软删行（软删后可复用），`false`/省略约束全表（含软删行）。
-7. **表不使用枚举**：`status` 等状态列用 `integer`，`data/enums.yaml` 的 `values[].code` 是数据库整数码，entity 负责 code ↔ 枚举映射；枚举值可改名或删除，code 在当前枚举内唯一。
-8. **索引必须写 `comment` 与 `used_by`**；`used_by` 至少一个查询项 ID，且查询引用当前表；表达式索引用 `expression`。没有查询的索引直接删除。
-9. **主键类型是 integer（bits: 64）**，具体生成方式由实现决定；`created_at` 由数据库 `now()`，`updated_at` / `deleted_at` 由应用写入。
-10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；写查询用 `persistence.write_queries` / `writes` 显式登记，checker 校验单表与归属；跨模块读通过 `persistence.queries`。
-11. **禁止未结构化 DDL 字段**：分区写在 `data/storage.yaml` 的 `partition.<id>`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定，不要塞原生 SQL。
-12. **反向映射分两类**：`table.entities` 与 `model.included_by` 是**显式声明**，checker 双向校验；entity 的 `used_by.queries` / `used_by.capabilities` 是**生成物**，由 `make gen-graph` 按 query/capability 引用计算并写回，禁止手改。四类都只记**直接入边**。`used_by.queries` 记录查询项 ID（`data.queries.<module>.<snake_case(name)>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `docs/contracts/generated/lineage.md` 查询。
-13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
-14. **冗余组必须登记**：`columns[].redundancy` 只写组 ID；`data/redundancy.yaml` 的 `groups` 定义 `source`/`copies`，两边双向一致，`type`/`nullable` 一致；每组只能有一个 `source`。
-15. **单表 query 必须声明 `index_ref`**：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须把 query 写进 `used_by`，反向也校验。多表 query 可省略，也可引用任一查询表的索引。
-16. **entity 字段必须显式**：标量字段必写 `description`/`source`/`validation`；`source` 三选一（`column`/`computed`/`soft`），`source.column` 必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用。`json_name` 省略时取 `snake_case(name)`；`type`/`sensitivity` 可省略并按来源列派生（`soft` 除外）；显式 `type` 的 `*` 必须与列 `nullable` 一致；`computed` 必须显式 `type`；`sensitivity` 不得放松。表↔实体的多对多映射由 `model.tables` + 每个字段的 `source.column` 明确；反向映射写在 `table.entities`，checker 校验双向一致。
-17. **query 返回实体时必须完整**：`returns[].kind: entity` 的 `columns` 省略表示默认投影（全部非 secret 列）；显式时必须覆盖非指针、非 secret 列字段；`sensitivity: secret` 字段默认不进入投影，只有同模块 query 通过 `columns` 显式列出才可返回。返回实体的 query 会写入 `entity.used_by.queries`。
-18. **反向映射必须对账**：`table.entities` 记录映射本表的 entity；`model.included_by` 记录通过关系字段指向本实体的 entity；`used_by.queries` 记录返回本实体的 query；`used_by.capabilities` 记录引用本实体的 capability。前两者显式声明，后两者由 `make gen-graph` 写回；`contract-check` 对四者逐一校验，悬空或缺失都报错。
-
----
-
-## 3.1 迁移禁止操作
-
-以下操作生成器直接报错，不会产出迁移：
-
-迁移文件名：`<utc_timestamp>_<snake_case_name>.sql`。
-
-| 禁止 | 替代做法 |
-|---|---|
-| `DROP COLUMN` | 先标 deprecated，停止写入一个版本后再删 |
-| `RENAME COLUMN` | 加新列 → 双写 → 回填 → 切读 → 删旧列 |
-| 给已有数据的表加 `NOT NULL` 且无默认值 | 加可空 → 回填 → 加约束 |
-| 原地改列类型 | 新列 + 回填 + 切换 |
-| `size_class.<table>=large` 的表非 `CONCURRENTLY` 建索引 | `CREATE INDEX CONCURRENTLY`（`transaction: false`） |
-
-零停机三步：加可空列 → 分批回填 → 加约束（`NOT VALID` 后 `VALIDATE`）。
-
-软删状态由 entity 映射；如保留 DB CHECK，用整数码（如 account 的 `deleted = 3`），不要写枚举名。
-
-### 3.2 结构化 DDL（替代未结构化字段）
-
-契约不提供 `ddl_ext` 这类逃生口；SQL 特性用结构化字段表达：
+### 5.3 实体：列来源 + 枚举映射 + 关系
 
 ```yaml
-# data/storage.yaml
-partition:
-  data.tables.account: { strategy: range, columns: [created_at], interval: "1 month" }
+- name: Status
+  type: data.enums.account_status
+  description: "账号状态"
+  source: { column: data.tables.account.col.status }
+  validation: { column: data.tables.account.col.status }
 
-# data/tables/account.yaml
-indexes:
-  - name: idx_account_email_lower
-    expression: "lower(email)"
-    comment: "邮箱不区分大小写查找"
+- name: Tokens
+  type: data.entities.token
+  description: "账号的设备令牌"
+  join_column_from: data.tables.account.col.id
+  join_column_to: data.tables.token.col.account_id
 ```
 
-- `partition.<id>`：`strategy` 为 `range|list|hash`；`columns` 必须是表列 ID 的末段
-- `indexes[].expression`：表达式索引；必须写非空 `comment`
-- `indexes[].comment`：生成 `COMMENT ON INDEX`；与 `columns` / `expression` 一起构成索引定义
-- 生成器无法表达的新特性：先扩展本契约的字段，不要手写迁移
-
-生成器无法表达时允许人工调整，但必须标：
-
-```sql
--- manual-adjust: CONCURRENTLY 无法在事务内执行
-```
-
-人工调整统一使用 `-- manual-adjust:` 前缀；验证命令在 CI/Makefile 中执行。
-
-### 3.3 类型级负向约束
-
-以下约束适用于该类型的所有契约；具体实例只写差异，不要再复制。`data.entities` 的通用约束见 `entities/_base.yaml` 的 `do_not`。
-
-**data.tables**
-
-- 不要手写 migrations，改表契约后运行 `make gen-db`
-- `CHECK expr` 只校验非空；SQL 语义由生成器/数据库验证，checker 不解析 SQL
-- 物理表必须在 `table.extends` 声明一个或多个父表（最终到达 `data.tables.base`）；不得重复声明任何继承列
-- 不要绕过软删过滤（`deleted_at IS NULL`）
-- 唯一性统一用 `indexes[].unique`：`live_only: true` 只约束未软删行，`false`/省略约束全表（含软删行）
-- 禁止数据库外键；跨表一致性由应用/业务规则保证
-- 表列不引用 `data.enums.*`；状态整数码用 `integer`，由 entity 映射为枚举
-- 不要用未结构化字段塞原生 DDL；分区用 `partition.<id>`，表达式索引用 `indexes[].expression`
-- `table.entities` / `model.included_by` 显式声明；entity 的 `used_by.queries` / `used_by.capabilities` 是生成物，禁止手改
-- 只有 `owner_module` 相同的 `cap.services` / `cap.async` 可以写表；跨模块读通过 `persistence.queries`
-- `sensitivity: secret` 列禁止进入普通 OpenAPI/TS/事件/普通 entity；`pii` 列可脱敏返回；认证 query 与 `x-auth-response` 是唯一例外
-
-**data.queries**
-
-- 每个 query 不写 item id；用显式 `name`（PascalCase），项 ID 派生为 `data.queries.<file>.<snake_case(name)>`
-- 每个 query 的表从 `tables` 推导，供图校验推导血缘
-- 返回实体用 `returns[].kind: entity`；统计结果用 `kind: scalar` / `kind: column`
-- 写查询在 capabilities 的 `persistence.write_queries` / `cap.async.writes` 中声明；必须已在 `persistence.queries` / `uses` 中登记，目标单表且归属与 capability 模块一致
-- 不要在 repo 层手写 SQL
-- 投影由 `returns[].columns` 声明；含 `secret` 列的表必须显式裁剪返回列
-- nullable 参数在 SQL 中使用 `sqlc.narg('name')`
-
-**data.enums**
-
-- 枚举值可改名或删除；`code` 在当前枚举内唯一
-- 删除枚举值后不要复用其 `code`；历史数据仍引用旧 code
-- 每个枚举必须写 `used_by`，只列 `data.entities` / capability ID；不列物理表或 feature；列表逐行竖排
-- `do_not` 每条必须含集合 ID `data.enums`、枚举 name 或 go_type/ts_type；通用规则放组 README
-- 每个枚举项只写 `name`，项 ID 派生为 `data.enums.<name>`；不得再写 `id`
-- 不要收模块内部枚举
-
-**data.storage / data.redundancy**：见各自文件的 `do_not`（单例契约，类型级约束就近写在文件内）。
+标量字段与关系字段互斥：标量写 `source` + `validation`，关系写 `type` + `join_column_*` + `load`，两套键不得混用（`[强制: entity-field-variant]`）。实体不重复物理长度参数；统计口径不同时用 query 的 `returns`，不要把查询专属聚合塞进实体。
 
 ---
 
-## 4. CI 校验
+## 6. 常见错误
 
-| 检查 | 手段 |
-|---|---|
-| 迁移与契约一致 | 空库 apply 全部迁移 → dump → 与 `schema.sql` 逐字段比对 |
-| 契约改了但没生成迁移 | `make gen-db && git diff --exit-code` |
-| 查询未登记 | 每个 `.sql` 必须能追溯到 `data/queries/*.yaml` 条目 |
-| 枚举两端一致 | Go 常量集合 == TS union 集合 |
-| 索引无说明 | `comment` 缺失即报错 |
-| `used_by` 漂移 | `make gen-graph-check` |
-| 敏感字段外泄 | `sensitivity: secret` 列不得出现在普通 OpenAPI/TS/事件/普通 entity；认证 query 与 `x-auth-response` 是唯一例外 |
+只列两类：复发过的错误、已被拒绝的越界写法。通用规则已由 checker 强制，不在此复述。
 
----
-
-## 5. 命名
-
-- 契约文件：snake_case（`tables/account.yaml` → `data.tables.account`）
-- 物理表名：必须显式声明；本仓库统一使用单数
-- 索引：`idx_<physical_table>_<cols>`；唯一索引：`uq_<physical_table>_<cols>`
-- 检查约束：`ck_<physical_table>_<rule>`
-- 查询：`data.queries.<module>.<snake_case>`
-- 模块名：单数（`account`）；集合响应字段与动作名按语义保留复数（`accounts`、`listAccounts`）
+| 错误 | 为什么错 | 正确做法 |
+|---|---|---|
+| 手写 `migrations/*.sql` | 生成物，下次 `make gen-db` 被覆盖且 CI diff 失败 | 改 `tables/*.yaml`（`contracts/README.md` §6） |
+| 唯一索引不写 `used_by` | `[强制: index-used-by]` 直接拒绝 | 把插入 / 唯一性查询列进去 |
+| 软删表用全表唯一索引 | 删除后无法重建同值 | `live_only: true` |
+| 给 entity 加写形状 | 第二份写模型必然漂移 | 用 query + capability 表达 |
+| query 写 `statement` / `where` | 第二份真相，checker 无法验证 | 只写形状 |
+| 在表里声明引擎 | 引擎归属只在 `storage.tables.<engine>` | 登记到 `storage.yaml` |
+| 在表里写 `initial_rows` / seed | 字段不存在，生成器不识别 | 先扩展 `_meta/data.tables.yaml` 与生成器 |
+| 枚举值复用旧 `code` | 历史行仍引用旧码 | 新增 `code` |
 
 ---
 
-## 6. 存储与冗余
+## 7. 当前闸门状态
 
-`data/storage.yaml` 是项目级单例：
+`make contract-check` 覆盖 data 层全部结构与引用校验（`data.tables` / `data.enums` / `data.entities` / `data.queries` / `storage` / `redundancy`），并内嵌 `used_by` 新鲜度与 `rule-id` 同步检查。
 
-- `supported_engines`（mysql / postgres / mongodb）：允许的权威引擎集合
-- `tables.<engine>`：该引擎下的表 ID 列表；每个 `supported_engine` 都必须有对应键（可为空列表），每张物理表只能出现在一个权威引擎下
-- `caches.<engine>`：非权威副本（如 `redis` 下的 `token`）；Redis 不是表存储，不参与 DDL
-- `size_class.<table>` / `retention.<table>` / `partition.<table>`：表级物理事实，键必须是已登记的表
-- `retention.<table>`：可选的生命周期策略，不是强制清理。`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只有在确实存在硬删策略时才写；主数据与认证绑定默认不写。`cache_ttl` 只用于 `caches` 中的表，表示 Redis 缓存周期，且不得超过 `ttl`；Redis 仍是非权威副本，清理以数据库为准
-- `not_supported_topologies` 列表（sharding / multi-primary / cross-region / outbox）
+| 闸门 | 机制 | 状态 |
+|---|---|---|
+| 契约结构与引用 | `make contract-check`（lefthook pre-commit + CI） | ✅ 已启用 |
+| `used_by` 漂移 | `gen_graph -check`（内嵌于 contract-check） | ✅ 已启用 |
+| 规则 ID 同步 | `gen_rule_ids -check`（内嵌于 contract-check） | ✅ 已启用 |
+| 契约 → DDL / migrations / sqlc | `make gen-db` | ⬜ P2 未实现 |
+| 迁移重放与目标态比对 | `make db-verify` | ⬜ P5 未实现 |
+| 枚举两端一致（Go / TS） | `make gen` | ⬜ P2 未实现 |
+| 影响面与血缘 | `make contract-impact` / `contract-graph` | ⬜ P2 未实现 |
 
-```yaml
-supported_engines: [mysql, postgres, mongodb]
-tables:
-  mysql:
-    - data.tables.account
-    - data.tables.token
-  postgres: []
-  mongodb: []
-caches:
-  redis:
-    - data.tables.token
-    - data.tables.verification_body
-size_class:
-  data.tables.token: large
-retention:
-  data.tables.token: { unit: days, ttl: 30, cache_ttl: 30 }
-  data.tables.verification_body: { unit: minutes, ttl: 10, cache_ttl: 10 }
-```
-
-引擎版本、扩展、连接池、迁移工具、部署拓扑、副本/读写分离、任务锁属于运行时/部署配置，不写进 `storage.yaml`。
-**禁止在 `tables/*.yaml` 里声明 engine/存储位置；引擎分组只在 `storage.yaml` 的 `tables.<engine>`。**
-
-跨表冗余组不在这里：`data/redundancy.yaml` 的 `groups` 定义 `source`/`copies`，表列只写 `redundancy` 组 ID。
-
-### 6.1 凭据与令牌
-
-- `auth_pwd.password_hash` 是 argon2id 唯一路径；不保留 MD5 遗留字段。
-- `token` 表只存 `access_token_hash` / `refresh_token_hash`，不存原文；原文只在 `/auth/login`、`/auth/refresh` 的响应中返回一次。
-- `verification_body.code_hash` 只存验证码哈希，不存原文；`content` 若含原文必须按 `secret` 管理，禁止进入日志/响应/事件。
-- `verification_action.input_hash` 必须用 HMAC-SHA256，禁止裸哈希或存提交原文。
-- 哈希算法与 TTL 由 `platform/security/auth_policy.yaml` 定义，data 层不复制。
-
----
-
-## 7. 诚实边界
-
-生产在线 DDL（大表加索引需 `CONCURRENTLY`、数据回填分步）无法全自动。
-契约约束**最终态**，迁移**过程**允许人工介入，规则见本节。
-
-P2 生成器尚未实现：当前的 `generated+tested` 是目标值，不代表已有闸门；生成器落地后以 `make gen` / `make gen-db` / `make gen-graph` 为准。
+**未实现的闸门不产生保护。** 在它们落地前，迁移正确性靠 review 与 `EXPLAIN`，不靠本文件。迁移政策与 `-- manual-adjust` 约定见 `contracts/README.md` §6；零停机操作步骤见 `docs/guides/architecture.md` §5.4。

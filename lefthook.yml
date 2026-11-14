@@ -10,6 +10,9 @@ pre-commit:
     contracts:
       glob: "contracts/**/*.yaml"
       run: make contract-check
+    contract-docs:
+      glob: "contracts/**/*.md"
+      run: ./scripts/check-docs.sh
     rule-ids:
       glob: "scripts/cmd/**/*.go"
       run: make check-rule-ids

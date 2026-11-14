@@ -404,18 +404,13 @@ apps:
 - 禁止把 `*pgx.Tx` 当参数层层传递
 - 事务只在 service 层开启，handler 不开事务
 
-### 5.4 数据规范（`contracts/data/README.md`）
+### 5.4 数据层实现约定
 
-- 表结构基类 `data/tables/_base.yaml`：`id / status / created_at / updated_at / deleted_at` 五列，所有物理表继承
-- 主键 integer（bits: 64）；时间列 `timestamp`，统一 UTC；`updated_at` 由应用写入
+契约层规则（基类五列、枚举映射、唯一性、引擎分组、分区/表达式索引）以 `contracts/data/README.md` 为准，本节只列实现侧约定：
+
 - 业务表可选 `version` 做乐观锁；不是基类字段
-- 引擎分组和表级物理事实（`tables.<engine>` / `caches` / `size_class` / `retention` / `partition`）在 `data/storage.yaml`，禁止逐表声明 engine；部署拓扑、连接池、锁属于运行时配置，不写进契约
-- 表不使用枚举：`status` 等状态列用 `integer`，枚举只在 entity，`data/enums.yaml` 的 `values[].code` 是 DB 整数码
-- 唯一性统一用唯一索引：`live_only: true` 只约束未软删行（软删后可复用）；`false`/省略约束全表（含软删行）
-- 索引命名 `idx_<table>_<cols>`；禁止数据库外键，跨表一致性由应用/业务规则保证
+- 软删默认过滤（`deleted_at IS NULL`），必须在 repo 层统一，禁止每处手写
 - 迁移只前进；零停机三步：加可空列 → 回填 → 加约束
-- 软删默认过滤，必须在 repo 层统一，禁止每处手写
-- 分区用 `storage.partition.<id>`，表达式索引用 `indexes[].expression`；并发建索引策略由运行时迁移配置决定；不设未结构化 DDL 字段
 
 ### 5.5 请求治理
 
