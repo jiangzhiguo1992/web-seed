@@ -57,9 +57,6 @@ fields:
     load: lazy
 
 validation:
-  - name: password_present
-    expr: "PasswordHash != nil"
-    on_violation: platform.errors.AUTH_INVALID_CREDENTIALS
   - name: lock_consistency
     expr: "LockedUntil == nil || FailedLoginCount > 0"
     on_violation: platform.errors.AUTH_LOCKED

@@ -68,6 +68,15 @@ rules:
     then: "拒绝，返回 ACCOUNT_ALREADY_DELETED"
     implemented_by: [cap.services.account.update, cap.services.account.activate, cap.services.account.suspend, cap.services.account.delete]
 
+  - id: business.rules.account.delete_revokes_auth
+    summary: "软删账号必须同时软删认证绑定并吊销全部令牌"
+    severity: error
+    on_violation: platform.errors.COMMON_INTERNAL
+    given: "account.delete 只更新 account.status/deleted_at"
+    when: "软删账号"
+    then: "调用 cap.services.auth.revoke_all_for_account；失败则回滚整个删除"
+    implemented_by: [cap.services.account.delete, cap.services.auth.revoke_all_for_account]
+
 invariants:
   - id: business.rules.account.invariants.deleted_status_consistent
     description: "status=deleted 当且仅当 deleted_at 非空"

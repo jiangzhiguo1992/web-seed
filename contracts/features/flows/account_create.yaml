@@ -28,7 +28,6 @@ steps:
   - id: submit
     ui: "提交"
     capability: cap.http.account.create
-    idempotency: client_generated_key
     loading_state: button_spinner
     on_success: "goto(detail)"
     on_error:
@@ -42,6 +41,6 @@ steps:
     to: feature.pages.account_detail
 
 edge_cases:
-  - { id: double_submit, handling: "提交中禁用按钮 + Idempotency-Key" }
+  - { id: double_submit, handling: "提交中禁用按钮 + number 唯一约束" }
   - { id: unsaved_leave, handling: "离开前确认" }
   - { id: network_error, handling: "保留表单内容，允许重试" }

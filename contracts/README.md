@@ -88,7 +88,7 @@ contracts/
 │   ├── tables/<file>.yaml     #   物理表结构（文件名决定 ID，物理表名可独立覆盖）
 │   ├── entities/_base.yaml   #   实体字段基类：5 列 + 类型级 do_not
 │   ├── entities/<entity>.yaml#   读模型：继承 _base，只写业务字段、关系、validation
-│   ├── queries/<module>.yaml #   查询接口（入参/结果/目标表/索引，.sql 是实现）
+│   ├── queries/<scope>.yaml #   查询接口（入参/结果/目标表/索引，.sql 是实现）
 │   ├── enums.yaml            #   跨端枚举集合（data.enums + data.enums.<name>）
 │   ├── redundancy.yaml       #   跨表冗余列关系（groups: source/copies）
 │   └── storage.yaml          #   每张表的存储约束（engine/size_class/retention/partition）
@@ -155,7 +155,7 @@ contracts/
 | 集合文件 | 文件 ID | 项 ID |
 |---|---|---|
 | `data/tables/<file>.yaml` | `data.tables.<file>` | `data.tables.<file>.col.<column>` / `data.tables.<file>.constraint.<name>` |
-| `data/queries/<module>.yaml` | `data.queries.<module>` | `data.queries.<module>.<snake_case(name)>`（name 显式） |
+| `data/queries/<scope>.yaml` | `data.queries.<scope>` | `data.queries.<scope>.<snake_case(name)>`（name 显式） |
 | `data/enums.yaml` | `data.enums` | `data.enums.<name>`（name 派生，不写 id） |
 | `platform/security/permissions.yaml` | `platform.security.permissions` | `platform.security.permissions.<code>` |
 | `platform/security/roles.yaml` | `platform.security.roles` | `platform.security.roles.<code>` |
@@ -495,7 +495,7 @@ data/redundancy.yaml ──> 冗余组关系
 P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器待实现。
 
 - **_meta**：`_types.yaml` / `data.tables.yaml` / `data.enums.yaml` / `data.entities.yaml` / `data.queries.yaml` + `make contract-new` + `make contract-check`
-- **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email`、`entities/*`、`enums`、`queries/{account,auth}`、`storage`
+- **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email` / `verification`、`entities/*`、`enums`、`queries/{account,auth,token,verification}`、`storage`
 - **capabilities**：`http/{shared,account,auth}`、`async/account_cleanup`、`services/{account,auth}`（其余模块待建）
 - **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件
 

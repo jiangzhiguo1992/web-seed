@@ -1,0 +1,74 @@
+# 认证业务规则集：验证体一次性消费、过期、尝试上限、重发与目标归一化。
+
+schema_version: 1
+id: business.rules.auth
+summary: "认证业务规则集"
+stability: draft
+do_not:
+  - "business.rules.auth 每条规则必须有 given/when/then"
+  - "验证体规则只引用 data.entities.verification，不引用物理表/查询"
+  - "不要在 handler 里手写验证码消费或重发逻辑"
+
+scope: "auth"
+
+rules:
+  - id: business.rules.auth.verification_one_time
+    summary: "验证码只能消费一次"
+    severity: error
+    on_violation: platform.errors.AUTH_VERIFICATION_INVALID
+    given: "verification.consumed_at != nil 或 status 不是 pending/sent"
+    when: "校验验证码"
+    then: "拒绝，返回 AUTH_VERIFICATION_INVALID；条件更新必须 affected_rows=1"
+    implemented_by: [cap.services.auth.verify_code]
+
+  - id: business.rules.auth.verification_expiry
+    summary: "过期验证码不可消费"
+    severity: error
+    on_violation: platform.errors.AUTH_VERIFICATION_EXPIRED
+    given: "verification.expire_at <= now()"
+    when: "校验验证码"
+    then: "拒绝，返回 AUTH_VERIFICATION_EXPIRED，并将记录置为 expired"
+    implemented_by: [cap.services.auth.verify_code]
+
+  - id: business.rules.auth.verification_attempts
+    summary: "失败次数达到上限后作废验证码"
+    severity: error
+    on_violation: platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+    given: "verification.attempt_count >= auth_policy.verification.max_attempts"
+    when: "校验验证码"
+    then: "拒绝，返回 AUTH_VERIFICATION_ATTEMPTS_EXCEEDED，并将记录置为 revoked"
+    implemented_by: [cap.services.auth.verify_code]
+
+  - id: business.rules.auth.verification_resend
+    summary: "重发前作废同一 target+purpose 的旧验证码"
+    severity: error
+    on_violation: platform.errors.AUTH_VERIFICATION_RATE_LIMITED
+    given: "同一 auth_type+target+purpose 仍存在 pending/sent 验证码"
+    when: "发送验证码"
+    then: "在同一事务内先 revoke 旧记录再创建新记录；未过重发间隔则返回 AUTH_VERIFICATION_RATE_LIMITED"
+    implemented_by: [cap.services.auth.send_verification]
+
+  - id: business.rules.auth.verification_target_normalization
+    summary: "target 写入前按 auth_type 归一化"
+    severity: error
+    on_violation: platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+    given: "phone 未使用 E.164，或 email 未小写"
+    when: "发送验证码"
+    then: "按 auth_policy.verification.target_normalization 归一化后再写入"
+    implemented_by: [cap.services.auth.send_verification]
+
+  - id: business.rules.auth.verification_no_enumeration
+    summary: "发送/校验失败不枚举 target 是否存在"
+    severity: error
+    on_violation: platform.errors.AUTH_VERIFICATION_INVALID
+    given: "target 未注册或不存在"
+    when: "发送或校验验证码"
+    then: "返回统一的验证码错误，不暴露 target 是否存在"
+    implemented_by: [cap.services.auth.send_verification, cap.services.auth.verify_code]
+
+invariants:
+  - id: business.rules.auth.invariants.verification_consumed_consistent
+    description: "consumed 状态当且仅当 consumed_at 非空"
+    assert: "(status == consumed) == (consumed_at != nil)"
+    on_violation: platform.errors.AUTH_VERIFICATION_INVALID
+    implemented_by: [cap.services.auth.verify_code]

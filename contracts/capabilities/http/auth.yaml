@@ -9,6 +9,8 @@ do_not:
   - "auth 登录失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
   - "auth 响应中的 token 只允许出现在 /auth/login 与 /auth/refresh"
   - "auth 每个 operation 必须有 x-contract-id 与 x-service"
+  - "验证码接口不要返回 code_hash / content / target 原文；只返回 masked_target"
+  - "验证码发送/校验失败不要枚举 target 是否存在"
 
 module: auth
 base_path: /v1
@@ -45,6 +47,65 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AuthSession" }
+
+  /auth/verification/send:
+    post:
+      operationId: sendVerification
+      x-contract-id: cap.http.auth.verification_send
+      x-service: cap.services.auth.send_verification
+      summary: "发送验证码"
+      x-timeout-ms: 5000
+      x-rate-limit: { requests: 10, window_seconds: 60 }
+      x-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [auth_type, target, purpose]
+              properties:
+                auth_type: { type: string, enum: [phone, email] }
+                target: { type: string, minLength: 1, maxLength: 320 }
+                purpose: { $ref: "#/components/schemas/VerificationPurpose" }
+            example: { auth_type: phone, target: "+8613800138000", purpose: login }
+      responses:
+        "202":
+          description: "已受理"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VerificationSent" }
+
+  /auth/verification/verify:
+    post:
+      operationId: verifyCode
+      x-contract-id: cap.http.auth.verification_verify
+      x-service: cap.services.auth.verify_code
+      summary: "校验验证码"
+      x-timeout-ms: 5000
+      x-rate-limit: { requests: 10, window_seconds: 60 }
+      x-audit: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [auth_type, target, purpose, code]
+              properties:
+                auth_type: { type: string, enum: [phone, email] }
+                target: { type: string, minLength: 1, maxLength: 320 }
+                purpose: { $ref: "#/components/schemas/VerificationPurpose" }
+                code: { type: string, minLength: 4, maxLength: 12 }
+            example: { auth_type: phone, target: "+8613800138000", purpose: login, code: "123456" }
+      responses:
+        "200":
+          description: "校验成功"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VerificationResult" }
 
   /auth/refresh:
     post:
@@ -113,3 +174,26 @@ components:
       properties:
         account: { $ref: "#/components/schemas/Account" }
         tokens: { $ref: "#/components/schemas/TokenPair" }
+
+    VerificationPurpose:
+      type: string
+      enum: [register, login, reset_password, bind, unbind, change, delete_account]
+
+    VerificationSent:
+      type: object
+      additionalProperties: false
+      required: [id, masked_target, expire_at, retry_after_seconds]
+      properties:
+        id: { type: integer }
+        masked_target: { type: string }
+        expire_at: { type: string, format: date-time }
+        retry_after_seconds: { type: integer, minimum: 0 }
+
+    VerificationResult:
+      type: object
+      additionalProperties: false
+      required: [verified, verification_id]
+      properties:
+        verified: { type: boolean }
+        verification_id: { type: integer }
+        consumed_at: { type: string, format: date-time, nullable: true }

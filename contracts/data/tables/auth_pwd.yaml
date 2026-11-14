@@ -27,12 +27,13 @@ columns:
     nullable: false
     min_len: 1
     max_len: 254
+    normalize: lower
     sensitivity: pii
-    comment: "登录名；唯一"
+    comment: "登录名；小写归一且唯一"
 
   - name: password_hash
     type: string
-    nullable: true
+    nullable: false
     min_len: 20
     max_len: 255
     sensitivity: secret
@@ -51,9 +52,9 @@ columns:
     comment: "锁定截止时间；为空表示未锁定"
 
 constraints:
-  - name: ck_auth_pwd_password_present
+  - name: ck_auth_pwd_username_lowercase
     type: check
-    expr: "password_hash IS NOT NULL"
+    expr: "username = lower(username)"
 
 indexes:
   - name: uq_auth_pwd_username
@@ -70,7 +71,9 @@ indexes:
     unique: true
     live_only: true
     comment: "未删除记录内一个账号只有一条密码记录"
-    used_by: [ data.queries.auth.create_auth_pwd ]
+    used_by:
+      - data.queries.auth.create_auth_pwd
+      - data.queries.auth.soft_delete_auth_pwd_by_account
 
 used_by:
   queries:
@@ -78,4 +81,5 @@ used_by:
     - data.queries.auth.get_auth_pwd_by_username
     - data.queries.auth.record_auth_pwd_login_failure
     - data.queries.auth.record_auth_pwd_login_success
+    - data.queries.auth.soft_delete_auth_pwd_by_account
     - data.queries.auth.update_auth_pwd_hash

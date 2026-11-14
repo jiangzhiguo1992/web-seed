@@ -80,7 +80,7 @@ contracts/capabilities/http/
 
 | 扩展 | 含义 | 缺省后果 |
 |---|---|---|
-| `x-idempotent` | 是否幂等，配合 `Idempotency-Key` | 重试可能重复写入 |
+| `x-idempotent` | 是否幂等；有 `Idempotency-Key` 时按 key 重放，无 key 时靠业务唯一约束 | 重试可能重复写入 |
 | `x-timeout-ms` | 服务端处理超时 | 使用全局默认 |
 | `x-rate-limit` | 限流策略 | 无限流 |
 | `x-preconditions` | 前置条件，引用 `platform.security.permissions.*` | 条件散落在代码里 |

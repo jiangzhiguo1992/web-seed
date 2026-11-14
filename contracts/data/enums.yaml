@@ -36,6 +36,7 @@ enums:
       entities:
         - data.entities.account
         - data.entities.token
+        - data.entities.verification
       capabilities:
         - cap.services.account
 
@@ -66,8 +67,23 @@ enums:
         - data.entities.token
       capabilities: []
 
+  - name: token_revoke_reason
+    description: "令牌吊销原因"
+    go_type: TokenRevokeReason
+    ts_type: TokenRevokeReason
+    values:
+      - { value: rotated, code: 0, description: "正常轮换" }
+      - { value: reused, code: 1, description: "复用检测触发" }
+      - { value: logout, code: 2, description: "登出" }
+      - { value: admin, code: 3, description: "管理员吊销" }
+      - { value: password_change, code: 4, description: "密码变更" }
+    used_by:
+      entities:
+        - data.entities.token
+      capabilities: []
+
   - name: auth_type
-    description: "认证方式；仅 API 输入，无 entity"
+    description: "认证方式"
     go_type: AuthType
     ts_type: AuthType
     values:
@@ -75,6 +91,41 @@ enums:
       - { value: phone, code: 1, description: "手机号认证" }
       - { value: email, code: 2, description: "邮箱认证" }
     used_by:
-      entities: []
+      entities:
+        - data.entities.verification
+      capabilities:
+        - cap.services.auth
+
+  - name: verification_status
+    description: "验证体状态"
+    go_type: VerificationStatus
+    ts_type: VerificationStatus
+    values:
+      - { value: pending, code: 0, description: "待发送" }
+      - { value: sent, code: 1, description: "已发送，待验证" }
+      - { value: consumed, code: 2, description: "已消费，终态" }
+      - { value: expired, code: 3, description: "已过期，终态" }
+      - { value: revoked, code: 4, description: "已作废，终态" }
+      - { value: failed, code: 5, description: "发送失败，终态" }
+    used_by:
+      entities:
+        - data.entities.verification
+      capabilities: []
+
+  - name: verification_purpose
+    description: "验证用途"
+    go_type: VerificationPurpose
+    ts_type: VerificationPurpose
+    values:
+      - { value: register, code: 0, description: "注册" }
+      - { value: login, code: 1, description: "登录" }
+      - { value: reset_password, code: 2, description: "重置密码" }
+      - { value: bind, code: 3, description: "绑定手机号或邮箱" }
+      - { value: unbind, code: 4, description: "解绑手机号或邮箱" }
+      - { value: change, code: 5, description: "换绑手机号或邮箱" }
+      - { value: delete_account, code: 6, description: "注销账号" }
+    used_by:
+      entities:
+        - data.entities.verification
       capabilities:
         - cap.services.auth

@@ -15,7 +15,7 @@
 | `tables/<file>.yaml` | 物理表：字段、类型、约束、索引、继承 | `schema.sql`、增量 `migrations/*.sql`、sqlc 输入 |
 | `entities/<entity>.yaml` | 读模型：Go 类型 `name`、表映射、语义字段（来源/关系/枚举/computed）、复杂校验 | Go/TS 类型 |
 | `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
-| `queries/<module>.yaml` | 查询契约：入参、结果、目标表、索引 | 查询接口、sqlc 代码 |
+| `queries/<scope>.yaml` | 查询契约：入参、结果、目标表、索引 | 查询接口、sqlc 代码 |
 | `storage.yaml` | 每张表的 engine/size_class/retention/partition；允许的引擎与不支持拓扑 | DDL 生成约束、配置校验 |
 | `redundancy.yaml` | 跨表冗余列关系：组 ID、source/copies | 冗余校验 |
 
@@ -119,6 +119,8 @@ groups:
 ### 1.6 查询是接口契约
 
 查询只声明**入参、结果、目标表与索引引用**；SQL 如何执行不在契约里，由实现负责；读写归属在 capabilities 层。
+
+查询集按领域拆分，不强制一个模块一个文件；`owner_module` 决定写归属，文件 stem 决定 `data.queries.<file>` 的 ID 前缀（例如 `queries/token.yaml` → `data.queries.token.*`，owner_module 仍为 `auth`）。
 
 ```yaml
 - name: ListAccounts
@@ -323,6 +325,7 @@ indexes:
 
 - `auth_pwd.password_hash` 是 argon2id 唯一路径；不保留 MD5 遗留字段。
 - `token` 表只存 `access_token_hash` / `refresh_token_hash`，不存原文；原文只在 `/auth/login`、`/auth/refresh` 的响应中返回一次。
+- `verification.code_hash` 只存验证码哈希，不存原文；`content` 若含原文必须按 `secret` 管理，禁止进入日志/响应/事件。
 - 哈希算法与 TTL 由 `platform/security/auth_policy.yaml` 定义，data 层不复制。
 
 ---

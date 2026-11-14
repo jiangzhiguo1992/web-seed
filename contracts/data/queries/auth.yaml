@@ -7,7 +7,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "auth 之外的普通业务查询不要引用本文件"
-  - "auth 查询不要返回 password_hash / access_token / refresh_token 给非认证调用方"
+  - "auth 查询不要返回 password_hash 给非认证调用方"
   - "auth 查询返回 kind:table，不要改成 entity 隐式投影（会丢 secret 或扩大行形状）"
 
 queries:
@@ -175,110 +175,30 @@ queries:
       - data.tables.auth_email.uq_auth_email_username_domain
       - data.tables.auth_email.uq_auth_email_account
 
-  - name: CreateToken
+  - name: SoftDeleteAuthPwdByAccount
     tables:
-      - { table: data.tables.token, write: true }
+      - { table: data.tables.auth_pwd, write: true }
     params:
-      - { name: id, type: integer, column: data.tables.token.col.id }
-      - { name: own_type, type: data.enums.own_type, column: data.tables.token.col.own_type }
-      - { name: own_id, type: integer, column: data.tables.token.col.own_id }
-      - { name: account_id, type: integer, column: data.tables.token.col.account_id }
-      - { name: device_id, type: text, column: data.tables.token.col.device_id, nullable: true }
-      - { name: user_id, type: integer, column: data.tables.token.col.user_id, nullable: true }
-      - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
-      - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
-      - { name: access_expire_at, type: timestamp, column: data.tables.token.col.access_expire_at }
-      - { name: refresh_expire_at, type: timestamp, column: data.tables.token.col.refresh_expire_at }
-    returns:
-      - name: row
-        kind: table
-        table: data.tables.token
-        columns:
-          - id
-          - account_id
-          - device_id
-          - access_expire_at
-          - refresh_expire_at
-          - status
-    index_ref:
-      - data.tables.token.uq_token_access_hash
-      - data.tables.token.uq_token_refresh_hash
-
-  - name: GetTokenByRefresh
-    tables:
-      - { table: data.tables.token }
-    params:
-      - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
-    returns:
-      - name: row
-        kind: table
-        table: data.tables.token
-        columns:
-          - id
-          - account_id
-          - device_id
-          - user_id
-          - access_expire_at
-          - refresh_expire_at
-          - status
-    index_ref: [ data.tables.token.uq_token_refresh_hash ]
-
-  - name: GetTokenByAccess
-    tables:
-      - { table: data.tables.token }
-    params:
-      - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
-    returns:
-      - name: row
-        kind: table
-        table: data.tables.token
-        columns:
-          - id
-          - account_id
-          - device_id
-          - user_id
-          - access_expire_at
-          - refresh_expire_at
-          - status
-    index_ref: [ data.tables.token.uq_token_access_hash ]
-
-  - name: RevokeToken
-    tables:
-      - { table: data.tables.token, write: true }
-    params:
-      - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
+      - { name: account_id, type: integer, column: data.tables.auth_pwd.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.token.uq_token_refresh_hash ]
+    index_ref: [ data.tables.auth_pwd.uq_auth_pwd_account ]
 
-  - name: DeleteExpiredTokens
+  - name: SoftDeleteAuthPhoneByAccount
     tables:
-      - { table: data.tables.token, write: true }
+      - { table: data.tables.auth_phone, write: true }
     params:
-      - { name: limit, type: integer, nullable: true, default: 100 }
+      - { name: account_id, type: integer, column: data.tables.auth_phone.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
+    index_ref: [ data.tables.auth_phone.uq_auth_phone_account ]
 
-  - name: ListTokensByAccount
+  - name: SoftDeleteAuthEmailByAccount
     tables:
-      - { table: data.tables.token }
+      - { table: data.tables.auth_email, write: true }
     params:
-      - { name: offset, type: integer, nullable: true, default: 0 }
-      - { name: limit, type: integer, nullable: true, default: 20 }
-      - { name: account_id, type: integer, column: data.tables.token.col.account_id }
+      - { name: account_id, type: integer, column: data.tables.auth_email.col.account_id }
     returns:
-      - name: rows
-        list: true
-        kind: table
-        table: data.tables.token
-        columns:
-          - id
-          - account_id
-          - device_id
-          - access_expire_at
-          - refresh_expire_at
-          - status
-          - created_at
-          - updated_at
-    index_ref: [ data.tables.token.idx_token_account_id ]
+      - { name: affected_rows, kind: affected_rows }
+    index_ref: [ data.tables.auth_email.uq_auth_email_account ]
+

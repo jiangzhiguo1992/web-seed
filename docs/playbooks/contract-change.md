@@ -70,7 +70,7 @@ make contract-impact id=<被修改的 ID>
 | 定时任务 / 消费者 | `contracts/capabilities/async/<job>.yaml` |
 | 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
 | 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables` |
-| 查询 | `contracts/data/queries/<module>.yaml` |
+| 查询 | `contracts/data/queries/<scope>.yaml` |
 | 枚举 | `contracts/data/enums.yaml` |
 | 实体 / 状态机 / 规则 / 流程 | `contracts/business/**` |
 | 路由 / 页面 / 用户旅程 | `contracts/features/**` |

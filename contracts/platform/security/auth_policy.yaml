@@ -53,6 +53,23 @@ password:
   lockout: 15m
   breach_check: true
 
+verification:
+  table: data.tables.verification
+  code:
+    length: 6
+    charset: digits
+    storage: "hash"
+    hash_algorithm: hmac-sha256
+    secret_env: AUTH_VERIFICATION_SECRET
+  ttl: 10m
+  max_attempts: 5
+  resend_interval: 60s
+  daily_limit_per_target: 10
+  hourly_limit_per_ip: 20
+  target_normalization:
+    phone: e164
+    email: lowercase
+
 mfa:
   required_for_roles: [admin]
   methods: [totp]

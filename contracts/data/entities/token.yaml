@@ -71,6 +71,22 @@ fields:
     source: { column: data.tables.token.col.refresh_expire_at }
     validation: { column: data.tables.token.col.refresh_expire_at }
 
+  - name: RevokedAt
+    description: "吊销时间；为空表示未吊销"
+    source: { column: data.tables.token.col.revoked_at }
+    validation: { column: data.tables.token.col.revoked_at }
+
+  - name: RevokeReason
+    type: "*data.enums.token_revoke_reason"
+    description: "吊销原因"
+    source: { column: data.tables.token.col.revoke_reason }
+    validation: { column: data.tables.token.col.revoke_reason }
+
+  - name: ReplacedByID
+    description: "轮换后新令牌 ID；用于复用检测与轮换链"
+    source: { column: data.tables.token.col.replaced_by_id }
+    validation: { column: data.tables.token.col.replaced_by_id }
+
   - name: Account
     type: data.entities.account
     description: "所属账号"

@@ -72,5 +72,5 @@ cors:
 idempotency:
   header: Idempotency-Key
   window: 24h
-  scope: ["POST 创建类端点"]
-  storage: "数据库唯一索引 + request hash"
+  scope: ["需要严格重放的 POST 创建类端点"]
+  storage: "业务唯一约束优先；需要严格重放时再引入幂等键表"

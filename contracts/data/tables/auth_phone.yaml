@@ -35,8 +35,9 @@ columns:
     nullable: false
     min_len: 1
     max_len: 32
+    pattern: "^[0-9]{1,32}$"
     sensitivity: pii
-    comment: "手机号"
+    comment: "手机号；只允许数字，与 code 拼成 E.164 快照"
 
   - name: operator
     type: string
@@ -61,8 +62,10 @@ indexes:
     comment: "账号绑定唯一性"
     used_by:
       - data.queries.auth.create_auth_phone
+      - data.queries.auth.soft_delete_auth_phone_by_account
 
 used_by:
   queries:
     - data.queries.auth.create_auth_phone
     - data.queries.auth.get_auth_phone_by_number
+    - data.queries.auth.soft_delete_auth_phone_by_account

@@ -57,8 +57,6 @@ paths:
       x-preconditions: [platform.security.permissions.account_write]
       x-timeout-ms: 5000
       x-audit: true
-      parameters:
-        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:

@@ -27,8 +27,9 @@ columns:
     nullable: false
     min_len: 1
     max_len: 64
+    normalize: lower
     sensitivity: pii
-    comment: "邮箱 @ 前的本地部分"
+    comment: "邮箱 @ 前的本地部分；小写归一"
 
   - name: domain
     type: string
@@ -54,6 +55,10 @@ constraints:
     type: check
     expr: "domain = lower(domain)"
 
+  - name: ck_auth_email_username_lowercase
+    type: check
+    expr: "username = lower(username)"
+
 indexes:
   - name: uq_auth_email_username_domain
     columns: [ username, domain ]
@@ -71,8 +76,10 @@ indexes:
     comment: "账号绑定唯一性"
     used_by:
       - data.queries.auth.create_auth_email
+      - data.queries.auth.soft_delete_auth_email_by_account
 
 used_by:
   queries:
     - data.queries.auth.create_auth_email
     - data.queries.auth.get_auth_email_by_username_domain
+    - data.queries.auth.soft_delete_auth_email_by_account

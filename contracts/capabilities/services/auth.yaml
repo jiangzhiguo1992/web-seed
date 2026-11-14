@@ -9,6 +9,8 @@ do_not:
   - "持久化 token 前必须哈希；数据库表只存 hash，不存原文"
   - "不要返回 data.tables.*.row；返回 data.entities.account 或 TokenPair"
   - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
+  - "SendVerification / VerifyCode 不要返回 code_hash / content / target 原文；只返回 masked_target"
+  - "验证码校验失败不要枚举 target 是否存在"
 
 module: auth
 
@@ -54,6 +56,46 @@ interface:
       errors: [platform.errors.AUTH_TOKEN_INVALID]
       transaction: required
 
+    - name: RevokeAllForAccount
+      summary: "软删账号的认证绑定并吊销全部令牌；账号删除时同步调用"
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: account_id, type: integer }
+      returns:
+        - { name: err, type: error }
+      errors: [platform.errors.COMMON_INTERNAL]
+      transaction: required
+
+    - name: SendVerification
+      summary: "发送短信/邮件验证码"
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: input, type: SendVerificationInput }
+      returns:
+        - { name: verification, type: VerificationSent }
+        - { name: err, type: error }
+      errors:
+        - platform.errors.AUTH_VERIFICATION_RATE_LIMITED
+        - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+        - platform.errors.AUTH_PHONE_INVALID
+        - platform.errors.AUTH_EMAIL_INVALID
+      transaction: required
+
+    - name: VerifyCode
+      summary: "校验并消费验证码"
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: input, type: VerifyCodeInput }
+      returns:
+        - { name: result, type: VerificationResult }
+        - { name: err, type: error }
+      errors:
+        - platform.errors.AUTH_VERIFICATION_INVALID
+        - platform.errors.AUTH_VERIFICATION_EXPIRED
+        - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+        - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+      transaction: required
+
     - name: Verify
       summary: "校验访问令牌并返回账号"
       params:
@@ -74,6 +116,7 @@ persistence:
     - data.tables.auth_phone
     - data.tables.auth_email
     - data.tables.token
+    - data.tables.verification
   field_map: {}
   write_queries:
     - data.queries.auth.create_auth_pwd
@@ -82,9 +125,19 @@ persistence:
     - data.queries.auth.record_auth_pwd_login_failure
     - data.queries.auth.create_auth_phone
     - data.queries.auth.create_auth_email
-    - data.queries.auth.create_token
-    - data.queries.auth.revoke_token
-    - data.queries.auth.delete_expired_tokens
+    - data.queries.auth.soft_delete_auth_pwd_by_account
+    - data.queries.auth.soft_delete_auth_phone_by_account
+    - data.queries.auth.soft_delete_auth_email_by_account
+    - data.queries.token.create_token
+    - data.queries.token.revoke_token
+    - data.queries.token.revoke_tokens_by_account
+    - data.queries.token.delete_expired_tokens
+    - data.queries.verification.create_verification
+    - data.queries.verification.mark_verification_sent
+    - data.queries.verification.consume_verification
+    - data.queries.verification.increment_verification_attempt
+    - data.queries.verification.revoke_verifications_by_target
+    - data.queries.verification.delete_expired_verifications
   queries:
     get_account: data.queries.account.get_account
     get_auth_pwd_by_username: data.queries.auth.get_auth_pwd_by_username
@@ -94,20 +147,40 @@ persistence:
     get_auth_email_by_username_domain: data.queries.auth.get_auth_email_by_username_domain
     create_auth_phone: data.queries.auth.create_auth_phone
     create_auth_email: data.queries.auth.create_auth_email
+    soft_delete_auth_pwd_by_account: data.queries.auth.soft_delete_auth_pwd_by_account
+    soft_delete_auth_phone_by_account: data.queries.auth.soft_delete_auth_phone_by_account
+    soft_delete_auth_email_by_account: data.queries.auth.soft_delete_auth_email_by_account
     record_login_success: data.queries.auth.record_auth_pwd_login_success
     record_login_failure: data.queries.auth.record_auth_pwd_login_failure
-    create_token: data.queries.auth.create_token
-    get_token_by_refresh: data.queries.auth.get_token_by_refresh
-    get_token_by_access: data.queries.auth.get_token_by_access
-    revoke_token: data.queries.auth.revoke_token
-    delete_expired_tokens: data.queries.auth.delete_expired_tokens
-    list_tokens_by_account: data.queries.auth.list_tokens_by_account
+    create_token: data.queries.token.create_token
+    get_token_by_refresh: data.queries.token.get_token_by_refresh
+    get_token_by_access: data.queries.token.get_token_by_access
+    revoke_token: data.queries.token.revoke_token
+    revoke_tokens_by_account: data.queries.token.revoke_tokens_by_account
+    delete_expired_tokens: data.queries.token.delete_expired_tokens
+    list_tokens_by_account: data.queries.token.list_tokens_by_account
+    create_verification: data.queries.verification.create_verification
+    mark_verification_sent: data.queries.verification.mark_verification_sent
+    get_latest_verification: data.queries.verification.get_latest_verification
+    count_recent_verifications: data.queries.verification.count_recent_verifications
+    count_recent_verifications_by_ip: data.queries.verification.count_recent_verifications_by_ip
+    consume_verification: data.queries.verification.consume_verification
+    increment_verification_attempt: data.queries.verification.increment_verification_attempt
+    revoke_verifications_by_target: data.queries.verification.revoke_verifications_by_target
+    delete_expired_verifications: data.queries.verification.delete_expired_verifications
   constraint_errors:
     uq_auth_pwd_username: platform.errors.AUTH_USERNAME_TAKEN
     uq_auth_pwd_account: platform.errors.AUTH_USERNAME_TAKEN
-    ck_auth_pwd_password_present: platform.errors.AUTH_INVALID_CREDENTIALS
+    ck_auth_pwd_username_lowercase: platform.errors.AUTH_INVALID_CREDENTIALS
     uq_auth_phone_number: platform.errors.AUTH_PHONE_TAKEN
     uq_auth_email_username_domain: platform.errors.AUTH_EMAIL_TAKEN
+    ck_auth_email_domain_lowercase: platform.errors.AUTH_EMAIL_INVALID
+    ck_auth_email_username_lowercase: platform.errors.AUTH_EMAIL_INVALID
+    ck_token_revoked_consistent: platform.errors.AUTH_TOKEN_INVALID
+    ck_token_revoke_reason_consistent: platform.errors.AUTH_TOKEN_INVALID
+    ck_token_replaced_by_self: platform.errors.COMMON_CONFLICT
+    ck_verification_auth_type: platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+    ck_verification_consumed_status: platform.errors.AUTH_VERIFICATION_INVALID
 
 types:
   LoginInput:
@@ -140,3 +213,41 @@ types:
     properties:
       account: { type: data.entities.account }
       tokens: { type: TokenPair }
+
+  SendVerificationInput:
+    type: object
+    additionalProperties: false
+    required: [auth_type, target, purpose]
+    properties:
+      auth_type: { type: data.enums.auth_type }
+      target: { type: string, minLength: 1, maxLength: 320 }
+      purpose: { type: data.enums.verification_purpose }
+
+  VerificationSent:
+    type: object
+    additionalProperties: false
+    required: [id, masked_target, expire_at, retry_after_seconds]
+    properties:
+      id: { type: integer }
+      masked_target: { type: string }
+      expire_at: { type: string, format: date-time }
+      retry_after_seconds: { type: integer, minimum: 0 }
+
+  VerifyCodeInput:
+    type: object
+    additionalProperties: false
+    required: [auth_type, target, purpose, code]
+    properties:
+      auth_type: { type: data.enums.auth_type }
+      target: { type: string, minLength: 1, maxLength: 320 }
+      purpose: { type: data.enums.verification_purpose }
+      code: { type: string, minLength: 4, maxLength: 12 }
+
+  VerificationResult:
+    type: object
+    additionalProperties: false
+    required: [verified, verification_id]
+    properties:
+      verified: { type: boolean }
+      verification_id: { type: integer }
+      consumed_at: { type: string, format: date-time, nullable: true }

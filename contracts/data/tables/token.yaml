@@ -72,10 +72,37 @@ columns:
     nullable: false
     comment: "刷新令牌过期时间"
 
+  - name: revoked_at
+    type: timestamp
+    nullable: true
+    comment: "吊销时间；为空表示未吊销"
+
+  - name: revoke_reason
+    type: integer
+    nullable: true
+    comment: "吊销原因整数码；映射 data.enums.token_revoke_reason"
+
+  - name: replaced_by_id
+    type: integer
+    nullable: true
+    comment: "轮换后新令牌 ID；用于复用检测与轮换链"
+
 constraints:
   - name: ck_token_expire_order
     type: check
     expr: "refresh_expire_at > access_expire_at"
+
+  - name: ck_token_revoked_consistent
+    type: check
+    expr: "(status = 1) = (revoked_at IS NOT NULL)"
+
+  - name: ck_token_revoke_reason_consistent
+    type: check
+    expr: "(status = 1) = (revoke_reason IS NOT NULL)"
+
+  - name: ck_token_replaced_by_self
+    type: check
+    expr: "replaced_by_id IS NULL OR replaced_by_id <> id"
 
 indexes:
   - name: uq_token_access_hash
@@ -84,8 +111,8 @@ indexes:
     live_only: true
     comment: "访问令牌哈希查找"
     used_by:
-      - data.queries.auth.get_token_by_access
-      - data.queries.auth.create_token
+      - data.queries.token.get_token_by_access
+      - data.queries.token.create_token
 
   - name: uq_token_refresh_hash
     columns: [ refresh_token_hash ]
@@ -93,27 +120,30 @@ indexes:
     live_only: true
     comment: "刷新令牌哈希查找"
     used_by:
-      - data.queries.auth.get_token_by_refresh
-      - data.queries.auth.revoke_token
-      - data.queries.auth.create_token
+      - data.queries.token.get_token_by_refresh
+      - data.queries.token.revoke_token
+      - data.queries.token.create_token
 
-  - name: idx_token_account_id
-    columns: [ account_id ]
+  - name: idx_token_account_status
+    columns: [ account_id, status ]
     live_only: true
-    comment: "按账号列出令牌"
-    used_by: [ data.queries.auth.list_tokens_by_account ]
+    comment: "按账号与状态列出/吊销令牌"
+    used_by:
+      - data.queries.token.list_tokens_by_account
+      - data.queries.token.revoke_tokens_by_account
 
   - name: idx_token_refresh_expire_at
     columns: [ refresh_expire_at ]
     live_only: true
     comment: "过期令牌清理"
-    used_by: [ data.queries.auth.delete_expired_tokens ]
+    used_by: [ data.queries.token.delete_expired_tokens ]
 
 used_by:
   queries:
-    - data.queries.auth.create_token
-    - data.queries.auth.delete_expired_tokens
-    - data.queries.auth.get_token_by_access
-    - data.queries.auth.get_token_by_refresh
-    - data.queries.auth.list_tokens_by_account
-    - data.queries.auth.revoke_token
+    - data.queries.token.create_token
+    - data.queries.token.delete_expired_tokens
+    - data.queries.token.get_token_by_access
+    - data.queries.token.get_token_by_refresh
+    - data.queries.token.list_tokens_by_account
+    - data.queries.token.revoke_token
+    - data.queries.token.revoke_tokens_by_account
