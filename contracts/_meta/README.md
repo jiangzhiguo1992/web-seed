@@ -2,7 +2,7 @@
 
 > 本目录是**契约的单一源**：字段树、值域、字段含义、跨字段规则与校验入口。
 > 它不是业务契约，不登记在 `contracts/index.yaml`，也不进入 `generated/`。
-> `contracts/generated/` 只放**机器生成物**（如 `openapi/admin.yaml`）；人读视图在 `docs/reference/generated/`。
+> `contracts/generated/` 只放**机器生成物**（如 `openapi/admin.yaml`）；人读视图在 `docs/contracts/generated/`。
 
 ---
 

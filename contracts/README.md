@@ -124,7 +124,7 @@ contracts/
     └── openapi/admin.yaml    #   合并 OpenAPI spec（代码生成输入）
 ```
 
-人读视图（`lineage.md` / `data.md` / `errors.md` / `permissions.md`）在 `docs/reference/generated/`。
+人读视图（`lineage.md` / `data.md` / `errors.md` / `permissions.md`）在 `docs/contracts/generated/`。
 
 ---
 
@@ -383,7 +383,7 @@ table:
 
 ### 4.6 人读视图自动生成
 
-`docs/reference/generated/` 由契约生成，**禁止手写**：
+`docs/contracts/generated/` 由契约生成，**禁止手写**：
 
 | 文件 | 来源 |
 |---|---|
@@ -427,7 +427,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | business | 状态机、常量、断言、测试骨架 |
 | features | 路由、页面骨架、类型 |
 | platform | 配置校验、常量、CSS 变量 |
-| graph | 按需 graph；`lineage.md` 入 `docs/reference/generated/` |
+| graph | 按需 graph；`lineage.md` 入 `docs/contracts/generated/` |
 
 超过 6 个，维护成本会超过收益。
 

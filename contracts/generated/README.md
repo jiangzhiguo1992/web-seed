@@ -1,6 +1,6 @@
 # 机器生成物（generated）
 
-> 本目录只放**机器生成物**，禁止手改；人读视图在 `docs/reference/generated/`。
+> 本目录只放**机器生成物**，禁止手改；人读视图在 `docs/contracts/generated/`。
 > 契约规范、模板、脚本都在 `contracts/_meta/` 与 `scripts/`，不在本目录。
 
 ---
@@ -26,7 +26,7 @@ make gen-openapi   # 合并 spec
 | 产物 | 去向 | 原因 |
 |---|---|---|
 | `graph.json` | 按需生成（临时目录/CI） | 只有影响面分析需要时生成，避免与契约引用重复 |
-| `lineage.md` | `docs/reference/generated/lineage.md` | 人读文档统一进 `docs/` |
+| `lineage.md` | `docs/contracts/generated/lineage.md` | 人读文档统一进 `docs/` |
 | `manifest.json` | 删除设计 | `contracts/index.yaml` + `project.yaml` 已覆盖，无消费者 |
 | `inbound.yaml` | 删除设计 | `used_by.queries` / `table.entities` / `model.included_by` 已是反向索引 |
 

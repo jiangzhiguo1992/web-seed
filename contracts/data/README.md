@@ -181,7 +181,7 @@ data/redundancy.yaml ─> 冗余组校验
 9. **主键类型是 integer（bits: 64）**，具体生成方式由实现决定；`created_at` 由数据库 `now()`，`updated_at` / `deleted_at` 由应用写入。
 10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；写查询用 `persistence.write_queries` / `writes` 显式登记，checker 校验单表与归属；跨模块读通过 `persistence.queries`。
 11. **禁止未结构化 DDL 字段**：分区写在 `data/storage.yaml` 的 `tables.<id>.partition`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定，不要塞原生 SQL。
-12. **反向映射分两类**：`table.entities` 与 `model.included_by` 是**显式声明**，checker 双向校验；entity 的 `used_by.queries` / `used_by.capabilities` 是**生成物**，由 `make gen-graph` 按 query/capability 引用计算并写回，禁止手改。四类都只记**直接入边**。`used_by.queries` 记录查询项 ID（`data.queries.<module>.<snake_case(name)>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `docs/reference/generated/lineage.md` 查询。
+12. **反向映射分两类**：`table.entities` 与 `model.included_by` 是**显式声明**，checker 双向校验；entity 的 `used_by.queries` / `used_by.capabilities` 是**生成物**，由 `make gen-graph` 按 query/capability 引用计算并写回，禁止手改。四类都只记**直接入边**。`used_by.queries` 记录查询项 ID（`data.queries.<module>.<snake_case(name)>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `docs/contracts/generated/lineage.md` 查询。
 13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
 14. **冗余组必须登记**：`columns[].redundancy` 只写组 ID；`data/redundancy.yaml` 的 `groups` 定义 `source`/`copies`，两边双向一致，`type`/`nullable` 一致；每组只能有一个 `source`。
 15. **单表 query 必须声明 `index_ref`**：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须把 query 写进 `used_by`，反向也校验。多表 query 可省略，也可引用任一查询表的索引。

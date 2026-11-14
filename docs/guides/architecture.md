@@ -108,7 +108,7 @@
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
 - [ ] `business/**` → 状态机常量 + 断言 + 测试骨架
 - [ ] `features/**` → 路由表 + 页面骨架 + 类型
-- [ ] 结构化依赖 → 按需生成 graph；`lineage.md` → `docs/reference/generated/lineage.md`
+- [ ] 结构化依赖 → 按需生成 graph；`lineage.md` → `docs/contracts/generated/lineage.md`
 - [ ] `make gen` 幂等：连续两次生成结果一致
 
 #### P3 后端地基（`internal/platform`）
@@ -238,7 +238,7 @@ business/** ──> 状态机 / 常量 / 断言 / 测试骨架
 features/** ──> 路由 / 页面骨架 / 类型
 platform/** ──> 配置校验 / 常量 / CSS 变量
 
-结构化依赖 ──> 按需 graph + docs/reference/generated/lineage.md
+结构化依赖 ──> 按需 graph + docs/contracts/generated/lineage.md
 ```
 
 生成物入库，CI 用 `make gen && git diff --exit-code` 保证同步。
@@ -285,7 +285,8 @@ web-seed/
 │   ├── adr/                          # 决策记录（含 Rejected alternatives）
 │   ├── playbooks/                    # 步骤化手册
 │   ├── guides/                       # 解释性文档（本文在此）
-│   └── reference/                    # conventions / glossary / dependencies / generated
+│   ├── contracts/                    # 契约生成的人读视图（禁止手写）
+│   └── reference/                    # conventions / glossary / dependencies
 │
 ├── apps/
 │   ├── api/                          [C] 单 Go module，多 cmd，多应用装配

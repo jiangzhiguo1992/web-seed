@@ -57,7 +57,8 @@ playbook 未覆盖的任务：**先写 playbook，再动手**。这是硬规则�
 | `contracts/data/README.md` | 数据契约与迁移规则 | 加表 / 写查询前 |
 | `docs/playbooks/` | 步骤化操作手册 | 执行具体任务时 |
 | `docs/adr/` | 已定决策与否决方案 | 想改架构前 |
-| `docs/reference/` | 命名、术语、依赖清单、契约生成的人读视图 | 查约定时 |
+| `docs/contracts/generated/` | 契约生成的人读视图（禁止手写） | 查生成文档时 |
+| `docs/reference/` | 命名、术语、依赖清单 | 查约定时 |
 
 ---
 

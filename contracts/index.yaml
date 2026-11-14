@@ -157,4 +157,3 @@ orphan_whitelist:
   - platform.quality
   - platform.architecture.go_arch
   - platform.architecture.web_deps
-  - generated.openapi
