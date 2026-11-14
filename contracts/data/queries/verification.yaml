@@ -41,6 +41,7 @@ queries:
     params:
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
       - { name: sent_at, type: timestamp, column: data.tables.verification_body.col.sent_at }
+      - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.pk ]
@@ -75,6 +76,8 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
+      - { name: consumed_at, type: timestamp, column: data.tables.verification_body.col.consumed_at }
+      - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.pk ]
@@ -84,6 +87,8 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
+      - { name: attempt_count, type: integer, column: data.tables.verification_body.col.attempt_count }
+      - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.pk ]
@@ -95,6 +100,7 @@ queries:
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
       - { name: auth_id, type: integer, column: data.tables.verification_body.col.auth_id }
       - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
+      - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
@@ -104,6 +110,7 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: account_id, type: integer, column: data.tables.verification_body.col.account_id }
+      - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.idx_verification_account_id ]
