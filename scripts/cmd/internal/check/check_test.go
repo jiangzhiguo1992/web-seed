@@ -1089,6 +1089,38 @@ enums:
 	}
 }
 
+func TestEnumCodeLiterals(t *testing.T) {
+	c := &Checker{
+		tableDocs: map[string]map[string]any{
+			"data.tables.x": {"constraints": []any{map[string]any{"name": "ck_x_status", "expr": "status IN (0, 1, 9)"}}},
+		},
+		entities: map[string]*entityInfo{
+			"data.entities.x": {
+				ID:      "data.entities.x",
+				Rel:     "contracts/data/entities/x.yaml",
+				Primary: "data.tables.x",
+				Fields: []entityFieldInfo{{
+					Name: "Status", Type: "data.enums.x_status", HasType: true,
+					SourceColumnRef: "data.tables.x.col.status",
+					ColumnTable:     "data.tables.x", Column: "status",
+				}},
+			},
+		},
+		enumCodes: map[string]map[int]bool{"data.enums.x_status": {0: true, 1: true}},
+	}
+	c.checkEnumCodeLiterals()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "value 9 is not a code of data.enums.x_status") {
+		t.Fatalf("invalid enum code not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.tableDocs["data.tables.x"]["constraints"] = []any{map[string]any{"name": "ck_x_status", "expr": "status IN (0, 1)"}}
+	c.checkEnumCodeLiterals()
+	if len(c.errs) != 0 {
+		t.Fatalf("valid enum code reported: %v", c.errs)
+	}
+}
+
 func TestEnumCodeUnique(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "contracts/data")

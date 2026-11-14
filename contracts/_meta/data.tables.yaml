@@ -136,6 +136,7 @@ rules:
   - { id: no-foreign-key, text: "禁止 foreign_key；跨表一致性由应用/业务规则保证", implemented_by: [ no-foreign-key ] }
   - { id: index-live-only, text: "live_only: true 要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
   - { id: constraint-fields, text: "type=check 的约束必须写非空 expr", implemented_by: [ constraint-fields ] }
+  - { id: enum-code-literal, text: "表 CHECK 引用枚举列时，整数码必须存在于对应 data.enums 的 code 集合", implemented_by: [ enum-code-literal ] }
   - { id: storage-registry, text: "storage.yaml 的 tables 必须按 supported_engines 分组，覆盖每张物理表且只引用已存在的表；每张表只能出现在一个权威引擎下；基类不是物理表；caches 只登记非权威副本", implemented_by: [ storage-registry ] }
   - { id: storage-entry, text: "size_class/retention/partition 的键必须是已登记的表；size_class 只能是 small/large", implemented_by: [ storage-entry ] }
   - { id: storage-engine, text: "storage.tables 的键必须在 supported_engines 中，且每个 supported_engine 都必须有对应列表", implemented_by: [ storage-engine ] }

@@ -44,6 +44,7 @@ var knownRuleIDs = map[string]bool{
 	"entity-table-shape":          true,
 	"entity-used-by":              true,
 	"entity-validation":           true,
+	"enum-code-literal":           true,
 	"enum-code-unique":            true,
 	"enum-do-not-specific":        true,
 	"enum-id":                     true,

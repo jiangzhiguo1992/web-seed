@@ -11,6 +11,7 @@ import (
 
 func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 	c.checkEnumSchema(schema)
+	c.enumCodes = map[string]map[int]bool{}
 	if schema.Targets.File == "" || schema.Targets.ID == "" {
 		c.rulef("schema.targets", "%s: targets.file and targets.id must not be empty", schema.ID)
 		return map[string]map[string]bool{}
@@ -80,6 +81,7 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 			}
 		}
 		enums[id] = values
+		c.enumCodes[id] = codes
 		c.checkEnumUsedBy(rel, i, id, m, usages[id])
 	}
 	c.checkEnumDoNot(doc, rel, schema.Targets.ID, names, goTypes, tsTypes)
