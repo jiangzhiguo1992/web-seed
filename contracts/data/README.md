@@ -16,7 +16,7 @@
 | `entities/<entity>.yaml` | 读模型：Go 类型 `name`、表映射、语义字段（来源/关系/枚举/computed）、复杂校验 | Go/TS 类型 |
 | `enums.yaml` | 跨前后端枚举集合 | Go 常量、TS union、entity 映射 |
 | `queries/<scope>.yaml` | 查询契约：入参、结果、目标表、索引 | 查询接口、sqlc 代码 |
-| `storage.yaml` | 每张表的 engine/size_class/retention/partition；允许的引擎与不支持拓扑 | DDL 生成约束、配置校验 |
+| `storage.yaml` | 按引擎分组的表清单、size_class/retention/partition、允许的引擎与不支持拓扑 | DDL 生成约束、配置校验 |
 | `redundancy.yaml` | 跨表冗余列关系：组 ID、source/copies | 冗余校验 |
 
 ### 1.1 基类不是物理表
@@ -182,7 +182,7 @@ data/redundancy.yaml ─> 冗余组校验
 8. **索引必须写 `comment` 与 `used_by`**；`used_by` 至少一个查询项 ID，且查询引用当前表；表达式索引用 `expression`。没有查询的索引直接删除。
 9. **主键类型是 integer（bits: 64）**，具体生成方式由实现决定；`created_at` 由数据库 `now()`，`updated_at` / `deleted_at` 由应用写入。
 10. **`owner_module` 是写归属**：只有该模块的 `cap.services` / `cap.async` 可以写表；写查询用 `persistence.write_queries` / `writes` 显式登记，checker 校验单表与归属；跨模块读通过 `persistence.queries`。
-11. **禁止未结构化 DDL 字段**：分区写在 `data/storage.yaml` 的 `tables.<id>.partition`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定，不要塞原生 SQL。
+11. **禁止未结构化 DDL 字段**：分区写在 `data/storage.yaml` 的 `partition.<id>`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定，不要塞原生 SQL。
 12. **反向映射分两类**：`table.entities` 与 `model.included_by` 是**显式声明**，checker 双向校验；entity 的 `used_by.queries` / `used_by.capabilities` 是**生成物**，由 `make gen-graph` 按 query/capability 引用计算并写回，禁止手改。四类都只记**直接入边**。`used_by.queries` 记录查询项 ID（`data.queries.<module>.<snake_case(name)>`），不是查询文件 ID。注意 `indexes[].used_by` 是手写设计声明；完整影响面（页面/端点/流程）用 `make contract-impact id=<id>` 或 `docs/contracts/generated/lineage.md` 查询。
 13. **禁止数据库外键**：不使用 `foreign_key`；跨表一致性由应用服务与 `business.rules` 保证。
 14. **冗余组必须登记**：`columns[].redundancy` 只写组 ID；`data/redundancy.yaml` 的 `groups` 定义 `source`/`copies`，两边双向一致，`type`/`nullable` 一致；每组只能有一个 `source`。
@@ -205,7 +205,7 @@ data/redundancy.yaml ─> 冗余组校验
 | `RENAME COLUMN` | 加新列 → 双写 → 回填 → 切读 → 删旧列 |
 | 给已有数据的表加 `NOT NULL` 且无默认值 | 加可空 → 回填 → 加约束 |
 | 原地改列类型 | 新列 + 回填 + 切换 |
-| `storage.tables.size_class=large` 的表非 `CONCURRENTLY` 建索引 | `CREATE INDEX CONCURRENTLY`（`transaction: false`） |
+| `size_class.<table>=large` 的表非 `CONCURRENTLY` 建索引 | `CREATE INDEX CONCURRENTLY`（`transaction: false`） |
 
 零停机三步：加可空列 → 分批回填 → 加约束（`NOT VALID` 后 `VALIDATE`）。
 
@@ -228,7 +228,7 @@ indexes:
     comment: "邮箱不区分大小写查找"
 ```
 
-- `storage.tables.<id>.partition`：`strategy` 为 `range|list|hash`；`columns` 必须是表列 ID 的末段
+- `partition.<id>`：`strategy` 为 `range|list|hash`；`columns` 必须是表列 ID 的末段
 - `indexes[].expression`：表达式索引；必须写非空 `comment`
 - `indexes[].comment`：生成 `COMMENT ON INDEX`；与 `columns` / `expression` 一起构成索引定义
 - 生成器无法表达的新特性：先扩展本契约的字段，不要手写迁移
@@ -254,7 +254,7 @@ indexes:
 - 唯一性统一用 `indexes[].unique`：`live_only: true` 只约束未软删行，`false`/省略约束全表（含软删行）
 - 禁止数据库外键；跨表一致性由应用/业务规则保证
 - 表列不引用 `data.enums.*`；状态整数码用 `integer`，由 entity 映射为枚举
-- 不要用未结构化字段塞原生 DDL；分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`
+- 不要用未结构化字段塞原生 DDL；分区用 `partition.<id>`，表达式索引用 `indexes[].expression`
 - `table.entities` / `model.included_by` 显式声明；entity 的 `used_by.queries` / `used_by.capabilities` 是生成物，禁止手改
 - 只有 `owner_module` 相同的 `cap.services` / `cap.async` 可以写表；跨模块读通过 `persistence.queries`
 - `sensitivity: secret` 列禁止进入普通 OpenAPI/TS/事件/普通 entity；`pii` 列可脱敏返回；认证 query 与 `x-auth-response` 是唯一例外
@@ -311,11 +311,29 @@ indexes:
 
 `data/storage.yaml` 是项目级单例：
 
-- `supported_engines`（mysql / postgres / mongodb；默认 mysql）：允许的引擎集合
-- `tables.<id>.engine`：每张物理表必须显式声明存储引擎，且必须在 `supported_engines` 中
-- `tables.<id>.size_class` / `retention` / `partition`：表级保留与分区事实
-- `tables.<id>.retention`：可选的生命周期策略，不是强制清理。`pending` 用于未完成记录（如 account_cleanup），`ttl` 用于过期凭证（token / verification），`soft_delete` / `hard_delete` 只有在确实存在硬删策略时才写；主数据与认证绑定默认不写
+- `supported_engines`（mysql / postgres / mongodb）：允许的权威引擎集合
+- `tables.<engine>`：该引擎下的表 ID 列表；每个 `supported_engine` 都必须有对应键（可为空列表），每张物理表只能出现在一个权威引擎下
+- `caches.<engine>`：非权威副本（如 `redis` 下的 `token`）；Redis 不是表存储，不参与 DDL
+- `size_class.<table>` / `retention.<table>` / `partition.<table>`：表级物理事实，键必须是已登记的表
+- `retention.<table>`：可选的生命周期策略，不是强制清理。`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只有在确实存在硬删策略时才写；主数据与认证绑定默认不写
 - `not_supported_topologies` 列表（sharding / multi-primary / cross-region / outbox）
+
+```yaml
+supported_engines: [mysql, postgres, mongodb]
+tables:
+  mysql:
+    - data.tables.account
+    - data.tables.token
+  postgres: []
+  mongodb: []
+caches:
+  redis:
+    - data.tables.token
+size_class:
+  data.tables.token: large
+retention:
+  data.tables.token: { unit: days, ttl: 30 }
+```
 
 引擎版本、扩展、连接池、迁移工具、部署拓扑、副本/读写分离、任务锁属于运行时/部署配置，不写进 `storage.yaml`。
 **禁止在 `tables/*.yaml` 里逐表声明 engine。**

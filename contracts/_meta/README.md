@@ -78,7 +78,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；类型族来自 `_meta/_types.yaml`。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.tables` 的 retention/partition、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；类型族来自 `_meta/_types.yaml`。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 

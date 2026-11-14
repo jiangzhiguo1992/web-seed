@@ -31,7 +31,7 @@
 | 实现由契约生成 | 类型、常量、路由、状态机、DDL 均从本目录产出 |
 | 生成物不可手改 | `**/generated/` 与 `apps/api/migrations/` 是产物；手改会被 CI 拦截 |
 | 需求变更先改契约 | 禁止"先写代码后补契约" |
-| 契约不丢信息 | SQL 特性用结构化字段表达（`storage.tables.partition` / `indexes[].expression`），禁止塞回原生 DDL |
+| 契约不丢信息 | SQL 特性用结构化字段表达（`storage.partition` / `indexes[].expression`），禁止塞回原生 DDL |
 
 ### 1.2 契约的判定标准
 
@@ -469,7 +469,7 @@ data/redundancy.yaml ──> 冗余组关系
 | 禁止手写迁移 | 改 `tables/*.yaml` 后跑 `make gen-db` |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验 | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
-| 结构化 DDL | 分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
+| 结构化 DDL | 分区用 `storage.partition.<id>`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
 
 **诚实边界**：生产环境的在线 DDL（大表加索引、数据回填）无法全自动。契约约束**最终态**，迁移**过程**允许人工介入，并用 `-- manual-adjust: <原因>` 显式声明。
 

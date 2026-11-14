@@ -1,5 +1,5 @@
-// storage.go 校验 data/storage.yaml 的表级物理事实：
-// engine / size_class / retention / partition 统一登记在 storage，而不是表契约。
+// storage.go 校验 data/storage.yaml 的存储拓扑：
+// tables 按 engine 分组；size_class/retention/partition 按表登记；caches 记录非权威副本。
 // 引擎版本、连接池、部署拓扑等运行时配置不在契约内。
 package check
 
@@ -17,35 +17,157 @@ func (c *Checker) checkStorage(tableIDs map[string]string) {
 		return
 	}
 	c.checkStorageDoc(doc, rel)
+
 	rawTables, ok := asMap(doc["tables"])
 	if !ok {
-		c.rulef("storage-registry", "%s: tables must be a map keyed by table contract id", rel)
+		c.rulef("storage-registry", "%s: tables must be a map keyed by engine", rel)
 		return
 	}
-	entries := map[string]map[string]any{}
-	for _, id := range sortedAnyKeys(rawTables) {
-		m, ok := asMap(rawTables[id])
+	supported := stringSet(asList(doc["supported_engines"]))
+	for _, raw := range asList(doc["supported_engines"]) {
+		if engine, _ := raw.(string); engine != "" {
+			if _, ok := rawTables[engine]; !ok {
+				c.rulef("storage-engine", "%s: tables.%s is required for supported engine", rel, engine)
+			}
+		}
+	}
+
+	registered := map[string]string{}
+	for _, engine := range sortedAnyKeys(rawTables) {
+		if !supported[engine] {
+			c.rulef("storage-engine", "%s: tables.%s is not a supported engine", rel, engine)
+			continue
+		}
+		rawList, ok := rawTables[engine].([]any)
 		if !ok {
-			c.rulef("storage-entry", "%s: tables.%s must be an object", rel, id)
+			c.rulef("storage-registry", "%s: tables.%s must be a list of table IDs", rel, engine)
 			continue
 		}
-		if id == c.baseID {
-			c.rulef("storage-registry", "%s: tables.%s is the base contract, not a physical table", rel, id)
-			continue
+		seen := map[string]bool{}
+		for _, raw := range rawList {
+			id, _ := raw.(string)
+			if id == "" {
+				c.rulef("storage-registry", "%s: tables.%s must contain non-empty table IDs", rel, engine)
+				continue
+			}
+			if seen[id] {
+				c.rulef("storage-registry", "%s: tables.%s duplicates %s", rel, engine, id)
+				continue
+			}
+			seen[id] = true
+			if id == c.baseID {
+				c.rulef("storage-registry", "%s: %s is the base contract, not a physical table", rel, id)
+				continue
+			}
+			if _, ok := tableIDs[id]; !ok {
+				c.rulef("storage-registry", "%s: %s does not match any data.tables contract", rel, id)
+				continue
+			}
+			if prev, ok := registered[id]; ok {
+				c.rulef("storage-engine", "%s: table %s is registered under both %s and %s", rel, id, prev, engine)
+				continue
+			}
+			registered[id] = engine
 		}
-		if _, ok := tableIDs[id]; !ok {
-			c.rulef("storage-registry", "%s: tables.%s does not match any data.tables contract", rel, id)
-			continue
-		}
-		entries[id] = m
-		c.checkStorageEntry(doc, id, m, rel)
 	}
 	for _, id := range sortedStringMapKeys(tableIDs) {
 		if id == c.baseID {
 			continue
 		}
-		if _, ok := entries[id]; !ok {
+		if _, ok := registered[id]; !ok {
 			c.rulef("storage-registry", "%s: physical table %s is not registered", rel, id)
+		}
+	}
+
+	c.checkStorageCaches(doc, tableIDs, rel)
+	c.checkStorageMetadata(doc, registered, rel)
+}
+
+// checkStorageCaches 校验非权威副本（如 token 的 Redis 缓存）。
+func (c *Checker) checkStorageCaches(doc map[string]any, tableIDs map[string]string, rel string) {
+	raw, ok := doc["caches"]
+	if !ok {
+		return
+	}
+	caches, ok := asMap(raw)
+	if !ok {
+		c.rulef("storage-registry", "%s: caches must be a map keyed by cache engine", rel)
+		return
+	}
+	for _, engine := range sortedAnyKeys(caches) {
+		rawList, ok := caches[engine].([]any)
+		if !ok {
+			c.rulef("storage-registry", "%s: caches.%s must be a list of table IDs", rel, engine)
+			continue
+		}
+		seen := map[string]bool{}
+		for _, raw := range rawList {
+			id, _ := raw.(string)
+			if id == "" {
+				c.rulef("storage-registry", "%s: caches.%s must contain non-empty table IDs", rel, engine)
+				continue
+			}
+			if seen[id] {
+				c.rulef("storage-registry", "%s: caches.%s duplicates %s", rel, engine, id)
+				continue
+			}
+			seen[id] = true
+			if id == c.baseID {
+				c.rulef("storage-registry", "%s: %s is the base contract, not a physical table", rel, id)
+				continue
+			}
+			if _, ok := tableIDs[id]; !ok {
+				c.rulef("storage-registry", "%s: caches.%s references unknown table %s", rel, engine, id)
+			}
+		}
+	}
+}
+
+// checkStorageMetadata 校验 size_class / retention / partition 的键必须是已登记表。
+func (c *Checker) checkStorageMetadata(doc map[string]any, registered map[string]string, rel string) {
+	if raw, ok := doc["size_class"]; ok {
+		m, ok := asMap(raw)
+		if !ok {
+			c.rulef("storage-entry", "%s: size_class must be a map keyed by table ID", rel)
+		} else {
+			for _, id := range sortedAnyKeys(m) {
+				if _, ok := registered[id]; !ok {
+					c.rulef("storage-entry", "%s: size_class.%s is not a registered table", rel, id)
+					continue
+				}
+				s, _ := m[id].(string)
+				if s != "small" && s != "large" {
+					c.rulef("storage-entry", "%s: size_class.%s must be small or large, got %v", rel, id, m[id])
+				}
+			}
+		}
+	}
+	if raw, ok := doc["retention"]; ok {
+		m, ok := asMap(raw)
+		if !ok {
+			c.rulef("storage-retention", "%s: retention must be a map keyed by table ID", rel)
+		} else {
+			for _, id := range sortedAnyKeys(m) {
+				if _, ok := registered[id]; !ok {
+					c.rulef("storage-retention", "%s: retention.%s is not a registered table", rel, id)
+					continue
+				}
+				c.checkStorageRetention(id, m[id], rel)
+			}
+		}
+	}
+	if raw, ok := doc["partition"]; ok {
+		m, ok := asMap(raw)
+		if !ok {
+			c.rulef("storage-partition", "%s: partition must be a map keyed by table ID", rel)
+		} else {
+			for _, id := range sortedAnyKeys(m) {
+				if _, ok := registered[id]; !ok {
+					c.rulef("storage-partition", "%s: partition.%s is not a registered table", rel, id)
+					continue
+				}
+				c.checkStoragePartition(id, m[id], rel)
+			}
 		}
 	}
 }
@@ -54,7 +176,9 @@ func (c *Checker) checkStorage(tableIDs map[string]string) {
 func (c *Checker) checkStorageDoc(doc map[string]any, rel string) {
 	allowed := map[string]bool{
 		"schema_version": true, "id": true, "summary": true, "stability": true, "do_not": true,
-		"supported_engines": true, "tables": true, "not_supported_topologies": true,
+		"supported_engines": true, "tables": true, "caches": true,
+		"size_class": true, "retention": true, "partition": true,
+		"not_supported_topologies": true,
 	}
 	for _, k := range sortedAnyKeys(doc) {
 		if !allowed[k] {
@@ -137,124 +261,89 @@ func sortedStringMapKeys(m map[string]string) []string {
 	return out
 }
 
-func (c *Checker) checkStorageEntry(storageDoc map[string]any, id string, m map[string]any, rel string) {
-	allowed := map[string]bool{"engine": true, "size_class": true, "retention": true, "partition": true}
-	for k := range m {
-		if !allowed[k] {
-			c.rulef("storage-entry", "%s: tables.%s unknown field %q", rel, id, k)
-		}
-	}
-	if raw, ok := m["size_class"]; ok {
-		s, _ := raw.(string)
-		if s != "small" && s != "large" {
-			c.rulef("storage-entry", "%s: tables.%s size_class must be small or large, got %v", rel, id, raw)
-		}
-	}
-	engine, ok := m["engine"]
-	supported := stringSet(asList(storageDoc["supported_engines"]))
-	if !ok {
-		c.rulef("storage-entry", "%s: tables.%s engine is required", rel, id)
-	} else if s, _ := engine.(string); s == "" {
-		c.rulef("storage-engine", "%s: tables.%s engine must not be empty", rel, id)
-	} else if len(supported) > 0 && !supported[s] {
-		// supported_engines 缺失/非法时只报 storage-doc，避免每张表级联报 engine 不支持。
-		c.rulef("storage-engine", "%s: tables.%s engine %q is not supported", rel, id, s)
-	}
-	c.checkStorageRetention(id, m, rel)
-	c.checkStoragePartition(id, m, rel)
-}
-
-func (c *Checker) checkStorageRetention(id string, m map[string]any, rel string) {
-	raw, ok := m["retention"]
-	if !ok {
-		return
-	}
+func (c *Checker) checkStorageRetention(id string, raw any, rel string) {
 	r, ok := asMap(raw)
 	if !ok {
-		c.rulef("storage-retention", "%s: tables.%s retention must be an object", rel, id)
+		c.rulef("storage-retention", "%s: retention.%s must be an object", rel, id)
 		return
 	}
 	allowed := map[string]bool{"unit": true, "pending": true, "soft_delete": true, "hard_delete": true, "ttl": true}
 	for k := range r {
 		if !allowed[k] {
-			c.rulef("storage-retention", "%s: tables.%s retention unknown field %q", rel, id, k)
+			c.rulef("storage-retention", "%s: retention.%s unknown field %q", rel, id, k)
 		}
 	}
-	raw, hasUnit := r["unit"]
+	rawUnit, hasUnit := r["unit"]
 	if !hasUnit {
-		c.rulef("storage-retention", "%s: tables.%s retention.unit is required", rel, id)
-	} else if unit, ok := raw.(string); !ok {
-		c.rulef("storage-retention", "%s: tables.%s retention.unit must be a string", rel, id)
+		c.rulef("storage-retention", "%s: retention.%s.unit is required", rel, id)
+	} else if unit, ok := rawUnit.(string); !ok {
+		c.rulef("storage-retention", "%s: retention.%s.unit must be a string", rel, id)
 	} else if unit != "minutes" && unit != "hours" && unit != "days" {
-		c.rulef("storage-retention", "%s: tables.%s retention.unit must be minutes/hours/days, got %q", rel, id, unit)
+		c.rulef("storage-retention", "%s: retention.%s.unit must be minutes/hours/days, got %q", rel, id, unit)
 	}
 	hasDuration := false
 	for _, key := range []string{"pending", "soft_delete", "hard_delete", "ttl"} {
-		raw, ok := r[key]
+		rawDuration, ok := r[key]
 		if !ok {
 			continue
 		}
 		hasDuration = true
-		if n, ok := toInt(raw); !ok || n < 1 {
-			c.rulef("storage-retention", "%s: tables.%s retention.%s must be an integer >= 1", rel, id, key)
+		if n, ok := toInt(rawDuration); !ok || n < 1 {
+			c.rulef("storage-retention", "%s: retention.%s.%s must be an integer >= 1", rel, id, key)
 		}
 	}
 	if !hasDuration {
-		c.rulef("storage-retention", "%s: tables.%s retention must declare at least one duration", rel, id)
+		c.rulef("storage-retention", "%s: retention.%s must declare at least one duration", rel, id)
 	}
 }
 
-func (c *Checker) checkStoragePartition(id string, m map[string]any, rel string) {
-	raw, ok := m["partition"]
-	if !ok {
-		return
-	}
+func (c *Checker) checkStoragePartition(id string, raw any, rel string) {
 	p, ok := asMap(raw)
 	if !ok {
-		c.rulef("storage-partition", "%s: tables.%s partition must be an object", rel, id)
+		c.rulef("storage-partition", "%s: partition.%s must be an object", rel, id)
 		return
 	}
 	allowed := map[string]bool{"strategy": true, "columns": true, "interval": true}
 	for k := range p {
 		if !allowed[k] {
-			c.rulef("storage-partition", "%s: tables.%s partition unknown field %q", rel, id, k)
+			c.rulef("storage-partition", "%s: partition.%s unknown field %q", rel, id, k)
 		}
 	}
 	strategy, _ := p["strategy"].(string)
 	switch strategy {
 	case "range", "list", "hash":
 	default:
-		c.rulef("storage-partition", "%s: tables.%s partition.strategy must be range/list/hash", rel, id)
+		c.rulef("storage-partition", "%s: partition.%s.strategy must be range/list/hash", rel, id)
 	}
 	cols := asList(p["columns"])
 	if len(cols) == 0 {
-		c.rulef("storage-partition", "%s: tables.%s partition.columns must not be empty", rel, id)
+		c.rulef("storage-partition", "%s: partition.%s.columns must not be empty", rel, id)
 	}
-	for _, raw := range cols {
-		col, ok := raw.(string)
+	for _, rawCol := range cols {
+		col, ok := rawCol.(string)
 		if !ok || col == "" {
-			c.rulef("storage-partition", "%s: tables.%s partition.columns must be strings", rel, id)
+			c.rulef("storage-partition", "%s: partition.%s.columns must be strings", rel, id)
 			continue
 		}
 		if set := c.tableColumns[id]; set != nil {
 			if _, ok := set[col]; !ok {
-				c.rulef("storage-partition", "%s: tables.%s partition column %q not found", rel, id, col)
+				c.rulef("storage-partition", "%s: partition.%s column %q not found", rel, id, col)
 			}
 		}
 	}
 	interval := ""
-	if raw, ok := p["interval"]; ok {
-		s, ok := raw.(string)
+	if rawInterval, ok := p["interval"]; ok {
+		s, ok := rawInterval.(string)
 		if !ok {
-			c.rulef("storage-partition", "%s: tables.%s partition.interval must be a string", rel, id)
+			c.rulef("storage-partition", "%s: partition.%s.interval must be a string", rel, id)
 		} else {
 			interval = s
 		}
 	}
 	if strategy == "range" && interval == "" {
-		c.rulef("storage-partition", "%s: tables.%s partition.interval is required for range", rel, id)
+		c.rulef("storage-partition", "%s: partition.%s.interval is required for range", rel, id)
 	}
 	if strategy != "range" && interval != "" {
-		c.rulef("storage-partition", "%s: tables.%s partition.interval is only allowed for range", rel, id)
+		c.rulef("storage-partition", "%s: partition.%s.interval is only allowed for range", rel, id)
 	}
 }

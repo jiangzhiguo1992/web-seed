@@ -6,32 +6,31 @@ schema_version: 1
 stability: draft
 do_not:
   - "未列出的引擎与拓扑一律视为不支持，禁止自行引入"
-  - "Redis 不是表存储；表数据只能落在 supported_engines 中的引擎"
+  - "Redis 只作为 caches 中的非权威副本；权威表数据只能落在 supported_engines 中的引擎"
   - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
 
 supported_engines: [mysql, postgres, mongodb]
 not_supported_topologies: [sharding, multi-primary, cross-region, outbox]
 
 tables:
-  data.tables.account:
-    engine: mysql
-    size_class: large
-    retention: { unit: days, pending: 7 }
+  mysql:
+    - data.tables.account
+    - data.tables.token
+    - data.tables.auth_pwd
+    - data.tables.auth_phone
+    - data.tables.auth_email
+    - data.tables.verification
+  postgres: []
+  mongodb: []
 
-  data.tables.token:
-    engine: mysql
-    size_class: large
-    retention: { unit: days, ttl: 30 }
+caches:
+  redis:
+    - data.tables.token
 
-  data.tables.auth_pwd:
-    engine: mysql
+size_class:
+  data.tables.account: large
+  data.tables.token: large
+  data.tables.verification: small
 
-  data.tables.auth_phone:
-    engine: mysql
-
-  data.tables.auth_email:
-    engine: mysql
-
-  data.tables.verification:
-    engine: mysql
-    size_class: small
+retention:
+  data.tables.token: { unit: days, ttl: 30 }

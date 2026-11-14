@@ -415,7 +415,7 @@ apps:
 - 索引命名 `idx_<table>_<cols>`；禁止数据库外键，跨表一致性由应用/业务规则保证
 - 迁移只前进；零停机三步：加可空列 → 回填 → 加约束
 - 软删默认过滤，必须在 repo 层统一，禁止每处手写
-- 分区用 `storage.tables.<id>.partition`，表达式索引用 `indexes[].expression`；并发建索引策略由运行时迁移配置决定；不设未结构化 DDL 字段
+- 分区用 `storage.partition.<id>`，表达式索引用 `indexes[].expression`；并发建索引策略由运行时迁移配置决定；不设未结构化 DDL 字段
 
 ### 5.5 请求治理
 
