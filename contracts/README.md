@@ -118,11 +118,24 @@ contracts/
 │   ├── design/tokens.json      observability/{log_fields,metrics}.yaml
 │   └── analytics/events.yaml   security/{permissions,roles,auth_policy}.yaml
 │
-└── generated/                # 机器生成物（禁止手改）
+└── generated/                # 机器产物（见 4.7；禁止手改）
     └── openapi/admin.yaml    #   合并 OpenAPI spec（代码生成输入）
 ```
 
 人读视图（`lineage.md` / `data.md` / `errors.md` / `permissions.md`）在 `docs/contracts/generated/`。
+
+### 2.1 组 README 索引
+
+契约元规则在本文件；各组的类型规范在各组 README，按任务取用：
+
+| README | 何时读 |
+|---|---|
+| `_meta/README.md` | 写 / 改任何契约字段前 |
+| `data/README.md` | 加表 / 写查询前 |
+| `capabilities/README.md` | 加 API / 异步任务 / 跨模块 service 前 |
+| `business/README.md` | 改状态机 / 规则 / 领域事件前 |
+| `features/README.md` | 加页面 / 用户旅程前 |
+| `platform/README.md` | 改错误码 / 权限 / 配置 / 观测约定前 |
 
 ---
 
@@ -393,6 +406,27 @@ table:
 | `lineage.md` | 按需生成的 graph | ⬜ P2 |
 
 AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
+
+### 4.7 机器产物（`contracts/generated/`）
+
+`contracts/generated/` 只放机器生成物，禁止手改；人读视图在 `docs/contracts/generated/`。
+
+| 产物 | 来源 | 用途 |
+|---|---|---|
+| `openapi/admin.yaml` | `capabilities/http/*.yaml` + `shared.yaml` 合并 | oapi-codegen / Swagger / `gen-client` 的输入 |
+
+`db` 产物（`schema.sql`、`migrations/*.sql`）输出到 `apps/api/`，不在本目录。
+
+不再入库的产物：
+
+| 产物 | 去向 | 原因 |
+|---|---|---|
+| `graph.json` | 按需生成（临时目录 / CI） | 只有影响面分析需要时生成 |
+| `lineage.md` | `docs/contracts/generated/lineage.md` | 人读文档统一进 `docs/` |
+| `manifest.json` | 删除设计 | `index.yaml` + `project.yaml` 已覆盖，无消费者 |
+| `inbound.yaml` | 删除设计 | `used_by.*` / `table.entities` / `model.included_by` 已是反向索引 |
+
+`make gen` 是聚合入口（⬜ P2）；`make gen-graph` 只写回 `used_by`，不产出本目录文件。
 
 ---
 

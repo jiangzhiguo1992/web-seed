@@ -66,10 +66,4 @@ capabilities 契约**不反向引用 business**（`cap.flows` 例外：只允许
 
 ## 4. 与 capabilities/flows 的区别
 
-| | `capabilities/flows/*` | `features/flows/*` |
-|---|---|---|
-| 关注点 | 业务编排（系统视角） | 用户旅程（界面视角） |
-| 例子 | 发布账号 → 写库 → 发事件 | 填写表单 → 提交 → 跳转详情 |
-| 消费者 | api / worker | web |
-
-流程编排依赖具体能力，属于实现层，因此不在 business。
+流程编排依赖具体能力，属于实现层，因此不在 business。`capabilities/flows` 与 `features/flows` 的对照见 `features/README.md` 4。

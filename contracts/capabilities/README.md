@@ -16,13 +16,7 @@
 
 ## 1.1 不引用 business
 
-capabilities 是 business 的实现，**契约里不出现 `business.*`**：
-
-- 返回类型用 `data.entities.*`，不用 `data.tables.*.row`
-- 事件由 `business/events` 的 `emitted_by` 声明
-- 规则由 `business/rules` 的 `implemented_by` 声明
-
-实现代码按 business 契约编写，但契约层不反向引用——两处都写必然漂移。
+capabilities 是 business 的实现，契约里不出现 `business.*`；方向与例外见 `contracts/README.md` 3.2.1。返回类型用 `data.entities.*`，事件与规则由上游锚点声明。
 
 ## 1.2 类型级负向约束
 
