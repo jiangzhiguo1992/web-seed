@@ -2,7 +2,7 @@
 
 id: data.queries.auth
 summary: "认证查询集"
-owner_module: auth
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:
@@ -36,6 +36,7 @@ queries:
     params:
       - { name: id, type: integer, column: data.tables.auth_pwd.col.id }
       - { name: account_id, type: integer, column: data.tables.auth_pwd.col.account_id }
+      - { name: status, type: integer, column: data.tables.auth_pwd.col.status }
       - { name: username, type: text, column: data.tables.auth_pwd.col.username }
       - { name: password_hash, type: text, column: data.tables.auth_pwd.col.password_hash }
     returns:
@@ -107,6 +108,7 @@ queries:
     params:
       - { name: id, type: integer, column: data.tables.auth_phone.col.id }
       - { name: account_id, type: integer, column: data.tables.auth_phone.col.account_id }
+      - { name: status, type: integer, column: data.tables.auth_phone.col.status }
       - { name: code, type: text, column: data.tables.auth_phone.col.code }
       - { name: number, type: text, column: data.tables.auth_phone.col.number }
       - { name: operator, type: text, column: data.tables.auth_phone.col.operator, nullable: true }
@@ -153,6 +155,7 @@ queries:
     params:
       - { name: id, type: integer, column: data.tables.auth_email.col.id }
       - { name: account_id, type: integer, column: data.tables.auth_email.col.account_id }
+      - { name: status, type: integer, column: data.tables.auth_email.col.status }
       - { name: username, type: text, column: data.tables.auth_email.col.username }
       - { name: domain, type: text, column: data.tables.auth_email.col.domain }
       - { name: entity, type: text, column: data.tables.auth_email.col.entity, nullable: true }
@@ -201,4 +204,24 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_email.uq_auth_email_account ]
+
+  - name: SetAuthPhoneStatus
+    tables:
+      - { table: data.tables.auth_phone, write: true }
+    params:
+      - { name: id, type: integer, column: data.tables.auth_phone.col.id }
+      - { name: status, type: integer, column: data.tables.auth_phone.col.status }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+    index_ref: [ data.tables.auth_phone.pk ]
+
+  - name: SetAuthEmailStatus
+    tables:
+      - { table: data.tables.auth_email, write: true }
+    params:
+      - { name: id, type: integer, column: data.tables.auth_email.col.id }
+      - { name: status, type: integer, column: data.tables.auth_email.col.status }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+    index_ref: [ data.tables.auth_email.pk ]
 

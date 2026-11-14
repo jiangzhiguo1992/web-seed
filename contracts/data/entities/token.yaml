@@ -2,7 +2,7 @@
 
 id: data.entities.token
 summary: "令牌数据实体"
-owner_module: auth
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:

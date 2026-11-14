@@ -495,8 +495,8 @@ data/redundancy.yaml ──> 冗余组关系
 P2：目录与最小示例已落盘；`contract-check` 试点可用，生成器待实现。
 
 - **_meta**：`_types.yaml` / `data.tables.yaml` / `data.enums.yaml` / `data.entities.yaml` / `data.queries.yaml` + `make contract-new` + `make contract-check`
-- **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email` / `verification`、`entities/*`、`enums`、`queries/{account,auth,token,verification}`、`storage`
-- **capabilities**：`http/{shared,account,auth}`、`async/account_cleanup`、`services/{account,auth}`（其余模块待建）
+- **data**：`tables/_base` + `account` / `token` / `auth_pwd` / `auth_phone` / `auth_email` / `verification_body` / `verification_action`、`entities/*`、`enums`、`queries/{account,auth,token,verification}`、`storage`
+- **capabilities**：`http/{shared,account,auth}`、`async/{account_cleanup,verification_cleanup}`、`services/{account,auth}`（其余模块待建）
 - **business / features / platform**：`states` `rules` `flows` `events` `glossary`、`routes` `pages/*` `flows/*`、平台文件
 
 > P2 生成器未落地前，`generated+tested` 是目标值，不代表已有闸门；`contract-check` 目前覆盖 data.tables / data.enums / data.entities / data.queries（含结构化 SQL 形状）、跨文件引用与 used_by；`gen` 与其余类型 schema 待补。`index.yaml` 目前由人工维护，P2 后改由 `gen-graph` 聚合。

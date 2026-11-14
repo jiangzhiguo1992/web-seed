@@ -2,7 +2,7 @@
 
 id: data.tables.auth_email
 summary: "邮箱认证表"
-owner_module: auth
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:
@@ -82,4 +82,5 @@ used_by:
   queries:
     - data.queries.auth.create_auth_email
     - data.queries.auth.get_auth_email_by_username_domain
+    - data.queries.auth.set_auth_email_status
     - data.queries.auth.soft_delete_auth_email_by_account

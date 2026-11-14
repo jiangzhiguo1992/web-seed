@@ -2,7 +2,7 @@
 
 id: data.entities.auth_email
 summary: "邮箱认证数据实体"
-owner_module: auth
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:

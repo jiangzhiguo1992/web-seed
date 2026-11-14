@@ -2,7 +2,7 @@
 
 id: data.tables.auth_phone
 summary: "手机号认证表"
-owner_module: auth
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:
@@ -68,4 +68,5 @@ used_by:
   queries:
     - data.queries.auth.create_auth_phone
     - data.queries.auth.get_auth_phone_by_number
+    - data.queries.auth.set_auth_phone_status
     - data.queries.auth.soft_delete_auth_phone_by_account

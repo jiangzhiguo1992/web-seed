@@ -328,6 +328,7 @@ tables:
 caches:
   redis:
     - data.tables.token
+    - data.tables.verification_body
 size_class:
   data.tables.token: large
 retention:
@@ -343,7 +344,8 @@ retention:
 
 - `auth_pwd.password_hash` 是 argon2id 唯一路径；不保留 MD5 遗留字段。
 - `token` 表只存 `access_token_hash` / `refresh_token_hash`，不存原文；原文只在 `/auth/login`、`/auth/refresh` 的响应中返回一次。
-- `verification.code_hash` 只存验证码哈希，不存原文；`content` 若含原文必须按 `secret` 管理，禁止进入日志/响应/事件。
+- `verification_body.code_hash` 只存验证码哈希，不存原文；`content` 若含原文必须按 `secret` 管理，禁止进入日志/响应/事件。
+- `verification_action.input_hash` 必须用 HMAC-SHA256，禁止裸哈希或存提交原文。
 - 哈希算法与 TTL 由 `platform/security/auth_policy.yaml` 定义，data 层不复制。
 
 ---

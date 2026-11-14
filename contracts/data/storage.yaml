@@ -19,18 +19,21 @@ tables:
     - data.tables.auth_pwd
     - data.tables.auth_phone
     - data.tables.auth_email
-    - data.tables.verification
+    - data.tables.verification_body
+    - data.tables.verification_action
   postgres: []
   mongodb: []
 
 caches:
   redis:
     - data.tables.token
+    - data.tables.verification_body
 
 size_class:
   data.tables.account: large
   data.tables.token: large
-  data.tables.verification: small
+  data.tables.verification_body: small
+  data.tables.verification_action: large
 
 retention:
   data.tables.token: { unit: days, ttl: 30 }

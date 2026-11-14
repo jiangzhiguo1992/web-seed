@@ -2,7 +2,7 @@
 
 id: data.tables.auth_pwd
 summary: "密码认证表"
-owner_module: auth
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:

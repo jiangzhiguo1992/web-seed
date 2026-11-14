@@ -45,7 +45,6 @@ errors:
   - { code: AUTH_VERIFICATION_INVALID, status: 422, retryable: false, i18n: errors.auth.verification_invalid, message: "验证码不正确" }
   - { code: AUTH_VERIFICATION_EXPIRED, status: 422, retryable: false, i18n: errors.auth.verification_expired, message: "验证码已过期" }
   - { code: AUTH_VERIFICATION_ATTEMPTS_EXCEEDED, status: 423, retryable: true, i18n: errors.auth.verification_attempts_exceeded, message: "验证码尝试次数过多" }
-  - { code: AUTH_VERIFICATION_RATE_LIMITED, status: 429, retryable: true, i18n: errors.auth.verification_rate_limited, message: "验证码发送过于频繁" }
   - { code: AUTH_VERIFICATION_TARGET_INVALID, status: 422, retryable: false, i18n: errors.auth.verification_target_invalid, message: "验证目标格式不合法" }
   - { code: AUTH_WEAK_PASSWORD, status: 422, retryable: false, i18n: errors.auth.weak_password, message: "密码强度不足" }
   - { code: AUTH_TOKEN_INVALID, status: 401, retryable: false, i18n: errors.auth.token_invalid, message: "令牌无效" }

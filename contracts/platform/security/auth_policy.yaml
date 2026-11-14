@@ -36,6 +36,8 @@ session:
   idle_timeout: 7d
   absolute_timeout: 30d
   revoke_on_password_change: true
+  revoke_on_phone_change: true
+  revoke_on_email_change: true
   store: database
 
 csrf:
@@ -54,7 +56,7 @@ password:
   breach_check: true
 
 verification:
-  table: data.tables.verification
+  table: data.tables.verification_body
   code:
     length: 6
     charset: digits
@@ -63,9 +65,6 @@ verification:
     secret_env: AUTH_VERIFICATION_SECRET
   ttl: 10m
   max_attempts: 5
-  resend_interval: 60s
-  daily_limit_per_target: 10
-  hourly_limit_per_ip: 20
   target_normalization:
     phone: e164
     email: lowercase

@@ -12,7 +12,7 @@ do_not:
   - "验证码接口不要返回 code_hash / content / target 原文；只返回 masked_target"
   - "验证码发送/校验失败不要枚举 target 是否存在"
 
-module: auth
+module: account
 base_path: /v1
 default_error_responses: [400, 401, 403, 422, 423, 429, 500]
 
@@ -55,7 +55,6 @@ paths:
       x-service: cap.services.auth.send_verification
       summary: "发送验证码"
       x-timeout-ms: 5000
-      x-rate-limit: { requests: 10, window_seconds: 60 }
       x-audit: true
       requestBody:
         required: true
@@ -67,6 +66,7 @@ paths:
               required: [auth_type, target, purpose]
               properties:
                 auth_type: { type: string, enum: [phone, email] }
+                account_id: { type: integer, nullable: true, description: "注册时必传" }
                 target: { type: string, minLength: 1, maxLength: 320 }
                 purpose: { $ref: "#/components/schemas/VerificationPurpose" }
             example: { auth_type: phone, target: "+8613800138000", purpose: login }
@@ -84,7 +84,6 @@ paths:
       x-service: cap.services.auth.verify_code
       summary: "校验验证码"
       x-timeout-ms: 5000
-      x-rate-limit: { requests: 10, window_seconds: 60 }
       x-audit: true
       requestBody:
         required: true
@@ -96,6 +95,7 @@ paths:
               required: [auth_type, target, purpose, code]
               properties:
                 auth_type: { type: string, enum: [phone, email] }
+                account_id: { type: integer, nullable: true, description: "注册时必传" }
                 target: { type: string, minLength: 1, maxLength: 320 }
                 purpose: { $ref: "#/components/schemas/VerificationPurpose" }
                 code: { type: string, minLength: 4, maxLength: 12 }
@@ -177,17 +177,16 @@ components:
 
     VerificationPurpose:
       type: string
-      enum: [register, login, reset_password, bind, unbind, change, delete_account]
+      enum: [register, login, reset_password, bind_phone, bind_email, unbind_phone, unbind_email, change_phone, change_email, delete_account]
 
     VerificationSent:
       type: object
       additionalProperties: false
-      required: [id, masked_target, expire_at, retry_after_seconds]
+      required: [id, masked_target, expire_at]
       properties:
         id: { type: integer }
         masked_target: { type: string }
         expire_at: { type: string, format: date-time }
-        retry_after_seconds: { type: integer, minimum: 0 }
 
     VerificationResult:
       type: object

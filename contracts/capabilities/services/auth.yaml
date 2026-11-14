@@ -10,13 +10,16 @@ do_not:
   - "不要返回 data.tables.*.row；返回 data.entities.account 或 TokenPair"
   - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
   - "SendVerification / VerifyCode 不要返回 code_hash / content / target 原文；只返回 masked_target"
+  - "SendVerification / VerifyCode 必须在同一事务写入 verification_action，result 与实际结果一致"
+  - "RevokeAllForAccount 必须同时软删认证绑定、作废未消费验证体并吊销令牌"
+  - "换绑、解绑或停用认证绑定必须调用 RevokeVerificationsByAuth，按 auth_type+auth_id 作废未消费验证体"
   - "验证码校验失败不要枚举 target 是否存在"
 
-module: auth
+module: account
 
 interface:
   name: AuthService
-  package: internal/modules/auth
+  package: internal/modules/account/auth
   methods:
     - name: Login
       summary: "登录并签发令牌；校验 password_hash"
@@ -57,7 +60,7 @@ interface:
       transaction: required
 
     - name: RevokeAllForAccount
-      summary: "软删账号的认证绑定并吊销全部令牌；账号删除时同步调用"
+      summary: "软删账号的认证绑定、未消费验证体并吊销全部令牌；账号删除时同步调用"
       params:
         - { name: ctx, type: context.Context }
         - { name: account_id, type: integer }
@@ -67,7 +70,7 @@ interface:
       transaction: required
 
     - name: SendVerification
-      summary: "发送短信/邮件验证码"
+      summary: "发送短信/邮件验证码，并记录发送动作"
       params:
         - { name: ctx, type: context.Context }
         - { name: input, type: SendVerificationInput }
@@ -75,14 +78,14 @@ interface:
         - { name: verification, type: VerificationSent }
         - { name: err, type: error }
       errors:
-        - platform.errors.AUTH_VERIFICATION_RATE_LIMITED
+        - platform.errors.AUTH_VERIFICATION_INVALID
         - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
         - platform.errors.AUTH_PHONE_INVALID
         - platform.errors.AUTH_EMAIL_INVALID
       transaction: required
 
     - name: VerifyCode
-      summary: "校验并消费验证码"
+      summary: "校验并消费验证码，记录每次校验动作"
       params:
         - { name: ctx, type: context.Context }
         - { name: input, type: VerifyCodeInput }
@@ -94,6 +97,19 @@ interface:
         - platform.errors.AUTH_VERIFICATION_EXPIRED
         - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
         - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+      transaction: required
+
+    - name: RevokeVerificationsByAuth
+      summary: "换绑/解绑/停用认证绑定时作废对应未消费验证体"
+      params:
+        - { name: ctx, type: context.Context }
+        - { name: auth_type, type: data.enums.auth_type }
+        - { name: auth_id, type: integer }
+      returns:
+        - { name: err, type: error }
+      errors:
+        - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+        - platform.errors.COMMON_INTERNAL
       transaction: required
 
     - name: Verify
@@ -116,7 +132,8 @@ persistence:
     - data.tables.auth_phone
     - data.tables.auth_email
     - data.tables.token
-    - data.tables.verification
+    - data.tables.verification_body
+    - data.tables.verification_action
   field_map: {}
   write_queries:
     - data.queries.auth.create_auth_pwd
@@ -128,6 +145,8 @@ persistence:
     - data.queries.auth.soft_delete_auth_pwd_by_account
     - data.queries.auth.soft_delete_auth_phone_by_account
     - data.queries.auth.soft_delete_auth_email_by_account
+    - data.queries.auth.set_auth_phone_status
+    - data.queries.auth.set_auth_email_status
     - data.queries.token.create_token
     - data.queries.token.revoke_token
     - data.queries.token.revoke_tokens_by_account
@@ -136,8 +155,10 @@ persistence:
     - data.queries.verification.mark_verification_sent
     - data.queries.verification.consume_verification
     - data.queries.verification.increment_verification_attempt
-    - data.queries.verification.revoke_verifications_by_target
+    - data.queries.verification.revoke_active_verifications_by_account
+    - data.queries.verification.revoke_active_verifications_by_auth
     - data.queries.verification.delete_expired_verifications
+    - data.queries.verification.create_verification_action
   queries:
     get_account: data.queries.account.get_account
     get_auth_pwd_by_username: data.queries.auth.get_auth_pwd_by_username
@@ -150,6 +171,8 @@ persistence:
     soft_delete_auth_pwd_by_account: data.queries.auth.soft_delete_auth_pwd_by_account
     soft_delete_auth_phone_by_account: data.queries.auth.soft_delete_auth_phone_by_account
     soft_delete_auth_email_by_account: data.queries.auth.soft_delete_auth_email_by_account
+    set_auth_phone_status: data.queries.auth.set_auth_phone_status
+    set_auth_email_status: data.queries.auth.set_auth_email_status
     record_login_success: data.queries.auth.record_auth_pwd_login_success
     record_login_failure: data.queries.auth.record_auth_pwd_login_failure
     create_token: data.queries.token.create_token
@@ -162,12 +185,14 @@ persistence:
     create_verification: data.queries.verification.create_verification
     mark_verification_sent: data.queries.verification.mark_verification_sent
     get_latest_verification: data.queries.verification.get_latest_verification
-    count_recent_verifications: data.queries.verification.count_recent_verifications
-    count_recent_verifications_by_ip: data.queries.verification.count_recent_verifications_by_ip
     consume_verification: data.queries.verification.consume_verification
     increment_verification_attempt: data.queries.verification.increment_verification_attempt
-    revoke_verifications_by_target: data.queries.verification.revoke_verifications_by_target
+    revoke_active_verifications_by_account: data.queries.verification.revoke_active_verifications_by_account
+    revoke_active_verifications_by_auth: data.queries.verification.revoke_active_verifications_by_auth
     delete_expired_verifications: data.queries.verification.delete_expired_verifications
+    create_verification_action: data.queries.verification.create_verification_action
+    list_verification_actions: data.queries.verification.list_verification_actions
+    list_verification_actions_by_account: data.queries.verification.list_verification_actions_by_account
   constraint_errors:
     uq_auth_pwd_username: platform.errors.AUTH_USERNAME_TAKEN
     uq_auth_pwd_account: platform.errors.AUTH_USERNAME_TAKEN
@@ -220,18 +245,18 @@ types:
     required: [auth_type, target, purpose]
     properties:
       auth_type: { type: data.enums.auth_type }
+      account_id: { type: integer, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
       target: { type: string, minLength: 1, maxLength: 320 }
       purpose: { type: data.enums.verification_purpose }
 
   VerificationSent:
     type: object
     additionalProperties: false
-    required: [id, masked_target, expire_at, retry_after_seconds]
+    required: [id, masked_target, expire_at]
     properties:
       id: { type: integer }
       masked_target: { type: string }
       expire_at: { type: string, format: date-time }
-      retry_after_seconds: { type: integer, minimum: 0 }
 
   VerifyCodeInput:
     type: object
@@ -239,6 +264,7 @@ types:
     required: [auth_type, target, purpose, code]
     properties:
       auth_type: { type: data.enums.auth_type }
+      account_id: { type: integer, nullable: true, description: "注册时必传；其他用途可省略" }
       target: { type: string, minLength: 1, maxLength: 320 }
       purpose: { type: data.enums.verification_purpose }
       code: { type: string, minLength: 4, maxLength: 12 }

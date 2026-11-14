@@ -30,13 +30,12 @@ enums:
     ts_type: OwnType
     values:
       - { value: user, code: 0, description: "用户" }
-      - { value: tenant, code: 1, description: "租户" }
+      - { value: admin, code: 1, description: "管理员" }
       - { value: system, code: 2, description: "系统" }
     used_by:
       entities:
         - data.entities.account
         - data.entities.token
-        - data.entities.verification
       capabilities:
         - cap.services.account
 
@@ -45,8 +44,9 @@ enums:
     go_type: AuthStatus
     ts_type: AuthStatus
     values:
-      - { value: active, code: 0, description: "可认证" }
-      - { value: disabled, code: 1, description: "已停用" }
+      - { value: unverified, code: 0, description: "未认证" }
+      - { value: verified, code: 1, description: "已认证" }
+      - { value: disabled, code: 2, description: "已停用" }
     used_by:
       entities:
         - data.entities.auth_email
@@ -77,6 +77,8 @@ enums:
       - { value: logout, code: 2, description: "登出" }
       - { value: admin, code: 3, description: "管理员吊销" }
       - { value: password_change, code: 4, description: "密码变更" }
+      - { value: phone_change, code: 5, description: "手机变更" }
+      - { value: email_change, code: 6, description: "邮箱变更" }
     used_by:
       entities:
         - data.entities.token
@@ -92,7 +94,7 @@ enums:
       - { value: email, code: 2, description: "邮箱认证" }
     used_by:
       entities:
-        - data.entities.verification
+        - data.entities.verification_body
       capabilities:
         - cap.services.auth
 
@@ -109,7 +111,7 @@ enums:
       - { value: failed, code: 5, description: "发送失败，终态" }
     used_by:
       entities:
-        - data.entities.verification
+        - data.entities.verification_body
       capabilities: []
 
   - name: verification_purpose
@@ -120,12 +122,15 @@ enums:
       - { value: register, code: 0, description: "注册" }
       - { value: login, code: 1, description: "登录" }
       - { value: reset_password, code: 2, description: "重置密码" }
-      - { value: bind, code: 3, description: "绑定手机号或邮箱" }
-      - { value: unbind, code: 4, description: "解绑手机号或邮箱" }
-      - { value: change, code: 5, description: "换绑手机号或邮箱" }
-      - { value: delete_account, code: 6, description: "注销账号" }
+      - { value: bind_phone, code: 3, description: "绑定手机号" }
+      - { value: bind_email, code: 4, description: "绑定邮箱" }
+      - { value: unbind_phone, code: 5, description: "解绑手机号" }
+      - { value: unbind_email, code: 6, description: "解绑邮箱" }
+      - { value: change_phone, code: 7, description: "换绑手机号" }
+      - { value: change_email, code: 8, description: "换绑邮箱" }
+      - { value: delete_account, code: 9, description: "注销账号" }
     used_by:
       entities:
-        - data.entities.verification
+        - data.entities.verification_body
       capabilities:
         - cap.services.auth

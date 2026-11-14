@@ -54,26 +54,38 @@ entries:
   - { id: data.tables.auth_pwd, path: data/tables/auth_pwd.yaml, summary: "密码认证表结构", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.tables.auth_phone, path: data/tables/auth_phone.yaml, summary: "手机号认证表结构", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.tables.auth_email, path: data/tables/auth_email.yaml, summary: "邮箱认证表结构", consumers: [api], enforcement: generated+tested, stability: draft }
-  - id: data.tables.verification
-    path: data/tables/verification.yaml
+  - id: data.tables.verification_body
+    path: data/tables/verification_body.yaml
     summary: "验证体表结构（一次性验证凭证与消息快照）"
     consumers: [api]
     enforcement: generated+tested
     stability: draft
     common_mistakes:
-      - "存 auth_phone/auth_email 的 ID 而不是地址快照"
+      - "auth_id 与 auth_type 指向不同种类的认证绑定"
+      - "在验证体里存 target 地址原文而不是 auth_id"
       - "把验证码原文写进 code_hash"
-      - "用 target 回写或反查可变的绑定记录"
+      - "在 account 之前创建验证体"
+  - id: data.tables.verification_action
+    path: data/tables/verification_action.yaml
+    summary: "验证动作表结构（发送/校验请求日志）"
+    consumers: [api, worker]
+    enforcement: generated+tested
+    stability: draft
+    common_mistakes:
+      - "把 auth_id/auth_type/account_id 复制进动作表"
+      - "用裸哈希存 input_hash"
+      - "更新或软删历史动作"
   - { id: data.entities.account, path: data/entities/account.yaml, summary: "账号数据实体与关系", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: data.entities.token, path: data/entities/token.yaml, summary: "令牌数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.auth_pwd, path: data/entities/auth_pwd.yaml, summary: "密码认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.auth_phone, path: data/entities/auth_phone.yaml, summary: "手机号认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.auth_email, path: data/entities/auth_email.yaml, summary: "邮箱认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.entities.verification, path: data/entities/verification.yaml, summary: "验证体数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.entities.verification_body, path: data/entities/verification_body.yaml, summary: "验证体数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.entities.verification_action, path: data/entities/verification_action.yaml, summary: "验证动作数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.queries.account, path: data/queries/account.yaml, summary: "账号查询集", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.queries.auth, path: data/queries/auth.yaml, summary: "认证查询集（密码/手机/邮箱）", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.queries.token, path: data/queries/token.yaml, summary: "令牌查询集", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.queries.verification, path: data/queries/verification.yaml, summary: "验证体查询集", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.queries.verification, path: data/queries/verification.yaml, summary: "验证查询集（验证体与验证动作）", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.enums, path: data/enums.yaml, summary: "跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated, stability: draft }
 
   # ---------- capabilities ----------
@@ -91,6 +103,7 @@ entries:
       - "忘记 x-service 锚点到 cap.services"
   - { id: cap.http.auth, path: capabilities/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/登出/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.async.account_cleanup, path: capabilities/async/account_cleanup.yaml, summary: "过期账号清理任务", consumers: [worker], enforcement: generated+tested, stability: draft }
+  - { id: cap.async.verification_cleanup, path: capabilities/async/verification_cleanup.yaml, summary: "过期验证体与历史验证动作清理任务", consumers: [worker], enforcement: generated+tested, stability: draft }
   - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号跨模块 service 接口", consumers: [api], enforcement: generated+tested, stability: stable }
   - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证跨模块 service 接口", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.flows.account_activation, path: capabilities/flows/account_activation.yaml, summary: "账号发布业务流程编排", consumers: [api], enforcement: tested, stability: draft }
