@@ -11,7 +11,7 @@ do_not:
   - "verification.content 默认存脱敏正文；仅审计必要时写原文"
   - "verification.auth_type 只允许 phone/email；pwd 不是可发送验证消息的渠道"
   - "verification 不建数据库外键；与账号的关联由 auth 模块按 target 快照解析"
-  - "verification.own_type/own_id 是验证体自身的归属，不是 account 的冗余副本；注册场景可能先于 account 存在"
+  - "verification.own_type/own_id 复制 account 的归属；注册必须先创建 pending account 再发验证码，验证体不早于 account 存在，禁止凭空预生成 own_id"
 
 table:
   name: verification
@@ -25,11 +25,13 @@ columns:
   - name: own_type
     type: integer
     nullable: false
+    redundancy: account_own_type
     comment: "归属类型整数码；映射 data.enums.own_type"
 
   - name: own_id
     type: integer
     nullable: false
+    redundancy: account_own_id
     comment: "归属 ID；与 own_type 组成归属主体"
 
   - name: auth_type

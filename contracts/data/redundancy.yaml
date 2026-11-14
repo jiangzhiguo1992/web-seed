@@ -12,11 +12,13 @@ groups:
     source: data.tables.account.col.own_type
     copies:
       - data.tables.token.col.own_type
+      - data.tables.verification.col.own_type
 
   account_own_id:
     source: data.tables.account.col.own_id
     copies:
       - data.tables.token.col.own_id
+      - data.tables.verification.col.own_id
 
   account_user_id:
     source: data.tables.account.col.user_id
