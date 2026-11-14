@@ -121,7 +121,7 @@ make gen
 ```bash
 make gen-openapi   # capabilities/http/* + apps/* → generated/openapi/<app>.yaml
 make gen-db        # data/tables/* → schema.sql + migrations
-make gen-graph     # refs → generated/{manifest.json,graph.json,lineage.md}
+make gen-graph     # 结构化依赖 → used_by；graph/lineage 按需生成
 make gen-client    # 合并 spec → apps/web/packages/api-client/src/generated
 ```
 

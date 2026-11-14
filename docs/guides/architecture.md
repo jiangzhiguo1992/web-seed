@@ -108,7 +108,7 @@
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
 - [ ] `business/**` → 状态机常量 + 断言 + 测试骨架
 - [ ] `features/**` → 路由表 + 页面骨架 + 类型
-- [ ] 全部 `refs` → `generated/{manifest.json,graph.json,lineage.md}`
+- [ ] 结构化依赖 → 按需生成 graph；`lineage.md` → `docs/reference/generated/lineage.md`
 - [ ] `make gen` 幂等：连续两次生成结果一致
 
 #### P3 后端地基（`internal/platform`）
@@ -238,7 +238,7 @@ business/** ──> 状态机 / 常量 / 断言 / 测试骨架
 features/** ──> 路由 / 页面骨架 / 类型
 platform/** ──> 配置校验 / 常量 / CSS 变量
 
-全部 refs ──> generated/graph.json + lineage.md
+结构化依赖 ──> 按需 graph + docs/reference/generated/lineage.md
 ```
 
 生成物入库，CI 用 `make gen && git diff --exit-code` 保证同步。
@@ -279,13 +279,13 @@ web-seed/
 │   ├── business/                       #   states / rules / events / glossary
 │   ├── features/                     #   routes / pages / flows
 │   ├── platform/                     #   环境/版本/错误/枚举/HTTP/质量/配置/架构/设计/观测/埋点/安全
-│   └── generated/                    #   manifest / graph / lineage
+│   └── generated/                    #   openapi/admin.yaml（机器产物）
 ├── docs/
 │   ├── index.md                      # 唯一地图（AI 入口）
 │   ├── adr/                          # 决策记录（含 Rejected alternatives）
 │   ├── playbooks/                    # 步骤化手册
 │   ├── guides/                       # 解释性文档（本文在此）
-│   └── reference/                    # conventions / glossary / dependencies
+│   └── reference/                    # conventions / glossary / dependencies / generated
 │
 ├── apps/
 │   ├── api/                          [C] 单 Go module，多 cmd，多应用装配
@@ -514,7 +514,7 @@ self:     doctor（模板自身健康）
 
 ## 8. 明确不做
 
-多租户 · Outbox · SSR/Nuxt · 微服务 · K8s manifests · CDN · 备份 · 告警平台 · 完整 i18n · 低代码 · turbo/nx · GraphQL · gRPC · MySQL · MongoDB · 分库分表 · 多主 · 跨地域。
+多租户 · Outbox · SSR/Nuxt · 微服务 · K8s manifests · CDN · 备份 · 告警平台 · 完整 i18n · 低代码 · turbo/nx · GraphQL · gRPC · 分库分表 · 多主 · 跨地域。
 
 **"完整"的定义**：不是功能全量，而是所有横切面都有明确归属——做 / 不做 / 留口，没有"没人管"的地带。
 

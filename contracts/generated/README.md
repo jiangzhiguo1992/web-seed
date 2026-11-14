@@ -1,7 +1,7 @@
-# 生成物索引（generated）
+# 机器生成物（generated）
 
-> 本目录全部是**产物**，禁止手改。删除后可 `make gen` 重建。
-> 契约工具链（schema / templates / scaffold / check）在 `contracts/_meta/`，**不在本目录**。
+> 本目录只放**机器生成物**，禁止手改；人读视图在 `docs/reference/generated/`。
+> 契约规范、模板、脚本都在 `contracts/_meta/` 与 `scripts/`，不在本目录。
 
 ---
 
@@ -9,29 +9,31 @@
 
 | 文件 | 来源 | 用途 |
 |---|---|---|
-| `manifest.json` | 所有契约的 `generates` 字段汇总 | 生成物 → 来源契约映射 |
-| `graph.json` | 所有契约的 `refs` 字段 | 锚点图，供 AI 与影响面分析查询 |
-| `inbound.yaml` | `graph.json` 反向索引 | 每张表/契约被谁引用；写入 `used_by.queries`（查询项 ID）；`table.entities` 与 `model.included_by` 是显式映射，不在此生成 |
-| `lineage.md` | `graph.json` 渲染 | 人读血缘报告 |
-| `openapi/admin.yaml` | `capabilities/http/*.yaml` + `shared.yaml` 合并 | 完整 OpenAPI spec，供 oapi-codegen / Swagger |
+| `openapi/admin.yaml` | `capabilities/http/*.yaml` + `shared.yaml` 合并 | oapi-codegen / Swagger / `gen-client` 的输入 |
+
+`db` 产物（`schema.sql`、`migrations/*.sql`）由 `gen-db` 输出到 `apps/api/`，不在本目录。
 
 ## 2. 生成命令
 
 ```bash
-make gen          # 全部
-make gen-graph    # 仅锚点图与血缘
-make gen-openapi  # 仅合并 spec
+make gen-openapi   # 合并 spec
 ```
 
-## 3. 校验
+`make gen` 是聚合入口，当前尚未实现；`make gen-graph` 只写回 table/entity 的 `used_by.queries`，不产出本目录文件。
+
+## 3. 不再入库的产物
+
+| 产物 | 去向 | 原因 |
+|---|---|---|
+| `graph.json` | 按需生成（临时目录/CI） | 只有影响面分析需要时生成，避免与契约引用重复 |
+| `lineage.md` | `docs/reference/generated/lineage.md` | 人读文档统一进 `docs/` |
+| `manifest.json` | 删除设计 | `contracts/index.yaml` + `project.yaml` 已覆盖，无消费者 |
+| `inbound.yaml` | 删除设计 | `used_by.queries` / `table.entities` / `model.included_by` 已是反向索引 |
+
+## 4. 校验
 
 | 检查 | 失败 |
 |---|---|
 | 生成物与契约不一致 | CI `git diff --exit-code` 失败 |
-| 手改生成物 | 文件头校验 + 重新生成 diff |
-| 图存在悬空/越层/循环 | `make contract-graph` 失败 |
-| 反向映射与实际入边不一致 | `make gen-graph && git diff --exit-code` 失败（`used_by.queries`）；`contract-check` 校验 `table.entities` / `model.included_by` |
-
-## 4. 为什么入库
-
-派生项目即使未装生成器也能编译；同时让契约变更在 PR 中可见（生成物 diff 即契约影响面）。
+| 手改生成物 | 重新生成 diff 失败 |
+| OpenAPI 合并漂移 | `make gen-openapi && git diff --exit-code` 失败（待实现） |

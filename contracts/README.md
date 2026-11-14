@@ -120,12 +120,11 @@ contracts/
 │   ├── design/tokens.json      observability/{log_fields,metrics}.yaml
 │   └── analytics/events.yaml   security/{permissions,roles,auth_policy}.yaml
 │
-└── generated/                # 生成物索引（禁止手改）
-    ├── manifest.json         #   生成物清单 + 来源契约
-    ├── graph.json            #   锚点图
-    ├── inbound.yaml          #   反向索引（used_by 来源）
-    └── lineage.md            #   人读血缘
+└── generated/                # 机器生成物（禁止手改）
+    └── openapi/admin.yaml    #   合并 OpenAPI spec（代码生成输入）
 ```
+
+人读视图（`lineage.md` / `data.md` / `errors.md` / `permissions.md`）在 `docs/reference/generated/`。
 
 ---
 
@@ -214,7 +213,7 @@ capabilities 契约里**不出现任何 `business.*`**：
 ### 3.3 图校验
 
 ```bash
-make contract-graph     # 校验 + 生成 graph.json / lineage.md
+make contract-graph     # 校验 + 按需生成 graph / lineage
 make contract-impact id=data.tables.account.col.number
 ```
 
@@ -391,7 +390,7 @@ table:
 | `errors.md` | `platform/errors.yaml` |
 | `permissions.md` | `platform/security/permissions.yaml` |
 | `data.md` | `data/tables/*.yaml` |
-| `lineage.md` | `generated/graph.json` |
+| `lineage.md` | 按需生成的 graph |
 
 AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 
@@ -428,7 +427,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | business | 状态机、常量、断言、测试骨架 |
 | features | 路由、页面骨架、类型 |
 | platform | 配置校验、常量、CSS 变量 |
-| graph | graph.json、lineage.md |
+| graph | 按需 graph；`lineage.md` 入 `docs/reference/generated/` |
 
 超过 6 个，维护成本会超过收益。
 

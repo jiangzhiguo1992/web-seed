@@ -133,10 +133,7 @@ entries:
   - { id: platform.security.auth_policy, path: platform/security/auth_policy.yaml, summary: "会话与认证策略", consumers: [api, web/admin], enforcement: tested, stability: stable }
 
   # ---------- generated（产物索引，非契约正文） ----------
-  - { id: generated.manifest, path: generated/manifest.json, summary: "生成物与来源契约映射", consumers: [tools], enforcement: generated, stability: stable }
-  - { id: generated.graph, path: generated/graph.json, summary: "锚点图", consumers: [tools, ai], enforcement: generated, stability: stable }
-  - { id: generated.inbound, path: generated/inbound.yaml, summary: "反向索引（表/契约被谁引用，写入 used_by）", consumers: [tools, ai], enforcement: generated, stability: stable }
-  - { id: generated.lineage, path: generated/lineage.md, summary: "人读血缘报告", consumers: [ai, ops], enforcement: generated, stability: stable }
+  - { id: generated.openapi, path: generated/openapi/admin.yaml, summary: "合并 OpenAPI spec（代码生成输入）", consumers: [api, tools], enforcement: generated, stability: draft }
 
 # 跨文件的坑：不属于任何单一契约，但 AI 最容易犯
 global_notes:
@@ -160,7 +157,4 @@ orphan_whitelist:
   - platform.quality
   - platform.architecture.go_arch
   - platform.architecture.web_deps
-  - generated.manifest
-  - generated.graph
-  - generated.inbound
-  - generated.lineage
+  - generated.openapi

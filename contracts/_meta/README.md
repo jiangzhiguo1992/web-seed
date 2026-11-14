@@ -2,7 +2,7 @@
 
 > 本目录是**契约的单一源**：字段树、值域、字段含义、跨字段规则与校验入口。
 > 它不是业务契约，不登记在 `contracts/index.yaml`，也不进入 `generated/`。
-> `contracts/generated/` 仍然只放**产物**：manifest / graph / inbound / openapi / db。
+> `contracts/generated/` 只放**机器生成物**（如 `openapi/admin.yaml`）；人读视图在 `docs/reference/generated/`。
 
 ---
 
@@ -169,7 +169,7 @@ scripts/cmd/
 
 - 命名品味、业务语义、跨模块读归属是否最小化
 - 其余契约类型规范（http/services/...）
-- `graph.json` 越层/循环/孤儿
+- 按需生成的 graph 越层/循环/孤儿
 - `generated/` diff
 
 这些会在后续批次补；不要因为它们未机器化就跳过 `_meta` 的规则。
