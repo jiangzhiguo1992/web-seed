@@ -36,16 +36,16 @@ fields:
     source: { column: data.tables.verification_body.col.auth_type }
     validation: { column: data.tables.verification_body.col.auth_type }
 
+  - name: AuthID
+    description: "认证绑定 ID：phone 指向 auth_phone，email 指向 auth_email"
+    source: { column: data.tables.verification_body.col.auth_id }
+    validation: { column: data.tables.verification_body.col.auth_id }
+
   - name: Purpose
     type: data.enums.verification_purpose
     description: "验证用途，例如注册、登录、重置密码"
     source: { column: data.tables.verification_body.col.purpose }
     validation: { column: data.tables.verification_body.col.purpose }
-
-  - name: AuthID
-    description: "认证绑定 ID：phone 指向 auth_phone，email 指向 auth_email"
-    source: { column: data.tables.verification_body.col.auth_id }
-    validation: { column: data.tables.verification_body.col.auth_id }
 
   - name: codeHash
     description: "验证码/令牌哈希；不存原文"
