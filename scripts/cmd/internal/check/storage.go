@@ -80,7 +80,24 @@ func (c *Checker) checkStorage(tableIDs map[string]string) {
 	}
 
 	c.checkStorageCaches(doc, tableIDs, rel)
-	c.checkStorageMetadata(doc, registered, rel)
+	c.checkStorageMetadata(doc, registered, cachedTables(doc), rel)
+}
+
+// cachedTables 收集 caches 中声明的表 ID，用于校验 retention.cache_ttl。
+func cachedTables(doc map[string]any) map[string]bool {
+	out := map[string]bool{}
+	caches, ok := asMap(doc["caches"])
+	if !ok {
+		return out
+	}
+	for _, raw := range caches {
+		for _, item := range asList(raw) {
+			if id, _ := item.(string); id != "" {
+				out[id] = true
+			}
+		}
+	}
+	return out
 }
 
 // checkStorageCaches 校验非权威副本（如 token 的 Redis 缓存）。
@@ -124,7 +141,7 @@ func (c *Checker) checkStorageCaches(doc map[string]any, tableIDs map[string]str
 }
 
 // checkStorageMetadata 校验 size_class / retention / partition 的键必须是已登记表。
-func (c *Checker) checkStorageMetadata(doc map[string]any, registered map[string]string, rel string) {
+func (c *Checker) checkStorageMetadata(doc map[string]any, registered map[string]string, cached map[string]bool, rel string) {
 	if raw, ok := doc["size_class"]; ok {
 		m, ok := asMap(raw)
 		if !ok {
@@ -152,7 +169,7 @@ func (c *Checker) checkStorageMetadata(doc map[string]any, registered map[string
 					c.rulef("storage-retention", "%s: retention.%s is not a registered table", rel, id)
 					continue
 				}
-				c.checkStorageRetention(id, m[id], rel)
+				c.checkStorageRetention(id, m[id], cached[id], rel)
 			}
 		}
 	}
@@ -261,13 +278,13 @@ func sortedStringMapKeys(m map[string]string) []string {
 	return out
 }
 
-func (c *Checker) checkStorageRetention(id string, raw any, rel string) {
+func (c *Checker) checkStorageRetention(id string, raw any, cached bool, rel string) {
 	r, ok := asMap(raw)
 	if !ok {
 		c.rulef("storage-retention", "%s: retention.%s must be an object", rel, id)
 		return
 	}
-	allowed := map[string]bool{"unit": true, "pending": true, "soft_delete": true, "hard_delete": true, "ttl": true}
+	allowed := map[string]bool{"unit": true, "pending": true, "soft_delete": true, "hard_delete": true, "ttl": true, "cache_ttl": true}
 	for k := range r {
 		if !allowed[k] {
 			c.rulef("storage-retention", "%s: retention.%s unknown field %q", rel, id, k)
@@ -282,7 +299,7 @@ func (c *Checker) checkStorageRetention(id string, raw any, rel string) {
 		c.rulef("storage-retention", "%s: retention.%s.unit must be minutes/hours/days, got %q", rel, id, unit)
 	}
 	hasDuration := false
-	for _, key := range []string{"pending", "soft_delete", "hard_delete", "ttl"} {
+	for _, key := range []string{"pending", "soft_delete", "hard_delete", "ttl", "cache_ttl"} {
 		rawDuration, ok := r[key]
 		if !ok {
 			continue
@@ -294,6 +311,18 @@ func (c *Checker) checkStorageRetention(id string, raw any, rel string) {
 	}
 	if !hasDuration {
 		c.rulef("storage-retention", "%s: retention.%s must declare at least one duration", rel, id)
+	}
+	if _, ok := r["cache_ttl"]; ok && !cached {
+		c.rulef("storage-retention", "%s: retention.%s.cache_ttl requires the table in caches", rel, id)
+	}
+	if rawCache, ok := r["cache_ttl"]; ok {
+		if cacheTTL, ok := toInt(rawCache); ok {
+			if rawTTL, ok := r["ttl"]; ok {
+				if ttl, ok := toInt(rawTTL); ok && cacheTTL > ttl {
+					c.rulef("storage-retention", "%s: retention.%s.cache_ttl must not exceed ttl", rel, id)
+				}
+			}
+		}
 	}
 }
 

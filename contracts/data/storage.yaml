@@ -36,4 +36,5 @@ size_class:
   data.tables.verification_action: large
 
 retention:
-  data.tables.token: { unit: days, ttl: 30 }
+  data.tables.token: { unit: days, ttl: 30, cache_ttl: 30 }
+  data.tables.verification_body: { unit: minutes, ttl: 10, cache_ttl: 10 }

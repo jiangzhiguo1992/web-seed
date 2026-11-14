@@ -140,7 +140,7 @@ rules:
   - { id: storage-entry, text: "size_class/retention/partition 的键必须是已登记的表；size_class 只能是 small/large", implemented_by: [ storage-entry ] }
   - { id: storage-engine, text: "storage.tables 的键必须在 supported_engines 中，且每个 supported_engine 都必须有对应列表", implemented_by: [ storage-engine ] }
   - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/supported_engines/tables/caches/size_class/retention/partition/not_supported_topologies；supported_engines 必填且必须是非空字符串列表，not_supported_topologies 若存在必须是非空字符串列表", implemented_by: [ storage-doc ] }
-  - { id: storage-retention, text: "retention 只允许 unit/pending/soft_delete/hard_delete/ttl；必须写 unit 和至少一个时长；unit 只能是 minutes/hours/days；各时长必须 >= 1", implemented_by: [ storage-retention ] }
+  - { id: storage-retention, text: "retention 只允许 unit/pending/soft_delete/hard_delete/ttl/cache_ttl；必须写 unit 和至少一个时长；unit 只能是 minutes/hours/days；各时长必须 >= 1；cache_ttl 只能用于 caches 中的表，且不得超过 ttl", implemented_by: [ storage-retention ] }
   - { id: storage-partition, text: "partition 只允许 strategy/columns/interval；strategy 只能是 range/list/hash；columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
   - { id: used-by-generated, text: "used_by.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ used-by-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }

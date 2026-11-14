@@ -29,8 +29,7 @@ columns:
   - name: account_id
     type: integer
     nullable: false
-    redundancy: verification_account_id
-    comment: "账号 ID 快照；验证体清理后仍可按账号追溯"
+    comment: "账号 ID 快照；验证体清理后仍可按账号追溯；不作为冗余副本声明"
 
   - name: action
     type: integer
@@ -71,12 +70,6 @@ columns:
     sensitivity: secret
     comment: "提交内容的 HMAC-SHA256；不存原文"
 
-  - name: request_id
-    type: string
-    nullable: true
-    max_len: 64
-    comment: "请求关联 ID；用于日志串联"
-
 constraints:
   - name: ck_verification_action_action_result
     type: check
@@ -85,6 +78,14 @@ constraints:
   - name: ck_verification_action_input
     type: check
     expr: "(action = 1 AND input_hash IS NULL) OR (action = 2 AND input_hash IS NOT NULL)"
+
+  - name: ck_verification_action_status
+    type: check
+    expr: "status = 0"
+
+  - name: ck_verification_action_no_soft_delete
+    type: check
+    expr: "deleted_at IS NULL"
 
 indexes:
   - name: idx_verification_action_account

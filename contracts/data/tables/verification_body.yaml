@@ -26,7 +26,6 @@ columns:
   - name: account_id
     type: integer
     nullable: false
-    redundancy: verification_account_id
     comment: "账号 ID；验证体不早于 account 存在，不建外键"
 
   - name: auth_type
@@ -89,6 +88,10 @@ constraints:
   - name: ck_verification_purpose_auth_type
     type: check
     expr: "(purpose IN (3, 5, 7) AND auth_type = 1) OR (purpose IN (4, 6, 8) AND auth_type = 2) OR purpose IN (0, 1, 2, 9)"
+
+  - name: ck_verification_status
+    type: check
+    expr: "status IN (0, 1, 2, 3, 4, 5)"
 
   - name: ck_verification_expire_order
     type: check

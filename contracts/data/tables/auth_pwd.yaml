@@ -7,6 +7,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "auth_pwd.password_hash 只存哈希，不存原文"
+  - "auth_pwd.status 只允许 verified/disabled；unverified 不适用于密码绑定"
 
 table:
   name: auth_pwd
@@ -56,6 +57,10 @@ constraints:
     type: check
     expr: "username = lower(username)"
 
+  - name: ck_auth_pwd_status
+    type: check
+    expr: "status IN (1, 2)"
+
 indexes:
   - name: uq_auth_pwd_username
     columns: [ username ]
@@ -81,5 +86,6 @@ used_by:
     - data.queries.auth.get_auth_pwd_by_username
     - data.queries.auth.record_auth_pwd_login_failure
     - data.queries.auth.record_auth_pwd_login_success
+    - data.queries.auth.set_auth_pwd_status
     - data.queries.auth.soft_delete_auth_pwd_by_account
     - data.queries.auth.update_auth_pwd_hash

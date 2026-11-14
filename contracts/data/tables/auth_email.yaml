@@ -7,6 +7,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "auth_email 同一账号只能绑定一个未删除的邮箱"
+  - "uq_auth_email_username_domain 不区分 status；未认证/停用绑定仍占用邮箱，换绑前先软删旧记录"
 
 table:
   name: auth_email
@@ -58,6 +59,10 @@ constraints:
   - name: ck_auth_email_username_lowercase
     type: check
     expr: "username = lower(username)"
+
+  - name: ck_auth_email_status
+    type: check
+    expr: "status IN (0, 1, 2)"
 
 indexes:
   - name: uq_auth_email_username_domain

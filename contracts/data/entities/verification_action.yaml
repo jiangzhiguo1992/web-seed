@@ -61,11 +61,6 @@ fields:
     source: { column: data.tables.verification_action.col.input_hash }
     validation: { column: data.tables.verification_action.col.input_hash }
 
-  - name: RequestID
-    description: "请求关联 ID；用于日志串联"
-    source: { column: data.tables.verification_action.col.request_id }
-    validation: { column: data.tables.verification_action.col.request_id }
-
 used_by:
   queries: []
   capabilities: []

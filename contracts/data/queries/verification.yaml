@@ -129,7 +129,6 @@ queries:
       - { name: device_id, type: text, column: data.tables.verification_action.col.device_id, nullable: true }
       - { name: location, type: text, column: data.tables.verification_action.col.location, nullable: true }
       - { name: input_hash, type: text, column: data.tables.verification_action.col.input_hash, nullable: true }
-      - { name: request_id, type: text, column: data.tables.verification_action.col.request_id, nullable: true }
     returns:
       - name: row
         kind: table
@@ -162,7 +161,6 @@ queries:
           - request_ip
           - device_id
           - location
-          - request_id
           - created_at
     index_ref: [ data.tables.verification_action.idx_verification_action_body ]
 
@@ -185,7 +183,6 @@ queries:
           - request_ip
           - device_id
           - location
-          - request_id
           - created_at
     index_ref: [ data.tables.verification_action.idx_verification_action_account ]
 

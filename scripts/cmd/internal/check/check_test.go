@@ -564,7 +564,7 @@ func TestStorageCachesAndMetadata(t *testing.T) {
 		"size_class": map[string]any{"data.tables.unknown": "small"},
 		"retention":  map[string]any{"data.tables.unknown": map[string]any{"unit": "days"}},
 		"partition":  map[string]any{"data.tables.unknown": map[string]any{}},
-	}, map[string]string{"data.tables.x": "mysql"}, "contracts/data/storage.yaml")
+	}, map[string]string{"data.tables.x": "mysql"}, map[string]bool{}, "contracts/data/storage.yaml")
 	errs := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"size_class.data.tables.unknown is not a registered table",
@@ -644,21 +644,41 @@ func TestStorageDocRequiresSupportedEngines(t *testing.T) {
 
 func TestStorageRetentionRequiresUnitAndDuration(t *testing.T) {
 	c := &Checker{}
-	c.checkStorageRetention("data.tables.x", map[string]any{"pending": 7}, "contracts/data/storage.yaml")
+	c.checkStorageRetention("data.tables.x", map[string]any{"pending": 7}, false, "contracts/data/storage.yaml")
 	if !strings.Contains(entityErrs(c), "retention.data.tables.x.unit is required") {
 		t.Fatalf("missing retention unit not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
-	c.checkStorageRetention("data.tables.x", map[string]any{"unit": "days"}, "contracts/data/storage.yaml")
+	c.checkStorageRetention("data.tables.x", map[string]any{"unit": "days"}, false, "contracts/data/storage.yaml")
 	if !strings.Contains(entityErrs(c), "retention.data.tables.x must declare at least one duration") {
 		t.Fatalf("retention without duration not reported: %v", c.errs)
 	}
 }
 
+func TestStorageRetentionCacheTTL(t *testing.T) {
+	c := &Checker{}
+	c.checkStorageRetention("data.tables.x", map[string]any{"unit": "days", "ttl": 30, "cache_ttl": 30}, false, "contracts/data/storage.yaml")
+	if !strings.Contains(entityErrs(c), "cache_ttl requires the table in caches") {
+		t.Fatalf("cache_ttl without cache not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkStorageRetention("data.tables.x", map[string]any{"unit": "days", "ttl": 30, "cache_ttl": 60}, true, "contracts/data/storage.yaml")
+	if !strings.Contains(entityErrs(c), "cache_ttl must not exceed ttl") {
+		t.Fatalf("cache_ttl > ttl not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkStorageRetention("data.tables.x", map[string]any{"unit": "days", "ttl": 30, "cache_ttl": 30}, true, "contracts/data/storage.yaml")
+	if len(c.errs) != 0 {
+		t.Fatalf("valid cache_ttl reported: %v", c.errs)
+	}
+}
+
 func TestStorageRetentionUnitType(t *testing.T) {
 	c := &Checker{}
-	c.checkStorageRetention("data.tables.x", map[string]any{"unit": 5}, "contracts/data/storage.yaml")
+	c.checkStorageRetention("data.tables.x", map[string]any{"unit": 5}, false, "contracts/data/storage.yaml")
 	if !strings.Contains(entityErrs(c), "retention.data.tables.x.unit must be a string") {
 		t.Fatalf("non-string retention unit not reported: %v", c.errs)
 	}

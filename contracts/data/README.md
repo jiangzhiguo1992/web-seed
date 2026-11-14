@@ -314,7 +314,7 @@ indexes:
 - `tables.<engine>`：该引擎下的表 ID 列表；每个 `supported_engine` 都必须有对应键（可为空列表），每张物理表只能出现在一个权威引擎下
 - `caches.<engine>`：非权威副本（如 `redis` 下的 `token`）；Redis 不是表存储，不参与 DDL
 - `size_class.<table>` / `retention.<table>` / `partition.<table>`：表级物理事实，键必须是已登记的表
-- `retention.<table>`：可选的生命周期策略，不是强制清理。`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只有在确实存在硬删策略时才写；主数据与认证绑定默认不写
+- `retention.<table>`：可选的生命周期策略，不是强制清理。`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只有在确实存在硬删策略时才写；主数据与认证绑定默认不写。`cache_ttl` 只用于 `caches` 中的表，表示 Redis 缓存周期，且不得超过 `ttl`；Redis 仍是非权威副本，清理以数据库为准
 - `not_supported_topologies` 列表（sharding / multi-primary / cross-region / outbox）
 
 ```yaml
@@ -332,7 +332,8 @@ caches:
 size_class:
   data.tables.token: large
 retention:
-  data.tables.token: { unit: days, ttl: 30 }
+  data.tables.token: { unit: days, ttl: 30, cache_ttl: 30 }
+  data.tables.verification_body: { unit: minutes, ttl: 10, cache_ttl: 10 }
 ```
 
 引擎版本、扩展、连接池、迁移工具、部署拓扑、副本/读写分离、任务锁属于运行时/部署配置，不写进 `storage.yaml`。

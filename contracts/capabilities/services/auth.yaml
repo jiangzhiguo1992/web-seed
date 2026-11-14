@@ -147,6 +147,7 @@ persistence:
     - data.queries.auth.soft_delete_auth_email_by_account
     - data.queries.auth.set_auth_phone_status
     - data.queries.auth.set_auth_email_status
+    - data.queries.auth.set_auth_pwd_status
     - data.queries.token.create_token
     - data.queries.token.revoke_token
     - data.queries.token.revoke_tokens_by_account
@@ -173,6 +174,7 @@ persistence:
     soft_delete_auth_email_by_account: data.queries.auth.soft_delete_auth_email_by_account
     set_auth_phone_status: data.queries.auth.set_auth_phone_status
     set_auth_email_status: data.queries.auth.set_auth_email_status
+    set_auth_pwd_status: data.queries.auth.set_auth_pwd_status
     record_login_success: data.queries.auth.record_auth_pwd_login_success
     record_login_failure: data.queries.auth.record_auth_pwd_login_failure
     create_token: data.queries.token.create_token
