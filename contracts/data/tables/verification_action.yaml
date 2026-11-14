@@ -1,0 +1,116 @@
+# 验证动作表：发送与校验请求的追加日志。
+
+id: data.tables.verification_action
+summary: "验证动作（发送/校验请求记录）"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "verification_action 是追加日志；不要更新或软删历史动作"
+  - "verification_action.account_id 是有意快照；不要复制 auth_id/auth_type"
+  - "verification_action.input_hash 必须用 HMAC-SHA256，不能用裸哈希"
+  - "verification_action 不建数据库外键；verification_id 可因验证体清理而悬空"
+  - "验证体清理后动作仍保留用于风控与审计，不要按 verification_id 级联删除"
+
+table:
+  name: verification_action
+  comment: "验证动作：发送与校验请求的追加日志"
+  extends:
+    - data.tables.base
+  entities:
+    - data.entities.verification_action
+
+columns:
+  - name: verification_id
+    type: integer
+    nullable: false
+    comment: "验证体 ID；不建外键，验证体清理后允许悬空"
+
+  - name: account_id
+    type: integer
+    nullable: false
+    redundancy: verification_account_id
+    comment: "账号 ID 快照；验证体清理后仍可按账号追溯"
+
+  - name: action
+    type: integer
+    nullable: false
+    comment: "动作整数码；映射 data.enums.verification_action"
+
+  - name: result
+    type: integer
+    nullable: false
+    comment: "结果整数码；映射 data.enums.verification_result"
+
+  - name: request_ip
+    type: string
+    nullable: true
+    max_len: 45
+    sensitivity: pii
+    comment: "本次请求 IP 快照；风控与审计"
+
+  - name: device_id
+    type: string
+    nullable: true
+    max_len: 128
+    sensitivity: pii
+    comment: "客户端设备标识；与 LoginInput.device_id 对齐"
+
+  - name: location
+    type: string
+    nullable: true
+    max_len: 128
+    sensitivity: pii
+    comment: "IP 派生的粗粒度地点（国家/省/市）；不存精确坐标"
+
+  - name: input_hash
+    type: string
+    nullable: true
+    min_len: 32
+    max_len: 128
+    sensitivity: secret
+    comment: "提交内容的 HMAC-SHA256；不存原文"
+
+  - name: request_id
+    type: string
+    nullable: true
+    max_len: 64
+    comment: "请求关联 ID；用于日志串联"
+
+constraints:
+  - name: ck_verification_action_action_result
+    type: check
+    expr: "(action = 1 AND result IN (1, 2)) OR (action = 2 AND result IN (3, 4, 5, 6))"
+
+  - name: ck_verification_action_input
+    type: check
+    expr: "(action = 1 AND input_hash IS NULL) OR (action = 2 AND input_hash IS NOT NULL)"
+
+indexes:
+  - name: idx_verification_action_account
+    columns: [ account_id, created_at ]
+    live_only: false
+    comment: "按账号追溯验证动作"
+    used_by:
+      - data.queries.verification.list_verification_actions_by_account
+
+  - name: idx_verification_action_body
+    columns: [ verification_id, created_at ]
+    live_only: false
+    comment: "按验证体读取动作日志"
+    used_by:
+      - data.queries.verification.list_verification_actions
+
+  - name: idx_verification_action_created_at
+    columns: [ created_at ]
+    live_only: false
+    comment: "按时间清理历史验证动作"
+    used_by:
+      - data.queries.verification.delete_verification_actions_before
+
+used_by:
+  queries:
+    - data.queries.verification.create_verification_action
+    - data.queries.verification.delete_verification_actions_before
+    - data.queries.verification.list_verification_actions
+    - data.queries.verification.list_verification_actions_by_account

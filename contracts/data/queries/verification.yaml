@@ -1,132 +1,200 @@
-# 验证体查询集。
+# 验证查询集：验证体（body）与验证动作（action）。
 
 id: data.queries.verification
-summary: "验证体查询集"
-owner_module: auth
+summary: "验证查询集（验证体与验证动作）"
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "verification 之外的普通业务查询不要引用本文件"
-  - "verification 查询不要向非认证调用方返回 code_hash / content"
+  - "verification 组之外的普通业务查询不要引用本文件"
+  - "verification 查询不要向非认证调用方返回 code_hash / content / input_hash"
+  - "verification_action 只追加；不要提供更新或软删动作的查询"
 
 queries:
   - name: CreateVerification
     tables:
-      - { table: data.tables.verification, write: true }
+      - { table: data.tables.verification_body, write: true }
     params:
-      - { name: id, type: integer, column: data.tables.verification.col.id }
-      - { name: own_type, type: data.enums.own_type, column: data.tables.verification.col.own_type }
-      - { name: own_id, type: integer, column: data.tables.verification.col.own_id }
-      - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification.col.auth_type }
-      - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification.col.purpose }
-      - { name: target, type: text, column: data.tables.verification.col.target }
-      - { name: code_hash, type: text, column: data.tables.verification.col.code_hash }
-      - { name: content, type: text, column: data.tables.verification.col.content, nullable: true }
-      - { name: expire_at, type: timestamp, column: data.tables.verification.col.expire_at }
-      - { name: request_ip, type: text, column: data.tables.verification.col.request_ip, nullable: true }
+      - { name: id, type: integer, column: data.tables.verification_body.col.id }
+      - { name: account_id, type: integer, column: data.tables.verification_body.col.account_id }
+      - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
+      - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
+      - { name: auth_id, type: integer, column: data.tables.verification_body.col.auth_id }
+      - { name: code_hash, type: text, column: data.tables.verification_body.col.code_hash }
+      - { name: content, type: text, column: data.tables.verification_body.col.content, nullable: true }
+      - { name: expire_at, type: timestamp, column: data.tables.verification_body.col.expire_at }
     returns:
       - name: row
         kind: table
-        table: data.tables.verification
+        table: data.tables.verification_body
         columns:
           - id
           - status
           - sent_at
           - expire_at
           - created_at
-    index_ref: [ data.tables.verification.pk ]
+    index_ref: [ data.tables.verification_body.pk ]
 
   - name: MarkVerificationSent
     tables:
-      - { table: data.tables.verification, write: true }
+      - { table: data.tables.verification_body, write: true }
     params:
-      - { name: id, type: integer, column: data.tables.verification.col.id }
-      - { name: sent_at, type: timestamp, column: data.tables.verification.col.sent_at }
+      - { name: id, type: integer, column: data.tables.verification_body.col.id }
+      - { name: sent_at, type: timestamp, column: data.tables.verification_body.col.sent_at }
     returns:
       - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.verification.pk ]
+    index_ref: [ data.tables.verification_body.pk ]
 
   - name: GetLatestVerification
     tables:
-      - { table: data.tables.verification }
+      - { table: data.tables.verification_body }
     params:
-      - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification.col.auth_type }
-      - { name: target, type: text, column: data.tables.verification.col.target }
-      - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification.col.purpose }
+      - { name: account_id, type: integer, column: data.tables.verification_body.col.account_id }
+      - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
+      - { name: auth_id, type: integer, column: data.tables.verification_body.col.auth_id }
+      - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
     returns:
       - name: row
         kind: table
-        table: data.tables.verification
+        table: data.tables.verification_body
         columns:
           - id
-          - own_type
-          - own_id
+          - account_id
           - auth_type
           - purpose
-          - target
+          - auth_id
           - code_hash
           - expire_at
           - attempt_count
           - status
           - sent_at
-    index_ref: [ data.tables.verification.idx_verification_target_purpose ]
-
-  - name: CountRecentVerifications
-    tables:
-      - { table: data.tables.verification }
-    params:
-      - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification.col.auth_type }
-      - { name: target, type: text, column: data.tables.verification.col.target }
-      - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification.col.purpose }
-      - { name: since, type: timestamp }
-    returns:
-      - { name: count, kind: scalar, type: integer }
-    index_ref: [ data.tables.verification.idx_verification_target_purpose ]
-
-  - name: CountRecentVerificationsByIP
-    tables:
-      - { table: data.tables.verification }
-    params:
-      - { name: request_ip, type: text, column: data.tables.verification.col.request_ip }
-      - { name: since, type: timestamp }
-    returns:
-      - { name: count, kind: scalar, type: integer }
-    index_ref: [ data.tables.verification.idx_verification_request_ip ]
+    index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
 
   - name: ConsumeVerification
     tables:
-      - { table: data.tables.verification, write: true }
+      - { table: data.tables.verification_body, write: true }
     params:
-      - { name: id, type: integer, column: data.tables.verification.col.id }
+      - { name: id, type: integer, column: data.tables.verification_body.col.id }
     returns:
       - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.verification.pk ]
+    index_ref: [ data.tables.verification_body.pk ]
 
   - name: IncrementVerificationAttempt
     tables:
-      - { table: data.tables.verification, write: true }
+      - { table: data.tables.verification_body, write: true }
     params:
-      - { name: id, type: integer, column: data.tables.verification.col.id }
+      - { name: id, type: integer, column: data.tables.verification_body.col.id }
     returns:
       - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.verification.pk ]
+    index_ref: [ data.tables.verification_body.pk ]
 
-  - name: RevokeVerificationsByTarget
+  - name: RevokeActiveVerificationsByAuth
     tables:
-      - { table: data.tables.verification, write: true }
+      - { table: data.tables.verification_body, write: true }
     params:
-      - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification.col.auth_type }
-      - { name: target, type: text, column: data.tables.verification.col.target }
-      - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification.col.purpose }
+      - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
+      - { name: auth_id, type: integer, column: data.tables.verification_body.col.auth_id }
+      - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
     returns:
       - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.verification.idx_verification_target_purpose ]
+    index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
+
+  - name: RevokeActiveVerificationsByAccount
+    tables:
+      - { table: data.tables.verification_body, write: true }
+    params:
+      - { name: account_id, type: integer, column: data.tables.verification_body.col.account_id }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+    index_ref: [ data.tables.verification_body.idx_verification_account_id ]
 
   - name: DeleteExpiredVerifications
     tables:
-      - { table: data.tables.verification, write: true }
+      - { table: data.tables.verification_body, write: true }
     params:
       - { name: limit, type: integer, nullable: true, default: 100 }
     returns:
       - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.verification.idx_verification_expire_at ]
+    index_ref: [ data.tables.verification_body.idx_verification_expire_at ]
+
+  - name: CreateVerificationAction
+    tables:
+      - { table: data.tables.verification_action, write: true }
+    params:
+      - { name: verification_id, type: integer, column: data.tables.verification_action.col.verification_id }
+      - { name: account_id, type: integer, column: data.tables.verification_action.col.account_id }
+      - { name: action, type: data.enums.verification_action, column: data.tables.verification_action.col.action }
+      - { name: result, type: data.enums.verification_result, column: data.tables.verification_action.col.result }
+      - { name: request_ip, type: text, column: data.tables.verification_action.col.request_ip, nullable: true }
+      - { name: device_id, type: text, column: data.tables.verification_action.col.device_id, nullable: true }
+      - { name: location, type: text, column: data.tables.verification_action.col.location, nullable: true }
+      - { name: input_hash, type: text, column: data.tables.verification_action.col.input_hash, nullable: true }
+      - { name: request_id, type: text, column: data.tables.verification_action.col.request_id, nullable: true }
+    returns:
+      - name: row
+        kind: table
+        table: data.tables.verification_action
+        columns:
+          - id
+          - verification_id
+          - account_id
+          - action
+          - result
+          - created_at
+    index_ref: [ data.tables.verification_action.pk ]
+
+  - name: ListVerificationActions
+    tables:
+      - { table: data.tables.verification_action }
+    params:
+      - { name: verification_id, type: integer, column: data.tables.verification_action.col.verification_id }
+      - { name: limit, type: integer, nullable: true, default: 50 }
+    returns:
+      - name: row
+        kind: table
+        table: data.tables.verification_action
+        columns:
+          - id
+          - verification_id
+          - account_id
+          - action
+          - result
+          - request_ip
+          - device_id
+          - location
+          - request_id
+          - created_at
+    index_ref: [ data.tables.verification_action.idx_verification_action_body ]
+
+  - name: ListVerificationActionsByAccount
+    tables:
+      - { table: data.tables.verification_action }
+    params:
+      - { name: account_id, type: integer, column: data.tables.verification_action.col.account_id }
+      - { name: limit, type: integer, nullable: true, default: 50 }
+    returns:
+      - name: row
+        kind: table
+        table: data.tables.verification_action
+        columns:
+          - id
+          - verification_id
+          - account_id
+          - action
+          - result
+          - request_ip
+          - device_id
+          - location
+          - request_id
+          - created_at
+    index_ref: [ data.tables.verification_action.idx_verification_action_account ]
+
+  - name: DeleteVerificationActionsBefore
+    tables:
+      - { table: data.tables.verification_action, write: true }
+    params:
+      - { name: older_than_days, type: integer }
+      - { name: limit, type: integer, nullable: true, default: 100 }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+    index_ref: [ data.tables.verification_action.idx_verification_action_created_at ]

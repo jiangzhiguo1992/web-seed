@@ -1,38 +1,33 @@
 # 验证体表：一次性验证凭证与短信/邮件消息快照。
 
-id: data.tables.verification
+id: data.tables.verification_body
 summary: "验证体（一次性验证凭证与消息快照）"
-owner_module: auth
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "verification.target 只存发送时的地址快照；不要存 auth_phone/auth_email 的 ID 或引用会变的绑定行"
-  - "verification.code_hash 只存哈希，不存验证码原文；content 若含原文必须按 secret 管理"
-  - "verification.content 默认存脱敏正文；仅审计必要时写原文"
-  - "verification.auth_type 只允许 phone/email；pwd 不是可发送验证消息的渠道"
-  - "verification 不建数据库外键；与账号的关联由 auth 模块按 target 快照解析"
-  - "verification.own_type/own_id 复制 account 的归属；注册必须先创建 pending account 再发验证码，验证体不早于 account 存在，禁止凭空预生成 own_id"
+  - "verification_body.auth_id 必须与 auth_type 指向同一种绑定（phone→auth_phone、email→auth_email），不建数据库外键"
+  - "verification_body.code_hash 只存哈希，不存验证码原文；content 若含原文必须按 secret 管理"
+  - "verification_body.content 默认存脱敏正文；仅审计必要时写原文"
+  - "verification_body.auth_type 只允许 phone/email；pwd 不是可发送验证消息的渠道"
+  - "verification_body 不存 target 地址原文；发送时按 auth_id 读取绑定记录"
+  - "Redis 缓存只允许 id/status/account_id/auth_type/auth_id/purpose/expire_at 等非秘密字段，禁止缓存 code_hash/content"
+  - "注册必须先创建 pending account 再发验证码；verification_body 不早于 account 存在"
 
 table:
-  name: verification
+  name: verification_body
   comment: "验证体：一次性验证凭证与短信/邮件消息快照"
   extends:
     - data.tables.base
   entities:
-    - data.entities.verification
+    - data.entities.verification_body
 
 columns:
-  - name: own_type
+  - name: account_id
     type: integer
     nullable: false
-    redundancy: account_own_type
-    comment: "归属类型整数码；映射 data.enums.own_type"
-
-  - name: own_id
-    type: integer
-    nullable: false
-    redundancy: account_own_id
-    comment: "归属 ID；与 own_type 组成归属主体"
+    redundancy: verification_account_id
+    comment: "账号 ID；验证体不早于 account 存在，不建外键"
 
   - name: auth_type
     type: integer
@@ -44,12 +39,10 @@ columns:
     nullable: false
     comment: "验证用途整数码；映射 data.enums.verification_purpose，例如注册/登录/重置密码"
 
-  - name: target
-    type: string
+  - name: auth_id
+    type: integer
     nullable: false
-    max_len: 320
-    sensitivity: pii
-    comment: "目标地址快照：phone 用 E.164（如 +8613800138000），email 用小写完整地址（如 a@example.com）；不引用 auth_* 行"
+    comment: "认证绑定 ID；auth_type=phone 指向 auth_phone，auth_type=email 指向 auth_email；不建外键"
 
   - name: code_hash
     type: string
@@ -88,17 +81,14 @@ columns:
     min: 0
     comment: "校验失败次数；达到上限后作废"
 
-  - name: request_ip
-    type: string
-    nullable: true
-    max_len: 45
-    sensitivity: pii
-    comment: "发起请求的 IP；风控与审计"
-
 constraints:
   - name: ck_verification_auth_type
     type: check
     expr: "auth_type IN (1, 2)"
+
+  - name: ck_verification_purpose_auth_type
+    type: check
+    expr: "(purpose IN (3, 5, 7) AND auth_type = 1) OR (purpose IN (4, 6, 8) AND auth_type = 2) OR purpose IN (0, 1, 2, 9)"
 
   - name: ck_verification_expire_order
     type: check
@@ -117,14 +107,20 @@ constraints:
     expr: "(status = 2) = (consumed_at IS NOT NULL)"
 
 indexes:
-  - name: idx_verification_target_purpose
-    columns: [ auth_type, target, purpose, created_at ]
+  - name: idx_verification_auth_purpose
+    columns: [ auth_type, auth_id, purpose, created_at ]
     live_only: true
-    comment: "按目标地址与用途查最新验证码、发送频率与重发作废"
+    comment: "按认证绑定与用途查最新验证码、重发作废"
     used_by:
       - data.queries.verification.get_latest_verification
-      - data.queries.verification.count_recent_verifications
-      - data.queries.verification.revoke_verifications_by_target
+      - data.queries.verification.revoke_active_verifications_by_auth
+
+  - name: idx_verification_account_id
+    columns: [ account_id ]
+    live_only: false
+    comment: "账号软删时作废该账号未消费的验证体"
+    used_by:
+      - data.queries.verification.revoke_active_verifications_by_account
 
   - name: idx_verification_expire_at
     columns: [ expire_at ]
@@ -133,21 +129,13 @@ indexes:
     used_by:
       - data.queries.verification.delete_expired_verifications
 
-  - name: idx_verification_request_ip
-    columns: [ request_ip, created_at ]
-    live_only: true
-    comment: "按 IP 统计验证码发送频率"
-    used_by:
-      - data.queries.verification.count_recent_verifications_by_ip
-
 used_by:
   queries:
     - data.queries.verification.consume_verification
-    - data.queries.verification.count_recent_verifications
-    - data.queries.verification.count_recent_verifications_by_ip
     - data.queries.verification.create_verification
     - data.queries.verification.delete_expired_verifications
     - data.queries.verification.get_latest_verification
     - data.queries.verification.increment_verification_attempt
     - data.queries.verification.mark_verification_sent
-    - data.queries.verification.revoke_verifications_by_target
+    - data.queries.verification.revoke_active_verifications_by_account
+    - data.queries.verification.revoke_active_verifications_by_auth

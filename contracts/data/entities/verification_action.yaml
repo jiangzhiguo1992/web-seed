@@ -1,0 +1,71 @@
+# 验证动作数据实体。
+
+id: data.entities.verification_action
+summary: "验证动作数据实体"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "verification_action 是追加日志；不要提供更新或删除历史的业务方法"
+  - "verification_action.inputHash 禁止进入日志、事件或普通响应"
+  - "verification_action 不复制 auth_id/auth_type；account_id 是有意快照"
+
+model:
+  name: verificationAction
+  extends:
+    - data.entities.base
+  tables:
+    - data.tables.verification_action
+  included_by: []
+
+fields:
+  - name: VerificationID
+    description: "验证体 ID；验证体清理后允许悬空"
+    source: { column: data.tables.verification_action.col.verification_id }
+    validation: { column: data.tables.verification_action.col.verification_id }
+
+  - name: AccountID
+    description: "账号 ID 快照；验证体清理后仍可按账号追溯"
+    source: { column: data.tables.verification_action.col.account_id }
+    validation: { column: data.tables.verification_action.col.account_id }
+
+  - name: Action
+    type: data.enums.verification_action
+    description: "动作类型：发送或校验"
+    source: { column: data.tables.verification_action.col.action }
+    validation: { column: data.tables.verification_action.col.action }
+
+  - name: Result
+    type: data.enums.verification_result
+    description: "动作结果"
+    source: { column: data.tables.verification_action.col.result }
+    validation: { column: data.tables.verification_action.col.result }
+
+  - name: RequestIP
+    description: "本次请求 IP 快照"
+    source: { column: data.tables.verification_action.col.request_ip }
+    validation: { column: data.tables.verification_action.col.request_ip }
+
+  - name: DeviceID
+    description: "客户端设备标识"
+    source: { column: data.tables.verification_action.col.device_id }
+    validation: { column: data.tables.verification_action.col.device_id }
+
+  - name: Location
+    description: "IP 派生的粗粒度地点"
+    source: { column: data.tables.verification_action.col.location }
+    validation: { column: data.tables.verification_action.col.location }
+
+  - name: inputHash
+    description: "提交内容的 HMAC-SHA256；不存原文"
+    source: { column: data.tables.verification_action.col.input_hash }
+    validation: { column: data.tables.verification_action.col.input_hash }
+
+  - name: RequestID
+    description: "请求关联 ID；用于日志串联"
+    source: { column: data.tables.verification_action.col.request_id }
+    validation: { column: data.tables.verification_action.col.request_id }
+
+used_by:
+  queries: []
+  capabilities: []
