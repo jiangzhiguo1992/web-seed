@@ -1,0 +1,151 @@
+# 验证体表：一次性验证凭证与短信/邮件消息快照。
+
+id: data.tables.verification
+summary: "验证体（一次性验证凭证与消息快照）"
+owner_module: auth
+schema_version: 1
+stability: draft
+do_not:
+  - "verification.target 只存发送时的地址快照；不要存 auth_phone/auth_email 的 ID 或引用会变的绑定行"
+  - "verification.code_hash 只存哈希，不存验证码原文；content 若含原文必须按 secret 管理"
+  - "verification.content 默认存脱敏正文；仅审计必要时写原文"
+  - "verification.auth_type 只允许 phone/email；pwd 不是可发送验证消息的渠道"
+  - "verification 不建数据库外键；与账号的关联由 auth 模块按 target 快照解析"
+  - "verification.own_type/own_id 是验证体自身的归属，不是 account 的冗余副本；注册场景可能先于 account 存在"
+
+table:
+  name: verification
+  comment: "验证体：一次性验证凭证与短信/邮件消息快照"
+  extends:
+    - data.tables.base
+  entities:
+    - data.entities.verification
+
+columns:
+  - name: own_type
+    type: integer
+    nullable: false
+    comment: "归属类型整数码；映射 data.enums.own_type"
+
+  - name: own_id
+    type: integer
+    nullable: false
+    comment: "归属 ID；与 own_type 组成归属主体"
+
+  - name: auth_type
+    type: integer
+    nullable: false
+    comment: "认证方式整数码；映射 data.enums.auth_type；只允许 phone/email"
+
+  - name: purpose
+    type: integer
+    nullable: false
+    comment: "验证用途整数码；映射 data.enums.verification_purpose，例如注册/登录/重置密码"
+
+  - name: target
+    type: string
+    nullable: false
+    max_len: 320
+    sensitivity: pii
+    comment: "目标地址快照：phone 用 E.164（如 +8613800138000），email 用小写完整地址（如 a@example.com）；不引用 auth_* 行"
+
+  - name: code_hash
+    type: string
+    nullable: false
+    min_len: 32
+    max_len: 128
+    sensitivity: secret
+    comment: "验证码/令牌哈希；不存原文"
+
+  - name: content
+    type: string
+    nullable: true
+    max_len: 4096
+    sensitivity: secret
+    comment: "发送正文快照；可能含验证码原文，按 secret 管理，禁止进入日志/响应/事件"
+
+  - name: sent_at
+    type: timestamp
+    nullable: true
+    comment: "实际发送时间；发送失败为空"
+
+  - name: expire_at
+    type: timestamp
+    nullable: false
+    comment: "验证码过期时间；必须晚于 created_at"
+
+  - name: consumed_at
+    type: timestamp
+    nullable: true
+    comment: "验证通过/消费时间；为空表示未使用"
+
+  - name: attempt_count
+    type: integer
+    nullable: false
+    default: 0
+    min: 0
+    comment: "校验失败次数；达到上限后作废"
+
+  - name: request_ip
+    type: string
+    nullable: true
+    max_len: 45
+    sensitivity: pii
+    comment: "发起请求的 IP；风控与审计"
+
+constraints:
+  - name: ck_verification_auth_type
+    type: check
+    expr: "auth_type IN (1, 2)"
+
+  - name: ck_verification_expire_order
+    type: check
+    expr: "expire_at > created_at"
+
+  - name: ck_verification_sent_order
+    type: check
+    expr: "sent_at IS NULL OR (sent_at >= created_at AND sent_at < expire_at)"
+
+  - name: ck_verification_consumed_order
+    type: check
+    expr: "consumed_at IS NULL OR (consumed_at >= created_at AND consumed_at <= expire_at AND (sent_at IS NULL OR consumed_at >= sent_at))"
+
+  - name: ck_verification_consumed_status
+    type: check
+    expr: "(status = 2) = (consumed_at IS NOT NULL)"
+
+indexes:
+  - name: idx_verification_target_purpose
+    columns: [ auth_type, target, purpose, created_at ]
+    live_only: true
+    comment: "按目标地址与用途查最新验证码、发送频率与重发作废"
+    used_by:
+      - data.queries.verification.get_latest_verification
+      - data.queries.verification.count_recent_verifications
+      - data.queries.verification.revoke_verifications_by_target
+
+  - name: idx_verification_expire_at
+    columns: [ expire_at ]
+    live_only: true
+    comment: "过期验证记录清理"
+    used_by:
+      - data.queries.verification.delete_expired_verifications
+
+  - name: idx_verification_request_ip
+    columns: [ request_ip, created_at ]
+    live_only: true
+    comment: "按 IP 统计验证码发送频率"
+    used_by:
+      - data.queries.verification.count_recent_verifications_by_ip
+
+used_by:
+  queries:
+    - data.queries.verification.consume_verification
+    - data.queries.verification.count_recent_verifications
+    - data.queries.verification.count_recent_verifications_by_ip
+    - data.queries.verification.create_verification
+    - data.queries.verification.delete_expired_verifications
+    - data.queries.verification.get_latest_verification
+    - data.queries.verification.increment_verification_attempt
+    - data.queries.verification.mark_verification_sent
+    - data.queries.verification.revoke_verifications_by_target

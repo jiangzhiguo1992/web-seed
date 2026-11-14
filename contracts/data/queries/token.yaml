@@ -1,0 +1,142 @@
+# 令牌查询集。
+
+id: data.queries.token
+summary: "令牌查询集"
+owner_module: auth
+schema_version: 1
+stability: draft
+do_not:
+  - "token 之外的普通业务查询不要引用本文件"
+  - "token 查询不要向非认证调用方返回 access_token_hash / refresh_token_hash"
+
+queries:
+  - name: CreateToken
+    tables:
+      - { table: data.tables.token, write: true }
+    params:
+      - { name: id, type: integer, column: data.tables.token.col.id }
+      - { name: own_type, type: data.enums.own_type, column: data.tables.token.col.own_type }
+      - { name: own_id, type: integer, column: data.tables.token.col.own_id }
+      - { name: account_id, type: integer, column: data.tables.token.col.account_id }
+      - { name: device_id, type: text, column: data.tables.token.col.device_id, nullable: true }
+      - { name: user_id, type: integer, column: data.tables.token.col.user_id, nullable: true }
+      - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
+      - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
+      - { name: access_expire_at, type: timestamp, column: data.tables.token.col.access_expire_at }
+      - { name: refresh_expire_at, type: timestamp, column: data.tables.token.col.refresh_expire_at }
+    returns:
+      - name: row
+        kind: table
+        table: data.tables.token
+        columns:
+          - id
+          - account_id
+          - device_id
+          - access_expire_at
+          - refresh_expire_at
+          - status
+    index_ref:
+      - data.tables.token.uq_token_access_hash
+      - data.tables.token.uq_token_refresh_hash
+
+  - name: GetTokenByRefresh
+    tables:
+      - { table: data.tables.token }
+    params:
+      - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
+    returns:
+      - name: row
+        kind: table
+        table: data.tables.token
+        columns:
+          - id
+          - account_id
+          - device_id
+          - user_id
+          - access_expire_at
+          - refresh_expire_at
+          - revoked_at
+          - revoke_reason
+          - replaced_by_id
+          - status
+    index_ref: [ data.tables.token.uq_token_refresh_hash ]
+
+  - name: GetTokenByAccess
+    tables:
+      - { table: data.tables.token }
+    params:
+      - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
+    returns:
+      - name: row
+        kind: table
+        table: data.tables.token
+        columns:
+          - id
+          - account_id
+          - device_id
+          - user_id
+          - access_expire_at
+          - refresh_expire_at
+          - revoked_at
+          - revoke_reason
+          - replaced_by_id
+          - status
+    index_ref: [ data.tables.token.uq_token_access_hash ]
+
+  - name: RevokeToken
+    tables:
+      - { table: data.tables.token, write: true }
+    params:
+      - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
+      - { name: revoked_at, type: timestamp, column: data.tables.token.col.revoked_at }
+      - { name: revoke_reason, type: data.enums.token_revoke_reason, column: data.tables.token.col.revoke_reason }
+      - { name: replaced_by_id, type: integer, column: data.tables.token.col.replaced_by_id, nullable: true }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+    index_ref: [ data.tables.token.uq_token_refresh_hash ]
+
+  - name: RevokeTokensByAccount
+    tables:
+      - { table: data.tables.token, write: true }
+    params:
+      - { name: account_id, type: integer, column: data.tables.token.col.account_id }
+      - { name: revoked_at, type: timestamp, column: data.tables.token.col.revoked_at }
+      - { name: revoke_reason, type: data.enums.token_revoke_reason, column: data.tables.token.col.revoke_reason }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+    index_ref: [ data.tables.token.idx_token_account_status ]
+
+  - name: DeleteExpiredTokens
+    tables:
+      - { table: data.tables.token, write: true }
+    params:
+      - { name: limit, type: integer, nullable: true, default: 100 }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+    index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
+
+  - name: ListTokensByAccount
+    tables:
+      - { table: data.tables.token }
+    params:
+      - { name: offset, type: integer, nullable: true, default: 0 }
+      - { name: limit, type: integer, nullable: true, default: 20 }
+      - { name: account_id, type: integer, column: data.tables.token.col.account_id }
+    returns:
+      - name: rows
+        list: true
+        kind: table
+        table: data.tables.token
+        columns:
+          - id
+          - account_id
+          - device_id
+          - access_expire_at
+          - refresh_expire_at
+          - revoked_at
+          - revoke_reason
+          - replaced_by_id
+          - status
+          - created_at
+          - updated_at
+    index_ref: [ data.tables.token.idx_token_account_status ]
