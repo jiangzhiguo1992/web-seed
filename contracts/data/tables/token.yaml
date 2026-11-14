@@ -85,7 +85,7 @@ columns:
   - name: replaced_by_id
     type: integer
     nullable: true
-    comment: "轮换后新令牌 ID；用于复用检测与轮换链"
+    comment: "轮换后新令牌 ID（旧→新的前向指针）；不是吊销者 ID"
 
 constraints:
   - name: ck_token_expire_order

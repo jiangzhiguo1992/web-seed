@@ -40,6 +40,8 @@ type entityFieldInfo struct {
 	HasSource       bool
 	HasType         bool
 	Type            string
+	Nullable        bool
+	HasNullable     bool
 	ValidationKind  string
 	ValidationRef   string
 	ValidationCount int
@@ -245,6 +247,9 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 	if v, ok := m["type"].(string); ok && v != "" {
 		f.Type, f.HasType = v, true
 	}
+	if v, ok := m["nullable"].(bool); ok {
+		f.Nullable, f.HasNullable = v, true
+	}
 	if src, ok := asMap(m["source"]); ok {
 		f.HasSource = true
 		f.SourceColumnRef, _ = src["column"].(string)
@@ -364,7 +369,7 @@ func (c *Checker) applyEntityFieldDefaults(e *entityInfo) {
 		}
 		if !f.HasType {
 			typ := meta.typ
-			if meta.nullable {
+			if meta.nullable && !f.HasNullable {
 				typ = "*" + typ
 			}
 			f.Type, f.HasType = typ, true
@@ -685,6 +690,9 @@ func (c *Checker) checkRelationFieldShape(f entityFieldInfo, where string) {
 	if f.HasSource || f.HasValidation || f.HasSensitivity {
 		c.rulef("entity-field-variant", "%s: relation field must not declare source/validation/sensitivity", where)
 	}
+	if f.HasNullable {
+		c.rulef("entity-field-variant", "%s: relation field must not declare nullable", where)
+	}
 	if !f.HasType || f.JoinFromRef == "" || f.JoinToRef == "" {
 		c.rulef("entity-field-variant", "%s: relation field requires type/join_column_from/join_column_to", where)
 		return
@@ -722,7 +730,14 @@ func (c *Checker) checkScalarField(e *entityInfo, f entityFieldInfo, where strin
 		c.checkFieldValidation(e, f, where, "")
 		return
 	}
-	base, pointer := splitPointer(f.Type)
+	base, star := splitPointer(f.Type)
+	if f.HasNullable && star {
+		c.rulef("entity-field-type", "%s: use nullable:true or * prefix, not both", where)
+	}
+	pointer := star
+	if f.HasNullable {
+		pointer = f.Nullable
+	}
 	if base == "" {
 		c.rulef("entity-field-type", "%s: empty type", where)
 		return

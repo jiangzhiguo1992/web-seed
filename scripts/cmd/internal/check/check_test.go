@@ -566,24 +566,24 @@ func TestStorageDocShape(t *testing.T) {
 
 	c.errs = nil
 	doc["supported_engines"] = []any{"postgres"}
-	doc["not_supported"] = "sharding"
+	doc["not_supported_topologies"] = "sharding"
 	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported must be a list") {
-		t.Fatalf("non-list not_supported not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported_topologies must be a list") {
+		t.Fatalf("non-list not_supported_topologies not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	doc["not_supported"] = []any{"sharding", ""}
+	doc["not_supported_topologies"] = []any{"sharding", ""}
 	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported[1] must be a non-empty string") {
-		t.Fatalf("empty not_supported item not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported_topologies[1] must be a non-empty string") {
+		t.Fatalf("empty not_supported_topologies item not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	doc["not_supported"] = []any{}
+	doc["not_supported_topologies"] = []any{}
 	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported must not be empty when present") {
-		t.Fatalf("empty not_supported list not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported_topologies must not be empty when present") {
+		t.Fatalf("empty not_supported_topologies list not reported: %v", c.errs)
 	}
 }
 

@@ -54,7 +54,7 @@ func (c *Checker) checkStorage(tableIDs map[string]string) {
 func (c *Checker) checkStorageDoc(doc map[string]any, rel string) {
 	allowed := map[string]bool{
 		"schema_version": true, "id": true, "summary": true, "stability": true, "do_not": true,
-		"supported_engines": true, "tables": true, "not_supported": true,
+		"supported_engines": true, "tables": true, "not_supported_topologies": true,
 	}
 	for _, k := range sortedAnyKeys(doc) {
 		if !allowed[k] {
@@ -93,22 +93,22 @@ func (c *Checker) checkStorageDoc(doc map[string]any, rel string) {
 			c.rulef("storage-doc", "%s: supported_engines[%d] must be a non-empty string", rel, i)
 		}
 	}
-	raw, ok = doc["not_supported"]
+	raw, ok = doc["not_supported_topologies"]
 	if !ok {
 		return
 	}
 	list, ok = asList2(raw)
 	if !ok {
-		c.rulef("storage-doc", "%s: not_supported must be a list", rel)
+		c.rulef("storage-doc", "%s: not_supported_topologies must be a list", rel)
 		return
 	}
 	if len(list) == 0 {
-		c.rulef("storage-doc", "%s: not_supported must not be empty when present", rel)
+		c.rulef("storage-doc", "%s: not_supported_topologies must not be empty when present", rel)
 		return
 	}
 	for i, v := range list {
 		if s, _ := v.(string); s == "" {
-			c.rulef("storage-doc", "%s: not_supported[%d] must be a non-empty string", rel, i)
+			c.rulef("storage-doc", "%s: not_supported_topologies[%d] must be a non-empty string", rel, i)
 		}
 	}
 }

@@ -110,6 +110,36 @@ func TestEntityFieldProjectionRules(t *testing.T) {
 
 	c = newChecker()
 	e = newEntity()
+	e.Fields[2].Type = "string"
+	e.Fields[2].Nullable = true
+	e.Fields[2].HasNullable = true
+	c.checkEntityFields(e)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid nullable field reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	e = newEntity()
+	e.Fields[2].Type = "string"
+	e.Fields[2].Nullable = false
+	e.Fields[2].HasNullable = true
+	c.checkEntityFields(e)
+	if !strings.Contains(entityErrs(c), "pointer type") {
+		t.Fatalf("nullable mismatch not reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	e = newEntity()
+	e.Fields[2].Type = "*string"
+	e.Fields[2].Nullable = true
+	e.Fields[2].HasNullable = true
+	c.checkEntityFields(e)
+	if !strings.Contains(entityErrs(c), "not both") {
+		t.Fatalf("nullable + * prefix not reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	e = newEntity()
 	e.Fields[4].Sensitivity = sensitivityPII
 	c.checkEntityFields(e)
 	if !strings.Contains(entityErrs(c), "sensitivity") {
@@ -170,6 +200,30 @@ func TestEntityComputedField(t *testing.T) {
 	c.checkEntityFields(e)
 	if !strings.Contains(entityErrs(c), "must not reference @params") {
 		t.Fatalf("computed param reference not reported: %v", c.errs)
+	}
+}
+
+func TestEntityComputedNullableFlag(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {"id": {typ: "string", primaryKey: true}},
+		},
+		tableTypeFamilies: map[string]bool{"string": true, "integer": true},
+	}
+	e := &entityInfo{
+		ID: "data.entities.x", Rel: "x.yaml", Tables: []string{"data.tables.x"}, Primary: "data.tables.x",
+		Fields: []entityFieldInfo{
+			func() entityFieldInfo {
+				f := scalarField("ID", "string", "data.tables.x", "id")
+				return f
+			}(),
+			{Name: "Total", Type: "integer", HasType: true, HasNullable: true, Nullable: true,
+				SourceComputed: "COUNT(*)", ValidationKind: "soft", ValidationRef: "非负", ValidationCount: 1, Description: "总数"},
+		},
+	}
+	c.checkEntityFields(e)
+	if len(c.errs) != 0 {
+		t.Fatalf("computed nullable field reported: %v", c.errs)
 	}
 }
 
@@ -370,6 +424,22 @@ func TestEntityRelationRejectsEmptySourceAndValidation(t *testing.T) {
 	c.checkRelationFieldShape(*f, "x")
 	if !strings.Contains(entityErrs(c), "[entity-field-variant]") {
 		t.Fatalf("empty source/validation on relation not reported: %v", c.errs)
+	}
+}
+
+func TestEntityRelationRejectsNullable(t *testing.T) {
+	f := parseEntityField(map[string]any{
+		"name":             "Account",
+		"type":             "data.entities.account",
+		"nullable":         true,
+		"description":      "account",
+		"join_column_from": "data.tables.token.col.account_id",
+		"join_column_to":   "data.tables.account.col.id",
+	})
+	c := &Checker{}
+	c.checkRelationFieldShape(*f, "x")
+	if !strings.Contains(entityErrs(c), "must not declare nullable") {
+		t.Fatalf("nullable relation not reported: %v", c.errs)
 	}
 }
 

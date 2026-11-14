@@ -10,13 +10,13 @@ do_not:
   - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
 
 supported_engines: [mysql, postgres, mongodb]
-not_supported: [sharding, multi-primary, cross-region, outbox]
+not_supported_topologies: [sharding, multi-primary, cross-region, outbox]
 
 tables:
   data.tables.account:
     engine: mysql
     size_class: large
-    retention: { unit: days, pending: 7, soft_delete: 30, hard_delete: 90 }
+    retention: { unit: days, pending: 7 }
 
   data.tables.token:
     engine: mysql
@@ -25,17 +25,13 @@ tables:
 
   data.tables.auth_pwd:
     engine: mysql
-    retention: { unit: days, soft_delete: 30, hard_delete: 90 }
 
   data.tables.auth_phone:
     engine: mysql
-    retention: { unit: days, soft_delete: 30, hard_delete: 90 }
 
   data.tables.auth_email:
     engine: mysql
-    retention: { unit: days, soft_delete: 30, hard_delete: 90 }
 
   data.tables.verification:
     engine: mysql
     size_class: small
-    retention: { unit: days, pending: 1, soft_delete: 7, hard_delete: 30 }

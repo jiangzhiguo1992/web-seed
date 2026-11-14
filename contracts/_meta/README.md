@@ -142,7 +142,7 @@ scripts/cmd/
   - `owner_module` 必填且必须等于主表 `model.tables[0]` 的 `owner_module`
   - 字段二选一：标量字段（`source`）或关系字段（`type` + `join_column_from` + `join_column_to` + `load`）；两套键不得混用
   - 标量字段必须显式 `description`/`source`/`validation`；存在 `source.column` 时必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用
-  - `source` 三选一：`column`（物理列）、`computed`（计算/聚合）、`soft`（外部传入或无法脚本化的来源说明）；`computed` 必须显式 `type`、指针类型且不得引用 `@param`；`soft` 必须显式 `type`
+  - `source` 三选一：`column`（物理列）、`computed`（计算/聚合）、`soft`（外部传入或无法脚本化的来源说明）；`computed` 必须显式 `type`、指针（`nullable: true` 或 `*T`）且不得引用 `@param`；`soft` 必须显式 `type`
   - `json_name` 省略时取 snake_case(name)；标量字段的 `type`/`sensitivity` 可省略并按来源列派生（`soft` 除外）；关系字段的 `type` 是目标 entity；显式标量 `type` 的 `*` 必须与列 `nullable` 一致
   - `validation` 必填三选一：`column`（指向存在的列，且必须等于 `source.column`）、`pattern`（string 字段的合法正则）、`soft`（非空软表达式）；`soft` 来源不得用 `column`
   - 实体 `model.name` 是 Go 类型名：首字母大写 public，小写 internal；`model` 内字段顺序以 `_meta/data.entities.yaml` 的 `model.fields` 为准；不得重名

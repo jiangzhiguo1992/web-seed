@@ -52,7 +52,7 @@
 
 `fields` 同时承载两种字段，二者互斥：
 
-- **标量字段**：`description` + `source` + `validation` 必填。`source` 三选一：`column: data.tables.<t>.col.<c>`（数据库列）、`computed: "<表达式>"`（计算/聚合，必须使用指针类型 `*T`，且不得引用 `@param`）、`soft: "<说明>"`（外部传入或无法脚本化的来源）。`type` 前缀 `*` 表示指针，必须与来源列 `nullable` 完全一致；枚举字段只能映射 integer 列。`validation` 三选一：`column`（复用列规则，必须等于 `source.column`）、`pattern`（字符串硬正则）、`soft`（脚本无法验证的软表达式）；`soft` 来源不得用 `column`。
+- **标量字段**：`description` + `source` + `validation` 必填。`source` 三选一：`column: data.tables.<t>.col.<c>`（数据库列）、`computed: "<表达式>"`（计算/聚合，必须使用指针，且不得引用 `@param`）、`soft: "<说明>"`（外部传入或无法脚本化的来源）。指针用 `nullable: true` 表达，必须与来源列 `nullable` 完全一致；`type` 的 `*` 前缀是兼容写法，与 `nullable` 互斥；枚举字段只能映射 integer 列。`validation` 三选一：`column`（复用列规则，必须等于 `source.column`）、`pattern`（字符串硬正则）、`soft`（脚本无法验证的软表达式）；`soft` 来源不得用 `column`。
 - **关系字段**：`type`（目标 entity）+ `join_column_from` + `join_column_to` + `load`（eager/lazy，默认 lazy）必填；基数由两端列唯一性推断；不得写 `source`/`validation`/`sensitivity`（空对象也不允许）。`load: lazy` 表示默认不关联查询。
 
 `model.tables[0]` 是主表，`ID` 必须来自主表 `id` 列。实体字段不重复物理长度参数；统计口径不同时用 query 的 `returns`，不要把查询专属聚合塞进实体。
@@ -314,7 +314,8 @@ indexes:
 - `supported_engines`（mysql / postgres / mongodb；默认 mysql）：允许的引擎集合
 - `tables.<id>.engine`：每张物理表必须显式声明存储引擎，且必须在 `supported_engines` 中
 - `tables.<id>.size_class` / `retention` / `partition`：表级保留与分区事实
-- `not_supported` 列表（sharding / multi-primary / cross-region / outbox）
+- `tables.<id>.retention`：可选的生命周期策略，不是强制清理。`pending` 用于未完成记录（如 account_cleanup），`ttl` 用于过期凭证（token / verification），`soft_delete` / `hard_delete` 只有在确实存在硬删策略时才写；主数据与认证绑定默认不写
+- `not_supported_topologies` 列表（sharding / multi-primary / cross-region / outbox）
 
 引擎版本、扩展、连接池、迁移工具、部署拓扑、副本/读写分离、任务锁属于运行时/部署配置，不写进 `storage.yaml`。
 **禁止在 `tables/*.yaml` 里逐表声明 engine。**

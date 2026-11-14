@@ -62,7 +62,8 @@ fields:
     description: "业务字段与关系字段"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名；首字母大小写表示导出性" }
-      - { name: type, type: string, required: false, description: "标量：类型族键；关系：目标 entity ID；* 前缀表示指针" }
+      - { name: type, type: string, required: false, description: "标量：类型族键；关系：目标 entity ID；nullable=true 表示指针" }
+      - { name: nullable, type: boolean, required: false, default: false, description: "显式指针；true 表示 *T；且必须与来源列 nullable 一致" }
       - { name: json_name, type: string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "JSON 字段名" }
       - { name: description, type: string, required: true, description: "字段语义" }
       - name: source
@@ -122,7 +123,7 @@ rules:
   - { id: entity-id, text: "ID 是所有实体的唯一主键：必须来自主表 id 列、非指针，且是唯一主键", implemented_by: [ entity-id ] }
   - { id: entity-field-variant, text: "字段二选一：标量字段必须有 source 且不得写 join_column_from/join_column_to/load；关系字段必须有 type/join_column_from/join_column_to，且不得写 source/validation/sensitivity（空对象也不允许）", implemented_by: [ entity-field-variant ] }
   - { id: entity-field-source, text: "source 必须三选一：column 指向本实体表的列；computed 非空、指针类型、不引用 @param；soft 非空且必须显式 type", implemented_by: [ entity-field-source ] }
-  - { id: entity-field-type, text: "来源列字段的 type 可省略，省略时按列类型+nullable 派生；computed/soft 必填；显式 type 的 * 前缀必须与来源列 nullable 一致；枚举只能映射 integer 列；禁止列表类型和 data.tables.* 行类型", implemented_by: [ entity-field-type ] }
+  - { id: entity-field-type, text: "来源列字段的 type 可省略，省略时按列类型+nullable 派生；computed/soft 必填；nullable 显式指针且必须与来源列 nullable 一致；* 前缀为兼容写法，与 nullable 互斥；枚举只能映射 integer 列；禁止列表类型和 data.tables.* 行类型", implemented_by: [ entity-field-type ] }
   - { id: entity-field-column, text: "source.column 必须存在且属于本实体的表；同一列不得被两个字段引用；多表合成的每张表至少被一个字段引用", implemented_by: [ entity-field-column ] }
   - { id: entity-field-validation, text: "标量字段必须显式 validation，三选一：column 指向存在且与本字段 source.column 相同的列；pattern 是合法正则且字段为 string；soft 非空；soft 来源不得用 column", implemented_by: [ entity-field-validation ] }
   - { id: entity-field-description, text: "字段描述必须显式且非空，不从列 comment 继承", implemented_by: [ entity-field-description ] }
