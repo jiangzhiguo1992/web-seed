@@ -754,19 +754,6 @@ func TestBasePrimaryKeyNullable(t *testing.T) {
 	}
 }
 
-func TestCapabilityWriteLayer(t *testing.T) {
-	for id, want := range map[string]bool{
-		"cap.methods.account":   true,
-		"cap.flows.account_job": true,
-		"cap.http.account":      false,
-		"cap.features.account":  false,
-	} {
-		if got := capabilityMayWrite(map[string]any{"id": id}); got != want {
-			t.Fatalf("capabilityMayWrite(%s) = %v, want %v", id, got, want)
-		}
-	}
-}
-
 func TestHTTPCapabilityWriteLayerRejected(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "contracts/capabilities/http/x.yaml")
@@ -783,7 +770,7 @@ persistence:
 	}
 	c := &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
 	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.methods/cap.flows may declare table writes") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.methods may declare persistence/writes") {
 		t.Fatalf("http write layer not rejected: %v", c.errs)
 	}
 
@@ -797,7 +784,7 @@ writes:
 	}
 	c = &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
 	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.methods/cap.flows may declare writes") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.methods may declare persistence/writes") {
 		t.Fatalf("http top-level writes not rejected: %v", c.errs)
 	}
 }
@@ -807,11 +794,13 @@ func TestPersistenceOwnership(t *testing.T) {
 		"data.tables.account":  "account",
 		"data.tables.auth_pwd": "auth",
 	}}
-	doc := map[string]any{"module": "auth"}
-	p := map[string]any{
-		"tables": []any{"data.tables.account", "data.tables.auth_pwd"},
+	doc := map[string]any{
+		"module": "auth",
+		"persistence": map[string]any{
+			"tables": []any{"data.tables.account", "data.tables.auth_pwd"},
+		},
 	}
-	c.checkPersistenceOwnership(doc, p, "contracts/capabilities/services/auth.yaml")
+	c.checkMethodPersistence(doc, "contracts/capabilities/methods/auth.yaml", map[string]string{"data.tables.account": "contracts/data/tables/account.yaml", "data.tables.auth_pwd": "contracts/data/tables/auth_pwd.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), `cannot write data.tables.account`) {
 		t.Fatalf("cross-module write not reported: %v", c.errs)
 	}
@@ -819,13 +808,15 @@ func TestPersistenceOwnership(t *testing.T) {
 
 func TestPersistenceReadOnlyRejected(t *testing.T) {
 	c := &Checker{tableOwners: map[string]string{"data.tables.auth_pwd": "auth"}}
-	doc := map[string]any{"module": "auth"}
-	p := map[string]any{
-		"tables":           []any{"data.tables.auth_pwd"},
-		"read_only_tables": []any{"data.tables.account"},
+	doc := map[string]any{
+		"module": "auth",
+		"persistence": map[string]any{
+			"tables":           []any{"data.tables.auth_pwd"},
+			"read_only_tables": []any{"data.tables.account"},
+		},
 	}
-	c.checkPersistenceOwnership(doc, p, "contracts/capabilities/services/auth.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "read_only_tables is not supported") {
+	c.checkMethodPersistence(doc, "contracts/capabilities/methods/auth.yaml", map[string]string{"data.tables.auth_pwd": "contracts/data/tables/auth_pwd.yaml"})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "persistence.read_only_tables removed") {
 		t.Fatalf("read_only_tables not rejected: %v", c.errs)
 	}
 }
@@ -841,7 +832,7 @@ func TestTableEntitiesMismatch(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("contracts/data/tables/x.yaml", "id: data.tables.x\ntable:\n  entities: [ data.entities.wrong ]\nused_by:\n  queries: []\n")
+	write("contracts/data/tables/x.yaml", "id: data.tables.x\ntable:\n  entities: [ data.entities.wrong ]\n  queries: []\n")
 	write("contracts/data/entities/e.yaml", "id: data.entities.e\nmodel:\n  tables: [ data.tables.x ]\n")
 	c := &Checker{root: root}
 	c.checkUsedBy(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
@@ -978,7 +969,6 @@ func TestUsedByUsesParsedEntityAndQueryTargets(t *testing.T) {
 	if err := os.WriteFile(p, []byte(`id: data.tables.x
 table:
   entities: [ data.entities.e ]
-used_by:
   queries: [ data.queries.q.get_x ]
 `), 0o644); err != nil {
 		t.Fatal(err)
@@ -1009,7 +999,6 @@ func TestUsedByEntitiesAndQueries(t *testing.T) {
 id: data.tables.x
 table:
   entities: []
-used_by:
   queries: [ data.queries.q.get_x ]
 `)
 	tableIDs := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
@@ -1031,13 +1020,12 @@ used_by:
 id: data.tables.x
 table:
   entities: []
-used_by:
   queries: [ data.queries.q ]
 `)
 	c = parsed()
 	c.checkUsedBy(tableIDs)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "used_by.queries mismatch") {
-		t.Fatalf("query file ID should not satisfy used_by: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "table.queries mismatch") {
+		t.Fatalf("query file ID should not satisfy table.queries: %v", c.errs)
 	}
 }
 
@@ -1954,8 +1942,8 @@ persistence:
 `)
 	c := &Checker{root: root, queryIDs: map[string]string{"data.queries.q.get": "contracts/data/queries/q.yaml"}}
 	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown query data.queries.q.missing") {
-		t.Fatalf("missing persistence query not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "persistence.queries removed") {
+		t.Fatalf("legacy persistence.queries not rejected: %v", c.errs)
 	}
 }
 

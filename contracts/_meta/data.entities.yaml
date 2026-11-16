@@ -54,6 +54,7 @@ fields:
       - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名；首字母大小写表示导出性" }
       - { name: extends, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "实体基类" }
       - { name: tables, type: list<string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "映射的物理表" }
+      - { name: queries, type: list<string>, required: true, unique: true, pattern: '^data\.queries\.', generated: true, write: forbidden, description: "returns 本实体的 query 项 ID；由 gen-graph 生成" }
       - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "指向本实体的关系 entity ID 列表" }
 
   - name: fields
@@ -96,16 +97,6 @@ fields:
       - { name: expr, type: string, required: true, description: "布尔表达式文本；checker 只校验非空（不解析）" }
       - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "失败错误码" }
 
-  - name: used_by
-    type: object
-    required: true
-    generated: true
-    write: forbidden
-    description: "生成的反向索引"
-    fields:
-      - { name: queries, type: list<string>, required: true, unique: true, description: "returns 本实体的 query 项 ID" }
-      - { name: capabilities, type: list<string>, required: true, unique: true, description: "引用本实体的 capability ID" }
-
 rules:
   - { id: entity-base-file, text: "基类契约固定位于 contracts/data/entities/_base.yaml，ID 固定为 data.entities.base", implemented_by: [ entity-base-file ] }
   - { id: entity-base-shape, text: "基类必须且只能是 ID/Status/CreatedAt/UpdatedAt/DeletedAt；type 从 tables/_base 继承不得重写，DeletedAt 为 *timestamp；每个基类字段必须写 source/validation/description", implemented_by: [ entity-base-shape ] }
@@ -136,6 +127,6 @@ rules:
   - { id: entity-relation-eager-index, text: "eager 关系的 join_column_to 必须有索引或主键", implemented_by: [ entity-relation-eager-index ] }
   - { id: entity-relation-eager-cycle, text: "eager 关系链不得成环；自引用不得 eager", implemented_by: [ entity-relation-eager-cycle ] }
   - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；expr 非空；on_violation 必须存在", implemented_by: [ entity-validation ] }
-  - { id: entity-used-by, text: "used_by.queries 必须等于 returns 本实体的 query 集合；used_by.capabilities 必须等于通过 type/x-entity/returns 引用本实体的 capability 集合", implemented_by: [ entity-used-by ] }
+  - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入，禁止手改", implemented_by: [ entity-used-by ] }
   - { id: entity-included-by, text: "model.included_by 必须等于关系字段 type 指向本实体的 entity 集合；每个 entity 必须存在且确实指向本实体", implemented_by: [ entity-included-by ] }
   - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

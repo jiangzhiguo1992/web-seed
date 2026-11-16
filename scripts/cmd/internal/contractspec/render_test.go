@@ -131,12 +131,12 @@ func TestRenderEntity(t *testing.T) {
 	if len(fields) != 0 {
 		t.Fatalf("entity scaffold must not repeat base fields: %#v", fields)
 	}
-	usedBy, _ := doc["used_by"].(map[string]any)
-	if _, ok := usedBy["queries"]; !ok {
-		t.Fatalf("used_by.queries missing: %#v", usedBy)
+	queries, ok := model["queries"]
+	if !ok {
+		t.Fatalf("model.queries missing: %#v", model)
 	}
-	if _, ok := usedBy["capabilities"]; !ok {
-		t.Fatalf("used_by.capabilities missing: %#v", usedBy)
+	if got, ok := queries.([]any); !ok || len(got) != 0 {
+		t.Fatalf("model.queries must be an empty list: %#v", queries)
 	}
 }
 

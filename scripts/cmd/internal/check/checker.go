@@ -146,6 +146,7 @@ func (c *Checker) run() {
 	c.checkQueries(querySchema)
 	c.checkEntityUsedBy()
 	c.checkUsedBy(tableIDs)
+	c.checkQueryUsedBy()
 	c.checkIndex(tableIDs, enumSchema, entitySchema, querySchema)
 }
 

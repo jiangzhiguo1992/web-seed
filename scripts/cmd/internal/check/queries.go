@@ -47,6 +47,7 @@ type queryInfo struct {
 	Returns     []queryReturn
 	HasReturns  bool
 	IndexRef    []string
+	UsedBy      []string
 }
 
 type queryDoc struct {
@@ -135,6 +136,7 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		q.HasReturns = true
 	}
 	q.IndexRef = stringList(m["index_ref"])
+	q.UsedBy = stringList(m["used_by"])
 	for _, raw := range asList(m["params"]) {
 		pm, ok := asMap(raw)
 		if !ok {
@@ -780,4 +782,49 @@ func splitIndexRef(ref string) (table, name string, ok bool) {
 		return "", "", false
 	}
 	return table, name, true
+}
+
+// checkQueryUsedBy 对账 query.used_by 与 method.queries 的反向索引。
+func (c *Checker) checkQueryUsedBy() {
+	expected := map[string]map[string]bool{}
+	for _, f := range walkYAML(c.root, "contracts/capabilities/methods") {
+		doc, err := loadYAML(f)
+		if err != nil {
+			continue
+		}
+		fileID, _ := doc["id"].(string)
+		iface, _ := asMap(doc["interface"])
+		for _, raw := range asList(iface["methods"]) {
+			m, _ := asMap(raw)
+			name, _ := m["name"].(string)
+			methodID := fileID + "." + contractspec.SnakeCase(name)
+			for _, rawQ := range asList(m["queries"]) {
+				qid, _ := rawQ.(string)
+				if qid == "" {
+					continue
+				}
+				if expected[qid] == nil {
+					expected[qid] = map[string]bool{}
+				}
+				expected[qid][methodID] = true
+			}
+		}
+	}
+	for _, qid := range c.queryOrder {
+		q := c.queries[qid]
+		if q == nil {
+			continue
+		}
+		want := expected[qid]
+		if want == nil {
+			want = map[string]bool{}
+		}
+		got := map[string]bool{}
+		for _, u := range q.UsedBy {
+			got[u] = true
+		}
+		if !sameSet(got, want) {
+			c.rulef("query-used-by", "%s: used_by must be %v, got %v", qid, sortedKeys(want), sortedKeys(got))
+		}
+	}
 }

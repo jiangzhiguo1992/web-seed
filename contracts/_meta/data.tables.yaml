@@ -72,6 +72,14 @@ fields:
         unique: true
         pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
         description: "映射本表的 entity ID 列表"
+      - name: queries
+        type: list<string>
+        required: true
+        unique: true
+        pattern: '^data\.queries\.'
+        generated: true
+        write: forbidden
+        description: "使用本表的 query 项 ID；由 gen-graph 生成"
 
   - name: columns
     type: list<object>
@@ -118,15 +126,6 @@ fields:
       - { name: comment, type: string, required: true, description: "索引用途" }
       - { name: used_by, type: list<string>, required: true, unique: true, description: "使用该索引的 query 项 ID" }
 
-  - name: used_by
-    type: object
-    required: true
-    generated: true
-    write: forbidden
-    description: "生成的 query 反向索引"
-    fields:
-      - { name: queries, type: list<string>, required: true, unique: true, description: "query 项 ID" }
-
 rules:
   - { id: table-key-order, text: "表契约字段顺序必须与 _meta/data.tables.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ table-key-order ] }
   - { id: base-file, text: "基类契约固定位于 contracts/data/tables/_base.yaml，ID 固定为 data.tables.base", implemented_by: [ base-file ] }
@@ -150,9 +149,9 @@ rules:
   - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/supported_engines/tables/caches/size_class/retention/partition/not_supported_topologies；supported_engines 必填且必须是非空字符串列表，not_supported_topologies 若存在必须是非空字符串列表", implemented_by: [ storage-doc ] }
   - { id: storage-retention, text: "retention 只允许 unit/pending/soft_delete/hard_delete/ttl/cache_ttl；必须写 unit 和至少一个时长；unit 只能是 minutes/hours/days；各时长必须 >= 1；cache_ttl 只能用于 caches 中的表，且不得超过 ttl", implemented_by: [ storage-retention ] }
   - { id: storage-partition, text: "partition 只允许 strategy/columns/interval；strategy 只能是 range/list/hash；columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
-  - { id: used-by-generated, text: "used_by.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ used-by-generated ] }
+  - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
-  - { id: owner-write, text: "只有 owner_module 相同的 cap.methods/cap.flows 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在 persistence.write_queries 或 flow.writes 中；method 写表必须在 persistence.table/tables 中，flow 写表由 writes 声明；每个写表归属模块一致；返回 affected_rows 的查询必须有写表并出现在某个写声明中；跨模块读取用 persistence.queries", implemented_by: [ owner-write ] }
+  - { id: owner-write, text: "只有 owner_module 相同的 cap.methods 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 method 的 queries 中；method 写表必须属于 method 文件的 module；flow 不得直接引用 data.queries.*；跨模块写必须由 flow 编排多个 method，不允许一个 query 写多模块表", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-comment, text: "索引必须写非空 comment", implemented_by: [ index-comment ] }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；columns 必须存在；名称前缀匹配类型", implemented_by: [ index-definition ] }

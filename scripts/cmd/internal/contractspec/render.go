@@ -21,7 +21,6 @@ type tableScaffold struct {
 	Columns       []columnDef     `yaml:"columns"`
 	Constraints   []constraintDef `yaml:"constraints"`
 	Indexes       []any           `yaml:"indexes"`
-	UsedBy        usedByDef       `yaml:"used_by"`
 }
 
 type tableDef struct {
@@ -29,6 +28,7 @@ type tableDef struct {
 	Comment  string   `yaml:"comment"`
 	Extends  []string `yaml:"extends"`
 	Entities []string `yaml:"entities"`
+	Queries  []string `yaml:"queries"`
 }
 
 type columnDef struct {
@@ -43,10 +43,6 @@ type constraintDef struct {
 	Name string `yaml:"name"`
 	Type string `yaml:"type"`
 	Expr string `yaml:"expr,omitempty"`
-}
-
-type usedByDef struct {
-	Queries []string `yaml:"queries"`
 }
 
 type enumItemScaffold struct {
@@ -78,24 +74,19 @@ type entityScaffold struct {
 	DoNot         []string              `yaml:"do_not"`
 	Model         entityModelScaffold   `yaml:"model"`
 	Fields        []entityFieldScaffold `yaml:"fields"`
-	UsedBy        entityUsedByScaffold  `yaml:"used_by"`
 }
 
 type entityModelScaffold struct {
 	Name       string   `yaml:"name"`
 	Extends    []string `yaml:"extends"`
 	Tables     []string `yaml:"tables"`
+	Queries    []string `yaml:"queries"`
 	IncludedBy []string `yaml:"included_by"`
 }
 
 type entityFieldScaffold struct {
 	Name string `yaml:"name"`
 	Type string `yaml:"type"`
-}
-
-type entityUsedByScaffold struct {
-	Queries      []string `yaml:"queries"`
-	Capabilities []string `yaml:"capabilities"`
 }
 
 type queryFileScaffold struct {
@@ -114,6 +105,7 @@ type queryItemScaffold struct {
 	Params   []queryParamScaffold  `yaml:"params"`
 	Returns  []queryReturnScaffold `yaml:"returns"`
 	IndexRef flowStrings           `yaml:"index_ref"`
+	UsedBy   []string              `yaml:"used_by"`
 }
 
 type queryTableScaffold struct {
@@ -164,13 +156,13 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	top := map[string]bool{
 		"schema_version": true, "id": true, "summary": true, "stability": true,
 		"owner_module": true, "do_not": true, "table": true,
-		"columns": true, "constraints": true, "indexes": true, "used_by": true,
+		"columns": true, "constraints": true, "indexes": true,
 	}
 	if err := requireSupported(s.Fields, top, "data.tables"); err != nil {
 		return nil, err
 	}
 	tableField, _ := FindField(s.Fields, "table")
-	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "comment": true, "extends": true, "entities": true}, s.Type+".table"); err != nil {
+	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "comment": true, "extends": true, "entities": true, "queries": true}, s.Type+".table"); err != nil {
 		return nil, err
 	}
 	columnField, _ := FindField(s.Fields, "columns")
@@ -183,12 +175,6 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	if err := requireSupported(constraintsField.ItemFields, map[string]bool{
 		"name": true, "type": true, "expr": true,
 	}, s.Type+".constraints"); err != nil {
-		return nil, err
-	}
-	usedByField, _ := FindField(s.Fields, "used_by")
-	if err := requireSupported(usedByField.Fields, map[string]bool{
-		"queries": true,
-	}, s.Type+".used_by"); err != nil {
 		return nil, err
 	}
 	tableID := s.Targets.FileID(name + ".yaml")
@@ -221,13 +207,13 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 			Comment:  "TODO: 表说明",
 			Extends:  []string{baseTableID},
 			Entities: []string{},
+			Queries:  []string{},
 		},
 		Columns: []columnDef{
 			{Name: columnName, Type: columnType, Nullable: columnNullable, Comment: "TODO: 列说明", Params: columnParams},
 		},
 		Constraints: []constraintDef{},
 		Indexes:     []any{},
-		UsedBy:      usedByDef{Queries: []string{}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
@@ -305,7 +291,7 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 		return nil, fmt.Errorf("RenderEntity: model is missing in schema")
 	}
 	if err := requireSupported(modelField.Fields, map[string]bool{
-		"name": true, "extends": true, "tables": true, "included_by": true,
+		"name": true, "extends": true, "tables": true, "queries": true, "included_by": true,
 	}, "data.entities.model"); err != nil {
 		return nil, err
 	}
@@ -318,15 +304,6 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 		"source": true, "validation": true, "sensitivity": true,
 		"join_column_from": true, "join_column_to": true, "load": true,
 	}, "data.entities.fields"); err != nil {
-		return nil, err
-	}
-	usedByField, ok := FindField(s.Fields, "used_by")
-	if !ok {
-		return nil, fmt.Errorf("RenderEntity: used_by is missing in schema")
-	}
-	if err := requireSupported(usedByField.Fields, map[string]bool{
-		"queries": true, "capabilities": true,
-	}, "data.entities.used_by"); err != nil {
 		return nil, err
 	}
 	entityID := s.Targets.FileID(name + ".yaml")
@@ -344,10 +321,10 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 			Name:       lowerCamel(name),
 			Extends:    []string{"data.entities.base"},
 			Tables:     []string{tableID},
+			Queries:    []string{},
 			IncludedBy: []string{},
 		},
 		Fields: []entityFieldScaffold{},
-		UsedBy: entityUsedByScaffold{Queries: []string{}, Capabilities: []string{}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
@@ -381,7 +358,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 	}
 	if err := requireSupported(queriesField.ItemFields, map[string]bool{
 		"name": true, "tables": true,
-		"params": true, "returns": true, "index_ref": true,
+		"params": true, "returns": true, "index_ref": true, "used_by": true,
 	}, "data.queries.queries"); err != nil {
 		return nil, err
 	}
@@ -429,6 +406,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 			Params:   []queryParamScaffold{{Name: "id", Type: "integer", Column: tableID + ".col.id"}},
 			Returns:  []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}},
 			IndexRef: flowStrings{tableID + ".pk"},
+			UsedBy:   []string{},
 		}},
 	}
 	b, err := marshal2(doc)

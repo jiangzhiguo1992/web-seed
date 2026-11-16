@@ -556,46 +556,6 @@ func TestEntityValidationNameRejectedBySchema(t *testing.T) {
 	}
 }
 
-func TestEntityUsedByCapabilities(t *testing.T) {
-	root := t.TempDir()
-	path := filepath.Join(root, "contracts/capabilities/services/x.yaml")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	body := `id: cap.methods.x
-interface:
-  methods:
-    - name: Get
-      returns:
-        - { name: account, type: data.entities.account }
-`
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	c := &Checker{
-		root:        root,
-		entityOrder: []string{"data.entities.account"},
-		entities: map[string]*entityInfo{
-			"data.entities.account": {
-				ID: "data.entities.account", Rel: "account.yaml",
-				Doc: map[string]any{"used_by": map[string]any{"queries": []any{}, "capabilities": []any{}}},
-			},
-		},
-	}
-	c.checkEntityUsedBy()
-	if !strings.Contains(entityErrs(c), "used_by.capabilities must be") {
-		t.Fatalf("missing used_by capability not reported: %v", c.errs)
-	}
-	c.errs = nil
-	c.entities["data.entities.account"].Doc["used_by"] = map[string]any{
-		"queries": []any{}, "capabilities": []any{"cap.methods.x"},
-	}
-	c.checkEntityUsedBy()
-	if len(c.errs) != 0 {
-		t.Fatalf("valid used_by capabilities reported: %v", c.errs)
-	}
-}
-
 func TestEntityUsedByQueries(t *testing.T) {
 	c := &Checker{
 		entityOrder: []string{"data.entities.account"},
@@ -603,7 +563,7 @@ func TestEntityUsedByQueries(t *testing.T) {
 			"data.entities.account": {
 				ID:  "data.entities.account",
 				Rel: "account.yaml",
-				Doc: map[string]any{"used_by": map[string]any{"queries": []any{"data.queries.account.get"}}},
+				Doc: map[string]any{"model": map[string]any{"queries": []any{"data.queries.account.get"}}},
 			},
 		},
 		queries: map[string]*queryInfo{
@@ -612,13 +572,13 @@ func TestEntityUsedByQueries(t *testing.T) {
 	}
 	c.checkEntityUsedBy()
 	if len(c.errs) != 0 {
-		t.Fatalf("valid used_by reported: %v", c.errs)
+		t.Fatalf("valid model.queries reported: %v", c.errs)
 	}
 
-	c.entities["data.entities.account"].Doc = map[string]any{"used_by": map[string]any{"queries": []any{}}}
+	c.entities["data.entities.account"].Doc = map[string]any{"model": map[string]any{"queries": []any{}}}
 	c.checkEntityUsedBy()
 	if !strings.Contains(entityErrs(c), "[entity-used-by]") {
-		t.Fatalf("missing used_by query not reported: %v", c.errs)
+		t.Fatalf("missing model.queries not reported: %v", c.errs)
 	}
 }
 
@@ -1196,35 +1156,40 @@ func TestWriteQueries(t *testing.T) {
 		tableOwners: map[string]string{"data.tables.x": "x"},
 		queries:     map[string]*queryInfo{q.ID: q},
 	}
-	declared := map[string]bool{q.ID: true}
-	c.checkWriteQueries(map[string]any{"module": "x"}, []any{q.ID}, declared, []string{"data.tables.x"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
+	doc := func(module string) map[string]any {
+		return map[string]any{
+			"module": module,
+			"interface": map[string]any{"methods": []any{
+				map[string]any{"name": "Create", "queries": []any{q.ID}},
+			}},
+			"persistence": map[string]any{"tables": []any{"data.tables.x"}},
+		}
+	}
+	tables := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
+	c.checkMethodPersistence(doc("x"), "cap.yaml", tables)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid write query reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkWriteQueries(map[string]any{"module": "other"}, []any{q.ID}, declared, []string{"data.tables.x"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
+	c.checkMethodPersistence(doc("other"), "cap.yaml", tables)
 	if !strings.Contains(entityErrs(c), "cannot write") {
 		t.Fatalf("cross-module write not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkWriteQueries(map[string]any{"module": "x"}, []any{q.ID}, map[string]bool{}, []string{"data.tables.x"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
-	if !strings.Contains(entityErrs(c), "must be listed") {
-		t.Fatalf("undeclared write query not reported: %v", c.errs)
-	}
-
-	c.errs = nil
 	q.Writes = nil
-	c.checkWriteQueries(map[string]any{"module": "x"}, []any{q.ID}, declared, []string{"data.tables.x"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
-	if !strings.Contains(entityErrs(c), "must mark at least one table write:true") {
+	q.Returns = []queryReturn{{Kind: "affected_rows"}}
+	c.checkMethodPersistence(doc("x"), "cap.yaml", tables)
+	if !strings.Contains(entityErrs(c), "returns affected_rows without a write table") {
 		t.Fatalf("write query without write table not reported: %v", c.errs)
 	}
 
 	c.errs = nil
 	q.Writes = []string{"data.tables.x", "data.tables.y"}
+	q.Returns = nil
 	c.tableOwners["data.tables.y"] = "x"
-	c.checkWriteQueries(map[string]any{"module": "x"}, []any{q.ID}, declared, []string{"data.tables.x", "data.tables.y"}, "persistence.write_queries", "persistence.queries", "cap.yaml")
+	c.checkMethodPersistence(doc("x"), "cap.yaml", map[string]string{"data.tables.x": "contracts/data/tables/x.yaml", "data.tables.y": "contracts/data/tables/y.yaml"})
 	if len(c.errs) != 0 {
 		t.Fatalf("multi-table write reported: %v", c.errs)
 	}
@@ -1239,7 +1204,7 @@ func TestUndeclaredWriteQueryRejected(t *testing.T) {
 		},
 	}
 	c.checkCapabilityPersistence(map[string]string{})
-	if !strings.Contains(entityErrs(c), "not declared in any capability write list") {
+	if !strings.Contains(entityErrs(c), "not declared in any method queries") {
 		t.Fatalf("undeclared write table query not reported: %v", c.errs)
 	}
 }

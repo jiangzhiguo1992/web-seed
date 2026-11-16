@@ -37,6 +37,17 @@ func (c *Checker) checkCapabilities() {
 	flowAsync := map[string]bool{}
 	flowInbound := map[string]bool{}
 
+	typeNames := map[string]bool{}
+	for _, file := range glob(c.root, filepath.Join(methodSchema.Targets.Dir, methodSchema.Targets.Glob)) {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		types, _ := asMap(doc["types"])
+		for name := range types {
+			typeNames[name] = true
+		}
+	}
 	for _, file := range glob(c.root, filepath.Join(methodSchema.Targets.Dir, methodSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -53,7 +64,7 @@ func (c *Checker) checkCapabilities() {
 			c.rulef("cap-id", "%s: duplicate method id %s", rel, id)
 		}
 		methodIDs[id] = true
-		c.checkMethodDoc(doc, rel, id, methodIDs)
+		c.checkMethodDoc(doc, rel, id, methodIDs, methodSchema, typeNames)
 	}
 
 	for _, file := range glob(c.root, filepath.Join(flowSchema.Targets.Dir, flowSchema.Targets.Glob)) {
@@ -63,19 +74,25 @@ func (c *Checker) checkCapabilities() {
 			continue
 		}
 		rel := relPath(c.root, file)
-		id, _ := doc["id"].(string)
+		fileID, _ := doc["id"].(string)
 		want := flowSchema.Targets.FileID(filepath.Base(file))
-		if id != want {
-			c.rulef("cap-id", "%s: id %q must be %q", rel, id, want)
+		if fileID != want {
+			c.rulef("cap-id", "%s: id %q must be %q", rel, fileID, want)
 		}
-		if flowIDs[id] {
-			c.rulef("cap-id", "%s: duplicate flow id %s", rel, id)
+		module, _ := doc["module"].(string)
+		for _, raw := range asList(doc["flows"]) {
+			item, _ := asMap(raw)
+			name, _ := item["name"].(string)
+			id := fileID + "." + contractspec.SnakeCase(name)
+			if flowIDs[id] {
+				c.rulef("cap-id", "%s: duplicate flow id %s", rel, id)
+			}
+			flowIDs[id] = true
+			if item["trigger"] != nil {
+				flowAsync[id] = true
+			}
+			c.checkFlowItem(item, rel+":"+id, id, module, methodIDs)
 		}
-		flowIDs[id] = true
-		if doc["trigger"] != nil {
-			flowAsync[id] = true
-		}
-		c.checkFlowDoc(doc, rel, methodIDs)
 	}
 
 	for _, file := range glob(c.root, filepath.Join(httpSchema.Targets.Dir, httpSchema.Targets.Glob)) {
@@ -125,35 +142,32 @@ func (c *Checker) checkCapabilities() {
 	}
 }
 
-func (c *Checker) checkMethodDoc(doc map[string]any, rel, fileID string, methodIDs map[string]bool) {
+func (c *Checker) checkMethodDoc(doc map[string]any, rel, fileID string, methodIDs map[string]bool, schema *Schema, typeNames map[string]bool) {
+	c.validateDoc(doc, schema.Fields, rel)
+	c.checkFieldOrder(rel, schema.Fields, orderRules{})
+	if types, ok := asMap(doc["types"]); ok {
+		c.checkTypeRefs(types, typeNames, rel)
+	}
 	iface, _ := asMap(doc["interface"])
 	if iface == nil {
-		c.rulef("method-structure", "%s: interface is required", rel)
 		return
-	}
-	name, _ := iface["name"].(string)
-	if !isPascalCase(name) {
-		c.rulef("method-structure", "%s: interface.name must be PascalCase", rel)
-	}
-	pkg, _ := iface["package"].(string)
-	if !strings.HasPrefix(pkg, "internal/modules/") {
-		c.rulef("method-structure", "%s: interface.package must be under internal/modules/", rel)
 	}
 	seen := map[string]bool{}
 	for _, raw := range asList(iface["methods"]) {
 		m, _ := asMap(raw)
 		mname, _ := m["name"].(string)
-		if !isPascalCase(mname) {
-			c.rulef("method-structure", "%s: method name must be PascalCase", rel)
-		}
 		if seen[mname] {
 			c.rulef("method-structure", "%s: duplicate method %s", rel, mname)
 		}
 		seen[mname] = true
 		methodIDs[fileID+"."+contractspec.SnakeCase(mname)] = true
-		tx, _ := m["transaction"].(string)
-		if tx != "none" && tx != "read_only" {
-			c.rulef("method-structure", "%s.%s: transaction must be none or read_only", rel, mname)
+		for _, rawParam := range asList(m["params"]) {
+			pm, _ := asMap(rawParam)
+			c.checkTypeName(pm["type"], typeNames, rel+":"+mname)
+		}
+		for _, rawReturn := range asList(m["returns"]) {
+			rm, _ := asMap(rawReturn)
+			c.checkTypeName(rm["type"], typeNames, rel+":"+mname)
 		}
 		for _, rawErr := range asList(m["errors"]) {
 			code, _ := rawErr.(string)
@@ -165,11 +179,20 @@ func (c *Checker) checkMethodDoc(doc map[string]any, rel, fileID string, methodI
 				c.rulef("cap-ref", "%s.%s: unknown error %s", rel, mname, code)
 			}
 		}
+		for _, rawQuery := range asList(m["queries"]) {
+			qid, _ := rawQuery.(string)
+			if qid == "" {
+				c.rulef("cap-ref", "%s.%s: queries must be a query ID", rel, mname)
+				continue
+			}
+			if _, ok := c.queryIDs[qid]; !ok {
+				c.rulef("cap-ref", "%s.%s: unknown query %s", rel, mname, qid)
+			}
+		}
 	}
 }
 
-func (c *Checker) checkFlowDoc(doc map[string]any, rel string, methodIDs map[string]bool) {
-	module, _ := doc["module"].(string)
+func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, methodIDs map[string]bool) {
 	impl, _ := doc["implementation"].(string)
 	methodRef, _ := doc["method"].(string)
 	steps := asList(doc["steps"])
@@ -195,8 +218,8 @@ func (c *Checker) checkFlowDoc(doc map[string]any, rel string, methodIDs map[str
 		for _, raw := range steps {
 			step, _ := asMap(raw)
 			use, _ := step["use"].(string)
-			if !c.validFlowUse(use, module, methodIDs) {
-				c.rulef("cap-ref", "%s: step use %q is not a method, module query, or permission", rel, use)
+			if !c.validFlowUse(use, methodIDs) {
+				c.rulef("cap-ref", "%s: step use %q is not a method or permission; data.queries is forbidden", rel, use)
 			}
 		}
 	default:
@@ -238,22 +261,15 @@ func (c *Checker) checkFlowDoc(doc map[string]any, rel string, methodIDs map[str
 	}
 }
 
-func (c *Checker) validFlowUse(use, module string, methodIDs map[string]bool) bool {
+func (c *Checker) validFlowUse(use string, methodIDs map[string]bool) bool {
+	if use == "" {
+		return true // 无 use 的步骤是 flow 内部逻辑
+	}
 	switch {
 	case strings.HasPrefix(use, "cap.methods."):
 		return methodIDs[use]
 	case strings.HasPrefix(use, "platform.security.permissions."):
 		return c.permissionExists(use)
-	case strings.HasPrefix(use, "data.queries."):
-		if _, ok := c.queryIDs[use]; !ok {
-			return false
-		}
-		for table := range c.queryTables[use] {
-			if c.tableOwners[table] != module {
-				return false
-			}
-		}
-		return true
 	default:
 		return false
 	}
@@ -276,10 +292,36 @@ func (c *Checker) permissionExists(id string) bool {
 	return c.permissionSet[id]
 }
 
-func isPascalCase(s string) bool {
-	if s == "" {
-		return false
+func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) {
+	typ, _ := v.(string)
+	if typ == "" || isBuiltinType(typ) {
+		return
 	}
-	r := rune(s[0])
-	return r >= 'A' && r <= 'Z'
+	if !typeNames[typ] {
+		c.rulef("cap-ref", "%s: unknown type %s", where, typ)
+	}
+}
+
+func (c *Checker) checkTypeRefs(v any, typeNames map[string]bool, where string) {
+	switch x := v.(type) {
+	case map[string]any:
+		for k, val := range x {
+			if k == "type" {
+				c.checkTypeName(val, typeNames, where)
+			}
+			c.checkTypeRefs(val, typeNames, where)
+		}
+	case []any:
+		for _, item := range x {
+			c.checkTypeRefs(item, typeNames, where)
+		}
+	}
+}
+
+func isBuiltinType(t string) bool {
+	switch t {
+	case "context.Context", "error", "string", "integer", "number", "boolean", "object", "array", "any":
+		return true
+	}
+	return strings.HasPrefix(t, "*") || strings.HasPrefix(t, "List<") || strings.HasPrefix(t, "data.") || strings.HasPrefix(t, "time.")
 }

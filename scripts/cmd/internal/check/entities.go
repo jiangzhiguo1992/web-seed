@@ -1122,7 +1122,7 @@ func (c *Checker) checkEagerCycles() {
 	}
 }
 
-// checkEntityUsedBy 在 query/capability 解析完成后对账 used_by。
+// checkEntityUsedBy 在 query 解析完成后对账 model.queries。
 func (c *Checker) checkEntityUsedBy() {
 	expectedQueries := map[string]map[string]bool{}
 	for _, q := range c.queries {
@@ -1136,32 +1136,23 @@ func (c *Checker) checkEntityUsedBy() {
 			expectedQueries[r.Entity][q.ID] = true
 		}
 	}
-	expectedCapabilities := c.entityCapabilityUsages()
 	for _, id := range c.entityOrder {
 		e := c.entities[id]
-		ub, ok := asMap(e.Doc["used_by"])
+		model, _ := asMap(e.Doc["model"])
+		if model == nil {
+			continue
+		}
+		raw, ok := model["queries"]
 		if !ok {
 			continue
 		}
-		if raw, ok := ub["queries"]; ok {
-			gotQueries := stringSet(asList(raw))
-			wantQueries := expectedQueries[id]
-			if wantQueries == nil {
-				wantQueries = map[string]bool{}
-			}
-			if !sameSet(gotQueries, wantQueries) {
-				c.rulef("entity-used-by", "%s: used_by.queries must be %v, got %v", e.Rel, sortedKeys(wantQueries), sortedKeys(gotQueries))
-			}
+		gotQueries := stringSet(asList(raw))
+		wantQueries := expectedQueries[id]
+		if wantQueries == nil {
+			wantQueries = map[string]bool{}
 		}
-		if raw, ok := ub["capabilities"]; ok {
-			gotCapabilities := stringSet(asList(raw))
-			wantCapabilities := expectedCapabilities[id]
-			if wantCapabilities == nil {
-				wantCapabilities = map[string]bool{}
-			}
-			if !sameSet(gotCapabilities, wantCapabilities) {
-				c.rulef("entity-used-by", "%s: used_by.capabilities must be %v, got %v", e.Rel, sortedKeys(wantCapabilities), sortedKeys(gotCapabilities))
-			}
+		if !sameSet(gotQueries, wantQueries) {
+			c.rulef("entity-used-by", "%s: model.queries must be %v, got %v", e.Rel, sortedKeys(wantQueries), sortedKeys(gotQueries))
 		}
 	}
 }

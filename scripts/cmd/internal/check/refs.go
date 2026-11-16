@@ -35,7 +35,6 @@ func (c *Checker) isBaseTableRef(ref string) bool {
 
 func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 	c.declaredWrites = map[string]bool{}
-	// capabilities
 	for _, f := range walkYAML(c.root, "contracts/capabilities") {
 		doc, err := loadYAML(f)
 		if err != nil {
@@ -43,185 +42,89 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 			continue
 		}
 		rel := relPath(c.root, f)
-		if rawWrites, ok := doc["writes"]; ok {
-			if !capabilityMayWrite(doc) {
-				c.rulef("owner-write", "%s: only cap.methods/cap.flows may declare writes", rel)
+		id, _ := doc["id"].(string)
+		switch {
+		case strings.HasPrefix(id, "cap.methods."):
+			c.checkMethodPersistence(doc, rel, tableIDs)
+		case strings.HasPrefix(id, "cap.flows."):
+			if doc["writes"] != nil {
+				c.rulef("flow-no-query", "%s: flow must not declare writes; write through cap.methods", rel)
 			}
-			uses := map[string]bool{}
-			for _, x := range asList(doc["uses"]) {
-				if s, ok := x.(string); ok && s != "" {
-					uses[s] = true
-				}
+			if doc["persistence"] != nil {
+				c.rulef("flow-no-query", "%s: flow must not declare persistence; write through cap.methods", rel)
 			}
-			list, ok := rawWrites.([]any)
-			if !ok {
-				c.rulef("schema.type", "%s: writes must be a list", rel)
-			} else {
-				if module, _ := doc["module"].(string); module == "" {
-					c.rulef("owner-write", "%s: writes requires module to verify write ownership", rel)
-				}
-				for _, x := range list {
-					if qid, ok := x.(string); ok && qid != "" {
-						c.declaredWrites[qid] = true
-					}
-				}
-				c.checkWriteQueries(doc, list, uses, nil, "writes", "uses", rel)
-			}
-		}
-		p, _ := asMap(doc["persistence"])
-		if p == nil {
-			continue
-		}
-		if !capabilityMayWrite(doc) && (len(tableRefs(p)) > 0 || p["write_queries"] != nil) {
-			c.rulef("owner-write", "%s: only cap.methods/cap.flows may declare table writes", rel)
-		}
-		c.checkPersistenceOwnership(doc, p, rel)
-		if rawQ, ok := p["queries"]; ok {
-			qm, ok := asMap(rawQ)
-			if !ok {
-				c.rulef("schema.type", "%s: persistence.queries must be a map", rel)
-			} else {
-				for alias, raw := range qm {
-					qid, _ := raw.(string)
-					if qid == "" {
-						c.rulef("schema.required", "%s: persistence.queries.%s must be a query ID", rel, alias)
-						continue
-					}
-					if _, ok := c.queryIDs[qid]; !ok {
-						c.rulef("schema.ref", "%s: persistence.queries.%s references unknown query %s", rel, alias, qid)
-					}
-				}
-			}
-		}
-		if rawCE, ok := p["constraint_errors"]; ok {
-			ce, ok := asMap(rawCE)
-			if !ok {
-				c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
-			} else {
-				tables := tableRefs(p)
-				for name := range ce {
-					if name == "" {
-						c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
-						continue
-					}
-					if !c.tableObjectExists(tables, name) {
-						c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
-					}
-				}
-			}
-		}
-		for _, t := range tableRefs(p) {
-			if c.isBaseTableRef(t) {
-				c.rulef("schema.ref", "%s: base contract is not a physical table", rel)
-			} else if _, ok := tableIDs[t]; !ok {
-				c.rulef("schema.ref", "%s: persistence references unknown table %s", rel, t)
+		default:
+			if doc["persistence"] != nil || doc["writes"] != nil {
+				c.rulef("owner-write", "%s: only cap.methods may declare persistence/writes", rel)
 			}
 		}
 	}
 	for _, qid := range c.queryOrder {
 		q := c.queries[qid]
 		if q != nil && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) && !c.declaredWrites[qid] {
-			c.rulef("owner-write", "query %s has write tables or returns affected_rows but is not declared in any capability write list", qid)
+			c.rulef("owner-write", "query %s has write tables or returns affected_rows but is not declared in any method queries", qid)
 		}
 	}
 }
 
-// capabilityMayWrite 只允许 method 与 flow 契约声明写表/写查询。
-func capabilityMayWrite(doc map[string]any) bool {
-	id, _ := doc["id"].(string)
-	return strings.HasPrefix(id, "cap.methods.") || strings.HasPrefix(id, "cap.flows.")
-}
-
-// checkPersistenceOwnership 校验 capability 的写表与写查询归属：
-//   - read_only_tables 已移除，跨模块读必须通过 persistence.queries；
-//   - 写表（table/tables）的 owner_module 必须等于 capability 的 module；
-//   - write_queries 必须已在 persistence.queries 中登记、单表、目标表归属一致。
-func (c *Checker) checkPersistenceOwnership(doc, p map[string]any, rel string) {
-	if _, ok := p["read_only_tables"]; ok {
-		c.rulef("owner-write", "%s: read_only_tables is not supported; use persistence.queries for cross-module reads", rel)
+func (c *Checker) checkMethodPersistence(doc map[string]any, rel string, tableIDs map[string]string) {
+	if c.declaredWrites == nil {
+		c.declaredWrites = map[string]bool{}
 	}
-	if rawTables, ok := p["tables"]; ok {
-		if _, ok := rawTables.([]any); !ok {
-			c.rulef("schema.type", "%s: persistence.tables must be a list", rel)
-		}
-	}
-	writes := tableRefs(p)
 	module, _ := doc["module"].(string)
-	if len(writes) > 0 {
-		if module == "" {
-			c.rulef("owner-write", "%s: persistence requires module to verify write ownership", rel)
-		} else {
-			for _, t := range writes {
-				if owner := c.tableOwners[t]; owner != "" && owner != module {
-					c.rulef("owner-write", "%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
+	iface, _ := asMap(doc["interface"])
+	for _, raw := range asList(iface["methods"]) {
+		m, _ := asMap(raw)
+		name, _ := m["name"].(string)
+		for _, rawQ := range asList(m["queries"]) {
+			qid, _ := rawQ.(string)
+			q := c.queries[qid]
+			if q == nil {
+				continue
+			}
+			if queryReturnsAffectedRows(q) && len(q.Writes) == 0 {
+				c.rulef("owner-write", "%s.%s: query %s returns affected_rows without a write table", rel, name, qid)
+			}
+			for _, target := range q.Writes {
+				c.declaredWrites[qid] = true
+				if owner := c.tableOwners[target]; owner != "" && owner != module {
+					c.rulef("method-used-by", "%s.%s: module %q cannot write %s via %s (owner_module %q); cross-module writes must be orchestrated by a flow", rel, name, module, target, qid, owner)
 				}
 			}
 		}
 	}
-	declared := map[string]bool{}
-	if qm, ok := asMap(p["queries"]); ok {
-		for _, raw := range qm {
-			if qid, ok := raw.(string); ok && qid != "" {
-				declared[qid] = true
-			}
-		}
-	}
-	rawWrites, ok := p["write_queries"]
-	if !ok {
+	p, _ := asMap(doc["persistence"])
+	if p == nil {
 		return
 	}
-	list, ok := rawWrites.([]any)
-	if !ok {
-		c.rulef("schema.type", "%s: persistence.write_queries must be a list", rel)
-		return
-	}
-	if module == "" {
-		c.rulef("owner-write", "%s: persistence.write_queries requires module to verify write ownership", rel)
-	}
-	for _, x := range list {
-		if qid, ok := x.(string); ok && qid != "" {
-			c.declaredWrites[qid] = true
+	for _, removed := range []string{"queries", "write_queries", "field_map", "read_only_tables"} {
+		if _, ok := p[removed]; ok {
+			c.rulef("schema.field", "%s: persistence.%s removed; use method.queries or entity.source.column", rel, removed)
 		}
 	}
-	c.checkWriteQueries(doc, list, declared, writes, "persistence.write_queries", "persistence.queries", rel)
-}
-
-// checkWriteQueries 校验 capability 声明的写查询：
-//   - 必须已在 declared 列表（persistence.queries / uses）中登记；
-//   - 必须存在且恰好写一张表；
-//   - 目标表必须在 persistence.table/tables 中，且 owner_module 与 capability 一致。
-func (c *Checker) checkWriteQueries(doc map[string]any, raw []any, declared map[string]bool, tables []string, field, declaredName, rel string) {
-	module, _ := doc["module"].(string)
-	for i, x := range raw {
-		qid, ok := x.(string)
-		if !ok || qid == "" {
-			c.rulef("owner-write", "%s: %s[%d] must be a query ID", rel, field, i)
-			continue
+	tables := tableRefs(p)
+	for _, t := range tables {
+		if c.isBaseTableRef(t) {
+			c.rulef("schema.ref", "%s: base contract is not a physical table", rel)
+		} else if _, ok := tableIDs[t]; !ok {
+			c.rulef("schema.ref", "%s: persistence references unknown table %s", rel, t)
 		}
-		if !declared[qid] {
-			c.rulef("owner-write", "%s: write query %s must be listed in %s", rel, qid, declaredName)
+		if owner := c.tableOwners[t]; owner != "" && owner != module {
+			c.rulef("owner-write", "%s: module %q cannot write %s (owner_module %q); cross-module writes must be orchestrated by a flow", rel, module, t, owner)
 		}
-		q := c.queries[qid]
-		if q == nil {
-			c.rulef("owner-write", "%s: unknown write query %s", rel, qid)
-			continue
-		}
-		if len(q.Writes) == 0 {
-			c.rulef("owner-write", "%s: write query %s must mark at least one table write:true", rel, qid)
-			continue
-		}
-		seen := map[string]bool{}
-		for _, target := range q.Writes {
-			if seen[target] {
-				continue
-			}
-			seen[target] = true
-			if len(tables) > 0 && !containsString(tables, target) {
-				c.rulef("owner-write", "%s: write query %s table %s outside persistence.table/tables", rel, qid, target)
-			}
-			if module != "" {
-				if owner := c.tableOwners[target]; owner != "" && owner != module {
-					c.rulef("owner-write", "%s: module %q cannot write %s via %s (owner_module %q)", rel, module, target, qid, owner)
+	}
+	if rawCE, ok := p["constraint_errors"]; ok {
+		ce, ok := asMap(rawCE)
+		if !ok {
+			c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
+		} else {
+			for name := range ce {
+				if name == "" {
+					c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
+					continue
+				}
+				if !c.tableObjectExists(tables, name) {
+					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
 				}
 			}
 		}
@@ -280,15 +183,13 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 					c.rulef("table-entities", "%s: table.entities mismatch: declared %v, actual %v", rel, sortedKeys(gotEntities), sortedKeys(tableEntities[id]))
 				}
 			}
-		}
-		ub, _ := asMap(doc["used_by"])
-		if ub == nil {
-			continue // 缺失由 schema.required 报出
-		}
-		if raw, ok := ub["queries"]; ok {
+			raw, ok := table["queries"]
+			if !ok {
+				continue // 缺失由 schema.required 报出
+			}
 			gotQueries := stringSet(asList(raw))
 			if !sameSet(gotQueries, tableQueries[id]) {
-				c.rulef("used-by-generated", "%s: used_by.queries mismatch: declared %v, actual %v", rel, sortedKeys(gotQueries), sortedKeys(tableQueries[id]))
+				c.rulef("table-queries-generated", "%s: table.queries mismatch: declared %v, actual %v", rel, sortedKeys(gotQueries), sortedKeys(tableQueries[id]))
 			}
 		}
 	}
