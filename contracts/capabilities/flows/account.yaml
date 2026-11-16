@@ -20,6 +20,7 @@ flows:
     transaction: read_only
     errors:
       - platform.errors.COMMON_FORBIDDEN
+      - platform.errors.COMMON_RATE_LIMITED
 
   - name: create
     summary: "创建账号"
@@ -35,6 +36,8 @@ flows:
       - platform.errors.ACCOUNT_NUMBER_TAKEN
       - platform.errors.ACCOUNT_OWN_INVALID
       - platform.errors.COMMON_FORBIDDEN
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
 
   - name: get
     summary: "获取账号"
@@ -58,6 +61,7 @@ flows:
     errors:
       - platform.errors.ACCOUNT_NOT_FOUND
       - platform.errors.COMMON_FORBIDDEN
+      - platform.errors.COMMON_AUDIT_FAILED
 
   - name: delete
     summary: "删除账号"
@@ -72,12 +76,16 @@ flows:
         use: cap.methods.account.get
       - id: revoke_auth
         use: cap.methods.auth.revoke_all_for_account
+        depends_on: [load]
       - id: soft_delete
         use: cap.methods.account.delete
+        depends_on: [revoke_auth]
     errors:
       - platform.errors.ACCOUNT_NOT_FOUND
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_INTERNAL
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
 
   - name: activate
     summary: "激活账号"
@@ -90,6 +98,8 @@ flows:
     errors:
       - platform.errors.ACCOUNT_NOT_FOUND
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+      - platform.errors.COMMON_FORBIDDEN
+      - platform.errors.COMMON_AUDIT_FAILED
 
   - name: suspend
     summary: "封禁账号"
@@ -102,3 +112,5 @@ flows:
     errors:
       - platform.errors.ACCOUNT_NOT_FOUND
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+      - platform.errors.COMMON_FORBIDDEN
+      - platform.errors.COMMON_AUDIT_FAILED

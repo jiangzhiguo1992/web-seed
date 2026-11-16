@@ -97,7 +97,11 @@ trigger:
 
 - `steps[].use` 只允许：`cap.methods.*`、`platform.security.permissions.*`；不写 `use` 表示 flow 内部逻辑。
 - flow 不得直接引用 `data.queries.*`；query 只能由 method 调用。
-- `steps[].on_error` 必须是 `use` 目标声明的 `errors` 子集。
+- `steps[].depends_on` 只引用前序步骤；`when` 是受限布尔表达式（`true/false`、`!`、`&&`、`||`、括号、`input.*` / `step.<id>.*` 与字面量比较），静态可判定为 false 的步骤不可达；`when` 引用的 step 必须是前序步骤，字段必须存在于方法 returns 或内部 `output`。
+- 内部步骤用 `output: [{name, type}]` 声明输出；方法步骤输出由 method returns 派生，禁止声明 `output`。列表输出用 `[index]` 取元素，例如 `step.list.items[0].field`；`err` 不作为 step 输出，错误用 `on_error`。
+- `when` 静态 false 或 `depends_on` 不可达只跳过该 step，继续后续 step；要终止 flow 用 `on_error.action=abort`。
+- `steps[].on_error` 是 `{error, action, target}` 列表：`action: abort | continue | goto`；abort 向上传播，continue 吞掉，goto 跳到 target；未列出的错误默认 abort。存在后向/自环 `goto` 时 `flow.max_iterations` 必填且 `>= 1`；它是 flow 级循环总预算，预算耗尽返回 `COMMON_LOOP_EXHAUSTED`。
+- `flow.errors` 必须包含所有可达步骤的未处理错误和 flow 级错误；permissions/rate_limit/audit/idempotency 分别必带 `COMMON_FORBIDDEN`/`COMMON_RATE_LIMITED`/`COMMON_AUDIT_FAILED`/`COMMON_IDEMPOTENCY_CONFLICT`；存在后向/自环 goto 时必带 `COMMON_LOOP_EXHAUSTED`。
 - `compensation` 必须结构化：`action: rollback | compensate | dead_letter`。
 - `postconditions` 必须结构化：`{ field, op, value }`，不要写散文。
 - 一个 flow 只有一步也可以；判断标准是“是否需要独立的触发入口、权限边界和事务边界”，不是步骤数。

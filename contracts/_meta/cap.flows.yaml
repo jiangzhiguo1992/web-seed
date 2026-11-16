@@ -83,6 +83,7 @@ fields:
         fields:
           - { name: key, type: string, required: true, description: "幂等键模板" }
           - { name: window, type: string, required: true, pattern: '^[0-9]+(s|m|h|d)$', description: "窗口，例如 24h" }
+      - { name: max_iterations, type: integer, required: false, min: 1, description: "flow 级循环预算；存在后向/自环 goto 时必填" }
       - name: retry
         type: object
         required: false
@@ -105,8 +106,24 @@ fields:
         item_fields:
           - { name: id, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID，flow 内唯一" }
           - { name: use, type: string, required: false, description: "cap.methods.* 或 platform.security.permissions.*" }
-          - { name: on_error, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "错误处理；必须是 use 目标 errors 的子集" }
-          - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "内部逻辑步骤可产生的错误；use 非空时禁止" }
+          - { name: depends_on, type: list<string>, required: false, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "依赖的前序步骤 ID；依赖不可达时本步骤不可达" }
+          - { name: when, type: string, required: false, description: "受限布尔表达式：true/false、!、&&、||、括号、input.<path> / step.<id>.<path> 与字面量比较；静态可判定为 false 时不可达；step 引用必须是前序步骤" }
+          - name: on_error
+            type: list<object>
+            required: false
+            description: "错误处理；未列出的错误默认 abort"
+            item_fields:
+              - { name: error, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "错误码" }
+              - { name: action, type: string, required: true, enum: [ abort, continue, goto ], description: "abort=向上传播；continue=吞掉继续；goto=吞掉并跳转" }
+              - { name: target, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "action=goto 时的目标 step ID" }
+          - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误；方法步骤必须是 use 目标 errors 的子集，缺省取目标全部 errors；内部/权限步骤缺省为空" }
+          - name: output
+            type: list<object>
+            required: false
+            description: "内部步骤的输出 schema；方法步骤由 method returns 派生，禁止声明"
+            item_fields:
+              - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
+              - { name: type, type: string, required: true, description: "输出类型" }
       - name: compensation
         type: object
         required: false
@@ -121,8 +138,11 @@ fields:
           - { name: field, type: string, required: true, description: "字段名" }
           - { name: op, type: string, required: true, enum: [ eq, ne, gt, ge, lt, le, in, not_in ], description: "比较操作" }
           - { name: value, type: any, required: true, description: "期望值" }
-      - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "flow 对外错误集；direct flow 必须是 method errors 的子集，flow implementation 由 steps[].on_error 约束" }
+      - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "flow 对外错误集；direct flow 必须是 method errors 与 flow 级错误的并集子集；flow implementation 必须包含可达步骤的未处理错误与 flow 级错误；permissions/rate_limit/audit/idempotency 分别必带 COMMON_FORBIDDEN/COMMON_RATE_LIMITED/COMMON_AUDIT_FAILED/COMMON_IDEMPOTENCY_CONFLICT；存在后向/自环 goto 时必带 COMMON_LOOP_EXHAUSTED" }
 
 rules:
-  - { id: flow-structure, text: "flow item 的 implementation 只能是 direct/flow；direct 必须有 method 且无 steps；flow 必须有 steps 且无 method；同步 flow 必须有 transaction/permissions 且不得有 retry/concurrency；异步 flow 必须有 input/output/idempotency/retry/concurrency 且不得有 transaction；trigger.type=cron 必须有 schedule，type=event 必须有 event；direct flow 的 errors 必须是 method errors 的子集；flow implementation 的 errors 必须是 steps 产出的错误子集，step.errors 只允许内部步骤", implemented_by: [ flow-structure ] }
+  - { id: flow-structure, text: "flow item 的 implementation 只能是 direct/flow；direct 必须有 method 且无 steps；flow 必须有 steps 且无 method；同步 flow 必须有 transaction/permissions 且不得有 retry/concurrency；异步 flow 必须有 input/output/idempotency/retry/concurrency 且不得有 transaction；trigger.type=cron 必须有 schedule，type=event 必须有 event；step.id 在 flow 内唯一；depends_on 必须引用前序步骤；内部步骤 output.name 唯一，方法/权限步骤禁止 output", implemented_by: [ flow-structure ] }
+  - { id: flow-when, text: "when 是受限布尔表达式（true/false、!、&&、||、括号、input.* / step.<id>.* 与字面量比较）；静态 false 的步骤不可达；引用的 step 必须是前序步骤，字段必须存在于 method returns（err 除外）或内部 step.output", implemented_by: [ flow-when ] }
+  - { id: flow-control, text: "on_error 按 error 唯一，action 只能是 abort/continue/goto，target 仅 goto 可用且必须存在；存在后向/自环 goto 时 flow.max_iterations 必填且 >= 1，预算是 flow 级总预算，耗尽返回 COMMON_LOOP_EXHAUSTED", implemented_by: [ flow-control ] }
+  - { id: flow-errors, text: "方法步骤的 errors 必须是目标 method errors 的子集，缺省取全部；direct flow 的 errors 必须是 method errors 与 flow 级错误的并集子集，并包含必带 flow 级错误；flow implementation 的 errors 必须包含可达步骤的未处理错误与 flow 级错误；permissions/rate_limit/audit/idempotency 分别必带 COMMON_FORBIDDEN/COMMON_RATE_LIMITED/COMMON_AUDIT_FAILED/COMMON_IDEMPOTENCY_CONFLICT；存在后向/自环 goto 时必带 COMMON_LOOP_EXHAUSTED", implemented_by: [ flow-errors ] }
   - { id: flow-no-query, text: "flow 不得直接引用 data.queries.*；写操作必须经由 cap.methods，内部逻辑步骤不写 use", implemented_by: [ flow-no-query ] }

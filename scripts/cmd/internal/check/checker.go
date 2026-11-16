@@ -73,6 +73,8 @@ type Checker struct {
 	enumIDs           map[string]bool
 	errCodeSet        map[string]bool
 	permissionSet     map[string]bool
+	methodReturns     map[string]map[string]string
+	methodTypeDefs    map[string]map[string]any
 }
 
 // Run 执行全部契约校验并返回错误列表。

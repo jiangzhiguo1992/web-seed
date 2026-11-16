@@ -42,6 +42,8 @@ func (c *Checker) checkCapabilities() {
 	httpContractIDs := map[string]bool{}
 
 	typeNames := map[string]bool{}
+	c.methodReturns = map[string]map[string]string{}
+	c.methodTypeDefs = map[string]map[string]any{}
 	for _, file := range glob(c.root, filepath.Join(methodSchema.Targets.Dir, methodSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -49,8 +51,11 @@ func (c *Checker) checkCapabilities() {
 		}
 		types, _ := asMap(doc["types"])
 		id, _ := doc["id"].(string)
-		for name := range types {
+		for name, raw := range types {
 			typeNames[name] = true
+			if def, ok := asMap(raw); ok {
+				c.methodTypeDefs[name] = def
+			}
 			if id != "" {
 				methodTypeIDs[id+".types."+name] = true
 			}
@@ -102,7 +107,7 @@ func (c *Checker) checkCapabilities() {
 			if item["trigger"] != nil {
 				flowAsync[id] = true
 			}
-			c.checkFlowItem(item, rel+":"+id, id, module, methodIDs, methodErrors)
+			c.checkFlowItem(item, rel+":"+id, id, module, methodIDs, methodErrors, typeNames)
 		}
 	}
 
@@ -264,10 +269,17 @@ func (c *Checker) checkMethodDoc(doc map[string]any, rel, fileID string, methodI
 			pm, _ := asMap(rawParam)
 			c.checkTypeName(pm["type"], typeNames, rel+":"+mname)
 		}
+		returns := map[string]string{}
 		for _, rawReturn := range asList(m["returns"]) {
 			rm, _ := asMap(rawReturn)
+			name, _ := rm["name"].(string)
+			typ, _ := rm["type"].(string)
 			c.checkTypeName(rm["type"], typeNames, rel+":"+mname)
+			if name != "" && typ != "" && name != "err" {
+				returns[name] = typ
+			}
 		}
+		c.methodReturns[methodID] = returns
 		for _, rawErr := range asList(m["errors"]) {
 			code, _ := rawErr.(string)
 			if !strings.HasPrefix(code, "platform.errors.") {
@@ -293,7 +305,7 @@ func (c *Checker) checkMethodDoc(doc map[string]any, rel, fileID string, methodI
 	}
 }
 
-func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, methodIDs map[string]bool, methodErrors map[string]map[string]bool) {
+func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, methodIDs map[string]bool, methodErrors map[string]map[string]bool, typeNames map[string]bool) {
 	if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 	}
@@ -313,10 +325,25 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 			c.rulef("cap-ref", "%s: unknown method %s", rel, methodRef)
 		}
 		if methodRef != "" && methodIDs[methodRef] {
+			allowedErrors := map[string]bool{}
+			for code := range methodErrors[methodRef] {
+				allowedErrors[code] = true
+			}
+			req := flowLevelErrors(doc, false)
+			for code := range req {
+				allowedErrors[code] = true
+			}
+			flowErrors := map[string]bool{}
 			for _, raw := range asList(doc["errors"]) {
 				code, _ := raw.(string)
-				if !methodErrors[methodRef][code] {
-					c.rulef("flow-structure", "%s: error %s is not declared by %s", rel, code, methodRef)
+				flowErrors[code] = true
+				if !allowedErrors[code] {
+					c.rulef("flow-errors", "%s: error %s is not declared by %s or a flow-level feature", rel, code, methodRef)
+				}
+			}
+			for code := range req {
+				if !flowErrors[code] {
+					c.rulef("flow-errors", "%s: missing flow-level error %s", rel, code)
 				}
 			}
 		}
@@ -327,15 +354,29 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 		if len(steps) == 0 {
 			c.rulef("flow-structure", "%s: flow implementation requires steps", rel)
 		}
-		seenStep := map[string]bool{}
-		allowedErrors := map[string]bool{}
-		for _, raw := range steps {
+		stepOutputs := make([]map[string]string, len(steps))
+		allStepIndex := map[string]int{}
+		for i, raw := range steps {
+			step, _ := asMap(raw)
+			id, _ := step["id"].(string)
+			if id != "" {
+				if _, exists := allStepIndex[id]; !exists {
+					allStepIndex[id] = i
+				}
+			}
+		}
+		stepIndex := map[string]int{}
+		reachableByIdx := map[int]bool{}
+		requiredErrors := map[string]bool{}
+		hasBackwardGoto := false
+		for i, raw := range steps {
 			step, _ := asMap(raw)
 			stepID, _ := step["id"].(string)
-			if seenStep[stepID] {
+			if _, exists := stepIndex[stepID]; exists {
 				c.rulef("flow-structure", "%s: duplicate step id %s", rel, stepID)
+			} else {
+				stepIndex[stepID] = i
 			}
-			seenStep[stepID] = true
 			use, _ := step["use"].(string)
 			if !c.validFlowUse(use, methodIDs) {
 				if strings.HasPrefix(use, "data.queries.") {
@@ -344,33 +385,174 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 					c.rulef("cap-ref", "%s: step use %q is not a method or permission; data.queries is forbidden", rel, use)
 				}
 			}
-			if use != "" && methodErrors[use] != nil {
-				for code := range methodErrors[use] {
-					allowedErrors[code] = true
-				}
-				for _, rawErr := range asList(step["on_error"]) {
-					code, _ := rawErr.(string)
-					if !methodErrors[use][code] {
-						c.rulef("flow-structure", "%s: step %s on_error %s is not declared by %s", rel, stepID, code, use)
+			stepOutput := map[string]string{}
+			if step["output"] != nil {
+				if use != "" {
+					c.rulef("flow-structure", "%s: step %s output is only allowed for internal steps", rel, stepID)
+				} else {
+					seenOut := map[string]bool{}
+					for _, rawOut := range asList(step["output"]) {
+						om, _ := asMap(rawOut)
+						name, _ := om["name"].(string)
+						typ, _ := om["type"].(string)
+						if seenOut[name] {
+							c.rulef("flow-structure", "%s: step %s duplicate output %s", rel, stepID, name)
+						}
+						seenOut[name] = true
+						c.checkTypeName(om["type"], typeNames, rel+":"+stepID)
+						if name != "" && typ != "" {
+							stepOutput[name] = typ
+						}
 					}
 				}
 			}
-			if use == "" {
+			stepOutputs[i] = stepOutput
+			reachable := true
+			for _, rawDep := range asList(step["depends_on"]) {
+				depID, _ := rawDep.(string)
+				idx, ok := stepIndex[depID]
+				if !ok {
+					c.rulef("flow-structure", "%s: step %s depends_on %s must reference an earlier step", rel, stepID, depID)
+					reachable = false
+					continue
+				}
+				if !reachableByIdx[idx] {
+					reachable = false
+				}
+			}
+			if when, ok := step["when"]; ok {
+				s, _ := when.(string)
+				if strings.TrimSpace(s) == "" {
+					c.rulef("flow-when", "%s: step %s when must not be empty", rel, stepID)
+				} else if node, err := parseWhen(s); err != nil {
+					c.rulef("flow-when", "%s: step %s when %q: %v", rel, stepID, s, err)
+				} else {
+					if evalWhenNode(node) == whenFalse {
+						reachable = false
+					}
+					for _, ref := range whenStepRefs(node) {
+						if _, ok := stepIndex[ref]; !ok {
+							c.rulef("flow-when", "%s: step %s when references step %s that is not an earlier step", rel, stepID, ref)
+						}
+					}
+					for _, field := range whenStepFields(node) {
+						ref, path, ok := splitStepField(field)
+						if !ok {
+							continue
+						}
+						idx, ok := stepIndex[ref]
+						if !ok {
+							continue
+						}
+						target, _ := asMap(steps[idx])
+						if err := c.checkStepOutputPath(target, stepOutputs[idx], path); err != nil {
+							c.rulef("flow-when", "%s: step %s when references %s: %v", rel, stepID, field, err)
+						}
+					}
+				}
+			}
+			stepErrors := map[string]bool{}
+			if strings.HasPrefix(use, "cap.methods.") && methodErrors[use] != nil {
+				if step["errors"] != nil {
+					for _, rawErr := range asList(step["errors"]) {
+						code, _ := rawErr.(string)
+						if !methodErrors[use][code] {
+							c.rulef("flow-errors", "%s: step %s error %s is not declared by %s", rel, stepID, code, use)
+						}
+						stepErrors[code] = true
+					}
+				} else {
+					for code := range methodErrors[use] {
+						stepErrors[code] = true
+					}
+				}
+			} else {
 				for _, rawErr := range asList(step["errors"]) {
 					code, _ := rawErr.(string)
 					if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
 						c.rulef("cap-ref", "%s: step %s unknown error %s", rel, stepID, code)
 					}
-					allowedErrors[code] = true
+					stepErrors[code] = true
 				}
-			} else if step["errors"] != nil {
-				c.rulef("flow-structure", "%s: step %s errors is only allowed for internal steps", rel, stepID)
+			}
+			handled := map[string]bool{}
+			seenOnError := map[string]bool{}
+			for _, rawErr := range asList(step["on_error"]) {
+				entry, _ := asMap(rawErr)
+				code, _ := entry["error"].(string)
+				action, _ := entry["action"].(string)
+				target, _ := entry["target"].(string)
+				if !stepErrors[code] {
+					c.rulef("flow-control", "%s: step %s on_error %s is not declared by the step error set", rel, stepID, code)
+				}
+				if seenOnError[code] {
+					c.rulef("flow-control", "%s: step %s duplicate on_error for %s", rel, stepID, code)
+				}
+				seenOnError[code] = true
+				switch action {
+				case "abort":
+					if target != "" {
+						c.rulef("flow-control", "%s: step %s on_error %s target is only allowed for goto", rel, stepID, code)
+					}
+				case "continue":
+					if target != "" {
+						c.rulef("flow-control", "%s: step %s on_error %s target is only allowed for goto", rel, stepID, code)
+					}
+					handled[code] = true
+				case "goto":
+					if target == "" {
+						c.rulef("flow-control", "%s: step %s on_error %s goto requires target", rel, stepID, code)
+					} else if targetIdx, ok := allStepIndex[target]; !ok {
+						c.rulef("flow-control", "%s: step %s on_error %s goto target %s not found", rel, stepID, code, target)
+					} else if targetIdx <= i {
+						hasBackwardGoto = true
+					}
+					handled[code] = true
+				default:
+					c.rulef("flow-control", "%s: step %s on_error %s action must be abort, continue or goto", rel, stepID, code)
+				}
+			}
+			if reachable {
+				for code := range stepErrors {
+					if !handled[code] {
+						requiredErrors[code] = true
+					}
+				}
+			}
+			reachableByIdx[i] = reachable
+		}
+		if rawMax, ok := doc["max_iterations"]; ok {
+			budget, ok := toInt(rawMax)
+			if !ok || budget < 1 {
+				c.rulef("flow-control", "%s: max_iterations must be >= 1", rel)
 			}
 		}
+		if hasBackwardGoto && doc["max_iterations"] == nil {
+			c.rulef("flow-control", "%s: backward/self goto requires flow.max_iterations", rel)
+		}
+		req := flowLevelErrors(doc, hasBackwardGoto)
+		for code := range req {
+			requiredErrors[code] = true
+		}
+		allowedErrors := map[string]bool{}
+		for code := range requiredErrors {
+			allowedErrors[code] = true
+		}
+		flowErrors := map[string]bool{}
 		for _, raw := range asList(doc["errors"]) {
 			code, _ := raw.(string)
+			flowErrors[code] = true
 			if !allowedErrors[code] {
-				c.rulef("flow-structure", "%s: error %s is not produced by any step", rel, code)
+				c.rulef("flow-errors", "%s: error %s is not produced by a reachable, unhandled step", rel, code)
+			}
+		}
+		for code := range requiredErrors {
+			if !flowErrors[code] {
+				if req[code] {
+					c.rulef("flow-errors", "%s: missing flow-level error %s", rel, code)
+				} else {
+					c.rulef("flow-errors", "%s: missing error %s produced by a reachable, unhandled step", rel, code)
+				}
 			}
 		}
 	default:
@@ -421,6 +603,228 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 			c.rulef("cap-ref", "%s: unknown permission %s", rel, pid)
 		}
 	}
+}
+
+// checkStepOutputPath 校验 step.<id>.<path> 的字段链路：
+// 方法步骤从 method returns 取根字段；内部步骤从 step.output 取根字段。
+func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]string, path string) error {
+	segs, err := parseWhenPath(path)
+	if err != nil {
+		return err
+	}
+	root := segs[0]
+	use, _ := step["use"].(string)
+	var typ string
+	switch {
+	case strings.HasPrefix(use, "cap.methods."):
+		typ = c.methodReturns[use][root.name]
+		if typ == "" {
+			return fmt.Errorf("unknown output %s", root.name)
+		}
+	case use == "":
+		typ = output[root.name]
+		if typ == "" {
+			return fmt.Errorf("unknown output %s", root.name)
+		}
+	default:
+		return fmt.Errorf("permission step has no output")
+	}
+	if root.hasIndex {
+		typ, err = indexWhenType(typ)
+		if err != nil {
+			return fmt.Errorf("output %s: %v", root.name, err)
+		}
+	}
+	for _, seg := range segs[1:] {
+		typ = strings.TrimPrefix(typ, "*")
+		if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
+			return fmt.Errorf("list output requires index before %s", seg.name)
+		}
+		next, ok := c.resolveTypeField(typ, seg.name)
+		if !ok {
+			return fmt.Errorf("unknown field %s of %s", seg.name, typ)
+		}
+		typ = next
+		if seg.hasIndex {
+			typ, err = indexWhenType(typ)
+			if err != nil {
+				return fmt.Errorf("field %s: %v", seg.name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func indexWhenType(typ string) (string, error) {
+	typ = strings.TrimPrefix(typ, "*")
+	if !strings.HasPrefix(typ, "List<") || !strings.HasSuffix(typ, ">") {
+		return "", fmt.Errorf("%s is not a list", typ)
+	}
+	inner := strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">")
+	return strings.TrimPrefix(inner, "*"), nil
+}
+
+func (c *Checker) resolveTypeField(typ, name string) (string, bool) {
+	return c.resolveTypeFieldDepth(typ, name, map[string]bool{})
+}
+
+func (c *Checker) resolveTypeFieldDepth(typ, name string, seen map[string]bool) (string, bool) {
+	if resolved, ok := resolveTypeRef(typ); ok {
+		typ = resolved
+	}
+	if strings.HasPrefix(typ, "data.entities.") {
+		return c.entityFieldType(typ, name)
+	}
+	if seen[typ] {
+		return "", false
+	}
+	seen[typ] = true
+	defer delete(seen, typ)
+	def := c.methodTypeDefs[typ]
+	if def == nil {
+		return "", false
+	}
+	return c.resolveSchemaField(def, name, seen)
+}
+
+func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen map[string]bool) (string, bool) {
+	if props, ok := asMap(schema["properties"]); ok {
+		if prop, ok := asMap(props[name]); ok {
+			return schemaTypeName(prop)
+		}
+	}
+	if branches, ok := asList2(schema["allOf"]); ok {
+		var got string
+		for _, raw := range branches {
+			branch, _ := asMap(raw)
+			typ, ok := c.resolveSchemaField(branch, name, seen)
+			if !ok {
+				continue
+			}
+			if got == "" {
+				got = typ
+			} else if got != typ {
+				return "", false
+			}
+		}
+		if got != "" {
+			return got, true
+		}
+	}
+	for _, key := range []string{"oneOf", "anyOf"} {
+		if branches, ok := asList2(schema[key]); ok {
+			var got string
+			for _, raw := range branches {
+				branch, _ := asMap(raw)
+				typ, ok := c.resolveSchemaField(branch, name, seen)
+				if !ok {
+					return "", false
+				}
+				if got == "" {
+					got = typ
+				} else if got != typ {
+					return "", false
+				}
+			}
+			if got != "" {
+				return got, true
+			}
+		}
+	}
+	if ref, _ := schema["$ref"].(string); ref != "" {
+		if typ, ok := resolveTypeRef(ref); ok {
+			return c.resolveTypeFieldDepth(typ, name, seen)
+		}
+	}
+	return "", false
+}
+
+func schemaTypeName(schema map[string]any) (string, bool) {
+	if typ, _ := schema["type"].(string); typ != "" {
+		return typ, true
+	}
+	if ref, _ := schema["$ref"].(string); ref != "" {
+		return resolveTypeRef(ref)
+	}
+	for _, key := range []string{"oneOf", "anyOf", "allOf"} {
+		branches, ok := asList2(schema[key])
+		if !ok {
+			continue
+		}
+		var got string
+		for _, raw := range branches {
+			branch, _ := asMap(raw)
+			typ, ok := schemaTypeName(branch)
+			if !ok {
+				return "", false
+			}
+			if got == "" {
+				got = typ
+			} else if got != typ {
+				return "", false
+			}
+		}
+		if got != "" {
+			return got, true
+		}
+	}
+	return "", false
+}
+
+func resolveTypeRef(ref string) (string, bool) {
+	for _, prefix := range []string{"#/types/", "#/components/schemas/"} {
+		if strings.HasPrefix(ref, prefix) {
+			name := strings.TrimPrefix(ref, prefix)
+			if name != "" && !strings.ContainsAny(name, "/#") {
+				return name, true
+			}
+		}
+	}
+	if strings.HasPrefix(ref, "data.") {
+		return ref, true
+	}
+	if ref != "" && !strings.ContainsAny(ref, "/#") {
+		return ref, true
+	}
+	return "", false
+}
+
+func (c *Checker) entityFieldType(entityID, name string) (string, bool) {
+	e := c.entities[entityID]
+	if e == nil {
+		return "", false
+	}
+	for _, f := range e.Fields {
+		if f.JSONName == name || f.Name == name {
+			return f.Type, true
+		}
+	}
+	return "", false
+}
+
+// gotoCycle 在顺序边 i→i+1 与 goto 边上做 DFS，返回一个环（节点索引）或 nil。
+// flowLevelErrors 返回 flow 自身必须暴露的错误：
+// permissions 拒绝→COMMON_FORBIDDEN；rate_limit→COMMON_RATE_LIMITED；
+// audit 失败→COMMON_AUDIT_FAILED；idempotency 冲突→COMMON_IDEMPOTENCY_CONFLICT；
+// 存在后向/自环 goto→COMMON_LOOP_EXHAUSTED。
+func flowLevelErrors(doc map[string]any, hasBackwardGoto bool) map[string]bool {
+	required := map[string]bool{}
+	if len(asList(doc["permissions"])) > 0 {
+		required["platform.errors.COMMON_FORBIDDEN"] = true
+	}
+	if doc["rate_limit"] != nil {
+		required["platform.errors.COMMON_RATE_LIMITED"] = true
+	}
+	if audit, _ := doc["audit"].(bool); audit {
+		required["platform.errors.COMMON_AUDIT_FAILED"] = true
+	}
+	if doc["idempotency"] != nil {
+		required["platform.errors.COMMON_IDEMPOTENCY_CONFLICT"] = true
+	}
+	if hasBackwardGoto {
+		required["platform.errors.COMMON_LOOP_EXHAUSTED"] = true
+	}
+	return required
 }
 
 func (c *Checker) validFlowUse(use string, methodIDs map[string]bool) bool {

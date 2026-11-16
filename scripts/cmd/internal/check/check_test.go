@@ -2941,41 +2941,604 @@ persistence:
 
 func TestFlowImplementationErrors(t *testing.T) {
 	methodErrors := map[string]map[string]bool{
-		"cap.methods.x.get": {"platform.errors.A": true},
+		"cap.methods.x.get": {"platform.errors.A": true, "platform.errors.B": true},
 	}
-	c := &Checker{errCodeSet: map[string]bool{"A": true, "B": true, "C": true}}
+	methodIDs := map[string]bool{"cap.methods.x.get": true}
+	c := &Checker{
+		errCodeSet: map[string]bool{
+			"A": true, "B": true, "C": true,
+			"COMMON_FORBIDDEN": true, "COMMON_RATE_LIMITED": true,
+			"COMMON_AUDIT_FAILED": true, "COMMON_IDEMPOTENCY_CONFLICT": true,
+			"COMMON_LOOP_EXHAUSTED": true,
+		},
+		permissionSet: map[string]bool{"platform.security.permissions.x": true},
+		methodReturns: map[string]map[string]string{
+			"cap.methods.x.get": {
+				"account":  "data.entities.account",
+				"accounts": "List<data.entities.account>",
+			},
+		},
+		methodTypeDefs: map[string]map[string]any{
+			"Wrapper": {
+				"type": "object",
+				"properties": map[string]any{
+					"account": map[string]any{"$ref": "#/types/AccountRef"},
+				},
+			},
+			"AccountRef": {
+				"type": "object",
+				"properties": map[string]any{
+					"status": map[string]any{"type": "data.enums.account_status"},
+				},
+			},
+			"OneOfValue": {
+				"oneOf": []any{
+					map[string]any{"type": "object", "properties": map[string]any{"value": map[string]any{"type": "string"}}},
+					map[string]any{"type": "object", "properties": map[string]any{"value": map[string]any{"type": "string"}}},
+				},
+			},
+			"OneOfMixed": {
+				"oneOf": []any{
+					map[string]any{"type": "object", "properties": map[string]any{"value": map[string]any{"type": "string"}}},
+					map[string]any{"type": "object", "properties": map[string]any{"other": map[string]any{"type": "string"}}},
+				},
+			},
+			"AllOfValue": {
+				"allOf": []any{
+					map[string]any{"type": "object", "properties": map[string]any{"left": map[string]any{"type": "string"}}},
+					map[string]any{"type": "object", "properties": map[string]any{"right": map[string]any{"type": "integer"}}},
+				},
+			},
+		},
+		entities: map[string]*entityInfo{
+			"data.entities.account": {Fields: []entityFieldInfo{
+				{Name: "Status", JSONName: "status", Type: "data.enums.account_status"},
+			}},
+		},
+	}
+	check := func(t *testing.T, doc map[string]any) []string {
+		t.Helper()
+		c.errs = nil
+		c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{
+			"Wrapper": true, "AccountRef": true, "OneOfValue": true, "OneOfMixed": true, "AllOfValue": true,
+		})
+		return c.errs
+	}
+	step := func(id, use string, fields map[string]any) map[string]any {
+		m := map[string]any{"id": id}
+		if use != "" {
+			m["use"] = use
+		}
+		for k, v := range fields {
+			m[k] = v
+		}
+		return m
+	}
+	base := func(steps []any, errors []any) map[string]any {
+		return map[string]any{
+			"summary": "x", "implementation": "flow",
+			"transaction": "required", "permissions": []any{},
+			"steps": steps, "errors": errors,
+		}
+	}
+	want := func(t *testing.T, errs []string, text string) {
+		t.Helper()
+		if !strings.Contains(strings.Join(errs, "\n"), text) {
+			t.Fatalf("want %q, got %v", text, errs)
+		}
+	}
+	onError := func(code, action, target string) map[string]any {
+		m := map[string]any{"error": code, "action": action}
+		if target != "" {
+			m["target"] = target
+		}
+		return m
+	}
+
+	t.Run("unhandled errors must all be exposed", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", nil)}, []any{"platform.errors.A", "platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("valid flow errors reported: %v", errs)
+		}
+	})
+
+	t.Run("missing unhandled error", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", nil)}, []any{"platform.errors.A"})
+		want(t, check(t, doc), "missing error platform.errors.B")
+	})
+
+	t.Run("extra error", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", nil)}, []any{"platform.errors.A", "platform.errors.B", "platform.errors.C"})
+		want(t, check(t, doc), "not produced by a reachable, unhandled step")
+	})
+
+	t.Run("handled error is excluded", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"on_error": []any{onError("platform.errors.B", "continue", "")},
+		})}, []any{"platform.errors.A"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("handled error reported: %v", errs)
+		}
+	})
+
+	t.Run("handled error must not be exposed", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"on_error": []any{onError("platform.errors.B", "continue", "")},
+		})}, []any{"platform.errors.A", "platform.errors.B"})
+		want(t, check(t, doc), "not produced by a reachable, unhandled step")
+	})
+
+	t.Run("when false is unreachable", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"when": "false", "errors": []any{"platform.errors.A"},
+		})}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("unreachable step reported: %v", errs)
+		}
+	})
+
+	t.Run("unreachable step error must not be exposed", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"when": "false", "errors": []any{"platform.errors.A"},
+		})}, []any{"platform.errors.A"})
+		want(t, check(t, doc), "not produced by a reachable, unhandled step")
+	})
+
+	t.Run("dependency on unreachable step", func(t *testing.T) {
+		doc := base([]any{
+			step("off", "cap.methods.x.get", map[string]any{"when": "false", "errors": []any{"platform.errors.A"}}),
+			step("after", "cap.methods.x.get", map[string]any{"depends_on": []any{"off"}, "errors": []any{"platform.errors.B"}}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("dependency chain reported: %v", errs)
+		}
+	})
+
+	t.Run("dependency error must not be exposed", func(t *testing.T) {
+		doc := base([]any{
+			step("off", "cap.methods.x.get", map[string]any{"when": "false", "errors": []any{"platform.errors.A"}}),
+			step("after", "cap.methods.x.get", map[string]any{"depends_on": []any{"off"}, "errors": []any{"platform.errors.B"}}),
+		}, []any{"platform.errors.B"})
+		want(t, check(t, doc), "not produced by a reachable, unhandled step")
+	})
+
+	t.Run("depends_on must reference earlier step", func(t *testing.T) {
+		doc := base([]any{step("after", "cap.methods.x.get", map[string]any{"depends_on": []any{"missing"}})}, []any{})
+		want(t, check(t, doc), "must reference an earlier step")
+	})
+
+	t.Run("permissions expose forbidden", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{"platform.errors.COMMON_FORBIDDEN"})
+		doc["permissions"] = []any{"platform.security.permissions.x"}
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("permission forbidden reported: %v", errs)
+		}
+	})
+
+	t.Run("internal step errors", func(t *testing.T) {
+		doc := base([]any{step("internal", "", map[string]any{"errors": []any{"platform.errors.C"}})}, []any{"platform.errors.C"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("internal step errors reported: %v", errs)
+		}
+	})
+
+	t.Run("step errors must be declared by method", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{"platform.errors.C"}})}, []any{"platform.errors.A"})
+		want(t, check(t, doc), "not declared by cap.methods.x.get")
+	})
+
+	t.Run("on_error abort rethrows", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"on_error": []any{onError("platform.errors.B", "abort", "")},
+		})}, []any{"platform.errors.A", "platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("abort error reported: %v", errs)
+		}
+	})
+
+	t.Run("on_error goto branches", func(t *testing.T) {
+		doc := base([]any{
+			step("call", "cap.methods.x.get", map[string]any{
+				"errors":   []any{"platform.errors.A"},
+				"on_error": []any{onError("platform.errors.A", "goto", "fallback")},
+			}),
+			step("fallback", "cap.methods.x.get", map[string]any{"errors": []any{"platform.errors.B"}}),
+		}, []any{"platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("goto flow reported: %v", errs)
+		}
+	})
+
+	t.Run("goto target must exist", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"errors":   []any{"platform.errors.A"},
+			"on_error": []any{onError("platform.errors.A", "goto", "missing")},
+		})}, []any{})
+		want(t, check(t, doc), "goto target missing not found")
+	})
+
+	t.Run("self goto requires max_iterations", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"errors":   []any{"platform.errors.A"},
+			"on_error": []any{onError("platform.errors.A", "goto", "call")},
+		})}, []any{})
+		want(t, check(t, doc), "backward/self goto requires flow.max_iterations")
+	})
+
+	t.Run("bounded self goto", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"errors":   []any{"platform.errors.A"},
+			"on_error": []any{onError("platform.errors.A", "goto", "call")},
+		})}, []any{"platform.errors.COMMON_LOOP_EXHAUSTED"})
+		doc["max_iterations"] = 3
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("bounded self goto reported: %v", errs)
+		}
+	})
+
+	t.Run("bounded self goto requires loop exhausted", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"errors":   []any{"platform.errors.A"},
+			"on_error": []any{onError("platform.errors.A", "goto", "call")},
+		})}, []any{})
+		doc["max_iterations"] = 3
+		want(t, check(t, doc), "missing flow-level error platform.errors.COMMON_LOOP_EXHAUSTED")
+	})
+
+	t.Run("continue target is forbidden", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"errors":   []any{"platform.errors.A"},
+			"on_error": []any{onError("platform.errors.A", "continue", "fallback")},
+		})}, []any{})
+		want(t, check(t, doc), "target is only allowed for goto")
+	})
+
+	t.Run("when static false", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"when": "false && input.x == 1", "errors": []any{"platform.errors.A"},
+		})}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("static false reported: %v", errs)
+		}
+	})
+
+	t.Run("when unknown is reachable", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"when": "input.x == 1", "errors": []any{"platform.errors.A"},
+		})}, []any{"platform.errors.A"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("unknown when reported: %v", errs)
+		}
+	})
+
+	t.Run("when syntax error", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"when": "input.x", "errors": []any{"platform.errors.A"},
+		})}, []any{})
+		want(t, check(t, doc), "operand must be compared")
+	})
+
+	t.Run("rate_limit allows rate limited", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{"platform.errors.COMMON_RATE_LIMITED"})
+		doc["rate_limit"] = map[string]any{"requests": 1, "window_seconds": 1}
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("rate limited reported: %v", errs)
+		}
+	})
+
+	t.Run("audit allows audit failed", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{"platform.errors.COMMON_AUDIT_FAILED"})
+		doc["audit"] = true
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("audit failed reported: %v", errs)
+		}
+	})
+
+	t.Run("idempotency allows idempotency conflict", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{"platform.errors.COMMON_IDEMPOTENCY_CONFLICT"})
+		doc["idempotency"] = map[string]any{"key": "x", "window": "1h"}
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("idempotency conflict reported: %v", errs)
+		}
+	})
+
+	t.Run("flow level error without feature", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{"platform.errors.COMMON_RATE_LIMITED"})
+		want(t, check(t, doc), "not produced by a reachable, unhandled step")
+	})
+
+	t.Run("rate_limit requires rate limited", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
+		doc["rate_limit"] = map[string]any{"requests": 1, "window_seconds": 1}
+		want(t, check(t, doc), "missing flow-level error platform.errors.COMMON_RATE_LIMITED")
+	})
+
+	t.Run("audit requires audit failed", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
+		doc["audit"] = true
+		want(t, check(t, doc), "missing flow-level error platform.errors.COMMON_AUDIT_FAILED")
+	})
+
+	t.Run("idempotency requires idempotency conflict", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
+		doc["idempotency"] = map[string]any{"key": "x", "window": "1h"}
+		want(t, check(t, doc), "missing flow-level error platform.errors.COMMON_IDEMPOTENCY_CONFLICT")
+	})
+
+	t.Run("when references earlier step", func(t *testing.T) {
+		doc := base([]any{
+			step("load", "cap.methods.x.get", map[string]any{"errors": []any{"platform.errors.A"}}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{"platform.errors.B"},
+				"when":   `step.load.account.status == "ok"`,
+			}),
+		}, []any{"platform.errors.A", "platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("step reference reported: %v", errs)
+		}
+	})
+
+	t.Run("step output unknown field", func(t *testing.T) {
+		doc := base([]any{
+			step("load", "cap.methods.x.get", map[string]any{"errors": []any{}}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.load.account.missing == 1`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field missing")
+	})
+
+	t.Run("step output unknown root", func(t *testing.T) {
+		doc := base([]any{
+			step("load", "cap.methods.x.get", map[string]any{"errors": []any{}}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.load.missing == 1`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown output missing")
+	})
+
+	t.Run("list output index", func(t *testing.T) {
+		doc := base([]any{
+			step("load", "cap.methods.x.get", map[string]any{"errors": []any{}}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{"platform.errors.B"},
+				"when":   `step.load.accounts[0].status == "ok"`,
+			}),
+		}, []any{"platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("list output reported: %v", errs)
+		}
+	})
+
+	t.Run("list output requires index", func(t *testing.T) {
+		doc := base([]any{
+			step("load", "cap.methods.x.get", map[string]any{"errors": []any{}}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.load.accounts.status == "ok"`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "list output requires index")
+	})
+
+	t.Run("index on non-list", func(t *testing.T) {
+		doc := base([]any{
+			step("load", "cap.methods.x.get", map[string]any{"errors": []any{}}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.load.account[0].status == "ok"`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "not a list")
+	})
+
+	t.Run("method step output is forbidden", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"errors": []any{},
+			"output": []any{map[string]any{"name": "value", "type": "data.entities.account"}},
+		})}, []any{})
+		want(t, check(t, doc), "output is only allowed for internal steps")
+	})
+
+	t.Run("internal step output path", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "result", "type": "data.entities.account"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{"platform.errors.B"},
+				"when":   `step.internal.result.status == "ok"`,
+			}),
+		}, []any{"platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("internal output reported: %v", errs)
+		}
+	})
+
+	t.Run("ref output path", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "wrapper", "type": "Wrapper"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{"platform.errors.B"},
+				"when":   `step.internal.wrapper.account.status == "ok"`,
+			}),
+		}, []any{"platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("ref output reported: %v", errs)
+		}
+	})
+
+	t.Run("oneOf output field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "one", "type": "OneOfValue"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{"platform.errors.B"},
+				"when":   `step.internal.one.value == "ok"`,
+			}),
+		}, []any{"platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("oneOf output reported: %v", errs)
+		}
+	})
+
+	t.Run("oneOf missing branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "mixed", "type": "OneOfMixed"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.mixed.value == "ok"`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field value of OneOfMixed")
+	})
+
+	t.Run("allOf output field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "all", "type": "AllOfValue"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{"platform.errors.B"},
+				"when":   `step.internal.all.right == 1`,
+			}),
+		}, []any{"platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("allOf output reported: %v", errs)
+		}
+	})
+
+	t.Run("internal step without output", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{"errors": []any{}}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.result.status == "ok"`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown output result")
+	})
+
+	t.Run("when references unknown step", func(t *testing.T) {
+		doc := base([]any{step("check", "cap.methods.x.get", map[string]any{
+			"errors": []any{},
+			"when":   `step.missing.status == "ok"`,
+		})}, []any{})
+		want(t, check(t, doc), "references step missing that is not an earlier step")
+	})
+
+	t.Run("when references forward step", func(t *testing.T) {
+		doc := base([]any{
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.later.status == "ok"`,
+			}),
+			step("later", "cap.methods.x.get", map[string]any{"errors": []any{}}),
+		}, []any{})
+		want(t, check(t, doc), "references step later that is not an earlier step")
+	})
+
+	t.Run("when references unreachable step", func(t *testing.T) {
+		doc := base([]any{
+			step("off", "cap.methods.x.get", map[string]any{"when": "false", "errors": []any{}}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{"platform.errors.B"},
+				"when":   `step.off.account.status == "ok"`,
+			}),
+		}, []any{"platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("unreachable reference reported: %v", errs)
+		}
+	})
+
+	t.Run("backward goto requires max_iterations", func(t *testing.T) {
+		doc := base([]any{
+			step("load", "cap.methods.x.get", map[string]any{"errors": []any{}}),
+			step("call", "cap.methods.x.get", map[string]any{
+				"errors":   []any{"platform.errors.A"},
+				"on_error": []any{onError("platform.errors.A", "goto", "load")},
+			}),
+		}, []any{})
+		want(t, check(t, doc), "backward/self goto requires flow.max_iterations")
+	})
+
+	t.Run("bounded backward goto", func(t *testing.T) {
+		doc := base([]any{
+			step("load", "cap.methods.x.get", map[string]any{"errors": []any{}}),
+			step("call", "cap.methods.x.get", map[string]any{
+				"errors":   []any{"platform.errors.A"},
+				"on_error": []any{onError("platform.errors.A", "goto", "load")},
+			}),
+		}, []any{"platform.errors.COMMON_LOOP_EXHAUSTED"})
+		doc["max_iterations"] = 3
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("bounded backward goto reported: %v", errs)
+		}
+	})
+
+	t.Run("forward goto does not require max_iterations", func(t *testing.T) {
+		doc := base([]any{
+			step("call", "cap.methods.x.get", map[string]any{
+				"errors":   []any{"platform.errors.A"},
+				"on_error": []any{onError("platform.errors.A", "goto", "fallback")},
+			}),
+			step("fallback", "cap.methods.x.get", map[string]any{"errors": []any{}}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("forward goto reported: %v", errs)
+		}
+	})
+
+	t.Run("flow max_iterations must be positive", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
+		doc["max_iterations"] = 0
+		want(t, check(t, doc), "max_iterations must be >= 1")
+	})
+}
+
+func TestDirectFlowLevelErrors(t *testing.T) {
+	methodErrors := map[string]map[string]bool{"cap.methods.x.get": {"platform.errors.A": true}}
+	methodIDs := map[string]bool{"cap.methods.x.get": true}
+	c := &Checker{errCodeSet: map[string]bool{"A": true, "COMMON_RATE_LIMITED": true}}
 	doc := map[string]any{
-		"summary": "x", "implementation": "flow",
-		"transaction": "required", "permissions": []any{},
-		"steps": []any{
-			map[string]any{"id": "call", "use": "cap.methods.x.get"},
-		},
-		"errors": []any{"platform.errors.A"},
+		"summary": "x", "implementation": "direct",
+		"method": "cap.methods.x.get", "transaction": "read_only",
+		"permissions": []any{},
+		"rate_limit":  map[string]any{"requests": 1, "window_seconds": 1},
+		"errors":      []any{"platform.errors.A", "platform.errors.COMMON_RATE_LIMITED"},
 	}
-	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", map[string]bool{"cap.methods.x.get": true}, methodErrors)
+	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{})
 	if len(c.errs) != 0 {
-		t.Fatalf("valid flow errors reported: %v", c.errs)
+		t.Fatalf("direct flow level error reported: %v", c.errs)
 	}
 
-	doc["errors"] = []any{"platform.errors.B"}
+	doc["errors"] = []any{"platform.errors.A"}
 	c.errs = nil
-	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", map[string]bool{"cap.methods.x.get": true}, methodErrors)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "not produced by any step") {
-		t.Fatalf("unproduced flow error not reported: %v", c.errs)
+	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "missing flow-level error platform.errors.COMMON_RATE_LIMITED") {
+		t.Fatalf("missing rate limit error not reported: %v", c.errs)
 	}
 
-	doc = map[string]any{
-		"summary": "x", "implementation": "flow",
-		"transaction": "required", "permissions": []any{},
-		"steps": []any{
-			map[string]any{"id": "internal", "errors": []any{"platform.errors.C"}},
-		},
-		"errors": []any{"platform.errors.C"},
-	}
+	doc["rate_limit"] = nil
+	doc["permissions"] = []any{"platform.security.permissions.x"}
+	c.permissionSet = map[string]bool{"platform.security.permissions.x": true}
 	c.errs = nil
-	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", map[string]bool{}, methodErrors)
-	if len(c.errs) != 0 {
-		t.Fatalf("internal step errors reported: %v", c.errs)
+	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "missing flow-level error platform.errors.COMMON_FORBIDDEN") {
+		t.Fatalf("missing forbidden error not reported: %v", c.errs)
 	}
 }
 

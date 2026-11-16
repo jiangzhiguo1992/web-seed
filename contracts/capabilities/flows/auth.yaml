@@ -22,6 +22,8 @@ flows:
       - platform.errors.AUTH_LOCKED
       - platform.errors.ACCOUNT_SUSPENDED
       - platform.errors.COMMON_FORBIDDEN
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_RATE_LIMITED
 
   - name: send_verification
     summary: "发送验证码"
@@ -36,6 +38,8 @@ flows:
       - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
       - platform.errors.AUTH_PHONE_INVALID
       - platform.errors.AUTH_EMAIL_INVALID
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_RATE_LIMITED
 
   - name: verify_code
     summary: "校验验证码"
@@ -50,6 +54,8 @@ flows:
       - platform.errors.AUTH_VERIFICATION_EXPIRED
       - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
       - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_RATE_LIMITED
 
   - name: refresh
     summary: "刷新令牌"
@@ -71,3 +77,5 @@ flows:
     idempotency: { key: "auth_logout:{refresh_token_hash}", window: 24h }
     errors:
       - platform.errors.AUTH_TOKEN_INVALID
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
