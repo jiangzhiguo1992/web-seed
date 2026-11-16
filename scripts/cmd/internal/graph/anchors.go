@@ -151,6 +151,24 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 			}
 		}
 	}
+	eventTarget, err := resolveTarget(root, "cap.events")
+	if err == nil {
+		for _, f := range glob(root, filepath.Join(eventTarget.dir, eventTarget.glob)) {
+			doc, err := loadYAML(f)
+			if err != nil {
+				return nil, err
+			}
+			relFile := rel(root, f)
+			for _, raw := range asList(doc["events"]) {
+				item, _ := asMap(raw)
+				id, _ := item["id"].(string)
+				if id != "" {
+					a.EventFiles[relFile] = append(a.EventFiles[relFile], id)
+					a.EventConsumers[id] = append(a.EventConsumers[id], stringList(item["consumers"])...)
+				}
+			}
+		}
+	}
 	stateTarget, err := resolveTarget(root, "feature.states")
 	if err == nil {
 		for _, f := range glob(root, filepath.Join(stateTarget.dir, stateTarget.glob)) {
@@ -177,23 +195,8 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 			}
 		}
 	}
-	eventTarget, err := resolveTarget(root, "cap.events")
-	if err == nil {
-		for _, f := range glob(root, filepath.Join(eventTarget.dir, eventTarget.glob)) {
-			doc, err := loadYAML(f)
-			if err != nil {
-				return nil, err
-			}
-			relFile := rel(root, f)
-			for _, raw := range asList(doc["events"]) {
-				item, _ := asMap(raw)
-				id, _ := item["id"].(string)
-				if id != "" {
-					a.EventFiles[relFile] = append(a.EventFiles[relFile], id)
-					a.EventConsumers[id] = stringList(item["consumers"])
-				}
-			}
-		}
+	for id := range a.EventConsumers {
+		a.EventConsumers[id] = uniqueSorted(a.EventConsumers[id])
 	}
 	return a, nil
 }

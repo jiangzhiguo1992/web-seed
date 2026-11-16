@@ -4,7 +4,7 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
-        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
+        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-check contract-new contract-check contract-graph contract-impact contract-compat db-verify \
         gen-rule-ids check-rule-ids dev api-dev web-dev compose-up compose-down doctor derive check-docs
 
 help: ## 显示可用目标
@@ -79,10 +79,6 @@ gen-errors: ## platform/errors.yaml → docs/contracts/generated/errors.md
 
 gen-errors-check: ## 校验 errors.md 是否最新（CI）
 	cd scripts/cmd && go run ./gen_errors -root "$(CURDIR)" -check
-
-gen-client: contract-check ## 合并 spec → apps/web/packages/api-client（P2）
-	@echo "gen-client: 尚未实现（P2）"
-	@exit 1
 
 contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|feature.rules|feature.states|cap.events|cap.http）
 	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" service="$(service)" path="$(path)" http_method="$(http_method)" ./scripts/contract/scaffold.sh

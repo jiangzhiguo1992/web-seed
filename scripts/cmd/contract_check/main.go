@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/check"
+	"github.com/yourorg/web-seed/scripts/cmd/internal/spec"
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -21,6 +24,7 @@ func main() {
 		os.Exit(1)
 	}
 	errs := check.Run(abs)
+	errs = append(errs, validateGeneratedSpecs(abs)...)
 	if len(errs) > 0 {
 		fmt.Fprintf(os.Stderr, "contract-check: FAILED (%d error(s))\n", len(errs))
 		for _, e := range errs {
@@ -29,4 +33,29 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Println("contract-check: OK")
+}
+
+func validateGeneratedSpecs(root string) []string {
+	files, err := filepath.Glob(filepath.Join(root, "contracts/generated/openapi/*.yaml"))
+	if err != nil {
+		return []string{fmt.Sprintf("[schema.openapi] %v", err)}
+	}
+	var errs []string
+	for _, file := range files {
+		rel := strings.TrimPrefix(file, root+string(filepath.Separator))
+		b, err := os.ReadFile(file)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("[schema.openapi] %s: %v", rel, err))
+			continue
+		}
+		var doc map[string]any
+		if err := yaml.Unmarshal(b, &doc); err != nil {
+			errs = append(errs, fmt.Sprintf("[schema.openapi] %s: %v", rel, err))
+			continue
+		}
+		if err := spec.Validate(doc); err != nil {
+			errs = append(errs, fmt.Sprintf("[schema.openapi] %s: %v", rel, err))
+		}
+	}
+	return errs
 }

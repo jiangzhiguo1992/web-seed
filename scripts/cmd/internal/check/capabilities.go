@@ -9,17 +9,20 @@ package check
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
 
 type serviceMeta struct {
-	module     string
-	visibility string
-	async      bool
-	params     map[string]bool
-	errors     map[string]bool
-	returns    map[string]string
+	module      string
+	visibility  string
+	async       bool
+	params      map[string]bool
+	paramTypes  map[string]bool
+	typeSchemas map[string]map[string]any
+	errors      map[string]bool
+	returns     map[string]string
 }
 
 func (c *Checker) checkCapabilities() {
@@ -97,11 +100,28 @@ func (c *Checker) checkCapabilities() {
 			visibility, _ := item["visibility"].(string)
 			async := item["trigger"] != nil
 			params := map[string]bool{}
+			paramTypes := map[string]bool{}
+			typeSchemas := map[string]map[string]any{}
+			if types, ok := asMap(doc["types"]); ok {
+				for name, raw := range types {
+					if def, ok := asMap(raw); ok {
+						typeSchemas[name] = def
+					}
+				}
+			}
 			for _, rawParam := range asList(item["params"]) {
 				pm, _ := asMap(rawParam)
 				pn, _ := pm["name"].(string)
 				if pn != "" {
 					params[pn] = true
+				}
+				pt, _ := pm["type"].(string)
+				pt = strings.TrimPrefix(pt, "*")
+				if strings.HasPrefix(pt, "List<") && strings.HasSuffix(pt, ">") {
+					pt = strings.TrimSuffix(strings.TrimPrefix(pt, "List<"), ">")
+				}
+				if pt != "" {
+					paramTypes[pt] = true
 				}
 			}
 			errs := map[string]bool{}
@@ -119,7 +139,7 @@ func (c *Checker) checkCapabilities() {
 				}
 			}
 			c.methodReturns[id] = returns
-			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, async: async, params: params, errors: errs, returns: returns}
+			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, async: async, params: params, paramTypes: paramTypes, typeSchemas: typeSchemas, errors: errs, returns: returns}
 			for _, rawStep := range asList(item["steps"]) {
 				step, _ := asMap(rawStep)
 				if k, _ := step["kind"].(string); k == "service" {
@@ -894,6 +914,13 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					c.rulef("http-components", "%s: components.schemas.%s.x-service-type must match cap.services.<file>.types.<Type>", rel, name)
 				} else if typ, ok := serviceTypeRef(ref); !ok || !typeNames[typ] {
 					c.rulef("http-components", "%s: components.schemas.%s.x-service-type references unknown %s", rel, name, ref)
+				} else if props, ok := asMap(s["properties"]); ok {
+					if def := findTypeSchema(serviceMeta, typ); def != nil {
+						defProps, _ := asMap(def["properties"])
+						if !sameSchemaFields(props, defProps) {
+							c.rulef("http-service-type", "%s: components.schemas.%s fields differ from %s", rel, name, ref)
+						}
+					}
 				}
 			}
 			if ref, _ := s["x-enum"].(string); ref != "" {
@@ -1005,6 +1032,20 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if target.visibility != "public" {
 					c.rulef("service-visibility", "%s %s %s: service %s is not public", rel, method, path, serviceRef)
 				}
+				if rb, ok := asMap(op["requestBody"]); ok {
+					if content, ok := asMap(rb["content"]); ok {
+						for _, rawMedia := range content {
+							media, _ := asMap(rawMedia)
+							schema, _ := asMap(media["schema"])
+							if ref, _ := schema["$ref"].(string); ref != "" {
+								name := strings.TrimPrefix(ref, "#/components/schemas/")
+								if !target.paramTypes[name] {
+									c.rulef("http-service-type", "%s %s %s: requestBody $ref %s is not a param of %s", rel, method, path, name, serviceRef)
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -1040,6 +1081,35 @@ func (c *Checker) checkServiceTypes(types map[string]any, rel string) {
 			}
 		}
 	}
+}
+
+func findTypeSchema(meta map[string]serviceMeta, typ string) map[string]any {
+	for _, m := range meta {
+		if def := m.typeSchemas[typ]; def != nil {
+			return def
+		}
+	}
+	return nil
+}
+
+func sameSchemaFields(a, b map[string]any) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, rawA := range a {
+		rawB, ok := b[k]
+		if !ok {
+			return false
+		}
+		ma, _ := asMap(rawA)
+		mb, _ := asMap(rawB)
+		ta, _ := ma["type"].(string)
+		tb, _ := mb["type"].(string)
+		if ta != tb {
+			return false
+		}
+	}
+	return true
 }
 
 func serviceTypeRef(ref string) (string, bool) {
@@ -1959,6 +2029,21 @@ func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex map
 }
 
 // checkServiceCycles 在 kind=service 调用图上做 DFS 环检测。
+func canonicalCycle(cycle []string) string {
+	nodes := append([]string{}, cycle[:len(cycle)-1]...)
+	sort.Strings(nodes)
+	return strings.Join(nodes, "|")
+}
+
+func indexOf(values []string, value string) int {
+	for i, v := range values {
+		if v == value {
+			return i
+		}
+	}
+	return 0
+}
+
 func (c *Checker) checkServiceCycles(edges map[string][]string) {
 	const (
 		white = 0
@@ -1966,21 +2051,27 @@ func (c *Checker) checkServiceCycles(edges map[string][]string) {
 		black = 2
 	)
 	color := map[string]int{}
-	reported := false
+	seen := map[string]bool{}
+	var stack []string
 	var visit func(string)
 	visit = func(n string) {
 		color[n] = gray
+		stack = append(stack, n)
 		for _, m := range edges[n] {
 			switch color[m] {
 			case gray:
-				if !reported {
-					c.rulef("service-cycle", "service call cycle: %s -> %s", n, m)
-					reported = true
+				idx := indexOf(stack, m)
+				cycle := append(append([]string{}, stack[idx:]...), m)
+				key := canonicalCycle(cycle)
+				if !seen[key] {
+					seen[key] = true
+					c.rulef("service-cycle", "service call cycle: %s", strings.Join(cycle, " -> "))
 				}
 			case white:
 				visit(m)
 			}
 		}
+		stack = stack[:len(stack)-1]
 		color[n] = black
 	}
 	for n := range edges {

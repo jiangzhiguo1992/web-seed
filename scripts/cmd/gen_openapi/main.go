@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -46,7 +47,11 @@ func main() {
 		if *check {
 			got, err := os.ReadFile(target)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "gen-openapi: %s: %v\n", target, err)
+				if os.IsNotExist(err) {
+					fmt.Fprintf(os.Stderr, "gen-openapi: %s missing; run make gen-openapi\n", target)
+				} else {
+					fmt.Fprintf(os.Stderr, "gen-openapi: %s: %v\n", target, err)
+				}
 				os.Exit(1)
 			}
 			if !bytes.Equal(got, out) {
@@ -170,6 +175,9 @@ func build(root string) (map[string][]byte, error) {
 				item[method] = op
 			}
 			paths[path] = item
+		}
+		if err := openapispec.Validate(spec); err != nil {
+			return nil, fmt.Errorf("app %s: %w", appName, err)
 		}
 		b, err := marshal(spec)
 		if err != nil {

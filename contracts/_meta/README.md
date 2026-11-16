@@ -80,11 +80,11 @@ scripts/cmd/
 | `make contract-new type=feature.states name=invoice module=invoice` | 生成 feature.states 骨架（pending/active + activate） | 新建状态机前 |
 | `make contract-new type=cap.events name=invoice module=invoice` | 生成 cap.events 骨架（一个 created 事件） | 新建事件集前 |
 | `make contract-new type=cap.http name=invoice service=cap.services.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-service` 必填 | 新建 HTTP 绑定前 |
-| `make gen-graph` | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` | 改完表/实体/查询/方法后 |
+| `make gen-graph` | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` / 锚点 | 改完表/实体/查询/service 后 |
 | `make gen-graph-check` | 只校验上述反向索引是否最新（CI） | CI |
-| `make contract-check` | 结构 / ID / 约束 / 索引 / 反向索引 / owner / entity 投影 / query 参数与返回 / method.queries | 每次改完契约 |
-| `make gen` | 生成 DDL / OpenAPI / 类型 / graph | `contract-check` 通过后 |
-| `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 单独投影 | 按需 |
+| `make contract-check` | 结构 / ID / 约束 / 索引 / 反向索引 / owner / entity 投影 / query 参数与返回 / service steps | 每次改完契约 |
+| `make gen` | 生成 DDL / OpenAPI spec / 反向索引 / 错误文档 | `contract-check` 通过后 |
+| `make gen-openapi` / `gen-db` / `gen-graph` / `gen-errors` | 单独投影 | 按需 |
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
