@@ -95,7 +95,7 @@
 
 #### P2 契约生成链
 
-- [ ] `capabilities/http/*.yaml` + `shared.yaml` → 合并为 `generated/openapi/admin.yaml`
+- [ ] `capabilities/protocols/http/*.yaml` + `shared.yaml` → 合并为 `generated/openapi/admin.yaml`
 - [ ] 合并 spec → Go server 类型（`oapi-codegen strict-server`）
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
 - [ ] `data/tables/*.yaml` → `schema.sql` + 增量 `migrations/*.sql`
@@ -212,8 +212,8 @@
 
 | 组 | 职责 | 真相源 |
 |---|---|---|
-| `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储约束、冗余关系、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` + `data/redundancy.yaml` |
-| `capabilities/` | 实现层：HTTP、异步、跨模块 service、业务流程编排 | `capabilities/**` |
+| `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储约束、冗余关系、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` |
+| `capabilities/` | 能力层：`methods` 原子方法、`flows` 编排、`protocols` 协议绑定 | `capabilities/**` |
 | `business/` | 业务规格：状态机、规则、领域事件、术语（不含实体与实现） | `business/**` |
 | `features/` | 功能定义：路由、页面、用户旅程 | `features/**` |
 | `platform/` | 横切：环境、版本、错误、枚举、HTTP 约定、质量、配置、架构、设计、观测、埋点、安全 | `platform/**` |
@@ -227,7 +227,7 @@ data/tables/*.yaml
   ├─ schema.sql ──> sqlc ──> Go 查询代码
   └─ diff DB ─────> migrations/*.sql
 
-capabilities/http/*.yaml + shared.yaml
+capabilities/protocols/http/*.yaml + shared.yaml
   ├─ 合并 ─────────> generated/openapi/admin.yaml
   ├─ oapi-codegen ─> apps/api/internal/generated/openapi/
   └─ openapi-typescript ─> apps/web/packages/api-client/src/generated/
@@ -250,8 +250,8 @@ platform/** ──> 配置校验 / 常量 / CSS 变量
 - **唯一顺序**：`feature → business → capabilities → data`（单向链，无反向）
 - **锚点只在上游写**：`feature --uses--> business`，`business --implemented_by--> capabilities`，
   `capabilities --persists_via--> data`
-- **capabilities 契约不引用 business**：返回 `data` 行；规则与事件由 business 侧锚点（`cap.flows` 例外：仅允许引用 `business.states/rule/event` 做编排）
-- 图校验禁止 `cap.http` / `cap.services` / `cap.async` → `business`，仅放行 `cap.flows` → `business.{state,rule,event}`
+- **capabilities 契约不引用 business**：规则与事件由 business 侧锚点（`implemented_by` / `emitted_by`）声明；唯一例外是异步 flow 的 `trigger.event` 引用 `business.events.*` 作为输入
+- 图校验禁止 `cap.methods` / `cap.flows` / `cap.http` → `business`，仅放行异步 flow 的 `trigger.event`
 - 影响面：`make contract-impact id=<id>`
 
 **引用必须写在结构化字段里**（`ref` / `refs` / `capability` / `use` / `emits` / `page` / `route` / `x-*`）。
@@ -275,7 +275,7 @@ web-seed/
 │   ├── index.yaml                    #   契约地图（AI 入口）
 │   ├── project.yaml                  #   项目元信息（derive 输入）
 │   ├── data/                         #   tables(_base) / entities / queries / storage
-│   ├── capabilities/                 #   http / async / services / flows
+│   ├── capabilities/                 #   methods / flows + protocols/http
 │   ├── business/                       #   states / rules / events / glossary
 │   ├── features/                     #   routes / pages / flows
 │   ├── platform/                     #   环境/版本/错误/枚举/HTTP/质量/配置/架构/设计/观测/埋点/安全

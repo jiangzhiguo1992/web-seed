@@ -1,0 +1,72 @@
+# cap.http 类型规范：flow 到 HTTP 协议的绑定。
+# 字段树为目标态；paths 的 OpenAPI 结构由 OpenAPI 校验器负责，不在本文件重复。
+
+id: meta.cap.http
+type: cap.http
+title: "HTTP 协议绑定契约"
+targets:
+  dir: "contracts/capabilities/protocols/http"
+  glob: "*.yaml"
+  id: "cap.http.<file>"
+  naming: "snake_case"
+
+fields:
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: id
+    type: string
+    required: true
+    pattern: '^cap\.http\.[a-z][a-z0-9_]*$'
+    description: "契约 ID"
+
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: list<string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: module
+    type: string
+    required: false
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "所属模块；shared.yaml 可省略"
+
+  - name: base_path
+    type: string
+    required: false
+    description: "URL 前缀，例如 /v1"
+
+  - name: default_error_responses
+    type: list<any>
+    required: false
+    unique: true
+    description: "默认注入的错误状态码；operation 不得重复声明这些状态码"
+
+  - name: paths
+    type: any
+    required: true
+    description: "OpenAPI 3.1 path item；每个 operation 必须写 operationId、x-contract-id、x-flow"
+
+  - name: components
+    type: any
+    required: false
+    description: "协议层共享 schema/参数/响应；只放 Problem/PageInfo 等绑定特有类型"
+
+rules:
+  - { id: http-binding, text: "每个 http operation 必须有 operationId 与 x-flow；x-service 已移除；x-flow 必须指向存在的同步 flow；同步 flow 必须有至少一个 protocol 入边", implemented_by: [ http-binding ] }

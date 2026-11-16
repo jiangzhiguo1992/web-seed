@@ -1,0 +1,25 @@
+# 删除账号用例。先吊销认证，再软删账号。
+schema_version: 1
+id: cap.flows.account_delete
+summary: "删除账号"
+stability: stable
+do_not:
+  - "account_delete 必须先吊销认证再软删账号，禁止只改 account 状态"
+module: account
+implementation: flow
+permissions:
+  - platform.security.permissions.account_delete
+audit: true
+transaction: required
+idempotency: { key: "account_delete:{id}", window: 24h }
+steps:
+  - id: load
+    use: cap.methods.account.get
+  - id: revoke_auth
+    use: cap.methods.auth.revoke_all_for_account
+  - id: soft_delete
+    use: data.queries.account.soft_delete_account
+errors:
+  - platform.errors.ACCOUNT_NOT_FOUND
+  - platform.errors.COMMON_FORBIDDEN
+  - platform.errors.COMMON_INTERNAL

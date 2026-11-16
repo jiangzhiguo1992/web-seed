@@ -8,7 +8,7 @@ do_not:
   - "不要把 password_hash 或 token 写入日志、事件"
   - "auth 登录失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
   - "auth 响应中的 token 只允许出现在 /auth/login 与 /auth/refresh"
-  - "auth 每个 operation 必须有 x-contract-id 与 x-service"
+  - "auth 每个 operation 必须有 x-contract-id 与 x-flow"
   - "验证码接口不要返回 code_hash / content / target 原文；只返回 masked_target"
   - "验证码发送/校验失败不要枚举 target 是否存在"
 
@@ -21,11 +21,9 @@ paths:
     post:
       operationId: login
       x-contract-id: cap.http.auth.login
-      x-service: cap.services.auth.login
+      x-flow: cap.flows.auth_login
       summary: "登录"
       x-timeout-ms: 5000
-      x-rate-limit: { requests: 10, window_seconds: 60 }
-      x-audit: true
       requestBody:
         required: true
         content:
@@ -52,10 +50,9 @@ paths:
     post:
       operationId: sendVerification
       x-contract-id: cap.http.auth.verification_send
-      x-service: cap.services.auth.send_verification
+      x-flow: cap.flows.auth_send_verification
       summary: "发送验证码"
       x-timeout-ms: 5000
-      x-audit: true
       requestBody:
         required: true
         content:
@@ -81,10 +78,9 @@ paths:
     post:
       operationId: verifyCode
       x-contract-id: cap.http.auth.verification_verify
-      x-service: cap.services.auth.verify_code
+      x-flow: cap.flows.auth_verify_code
       summary: "校验验证码"
       x-timeout-ms: 5000
-      x-audit: true
       requestBody:
         required: true
         content:
@@ -111,7 +107,7 @@ paths:
     post:
       operationId: refreshToken
       x-contract-id: cap.http.auth.refresh
-      x-service: cap.services.auth.refresh
+      x-flow: cap.flows.auth_refresh
       summary: "刷新令牌"
       x-timeout-ms: 3000
       requestBody:
@@ -135,10 +131,8 @@ paths:
     post:
       operationId: logout
       x-contract-id: cap.http.auth.logout
-      x-service: cap.services.auth.logout
+      x-flow: cap.flows.auth_logout
       summary: "登出"
-      x-idempotent: true
-      x-audit: true
       requestBody:
         required: true
         content:

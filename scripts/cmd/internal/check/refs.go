@@ -45,7 +45,7 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 		rel := relPath(c.root, f)
 		if rawWrites, ok := doc["writes"]; ok {
 			if !capabilityMayWrite(doc) {
-				c.rulef("owner-write", "%s: only cap.services/cap.async may declare writes", rel)
+				c.rulef("owner-write", "%s: only cap.methods/cap.flows may declare writes", rel)
 			}
 			uses := map[string]bool{}
 			for _, x := range asList(doc["uses"]) {
@@ -73,7 +73,7 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 			continue
 		}
 		if !capabilityMayWrite(doc) && (len(tableRefs(p)) > 0 || p["write_queries"] != nil) {
-			c.rulef("owner-write", "%s: only cap.services/cap.async may declare table writes", rel)
+			c.rulef("owner-write", "%s: only cap.methods/cap.flows may declare table writes", rel)
 		}
 		c.checkPersistenceOwnership(doc, p, rel)
 		if rawQ, ok := p["queries"]; ok {
@@ -126,10 +126,10 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 	}
 }
 
-// capabilityMayWrite 只允许 service 与 async capability 声明写表/写查询。
+// capabilityMayWrite 只允许 method 与 flow 契约声明写表/写查询。
 func capabilityMayWrite(doc map[string]any) bool {
 	id, _ := doc["id"].(string)
-	return strings.HasPrefix(id, "cap.services.") || strings.HasPrefix(id, "cap.async.")
+	return strings.HasPrefix(id, "cap.methods.") || strings.HasPrefix(id, "cap.flows.")
 }
 
 // checkPersistenceOwnership 校验 capability 的写表与写查询归属：

@@ -1,0 +1,20 @@
+# 创建账号用例。直通 cap.methods.account.create。
+schema_version: 1
+id: cap.flows.account_create
+summary: "创建账号"
+stability: stable
+do_not:
+  - "account_create 不得在 handler 里直接写 account 表"
+module: account
+implementation: direct
+method: cap.methods.account.create
+permissions:
+  - platform.security.permissions.account_write
+audit: true
+transaction: required
+idempotency: { key: "account_create:{number}", window: 24h }
+errors:
+  - platform.errors.ACCOUNT_NUMBER_INVALID
+  - platform.errors.ACCOUNT_NUMBER_TAKEN
+  - platform.errors.ACCOUNT_OWN_INVALID
+  - platform.errors.COMMON_FORBIDDEN

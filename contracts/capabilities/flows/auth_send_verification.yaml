@@ -1,0 +1,19 @@
+# 发送验证码用例。直通 cap.methods.auth.send_verification。
+schema_version: 1
+id: cap.flows.auth_send_verification
+summary: "发送验证码"
+stability: stable
+do_not:
+  - "auth_send_verification 不得返回验证码原文或 target 原文"
+module: account
+implementation: direct
+method: cap.methods.auth.send_verification
+permissions: []
+audit: true
+rate_limit: { requests: 5, window_seconds: 60 }
+transaction: required
+errors:
+  - platform.errors.AUTH_VERIFICATION_INVALID
+  - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+  - platform.errors.AUTH_PHONE_INVALID
+  - platform.errors.AUTH_EMAIL_INVALID

@@ -1,16 +1,17 @@
 # 定期清理过期验证体与历史验证动作。
 
 schema_version: 1
-id: cap.async.verification_cleanup
+id: cap.flows.verification_cleanup
 summary: "过期验证体与历史验证动作清理任务"
 stability: draft
 module: account
+implementation: flow
 do_not:
   - "只删除 expire_at 已过期的验证体，不要碰未过期记录"
   - "动作日志按时间清理，不要按 verification_id 级联删除"
   - "动作保留阈值由 input.action_older_than_days 提供；storage 不再声明 retention"
   - "不要删除未超过 action_older_than_days 的动作"
-  - "cap.async.verification_cleanup 必须有 trigger/input/output/uses/writes/idempotency"
+  - "cap.flows.verification_cleanup 必须有 trigger/input/output/steps/idempotency/retry/concurrency"
 
 trigger:
   type: cron
@@ -33,6 +34,11 @@ output:
     deleted_bodies: { type: integer, minimum: 0 }
     deleted_actions: { type: integer, minimum: 0 }
 
+steps:
+  - id: delete_bodies
+    use: data.queries.verification.delete_expired_verifications
+  - id: delete_actions
+    use: data.queries.verification.delete_verification_actions_before
 uses:
   - data.queries.verification.delete_expired_verifications
   - data.queries.verification.delete_verification_actions_before

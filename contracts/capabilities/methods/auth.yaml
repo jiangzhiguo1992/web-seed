@@ -1,7 +1,7 @@
 # 认证模块对外暴露的 service 能力。只登记跨模块调用，模块内部方法不进契约。
 
 schema_version: 1
-id: cap.services.auth
+id: cap.methods.auth
 summary: "认证跨模块 service 接口"
 stability: draft
 do_not:
@@ -34,7 +34,7 @@ interface:
         - platform.errors.AUTH_LOCKED
         - platform.errors.ACCOUNT_SUSPENDED
         - platform.errors.COMMON_FORBIDDEN
-      transaction: required
+      transaction: none
 
     - name: Refresh
       summary: "用刷新令牌换取新令牌对"
@@ -47,7 +47,7 @@ interface:
       errors:
         - platform.errors.AUTH_TOKEN_INVALID
         - platform.errors.AUTH_TOKEN_EXPIRED
-      transaction: required
+      transaction: none
 
     - name: Logout
       summary: "吊销刷新令牌"
@@ -57,7 +57,7 @@ interface:
       returns:
         - { name: err, type: error }
       errors: [platform.errors.AUTH_TOKEN_INVALID]
-      transaction: required
+      transaction: none
 
     - name: RevokeAllForAccount
       summary: "软删账号的认证绑定、未消费验证体并吊销全部令牌；账号删除时同步调用"
@@ -67,7 +67,7 @@ interface:
       returns:
         - { name: err, type: error }
       errors: [platform.errors.COMMON_INTERNAL]
-      transaction: required
+      transaction: none
 
     - name: SendVerification
       summary: "发送短信/邮件验证码，并记录发送动作"
@@ -82,7 +82,7 @@ interface:
         - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
         - platform.errors.AUTH_PHONE_INVALID
         - platform.errors.AUTH_EMAIL_INVALID
-      transaction: required
+      transaction: none
 
     - name: VerifyCode
       summary: "校验并消费验证码，记录每次校验动作"
@@ -97,7 +97,7 @@ interface:
         - platform.errors.AUTH_VERIFICATION_EXPIRED
         - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
         - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
-      transaction: required
+      transaction: none
 
     - name: RevokeVerificationsByAuth
       summary: "换绑/解绑/停用认证绑定时作废对应未消费验证体"
@@ -110,7 +110,7 @@ interface:
       errors:
         - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
         - platform.errors.COMMON_INTERNAL
-      transaction: required
+      transaction: none
 
     - name: Verify
       summary: "校验访问令牌并返回账号"

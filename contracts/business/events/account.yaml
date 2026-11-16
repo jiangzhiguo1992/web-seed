@@ -25,7 +25,7 @@ events:
         number: { type: string }
         status: { type: string, enum: [pending, active] }
         created_at: { type: string, format: date-time }
-    trigger: [cap.services.account.create]
+    trigger: [cap.methods.account.create]
 
   - id: business.events.account.activated
     name: account.activated
@@ -37,7 +37,7 @@ events:
       properties:
         id: { type: integer }
         activated_at: { type: string, format: date-time }
-    trigger: [cap.services.account.activate]
+    trigger: [cap.methods.account.activate]
 
   - id: business.events.account.suspended
     name: account.suspended
@@ -50,7 +50,7 @@ events:
         id: { type: integer }
         reason: { type: string }
         suspended_at: { type: string, format: date-time }
-    trigger: [cap.services.account.suspend]
+    trigger: [cap.methods.account.suspend]
 
   - id: business.events.account.reactivated
     name: account.reactivated
@@ -62,7 +62,7 @@ events:
       properties:
         id: { type: integer }
         reactivated_at: { type: string, format: date-time }
-    trigger: [cap.services.account.activate]
+    trigger: [cap.methods.account.activate]
 
   - id: business.events.account.deleted
     name: account.deleted
@@ -74,7 +74,7 @@ events:
       properties:
         id: { type: integer }
         deleted_at: { type: string, format: date-time }
-    trigger: [cap.services.account.delete]
+    trigger: [cap.methods.account.delete]
 
   - id: business.events.account.login_succeeded
     name: account.login_succeeded
@@ -88,7 +88,7 @@ events:
         ip: { type: string }
         user_agent: { type: string }
         login_at: { type: string, format: date-time }
-    trigger: [cap.services.auth.login]
+    trigger: [cap.methods.auth.login]
 
   - id: business.events.account.login_failed
     name: account.login_failed
@@ -101,19 +101,7 @@ events:
         account_id: { type: integer, nullable: true }
         reason: { type: string, enum: [bad_password, locked, suspended, not_found] }
         failed_at: { type: string, format: date-time }
-    trigger: [cap.services.auth.login]
-
-  - id: business.events.account.cleaned
-    name: account.cleaned
-    version: 1
-    payload:
-      type: object
-      additionalProperties: false
-      required: [deleted_count, executed_at]
-      properties:
-        deleted_count: { type: integer }
-        executed_at: { type: string, format: date-time }
-    trigger: [cap.async.account_cleanup]
+    trigger: [cap.methods.auth.login]
 
 consumers:
   - module: audit

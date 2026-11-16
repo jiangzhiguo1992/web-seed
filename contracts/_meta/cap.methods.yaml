@@ -1,0 +1,73 @@
+# cap.methods 类型规范：模块对跨模块暴露的原子方法。
+# 字段树为目标态；capabilities 的字段树与 checker 接入待后续批次。
+
+id: meta.cap.methods
+type: cap.methods
+title: "原子方法契约"
+targets:
+  dir: "contracts/capabilities/methods"
+  glob: "*.yaml"
+  id: "cap.methods.<file>"
+  naming: "snake_case"
+
+fields:
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: id
+    type: string
+    required: true
+    pattern: '^cap\.methods\.[a-z][a-z0-9_]*$'
+    description: "契约 ID"
+
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: list<string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "所属模块；写表归属必须等于本字段"
+
+  - name: interface
+    type: any
+    required: true
+    description: "Go interface 契约：name/package/methods；具体结构由 cap.methods checker 校验"
+
+  - name: persistence
+    type: any
+    required: true
+    description: "持久化归属：table/tables/field_map/queries/write_queries/constraint_errors"
+
+  - name: types
+    type: any
+    required: false
+    description: "本地类型；值是 OpenAPI-ish schema 文本"
+
+  - name: consumers
+    type: any
+    required: false
+    description: "消费本方法的模块；目标态由 flows 自动推导，不再手写"
+
+rules:
+  - { id: cap-id, text: "methods/flows/http 契约 ID 必须与 targets.id 派生一致，且全局唯一", implemented_by: [ cap-id ] }
+  - { id: method-structure, text: "method 的 interface.name 必须 PascalCase、interface.package 必须在 internal/modules/ 下、method 名唯一、transaction 只能是 none/read_only", implemented_by: [ method-structure ] }
+  - { id: cap-ref, text: "method/flow 引用的 errors、permissions、methods、本模块 queries 必须存在", implemented_by: [ cap-ref ] }

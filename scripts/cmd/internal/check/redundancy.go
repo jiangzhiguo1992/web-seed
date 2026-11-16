@@ -1,232 +1,223 @@
-// redundancy.go 校验 data/redundancy.yaml 的冗余组：
-// 组明细在 groups，表列只写组 ID；两边必须双向一致，copy 与 source 类型/可空一致。
+// redundancy.go 校验 columns[].redundancy：
+// 列直接列出同组全部列引用，source 标记权威列；组内各列必须声明完全相同的列表。
 package check
 
 import (
-	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
-// redundancyGroup 是 data/redundancy.yaml groups 的解析结果。
-type redundancyGroup struct {
-	source string
-	copies []string
+// redundancyRef 是 columns[].redundancy 的一项。
+type redundancyRef struct {
+	column string
+	source bool
 }
 
-// refs 返回 source + copies，不修改底层切片。
-func (g *redundancyGroup) refs() []string {
-	out := make([]string, 0, 1+len(g.copies))
-	out = append(out, g.source)
-	out = append(out, g.copies...)
-	return out
+// redundancyDecl 是一列声明的整组冗余引用。
+type redundancyDecl struct {
+	owner      string
+	refs       []redundancyRef
+	key        string
+	wellFormed bool
 }
 
-func (g *redundancyGroup) has(ref string) bool {
-	for _, item := range g.refs() {
-		if item == ref {
-			return true
-		}
-	}
-	return false
-}
-
-// checkRedundancyFile 加载 data/redundancy.yaml；文件缺失或结构非法都直接报错。
-func (c *Checker) checkRedundancyFile() {
-	rel := "contracts/data/redundancy.yaml"
-	c.redundancyGroups = map[string]*redundancyGroup{}
-	doc, err := loadYAML(filepath.Join(c.root, rel))
-	if err != nil {
-		c.rulef("redundant-group", "%s: %v", rel, err)
-		return
-	}
-	allowed := map[string]bool{
-		"schema_version": true, "id": true, "summary": true, "stability": true, "do_not": true, "groups": true,
-	}
-	for _, k := range sortedAnyKeys(doc) {
-		if !allowed[k] {
-			c.rulef("schema.unknown-field", "%s: unknown top-level field %q", rel, k)
-		}
-	}
-	if id, ok := doc["id"].(string); !ok {
-		c.rulef("schema.required", "%s: missing required field \"id\"", rel)
-	} else if id != "data.redundancy" {
-		c.rulef("schema.const", "%s: id must be data.redundancy, got %q", rel, id)
-	}
-	if _, ok := doc["summary"]; !ok {
-		c.rulef("schema.required", "%s: missing required field \"summary\"", rel)
-	} else if summary, _ := doc["summary"].(string); strings.TrimSpace(summary) == "" {
-		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
-	}
-	if _, ok := doc["do_not"]; !ok {
-		c.rulef("schema.required", "%s: missing required field \"do_not\"", rel)
-	}
-	if raw, ok := doc["groups"]; !ok {
-		c.rulef("schema.required", "%s: missing required field \"groups\"", rel)
-	} else if _, ok := asMap(raw); !ok {
-		c.rulef("redundant-group", "%s: groups must be a map keyed by group id", rel)
-	}
-	c.checkStability(doc, rel)
-	c.checkRedundancyGroups(doc, rel)
-}
-
-// checkRedundancyGroups 解析 data/redundancy.yaml 的 groups：
-// 组只定义 source/copies，表列只写组 ID；source 唯一、copy 至少一个，类型/可空必须一致。
-func (c *Checker) checkRedundancyGroups(doc map[string]any, rel string) {
-	if c.redundancyGroups == nil {
-		c.redundancyGroups = map[string]*redundancyGroup{}
-	}
-	raw, ok := doc["groups"]
-	if !ok {
-		return
-	}
-	groups, ok := asMap(raw)
-	if !ok {
-		return // 类型错误由 checkRedundancyFile 报出
-	}
-	owners := map[string]string{}
-	for _, id := range sortedAnyKeys(groups) {
-		m, ok := asMap(groups[id])
-		if !ok {
-			c.rulef("redundant-group", "%s: groups.%s must be an object", rel, id)
-			continue
-		}
-		if !targetNamingPatterns["snake_case"].MatchString(id) {
-			c.rulef("redundant-group", "%s: groups.%s must be snake_case", rel, id)
-		}
-		allowed := map[string]bool{"source": true, "copies": true}
-		for k := range m {
-			if !allowed[k] {
-				c.rulef("redundant-group", "%s: groups.%s unknown field %q", rel, id, k)
-			}
-		}
-		source, _ := m["source"].(string)
-		if source == "" {
-			c.rulef("redundant-group", "%s: groups.%s.source is required", rel, id)
-			continue
-		}
-		srcTable, srcCol, srcOK := splitColumnRef(source)
-		if !srcOK || !c.columnExists(srcTable, srcCol) {
-			c.rulef("redundant-ref", "%s: groups.%s.source %q is not a table column", rel, id, source)
-			continue
-		}
-		rawCopies, ok := m["copies"]
-		if !ok {
-			c.rulef("redundant-group", "%s: groups.%s.copies must list at least one copy", rel, id)
-			continue
-		}
-		list, ok := asList2(rawCopies)
-		if !ok || len(list) == 0 {
-			c.rulef("redundant-group", "%s: groups.%s.copies must be a non-empty list", rel, id)
-			continue
-		}
-		refs := []string{source}
-		valid := true
-		for _, rawCopy := range list {
-			copyRef, ok := rawCopy.(string)
-			if !ok || copyRef == "" {
-				c.rulef("redundant-ref", "%s: groups.%s.copies items must be non-empty column refs", rel, id)
-				valid = false
-				continue
-			}
-			refs = append(refs, copyRef)
-		}
-		if !valid {
-			continue
-		}
-		seen := map[string]bool{}
-		for _, ref := range refs {
-			if seen[ref] {
-				c.rulef("redundant-ref", "%s: groups.%s repeats column %s", rel, id, ref)
-				valid = false
-			}
-			seen[ref] = true
-		}
-		for _, ref := range refs {
-			if prev, ok := owners[ref]; ok && prev != id {
-				c.rulef("redundant-ref", "%s: column %s already belongs to redundancy group %s", rel, ref, prev)
-				valid = false
-			}
-		}
-		if !valid {
-			continue
-		}
-		srcMeta := c.tableColumns[srcTable][srcCol]
-		for _, copyRef := range refs[1:] {
-			copyTable, copyCol, ok := splitColumnRef(copyRef)
-			if !ok || !c.columnExists(copyTable, copyCol) {
-				c.rulef("redundant-ref", "%s: groups.%s copy %q is not a table column", rel, id, copyRef)
-				continue
-			}
-			meta := c.tableColumns[copyTable][copyCol]
-			if c.resolvedColumnType(meta.typ) != c.resolvedColumnType(srcMeta.typ) || meta.nullable != srcMeta.nullable {
-				c.rulef("redundant-ref", "%s: groups.%s copy %s type/nullable (%s, nullable=%v) must match source %s (%s, nullable=%v)", rel, id, copyRef, c.resolvedColumnType(meta.typ), meta.nullable, source, c.resolvedColumnType(srcMeta.typ), srcMeta.nullable)
-			}
-		}
-		for _, ref := range refs {
-			owners[ref] = id
-		}
-		c.redundancyGroups[id] = &redundancyGroup{source: source, copies: refs[1:]}
-	}
-}
-
-// checkRedundancy 校验 columns[].redundancy：
-//   - 列上的组 ID 必须在 data/redundancy.yaml 的 groups 中存在；
-//   - 该文件列出的每一列必须声明同一个组 ID；
-//   - 反向：列声明的组必须列出该列。
+// checkRedundancy 校验冗余列组：
+//   - 每组恰好一个 source，声明列必须列出自身；
+//   - 组内每列必须声明相同的列表，同一列不得跨组；
+//   - 列引用必须存在，copy 与 source 的 type/nullable 必须一致。
 func (c *Checker) checkRedundancy(tableIDs map[string]string) {
-	declared := map[string]string{}
+	decls := map[string]*redundancyDecl{}
+	var order []string
 	for _, id := range sortedStringMapKeys(tableIDs) {
 		if id == c.baseID {
 			continue
 		}
-		doc := c.tableDocs[id]
-		for _, raw := range asList(doc["columns"]) {
+		for _, raw := range asList(c.tableDocs[id]["columns"]) {
 			m, ok := asMap(raw)
 			if !ok {
 				continue
 			}
 			name, _ := m["name"].(string)
-			group, _ := m["redundancy"].(string)
-			if name == "" || group == "" {
+			rawList, ok := m["redundancy"]
+			if name == "" || !ok {
 				continue
 			}
-			declared[id+".col."+name] = group
+			list, ok := asList2(rawList)
+			if !ok {
+				continue // 结构错误由 schema 校验报出
+			}
+			refs := make([]redundancyRef, 0, len(list))
+			valid := true
+			for _, item := range list {
+				entry, ok := asMap(item)
+				if !ok {
+					valid = false
+					break
+				}
+				column, _ := entry["column"].(string)
+				source, _ := entry["source"].(bool)
+				if column == "" {
+					valid = false
+					break
+				}
+				refs = append(refs, redundancyRef{column: column, source: source})
+			}
+			if !valid {
+				continue // 结构错误由 schema 校验报出
+			}
+			owner := id + ".col." + name
+			key := redundancyKey(refs)
+			wellFormed := len(refs) >= 2
+			seen := map[string]bool{}
+			for _, ref := range refs {
+				if seen[ref.column] {
+					c.rulef("redundant-group", "%s: redundancy repeats column %s", owner, ref.column)
+					wellFormed = false
+				}
+				seen[ref.column] = true
+			}
+			decls[owner] = &redundancyDecl{owner: owner, refs: refs, key: key, wellFormed: wellFormed}
+			order = append(order, owner)
 		}
 	}
+	sort.Strings(order)
 
-	for _, ref := range sortedStringMapKeys(declared) {
-		groupID := declared[ref]
-		group := c.redundancyGroups[groupID]
-		if group == nil {
-			c.rulef("redundant-ref", "%s: redundancy group %s is not defined in data/redundancy.yaml", ref, groupID)
+	checkedGroup := map[string]bool{}
+	reportedRef := map[string]bool{}
+	reportedUndeclared := map[string]bool{}
+	reportedMismatch := map[string]bool{}
+	for _, owner := range order {
+		decl := decls[owner]
+		// 结构非法（空/单成员/重复列）的声明不参与组比较，避免一个根因级联出 list differs。
+		if decl.wellFormed {
+			// 组 key 只描述集合，不能代替逐声明的自包含校验。
+			self := false
+			for _, ref := range decl.refs {
+				if ref.column == owner {
+					self = true
+					break
+				}
+			}
+			if !self {
+				c.rulef("redundant-group", "%s: redundancy must include the declaring column itself", owner)
+			}
+		}
+		if decl.wellFormed && !checkedGroup[decl.key] {
+			checkedGroup[decl.key] = true
+			sources := 0
+			sourceRef := ""
+			for _, ref := range decl.refs {
+				if ref.source {
+					sources++
+					sourceRef = ref.column
+				}
+			}
+			metas := c.redundancyMemberMetas(decl, reportedRef)
+			if sources != 1 {
+				c.rulef("redundant-group", "%s: redundancy must mark exactly one source (got %d)", owner, sources)
+			} else {
+				c.checkRedundancyTypes(decl, metas, sourceRef)
+			}
+		}
+		if !decl.wellFormed {
 			continue
 		}
-		if !group.has(ref) {
-			c.rulef("redundant-ref", "%s: redundancy group %s does not list this column", ref, groupID)
-		}
-	}
-
-	for _, groupID := range sortedRedundancyKeys(c.redundancyGroups) {
-		group := c.redundancyGroups[groupID]
-		for _, ref := range group.refs() {
-			if declared[ref] == groupID {
+		for _, ref := range decl.refs {
+			if reportedRef[ref.column] {
+				continue // 缺失/继承列已由 redundant-ref 报出
+			}
+			other, ok := decls[ref.column]
+			if !ok {
+				if !reportedUndeclared[ref.column] {
+					c.rulef("redundant-group", "%s: redundancy lists %s but that column does not declare columns[].redundancy", owner, ref.column)
+					reportedUndeclared[ref.column] = true
+				}
 				continue
 			}
-			got := declared[ref]
-			if got == "" {
-				got = "<none>"
+			if !other.wellFormed {
+				continue // 对方结构非法，已由 schema/duplicate 报出
 			}
-			c.rulef("redundant-ref", "%s: data/redundancy.yaml group %s lists this column but columns[].redundancy is %s", ref, groupID, got)
+			if other.key != decl.key {
+				pair := owner + "\x00" + ref.column
+				if owner > ref.column {
+					pair = ref.column + "\x00" + owner
+				}
+				if !reportedMismatch[pair] {
+					c.rulef("redundant-group", "%s: redundancy list differs from %s", owner, ref.column)
+					reportedMismatch[pair] = true
+				}
+			}
 		}
 	}
 }
 
-func sortedRedundancyKeys(m map[string]*redundancyGroup) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
+// checkRedundancyTypes 比较 copy 与 source 的类型/可空。
+func (c *Checker) checkRedundancyTypes(decl *redundancyDecl, metas map[string]columnMeta, sourceRef string) {
+	srcMeta, ok := metas[sourceRef]
+	if !ok {
+		return
 	}
-	sort.Strings(out)
-	return out
+	for _, ref := range decl.refs {
+		if ref.source {
+			continue
+		}
+		meta, ok := metas[ref.column]
+		if !ok {
+			continue
+		}
+		if c.resolvedColumnType(meta.typ) != c.resolvedColumnType(srcMeta.typ) || meta.nullable != srcMeta.nullable {
+			c.rulef("redundant-ref", "%s: copy %s type/nullable (%s, nullable=%v) must match source %s (%s, nullable=%v)", decl.owner, ref.column, c.resolvedColumnType(meta.typ), meta.nullable, sourceRef, c.resolvedColumnType(srcMeta.typ), srcMeta.nullable)
+		}
+	}
+}
+
+// redundancyMemberMetas 校验组内全部列引用，返回可用列的元数据。
+func (c *Checker) redundancyMemberMetas(decl *redundancyDecl, reported map[string]bool) map[string]columnMeta {
+	metas := map[string]columnMeta{}
+	for _, ref := range decl.refs {
+		table, col, ok := c.checkRedundancyRef(decl.owner, ref.column, reported)
+		if !ok {
+			continue
+		}
+		metas[ref.column] = c.tableColumns[table][col]
+	}
+	return metas
+}
+
+// checkRedundancyRef 校验列引用存在且是本表自声明列；继承列与基类列不允许进入冗余组。
+func (c *Checker) checkRedundancyRef(owner, ref string, reported map[string]bool) (string, string, bool) {
+	table, col, ok := splitColumnRef(ref)
+	if ok && table == baseContractID {
+		if !reported[ref] {
+			c.rulef("redundant-ref", "%s: redundancy column %q is a base column; members must be physical table columns", owner, ref)
+			reported[ref] = true
+		}
+		return "", "", false
+	}
+	if !ok || !c.columnExists(table, col) {
+		if !reported[ref] {
+			c.rulef("redundant-ref", "%s: redundancy column %q is not a table column", owner, ref)
+			reported[ref] = true
+		}
+		return "", "", false
+	}
+	if c.inheritedCols[table][col] {
+		if !reported[ref] {
+			c.rulef("redundant-ref", "%s: redundancy column %q is inherited; members must be declared on their own table", owner, ref)
+			reported[ref] = true
+		}
+		return "", "", false
+	}
+	return table, col, true
+}
+
+// redundancyKey 生成与顺序无关的组标识：列引用 + source 标记。
+func redundancyKey(refs []redundancyRef) string {
+	items := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		items = append(items, ref.column+"="+strconv.FormatBool(ref.source))
+	}
+	sort.Strings(items)
+	return strings.Join(items, "\n")
 }

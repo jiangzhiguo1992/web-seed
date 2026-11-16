@@ -7,7 +7,7 @@ stability: stable
 do_not:
   - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
   - "x-contract-id 必须与 index 中的 operation 一一对应"
-  - "account 每个 operation 必须有 x-service"
+  - "account 每个 operation 必须有 x-flow"
   - "account 的字段长度/枚举以 data 契约为准，这里的手写值只用于 OpenAPI 展开"
 
 module: account
@@ -19,11 +19,9 @@ paths:
     get:
       operationId: listAccounts
       x-contract-id: cap.http.account.list
-      x-service: cap.services.account.list
+      x-flow: cap.flows.account_list
       summary: "列出账号"
-      x-preconditions: [platform.security.permissions.account_read]
       x-timeout-ms: 3000
-      x-rate-limit: { requests: 60, window_seconds: 60 }
       parameters:
         - { name: status, in: query, required: false, schema: { type: string, enum: [pending, active, suspended, deleted] } }
         - { name: own_type, in: query, required: false, schema: { type: string, enum: [user, admin, system] } }
@@ -51,12 +49,9 @@ paths:
     post:
       operationId: createAccount
       x-contract-id: cap.http.account.create
-      x-service: cap.services.account.create
+      x-flow: cap.flows.account_create
       summary: "创建账号"
-      x-idempotent: true
-      x-preconditions: [platform.security.permissions.account_write]
       x-timeout-ms: 5000
-      x-audit: true
       requestBody:
         required: true
         content:
@@ -83,9 +78,8 @@ paths:
     get:
       operationId: getAccount
       x-contract-id: cap.http.account.get
-      x-service: cap.services.account.get
+      x-flow: cap.flows.account_get
       summary: "获取账号"
-      x-preconditions: [platform.security.permissions.account_read]
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
@@ -98,10 +92,8 @@ paths:
     patch:
       operationId: updateAccount
       x-contract-id: cap.http.account.update
-      x-service: cap.services.account.update
+      x-flow: cap.flows.account_update
       summary: "更新账号资料"
-      x-preconditions: [platform.security.permissions.account_write]
-      x-audit: true
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       requestBody:
@@ -124,11 +116,8 @@ paths:
     delete:
       operationId: deleteAccount
       x-contract-id: cap.http.account.delete
-      x-service: cap.services.account.delete
+      x-flow: cap.flows.account_delete
       summary: "删除账号（软删）"
-      x-idempotent: true
-      x-preconditions: [platform.security.permissions.account_delete]
-      x-audit: true
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
@@ -138,10 +127,8 @@ paths:
     post:
       operationId: activateAccount
       x-contract-id: cap.http.account.activate
-      x-service: cap.services.account.activate
+      x-flow: cap.flows.account_activate
       summary: "激活账号"
-      x-preconditions: [platform.security.permissions.account_write]
-      x-audit: true
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
@@ -155,10 +142,8 @@ paths:
     post:
       operationId: suspendAccount
       x-contract-id: cap.http.account.suspend
-      x-service: cap.services.account.suspend
+      x-flow: cap.flows.account_suspend
       summary: "封禁账号"
-      x-preconditions: [platform.security.permissions.account_write]
-      x-audit: true
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       requestBody:

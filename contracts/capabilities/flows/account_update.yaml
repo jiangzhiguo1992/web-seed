@@ -1,0 +1,17 @@
+# 更新账号资料用例。直通 cap.methods.account.update。
+schema_version: 1
+id: cap.flows.account_update
+summary: "更新账号资料"
+stability: stable
+do_not:
+  - "account_update 不得修改 status；状态变更走 activate/suspend"
+module: account
+implementation: direct
+method: cap.methods.account.update
+permissions:
+  - platform.security.permissions.account_write
+audit: true
+transaction: required
+errors:
+  - platform.errors.ACCOUNT_NOT_FOUND
+  - platform.errors.COMMON_FORBIDDEN

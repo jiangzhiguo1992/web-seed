@@ -756,8 +756,8 @@ func TestBasePrimaryKeyNullable(t *testing.T) {
 
 func TestCapabilityWriteLayer(t *testing.T) {
 	for id, want := range map[string]bool{
-		"cap.services.account":  true,
-		"cap.async.account_job": true,
+		"cap.methods.account":   true,
+		"cap.flows.account_job": true,
 		"cap.http.account":      false,
 		"cap.features.account":  false,
 	} {
@@ -783,7 +783,7 @@ persistence:
 	}
 	c := &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
 	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services/cap.async may declare table writes") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.methods/cap.flows may declare table writes") {
 		t.Fatalf("http write layer not rejected: %v", c.errs)
 	}
 
@@ -797,7 +797,7 @@ writes:
 	}
 	c = &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
 	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services/cap.async may declare writes") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.methods/cap.flows may declare writes") {
 		t.Fatalf("http top-level writes not rejected: %v", c.errs)
 	}
 }
@@ -1395,7 +1395,7 @@ func TestEnumCapabilityUsage(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(capPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	capability := `id: cap.services.x
+	capability := `id: cap.methods.x
 types:
   Filter:
     type: object
@@ -1407,7 +1407,7 @@ types:
 	}
 	c := &Checker{root: root}
 	u := c.enumUsages()["data.enums.x_status"]
-	if u == nil || !u.capabilities["cap.services.x"] {
+	if u == nil || !u.capabilities["cap.methods.x"] {
 		t.Fatalf("capability enum usage not recorded: %#v", u)
 	}
 }
@@ -1481,7 +1481,7 @@ func TestEnumRefsScanAllContracts(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := `
-id: cap.services.x
+id: cap.methods.x
 types:
   Input:
     type: object
@@ -1945,7 +1945,7 @@ func TestPersistenceQueriesExist(t *testing.T) {
 		}
 	}
 	write("contracts/capabilities/services/x.yaml", `
-id: cap.services.x
+id: cap.methods.x
 module: x
 persistence:
   table: data.tables.x
@@ -2351,81 +2351,349 @@ func TestIndexUsedBy(t *testing.T) {
 }
 
 func TestRedundancyValidation(t *testing.T) {
-	valid := &Checker{
-		tableColumns: map[string]map[string]columnMeta{
+	col := func(name string, redundancy []any) map[string]any {
+		return map[string]any{"name": name, "redundancy": redundancy}
+	}
+	ref := func(column string, source bool) map[string]any {
+		return map[string]any{"column": column, "source": source}
+	}
+	newChecker := func(docs map[string]map[string]any, cols map[string]map[string]columnMeta) *Checker {
+		return &Checker{tableDocs: docs, tableColumns: cols}
+	}
+	tables := map[string]string{
+		"data.tables.a": "contracts/data/tables/a.yaml",
+		"data.tables.b": "contracts/data/tables/b.yaml",
+	}
+	equalGroup := func() []any {
+		return []any{ref("data.tables.a.col.x", true), ref("data.tables.b.col.x", false)}
+	}
+
+	t.Run("valid group", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", equalGroup())}},
+			"data.tables.b": {"columns": []any{col("x", equalGroup())}},
+		}, map[string]map[string]columnMeta{
 			"data.tables.a": {"x": {typ: "string"}},
 			"data.tables.b": {"x": {typ: "string"}},
-		},
-		tableDocs: map[string]map[string]any{
-			"data.tables.a": {"columns": []any{map[string]any{"name": "x", "redundancy": "g"}}},
-			"data.tables.b": {"columns": []any{map[string]any{"name": "x", "redundancy": "g"}}},
-		},
-	}
-	valid.checkRedundancyGroups(map[string]any{"groups": map[string]any{
-		"g": map[string]any{"source": "data.tables.a.col.x", "copies": []any{"data.tables.b.col.x"}},
-	}}, "contracts/data/storage.yaml")
-	valid.checkRedundancy(map[string]string{
-		"data.tables.a": "contracts/data/tables/a.yaml",
-		"data.tables.b": "contracts/data/tables/b.yaml",
-	})
-	if len(valid.errs) != 0 {
-		t.Fatalf("valid redundancy group reported: %v", valid.errs)
-	}
-
-	c := &Checker{
-		tableColumns: map[string]map[string]columnMeta{
-			"data.tables.a": {"x": {typ: "string"}, "no_copy": {typ: "string"}},
-			"data.tables.b": {"x": {typ: "integer"}},
-		},
-		tableDocs: map[string]map[string]any{
-			"data.tables.a": {"columns": []any{
-				map[string]any{"name": "x", "redundancy": "g"},
-				map[string]any{"name": "no_copy", "redundancy": "g2"},
-			}},
-			"data.tables.b": {"columns": []any{map[string]any{"name": "x", "redundancy": "g"}}},
-		},
-	}
-	c.checkRedundancyGroups(map[string]any{"groups": map[string]any{
-		"g":  map[string]any{"source": "data.tables.a.col.x", "copies": []any{"data.tables.b.col.x"}},
-		"g2": map[string]any{"source": "data.tables.a.col.no_copy"},
-		"g3": map[string]any{"source": "data.tables.a.col.missing", "copies": []any{"data.tables.b.col.x"}},
-	}}, "contracts/data/storage.yaml")
-	c.checkRedundancy(map[string]string{
-		"data.tables.a": "contracts/data/tables/a.yaml",
-		"data.tables.b": "contracts/data/tables/b.yaml",
-	})
-	errs := strings.Join(c.errs, "\n")
-	for _, want := range []string{
-		"type/nullable",
-		"copies must list at least one copy",
-		"is not a table column",
-		"not defined in data/redundancy.yaml",
-	} {
-		if !strings.Contains(errs, want) {
-			t.Fatalf("missing %q in redundancy errors: %v", want, c.errs)
+		})
+		c.checkRedundancy(tables)
+		if len(c.errs) != 0 {
+			t.Fatalf("valid redundancy group reported: %v", c.errs)
 		}
-	}
+	})
+
+	t.Run("type mismatch", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", equalGroup())}},
+			"data.tables.b": {"columns": []any{col("x", equalGroup())}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "integer"}},
+		})
+		c.checkRedundancy(tables)
+		if !strings.Contains(strings.Join(c.errs, "\n"), "type/nullable") {
+			t.Fatalf("type mismatch not reported: %v", c.errs)
+		}
+	})
+
+	t.Run("missing column", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", []any{
+				ref("data.tables.a.col.x", true),
+				ref("data.tables.b.col.missing", false),
+			})}},
+			"data.tables.b": {"columns": []any{}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {},
+		})
+		c.checkRedundancy(tables)
+		errs := strings.Join(c.errs, "\n")
+		if !strings.Contains(errs, "is not a table column") {
+			t.Fatalf("missing column not reported: %v", c.errs)
+		}
+		if strings.Contains(errs, "does not declare") {
+			t.Fatalf("missing column cascaded into does-not-declare: %v", c.errs)
+		}
+	})
+
+	t.Run("listed column does not declare", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", equalGroup())}},
+			"data.tables.b": {"columns": []any{map[string]any{"name": "x"}}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(tables)
+		if !strings.Contains(strings.Join(c.errs, "\n"), "does not declare columns[].redundancy") {
+			t.Fatalf("undeclared group member not reported: %v", c.errs)
+		}
+	})
+
+	t.Run("source and self", func(t *testing.T) {
+		list := []any{ref("data.tables.b.col.x", false), ref("data.tables.c.col.x", false)}
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", list)}},
+			"data.tables.b": {"columns": []any{col("x", list)}},
+			"data.tables.c": {"columns": []any{col("x", list)}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "string"}},
+			"data.tables.c": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(map[string]string{
+			"data.tables.a": "contracts/data/tables/a.yaml",
+			"data.tables.b": "contracts/data/tables/b.yaml",
+			"data.tables.c": "contracts/data/tables/c.yaml",
+		})
+		errs := strings.Join(c.errs, "\n")
+		for _, want := range []string{
+			"exactly one source",
+			"include the declaring column itself",
+		} {
+			if !strings.Contains(errs, want) {
+				t.Fatalf("missing %q in redundancy errors: %v", want, c.errs)
+			}
+		}
+	})
+
+	t.Run("duplicate column", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", []any{
+				ref("data.tables.a.col.x", true),
+				ref("data.tables.a.col.x", false),
+			})}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(map[string]string{"data.tables.a": "contracts/data/tables/a.yaml"})
+		if !strings.Contains(strings.Join(c.errs, "\n"), "repeats column") {
+			t.Fatalf("duplicate column not reported: %v", c.errs)
+		}
+	})
+
+	t.Run("duplicate list does not cascade", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", []any{
+				ref("data.tables.a.col.x", true),
+				ref("data.tables.b.col.x", false),
+				ref("data.tables.b.col.x", false),
+			})}},
+			"data.tables.b": {"columns": []any{col("x", []any{
+				ref("data.tables.a.col.x", true),
+				ref("data.tables.b.col.x", false),
+			})}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(tables)
+		errs := strings.Join(c.errs, "\n")
+		if !strings.Contains(errs, "repeats column") {
+			t.Fatalf("duplicate column not reported: %v", c.errs)
+		}
+		if strings.Contains(errs, "list differs") {
+			t.Fatalf("duplicate cascaded into list mismatch: %v", c.errs)
+		}
+	})
+
+	t.Run("self check per declaration", func(t *testing.T) {
+		// C 与 A/B 声明同一个列表，但列表里没有 C 自己；key 相同不能掩盖 C 的自包含错误。
+		list := equalGroup()
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", list)}},
+			"data.tables.b": {"columns": []any{col("x", list)}},
+			"data.tables.c": {"columns": []any{col("x", list)}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "string"}},
+			"data.tables.c": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(map[string]string{
+			"data.tables.a": "contracts/data/tables/a.yaml",
+			"data.tables.b": "contracts/data/tables/b.yaml",
+			"data.tables.c": "contracts/data/tables/c.yaml",
+		})
+		if !strings.Contains(strings.Join(c.errs, "\n"), "data.tables.c.col.x: redundancy must include the declaring column itself") {
+			t.Fatalf("self check masked by group key: %v", c.errs)
+		}
+	})
+
+	t.Run("single member is schema-only", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", []any{ref("data.tables.a.col.x", true)})}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(map[string]string{"data.tables.a": "contracts/data/tables/a.yaml"})
+		if len(c.errs) != 0 {
+			t.Fatalf("single member must be left to schema min_items: %v", c.errs)
+		}
+	})
+
+	t.Run("different lists", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", equalGroup())}},
+			"data.tables.b": {"columns": []any{col("x", []any{
+				ref("data.tables.b.col.x", true),
+				ref("data.tables.a.col.x", false),
+			})}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(tables)
+		if !strings.Contains(strings.Join(c.errs, "\n"), "redundancy list differs from") {
+			t.Fatalf("conflicting lists not reported: %v", c.errs)
+		}
+	})
+
+	t.Run("order does not matter", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", equalGroup())}},
+			"data.tables.b": {"columns": []any{col("x", []any{
+				ref("data.tables.b.col.x", false),
+				ref("data.tables.a.col.x", true),
+			})}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(tables)
+		if len(c.errs) != 0 {
+			t.Fatalf("order-insensitive group reported: %v", c.errs)
+		}
+	})
+
+	t.Run("column in two groups", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", []any{
+				ref("data.tables.a.col.x", true),
+				ref("data.tables.b.col.x", false),
+			})}},
+			"data.tables.b": {"columns": []any{col("x", []any{
+				ref("data.tables.a.col.x", true),
+				ref("data.tables.b.col.x", false),
+			})}},
+			"data.tables.c": {"columns": []any{col("x", []any{
+				ref("data.tables.c.col.x", true),
+				ref("data.tables.b.col.x", false),
+			})}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+			"data.tables.b": {"x": {typ: "string"}},
+			"data.tables.c": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(map[string]string{
+			"data.tables.a": "contracts/data/tables/a.yaml",
+			"data.tables.b": "contracts/data/tables/b.yaml",
+			"data.tables.c": "contracts/data/tables/c.yaml",
+		})
+		if !strings.Contains(strings.Join(c.errs, "\n"), "redundancy list differs from") {
+			t.Fatalf("shared column across groups not reported: %v", c.errs)
+		}
+	})
+
+	t.Run("inherited column cannot join", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", []any{
+				ref("data.tables.a.col.x", true),
+				ref("data.tables.b.col.id", false),
+			})}},
+			"data.tables.b": {"columns": []any{map[string]any{"name": "x"}}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "integer"}},
+			"data.tables.b": {"x": {typ: "string"}, "id": {typ: "integer"}},
+		})
+		c.inheritedCols = map[string]map[string]bool{"data.tables.b": {"id": true}}
+		c.checkRedundancy(tables)
+		errs := strings.Join(c.errs, "\n")
+		if !strings.Contains(errs, "is inherited") {
+			t.Fatalf("inherited column accepted: %v", c.errs)
+		}
+		if strings.Contains(errs, "does not declare") {
+			t.Fatalf("inherited column cascaded into does-not-declare: %v", c.errs)
+		}
+	})
+
+	t.Run("base column cannot join", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", []any{
+				ref("data.tables.a.col.x", true),
+				ref("data.tables.base.col.id", false),
+			})}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "integer"}},
+		})
+		c.checkRedundancy(map[string]string{"data.tables.a": "contracts/data/tables/a.yaml"})
+		errs := strings.Join(c.errs, "\n")
+		if !strings.Contains(errs, "is a base column") {
+			t.Fatalf("base column accepted: %v", c.errs)
+		}
+		if strings.Contains(errs, "does not declare") {
+			t.Fatalf("base column cascaded into does-not-declare: %v", c.errs)
+		}
+	})
+
+	t.Run("empty list is schema-only", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", []any{})}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(map[string]string{"data.tables.a": "contracts/data/tables/a.yaml"})
+		if len(c.errs) != 0 {
+			t.Fatalf("empty list must be left to schema min_items: %v", c.errs)
+		}
+	})
 }
 
-func TestRedundancyFileShape(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "contracts/data")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+func TestRedundancySchema(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
 		t.Fatal(err)
 	}
-	body := "id: data.redundancy\nsummary: \"x\"\n"
-	if err := os.WriteFile(filepath.Join(dir, "redundancy.yaml"), []byte(body), 0o644); err != nil {
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	c := &Checker{root: root}
-	c.checkRedundancyFile()
-	errs := strings.Join(c.errs, "\n")
-	for _, want := range []string{
-		`missing required field "do_not"`,
-		`missing required field "groups"`,
-	} {
-		if !strings.Contains(errs, want) {
-			t.Fatalf("missing %q in redundancy file errors: %v", want, c.errs)
+	columns, ok := contractspec.FindField(schema.Fields, "columns")
+	if !ok {
+		t.Fatal("columns field missing in meta")
+	}
+	redundancy, ok := contractspec.FindField(columns.ItemFields, "redundancy")
+	if !ok {
+		t.Fatal("columns.redundancy field missing in meta")
+	}
+	if redundancy.Type != "list<object>" {
+		t.Fatalf("redundancy type = %q, want list<object>", redundancy.Type)
+	}
+	column, ok := contractspec.FindField(redundancy.ItemFields, "column")
+	if !ok || column.Type != "string" || column.Pattern == "" || !column.Required {
+		t.Fatalf("redundancy.column shape = %#v", column)
+	}
+	source, ok := contractspec.FindField(redundancy.ItemFields, "source")
+	if !ok || source.Type != "boolean" || !source.Required {
+		t.Fatalf("redundancy.source shape = %#v", source)
+	}
+
+	cases := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{"single member", []any{map[string]any{"column": "data.tables.a.col.x", "source": true}}, "[schema.range]"},
+		{"legacy group id", "account_own_type", "[schema.type]"},
+		{"bad column ref", []any{map[string]any{"column": "token.own_type", "source": true}}, "[schema.pattern]"},
+		{"bad source type", []any{map[string]any{"column": "data.tables.a.col.x", "source": "yes"}}, "[schema.type]"},
+		{"missing source", []any{map[string]any{"column": "data.tables.a.col.x"}}, "[schema.required]"},
+	}
+	for _, tc := range cases {
+		c := &Checker{}
+		c.validateValue(tc.value, redundancy, "columns[0].redundancy")
+		if !strings.Contains(strings.Join(c.errs, "\n"), tc.want) {
+			t.Fatalf("%s: missing %q in schema errors: %v", tc.name, tc.want, c.errs)
 		}
 	}
 }
@@ -2597,6 +2865,35 @@ func TestBaseIDBitsMustBe64(t *testing.T) {
 	}
 }
 
+func TestBaseColumnsRejectRedundancy(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := map[string]any{
+		"id": "data.tables.base", "summary": "base", "schema_version": 1, "stability": "stable", "do_not": []any{},
+		"columns": []any{
+			map[string]any{"name": "id", "type": "integer", "primary_key": true, "bits": 64, "redundancy": []any{
+				map[string]any{"column": "data.tables.base.col.id", "source": true},
+				map[string]any{"column": "data.tables.a.col.id", "source": false},
+			}},
+			map[string]any{"name": "status", "type": "integer", "default": 0},
+			map[string]any{"name": "created_at", "type": "timestamp"},
+			map[string]any{"name": "updated_at", "type": "timestamp"},
+			map[string]any{"name": "deleted_at", "type": "timestamp", "nullable": true},
+		},
+	}
+	c := &Checker{root: root}
+	c.checkBaseTable(doc, schema, "contracts/data/tables/_base.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `base column "id" must not declare redundancy`) {
+		t.Fatalf("base redundancy declaration not reported: %v", c.errs)
+	}
+}
+
 func TestCollectTableObjectsGlobalNames(t *testing.T) {
 	c := &Checker{
 		tableObjects: map[string]map[string]bool{},
@@ -2628,7 +2925,7 @@ func TestConstraintErrorRef(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := `
-id: cap.services.x
+id: cap.methods.x
 module: x
 persistence:
   table: data.tables.x

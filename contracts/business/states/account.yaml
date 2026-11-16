@@ -27,7 +27,7 @@ transitions:
     guard: "number 已归一且格式合法"
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     side_effects: [business.events.account.activated]
-    implemented_by: [cap.services.account.activate]
+    implemented_by: [cap.methods.account.activate]
 
   - name: suspend
     description: "封禁账号"
@@ -35,7 +35,7 @@ transitions:
     to: suspended
     guard: "true"
     side_effects: [business.events.account.suspended]
-    implemented_by: [cap.services.account.suspend]
+    implemented_by: [cap.methods.account.suspend]
 
   - name: reactivate
     description: "解封"
@@ -43,7 +43,7 @@ transitions:
     to: active
     guard: "true"
     side_effects: [business.events.account.reactivated]
-    implemented_by: [cap.services.account.activate]
+    implemented_by: [cap.methods.account.activate]
 
   - name: delete
     description: "软删"
@@ -51,7 +51,7 @@ transitions:
     to: deleted
     guard: "true"
     side_effects: [business.events.account.deleted]
-    implemented_by: [cap.services.account.delete]
+    implemented_by: [cap.methods.account.delete]
 
 forbidden_examples:
   - { from: deleted, transition: activate, reason: "已删除不可激活" }

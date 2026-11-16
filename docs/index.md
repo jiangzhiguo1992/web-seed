@@ -25,7 +25,7 @@
 |---|---|---|
 | 改任何契约 | `playbooks/contract-change.md` | `_meta/README.md` → `_meta/<type>.yaml` → `index.yaml` → 目标文件 |
 | 新增 / 修改 API | `contract-change` + `add-endpoint`（P7） | `capabilities/README.md`、`capabilities/http/*.yaml`、`project.yaml`（apps） |
-| 新增表 / 迁移 | `contract-change` + `add-table`（P7） | `data/README.md`、`_meta/data.tables.yaml`、`data/tables/_base.yaml`、`data/tables/*.yaml`、`data/storage.yaml`、`data/redundancy.yaml` |
+| 新增表 / 迁移 | `contract-change` + `add-table`（P7） | `data/README.md`、`_meta/data.tables.yaml`、`data/tables/_base.yaml`、`data/tables/*.yaml`、`data/storage.yaml` |
 | 改业务规则 / 状态机 | `contract-change` | `business/README.md`、`business/{states,rules,events}/*.yaml` |
 | 改存储引擎 | `contract-change` | `data/storage.yaml` |
 | 新增页面 | `contract-change` + `add-feature`（P7） | `features/README.md`、`features/pages/*.yaml`、`features/routes.yaml` |

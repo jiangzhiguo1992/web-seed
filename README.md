@@ -52,7 +52,7 @@ web-seed/
 │   ├── _meta/                   #   契约字段规范 + 类型默认值（data.tables / data.enums / _types）
 │   ├── project.yaml             #   项目元信息（derive 唯一输入）
 │   ├── data/                    #   ① 数据：tables（真相源）/ entities / queries
-│   ├── capabilities/            #   ② 实现层：http / async / services / flows
+│   ├── capabilities/            #   ② 能力层：methods / flows + protocols/http
 │   ├── business/                  #   ③ 业务规格：states / rules / events / glossary
 │   ├── features/                #   ④ 功能：routes / pages / flows
 │   ├── platform/                #   ⑤ 横切：环境/版本/错误/枚举/HTTP/质量/配置/架构/设计/观测/埋点/安全
@@ -228,7 +228,7 @@ make build-web        # apps/web/admin/dist
 3. 手工同步替换（`derive.sh` 落地前）：
    - Go module：`github.com/yourorg/web-seed/apps/api` → 你的 module
    - 前端 scope：`@webseed/*` → 你的 scope
-4. 删除示例契约与实现：`data/tables/{account,token,auth_pwd,auth_phone,auth_email,verification_body,verification_action}.yaml`、`data/entities/{account,token,auth_pwd,auth_phone,auth_email,verification_body,verification_action}.yaml`、`data/queries/{account,auth,token,verification}.yaml`、`capabilities/http/{account,auth}.yaml`、`capabilities/services/{account,auth}.yaml`、`capabilities/flows/account_activation.yaml`、`capabilities/async/{account_cleanup,verification_cleanup}.yaml`、`business/**/account*.yaml`、`features/{pages,flows}/account_*.yaml` 及对应代码
+4. 删除示例契约与实现：`data/tables/{account,token,auth_pwd,auth_phone,auth_email,verification_body,verification_action}.yaml`、`data/entities/{account,token,auth_pwd,auth_phone,auth_email,verification_body,verification_action}.yaml`、`data/queries/{account,auth,token,verification}.yaml`、`capabilities/protocols/http/{account,auth}.yaml`、`capabilities/methods/{account,auth}.yaml`、`capabilities/flows/verification_cleanup.yaml`、`business/**/account*.yaml`、`features/{pages,flows}/account_*.yaml` 及对应代码
 5. 删除 `.opencode/opencode.json`（含本地 MCP 配置）
 6. 创建 `.env.local`，参考 `.env.example`（P2 生成）
 

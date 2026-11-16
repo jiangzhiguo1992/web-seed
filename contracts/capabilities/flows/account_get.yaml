@@ -1,0 +1,16 @@
+# 获取账号用例。直通 cap.methods.account.get。
+schema_version: 1
+id: cap.flows.account_get
+summary: "获取账号"
+stability: stable
+do_not:
+  - "account_get 不得返回认证绑定或令牌"
+module: account
+implementation: direct
+method: cap.methods.account.get
+permissions:
+  - platform.security.permissions.account_read
+transaction: read_only
+errors:
+  - platform.errors.ACCOUNT_NOT_FOUND
+  - platform.errors.COMMON_FORBIDDEN

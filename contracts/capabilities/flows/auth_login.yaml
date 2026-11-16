@@ -1,0 +1,19 @@
+# 登录用例。直通 cap.methods.auth.login。
+schema_version: 1
+id: cap.flows.auth_login
+summary: "登录"
+stability: stable
+do_not:
+  - "auth_login 不得区分账号不存在与密码错误"
+module: account
+implementation: direct
+method: cap.methods.auth.login
+permissions: []
+audit: true
+rate_limit: { requests: 10, window_seconds: 60 }
+transaction: required
+errors:
+  - platform.errors.AUTH_INVALID_CREDENTIALS
+  - platform.errors.AUTH_LOCKED
+  - platform.errors.ACCOUNT_SUSPENDED
+  - platform.errors.COMMON_FORBIDDEN

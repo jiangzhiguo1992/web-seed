@@ -86,7 +86,14 @@ fields:
       - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值" }
       # 类型族参数由 _meta/_types.yaml 的 column_types.families.params 注入
       - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], default: public, description: "敏感级别；secret 列禁止跨模块返回" }
-      - { name: redundancy, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "冗余组 ID" }
+      - name: redundancy
+        type: list<object>
+        required: false
+        min_items: 2
+        description: "同组冗余列引用；每项用 source 标记权威列"
+        item_fields:
+          - { name: column, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "同组列引用" }
+          - { name: source, type: boolean, required: true, description: "是否为权威列；每组恰好一个" }
       - { name: comment, type: string, required: false, description: "列 COMMENT" }
 
   - name: constraints
@@ -145,7 +152,7 @@ rules:
   - { id: storage-partition, text: "partition 只允许 strategy/columns/interval；strategy 只能是 range/list/hash；columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
   - { id: used-by-generated, text: "used_by.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ used-by-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
-  - { id: owner-write, text: "只有 owner_module 相同的 cap.services/cap.async 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在 persistence.write_queries 或 cap.async.writes 中；service 写表必须在 persistence.table/tables 中，async 写表由 writes 声明；每个写表归属模块一致；返回 affected_rows 的查询必须有写表并出现在某个写声明中；跨模块读取用 persistence.queries", implemented_by: [ owner-write ] }
+  - { id: owner-write, text: "只有 owner_module 相同的 cap.methods/cap.flows 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在 persistence.write_queries 或 flow.writes 中；method 写表必须在 persistence.table/tables 中，flow 写表由 writes 声明；每个写表归属模块一致；返回 affected_rows 的查询必须有写表并出现在某个写声明中；跨模块读取用 persistence.queries", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-comment, text: "索引必须写非空 comment", implemented_by: [ index-comment ] }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；columns 必须存在；名称前缀匹配类型", implemented_by: [ index-definition ] }
@@ -153,8 +160,8 @@ rules:
   - { id: index-used-by-ref, text: "index.used_by 必须指向存在的 data.queries.* 项，且该查询的 tables 必须包含当前表", implemented_by: [ index-used-by-ref ] }
   - { id: index-name-unique, text: "索引名同一 schema 内必须全局唯一", implemented_by: [ index-name-unique ] }
   - { id: constraint-error-ref, text: "capabilities.persistence.constraint_errors 的键必须是所写表声明的约束或索引名", implemented_by: [ constraint-error-ref ] }
-  - { id: redundant-group, text: "data/redundancy.yaml 的 groups 每个组必须有 source 和至少一个 copies；组只允许 source/copies；组 ID 必须为 snake_case", implemented_by: [ redundant-group ] }
-  - { id: redundant-ref, text: "groups 的 source/copies 必须是存在的表列；columns[].redundancy 必须与 groups 双向一致；同一列只能属于一个组；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
+  - { id: redundant-group, text: "columns[].redundancy 每组必须恰好一个 source 且包含声明列自身；组内每列必须声明完全相同的列表；同一列不得跨组；列表不得重复列；基类列不得声明 redundancy", implemented_by: [ redundant-group ] }
+  - { id: redundant-ref, text: "redundancy 的 column 必须是存在的物理表自声明列（继承列/基类列不允许）；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
   - { id: default-type, text: "列 default 的 YAML 类型必须与列类型族兼容；长度/范围按本列声明的参数校验（不展开 data.tables.*.col.* 引用）", implemented_by: [ default-type ] }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
   - { id: physical-primary-key, text: "物理表不得声明 primary_key；主键统一由基类 id 提供", implemented_by: [ physical-primary-key ] }

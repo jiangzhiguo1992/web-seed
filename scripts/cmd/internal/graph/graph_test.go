@@ -93,7 +93,7 @@ queries:
       - { name: exists, kind: scalar, type: boolean }
     tables: [ data.tables.b ]
 `)
-	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.methods.x
 interface:
   methods:
     - name: Get
@@ -115,7 +115,7 @@ func TestCompute(t *testing.T) {
 	if got := snap.Entities["data.entities.e1"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("entity e1 queries = %v", got)
 	}
-	if got := snap.Entities["data.entities.e1"].Capabilities; len(got) != 1 || got[0] != "cap.services.x" {
+	if got := snap.Entities["data.entities.e1"].Capabilities; len(got) != 1 || got[0] != "cap.methods.x" {
 		t.Fatalf("entity e1 capabilities = %v", got)
 	}
 }
@@ -219,7 +219,7 @@ func TestWriteAndCheck(t *testing.T) {
 		t.Fatalf("table b used_by not written:\n%s", b)
 	}
 	e1, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e1.yaml"))
-	if !strings.Contains(string(e1), "used_by:\n  queries:\n    - data.queries.q.get_a\n  capabilities:\n    - cap.services.x\n") {
+	if !strings.Contains(string(e1), "used_by:\n  queries:\n    - data.queries.q.get_a\n  capabilities:\n    - cap.methods.x\n") {
 		t.Fatalf("entity used_by not written:\n%s", e1)
 	}
 

@@ -562,7 +562,7 @@ func TestEntityUsedByCapabilities(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := `id: cap.services.x
+	body := `id: cap.methods.x
 interface:
   methods:
     - name: Get
@@ -588,7 +588,7 @@ interface:
 	}
 	c.errs = nil
 	c.entities["data.entities.account"].Doc["used_by"] = map[string]any{
-		"queries": []any{}, "capabilities": []any{"cap.services.x"},
+		"queries": []any{}, "capabilities": []any{"cap.methods.x"},
 	}
 	c.checkEntityUsedBy()
 	if len(c.errs) != 0 {

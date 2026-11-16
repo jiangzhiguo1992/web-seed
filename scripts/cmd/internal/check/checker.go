@@ -59,7 +59,6 @@ type Checker struct {
 	tableColumns      map[string]map[string]columnMeta
 	tableDocs         map[string]map[string]any
 	tableTypeFamilies map[string]bool
-	redundancyGroups  map[string]*redundancyGroup
 	entityDocs        []entityDoc
 	entityBaseDoc     map[string]any
 	entityBaseFields  []entityFieldInfo
@@ -72,6 +71,7 @@ type Checker struct {
 	queryOrder        []string
 	enumCodes         map[string]map[int]bool
 	errCodeSet        map[string]bool
+	permissionSet     map[string]bool
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -128,7 +128,6 @@ func (c *Checker) run() {
 	c.loadTableColumns(tableIDs)
 	c.checkIndexLiveOnly(tableIDs)
 	c.checkStorage(tableIDs)
-	c.checkRedundancyFile()
 	c.loadEntities(entitySchema)
 	c.checkRedundancy(tableIDs)
 	c.loadTableIndexes(tableIDs)
@@ -139,6 +138,7 @@ func (c *Checker) run() {
 	c.checkRules(enumSchema)
 	c.checkRules(entitySchema)
 	c.checkRules(querySchema)
+	c.checkCapabilities()
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues)
 	c.checkCapabilityPersistence(tableIDs)

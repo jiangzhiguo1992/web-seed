@@ -1,0 +1,19 @@
+# 校验验证码用例。直通 cap.methods.auth.verify_code。
+schema_version: 1
+id: cap.flows.auth_verify_code
+summary: "校验验证码"
+stability: stable
+do_not:
+  - "auth_verify_code 不得枚举 target 是否存在"
+module: account
+implementation: direct
+method: cap.methods.auth.verify_code
+permissions: []
+audit: true
+rate_limit: { requests: 10, window_seconds: 60 }
+transaction: required
+errors:
+  - platform.errors.AUTH_VERIFICATION_INVALID
+  - platform.errors.AUTH_VERIFICATION_EXPIRED
+  - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+  - platform.errors.AUTH_VERIFICATION_TARGET_INVALID

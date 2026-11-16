@@ -46,7 +46,7 @@
 - 不要在事件里放 PII
 - 破坏兼容必须升 version
 - payload 字段只能是 `data.entities.*` 字段的子集
-- 不要写 trigger 反向引用能力（由 capabilities 的 emits 声明）
+- `trigger` / `emitted_by` 是 business 指向 capability 的反向锚点，只写能力 ID；capabilities 不写 `emits`
 
 **business.glossary**
 

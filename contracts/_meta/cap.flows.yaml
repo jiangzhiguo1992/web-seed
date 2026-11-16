@@ -1,0 +1,129 @@
+# cap.flows 类型规范：可独立触发的编排单元，同步/异步统一。
+# 字段树为目标态；capabilities 的字段树与 checker 接入待后续批次。
+
+id: meta.cap.flows
+type: cap.flows
+title: "编排契约"
+targets:
+  dir: "contracts/capabilities/flows"
+  glob: "*.yaml"
+  id: "cap.flows.<file>"
+  naming: "snake_case"
+
+fields:
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: id
+    type: string
+    required: true
+    pattern: '^cap\.flows\.[a-z][a-z0-9_]*$'
+    description: "契约 ID"
+
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: list<string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "所属模块；flow 的写归属校验基准"
+
+  - name: implementation
+    type: string
+    required: true
+    enum: [ direct, flow ]
+    description: "direct=直通一个 method；flow=显式 steps 编排"
+
+  - name: method
+    type: string
+    required: false
+    pattern: '^cap\.methods\.'
+    description: "implementation=direct 时必填；指向被直通的原子方法"
+
+  - name: trigger
+    type: any
+    required: false
+    description: "异步触发器：type=cron|event|webhook；同步 flow 不写本字段"
+
+  - name: input
+    type: any
+    required: false
+    description: "同步 flow 对应请求；异步 flow 对应 job payload"
+
+  - name: output
+    type: any
+    required: false
+    description: "同步 flow 对应响应；异步 flow 对应 job result"
+
+  - name: permissions
+    type: list<string>
+    required: false
+    description: "权限点 ID；同步 flow 必填，异步 flow 可选"
+
+  - name: audit
+    type: boolean
+    required: false
+    description: "是否写审计日志"
+
+  - name: rate_limit
+    type: any
+    required: false
+    description: "限流策略：requests/window_seconds"
+
+  - name: transaction
+    type: string
+    required: false
+    enum: [ required, read_only, none ]
+    description: "事务边界；同步 flow 必填"
+
+  - name: idempotency
+    type: any
+    required: false
+    description: "幂等键与窗口；异步 flow 必填，同步 flow 可选（有 Idempotency-Key 时）"
+
+  - name: retry
+    type: any
+    required: false
+    description: "重试与死信；异步 flow 必填，同步 flow 禁止"
+
+  - name: concurrency
+    type: any
+    required: false
+    description: "并发与分布式锁；异步 flow 必填，同步 flow 禁止"
+
+  - name: steps
+    type: any
+    required: false
+    description: "implementation=flow 时必填；use 只能是 cap.methods.*、本模块 data.queries.*、platform.security.permissions.*"
+
+  - name: compensation
+    type: any
+    required: false
+    description: "结构化补偿：action=rollback|compensate|dead_letter"
+
+  - name: errors
+    type: list<string>
+    required: false
+    description: "flow 对外错误集；必须是 steps 错误的子集"
+
+rules:
+  - { id: flow-structure, text: "flow 的 implementation 只能是 direct/flow；direct 必须有 method 且无 steps；flow 必须有 steps 且无 method；同步 flow 必须有 transaction/permissions 且不得有 retry/concurrency；异步 flow 必须有 input/output/idempotency/retry/concurrency 且不得有 transaction", implemented_by: [ flow-structure ] }

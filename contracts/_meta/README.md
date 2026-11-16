@@ -15,7 +15,10 @@ contracts/_meta/
 ├── data.tables.yaml      # data.tables 的字段树 + 值域 + 说明
 ├── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
 ├── data.entities.yaml    # data.entities 的字段树 + 值域 + 说明
-└── data.queries.yaml     # data.queries 的字段树 + 值域 + 说明
+├── data.queries.yaml     # data.queries 的字段树 + 值域 + 说明
+├── cap.methods.yaml      # cap.methods 的 targets + 字段树（原子方法）
+├── cap.flows.yaml        # cap.flows 的 targets + 字段树（编排）
+└── cap.http.yaml         # cap.http 的 targets + 字段树（HTTP 绑定）
 
 scripts/contract/
 ├── scaffold.sh           # make contract-new
@@ -78,7 +81,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；类型族来自 `_meta/_types.yaml`。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；类型族来自 `_meta/_types.yaml`。`cap.methods` / `cap.flows` / `cap.http` 的 targets 已落盘，骨架生成与字段校验待后续批次接入。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -108,11 +111,11 @@ scripts/cmd/
   - 禁止 `foreign_key`；跨表一致性由应用/业务规则保证
   - 唯一索引的 `live_only` 决定作用域：`true` 只约束未软删行（要求 nullable `deleted_at`），`false`/省略约束全表（含软删行）
   - `indexes` 的 `comment`、`columns` xor `expression`、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表
-  - `columns[].redundancy` 只写组 ID；`data/redundancy.yaml` 的 `groups` 定义 `source`/`copies`，两边双向一致，`type`/`nullable` 一致
+  - `columns[].redundancy` 直接列出同组全部列引用（`column` + `source`）；组内各列声明必须完全一致，`type`/`nullable` 一致
   - `data/queries/*.yaml` 的 `index_ref`：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须在 `used_by` 中列出该 query
-  - `data/storage.yaml` 的 `tables.<engine>`：按 supported_engines 分组，覆盖每张物理表且无孤儿；`caches` 只登记非权威副本；`size_class`/`retention`/`partition` 按表登记；`data/redundancy.yaml` 的组 ID、source/copies 与列声明双向一致
+  - `data/storage.yaml` 的 `tables.<engine>`：按 supported_engines 分组，覆盖每张物理表且无孤儿；`caches` 只登记非权威副本；`size_class`/`retention`/`partition` 按表登记
   - `table.entities` 显式记录映射本表的实体，checker 校验；`used_by` 只记生成的 `queries`
-  - `owner_module` 与 capabilities 写表归属一致（只有 `cap.services` / `cap.async` 可写）；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
+  - `owner_module` 与 capabilities 写表归属一致（只有 `cap.methods` / `cap.flows` 可写）；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
   - `persistence.queries` 引用的查询项必须存在；`persistence.write_queries`（service）与 `writes`（async）必须已在 queries/uses 中登记，且每个写表在 `persistence.table/tables` 中、归属一致；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
   - 索引名同一 schema 内必须全局唯一
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
@@ -189,12 +192,11 @@ scripts/cmd/
 | `column_types` | `_types.yaml` 中的类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
 | `columns[].type` | 类型族键，或硬编码的 `data.tables.<t>.col.<c>`；不是类型族，也不是外键；表列不引用 `data.enums.*` |
 | `targets` | `dir`/`glob` 扫描路径；`file` 是单文件契约的固定路径；`id` 是 ID 模板（`<file>` → 文件 stem；单例契约直接写固定 ID）；`naming` 是文件名规则（`snake_case`）；基类固定 `_base.yaml`，不在此声明 |
-| `columns[].redundancy` | 冗余组 ID；组明细（source/copies）在 `data/redundancy.yaml` 的 `groups` |
+| `columns[].redundancy` | 同组冗余列引用列表；`source: true` 标记权威列，每组恰好一个，组内各列声明完全一致 |
 | `indexes[].comment` | 索引必须写非空用途说明；生成 `COMMENT ON INDEX` |
 | `indexes[].used_by` | 使用该索引的 query item ID 列表；至少一个，防空索引 |
 | `queries[].index_ref` | query 使用的索引：`data.tables.<t>.pk` 或 `data.tables.<t>.<index-name>`；与 `indexes[].used_by` 双向一致 |
 | `data/storage.yaml` 的 `tables.<engine>` | 按 engine 分组的表清单；`caches` 为非权威副本；`size_class`/`retention`/`partition` 按表登记；表契约不再承载这些物理事实 |
-| `data/redundancy.yaml` 的 `groups` | 冗余组明细：`source` + `copies`；与表列上的 `redundancy` 双向一致 |
 | `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
 | `rules` | 本类型的专有规则；每条必须写 `implemented_by`（含规则自身 ID，指向 checker 实际输出的 `[rule-id]`）；通用结构规则由 checker 代码强制 |
 

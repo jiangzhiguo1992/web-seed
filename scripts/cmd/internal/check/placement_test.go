@@ -77,7 +77,7 @@ enums:
       - { value: active, code: 0 }
     used_by:
       entities: [ data.entities.x ]
-      capabilities: [ cap.services.x ]
+      capabilities: [ cap.methods.x ]
 `)
 	c := &Checker{root: flow}
 	c.checkFieldPlacement()
@@ -101,7 +101,7 @@ enums:
       entities:
         - data.entities.x
       capabilities:
-        - cap.services.x
+        - cap.methods.x
 `)
 	c = &Checker{root: block}
 	c.checkFieldPlacement()

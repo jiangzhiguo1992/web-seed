@@ -489,6 +489,9 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 		if !ok {
 			continue
 		}
+		if _, ok := m["redundancy"]; ok {
+			c.rulef("redundant-group", "%s: base column %q must not declare redundancy", rel, n)
+		}
 		names = append(names, n)
 		if shape, ok := baseColumnShape[n]; ok {
 			typ, _ := m["type"].(string)
