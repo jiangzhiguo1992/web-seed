@@ -57,7 +57,7 @@ protocols ──x-flow──> flows ──use──> methods ──queries──
 
 类型级负向约束：
 
-- 不要在 interface 里暴露 `*pgx.Tx` 或 HTTP 类型。
+- 不要在 interface 里暴露 `*sql.Tx` 或 HTTP 类型。
 - 不要返回表行 `data.tables.*.row`；返回 `data.entities.*` 或本地 `types.*`。
 - 只登记跨模块调用的方法；模块内 helper 不要进契约。
 - 写表必须属于 `owner_module`；每个方法用 `queries` 列出它调用的 query 项，query 的 `used_by` 由 `make gen-graph` 反向生成。

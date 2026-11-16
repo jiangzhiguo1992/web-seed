@@ -4,7 +4,7 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
-        gen gen-openapi gen-db gen-graph gen-graph-check gen-errors gen-errors-check gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
+        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
         gen-rule-ids check-rule-ids dev api-dev web-dev compose-up compose-down doctor derive check-docs
 
 help: ## 显示可用目标
@@ -43,19 +43,22 @@ lint-tools: ## 契约工具 vet + 格式检查
 typecheck: ## 前端类型检查
 	pnpm -C apps/web -r --if-present typecheck
 
-gen: contract-check ## 重新生成全部契约产物（gen-graph / gen-errors 已实现，其余 P2；生成前强制校验契约）
-	@echo "gen: 部分实现。已实现：gen-graph / gen-errors。待实现：gen-openapi / gen-db / gen-client / gen-env"
+gen: contract-check ## 重新生成契约产物（已实现 gen-graph / gen-errors / gen-db；其余 P2）
+	@echo "gen: 部分实现。已实现：gen-graph / gen-errors / gen-db。待实现：gen-openapi / gen-client / gen-env"
 	$(MAKE) gen-graph
 	$(MAKE) gen-errors
+	$(MAKE) gen-db
 	@exit 1
 
 gen-openapi: contract-check ## 合并 capabilities/http/* + apps/* → generated/openapi（P2）
 	@echo "gen-openapi: 尚未实现（P2）"
 	@exit 1
 
-gen-db: contract-check ## data/tables/* → schema.sql + migrations（P2）
-	@echo "gen-db: 尚未实现（P2）"
-	@exit 1
+gen-db: contract-check ## data/tables/* → apps/api/schema.sql + migrations/0001_baseline.sql
+	cd scripts/cmd && go run ./gen_db -root "$(CURDIR)"
+
+gen-db-check: ## 校验 schema.sql / migrations 是否为最新
+	cd scripts/cmd && go run ./gen_db -root "$(CURDIR)" -check
 
 gen-graph: ## 按引用计算并写回 table/entity 的 used_by
 	cd scripts/cmd && go run ./gen_graph -root "$(CURDIR)"

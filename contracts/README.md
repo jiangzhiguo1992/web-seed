@@ -443,7 +443,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | 生成器 | 输出 | 状态 |
 |---|---|---|
 | openapi | Go server 类型 + TS client | ⬜ P2 |
-| db | DDL / migrations / sqlc 输入 | ⬜ P2 |
+| db | DDL / migrations / sqlc 输入 | ✅ `schema.sql` + `0001_baseline.sql`；增量 diff ⬜ P5 |
 | business | 状态机、常量、断言、测试骨架 | ⬜ P2 |
 | features | 路由、页面骨架、类型 | ⬜ P2 |
 | platform | 配置校验、常量、CSS 变量 | ⬜ P2 |
@@ -486,6 +486,7 @@ data/storage.yaml ──> 按引擎分组的表清单 + 表级物理事实
 | 规则 | 说明 |
 |---|---|
 | 禁止手写迁移 | 改 `tables/*.yaml` 后跑 `make gen-db` |
+| 目标引擎 | MySQL 8.0.16+；`live_only` 索引用 functional unique index 表达（`deleted_at IS NULL` 表达式键），不是 PostgreSQL partial index |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验（⬜ P5） | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
 | 结构化 DDL | 分区用 `storage.partition.<id>`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |

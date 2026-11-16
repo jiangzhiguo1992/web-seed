@@ -10,7 +10,5 @@ cd "$ROOT/scripts/cmd"
 go run ./gen_rule_ids -check
 go run ./gen_graph -root "$ROOT" -check
 
-tmp="$(mktemp "${TMPDIR:-/tmp}/contractcheck.XXXXXX")"
-trap 'rm -f "$tmp"' EXIT
-go build -o "$tmp" ./contract_check
-"$tmp" -root "$ROOT"
+# 直接 go run，避免在 SourceTree 等工具的临时目录里生成并执行未签名二进制（macOS 可能 SIGKILL）。
+go run ./contract_check -root "$ROOT"

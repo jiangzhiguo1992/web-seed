@@ -231,7 +231,7 @@ indexes:
 | 契约结构与引用 | `make contract-check`（lefthook pre-commit + CI） | ✅ 已启用 |
 | 反向索引漂移 | `gen_graph -check`（内嵌于 contract-check） | ✅ 已启用 |
 | 规则 ID 同步 | `gen_rule_ids -check`（内嵌于 contract-check） | ✅ 已启用 |
-| 契约 → DDL / migrations / sqlc | `make gen-db` | ⬜ P2 未实现 |
+| 契约 → DDL / migrations / sqlc | `make gen-db` | ✅ schema.sql + 0001_baseline.sql；sqlc ⬜ P2 |
 | 迁移重放与目标态比对 | `make db-verify` | ⬜ P5 未实现 |
 | 枚举两端一致（Go / TS） | `make gen` | ⬜ P2 未实现 |
 | 影响面与血缘 | `make contract-impact` / `contract-graph` | ⬜ P2 未实现 |

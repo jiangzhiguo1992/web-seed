@@ -7,7 +7,7 @@ schema_version: 1
 stability: stable
 do_not:
   - "返回 data.entities.account，不要返回表行"
-  - "不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型"
+  - "不要在 interface 里暴露 *sql.Tx 或 HTTP 类型"
   - "认证相关方法在 cap.methods.auth，不要塞进本接口"
   - "Delete 只做 account 软删；认证绑定、未消费验证体与令牌由 cap.flows.account.delete 编排清理"
 
