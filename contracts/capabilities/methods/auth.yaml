@@ -1,4 +1,4 @@
-# 认证会话能力：登录与账号级聚合清理。令牌在 methods/token.yaml，验证码在 methods/verification.yaml。
+# 认证会话 service；令牌见 token.yaml，验证码见 verification.yaml。
 
 schema_version: 1
 id: cap.methods.auth
@@ -8,7 +8,6 @@ do_not:
   - "auth.Login 不直接写 token 表；通过 TokenService.Issue 完成签发"
   - "auth.RevokeAllForAccount 必须编排 TokenService.RevokeByAccount 与 VerificationService.RevokeByAccount"
   - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
-  - "不要返回 data.tables.*.row；返回 data.entities.account 或 AuthSession"
 
 module: account
 

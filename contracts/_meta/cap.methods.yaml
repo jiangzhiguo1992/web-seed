@@ -80,7 +80,7 @@ fields:
             required: true
             description: "入参"
             item_fields:
-              - { name: name, type: string, required: true, description: "参数名" }
+              - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
               - { name: type, type: string, required: true, description: "参数类型" }
               - { name: nullable, type: boolean, required: false, description: "是否可空" }
           - name: returns
@@ -88,7 +88,7 @@ fields:
             required: true
             description: "返回值"
             item_fields:
-              - { name: name, type: string, required: true, description: "返回名" }
+              - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名" }
               - { name: type, type: string, required: true, description: "返回类型" }
               - { name: nullable, type: boolean, required: false, description: "是否可空" }
           - name: errors
@@ -104,7 +104,7 @@ fields:
             type: list<string>
             required: true
             unique: true
-            pattern: '^data\.queries\.'
+            pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$'
             description: "本方法调用的 query 项 ID；query.used_by 的反向索引由 gen-graph 生成"
 
   - name: persistence
@@ -112,8 +112,8 @@ fields:
     required: true
     description: "持久化归属"
     fields:
-      - { name: table, type: string, required: false, pattern: '^data\.tables\.', description: "单表归属" }
-      - { name: tables, type: list<string>, required: false, description: "多表归属" }
+      - { name: table, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "单表归属" }
+      - { name: tables, type: list<string>, required: false, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "多表归属" }
       - { name: constraint_errors, type: map<string>, required: false, description: "约束/索引名到错误 ID" }
 
   - name: types
@@ -128,10 +128,10 @@ fields:
     write: forbidden
     description: "生成的 flow 反向索引"
     fields:
-      - { name: flows, type: list<string>, required: true, unique: true, pattern: '^cap\.flows\.', description: "调用本方法的 flow item ID" }
+      - { name: flows, type: list<string>, required: true, unique: true, pattern: '^cap\.flows\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "调用本方法的 flow item ID" }
 
 rules:
   - { id: cap-id, text: "methods/flows/http 契约 ID 必须与 targets.id 派生一致，且全局唯一", implemented_by: [ cap-id ] }
-  - { id: method-structure, text: "method 的 interface.name 必须 PascalCase、interface.package 必须在 internal/modules/ 下、method 名唯一、transaction 只能是 none/read_only", implemented_by: [ method-structure ] }
-  - { id: cap-ref, text: "method 的 queries 必须指向存在的 data.queries.* 项；flow 引用的 errors、permissions、methods 必须存在", implemented_by: [ cap-ref ] }
-  - { id: method-used-by, text: "method.queries 中带写表的 query，其表必须属于 method 文件的 module；flow 不得直接引用 data.queries.*", implemented_by: [ method-used-by, owner-write ] }
+  - { id: method-structure, text: "method 的 interface.name 必须 PascalCase、interface.package 必须在 internal/modules/ 下、method 名唯一、transaction 只能是 none/read_only；types 的 object 必须 additionalProperties: false 且 required 字段必须在 properties 中", implemented_by: [ method-structure ] }
+  - { id: cap-ref, text: "method 的 queries 必须指向存在的 data.queries.* 项；params/returns/types 的 data.enums.* / data.entities.* 必须存在，data.tables.* 禁止；flow 引用的 errors、permissions、methods 必须存在", implemented_by: [ cap-ref ] }
+  - { id: method-used-by, text: "method.queries 中带写表的 query，其表必须属于 method 文件的 module", implemented_by: [ method-used-by ] }

@@ -70,6 +70,7 @@ type Checker struct {
 	queryDupIDs       map[string]bool
 	queryOrder        []string
 	enumCodes         map[string]map[int]bool
+	enumIDs           map[string]bool
 	errCodeSet        map[string]bool
 	permissionSet     map[string]bool
 }
@@ -133,6 +134,10 @@ func (c *Checker) run() {
 	c.loadTableIndexes(tableIDs)
 	c.checkQueryIndexRefs()
 	enumValues := c.checkEnums(enumSchema)
+	c.enumIDs = map[string]bool{}
+	for id := range enumValues {
+		c.enumIDs[id] = true
+	}
 	c.checkEnumCodeLiterals()
 	c.checkRules(tableSchema)
 	c.checkRules(enumSchema)

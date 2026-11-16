@@ -456,3 +456,77 @@ func TestRenderEnumItemRequiresTargets(t *testing.T) {
 		t.Fatal("expected missing targets to fail")
 	}
 }
+
+func TestRenderMethod(t *testing.T) {
+	s := loadSchemaByType(t, "cap.methods")
+	b, err := RenderMethod(s, "invoice", "invoice", "发票服务", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["id"] != "cap.methods.invoice" {
+		t.Fatalf("id = %v", doc["id"])
+	}
+	iface, _ := doc["interface"].(map[string]any)
+	if iface["name"] != "InvoiceService" || iface["package"] != "internal/modules/invoice" {
+		t.Fatalf("interface = %#v", iface)
+	}
+	methods, _ := iface["methods"].([]any)
+	if len(methods) != 1 {
+		t.Fatalf("methods = %#v", methods)
+	}
+	m, _ := methods[0].(map[string]any)
+	if m["name"] != "Get" || m["transaction"] != "read_only" {
+		t.Fatalf("method = %#v", m)
+	}
+	if _, ok := m["queries"]; !ok {
+		t.Fatalf("method.queries missing: %#v", m)
+	}
+}
+
+func TestRenderFlow(t *testing.T) {
+	s := loadSchemaByType(t, "cap.flows")
+	b, err := RenderFlow(s, "invoice", "invoice", "发票用例", "cap.methods.invoice.get")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["id"] != "cap.flows.invoice" {
+		t.Fatalf("id = %v", doc["id"])
+	}
+	flows, _ := doc["flows"].([]any)
+	if len(flows) != 1 {
+		t.Fatalf("flows = %#v", flows)
+	}
+	item, _ := flows[0].(map[string]any)
+	if item["implementation"] != "direct" || item["method"] != "cap.methods.invoice.get" {
+		t.Fatalf("flow item = %#v", item)
+	}
+}
+
+func TestRenderHTTP(t *testing.T) {
+	s := loadSchemaByType(t, "cap.http")
+	b, err := RenderHTTP(s, "invoice", "invoice", "发票 HTTP", "cap.flows.invoice.get", "/invoice", "get")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["id"] != "cap.http.invoice" {
+		t.Fatalf("id = %v", doc["id"])
+	}
+	paths, _ := doc["paths"].(map[string]any)
+	path, _ := paths["/invoice"].(map[string]any)
+	op, _ := path["get"].(map[string]any)
+	if op["x-contract-id"] != "cap.http.invoice.get" || op["x-flow"] != "cap.flows.invoice.get" {
+		t.Fatalf("operation = %#v", op)
+	}
+}

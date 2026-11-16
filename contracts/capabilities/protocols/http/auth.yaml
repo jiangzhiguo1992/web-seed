@@ -6,11 +6,7 @@ summary: "认证 HTTP 接口"
 stability: draft
 do_not:
   - "不要把 password_hash 或 token 写入日志、事件"
-  - "auth 登录失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
-  - "auth 响应中的 token 只允许出现在 /auth/login 与 /auth/refresh"
-  - "auth 每个 operation 必须有 x-contract-id 与 x-flow"
-  - "验证码接口不要返回 code_hash / content / target 原文；只返回 masked_target"
-  - "验证码发送/校验失败不要枚举 target 是否存在"
+  - "token 只允许出现在 /auth/login 与 /auth/refresh 的响应"
 
 module: account
 base_path: /v1
@@ -149,44 +145,16 @@ paths:
 components:
   schemas:
     TokenPair:
-      type: object
-      additionalProperties: false
-      x-entity: data.entities.token
-      x-auth-response: true
-      required: [access_token, refresh_token, access_expire_at, refresh_expire_at]
-      properties:
-        access_token: { type: string, readOnly: true }
-        refresh_token: { type: string, readOnly: true }
-        access_expire_at: { type: string, format: date-time }
-        refresh_expire_at: { type: string, format: date-time }
-        token_type: { type: string, enum: [Bearer] }
+      x-method-type: cap.methods.token.types.TokenPair
 
     AuthSession:
-      type: object
-      additionalProperties: false
-      required: [account, tokens]
-      properties:
-        account: { $ref: "#/components/schemas/Account" }
-        tokens: { $ref: "#/components/schemas/TokenPair" }
+      x-method-type: cap.methods.auth.types.AuthSession
 
     VerificationPurpose:
-      type: string
-      enum: [register, login, reset_password, bind_phone, bind_email, unbind_phone, unbind_email, change_phone, change_email, delete_account]
+      x-enum: data.enums.verification_purpose
 
     VerificationSent:
-      type: object
-      additionalProperties: false
-      required: [id, masked_target, expire_at]
-      properties:
-        id: { type: integer }
-        masked_target: { type: string }
-        expire_at: { type: string, format: date-time }
+      x-method-type: cap.methods.verification.types.VerificationSent
 
     VerificationResult:
-      type: object
-      additionalProperties: false
-      required: [verified, verification_id]
-      properties:
-        verified: { type: boolean }
-        verification_id: { type: integer }
-        consumed_at: { type: string, format: date-time, nullable: true }
+      x-method-type: cap.methods.verification.types.VerificationResult

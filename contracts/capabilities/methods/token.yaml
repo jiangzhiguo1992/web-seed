@@ -1,4 +1,4 @@
-# 令牌能力：签发、刷新、吊销、校验。被 auth / handlers 使用；不直接对进程外暴露。
+# 令牌 service。
 
 schema_version: 1
 id: cap.methods.token

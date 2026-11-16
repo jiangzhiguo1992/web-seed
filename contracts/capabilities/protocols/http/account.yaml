@@ -6,9 +6,7 @@ summary: "账号 HTTP 接口"
 stability: stable
 do_not:
   - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
-  - "x-contract-id 必须与 index 中的 operation 一一对应"
-  - "account 每个 operation 必须有 x-flow"
-  - "account 的字段长度/枚举以 data 契约为准，这里的手写值只用于 OpenAPI 展开"
+  - "字段长度/枚举以 data 契约为准，不在此处扩展"
 
 module: account
 base_path: /v1
@@ -166,20 +164,7 @@ paths:
 components:
   schemas:
     Account:
-      type: object
-      additionalProperties: false
       x-entity: data.entities.account
-      required: [id, own_type, own_id, number, nickname, status, created_at]
-      properties:
-        id: { type: integer }
-        own_type: { type: string, enum: [user, admin, system] }
-        own_id: { type: integer }
-        number: { type: string, maxLength: 64 }
-        nickname: { type: string, maxLength: 100 }
-        user_id: { type: integer, nullable: true }
-        status: { type: string, enum: [pending, active, suspended, deleted] }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
       example:
         id: 1
         own_type: user

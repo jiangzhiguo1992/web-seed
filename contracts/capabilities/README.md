@@ -125,6 +125,7 @@ HTTP 约束：
 - 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明。
 - 每个 operation 必须写 `x-contract-id` 与 `x-flow`。
 - 不要手写与 method 重复的 schema；request/response 从 flow 的 `input/output` 引用。
+- `components.schemas` 通过 `x-method-type` / `x-enum` / `x-entity` 指向唯一来源，生成器展开；禁止重复写 properties。
 
 ---
 

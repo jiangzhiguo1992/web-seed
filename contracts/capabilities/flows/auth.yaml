@@ -1,4 +1,4 @@
-# 认证用例集。同步 flow 由 protocols/http 的 x-flow 引用。
+# 认证用例集。
 
 schema_version: 1
 id: cap.flows.auth

@@ -73,6 +73,9 @@ scripts/cmd/
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
 | `make contract-new type=data.entities name=note table=note` | 按 `_meta/data.entities.yaml` 生成单表读模型骨架；owner_module 从目标表读取（目标表必须已存在） | 新建实体时 |
 | `make contract-new type=data.queries name=note module=notes table=note` | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在） | 新建查询集时 |
+| `make contract-new type=cap.methods name=invoice module=invoice` | 按 `_meta/cap.methods.yaml` 生成 method 文件骨架；`table=note` 时写 `persistence.table` | 新建 method 契约前 |
+| `make contract-new type=cap.flows name=invoice method=cap.methods.invoice.get` | 生成 direct flow 骨架；`-method` 必填 | 新建 flow 前 |
+| `make contract-new type=cap.http name=invoice flow=cap.flows.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-flow` 必填 | 新建 HTTP 绑定前 |
 | `make gen-graph` | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` | 改完表/实体/查询/方法后 |
 | `make gen-graph-check` | 只校验上述反向索引是否最新（CI） | CI |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / 反向索引 / owner / entity 投影 / query 参数与返回 / method.queries | 每次改完契约 |
@@ -81,7 +84,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries`；类型族来自 `_meta/_types.yaml`。`cap.methods` / `cap.flows` / `cap.http` 的 targets 已落盘，骨架生成与字段校验待后续批次接入。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.methods` / `cap.flows` / `cap.http`；类型族来自 `_meta/_types.yaml`。cap.* 生成最小骨架（module/interface/一个方法、一个 direct flow、一个 operation），不生成 `types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 

@@ -1,4 +1,4 @@
-# 账号模块对外暴露的 service 能力。只登记跨模块调用，模块内部方法不进契约。
+# 账号 service 接口。
 
 schema_version: 1
 id: cap.methods.account

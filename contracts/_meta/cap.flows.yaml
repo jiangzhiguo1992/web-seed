@@ -55,21 +55,74 @@ fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "用例名；派生 item ID" }
       - { name: summary, type: string, required: true, description: "一句话说明" }
       - { name: implementation, type: string, required: true, enum: [ direct, flow ], description: "direct=直通一个 method；flow=显式 steps 编排" }
-      - { name: method, type: string, required: false, pattern: '^cap\.methods\.', description: "implementation=direct 时必填" }
-      - { name: trigger, type: any, required: false, description: "异步触发器：type=cron|event|webhook；同步 flow 不写本字段" }
+      - { name: method, type: string, required: false, pattern: '^cap\.methods\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "implementation=direct 时必填" }
+      - name: trigger
+        type: object
+        required: false
+        description: "异步触发器；同步 flow 不写本字段"
+        fields:
+          - { name: type, type: string, required: true, enum: [ cron, event, webhook ], description: "触发类型" }
+          - { name: schedule, type: string, required: false, description: "cron 表达式；type=cron 时必须" }
+          - { name: event, type: string, required: false, pattern: '^business\.events\.', description: "事件 ID；type=event 时必须" }
       - { name: input, type: any, required: false, description: "同步 flow 对应请求；异步 flow 对应 job payload" }
       - { name: output, type: any, required: false, description: "同步 flow 对应响应；异步 flow 对应 job result" }
-      - { name: permissions, type: list<string>, required: false, description: "权限点 ID；同步 flow 必填，异步 flow 可选" }
+      - { name: permissions, type: list<string>, required: false, unique: true, pattern: '^platform\.security\.permissions\.[a-z][a-z0-9_]*$', description: "权限点 ID；同步 flow 必填，异步 flow 可选" }
       - { name: audit, type: boolean, required: false, description: "是否写审计日志" }
-      - { name: rate_limit, type: any, required: false, description: "限流策略：requests/window_seconds" }
+      - name: rate_limit
+        type: object
+        required: false
+        description: "限流策略"
+        fields:
+          - { name: requests, type: integer, required: true, min: 1, description: "窗口内请求数" }
+          - { name: window_seconds, type: integer, required: true, min: 1, description: "窗口秒数" }
       - { name: transaction, type: string, required: false, enum: [ required, read_only, none ], description: "事务边界；同步 flow 必填" }
-      - { name: idempotency, type: any, required: false, description: "幂等键与窗口；异步 flow 必填，同步 flow 可选" }
-      - { name: retry, type: any, required: false, description: "重试与死信；异步 flow 必填，同步 flow 禁止" }
-      - { name: concurrency, type: any, required: false, description: "并发与分布式锁；异步 flow 必填，同步 flow 禁止" }
-      - { name: steps, type: any, required: false, description: "implementation=flow 时必填；use 只能是 cap.methods.*、platform.security.permissions.*；无 use 表示 flow 内部逻辑，不得引用 data.queries.*" }
-      - { name: compensation, type: any, required: false, description: "结构化补偿：action=rollback|compensate|dead_letter" }
-      - { name: errors, type: list<string>, required: false, description: "flow 对外错误集；必须是 steps 错误的子集" }
+      - name: idempotency
+        type: object
+        required: false
+        description: "幂等键与窗口；异步 flow 必填，同步 flow 可选"
+        fields:
+          - { name: key, type: string, required: true, description: "幂等键模板" }
+          - { name: window, type: string, required: true, pattern: '^[0-9]+(s|m|h|d)$', description: "窗口，例如 24h" }
+      - name: retry
+        type: object
+        required: false
+        description: "重试与死信；异步 flow 必填，同步 flow 禁止"
+        fields:
+          - { name: max_attempts, type: integer, required: true, min: 1, description: "最大尝试次数" }
+          - { name: backoff, type: string, required: true, enum: [ fixed, exponential ], description: "退避策略" }
+          - { name: dead_letter, type: boolean, required: true, description: "是否进入死信" }
+      - name: concurrency
+        type: object
+        required: false
+        description: "并发与分布式锁；异步 flow 必填，同步 flow 禁止"
+        fields:
+          - { name: key, type: string, required: true, description: "并发键模板" }
+          - { name: ttl, type: string, required: false, pattern: '^[0-9]+(s|m|h|d)$', description: "锁 TTL" }
+      - name: steps
+        type: list<object>
+        required: false
+        description: "implementation=flow 时必填；use 只能是 cap.methods.*、platform.security.permissions.*；无 use 表示 flow 内部逻辑，不得引用 data.queries.*"
+        item_fields:
+          - { name: id, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID，flow 内唯一" }
+          - { name: use, type: string, required: false, description: "cap.methods.* 或 platform.security.permissions.*" }
+          - { name: on_error, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "错误处理；必须是 use 目标 errors 的子集" }
+          - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "内部逻辑步骤可产生的错误；use 非空时禁止" }
+      - name: compensation
+        type: object
+        required: false
+        description: "结构化补偿"
+        fields:
+          - { name: action, type: string, required: true, enum: [ rollback, compensate, dead_letter ], description: "补偿动作" }
+      - name: postconditions
+        type: list<object>
+        required: false
+        description: "后置条件"
+        item_fields:
+          - { name: field, type: string, required: true, description: "字段名" }
+          - { name: op, type: string, required: true, enum: [ eq, ne, gt, ge, lt, le, in, not_in ], description: "比较操作" }
+          - { name: value, type: any, required: true, description: "期望值" }
+      - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "flow 对外错误集；direct flow 必须是 method errors 的子集，flow implementation 由 steps[].on_error 约束" }
 
 rules:
-  - { id: flow-structure, text: "flow item 的 implementation 只能是 direct/flow；direct 必须有 method 且无 steps；flow 必须有 steps 且无 method；同步 flow 必须有 transaction/permissions 且不得有 retry/concurrency；异步 flow 必须有 input/output/idempotency/retry/concurrency 且不得有 transaction", implemented_by: [ flow-structure ] }
+  - { id: flow-structure, text: "flow item 的 implementation 只能是 direct/flow；direct 必须有 method 且无 steps；flow 必须有 steps 且无 method；同步 flow 必须有 transaction/permissions 且不得有 retry/concurrency；异步 flow 必须有 input/output/idempotency/retry/concurrency 且不得有 transaction；trigger.type=cron 必须有 schedule，type=event 必须有 event；direct flow 的 errors 必须是 method errors 的子集；flow implementation 的 errors 必须是 steps 产出的错误子集，step.errors 只允许内部步骤", implemented_by: [ flow-structure ] }
   - { id: flow-no-query, text: "flow 不得直接引用 data.queries.*；写操作必须经由 cap.methods，内部逻辑步骤不写 use", implemented_by: [ flow-no-query ] }

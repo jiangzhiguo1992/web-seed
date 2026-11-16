@@ -1,4 +1,4 @@
-# 验证码能力：发送、校验、按绑定或账号作废。
+# 验证码 service。
 
 schema_version: 1
 id: cap.methods.verification
@@ -6,7 +6,7 @@ summary: "验证码发送与校验接口"
 stability: draft
 do_not:
   - "Send / Verify 不要返回 code_hash / content / target 原文；只返回 masked_target"
-  - "Send / Verify 必须在同一事务写入 verification_action，result 与实际结果一致"
+  - "Send / Verify 写 verification_action 必须与业务结果同事务，失败不得留下不一致记录"
   - "验证码校验失败不要枚举 target 是否存在"
   - "换绑、解绑或停用认证绑定必须调用 RevokeByAuth"
 

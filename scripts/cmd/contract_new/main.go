@@ -21,17 +21,28 @@ import (
 
 func main() {
 	root := flag.String("root", "../..", "repo root")
-	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries")
+	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.methods | cap.flows | cap.http")
 	name := flag.String("name", "", "snake_case name")
 	module := flag.String("module", "", "owner_module / query module (default: name)")
 	table := flag.String("table", "", "table stem (default: name)")
 	summary := flag.String("summary", "", "summary (default: name)")
 	out := flag.String("out", "", "output file (data.tables/entities/queries); empty prints to stdout; auto uses targets.dir")
 	columnType := flag.String("column-type", "", "first column type family (default: schema default)")
+	method := flag.String("method", "", "cap.flows: method item ID (cap.methods.*.*)")
+	flow := flag.String("flow", "", "cap.http: flow item ID (cap.flows.*.*)")
+	path := flag.String("path", "", "cap.http: URL path (default: /<name>)")
+	httpMethod := flag.String("http-method", "get", "cap.http: HTTP method")
 	flag.Parse()
 
+	tableSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "table" {
+			tableSet = true
+		}
+	})
+
 	if *typ == "" || *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>]")
+		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.methods|cap.flows|cap.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-method <cap.methods.*.*>] [-flow <cap.flows.*.*>] [-path </x>] [-http-method get]")
 		os.Exit(2)
 	}
 	if *module == "" {
@@ -53,13 +64,18 @@ func main() {
 		fail(err)
 	}
 	switch *typ {
-	case "data.tables", "data.entities", "data.queries":
+	case "data.tables", "data.entities", "data.queries", "cap.methods", "cap.flows", "cap.http":
 		if *out == "auto" {
 			if schema.Targets.Dir == "" {
 				fail(fmt.Errorf("targets.dir is empty"))
 			}
 			*out = filepath.Join(abs, schema.Targets.Dir, *name+".yaml")
 		}
+	}
+
+	methodTable := ""
+	if tableSet {
+		methodTable = *table
 	}
 
 	switch *typ {
@@ -106,6 +122,36 @@ func main() {
 			fail(err)
 		}
 		os.Stdout.Write(b)
+
+	case "cap.methods":
+		b, err := contractspec.RenderMethod(schema, *name, *module, *summary, methodTable)
+		if err != nil {
+			fail(err)
+		}
+		writeOut(*out, b, "next: replace TODO; add params/returns/queries; add types if needed; register in contracts/index.yaml; make contract-check")
+
+	case "cap.flows":
+		if *method == "" {
+			fail(fmt.Errorf("-method is required for cap.flows"))
+		}
+		b, err := contractspec.RenderFlow(schema, *name, *module, *summary, *method)
+		if err != nil {
+			fail(err)
+		}
+		writeOut(*out, b, "next: replace TODO; add permissions/errors; ensure the method exists; register in contracts/index.yaml; make contract-check")
+
+	case "cap.http":
+		if *flow == "" {
+			fail(fmt.Errorf("-flow is required for cap.http"))
+		}
+		if *path == "" {
+			*path = "/" + *name
+		}
+		b, err := contractspec.RenderHTTP(schema, *name, *module, *summary, *flow, *path, *httpMethod)
+		if err != nil {
+			fail(err)
+		}
+		writeOut(*out, b, "next: replace the 200 response schema; add components if needed; ensure the flow exists; make contract-check")
 
 	default:
 		fail(fmt.Errorf("unsupported type: %s", *typ))

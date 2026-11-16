@@ -97,10 +97,8 @@ func (c *Checker) checkMethodPersistence(doc map[string]any, rel string, tableID
 	if p == nil {
 		return
 	}
-	for _, removed := range []string{"queries", "write_queries", "field_map", "read_only_tables"} {
-		if _, ok := p[removed]; ok {
-			c.rulef("schema.field", "%s: persistence.%s removed; use method.queries or entity.source.column", rel, removed)
-		}
+	if p["table"] != nil && p["tables"] != nil {
+		c.rulef("schema.conflict", "%s: persistence.table and persistence.tables are mutually exclusive", rel)
 	}
 	tables := tableRefs(p)
 	for _, t := range tables {
@@ -118,13 +116,19 @@ func (c *Checker) checkMethodPersistence(doc map[string]any, rel string, tableID
 		if !ok {
 			c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
 		} else {
-			for name := range ce {
+			for name, rawVal := range ce {
 				if name == "" {
 					c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
 					continue
 				}
 				if !c.tableObjectExists(tables, name) {
 					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
+				}
+				code, _ := rawVal.(string)
+				if !strings.HasPrefix(code, "platform.errors.") {
+					c.rulef("schema.pattern", "%s: persistence.constraint_errors.%s must be platform.errors.*", rel, name)
+				} else if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s references unknown error %s", rel, name, code)
 				}
 			}
 		}

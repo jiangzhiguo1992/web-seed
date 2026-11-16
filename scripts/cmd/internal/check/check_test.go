@@ -807,16 +807,18 @@ func TestPersistenceOwnership(t *testing.T) {
 }
 
 func TestPersistenceReadOnlyRejected(t *testing.T) {
-	c := &Checker{tableOwners: map[string]string{"data.tables.auth_pwd": "auth"}}
-	doc := map[string]any{
-		"module": "auth",
-		"persistence": map[string]any{
-			"tables":           []any{"data.tables.auth_pwd"},
-			"read_only_tables": []any{"data.tables.account"},
-		},
-	}
-	c.checkMethodPersistence(doc, "contracts/capabilities/methods/auth.yaml", map[string]string{"data.tables.auth_pwd": "contracts/data/tables/auth_pwd.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "persistence.read_only_tables removed") {
+	c := &Checker{}
+	fields := []Field{{Name: "persistence", Type: "object", Required: true, Fields: []Field{
+		{Name: "table", Type: "string"},
+		{Name: "tables", Type: "list<string>"},
+		{Name: "constraint_errors", Type: "map<string>"},
+	}}}
+	doc := map[string]any{"persistence": map[string]any{
+		"tables":           []any{"data.tables.auth_pwd"},
+		"read_only_tables": []any{"data.tables.account"},
+	}}
+	c.validateDoc(doc, fields, "cap.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unknown-field]") {
 		t.Fatalf("read_only_tables not rejected: %v", c.errs)
 	}
 }
@@ -1922,27 +1924,18 @@ func TestMissingBaseKeepsPhysicalCols(t *testing.T) {
 }
 
 func TestPersistenceQueriesExist(t *testing.T) {
-	root := t.TempDir()
-	write := func(rel, body string) {
-		p := filepath.Join(root, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("contracts/capabilities/services/x.yaml", `
-id: cap.methods.x
-module: x
-persistence:
-  table: data.tables.x
-  queries:
-    get: data.queries.q.missing
-`)
-	c := &Checker{root: root, queryIDs: map[string]string{"data.queries.q.get": "contracts/data/queries/q.yaml"}}
-	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "persistence.queries removed") {
+	c := &Checker{}
+	fields := []Field{{Name: "persistence", Type: "object", Required: true, Fields: []Field{
+		{Name: "table", Type: "string"},
+		{Name: "tables", Type: "list<string>"},
+		{Name: "constraint_errors", Type: "map<string>"},
+	}}}
+	doc := map[string]any{"persistence": map[string]any{
+		"table":   "data.tables.x",
+		"queries": map[string]any{"get": "data.queries.q.missing"},
+	}}
+	c.validateDoc(doc, fields, "cap.yaml")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unknown-field]") {
 		t.Fatalf("legacy persistence.queries not rejected: %v", c.errs)
 	}
 }
@@ -2938,9 +2931,73 @@ persistence:
 		root:         root,
 		tableOwners:  map[string]string{"data.tables.x": "x"},
 		tableObjects: map[string]map[string]bool{"data.tables.x": {"ck_missing": true}},
+		errCodeSet:   map[string]bool{"X": true},
 	}
 	c.checkCapabilityPersistence(tableIDs)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid constraint_errors key reported: %v", c.errs)
+	}
+}
+
+func TestFlowImplementationErrors(t *testing.T) {
+	methodErrors := map[string]map[string]bool{
+		"cap.methods.x.get": {"platform.errors.A": true},
+	}
+	c := &Checker{errCodeSet: map[string]bool{"A": true, "B": true, "C": true}}
+	doc := map[string]any{
+		"summary": "x", "implementation": "flow",
+		"transaction": "required", "permissions": []any{},
+		"steps": []any{
+			map[string]any{"id": "call", "use": "cap.methods.x.get"},
+		},
+		"errors": []any{"platform.errors.A"},
+	}
+	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", map[string]bool{"cap.methods.x.get": true}, methodErrors)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid flow errors reported: %v", c.errs)
+	}
+
+	doc["errors"] = []any{"platform.errors.B"}
+	c.errs = nil
+	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", map[string]bool{"cap.methods.x.get": true}, methodErrors)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "not produced by any step") {
+		t.Fatalf("unproduced flow error not reported: %v", c.errs)
+	}
+
+	doc = map[string]any{
+		"summary": "x", "implementation": "flow",
+		"transaction": "required", "permissions": []any{},
+		"steps": []any{
+			map[string]any{"id": "internal", "errors": []any{"platform.errors.C"}},
+		},
+		"errors": []any{"platform.errors.C"},
+	}
+	c.errs = nil
+	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", map[string]bool{}, methodErrors)
+	if len(c.errs) != 0 {
+		t.Fatalf("internal step errors reported: %v", c.errs)
+	}
+}
+
+func TestMethodTypeRefs(t *testing.T) {
+	c := &Checker{
+		enumIDs:  map[string]bool{"data.enums.x": true},
+		entities: map[string]*entityInfo{"data.entities.e": {}},
+	}
+	for _, tt := range []struct {
+		typ  string
+		want string
+	}{
+		{"data.enums.missing", "unknown enum"},
+		{"data.entities.missing", "unknown entity"},
+		{"List<data.entities.missing>", "unknown entity"},
+		{"*data.entities.missing", "unknown entity"},
+		{"data.tables.x", "not a method type"},
+	} {
+		c.errs = nil
+		c.checkTypeName(tt.typ, nil, "x")
+		if !strings.Contains(strings.Join(c.errs, "\n"), tt.want) {
+			t.Fatalf("%s not reported: %v", tt.typ, c.errs)
+		}
 	}
 }
