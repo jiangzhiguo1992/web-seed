@@ -15,9 +15,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 usage() {
-  echo "usage: type=<type> name=<name> [module=<module>] [summary=<text>] [column_type=<family>] [table=<stem>] $0" >&2
-  echo "       make contract-new type=<type> name=<name> [module=...] [summary=...] [column_type=...] [table=...]" >&2
-  echo "  type: data.tables | data.enums | data.entities | data.queries" >&2
+  echo "usage: type=<type> name=<name> [module=<module>] [summary=<text>] [column_type=<family>] [table=<stem>] [service=<cap.services.*.*>] [path=</x>] [http_method=<verb>] $0" >&2
+  echo "       make contract-new type=<type> name=<name> [module=...] [summary=...] [service=...] [path=...]" >&2
+  echo "  type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.http" >&2
   exit 2
 }
 
@@ -32,6 +32,9 @@ module="${module:-${name}}"
 summary="${summary:-${name}}"
 column_type="${column_type:-}"
 table="${table:-${name}}"
+service="${service:-}"
+path="${path:-/${name}}"
+http_method="${http_method:-get}"
 
 [[ -n "$type" && -n "$name" ]] || usage
 [[ "$name" =~ ^[a-z][a-z0-9_]*$ ]] || { echo "invalid name: $name (snake_case required)" >&2; exit 2; }
@@ -57,6 +60,27 @@ case "$type" in
 
   data.queries)
     go run ./contract_new -root "$ROOT" -type data.queries -name "$name" -module "$module" -table "$table" -summary "$summary" -out auto
+    ;;
+
+  cap.services)
+    go run ./contract_new -root "$ROOT" -type cap.services -name "$name" -module "$module" -summary "$summary" -out auto
+    ;;
+
+  feature.rules)
+    go run ./contract_new -root "$ROOT" -type feature.rules -name "$name" -module "$module" -summary "$summary" -out auto
+    ;;
+
+  feature.states)
+    go run ./contract_new -root "$ROOT" -type feature.states -name "$name" -module "$module" -summary "$summary" -out auto
+    ;;
+
+  cap.events)
+    go run ./contract_new -root "$ROOT" -type cap.events -name "$name" -module "$module" -summary "$summary" -out auto
+    ;;
+
+  cap.http)
+    [[ -n "$service" ]] || { echo "cap.http requires service=cap.services.*.*" >&2; exit 2; }
+    go run ./contract_new -root "$ROOT" -type cap.http -name "$name" -module "$module" -summary "$summary" -service "$service" -path "$path" -http-method "$http_method" -out auto
     ;;
 
   *)

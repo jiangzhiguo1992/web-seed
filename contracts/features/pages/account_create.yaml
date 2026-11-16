@@ -6,14 +6,14 @@ summary: "新建账号页"
 stability: draft
 do_not:
   - "不要在本页收集密码/手机号/邮箱；认证信息由 auth 模块单独创建"
-  - "不要硬编码编号格式，引用 business.rules.account.number_format"
+  - "不要硬编码编号格式，引用 feature.rules.account.number_format"
 
 page: account_create
 route: feature.routes.account_create
 
 data:
   submit:
-    capability: cap.flows.account.create
+    capability: cap.services.account.create
     params:
       own_type: { from: form.own_type, type: string, required: true }
       own_id: { from: form.own_id, type: integer, required: true }
@@ -38,7 +38,7 @@ view_states:
 
 actions:
   submit:
-    capability: cap.flows.account.create
+    capability: cap.services.account.create
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "创建"

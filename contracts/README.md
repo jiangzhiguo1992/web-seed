@@ -57,8 +57,8 @@
 
 | 契约 + 闸门能保证 | 契约无法保证 | 靠什么补 |
 |---|---|---|
-| 接口形状不漂移 | 字段语义是否被正确理解 | `business/glossary.md` + review |
-| 状态转换穷举 | 业务规则是否被正确实现 | `business/rules` 的可执行用例 |
+| 接口形状不漂移 | 字段语义是否被正确理解 | `docs/reference/glossary.md` + review |
+| 状态转换穷举 | 业务规则是否被正确实现 | `features/rules` 的可执行用例 |
 | 表结构与迁移一致 | 事务边界与并发是否正确 | 集成测试 + race |
 | 前后端类型一致 | 性能是否退化 | 基准测试 |
 | 枚举、权限、错误码一致 | 契约本身是否写错 | review + 真实用例回归 |
@@ -90,24 +90,19 @@ contracts/
 │   ├── enums.yaml            #   跨端枚举：integer code ↔ 名称
 │   └── storage.yaml          #   单例：引擎归属 / size_class / 保留 / 分区
 │
-├── capabilities/             # ② 能力层：methods + flows + protocols
-│   ├── methods/<module>.yaml #   原子方法：跨模块可见，不直接对外
-│   ├── flows/<module>.yaml   #   编排：同步（被 protocol 引用）/ 异步（trigger）
+├── capabilities/             # ② 能力层：services + events + protocols
+│   ├── services/<module>.yaml #   服务：interface + steps + persistence
+│   ├── events/<subject>.yaml  #   领域事件与 payload（按业务主体）
 │   └── protocols/
-│       └── http/<module>.yaml#   HTTP 绑定：只写协议差异，x-flow 指回 flow
+│       └── http/<module>.yaml #   HTTP 绑定：只写协议差异，x-service 指回 service
 │
-├── business/                   # ③ 业务规格（不含实现）
-│   ├── states/<machine>.yaml #   状态机（transitions 定义合法转换）
-│   ├── rules/<scope>.yaml    #   业务规则（可执行断言）
-│   ├── events/<scope>.yaml   #   领域事件与 payload
-│   └── glossary.md           #   术语表（review-only）
-│
-├── features/                 # ④ 功能契约（面向用户）
+├── features/                 # ③ 功能契约（面向用户）
 │   ├── routes.yaml           #   路由、菜单、布局
 │   ├── pages/<page>.yaml     #   页面：数据源、四态、动作、字段
-│   └── flows/<flow>.yaml     #   跨页用户旅程
+│   ├── rules/<subject>.yaml  #   业务规则（constraint / invariant / policy）
+│   └── states/<machine>.yaml #   状态机（transitions 定义合法转换）
 │
-├── platform/                 # ⑤ 平台契约（工程约束）
+├── platform/                 # ④ 平台契约（工程约束）
 │   ├── environments.yaml     #   环境清单与差异
 │   ├── versioning.yaml       #   版本与兼容策略
 │   ├── errors.yaml           #   错误码、HTTP 映射、文案 key
@@ -132,7 +127,7 @@ contracts/
 | `_meta/README.md` | 写 / 改任何契约字段前 |
 | `data/README.md` | 加表 / 写查询前 |
 | `capabilities/README.md` | 加 API / 异步任务 / 跨模块 service 前 |
-| `business/README.md` | 改状态机 / 规则 / 领域事件前 |
+| `features/README.md` | 改状态机 / 规则前 |
 | `features/README.md` | 加页面 / 用户旅程前 |
 | `platform/README.md` | 改错误码 / 权限 / 配置 / 观测约定前 |
 
@@ -149,8 +144,7 @@ contracts/
 | 组 | 示例 |
 |---|---|
 | data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_account_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
-| capabilities | `cap.methods.account.get`、`cap.flows.account.delete`、`cap.http.account.create` |
-| business | `business.states.account`、`business.rules.account.number_format`、`business.events.account.created` |
+| capabilities | `cap.services.account.get`、`feature.rules.account.number_format`、`feature.states.account`、`cap.events.account.created`、`cap.http.account.create` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
 | platform | `platform.errors.ACCOUNT_NOT_FOUND`、`platform.security.permissions.account_read`、`platform.security.roles.admin`、`platform.analytics.events.page.account_list_viewed` |
 
@@ -175,53 +169,51 @@ contracts/
 ### 3.2 唯一顺序：单向链
 
 ```
-feature ──> business ──> capabilities ──> data
+feature ──> capabilities ──> data
+              ├── services ──> data.queries
+              └── services ──> rules / states / events
 ```
 
-契约依赖只有这一条链，**没有反向**。允许两个例外：`business → data.entities`（业务主体）与 `business → capabilities`（`implemented_by` / `emitted_by`）；capabilities 不反向引用 business。
+契约依赖只有这一条链，**没有反向**。capabilities 内部允许 `services → rules/states/events`（业务依据）；`rules/states` 允许引用 `data.entities.*` 作为业务主体，但禁止引用 `data.tables` / `data.queries` / `data.storage`。
 
 | 环节 | 职责 | 锚点写在哪 |
 |---|---|---|
-| feature | 定义用户功能 | 锚 `business`（规则/状态/字段）与 `capabilities`（接口） |
-| business | 业务规格 | 锚 `capabilities`（`implemented_by` / `emitted_by`） |
-| capabilities | 实现 | 锚 `data`（`method.queries` → queries / `persistence.table/tables`） |
+| feature | 定义用户功能 | 锚 `capabilities`（service / rule / state） |
+| capabilities | 实现 + 业务规格 | service 锚 `data`（steps → queries / `persistence.tables`）；service 锚 `rules/states/events` |
 | data | 持久化 | 无下游 |
 
 **所有跨层关系只在上游写一处**：
 
 | 边 | 写在 | 字段 |
 |---|---|---|
-| feature → business | 页面契约 | `data` / `actions` / `fields` / `states` |
-| feature → capabilities | 页面契约 | `capability:` |
-| business → capabilities | 规则 / 状态机 / 事件 | `implemented_by` / `emitted_by` |
-| capabilities/protocols → capabilities/flows | protocol operation | `x-flow` |
-| capabilities/flows → capabilities/methods | flow steps | `use: cap.methods.*` |
-| capabilities/methods → data | method 契约 | `interface.methods[].queries` / `persistence.table/tables` / `constraint_errors` |
+| feature → capabilities | 页面契约 | `capability:` / `feature.rules.*` / `feature.states.*` |
+| capabilities/protocols → capabilities/services | protocol operation | `x-service` |
+| capabilities/services → capabilities/services | service steps | `kind: service` + `service` |
+| capabilities/services → capabilities/rules | service steps | `kind: logic` + `rules` |
+| capabilities/services → capabilities/states | service steps | `kind: transition` + `transition` |
+| capabilities/services → capabilities/events | service steps | `kind: event` + `event` |
+| capabilities/services → data | service 契约 | `steps[].query` / `steps[].queries` / `persistence.tables` / `constraint_errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `join_column_from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `table.queries`（生成物） |
 | data.entities → 上游（反向） | 实体文件 | `model.included_by`（显式，checker 校验） / `model.queries`（生成物） |
-| data.queries → 上游（反向） | 查询项 | `used_by`（生成物，指向 `cap.methods.*`） |
-| capabilities/methods → 上游（反向） | method 文件 | `used_by.flows`（生成物） |
+| data.queries → 上游（反向） | 查询项 | `used_by`（生成物，指向 `cap.services.*`，不得为空） |
 
-### 3.2.1 capabilities 不引用 business
+### 3.2.1 capabilities 的业务规格引用
 
-capabilities 契约里**不出现任何 `business.*`**：
+capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，不再有 `business.*`：
 
 | 不要写 | 改写为 |
 |---|---|
-| `returns: data.entities.account` | `returns: data.tables.account.row` |
-| `emits: business.events.*` | 由 `business/events` 的 `emitted_by` 声明 |
-| `x-preconditions: business.rules.*` | 由 `business/rules` 的 `implemented_by` 声明 |
-| `x-side-effects: business.events.*` | 同上 |
+| `returns: data.tables.account.row` | `returns: data.entities.account` |
+| `emits: cap.events.*` | 由 `cap.events.*.emitted_by` 声明；service 的 `kind: event` step 引用事件 |
+| `x-preconditions: feature.rules.*` | 由 `feature.rules.*.implemented_by` 声明；service 的 `kind: logic` step 引用规则 |
 
-理由：capability 是 business 的实现，**实现不反向声明"我实现了谁"**——那由上游锚点。两处都写必然漂移。
+理由：service 是规则的实现，**实现不反向声明"我实现了谁"**——那由 `implemented_by` / `emitted_by` 锚点。两处都写必然漂移。
 
-例外：异步 flow 的 `trigger.event` 允许引用 `business.events.*`，因为事件是它的输入；这不是“声明实现关系”，实现锚点仍由 business 侧的 `emitted_by` 写。其余 capabilities 契约（含同步 flow 的 `steps`）禁止出现 `business.*`。
+capabilities 内部允许 `services → rules/states/events`：`kind: logic` 的 `rules`、`kind: transition` 的 `transition`、`kind: event` 的 `event`。这是同组内的业务依据，不是跨层引用。
 
-`business` 允许引用 `data.entities.*` 作为业务主体（状态机的 `subject`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。这是"业务规格描述对象"与"实现依赖表"的区别。
-
-实现代码按 `business` 契约编写，但契约层不表达这种依赖。
+`rules` / `states` 允许引用 `data.entities.*` 作为业务主体（状态机的 `subject`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。`business.*` 已全部移除。
 
 ### 3.3 图校验（⬜ P2）
 
@@ -245,12 +237,14 @@ make contract-impact id=data.tables.account.col.number
 
 ```
 feature.pages.account_list
-  ├─ cap.http.account.list ─x-flow→ cap.flows.account.list
-  │    └─ use→ cap.methods.account.list ─persistence→ data.queries.account.list_accounts
-  └─ cap.http.account.create ─x-flow→ cap.flows.account.create
-       └─ use→ cap.methods.account.create ─persistence→ data.tables.account
+  ├─ cap.http.account.list ─x-service→ cap.services.account.list
+  │    └─ kind=logic → data.queries.account.list_accounts
+  └─ cap.http.account.create ─x-service→ cap.services.account.create
+       ├─ kind=logic → data.queries.account.create_account
+       └─ rules → feature.rules.account.*
+            └─ implemented_by → cap.services.account.create
 
-business.states.account ─subject→ data.entities.account ─table→ data.tables.account
+feature.states.account ─subject→ data.entities.account ─table→ data.tables.account
 ```
 
 ### 3.4 契约变更流程
@@ -330,13 +324,12 @@ table:
 |---|---|---|
 | `data/tables/*` | 一物理表一文件 | **不限** |
 | `data/entities/*` | 一逻辑实体一文件 | 150 |
-| `capabilities/methods/*` | 一模块一文件（interface + persistence + 类型） | 200 |
-| `capabilities/flows/*` | 一模块一文件，内含多个 flow item | 200 |
+| `capabilities/services/*` | 一模块一文件（interface + services + persistence + 类型） | 250 |
+| `capabilities/events/*` | 一业务主体一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
-| `business/states/*` | 一状态机一文件 | 150 |
-| `business/{rules,events}/*` | 一规则集 / 领域一文件 | 120 |
+| `features/states/*` | 一状态机一文件 | 150 |
+| `features/rules/*` | 一规则集一文件 | 120 |
 | `features/pages/*` | 一页面一文件 | 150 |
-| `features/flows/*` | 一旅程一文件 | 120 |
 | `platform/**` | 一关注点一文件 | 150 |
 | `index.yaml` | 只放摘要 | 400 |
 | 各组 `README.md` | 规范正文（含图示与对照表） | 450 |
@@ -362,11 +355,11 @@ table:
 |---|---|---|---|
 | **类型级（可执行）** | `_meta/<type>.yaml` 的 `rules` | "所有表必须写 table.queries" | 机器校验 |
 | **类型级（指导）** | `<group>/README.md` 或 `<type>/_base.yaml` 的 `do_not` | "所有表不要手写 migrations" | 一处定义，全类继承 |
-| **组级** | `<group>/README.md` | "business 不引用 data"、"实体在 data 层" | 手写，稳定 |
+| **组级** | `<group>/README.md` | "features 不引用 data"、"实体在 data 层" | 手写，稳定 |
 | **实例级** | 契约正文 `do_not` | "account.status 使用 integer；枚举只在 entity"、"游标分页要有 tiebreaker" | 就近，每个文件 1–3 条 |
 | **全局** | `index.yaml` 的 `global_notes` | "错误响应由生成器注入" | 跨文件坑，极少 |
 
-例外：`business/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不是类型规则清单；除此以外具体契约禁止顶层 `rules`；嵌套的数据属性可以叫 `rules`，不视为契约规则。
+例外：`features/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不是类型规则清单；除此以外具体契约禁止顶层 `rules`；嵌套的数据属性可以叫 `rules`，不视为契约规则。
 
 **不建目录级 index 汇总约束**，原因：
 
@@ -438,18 +431,20 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 契约不足 → 先改契约，再实现；禁止"先写代码后补契约"。
 `make gen` 是契约 → 产物，不是生成契约；新建契约用 `make contract-new`。
 
-### 5.1 生成器上限：6 个
+### 5.1 生成器上限：4 个（已实现）
 
 | 生成器 | 输出 | 状态 |
 |---|---|---|
-| openapi | Go server 类型 + TS client | ⬜ P2 |
+| graph | `used_by` 写回；rules/states/events 锚点 | ✅ 写回 / ⬜ lineage |
+| errors | `platform/errors.yaml` → 错误码文档 | ✅ |
 | db | DDL / migrations / sqlc 输入 | ✅ `schema.sql` + `0001_baseline.sql`；增量 diff ⬜ P5 |
-| business | 状态机、常量、断言、测试骨架 | ⬜ P2 |
+| openapi | 合并 spec 并展开 service types | ✅ |
 | features | 路由、页面骨架、类型 | ⬜ P2 |
 | platform | 配置校验、常量、CSS 变量 | ⬜ P2 |
-| graph | `used_by` 写回；`lineage.md` 入 `docs/contracts/generated/` | ✅ 写回 / ⬜ lineage |
+| rules/states | `feature.rules` / `feature.states` → 校验函数 / 状态机 | ⬜ P2 |
+| service / usecase / handler / worker | apps 代码生成 | ⬜ P2 |
 
-超过 6 个，维护成本会超过收益。
+已实现 4 个契约生成器；apps 代码生成属于实现层，不在契约阶段生成。
 
 ### 5.2 反例优先
 

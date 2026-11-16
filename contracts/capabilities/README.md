@@ -1,164 +1,152 @@
 # 能力契约（capabilities）
 
-> 能力层分三层：**methods**（原子方法）、**flows**（编排）、**protocols**（传输协议）。
-> 依赖方向单向：`protocols → flows → methods → data`。capabilities 不引用 business。
+> 能力层分三类：**services**（服务）、**events**（领域事件）、**protocols**（传输协议）。
+> 业务规则与状态机属于功能规格，放在 `features/{rules,states}`。
+> 依赖方向：`protocols → services → data.queries`；`services → feature.rules / feature.states / events`；`features.pages → services`。
 
 ---
 
-## 1. 三层职责
+## 1. 三类职责
 
 | 目录 | 回答的问题 | 真相源内容 | 产物 |
 |---|---|---|---|
-| `methods/<module>.yaml` | 模块能提供哪些**原子方法** | interface、方法签名、错误、事务、持久化归属 | Go interface、mock、写归属校验 |
-| `flows/<module>.yaml` | 一个模块的**可独立触发用例集**如何编排 | flows 列表：steps、权限、审计、事务、幂等、重试 | 用例骨架、集成测试、影响面 |
-| `protocols/<protocol>/<module>.yaml` | 能力如何通过某种**协议**暴露 | path、method、status、header、schema 引用 | server 类型、client、合并 spec |
+| `services/<module>.yaml` | 模块能提供哪些服务、每个服务如何实现 | interface、services[]、steps、errors、事务、持久化归属 | Go interface、usecase 骨架、写归属校验 |
+| `events/<subject>.yaml` | 跨模块异步消息长什么样 | name、version、payload、emitted_by | 事件常量、payload 类型 |
+| `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露 | path、method、status、header、schema 引用 | server 类型、client、合并 spec |
 
 一句话区分：
 
-- **method = 一个方法一件事**，跨模块可见，不直接对进程外暴露。
-- **flow = 最小可独立触发的编排单元**，可以只有一步；同步或异步由 `trigger` 决定。
-- **protocol = flow 到传输协议的绑定**，只写协议差异。
+- **service = 一个可调用单元**（同步/异步/内部），有明确的 params/returns/errors 和 steps。
+- **step = 服务实现路径上的一步**，五类：query / service / logic / event / transition。
+- **rule / state 在 features**，被 service 的 `kind: logic` / `kind: transition` step 引用。
+- **event = 跨模块消息契约**，被 service 的 `kind: event` step 发射，被异步 service 的 `trigger.event` 消费。
+- **protocol = service 到传输协议的绑定**，只写协议差异。
 
 ---
 
 ## 2. 依赖方向
 
 ```
-protocols ──x-flow──> flows ──use──> methods ──queries──> data.queries
-     │                   │              └──persistence──> data.tables
-     └──不引用 methods    └──不引用 data.queries
+protocols ──x-service──> services ──steps──> data.queries
+     │                     │
+     │                     ├──kind=service──> services（跨模块）
+     │                     ├──rules─────────> features.rules
+     │                     ├──transition────> features.states
+     │                     └──event─────────> events
+     └──不引用 queries      └──kind=query────> 本模块 data.queries
 ```
 
 | 边 | 写在哪 | 字段 |
 |---|---|---|
-| protocol → flow | `protocols/<protocol>/*.yaml` | `x-flow` |
-| flow → method | `flows/*.yaml` 的 steps | `use: cap.methods.*` |
-| method → query | `methods/*.yaml` 的 `interface.methods[].queries` | `data.queries.*` |
-| method → table | `methods/*.yaml` | `persistence.table/tables` + `constraint_errors` |
+| protocol → service | `protocols/<protocol>/*.yaml` | `x-service` |
+| service → query | `services/*.yaml` 的 steps | `kind: query` + `query` |
+| service → service | `services/*.yaml` 的 steps | `kind: service` + `service` |
+| service → rule | `services/*.yaml` 的 steps | `kind: logic` + `rules: [feature.rules.*]` |
+| service → state | `services/*.yaml` 的 steps | `kind: transition` + `transition: feature.states.*` |
+| service → event | `services/*.yaml` 的 steps | `kind: event` + `event` |
+| feature → service | `features/**` | `capability: cap.services.*` |
+| feature → rule/state | `features/{pages,rules,states}/**` | `feature.rules.*` / `feature.states.*` |
 
 **禁止**：
 
-- protocol 直接引用 `cap.methods.*`（对外入口只能是 flow）。
-- flow 直接引用 `data.queries.*`（query 只能由 method 调用；flow 只能编排 method 或内部逻辑）。
-- flow 嵌套另一个 flow（编排只到 method 层）。
-- capabilities 任何位置出现 `business.*`。
+- protocol 直接引用 `data.queries.*` 或 `feature.rules.*`（对外入口只能是 service）。
+- `kind: query` 引用其他模块的 query（跨模块必须走 `kind: service`）。
+- flow 嵌套 flow；service 调用图不得成环。
+- service 声明 `business.*`（business 层已移除）。
 
 ---
 
-## 3. methods
+## 3. services
 
-`methods/<module>.yaml` 登记模块对**其他模块**暴露的原子方法。模块内部私有方法不进契约——Go 编译器已经能约束。
+`services/<module>.yaml` 一个文件对应一个 Go interface。`services[]` 的每一项是一个可调用单元。
 
-必须声明：
+文件级必须声明：
 
-- `interface.name` / `interface.package` / `interface.methods`
-- 每个方法的 `params` / `returns` / `errors` / `transaction` / `queries`
-- `persistence`（表归属、约束错误映射）
+- `interface.name` / `interface.package`（`internal/modules/<module>/api`）
+- `persistence.tables` / `persistence.constraint_errors`（本文件可写的表与约束错误映射）
+- `types`（本地对象 schema；可跨文件引用）
 
-类型级负向约束：
+service 项必须声明：
 
-- 不要在 interface 里暴露 `*sql.Tx` 或 HTTP 类型。
-- 不要返回表行 `data.tables.*.row`；返回 `data.entities.*` 或本地 `types.*`。
-- 只登记跨模块调用的方法；模块内 helper 不要进契约。
-- 写表必须属于 `owner_module`；每个方法用 `queries` 列出它调用的 query 项，query 的 `used_by` 由 `make gen-graph` 反向生成。
-- 跨模块写不允许由一个 query 完成：拆成多个单表 query，由 flow 编排多个 method；flow 的 `transaction` 覆盖所有 steps。
-- 不要声明权限/审计/限流/幂等——这些属于 flow。
-- `used_by.flows` 由 `make gen-graph` 写回；不要手改。
-- `transaction` 只写 `none` 或 `read_only`；写事务由 flow 管理。
-- `types` 可以引用其他 methods 文件的类型（如 `AuthSession` 引用 `TokenPair`）；生成器按文件依赖解析。
-- 不要引用 `business.*`。
+- `name` / `summary` / `visibility`（`public` 跨模块可见，`internal` 仅本模块可见）
+- `params` / `returns` / `errors`
+- `transaction`（`required` / `read_only` / `none`）
+- `steps`（至少一步）
 
----
+可选：`permissions` / `audit` / `rate_limit` / `idempotency`（入口生成器消费）；`trigger` / `retry` / `concurrency`（异步入口）；`max_iterations`（后向 goto）。
 
-## 4. flows
+### 3.1 steps
 
-`flows/<module>.yaml` 是编排层，一个文件承载一个模块的多个 flow item。同步和异步共用同一套 `steps` 结构，通过 `trigger` 区分。
+| kind | 必填 | 说明 |
+|---|---|---|
+| `query` | `query` + `params` | 调用本模块 `data.queries.*` |
+| `service` | `service` + `params` | 调用其他（或本模块）service；跨模块目标必须 `public` |
+| `logic` | `output` + `errors`；可选 `queries` / `rules` | 手写实现；`queries` 用于 query 反向索引，`rules` 是业务依据 |
+| `event` | `event` + `payload` | 发射 `cap.events.*`，生成器在事务提交后执行 |
+| `transition` | `transition` | 执行 `feature.states.*` 转换；可选 `queries` / `output` |
 
-### 4.1 同步 flow
+通用字段：`id` / `kind` / `summary` / `depends_on` / `when` / `on_error` / `errors`。
 
-不写 `trigger`，由 `protocols` 的 `x-flow` 引用。
+- `when` 是受限布尔表达式（`true/false`、`!`、`&&`、`||`、括号、`input.*` / `step.<id>.*` 与字面量比较）；静态 false 的步骤不可达。
+- `on_error` 是 `{error, action, target}` 列表；`action: abort | continue | goto`；存在后向/自环 goto 时 `max_iterations` 必填。
+- `service.errors` 必须覆盖所有可达步骤的未处理错误与入口策略错误（权限→`COMMON_FORBIDDEN`、限流→`COMMON_RATE_LIMITED`、审计→`COMMON_AUDIT_FAILED`、幂等→`COMMON_IDEMPOTENCY_CONFLICT`、循环耗尽→`COMMON_LOOP_EXHAUSTED`）。
 
-必填：`owner_module` / `steps` / `permissions` / `transaction` / `errors`。
+### 3.2 事务与写归属
 
-### 4.2 异步 flow
-
-写 `trigger`：
-
-```yaml
-trigger:
-  type: cron | event | webhook
-  schedule: "0 4 * * *"       # type=cron
-  event: business.events.*    # type=event（唯一允许引用 business 的位置）
-```
-
-必填：`owner_module` / `trigger` / `input` / `output` / `steps` / `idempotency` / `retry` / `concurrency`。
-
-### 4.3 共同约束
-
-- `steps[].use` 只允许：`cap.methods.*`、`platform.security.permissions.*`；不写 `use` 表示 flow 内部逻辑。
-- flow 不得直接引用 `data.queries.*`；query 只能由 method 调用。
-- `steps[].depends_on` 只引用前序步骤；`when` 是受限布尔表达式（`true/false`、`!`、`&&`、`||`、括号、`input.*` / `step.<id>.*` 与字面量比较），静态可判定为 false 的步骤不可达；`when` 引用的 step 必须是前序步骤，字段必须存在于方法 returns 或内部 `output`。
-- 内部步骤用 `output: [{name, type}]` 声明输出；方法步骤输出由 method returns 派生，禁止声明 `output`。列表输出用 `[index]` 取元素，例如 `step.list.items[0].field`；列表 schema 支持 `items`、`prefixItems`、`items` tuple 与 `additionalItems`；`$ref` / `oneOf`（含 discriminator）/ `anyOf` / `allOf` 按 schema 解析；`when` 的 `&&`、`||`、`!=`、`!`、`<`、`<=`、`>`、`>=` 约束用于选择 `oneOf` 分支，`||` 合并两侧共同路径的候选值/区间（单侧路径丢弃），`!` 按 De Morgan 取反；`err` 不作为 step 输出，错误用 `on_error`。
-- `when` 静态 false 或 `depends_on` 不可达只跳过该 step，继续后续 step；要终止 flow 用 `on_error.action=abort`。
-- `steps[].on_error` 是 `{error, action, target}` 列表：`action: abort | continue | goto`；abort 向上传播，continue 吞掉，goto 跳到 target；未列出的错误默认 abort。存在后向/自环 `goto` 时 `flow.max_iterations` 必填且 `>= 1`；它是 flow 级循环总预算，预算耗尽返回 `COMMON_LOOP_EXHAUSTED`（503，可重试，建议带 `Retry-After`）。
-- `flow.errors` 必须包含所有可达步骤的未处理错误和 flow 级错误；permissions/rate_limit/audit/idempotency 分别必带 `COMMON_FORBIDDEN`/`COMMON_RATE_LIMITED`/`COMMON_AUDIT_FAILED`/`COMMON_IDEMPOTENCY_CONFLICT`；存在后向/自环 goto 时必带 `COMMON_LOOP_EXHAUSTED`。
-- `compensation` 必须结构化：`action: rollback | compensate | dead_letter`。
-- `postconditions` 必须结构化：`{ field, op, value }`，不要写散文。
-- 一个 flow 只有一步也可以；判断标准是“是否需要独立的触发入口、权限边界和事务边界”，不是步骤数。
-- 异步 flow 不允许被 `protocols` 引用；同步 flow 必须至少被一个 protocol 引用，否则是孤儿。
+- `transaction` 是 service 级事务边界；生成器在 usecase 方法体外层包裹 `WithTx`。
+- `kind: query` 的写表必须属于文件 `owner_module`；跨模块写必须走 `kind: service`。
+- `persistence.tables` 必须覆盖所有 query 写表；`constraint_errors` 的键必须是所写表的约束或索引名。
+- `query.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，且不得为空。
 
 ---
 
-## 5. protocols
+## 4. 业务规格在 features
+
+`rules` / `states` 属于功能规格，放在 `contracts/features/{rules,states}/`：
+
+- service 的 `kind: logic` step 用 `rules: [feature.rules.*]` 引用业务规则；
+- service 的 `kind: transition` step 用 `transition: feature.states.*` 引用状态转换；
+- `feature.rules` / `feature.states` 的 `implemented_by` 反向指向 `cap.services.*`。
+
+capabilities 不再有 `rules/` / `states/` 目录。
+
+## 5. events
+
+`events/<subject>.yaml` 按业务主体组织（不按生产者模块）：
+
+- 每个事件有 `id` / `name` / `version` / `payload` / `emitted_by` / `consumers`；
+- `payload` 是 object 且 `additionalProperties: false`；
+- `emitted_by` 指向 `cap.services.*`；`consumers` 是消费模块；
+- 事件发射是 service 的 `kind: event` step，不是 service 项。
+
+## 6. protocols
 
 `protocols/<protocol>/<module>.yaml` 只写协议差异：
 
-- path / method / operationId
+- path / method / operationId / `x-contract-id` / `x-service`
 - status code / content-type / header
 - request/response 的 schema `$ref`
-- `x-flow: cap.flows.*`
+- `components.schemas` 通过 `x-service-type` / `x-enum` / `x-entity` 指向唯一来源
 
-**不要写**：权限、审计、限流、幂等、事务——这些在 flow。
-
-当前只启用 `http`（OpenAPI 3.1 片段）。`grpc` / `graphql` 未来按需新增，新增时只加目录与对应生成器，不改能力层。
+**不要写**：权限、审计、限流、幂等、事务——这些在 service。
 
 HTTP 约束：
 
 - 响应 schema 必须 `additionalProperties: false`。
 - 错误响应统一引用 `protocols/http/shared.yaml` 的 `Problem`。
 - 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明。
-- 503 必须通过 shared 的 `ServiceUnavailable` 返回 `Retry-After`；`default_error_responses` 含 503 时 shared 必须定义 `components.headers.RetryAfter` 与 `components.responses.ServiceUnavailable`。`Retry-After` 只接受非负整数秒或 HTTP-date，非法值不发送并返回参数错误。
-- 每个 operation 必须写 `x-contract-id` 与 `x-flow`。
-- 不要手写与 method 重复的 schema；request/response 从 flow 的 `input/output` 引用。
-- `components.schemas` 通过 `x-method-type` / `x-enum` / `x-entity` 指向唯一来源，生成器展开；禁止重复写 properties。
+- 503 必须通过 shared 的 `ServiceUnavailable` 返回 `Retry-After`。
+- 每个 operation 必须写 `x-contract-id` 与 `x-service`；`x-service` 只能指向 `public` 且无 `trigger` 的同步 service。
 
 ---
 
-## 6. capabilities 不依赖 business
-
-capabilities 契约里**不出现任何 `business.*`**。方向只有一个：
-
-```
-business ──implemented_by / emitted_by──> capabilities
-```
-
-| 不要写 | 改写为 |
-|---|---|
-| `x-preconditions: business.rules.*` | 由 `business/rules` 的 `implemented_by` 声明 |
-| `emits: business.events.*` | 由 `business/events` 的 `emitted_by` 声明 |
-| `use: business.states.account.transition` | 状态转换封装在 `cap.methods.*` 内；flow 只调用 method |
-
-唯一例外：异步 flow 的 `trigger.event` 引用 `business.events.*`，因为事件就是它的输入。这只是“引用输入类型”，不是“声明实现关系”。
-
----
-
-## 7. 目录
+## 7. 目录与 ID
 
 ```
 contracts/capabilities/
 ├── README.md
-├── methods/<module>.yaml
-├── flows/<module>.yaml
+├── services/<module>.yaml
+├── events/<subject>.yaml
 └── protocols/
     ├── http/
     │   ├── shared.yaml
@@ -167,26 +155,26 @@ contracts/capabilities/
     └── graphql/       # 未来
 ```
 
-ID 派生：
-
 | 目录 | ID | 示例 |
 |---|---|---|
-| `methods/` | `cap.methods.<file>` | `cap.methods.account` |
-| `flows/` | `cap.flows.<file>.<name>` | `cap.flows.account.delete` |
+| `services/` | `cap.services.<file>` | `cap.services.account` |
+| `events/` | `cap.events.<file>` | `cap.events.account` |
 | `protocols/http/` | `cap.http.<file>` | `cap.http.account` |
-| `protocols/grpc/` | `cap.grpc.<file>` | `cap.grpc.account` |
-| `protocols/graphql/` | `cap.graphql.<file>` | `cap.graphql.account` |
 
-方法/步骤项 ID 由文件 ID + 显式 `name` 派生：
+方法/步骤项 ID：
 
-- method 项：`cap.methods.<file>.<snake_case(method)>`
-- flow 步骤：步骤内 `id`，不是全局契约 ID。
+- service 项：`cap.services.<file>.<snake_case(name)>`
+- rule 项：显式 `id`
+- state 转换：`feature.states.<file>.<snake_case(transition)>`
+- event 项：显式 `id`
+- step：步骤内 `id`，不是全局契约 ID
 
 ---
 
 ## 8. 当前落地状态
 
-- `protocols/http/*.yaml` 已全部使用 `x-flow` 指向同步 flow；`x-service` 已移除。
-- `flows/<module>.yaml` 的每个 flow item 用 `implementation: direct`（直通一个 method）或 `implementation: flow`（显式 steps）。
-- `methods/*.yaml` 的写方法 `transaction` 已改为 `none`；事务边界在对应的 flow 上声明。
-- 原 `cap.flows.account_activation` 已删除：它是单模块内部编排，且引用了 `business.*`。
+- `services/*.yaml` 已合并原 methods + flows；每个 service 项都有 steps。
+- `features/rules/*` / `features/states/*` 承载业务规则与状态机；`capabilities/events/*` 承载领域事件。
+- `protocols/http/*.yaml` 已全部使用 `x-service` 指向同步 service。
+- `data.queries.*.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，不得为空。
+- 术语表在 `docs/reference/glossary.md`（review-only，不占契约组）。

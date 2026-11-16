@@ -17,7 +17,7 @@ paths:
     get:
       operationId: listAccounts
       x-contract-id: cap.http.account.list
-      x-flow: cap.flows.account.list
+      x-service: cap.services.account.list
       summary: "列出账号"
       x-timeout-ms: 3000
       parameters:
@@ -47,23 +47,14 @@ paths:
     post:
       operationId: createAccount
       x-contract-id: cap.http.account.create
-      x-flow: cap.flows.account.create
+      x-service: cap.services.account.create
       summary: "创建账号"
       x-timeout-ms: 5000
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [own_type, own_id, number, nickname]
-              properties:
-                own_type: { type: string, enum: [user, admin, system] }
-                own_id: { type: integer }
-                number: { type: string, minLength: 4, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" }
-                nickname: { type: string, minLength: 1, maxLength: 100 }
-                user_id: { type: integer, nullable: true }
+            schema: { $ref: "#/components/schemas/CreateAccountInput" }
             example: { own_type: user, own_id: 2, number: "ACC-0001", nickname: "管理员" }
       responses:
         "201":
@@ -76,7 +67,7 @@ paths:
     get:
       operationId: getAccount
       x-contract-id: cap.http.account.get
-      x-flow: cap.flows.account.get
+      x-service: cap.services.account.get
       summary: "获取账号"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -90,7 +81,7 @@ paths:
     patch:
       operationId: updateAccount
       x-contract-id: cap.http.account.update
-      x-flow: cap.flows.account.update
+      x-service: cap.services.account.update
       summary: "更新账号资料"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -98,12 +89,7 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [nickname]
-              properties:
-                nickname: { type: string, minLength: 1, maxLength: 100 }
+            schema: { $ref: "#/components/schemas/UpdateAccountInput" }
       responses:
         "200":
           description: "成功"
@@ -114,7 +100,7 @@ paths:
     delete:
       operationId: deleteAccount
       x-contract-id: cap.http.account.delete
-      x-flow: cap.flows.account.delete
+      x-service: cap.services.account.delete
       summary: "删除账号（软删）"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -125,7 +111,7 @@ paths:
     post:
       operationId: activateAccount
       x-contract-id: cap.http.account.activate
-      x-flow: cap.flows.account.activate
+      x-service: cap.services.account.activate
       summary: "激活账号"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -140,7 +126,7 @@ paths:
     post:
       operationId: suspendAccount
       x-contract-id: cap.http.account.suspend
-      x-flow: cap.flows.account.suspend
+      x-service: cap.services.account.suspend
       summary: "封禁账号"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -165,3 +151,9 @@ components:
   schemas:
     Account:
       x-entity: data.entities.account
+
+    CreateAccountInput:
+      x-service-type: cap.services.account.types.CreateAccountInput
+
+    UpdateAccountInput:
+      x-service-type: cap.services.account.types.UpdateAccountInput

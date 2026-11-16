@@ -43,16 +43,24 @@ lint-tools: ## 契约工具 vet + 格式检查
 typecheck: ## 前端类型检查
 	pnpm -C apps/web -r --if-present typecheck
 
-gen: contract-check ## 重新生成契约产物（已实现 gen-graph / gen-errors / gen-db；其余 P2）
-	@echo "gen: 部分实现。已实现：gen-graph / gen-errors / gen-db。待实现：gen-openapi / gen-client / gen-env"
+gen: contract-check ## 重新生成契约产物
+	@echo "gen: 生成契约产物"
 	$(MAKE) gen-graph
 	$(MAKE) gen-errors
 	$(MAKE) gen-db
-	@exit 1
+	$(MAKE) gen-openapi
 
-gen-openapi: contract-check ## 合并 capabilities/http/* + apps/* → generated/openapi（P2）
-	@echo "gen-openapi: 尚未实现（P2）"
-	@exit 1
+gen-openapi: contract-check ## 合并 protocols/http/* → contracts/generated/openapi
+	cd scripts/cmd && go run ./gen_openapi -root "$(CURDIR)"
+
+gen-openapi-check: ## 校验 OpenAPI spec 是否最新
+	cd scripts/cmd && go run ./gen_openapi -root "$(CURDIR)" -check
+
+gen-check: ## 校验全部生成物最新
+	$(MAKE) gen-graph-check
+	$(MAKE) gen-errors-check
+	$(MAKE) gen-db-check
+	$(MAKE) gen-openapi-check
 
 gen-db: contract-check ## data/tables/* → apps/api/schema.sql + migrations/0001_baseline.sql
 	cd scripts/cmd && go run ./gen_db -root "$(CURDIR)"
@@ -76,8 +84,8 @@ gen-client: contract-check ## 合并 spec → apps/web/packages/api-client（P2�
 	@echo "gen-client: 尚未实现（P2）"
 	@exit 1
 
-contract-new: ## 生成契约骨架（type=data.tables|data.enums|data.entities|data.queries；table=<stem> 可选）
-	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" ./scripts/contract/scaffold.sh
+contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|feature.rules|feature.states|cap.events|cap.http）
+	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" service="$(service)" path="$(path)" http_method="$(http_method)" ./scripts/contract/scaffold.sh
 
 contract-check: ## 校验契约结构与 used_by（data.tables/enums/entities/queries）
 	@./scripts/contract/validate.sh

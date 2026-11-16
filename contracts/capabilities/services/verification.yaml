@@ -1,0 +1,195 @@
+# 验证码 service。
+
+id: cap.services.verification
+summary: "验证码服务：发送、校验与作废"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "send / verify 不要返回 code_hash / content / target 原文；只返回 masked_target"
+  - "verify 写 verification_action 必须与业务结果同事务，失败不得留下不一致记录"
+  - "验证码校验失败不要枚举 target 是否存在"
+  - "换绑、解绑或停用认证绑定必须调用 revoke_by_auth"
+interface:
+  name: VerificationService
+  package: internal/modules/account/auth/verification/api
+persistence:
+  tables:
+    - data.tables.verification_body
+    - data.tables.verification_action
+  constraint_errors:
+    ck_verification_auth_type: platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+    ck_verification_consumed_status: platform.errors.AUTH_VERIFICATION_INVALID
+types:
+  SendVerificationInput:
+    type: object
+    additionalProperties: false
+    required: [auth_type, target, purpose]
+    properties:
+      auth_type: {type: data.enums.auth_type}
+      account_id: {type: integer, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析"}
+      target: {type: string, minLength: 1, maxLength: 320}
+      purpose: {type: data.enums.verification_purpose}
+  VerificationSent:
+    type: object
+    additionalProperties: false
+    required: [id, masked_target, expire_at]
+    properties:
+      id: {type: integer}
+      masked_target: {type: string}
+      expire_at: {type: string, format: date-time}
+  VerifyCodeInput:
+    type: object
+    additionalProperties: false
+    required: [auth_type, target, purpose, code]
+    properties:
+      auth_type: {type: data.enums.auth_type}
+      account_id: {type: integer, nullable: true, description: "注册时必传；其他用途可省略"}
+      target: {type: string, minLength: 1, maxLength: 320}
+      purpose: {type: data.enums.verification_purpose}
+      code: {type: string, minLength: 4, maxLength: 12}
+  VerificationResult:
+    type: object
+    additionalProperties: false
+    required: [verified, verification_id]
+    properties:
+      verified: {type: boolean}
+      verification_id: {type: integer}
+      consumed_at: {type: string, format: date-time, nullable: true}
+services:
+  - name: send
+    summary: "发送短信/邮件验证码"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: input, type: SendVerificationInput}
+    returns:
+      - {name: verification, type: VerificationSent}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_VERIFICATION_INVALID
+      - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+      - platform.errors.AUTH_PHONE_INVALID
+      - platform.errors.AUTH_EMAIL_INVALID
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_RATE_LIMITED
+    permissions: []
+    audit: true
+    rate_limit: {requests: 5, window_seconds: 60}
+    transaction: required
+    steps:
+      - id: send
+        kind: logic
+        summary: "归一化 target、作废旧验证码并创建新验证体"
+        errors:
+          - platform.errors.AUTH_VERIFICATION_INVALID
+          - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+          - platform.errors.AUTH_PHONE_INVALID
+          - platform.errors.AUTH_EMAIL_INVALID
+        output:
+          - {name: verification, type: VerificationSent}
+        queries:
+          - data.queries.verification.get_latest_verification
+          - data.queries.verification.create_verification
+          - data.queries.verification.mark_verification_sent
+        rules:
+          - "feature.rules.auth.verification_resend"
+          - "feature.rules.auth.verification_target_normalization"
+          - "feature.rules.auth.verification_no_enumeration"
+          - "feature.rules.auth.verification_account_active"
+          - "feature.rules.auth.verification_register_account"
+          - "feature.rules.auth.verification_auth_binding"
+          - "feature.rules.auth.verification_purpose_status"
+  - name: verify
+    summary: "校验并消费验证码，记录每次校验动作"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: input, type: VerifyCodeInput}
+    returns:
+      - {name: result, type: VerificationResult}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_VERIFICATION_INVALID
+      - platform.errors.AUTH_VERIFICATION_EXPIRED
+      - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+      - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_RATE_LIMITED
+    permissions: []
+    audit: true
+    rate_limit: {requests: 10, window_seconds: 60}
+    transaction: required
+    steps:
+      - id: verify
+        kind: logic
+        summary: "一次性消费验证码，记录失败次数与动作日志"
+        errors:
+          - platform.errors.AUTH_VERIFICATION_INVALID
+          - platform.errors.AUTH_VERIFICATION_EXPIRED
+          - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+          - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+        output:
+          - {name: result, type: VerificationResult}
+        queries:
+          - data.queries.verification.get_latest_verification
+          - data.queries.verification.consume_verification
+          - data.queries.verification.increment_verification_attempt
+          - data.queries.verification.create_verification_action
+        rules:
+          - "feature.rules.auth.verification_one_time"
+          - "feature.rules.auth.verification_expiry"
+          - "feature.rules.auth.verification_attempts"
+          - "feature.rules.auth.verification_auth_binding"
+          - "feature.rules.auth.verification_purpose_status"
+          - "feature.rules.auth.verification_no_enumeration"
+          - "feature.rules.auth.verification_account_active"
+          - "feature.rules.auth.verification_register_account"
+          - "feature.rules.auth.verification_success_sets_verified"
+          - "feature.rules.auth.verification_action_recorded"
+          - "feature.rules.auth.verification_action_append_only"
+  - name: revoke_by_auth
+    summary: "换绑/解绑/停用认证绑定时作废对应未消费验证体"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: auth_type, type: data.enums.auth_type}
+      - {name: auth_id, type: integer}
+    returns:
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+      - platform.errors.COMMON_INTERNAL
+    transaction: none
+    steps:
+      - id: revoke
+        kind: logic
+        summary: "按 auth_type + auth_id 作废未消费验证体"
+        errors:
+          - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+          - platform.errors.COMMON_INTERNAL
+        output: []
+        queries:
+          - data.queries.verification.revoke_active_verifications_by_auth
+        rules:
+          - "feature.rules.auth.verification_auth_change"
+  - name: revoke_by_account
+    summary: "作废账号的全部未消费验证体"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: account_id, type: integer}
+    returns:
+      - {name: err, type: error}
+    errors:
+      - platform.errors.COMMON_INTERNAL
+    transaction: none
+    steps:
+      - id: revoke
+        kind: logic
+        summary: "按 account_id 作废全部未消费验证体"
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        output: []
+        queries:
+          - data.queries.verification.revoke_active_verifications_by_account

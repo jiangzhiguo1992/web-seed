@@ -75,6 +75,7 @@ type Checker struct {
 	permissionSet     map[string]bool
 	methodReturns     map[string]map[string]string
 	methodTypeDefs    map[string]map[string]any
+	queryReturnTypes  map[string]map[string]string
 	inlineSeq         int
 }
 

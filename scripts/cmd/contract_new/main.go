@@ -21,28 +21,20 @@ import (
 
 func main() {
 	root := flag.String("root", "../..", "repo root")
-	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.methods | cap.flows | cap.http")
+	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.http")
 	name := flag.String("name", "", "snake_case name")
 	module := flag.String("module", "", "owner_module / query module (default: name)")
 	table := flag.String("table", "", "table stem (default: name)")
 	summary := flag.String("summary", "", "summary (default: name)")
 	out := flag.String("out", "", "output file (data.tables/entities/queries); empty prints to stdout; auto uses targets.dir")
 	columnType := flag.String("column-type", "", "first column type family (default: schema default)")
-	method := flag.String("method", "", "cap.flows: method item ID (cap.methods.*.*)")
-	flow := flag.String("flow", "", "cap.http: flow item ID (cap.flows.*.*)")
+	service := flag.String("service", "", "cap.http: service item ID (cap.services.*.*)")
 	path := flag.String("path", "", "cap.http: URL path (default: /<name>)")
 	httpMethod := flag.String("http-method", "get", "cap.http: HTTP method")
 	flag.Parse()
 
-	tableSet := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "table" {
-			tableSet = true
-		}
-	})
-
 	if *typ == "" || *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.methods|cap.flows|cap.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-method <cap.methods.*.*>] [-flow <cap.flows.*.*>] [-path </x>] [-http-method get]")
+		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|feature.rules|feature.states|cap.events|cap.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
 		os.Exit(2)
 	}
 	if *module == "" {
@@ -64,18 +56,13 @@ func main() {
 		fail(err)
 	}
 	switch *typ {
-	case "data.tables", "data.entities", "data.queries", "cap.methods", "cap.flows", "cap.http":
+	case "data.tables", "data.entities", "data.queries", "cap.services", "feature.rules", "feature.states", "cap.events", "cap.http":
 		if *out == "auto" {
 			if schema.Targets.Dir == "" {
 				fail(fmt.Errorf("targets.dir is empty"))
 			}
 			*out = filepath.Join(abs, schema.Targets.Dir, *name+".yaml")
 		}
-	}
-
-	methodTable := ""
-	if tableSet {
-		methodTable = *table
 	}
 
 	switch *typ {
@@ -123,35 +110,46 @@ func main() {
 		}
 		os.Stdout.Write(b)
 
-	case "cap.methods":
-		b, err := contractspec.RenderMethod(schema, *name, *module, *summary, methodTable)
+	case "cap.services":
+		b, err := contractspec.RenderService(schema, *name, *module, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; add params/returns/queries; add types if needed; register in contracts/index.yaml; make contract-check")
+		writeOut(*out, b, "next: replace TODO; add services/steps/queries/rules; set persistence.tables; register in contracts/index.yaml; make gen-graph; make contract-check")
 
-	case "cap.flows":
-		if *method == "" {
-			fail(fmt.Errorf("-method is required for cap.flows"))
-		}
-		b, err := contractspec.RenderFlow(schema, *name, *module, *summary, *method)
+	case "feature.rules":
+		b, err := contractspec.RenderRule(schema, *name, *module, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; add permissions/errors; ensure the method exists; register in contracts/index.yaml; make contract-check")
+		writeOut(*out, b, "next: replace TODO; choose constraint/invariant/policy; point implemented_by at cap.services.*; register in contracts/index.yaml; make contract-check")
+
+	case "feature.states":
+		b, err := contractspec.RenderState(schema, *name, *module, *summary)
+		if err != nil {
+			fail(err)
+		}
+		writeOut(*out, b, "next: replace TODO; exhaust states/transitions; set guard/side_effects/implemented_by; register in contracts/index.yaml; make contract-check")
+
+	case "cap.events":
+		b, err := contractspec.RenderEvent(schema, *name, *module, *summary)
+		if err != nil {
+			fail(err)
+		}
+		writeOut(*out, b, "next: replace TODO; add payload fields; point emitted_by at cap.services.*; register in contracts/index.yaml; make contract-check")
 
 	case "cap.http":
-		if *flow == "" {
-			fail(fmt.Errorf("-flow is required for cap.http"))
+		if *service == "" {
+			fail(fmt.Errorf("-service is required for cap.http"))
 		}
 		if *path == "" {
 			*path = "/" + *name
 		}
-		b, err := contractspec.RenderHTTP(schema, *name, *module, *summary, *flow, *path, *httpMethod)
+		b, err := contractspec.RenderHTTP(schema, *name, *module, *summary, *service, *path, *httpMethod)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace the 200 response schema; add components if needed; ensure the flow exists; make contract-check")
+		writeOut(*out, b, "next: replace the 200 response schema; add components if needed; ensure the service exists and is public/sync; make contract-check")
 
 	default:
 		fail(fmt.Errorf("unsupported type: %s", *typ))

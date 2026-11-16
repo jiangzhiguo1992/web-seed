@@ -5,7 +5,7 @@ id: feature.pages.account_detail
 summary: "账号详情页"
 stability: stable
 do_not:
-  - "不要在前端判断状态合法性，使用 business.states.account 的转换表"
+  - "不要在前端判断状态合法性，使用 feature.states.account 的转换表"
   - "不要在页面展示密码、手机号、邮箱、令牌"
   - "认证信息只能通过认证接口获取，不要在本页拼装"
 
@@ -14,7 +14,7 @@ route: feature.routes.account_detail
 
 data:
   detail:
-    capability: cap.flows.account.get
+    capability: cap.services.account.get
     params:
       id: { from: route.params.id, type: integer, required: true }
     cache:
@@ -37,23 +37,23 @@ view_states:
 
 actions:
   edit:
-    capability: cap.flows.account.update
+    capability: cap.services.account.update
     permission: platform.security.permissions.account_write
     available_when: { state_not: [deleted] }
     ui: "primary-button"
   activate:
-    capability: cap.flows.account.activate
+    capability: cap.services.account.activate
     permission: platform.security.permissions.account_write
-    available_when: { transitions: [business.states.account.activate, business.states.account.reactivate] }
+    available_when: { transitions: [feature.states.account.activate, feature.states.account.reactivate] }
   suspend:
-    capability: cap.flows.account.suspend
+    capability: cap.services.account.suspend
     permission: platform.security.permissions.account_write
-    available_when: { transition: business.states.account.suspend }
+    available_when: { transition: feature.states.account.suspend }
     confirm: true
   delete:
-    capability: cap.flows.account.delete
+    capability: cap.services.account.delete
     permission: platform.security.permissions.account_delete
-    available_when: { transition: business.states.account.delete }
+    available_when: { transition: feature.states.account.delete }
     confirm: true
     danger: true
 
@@ -69,7 +69,7 @@ fields:
   - name: user_id
     render: code
   - name: status
-    enum: business.states.account.states
+    enum: feature.states.account.states
     render: badge
   - name: created_at
     render: relative_time
@@ -77,5 +77,5 @@ fields:
     render: relative_time
 
 transition_ui:
-  source: business.states.account.transitions
+  source: feature.states.account.transitions
   rule: "只渲染 from 包含当前状态的按钮；点击前调用 canTransition()"

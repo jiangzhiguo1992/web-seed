@@ -1,7 +1,7 @@
-// Package graph 计算 query/flow 入边并写回 table/model/query/method 的反向索引。
+// Package graph 计算 query 入边并写回 table/model/query 的反向索引。
 //
 // table.entities 与 model.included_by 是显式映射，由 checker 校验；
-// gen-graph 维护生成物 table.queries、model.queries、query.used_by 与 method.used_by.flows。
+// gen-graph 维护生成物 table.queries、model.queries 与 query.used_by。
 package graph
 
 import (
@@ -24,19 +24,14 @@ type EntityUsedBy struct {
 	Queries []string
 }
 
-type MethodUsedBy struct {
-	Flows []string
-}
-
 type Snapshot struct {
 	Tables      map[string]TableUsedBy
 	Entities    map[string]EntityUsedBy
-	Methods     map[string]MethodUsedBy
-	Queries     map[string][]string // query ID → method item IDs
+	Queries     map[string][]string // query ID → service item IDs
 	TableFiles  map[string]string
 	EntityFiles map[string]string
-	MethodFiles map[string]string
 	QueryFiles  map[string][]string // query file → query IDs in item order
+	Anchors     *Anchors
 }
 
 type tableSet struct {
@@ -45,10 +40,6 @@ type tableSet struct {
 
 type entitySet struct {
 	queries map[string]bool
-}
-
-type methodSet struct {
-	flows map[string]bool
 }
 
 // scanTarget 是 _meta targets 的扫描路径与 ID 模板。
@@ -118,17 +109,13 @@ func Compute(root string) (*Snapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	methodTarget, err := resolveTarget(root, "cap.methods")
-	if err != nil {
-		return nil, err
-	}
-	flowTarget, err := resolveTarget(root, "cap.flows")
+	serviceTarget, err := resolveTarget(root, "cap.services")
 	if err != nil {
 		return nil, err
 	}
 	for name, target := range map[string]scanTarget{
 		"data.tables": tableTarget, "data.entities": entityTarget, "data.queries": queryTarget,
-		"cap.methods": methodTarget, "cap.flows": flowTarget,
+		"cap.services": serviceTarget,
 	} {
 		info, err := os.Stat(filepath.Join(root, target.dir))
 		if err != nil || !info.IsDir() {
@@ -137,12 +124,10 @@ func Compute(root string) (*Snapshot, error) {
 	}
 	tables := map[string]*tableSet{}
 	entities := map[string]*entitySet{}
-	methods := map[string]*methodSet{}
 	tableFiles := map[string]string{}
 	entityFiles := map[string]string{}
-	methodFiles := map[string]string{}
 	queryFiles := map[string][]string{}
-	queryMethods := map[string]map[string]bool{}
+	queryServices := map[string]map[string]bool{}
 
 	tableIDTemplate := contractspec.Targets{ID: tableTarget.id}
 	for _, f := range glob(root, filepath.Join(tableTarget.dir, tableTarget.glob)) {
@@ -173,15 +158,6 @@ func Compute(root string) (*Snapshot, error) {
 		}
 		entities[id] = &entitySet{queries: map[string]bool{}}
 		entityFiles[id] = rel(root, f)
-	}
-	methodIDTemplate := contractspec.Targets{ID: methodTarget.id}
-	for _, f := range glob(root, filepath.Join(methodTarget.dir, methodTarget.glob)) {
-		id := methodIDTemplate.FileID(filepath.Base(f))
-		if id == "" {
-			continue
-		}
-		methods[id] = &methodSet{flows: map[string]bool{}}
-		methodFiles[id] = rel(root, f)
 	}
 	queryIDTemplate := contractspec.Targets{ID: queryTarget.id}
 	seenQueries := map[string]string{}
@@ -219,71 +195,62 @@ func Compute(root string) (*Snapshot, error) {
 			}
 		}
 	}
-	for _, f := range glob(root, filepath.Join(methodTarget.dir, methodTarget.glob)) {
+
+	for _, f := range glob(root, filepath.Join(serviceTarget.dir, serviceTarget.glob)) {
 		doc, err := loadYAML(f)
 		if err != nil {
 			return nil, err
 		}
 		fileID, _ := doc["id"].(string)
-		iface, _ := asMap(doc["interface"])
-		for _, raw := range asList(iface["methods"]) {
-			m, _ := asMap(raw)
-			name, _ := m["name"].(string)
-			methodID := fileID + "." + contractspec.SnakeCase(name)
-			for _, rawQ := range asList(m["queries"]) {
-				qid, _ := rawQ.(string)
-				if qid == "" {
-					continue
-				}
-				if queryMethods[qid] == nil {
-					queryMethods[qid] = map[string]bool{}
-				}
-				queryMethods[qid][methodID] = true
-			}
-		}
-	}
-	flowIDTemplate := contractspec.Targets{ID: flowTarget.id}
-	for _, f := range glob(root, filepath.Join(flowTarget.dir, flowTarget.glob)) {
-		doc, err := loadYAML(f)
-		if err != nil {
-			return nil, err
-		}
-		fileID := flowIDTemplate.FileID(filepath.Base(f))
 		if fileID == "" {
 			continue
 		}
-		for _, raw := range asList(doc["flows"]) {
-			item, ok := asMap(raw)
-			if !ok {
+		for _, raw := range asList(doc["services"]) {
+			item, _ := asMap(raw)
+			name, _ := item["name"].(string)
+			if name == "" {
 				continue
 			}
-			name, _ := item["name"].(string)
-			flowID := fileID + "." + contractspec.SnakeCase(name)
-			if m, _ := item["method"].(string); m != "" {
-				if ms := methods[methodFileID(m)]; ms != nil {
-					ms.flows[flowID] = true
-				}
-			}
-			for _, stepRaw := range asList(item["steps"]) {
-				step, _ := asMap(stepRaw)
-				use, _ := step["use"].(string)
-				if strings.HasPrefix(use, "cap.methods.") {
-					if ms := methods[methodFileID(use)]; ms != nil {
-						ms.flows[flowID] = true
+			serviceID := fileID + "." + name
+			for _, rawStep := range asList(item["steps"]) {
+				step, _ := asMap(rawStep)
+				kind, _ := step["kind"].(string)
+				var qids []string
+				switch kind {
+				case "query":
+					qid, _ := step["query"].(string)
+					if qid != "" {
+						qids = append(qids, qid)
 					}
+				case "logic", "transition":
+					for _, rawQ := range asList(step["queries"]) {
+						qid, _ := rawQ.(string)
+						if qid != "" {
+							qids = append(qids, qid)
+						}
+					}
+				}
+				for _, qid := range qids {
+					if queryServices[qid] == nil {
+						queryServices[qid] = map[string]bool{}
+					}
+					queryServices[qid][serviceID] = true
 				}
 			}
 		}
 	}
 
+	anchors, err := computeAnchors(root, serviceTarget)
+	if err != nil {
+		return nil, err
+	}
 	snap := &Snapshot{
+		Anchors:     anchors,
 		Tables:      map[string]TableUsedBy{},
 		Entities:    map[string]EntityUsedBy{},
-		Methods:     map[string]MethodUsedBy{},
 		Queries:     map[string][]string{},
 		TableFiles:  tableFiles,
 		EntityFiles: entityFiles,
-		MethodFiles: methodFiles,
 		QueryFiles:  queryFiles,
 	}
 	for id, ts := range tables {
@@ -292,10 +259,7 @@ func Compute(root string) (*Snapshot, error) {
 	for id, es := range entities {
 		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries)}
 	}
-	for id, ms := range methods {
-		snap.Methods[id] = MethodUsedBy{Flows: sortedKeys(ms.flows)}
-	}
-	for id, qs := range queryMethods {
+	for id, qs := range queryServices {
 		snap.Queries[id] = sortedKeys(qs)
 	}
 	return snap, nil
@@ -338,15 +302,12 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 			changed = append(changed, file)
 		}
 	}
-	for _, id := range sortedFileKeys(s.MethodFiles) {
-		file := s.MethodFiles[id]
-		ok, err := syncMethodUsedByFile(filepath.Join(root, file), s.Methods[id].Flows)
+	if s.Anchors != nil {
+		files, err := s.Anchors.Write(root)
 		if err != nil {
 			return changed, err
 		}
-		if ok {
-			changed = append(changed, file)
-		}
+		changed = append(changed, files...)
 	}
 	return changed, nil
 }
@@ -396,19 +357,12 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 			}
 		}
 	}
-	for _, id := range sortedFileKeys(s.MethodFiles) {
-		file := s.MethodFiles[id]
-		doc, err := loadYAML(filepath.Join(root, file))
+	if s.Anchors != nil {
+		anchors, err := s.Anchors.Check(root)
 		if err != nil {
 			return nil, err
 		}
-		got, ok := methodUsedBy(doc)
-		want := s.Methods[id].Flows
-		if !ok {
-			drift = append(drift, fmt.Sprintf("%s: used_by must contain flows only", file))
-		} else if !sameSet(got, want) {
-			drift = append(drift, fmt.Sprintf("%s: used_by.flows must be %v, got %v", file, want, got))
-		}
+		drift = append(drift, anchors...)
 	}
 	return drift, nil
 }
@@ -676,54 +630,6 @@ func renderListBlock(indent, key string, values []string) []string {
 		out = append(out, indent+"  - "+v)
 	}
 	return out
-}
-
-func renderMethodUsedBy(flows []string) string {
-	var b strings.Builder
-	b.WriteString("used_by:\n")
-	renderList(&b, "flows", flows)
-	return b.String()
-}
-
-func syncMethodUsedByFile(path string, flows []string) (bool, error) {
-	src, err := os.ReadFile(path)
-	if err != nil {
-		return false, err
-	}
-	doc := map[string]any{}
-	if err := yaml.Unmarshal(src, &doc); err != nil {
-		return false, fmt.Errorf("%s: %w", path, err)
-	}
-	got, ok := methodUsedBy(doc)
-	if ok && sameSet(got, flows) {
-		return false, nil
-	}
-	out, err := applyUsedBy(src, renderMethodUsedBy(flows))
-	if err != nil {
-		return false, fmt.Errorf("%s: %w", path, err)
-	}
-	return true, writeAtomic(path, out)
-}
-
-// methodUsedBy 读取 method 的 used_by；必须只有 flows 键。
-func methodUsedBy(doc map[string]any) ([]string, bool) {
-	ub, _ := asMap(doc["used_by"])
-	if ub == nil || len(ub) != 1 {
-		return nil, false
-	}
-	raw, ok := ub["flows"]
-	if !ok {
-		return nil, false
-	}
-	return stringList(raw), true
-}
-
-// methodFileID 把 cap.methods.<file>.<method> 还原为文件级 ID。
-func methodFileID(id string) string {
-	if i := strings.LastIndex(id, "."); i > 0 {
-		return id[:i]
-	}
-	return id
 }
 
 func renderList(b *strings.Builder, key string, values []string) {

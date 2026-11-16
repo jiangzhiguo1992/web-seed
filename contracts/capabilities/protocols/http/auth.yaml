@@ -17,23 +17,14 @@ paths:
     post:
       operationId: login
       x-contract-id: cap.http.auth.login
-      x-flow: cap.flows.auth.login
+      x-service: cap.services.auth.login
       summary: "登录"
       x-timeout-ms: 5000
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [auth_type, identifier]
-              properties:
-                auth_type: { type: string, enum: [pwd, phone, email] }
-                identifier: { type: string, minLength: 1, maxLength: 254 }
-                password: { type: string, writeOnly: true, nullable: true }
-                code: { type: string, nullable: true, description: "手机号区号，例如 +86" }
-                device_id: { type: string, nullable: true, maxLength: 128 }
+            schema: { $ref: "#/components/schemas/LoginInput" }
             example: { auth_type: pwd, identifier: "admin", password: "a-strong-password", device_id: "web-admin" }
       responses:
         "200":
@@ -46,22 +37,14 @@ paths:
     post:
       operationId: sendVerification
       x-contract-id: cap.http.auth.verification_send
-      x-flow: cap.flows.auth.send_verification
+      x-service: cap.services.verification.send
       summary: "发送验证码"
       x-timeout-ms: 5000
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [auth_type, target, purpose]
-              properties:
-                auth_type: { type: string, enum: [phone, email] }
-                account_id: { type: integer, nullable: true, description: "注册时必传" }
-                target: { type: string, minLength: 1, maxLength: 320 }
-                purpose: { $ref: "#/components/schemas/VerificationPurpose" }
+            schema: { $ref: "#/components/schemas/SendVerificationInput" }
             example: { auth_type: phone, target: "+8613800138000", purpose: login }
       responses:
         "202":
@@ -74,23 +57,14 @@ paths:
     post:
       operationId: verifyCode
       x-contract-id: cap.http.auth.verification_verify
-      x-flow: cap.flows.auth.verify_code
+      x-service: cap.services.verification.verify
       summary: "校验验证码"
       x-timeout-ms: 5000
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [auth_type, target, purpose, code]
-              properties:
-                auth_type: { type: string, enum: [phone, email] }
-                account_id: { type: integer, nullable: true, description: "注册时必传" }
-                target: { type: string, minLength: 1, maxLength: 320 }
-                purpose: { $ref: "#/components/schemas/VerificationPurpose" }
-                code: { type: string, minLength: 4, maxLength: 12 }
+            schema: { $ref: "#/components/schemas/VerifyCodeInput" }
             example: { auth_type: phone, target: "+8613800138000", purpose: login, code: "123456" }
       responses:
         "200":
@@ -103,7 +77,7 @@ paths:
     post:
       operationId: refreshToken
       x-contract-id: cap.http.auth.refresh
-      x-flow: cap.flows.auth.refresh
+      x-service: cap.services.token.refresh
       summary: "刷新令牌"
       x-timeout-ms: 3000
       requestBody:
@@ -127,7 +101,7 @@ paths:
     post:
       operationId: logout
       x-contract-id: cap.http.auth.logout
-      x-flow: cap.flows.auth.logout
+      x-service: cap.services.token.logout
       summary: "登出"
       requestBody:
         required: true
@@ -144,17 +118,26 @@ paths:
 
 components:
   schemas:
+    LoginInput:
+      x-service-type: cap.services.auth.types.LoginInput
+
+    SendVerificationInput:
+      x-service-type: cap.services.verification.types.SendVerificationInput
+
+    VerifyCodeInput:
+      x-service-type: cap.services.verification.types.VerifyCodeInput
+
     TokenPair:
-      x-method-type: cap.methods.token.types.TokenPair
+      x-service-type: cap.services.token.types.TokenPair
 
     AuthSession:
-      x-method-type: cap.methods.auth.types.AuthSession
+      x-service-type: cap.services.auth.types.AuthSession
 
     VerificationPurpose:
       x-enum: data.enums.verification_purpose
 
     VerificationSent:
-      x-method-type: cap.methods.verification.types.VerificationSent
+      x-service-type: cap.services.verification.types.VerificationSent
 
     VerificationResult:
-      x-method-type: cap.methods.verification.types.VerificationResult
+      x-service-type: cap.services.verification.types.VerificationResult

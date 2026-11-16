@@ -787,26 +787,40 @@ func splitIndexRef(ref string) (table, name string, ok bool) {
 // checkQueryUsedBy 对账 query.used_by 与 method.queries 的反向索引。
 func (c *Checker) checkQueryUsedBy() {
 	expected := map[string]map[string]bool{}
-	for _, f := range walkYAML(c.root, "contracts/capabilities/methods") {
+	for _, f := range glob(c.root, "contracts/capabilities/services/*.yaml") {
 		doc, err := loadYAML(f)
 		if err != nil {
 			continue
 		}
 		fileID, _ := doc["id"].(string)
-		iface, _ := asMap(doc["interface"])
-		for _, raw := range asList(iface["methods"]) {
-			m, _ := asMap(raw)
-			name, _ := m["name"].(string)
-			methodID := fileID + "." + contractspec.SnakeCase(name)
-			for _, rawQ := range asList(m["queries"]) {
-				qid, _ := rawQ.(string)
-				if qid == "" {
-					continue
+		for _, raw := range asList(doc["services"]) {
+			item, _ := asMap(raw)
+			name, _ := item["name"].(string)
+			serviceID := fileID + "." + name
+			for _, rawStep := range asList(item["steps"]) {
+				step, _ := asMap(rawStep)
+				kind, _ := step["kind"].(string)
+				var qids []string
+				switch kind {
+				case "query":
+					qid, _ := step["query"].(string)
+					if qid != "" {
+						qids = append(qids, qid)
+					}
+				case "logic", "transition":
+					for _, rawQ := range asList(step["queries"]) {
+						qid, _ := rawQ.(string)
+						if qid != "" {
+							qids = append(qids, qid)
+						}
+					}
 				}
-				if expected[qid] == nil {
-					expected[qid] = map[string]bool{}
+				for _, qid := range qids {
+					if expected[qid] == nil {
+						expected[qid] = map[string]bool{}
+					}
+					expected[qid][serviceID] = true
 				}
-				expected[qid][methodID] = true
 			}
 		}
 	}
@@ -825,6 +839,9 @@ func (c *Checker) checkQueryUsedBy() {
 		}
 		if !sameSet(got, want) {
 			c.rulef("query-used-by", "%s: used_by must be %v, got %v", qid, sortedKeys(want), sortedKeys(got))
+		}
+		if len(want) == 0 {
+			c.rulef("query-unused", "%s: query is not referenced by any service step", qid)
 		}
 	}
 }

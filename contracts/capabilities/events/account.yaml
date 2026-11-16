@@ -1,0 +1,111 @@
+# 账号领域事件。
+
+id: cap.events.account
+summary: "账号领域事件"
+owner_module: account
+schema_version: 1
+stability: stable
+do_not:
+  - "account 事件 payload 只带 id/number 等非敏感标识；禁止 password_hash、token、邮箱、手机号"
+  - "破坏兼容必须升 version，不要原地改"
+  - "事件 payload 字段只能是 data.entities.account 字段的子集"
+scope: "account"
+delivery: at_least_once
+events:
+  - id: cap.events.account.created
+    name: account.created
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, number, status, created_at]
+      properties:
+        id: {type: integer}
+        number: {type: string}
+        status: {type: string, enum: [pending, active]}
+        created_at: {type: string, format: date-time}
+    summary: "账号创建"
+    emitted_by: [ cap.services.account.create ]
+    consumers: [ audit ]
+  - id: cap.events.account.activated
+    name: account.activated
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, activated_at]
+      properties:
+        id: {type: integer}
+        activated_at: {type: string, format: date-time}
+    summary: "账号激活或解封"
+    emitted_by: [ cap.services.account.activate ]
+    consumers: [ audit, notification ]
+  - id: cap.events.account.suspended
+    name: account.suspended
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, suspended_at, reason]
+      properties:
+        id: {type: integer}
+        reason: {type: string}
+        suspended_at: {type: string, format: date-time}
+    summary: "账号封禁"
+    emitted_by: [ cap.services.account.suspend ]
+    consumers: [ audit, notification ]
+  - id: cap.events.account.reactivated
+    name: account.reactivated
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, reactivated_at]
+      properties:
+        id: {type: integer}
+        reactivated_at: {type: string, format: date-time}
+    summary: "账号解封"
+    emitted_by: [ cap.services.account.activate ]
+    consumers: [ audit ]
+  - id: cap.events.account.deleted
+    name: account.deleted
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, deleted_at]
+      properties:
+        id: {type: integer}
+        deleted_at: {type: string, format: date-time}
+    summary: "账号软删"
+    emitted_by: [ cap.services.account.delete ]
+    consumers: [ audit ]
+  - id: cap.events.account.login_succeeded
+    name: account.login_succeeded
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [id, login_at]
+      properties:
+        id: {type: integer}
+        ip: {type: string}
+        user_agent: {type: string}
+        login_at: {type: string, format: date-time}
+    summary: "登录成功"
+    emitted_by: [ cap.services.auth.login ]
+    consumers: [ audit ]
+  - id: cap.events.account.login_failed
+    name: account.login_failed
+    version: 1
+    payload:
+      type: object
+      additionalProperties: false
+      required: [reason, failed_at]
+      properties:
+        account_id: {type: integer, nullable: true}
+        reason: {type: string, enum: [bad_password, locked, suspended, not_found]}
+        failed_at: {type: string, format: date-time}
+    summary: "登录失败"
+    emitted_by: [ cap.services.auth.login ]
+    consumers: [ audit ]

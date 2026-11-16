@@ -616,32 +616,43 @@ func quoteScaffoldProse(n *yaml.Node) {
 	}
 }
 
-type methodFileScaffold struct {
-	ID            string                    `yaml:"id"`
-	Summary       string                    `yaml:"summary"`
-	OwnerModule   string                    `yaml:"owner_module"`
-	SchemaVersion int                       `yaml:"schema_version"`
-	Stability     string                    `yaml:"stability"`
-	DoNot         []string                  `yaml:"do_not"`
-	Interface     methodInterfaceScaffold   `yaml:"interface"`
-	Persistence   methodPersistenceScaffold `yaml:"persistence"`
-	UsedBy        methodUsedByScaffold      `yaml:"used_by"`
+type serviceFileScaffold struct {
+	ID            string                     `yaml:"id"`
+	Summary       string                     `yaml:"summary"`
+	OwnerModule   string                     `yaml:"owner_module"`
+	SchemaVersion int                        `yaml:"schema_version"`
+	Stability     string                     `yaml:"stability"`
+	DoNot         []string                   `yaml:"do_not"`
+	Interface     serviceInterfaceScaffold   `yaml:"interface"`
+	Persistence   servicePersistenceScaffold `yaml:"persistence"`
+	Types         map[string]any             `yaml:"types,omitempty"`
+	Services      []serviceItemScaffold      `yaml:"services"`
 }
 
-type methodInterfaceScaffold struct {
-	Name    string               `yaml:"name"`
-	Package string               `yaml:"package"`
-	Methods []methodItemScaffold `yaml:"methods"`
+type serviceInterfaceScaffold struct {
+	Name    string `yaml:"name"`
+	Package string `yaml:"package"`
 }
 
-type methodItemScaffold struct {
+type serviceItemScaffold struct {
 	Name        string              `yaml:"name"`
 	Summary     string              `yaml:"summary"`
+	Visibility  string              `yaml:"visibility"`
 	Params      []methodArgScaffold `yaml:"params"`
 	Returns     []methodArgScaffold `yaml:"returns"`
 	Errors      []string            `yaml:"errors"`
+	Permissions []string            `yaml:"permissions"`
 	Transaction string              `yaml:"transaction"`
-	Queries     []string            `yaml:"queries"`
+	Steps       []stepScaffold      `yaml:"steps"`
+}
+
+type stepScaffold struct {
+	ID      string              `yaml:"id"`
+	Kind    string              `yaml:"kind"`
+	Summary string              `yaml:"summary"`
+	Errors  []string            `yaml:"errors"`
+	Output  []methodArgScaffold `yaml:"output"`
+	Queries []string            `yaml:"queries"`
 }
 
 type methodArgScaffold struct {
@@ -649,33 +660,79 @@ type methodArgScaffold struct {
 	Type string `yaml:"type"`
 }
 
-type methodPersistenceScaffold struct {
-	Table            string            `yaml:"table,omitempty"`
+type servicePersistenceScaffold struct {
+	Tables           []string          `yaml:"tables"`
 	ConstraintErrors map[string]string `yaml:"constraint_errors,omitempty"`
 }
 
-type methodUsedByScaffold struct {
-	Flows []string `yaml:"flows"`
+type ruleFileScaffold struct {
+	ID            string         `yaml:"id"`
+	Summary       string         `yaml:"summary"`
+	OwnerModule   string         `yaml:"owner_module"`
+	SchemaVersion int            `yaml:"schema_version"`
+	Stability     string         `yaml:"stability"`
+	DoNot         []string       `yaml:"do_not"`
+	Rules         []ruleScaffold `yaml:"rules"`
 }
 
-type flowFileScaffold struct {
-	ID            string             `yaml:"id"`
-	Summary       string             `yaml:"summary"`
-	OwnerModule   string             `yaml:"owner_module"`
-	SchemaVersion int                `yaml:"schema_version"`
-	Stability     string             `yaml:"stability"`
-	DoNot         []string           `yaml:"do_not"`
-	Flows         []flowItemScaffold `yaml:"flows"`
+type ruleScaffold struct {
+	ID            string   `yaml:"id"`
+	Kind          string   `yaml:"kind"`
+	Summary       string   `yaml:"summary"`
+	Severity      string   `yaml:"severity"`
+	OnViolation   string   `yaml:"on_violation"`
+	ImplementedBy []string `yaml:"implemented_by"`
 }
 
-type flowItemScaffold struct {
-	Name           string   `yaml:"name"`
-	Summary        string   `yaml:"summary"`
-	Implementation string   `yaml:"implementation"`
-	Method         string   `yaml:"method"`
-	Permissions    []string `yaml:"permissions"`
-	Transaction    string   `yaml:"transaction"`
-	Errors         []string `yaml:"errors"`
+type stateFileScaffold struct {
+	ID            string               `yaml:"id"`
+	Summary       string               `yaml:"summary"`
+	OwnerModule   string               `yaml:"owner_module"`
+	SchemaVersion int                  `yaml:"schema_version"`
+	Stability     string               `yaml:"stability"`
+	DoNot         []string             `yaml:"do_not"`
+	Machine       string               `yaml:"machine"`
+	Subject       string               `yaml:"subject"`
+	States        []stateScaffold      `yaml:"states"`
+	Initial       string               `yaml:"initial"`
+	Transitions   []transitionScaffold `yaml:"transitions"`
+}
+
+type stateScaffold struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	Terminal    bool   `yaml:"terminal"`
+}
+
+type transitionScaffold struct {
+	Name          string   `yaml:"name"`
+	Description   string   `yaml:"description"`
+	From          []string `yaml:"from"`
+	To            string   `yaml:"to"`
+	Guard         any      `yaml:"guard"`
+	OnViolation   string   `yaml:"on_violation"`
+	ImplementedBy []string `yaml:"implemented_by"`
+}
+
+type eventFileScaffold struct {
+	ID            string          `yaml:"id"`
+	Summary       string          `yaml:"summary"`
+	OwnerModule   string          `yaml:"owner_module"`
+	SchemaVersion int             `yaml:"schema_version"`
+	Stability     string          `yaml:"stability"`
+	DoNot         []string        `yaml:"do_not"`
+	Scope         string          `yaml:"scope"`
+	Delivery      string          `yaml:"delivery"`
+	Events        []eventScaffold `yaml:"events"`
+}
+
+type eventScaffold struct {
+	ID        string         `yaml:"id"`
+	Name      string         `yaml:"name"`
+	Version   int            `yaml:"version"`
+	Summary   string         `yaml:"summary"`
+	Payload   map[string]any `yaml:"payload"`
+	EmittedBy []string       `yaml:"emitted_by"`
 }
 
 type httpFileScaffold struct {
@@ -690,47 +747,56 @@ type httpFileScaffold struct {
 	Paths                 map[string]any `yaml:"paths"`
 }
 
-// RenderMethod 生成 cap.methods 的最小合法骨架。
-func RenderMethod(s *Schema, name, module, summary, table string) ([]byte, error) {
-	if s == nil || s.Type != "cap.methods" {
-		return nil, fmt.Errorf("RenderMethod: want cap.methods schema")
+// RenderService 生成 cap.services 的最小合法骨架。
+func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
+	if s == nil || s.Type != "cap.services" {
+		return nil, fmt.Errorf("RenderService: want cap.services schema")
 	}
 	if !validName(name) || !validName(module) {
-		return nil, fmt.Errorf("RenderMethod: invalid name/module")
+		return nil, fmt.Errorf("RenderService: invalid name/module")
 	}
 	if strings.TrimSpace(summary) == "" {
-		return nil, fmt.Errorf("RenderMethod: summary must not be empty")
+		return nil, fmt.Errorf("RenderService: summary must not be empty")
 	}
 	fileID := s.Targets.FileID(name + ".yaml")
 	if fileID == "" {
-		return nil, fmt.Errorf("RenderMethod: cannot derive id from targets.id")
+		return nil, fmt.Errorf("RenderService: cannot derive id from targets.id")
 	}
-	persistence := methodPersistenceScaffold{}
-	if table != "" {
-		persistence.Table = "data.tables." + table
-	}
-	doc := methodFileScaffold{
+	doc := serviceFileScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            fileID,
 		Summary:       summary,
 		Stability:     scaffoldStability,
-		DoNot:         []string{},
+		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
-		Interface: methodInterfaceScaffold{
-			Name:    pascal(module) + "Service",
-			Package: "internal/modules/" + module,
-			Methods: []methodItemScaffold{{
-				Name:        "Get",
-				Summary:     "TODO: 方法说明",
-				Params:      []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "integer"}},
-				Returns:     []methodArgScaffold{{Name: "value", Type: "any"}, {Name: "err", Type: "error"}},
-				Errors:      []string{"platform.errors.COMMON_INTERNAL"},
-				Transaction: "read_only",
-				Queries:     []string{},
-			}},
+		Interface:     serviceInterfaceScaffold{Name: pascal(module) + "Service", Package: "internal/modules/" + module + "/api"},
+		Persistence:   servicePersistenceScaffold{Tables: []string{}},
+		Types: map[string]any{
+			"GetInput": map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"required":             []any{"id"},
+				"properties":           map[string]any{"id": map[string]any{"type": "integer"}},
+			},
 		},
-		Persistence: persistence,
-		UsedBy:      methodUsedByScaffold{Flows: []string{}},
+		Services: []serviceItemScaffold{{
+			Name:        "get",
+			Summary:     "TODO: 服务说明",
+			Visibility:  "public",
+			Params:      []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: "GetInput"}},
+			Returns:     []methodArgScaffold{{Name: "value", Type: "any"}, {Name: "err", Type: "error"}},
+			Errors:      []string{"platform.errors.COMMON_INTERNAL"},
+			Permissions: []string{},
+			Transaction: "read_only",
+			Steps: []stepScaffold{{
+				ID:      "load",
+				Kind:    "logic",
+				Summary: "TODO: 实现步骤",
+				Errors:  []string{"platform.errors.COMMON_INTERNAL"},
+				Output:  []methodArgScaffold{{Name: "value", Type: "any"}},
+				Queries: []string{},
+			}},
+		}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
@@ -739,39 +805,107 @@ func RenderMethod(s *Schema, name, module, summary, table string) ([]byte, error
 	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
 }
 
-// RenderFlow 生成 cap.flows 的最小 direct flow 骨架。
-func RenderFlow(s *Schema, name, module, summary, method string) ([]byte, error) {
-	if s == nil || s.Type != "cap.flows" {
-		return nil, fmt.Errorf("RenderFlow: want cap.flows schema")
+// RenderRule 生成 cap.rules 的最小 policy 骨架。
+func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
+	if s == nil || s.Type != "feature.rules" {
+		return nil, fmt.Errorf("RenderRule: want feature.rules schema")
 	}
 	if !validName(name) || !validName(module) {
-		return nil, fmt.Errorf("RenderFlow: invalid name/module")
-	}
-	if strings.TrimSpace(summary) == "" {
-		return nil, fmt.Errorf("RenderFlow: summary must not be empty")
-	}
-	if !strings.HasPrefix(method, "cap.methods.") {
-		return nil, fmt.Errorf("RenderFlow: method must be cap.methods.*")
+		return nil, fmt.Errorf("RenderRule: invalid name/module")
 	}
 	fileID := s.Targets.FileID(name + ".yaml")
-	if fileID == "" {
-		return nil, fmt.Errorf("RenderFlow: cannot derive id from targets.id")
-	}
-	doc := flowFileScaffold{
+	doc := ruleFileScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            fileID,
 		Summary:       summary,
 		Stability:     scaffoldStability,
+		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
-		DoNot:         []string{},
-		Flows: []flowItemScaffold{{
-			Name:           "get",
-			Summary:        "TODO: 用例说明",
-			Implementation: "direct",
-			Method:         method,
-			Permissions:    []string{},
-			Transaction:    "read_only",
-			Errors:         []string{},
+		Rules: []ruleScaffold{{
+			ID:            fileID + ".example",
+			Kind:          "policy",
+			Summary:       "TODO: 规则说明",
+			Severity:      "error",
+			OnViolation:   "platform.errors.COMMON_INTERNAL",
+			ImplementedBy: []string{},
+		}},
+	}
+	b, err := marshal2(doc)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
+}
+
+// RenderState 生成 cap.states 的最小状态机骨架。
+func RenderState(s *Schema, name, module, summary string) ([]byte, error) {
+	if s == nil || s.Type != "feature.states" {
+		return nil, fmt.Errorf("RenderState: want feature.states schema")
+	}
+	if !validName(name) || !validName(module) {
+		return nil, fmt.Errorf("RenderState: invalid name/module")
+	}
+	fileID := s.Targets.FileID(name + ".yaml")
+	doc := stateFileScaffold{
+		SchemaVersion: intConst(s.Fields, "schema_version", 1),
+		ID:            fileID,
+		Summary:       summary,
+		Stability:     scaffoldStability,
+		DoNot:         []string{"TODO: 实例级负向约束"},
+		OwnerModule:   module,
+		Machine:       name,
+		Subject:       "data.entities." + name,
+		States: []stateScaffold{
+			{Name: "pending", Description: "TODO: 初始状态", Terminal: false},
+			{Name: "active", Description: "TODO: 终态", Terminal: true},
+		},
+		Initial: "pending",
+		Transitions: []transitionScaffold{{
+			Name:          "activate",
+			Description:   "TODO: 转换说明",
+			From:          []string{"pending"},
+			To:            "active",
+			Guard:         true,
+			OnViolation:   "platform.errors.COMMON_INTERNAL",
+			ImplementedBy: []string{},
+		}},
+	}
+	b, err := marshal2(doc)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
+}
+
+// RenderEvent 生成 cap.events 的最小事件骨架。
+func RenderEvent(s *Schema, name, module, summary string) ([]byte, error) {
+	if s == nil || s.Type != "cap.events" {
+		return nil, fmt.Errorf("RenderEvent: want cap.events schema")
+	}
+	if !validName(name) || !validName(module) {
+		return nil, fmt.Errorf("RenderEvent: invalid name/module")
+	}
+	fileID := s.Targets.FileID(name + ".yaml")
+	doc := eventFileScaffold{
+		SchemaVersion: intConst(s.Fields, "schema_version", 1),
+		ID:            fileID,
+		Summary:       summary,
+		Stability:     scaffoldStability,
+		DoNot:         []string{"TODO: 实例级负向约束"},
+		OwnerModule:   module,
+		Scope:         name,
+		Delivery:      "at_least_once",
+		Events: []eventScaffold{{
+			ID:      fileID + ".created",
+			Name:    name + ".created",
+			Version: 1,
+			Summary: "TODO: 事件说明",
+			Payload: map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties":           map[string]any{"id": map[string]any{"type": "integer"}},
+			},
+			EmittedBy: []string{},
 		}},
 	}
 	b, err := marshal2(doc)
@@ -782,7 +916,7 @@ func RenderFlow(s *Schema, name, module, summary, method string) ([]byte, error)
 }
 
 // RenderHTTP 生成 cap.http 的最小单 operation 骨架。
-func RenderHTTP(s *Schema, name, module, summary, flow, path, httpMethod string) ([]byte, error) {
+func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod string) ([]byte, error) {
 	if s == nil || s.Type != "cap.http" {
 		return nil, fmt.Errorf("RenderHTTP: want cap.http schema")
 	}
@@ -792,8 +926,8 @@ func RenderHTTP(s *Schema, name, module, summary, flow, path, httpMethod string)
 	if strings.TrimSpace(summary) == "" {
 		return nil, fmt.Errorf("RenderHTTP: summary must not be empty")
 	}
-	if !strings.HasPrefix(flow, "cap.flows.") {
-		return nil, fmt.Errorf("RenderHTTP: flow must be cap.flows.*")
+	if !strings.HasPrefix(service, "cap.services.") {
+		return nil, fmt.Errorf("RenderHTTP: service must be cap.services.*")
 	}
 	if !strings.HasPrefix(path, "/") {
 		return nil, fmt.Errorf("RenderHTTP: path must start with /")
@@ -809,7 +943,7 @@ func RenderHTTP(s *Schema, name, module, summary, flow, path, httpMethod string)
 	op := map[string]any{
 		"operationId":   httpMethod + pascal(name),
 		"x-contract-id": fileID + "." + httpMethod,
-		"x-flow":        flow,
+		"x-service":     service,
 		"summary":       summary,
 		"x-timeout-ms":  3000,
 		"responses": map[string]any{

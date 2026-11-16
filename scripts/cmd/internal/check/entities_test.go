@@ -1204,7 +1204,7 @@ func TestUndeclaredWriteQueryRejected(t *testing.T) {
 		},
 	}
 	c.checkCapabilityPersistence(map[string]string{})
-	if !strings.Contains(entityErrs(c), "not declared in any method queries") {
+	if !strings.Contains(entityErrs(c), "not referenced by any service step") {
 		t.Fatalf("undeclared write table query not reported: %v", c.errs)
 	}
 }

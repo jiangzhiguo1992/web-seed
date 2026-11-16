@@ -25,11 +25,9 @@ func writeTargets(t *testing.T, root, tableDir, entityDir, queryDir string) {
 	writeFixture(t, root, "contracts/_meta/data.tables.yaml", fmt.Sprintf("type: data.tables\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n", tableDir))
 	writeFixture(t, root, "contracts/_meta/data.entities.yaml", fmt.Sprintf("type: data.entities\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.entities.<file>\"\n", entityDir))
 	writeFixture(t, root, "contracts/_meta/data.queries.yaml", fmt.Sprintf("type: data.queries\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.queries.<file>\"\n", queryDir))
-	methodDir := "contracts/capabilities/methods"
-	flowDir := "contracts/capabilities/flows"
-	writeFixture(t, root, "contracts/_meta/cap.methods.yaml", fmt.Sprintf("type: cap.methods\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"cap.methods.<file>\"\n", methodDir))
-	writeFixture(t, root, "contracts/_meta/cap.flows.yaml", fmt.Sprintf("type: cap.flows\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"cap.flows.<file>\"\n", flowDir))
-	ensureDirs(t, root, methodDir, flowDir)
+	serviceDir := "contracts/capabilities/services"
+	writeFixture(t, root, "contracts/_meta/cap.services.yaml", fmt.Sprintf("type: cap.services\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"cap.services.<file>\"\n", serviceDir))
+	ensureDirs(t, root, serviceDir)
 }
 
 func ensureDirs(t *testing.T, root string, dirs ...string) {
@@ -96,14 +94,14 @@ queries:
     tables: [ data.tables.b ]
     used_by: []
 `)
-	writeFixture(t, root, "contracts/capabilities/methods/x.yaml", `id: cap.methods.x
-interface:
-  methods:
-    - name: Get
-      returns:
-        - { name: e, type: data.entities.e1 }
-      queries:
-        - data.queries.q.get_a
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+services:
+  - name: get
+    steps:
+      - id: load
+        kind: logic
+        queries:
+          - data.queries.q.get_a
 `)
 	return root
 }
@@ -120,7 +118,7 @@ func TestCompute(t *testing.T) {
 	if got := snap.Entities["data.entities.e1"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("entity e1 queries = %v", got)
 	}
-	if got := snap.Queries["data.queries.q.get_a"]; len(got) != 1 || got[0] != "cap.methods.x.get" {
+	if got := snap.Queries["data.queries.q.get_a"]; len(got) != 1 || got[0] != "cap.services.x.get" {
 		t.Fatalf("query get_a used_by = %v", got)
 	}
 }
@@ -214,7 +212,7 @@ func TestWriteAndCheck(t *testing.T) {
 		t.Fatalf("entity e1 queries not written:\n%s", e1)
 	}
 	q, _ := os.ReadFile(filepath.Join(root, "contracts/data/queries/q.yaml"))
-	if !strings.Contains(string(q), "used_by:\n      - cap.methods.x.get") {
+	if !strings.Contains(string(q), "used_by:\n      - cap.services.x.get") {
 		t.Fatalf("query used_by not written:\n%s", q)
 	}
 

@@ -16,14 +16,11 @@ groups:
     description: "tables 物理结构，entities 读模型，queries 装载桥，storage 表级约束。"
     layers: [tables, entities, queries, storage, policy]
   capabilities:
-    description: "HTTP / 异步 / 跨模块 service。"
-    layers: [http, async, services, flows]
-  business:
-    description: "状态机、规则、领域事件。"
-    layers: [states, rules, events, glossary]
+    description: "HTTP / 异步 / 跨模块 service / 领域事件。"
+    layers: [http, async, services, events]
   features:
-    description: "路由、页面、跨页旅程。"
-    layers: [routes, pages, flows]
+    description: "路由、页面、业务规则、状态机。"
+    layers: [routes, pages, rules, states]
   platform:
     description: "平台约定：环境、错误、架构、观测、安全等。"
     layers: [environments, versioning, errors, http_conventions, quality, config, architecture, design, observability, analytics, security]
@@ -99,18 +96,16 @@ entries:
       - "在 handler 里直接读 r.URL.Query() 而不用生成参数"
       - "逐接口重复声明 4xx/5xx 响应（已由 default_error_responses 注入）"
       - 响应 schema 缺少 additionalProperties: false
-      - "忘记 x-flow 锚点到 cap.flows"
+      - "忘记 x-flow 锚点到 cap.services"
   - { id: cap.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/登出/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: cap.methods.account, path: capabilities/methods/account.yaml, summary: "账号跨模块原子方法", consumers: [api], enforcement: generated+tested, stability: stable }
-  - { id: cap.methods.auth, path: capabilities/methods/auth.yaml, summary: "认证会话跨模块原子方法", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.methods.token, path: capabilities/methods/token.yaml, summary: "令牌签发与校验原子方法", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.methods.verification, path: capabilities/methods/verification.yaml, summary: "验证码发送与校验原子方法", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.flows.account, path: capabilities/flows/account.yaml, summary: "账号用例集", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.auth, path: capabilities/flows/auth.yaml, summary: "认证用例集", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号服务：查询、创建、更新、状态转换与软删编排", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证会话服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：签发、刷新、吊销与校验", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
 
-  # ---------- business ----------
-  - id: business.states.account
-    path: business/states/account.yaml
+  # ---------- rules / states / events ----------
+  - id: feature.states.account
+    path: features/states/account.yaml
     summary: "账号状态机"
     consumers: [api, web/admin]
     enforcement: generated+tested
@@ -119,10 +114,9 @@ entries:
       - "在 handler/service 手写 status 判断"
       - "新增状态却不加转换"
       - "把 archived 与 deleted 混用"
-  - { id: business.rules.account, path: business/rules/account.yaml, summary: "账号业务规则集", consumers: [api], enforcement: tested, stability: stable }
-  - { id: business.rules.auth, path: business/rules/auth.yaml, summary: "认证业务规则集（验证体）", consumers: [api], enforcement: tested, stability: draft }
-  - { id: business.events.account, path: business/events/account.yaml, summary: "账号领域事件", consumers: [api, worker], enforcement: generated+tested, stability: stable }
-  - { id: business.glossary, path: business/glossary.md, summary: "统一术语表", consumers: [api, web/admin, ai], enforcement: review-only, stability: stable }
+  - { id: feature.rules.account, path: features/rules/account.yaml, summary: "账号业务规则集", consumers: [api], enforcement: tested, stability: stable }
+  - { id: feature.rules.auth, path: features/rules/auth.yaml, summary: "认证业务规则集（验证体）", consumers: [api], enforcement: tested, stability: draft }
+  - { id: cap.events.account, path: capabilities/events/account.yaml, summary: "账号领域事件", consumers: [api, worker], enforcement: generated+tested, stability: stable }
 
   # ---------- features ----------
   - { id: feature.routes, path: features/routes.yaml, summary: "路由与菜单", consumers: [web/admin], enforcement: generated, stability: stable }
@@ -140,7 +134,6 @@ entries:
   - { id: feature.pages.account_create, path: features/pages/account_create.yaml, summary: "新建账号页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.pages.login, path: features/pages/login.yaml, summary: "登录页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.pages.not_found, path: features/pages/not_found.yaml, summary: "404 页", consumers: [web/admin], enforcement: generated, stability: stable }
-  - { id: feature.flows.account_create, path: features/flows/account_create.yaml, summary: "创建账号用户旅程", consumers: [web/admin], enforcement: tested, stability: draft }
 
   # ---------- platform ----------
   - { id: platform.environments, path: platform/environments.yaml, summary: "环境清单与差异", consumers: [ops, api, web/admin], enforcement: tested, stability: stable }
@@ -167,8 +160,8 @@ global_notes:
   - "错误响应由 capabilities/http 的 default_error_responses 注入，不要逐接口声明"
   - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.returns"
   - "data.entities 的字段名与表列名可能不同：entity 用 source.column 指明来源；method 返回 entity，不重复列映射"
-  - "领域事件由 business/events 的 emitted_by 声明，capabilities 不写 emits"
-  - "capabilities 契约不引用 business.*（cap.flows 仅允许引用 business.states/rules/events 做编排）"
+  - "领域事件由 cap.events 的 emitted_by 声明；service 的 kind=event step 引用事件，不写 emits"
+  - "services.steps 允许引用 feature.rules/feature.states/cap.events；不得引用 business.*，也不得直接引用 data.queries 之外的跨层实现"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table.queries / model.queries / query.used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
   - "引擎分组与表级物理事实（tables.<engine>/caches/size_class/retention/partition）只在 data/storage.yaml 声明；冗余列表直接写在 columns[].redundancy"

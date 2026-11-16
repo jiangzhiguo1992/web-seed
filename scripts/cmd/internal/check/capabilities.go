@@ -1,8 +1,9 @@
-// capabilities.go 校验 methods / flows / protocols 三层：
-//   - ID 与 targets 派生一致、全局唯一
-//   - method 的 interface/transaction/errors
-//   - flow 的 implementation 互斥、同步/异步字段、steps 引用
-//   - protocol 的 x-flow 绑定、异步 flow 不得绑定、同步 flow 必须有入边
+// capabilities.go 校验 services / rules / states / events / protocols 五类契约：
+//   - services 的 interface/visibility/trigger/steps/errors/参数映射
+//   - rules 的 constraint/invariant/policy 结构与服务引用
+//   - states 的状态/转换/守卫/副作用
+//   - events 的 payload/版本/生产与消费锚点
+//   - protocol 的 x-service 绑定、异步 service 不得绑定
 package check
 
 import (
@@ -10,19 +11,36 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
+type serviceMeta struct {
+	module     string
+	visibility string
+	async      bool
+	params     map[string]bool
+	errors     map[string]bool
+	returns    map[string]string
+}
+
 func (c *Checker) checkCapabilities() {
-	methodSchema, err := c.loadSchemaByType("cap.methods")
+	serviceSchema, err := c.loadSchemaByType("cap.services")
 	if err != nil {
-		c.rulef("schema.load", "load cap.methods schema: %v", err)
+		c.rulef("schema.load", "load cap.services schema: %v", err)
 		return
 	}
-	flowSchema, err := c.loadSchemaByType("cap.flows")
+	ruleSchema, err := c.loadSchemaByType("feature.rules")
 	if err != nil {
-		c.rulef("schema.load", "load cap.flows schema: %v", err)
+		c.rulef("schema.load", "load feature.rules schema: %v", err)
+		return
+	}
+	stateSchema, err := c.loadSchemaByType("feature.states")
+	if err != nil {
+		c.rulef("schema.load", "load feature.states schema: %v", err)
+		return
+	}
+	eventSchema, err := c.loadSchemaByType("cap.events")
+	if err != nil {
+		c.rulef("schema.load", "load cap.events schema: %v", err)
 		return
 	}
 	httpSchema, err := c.loadSchemaByType("cap.http")
@@ -30,90 +48,818 @@ func (c *Checker) checkCapabilities() {
 		c.rulef("schema.load", "load cap.http schema: %v", err)
 		return
 	}
-	c.checkRules(methodSchema)
-	c.checkRules(flowSchema)
-	c.checkRules(httpSchema)
+	for _, s := range []*Schema{serviceSchema, ruleSchema, stateSchema, eventSchema, httpSchema} {
+		c.checkRules(s)
+	}
 
-	methodIDs := map[string]bool{}
-	methodErrors := map[string]map[string]bool{}
-	methodTypeIDs := map[string]bool{}
-	flowIDs := map[string]bool{}
-	flowAsync := map[string]bool{}
-	flowInbound := map[string]bool{}
-	httpContractIDs := map[string]bool{}
-
+	serviceFiles := glob(c.root, filepath.Join(serviceSchema.Targets.Dir, serviceSchema.Targets.Glob))
 	typeNames := map[string]bool{}
-	c.methodReturns = map[string]map[string]string{}
 	c.methodTypeDefs = map[string]map[string]any{}
-	for _, file := range glob(c.root, filepath.Join(methodSchema.Targets.Dir, methodSchema.Targets.Glob)) {
+	c.methodReturns = map[string]map[string]string{}
+	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
 			continue
 		}
 		types, _ := asMap(doc["types"])
-		id, _ := doc["id"].(string)
 		for name, raw := range types {
 			typeNames[name] = true
 			if def, ok := asMap(raw); ok {
 				c.methodTypeDefs[name] = def
 			}
-			if id != "" {
-				methodTypeIDs[id+".types."+name] = true
-			}
 		}
-	}
-	for _, file := range glob(c.root, filepath.Join(methodSchema.Targets.Dir, methodSchema.Targets.Glob)) {
-		doc, err := loadYAML(file)
-		if err != nil {
-			c.rulef("schema.load", "%s: %v", relPath(c.root, file), err)
-			continue
-		}
-		rel := relPath(c.root, file)
-		id, _ := doc["id"].(string)
-		want := methodSchema.Targets.FileID(filepath.Base(file))
-		if id != want {
-			c.rulef("cap-id", "%s: id %q must be %q", rel, id, want)
-		}
-		if methodIDs[id] {
-			c.rulef("cap-id", "%s: duplicate method id %s", rel, id)
-		}
-		methodIDs[id] = true
-		c.checkMethodDoc(doc, rel, id, methodIDs, methodErrors, methodSchema, typeNames)
 	}
 
-	for _, file := range glob(c.root, filepath.Join(flowSchema.Targets.Dir, flowSchema.Targets.Glob)) {
+	// pass 1：收集 service item 元数据与返回类型。
+	serviceIDs := map[string]bool{}
+	serviceEdges := map[string][]string{}
+	serviceMetaByID := map[string]serviceMeta{}
+	serviceItemIDs := map[string]bool{}
+	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
-			c.rulef("schema.load", "%s: %v", relPath(c.root, file), err)
 			continue
-		}
-		rel := relPath(c.root, file)
-		c.checkFieldOrder(rel, flowSchema.Fields, orderRules{})
-		if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
-			c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 		}
 		fileID, _ := doc["id"].(string)
-		want := flowSchema.Targets.FileID(filepath.Base(file))
-		if fileID != want {
-			c.rulef("cap-id", "%s: id %q must be %q", rel, fileID, want)
-		}
 		module, _ := doc["owner_module"].(string)
-		for _, raw := range asList(doc["flows"]) {
+		for _, raw := range asList(doc["services"]) {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
-			id := fileID + "." + contractspec.SnakeCase(name)
-			if flowIDs[id] {
-				c.rulef("cap-id", "%s: duplicate flow id %s", rel, id)
+			if name == "" {
+				continue
 			}
-			flowIDs[id] = true
-			if item["trigger"] != nil {
-				flowAsync[id] = true
+			id := fileID + "." + name
+			if serviceIDs[id] {
+				c.rulef("service-id", "%s: duplicate service id %s", relPath(c.root, file), id)
 			}
-			c.checkFlowItem(item, rel+":"+id, id, module, methodIDs, methodErrors, typeNames)
+			serviceIDs[id] = true
+			serviceItemIDs[id] = true
+			visibility, _ := item["visibility"].(string)
+			async := item["trigger"] != nil
+			params := map[string]bool{}
+			for _, rawParam := range asList(item["params"]) {
+				pm, _ := asMap(rawParam)
+				pn, _ := pm["name"].(string)
+				if pn != "" {
+					params[pn] = true
+				}
+			}
+			errs := map[string]bool{}
+			for _, rawErr := range asList(item["errors"]) {
+				code, _ := rawErr.(string)
+				errs[code] = true
+			}
+			returns := map[string]string{}
+			for _, rawReturn := range asList(item["returns"]) {
+				rm, _ := asMap(rawReturn)
+				rn, _ := rm["name"].(string)
+				rt, _ := rm["type"].(string)
+				if rn != "" && rt != "" && rn != "err" {
+					returns[rn] = rt
+				}
+			}
+			c.methodReturns[id] = returns
+			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, async: async, params: params, errors: errs, returns: returns}
+			for _, rawStep := range asList(item["steps"]) {
+				step, _ := asMap(rawStep)
+				if k, _ := step["kind"].(string); k == "service" {
+					ref, _ := step["service"].(string)
+					if ref != "" {
+						serviceEdges[id] = append(serviceEdges[id], ref)
+					}
+				}
+			}
 		}
 	}
 
-	httpFiles := glob(c.root, filepath.Join(httpSchema.Targets.Dir, httpSchema.Targets.Glob))
+	// query 返回类型：供 kind=query 的 when 路径解析。
+	c.queryReturnTypes = map[string]map[string]string{}
+	for qid, q := range c.queries {
+		m := map[string]string{}
+		for _, r := range q.Returns {
+			typ := r.Type
+			switch r.Kind {
+			case "entity":
+				typ = r.Entity
+			case "table":
+				typ = r.Table
+			case "scalar":
+				typ = r.Type
+			case "affected_rows":
+				typ = "integer"
+			case "column":
+				typ = "string"
+			}
+			if typ == "" {
+				typ = "any"
+			}
+			if r.List {
+				typ = "List<" + typ + ">"
+			}
+			m[r.Name] = typ
+		}
+		c.queryReturnTypes[qid] = m
+	}
+
+	// pass 2：校验 services 文档。
+	for _, file := range serviceFiles {
+		doc, err := loadYAML(file)
+		if err != nil {
+			c.rulef("schema.load", "%s: %v", relPath(c.root, file), err)
+			continue
+		}
+		c.checkServiceDoc(doc, relPath(c.root, file), serviceSchema, typeNames, serviceMetaByID)
+	}
+
+	// rules / states / events 先收集 ID，再互相校验。
+	ruleIDs := map[string]bool{}
+	for _, file := range glob(c.root, filepath.Join(ruleSchema.Targets.Dir, ruleSchema.Targets.Glob)) {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		for _, raw := range asList(doc["rules"]) {
+			item, _ := asMap(raw)
+			id, _ := item["id"].(string)
+			if id != "" {
+				ruleIDs[id] = true
+			}
+		}
+	}
+	eventIDs := map[string]bool{}
+	eventPayloads := map[string]map[string]bool{}
+	for _, file := range glob(c.root, filepath.Join(eventSchema.Targets.Dir, eventSchema.Targets.Glob)) {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		for _, raw := range asList(doc["events"]) {
+			item, _ := asMap(raw)
+			id, _ := item["id"].(string)
+			if id == "" {
+				continue
+			}
+			eventIDs[id] = true
+			keys := map[string]bool{}
+			if payload, ok := asMap(item["payload"]); ok {
+				if props, ok := asMap(payload["properties"]); ok {
+					for k := range props {
+						keys[k] = true
+					}
+				}
+			}
+			eventPayloads[id] = keys
+		}
+	}
+	transitionIDs := map[string]bool{}
+	for _, file := range glob(c.root, filepath.Join(stateSchema.Targets.Dir, stateSchema.Targets.Glob)) {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		fileID, _ := doc["id"].(string)
+		for _, raw := range asList(doc["transitions"]) {
+			item, _ := asMap(raw)
+			name, _ := item["name"].(string)
+			if name != "" {
+				transitionIDs[fileID+"."+name] = true
+			}
+		}
+	}
+
+	// pass 3：按 kind 回查 step 引用。
+	for _, file := range serviceFiles {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		fileID, _ := doc["id"].(string)
+		module, _ := doc["owner_module"].(string)
+		for _, raw := range asList(doc["services"]) {
+			item, _ := asMap(raw)
+			name, _ := item["name"].(string)
+			if name == "" {
+				continue
+			}
+			c.checkServiceItem(item, relPath(c.root, file), fileID+"."+name, module, serviceMetaByID, ruleIDs, eventIDs, eventPayloads, transitionIDs, typeNames)
+		}
+	}
+
+	c.checkServiceCycles(serviceEdges)
+
+	// pass 4：rules / states / events。
+	for _, file := range glob(c.root, filepath.Join(ruleSchema.Targets.Dir, ruleSchema.Targets.Glob)) {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		c.checkRuleDoc(doc, relPath(c.root, file), ruleSchema, serviceItemIDs, eventIDs)
+	}
+	for _, file := range glob(c.root, filepath.Join(stateSchema.Targets.Dir, stateSchema.Targets.Glob)) {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		c.checkStateDoc(doc, relPath(c.root, file), stateSchema, serviceItemIDs, eventIDs, ruleIDs)
+	}
+	for _, file := range glob(c.root, filepath.Join(eventSchema.Targets.Dir, eventSchema.Targets.Glob)) {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		c.checkEventDoc(doc, relPath(c.root, file), eventSchema, serviceItemIDs)
+	}
+
+	c.checkHTTPBindings(httpSchema, serviceMetaByID, eventIDs, typeNames)
+}
+
+func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema, typeNames map[string]bool, serviceMeta map[string]serviceMeta) {
+	c.validateDoc(doc, schema.Fields, rel)
+	c.checkFieldOrder(rel, schema.Fields, orderRules{})
+	if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
+		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
+	}
+	fileID, _ := doc["id"].(string)
+	want := schema.Targets.FileID(filepath.Base(rel))
+	if fileID != want {
+		c.rulef("service-id", "%s: id %q must be %q", rel, fileID, want)
+	}
+	if types, ok := asMap(doc["types"]); ok {
+		c.checkTypeRefs(types, typeNames, rel)
+		c.checkServiceTypes(types, rel)
+	}
+	seen := map[string]bool{}
+	for _, raw := range asList(doc["services"]) {
+		item, _ := asMap(raw)
+		name, _ := item["name"].(string)
+		if seen[name] {
+			c.rulef("service-structure", "%s: duplicate service %s", rel, name)
+		}
+		seen[name] = true
+		if s, _ := item["summary"].(string); strings.TrimSpace(s) == "" {
+			c.rulef("schema.non-empty", "%s.%s: summary must not be empty", rel, name)
+		}
+		visibility, _ := item["visibility"].(string)
+		if visibility == "" {
+			c.rulef("service-structure", "%s.%s: visibility required", rel, name)
+		}
+		if item["trigger"] != nil {
+			for _, field := range []string{"retry", "concurrency"} {
+				if item[field] == nil {
+					c.rulef("service-trigger", "%s.%s: async service requires %s", rel, name, field)
+				}
+			}
+		} else {
+			if item["retry"] != nil || item["concurrency"] != nil {
+				c.rulef("service-trigger", "%s.%s: sync service must not declare retry/concurrency", rel, name)
+			}
+		}
+		for _, rawParam := range asList(item["params"]) {
+			pm, _ := asMap(rawParam)
+			c.checkTypeName(pm["type"], typeNames, rel+":"+name)
+		}
+		for _, rawReturn := range asList(item["returns"]) {
+			rm, _ := asMap(rawReturn)
+			c.checkTypeName(rm["type"], typeNames, rel+":"+name)
+		}
+		for _, rawErr := range asList(item["errors"]) {
+			code, _ := rawErr.(string)
+			if !strings.HasPrefix(code, "platform.errors.") {
+				c.rulef("service-ref", "%s.%s: error %q must be platform.errors.*", rel, name, code)
+				continue
+			}
+			if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+				c.rulef("service-ref", "%s.%s: unknown error %s", rel, name, code)
+			}
+		}
+		for _, rawPerm := range asList(item["permissions"]) {
+			pid, _ := rawPerm.(string)
+			if !c.permissionExists(pid) {
+				c.rulef("service-ref", "%s.%s: unknown permission %s", rel, name, pid)
+			}
+		}
+		if trigger, ok := asMap(item["trigger"]); ok && trigger != nil {
+			switch typ, _ := trigger["type"].(string); typ {
+			case "cron":
+				if s, _ := trigger["schedule"].(string); strings.TrimSpace(s) == "" {
+					c.rulef("service-trigger", "%s.%s: trigger.schedule required for cron", rel, name)
+				}
+			case "event":
+				if s, _ := trigger["event"].(string); strings.TrimSpace(s) == "" {
+					c.rulef("service-trigger", "%s.%s: trigger.event required for event", rel, name)
+				}
+			case "webhook":
+			default:
+				c.rulef("service-trigger", "%s.%s: trigger.type must be cron/event/webhook", rel, name)
+			}
+		}
+	}
+}
+
+func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, eventPayloads map[string]map[string]bool, transitionIDs map[string]bool, typeNames map[string]bool) {
+	steps := asList(doc["steps"])
+	if len(steps) == 0 {
+		c.rulef("service-structure", "%s: service requires steps", rel)
+		return
+	}
+	stepOutputs := make([]map[string]string, len(steps))
+	allStepIndex := map[string]int{}
+	for i, raw := range steps {
+		step, _ := asMap(raw)
+		sid, _ := step["id"].(string)
+		if sid != "" {
+			if _, exists := allStepIndex[sid]; !exists {
+				allStepIndex[sid] = i
+			}
+		}
+	}
+	stepIndex := map[string]int{}
+	reachableByIdx := map[int]bool{}
+	requiredErrors := map[string]bool{}
+	hasBackwardGoto := false
+	for i, raw := range steps {
+		step, _ := asMap(raw)
+		stepID, _ := step["id"].(string)
+		if _, exists := stepIndex[stepID]; exists {
+			c.rulef("service-structure", "%s: duplicate step id %s", rel, stepID)
+		} else {
+			stepIndex[stepID] = i
+		}
+		kind, _ := step["kind"].(string)
+		if s, _ := step["summary"].(string); strings.TrimSpace(s) == "" {
+			c.rulef("schema.non-empty", "%s: step %s summary must not be empty", rel, stepID)
+		}
+
+		var targetErrors map[string]bool
+		switch kind {
+		case "query":
+			qid, _ := step["query"].(string)
+			if qid == "" {
+				c.rulef("service-steps-kind", "%s: step %s kind=query requires query", rel, stepID)
+			} else if q, ok := c.queries[qid]; !ok {
+				c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
+			} else {
+				if refs, ok := asMap(step["params"]); ok {
+					for name, rawExpr := range refs {
+						found := false
+						for _, p := range q.Params {
+							if p.Name == name {
+								found = true
+								break
+							}
+						}
+						if !found {
+							c.rulef("service-steps-kind", "%s: step %s query %s has no param %s", rel, stepID, qid, name)
+						}
+						c.checkServiceParamExpr(rawExpr, doc, stepIndex, stepOutputs, steps, rel, stepID)
+					}
+				}
+			}
+		case "service":
+			ref, _ := step["service"].(string)
+			if ref == "" {
+				c.rulef("service-steps-kind", "%s: step %s kind=service requires service", rel, stepID)
+			} else if target, ok := serviceMeta[ref]; !ok {
+				c.rulef("service-ref", "%s: step %s unknown service %s", rel, stepID, ref)
+			} else {
+				targetErrors = target.errors
+				if target.module != module && target.visibility != "public" {
+					c.rulef("service-visibility", "%s: step %s cannot call internal %s from another module", rel, stepID, ref)
+				}
+				if refs, ok := asMap(step["params"]); ok {
+					for name, rawExpr := range refs {
+						if !target.params[name] {
+							c.rulef("service-steps-kind", "%s: step %s service %s has no param %s", rel, stepID, ref, name)
+						}
+						c.checkServiceParamExpr(rawExpr, doc, stepIndex, stepOutputs, steps, rel, stepID)
+					}
+				}
+			}
+		case "logic":
+			if step["output"] == nil {
+				c.rulef("service-steps-kind", "%s: step %s kind=logic requires output", rel, stepID)
+			}
+			if step["errors"] == nil {
+				c.rulef("service-steps-kind", "%s: step %s kind=logic requires errors", rel, stepID)
+			}
+			for _, rawQ := range asList(step["queries"]) {
+				qid, _ := rawQ.(string)
+				if _, ok := c.queries[qid]; !ok {
+					c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
+				}
+			}
+			for _, rawRule := range asList(step["rules"]) {
+				rid, _ := rawRule.(string)
+				if !ruleIDs[rid] {
+					c.rulef("service-ref", "%s: step %s unknown rule %s", rel, stepID, rid)
+				}
+			}
+			for _, rawEvent := range asList(step["events"]) {
+				ev, _ := rawEvent.(string)
+				if !eventIDs[ev] {
+					c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
+				}
+			}
+		case "event":
+			ev, _ := step["event"].(string)
+			if ev == "" {
+				c.rulef("service-steps-kind", "%s: step %s kind=event requires event", rel, stepID)
+			} else if !eventIDs[ev] {
+				c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
+			}
+			if payload, ok := asMap(step["payload"]); ok {
+				for name := range payload {
+					if !eventPayloads[ev][name] {
+						c.rulef("service-event-payload", "%s: step %s event %s has no payload field %s", rel, stepID, ev, name)
+					}
+				}
+			}
+		case "transition":
+			trs := asList(step["transitions"])
+			if len(trs) == 0 {
+				c.rulef("service-steps-kind", "%s: step %s kind=transition requires transitions", rel, stepID)
+			}
+			for _, rawTr := range trs {
+				tr, _ := rawTr.(string)
+				if !transitionIDs[tr] {
+					c.rulef("service-ref", "%s: step %s unknown transition %s", rel, stepID, tr)
+				}
+			}
+			for _, rawEvent := range asList(step["events"]) {
+				ev, _ := rawEvent.(string)
+				if !eventIDs[ev] {
+					c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
+				}
+			}
+		default:
+			c.rulef("service-structure", "%s: step %s kind must be query/service/logic/event/transition", rel, stepID)
+		}
+
+		stepOutput := map[string]string{}
+		if step["output"] != nil {
+			if kind != "logic" && kind != "transition" {
+				c.rulef("service-structure", "%s: step %s output is only allowed for logic/transition", rel, stepID)
+			} else {
+				seenOut := map[string]bool{}
+				for _, rawOut := range asList(step["output"]) {
+					om, _ := asMap(rawOut)
+					name, _ := om["name"].(string)
+					typ, _ := om["type"].(string)
+					if seenOut[name] {
+						c.rulef("service-structure", "%s: step %s duplicate output %s", rel, stepID, name)
+					}
+					seenOut[name] = true
+					c.checkTypeName(om["type"], typeNames, rel+":"+stepID)
+					if name != "" && typ != "" {
+						stepOutput[name] = typ
+					}
+				}
+			}
+		}
+		if kind == "logic" {
+			for _, rawReturn := range asList(doc["returns"]) {
+				rm, _ := asMap(rawReturn)
+				rn, _ := rm["name"].(string)
+				if rn == "" || rn == "err" {
+					continue
+				}
+				if _, ok := stepOutput[rn]; !ok {
+					c.rulef("service-output", "%s: step %s logic output missing return %s", rel, stepID, rn)
+				}
+			}
+		}
+		stepOutputs[i] = stepOutput
+
+		reachable := true
+		for _, rawDep := range asList(step["depends_on"]) {
+			depID, _ := rawDep.(string)
+			idx, ok := stepIndex[depID]
+			if !ok {
+				c.rulef("service-structure", "%s: step %s depends_on %s must reference an earlier step", rel, stepID, depID)
+				reachable = false
+				continue
+			}
+			if !reachableByIdx[idx] {
+				reachable = false
+			}
+		}
+		if when, ok := step["when"]; ok {
+			s, _ := when.(string)
+			if strings.TrimSpace(s) == "" {
+				c.rulef("service-when", "%s: step %s when must not be empty", rel, stepID)
+			} else if node, err := parseWhen(s); err != nil {
+				c.rulef("service-when", "%s: step %s when %q: %v", rel, stepID, s, err)
+			} else {
+				if evalWhenNode(node) == whenFalse {
+					reachable = false
+				}
+				formula := whenFormulaFromNode(node)
+				for _, ref := range whenStepRefs(node) {
+					if _, ok := stepIndex[ref]; !ok {
+						c.rulef("service-when", "%s: step %s when references step %s that is not an earlier step", rel, stepID, ref)
+					}
+				}
+				for _, field := range whenStepFields(node) {
+					ref, path, ok := splitStepField(field)
+					if !ok {
+						continue
+					}
+					idx, ok := stepIndex[ref]
+					if !ok {
+						continue
+					}
+					target, _ := asMap(steps[idx])
+					if err := c.checkStepOutputPath(target, stepOutputs[idx], path, formula, ref); err != nil {
+						c.rulef("service-when", "%s: step %s when references %s: %v", rel, stepID, field, err)
+					}
+				}
+			}
+		}
+
+		stepErrors := map[string]bool{}
+		if targetErrors != nil {
+			if step["errors"] != nil {
+				for _, rawErr := range asList(step["errors"]) {
+					code, _ := rawErr.(string)
+					if !targetErrors[code] {
+						c.rulef("service-errors", "%s: step %s error %s is not declared by target service", rel, stepID, code)
+					}
+					stepErrors[code] = true
+				}
+			} else {
+				for code := range targetErrors {
+					stepErrors[code] = true
+				}
+			}
+		} else {
+			for _, rawErr := range asList(step["errors"]) {
+				code, _ := rawErr.(string)
+				if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+					c.rulef("service-ref", "%s: step %s unknown error %s", rel, stepID, code)
+				}
+				stepErrors[code] = true
+			}
+		}
+
+		handled := map[string]bool{}
+		seenOnError := map[string]bool{}
+		for _, rawErr := range asList(step["on_error"]) {
+			entry, _ := asMap(rawErr)
+			code, _ := entry["error"].(string)
+			action, _ := entry["action"].(string)
+			target, _ := entry["target"].(string)
+			if !stepErrors[code] {
+				c.rulef("service-control", "%s: step %s on_error %s is not declared by the step error set", rel, stepID, code)
+			}
+			if seenOnError[code] {
+				c.rulef("service-control", "%s: step %s duplicate on_error for %s", rel, stepID, code)
+			}
+			seenOnError[code] = true
+			switch action {
+			case "abort":
+				if target != "" {
+					c.rulef("service-control", "%s: step %s on_error %s target is only allowed for goto", rel, stepID, code)
+				}
+			case "continue":
+				if target != "" {
+					c.rulef("service-control", "%s: step %s on_error %s target is only allowed for goto", rel, stepID, code)
+				}
+				handled[code] = true
+			case "goto":
+				if target == "" {
+					c.rulef("service-control", "%s: step %s on_error %s goto requires target", rel, stepID, code)
+				} else if targetIdx, ok := allStepIndex[target]; !ok {
+					c.rulef("service-control", "%s: step %s on_error %s goto target %s not found", rel, stepID, code, target)
+				} else if targetIdx <= i {
+					hasBackwardGoto = true
+				}
+				handled[code] = true
+			default:
+				c.rulef("service-control", "%s: step %s on_error %s action must be abort, continue or goto", rel, stepID, code)
+			}
+		}
+		if reachable {
+			for code := range stepErrors {
+				if !handled[code] {
+					requiredErrors[code] = true
+				}
+			}
+		}
+		reachableByIdx[i] = reachable
+	}
+
+	if rawMax, ok := doc["max_iterations"]; ok {
+		budget, ok := toInt(rawMax)
+		if !ok || budget < 1 {
+			c.rulef("service-control", "%s: max_iterations must be >= 1", rel)
+		}
+	}
+	if hasBackwardGoto && doc["max_iterations"] == nil {
+		c.rulef("service-control", "%s: backward/self goto requires service.max_iterations", rel)
+	}
+	req := serviceLevelErrors(doc, hasBackwardGoto)
+	for code := range req {
+		requiredErrors[code] = true
+	}
+	allowedErrors := map[string]bool{}
+	for code := range requiredErrors {
+		allowedErrors[code] = true
+	}
+	serviceErrors := map[string]bool{}
+	for _, raw := range asList(doc["errors"]) {
+		code, _ := raw.(string)
+		serviceErrors[code] = true
+		if !allowedErrors[code] {
+			c.rulef("service-errors", "%s: error %s is not produced by a reachable, unhandled step", rel, code)
+		}
+	}
+	for code := range requiredErrors {
+		if !serviceErrors[code] {
+			if req[code] {
+				c.rulef("service-errors", "%s: missing service-level error %s", rel, code)
+			} else {
+				c.rulef("service-errors", "%s: missing error %s produced by a reachable, unhandled step", rel, code)
+			}
+		}
+	}
+}
+
+func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, serviceIDs, eventIDs map[string]bool) {
+	c.validateDoc(doc, schema.Fields, rel)
+	c.checkFieldOrder(rel, schema.Fields, orderRules{})
+	fileID, _ := doc["id"].(string)
+	want := schema.Targets.FileID(filepath.Base(rel))
+	if fileID != want {
+		c.rulef("rule-id-unique", "%s: id %q must be %q", rel, fileID, want)
+	}
+	seen := map[string]bool{}
+	for _, raw := range asList(doc["rules"]) {
+		item, _ := asMap(raw)
+		id, _ := item["id"].(string)
+		if id == "" {
+			c.rulef("rule-structure", "%s: rule id required", rel)
+			continue
+		}
+		if seen[id] {
+			c.rulef("rule-id-unique", "%s: duplicate rule id %s", rel, id)
+		}
+		seen[id] = true
+		if !strings.HasPrefix(id, fileID+".") {
+			c.rulef("rule-id-unique", "%s: rule id %s must start with %s.", rel, id, fileID)
+		}
+		kind, _ := item["kind"].(string)
+		switch kind {
+		case "constraint":
+			if item["field"] == nil || item["op"] == nil || item["value"] == nil {
+				c.rulef("rule-structure", "%s: constraint %s requires field/op/value", rel, id)
+			}
+		case "invariant":
+			if s, _ := item["assert"].(string); strings.TrimSpace(s) == "" {
+				c.rulef("rule-structure", "%s: invariant %s requires assert", rel, id)
+			}
+		case "policy":
+			if item["implemented_by"] == nil {
+				c.rulef("rule-structure", "%s: policy %s requires implemented_by", rel, id)
+			}
+		default:
+			c.rulef("rule-structure", "%s: rule %s kind must be constraint/invariant/policy", rel, id)
+		}
+		for _, rawSvc := range asList(item["implemented_by"]) {
+			svc, _ := rawSvc.(string)
+			if !serviceIDs[svc] {
+				c.rulef("rule-structure", "%s: rule %s unknown service %s", rel, id, svc)
+			}
+		}
+	}
+}
+
+func (c *Checker) checkStateDoc(doc map[string]any, rel string, schema *Schema, serviceIDs, eventIDs, ruleIDs map[string]bool) {
+	c.validateDoc(doc, schema.Fields, rel)
+	c.checkFieldOrder(rel, schema.Fields, orderRules{})
+	fileID, _ := doc["id"].(string)
+	want := schema.Targets.FileID(filepath.Base(rel))
+	if fileID != want {
+		c.rulef("state-structure", "%s: id %q must be %q", rel, fileID, want)
+	}
+	stateNames := map[string]bool{}
+	for _, raw := range asList(doc["states"]) {
+		item, _ := asMap(raw)
+		name, _ := item["name"].(string)
+		if stateNames[name] {
+			c.rulef("state-structure", "%s: duplicate state %s", rel, name)
+		}
+		stateNames[name] = true
+	}
+	initial, _ := doc["initial"].(string)
+	if !stateNames[initial] {
+		c.rulef("state-structure", "%s: initial %s is not a declared state", rel, initial)
+	}
+	nonTerminalOut := map[string]bool{}
+	transitionNames := map[string]bool{}
+	for _, raw := range asList(doc["transitions"]) {
+		item, _ := asMap(raw)
+		name, _ := item["name"].(string)
+		if transitionNames[name] {
+			c.rulef("state-exhaustive", "%s: duplicate transition %s", rel, name)
+		}
+		transitionNames[name] = true
+		from := asList(item["from"])
+		fromNames := map[string]bool{}
+		for _, rawFrom := range from {
+			s, _ := rawFrom.(string)
+			fromNames[s] = true
+			if !stateNames[s] {
+				c.rulef("state-structure", "%s: transition %s unknown from state %s", rel, name, s)
+			}
+			nonTerminalOut[s] = true
+		}
+		to, _ := item["to"].(string)
+		if !stateNames[to] {
+			c.rulef("state-structure", "%s: transition %s unknown to state %s", rel, name, to)
+		}
+		guard, _ := asMap(item["guard"])
+		if guard == nil {
+			if _, ok := item["guard"].(bool); !ok {
+				c.rulef("state-structure", "%s: transition %s guard must be true or { rule: feature.rules.* }", rel, name)
+			}
+		} else if rule, _ := guard["rule"].(string); !ruleIDs[rule] {
+			c.rulef("state-structure", "%s: transition %s unknown guard rule %s", rel, name, rule)
+		}
+		for _, rawEvent := range asList(item["side_effects"]) {
+			ev, _ := rawEvent.(string)
+			if !eventIDs[ev] {
+				c.rulef("state-structure", "%s: transition %s unknown event %s", rel, name, ev)
+			}
+		}
+		for _, rawSvc := range asList(item["implemented_by"]) {
+			svc, _ := rawSvc.(string)
+			if !serviceIDs[svc] {
+				c.rulef("state-structure", "%s: transition %s unknown service %s", rel, name, svc)
+			}
+		}
+	}
+	for _, raw := range asList(doc["states"]) {
+		item, _ := asMap(raw)
+		name, _ := item["name"].(string)
+		terminal, _ := item["terminal"].(bool)
+		if !terminal && !nonTerminalOut[name] {
+			c.rulef("state-exhaustive", "%s: non-terminal state %s has no outgoing transition", rel, name)
+		}
+		if terminal && nonTerminalOut[name] {
+			c.rulef("state-exhaustive", "%s: terminal state %s must not have outgoing transitions", rel, name)
+		}
+	}
+	for _, raw := range asList(doc["forbidden_examples"]) {
+		item, _ := asMap(raw)
+		from, _ := item["from"].(string)
+		tr, _ := item["transition"].(string)
+		if !stateNames[from] {
+			c.rulef("state-structure", "%s: forbidden example unknown from state %s", rel, from)
+		}
+		if !transitionNames[tr] {
+			c.rulef("state-structure", "%s: forbidden example unknown transition %s", rel, tr)
+		}
+	}
+}
+
+func (c *Checker) checkEventDoc(doc map[string]any, rel string, schema *Schema, serviceIDs map[string]bool) {
+	c.validateDoc(doc, schema.Fields, rel)
+	c.checkFieldOrder(rel, schema.Fields, orderRules{})
+	fileID, _ := doc["id"].(string)
+	want := schema.Targets.FileID(filepath.Base(rel))
+	if fileID != want {
+		c.rulef("event-structure", "%s: id %q must be %q", rel, fileID, want)
+	}
+	names := map[string]bool{}
+	for _, raw := range asList(doc["events"]) {
+		item, _ := asMap(raw)
+		id, _ := item["id"].(string)
+		name, _ := item["name"].(string)
+		if names[name] {
+			c.rulef("event-version", "%s: duplicate event name %s", rel, name)
+		}
+		names[name] = true
+		if !strings.HasPrefix(id, fileID+".") {
+			c.rulef("event-structure", "%s: event id %s must start with %s.", rel, id, fileID)
+		}
+		if payload, ok := asMap(item["payload"]); ok {
+			if typ, _ := payload["type"].(string); typ == "object" {
+				if v, ok := payload["additionalProperties"]; !ok || v != false {
+					c.rulef("event-structure", "%s: event %s payload must set additionalProperties: false", rel, id)
+				}
+			}
+		}
+		for _, rawSvc := range asList(item["emitted_by"]) {
+			svc, _ := rawSvc.(string)
+			if !serviceIDs[svc] {
+				c.rulef("event-structure", "%s: event %s unknown service %s", rel, id, svc)
+			}
+		}
+	}
+}
+
+func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]serviceMeta, eventIDs map[string]bool, typeNames map[string]bool) {
+	httpFiles := glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
 	httpSchemas := map[string]bool{}
 	httpHeaders := map[string]bool{}
 	var serviceUnavailable map[string]any
@@ -124,7 +870,7 @@ func (c *Checker) checkCapabilities() {
 			continue
 		}
 		rel := relPath(c.root, file)
-		c.checkFieldOrder(rel, httpSchema.Fields, orderRules{})
+		c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		components, _ := asMap(doc["components"])
 		headers, _ := asMap(components["headers"])
 		for name := range headers {
@@ -143,11 +889,11 @@ func (c *Checker) checkCapabilities() {
 		for name, raw := range schemas {
 			httpSchemas[name] = true
 			s, _ := asMap(raw)
-			if ref, _ := s["x-method-type"].(string); ref != "" {
-				if !match(`^cap\.methods\.[a-z][a-z0-9_]*\.types\.[A-Z][A-Za-z0-9]*$`, ref) {
-					c.rulef("http-components", "%s: components.schemas.%s.x-method-type must match cap.methods.<file>.types.<Type>", rel, name)
-				} else if !methodTypeIDs[ref] {
-					c.rulef("http-components", "%s: components.schemas.%s.x-method-type references unknown %s", rel, name, ref)
+			if ref, _ := s["x-service-type"].(string); ref != "" {
+				if !match(`^cap\.services\.[a-z][a-z0-9_]*\.types\.[A-Z][A-Za-z0-9]*$`, ref) {
+					c.rulef("http-components", "%s: components.schemas.%s.x-service-type must match cap.services.<file>.types.<Type>", rel, name)
+				} else if typ, ok := serviceTypeRef(ref); !ok || !typeNames[typ] {
+					c.rulef("http-components", "%s: components.schemas.%s.x-service-type references unknown %s", rel, name, ref)
 				}
 			}
 			if ref, _ := s["x-enum"].(string); ref != "" {
@@ -213,11 +959,6 @@ func (c *Checker) checkCapabilities() {
 					c.rulef("http-binding", "%s %s %s: x-contract-id required", rel, method, path)
 				case !match(`^cap\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`, contractID):
 					c.rulef("http-binding", "%s %s %s: x-contract-id %q must match cap.http.<file>.<operation>", rel, method, path, contractID)
-				case httpContractIDs[contractID]:
-					c.rulef("http-binding", "%s %s %s: duplicate x-contract-id %s", rel, method, path, contractID)
-				}
-				if contractID != "" {
-					httpContractIDs[contractID] = true
 				}
 				if raw, ok := op["x-timeout-ms"]; ok {
 					if n, ok := toInt(raw); !ok || n <= 0 {
@@ -236,8 +977,8 @@ func (c *Checker) checkCapabilities() {
 						c.rulef("http-retry-after", "%s %s %s: 503 response must declare Retry-After", rel, method, path)
 					}
 				}
-				if op["x-service"] != nil {
-					c.rulef("http-binding", "%s %s %s: x-service removed; use x-flow", rel, method, path)
+				if op["x-flow"] != nil {
+					c.rulef("http-binding", "%s %s %s: x-flow removed; use x-service", rel, method, path)
 				}
 				collectRefs(op, func(ref string) {
 					if strings.HasPrefix(ref, "#/components/schemas/") {
@@ -247,27 +988,24 @@ func (c *Checker) checkCapabilities() {
 						}
 					}
 				})
-				flowRef, _ := op["x-flow"].(string)
-				if flowRef == "" {
-					c.rulef("http-binding", "%s %s %s: x-flow required", rel, method, path)
+				serviceRef, _ := op["x-service"].(string)
+				if serviceRef == "" {
+					c.rulef("http-binding", "%s %s %s: x-service required", rel, method, path)
 					continue
 				}
-				if !flowIDs[flowRef] {
-					c.rulef("http-binding", "%s %s %s: unknown flow %s", rel, method, path, flowRef)
+				target, ok := serviceMeta[serviceRef]
+				if !ok {
+					c.rulef("http-binding", "%s %s %s: unknown service %s", rel, method, path, serviceRef)
 					continue
 				}
-				if flowAsync[flowRef] {
-					c.rulef("http-binding", "%s %s %s: async flow %s cannot be bound to http", rel, method, path, flowRef)
+				if target.async {
+					c.rulef("http-binding", "%s %s %s: async service %s cannot be bound to http", rel, method, path, serviceRef)
 					continue
 				}
-				flowInbound[flowRef] = true
+				if target.visibility != "public" {
+					c.rulef("service-visibility", "%s %s %s: service %s is not public", rel, method, path, serviceRef)
+				}
 			}
-		}
-	}
-
-	for id := range flowIDs {
-		if !flowAsync[id] && !flowInbound[id] {
-			c.rulef("http-binding", "sync flow %s has no protocol inbound", id)
 		}
 	}
 }
@@ -285,398 +1023,86 @@ func retryAfterHeader(resp map[string]any) bool {
 	return ok
 }
 
-func (c *Checker) checkMethodDoc(doc map[string]any, rel, fileID string, methodIDs map[string]bool, methodErrors map[string]map[string]bool, schema *Schema, typeNames map[string]bool) {
-	c.validateDoc(doc, schema.Fields, rel)
-	c.checkFieldOrder(rel, schema.Fields, orderRules{})
-	if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
-		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
-	}
-	if types, ok := asMap(doc["types"]); ok {
-		c.checkTypeRefs(types, typeNames, rel)
-		c.checkMethodTypes(types, rel)
-	}
-	iface, _ := asMap(doc["interface"])
-	if iface == nil {
-		return
-	}
-	seen := map[string]bool{}
-	for _, raw := range asList(iface["methods"]) {
+func (c *Checker) checkServiceTypes(types map[string]any, rel string) {
+	for name, raw := range types {
 		m, _ := asMap(raw)
-		mname, _ := m["name"].(string)
-		if seen[mname] {
-			c.rulef("method-structure", "%s: duplicate method %s", rel, mname)
+		if typ, _ := m["type"].(string); typ != "object" {
+			continue
 		}
-		seen[mname] = true
-		if s, _ := m["summary"].(string); strings.TrimSpace(s) == "" {
-			c.rulef("schema.non-empty", "%s.%s: summary must not be empty", rel, mname)
+		if v, ok := m["additionalProperties"]; !ok || v != false {
+			c.rulef("service-structure", "%s: types.%s must set additionalProperties: false", rel, name)
 		}
-		methodID := fileID + "." + contractspec.SnakeCase(mname)
-		methodIDs[methodID] = true
-		errs := map[string]bool{}
-		for _, rawParam := range asList(m["params"]) {
-			pm, _ := asMap(rawParam)
-			c.checkTypeName(pm["type"], typeNames, rel+":"+mname)
-		}
-		returns := map[string]string{}
-		for _, rawReturn := range asList(m["returns"]) {
-			rm, _ := asMap(rawReturn)
-			name, _ := rm["name"].(string)
-			typ, _ := rm["type"].(string)
-			c.checkTypeName(rm["type"], typeNames, rel+":"+mname)
-			if name != "" && typ != "" && name != "err" {
-				returns[name] = typ
-			}
-		}
-		c.methodReturns[methodID] = returns
-		for _, rawErr := range asList(m["errors"]) {
-			code, _ := rawErr.(string)
-			if !strings.HasPrefix(code, "platform.errors.") {
-				c.rulef("cap-ref", "%s.%s: error %q must be platform.errors.*", rel, mname, code)
-				continue
-			}
-			if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
-				c.rulef("cap-ref", "%s.%s: unknown error %s", rel, mname, code)
-			}
-			errs[code] = true
-		}
-		methodErrors[methodID] = errs
-		for _, rawQuery := range asList(m["queries"]) {
-			qid, _ := rawQuery.(string)
-			if qid == "" {
-				c.rulef("cap-ref", "%s.%s: queries must be a query ID", rel, mname)
-				continue
-			}
-			if _, ok := c.queryIDs[qid]; !ok {
-				c.rulef("cap-ref", "%s.%s: unknown query %s", rel, mname, qid)
+		props, _ := asMap(m["properties"])
+		for _, rawReq := range asList(m["required"]) {
+			field, _ := rawReq.(string)
+			if props[field] == nil {
+				c.rulef("service-structure", "%s: types.%s required field %q not in properties", rel, name, field)
 			}
 		}
 	}
 }
 
-func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, methodIDs map[string]bool, methodErrors map[string]map[string]bool, typeNames map[string]bool) {
-	if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
-		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
+func serviceTypeRef(ref string) (string, bool) {
+	if !strings.HasPrefix(ref, "cap.services.") {
+		return "", false
 	}
-	impl, _ := doc["implementation"].(string)
-	methodRef, _ := doc["method"].(string)
-	steps := asList(doc["steps"])
-
-	switch impl {
-	case "direct":
-		if methodRef == "" {
-			c.rulef("flow-structure", "%s: direct flow requires method", rel)
-		}
-		if len(steps) > 0 {
-			c.rulef("flow-structure", "%s: direct flow must not declare steps", rel)
-		}
-		if methodRef != "" && !methodIDs[methodRef] {
-			c.rulef("cap-ref", "%s: unknown method %s", rel, methodRef)
-		}
-		if methodRef != "" && methodIDs[methodRef] {
-			allowedErrors := map[string]bool{}
-			for code := range methodErrors[methodRef] {
-				allowedErrors[code] = true
-			}
-			req := flowLevelErrors(doc, false)
-			for code := range req {
-				allowedErrors[code] = true
-			}
-			flowErrors := map[string]bool{}
-			for _, raw := range asList(doc["errors"]) {
-				code, _ := raw.(string)
-				flowErrors[code] = true
-				if !allowedErrors[code] {
-					c.rulef("flow-errors", "%s: error %s is not declared by %s or a flow-level feature", rel, code, methodRef)
-				}
-			}
-			for code := range req {
-				if !flowErrors[code] {
-					c.rulef("flow-errors", "%s: missing flow-level error %s", rel, code)
-				}
-			}
-		}
-	case "flow":
-		if methodRef != "" {
-			c.rulef("flow-structure", "%s: flow implementation must not declare method", rel)
-		}
-		if len(steps) == 0 {
-			c.rulef("flow-structure", "%s: flow implementation requires steps", rel)
-		}
-		stepOutputs := make([]map[string]string, len(steps))
-		allStepIndex := map[string]int{}
-		for i, raw := range steps {
-			step, _ := asMap(raw)
-			id, _ := step["id"].(string)
-			if id != "" {
-				if _, exists := allStepIndex[id]; !exists {
-					allStepIndex[id] = i
-				}
-			}
-		}
-		stepIndex := map[string]int{}
-		reachableByIdx := map[int]bool{}
-		requiredErrors := map[string]bool{}
-		hasBackwardGoto := false
-		for i, raw := range steps {
-			step, _ := asMap(raw)
-			stepID, _ := step["id"].(string)
-			if _, exists := stepIndex[stepID]; exists {
-				c.rulef("flow-structure", "%s: duplicate step id %s", rel, stepID)
-			} else {
-				stepIndex[stepID] = i
-			}
-			use, _ := step["use"].(string)
-			if !c.validFlowUse(use, methodIDs) {
-				if strings.HasPrefix(use, "data.queries.") {
-					c.rulef("flow-no-query", "%s: step use %q is not a method or permission; data.queries is forbidden", rel, use)
-				} else {
-					c.rulef("cap-ref", "%s: step use %q is not a method or permission; data.queries is forbidden", rel, use)
-				}
-			}
-			stepOutput := map[string]string{}
-			if step["output"] != nil {
-				if use != "" {
-					c.rulef("flow-structure", "%s: step %s output is only allowed for internal steps", rel, stepID)
-				} else {
-					seenOut := map[string]bool{}
-					for _, rawOut := range asList(step["output"]) {
-						om, _ := asMap(rawOut)
-						name, _ := om["name"].(string)
-						typ, _ := om["type"].(string)
-						if seenOut[name] {
-							c.rulef("flow-structure", "%s: step %s duplicate output %s", rel, stepID, name)
-						}
-						seenOut[name] = true
-						c.checkTypeName(om["type"], typeNames, rel+":"+stepID)
-						if name != "" && typ != "" {
-							stepOutput[name] = typ
-						}
-					}
-				}
-			}
-			stepOutputs[i] = stepOutput
-			reachable := true
-			for _, rawDep := range asList(step["depends_on"]) {
-				depID, _ := rawDep.(string)
-				idx, ok := stepIndex[depID]
-				if !ok {
-					c.rulef("flow-structure", "%s: step %s depends_on %s must reference an earlier step", rel, stepID, depID)
-					reachable = false
-					continue
-				}
-				if !reachableByIdx[idx] {
-					reachable = false
-				}
-			}
-			if when, ok := step["when"]; ok {
-				s, _ := when.(string)
-				if strings.TrimSpace(s) == "" {
-					c.rulef("flow-when", "%s: step %s when must not be empty", rel, stepID)
-				} else if node, err := parseWhen(s); err != nil {
-					c.rulef("flow-when", "%s: step %s when %q: %v", rel, stepID, s, err)
-				} else {
-					if evalWhenNode(node) == whenFalse {
-						reachable = false
-					}
-					formula := whenFormulaFromNode(node)
-					for _, ref := range whenStepRefs(node) {
-						if _, ok := stepIndex[ref]; !ok {
-							c.rulef("flow-when", "%s: step %s when references step %s that is not an earlier step", rel, stepID, ref)
-						}
-					}
-					for _, field := range whenStepFields(node) {
-						ref, path, ok := splitStepField(field)
-						if !ok {
-							continue
-						}
-						idx, ok := stepIndex[ref]
-						if !ok {
-							continue
-						}
-						target, _ := asMap(steps[idx])
-						if err := c.checkStepOutputPath(target, stepOutputs[idx], path, formula, ref); err != nil {
-							c.rulef("flow-when", "%s: step %s when references %s: %v", rel, stepID, field, err)
-						}
-					}
-				}
-			}
-			stepErrors := map[string]bool{}
-			if strings.HasPrefix(use, "cap.methods.") && methodErrors[use] != nil {
-				if step["errors"] != nil {
-					for _, rawErr := range asList(step["errors"]) {
-						code, _ := rawErr.(string)
-						if !methodErrors[use][code] {
-							c.rulef("flow-errors", "%s: step %s error %s is not declared by %s", rel, stepID, code, use)
-						}
-						stepErrors[code] = true
-					}
-				} else {
-					for code := range methodErrors[use] {
-						stepErrors[code] = true
-					}
-				}
-			} else {
-				for _, rawErr := range asList(step["errors"]) {
-					code, _ := rawErr.(string)
-					if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
-						c.rulef("cap-ref", "%s: step %s unknown error %s", rel, stepID, code)
-					}
-					stepErrors[code] = true
-				}
-			}
-			handled := map[string]bool{}
-			seenOnError := map[string]bool{}
-			for _, rawErr := range asList(step["on_error"]) {
-				entry, _ := asMap(rawErr)
-				code, _ := entry["error"].(string)
-				action, _ := entry["action"].(string)
-				target, _ := entry["target"].(string)
-				if !stepErrors[code] {
-					c.rulef("flow-control", "%s: step %s on_error %s is not declared by the step error set", rel, stepID, code)
-				}
-				if seenOnError[code] {
-					c.rulef("flow-control", "%s: step %s duplicate on_error for %s", rel, stepID, code)
-				}
-				seenOnError[code] = true
-				switch action {
-				case "abort":
-					if target != "" {
-						c.rulef("flow-control", "%s: step %s on_error %s target is only allowed for goto", rel, stepID, code)
-					}
-				case "continue":
-					if target != "" {
-						c.rulef("flow-control", "%s: step %s on_error %s target is only allowed for goto", rel, stepID, code)
-					}
-					handled[code] = true
-				case "goto":
-					if target == "" {
-						c.rulef("flow-control", "%s: step %s on_error %s goto requires target", rel, stepID, code)
-					} else if targetIdx, ok := allStepIndex[target]; !ok {
-						c.rulef("flow-control", "%s: step %s on_error %s goto target %s not found", rel, stepID, code, target)
-					} else if targetIdx <= i {
-						hasBackwardGoto = true
-					}
-					handled[code] = true
-				default:
-					c.rulef("flow-control", "%s: step %s on_error %s action must be abort, continue or goto", rel, stepID, code)
-				}
-			}
-			if reachable {
-				for code := range stepErrors {
-					if !handled[code] {
-						requiredErrors[code] = true
-					}
-				}
-			}
-			reachableByIdx[i] = reachable
-		}
-		if rawMax, ok := doc["max_iterations"]; ok {
-			budget, ok := toInt(rawMax)
-			if !ok || budget < 1 {
-				c.rulef("flow-control", "%s: max_iterations must be >= 1", rel)
-			}
-		}
-		if hasBackwardGoto && doc["max_iterations"] == nil {
-			c.rulef("flow-control", "%s: backward/self goto requires flow.max_iterations", rel)
-		}
-		req := flowLevelErrors(doc, hasBackwardGoto)
-		for code := range req {
-			requiredErrors[code] = true
-		}
-		allowedErrors := map[string]bool{}
-		for code := range requiredErrors {
-			allowedErrors[code] = true
-		}
-		flowErrors := map[string]bool{}
-		for _, raw := range asList(doc["errors"]) {
-			code, _ := raw.(string)
-			flowErrors[code] = true
-			if !allowedErrors[code] {
-				c.rulef("flow-errors", "%s: error %s is not produced by a reachable, unhandled step", rel, code)
-			}
-		}
-		for code := range requiredErrors {
-			if !flowErrors[code] {
-				if req[code] {
-					c.rulef("flow-errors", "%s: missing flow-level error %s", rel, code)
-				} else {
-					c.rulef("flow-errors", "%s: missing error %s produced by a reachable, unhandled step", rel, code)
-				}
-			}
-		}
-	default:
-		c.rulef("flow-structure", "%s: implementation must be direct or flow", rel)
+	rest := strings.TrimPrefix(ref, "cap.services.")
+	parts := strings.Split(rest, ".types.")
+	if len(parts) != 2 || parts[1] == "" {
+		return "", false
 	}
-
-	if doc["trigger"] == nil {
-		if doc["transaction"] == nil {
-			c.rulef("flow-structure", "%s: sync flow requires transaction", rel)
-		}
-		if doc["permissions"] == nil {
-			c.rulef("flow-structure", "%s: sync flow requires permissions", rel)
-		}
-		if doc["retry"] != nil || doc["concurrency"] != nil {
-			c.rulef("flow-structure", "%s: sync flow must not declare retry/concurrency", rel)
-		}
-	} else {
-		for _, field := range []string{"input", "output", "idempotency", "retry", "concurrency"} {
-			if doc[field] == nil {
-				c.rulef("flow-structure", "%s: async flow requires %s", rel, field)
-			}
-		}
-		if doc["transaction"] != nil {
-			c.rulef("flow-structure", "%s: async flow must not declare transaction", rel)
-		}
-		trigger, _ := asMap(doc["trigger"])
-		switch typ, _ := trigger["type"].(string); typ {
-		case "cron":
-			if s, _ := trigger["schedule"].(string); strings.TrimSpace(s) == "" {
-				c.rulef("flow-structure", "%s: trigger.schedule required for cron", rel)
-			}
-		case "event":
-			if s, _ := trigger["event"].(string); strings.TrimSpace(s) == "" {
-				c.rulef("flow-structure", "%s: trigger.event required for event", rel)
-			}
-		}
-	}
-
-	for _, raw := range asList(doc["errors"]) {
-		code, _ := raw.(string)
-		if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
-			c.rulef("cap-ref", "%s: unknown error %s", rel, code)
-		}
-	}
-	for _, raw := range asList(doc["permissions"]) {
-		pid, _ := raw.(string)
-		if !c.permissionExists(pid) {
-			c.rulef("cap-ref", "%s: unknown permission %s", rel, pid)
-		}
-	}
+	return parts[1], true
 }
 
-// checkStepOutputPath 校验 step.<id>.<path> 的字段链路：
-// 方法步骤从 method returns 取根字段；内部步骤从 step.output 取根字段。
+func serviceLevelErrors(doc map[string]any, hasBackwardGoto bool) map[string]bool {
+	required := map[string]bool{}
+	if len(asList(doc["permissions"])) > 0 {
+		required["platform.errors.COMMON_FORBIDDEN"] = true
+	}
+	if doc["rate_limit"] != nil {
+		required["platform.errors.COMMON_RATE_LIMITED"] = true
+	}
+	if audit, _ := doc["audit"].(bool); audit {
+		required["platform.errors.COMMON_AUDIT_FAILED"] = true
+	}
+	if doc["idempotency"] != nil {
+		required["platform.errors.COMMON_IDEMPOTENCY_CONFLICT"] = true
+	}
+	if hasBackwardGoto {
+		required["platform.errors.COMMON_LOOP_EXHAUSTED"] = true
+	}
+	return required
+}
 func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]string, path string, formula whenFormula, stepRef string) error {
 	segs, err := parseWhenPath(path)
 	if err != nil {
 		return err
 	}
 	root := segs[0]
-	use, _ := step["use"].(string)
+	kind, _ := step["kind"].(string)
 	var typ string
-	switch {
-	case strings.HasPrefix(use, "cap.methods."):
-		typ = c.methodReturns[use][root.name]
+	switch kind {
+	case "service":
+		ref, _ := step["service"].(string)
+		typ = c.methodReturns[ref][root.name]
 		if typ == "" {
 			return fmt.Errorf("unknown output %s", root.name)
 		}
-	case use == "":
+	case "query":
+		ref, _ := step["query"].(string)
+		typ = c.queryReturnTypes[ref][root.name]
+		if typ == "" {
+			return fmt.Errorf("unknown output %s", root.name)
+		}
+	case "logic", "transition":
 		typ = output[root.name]
 		if typ == "" {
 			return fmt.Errorf("unknown output %s", root.name)
 		}
+	case "event":
+		return fmt.Errorf("event step has no output")
 	default:
-		return fmt.Errorf("permission step has no output")
+		return fmt.Errorf("unknown step kind %q", kind)
 	}
 	if root.hasIndex {
 		typ, err = indexWhenType(typ)
@@ -1352,25 +1778,25 @@ func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) 
 	}
 	if strings.HasPrefix(base, "data.enums.") {
 		if !c.enumIDs[base] {
-			c.rulef("cap-ref", "%s: unknown enum %s", where, base)
+			c.rulef("service-ref", "%s: unknown enum %s", where, base)
 		}
 		return
 	}
 	if strings.HasPrefix(base, "data.entities.") {
 		if _, ok := c.entities[base]; !ok {
-			c.rulef("cap-ref", "%s: unknown entity %s", where, base)
+			c.rulef("service-ref", "%s: unknown entity %s", where, base)
 		}
 		return
 	}
 	if strings.HasPrefix(base, "data.tables.") {
-		c.rulef("cap-ref", "%s: data.tables.* is not a method type; use data.entities.*", where)
+		c.rulef("service-ref", "%s: data.tables.* is not a method type; use data.entities.*", where)
 		return
 	}
 	if isBuiltinType(base) {
 		return
 	}
 	if !typeNames[base] {
-		c.rulef("cap-ref", "%s: unknown type %s", where, base)
+		c.rulef("service-ref", "%s: unknown type %s", where, base)
 	}
 }
 
@@ -1416,22 +1842,150 @@ func collectRefs(v any, fn func(string)) {
 	}
 }
 
-// checkMethodTypes 校验本地类型：object 必须闭合，required 必须出现在 properties。
-func (c *Checker) checkMethodTypes(types map[string]any, rel string) {
-	for name, raw := range types {
-		m, _ := asMap(raw)
-		if typ, _ := m["type"].(string); typ != "object" {
-			continue
+// checkFlowItem 是旧测试的兼容入口：把旧 flow 文档适配为 service item。
+func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, methodIDs map[string]bool, methodErrors map[string]map[string]bool, typeNames map[string]bool) {
+	metaByID := map[string]serviceMeta{}
+	for mid := range methodIDs {
+		metaByID[mid] = serviceMeta{
+			module:     module,
+			visibility: "public",
+			params:     map[string]bool{},
+			errors:     methodErrors[mid],
+			returns:    c.methodReturns[mid],
 		}
-		if v, ok := m["additionalProperties"]; !ok || v != false {
-			c.rulef("method-structure", "%s: types.%s must set additionalProperties: false", rel, name)
+	}
+	steps := []any{}
+	for _, raw := range asList(doc["steps"]) {
+		old, _ := asMap(raw)
+		step := map[string]any{"summary": "x"}
+		for k, v := range old {
+			step[k] = v
 		}
-		props, _ := asMap(m["properties"])
-		for _, rawReq := range asList(m["required"]) {
-			field, _ := rawReq.(string)
-			if props[field] == nil {
-				c.rulef("method-structure", "%s: types.%s required field %q not in properties", rel, name, field)
+		use, _ := old["use"].(string)
+		switch {
+		case use == "":
+			step["kind"] = "logic"
+			if step["output"] == nil {
+				step["output"] = []any{}
 			}
+			if step["errors"] == nil {
+				step["errors"] = []any{}
+			}
+		case strings.HasPrefix(use, "cap.methods."):
+			step["kind"] = "service"
+			step["service"] = use
+		default:
+			step["kind"] = "logic"
+			if step["output"] == nil {
+				step["output"] = []any{}
+			}
+			if step["errors"] == nil {
+				step["errors"] = []any{}
+			}
+		}
+		steps = append(steps, step)
+	}
+	if method, _ := doc["method"].(string); method != "" {
+		steps = append(steps, map[string]any{
+			"id":      "call",
+			"kind":    "service",
+			"summary": "x",
+			"service": method,
+		})
+	}
+	doc2 := map[string]any{
+		"summary":        doc["summary"],
+		"transaction":    doc["transaction"],
+		"permissions":    doc["permissions"],
+		"errors":         doc["errors"],
+		"rate_limit":     doc["rate_limit"],
+		"audit":          doc["audit"],
+		"idempotency":    doc["idempotency"],
+		"steps":          steps,
+		"max_iterations": doc["max_iterations"],
+		"trigger":        doc["trigger"],
+		"retry":          doc["retry"],
+		"concurrency":    doc["concurrency"],
+	}
+	for k, v := range doc2 {
+		if v == nil {
+			delete(doc2, k)
+		}
+	}
+	c.checkServiceItem(doc2, rel, id, module, metaByID, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, typeNames)
+}
+
+// checkServiceParamExpr 校验 params 表达式：input.* 必须存在于 service 入参，
+// step.<id>.* 必须存在于前序步骤输出。
+func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex map[string]int, stepOutputs []map[string]string, steps []any, rel, stepID string) {
+	expr, ok := v.(string)
+	if !ok || expr == "" {
+		return
+	}
+	switch {
+	case strings.HasPrefix(expr, "input."):
+		field := strings.TrimPrefix(expr, "input.")
+		if i := strings.IndexByte(field, '.'); i >= 0 {
+			field = field[:i]
+		}
+		found := false
+		for _, raw := range asList(doc["params"]) {
+			pm, _ := asMap(raw)
+			name, _ := pm["name"].(string)
+			if name == field {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.rulef("service-params", "%s: step %s param references unknown input %s", rel, stepID, field)
+		}
+	case strings.HasPrefix(expr, "step."):
+		ref, path, ok := splitStepField(expr)
+		if !ok {
+			c.rulef("service-params", "%s: step %s param %q is not a valid step reference", rel, stepID, expr)
+			return
+		}
+		idx, exists := stepIndex[ref]
+		if !exists {
+			c.rulef("service-params", "%s: step %s param references step %s that is not an earlier step", rel, stepID, ref)
+			return
+		}
+		target, _ := asMap(steps[idx])
+		if err := c.checkStepOutputPath(target, stepOutputs[idx], path, whenFormula{}, ref); err != nil {
+			c.rulef("service-params", "%s: step %s param references %s: %v", rel, stepID, expr, err)
+		}
+	}
+}
+
+// checkServiceCycles 在 kind=service 调用图上做 DFS 环检测。
+func (c *Checker) checkServiceCycles(edges map[string][]string) {
+	const (
+		white = 0
+		gray  = 1
+		black = 2
+	)
+	color := map[string]int{}
+	reported := false
+	var visit func(string)
+	visit = func(n string) {
+		color[n] = gray
+		for _, m := range edges[n] {
+			switch color[m] {
+			case gray:
+				if !reported {
+					c.rulef("service-cycle", "service call cycle: %s -> %s", n, m)
+					reported = true
+				}
+			case white:
+				visit(m)
+			}
+		}
+		color[n] = black
+	}
+	for n := range edges {
+		if color[n] == white {
+			visit(n)
 		}
 	}
 }

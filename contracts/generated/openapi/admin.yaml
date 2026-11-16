@@ -1,0 +1,965 @@
+components:
+  headers:
+    RetryAfter:
+      description: 建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误
+      schema:
+        example: "30"
+        type: string
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema:
+        maxLength: 64
+        minLength: 8
+        type: string
+    RequestId:
+      in: header
+      name: X-Request-Id
+      required: false
+      schema:
+        maxLength: 64
+        type: string
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 请求非法
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 状态冲突
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 无权限
+    Internal:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 服务端错误
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 资源不存在
+    ServiceUnavailable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 服务暂不可用或循环预算耗尽，可稍后重试
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 触发限流
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 未认证
+  schemas:
+    Account:
+      additionalProperties: false
+      properties:
+        auth_email:
+          description: 账号绑定的邮箱
+          type: object
+        auth_phone:
+          description: 账号绑定的手机号
+          type: object
+        auth_pwd:
+          description: 账号的密码认证记录
+          type: object
+        nickname:
+          description: 昵称
+          type: object
+        number:
+          description: 账号编号
+          type: object
+        own_i_d:
+          description: 归属 ID；与 own_type 组成归属主体
+          type: object
+        own_type:
+          description: 数据归属主体类型
+          enum:
+            - user
+            - admin
+            - system
+          type: string
+        status:
+          description: 账号状态
+          enum:
+            - pending
+            - active
+            - suspended
+            - deleted
+          type: string
+        tokens:
+          description: 账号的设备令牌
+          type: object
+        user_i_d:
+          description: 关联用户 ID
+          type: object
+      required:
+        - status
+        - own_type
+        - own_i_d
+        - number
+        - nickname
+        - user_i_d
+        - tokens
+        - auth_pwd
+        - auth_phone
+        - auth_email
+      type: object
+      x-entity: data.entities.account
+    AuthSession:
+      additionalProperties: false
+      properties:
+        account:
+          $ref: '#/components/schemas/Account'
+        tokens:
+          $ref: '#/components/schemas/TokenPair'
+      required:
+        - account
+        - tokens
+      type: object
+      x-service-type: cap.services.auth.types.AuthSession
+    CreateAccountInput:
+      additionalProperties: false
+      properties:
+        nickname:
+          maxLength: 100
+          minLength: 1
+          type: string
+        number:
+          maxLength: 64
+          minLength: 4
+          pattern: ^[A-Za-z0-9_-]+$
+          type: string
+        own_id:
+          type: integer
+        own_type:
+          enum:
+            - user
+            - admin
+            - system
+          type: string
+        user_id:
+          nullable: true
+          type: integer
+      required:
+        - own_type
+        - own_id
+        - number
+        - nickname
+      type: object
+      x-service-type: cap.services.account.types.CreateAccountInput
+    LoginInput:
+      additionalProperties: false
+      properties:
+        auth_type:
+          enum:
+            - pwd
+            - phone
+            - email
+          type: string
+        code:
+          description: 手机号区号，例如 +86
+          nullable: true
+          type: string
+        device_id:
+          maxLength: 128
+          nullable: true
+          type: string
+        identifier:
+          maxLength: 254
+          minLength: 1
+          type: string
+        password:
+          nullable: true
+          type: string
+          writeOnly: true
+      required:
+        - auth_type
+        - identifier
+      type: object
+      x-service-type: cap.services.auth.types.LoginInput
+    PageInfo:
+      additionalProperties: false
+      properties:
+        has_more:
+          type: boolean
+        next_cursor:
+          nullable: true
+          type: string
+      required:
+        - has_more
+      type: object
+    Problem:
+      additionalProperties: false
+      properties:
+        code:
+          example: NOTE_NOT_FOUND
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            additionalProperties: false
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+            required:
+              - field
+              - message
+            type: object
+          type: array
+        instance:
+          format: uri-reference
+          type: string
+        status:
+          example: 404
+          maximum: 599
+          minimum: 100
+          type: integer
+        title:
+          example: not found
+          type: string
+        type:
+          example: about:blank
+          format: uri-reference
+          type: string
+      required:
+        - type
+        - title
+        - status
+      type: object
+    SendVerificationInput:
+      additionalProperties: false
+      properties:
+        account_id:
+          description: 注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析
+          nullable: true
+          type: integer
+        auth_type:
+          enum:
+            - pwd
+            - phone
+            - email
+          type: string
+        purpose:
+          enum:
+            - register
+            - login
+            - reset_password
+            - bind_phone
+            - bind_email
+            - unbind_phone
+            - unbind_email
+            - change_phone
+            - change_email
+            - delete_account
+          type: string
+        target:
+          maxLength: 320
+          minLength: 1
+          type: string
+      required:
+        - auth_type
+        - target
+        - purpose
+      type: object
+      x-service-type: cap.services.verification.types.SendVerificationInput
+    TokenPair:
+      additionalProperties: false
+      properties:
+        access_expire_at:
+          format: date-time
+          type: string
+        access_token:
+          readOnly: true
+          type: string
+        refresh_expire_at:
+          format: date-time
+          type: string
+        refresh_token:
+          readOnly: true
+          type: string
+        token_type:
+          enum:
+            - Bearer
+          type: string
+      required:
+        - access_token
+        - refresh_token
+        - access_expire_at
+        - refresh_expire_at
+      type: object
+      x-auth-response: true
+      x-service-type: cap.services.token.types.TokenPair
+    UpdateAccountInput:
+      additionalProperties: false
+      properties:
+        nickname:
+          maxLength: 100
+          minLength: 1
+          type: string
+      required:
+        - nickname
+      type: object
+      x-service-type: cap.services.account.types.UpdateAccountInput
+    VerificationPurpose:
+      enum:
+        - register
+        - login
+        - reset_password
+        - bind_phone
+        - bind_email
+        - unbind_phone
+        - unbind_email
+        - change_phone
+        - change_email
+        - delete_account
+      type: string
+      x-enum: data.enums.verification_purpose
+    VerificationResult:
+      additionalProperties: false
+      properties:
+        consumed_at:
+          format: date-time
+          nullable: true
+          type: string
+        verification_id:
+          type: integer
+        verified:
+          type: boolean
+      required:
+        - verified
+        - verification_id
+      type: object
+      x-service-type: cap.services.verification.types.VerificationResult
+    VerificationSent:
+      additionalProperties: false
+      properties:
+        expire_at:
+          format: date-time
+          type: string
+        id:
+          type: integer
+        masked_target:
+          type: string
+      required:
+        - id
+        - masked_target
+        - expire_at
+      type: object
+      x-service-type: cap.services.verification.types.VerificationSent
+    VerifyCodeInput:
+      additionalProperties: false
+      properties:
+        account_id:
+          description: 注册时必传；其他用途可省略
+          nullable: true
+          type: integer
+        auth_type:
+          enum:
+            - pwd
+            - phone
+            - email
+          type: string
+        code:
+          maxLength: 12
+          minLength: 4
+          type: string
+        purpose:
+          enum:
+            - register
+            - login
+            - reset_password
+            - bind_phone
+            - bind_email
+            - unbind_phone
+            - unbind_email
+            - change_phone
+            - change_email
+            - delete_account
+          type: string
+        target:
+          maxLength: 320
+          minLength: 1
+          type: string
+      required:
+        - auth_type
+        - target
+        - purpose
+        - code
+      type: object
+      x-service-type: cap.services.verification.types.VerifyCodeInput
+info:
+  title: web-seed admin API
+  version: 0.1.0
+openapi: 3.1.0
+paths:
+  /account:
+    get:
+      operationId: listAccounts
+      parameters:
+        - in: query
+          name: status
+          required: false
+          schema:
+            enum:
+              - pending
+              - active
+              - suspended
+              - deleted
+            type: string
+        - in: query
+          name: own_type
+          required: false
+          schema:
+            enum:
+              - user
+              - admin
+              - system
+            type: string
+        - in: query
+          name: cursor
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: page_size
+          required: false
+          schema:
+            default: 20
+            maximum: 100
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                items:
+                  - created_at: "2026-11-11T09:30:00Z"
+                    id: 1
+                    nickname: 管理员
+                    number: ACC-0001
+                    own_id: 2
+                    own_type: user
+                    status: active
+                page:
+                  has_more: false
+                  next_cursor: null
+              schema:
+                additionalProperties: false
+                properties:
+                  items:
+                    items:
+                      $ref: '#/components/schemas/Account'
+                    type: array
+                  page:
+                    $ref: '#/components/schemas/PageInfo'
+                required:
+                  - items
+                  - page
+                type: object
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 列出账号
+      x-contract-id: cap.http.account.list
+      x-service: cap.services.account.list
+      x-timeout-ms: 3000
+    post:
+      operationId: createAccount
+      requestBody:
+        content:
+          application/json:
+            example:
+              nickname: 管理员
+              number: ACC-0001
+              own_id: 2
+              own_type: user
+            schema:
+              $ref: '#/components/schemas/CreateAccountInput'
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: 已创建
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 创建账号
+      x-contract-id: cap.http.account.create
+      x-service: cap.services.account.create
+      x-timeout-ms: 5000
+  /account/{id}:
+    delete:
+      operationId: deleteAccount
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: 已删除
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 删除账号（软删）
+      x-contract-id: cap.http.account.delete
+      x-service: cap.services.account.delete
+    get:
+      operationId: getAccount
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 获取账号
+      x-contract-id: cap.http.account.get
+      x-service: cap.services.account.get
+    patch:
+      operationId: updateAccount
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 更新账号资料
+      x-contract-id: cap.http.account.update
+      x-service: cap.services.account.update
+  /account/{id}/activate:
+    post:
+      operationId: activateAccount
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 激活账号
+      x-contract-id: cap.http.account.activate
+      x-service: cap.services.account.activate
+  /account/{id}/suspend:
+    post:
+      operationId: suspendAccount
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              properties:
+                reason:
+                  maxLength: 200
+                  minLength: 1
+                  type: string
+              required:
+                - reason
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 封禁账号
+      x-contract-id: cap.http.account.suspend
+      x-service: cap.services.account.suspend
+  /auth/login:
+    post:
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            example:
+              auth_type: pwd
+              device_id: web-admin
+              identifier: admin
+              password: a-strong-password
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+          description: 登录成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 登录
+      x-contract-id: cap.http.auth.login
+      x-service: cap.services.auth.login
+      x-timeout-ms: 5000
+  /auth/logout:
+    post:
+      operationId: logout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              properties:
+                refresh_token:
+                  minLength: 1
+                  type: string
+              required:
+                - refresh_token
+              type: object
+        required: true
+      responses:
+        "204":
+          description: 已登出
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 登出
+      x-contract-id: cap.http.auth.logout
+      x-service: cap.services.token.logout
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      requestBody:
+        content:
+          application/json:
+            schema:
+              additionalProperties: false
+              properties:
+                refresh_token:
+                  minLength: 1
+                  type: string
+              required:
+                - refresh_token
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 刷新令牌
+      x-contract-id: cap.http.auth.refresh
+      x-service: cap.services.token.refresh
+      x-timeout-ms: 3000
+  /auth/verification/send:
+    post:
+      operationId: sendVerification
+      requestBody:
+        content:
+          application/json:
+            example:
+              auth_type: phone
+              purpose: login
+              target: "+8613800138000"
+            schema:
+              $ref: '#/components/schemas/SendVerificationInput'
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationSent'
+          description: 已受理
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 发送验证码
+      x-contract-id: cap.http.auth.verification_send
+      x-service: cap.services.verification.send
+      x-timeout-ms: 5000
+  /auth/verification/verify:
+    post:
+      operationId: verifyCode
+      requestBody:
+        content:
+          application/json:
+            example:
+              auth_type: phone
+              code: "123456"
+              purpose: login
+              target: "+8613800138000"
+            schema:
+              $ref: '#/components/schemas/VerifyCodeInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationResult'
+          description: 校验成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          $ref: '#/components/responses/Conflict'
+        "422":
+          $ref: '#/components/responses/BadRequest'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 校验验证码
+      x-contract-id: cap.http.auth.verification_verify
+      x-service: cap.services.verification.verify
+      x-timeout-ms: 5000
+servers:
+  - url: /v1

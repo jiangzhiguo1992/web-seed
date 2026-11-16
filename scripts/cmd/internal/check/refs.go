@@ -43,99 +43,94 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 		}
 		rel := relPath(c.root, f)
 		id, _ := doc["id"].(string)
-		switch {
-		case strings.HasPrefix(id, "cap.methods."):
-			c.checkMethodPersistence(doc, rel, tableIDs)
-		case strings.HasPrefix(id, "cap.flows."):
-			if doc["writes"] != nil {
-				c.rulef("flow-no-query", "%s: flow must not declare writes; write through cap.methods", rel)
-			}
-			if doc["persistence"] != nil {
-				c.rulef("flow-no-query", "%s: flow must not declare persistence; write through cap.methods", rel)
-			}
-		default:
+		if !strings.HasPrefix(id, "cap.services.") {
 			if doc["persistence"] != nil || doc["writes"] != nil {
-				c.rulef("owner-write", "%s: only cap.methods may declare persistence/writes", rel)
+				c.rulef("owner-write", "%s: only cap.services may declare persistence/writes", rel)
+			}
+			continue
+		}
+		module, _ := doc["owner_module"].(string)
+		p, _ := asMap(doc["persistence"])
+		tables := tableRefs(p)
+		for _, t := range tables {
+			if c.isBaseTableRef(t) {
+				c.rulef("schema.ref", "%s: base contract is not a physical table", rel)
+			} else if _, ok := tableIDs[t]; !ok {
+				c.rulef("schema.ref", "%s: persistence references unknown table %s", rel, t)
+			}
+			if owner := c.tableOwners[t]; owner != "" && owner != module {
+				c.rulef("service-owner-write", "%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
+			}
+		}
+		if rawCE, ok := p["constraint_errors"]; ok {
+			ce, ok := asMap(rawCE)
+			if !ok {
+				c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
+			} else {
+				for name, rawVal := range ce {
+					if name == "" {
+						c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
+						continue
+					}
+					if !c.tableObjectExists(tables, name) {
+						c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
+					}
+					code, _ := rawVal.(string)
+					if !strings.HasPrefix(code, "platform.errors.") {
+						c.rulef("schema.pattern", "%s: persistence.constraint_errors.%s must be platform.errors.*", rel, name)
+					} else if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+						c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s references unknown error %s", rel, name, code)
+					}
+				}
+			}
+		}
+		for _, raw := range asList(doc["services"]) {
+			item, _ := asMap(raw)
+			name, _ := item["name"].(string)
+			for _, rawStep := range asList(item["steps"]) {
+				step, _ := asMap(rawStep)
+				kind, _ := step["kind"].(string)
+				var qids []string
+				switch kind {
+				case "query":
+					qid, _ := step["query"].(string)
+					if qid != "" {
+						qids = append(qids, qid)
+					}
+				case "logic", "transition":
+					for _, rawQ := range asList(step["queries"]) {
+						qid, _ := rawQ.(string)
+						if qid != "" {
+							qids = append(qids, qid)
+						}
+					}
+				}
+				for _, qid := range qids {
+					q := c.queries[qid]
+					if q == nil {
+						continue
+					}
+					if queryReturnsAffectedRows(q) && len(q.Writes) == 0 {
+						c.rulef("service-owner-write", "%s.%s: query %s returns affected_rows without a write table", rel, name, qid)
+					}
+					for _, target := range q.Writes {
+						c.declaredWrites[qid] = true
+						if owner := c.tableOwners[target]; owner != "" && owner != module {
+							c.rulef("service-owner-write", "%s.%s: module %q cannot write %s via %s (owner_module %q); cross-module writes must go through kind=service", rel, name, module, target, qid, owner)
+						}
+					}
+				}
 			}
 		}
 	}
 	for _, qid := range c.queryOrder {
 		q := c.queries[qid]
 		if q != nil && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) && !c.declaredWrites[qid] {
-			c.rulef("owner-write", "query %s has write tables or returns affected_rows but is not declared in any method queries", qid)
+			c.rulef("owner-write", "query %s has write tables or returns affected_rows but is not referenced by any service step", qid)
 		}
 	}
 }
 
-func (c *Checker) checkMethodPersistence(doc map[string]any, rel string, tableIDs map[string]string) {
-	if c.declaredWrites == nil {
-		c.declaredWrites = map[string]bool{}
-	}
-	module, _ := doc["owner_module"].(string)
-	iface, _ := asMap(doc["interface"])
-	for _, raw := range asList(iface["methods"]) {
-		m, _ := asMap(raw)
-		name, _ := m["name"].(string)
-		for _, rawQ := range asList(m["queries"]) {
-			qid, _ := rawQ.(string)
-			q := c.queries[qid]
-			if q == nil {
-				continue
-			}
-			if queryReturnsAffectedRows(q) && len(q.Writes) == 0 {
-				c.rulef("owner-write", "%s.%s: query %s returns affected_rows without a write table", rel, name, qid)
-			}
-			for _, target := range q.Writes {
-				c.declaredWrites[qid] = true
-				if owner := c.tableOwners[target]; owner != "" && owner != module {
-					c.rulef("method-used-by", "%s.%s: module %q cannot write %s via %s (owner_module %q); cross-module writes must be orchestrated by a flow", rel, name, module, target, qid, owner)
-				}
-			}
-		}
-	}
-	p, _ := asMap(doc["persistence"])
-	if p == nil {
-		return
-	}
-	if p["table"] != nil && p["tables"] != nil {
-		c.rulef("schema.conflict", "%s: persistence.table and persistence.tables are mutually exclusive", rel)
-	}
-	tables := tableRefs(p)
-	for _, t := range tables {
-		if c.isBaseTableRef(t) {
-			c.rulef("schema.ref", "%s: base contract is not a physical table", rel)
-		} else if _, ok := tableIDs[t]; !ok {
-			c.rulef("schema.ref", "%s: persistence references unknown table %s", rel, t)
-		}
-		if owner := c.tableOwners[t]; owner != "" && owner != module {
-			c.rulef("owner-write", "%s: module %q cannot write %s (owner_module %q); cross-module writes must be orchestrated by a flow", rel, module, t, owner)
-		}
-	}
-	if rawCE, ok := p["constraint_errors"]; ok {
-		ce, ok := asMap(rawCE)
-		if !ok {
-			c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
-		} else {
-			for name, rawVal := range ce {
-				if name == "" {
-					c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
-					continue
-				}
-				if !c.tableObjectExists(tables, name) {
-					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
-				}
-				code, _ := rawVal.(string)
-				if !strings.HasPrefix(code, "platform.errors.") {
-					c.rulef("schema.pattern", "%s: persistence.constraint_errors.%s must be platform.errors.*", rel, name)
-				} else if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
-					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s references unknown error %s", rel, name, code)
-				}
-			}
-		}
-	}
-}
-
-// tableObjectExists 判断约束/索引名是否属于给定表列表中的任一表。
 func (c *Checker) tableObjectExists(tables []string, name string) bool {
 	for _, t := range tables {
 		if c.tableObjects[t][name] {
@@ -298,4 +293,105 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 			}
 		}
 	}
+}
+
+// checkServicePersistenceDoc 校验单个 service 文档的写归属。
+func (c *Checker) checkServicePersistenceDoc(doc map[string]any, rel, module string, tableIDs map[string]string) {
+	if c.declaredWrites == nil {
+		c.declaredWrites = map[string]bool{}
+	}
+	p, _ := asMap(doc["persistence"])
+	tables := tableRefs(p)
+	for _, t := range tables {
+		if c.isBaseTableRef(t) {
+			c.rulef("schema.ref", "%s: base contract is not a physical table", rel)
+		} else if _, ok := tableIDs[t]; !ok {
+			c.rulef("schema.ref", "%s: persistence references unknown table %s", rel, t)
+		}
+		if owner := c.tableOwners[t]; owner != "" && owner != module {
+			c.rulef("service-owner-write", "%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
+		}
+	}
+	if rawCE, ok := p["constraint_errors"]; ok {
+		ce, ok := asMap(rawCE)
+		if !ok {
+			c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
+		} else {
+			for name, rawVal := range ce {
+				if name == "" {
+					c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
+					continue
+				}
+				if !c.tableObjectExists(tables, name) {
+					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
+				}
+				code, _ := rawVal.(string)
+				if !strings.HasPrefix(code, "platform.errors.") {
+					c.rulef("schema.pattern", "%s: persistence.constraint_errors.%s must be platform.errors.*", rel, name)
+				} else if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s references unknown error %s", rel, name, code)
+				}
+			}
+		}
+	}
+	for _, raw := range asList(doc["services"]) {
+		item, _ := asMap(raw)
+		name, _ := item["name"].(string)
+		for _, rawStep := range asList(item["steps"]) {
+			step, _ := asMap(rawStep)
+			kind, _ := step["kind"].(string)
+			var qids []string
+			switch kind {
+			case "query":
+				qid, _ := step["query"].(string)
+				if qid != "" {
+					qids = append(qids, qid)
+				}
+			case "logic", "transition":
+				for _, rawQ := range asList(step["queries"]) {
+					qid, _ := rawQ.(string)
+					if qid != "" {
+						qids = append(qids, qid)
+					}
+				}
+			}
+			for _, qid := range qids {
+				q := c.queries[qid]
+				if q == nil {
+					continue
+				}
+				if queryReturnsAffectedRows(q) && len(q.Writes) == 0 {
+					c.rulef("service-owner-write", "%s.%s: query %s returns affected_rows without a write table", rel, name, qid)
+				}
+				for _, target := range q.Writes {
+					c.declaredWrites[qid] = true
+					if owner := c.tableOwners[target]; owner != "" && owner != module {
+						c.rulef("service-owner-write", "%s.%s: module %q cannot write %s via %s (owner_module %q); cross-module writes must go through kind=service", rel, name, module, target, qid, owner)
+					}
+				}
+			}
+		}
+	}
+}
+
+// checkMethodPersistence 是旧测试的兼容入口：把 interface.methods[].queries 适配为 logic steps。
+func (c *Checker) checkMethodPersistence(doc map[string]any, rel string, tableIDs map[string]string) {
+	module, _ := doc["owner_module"].(string)
+	iface, _ := asMap(doc["interface"])
+	var services []any
+	for _, raw := range asList(iface["methods"]) {
+		m, _ := asMap(raw)
+		services = append(services, map[string]any{
+			"name": m["name"],
+			"steps": []any{map[string]any{
+				"kind":    "logic",
+				"queries": m["queries"],
+			}},
+		})
+	}
+	c.checkServicePersistenceDoc(map[string]any{
+		"owner_module": module,
+		"persistence":  doc["persistence"],
+		"services":     services,
+	}, rel, module, tableIDs)
 }

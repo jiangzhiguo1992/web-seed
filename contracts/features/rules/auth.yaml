@@ -1,155 +1,153 @@
 # 认证业务规则集：验证体一次性消费、过期、尝试上限、重发、归属与动作日志。
 
-schema_version: 1
-id: business.rules.auth
+id: feature.rules.auth
 summary: "认证业务规则集"
+owner_module: account
+schema_version: 1
 stability: draft
 do_not:
-  - "business.rules.auth 每条规则必须有 given/when/then"
   - "验证体规则只引用 data.entities.verification_body / verification_action，不引用物理表/查询"
   - "不要在 handler 里手写验证码消费、重发或动作写入逻辑"
-
-scope: "auth"
-
 rules:
-  - id: business.rules.auth.verification_one_time
+  - id: feature.rules.auth.verification_one_time
+    kind: policy
     summary: "验证码只能消费一次"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
+    implemented_by: [ cap.services.verification.verify ]
     given: "verification_body.consumed_at != nil 或 status 不是 pending/sent"
     when: "校验验证码"
     then: "拒绝，返回 AUTH_VERIFICATION_INVALID；条件更新必须 affected_rows=1"
-    implemented_by: [cap.methods.verification.verify]
-
-  - id: business.rules.auth.verification_expiry
+  - id: feature.rules.auth.verification_expiry
+    kind: policy
     summary: "过期验证码不可消费"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_EXPIRED
+    implemented_by: [ cap.services.verification.verify ]
     given: "verification_body.expire_at <= now()"
     when: "校验验证码"
     then: "拒绝，返回 AUTH_VERIFICATION_EXPIRED，并将记录置为 expired"
-    implemented_by: [cap.methods.verification.verify]
-
-  - id: business.rules.auth.verification_attempts
+  - id: feature.rules.auth.verification_attempts
+    kind: policy
     summary: "失败次数达到上限后作废验证码"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+    implemented_by: [ cap.services.verification.verify ]
     given: "verification_body.attempt_count >= auth_policy.verification.max_attempts"
     when: "校验验证码"
     then: "拒绝，返回 AUTH_VERIFICATION_ATTEMPTS_EXCEEDED，并将记录置为 revoked"
-    implemented_by: [cap.methods.verification.verify]
-
-  - id: business.rules.auth.verification_auth_binding
+  - id: feature.rules.auth.verification_auth_binding
+    kind: policy
     summary: "验证体的 account_id 必须与 auth_id 所属账号一致"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
     given: "auth_phone/auth_email.account_id != verification_body.account_id，或 auth_status=disabled"
     when: "发送或校验验证码"
     then: "拒绝，不创建验证体、不消费；返回统一验证错误，不暴露绑定归属"
-    implemented_by: [cap.methods.verification.send, cap.methods.verification.verify]
-
-  - id: business.rules.auth.auth_login_requires_verified
+  - id: feature.rules.auth.auth_login_requires_verified
+    kind: policy
     summary: "只有已验证且未停用的认证记录可以登录"
     severity: error
     on_violation: platform.errors.AUTH_INVALID_CREDENTIALS
+    implemented_by: [ cap.services.auth.login ]
     given: "auth_pwd.status != verified，或 auth_phone/auth_email.status != verified 或 status=disabled"
     when: "登录"
     then: "返回 AUTH_INVALID_CREDENTIALS，不区分未认证/停用/不存在"
-    implemented_by: [cap.methods.auth.login]
-
-  - id: business.rules.auth.verification_purpose_status
+  - id: feature.rules.auth.verification_purpose_status
+    kind: policy
     summary: "登录/重置/解绑/注销要求认证记录已验证；注册/绑定/换绑允许未认证"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
     given: "purpose in (login, reset_password, unbind_phone, unbind_email, delete_account) 且 auth_status != verified；或 auth_status=disabled"
     when: "发送或校验验证码"
     then: "拒绝并返回统一验证错误，不暴露绑定状态"
-    implemented_by: [cap.methods.verification.send, cap.methods.verification.verify]
-
-  - id: business.rules.auth.verification_auth_change
+  - id: feature.rules.auth.verification_auth_change
+    kind: policy
     summary: "换绑/解绑/停用认证绑定时作废对应未消费验证体"
     severity: error
     on_violation: platform.errors.COMMON_INTERNAL
+    implemented_by: [ cap.services.verification.revoke_by_auth ]
     given: "auth_phone/auth_email 被换绑、解绑或 status 变为 disabled"
     when: "变更认证绑定"
-    then: "在同一事务调用 cap.methods.verification.revoke_by_auth(auth_type, auth_id)；失败则回滚"
-    implemented_by: [cap.methods.verification.revoke_by_auth]
-
-  - id: business.rules.auth.verification_resend
+    then: "在同一事务调用 cap.services.verification.revoke_by_auth(auth_type, auth_id)；失败则回滚"
+  - id: feature.rules.auth.verification_resend
+    kind: policy
     summary: "重发前作废同一 auth_id+purpose 的旧验证码"
     severity: error
     on_violation: platform.errors.COMMON_INTERNAL
+    implemented_by: [ cap.services.verification.send ]
     given: "同一 auth_type+auth_id+purpose 仍存在 pending/sent 验证码"
     when: "发送验证码"
     then: "在同一事务内先 revoke 旧记录再创建新记录；不设时间间隔限制"
-    implemented_by: [cap.methods.verification.send]
-
-  - id: business.rules.auth.verification_target_normalization
+  - id: feature.rules.auth.verification_target_normalization
+    kind: policy
     summary: "target 用于解析 auth_id，写入前按 auth_type 归一化"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+    implemented_by: [ cap.services.verification.send ]
     given: "phone 未使用 E.164，或 email 未小写"
     when: "发送验证码"
     then: "按 auth_policy.verification.target_normalization 归一化后解析 auth_id；验证体只存 auth_id"
-    implemented_by: [cap.methods.verification.send]
-
-  - id: business.rules.auth.verification_no_enumeration
+  - id: feature.rules.auth.verification_no_enumeration
+    kind: policy
     summary: "发送/校验失败不枚举账号或认证绑定是否存在"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
     given: "target 或 auth_id 未注册、不存在或已停用"
     when: "发送或校验验证码"
     then: "返回统一的验证码错误，不暴露账号或绑定是否存在"
-    implemented_by: [cap.methods.verification.send, cap.methods.verification.verify]
-
-  - id: business.rules.auth.verification_account_active
+  - id: feature.rules.auth.verification_account_active
+    kind: policy
     summary: "验证体必须绑定未删除账号"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
     given: "account_id 不存在、已软删或 status=deleted"
     when: "发送或校验验证码"
     then: "拒绝，不创建验证体、不写动作；返回统一验证错误，不区分账号不存在/已删除；注册必须先创建 pending account"
-    implemented_by: [cap.methods.verification.send, cap.methods.verification.verify]
-
-  - id: business.rules.auth.verification_register_account
+  - id: feature.rules.auth.verification_register_account
+    kind: policy
     summary: "注册验证必须携带 pending account ID"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
     given: "purpose=register 且 account_id 为空"
     when: "发送或校验注册验证码"
     then: "拒绝并返回统一验证错误；注册流程先创建 pending account，再把 account_id 传入验证请求"
-    implemented_by: [cap.methods.verification.send, cap.methods.verification.verify]
-
-  - id: business.rules.auth.verification_success_sets_verified
+  - id: feature.rules.auth.verification_success_sets_verified
+    kind: policy
     summary: "验证成功后认证记录置为已认证"
     severity: error
     on_violation: platform.errors.COMMON_INTERNAL
+    implemented_by: [ cap.services.verification.verify ]
     given: "purpose in (register, bind_phone, bind_email, change_phone, change_email) 且验证码校验成功"
     when: "消费验证码"
     then: "将 auth_id 对应的 auth_phone/auth_email.status 置为 verified"
-    implemented_by: [cap.methods.verification.verify]
-
-  - id: business.rules.auth.verification_action_recorded
+  - id: feature.rules.auth.verification_action_recorded
+    kind: policy
     summary: "校验必须追加动作日志"
     severity: error
     on_violation: platform.errors.COMMON_INTERNAL
+    implemented_by: [ cap.services.verification.verify ]
     given: "VerifyCode 发生状态变更"
     when: "事务提交"
     then: "同一事务写入 verification_action，含 account_id 快照；result 与实际结果一致"
-    implemented_by: [cap.methods.verification.verify]
-
-  - id: business.rules.auth.verification_action_append_only
+  - id: feature.rules.auth.verification_action_append_only
+    kind: policy
     summary: "验证动作只追加，不更新"
     severity: error
     on_violation: platform.errors.COMMON_INTERNAL
+    implemented_by: [ cap.services.verification.verify ]
     given: "verification_action 已写入"
     when: "任何后续流程"
     then: "禁止 UPDATE 或软删；只允许按保留期清理"
-    implemented_by: [cap.methods.verification.verify]
-
-invariants:
-  - id: business.rules.auth.invariants.verification_consumed_consistent
-    description: "consumed 状态当且仅当 consumed_at 非空"
+  - id: feature.rules.auth.verification_consumed_consistent
+    kind: invariant
+    summary: "consumed 状态当且仅当 consumed_at 非空"
+    severity: error
     assert: "(status == consumed) == (consumed_at != nil)"
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
-    implemented_by: [cap.methods.verification.verify]
+    implemented_by: []

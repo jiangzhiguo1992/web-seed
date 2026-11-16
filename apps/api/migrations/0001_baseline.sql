@@ -121,8 +121,6 @@ CREATE TABLE `verification_action` (
   CONSTRAINT `ck_verification_action_no_soft_delete` CHECK (deleted_at IS NULL),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='验证动作：校验请求的追加日志';
-CREATE INDEX `idx_verification_action_account` ON `verification_action` (`account_id`, `created_at`);
-CREATE INDEX `idx_verification_action_body` ON `verification_action` (`verification_id`, `created_at`);
 
 CREATE TABLE `verification_body` (
   `id` BIGINT NOT NULL COMMENT '主键 integer（bits: 64）；生成方式由实现决定',

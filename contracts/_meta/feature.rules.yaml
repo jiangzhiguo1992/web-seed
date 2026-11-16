@@ -1,0 +1,72 @@
+# feature.rules 类型规范：可执行的业务规则，按业务主体组织。
+# constraint = 字段级可生成校验；invariant = 可生成断言/测试；policy = 需要人工实现，必须测试。
+
+id: meta.feature.rules
+type: feature.rules
+title: "业务规则契约"
+targets:
+  dir: "contracts/features/rules"
+  glob: "*.yaml"
+  id: "feature.rules.<file>"
+  naming: "snake_case"
+
+fields:
+  - name: id
+    type: string
+    required: true
+    pattern: '^feature\.rules\.[a-z][a-z0-9_]*$'
+    description: "契约 ID"
+
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明"
+
+  - name: owner_module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "规则归属模块；按业务主体而非实现模块"
+
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: list<string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: rules
+    type: list<object>
+    required: true
+    min_items: 1
+    description: "规则项；item ID 由显式 id 给出"
+    item_fields:
+      - { name: id, type: string, required: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "规则 ID" }
+      - { name: kind, type: string, required: true, enum: [ constraint, invariant, policy ], description: "constraint=字段级校验；invariant=断言；policy=人工实现" }
+      - { name: summary, type: string, required: true, description: "一句话说明" }
+      - { name: severity, type: string, required: true, enum: [ error, warning ], description: "违反级别" }
+      - { name: field, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "constraint 的字段名" }
+      - { name: op, type: string, required: false, enum: [ eq, ne, gt, ge, lt, le, in, not_in, pattern, min_len, max_len, required, not_null ], description: "constraint 的比较操作" }
+      - { name: value, type: any, required: false, description: "constraint 的期望值" }
+      - { name: assert, type: string, required: false, description: "invariant 的断言表达式" }
+      - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "违反时返回的错误码" }
+      - { name: implemented_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该规则的服务项" }
+      - { name: given, type: string, required: false, description: "policy 的前置条件（人工实现依据，不做机器校验）" }
+      - { name: when, type: string, required: false, description: "policy 的触发场景（人工实现依据，不做机器校验）" }
+      - { name: then, type: string, required: false, description: "policy 的期望结果（人工实现依据，不做机器校验）" }
+
+rules:
+  - { id: rule-structure, text: "kind=constraint 必须有 field/op/value；kind=invariant 必须有 assert；kind=policy 必须有 summary 与 implemented_by；implemented_by 必须指向存在的 cap.services.*；on_violation 必须存在", implemented_by: [ rule-structure ] }
+  - { id: rule-id-unique, text: "规则 ID 全局唯一，且必须等于文件 ID + snake_case(name) 的显式值", implemented_by: [ rule-id-unique ] }

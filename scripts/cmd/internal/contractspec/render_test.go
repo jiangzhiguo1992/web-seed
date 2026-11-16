@@ -457,9 +457,9 @@ func TestRenderEnumItemRequiresTargets(t *testing.T) {
 	}
 }
 
-func TestRenderMethod(t *testing.T) {
-	s := loadSchemaByType(t, "cap.methods")
-	b, err := RenderMethod(s, "invoice", "invoice", "发票服务", "")
+func TestRenderService(t *testing.T) {
+	s := loadSchemaByType(t, "cap.services")
+	b, err := RenderService(s, "invoice", "invoice", "发票服务")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,29 +467,34 @@ func TestRenderMethod(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["id"] != "cap.methods.invoice" {
+	if doc["id"] != "cap.services.invoice" {
 		t.Fatalf("id = %v", doc["id"])
 	}
 	iface, _ := doc["interface"].(map[string]any)
-	if iface["name"] != "InvoiceService" || iface["package"] != "internal/modules/invoice" {
+	if iface["name"] != "InvoiceService" || iface["package"] != "internal/modules/invoice/api" {
 		t.Fatalf("interface = %#v", iface)
 	}
-	methods, _ := iface["methods"].([]any)
-	if len(methods) != 1 {
-		t.Fatalf("methods = %#v", methods)
+	services, _ := doc["services"].([]any)
+	if len(services) != 1 {
+		t.Fatalf("services = %#v", services)
 	}
-	m, _ := methods[0].(map[string]any)
-	if m["name"] != "Get" || m["transaction"] != "read_only" {
-		t.Fatalf("method = %#v", m)
+	m, _ := services[0].(map[string]any)
+	if m["name"] != "get" || m["visibility"] != "public" || m["transaction"] != "read_only" {
+		t.Fatalf("service = %#v", m)
 	}
-	if _, ok := m["queries"]; !ok {
-		t.Fatalf("method.queries missing: %#v", m)
+	steps, _ := m["steps"].([]any)
+	if len(steps) != 1 {
+		t.Fatalf("steps = %#v", steps)
+	}
+	step, _ := steps[0].(map[string]any)
+	if step["kind"] != "logic" {
+		t.Fatalf("step = %#v", step)
 	}
 }
 
-func TestRenderFlow(t *testing.T) {
-	s := loadSchemaByType(t, "cap.flows")
-	b, err := RenderFlow(s, "invoice", "invoice", "发票用例", "cap.methods.invoice.get")
+func TestRenderRule(t *testing.T) {
+	s := loadSchemaByType(t, "feature.rules")
+	b, err := RenderRule(s, "invoice", "invoice", "发票规则")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,22 +502,22 @@ func TestRenderFlow(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["id"] != "cap.flows.invoice" {
+	if doc["id"] != "feature.rules.invoice" {
 		t.Fatalf("id = %v", doc["id"])
 	}
-	flows, _ := doc["flows"].([]any)
-	if len(flows) != 1 {
-		t.Fatalf("flows = %#v", flows)
+	rules, _ := doc["rules"].([]any)
+	if len(rules) != 1 {
+		t.Fatalf("rules = %#v", rules)
 	}
-	item, _ := flows[0].(map[string]any)
-	if item["implementation"] != "direct" || item["method"] != "cap.methods.invoice.get" {
-		t.Fatalf("flow item = %#v", item)
+	item, _ := rules[0].(map[string]any)
+	if item["kind"] != "policy" {
+		t.Fatalf("rule = %#v", item)
 	}
 }
 
 func TestRenderHTTP(t *testing.T) {
 	s := loadSchemaByType(t, "cap.http")
-	b, err := RenderHTTP(s, "invoice", "invoice", "发票 HTTP", "cap.flows.invoice.get", "/invoice", "get")
+	b, err := RenderHTTP(s, "invoice", "invoice", "发票 HTTP", "cap.services.invoice.get", "/invoice", "get")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +531,7 @@ func TestRenderHTTP(t *testing.T) {
 	paths, _ := doc["paths"].(map[string]any)
 	path, _ := paths["/invoice"].(map[string]any)
 	op, _ := path["get"].(map[string]any)
-	if op["x-contract-id"] != "cap.http.invoice.get" || op["x-flow"] != "cap.flows.invoice.get" {
+	if op["x-contract-id"] != "cap.http.invoice.get" || op["x-service"] != "cap.services.invoice.get" {
 		t.Fatalf("operation = %#v", op)
 	}
 }

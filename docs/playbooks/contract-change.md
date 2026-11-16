@@ -72,7 +72,7 @@ make contract-impact id=<被修改的 ID>
 | 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables.<engine>` / `size_class` / `retention` / `partition` |
 | 查询 | `contracts/data/queries/<scope>.yaml` |
 | 枚举 | `contracts/data/enums.yaml` |
-| 实体 / 状态机 / 规则 / 流程 | `contracts/business/**` |
+| 实体 / 状态机 / 规则 / 流程 | `contracts/capabilities/{services,rules,states,events}/**` |
 | 路由 / 页面 / 用户旅程 | `contracts/features/**` |
 | 错误码 / 权限 / 配置 / 环境 | `contracts/platform/**` |
 

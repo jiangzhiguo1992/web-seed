@@ -17,15 +17,15 @@ coverage:
 must_test:
   - id: state_machine_transitions
     why: "非法转换必须 panic 或返回明确错误"
-    where: apps/api/internal/generated/business/*_state_test.go
+    where: apps/api/internal/generated/features/*_state_test.go
   - id: response_schema
     why: "防止实现多返回字段"
     where: apps/api/internal/composition/*/routes_test.go
   - id: route_set_matches_contract
     why: "防止端点漂移"
     where: apps/api/internal/composition/*/routes_test.go
-  - id: business_rules
-    why: "business/rules 每条规则至少一组用例"
+  - id: feature_rules
+    why: "features/rules 每条规则至少一组用例"
     where: apps/api/internal/modules/*/rules_test.go
   - id: page_states
     why: "页面四态必须有快照或断言"

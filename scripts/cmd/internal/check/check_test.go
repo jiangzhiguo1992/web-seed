@@ -770,7 +770,7 @@ persistence:
 	}
 	c := &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
 	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.methods may declare persistence/writes") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services may declare persistence/writes") {
 		t.Fatalf("http write layer not rejected: %v", c.errs)
 	}
 
@@ -784,7 +784,7 @@ writes:
 	}
 	c = &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
 	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.methods may declare persistence/writes") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services may declare persistence/writes") {
 		t.Fatalf("http top-level writes not rejected: %v", c.errs)
 	}
 }
@@ -2906,10 +2906,10 @@ func TestConstraintErrorRef(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := `
-id: cap.methods.x
+id: cap.services.x
 owner_module: x
 persistence:
-  table: data.tables.x
+  tables: [data.tables.x]
   constraint_errors:
     ck_missing: platform.errors.X
 `
@@ -3478,7 +3478,7 @@ func TestFlowImplementationErrors(t *testing.T) {
 
 	t.Run("step errors must be declared by method", func(t *testing.T) {
 		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{"platform.errors.C"}})}, []any{"platform.errors.A"})
-		want(t, check(t, doc), "not declared by cap.methods.x.get")
+		want(t, check(t, doc), "not declared by target service")
 	})
 
 	t.Run("on_error abort rethrows", func(t *testing.T) {
@@ -3516,7 +3516,7 @@ func TestFlowImplementationErrors(t *testing.T) {
 			"errors":   []any{"platform.errors.A"},
 			"on_error": []any{onError("platform.errors.A", "goto", "call")},
 		})}, []any{})
-		want(t, check(t, doc), "backward/self goto requires flow.max_iterations")
+		want(t, check(t, doc), "backward/self goto requires service.max_iterations")
 	})
 
 	t.Run("bounded self goto", func(t *testing.T) {
@@ -3536,7 +3536,7 @@ func TestFlowImplementationErrors(t *testing.T) {
 			"on_error": []any{onError("platform.errors.A", "goto", "call")},
 		})}, []any{})
 		doc["max_iterations"] = 3
-		want(t, check(t, doc), "missing flow-level error platform.errors.COMMON_LOOP_EXHAUSTED")
+		want(t, check(t, doc), "missing service-level error platform.errors.COMMON_LOOP_EXHAUSTED")
 	})
 
 	t.Run("continue target is forbidden", func(t *testing.T) {
@@ -3604,19 +3604,19 @@ func TestFlowImplementationErrors(t *testing.T) {
 	t.Run("rate_limit requires rate limited", func(t *testing.T) {
 		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
 		doc["rate_limit"] = map[string]any{"requests": 1, "window_seconds": 1}
-		want(t, check(t, doc), "missing flow-level error platform.errors.COMMON_RATE_LIMITED")
+		want(t, check(t, doc), "missing service-level error platform.errors.COMMON_RATE_LIMITED")
 	})
 
 	t.Run("audit requires audit failed", func(t *testing.T) {
 		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
 		doc["audit"] = true
-		want(t, check(t, doc), "missing flow-level error platform.errors.COMMON_AUDIT_FAILED")
+		want(t, check(t, doc), "missing service-level error platform.errors.COMMON_AUDIT_FAILED")
 	})
 
 	t.Run("idempotency requires idempotency conflict", func(t *testing.T) {
 		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
 		doc["idempotency"] = map[string]any{"key": "x", "window": "1h"}
-		want(t, check(t, doc), "missing flow-level error platform.errors.COMMON_IDEMPOTENCY_CONFLICT")
+		want(t, check(t, doc), "missing service-level error platform.errors.COMMON_IDEMPOTENCY_CONFLICT")
 	})
 
 	t.Run("when references earlier step", func(t *testing.T) {
@@ -3694,7 +3694,7 @@ func TestFlowImplementationErrors(t *testing.T) {
 			"errors": []any{},
 			"output": []any{map[string]any{"name": "value", "type": "data.entities.account"}},
 		})}, []any{})
-		want(t, check(t, doc), "output is only allowed for internal steps")
+		want(t, check(t, doc), "output is only allowed for logic/transition")
 	})
 
 	t.Run("internal step output path", func(t *testing.T) {
@@ -4294,7 +4294,7 @@ func TestFlowImplementationErrors(t *testing.T) {
 				"on_error": []any{onError("platform.errors.A", "goto", "load")},
 			}),
 		}, []any{})
-		want(t, check(t, doc), "backward/self goto requires flow.max_iterations")
+		want(t, check(t, doc), "backward/self goto requires service.max_iterations")
 	})
 
 	t.Run("bounded backward goto", func(t *testing.T) {
@@ -4350,7 +4350,7 @@ func TestDirectFlowLevelErrors(t *testing.T) {
 	doc["errors"] = []any{"platform.errors.A"}
 	c.errs = nil
 	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "missing flow-level error platform.errors.COMMON_RATE_LIMITED") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "missing service-level error platform.errors.COMMON_RATE_LIMITED") {
 		t.Fatalf("missing rate limit error not reported: %v", c.errs)
 	}
 
@@ -4359,7 +4359,7 @@ func TestDirectFlowLevelErrors(t *testing.T) {
 	c.permissionSet = map[string]bool{"platform.security.permissions.x": true}
 	c.errs = nil
 	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "missing flow-level error platform.errors.COMMON_FORBIDDEN") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "missing service-level error platform.errors.COMMON_FORBIDDEN") {
 		t.Fatalf("missing forbidden error not reported: %v", c.errs)
 	}
 }

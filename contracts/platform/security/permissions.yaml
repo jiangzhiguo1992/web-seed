@@ -6,7 +6,7 @@ summary: "权限点"
 stability: stable
 do_not:
   - "权限点只增不改；删除必须走弃用流程"
-  - "资源级权限不要只靠权限点，必须在 business/rules 声明"
+  - "资源级权限不要只靠权限点，必须在 features/rules 声明"
 
 naming:
   pattern: "<resource>_<action>"
@@ -26,7 +26,7 @@ permissions:
 
 boundaries:
   resource_level:
-    example: "见 business.rules.account.self_only"
+    example: "见 feature.rules.account.self_only"
 
   wildcard:
     allowed_for: [platform.security.roles.admin]

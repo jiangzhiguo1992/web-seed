@@ -1,0 +1,248 @@
+# 认证会话 service；令牌见 token.yaml，验证码见 verification.yaml。
+
+id: cap.services.auth
+summary: "认证会话服务：登录、认证绑定与账号注销编排"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "auth.login 不直接写 token 表；通过 cap.services.token.issue 签发"
+  - "revoke_all_for_account 必须编排 token.revoke_by_account 与 verification.revoke_by_account"
+  - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
+interface:
+  name: AuthService
+  package: internal/modules/account/auth/api
+persistence:
+  tables:
+    - data.tables.auth_pwd
+    - data.tables.auth_phone
+    - data.tables.auth_email
+  constraint_errors:
+    uq_auth_pwd_username: platform.errors.AUTH_USERNAME_TAKEN
+    uq_auth_pwd_account: platform.errors.AUTH_USERNAME_TAKEN
+    ck_auth_pwd_username_lowercase: platform.errors.AUTH_INVALID_CREDENTIALS
+    uq_auth_phone_number: platform.errors.AUTH_PHONE_TAKEN
+    uq_auth_email_username_domain: platform.errors.AUTH_EMAIL_TAKEN
+    ck_auth_email_domain_lowercase: platform.errors.AUTH_EMAIL_INVALID
+    ck_auth_email_username_lowercase: platform.errors.AUTH_EMAIL_INVALID
+types:
+  LoginInput:
+    type: object
+    additionalProperties: false
+    required: [auth_type, identifier]
+    properties:
+      auth_type: {type: data.enums.auth_type}
+      identifier: {type: string, minLength: 1, maxLength: 254}
+      password: {type: string, writeOnly: true, nullable: true}
+      code: {type: string, nullable: true, description: "手机号区号，例如 +86"}
+      device_id: {type: string, nullable: true, maxLength: 128}
+  BindPasswordInput:
+    type: object
+    additionalProperties: false
+    required: [account_id, action]
+    properties:
+      account_id: {type: integer}
+      action: {type: string, enum: [create, update, enable, disable]}
+      username: {type: string, nullable: true, maxLength: 254}
+      password: {type: string, writeOnly: true, nullable: true}
+  BindPhoneInput:
+    type: object
+    additionalProperties: false
+    required: [account_id, action]
+    properties:
+      account_id: {type: integer}
+      action: {type: string, enum: [create, enable, disable]}
+      code: {type: string, nullable: true, description: "手机号区号，例如 +86"}
+      number: {type: string, nullable: true, maxLength: 32}
+  BindEmailInput:
+    type: object
+    additionalProperties: false
+    required: [account_id, action]
+    properties:
+      account_id: {type: integer}
+      action: {type: string, enum: [create, enable, disable]}
+      username: {type: string, nullable: true, maxLength: 254}
+      domain: {type: string, nullable: true, maxLength: 255}
+  AuthBinding:
+    type: object
+    additionalProperties: false
+    required: [auth_type, auth_id, account_id, status]
+    properties:
+      auth_type: {type: data.enums.auth_type}
+      auth_id: {type: integer}
+      account_id: {type: integer}
+      status: {type: data.enums.auth_status}
+      masked_target: {type: string}
+  AuthSession:
+    type: object
+    additionalProperties: false
+    required: [account, tokens]
+    properties:
+      account: {type: data.entities.account}
+      tokens: {type: TokenPair}
+services:
+  - name: login
+    summary: "登录：校验认证绑定，签发令牌"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: input, type: LoginInput}
+    returns:
+      - {name: session, type: AuthSession}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_INVALID_CREDENTIALS
+      - platform.errors.AUTH_LOCKED
+      - platform.errors.ACCOUNT_SUSPENDED
+      - platform.errors.COMMON_FORBIDDEN
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_RATE_LIMITED
+    permissions: []
+    audit: true
+    rate_limit: {requests: 10, window_seconds: 60}
+    transaction: required
+    steps:
+      - id: login
+        kind: logic
+        summary: "按认证方式校验凭据、锁定与账号状态，签发令牌"
+        errors:
+          - platform.errors.AUTH_INVALID_CREDENTIALS
+          - platform.errors.AUTH_LOCKED
+          - platform.errors.ACCOUNT_SUSPENDED
+          - platform.errors.COMMON_FORBIDDEN
+        output:
+          - {name: session, type: AuthSession}
+        queries:
+          - data.queries.account.get_account
+          - data.queries.auth.get_auth_pwd_by_username
+          - data.queries.auth.get_auth_phone_by_number
+          - data.queries.auth.get_auth_email_by_username_domain
+          - data.queries.auth.record_auth_pwd_login_success
+          - data.queries.auth.record_auth_pwd_login_failure
+        events:
+          - cap.events.account.login_succeeded
+          - cap.events.account.login_failed
+        rules:
+          - "feature.rules.auth.auth_login_requires_verified"
+  - name: bind_password
+    summary: "创建、更新或启停密码认证绑定"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: input, type: BindPasswordInput}
+    returns:
+      - {name: binding, type: AuthBinding}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_USERNAME_TAKEN
+      - platform.errors.AUTH_INVALID_CREDENTIALS
+      - platform.errors.COMMON_FORBIDDEN
+    transaction: none
+    steps:
+      - id: bind
+        kind: logic
+        summary: "按 action 创建、改密或启停密码绑定"
+        errors:
+          - platform.errors.AUTH_USERNAME_TAKEN
+          - platform.errors.AUTH_INVALID_CREDENTIALS
+          - platform.errors.COMMON_FORBIDDEN
+        output:
+          - {name: binding, type: AuthBinding}
+        queries:
+          - data.queries.auth.create_auth_pwd
+          - data.queries.auth.update_auth_pwd_hash
+          - data.queries.auth.set_auth_pwd_status
+  - name: bind_phone
+    summary: "创建或启停手机号认证绑定"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: input, type: BindPhoneInput}
+    returns:
+      - {name: binding, type: AuthBinding}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_PHONE_TAKEN
+      - platform.errors.AUTH_PHONE_INVALID
+      - platform.errors.COMMON_FORBIDDEN
+    transaction: none
+    steps:
+      - id: bind
+        kind: logic
+        summary: "按 action 创建或启停手机号绑定"
+        errors:
+          - platform.errors.AUTH_PHONE_TAKEN
+          - platform.errors.AUTH_PHONE_INVALID
+          - platform.errors.COMMON_FORBIDDEN
+        output:
+          - {name: binding, type: AuthBinding}
+        queries:
+          - data.queries.auth.create_auth_phone
+          - data.queries.auth.set_auth_phone_status
+  - name: bind_email
+    summary: "创建或启停邮箱认证绑定"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: input, type: BindEmailInput}
+    returns:
+      - {name: binding, type: AuthBinding}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_EMAIL_TAKEN
+      - platform.errors.AUTH_EMAIL_INVALID
+      - platform.errors.COMMON_FORBIDDEN
+    transaction: none
+    steps:
+      - id: bind
+        kind: logic
+        summary: "按 action 创建或启停邮箱绑定"
+        errors:
+          - platform.errors.AUTH_EMAIL_TAKEN
+          - platform.errors.AUTH_EMAIL_INVALID
+          - platform.errors.COMMON_FORBIDDEN
+        output:
+          - {name: binding, type: AuthBinding}
+        queries:
+          - data.queries.auth.create_auth_email
+          - data.queries.auth.set_auth_email_status
+  - name: revoke_all_for_account
+    summary: "软删账号的认证绑定，并编排令牌吊销与验证体作废"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: account_id, type: integer}
+    returns:
+      - {name: err, type: error}
+    errors:
+      - platform.errors.COMMON_INTERNAL
+    transaction: none
+    steps:
+      - id: revoke_bindings
+        kind: logic
+        summary: "软删账号的密码/手机/邮箱认证绑定"
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        output: []
+        queries:
+          - data.queries.auth.soft_delete_auth_pwd_by_account
+          - data.queries.auth.soft_delete_auth_phone_by_account
+          - data.queries.auth.soft_delete_auth_email_by_account
+      - id: revoke_tokens
+        kind: service
+        summary: "吊销账号全部令牌"
+        depends_on: [revoke_bindings]
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        service: cap.services.token.revoke_by_account
+        params:
+          account_id: "input.account_id"
+      - id: revoke_verifications
+        kind: service
+        summary: "作废账号未消费的验证体"
+        depends_on: [revoke_tokens]
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        service: cap.services.verification.revoke_by_account
+        params:
+          account_id: "input.account_id"

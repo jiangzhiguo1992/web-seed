@@ -1,0 +1,77 @@
+# cap.events 类型规范：跨模块异步消息契约，按业务主体组织。
+# 事件只有 name/version/payload；发射与消费是 service step / trigger 的引用。
+
+id: meta.cap.events
+type: cap.events
+title: "领域事件契约"
+targets:
+  dir: "contracts/capabilities/events"
+  glob: "*.yaml"
+  id: "cap.events.<file>"
+  naming: "snake_case"
+
+fields:
+  - name: id
+    type: string
+    required: true
+    pattern: '^cap\.events\.[a-z][a-z0-9_]*$'
+    description: "契约 ID"
+
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明"
+
+  - name: owner_module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "事件归属模块；按业务主体而非生产者模块"
+
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: list<string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: scope
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "业务范围"
+  - name: delivery
+    type: string
+    required: true
+    enum: [ at_least_once, at_most_once, exactly_once ]
+    description: "投递语义"
+
+  - name: events
+    type: list<object>
+    required: true
+    min_items: 1
+    description: "事件项；item ID = cap.events.<file>.<snake_case(name)>"
+    item_fields:
+      - { name: id, type: string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "事件 ID" }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$', description: "事件名，例如 account.created" }
+      - { name: version, type: integer, required: true, min: 1, description: "事件版本" }
+      - { name: payload, type: any, required: true, description: "payload schema；object 必须 additionalProperties: false" }
+      - { name: summary, type: string, required: true, description: "一句话说明" }
+      - { name: emitted_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "发射该事件的服务项" }
+      - { name: consumers, type: list<string>, required: false, unique: true, generated: true, write: forbidden, pattern: '^[a-z][a-z0-9_]*$', description: "消费该事件的模块；由 service trigger.event 生成" }
+
+rules:
+  - { id: event-structure, text: "事件名在文件内唯一；version >= 1；payload 必须是 object 且 additionalProperties: false；emitted_by 必须指向存在的 cap.services.*；consumers 只能是已声明模块", implemented_by: [ event-structure ] }
+  - { id: event-version, text: "同一事件名不得重复；破坏兼容必须升 version，不得原地改 payload", implemented_by: [ event-version ] }

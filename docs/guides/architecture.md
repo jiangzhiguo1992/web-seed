@@ -1,6 +1,6 @@
 # web-seed 架构设计与实施方案
 
-> **版本** v3.2 · **状态** P0/P1 完成；契约层已重构为五组；P2 进行中 · **更新** 2026-11-11
+> **版本** v3.2 · **状态** P0/P1 完成；契约层已重构为四组（capabilities 内含 services/rules/states/events）；P2 进行中 · **更新** 2026-11-11
 > **已定决策**：目录形态 `1A`（`apps/api` + `apps/web`）· UI `2A`（Tailwind + shadcn-vue）· 能力档 `3C`（全家桶，默认关闭）
 >
 > 本文是模板种子工程自身的架构设计与实施计划，不是派生项目的业务文档。
@@ -85,7 +85,7 @@
 
 - [x] 根文件：`Makefile` `lefthook.yml` `.editorconfig` `.gitattributes` `.nvmrc`；前端包管理在 `apps/web`（`package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml`）
 - [x] `docs/{index.md,adr/,playbooks/,guides/,reference/}`
-- [x] `contracts/` 五组目录 + `index.yaml` + `project.yaml` + `README.md`
+- [x] `contracts/` 四组目录 + `index.yaml` + `project.yaml` + `README.md`
 - [x] `apps/api` 骨架（`cmd/` `internal/{platform,modules,composition,generated}`、`composition/<app>/handlers/`、`migrations/` `queries/`）
 - [x] `apps/web/admin` 骨架（`src/{app,pages,features,shared}`）
 - [x] `apps/web/packages/{api-client,ui-kit,design-tokens,tsconfig,eslint-config}`
@@ -95,7 +95,7 @@
 
 #### P2 契约生成链
 
-- [ ] `capabilities/protocols/http/*.yaml` + `shared.yaml` → 合并为 `generated/openapi/admin.yaml`
+- [x] `capabilities/protocols/http/*.yaml` + `shared.yaml` → 合并为 `generated/openapi/admin.yaml`
 - [ ] 合并 spec → Go server 类型（`oapi-codegen strict-server`）
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
 - [x] `data/tables/*.yaml` → `schema.sql` + `migrations/0001_baseline.sql`（增量 diff 仍 P5）
@@ -106,10 +106,10 @@
 - [ ] `platform/errors.yaml` + `platform/security/permissions.yaml` → 两端常量
 - [ ] `platform/config/env.json` → `.env.example`（`gen-env.sh`）
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
-- [ ] `business/**` → 状态机常量 + 断言 + 测试骨架
+- [ ] `features/rules|states` + `capabilities/events/**` → 状态机常量 + 断言 + 测试骨架
 - [ ] `features/**` → 路由表 + 页面骨架 + 类型
 - [ ] 结构化依赖 → 按需生成 graph；`lineage.md` → `docs/contracts/generated/lineage.md`
-- [ ] `make gen` 幂等：连续两次生成结果一致
+- [x] `make gen` 幂等：连续两次生成结果一致
 
 #### P3 后端地基（`internal/platform`）
 
@@ -183,7 +183,7 @@
    可选能力在任何地方都不被引用，只通过一处显式注册表接入。删除 = 删目录 + 删一行注册。
 
 3. **薄校验优先，生成器克制**
-   能用测试/脚本比对的，不写代码生成器。生成器上限 **6 个**：openapi、db、business、features、platform、graph。超过则维护成本压过收益。
+   能用测试/脚本比对的，不写代码生成器。生成器上限 **6 个**：openapi、db、capabilities、features、platform、graph。超过则维护成本压过收益。
 
 ### 1.3 四防目标
 
@@ -208,14 +208,13 @@
 
 每类契约必须具备三件事：**有校验、有 playbook、有删除路径**，缺一即会腐烂。
 
-### 2.2 五组结构
+### 2.2 四组结构
 
 | 组 | 职责 | 真相源 |
 |---|---|---|
 | `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储约束、冗余关系、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` |
-| `capabilities/` | 能力层：`methods` 原子方法、`flows` 编排、`protocols` 协议绑定 | `capabilities/**` |
-| `business/` | 业务规格：状态机、规则、领域事件、术语（不含实体与实现） | `business/**` |
-| `features/` | 功能定义：路由、页面、用户旅程 | `features/**` |
+| `capabilities/` | 能力层：`services` 服务、`events` 领域事件、`protocols` 协议绑定 | `capabilities/**` |
+| `features/` | 功能定义：路由、页面、业务规则、状态机 | `features/**` |
 | `platform/` | 横切：环境、版本、错误、枚举、HTTP 约定、质量、配置、架构、设计、观测、埋点、安全 | `platform/**` |
 
 `index.yaml` 是契约地图，`generated/` 是产物。详见 [`contracts/README.md`](../../contracts/README.md)。
@@ -227,16 +226,17 @@ data/tables/*.yaml
   ├─ schema.sql ──> sqlc ──> Go 查询代码
   └─ diff DB ─────> migrations/*.sql
 
-capabilities/protocols/http/*.yaml + shared.yaml
-  ├─ 合并 ─────────> generated/openapi/admin.yaml
-  ├─ oapi-codegen ─> apps/api/internal/generated/openapi/
-  └─ openapi-typescript ─> apps/web/packages/api-client/src/generated/
+data/tables/*.yaml ──> gen-db ──> schema.sql + migrations/*.sql
 
-data/queries/*.yaml ──> queries/*.sql ──> sqlc
+capabilities/protocols/http/*.yaml + shared.yaml ──> gen-openapi ──> generated/openapi/admin.yaml
 
-business/** ──> 状态机 / 常量 / 断言 / 测试骨架
-features/** ──> 路由 / 页面骨架 / 类型
-platform/** ──> 配置校验 / 常量 / CSS 变量
+platform/errors.yaml ──> gen-errors ──> docs/contracts/generated/errors.md
+
+capabilities/services/*.yaml ──> (P2) Go interface / usecase / handler
+data/queries/*.yaml ──> (P2) queries/*.sql ──> sqlc
+capabilities/events/** + features/{rules,states}/** ──> (P2) 状态机 / 常量 / 断言 / 测试骨架
+features/** ──> (P2) 路由 / 页面骨架 / 类型
+platform/** ──> (P2) 配置校验 / 常量 / CSS 变量
 
 结构化依赖 ──> 按需 graph + docs/contracts/generated/lineage.md
 ```
@@ -247,11 +247,11 @@ platform/** ──> 配置校验 / 常量 / CSS 变量
 
 - ID 规范：`<group>.<type>.<scope>.<name>[.<item>]`
 - 跨文件引用写 ID，不写路径
-- **唯一顺序**：`feature → business → capabilities → data`（单向链，无反向）
-- **锚点只在上游写**：`feature --uses--> business`，`business --implemented_by--> capabilities`，
+- **唯一顺序**：`feature → capabilities → data`（单向链，无反向）
+- **锚点只在上游写**：`feature --capability--> capabilities`，`capabilities --implemented_by--> capabilities`，
   `capabilities --persists_via--> data`
-- **capabilities 契约不引用 business**：规则与事件由 business 侧锚点（`implemented_by` / `emitted_by`）声明；唯一例外是异步 flow 的 `trigger.event` 引用 `business.events.*` 作为输入
-- 图校验禁止 `cap.methods` / `cap.flows` / `cap.http` → `business`，仅放行异步 flow 的 `trigger.event`
+- **capabilities 内部按业务主体组织**：`services` 的 steps 引用 `feature.rules` / `feature.states` / `cap.events`；`implemented_by` / `emitted_by` 是反向锚点，不重复声明
+- 图校验禁止任何 `cap.*` → `business.*`（business 层已移除）；`services → rules/states/events` 是允许的同组边
 - 影响面：`make contract-impact id=<id>`
 
 **引用必须写在结构化字段里**（`ref` / `refs` / `capability` / `use` / `emits` / `page` / `route` / `x-*`）。
@@ -271,12 +271,12 @@ web-seed/
 ├── apps/web/            # package.json · pnpm-workspace.yaml · pnpm-lock.yaml
 ├── .env.example                      # 生成物，禁止手改
 │
-├── contracts/                        [C] 五组契约（唯一真相源）
+├── contracts/                        [C] 四组契约（唯一真相源）
 │   ├── index.yaml                    #   契约地图（AI 入口）
 │   ├── project.yaml                  #   项目元信息（derive 输入）
 │   ├── data/                         #   tables(_base) / entities / queries / storage
 │   ├── capabilities/                 #   methods / flows + protocols/http
-│   ├── business/                       #   states / rules / events / glossary
+│   ├── capabilities/{services,rules,states,events}/ + protocols/
 │   ├── features/                     #   routes / pages / flows
 │   ├── platform/                     #   环境/版本/错误/枚举/HTTP/质量/配置/架构/设计/观测/埋点/安全
 │   └── generated/                    #   openapi/admin.yaml（机器产物）
@@ -522,7 +522,7 @@ self:     doctor（模板自身健康）
 |---|---|
 | 0001 | 采用 ADR 记录架构决策（含 Rejected alternatives） |
 | 0002 | **契约层为唯一真相源**：migrations / queries / 类型 / 路由均由契约生成 |
-| 0003 | 五组契约模型：`data / capabilities / business / features / platform` |
+| 0003 | 四组契约模型：`data / capabilities / features / platform`（capabilities 内含 services/rules/states/events） |
 | 0004 | 锚点机制：全局 ID + 结构化引用 + 分层约束 + 图校验 |
 | 0005 | 模块化单体 + 多应用装配层 + 每应用契约组合 |
 | 0006 | copy-on-derive，不承诺上游同步 |

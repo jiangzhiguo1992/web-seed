@@ -1,0 +1,179 @@
+# 令牌 service。
+
+id: cap.services.token
+summary: "令牌服务：签发、刷新、吊销与校验"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "token 持久化前必须哈希；数据库只存 hash，不存原文"
+  - "issue 返回 TokenPair 是唯一允许暴露原文的位置"
+  - "verify 只校验 access token；refresh token 只在 refresh/logout 中使用"
+interface:
+  name: TokenService
+  package: internal/modules/account/auth/token/api
+persistence:
+  tables:
+    - data.tables.token
+  constraint_errors:
+    ck_token_revoked_consistent: platform.errors.AUTH_TOKEN_INVALID
+    ck_token_revoke_reason_consistent: platform.errors.AUTH_TOKEN_INVALID
+    ck_token_replaced_by_self: platform.errors.COMMON_CONFLICT
+types:
+  TokenPair:
+    type: object
+    additionalProperties: false
+    x-auth-response: true
+    required: [access_token, refresh_token, access_expire_at, refresh_expire_at]
+    properties:
+      access_token: {type: string, readOnly: true}
+      refresh_token: {type: string, readOnly: true}
+      access_expire_at: {type: string, format: date-time}
+      refresh_expire_at: {type: string, format: date-time}
+      token_type: {type: string, enum: [Bearer]}
+services:
+  - name: issue
+    summary: "为账号签发 access + refresh 令牌对"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: account_id, type: integer}
+      - {name: device_id, type: string, nullable: true}
+    returns:
+      - {name: tokens, type: TokenPair}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.COMMON_INTERNAL
+    transaction: none
+    steps:
+      - id: issue
+        kind: logic
+        summary: "生成令牌对，哈希后持久化 refresh token"
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        output:
+          - {name: tokens, type: TokenPair}
+        queries:
+          - data.queries.token.create_token
+  - name: refresh
+    summary: "用刷新令牌换取新令牌对"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: refresh_token, type: string}
+    returns:
+      - {name: tokens, type: TokenPair}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_TOKEN_INVALID
+      - platform.errors.AUTH_TOKEN_EXPIRED
+    permissions: []
+    transaction: required
+    steps:
+      - id: refresh
+        kind: logic
+        summary: "校验 refresh token，作废旧令牌并签发新令牌对"
+        errors:
+          - platform.errors.AUTH_TOKEN_INVALID
+          - platform.errors.AUTH_TOKEN_EXPIRED
+        output:
+          - {name: tokens, type: TokenPair}
+        queries:
+          - data.queries.token.get_token_by_refresh
+          - data.queries.token.create_token
+          - data.queries.token.revoke_token
+  - name: logout
+    summary: "吊销刷新令牌"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: refresh_token, type: string}
+    returns:
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_TOKEN_INVALID
+      - platform.errors.COMMON_AUDIT_FAILED
+      - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
+    permissions: []
+    audit: true
+    transaction: required
+    idempotency: {key: "auth_logout:{refresh_token_hash}", window: 24h}
+    steps:
+      - id: logout
+        kind: logic
+        summary: "校验并吊销 refresh token"
+        errors:
+          - platform.errors.AUTH_TOKEN_INVALID
+        output: []
+        queries:
+          - data.queries.token.get_token_by_refresh
+          - data.queries.token.revoke_token
+  - name: revoke_by_account
+    summary: "吊销账号的全部令牌"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: account_id, type: integer}
+    returns:
+      - {name: err, type: error}
+    errors:
+      - platform.errors.COMMON_INTERNAL
+    transaction: none
+    steps:
+      - id: revoke
+        kind: logic
+        summary: "吊销账号全部有效令牌"
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        output: []
+        queries:
+          - data.queries.token.revoke_tokens_by_account
+  - name: verify
+    summary: "校验访问令牌并返回账号"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: access_token, type: string}
+    returns:
+      - {name: account, type: data.entities.account}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.AUTH_TOKEN_INVALID
+      - platform.errors.AUTH_TOKEN_EXPIRED
+    transaction: read_only
+    steps:
+      - id: verify
+        kind: logic
+        summary: "校验 access token 并加载账号"
+        errors:
+          - platform.errors.AUTH_TOKEN_INVALID
+          - platform.errors.AUTH_TOKEN_EXPIRED
+        output:
+          - {name: account, type: data.entities.account}
+        queries:
+          - data.queries.token.get_token_by_access
+          - data.queries.account.get_account
+  - name: purge_expired
+    summary: "清理已过期令牌"
+    visibility: internal
+    params:
+      - {name: ctx, type: context.Context}
+    returns:
+      - {name: affected_rows, type: integer}
+      - {name: err, type: error}
+    errors:
+      - platform.errors.COMMON_INTERNAL
+    transaction: none
+    trigger: {type: cron, schedule: "0 3 * * *"}
+    retry: {max_attempts: 3, backoff: exponential, dead_letter: true}
+    concurrency: {key: token_purge, ttl: 1h}
+    steps:
+      - id: purge
+        kind: logic
+        summary: "删除过期令牌"
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        output:
+          - {name: affected_rows, type: integer}
+        queries:
+          - data.queries.token.delete_expired_tokens

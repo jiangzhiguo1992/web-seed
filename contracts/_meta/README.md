@@ -16,8 +16,10 @@ contracts/_meta/
 ├── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
 ├── data.entities.yaml    # data.entities 的字段树 + 值域 + 说明
 ├── data.queries.yaml     # data.queries 的字段树 + 值域 + 说明
-├── cap.methods.yaml      # cap.methods 的 targets + 字段树（原子方法）
-├── cap.flows.yaml        # cap.flows 的 targets + 字段树（编排）
+├── cap.services.yaml     # cap.services 的 targets + 字段树（服务 + steps）
+├── feature.rules.yaml        # feature.rules 的 targets + 字段树（业务规则）
+├── feature.states.yaml       # feature.states 的 targets + 字段树（状态机）
+├── cap.events.yaml       # cap.events 的 targets + 字段树（领域事件）
 └── cap.http.yaml         # cap.http 的 targets + 字段树（HTTP 绑定）
 
 scripts/contract/
@@ -73,9 +75,11 @@ scripts/cmd/
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
 | `make contract-new type=data.entities name=note table=note` | 按 `_meta/data.entities.yaml` 生成单表读模型骨架；owner_module 从目标表读取（目标表必须已存在） | 新建实体时 |
 | `make contract-new type=data.queries name=note module=notes table=note` | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在） | 新建查询集时 |
-| `make contract-new type=cap.methods name=invoice module=invoice` | 按 `_meta/cap.methods.yaml` 生成 method 文件骨架；`table=note` 时写 `persistence.table` | 新建 method 契约前 |
-| `make contract-new type=cap.flows name=invoice method=cap.methods.invoice.get` | 生成 direct flow 骨架；`-method` 必填 | 新建 flow 前 |
-| `make contract-new type=cap.http name=invoice flow=cap.flows.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-flow` 必填 | 新建 HTTP 绑定前 |
+| `make contract-new type=cap.services name=invoice module=invoice` | 按 `_meta/cap.services.yaml` 生成服务文件骨架（interface + 一个 service + 一条 logic step） | 新建服务契约前 |
+| `make contract-new type=feature.rules name=invoice module=invoice` | 生成 feature.rules 骨架（一个 policy） | 新建规则集前 |
+| `make contract-new type=feature.states name=invoice module=invoice` | 生成 feature.states 骨架（pending/active + activate） | 新建状态机前 |
+| `make contract-new type=cap.events name=invoice module=invoice` | 生成 cap.events 骨架（一个 created 事件） | 新建事件集前 |
+| `make contract-new type=cap.http name=invoice service=cap.services.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-service` 必填 | 新建 HTTP 绑定前 |
 | `make gen-graph` | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` | 改完表/实体/查询/方法后 |
 | `make gen-graph-check` | 只校验上述反向索引是否最新（CI） | CI |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / 反向索引 / owner / entity 投影 / query 参数与返回 / method.queries | 每次改完契约 |
@@ -84,7 +88,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.methods` / `cap.flows` / `cap.http`；类型族来自 `_meta/_types.yaml`。cap.* 生成最小骨架（module/interface/一个方法、一个 direct flow、一个 operation），不生成 `types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.services` / `feature.rules` / `feature.states` / `cap.events` / `cap.http`；类型族来自 `_meta/_types.yaml`。cap.* 生成最小骨架（一个 service + logic step、一个 policy、一个状态机、一个事件、一个 operation），不生成 `types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -95,7 +99,7 @@ scripts/cmd/
 - `_meta/<type>.yaml` 字段规范按 `KnownFields` 严格解析：未知字段（如 `requred`）直接失败，不再静默忽略
 - `_meta/_types.yaml` 的 `column_types.families` 由 tables/entities/queries 共用；文件缺失、families 为空、族/参数定义非法都会直接失败（`schema.types`）
 - 模板字段顺序是唯一顺序源：tables/entities/queries/enums 实例的顶层与嵌套对象（含 `fields` / `item_fields`）都按 `_meta/<type>.yaml` 的字段顺序校验；新增字段只改模板
-- 没有 `_meta` 模板的契约（`data.storage`、capabilities/business/features/platform）暂不做字段顺序校验；需要覆盖时先补该类型的 `_meta` 模板
+- 没有 `_meta` 模板的契约（`data.storage`、features/platform 的部分类型）暂不做字段顺序校验；需要覆盖时先补该类型的 `_meta` 模板
 - `data.tables/*.yaml`
   - `targets.dir/glob` 决定扫描路径；`targets.id/naming` 由 checker 校验（ID 模板、snake_case）
   - `columns[].type` 只允许类型族键或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`
@@ -118,14 +122,14 @@ scripts/cmd/
   - `data/queries/*.yaml` 的 `index_ref`：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须在 `used_by` 中列出该 query
   - `data/storage.yaml` 的 `tables.<engine>`：按 supported_engines 分组，覆盖每张物理表且无孤儿；`caches` 只登记非权威副本；`size_class`/`retention`/`partition` 按表登记
   - `table.entities` 显式记录映射本表的实体，checker 校验；`table.queries` 只记生成的 `queries`
-  - `owner_module` 与 capabilities 写表归属一致（只有 `cap.methods` 可写）；跨模块读通过 `interface.methods[].queries`，`read_only_tables` 已移除
-  - `interface.methods[].queries` 引用的查询项必须存在；每个写查询必须被某个 method 的 `queries` 引用，且写表归属一致；flow 不得直接引用 `data.queries.*`；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
+  - `owner_module` 与 capabilities 写表归属一致（只有 `cap.services` 可写）；跨模块读通过 `kind: service` 调用，`read_only_tables` 已移除
+  - service steps 的 `kind: query` / `kind: logic.queries` 引用的查询项必须存在；每个写查询必须被某个 service step 引用，且写表归属一致；`kind: query` 不得跨模块写；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
   - 索引名同一 schema 内必须全局唯一
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
   - 所有契约的顶层 `fields` 必须竖排（block style），嵌套 `item_fields` 不限制（`schema.fields-style`）；`table.extends/entities`、`model.extends/tables/included_by` 必须竖排（`schema.list-style`）
   - 具体契约的 `do_not` 不得与组 README / `_base` 的指导重复（`schema.do-not-duplicate`）
   - `do_not` 只写脚本无法判定且非纯风格的业务/架构约束；字段形状、枚举、默认值、引用存在性等已由 `rules` / schema 强制，不重复
-  - `rules` 只允许出现在 `_meta`；`business/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不属于类型规则清单。具体契约的 `do_not` 只写实例级；`_meta` 下不得出现 `do_not`（`schema.meta-placement`）
+  - `rules` 只允许出现在 `_meta`；`features/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不属于类型规则清单。具体契约的 `do_not` 只写实例级；`_meta` 下不得出现 `do_not`（`schema.meta-placement`）
   - `rules` 的 `id`/`text` 非空、`id` 唯一；`implemented_by` 必须包含规则自身 ID，且每个值都指向 checker 实际输出的 `[rule-id]`（`schema.rules`）
   - checker 输出的非 `schema.*` 错误 ID 必须由某个类型的 `rules` 声明，反向防止“有实现没规则”
   - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；`make contract-check` 校验它是否最新
@@ -233,6 +237,6 @@ scripts/cmd/
 - 不要在本文件之外再写一份通用字段语义；类型文件只写类型特有内容。
 - 不要把 `column_types` 写回 `data.tables.yaml`；类型族只放在 `_types.yaml`。
 - 不要在 checker 里解析 `CHECK expr` 的 SQL 语义；checker 只校验非空，语义属于生成器/数据库验证的软区。
-- 不要在 `_meta` 下写 `do_not`；不要在具体契约写顶层 `rules`（`business/rules` 与 `platform` 的领域规则集除外）。`contract-check` 的 `schema.meta-placement` 会拦住。
+- 不要在 `_meta` 下写 `do_not`；不要在具体契约写顶层 `rules`（`features/rules` 与 `platform` 的领域规则集除外）。`contract-check` 的 `schema.meta-placement` 会拦住。
 - 不要在 `contracts/_meta/` 里写业务实例；它只描述类型。
 - 不要为单个表/页面各写一份规范；按类型一份。

@@ -53,7 +53,7 @@ web-seed/
 │   ├── project.yaml             #   项目元信息（derive 唯一输入）
 │   ├── data/                    #   ① 数据：tables（真相源）/ entities / queries
 │   ├── capabilities/            #   ② 能力层：methods / flows + protocols/http
-│   ├── business/                  #   ③ 业务规格：states / rules / events / glossary
+│   ├── capabilities/               #   ③ 服务 / 规则 / 状态机 / 事件 / 协议
 │   ├── features/                #   ④ 功能：routes / pages / flows
 │   ├── platform/                #   ⑤ 横切：环境/版本/错误/枚举/HTTP/质量/配置/架构/设计/观测/埋点/安全
 │   └── generated/               #   产物索引：manifest / graph / lineage
@@ -72,7 +72,7 @@ web-seed/
 │   │   │   ├── platform/        #   基础设施：config、httpserver（P3 扩 database/observability/security）
 │   │   │   ├── modules/         [P] 业务模块：service + repo，不依赖 HTTP
 │   │   │   ├── composition/adminapi/ #   应用装配 + handlers/[P] 契约适配器
-│   │   │   └── generated/       [P] 生成物（openapi / db / business / features / 常量）
+│   │   │   └── generated/       [P] 生成物（openapi / db / capabilities / features / 常量）
 │   │   ├── migrations/          [P]
 │   │   ├── queries/             [P]
 │   │   └── go.mod  Dockerfile
@@ -118,9 +118,9 @@ web-seed/
 |---|---|---|
 | 后端语言 | Go 1.27 | 已用 |
 | HTTP | chi + net/http | 已用 |
-| 契约生成 | 6 个生成器：openapi / db / business / features / platform / graph | P2 |
-| 接口生成 | oapi-codegen（`strict-server`）+ openapi-typescript | P2 |
-| 数据访问 | go-sql-driver/mysql + sqlc | P2 |
+| 契约生成 | 4 个生成器：graph / errors / db / openapi | 已用 |
+| 接口生成 | oapi-codegen（`strict-server`）+ openapi-typescript | ⬜ P2 |
+| 数据访问 | go-sql-driver/mysql + sqlc | ⬜ P2 |
 | 迁移 | goose | ✅ 0001_baseline / 增量 P5 |
 | 日志 | slog（JSON） | 已用 |
 | 前端 | Vue 3.5 + Vite 7 + TypeScript 5.9 | 已用 |
@@ -228,7 +228,7 @@ make build-web        # apps/web/admin/dist
 3. 手工同步替换（`derive.sh` 落地前）：
    - Go module：`github.com/yourorg/web-seed/apps/api` → 你的 module
    - 前端 scope：`@webseed/*` → 你的 scope
-4. 删除示例契约与实现：`data/tables/{account,token,auth_pwd,auth_phone,auth_email,verification_body,verification_action}.yaml`、`data/entities/{account,token,auth_pwd,auth_phone,auth_email,verification_body,verification_action}.yaml`、`data/queries/{account,auth,token,verification}.yaml`、`capabilities/protocols/http/{account,auth}.yaml`、`capabilities/methods/{account,auth}.yaml`、`capabilities/flows/verification_cleanup.yaml`、`business/**/account*.yaml`、`features/{pages,flows}/account_*.yaml` 及对应代码
+4. 删除示例契约与实现：`data/tables/{account,token,auth_pwd,auth_phone,auth_email,verification_body,verification_action}.yaml`、`data/entities/{account,token,auth_pwd,auth_phone,auth_email,verification_body,verification_action}.yaml`、`data/queries/{account,auth,token,verification}.yaml`、`capabilities/protocols/http/{account,auth}.yaml`、`capabilities/services/{account,auth,token,verification}.yaml`、`capabilities/{rules,states,events}/account*.yaml`、`features/{pages,flows}/account_*.yaml` 及对应代码
 5. 删除 `.opencode/opencode.json`（含本地 MCP 配置）
 6. 创建 `.env.local`，参考 `.env.example`（P2 生成）
 
