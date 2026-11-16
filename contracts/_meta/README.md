@@ -54,7 +54,7 @@ scripts/cmd/
 2. 读 contracts/_meta/<type>.yaml（字段含义、值域、生成行为、易错点）
 3. 新建：make contract-new type=data.tables name=note module=notes
 4. 改 YAML（只改契约，不写生成物）
-5. make gen-graph（写回 table/entity used_by）
+5. make gen-graph（写回 `table.queries` / `model.queries` / `query.used_by` / `used_by.flows`）
 6. make contract-check
 7. make gen
 8. git diff --exit-code
@@ -73,9 +73,9 @@ scripts/cmd/
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
 | `make contract-new type=data.entities name=note table=note` | 按 `_meta/data.entities.yaml` 生成单表读模型骨架；owner_module 从目标表读取（目标表必须已存在） | 新建实体时 |
 | `make contract-new type=data.queries name=note module=notes table=note` | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在） | 新建查询集时 |
-| `make gen-graph` | 按引用计算并写回 table/entity 的 `used_by` | 改完表/实体/查询后 |
-| `make gen-graph-check` | 只校验 `used_by` 是否最新（CI） | CI |
-| `make contract-check` | 结构 / ID / 约束 / 索引 / used_by / owner / entity 投影 / query 参数与返回 / persistence.queries | 每次改完契约 |
+| `make gen-graph` | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` | 改完表/实体/查询/方法后 |
+| `make gen-graph-check` | 只校验上述反向索引是否最新（CI） | CI |
+| `make contract-check` | 结构 / ID / 约束 / 索引 / 反向索引 / owner / entity 投影 / query 参数与返回 / method.queries | 每次改完契约 |
 | `make gen` | 生成 DDL / OpenAPI / 类型 / graph | `contract-check` 通过后 |
 | `make gen-openapi` / `gen-db` / `gen-graph` / `gen-client` | 单独投影 | 按需 |
 
@@ -114,9 +114,9 @@ scripts/cmd/
   - `columns[].redundancy` 直接列出同组全部列引用（`column` + `source`）；组内各列声明必须完全一致，`type`/`nullable` 一致
   - `data/queries/*.yaml` 的 `index_ref`：指向 `data.tables.<t>.pk` 或 `indexes[].name`；显式索引必须在 `used_by` 中列出该 query
   - `data/storage.yaml` 的 `tables.<engine>`：按 supported_engines 分组，覆盖每张物理表且无孤儿；`caches` 只登记非权威副本；`size_class`/`retention`/`partition` 按表登记
-  - `table.entities` 显式记录映射本表的实体，checker 校验；`used_by` 只记生成的 `queries`
-  - `owner_module` 与 capabilities 写表归属一致（只有 `cap.methods` / `cap.flows` 可写）；跨模块读通过 `persistence.queries`，`read_only_tables` 已移除
-  - `persistence.queries` 引用的查询项必须存在；`persistence.write_queries`（service）与 `writes`（async）必须已在 queries/uses 中登记，且每个写表在 `persistence.table/tables` 中、归属一致；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
+  - `table.entities` 显式记录映射本表的实体，checker 校验；`table.queries` 只记生成的 `queries`
+  - `owner_module` 与 capabilities 写表归属一致（只有 `cap.methods` 可写）；跨模块读通过 `interface.methods[].queries`，`read_only_tables` 已移除
+  - `interface.methods[].queries` 引用的查询项必须存在；每个写查询必须被某个 method 的 `queries` 引用，且写表归属一致；flow 不得直接引用 `data.queries.*`；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
   - 索引名同一 schema 内必须全局唯一
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
   - 所有契约的顶层 `fields` 必须竖排（block style），嵌套 `item_fields` 不限制（`schema.fields-style`）；`table.extends/entities`、`model.extends/tables/included_by` 必须竖排（`schema.list-style`）
@@ -153,7 +153,7 @@ scripts/cmd/
   - 字段 `name` 是 Go 字段名：首字母大写导出，小写不导出；`sensitivity: secret` 字段必须小写开头；`json_name` 省略时取 snake_case(name)，同实体唯一
   - 关系字段的 type entity / join_column_to 所属表 / join_column_from/to 类型一致性；基数由两端唯一性推断；eager 必须有索引且不得成环
   - 实体级 `validation[].name` 必须 snake_case 且实体内唯一，ID 派生为 `<entity-id>.<name>`；`expr` 非空、`on_violation` 必须存在
-  - `model.included_by` 显式声明，checker 校验与关系字段入边一致；`used_by.queries` 与 returns 本实体的 query 完全一致，`used_by.capabilities` 与引用本实体的 capability 完全一致
+  - `model.included_by` 显式声明，checker 校验与关系字段入边一致；`model.queries` 与 returns 本实体的 query 完全一致
 - `data/queries/*.yaml`
   - 结构按 `_meta/data.queries.yaml`；item 不写 id，name=PascalCase 且全局唯一；项 ID 由 `<文件 id>.<snake_case(name)>` 派生
   - `tables` 是查询读写的表；每项 `{table, write}`，`write: true` 表示写该表；必须存在、不是 `data.tables.base`、不得重复；第一项为主表；可以多表；实例必须竖排
@@ -164,7 +164,7 @@ scripts/cmd/
   - `columns` 只用于 `table` / `entity`；实体显式 `columns` 必须覆盖全部非指针、非 `secret` 字段
   - 单表 query 至少一个 `index_ref`；显式索引必须与 `used_by` 双向一致
   - `sensitivity: secret` 列只有同模块可显式返回；`pii` 可返回
-  - 写查询在 capabilities 的 `persistence.write_queries`（service）或 `writes`（async）中声明；查询必须有至少一个 `write: true` 的表；必须已在 queries/uses 中登记，checker 校验存在、每个写表归属
+  - 写查询必须在某个 method 的 `queries` 中声明；查询必须有至少一个 `write: true` 的表；checker 校验存在、每个写表归属；flow 不得直接引用 `data.queries.*`
 - 实体/查询/能力对表的引用存在
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复；entities/queries 文件必须登记
 
@@ -224,7 +224,7 @@ scripts/cmd/
 - 不要重建 `contracts/_meta/schema/` 或 `contracts/_meta/templates/`。
 - 不要在 `_meta` 之外再手写一份字段模板；需要样板时用 `make contract-new`。
 - 不要把 `_meta` 或脚本放进 `contracts/generated/`。
-- 不要手写 `used_by`；它由 `make gen-graph` 写入，`contract-check` 校验。
+- 不要手写生成的反向索引（`table.queries` / `model.queries` / `query.used_by` / `used_by.flows`）；它们由 `make gen-graph` 写入，`contract-check` 校验。method item 的 `used_by` 是手写正向依赖。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`；`contract-check` 会校验 `implemented_by` 必须包含规则自身 ID、每个 ID 都有实际输出，并反向检查所有非 `schema.*` 输出都已被规则声明；但不会判断检查逻辑本身是否正确（后者靠测试）。
 - 不要在本文件之外再写一份通用字段语义；类型文件只写类型特有内容。

@@ -1,0 +1,104 @@
+# 账号用例集。同步 flow 由 protocols/http 的 x-flow 引用。
+
+schema_version: 1
+id: cap.flows.account
+summary: "账号用例集"
+stability: stable
+module: account
+do_not:
+  - "account 用例只编排 cap.methods.*；不得直接引用 data.queries.*"
+  - "delete 必须先调用 cap.methods.auth.revoke_all_for_account，再调用 cap.methods.account.delete"
+
+flows:
+  - name: list
+    summary: "账号列表"
+    implementation: direct
+    method: cap.methods.account.list
+    permissions:
+      - platform.security.permissions.account_read
+    rate_limit: { requests: 60, window_seconds: 60 }
+    transaction: read_only
+    errors:
+      - platform.errors.COMMON_FORBIDDEN
+
+  - name: create
+    summary: "创建账号"
+    implementation: direct
+    method: cap.methods.account.create
+    permissions:
+      - platform.security.permissions.account_write
+    audit: true
+    transaction: required
+    idempotency: { key: "account_create:{number}", window: 24h }
+    errors:
+      - platform.errors.ACCOUNT_NUMBER_INVALID
+      - platform.errors.ACCOUNT_NUMBER_TAKEN
+      - platform.errors.ACCOUNT_OWN_INVALID
+      - platform.errors.COMMON_FORBIDDEN
+
+  - name: get
+    summary: "获取账号"
+    implementation: direct
+    method: cap.methods.account.get
+    permissions:
+      - platform.security.permissions.account_read
+    transaction: read_only
+    errors:
+      - platform.errors.ACCOUNT_NOT_FOUND
+      - platform.errors.COMMON_FORBIDDEN
+
+  - name: update
+    summary: "更新账号资料"
+    implementation: direct
+    method: cap.methods.account.update
+    permissions:
+      - platform.security.permissions.account_write
+    audit: true
+    transaction: required
+    errors:
+      - platform.errors.ACCOUNT_NOT_FOUND
+      - platform.errors.COMMON_FORBIDDEN
+
+  - name: delete
+    summary: "删除账号"
+    implementation: flow
+    permissions:
+      - platform.security.permissions.account_delete
+    audit: true
+    transaction: required
+    idempotency: { key: "account_delete:{id}", window: 24h }
+    steps:
+      - id: load
+        use: cap.methods.account.get
+      - id: revoke_auth
+        use: cap.methods.auth.revoke_all_for_account
+      - id: soft_delete
+        use: cap.methods.account.delete
+    errors:
+      - platform.errors.ACCOUNT_NOT_FOUND
+      - platform.errors.COMMON_FORBIDDEN
+      - platform.errors.COMMON_INTERNAL
+
+  - name: activate
+    summary: "激活账号"
+    implementation: direct
+    method: cap.methods.account.activate
+    permissions:
+      - platform.security.permissions.account_write
+    audit: true
+    transaction: required
+    errors:
+      - platform.errors.ACCOUNT_NOT_FOUND
+      - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+
+  - name: suspend
+    summary: "封禁账号"
+    implementation: direct
+    method: cap.methods.account.suspend
+    permissions:
+      - platform.security.permissions.account_write
+    audit: true
+    transaction: required
+    errors:
+      - platform.errors.ACCOUNT_NOT_FOUND
+      - platform.errors.ACCOUNT_ILLEGAL_TRANSITION

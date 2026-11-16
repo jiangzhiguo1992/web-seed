@@ -104,7 +104,7 @@ make contract-new type=data.enums  name=note_status
 make contract-check
 ```
 
-校验结构、ID、字段顺序（以 `_meta/<type>.yaml` 的 `fields` / `item_fields` 为准）、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`table.entities` / `model.included_by`（显式映射）与 `used_by.queries`（生成物）。不通过不要进入生成。
+校验结构、ID、字段顺序（以 `_meta/<type>.yaml` 的 `fields` / `item_fields` 为准）、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`table.entities` / `model.included_by`（显式映射）与 `table.queries` / `model.queries` / `query.used_by`（生成物）。不通过不要进入生成。
 
 修改 `rules` 的 `implemented_by` 后，运行 `make gen-rule-ids` 更新 `rule_ids_gen.go`；`make contract-check` 会拒绝过期的生成文件。
 

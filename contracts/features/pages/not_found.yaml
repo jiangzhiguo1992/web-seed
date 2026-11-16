@@ -12,7 +12,7 @@ route: null
 
 data: {}
 
-states:
+view_states:
   empty:
     when: "true"
     ui: "not_found_illustration"

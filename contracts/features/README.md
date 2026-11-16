@@ -36,14 +36,15 @@ features ✗ data（禁止直接引用表或字段）
 **feature.pages**
 
 - 不要手写 URL，必须引用 capability
-- 四态（loading/empty/error/forbidden）缺一不可
+- `view_states` 四态（loading/empty/error/forbidden）缺一不可；禁止再用 `states` 命名 UI 状态
 - 禁止引用 `data.*`
+- `available_when` 只允许结构化引用：`{ transition: business.states.* }` / `{ transitions: [...] }` / `{ state_not: [...] }`；禁止字符串表达式
 
 **feature.flows**
 
 - 只描述界面步骤与结果，不写实现
 
-## 3. 页面契约必须声明的四态
+## 3. 页面契约必须声明的 `view_states` 四态
 
 | 状态 | 必填条件 |
 |---|---|
@@ -52,7 +53,7 @@ features ✗ data（禁止直接引用表或字段）
 | `error` | 请求失败，展示 `Problem.detail` |
 | `forbidden` | 无权限时的表现 |
 
-缺任一状态即校验失败——这是前端最容易漏、也最影响体验的部分。
+缺任一状态即校验失败——这是前端最容易漏、也最影响体验的部分。`view_states` 与 `business.states` 是不同概念：前者是 UI 加载态，后者是业务状态机。
 
 ## 4. 与 `capabilities/flows` 的区别
 

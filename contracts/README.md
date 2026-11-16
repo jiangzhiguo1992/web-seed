@@ -92,7 +92,7 @@ contracts/
 │
 ├── capabilities/             # ② 能力层：methods + flows + protocols
 │   ├── methods/<module>.yaml #   原子方法：跨模块可见，不直接对外
-│   ├── flows/<flow>.yaml     #   编排：同步（被 protocol 引用）/ 异步（trigger）
+│   ├── flows/<module>.yaml   #   编排：同步（被 protocol 引用）/ 异步（trigger）
 │   └── protocols/
 │       └── http/<module>.yaml#   HTTP 绑定：只写协议差异，x-flow 指回 flow
 │
@@ -149,7 +149,7 @@ contracts/
 | 组 | 示例 |
 |---|---|
 | data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_account_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
-| capabilities | `cap.methods.account.get`、`cap.flows.verification_cleanup`、`cap.http.account.create` |
+| capabilities | `cap.methods.account.get`、`cap.flows.account.delete`、`cap.http.account.create` |
 | business | `business.states.account`、`business.rules.account.number_format`、`business.events.account.created` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
 | platform | `platform.errors.ACCOUNT_NOT_FOUND`、`platform.security.permissions.account_read`、`platform.security.roles.admin`、`platform.analytics.events.page.account_list_viewed` |
@@ -184,7 +184,7 @@ feature ──> business ──> capabilities ──> data
 |---|---|---|
 | feature | 定义用户功能 | 锚 `business`（规则/状态/字段）与 `capabilities`（接口） |
 | business | 业务规格 | 锚 `capabilities`（`implemented_by` / `emitted_by`） |
-| capabilities | 实现 | 锚 `data`（`persistence.queries`） |
+| capabilities | 实现 | 锚 `data`（`method.queries` → queries / `persistence.table/tables`） |
 | data | 持久化 | 无下游 |
 
 **所有跨层关系只在上游写一处**：
@@ -196,11 +196,13 @@ feature ──> business ──> capabilities ──> data
 | business → capabilities | 规则 / 状态机 / 事件 | `implemented_by` / `emitted_by` |
 | capabilities/protocols → capabilities/flows | protocol operation | `x-flow` |
 | capabilities/flows → capabilities/methods | flow steps | `use: cap.methods.*` |
-| capabilities/methods → data | method 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
+| capabilities/methods → data | method 契约 | `interface.methods[].queries` / `persistence.table/tables` / `constraint_errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `join_column_from/to` |
-| data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `used_by.queries`（生成物） |
-| data.entities → 上游（反向） | 实体文件 | `model.included_by`（显式，checker 校验） / `used_by.queries`（生成物） |
+| data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `table.queries`（生成物） |
+| data.entities → 上游（反向） | 实体文件 | `model.included_by`（显式，checker 校验） / `model.queries`（生成物） |
+| data.queries → 上游（反向） | 查询项 | `used_by`（生成物，指向 `cap.methods.*`） |
+| capabilities/methods → 上游（反向） | method 文件 | `used_by.flows`（生成物） |
 
 ### 3.2.1 capabilities 不引用 business
 
@@ -243,9 +245,9 @@ make contract-impact id=data.tables.account.col.number
 
 ```
 feature.pages.account_list
-  ├─ cap.http.account.list ─x-flow→ cap.flows.account_list
+  ├─ cap.http.account.list ─x-flow→ cap.flows.account.list
   │    └─ use→ cap.methods.account.list ─persistence→ data.queries.account.list_accounts
-  └─ cap.http.account.create ─x-flow→ cap.flows.account_create
+  └─ cap.http.account.create ─x-flow→ cap.flows.account.create
        └─ use→ cap.methods.account.create ─persistence→ data.tables.account
 
 business.states.account ─subject→ data.entities.account ─table→ data.tables.account
@@ -329,7 +331,7 @@ table:
 | `data/tables/*` | 一物理表一文件 | **不限** |
 | `data/entities/*` | 一逻辑实体一文件 | 150 |
 | `capabilities/methods/*` | 一模块一文件（interface + persistence + 类型） | 200 |
-| `capabilities/flows/*` | 一 flow 一文件（同步或异步） | 120 |
+| `capabilities/flows/*` | 一模块一文件，内含多个 flow item | 200 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
 | `business/states/*` | 一状态机一文件 | 150 |
 | `business/{rules,events}/*` | 一规则集 / 领域一文件 | 120 |
@@ -358,7 +360,7 @@ table:
 
 | 层 | 位置 | 例子 | 维护 |
 |---|---|---|---|
-| **类型级（可执行）** | `_meta/<type>.yaml` 的 `rules` | "所有表必须写 used_by" | 机器校验 |
+| **类型级（可执行）** | `_meta/<type>.yaml` 的 `rules` | "所有表必须写 table.queries" | 机器校验 |
 | **类型级（指导）** | `<group>/README.md` 或 `<type>/_base.yaml` 的 `do_not` | "所有表不要手写 migrations" | 一处定义，全类继承 |
 | **组级** | `<group>/README.md` | "business 不引用 data"、"实体在 data 层" | 手写，稳定 |
 | **实例级** | 契约正文 `do_not` | "account.status 使用 integer；枚举只在 entity"、"游标分页要有 tiebreaker" | 就近，每个文件 1–3 条 |
@@ -425,7 +427,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | `manifest.json` | 删除设计 | `index.yaml` + `project.yaml` 已覆盖，无消费者 |
 | `inbound.yaml` | 删除设计 | `used_by.*` / `table.entities` / `model.included_by` 已是反向索引 |
 
-`make gen` 是聚合入口（⬜ P2）；`make gen-graph` 只写回 `used_by`，不产出本目录文件。
+`make gen` 是聚合入口（⬜ P2）；`make gen-graph` 只写回 `table.queries` / `model.queries` / `query.used_by` / `used_by.flows`，不产出本目录文件。
 
 ---
 

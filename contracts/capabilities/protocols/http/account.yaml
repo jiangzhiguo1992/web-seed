@@ -19,7 +19,7 @@ paths:
     get:
       operationId: listAccounts
       x-contract-id: cap.http.account.list
-      x-flow: cap.flows.account_list
+      x-flow: cap.flows.account.list
       summary: "列出账号"
       x-timeout-ms: 3000
       parameters:
@@ -49,7 +49,7 @@ paths:
     post:
       operationId: createAccount
       x-contract-id: cap.http.account.create
-      x-flow: cap.flows.account_create
+      x-flow: cap.flows.account.create
       summary: "创建账号"
       x-timeout-ms: 5000
       requestBody:
@@ -78,7 +78,7 @@ paths:
     get:
       operationId: getAccount
       x-contract-id: cap.http.account.get
-      x-flow: cap.flows.account_get
+      x-flow: cap.flows.account.get
       summary: "获取账号"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -92,7 +92,7 @@ paths:
     patch:
       operationId: updateAccount
       x-contract-id: cap.http.account.update
-      x-flow: cap.flows.account_update
+      x-flow: cap.flows.account.update
       summary: "更新账号资料"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -116,7 +116,7 @@ paths:
     delete:
       operationId: deleteAccount
       x-contract-id: cap.http.account.delete
-      x-flow: cap.flows.account_delete
+      x-flow: cap.flows.account.delete
       summary: "删除账号（软删）"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -127,7 +127,7 @@ paths:
     post:
       operationId: activateAccount
       x-contract-id: cap.http.account.activate
-      x-flow: cap.flows.account_activate
+      x-flow: cap.flows.account.activate
       summary: "激活账号"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
@@ -142,7 +142,7 @@ paths:
     post:
       operationId: suspendAccount
       x-contract-id: cap.http.account.suspend
-      x-flow: cap.flows.account_suspend
+      x-flow: cap.flows.account.suspend
       summary: "封禁账号"
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }

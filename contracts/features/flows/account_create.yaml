@@ -27,7 +27,7 @@ steps:
 
   - id: submit
     ui: "提交"
-    capability: cap.http.account.create
+    capability: cap.flows.account.create
     loading_state: button_spinner
     on_success: "goto(detail)"
     on_error:

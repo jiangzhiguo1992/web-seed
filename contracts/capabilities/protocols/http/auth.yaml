@@ -21,7 +21,7 @@ paths:
     post:
       operationId: login
       x-contract-id: cap.http.auth.login
-      x-flow: cap.flows.auth_login
+      x-flow: cap.flows.auth.login
       summary: "登录"
       x-timeout-ms: 5000
       requestBody:
@@ -50,7 +50,7 @@ paths:
     post:
       operationId: sendVerification
       x-contract-id: cap.http.auth.verification_send
-      x-flow: cap.flows.auth_send_verification
+      x-flow: cap.flows.auth.send_verification
       summary: "发送验证码"
       x-timeout-ms: 5000
       requestBody:
@@ -78,7 +78,7 @@ paths:
     post:
       operationId: verifyCode
       x-contract-id: cap.http.auth.verification_verify
-      x-flow: cap.flows.auth_verify_code
+      x-flow: cap.flows.auth.verify_code
       summary: "校验验证码"
       x-timeout-ms: 5000
       requestBody:
@@ -107,7 +107,7 @@ paths:
     post:
       operationId: refreshToken
       x-contract-id: cap.http.auth.refresh
-      x-flow: cap.flows.auth_refresh
+      x-flow: cap.flows.auth.refresh
       summary: "刷新令牌"
       x-timeout-ms: 3000
       requestBody:
@@ -131,7 +131,7 @@ paths:
     post:
       operationId: logout
       x-contract-id: cap.http.auth.logout
-      x-flow: cap.flows.auth_logout
+      x-flow: cap.flows.auth.logout
       summary: "登出"
       requestBody:
         required: true

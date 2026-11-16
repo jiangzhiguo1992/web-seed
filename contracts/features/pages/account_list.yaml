@@ -14,7 +14,7 @@ route: feature.routes.account_list
 
 data:
   list:
-    capability: cap.http.account.list
+    capability: cap.flows.account.list
     params:
       status: { from: query.status, enum: business.states.account.states, optional: true }
       own_type: { from: query.own_type, optional: true }
@@ -23,7 +23,7 @@ data:
       stale_time: 30s
       refetch_on_focus: false
 
-states:
+view_states:
   loading:
     when: "query.isPending"
     ui: "skeleton-table"
@@ -42,32 +42,32 @@ states:
 
 actions:
   create:
-    capability: cap.http.account.create
+    capability: cap.flows.account.create
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "新建账号"
     on_success: "navigate(feature.flows.account_create.success_target)"
   activate:
-    capability: cap.http.account.activate
+    capability: cap.flows.account.activate
     permission: platform.security.permissions.account_write
     ui: "row-action"
     label: "激活"
-    available_when: "row.status == pending || row.status == suspended"
+    available_when: { transitions: [business.states.account.activate, business.states.account.reactivate] }
   suspend:
-    capability: cap.http.account.suspend
+    capability: cap.flows.account.suspend
     permission: platform.security.permissions.account_write
     ui: "row-action"
     label: "封禁"
     confirm: true
-    available_when: "row.status == active"
+    available_when: { transition: business.states.account.suspend }
   delete:
-    capability: cap.http.account.delete
+    capability: cap.flows.account.delete
     permission: platform.security.permissions.account_delete
     ui: "row-action"
     label: "删除"
     confirm: true
     danger: true
-    available_when: "row.status == pending || row.status == active"
+    available_when: { transition: business.states.account.delete }
 
 fields:
   - name: number

@@ -1,5 +1,4 @@
 # cap.methods 类型规范：模块对跨模块暴露的原子方法。
-# 字段树为目标态；capabilities 的字段树与 checker 接入待后续批次。
 
 id: meta.cap.methods
 type: cap.methods
@@ -48,26 +47,91 @@ fields:
     description: "所属模块；写表归属必须等于本字段"
 
   - name: interface
-    type: any
+    type: object
     required: true
-    description: "Go interface 契约：name/package/methods；具体结构由 cap.methods checker 校验"
+    description: "Go interface 契约"
+    fields:
+      - name: name
+        type: string
+        required: true
+        pattern: '^[A-Z][A-Za-z0-9]*$'
+        description: "interface 名，PascalCase"
+      - name: package
+        type: string
+        required: true
+        pattern: '^internal/modules/.*$'
+        description: "Go 包路径"
+      - name: methods
+        type: list<object>
+        required: true
+        description: "原子方法列表"
+        item_fields:
+          - name: name
+            type: string
+            required: true
+            pattern: '^[A-Z][A-Za-z0-9]*$'
+            description: "方法名，PascalCase"
+          - name: summary
+            type: string
+            required: true
+            description: "一句话说明"
+          - name: params
+            type: list<object>
+            required: true
+            description: "入参"
+            item_fields:
+              - { name: name, type: string, required: true, description: "参数名" }
+              - { name: type, type: string, required: true, description: "参数类型" }
+              - { name: nullable, type: boolean, required: false, description: "是否可空" }
+          - name: returns
+            type: list<object>
+            required: true
+            description: "返回值"
+            item_fields:
+              - { name: name, type: string, required: true, description: "返回名" }
+              - { name: type, type: string, required: true, description: "返回类型" }
+              - { name: nullable, type: boolean, required: false, description: "是否可空" }
+          - name: errors
+            type: list<string>
+            required: true
+            description: "错误 ID 列表"
+          - name: transaction
+            type: string
+            required: true
+            enum: [ none, read_only ]
+            description: "事务语义；写事务由 flow 管理"
+          - name: queries
+            type: list<string>
+            required: true
+            unique: true
+            pattern: '^data\.queries\.'
+            description: "本方法调用的 query 项 ID；query.used_by 的反向索引由 gen-graph 生成"
 
   - name: persistence
-    type: any
+    type: object
     required: true
-    description: "持久化归属：table/tables/field_map/queries/write_queries/constraint_errors"
+    description: "持久化归属"
+    fields:
+      - { name: table, type: string, required: false, pattern: '^data\.tables\.', description: "单表归属" }
+      - { name: tables, type: list<string>, required: false, description: "多表归属" }
+      - { name: constraint_errors, type: map<string>, required: false, description: "约束/索引名到错误 ID" }
 
   - name: types
     type: any
     required: false
     description: "本地类型；值是 OpenAPI-ish schema 文本"
 
-  - name: consumers
-    type: any
-    required: false
-    description: "消费本方法的模块；目标态由 flows 自动推导，不再手写"
+  - name: used_by
+    type: object
+    required: true
+    generated: true
+    write: forbidden
+    description: "生成的 flow 反向索引"
+    fields:
+      - { name: flows, type: list<string>, required: true, unique: true, pattern: '^cap\.flows\.', description: "调用本方法的 flow item ID" }
 
 rules:
   - { id: cap-id, text: "methods/flows/http 契约 ID 必须与 targets.id 派生一致，且全局唯一", implemented_by: [ cap-id ] }
   - { id: method-structure, text: "method 的 interface.name 必须 PascalCase、interface.package 必须在 internal/modules/ 下、method 名唯一、transaction 只能是 none/read_only", implemented_by: [ method-structure ] }
-  - { id: cap-ref, text: "method/flow 引用的 errors、permissions、methods、本模块 queries 必须存在", implemented_by: [ cap-ref ] }
+  - { id: cap-ref, text: "method 的 queries 必须指向存在的 data.queries.* 项；flow 引用的 errors、permissions、methods 必须存在", implemented_by: [ cap-ref ] }
+  - { id: method-used-by, text: "method.queries 中带写表的 query，其表必须属于 method 文件的 module；flow 不得直接引用 data.queries.*", implemented_by: [ method-used-by, owner-write ] }

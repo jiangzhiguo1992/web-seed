@@ -13,7 +13,7 @@ route: feature.routes.account_create
 
 data:
   submit:
-    capability: cap.http.account.create
+    capability: cap.flows.account.create
     params:
       own_type: { from: form.own_type, type: string, required: true }
       own_id: { from: form.own_id, type: integer, required: true }
@@ -21,7 +21,7 @@ data:
       nickname: { from: form.nickname, type: string, required: true }
       user_id: { from: form.user_id, type: integer, optional: true }
 
-states:
+view_states:
   loading:
     when: "mutation.isPending"
     ui: "button_spinner"
@@ -38,7 +38,7 @@ states:
 
 actions:
   submit:
-    capability: cap.http.account.create
+    capability: cap.flows.account.create
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "创建"

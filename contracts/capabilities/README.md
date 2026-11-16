@@ -10,7 +10,7 @@
 | 目录 | 回答的问题 | 真相源内容 | 产物 |
 |---|---|---|---|
 | `methods/<module>.yaml` | 模块能提供哪些**原子方法** | interface、方法签名、错误、事务、持久化归属 | Go interface、mock、写归属校验 |
-| `flows/<flow>.yaml` | 一个**可独立触发的业务动作**如何编排 | steps、权限、审计、事务、幂等、重试 | 用例骨架、集成测试、影响面 |
+| `flows/<module>.yaml` | 一个模块的**可独立触发用例集**如何编排 | flows 列表：steps、权限、审计、事务、幂等、重试 | 用例骨架、集成测试、影响面 |
 | `protocols/<protocol>/<module>.yaml` | 能力如何通过某种**协议**暴露 | path、method、status、header、schema 引用 | server 类型、client、合并 spec |
 
 一句话区分：
@@ -24,22 +24,22 @@
 ## 2. 依赖方向
 
 ```
-protocols ──x-flow──> flows ──use──> methods ──persistence──> data
-     │                   │
-     └──不引用 methods    └──只引用本模块 data.queries
+protocols ──x-flow──> flows ──use──> methods ──queries──> data.queries
+     │                   │              └──persistence──> data.tables
+     └──不引用 methods    └──不引用 data.queries
 ```
 
 | 边 | 写在哪 | 字段 |
 |---|---|---|
 | protocol → flow | `protocols/<protocol>/*.yaml` | `x-flow` |
 | flow → method | `flows/*.yaml` 的 steps | `use: cap.methods.*` |
-| flow → 本模块 query | `flows/*.yaml` 的 steps | `use: data.queries.<本模块>.*` |
-| method → data | `methods/*.yaml` | `persistence.table/tables/queries` |
+| method → query | `methods/*.yaml` 的 `interface.methods[].queries` | `data.queries.*` |
+| method → table | `methods/*.yaml` | `persistence.table/tables` + `constraint_errors` |
 
 **禁止**：
 
 - protocol 直接引用 `cap.methods.*`（对外入口只能是 flow）。
-- flow 引用其他模块的 `data.queries.*`（跨模块必须走 method）。
+- flow 直接引用 `data.queries.*`（query 只能由 method 调用；flow 只能编排 method 或内部逻辑）。
 - flow 嵌套另一个 flow（编排只到 method 层）。
 - capabilities 任何位置出现 `business.*`。
 
@@ -52,24 +52,27 @@ protocols ──x-flow──> flows ──use──> methods ──persistence�
 必须声明：
 
 - `interface.name` / `interface.package` / `interface.methods`
-- 每个方法的 `params` / `returns` / `errors` / `transaction`
-- `persistence`（表、字段映射、查询、约束错误映射）
+- 每个方法的 `params` / `returns` / `errors` / `transaction` / `queries`
+- `persistence`（表归属、约束错误映射）
 
 类型级负向约束：
 
 - 不要在 interface 里暴露 `*pgx.Tx` 或 HTTP 类型。
 - 不要返回表行 `data.tables.*.row`；返回 `data.entities.*` 或本地 `types.*`。
 - 只登记跨模块调用的方法；模块内 helper 不要进契约。
-- 写表必须属于 `module`；跨模块读通过 `persistence.queries`。
+- 写表必须属于 `module`；每个方法用 `queries` 列出它调用的 query 项，query 的 `used_by` 由 `make gen-graph` 反向生成。
+- 跨模块写不允许由一个 query 完成：拆成多个单表 query，由 flow 编排多个 method；flow 的 `transaction` 覆盖所有 steps。
 - 不要声明权限/审计/限流/幂等——这些属于 flow。
+- `used_by.flows` 由 `make gen-graph` 写回；不要手改。
 - `transaction` 只写 `none` 或 `read_only`；写事务由 flow 管理。
+- `types` 可以引用其他 methods 文件的类型（如 `AuthSession` 引用 `TokenPair`）；生成器按文件依赖解析。
 - 不要引用 `business.*`。
 
 ---
 
 ## 4. flows
 
-`flows/<flow>.yaml` 是编排层。同步和异步共用同一套 `steps` 结构，通过 `trigger` 区分。
+`flows/<module>.yaml` 是编排层，一个文件承载一个模块的多个 flow item。同步和异步共用同一套 `steps` 结构，通过 `trigger` 区分。
 
 ### 4.1 同步 flow
 
@@ -92,7 +95,8 @@ trigger:
 
 ### 4.3 共同约束
 
-- `steps[].use` 只允许：`cap.methods.*`、本模块 `data.queries.*`、`platform.security.permissions.*`。
+- `steps[].use` 只允许：`cap.methods.*`、`platform.security.permissions.*`；不写 `use` 表示 flow 内部逻辑。
+- flow 不得直接引用 `data.queries.*`；query 只能由 method 调用。
 - `steps[].on_error` 必须是 `use` 目标声明的 `errors` 子集。
 - `compensation` 必须结构化：`action: rollback | compensate | dead_letter`。
 - `postconditions` 必须结构化：`{ field, op, value }`，不要写散文。
@@ -148,7 +152,7 @@ business ──implemented_by / emitted_by──> capabilities
 contracts/capabilities/
 ├── README.md
 ├── methods/<module>.yaml
-├── flows/<flow>.yaml
+├── flows/<module>.yaml
 └── protocols/
     ├── http/
     │   ├── shared.yaml
@@ -162,7 +166,7 @@ ID 派生：
 | 目录 | ID | 示例 |
 |---|---|---|
 | `methods/` | `cap.methods.<file>` | `cap.methods.account` |
-| `flows/` | `cap.flows.<file>` | `cap.flows.verification_cleanup` |
+| `flows/` | `cap.flows.<file>.<name>` | `cap.flows.account.delete` |
 | `protocols/http/` | `cap.http.<file>` | `cap.http.account` |
 | `protocols/grpc/` | `cap.grpc.<file>` | `cap.grpc.account` |
 | `protocols/graphql/` | `cap.graphql.<file>` | `cap.graphql.account` |
@@ -177,6 +181,6 @@ ID 派生：
 ## 8. 当前落地状态
 
 - `protocols/http/*.yaml` 已全部使用 `x-flow` 指向同步 flow；`x-service` 已移除。
-- `flows/*.yaml` 的同步 flow 用 `implementation: direct`（直通一个 method）或 `implementation: flow`（显式 steps）。
+- `flows/<module>.yaml` 的每个 flow item 用 `implementation: direct`（直通一个 method）或 `implementation: flow`（显式 steps）。
 - `methods/*.yaml` 的写方法 `transaction` 已改为 `none`；事务边界在对应的 flow 上声明。
-- `cap.flows.account_activation` 已删除：它是单模块内部编排，且引用了 `business.*`。
+- 原 `cap.flows.account_activation` 已删除：它是单模块内部编排，且引用了 `business.*`。

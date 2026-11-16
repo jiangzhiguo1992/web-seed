@@ -8,7 +8,7 @@ do_not:
   - "返回 data.entities.account，不要返回表行"
   - "不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型"
   - "认证相关方法在 cap.methods.auth，不要塞进本接口"
-  - "软删账号必须调用 cap.methods.auth.revoke_all_for_account 清理认证绑定、未消费验证体与令牌，禁止只改 account 状态"
+  - "Delete 只做 account 软删；认证绑定、未消费验证体与令牌由 cap.flows.account.delete 编排清理"
 
 module: account
 
@@ -26,6 +26,8 @@ interface:
         - { name: err, type: error }
       errors: [platform.errors.ACCOUNT_NOT_FOUND, platform.errors.COMMON_FORBIDDEN]
       transaction: read_only
+      queries:
+        - data.queries.account.get_account
 
     - name: List
       summary: "列出账号（游标分页）"
@@ -38,6 +40,8 @@ interface:
         - { name: err, type: error }
       errors: [platform.errors.COMMON_FORBIDDEN]
       transaction: read_only
+      queries:
+        - data.queries.account.list_accounts
 
     - name: Create
       summary: "创建账号"
@@ -53,6 +57,9 @@ interface:
         - platform.errors.ACCOUNT_OWN_INVALID
         - platform.errors.COMMON_FORBIDDEN
       transaction: none
+      queries:
+        - data.queries.account.exists_account_number
+        - data.queries.account.create_account
 
     - name: Update
       summary: "更新账号资料"
@@ -67,6 +74,9 @@ interface:
         - platform.errors.ACCOUNT_NOT_FOUND
         - platform.errors.COMMON_FORBIDDEN
       transaction: none
+      queries:
+        - data.queries.account.get_account
+        - data.queries.account.update_account
 
     - name: Activate
       summary: "激活或解封账号"
@@ -80,6 +90,9 @@ interface:
         - platform.errors.ACCOUNT_NOT_FOUND
         - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
       transaction: none
+      queries:
+        - data.queries.account.get_account
+        - data.queries.account.set_account_status
 
     - name: Suspend
       summary: "封禁账号"
@@ -94,6 +107,9 @@ interface:
         - platform.errors.ACCOUNT_NOT_FOUND
         - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
       transaction: none
+      queries:
+        - data.queries.account.get_account
+        - data.queries.account.set_account_status
 
     - name: Delete
       summary: "软删账号"
@@ -106,25 +122,13 @@ interface:
         - platform.errors.ACCOUNT_NOT_FOUND
         - platform.errors.COMMON_FORBIDDEN
       transaction: none
+      queries:
+        - data.queries.account.get_account
+        - data.queries.account.soft_delete_account
 
 # 持久化实现：capabilities 负责把 data 实体映射到表
 persistence:
   table: data.tables.account
-  field_map: {}                    # 实体字段名与列名一致，无差异
-  write_queries:
-    - data.queries.account.create_account
-    - data.queries.account.update_account
-    - data.queries.account.set_account_status
-    - data.queries.account.soft_delete_account
-  queries:
-    get: data.queries.account.get_account
-    get_by_number: data.queries.account.get_account_by_number
-    exists_number: data.queries.account.exists_account_number
-    list: data.queries.account.list_accounts
-    create: data.queries.account.create_account
-    update: data.queries.account.update_account
-    set_status: data.queries.account.set_account_status
-    soft_delete: data.queries.account.soft_delete_account
   constraint_errors:
     uq_account_number: platform.errors.ACCOUNT_NUMBER_TAKEN
     ck_account_deleted_consistent: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
@@ -157,10 +161,13 @@ types:
     properties:
       nickname: { type: string, minLength: 1, maxLength: 100 }
 
-consumers:
-  - module: audit
-    uses: [Get]
-  - module: auth
-    uses: [Get]
-  - module: notification
-    uses: [Get]
+
+used_by:
+  flows:
+    - cap.flows.account.activate
+    - cap.flows.account.create
+    - cap.flows.account.delete
+    - cap.flows.account.get
+    - cap.flows.account.list
+    - cap.flows.account.suspend
+    - cap.flows.account.update

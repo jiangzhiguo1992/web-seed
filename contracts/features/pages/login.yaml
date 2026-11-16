@@ -1,4 +1,4 @@
-# 登录页。认证接口已在 cap.http.auth 落地。
+# 登录页。认证用例已在 cap.flows.auth 落地。
 
 schema_version: 1
 id: feature.pages.login
@@ -14,14 +14,14 @@ route: feature.routes.login
 
 data:
   submit:
-    capability: cap.http.auth.login
+    capability: cap.flows.auth.login
     params:
       auth_type: { from: form.auth_type, type: string, enum: [pwd, phone, email], default: pwd }
       identifier: { from: form.identifier, type: string, required: true }
       password: { from: form.password, type: string, required: true, secret: true }
       device_id: { from: device.id, type: string }
 
-states:
+view_states:
   idle:
     when: "true"
     ui: "form"
@@ -39,7 +39,7 @@ states:
 
 actions:
   submit:
-    capability: cap.http.auth.login
+    capability: cap.flows.auth.login
     ui: "primary-button"
     label: "登录"
     on_success: "close_and_redirect(feature.routes.account_list)"

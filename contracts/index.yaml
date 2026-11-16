@@ -101,21 +101,12 @@ entries:
       - 响应 schema 缺少 additionalProperties: false
       - "忘记 x-flow 锚点到 cap.flows"
   - { id: cap.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/登出/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: cap.flows.account_list, path: capabilities/flows/account_list.yaml, summary: "账号列表用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.account_create, path: capabilities/flows/account_create.yaml, summary: "创建账号用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.account_get, path: capabilities/flows/account_get.yaml, summary: "获取账号用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.account_update, path: capabilities/flows/account_update.yaml, summary: "更新账号资料用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.account_delete, path: capabilities/flows/account_delete.yaml, summary: "删除账号用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.account_activate, path: capabilities/flows/account_activate.yaml, summary: "激活账号用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.account_suspend, path: capabilities/flows/account_suspend.yaml, summary: "封禁账号用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.auth_login, path: capabilities/flows/auth_login.yaml, summary: "登录用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.auth_send_verification, path: capabilities/flows/auth_send_verification.yaml, summary: "发送验证码用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.auth_verify_code, path: capabilities/flows/auth_verify_code.yaml, summary: "校验验证码用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.auth_refresh, path: capabilities/flows/auth_refresh.yaml, summary: "刷新令牌用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.auth_logout, path: capabilities/flows/auth_logout.yaml, summary: "登出用例", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
-  - { id: cap.flows.verification_cleanup, path: capabilities/flows/verification_cleanup.yaml, summary: "过期验证体与历史验证动作清理任务", consumers: [worker], enforcement: generated+tested, stability: draft }
-  - { id: cap.methods.account, path: capabilities/methods/account.yaml, summary: "账号跨模块 method 接口", consumers: [api], enforcement: generated+tested, stability: stable }
-  - { id: cap.methods.auth, path: capabilities/methods/auth.yaml, summary: "认证跨模块 method 接口", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.methods.account, path: capabilities/methods/account.yaml, summary: "账号跨模块原子方法", consumers: [api], enforcement: generated+tested, stability: stable }
+  - { id: cap.methods.auth, path: capabilities/methods/auth.yaml, summary: "认证会话跨模块原子方法", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.methods.token, path: capabilities/methods/token.yaml, summary: "令牌签发与校验原子方法", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.methods.verification, path: capabilities/methods/verification.yaml, summary: "验证码发送与校验原子方法", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.flows.account, path: capabilities/flows/account.yaml, summary: "账号用例集", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: cap.flows.auth, path: capabilities/flows/auth.yaml, summary: "认证用例集", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
 
   # ---------- business ----------
   - id: business.states.account
@@ -175,11 +166,11 @@ entries:
 global_notes:
   - "错误响应由 capabilities/http 的 default_error_responses 注入，不要逐接口声明"
   - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.returns"
-  - "data.entities 的字段名与表列名可能不同：entity 用 source.column 指明来源，cap.methods.persistence.field_map 只描述 service 类型差异"
+  - "data.entities 的字段名与表列名可能不同：entity 用 source.column 指明来源；method 返回 entity，不重复列映射"
   - "领域事件由 business/events 的 emitted_by 声明，capabilities 不写 emits"
   - "capabilities 契约不引用 business.*（cap.flows 仅允许引用 business.states/rules/events 做编排）"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
-  - "table/entity 的 used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
+  - "table.queries / model.queries / query.used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
   - "引擎分组与表级物理事实（tables.<engine>/caches/size_class/retention/partition）只在 data/storage.yaml 声明；冗余列表直接写在 columns[].redundancy"
 
 # 白名单：允许没有入边的根契约

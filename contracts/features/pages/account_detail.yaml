@@ -14,13 +14,13 @@ route: feature.routes.account_detail
 
 data:
   detail:
-    capability: cap.http.account.get
+    capability: cap.flows.account.get
     params:
       id: { from: route.params.id, type: integer, required: true }
     cache:
       stale_time: 10s
 
-states:
+view_states:
   loading:
     when: "query.isPending"
     ui: "skeleton-detail"
@@ -37,23 +37,23 @@ states:
 
 actions:
   edit:
-    capability: cap.http.account.update
+    capability: cap.flows.account.update
     permission: platform.security.permissions.account_write
-    available_when: "row.status != deleted"
+    available_when: { state_not: [deleted] }
     ui: "primary-button"
   activate:
-    capability: cap.http.account.activate
+    capability: cap.flows.account.activate
     permission: platform.security.permissions.account_write
-    available_when: "canTransition('activate')"
+    available_when: { transitions: [business.states.account.activate, business.states.account.reactivate] }
   suspend:
-    capability: cap.http.account.suspend
+    capability: cap.flows.account.suspend
     permission: platform.security.permissions.account_write
-    available_when: "canTransition('suspend')"
+    available_when: { transition: business.states.account.suspend }
     confirm: true
   delete:
-    capability: cap.http.account.delete
+    capability: cap.flows.account.delete
     permission: platform.security.permissions.account_delete
-    available_when: "canTransition('delete')"
+    available_when: { transition: business.states.account.delete }
     confirm: true
     danger: true
 
