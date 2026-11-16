@@ -115,15 +115,6 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.idx_verification_account_id ]
 
-  - name: DeleteExpiredVerifications
-    tables:
-      - { table: data.tables.verification_body, write: true }
-    params:
-      - { name: limit, type: integer, nullable: true, default: 100 }
-    returns:
-      - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.verification_body.idx_verification_expire_at ]
-
   - name: CreateVerificationAction
     tables:
       - { table: data.tables.verification_action, write: true }
@@ -193,12 +184,3 @@ queries:
           - created_at
     index_ref: [ data.tables.verification_action.idx_verification_action_account ]
 
-  - name: DeleteVerificationActionsBefore
-    tables:
-      - { table: data.tables.verification_action, write: true }
-    params:
-      - { name: older_than_days, type: integer }
-      - { name: limit, type: integer, nullable: true, default: 100 }
-    returns:
-      - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.verification_action.idx_verification_action_created_at ]

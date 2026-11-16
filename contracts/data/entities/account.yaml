@@ -83,11 +83,12 @@ fields:
 
 used_by:
   queries:
+    - data.queries.account.create_account
     - data.queries.account.get_account
     - data.queries.account.get_account_by_number
     - data.queries.account.list_accounts
-    - data.queries.account.create_account
   capabilities:
     - cap.http.account
     - cap.methods.account
     - cap.methods.auth
+    - cap.methods.token

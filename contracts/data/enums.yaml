@@ -98,6 +98,7 @@ enums:
         - data.entities.verification_body
       capabilities:
         - cap.methods.auth
+        - cap.methods.verification
 
   - name: verification_status
     description: "验证体状态"
@@ -134,7 +135,7 @@ enums:
       entities:
         - data.entities.verification_body
       capabilities:
-        - cap.methods.auth
+        - cap.methods.verification
 
   - name: verification_action
     description: "验证动作"

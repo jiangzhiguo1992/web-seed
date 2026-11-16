@@ -126,18 +126,10 @@ indexes:
     used_by:
       - data.queries.verification.revoke_active_verifications_by_account
 
-  - name: idx_verification_expire_at
-    columns: [ expire_at ]
-    live_only: true
-    comment: "过期验证记录清理"
-    used_by:
-      - data.queries.verification.delete_expired_verifications
-
 used_by:
   queries:
     - data.queries.verification.consume_verification
     - data.queries.verification.create_verification
-    - data.queries.verification.delete_expired_verifications
     - data.queries.verification.get_latest_verification
     - data.queries.verification.increment_verification_attempt
     - data.queries.verification.mark_verification_sent
