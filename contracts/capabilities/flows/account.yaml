@@ -1,10 +1,10 @@
 # 账号用例集。
 
-schema_version: 1
 id: cap.flows.account
 summary: "账号用例集"
-stability: stable
 module: account
+schema_version: 1
+stability: stable
 do_not:
   - "account 用例只编排 cap.methods.*；不得直接引用 data.queries.*"
   - "delete 必须先调用 cap.methods.auth.revoke_all_for_account，再调用 cap.methods.account.delete"

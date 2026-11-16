@@ -1,10 +1,10 @@
 # 认证用例集。
 
-schema_version: 1
 id: cap.flows.auth
 summary: "认证用例集"
-stability: stable
 module: account
+schema_version: 1
+stability: stable
 do_not:
   - "auth 用例只编排 cap.methods.{auth,token,verification}.*；不要在 flow 里写密码学或令牌逻辑"
 

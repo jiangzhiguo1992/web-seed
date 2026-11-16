@@ -1,16 +1,15 @@
 # 账号 service 接口。
 
-schema_version: 1
 id: cap.methods.account
 summary: "账号跨模块 service 接口"
+module: account
+schema_version: 1
 stability: stable
 do_not:
   - "返回 data.entities.account，不要返回表行"
   - "不要在 interface 里暴露 *pgx.Tx 或 HTTP 类型"
   - "认证相关方法在 cap.methods.auth，不要塞进本接口"
   - "Delete 只做 account 软删；认证绑定、未消费验证体与令牌由 cap.flows.account.delete 编排清理"
-
-module: account
 
 interface:
   name: AccountService
@@ -160,7 +159,6 @@ types:
     required: [nickname]
     properties:
       nickname: { type: string, minLength: 1, maxLength: 100 }
-
 
 used_by:
   flows:

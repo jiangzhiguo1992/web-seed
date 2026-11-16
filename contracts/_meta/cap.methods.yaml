@@ -10,12 +10,6 @@ targets:
   naming: "snake_case"
 
 fields:
-  - name: schema_version
-    type: integer
-    required: true
-    const: 1
-    description: "格式版本"
-
   - name: id
     type: string
     required: true
@@ -26,6 +20,18 @@ fields:
     type: string
     required: true
     description: "一句话说明"
+
+  - name: module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "所属模块；写表归属必须等于本字段"
+
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "格式版本"
 
   - name: stability
     type: string
@@ -39,12 +45,6 @@ fields:
     required: true
     unique: true
     description: "实例级负向约束"
-
-  - name: module
-    type: string
-    required: true
-    pattern: '^[a-z][a-z0-9_]*$'
-    description: "所属模块；写表归属必须等于本字段"
 
   - name: interface
     type: object

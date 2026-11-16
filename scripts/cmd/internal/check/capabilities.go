@@ -8,6 +8,7 @@ package check
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
@@ -87,6 +88,7 @@ func (c *Checker) checkCapabilities() {
 			continue
 		}
 		rel := relPath(c.root, file)
+		c.checkFieldOrder(rel, flowSchema.Fields, orderRules{})
 		if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
 			c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 		}
@@ -122,6 +124,7 @@ func (c *Checker) checkCapabilities() {
 			continue
 		}
 		rel := relPath(c.root, file)
+		c.checkFieldOrder(rel, httpSchema.Fields, orderRules{})
 		components, _ := asMap(doc["components"])
 		headers, _ := asMap(components["headers"])
 		for name := range headers {
@@ -475,7 +478,7 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 					if evalWhenNode(node) == whenFalse {
 						reachable = false
 					}
-					discByStep := whenDiscriminatorValues(node)
+					formula := whenFormulaFromNode(node)
 					for _, ref := range whenStepRefs(node) {
 						if _, ok := stepIndex[ref]; !ok {
 							c.rulef("flow-when", "%s: step %s when references step %s that is not an earlier step", rel, stepID, ref)
@@ -491,14 +494,7 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 							continue
 						}
 						target, _ := asMap(steps[idx])
-						disc := map[string]whenConstraint{}
-						for k, v := range discByStep[ref] {
-							disc[k] = v
-						}
-						for k, v := range discByStep["input"] {
-							disc["input:"+k] = v
-						}
-						if err := c.checkStepOutputPath(target, stepOutputs[idx], path, disc); err != nil {
+						if err := c.checkStepOutputPath(target, stepOutputs[idx], path, formula, ref); err != nil {
 							c.rulef("flow-when", "%s: step %s when references %s: %v", rel, stepID, field, err)
 						}
 					}
@@ -660,7 +656,7 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 
 // checkStepOutputPath 校验 step.<id>.<path> 的字段链路：
 // 方法步骤从 method returns 取根字段；内部步骤从 step.output 取根字段。
-func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]string, path string, disc map[string]whenConstraint) error {
+func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]string, path string, formula whenFormula, stepRef string) error {
 	segs, err := parseWhenPath(path)
 	if err != nil {
 		return err
@@ -694,7 +690,7 @@ func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]str
 		if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
 			return fmt.Errorf("list output requires index before %s", seg.name)
 		}
-		next, ok := c.resolveTypeField(typ, seg.name, disc, prefix)
+		next, ok := c.resolveTypeField(typ, seg.name, formula, stepRef, prefix)
 		if !ok {
 			return fmt.Errorf("unknown field %s of %s", seg.name, typ)
 		}
@@ -719,11 +715,11 @@ func indexWhenType(typ string) (string, error) {
 	return strings.TrimPrefix(inner, "*"), nil
 }
 
-func (c *Checker) resolveTypeField(typ, name string, disc map[string]whenConstraint, prefix string) (string, bool) {
-	return c.resolveTypeFieldDepth(typ, name, map[string]bool{}, disc, prefix)
+func (c *Checker) resolveTypeField(typ, name string, formula whenFormula, stepRef, prefix string) (string, bool) {
+	return c.resolveTypeFieldDepth(typ, name, map[string]bool{}, formula, stepRef, prefix)
 }
 
-func (c *Checker) resolveTypeFieldDepth(typ, name string, seen map[string]bool, disc map[string]whenConstraint, prefix string) (string, bool) {
+func (c *Checker) resolveTypeFieldDepth(typ, name string, seen map[string]bool, formula whenFormula, stepRef, prefix string) (string, bool) {
 	if resolved, ok := resolveTypeRef(typ); ok {
 		typ = resolved
 	}
@@ -739,20 +735,22 @@ func (c *Checker) resolveTypeFieldDepth(typ, name string, seen map[string]bool, 
 	if def == nil {
 		return "", false
 	}
-	return c.resolveSchemaField(def, name, seen, disc, prefix)
+	return c.resolveSchemaField(def, name, seen, formula, stepRef, prefix)
 }
 
-func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen map[string]bool, disc map[string]whenConstraint, prefix string) (string, bool) {
+func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen map[string]bool, formula whenFormula, stepRef, prefix string) (string, bool) {
 	if props, ok := asMap(schema["properties"]); ok {
-		if prop, ok := asMap(props[name]); ok {
-			return c.schemaTypeName(prop)
+		if raw, exists := props[name]; exists {
+			if prop, ok := schemaFromAny(raw); ok {
+				return c.schemaTypeName(prop)
+			}
 		}
 	}
 	if branches, ok := asList2(schema["allOf"]); ok {
 		var got string
 		for _, raw := range branches {
 			branch, _ := asMap(raw)
-			typ, ok := c.resolveSchemaField(branch, name, seen, disc, prefix)
+			typ, ok := c.resolveSchemaField(branch, name, seen, formula, stepRef, prefix)
 			if !ok {
 				continue
 			}
@@ -772,30 +770,22 @@ func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen ma
 				if !c.validDiscriminator(branches, discSchema, seen) {
 					return "", false
 				}
-				prop, _ := discSchema["propertyName"].(string)
-				constraint, ok := disc[prefix+"."+prop]
-				if !ok {
-					constraint, ok = disc["input:"+prefix+"."+prop]
-				}
-				if !ok {
-					constraint, ok = disc["input:"+prop]
-				}
-				if ok && (constraint.impossible || len(constraint.selectors) > 0) {
+				if formula.impossible || len(formula.clauses) > 0 {
 					if _, hasMapping := asMap(discSchema["mapping"]); !hasMapping {
-						return c.resolveVariantField(branches, name, seen, disc, prefix)
+						return c.resolveVariantField(branches, name, seen, formula, stepRef, prefix)
 					}
-					selected, ok := c.selectDiscriminatorBranches(branches, discSchema, constraint)
+					selected, ok := c.selectDiscriminatorBranches(branches, discSchema, formula, stepRef, prefix)
 					if !ok {
 						return "", false
 					}
-					return c.resolveSelectedBranches(selected, name, seen, disc, prefix)
+					return c.resolveSelectedBranches(selected, name, seen, formula, stepRef, prefix)
 				}
-				return c.resolveVariantField(branches, name, seen, disc, prefix)
+				return c.resolveVariantField(branches, name, seen, formula, stepRef, prefix)
 			}
 			var got string
 			for _, raw := range branches {
 				branch, _ := asMap(raw)
-				typ, ok := c.resolveSchemaField(branch, name, seen, disc, prefix)
+				typ, ok := c.resolveSchemaField(branch, name, seen, formula, stepRef, prefix)
 				if !ok {
 					return "", false
 				}
@@ -812,7 +802,7 @@ func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen ma
 	}
 	if ref, _ := schema["$ref"].(string); ref != "" {
 		if typ, ok := resolveTypeRef(ref); ok {
-			return c.resolveTypeFieldDepth(typ, name, seen, disc, prefix)
+			return c.resolveTypeFieldDepth(typ, name, seen, formula, stepRef, prefix)
 		}
 	}
 	return "", false
@@ -827,7 +817,7 @@ func (c *Checker) validDiscriminator(branches []any, disc map[string]any, seen m
 	var got string
 	for _, raw := range branches {
 		branch, _ := asMap(raw)
-		typ, ok := c.resolveSchemaField(branch, prop, seen, nil, "")
+		typ, ok := c.resolveSchemaField(branch, prop, seen, whenFormula{}, "", "")
 		if !ok {
 			return false
 		}
@@ -864,12 +854,12 @@ func (c *Checker) validDiscriminator(branches []any, disc map[string]any, seen m
 
 // resolveVariantField 在 discriminator 下允许分支特有字段：
 // 只在一个分支存在即返回；多个分支都有时必须类型一致。
-func (c *Checker) resolveVariantField(branches []any, name string, seen map[string]bool, disc map[string]whenConstraint, prefix string) (string, bool) {
+func (c *Checker) resolveVariantField(branches []any, name string, seen map[string]bool, formula whenFormula, stepRef, prefix string) (string, bool) {
 	var got string
 	found := false
 	for _, raw := range branches {
 		branch, _ := asMap(raw)
-		typ, ok := c.resolveSchemaField(branch, name, seen, disc, prefix)
+		typ, ok := c.resolveSchemaField(branch, name, seen, formula, stepRef, prefix)
 		if !ok {
 			continue
 		}
@@ -885,55 +875,54 @@ func (c *Checker) resolveVariantField(branches []any, name string, seen map[stri
 	return "", false
 }
 
-// selectDiscriminatorBranches 按 constraint 选择 oneOf/anyOf 分支。
-func (c *Checker) selectDiscriminatorBranches(branches []any, disc map[string]any, constraint whenConstraint) ([]map[string]any, bool) {
-	if constraint.impossible {
+// selectDiscriminatorBranches 按完整 when clause 选择 oneOf/anyOf 分支：
+// clause 中同一 step 的判别路径必须匹配候选值，其他路径若能在分支 const/enum 中求值也一并校验。
+func (c *Checker) selectDiscriminatorBranches(branches []any, disc map[string]any, formula whenFormula, stepRef, prefix string) ([]map[string]any, bool) {
+	if formula.impossible {
 		return nil, false
 	}
 	mapping, _ := asMap(disc["mapping"])
 	if mapping == nil {
 		return nil, false
 	}
-	candidates := map[string]bool{}
-	for value := range mapping {
-		if constraint.matches(value) {
-			candidates[value] = true
-		}
-	}
-	if len(candidates) == 0 {
-		return nil, false
-	}
+	prop, _ := disc["propertyName"].(string)
 	var out []map[string]any
 	seen := map[string]bool{}
-	for value := range candidates {
-		ref, _ := mapping[value].(string)
+	for value, rawRef := range mapping {
+		ref, _ := rawRef.(string)
 		name, ok := resolveTypeRef(ref)
 		if !ok {
 			return nil, false
 		}
-		found := false
+		var branch map[string]any
 		for _, raw := range branches {
-			branch, _ := asMap(raw)
-			if branchName, ok := branchTypeName(branch); ok && branchName == name {
-				if !seen[branchName] {
-					seen[branchName] = true
-					out = append(out, branch)
-				}
-				found = true
+			b, _ := asMap(raw)
+			if branchName, ok := branchTypeName(b); ok && branchName == name {
+				branch = c.branchSchema(b)
 				break
 			}
 		}
-		if !found {
+		if branch == nil {
 			return nil, false
 		}
+		if !c.formulaAllows(formula, stepRef, prefix, prop, value, branch) {
+			continue
+		}
+		if !seen[name] {
+			seen[name] = true
+			out = append(out, branch)
+		}
+	}
+	if len(out) == 0 {
+		return nil, false
 	}
 	return out, true
 }
 
-func (c *Checker) resolveSelectedBranches(branches []map[string]any, name string, seen map[string]bool, disc map[string]whenConstraint, prefix string) (string, bool) {
+func (c *Checker) resolveSelectedBranches(branches []map[string]any, name string, seen map[string]bool, formula whenFormula, stepRef, prefix string) (string, bool) {
 	var got string
 	for _, branch := range branches {
-		typ, ok := c.resolveSchemaField(branch, name, seen, disc, prefix)
+		typ, ok := c.resolveSchemaField(branch, name, seen, formula, stepRef, prefix)
 		if !ok {
 			return "", false
 		}
@@ -949,6 +938,263 @@ func (c *Checker) resolveSelectedBranches(branches []map[string]any, name string
 	return got, true
 }
 
+// formulaAllows 判断 clause 是否可能容纳该分支：不同 step 的条件视为未知，不否决。
+func (c *Checker) formulaAllows(f whenFormula, stepRef, prefix, discProp, value string, branch map[string]any) bool {
+	if f.impossible {
+		return false
+	}
+	if len(f.clauses) == 0 {
+		return true
+	}
+	discPath := discProp
+	if prefix != "" {
+		discPath = prefix + "." + discProp
+	}
+	for _, clause := range f.clauses {
+		ok := true
+		for key, sel := range clause {
+			if key.step == "input" {
+				if key.path == discPath || key.path == discProp {
+					if !sel.matches(value) {
+						ok = false
+						break
+					}
+				}
+				continue
+			}
+			if key.step != stepRef {
+				continue
+			}
+			if key.path == discPath || key.path == discProp {
+				if !sel.matches(value) {
+					ok = false
+					break
+				}
+				continue
+			}
+			constVals, found := c.branchConstValues(branch, key.path)
+			if !found && prefix != "" {
+				if field := strings.TrimPrefix(key.path, prefix+"."); field != key.path {
+					constVals, found = c.branchConstValues(branch, field)
+				}
+			}
+			if found {
+				possible := false
+				for _, constVal := range constVals {
+					if sel.matches(constVal) {
+						possible = true
+						break
+					}
+				}
+				if !possible {
+					ok = false
+					break
+				}
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Checker) branchConstValues(branch map[string]any, field string) ([]string, bool) {
+	schemas := c.propertySchemas(c.branchSchema(branch), strings.Split(field, "."), 0)
+	if len(schemas) == 0 {
+		return nil, false
+	}
+	var vals []string
+	for _, schema := range schemas {
+		vs, ok := constValues(schema)
+		if !ok {
+			// 任一可能 schema 没有常量，整个字段视为未知，避免错误排除分支。
+			return nil, false
+		}
+		vals = append(vals, vs...)
+	}
+	if len(vals) == 0 {
+		return nil, false
+	}
+	return vals, true
+}
+
+// propertySchemas 返回字段路径可能命中的 schema 集合：
+// properties / $ref / allOf / oneOf / anyOf / 数组元素都按并集处理。
+func (c *Checker) propertySchemas(schema map[string]any, parts []string, depth int) []map[string]any {
+	if depth > 32 {
+		return nil
+	}
+	if len(parts) == 0 {
+		return []map[string]any{schema}
+	}
+	schema = c.branchSchema(schema)
+	if isArraySchema(schema) {
+		var out []map[string]any
+		for _, elem := range c.arrayElementSchemas(schema, -1, false) {
+			out = append(out, c.propertySchemas(elem, parts, depth+1)...)
+		}
+		return out
+	}
+	name := parts[0]
+	var out []map[string]any
+	if idx := strings.IndexByte(name, '['); idx >= 0 {
+		base := name[:idx]
+		index, ok := parseArrayIndex(name[idx:])
+		if !ok {
+			return nil
+		}
+		for _, prop := range c.propertySchemas(schema, []string{base}, depth+1) {
+			for _, elem := range c.arrayElementSchemas(prop, index, true) {
+				out = append(out, c.propertySchemas(elem, parts[1:], depth+1)...)
+			}
+		}
+		return out
+	}
+	if props, ok := asMap(schema["properties"]); ok {
+		if raw, exists := props[name]; exists {
+			if prop, ok := schemaFromAny(raw); ok {
+				out = append(out, c.propertySchemas(prop, parts[1:], depth+1)...)
+			}
+		}
+	}
+	if branches, ok := asList2(schema["allOf"]); ok {
+		for _, raw := range branches {
+			branch, _ := asMap(raw)
+			out = append(out, c.propertySchemas(branch, parts, depth+1)...)
+		}
+	}
+	for _, key := range []string{"oneOf", "anyOf"} {
+		if branches, ok := asList2(schema[key]); ok {
+			for _, raw := range branches {
+				branch, _ := asMap(raw)
+				out = append(out, c.propertySchemas(branch, parts, depth+1)...)
+			}
+		}
+	}
+	return out
+}
+
+func parseArrayIndex(s string) (int, bool) {
+	if len(s) < 3 || s[0] != '[' || s[len(s)-1] != ']' {
+		return 0, false
+	}
+	n, err := strconv.Atoi(s[1 : len(s)-1])
+	if err != nil || n < 0 {
+		return 0, false
+	}
+	return n, true
+}
+
+func schemaFromAny(v any) (map[string]any, bool) {
+	if m, ok := asMap(v); ok {
+		return m, true
+	}
+	if l, ok := asList2(v); ok {
+		return map[string]any{"type": "array", "items": l}, true
+	}
+	return nil, false
+}
+
+func isArraySchema(schema map[string]any) bool {
+	if typ, _ := schema["type"].(string); typ == "array" {
+		return true
+	}
+	if _, ok := asList2(schema["prefixItems"]); ok {
+		return true
+	}
+	if _, ok := asList2(schema["items"]); ok {
+		return true
+	}
+	return false
+}
+
+// arrayElementSchemas 返回数组所有元素 schema；
+// hasIndex=true 时只返回该下标的元素，tuple/prefixItems 越界回退到 items/additionalItems。
+func (c *Checker) arrayElementSchemas(schema map[string]any, index int, hasIndex bool) []map[string]any {
+	schema = c.branchSchema(schema)
+	var prefix []map[string]any
+	if raw, ok := asList2(schema["prefixItems"]); ok {
+		for _, r := range raw {
+			if m, ok := asMap(r); ok {
+				prefix = append(prefix, m)
+			}
+		}
+	}
+	itemsSchema, hasItemsMap := asMap(schema["items"])
+	itemsList, hasItemsList := asList2(schema["items"])
+	additional, _ := asMap(schema["additionalItems"])
+	if hasIndex {
+		if index < len(prefix) {
+			return []map[string]any{prefix[index]}
+		}
+		if hasItemsMap {
+			return []map[string]any{itemsSchema}
+		}
+		if hasItemsList {
+			if index < len(itemsList) {
+				if m, ok := asMap(itemsList[index]); ok {
+					return []map[string]any{m}
+				}
+			}
+			if additional != nil {
+				return []map[string]any{additional}
+			}
+		}
+		if additional != nil {
+			return []map[string]any{additional}
+		}
+		return nil
+	}
+	var out []map[string]any
+	out = append(out, prefix...)
+	if hasItemsMap {
+		out = append(out, itemsSchema)
+	}
+	if hasItemsList {
+		for _, raw := range itemsList {
+			if m, ok := asMap(raw); ok {
+				out = append(out, m)
+			}
+		}
+	}
+	if additional != nil {
+		out = append(out, additional)
+	}
+	return out
+}
+
+func constValues(schema map[string]any) ([]string, bool) {
+	if v, ok := schema["const"]; ok {
+		if s, ok := whenLiteralString(v); ok {
+			return []string{s}, true
+		}
+	}
+	if enum, ok := asList2(schema["enum"]); ok {
+		var vals []string
+		for _, e := range enum {
+			if s, ok := whenLiteralString(e); ok {
+				vals = append(vals, s)
+			}
+		}
+		if len(vals) > 0 {
+			return vals, true
+		}
+	}
+	return nil, false
+}
+
+func (c *Checker) branchSchema(branch map[string]any) map[string]any {
+	if ref, _ := branch["$ref"].(string); ref != "" {
+		if name, ok := resolveTypeRef(ref); ok {
+			if def := c.methodTypeDefs[name]; def != nil {
+				return def
+			}
+		}
+	}
+	return branch
+}
+
 func branchTypeName(branch map[string]any) (string, bool) {
 	if ref, _ := branch["$ref"].(string); ref != "" {
 		return resolveTypeRef(ref)
@@ -962,6 +1208,23 @@ func branchTypeName(branch map[string]any) (string, bool) {
 func (c *Checker) schemaTypeName(schema map[string]any) (string, bool) {
 	if ref, _ := schema["$ref"].(string); ref != "" {
 		return resolveTypeRef(ref)
+	}
+	if isArraySchema(schema) {
+		elements := c.arrayElementSchemas(schema, -1, false)
+		if len(elements) == 1 {
+			if inner, ok := c.schemaTypeName(elements[0]); ok {
+				return "List<" + inner + ">", true
+			}
+		}
+		if len(elements) > 1 {
+			union := make([]any, 0, len(elements))
+			for _, elem := range elements {
+				union = append(union, elem)
+			}
+			if inner, ok := c.inlineType(map[string]any{"oneOf": union}); ok {
+				return "List<" + inner + ">", true
+			}
+		}
 	}
 	if _, ok := asList2(schema["oneOf"]); ok {
 		return c.inlineType(schema)

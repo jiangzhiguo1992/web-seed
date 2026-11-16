@@ -3084,6 +3084,254 @@ func TestFlowImplementationErrors(t *testing.T) {
 					"two":  map[string]any{"type": "string"},
 				},
 			},
+			"ConstrainedPayment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/ConstrainedCard"},
+					map[string]any{"$ref": "#/types/ConstrainedBank"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "method",
+					"mapping": map[string]any{
+						"card": "#/types/ConstrainedCard",
+						"bank": "#/types/ConstrainedBank",
+					},
+				},
+			},
+			"ConstrainedCard": {
+				"type": "object",
+				"properties": map[string]any{
+					"method":      map[string]any{"type": "string", "const": "card"},
+					"kind":        map[string]any{"type": "integer", "const": 1},
+					"card_number": map[string]any{"type": "string"},
+				},
+			},
+			"ConstrainedBank": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "bank"},
+					"kind":   map[string]any{"type": "integer", "const": 2},
+					"iban":   map[string]any{"type": "string"},
+				},
+			},
+			"EnumPayment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/EnumCard"},
+					map[string]any{"$ref": "#/types/EnumBank"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "method",
+					"mapping": map[string]any{
+						"card": "#/types/EnumCard",
+						"bank": "#/types/EnumBank",
+					},
+				},
+			},
+			"EnumCard": {
+				"type": "object",
+				"properties": map[string]any{
+					"method":      map[string]any{"type": "string", "const": "card"},
+					"mode":        map[string]any{"type": "integer", "enum": []any{1, 2}},
+					"card_number": map[string]any{"type": "string"},
+				},
+			},
+			"EnumBank": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "bank"},
+					"mode":   map[string]any{"type": "integer", "enum": []any{3}},
+					"iban":   map[string]any{"type": "string"},
+				},
+			},
+			"NestedPayment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/NestedCard"},
+					map[string]any{"$ref": "#/types/NestedBank"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "method",
+					"mapping": map[string]any{
+						"card": "#/types/NestedCard",
+						"bank": "#/types/NestedBank",
+					},
+				},
+			},
+			"NestedCard": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "card"},
+					"meta": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"kind": map[string]any{"type": "integer", "const": 2},
+						},
+					},
+					"card_number": map[string]any{"type": "string"},
+				},
+			},
+			"NestedBank": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "bank"},
+					"meta": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"kind": map[string]any{"type": "integer", "const": 3},
+						},
+					},
+					"iban": map[string]any{"type": "string"},
+				},
+			},
+			"UnionPayment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/UnionCard"},
+					map[string]any{"$ref": "#/types/UnionBank"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "method",
+					"mapping": map[string]any{
+						"card": "#/types/UnionCard",
+						"bank": "#/types/UnionBank",
+					},
+				},
+			},
+			"UnionCard": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "card"},
+					"payload": map[string]any{
+						"oneOf": []any{
+							map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 1}}},
+							map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 2}}},
+						},
+					},
+					"card_number": map[string]any{"type": "string"},
+				},
+			},
+			"UnionBank": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "bank"},
+					"payload": map[string]any{
+						"oneOf": []any{
+							map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 3}}},
+						},
+					},
+					"iban": map[string]any{"type": "string"},
+				},
+			},
+			"ArrayPayment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/ArrayCard"},
+					map[string]any{"$ref": "#/types/ArrayBank"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "method",
+					"mapping": map[string]any{
+						"card": "#/types/ArrayCard",
+						"bank": "#/types/ArrayBank",
+					},
+				},
+			},
+			"ArrayCard": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "card"},
+					"items": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type":       "object",
+							"properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 2}},
+						},
+					},
+					"card_number": map[string]any{"type": "string"},
+				},
+			},
+			"ArrayBank": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "bank"},
+					"items": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type":       "object",
+							"properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 3}},
+						},
+					},
+					"iban": map[string]any{"type": "string"},
+				},
+			},
+			"TuplePayment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/TupleCard"},
+					map[string]any{"$ref": "#/types/TupleBank"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "method",
+					"mapping": map[string]any{
+						"card": "#/types/TupleCard",
+						"bank": "#/types/TupleBank",
+					},
+				},
+			},
+			"TupleCard": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "card"},
+					"items": map[string]any{
+						"type":        "array",
+						"prefixItems": []any{map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 2}}}},
+						"items":       map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 4}}},
+					},
+					"card_number": map[string]any{"type": "string"},
+				},
+			},
+			"TupleBank": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "bank"},
+					"items": map[string]any{
+						"type":        "array",
+						"prefixItems": []any{map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 3}}}},
+						"items":       map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 5}}},
+					},
+					"iban": map[string]any{"type": "string"},
+				},
+			},
+			"DraftTuplePayment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/DraftTupleCard"},
+					map[string]any{"$ref": "#/types/DraftTupleBank"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "method",
+					"mapping": map[string]any{
+						"card": "#/types/DraftTupleCard",
+						"bank": "#/types/DraftTupleBank",
+					},
+				},
+			},
+			"DraftTupleCard": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "card"},
+					"items": []any{
+						map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 2}}},
+						map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 4}}},
+					},
+					"card_number": map[string]any{"type": "string"},
+				},
+			},
+			"DraftTupleBank": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string", "const": "bank"},
+					"items": []any{
+						map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 3}}},
+						map[string]any{"type": "object", "properties": map[string]any{"kind": map[string]any{"type": "integer", "const": 5}}},
+					},
+					"iban": map[string]any{"type": "string"},
+				},
+			},
 		},
 		entities: map[string]*entityInfo{
 			"data.entities.account": {Fields: []entityFieldInfo{
@@ -3100,6 +3348,13 @@ func TestFlowImplementationErrors(t *testing.T) {
 			"Payment": true, "CardPayment": true, "BankPayment": true, "BadDiscriminator": true,
 			"WrongPayment": true, "BadMappingPayment": true, "TypeMismatchPayment": true,
 			"NumericPayment": true, "NumericOne": true, "NumericTwo": true,
+			"ConstrainedPayment": true, "ConstrainedCard": true, "ConstrainedBank": true,
+			"EnumPayment": true, "EnumCard": true, "EnumBank": true,
+			"NestedPayment": true, "NestedCard": true, "NestedBank": true,
+			"UnionPayment": true, "UnionCard": true, "UnionBank": true,
+			"ArrayPayment": true, "ArrayCard": true, "ArrayBank": true,
+			"TuplePayment": true, "TupleCard": true, "TupleBank": true,
+			"DraftTuplePayment": true, "DraftTupleCard": true, "DraftTupleBank": true,
 		})
 		return c.errs
 	}
@@ -3704,6 +3959,218 @@ func TestFlowImplementationErrors(t *testing.T) {
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("range conjunction negation reported: %v", errs)
 		}
+	})
+
+	t.Run("cross-field clause selects branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "constrained", "type": "ConstrainedPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.constrained.kind == 2 && step.internal.constrained.iban != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("cross-field clause reported: %v", errs)
+		}
+	})
+
+	t.Run("cross-field clause rejects other branch field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "constrained", "type": "ConstrainedPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.constrained.kind == 2 && step.internal.constrained.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number")
+	})
+
+	t.Run("multi-value enum selects branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "enum", "type": "EnumPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.enum.mode == 2 && step.internal.enum.card_number != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("multi-value enum reported: %v", errs)
+		}
+	})
+
+	t.Run("multi-value enum rejects other branch field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "enum", "type": "EnumPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.enum.mode == 3 && step.internal.enum.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number")
+	})
+
+	t.Run("nested branch const selects branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "nested", "type": "NestedPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.nested.meta.kind == 2 && step.internal.nested.card_number != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("nested const reported: %v", errs)
+		}
+	})
+
+	t.Run("nested branch const rejects other branch field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "nested", "type": "NestedPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.nested.meta.kind == 3 && step.internal.nested.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number")
+	})
+
+	t.Run("oneOf nested const selects branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "union", "type": "UnionPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.union.payload.kind == 2 && step.internal.union.card_number != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("oneOf nested const reported: %v", errs)
+		}
+	})
+
+	t.Run("oneOf nested const rejects other branch field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "union", "type": "UnionPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.union.payload.kind == 3 && step.internal.union.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number")
+	})
+
+	t.Run("array nested const selects branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "array", "type": "ArrayPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.array.items[0].kind == 2 && step.internal.array.card_number != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("array nested const reported: %v", errs)
+		}
+	})
+
+	t.Run("array nested const rejects other branch field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "array", "type": "ArrayPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.array.items[0].kind == 3 && step.internal.array.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number")
+	})
+
+	t.Run("prefixItems tuple selects branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "tuple", "type": "TuplePayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.tuple.items[0].kind == 2 && step.internal.tuple.card_number != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("prefixItems tuple reported: %v", errs)
+		}
+	})
+
+	t.Run("prefixItems additional item selects branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "tuple", "type": "TuplePayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.tuple.items[1].kind == 5 && step.internal.tuple.iban != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("prefixItems additional reported: %v", errs)
+		}
+	})
+
+	t.Run("draft tuple selects branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "draft", "type": "DraftTuplePayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.draft.items[1].kind == 4 && step.internal.draft.card_number != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("draft tuple reported: %v", errs)
+		}
+	})
+
+	t.Run("draft tuple rejects other branch field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "draft", "type": "DraftTuplePayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.draft.items[1].kind == 5 && step.internal.draft.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number")
 	})
 
 	t.Run("discriminator unknown mapping value", func(t *testing.T) {

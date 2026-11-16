@@ -1,8 +1,8 @@
 # HTTP 共享组件。各模块 OpenAPI 引用的公共 schema 与参数。
 
-schema_version: 1
 id: cap.http.shared
 summary: "HTTP 共享组件"
+schema_version: 1
 stability: stable
 
 components:
@@ -51,7 +51,7 @@ components:
 
   headers:
     RetryAfter:
-      description: "建议重试等待秒数或 HTTP-date；非法值不发送"
+      description: "建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误"
       schema: { type: string, example: "30" }
 
   responses:

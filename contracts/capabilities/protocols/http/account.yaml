@@ -1,14 +1,14 @@
 # 账号 HTTP 接口（OpenAPI 片段）。
 
-schema_version: 1
 id: cap.http.account
 summary: "账号 HTTP 接口"
+module: account
+schema_version: 1
 stability: stable
 do_not:
   - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
   - "字段长度/枚举以 data 契约为准，不在此处扩展"
 
-module: account
 base_path: /v1
 default_error_responses: [400, 401, 403, 404, 409, 422, 429, 500, 503]
 

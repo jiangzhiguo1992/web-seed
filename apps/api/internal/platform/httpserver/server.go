@@ -36,11 +36,12 @@ type Options struct {
 
 // NewRouter 构造路由与中间件链。
 //
-// 中间件顺序即为执行顺序：RequestID → RealIP → Recoverer → 访问日志。
+// 中间件顺序即为执行顺序：RequestID → ProblemWriter → RealIP → Recoverer → 访问日志。
 // P2 将在 Recoverer 之后插入契约请求校验中间件。
 func NewRouter(log *slog.Logger) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
+	r.Use(WithProblemWriter(log))
 	// RealIP 信任 X-Forwarded-For / X-Real-IP，仅在可信反代之后启用。
 	// 直接暴露公网时必须移除，否则客户端可伪造来源 IP。
 	r.Use(middleware.RealIP)

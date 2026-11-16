@@ -98,7 +98,7 @@ trigger:
 - `steps[].use` 只允许：`cap.methods.*`、`platform.security.permissions.*`；不写 `use` 表示 flow 内部逻辑。
 - flow 不得直接引用 `data.queries.*`；query 只能由 method 调用。
 - `steps[].depends_on` 只引用前序步骤；`when` 是受限布尔表达式（`true/false`、`!`、`&&`、`||`、括号、`input.*` / `step.<id>.*` 与字面量比较），静态可判定为 false 的步骤不可达；`when` 引用的 step 必须是前序步骤，字段必须存在于方法 returns 或内部 `output`。
-- 内部步骤用 `output: [{name, type}]` 声明输出；方法步骤输出由 method returns 派生，禁止声明 `output`。列表输出用 `[index]` 取元素，例如 `step.list.items[0].field`；`$ref` / `oneOf`（含 discriminator）/ `anyOf` / `allOf` 按 schema 解析；`when` 的 `&&`、`||`、`!=`、`!`、`<`、`<=`、`>`、`>=` 约束用于选择 `oneOf` 分支，`||` 合并两侧共同路径的候选值/区间（单侧路径丢弃），`!` 按 De Morgan 取反；`err` 不作为 step 输出，错误用 `on_error`。
+- 内部步骤用 `output: [{name, type}]` 声明输出；方法步骤输出由 method returns 派生，禁止声明 `output`。列表输出用 `[index]` 取元素，例如 `step.list.items[0].field`；列表 schema 支持 `items`、`prefixItems`、`items` tuple 与 `additionalItems`；`$ref` / `oneOf`（含 discriminator）/ `anyOf` / `allOf` 按 schema 解析；`when` 的 `&&`、`||`、`!=`、`!`、`<`、`<=`、`>`、`>=` 约束用于选择 `oneOf` 分支，`||` 合并两侧共同路径的候选值/区间（单侧路径丢弃），`!` 按 De Morgan 取反；`err` 不作为 step 输出，错误用 `on_error`。
 - `when` 静态 false 或 `depends_on` 不可达只跳过该 step，继续后续 step；要终止 flow 用 `on_error.action=abort`。
 - `steps[].on_error` 是 `{error, action, target}` 列表：`action: abort | continue | goto`；abort 向上传播，continue 吞掉，goto 跳到 target；未列出的错误默认 abort。存在后向/自环 `goto` 时 `flow.max_iterations` 必填且 `>= 1`；它是 flow 级循环总预算，预算耗尽返回 `COMMON_LOOP_EXHAUSTED`（503，可重试，建议带 `Retry-After`）。
 - `flow.errors` 必须包含所有可达步骤的未处理错误和 flow 级错误；permissions/rate_limit/audit/idempotency 分别必带 `COMMON_FORBIDDEN`/`COMMON_RATE_LIMITED`/`COMMON_AUDIT_FAILED`/`COMMON_IDEMPOTENCY_CONFLICT`；存在后向/自环 goto 时必带 `COMMON_LOOP_EXHAUSTED`。
@@ -127,7 +127,7 @@ HTTP 约束：
 - 响应 schema 必须 `additionalProperties: false`。
 - 错误响应统一引用 `protocols/http/shared.yaml` 的 `Problem`。
 - 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明。
-- 503 必须通过 shared 的 `ServiceUnavailable` 返回 `Retry-After`；`default_error_responses` 含 503 时 shared 必须定义 `components.headers.RetryAfter` 与 `components.responses.ServiceUnavailable`。
+- 503 必须通过 shared 的 `ServiceUnavailable` 返回 `Retry-After`；`default_error_responses` 含 503 时 shared 必须定义 `components.headers.RetryAfter` 与 `components.responses.ServiceUnavailable`。`Retry-After` 只接受非负整数秒或 HTTP-date，非法值不发送并返回参数错误。
 - 每个 operation 必须写 `x-contract-id` 与 `x-flow`。
 - 不要手写与 method 重复的 schema；request/response 从 flow 的 `input/output` 引用。
 - `components.schemas` 通过 `x-method-type` / `x-enum` / `x-entity` 指向唯一来源，生成器展开；禁止重复写 properties。

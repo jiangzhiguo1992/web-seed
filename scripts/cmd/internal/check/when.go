@@ -344,6 +344,12 @@ func whenLiteralString(v any) (string, bool) {
 			return strconv.FormatInt(int64(x), 10), true
 		}
 		return strconv.FormatFloat(x, 'f', -1, 64), true
+	case int:
+		return strconv.Itoa(x), true
+	case int64:
+		return strconv.FormatInt(x, 10), true
+	case uint64:
+		return strconv.FormatUint(x, 10), true
 	}
 	return "", false
 }
@@ -537,6 +543,162 @@ func cloneConstraints(in map[string]map[string]whenConstraint) map[string]map[st
 				impossible: c.impossible,
 			}
 		}
+	}
+	return out
+}
+
+type whenKey struct {
+	step string
+	path string
+}
+
+type whenClause map[whenKey]whenSelector
+
+type whenFormula struct {
+	clauses    []whenClause
+	impossible bool
+}
+
+// whenFormulaFromNode 把 when 表达式转成 DNF：clauses 之间 OR，clause 内部 AND。
+func whenFormulaFromNode(n *whenNode) whenFormula {
+	if n == nil {
+		return whenFormula{}
+	}
+	switch n.kind {
+	case "and":
+		return formulaAnd(whenFormulaFromNode(n.left), whenFormulaFromNode(n.right))
+	case "or":
+		return formulaOr(whenFormulaFromNode(n.left), whenFormulaFromNode(n.right))
+	case "not":
+		return formulaNot(whenFormulaFromNode(n.left))
+	case "compare":
+		return formulaFromCompare(n)
+	default:
+		return whenFormula{}
+	}
+}
+
+func formulaFromCompare(n *whenNode) whenFormula {
+	m := compareConstraint(n)
+	if m == nil {
+		return whenFormula{}
+	}
+	f := whenFormula{}
+	for step, paths := range m {
+		for path, c := range paths {
+			for _, sel := range c.selectors {
+				f.clauses = append(f.clauses, whenClause{{step: step, path: path}: sel})
+			}
+		}
+	}
+	return f
+}
+
+func formulaAnd(a, b whenFormula) whenFormula {
+	if a.impossible || b.impossible {
+		return whenFormula{impossible: true}
+	}
+	if len(a.clauses) == 0 {
+		return b
+	}
+	if len(b.clauses) == 0 {
+		return a
+	}
+	var out []whenClause
+	for _, ca := range a.clauses {
+		for _, cb := range b.clauses {
+			if merged, ok := mergeClause(ca, cb); ok {
+				out = append(out, merged)
+			}
+		}
+	}
+	if len(out) == 0 {
+		return whenFormula{impossible: true}
+	}
+	if len(out) > maxWhenSelectors {
+		return whenFormula{}
+	}
+	return whenFormula{clauses: out}
+}
+
+func formulaOr(a, b whenFormula) whenFormula {
+	if a.impossible {
+		return b
+	}
+	if b.impossible {
+		return a
+	}
+	if len(a.clauses) == 0 || len(b.clauses) == 0 {
+		return whenFormula{}
+	}
+	out := append(cloneClauses(a.clauses), cloneClauses(b.clauses)...)
+	if len(out) > maxWhenSelectors {
+		return whenFormula{}
+	}
+	return whenFormula{clauses: out}
+}
+
+func formulaNot(a whenFormula) whenFormula {
+	if a.impossible {
+		return whenFormula{}
+	}
+	if len(a.clauses) == 0 {
+		return whenFormula{impossible: true}
+	}
+	result := whenFormula{}
+	for _, clause := range a.clauses {
+		result = formulaAnd(result, negateClause(clause))
+		if result.impossible {
+			return result
+		}
+	}
+	return result
+}
+
+func negateClause(c whenClause) whenFormula {
+	out := whenFormula{}
+	for key, sel := range c {
+		comps, ok := complementSelector(sel)
+		if !ok {
+			return whenFormula{impossible: true}
+		}
+		for _, comp := range comps {
+			out.clauses = append(out.clauses, whenClause{key: comp})
+		}
+	}
+	if len(out.clauses) == 0 {
+		return whenFormula{impossible: true}
+	}
+	return out
+}
+
+func mergeClause(a, b whenClause) (whenClause, bool) {
+	out := whenClause{}
+	for k, v := range a {
+		out[k] = cloneSelector(v)
+	}
+	for k, v := range b {
+		if existing, ok := out[k]; ok {
+			merged, ok := mergeSelectors(existing, v)
+			if !ok {
+				return nil, false
+			}
+			out[k] = merged
+			continue
+		}
+		out[k] = cloneSelector(v)
+	}
+	return out, true
+}
+
+func cloneClauses(in []whenClause) []whenClause {
+	out := make([]whenClause, 0, len(in))
+	for _, c := range in {
+		m := whenClause{}
+		for k, v := range c {
+			m[k] = cloneSelector(v)
+		}
+		out = append(out, m)
 	}
 	return out
 }

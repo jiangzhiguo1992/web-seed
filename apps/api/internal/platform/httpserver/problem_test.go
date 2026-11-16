@@ -48,7 +48,9 @@ func TestWriteProblem(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			WriteProblem(rec, tt.in)
+			if err := writeProblem(rec, tt.in); err != nil {
+				t.Fatalf("WriteProblem() error: %v", err)
+			}
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
@@ -77,6 +79,7 @@ func TestWriteProblemRetryAfter(t *testing.T) {
 		problem    Problem
 		wantStatus int
 		wantHeader string
+		wantErr    bool
 	}{
 		{
 			name:       "503 writes header",
@@ -100,11 +103,13 @@ func TestWriteProblemRetryAfter(t *testing.T) {
 			name:       "503 drops invalid header",
 			problem:    Problem{Status: 503, RetryAfter: "soon"},
 			wantStatus: 503,
+			wantErr:    true,
 		},
 		{
 			name:       "429 drops negative seconds",
 			problem:    Problem{Status: 429, RetryAfter: "-1"},
 			wantStatus: 429,
+			wantErr:    true,
 		},
 		{
 			name:       "503 without retry after",
@@ -131,7 +136,10 @@ func TestWriteProblemRetryAfter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			WriteProblem(rec, tt.problem)
+			err := writeProblem(rec, tt.problem)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("WriteProblem() error = %v, wantErr %v", err, tt.wantErr)
+			}
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
