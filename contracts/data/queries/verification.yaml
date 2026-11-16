@@ -1,4 +1,4 @@
-# 验证查询集：验证体（body）与验证动作（action）。
+# 验证查询集：验证体（body）与验证动作（verification_action）。
 
 id: data.queries.verification
 summary: "验证查询集（验证体与验证动作）"
@@ -136,12 +136,11 @@ queries:
     params:
       - { name: verification_id, type: integer, column: data.tables.verification_action.col.verification_id }
       - { name: account_id, type: integer, column: data.tables.verification_action.col.account_id }
-      - { name: action, type: data.enums.verification_action, column: data.tables.verification_action.col.action }
       - { name: result, type: data.enums.verification_result, column: data.tables.verification_action.col.result }
       - { name: request_ip, type: text, column: data.tables.verification_action.col.request_ip, nullable: true }
       - { name: device_id, type: text, column: data.tables.verification_action.col.device_id, nullable: true }
       - { name: location, type: text, column: data.tables.verification_action.col.location, nullable: true }
-      - { name: input_hash, type: text, column: data.tables.verification_action.col.input_hash, nullable: true }
+      - { name: input_hash, type: text, column: data.tables.verification_action.col.input_hash }
     returns:
       - name: row
         kind: table
@@ -150,12 +149,10 @@ queries:
           - id
           - verification_id
           - account_id
-          - action
           - result
           - created_at
     index_ref: [ data.tables.verification_action.pk ]
     used_by:
-      - cap.methods.verification.send
       - cap.methods.verification.verify
 
   - name: ListVerificationActions
@@ -172,7 +169,6 @@ queries:
           - id
           - verification_id
           - account_id
-          - action
           - result
           - request_ip
           - device_id
@@ -195,7 +191,6 @@ queries:
           - id
           - verification_id
           - account_id
-          - action
           - result
           - request_ip
           - device_id

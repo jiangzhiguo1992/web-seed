@@ -151,7 +151,7 @@ rules:
   - { id: storage-partition, text: "partition 只允许 strategy/columns/interval；strategy 只能是 range/list/hash；columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
   - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
-  - { id: owner-write, text: "只有 owner_module 相同的 cap.methods 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 method 的 queries 中；method 写表必须属于 method 文件的 module；跨模块写必须由 flow 编排多个 method，不允许一个 query 写多模块表", implemented_by: [ owner-write ] }
+  - { id: owner-write, text: "只有 owner_module 相同的 cap.methods 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 method 的 queries 中；method 写表必须属于 method 文件的 owner_module；跨模块写必须由 flow 编排多个 method，不允许一个 query 写多模块表", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-comment, text: "索引必须写非空 comment", implemented_by: [ index-comment ] }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；columns 必须存在；名称前缀匹配类型", implemented_by: [ index-definition ] }

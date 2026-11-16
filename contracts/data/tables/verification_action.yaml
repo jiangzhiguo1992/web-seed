@@ -1,7 +1,7 @@
-# 验证动作表：发送与校验请求的追加日志。
+# 验证动作表：校验请求的追加日志。
 
 id: data.tables.verification_action
-summary: "验证动作（发送/校验请求记录）"
+summary: "验证动作（校验请求记录）"
 owner_module: account
 schema_version: 1
 stability: draft
@@ -14,7 +14,7 @@ do_not:
 
 table:
   name: verification_action
-  comment: "验证动作：发送与校验请求的追加日志"
+  comment: "验证动作：校验请求的追加日志"
   extends:
     - data.tables.base
   entities:
@@ -34,11 +34,6 @@ columns:
     type: integer
     nullable: false
     comment: "账号 ID 快照；验证体清理后仍可按账号追溯；不作为冗余副本声明"
-
-  - name: action
-    type: integer
-    nullable: false
-    comment: "动作整数码；映射 data.enums.verification_action"
 
   - name: result
     type: integer
@@ -68,20 +63,20 @@ columns:
 
   - name: input_hash
     type: string
-    nullable: true
+    nullable: false
     min_len: 32
     max_len: 128
     sensitivity: secret
     comment: "提交内容的 HMAC-SHA256；不存原文"
 
 constraints:
-  - name: ck_verification_action_action_result
+  - name: ck_verification_action_result
     type: check
-    expr: "(action = 1 AND result IN (1, 2)) OR (action = 2 AND result IN (3, 4, 5, 6))"
+    expr: "result IN (3, 4, 5, 6)"
 
   - name: ck_verification_action_input
     type: check
-    expr: "(action = 1 AND input_hash IS NULL) OR (action = 2 AND input_hash IS NOT NULL)"
+    expr: "input_hash IS NOT NULL"
 
   - name: ck_verification_action_status
     type: check

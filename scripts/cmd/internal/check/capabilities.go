@@ -97,7 +97,7 @@ func (c *Checker) checkCapabilities() {
 		if fileID != want {
 			c.rulef("cap-id", "%s: id %q must be %q", rel, fileID, want)
 		}
-		module, _ := doc["module"].(string)
+		module, _ := doc["owner_module"].(string)
 		for _, raw := range asList(doc["flows"]) {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)

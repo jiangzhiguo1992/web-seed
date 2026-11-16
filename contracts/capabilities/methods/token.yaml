@@ -2,7 +2,7 @@
 
 id: cap.methods.token
 summary: "令牌签发与校验接口"
-module: account
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:

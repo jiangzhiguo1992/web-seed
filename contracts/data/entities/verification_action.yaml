@@ -30,12 +30,6 @@ fields:
     source: { column: data.tables.verification_action.col.account_id }
     validation: { column: data.tables.verification_action.col.account_id }
 
-  - name: Action
-    type: data.enums.verification_action
-    description: "动作类型：发送或校验"
-    source: { column: data.tables.verification_action.col.action }
-    validation: { column: data.tables.verification_action.col.action }
-
   - name: Result
     type: data.enums.verification_result
     description: "动作结果"

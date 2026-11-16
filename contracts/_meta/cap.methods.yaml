@@ -21,11 +21,11 @@ fields:
     required: true
     description: "一句话说明"
 
-  - name: module
+  - name: owner_module
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "所属模块；写表归属必须等于本字段"
+    description: "写归属模块；写表归属必须等于本字段"
 
   - name: schema_version
     type: integer
@@ -134,4 +134,4 @@ rules:
   - { id: cap-id, text: "methods/flows/http 契约 ID 必须与 targets.id 派生一致，且全局唯一", implemented_by: [ cap-id ] }
   - { id: method-structure, text: "method 的 interface.name 必须 PascalCase、interface.package 必须在 internal/modules/ 下、method 名唯一、transaction 只能是 none/read_only；types 的 object 必须 additionalProperties: false 且 required 字段必须在 properties 中", implemented_by: [ method-structure ] }
   - { id: cap-ref, text: "method 的 queries 必须指向存在的 data.queries.* 项；params/returns/types 的 data.enums.* / data.entities.* 必须存在，data.tables.* 禁止；flow 引用的 errors、permissions、methods 必须存在", implemented_by: [ cap-ref ] }
-  - { id: method-used-by, text: "method.queries 中带写表的 query，其表必须属于 method 文件的 module", implemented_by: [ method-used-by ] }
+  - { id: method-used-by, text: "method.queries 中带写表的 query，其表必须属于 method 文件的 owner_module", implemented_by: [ method-used-by ] }

@@ -71,7 +71,7 @@ func (c *Checker) checkMethodPersistence(doc map[string]any, rel string, tableID
 	if c.declaredWrites == nil {
 		c.declaredWrites = map[string]bool{}
 	}
-	module, _ := doc["module"].(string)
+	module, _ := doc["owner_module"].(string)
 	iface, _ := asMap(doc["interface"])
 	for _, raw := range asList(iface["methods"]) {
 		m, _ := asMap(raw)

@@ -617,12 +617,12 @@ func quoteScaffoldProse(n *yaml.Node) {
 }
 
 type methodFileScaffold struct {
-	SchemaVersion int                       `yaml:"schema_version"`
 	ID            string                    `yaml:"id"`
 	Summary       string                    `yaml:"summary"`
+	OwnerModule   string                    `yaml:"owner_module"`
+	SchemaVersion int                       `yaml:"schema_version"`
 	Stability     string                    `yaml:"stability"`
 	DoNot         []string                  `yaml:"do_not"`
-	Module        string                    `yaml:"module"`
 	Interface     methodInterfaceScaffold   `yaml:"interface"`
 	Persistence   methodPersistenceScaffold `yaml:"persistence"`
 	UsedBy        methodUsedByScaffold      `yaml:"used_by"`
@@ -659,12 +659,12 @@ type methodUsedByScaffold struct {
 }
 
 type flowFileScaffold struct {
-	SchemaVersion int                `yaml:"schema_version"`
 	ID            string             `yaml:"id"`
 	Summary       string             `yaml:"summary"`
+	OwnerModule   string             `yaml:"owner_module"`
+	SchemaVersion int                `yaml:"schema_version"`
 	Stability     string             `yaml:"stability"`
 	DoNot         []string           `yaml:"do_not"`
-	Module        string             `yaml:"module"`
 	Flows         []flowItemScaffold `yaml:"flows"`
 }
 
@@ -679,12 +679,12 @@ type flowItemScaffold struct {
 }
 
 type httpFileScaffold struct {
-	SchemaVersion         int            `yaml:"schema_version"`
 	ID                    string         `yaml:"id"`
 	Summary               string         `yaml:"summary"`
+	OwnerModule           string         `yaml:"owner_module"`
+	SchemaVersion         int            `yaml:"schema_version"`
 	Stability             string         `yaml:"stability"`
 	DoNot                 []string       `yaml:"do_not"`
-	Module                string         `yaml:"module"`
 	BasePath              string         `yaml:"base_path"`
 	DefaultErrorResponses []int          `yaml:"default_error_responses,omitempty"`
 	Paths                 map[string]any `yaml:"paths"`
@@ -715,7 +715,7 @@ func RenderMethod(s *Schema, name, module, summary, table string) ([]byte, error
 		Summary:       summary,
 		Stability:     scaffoldStability,
 		DoNot:         []string{},
-		Module:        module,
+		OwnerModule:   module,
 		Interface: methodInterfaceScaffold{
 			Name:    pascal(module) + "Service",
 			Package: "internal/modules/" + module,
@@ -762,7 +762,7 @@ func RenderFlow(s *Schema, name, module, summary, method string) ([]byte, error)
 		ID:            fileID,
 		Summary:       summary,
 		Stability:     scaffoldStability,
-		Module:        module,
+		OwnerModule:   module,
 		DoNot:         []string{},
 		Flows: []flowItemScaffold{{
 			Name:           "get",
@@ -822,7 +822,7 @@ func RenderHTTP(s *Schema, name, module, summary, flow, path, httpMethod string)
 		Summary:       summary,
 		Stability:     scaffoldStability,
 		DoNot:         []string{},
-		Module:        module,
+		OwnerModule:   module,
 		BasePath:      "/v1",
 		Paths:         map[string]any{path: map[string]any{httpMethod: op}},
 	}

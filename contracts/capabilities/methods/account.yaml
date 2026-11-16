@@ -2,7 +2,7 @@
 
 id: cap.methods.account
 summary: "账号跨模块 service 接口"
-module: account
+owner_module: account
 schema_version: 1
 stability: stable
 do_not:

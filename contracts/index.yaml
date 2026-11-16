@@ -66,7 +66,7 @@ entries:
       - "在 account 之前创建验证体"
   - id: data.tables.verification_action
     path: data/tables/verification_action.yaml
-    summary: "验证动作表结构（发送/校验请求日志）"
+    summary: "验证动作表结构（校验请求日志）"
     consumers: [api, worker]
     enforcement: generated+tested
     stability: draft

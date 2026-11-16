@@ -130,13 +130,13 @@ rules:
     implemented_by: [cap.methods.verification.verify]
 
   - id: business.rules.auth.verification_action_recorded
-    summary: "发送与校验必须追加动作日志"
+    summary: "校验必须追加动作日志"
     severity: error
     on_violation: platform.errors.COMMON_INTERNAL
-    given: "SendVerification 或 VerifyCode 发生状态变更"
+    given: "VerifyCode 发生状态变更"
     when: "事务提交"
     then: "同一事务写入 verification_action，含 account_id 快照；result 与实际结果一致"
-    implemented_by: [cap.methods.verification.send, cap.methods.verification.verify]
+    implemented_by: [cap.methods.verification.verify]
 
   - id: business.rules.auth.verification_action_append_only
     summary: "验证动作只追加，不更新"
@@ -145,7 +145,7 @@ rules:
     given: "verification_action 已写入"
     when: "任何后续流程"
     then: "禁止 UPDATE 或软删；只允许按保留期清理"
-    implemented_by: [cap.methods.verification.send, cap.methods.verification.verify]
+    implemented_by: [cap.methods.verification.verify]
 
 invariants:
   - id: business.rules.auth.invariants.verification_consumed_consistent

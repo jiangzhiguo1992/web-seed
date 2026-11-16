@@ -2,12 +2,12 @@
 
 id: cap.methods.verification
 summary: "验证码发送与校验接口"
-module: account
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:
   - "Send / Verify 不要返回 code_hash / content / target 原文；只返回 masked_target"
-  - "Send / Verify 写 verification_action 必须与业务结果同事务，失败不得留下不一致记录"
+  - "Verify 写 verification_action 必须与业务结果同事务，失败不得留下不一致记录"
   - "验证码校验失败不要枚举 target 是否存在"
   - "换绑、解绑或停用认证绑定必须调用 RevokeByAuth"
 
@@ -16,7 +16,7 @@ interface:
   package: internal/modules/account/auth/verification
   methods:
     - name: Send
-      summary: "发送短信/邮件验证码，并记录发送动作"
+      summary: "发送短信/邮件验证码"
       params:
         - { name: ctx, type: context.Context }
         - { name: input, type: SendVerificationInput }
@@ -33,7 +33,6 @@ interface:
         - data.queries.verification.get_latest_verification
         - data.queries.verification.create_verification
         - data.queries.verification.mark_verification_sent
-        - data.queries.verification.create_verification_action
 
     - name: Verify
       summary: "校验并消费验证码，记录每次校验动作"

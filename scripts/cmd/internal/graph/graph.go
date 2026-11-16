@@ -593,6 +593,10 @@ func mappingKeyRange(m *yaml.Node, key string, parentEnd int) (int, int, bool) {
 				end = next
 			}
 		}
+		// 只替换该键的值块，保留其后的空行与注释。
+		if valueEnd := blockEnd(m.Content[i+1], end); valueEnd > start && valueEnd <= end {
+			end = valueEnd
+		}
 		return start, end, true
 	}
 	return 0, 0, false

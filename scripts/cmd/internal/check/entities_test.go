@@ -1158,7 +1158,7 @@ func TestWriteQueries(t *testing.T) {
 	}
 	doc := func(module string) map[string]any {
 		return map[string]any{
-			"module": module,
+			"owner_module": module,
 			"interface": map[string]any{"methods": []any{
 				map[string]any{"name": "Create", "queries": []any{q.ID}},
 			}},

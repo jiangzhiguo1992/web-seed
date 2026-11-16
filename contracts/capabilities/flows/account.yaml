@@ -2,7 +2,7 @@
 
 id: cap.flows.account
 summary: "账号用例集"
-module: account
+owner_module: account
 schema_version: 1
 stability: stable
 do_not:

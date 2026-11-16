@@ -761,7 +761,7 @@ func TestHTTPCapabilityWriteLayerRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := `id: cap.http.x
-module: x
+owner_module: x
 persistence:
   tables: [ data.tables.x ]
 `
@@ -775,7 +775,7 @@ persistence:
 	}
 
 	body = `id: cap.http.x
-module: x
+owner_module: x
 writes:
   - data.queries.x.q
 `
@@ -795,7 +795,7 @@ func TestPersistenceOwnership(t *testing.T) {
 		"data.tables.auth_pwd": "auth",
 	}}
 	doc := map[string]any{
-		"module": "auth",
+		"owner_module": "auth",
 		"persistence": map[string]any{
 			"tables": []any{"data.tables.account", "data.tables.auth_pwd"},
 		},
@@ -2907,7 +2907,7 @@ func TestConstraintErrorRef(t *testing.T) {
 	}
 	body := `
 id: cap.methods.x
-module: x
+owner_module: x
 persistence:
   table: data.tables.x
   constraint_errors:

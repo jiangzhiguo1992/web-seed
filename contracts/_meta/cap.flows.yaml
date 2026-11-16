@@ -1,4 +1,4 @@
-# cap.flows 类型规范：按模块聚合的编排用例集，文件级 module + item 级 flow。
+# cap.flows 类型规范：按模块聚合的编排用例集，文件级 owner_module + item 级 flow。
 
 id: meta.cap.flows
 type: cap.flows
@@ -21,11 +21,11 @@ fields:
     required: true
     description: "一句话说明"
 
-  - name: module
+  - name: owner_module
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "所属模块；flow 的写归属校验基准"
+    description: "写归属模块；flow 的写归属校验基准"
 
   - name: schema_version
     type: integer

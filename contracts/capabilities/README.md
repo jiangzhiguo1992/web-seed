@@ -60,7 +60,7 @@ protocols ──x-flow──> flows ──use──> methods ──queries──
 - 不要在 interface 里暴露 `*pgx.Tx` 或 HTTP 类型。
 - 不要返回表行 `data.tables.*.row`；返回 `data.entities.*` 或本地 `types.*`。
 - 只登记跨模块调用的方法；模块内 helper 不要进契约。
-- 写表必须属于 `module`；每个方法用 `queries` 列出它调用的 query 项，query 的 `used_by` 由 `make gen-graph` 反向生成。
+- 写表必须属于 `owner_module`；每个方法用 `queries` 列出它调用的 query 项，query 的 `used_by` 由 `make gen-graph` 反向生成。
 - 跨模块写不允许由一个 query 完成：拆成多个单表 query，由 flow 编排多个 method；flow 的 `transaction` 覆盖所有 steps。
 - 不要声明权限/审计/限流/幂等——这些属于 flow。
 - `used_by.flows` 由 `make gen-graph` 写回；不要手改。
@@ -78,7 +78,7 @@ protocols ──x-flow──> flows ──use──> methods ──queries──
 
 不写 `trigger`，由 `protocols` 的 `x-flow` 引用。
 
-必填：`module` / `steps` / `permissions` / `transaction` / `errors`。
+必填：`owner_module` / `steps` / `permissions` / `transaction` / `errors`。
 
 ### 4.2 异步 flow
 
@@ -91,7 +91,7 @@ trigger:
   event: business.events.*    # type=event（唯一允许引用 business 的位置）
 ```
 
-必填：`module` / `trigger` / `input` / `output` / `steps` / `idempotency` / `retry` / `concurrency`。
+必填：`owner_module` / `trigger` / `input` / `output` / `steps` / `idempotency` / `retry` / `concurrency`。
 
 ### 4.3 共同约束
 
