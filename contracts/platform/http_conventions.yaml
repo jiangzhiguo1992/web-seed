@@ -31,6 +31,7 @@ headers:
     - { name: Accept-Language, required: false, note: "用于错误文案" }
   response:
     - { name: X-Request-Id, required: true, note: "必须回传，便于关联日志" }
+    - { name: Retry-After, required: false, note: "429/503 时返回非负整数秒或 HTTP-date；COMMON_RATE_LIMITED / COMMON_LOOP_EXHAUSTED 使用；非法值不发送" }
     - { name: RateLimit-Limit, required: false }
     - { name: RateLimit-Remaining, required: false }
     - { name: RateLimit-Reset, required: false }

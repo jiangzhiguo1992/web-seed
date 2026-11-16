@@ -4,7 +4,7 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
-        gen gen-openapi gen-db gen-graph gen-graph-check gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
+        gen gen-openapi gen-db gen-graph gen-graph-check gen-errors gen-errors-check gen-client contract-new contract-check contract-graph contract-impact contract-compat db-verify \
         gen-rule-ids check-rule-ids dev api-dev web-dev compose-up compose-down doctor derive check-docs
 
 help: ## 显示可用目标
@@ -43,8 +43,10 @@ lint-tools: ## 契约工具 vet + 格式检查
 typecheck: ## 前端类型检查
 	pnpm -C apps/web -r --if-present typecheck
 
-gen: contract-check ## 重新生成全部契约产物（gen-graph 已实现，其余 P2；生成前强制校验契约）
-	@echo "gen: 部分实现。已实现：gen-graph。待实现：gen-openapi / gen-db / gen-client / gen-env"
+gen: contract-check ## 重新生成全部契约产物（gen-graph / gen-errors 已实现，其余 P2；生成前强制校验契约）
+	@echo "gen: 部分实现。已实现：gen-graph / gen-errors。待实现：gen-openapi / gen-db / gen-client / gen-env"
+	$(MAKE) gen-graph
+	$(MAKE) gen-errors
 	@exit 1
 
 gen-openapi: contract-check ## 合并 capabilities/http/* + apps/* → generated/openapi（P2）
@@ -60,6 +62,12 @@ gen-graph: ## 按引用计算并写回 table/entity 的 used_by
 
 gen-graph-check: ## 校验 used_by 是否最新（CI）
 	cd scripts/cmd && go run ./gen_graph -root "$(CURDIR)" -check
+
+gen-errors: ## platform/errors.yaml → docs/contracts/generated/errors.md
+	cd scripts/cmd && go run ./gen_errors -root "$(CURDIR)"
+
+gen-errors-check: ## 校验 errors.md 是否最新（CI）
+	cd scripts/cmd && go run ./gen_errors -root "$(CURDIR)" -check
 
 gen-client: contract-check ## 合并 spec → apps/web/packages/api-client（P2）
 	@echo "gen-client: 尚未实现（P2）"

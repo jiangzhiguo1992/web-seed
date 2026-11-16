@@ -10,7 +10,7 @@ do_not:
 
 module: account
 base_path: /v1
-default_error_responses: [400, 401, 403, 404, 409, 422, 429, 500]
+default_error_responses: [400, 401, 403, 404, 409, 422, 429, 500, 503]
 
 paths:
   /account:

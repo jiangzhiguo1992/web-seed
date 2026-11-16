@@ -118,6 +118,436 @@ func splitStepField(field string) (string, string, bool) {
 	return parts[1], strings.Join(parts[2:], "."), true
 }
 
+type whenRange struct {
+	op    string
+	value string
+}
+
+type whenSelector struct {
+	include map[string]bool
+	exclude map[string]bool
+	ranges  []whenRange
+}
+
+type whenConstraint struct {
+	selectors  []whenSelector
+	impossible bool
+}
+
+const maxWhenSelectors = 64
+
+// matches 判断 mapping key 是否满足约束：selectors 之间是 OR，selector 内部是 AND。
+func (c whenConstraint) matches(value string) bool {
+	if c.impossible {
+		return false
+	}
+	if len(c.selectors) == 0 {
+		return true
+	}
+	for _, s := range c.selectors {
+		if s.matches(value) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s whenSelector) matches(value string) bool {
+	if len(s.include) > 0 && !s.include[value] {
+		return false
+	}
+	if s.exclude[value] {
+		return false
+	}
+	for _, r := range s.ranges {
+		if !whenOneRange(value, r) {
+			return false
+		}
+	}
+	return true
+}
+
+// whenDiscriminatorValues 收集 when 中可静态确定的判别字段约束。
+// 支持 && / || / ! / == / != / 范围比较；字符串、数字、布尔值都可作为判别值。
+func whenDiscriminatorValues(n *whenNode) map[string]map[string]whenConstraint {
+	return collectWhenConstraints(n)
+}
+
+func collectWhenConstraints(n *whenNode) map[string]map[string]whenConstraint {
+	if n == nil {
+		return nil
+	}
+	switch n.kind {
+	case "and":
+		return mergeConstraintsAnd(collectWhenConstraints(n.left), collectWhenConstraints(n.right))
+	case "or":
+		return mergeConstraintsOr(collectWhenConstraints(n.left), collectWhenConstraints(n.right))
+	case "compare":
+		return compareConstraint(n)
+	case "not":
+		return collectNegatedConstraints(n.left)
+	default:
+		return nil
+	}
+}
+
+func collectNegatedConstraints(n *whenNode) map[string]map[string]whenConstraint {
+	if n == nil {
+		return nil
+	}
+	switch n.kind {
+	case "not":
+		return collectWhenConstraints(n.left)
+	case "and":
+		return mergeConstraintsOr(collectNegatedConstraints(n.left), collectNegatedConstraints(n.right))
+	case "or":
+		return mergeConstraintsAnd(collectNegatedConstraints(n.left), collectNegatedConstraints(n.right))
+	case "compare":
+		return invertConstraints(compareConstraint(n))
+	default:
+		return nil
+	}
+}
+
+func invertConstraints(in map[string]map[string]whenConstraint) map[string]map[string]whenConstraint {
+	if in == nil {
+		return nil
+	}
+	out := map[string]map[string]whenConstraint{}
+	for step, paths := range in {
+		out[step] = map[string]whenConstraint{}
+		for path, c := range paths {
+			out[step][path] = invertConstraint(c)
+		}
+	}
+	return out
+}
+
+// invertConstraint 对约束取反：selectors 是 OR，取反后变成 AND。
+func invertConstraint(c whenConstraint) whenConstraint {
+	if c.impossible {
+		return whenConstraint{}
+	}
+	if len(c.selectors) == 0 {
+		return whenConstraint{impossible: true}
+	}
+	result := whenConstraint{selectors: []whenSelector{{}}}
+	for _, s := range c.selectors {
+		comp, ok := complementSelector(s)
+		if !ok {
+			return whenConstraint{impossible: true}
+		}
+		result = andConstraints(result, whenConstraint{selectors: comp})
+		if result.impossible {
+			return result
+		}
+	}
+	return result
+}
+
+// complementSelector 返回 selector 的补集（OR 形式）；无原子的 selector 是 true，补集为 false。
+func complementSelector(s whenSelector) ([]whenSelector, bool) {
+	var out []whenSelector
+	for v := range s.include {
+		out = append(out, whenSelector{exclude: map[string]bool{v: true}})
+	}
+	for v := range s.exclude {
+		out = append(out, whenSelector{include: map[string]bool{v: true}})
+	}
+	for _, r := range s.ranges {
+		out = append(out, whenSelector{ranges: []whenRange{{op: invertRangeOp(r.op), value: r.value}}})
+	}
+	if len(out) == 0 {
+		return nil, false
+	}
+	return out, true
+}
+
+func invertRangeOp(op string) string {
+	switch op {
+	case "<":
+		return ">="
+	case "<=":
+		return ">"
+	case ">":
+		return "<="
+	case ">=":
+		return "<"
+	}
+	return op
+}
+
+func compareConstraint(n *whenNode) map[string]map[string]whenConstraint {
+	switch n.op {
+	case "==", "!=", "<", "<=", ">", ">=":
+	default:
+		return nil
+	}
+	if n.left == nil || n.right == nil {
+		return nil
+	}
+	field, lit := n.left, n.right
+	if field.kind != "field" && lit.kind == "field" {
+		field, lit = lit, field
+	}
+	if field.kind != "field" || lit.kind != "literal" {
+		return nil
+	}
+	val, ok := whenLiteralString(lit.value)
+	if !ok {
+		return nil
+	}
+	path, _ := field.value.(string)
+	step, rest, ok := splitStepField(path)
+	if !ok {
+		rest, ok = splitInputField(path)
+		if !ok {
+			return nil
+		}
+		step = "input"
+	}
+	s := whenSelector{}
+	switch n.op {
+	case "==":
+		s.include = map[string]bool{val: true}
+	case "!=":
+		s.exclude = map[string]bool{val: true}
+	case "<", "<=", ">", ">=":
+		s.ranges = []whenRange{{op: n.op, value: val}}
+	default:
+		return nil
+	}
+	return map[string]map[string]whenConstraint{step: {rest: {selectors: []whenSelector{s}}}}
+}
+
+func splitInputField(field string) (string, bool) {
+	if strings.HasPrefix(field, "input.") {
+		rest := strings.TrimPrefix(field, "input.")
+		if rest != "" {
+			return rest, true
+		}
+	}
+	return "", false
+}
+
+func whenLiteralString(v any) (string, bool) {
+	switch x := v.(type) {
+	case string:
+		return x, true
+	case bool:
+		if x {
+			return "true", true
+		}
+		return "false", true
+	case float64:
+		if x == float64(int64(x)) {
+			return strconv.FormatInt(int64(x), 10), true
+		}
+		return strconv.FormatFloat(x, 'f', -1, 64), true
+	}
+	return "", false
+}
+
+func mergeConstraintsAnd(a, b map[string]map[string]whenConstraint) map[string]map[string]whenConstraint {
+	out := cloneConstraints(a)
+	for step, paths := range b {
+		if out[step] == nil {
+			out[step] = map[string]whenConstraint{}
+		}
+		for path, cb := range paths {
+			if ca, ok := out[step][path]; ok {
+				out[step][path] = andConstraints(ca, cb)
+			} else {
+				out[step][path] = cb
+			}
+		}
+	}
+	return out
+}
+
+// mergeConstraintsOr 处理 ||：只保留两侧都约束的 step/path，值/区间取并集。
+// 单侧路径在 || 下可能不参与，丢弃以免误导分支选择。
+func mergeConstraintsOr(a, b map[string]map[string]whenConstraint) map[string]map[string]whenConstraint {
+	if len(a) == 0 || len(b) == 0 {
+		return nil
+	}
+	out := map[string]map[string]whenConstraint{}
+	for step, paths := range a {
+		bp, ok := b[step]
+		if !ok {
+			continue
+		}
+		for path, ca := range paths {
+			cb, ok := bp[path]
+			if !ok {
+				continue
+			}
+			if out[step] == nil {
+				out[step] = map[string]whenConstraint{}
+			}
+			out[step][path] = orConstraints(ca, cb)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func andConstraints(a, b whenConstraint) whenConstraint {
+	if a.impossible || b.impossible {
+		return whenConstraint{impossible: true}
+	}
+	if len(a.selectors) == 0 {
+		return b
+	}
+	if len(b.selectors) == 0 {
+		return a
+	}
+	var out []whenSelector
+	for _, sa := range a.selectors {
+		for _, sb := range b.selectors {
+			if s, ok := mergeSelectors(sa, sb); ok {
+				out = append(out, s)
+			}
+		}
+	}
+	if len(out) == 0 {
+		return whenConstraint{impossible: true}
+	}
+	if len(out) > maxWhenSelectors {
+		return whenConstraint{}
+	}
+	return whenConstraint{selectors: out}
+}
+
+func mergeSelectors(a, b whenSelector) (whenSelector, bool) {
+	out := whenSelector{
+		include: map[string]bool{},
+		exclude: map[string]bool{},
+		ranges:  append(append([]whenRange{}, a.ranges...), b.ranges...),
+	}
+	for v := range a.exclude {
+		out.exclude[v] = true
+	}
+	for v := range b.exclude {
+		out.exclude[v] = true
+	}
+	hasInclude := len(a.include) > 0 || len(b.include) > 0
+	switch {
+	case len(a.include) > 0 && len(b.include) > 0:
+		for v := range a.include {
+			if b.include[v] {
+				out.include[v] = true
+			}
+		}
+	case len(a.include) > 0:
+		for v := range a.include {
+			out.include[v] = true
+		}
+	case len(b.include) > 0:
+		for v := range b.include {
+			out.include[v] = true
+		}
+	}
+	for v := range out.exclude {
+		delete(out.include, v)
+	}
+	if hasInclude && len(out.include) == 0 {
+		return whenSelector{}, false
+	}
+	return out, true
+}
+
+func orConstraints(a, b whenConstraint) whenConstraint {
+	if a.impossible {
+		return b
+	}
+	if b.impossible {
+		return a
+	}
+	if len(a.selectors) == 0 || len(b.selectors) == 0 {
+		return whenConstraint{}
+	}
+	out := append(cloneSelectors(a.selectors), cloneSelectors(b.selectors)...)
+	if len(out) > maxWhenSelectors {
+		return whenConstraint{}
+	}
+	return whenConstraint{selectors: out}
+}
+
+func cloneSelectors(in []whenSelector) []whenSelector {
+	out := make([]whenSelector, 0, len(in))
+	for _, s := range in {
+		out = append(out, cloneSelector(s))
+	}
+	return out
+}
+
+func cloneSelector(s whenSelector) whenSelector {
+	out := whenSelector{
+		include: map[string]bool{},
+		exclude: map[string]bool{},
+		ranges:  append([]whenRange{}, s.ranges...),
+	}
+	for v := range s.include {
+		out.include[v] = true
+	}
+	for v := range s.exclude {
+		out.exclude[v] = true
+	}
+	return out
+}
+
+func whenOneRange(value string, r whenRange) bool {
+	lv, lerr := strconv.ParseFloat(value, 64)
+	rv, rerr := strconv.ParseFloat(r.value, 64)
+	if lerr == nil && rerr == nil {
+		switch r.op {
+		case "<":
+			return lv < rv
+		case "<=":
+			return lv <= rv
+		case ">":
+			return lv > rv
+		case ">=":
+			return lv >= rv
+		}
+	}
+	switch r.op {
+	case "<":
+		return value < r.value
+	case "<=":
+		return value <= r.value
+	case ">":
+		return value > r.value
+	case ">=":
+		return value >= r.value
+	}
+	return false
+}
+
+func cloneConstraints(in map[string]map[string]whenConstraint) map[string]map[string]whenConstraint {
+	out := map[string]map[string]whenConstraint{}
+	for step, paths := range in {
+		out[step] = map[string]whenConstraint{}
+		for path, c := range paths {
+			out[step][path] = whenConstraint{
+				selectors:  cloneSelectors(c.selectors),
+				impossible: c.impossible,
+			}
+		}
+	}
+	return out
+}
+
+func whenSegmentPath(seg whenPathSegment) string {
+	if seg.hasIndex {
+		return fmt.Sprintf("%s[%d]", seg.name, seg.index)
+	}
+	return seg.name
+}
+
 func tokenizeWhen(s string) ([]whenToken, error) {
 	var toks []whenToken
 	for i := 0; i < len(s); {

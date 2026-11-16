@@ -70,3 +70,110 @@ func TestWriteProblem(t *testing.T) {
 		})
 	}
 }
+
+func TestWriteProblemRetryAfter(t *testing.T) {
+	tests := []struct {
+		name       string
+		problem    Problem
+		wantStatus int
+		wantHeader string
+	}{
+		{
+			name:       "503 writes header",
+			problem:    Problem{Status: 503, RetryAfter: "30"},
+			wantStatus: 503,
+			wantHeader: "30",
+		},
+		{
+			name:       "429 writes header",
+			problem:    Problem{Status: 429, RetryAfter: "120"},
+			wantStatus: 429,
+			wantHeader: "120",
+		},
+		{
+			name:       "503 writes http-date header",
+			problem:    Problem{Status: 503, RetryAfter: "Wed, 21 Oct 2015 07:28:00 GMT"},
+			wantStatus: 503,
+			wantHeader: "Wed, 21 Oct 2015 07:28:00 GMT",
+		},
+		{
+			name:       "503 drops invalid header",
+			problem:    Problem{Status: 503, RetryAfter: "soon"},
+			wantStatus: 503,
+		},
+		{
+			name:       "429 drops negative seconds",
+			problem:    Problem{Status: 429, RetryAfter: "-1"},
+			wantStatus: 429,
+		},
+		{
+			name:       "503 without retry after",
+			problem:    Problem{Status: 503},
+			wantStatus: 503,
+		},
+		{
+			name:       "500 ignores retry after",
+			problem:    Problem{Status: 500, RetryAfter: "30"},
+			wantStatus: 500,
+		},
+		{
+			name:       "invalid status falls back and drops header",
+			problem:    Problem{Status: 0, RetryAfter: "30"},
+			wantStatus: 500,
+		},
+		{
+			name:       "empty retry after",
+			problem:    Problem{Status: 503, RetryAfter: ""},
+			wantStatus: 503,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			WriteProblem(rec, tt.problem)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
+			}
+			if got := rec.Header().Get("Retry-After"); got != tt.wantHeader {
+				t.Fatalf("Retry-After = %q, want %q", got, tt.wantHeader)
+			}
+
+			var body map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if _, ok := body["RetryAfter"]; ok {
+				t.Fatalf("RetryAfter must not appear in body")
+			}
+			if _, ok := body["retry_after"]; ok {
+				t.Fatalf("retry_after must not appear in body")
+			}
+		})
+	}
+}
+
+func TestValidRetryAfter(t *testing.T) {
+	cases := []struct {
+		value string
+		want  bool
+	}{
+		{"30", true},
+		{"0", true},
+		{"007", true},
+		{"Wed, 21 Oct 2015 07:28:00 GMT", true},
+		{"", false},
+		{"-1", false},
+		{" 30", false},
+		{"30 ", false},
+		{"soon", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.value, func(t *testing.T) {
+			if got := validRetryAfter(tc.value); got != tc.want {
+				t.Fatalf("validRetryAfter(%q) = %v, want %v", tc.value, got, tc.want)
+			}
+		})
+	}
+}

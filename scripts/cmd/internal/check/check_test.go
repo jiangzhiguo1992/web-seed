@@ -2989,6 +2989,101 @@ func TestFlowImplementationErrors(t *testing.T) {
 					map[string]any{"type": "object", "properties": map[string]any{"right": map[string]any{"type": "integer"}}},
 				},
 			},
+			"Payment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/CardPayment"},
+					map[string]any{"$ref": "#/types/BankPayment"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "method",
+					"mapping": map[string]any{
+						"card": "#/types/CardPayment",
+						"bank": "#/types/BankPayment",
+					},
+				},
+			},
+			"CardPayment": {
+				"type": "object",
+				"properties": map[string]any{
+					"method":      map[string]any{"type": "string"},
+					"card_number": map[string]any{"type": "string"},
+					"shared":      map[string]any{"type": "string"},
+				},
+			},
+			"BankPayment": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string"},
+					"iban":   map[string]any{"type": "string"},
+					"shared": map[string]any{"type": "integer"},
+				},
+			},
+			"BadDiscriminator": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/CardPayment"},
+					map[string]any{"type": "object", "properties": map[string]any{"other": map[string]any{"type": "string"}}},
+				},
+				"discriminator": map[string]any{"propertyName": "method"},
+			},
+			"WrongPayment": {
+				"type": "object",
+				"properties": map[string]any{
+					"method": map[string]any{"type": "string"},
+				},
+			},
+			"BadMappingPayment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/CardPayment"},
+					map[string]any{"$ref": "#/types/BankPayment"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "method",
+					"mapping": map[string]any{
+						"card": "#/types/CardPayment",
+						"bank": "#/types/WrongPayment",
+					},
+				},
+			},
+			"TypeMismatchPayment": {
+				"oneOf": []any{
+					map[string]any{"type": "object", "properties": map[string]any{
+						"kind":  map[string]any{"type": "string"},
+						"value": map[string]any{"type": "string"},
+					}},
+					map[string]any{"type": "object", "properties": map[string]any{
+						"kind":  map[string]any{"type": "integer"},
+						"value": map[string]any{"type": "string"},
+					}},
+				},
+				"discriminator": map[string]any{"propertyName": "kind"},
+			},
+			"NumericPayment": {
+				"oneOf": []any{
+					map[string]any{"$ref": "#/types/NumericOne"},
+					map[string]any{"$ref": "#/types/NumericTwo"},
+				},
+				"discriminator": map[string]any{
+					"propertyName": "kind",
+					"mapping": map[string]any{
+						"1": "#/types/NumericOne",
+						"2": "#/types/NumericTwo",
+					},
+				},
+			},
+			"NumericOne": {
+				"type": "object",
+				"properties": map[string]any{
+					"kind": map[string]any{"type": "integer"},
+					"one":  map[string]any{"type": "string"},
+				},
+			},
+			"NumericTwo": {
+				"type": "object",
+				"properties": map[string]any{
+					"kind": map[string]any{"type": "integer"},
+					"two":  map[string]any{"type": "string"},
+				},
+			},
 		},
 		entities: map[string]*entityInfo{
 			"data.entities.account": {Fields: []entityFieldInfo{
@@ -3000,7 +3095,11 @@ func TestFlowImplementationErrors(t *testing.T) {
 		t.Helper()
 		c.errs = nil
 		c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{
-			"Wrapper": true, "AccountRef": true, "OneOfValue": true, "OneOfMixed": true, "AllOfValue": true,
+			"Wrapper": true, "AccountRef": true,
+			"OneOfValue": true, "OneOfMixed": true, "AllOfValue": true,
+			"Payment": true, "CardPayment": true, "BankPayment": true, "BadDiscriminator": true,
+			"WrongPayment": true, "BadMappingPayment": true, "TypeMismatchPayment": true,
+			"NumericPayment": true, "NumericOne": true, "NumericTwo": true,
 		})
 		return c.errs
 	}
@@ -3421,6 +3520,262 @@ func TestFlowImplementationErrors(t *testing.T) {
 		}
 	})
 
+	t.Run("discriminator variant field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "payment", "type": "Payment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{"platform.errors.B"},
+				"when":   `step.internal.payment.card_number != null && step.internal.payment.method == "card"`,
+			}),
+		}, []any{"platform.errors.B"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("discriminator field reported: %v", errs)
+		}
+	})
+
+	t.Run("discriminator selects branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "payment", "type": "Payment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.payment.method == "bank" && step.internal.payment.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number")
+	})
+
+	t.Run("discriminator selects shared field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "payment", "type": "Payment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.payment.method == "card" && step.internal.payment.shared == "x"`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("discriminator shared reported: %v", errs)
+		}
+	})
+
+	t.Run("discriminator or alternatives", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "payment", "type": "Payment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `(step.internal.payment.method == "card" || step.internal.payment.method == "bank") && step.internal.payment.shared != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field shared")
+	})
+
+	t.Run("discriminator exclude value", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "payment", "type": "Payment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.payment.method != "card" && step.internal.payment.shared != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("discriminator exclude reported: %v", errs)
+		}
+	})
+
+	t.Run("discriminator input value", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "payment", "type": "Payment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `input.payment.method == "card" && step.internal.payment.card_number != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("discriminator input reported: %v", errs)
+		}
+	})
+
+	t.Run("discriminator negated value", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "payment", "type": "Payment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `!(step.internal.payment.method == "card") && step.internal.payment.shared != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("discriminator negation reported: %v", errs)
+		}
+	})
+
+	t.Run("discriminator numeric range", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "numeric", "type": "NumericPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.numeric.kind > 1 && step.internal.numeric.two != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("discriminator range reported: %v", errs)
+		}
+	})
+
+	t.Run("discriminator numeric range miss", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "numeric", "type": "NumericPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.numeric.kind > 1 && step.internal.numeric.one != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field one")
+	})
+
+	t.Run("discriminator range union", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "numeric", "type": "NumericPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `(step.internal.numeric.kind > 1 || step.internal.numeric.kind > 2) && step.internal.numeric.two != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("range union reported: %v", errs)
+		}
+	})
+
+	t.Run("discriminator range negation", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "numeric", "type": "NumericPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `!(step.internal.numeric.kind > 1) && step.internal.numeric.one != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("range negation reported: %v", errs)
+		}
+	})
+
+	t.Run("discriminator range conjunction negation", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "numeric", "type": "NumericPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `!(step.internal.numeric.kind > 1 && step.internal.numeric.kind <= 3) && step.internal.numeric.one != null`,
+			}),
+		}, []any{})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("range conjunction negation reported: %v", errs)
+		}
+	})
+
+	t.Run("discriminator unknown mapping value", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "payment", "type": "Payment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.payment.method == "wire" && step.internal.payment.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number")
+	})
+
+	t.Run("discriminator ambiguous field", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "payment", "type": "Payment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.payment.shared != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field shared of Payment")
+	})
+
+	t.Run("discriminator invalid branch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "bad", "type": "BadDiscriminator"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.bad.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number of BadDiscriminator")
+	})
+
+	t.Run("discriminator mapping points outside branches", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "bad", "type": "BadMappingPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.bad.card_number != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field card_number of BadMappingPayment")
+	})
+
+	t.Run("discriminator property type mismatch", func(t *testing.T) {
+		doc := base([]any{
+			step("internal", "", map[string]any{
+				"errors": []any{},
+				"output": []any{map[string]any{"name": "mismatch", "type": "TypeMismatchPayment"}},
+			}),
+			step("check", "cap.methods.x.get", map[string]any{
+				"errors": []any{},
+				"when":   `step.internal.mismatch.value != null`,
+			}),
+		}, []any{})
+		want(t, check(t, doc), "unknown field value of TypeMismatchPayment")
+	})
+
 	t.Run("internal step without output", func(t *testing.T) {
 		doc := base([]any{
 			step("internal", "", map[string]any{"errors": []any{}}),
@@ -3562,5 +3917,38 @@ func TestMethodTypeRefs(t *testing.T) {
 		if !strings.Contains(strings.Join(c.errs, "\n"), tt.want) {
 			t.Fatalf("%s not reported: %v", tt.typ, c.errs)
 		}
+	}
+}
+
+func TestRetryAfterHeader(t *testing.T) {
+	cases := []struct {
+		name string
+		resp map[string]any
+		want bool
+	}{
+		{"missing headers", map[string]any{}, false},
+		{"missing retry-after", map[string]any{"headers": map[string]any{}}, false},
+		{
+			"ref",
+			map[string]any{"headers": map[string]any{"Retry-After": map[string]any{"$ref": "#/components/headers/RetryAfter"}}},
+			true,
+		},
+		{
+			"wrong ref",
+			map[string]any{"headers": map[string]any{"Retry-After": map[string]any{"$ref": "#/components/headers/Other"}}},
+			false,
+		},
+		{
+			"inline schema",
+			map[string]any{"headers": map[string]any{"Retry-After": map[string]any{"schema": map[string]any{"type": "string"}}}},
+			true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := retryAfterHeader(tc.resp); got != tc.want {
+				t.Fatalf("retryAfterHeader() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

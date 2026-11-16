@@ -113,6 +113,9 @@ func (c *Checker) checkCapabilities() {
 
 	httpFiles := glob(c.root, filepath.Join(httpSchema.Targets.Dir, httpSchema.Targets.Glob))
 	httpSchemas := map[string]bool{}
+	httpHeaders := map[string]bool{}
+	var serviceUnavailable map[string]any
+	hasDefault503 := false
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -120,6 +123,19 @@ func (c *Checker) checkCapabilities() {
 		}
 		rel := relPath(c.root, file)
 		components, _ := asMap(doc["components"])
+		headers, _ := asMap(components["headers"])
+		for name := range headers {
+			httpHeaders[name] = true
+		}
+		responses, _ := asMap(components["responses"])
+		if raw, ok := responses["ServiceUnavailable"]; ok {
+			serviceUnavailable, _ = asMap(raw)
+		}
+		for _, raw := range asList(doc["default_error_responses"]) {
+			if n, ok := toInt(raw); ok && n == 503 {
+				hasDefault503 = true
+			}
+		}
 		schemas, _ := asMap(components["schemas"])
 		for name, raw := range schemas {
 			httpSchemas[name] = true
@@ -146,6 +162,16 @@ func (c *Checker) checkCapabilities() {
 					c.rulef("http-components", "%s: components.schemas.%s must set additionalProperties: false", rel, name)
 				}
 			}
+		}
+	}
+	if hasDefault503 {
+		if !httpHeaders["RetryAfter"] {
+			c.rulef("http-retry-after", "default_error_responses includes 503 but components.headers.RetryAfter is missing")
+		}
+		if serviceUnavailable == nil {
+			c.rulef("http-retry-after", "default_error_responses includes 503 but components.responses.ServiceUnavailable is missing")
+		} else if !retryAfterHeader(serviceUnavailable) {
+			c.rulef("http-retry-after", "components.responses.ServiceUnavailable must declare Retry-After")
 		}
 	}
 	for _, file := range httpFiles {
@@ -201,6 +227,12 @@ func (c *Checker) checkCapabilities() {
 						c.rulef("http-binding", "%s %s %s: status %s is injected by default_error_responses; do not repeat it", rel, method, path, status)
 					}
 				}
+				if raw, ok := responses["503"]; ok {
+					resp, _ := asMap(raw)
+					if !retryAfterHeader(resp) {
+						c.rulef("http-retry-after", "%s %s %s: 503 response must declare Retry-After", rel, method, path)
+					}
+				}
 				if op["x-service"] != nil {
 					c.rulef("http-binding", "%s %s %s: x-service removed; use x-flow", rel, method, path)
 				}
@@ -235,6 +267,19 @@ func (c *Checker) checkCapabilities() {
 			c.rulef("http-binding", "sync flow %s has no protocol inbound", id)
 		}
 	}
+}
+
+func retryAfterHeader(resp map[string]any) bool {
+	headers, _ := asMap(resp["headers"])
+	ra, _ := asMap(headers["Retry-After"])
+	if ra == nil {
+		return false
+	}
+	if ref, _ := ra["$ref"].(string); ref != "" {
+		return ref == "#/components/headers/RetryAfter"
+	}
+	_, ok := asMap(ra["schema"])
+	return ok
 }
 
 func (c *Checker) checkMethodDoc(doc map[string]any, rel, fileID string, methodIDs map[string]bool, methodErrors map[string]map[string]bool, schema *Schema, typeNames map[string]bool) {
@@ -430,6 +475,7 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 					if evalWhenNode(node) == whenFalse {
 						reachable = false
 					}
+					discByStep := whenDiscriminatorValues(node)
 					for _, ref := range whenStepRefs(node) {
 						if _, ok := stepIndex[ref]; !ok {
 							c.rulef("flow-when", "%s: step %s when references step %s that is not an earlier step", rel, stepID, ref)
@@ -445,7 +491,14 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 							continue
 						}
 						target, _ := asMap(steps[idx])
-						if err := c.checkStepOutputPath(target, stepOutputs[idx], path); err != nil {
+						disc := map[string]whenConstraint{}
+						for k, v := range discByStep[ref] {
+							disc[k] = v
+						}
+						for k, v := range discByStep["input"] {
+							disc["input:"+k] = v
+						}
+						if err := c.checkStepOutputPath(target, stepOutputs[idx], path, disc); err != nil {
 							c.rulef("flow-when", "%s: step %s when references %s: %v", rel, stepID, field, err)
 						}
 					}
@@ -607,7 +660,7 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 
 // checkStepOutputPath 校验 step.<id>.<path> 的字段链路：
 // 方法步骤从 method returns 取根字段；内部步骤从 step.output 取根字段。
-func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]string, path string) error {
+func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]string, path string, disc map[string]whenConstraint) error {
 	segs, err := parseWhenPath(path)
 	if err != nil {
 		return err
@@ -635,16 +688,18 @@ func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]str
 			return fmt.Errorf("output %s: %v", root.name, err)
 		}
 	}
+	prefix := whenSegmentPath(root)
 	for _, seg := range segs[1:] {
 		typ = strings.TrimPrefix(typ, "*")
 		if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
 			return fmt.Errorf("list output requires index before %s", seg.name)
 		}
-		next, ok := c.resolveTypeField(typ, seg.name)
+		next, ok := c.resolveTypeField(typ, seg.name, disc, prefix)
 		if !ok {
 			return fmt.Errorf("unknown field %s of %s", seg.name, typ)
 		}
 		typ = next
+		prefix += "." + whenSegmentPath(seg)
 		if seg.hasIndex {
 			typ, err = indexWhenType(typ)
 			if err != nil {
@@ -664,11 +719,11 @@ func indexWhenType(typ string) (string, error) {
 	return strings.TrimPrefix(inner, "*"), nil
 }
 
-func (c *Checker) resolveTypeField(typ, name string) (string, bool) {
-	return c.resolveTypeFieldDepth(typ, name, map[string]bool{})
+func (c *Checker) resolveTypeField(typ, name string, disc map[string]whenConstraint, prefix string) (string, bool) {
+	return c.resolveTypeFieldDepth(typ, name, map[string]bool{}, disc, prefix)
 }
 
-func (c *Checker) resolveTypeFieldDepth(typ, name string, seen map[string]bool) (string, bool) {
+func (c *Checker) resolveTypeFieldDepth(typ, name string, seen map[string]bool, disc map[string]whenConstraint, prefix string) (string, bool) {
 	if resolved, ok := resolveTypeRef(typ); ok {
 		typ = resolved
 	}
@@ -684,20 +739,20 @@ func (c *Checker) resolveTypeFieldDepth(typ, name string, seen map[string]bool) 
 	if def == nil {
 		return "", false
 	}
-	return c.resolveSchemaField(def, name, seen)
+	return c.resolveSchemaField(def, name, seen, disc, prefix)
 }
 
-func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen map[string]bool) (string, bool) {
+func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen map[string]bool, disc map[string]whenConstraint, prefix string) (string, bool) {
 	if props, ok := asMap(schema["properties"]); ok {
 		if prop, ok := asMap(props[name]); ok {
-			return schemaTypeName(prop)
+			return c.schemaTypeName(prop)
 		}
 	}
 	if branches, ok := asList2(schema["allOf"]); ok {
 		var got string
 		for _, raw := range branches {
 			branch, _ := asMap(raw)
-			typ, ok := c.resolveSchemaField(branch, name, seen)
+			typ, ok := c.resolveSchemaField(branch, name, seen, disc, prefix)
 			if !ok {
 				continue
 			}
@@ -713,10 +768,34 @@ func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen ma
 	}
 	for _, key := range []string{"oneOf", "anyOf"} {
 		if branches, ok := asList2(schema[key]); ok {
+			if discSchema, ok := asMap(schema["discriminator"]); ok {
+				if !c.validDiscriminator(branches, discSchema, seen) {
+					return "", false
+				}
+				prop, _ := discSchema["propertyName"].(string)
+				constraint, ok := disc[prefix+"."+prop]
+				if !ok {
+					constraint, ok = disc["input:"+prefix+"."+prop]
+				}
+				if !ok {
+					constraint, ok = disc["input:"+prop]
+				}
+				if ok && (constraint.impossible || len(constraint.selectors) > 0) {
+					if _, hasMapping := asMap(discSchema["mapping"]); !hasMapping {
+						return c.resolveVariantField(branches, name, seen, disc, prefix)
+					}
+					selected, ok := c.selectDiscriminatorBranches(branches, discSchema, constraint)
+					if !ok {
+						return "", false
+					}
+					return c.resolveSelectedBranches(selected, name, seen, disc, prefix)
+				}
+				return c.resolveVariantField(branches, name, seen, disc, prefix)
+			}
 			var got string
 			for _, raw := range branches {
 				branch, _ := asMap(raw)
-				typ, ok := c.resolveSchemaField(branch, name, seen)
+				typ, ok := c.resolveSchemaField(branch, name, seen, disc, prefix)
 				if !ok {
 					return "", false
 				}
@@ -733,42 +812,183 @@ func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen ma
 	}
 	if ref, _ := schema["$ref"].(string); ref != "" {
 		if typ, ok := resolveTypeRef(ref); ok {
-			return c.resolveTypeFieldDepth(typ, name, seen)
+			return c.resolveTypeFieldDepth(typ, name, seen, disc, prefix)
 		}
 	}
 	return "", false
 }
 
-func schemaTypeName(schema map[string]any) (string, bool) {
-	if typ, _ := schema["type"].(string); typ != "" {
-		return typ, true
+// validDiscriminator 校验判别字段存在于所有分支且类型一致；mapping 的 ref 必须可解析。
+func (c *Checker) validDiscriminator(branches []any, disc map[string]any, seen map[string]bool) bool {
+	prop, _ := disc["propertyName"].(string)
+	if prop == "" {
+		return false
 	}
-	if ref, _ := schema["$ref"].(string); ref != "" {
-		return resolveTypeRef(ref)
+	var got string
+	for _, raw := range branches {
+		branch, _ := asMap(raw)
+		typ, ok := c.resolveSchemaField(branch, prop, seen, nil, "")
+		if !ok {
+			return false
+		}
+		if got == "" {
+			got = typ
+		} else if got != typ {
+			return false
+		}
 	}
-	for _, key := range []string{"oneOf", "anyOf", "allOf"} {
-		branches, ok := asList2(schema[key])
+	if mapping, ok := asMap(disc["mapping"]); ok {
+		branchNames := map[string]bool{}
+		for _, raw := range branches {
+			branch, _ := asMap(raw)
+			if name, ok := branchTypeName(branch); ok {
+				branchNames[name] = true
+			}
+		}
+		for _, raw := range mapping {
+			ref, _ := raw.(string)
+			name, ok := resolveTypeRef(ref)
+			if !ok {
+				return false
+			}
+			if strings.HasPrefix(name, "data.") {
+				continue
+			}
+			if c.methodTypeDefs[name] == nil || !branchNames[name] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// resolveVariantField 在 discriminator 下允许分支特有字段：
+// 只在一个分支存在即返回；多个分支都有时必须类型一致。
+func (c *Checker) resolveVariantField(branches []any, name string, seen map[string]bool, disc map[string]whenConstraint, prefix string) (string, bool) {
+	var got string
+	found := false
+	for _, raw := range branches {
+		branch, _ := asMap(raw)
+		typ, ok := c.resolveSchemaField(branch, name, seen, disc, prefix)
 		if !ok {
 			continue
 		}
-		var got string
-		for _, raw := range branches {
-			branch, _ := asMap(raw)
-			typ, ok := schemaTypeName(branch)
-			if !ok {
-				return "", false
-			}
-			if got == "" {
-				got = typ
-			} else if got != typ {
-				return "", false
-			}
+		if found && typ != got {
+			return "", false
 		}
-		if got != "" {
-			return got, true
-		}
+		got = typ
+		found = true
+	}
+	if found {
+		return got, true
 	}
 	return "", false
+}
+
+// selectDiscriminatorBranches 按 constraint 选择 oneOf/anyOf 分支。
+func (c *Checker) selectDiscriminatorBranches(branches []any, disc map[string]any, constraint whenConstraint) ([]map[string]any, bool) {
+	if constraint.impossible {
+		return nil, false
+	}
+	mapping, _ := asMap(disc["mapping"])
+	if mapping == nil {
+		return nil, false
+	}
+	candidates := map[string]bool{}
+	for value := range mapping {
+		if constraint.matches(value) {
+			candidates[value] = true
+		}
+	}
+	if len(candidates) == 0 {
+		return nil, false
+	}
+	var out []map[string]any
+	seen := map[string]bool{}
+	for value := range candidates {
+		ref, _ := mapping[value].(string)
+		name, ok := resolveTypeRef(ref)
+		if !ok {
+			return nil, false
+		}
+		found := false
+		for _, raw := range branches {
+			branch, _ := asMap(raw)
+			if branchName, ok := branchTypeName(branch); ok && branchName == name {
+				if !seen[branchName] {
+					seen[branchName] = true
+					out = append(out, branch)
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, false
+		}
+	}
+	return out, true
+}
+
+func (c *Checker) resolveSelectedBranches(branches []map[string]any, name string, seen map[string]bool, disc map[string]whenConstraint, prefix string) (string, bool) {
+	var got string
+	for _, branch := range branches {
+		typ, ok := c.resolveSchemaField(branch, name, seen, disc, prefix)
+		if !ok {
+			return "", false
+		}
+		if got == "" {
+			got = typ
+		} else if got != typ {
+			return "", false
+		}
+	}
+	if got == "" {
+		return "", false
+	}
+	return got, true
+}
+
+func branchTypeName(branch map[string]any) (string, bool) {
+	if ref, _ := branch["$ref"].(string); ref != "" {
+		return resolveTypeRef(ref)
+	}
+	if typ, _ := branch["type"].(string); typ != "" {
+		return typ, true
+	}
+	return "", false
+}
+
+func (c *Checker) schemaTypeName(schema map[string]any) (string, bool) {
+	if ref, _ := schema["$ref"].(string); ref != "" {
+		return resolveTypeRef(ref)
+	}
+	if _, ok := asList2(schema["oneOf"]); ok {
+		return c.inlineType(schema)
+	}
+	if _, ok := asList2(schema["anyOf"]); ok {
+		return c.inlineType(schema)
+	}
+	if _, ok := asList2(schema["allOf"]); ok {
+		return c.inlineType(schema)
+	}
+	if props, ok := asMap(schema["properties"]); ok && len(props) > 0 {
+		return c.inlineType(schema)
+	}
+	if typ, _ := schema["type"].(string); typ != "" {
+		return typ, true
+	}
+	return "", false
+}
+
+func (c *Checker) inlineType(schema map[string]any) (string, bool) {
+	if c.methodTypeDefs == nil {
+		c.methodTypeDefs = map[string]map[string]any{}
+	}
+	c.inlineSeq++
+	name := fmt.Sprintf("@inline/%d", c.inlineSeq)
+	c.methodTypeDefs[name] = schema
+	return name, true
 }
 
 func resolveTypeRef(ref string) (string, bool) {

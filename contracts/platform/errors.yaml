@@ -24,7 +24,7 @@ errors:
   - { code: COMMON_RATE_LIMITED, status: 429, retryable: true, i18n: errors.common.rate_limited, message: "请求过于频繁" }
   - { code: COMMON_INTERNAL, status: 500, retryable: true, i18n: errors.common.internal, message: "服务端错误" }
   - { code: COMMON_AUDIT_FAILED, status: 500, retryable: true, i18n: errors.common.audit_failed, message: "审计写入失败" }
-  - { code: COMMON_LOOP_EXHAUSTED, status: 500, retryable: false, i18n: errors.common.loop_exhausted, message: "循环次数超过上限" }
+  - { code: COMMON_LOOP_EXHAUSTED, status: 503, retryable: true, i18n: errors.common.loop_exhausted, message: "循环次数超过上限，请稍后重试" }
   - { code: COMMON_UNAVAILABLE, status: 503, retryable: true, i18n: errors.common.unavailable, message: "服务暂不可用" }
 
   # ---------- 账号 ----------
@@ -63,3 +63,4 @@ mapping_rules:
   - { status: 423, when: "认证锁定中" }
   - { status: 429, when: "触发限流" }
   - { status: 500, when: "未预期错误，必须记日志并含 request_id" }
+  - { status: 503, when: "依赖暂不可用或循环预算耗尽，可稍后重试；建议带 Retry-After" }

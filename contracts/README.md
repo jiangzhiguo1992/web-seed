@@ -397,11 +397,11 @@ table:
 
 ### 4.6 人读视图自动生成
 
-`docs/contracts/generated/` 下的视图由契约生成，**禁止手写**（生成器 ⬜ P2）：
+`docs/contracts/generated/` 下的视图由契约生成，**禁止手写**（`errors.md` ✅；其余 ⬜ P2）：
 
 | 文件 | 来源 | 状态 |
 |---|---|---|
-| `errors.md` | `platform/errors.yaml` | ⬜ P2 |
+| `errors.md` | `platform/errors.yaml` | ✅ `make gen-errors` |
 | `permissions.md` | `platform/security/permissions.yaml` | ⬜ P2 |
 | `data.md` | `data/tables/*.yaml` | ⬜ P2 |
 | `lineage.md` | 按需生成的 graph | ⬜ P2 |

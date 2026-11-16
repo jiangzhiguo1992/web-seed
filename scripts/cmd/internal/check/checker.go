@@ -75,6 +75,7 @@ type Checker struct {
 	permissionSet     map[string]bool
 	methodReturns     map[string]map[string]string
 	methodTypeDefs    map[string]map[string]any
+	inlineSeq         int
 }
 
 // Run 执行全部契约校验并返回错误列表。

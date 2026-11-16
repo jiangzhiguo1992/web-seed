@@ -67,6 +67,7 @@ var knownRuleIDs = map[string]bool{
 	"flow-when":                   true,
 	"http-binding":                true,
 	"http-components":             true,
+	"http-retry-after":            true,
 	"index-comment":               true,
 	"index-definition":            true,
 	"index-live-only":             true,

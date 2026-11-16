@@ -9,7 +9,7 @@ pre-commit:
       run: cd apps/api && go vet ./...
     contracts:
       glob: "contracts/**/*.yaml"
-      run: make contract-check
+      run: make contract-check && make gen-errors-check
     contract-docs:
       glob: "contracts/**/*.md"
       run: ./scripts/check-docs.sh

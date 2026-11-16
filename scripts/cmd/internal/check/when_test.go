@@ -69,3 +69,114 @@ func TestWhenStepRefs(t *testing.T) {
 		t.Fatalf("refs = %v", refs)
 	}
 }
+
+func TestWhenDiscriminatorValues(t *testing.T) {
+	n, err := parseWhen(`step.payment.method == "card" && step.payment.card_number != null`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := whenDiscriminatorValues(n)
+	if c := got["payment"]["method"]; !c.matches("card") {
+		t.Fatalf("values = %#v", got)
+	}
+
+	n, err = parseWhen(`step.payment.method == "card" || input.x == 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(whenDiscriminatorValues(n)) != 0 {
+		t.Fatalf("|| with different paths must not select a branch: %#v", whenDiscriminatorValues(n))
+	}
+
+	n, err = parseWhen(`step.payment.method == "card" || step.payment.method == "bank"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := whenDiscriminatorValues(n)["payment"]["method"]; !c.matches("card") || !c.matches("bank") {
+		t.Fatalf("|| values = %#v", c)
+	}
+
+	n, err = parseWhen(`step.payment.method != "card"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := whenDiscriminatorValues(n)["payment"]["method"]; c.matches("card") {
+		t.Fatalf("!= values = %#v", c)
+	}
+
+	n, err = parseWhen(`step.payment.kind == 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := whenDiscriminatorValues(n)["payment"]["kind"]; !c.matches("1") {
+		t.Fatalf("numeric values = %#v", c)
+	}
+
+	n, err = parseWhen(`!(step.payment.method == "card")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := whenDiscriminatorValues(n)["payment"]["method"]; c.matches("card") {
+		t.Fatalf("negated values = %#v", c)
+	}
+
+	n, err = parseWhen(`step.payment.kind > 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := whenDiscriminatorValues(n)["payment"]["kind"]; !c.matches("2") || c.matches("1") {
+		t.Fatalf("range values = %#v", c)
+	}
+
+	n, err = parseWhen(`input.payment.method == "card"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := whenDiscriminatorValues(n)["input"]["payment.method"]; !c.matches("card") {
+		t.Fatalf("input values = %#v", c)
+	}
+
+	n, err = parseWhen(`step.payment.kind > 1 || step.payment.kind > 2`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := whenDiscriminatorValues(n)["payment"]["kind"]; !c.matches("2") || c.matches("1") {
+		t.Fatalf("range union = %#v", c)
+	}
+
+	n, err = parseWhen(`!(step.payment.kind > 1)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := whenDiscriminatorValues(n)["payment"]["kind"]; !c.matches("1") || c.matches("2") {
+		t.Fatalf("range negation = %#v", c)
+	}
+
+	n, err = parseWhen(`!(step.payment.kind > 1 && step.payment.kind <= 3)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := whenDiscriminatorValues(n)["payment"]["kind"]; !c.matches("1") || c.matches("2") || !c.matches("4") {
+		t.Fatalf("range conjunction negation = %#v", c)
+	}
+
+	n, err = parseWhen(`(step.payment.method == "card" && step.payment.kind == 1) || (step.payment.method == "bank" && step.payment.kind == 2)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	multi := whenDiscriminatorValues(n)
+	if c := multi["payment"]["method"]; !c.matches("card") || !c.matches("bank") {
+		t.Fatalf("multi-path method = %#v", c)
+	}
+	if c := multi["payment"]["kind"]; !c.matches("1") || !c.matches("2") {
+		t.Fatalf("multi-path kind = %#v", c)
+	}
+
+	n, err = parseWhen(`(step.payment.method == "card" && step.payment.kind == 1) || (input.mode == "card")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := whenDiscriminatorValues(n); len(got) != 0 {
+		t.Fatalf("non-common path must be dropped: %#v", got)
+	}
+}
