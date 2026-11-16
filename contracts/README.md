@@ -88,14 +88,13 @@ contracts/
 │   ├── entities/<file>.yaml  #   业务读模型（_base.yaml 为基类）
 │   ├── queries/<scope>.yaml  #   读写形状：入参/返回/索引引用，不含 SQL
 │   ├── enums.yaml            #   跨端枚举：integer code ↔ 名称
-│   ├── storage.yaml          #   单例：引擎归属 / size_class / 保留 / 分区
-│   └── redundancy.yaml       #   单例：跨表列复制关系
+│   └── storage.yaml          #   单例：引擎归属 / size_class / 保留 / 分区
 │
-├── capabilities/             # ② 实现层
-│   ├── http/<module>.yaml    #   OpenAPI，按业务模块拆
-│   ├── async/<job>.yaml      #   定时任务 / 消息消费者 / webhook
-│   ├── services/<module>.yaml#   service 接口 + persistence（表/查询/约束映射）
-│   └── flows/<flow>.yaml     #   业务流程编排（调用能力）
+├── capabilities/             # ② 能力层：methods + flows + protocols
+│   ├── methods/<module>.yaml #   原子方法：跨模块可见，不直接对外
+│   ├── flows/<flow>.yaml     #   编排：同步（被 protocol 引用）/ 异步（trigger）
+│   └── protocols/
+│       └── http/<module>.yaml#   HTTP 绑定：只写协议差异，x-flow 指回 flow
 │
 ├── business/                   # ③ 业务规格（不含实现）
 │   ├── states/<machine>.yaml #   状态机（transitions 定义合法转换）
@@ -150,7 +149,7 @@ contracts/
 | 组 | 示例 |
 |---|---|
 | data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_account_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
-| capabilities | `cap.http.account.create`、`cap.async.account_cleanup`、`cap.services.account` |
+| capabilities | `cap.methods.account.get`、`cap.flows.verification_cleanup`、`cap.http.account.create` |
 | business | `business.states.account`、`business.rules.account.number_format`、`business.events.account.created` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
 | platform | `platform.errors.ACCOUNT_NOT_FOUND`、`platform.security.permissions.account_read`、`platform.security.roles.admin`、`platform.analytics.events.page.account_list_viewed` |
@@ -179,7 +178,7 @@ contracts/
 feature ──> business ──> capabilities ──> data
 ```
 
-契约依赖只有这一条链，**没有反向**。允许两个前向例外：`business → data.entities`（业务主体）与 `cap.flows → business.{states,rules,events}`（流程编排）。
+契约依赖只有这一条链，**没有反向**。允许两个例外：`business → data.entities`（业务主体）与 `business → capabilities`（`implemented_by` / `emitted_by`）；capabilities 不反向引用 business。
 
 | 环节 | 职责 | 锚点写在哪 |
 |---|---|---|
@@ -195,8 +194,9 @@ feature ──> business ──> capabilities ──> data
 | feature → business | 页面契约 | `data` / `actions` / `fields` / `states` |
 | feature → capabilities | 页面契约 | `capability:` |
 | business → capabilities | 规则 / 状态机 / 事件 | `implemented_by` / `emitted_by` |
-| capabilities/http → capabilities/services | HTTP operation | `x-service` |
-| capabilities/service → data | service 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
+| capabilities/protocols → capabilities/flows | protocol operation | `x-flow` |
+| capabilities/flows → capabilities/methods | flow steps | `use: cap.methods.*` |
+| capabilities/methods → data | method 契约 | `persistence.table` / `persistence.tables` / `persistence.queries` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `join_column_from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `used_by.queries`（生成物） |
@@ -215,7 +215,7 @@ capabilities 契约里**不出现任何 `business.*`**：
 
 理由：capability 是 business 的实现，**实现不反向声明"我实现了谁"**——那由上游锚点。两处都写必然漂移。
 
-例外：`cap.flows` 允许引用 `business.states` / `business.rules` / `business.events` 做编排，但不得复制规则逻辑；`cap.http` / `cap.services` / `cap.async` 仍然禁止引用 `business.*`。
+例外：异步 flow 的 `trigger.event` 允许引用 `business.events.*`，因为事件是它的输入；这不是“声明实现关系”，实现锚点仍由 business 侧的 `emitted_by` 写。其余 capabilities 契约（含同步 flow 的 `steps`）禁止出现 `business.*`。
 
 `business` 允许引用 `data.entities.*` 作为业务主体（状态机的 `subject`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。这是"业务规格描述对象"与"实现依赖表"的区别。
 
@@ -243,10 +243,10 @@ make contract-impact id=data.tables.account.col.number
 
 ```
 feature.pages.account_list
-  ├─ cap.http.account.list ─x-service→ cap.services.account.list
-  │    └─ data.queries.account.list_accounts ─> data.tables.account
-  └─ cap.http.account.create ─x-service→ cap.services.account.create
-       └─ data.tables.account
+  ├─ cap.http.account.list ─x-flow→ cap.flows.account_list
+  │    └─ use→ cap.methods.account.list ─persistence→ data.queries.account.list_accounts
+  └─ cap.http.account.create ─x-flow→ cap.flows.account_create
+       └─ use→ cap.methods.account.create ─persistence→ data.tables.account
 
 business.states.account ─subject→ data.entities.account ─table→ data.tables.account
 ```
@@ -328,10 +328,9 @@ table:
 |---|---|---|
 | `data/tables/*` | 一物理表一文件 | **不限** |
 | `data/entities/*` | 一逻辑实体一文件 | 150 |
-| `capabilities/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
-| `capabilities/async/*` | 一任务/消费者一文件 | 120 |
-| `capabilities/services/*` | 一模块一文件（接口 + persistence + 类型） | 200 |
-| `capabilities/flows/*` | 一流程一文件 | 120 |
+| `capabilities/methods/*` | 一模块一文件（interface + persistence + 类型） | 200 |
+| `capabilities/flows/*` | 一 flow 一文件（同步或异步） | 120 |
+| `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
 | `business/states/*` | 一状态机一文件 | 150 |
 | `business/{rules,events}/*` | 一规则集 / 领域一文件 | 120 |
 | `features/pages/*` | 一页面一文件 | 150 |
@@ -413,7 +412,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 
 | 产物 | 来源 | 用途 |
 |---|---|---|
-| `openapi/admin.yaml` | `capabilities/http/*.yaml` + `shared.yaml` 合并 | oapi-codegen / Swagger / `gen-client` 的输入 |
+| `openapi/admin.yaml` | `capabilities/protocols/http/*.yaml` + `shared.yaml` 合并 | oapi-codegen / Swagger / `gen-client` 的输入 |
 
 `db` 产物（`schema.sql`、`migrations/*.sql`）输出到 `apps/api/`，不在本目录。
 
@@ -480,7 +479,6 @@ data/tables/_base.yaml + tables/*.yaml ──> schema.sql（目标态）
                                              ├─ diff 当前 DB ──> migrations/<ts>_<name>.sql
                                              └─> sqlc 输入
 data/storage.yaml ──> 按引擎分组的表清单 + 表级物理事实
-data/redundancy.yaml ──> 冗余组关系
 ```
 
 | 规则 | 说明 |

@@ -23,7 +23,7 @@ enums:
       entities:
         - data.entities.account
       capabilities:
-        - cap.services.account
+        - cap.methods.account
 
   - name: own_type
     description: "数据归属主体类型"
@@ -38,7 +38,7 @@ enums:
         - data.entities.account
         - data.entities.token
       capabilities:
-        - cap.services.account
+        - cap.methods.account
 
   - name: auth_status
     description: "认证记录状态"
@@ -97,7 +97,7 @@ enums:
       entities:
         - data.entities.verification_body
       capabilities:
-        - cap.services.auth
+        - cap.methods.auth
 
   - name: verification_status
     description: "验证体状态"
@@ -134,7 +134,7 @@ enums:
       entities:
         - data.entities.verification_body
       capabilities:
-        - cap.services.auth
+        - cap.methods.auth
 
   - name: verification_action
     description: "验证动作"

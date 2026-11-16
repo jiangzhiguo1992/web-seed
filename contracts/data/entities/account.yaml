@@ -89,5 +89,5 @@ used_by:
     - data.queries.account.create_account
   capabilities:
     - cap.http.account
-    - cap.services.account
-    - cap.services.auth
+    - cap.methods.account
+    - cap.methods.auth

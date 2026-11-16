@@ -93,23 +93,3 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]
-
-  - name: ListStalePendingAccounts
-    tables:
-      - { table: data.tables.account }
-    params:
-      - { name: older_than_days, type: integer }
-      - { name: offset, type: integer, nullable: true, default: 0 }
-      - { name: limit, type: integer, nullable: true, default: 100 }
-    returns:
-      - { name: accounts, list: true, kind: table, table: data.tables.account }
-    index_ref: [ data.tables.account.idx_account_created_at_id ]
-
-  - name: SoftDeleteStalePendingAccounts
-    tables:
-      - { table: data.tables.account, write: true }
-    params:
-      - { name: ids, type: List<integer>, column: data.tables.account.col.id }
-    returns:
-      - { name: affected_rows, kind: affected_rows }
-    index_ref: [ data.tables.account.pk ]

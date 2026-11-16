@@ -30,9 +30,9 @@ feature ──> business ──> capabilities ──> data
 | `entities/<entity>.yaml` | 业务怎么读它 | Go 读模型：字段语义、关系、跨字段校验 | 不是写模型 |
 | `queries/<scope>.yaml` | 能怎么读写 | 入参、返回、目标表、索引引用 | 不是 SQL |
 | `enums.yaml` | 值是什么 | 跨端词汇：integer `code` ↔ 名称 | 不是表约束 |
-| `storage.yaml` / `redundancy.yaml` | 物理侧事实 | 引擎归属、`size_class`、保留、分区 / 跨表列复制 | 不是部署配置，也不是索引或视图 |
+| `storage.yaml` | 物理侧事实 | 引擎归属、`size_class`、保留、分区 | 不是部署配置，也不是索引或视图 |
 
-`enums.yaml` / `storage.yaml` / `redundancy.yaml` 是**固定文件**：文件名不随实例增长。`storage` / `redundancy` 各自只有一个契约 ID；`enums.yaml` 承载多个 `data.enums.<name>` 项。`tables/` / `entities/` / `queries/` 按实例一文件一契约，实例清单以 `contracts/index.yaml` 为准，本文件不列举。
+`enums.yaml` / `storage.yaml` 是**固定文件**：文件名不随实例增长。`storage` 只有一个契约 ID；`enums.yaml` 承载多个 `data.enums.<name>` 项。`tables/` / `entities/` / `queries/` 按实例一文件一契约，实例清单以 `contracts/index.yaml` 为准，本文件不列举。
 
 ### 2.1 关系
 
@@ -42,10 +42,9 @@ queries    ──(returns)─────────────>  entities
 entities   ──(source.column)───────>  tables
 entities   ──(type)────────────────>  enums
 storage    ──(tables / partition)──>  tables
-redundancy ──(source / copies)─────>  tables
 ```
 
-六条边里五条直接落到 `tables`；`entities` 是唯一中转层——`queries` 经由它返回业务数据，`enums` 则被它引用为字段类型。**`tables` 是所有边的终点。**
+五条边里三条直接落到 `tables`；`entities` 是唯一中转层——`queries` 经由它返回业务数据，`enums` 则被它引用为字段类型。**`tables` 是物理结构的汇聚点。** 跨表冗余列关系直接写在 `tables` 的 `columns[].redundancy`，不引入新契约文件。
 
 ### 2.2 两个基类不是实例
 
@@ -113,20 +112,17 @@ redundancy ──(source / copies)─────>  tables
 ### 4.2 索引与冗余
 
 - **索引必须有查询**：`indexes[].used_by` 至少一个 `data.queries.*` 项，且该查询的 `tables` 包含本表（`[强制: index-used-by]`、`[强制: index-used-by-ref]`）。唯一索引也要写——插入与唯一性校验同样是使用方。没有查询的索引直接删除，不要写假 ID。
-- **冗余必须登记**：列上只写组 ID，组明细在 `redundancy.yaml` 的 `groups`（`[强制: redundant-ref]`）。权威数据只在 `source`，`copy` 的 `type` / `nullable` 必须一致。
+- **冗余必须成组声明**：`columns[].redundancy` 直接列出同组全部列引用（`[强制: redundant-group]`、`[强制: redundant-ref]`）。`source: true` 标记权威列，每组恰好一个；组内每列声明完全相同的列表，`copy` 的 `type` / `nullable` 必须与 source 一致。成员只接受物理表自行声明的列，继承列与基类列不参与。
 
 ```yaml
-# tables/account.yaml
+# tables/account.yaml 与 tables/token.yaml 的 own_type 列写同一份列表
 columns:
   - name: own_type
-    redundancy: account_own_type
-
-# redundancy.yaml
-groups:
-  account_own_type:
-    source: data.tables.account.col.own_type
-    copies:
-      - data.tables.token.col.own_type
+    redundancy:
+      - column: data.tables.account.col.own_type
+        source: true
+      - column: data.tables.token.col.own_type
+        source: false
 ```
 
 ### 4.3 哪些是手写，哪些是生成的
@@ -227,7 +223,7 @@ indexes:
 
 ## 7. 当前闸门状态
 
-`make contract-check` 覆盖 data 层全部结构与引用校验（`data.tables` / `data.enums` / `data.entities` / `data.queries` / `storage` / `redundancy`），并内嵌 `used_by` 新鲜度与 `rule-id` 同步检查。
+`make contract-check` 覆盖 data 层全部结构与引用校验（`data.tables` / `data.enums` / `data.entities` / `data.queries` / `storage`），并内嵌 `used_by` 新鲜度与 `rule-id` 同步检查。
 
 | 闸门 | 机制 | 状态 |
 |---|---|---|

@@ -21,13 +21,17 @@ columns:
   - name: own_type
     type: integer
     nullable: false
-    redundancy: account_own_type
+    redundancy:
+      - { column: data.tables.account.col.own_type, source: true }
+      - { column: data.tables.token.col.own_type, source: false }
     comment: "归属类型整数码；映射 data.enums.own_type"
 
   - name: own_id
     type: integer
     nullable: false
-    redundancy: account_own_id
+    redundancy:
+      - { column: data.tables.account.col.own_id, source: true }
+      - { column: data.tables.token.col.own_id, source: false }
     comment: "归属 ID"
 
   - name: account_id
@@ -44,7 +48,9 @@ columns:
   - name: user_id
     type: integer
     nullable: true
-    redundancy: account_user_id
+    redundancy:
+      - { column: data.tables.account.col.user_id, source: true }
+      - { column: data.tables.token.col.user_id, source: false }
     comment: "关联用户 ID"
 
   - name: access_token_hash
