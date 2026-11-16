@@ -39,8 +39,8 @@ queries:
       - data.tables.token.uq_token_access_hash
       - data.tables.token.uq_token_refresh_hash
     used_by:
-      - cap.methods.token.issue
-      - cap.methods.token.refresh
+      - cap.services.token.issue
+      - cap.services.token.refresh
 
   - name: GetTokenByRefresh
     tables:
@@ -64,8 +64,8 @@ queries:
           - status
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
     used_by:
-      - cap.methods.token.logout
-      - cap.methods.token.refresh
+      - cap.services.token.logout
+      - cap.services.token.refresh
 
   - name: GetTokenByAccess
     tables:
@@ -89,7 +89,7 @@ queries:
           - status
     index_ref: [ data.tables.token.uq_token_access_hash ]
     used_by:
-      - cap.methods.token.verify
+      - cap.services.token.verify
 
   - name: RevokeToken
     tables:
@@ -103,8 +103,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
     used_by:
-      - cap.methods.token.logout
-      - cap.methods.token.refresh
+      - cap.services.token.logout
+      - cap.services.token.refresh
 
   - name: RevokeTokensByAccount
     tables:
@@ -117,7 +117,7 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.token.idx_token_account_status ]
     used_by:
-      - cap.methods.token.revoke_by_account
+      - cap.services.token.revoke_by_account
 
   - name: DeleteExpiredTokens
     tables:
@@ -128,31 +128,5 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
     used_by:
-      - cap.methods.token.purge_expired
+      - cap.services.token.purge_expired
 
-  - name: ListTokensByAccount
-    tables:
-      - { table: data.tables.token }
-    params:
-      - { name: offset, type: integer, nullable: true, default: 0 }
-      - { name: limit, type: integer, nullable: true, default: 20 }
-      - { name: account_id, type: integer, column: data.tables.token.col.account_id }
-    returns:
-      - name: rows
-        list: true
-        kind: table
-        table: data.tables.token
-        columns:
-          - id
-          - account_id
-          - device_id
-          - access_expire_at
-          - refresh_expire_at
-          - revoked_at
-          - revoke_reason
-          - replaced_by_id
-          - status
-          - created_at
-          - updated_at
-    index_ref: [ data.tables.token.idx_token_account_status ]
-    used_by: []

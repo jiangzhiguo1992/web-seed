@@ -19,23 +19,13 @@ queries:
       - { name: account, kind: entity, entity: data.entities.account }
     index_ref: [ data.tables.account.pk ]
     used_by:
-      - cap.methods.account.activate
-      - cap.methods.account.delete
-      - cap.methods.account.get
-      - cap.methods.account.suspend
-      - cap.methods.account.update
-      - cap.methods.auth.login
-      - cap.methods.token.verify
-
-  - name: GetAccountByNumber
-    tables:
-      - { table: data.tables.account }
-    params:
-      - { name: number, type: text, column: data.tables.account.col.number }
-    returns:
-      - { name: account, kind: entity, entity: data.entities.account }
-    index_ref: [ data.tables.account.uq_account_number ]
-    used_by: [ ]
+      - cap.services.account.activate
+      - cap.services.account.delete
+      - cap.services.account.get
+      - cap.services.account.suspend
+      - cap.services.account.update
+      - cap.services.auth.login
+      - cap.services.token.verify
 
   - name: ExistsAccountNumber
     tables:
@@ -46,7 +36,7 @@ queries:
       - { name: exists, kind: scalar, type: boolean }
     index_ref: [ data.tables.account.uq_account_number ]
     used_by:
-      - cap.methods.account.create
+      - cap.services.account.create
 
   - name: ListAccounts
     tables:
@@ -62,7 +52,7 @@ queries:
       - data.tables.account.idx_account_created_at_id
       - data.tables.account.idx_account_own_type_own_id
     used_by:
-      - cap.methods.account.list
+      - cap.services.account.list
 
   - name: CreateAccount
     tables:
@@ -78,7 +68,7 @@ queries:
       - { name: account, kind: entity, entity: data.entities.account }
     index_ref: [ data.tables.account.uq_account_number ]
     used_by:
-      - cap.methods.account.create
+      - cap.services.account.create
 
   - name: UpdateAccount
     tables:
@@ -90,7 +80,7 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]
     used_by:
-      - cap.methods.account.update
+      - cap.services.account.update
 
   - name: SetAccountStatus
     tables:
@@ -102,8 +92,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]
     used_by:
-      - cap.methods.account.activate
-      - cap.methods.account.suspend
+      - cap.services.account.activate
+      - cap.services.account.suspend
 
   - name: SoftDeleteAccount
     tables:
@@ -114,4 +104,4 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]
     used_by:
-      - cap.methods.account.delete
+      - cap.services.account.delete

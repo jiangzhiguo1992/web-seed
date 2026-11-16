@@ -21,8 +21,6 @@ table:
     - data.entities.verification_action
   queries:
     - data.queries.verification.create_verification_action
-    - data.queries.verification.list_verification_actions
-    - data.queries.verification.list_verification_actions_by_account
 
 columns:
   - name: verification_id
@@ -86,17 +84,4 @@ constraints:
     type: check
     expr: "deleted_at IS NULL"
 
-indexes:
-  - name: idx_verification_action_account
-    columns: [ account_id, created_at ]
-    live_only: false
-    comment: "按账号追溯验证动作"
-    used_by:
-      - data.queries.verification.list_verification_actions_by_account
-
-  - name: idx_verification_action_body
-    columns: [ verification_id, created_at ]
-    live_only: false
-    comment: "按验证体读取动作日志"
-    used_by:
-      - data.queries.verification.list_verification_actions
+indexes: []

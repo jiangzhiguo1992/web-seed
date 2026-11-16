@@ -13,11 +13,11 @@
 data 在单向链末端，没有下游：
 
 ```
-feature ──> business ──> capabilities ──> data
+feature ──> capabilities ──> data
 ```
 
-- 被 `capabilities` 通过 `method.queries` 读取、通过写查询修改；被 `business` 通过 `data.entities` 引用为业务主体。
-- **不负责**：业务不变量（`business/rules`）、写归属编排（`capabilities/services`）、部署与运行时（`platform`）。
+- 被 `capabilities` 通过 `method.queries` 读取、通过写查询修改；被 `features.rules/states` 通过 `data.entities` 引用为业务主体。
+- **不负责**：业务不变量（`features/rules`）、写归属编排（`capabilities/services`）、部署与运行时（`platform`）。
 - 目录内只有五类契约。没有第六类；表达力不足时先扩展本层字段，不要新增平行概念。
 
 ---
@@ -63,9 +63,9 @@ storage    ──(tables / partition)──>  tables
 
 ### 3.1 表不使用外键
 
-**选择**：跨表一致性由应用服务与 `business.rules` 保证（`[强制: no-foreign-key]`）。
+**选择**：跨表一致性由应用服务与 `feature.rules` 保证（`[强制: no-foreign-key]`）。
 **理由**：外键把部署顺序、分库分表、软删语义绑死在数据库上；契约层要允许引擎替换（`storage.yaml` 的 `supported_engines`）。
-**代价**：一致性校验必须显式写，漏写不会报错。跨表不变量的落点是 `business.rules`，不是注释。
+**代价**：一致性校验必须显式写，漏写不会报错。跨表不变量的落点是 `feature.rules`，不是注释。
 
 ### 3.2 表不使用枚举，只存 integer 码
 
@@ -101,7 +101,7 @@ storage    ──(tables / partition)──>  tables
 |---|---|---|
 | 数据库能表达的 | `tables` 的 `constraints` / `indexes` | 单行、单表、DDL 可表达（`CHECK`、唯一索引） |
 | 跨字段 / 跨表不变量 | `entities` 的 `validation` | 需要多列或多表联合判断，但仍是数据形状 |
-| 业务行为规则 | `business/rules` | 涉及"谁可以做""什么时候可以做" |
+| 业务行为规则 | `features/rules` | 涉及"谁可以做""什么时候可以做" |
 
 **不要把 DDL 搬进 entity，也不要把业务规则塞进 table。** 判据：这条约束失效时，该由数据库拒绝，还是由业务拒绝？
 

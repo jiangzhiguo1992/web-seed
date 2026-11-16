@@ -35,7 +35,7 @@ queries:
           - created_at
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
-      - cap.methods.verification.send
+      - cap.services.verification.send
 
   - name: MarkVerificationSent
     tables:
@@ -48,7 +48,7 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
-      - cap.methods.verification.send
+      - cap.services.verification.send
 
   - name: GetLatestVerification
     tables:
@@ -75,8 +75,8 @@ queries:
           - sent_at
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
-      - cap.methods.verification.send
-      - cap.methods.verification.verify
+      - cap.services.verification.send
+      - cap.services.verification.verify
 
   - name: ConsumeVerification
     tables:
@@ -89,7 +89,7 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
-      - cap.methods.verification.verify
+      - cap.services.verification.verify
 
   - name: IncrementVerificationAttempt
     tables:
@@ -102,7 +102,7 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
-      - cap.methods.verification.verify
+      - cap.services.verification.verify
 
   - name: RevokeActiveVerificationsByAuth
     tables:
@@ -116,7 +116,7 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
-      - cap.methods.verification.revoke_by_auth
+      - cap.services.verification.revoke_by_auth
 
   - name: RevokeActiveVerificationsByAccount
     tables:
@@ -128,7 +128,7 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.idx_verification_account_id ]
     used_by:
-      - cap.methods.verification.revoke_by_account
+      - cap.services.verification.revoke_by_account
 
   - name: CreateVerificationAction
     tables:
@@ -153,48 +153,6 @@ queries:
           - created_at
     index_ref: [ data.tables.verification_action.pk ]
     used_by:
-      - cap.methods.verification.verify
+      - cap.services.verification.verify
 
-  - name: ListVerificationActions
-    tables:
-      - { table: data.tables.verification_action }
-    params:
-      - { name: verification_id, type: integer, column: data.tables.verification_action.col.verification_id }
-      - { name: limit, type: integer, nullable: true, default: 50 }
-    returns:
-      - name: row
-        kind: table
-        table: data.tables.verification_action
-        columns:
-          - id
-          - verification_id
-          - account_id
-          - result
-          - request_ip
-          - device_id
-          - location
-          - created_at
-    index_ref: [ data.tables.verification_action.idx_verification_action_body ]
-    used_by: []
 
-  - name: ListVerificationActionsByAccount
-    tables:
-      - { table: data.tables.verification_action }
-    params:
-      - { name: account_id, type: integer, column: data.tables.verification_action.col.account_id }
-      - { name: limit, type: integer, nullable: true, default: 50 }
-    returns:
-      - name: row
-        kind: table
-        table: data.tables.verification_action
-        columns:
-          - id
-          - verification_id
-          - account_id
-          - result
-          - request_ip
-          - device_id
-          - location
-          - created_at
-    index_ref: [ data.tables.verification_action.idx_verification_action_account ]
-    used_by: []
