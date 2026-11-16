@@ -16,7 +16,7 @@ data 在单向链末端，没有下游：
 feature ──> business ──> capabilities ──> data
 ```
 
-- 被 `capabilities` 通过 `persistence.queries` 读取、通过写查询修改；被 `business` 通过 `data.entities` 引用为业务主体。
+- 被 `capabilities` 通过 `method.queries` 读取、通过写查询修改；被 `business` 通过 `data.entities` 引用为业务主体。
 - **不负责**：业务不变量（`business/rules`）、写归属编排（`capabilities/services`）、部署与运行时（`platform`）。
 - 目录内只有五类契约。没有第六类；表达力不足时先扩展本层字段，不要新增平行概念。
 
@@ -134,10 +134,11 @@ columns:
 | `table.entities` | 手写 | 映射本表的 entity 集合（`[强制: table-entities]`） |
 | `model.included_by` | 手写 | 通过关系字段指向本实体的 entity（`[强制: entity-included-by]`） |
 | `indexes[].used_by` | 手写 | 使用该索引的 query（设计声明） |
-| `used_by.queries` | `make gen-graph` | 返回本实体的 query（`[强制: used-by-generated]`，禁止手改） |
-| `used_by.capabilities` | `make gen-graph` | 引用本实体的 capability |
+| `table.queries` | `make gen-graph` | 使用本表的 query（`[强制: table-queries-generated]`，禁止手改） |
+| `model.queries` | `make gen-graph` | 返回本实体的 query（`[强制: entity-used-by]`，禁止手改） |
+| `queries[].used_by` | `make gen-graph` | 调用本 query 的 method（`[强制: query-used-by]`，禁止手改） |
 
-这五个字段都只记**直接关系**，不展开传递闭包；完整影响面用 `make contract-impact id=<id>` 查询（P2 未实现）。
+这六个字段都只记**直接关系**，不展开传递闭包；完整影响面用 `make contract-impact id=<id>` 查询（P2 未实现）。
 
 ### 4.4 保留策略是选择，不是枚举
 
@@ -228,7 +229,7 @@ indexes:
 | 闸门 | 机制 | 状态 |
 |---|---|---|
 | 契约结构与引用 | `make contract-check`（lefthook pre-commit + CI） | ✅ 已启用 |
-| `used_by` 漂移 | `gen_graph -check`（内嵌于 contract-check） | ✅ 已启用 |
+| 反向索引漂移 | `gen_graph -check`（内嵌于 contract-check） | ✅ 已启用 |
 | 规则 ID 同步 | `gen_rule_ids -check`（内嵌于 contract-check） | ✅ 已启用 |
 | 契约 → DDL / migrations / sqlc | `make gen-db` | ⬜ P2 未实现 |
 | 迁移重放与目标态比对 | `make db-verify` | ⬜ P5 未实现 |

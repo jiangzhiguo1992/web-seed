@@ -16,6 +16,7 @@ model:
     - data.entities.base
   tables:
     - data.tables.verification_body
+  queries: []
   included_by: []
 
 fields:
@@ -76,7 +77,3 @@ fields:
     description: "校验失败次数；达到上限后作废"
     source: { column: data.tables.verification_body.col.attempt_count }
     validation: { column: data.tables.verification_body.col.attempt_count }
-
-used_by:
-  queries: []
-  capabilities: []

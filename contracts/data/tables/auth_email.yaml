@@ -16,6 +16,11 @@ table:
     - data.tables.base
   entities:
     - data.entities.auth_email
+  queries:
+    - data.queries.auth.create_auth_email
+    - data.queries.auth.get_auth_email_by_username_domain
+    - data.queries.auth.set_auth_email_status
+    - data.queries.auth.soft_delete_auth_email_by_account
 
 columns:
   - name: account_id
@@ -82,10 +87,3 @@ indexes:
     used_by:
       - data.queries.auth.create_auth_email
       - data.queries.auth.soft_delete_auth_email_by_account
-
-used_by:
-  queries:
-    - data.queries.auth.create_auth_email
-    - data.queries.auth.get_auth_email_by_username_domain
-    - data.queries.auth.set_auth_email_status
-    - data.queries.auth.soft_delete_auth_email_by_account

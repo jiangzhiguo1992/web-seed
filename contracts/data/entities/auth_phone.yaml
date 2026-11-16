@@ -14,6 +14,7 @@ model:
     - data.entities.base
   tables:
     - data.tables.auth_phone
+  queries: []
   included_by:
     - data.entities.account
 
@@ -50,7 +51,3 @@ fields:
     join_column_from: data.tables.auth_phone.col.account_id
     join_column_to: data.tables.account.col.id
     load: lazy
-
-used_by:
-  queries: []
-  capabilities: []

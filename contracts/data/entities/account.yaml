@@ -14,6 +14,11 @@ model:
     - data.entities.base
   tables:
     - data.tables.account
+  queries:
+    - data.queries.account.create_account
+    - data.queries.account.get_account
+    - data.queries.account.get_account_by_number
+    - data.queries.account.list_accounts
   included_by:
     - data.entities.auth_pwd
     - data.entities.auth_phone
@@ -80,15 +85,3 @@ fields:
     join_column_from: data.tables.account.col.id
     join_column_to: data.tables.auth_email.col.account_id
     load: lazy
-
-used_by:
-  queries:
-    - data.queries.account.create_account
-    - data.queries.account.get_account
-    - data.queries.account.get_account_by_number
-    - data.queries.account.list_accounts
-  capabilities:
-    - cap.http.account
-    - cap.methods.account
-    - cap.methods.auth
-    - cap.methods.token

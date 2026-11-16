@@ -29,6 +29,8 @@ queries:
           - locked_until
           - status
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_username ]
+    used_by:
+      - cap.methods.auth.login
 
   - name: CreateAuthPwd
     tables:
@@ -53,6 +55,8 @@ queries:
     index_ref:
       - data.tables.auth_pwd.uq_auth_pwd_username
       - data.tables.auth_pwd.uq_auth_pwd_account
+    used_by:
+      - cap.methods.auth.bind_password
 
   - name: UpdateAuthPwdHash
     tables:
@@ -63,6 +67,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_pwd.pk ]
+    used_by:
+      - cap.methods.auth.bind_password
 
   - name: RecordAuthPwdLoginSuccess
     tables:
@@ -72,6 +78,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_pwd.pk ]
+    used_by:
+      - cap.methods.auth.login
 
   - name: RecordAuthPwdLoginFailure
     tables:
@@ -82,6 +90,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_pwd.pk ]
+    used_by:
+      - cap.methods.auth.login
 
   - name: GetAuthPhoneByNumber
     tables:
@@ -101,6 +111,8 @@ queries:
           - operator
           - status
     index_ref: [ data.tables.auth_phone.uq_auth_phone_number ]
+    used_by:
+      - cap.methods.auth.login
 
   - name: CreateAuthPhone
     tables:
@@ -128,6 +140,8 @@ queries:
     index_ref:
       - data.tables.auth_phone.uq_auth_phone_number
       - data.tables.auth_phone.uq_auth_phone_account
+    used_by:
+      - cap.methods.auth.bind_phone
 
   - name: GetAuthEmailByUsernameDomain
     tables:
@@ -148,6 +162,8 @@ queries:
           - tld
           - status
     index_ref: [ data.tables.auth_email.uq_auth_email_username_domain ]
+    used_by:
+      - cap.methods.auth.login
 
   - name: CreateAuthEmail
     tables:
@@ -177,6 +193,8 @@ queries:
     index_ref:
       - data.tables.auth_email.uq_auth_email_username_domain
       - data.tables.auth_email.uq_auth_email_account
+    used_by:
+      - cap.methods.auth.bind_email
 
   - name: SoftDeleteAuthPwdByAccount
     tables:
@@ -186,6 +204,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_account ]
+    used_by:
+      - cap.methods.auth.revoke_all_for_account
 
   - name: SoftDeleteAuthPhoneByAccount
     tables:
@@ -195,6 +215,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_phone.uq_auth_phone_account ]
+    used_by:
+      - cap.methods.auth.revoke_all_for_account
 
   - name: SoftDeleteAuthEmailByAccount
     tables:
@@ -204,6 +226,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_email.uq_auth_email_account ]
+    used_by:
+      - cap.methods.auth.revoke_all_for_account
 
   - name: SetAuthPhoneStatus
     tables:
@@ -214,6 +238,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_phone.pk ]
+    used_by:
+      - cap.methods.auth.bind_phone
 
   - name: SetAuthEmailStatus
     tables:
@@ -224,6 +250,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_email.pk ]
+    used_by:
+      - cap.methods.auth.bind_email
 
   - name: SetAuthPwdStatus
     tables:
@@ -234,4 +262,5 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.auth_pwd.pk ]
-
+    used_by:
+      - cap.methods.auth.bind_password

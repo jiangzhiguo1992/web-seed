@@ -14,6 +14,7 @@ model:
     - data.entities.base
   tables:
     - data.tables.auth_email
+  queries: []
   included_by:
     - data.entities.account
 
@@ -60,7 +61,3 @@ validation:
   - name: domain_parts
     expr: "TLD == nil || Domain endsWith('.' + TLD)"
     on_violation: platform.errors.AUTH_EMAIL_INVALID
-
-used_by:
-  queries: []
-  capabilities: []

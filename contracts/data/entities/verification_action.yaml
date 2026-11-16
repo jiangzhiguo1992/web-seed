@@ -16,6 +16,7 @@ model:
     - data.entities.base
   tables:
     - data.tables.verification_action
+  queries: []
   included_by: []
 
 fields:
@@ -60,7 +61,3 @@ fields:
     description: "提交内容的 HMAC-SHA256；不存原文"
     source: { column: data.tables.verification_action.col.input_hash }
     validation: { column: data.tables.verification_action.col.input_hash }
-
-used_by:
-  queries: []
-  capabilities: []

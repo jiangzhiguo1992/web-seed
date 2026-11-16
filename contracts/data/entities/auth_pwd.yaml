@@ -14,6 +14,7 @@ model:
     - data.entities.base
   tables:
     - data.tables.auth_pwd
+  queries: []
   included_by:
     - data.entities.account
 
@@ -60,7 +61,3 @@ validation:
   - name: lock_consistency
     expr: "LockedUntil == nil || FailedLoginCount > 0"
     on_violation: platform.errors.AUTH_LOCKED
-
-used_by:
-  queries: []
-  capabilities: []

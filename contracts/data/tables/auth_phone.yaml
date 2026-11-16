@@ -16,6 +16,11 @@ table:
     - data.tables.base
   entities:
     - data.entities.auth_phone
+  queries:
+    - data.queries.auth.create_auth_phone
+    - data.queries.auth.get_auth_phone_by_number
+    - data.queries.auth.set_auth_phone_status
+    - data.queries.auth.soft_delete_auth_phone_by_account
 
 columns:
   - name: account_id
@@ -69,10 +74,3 @@ indexes:
     used_by:
       - data.queries.auth.create_auth_phone
       - data.queries.auth.soft_delete_auth_phone_by_account
-
-used_by:
-  queries:
-    - data.queries.auth.create_auth_phone
-    - data.queries.auth.get_auth_phone_by_number
-    - data.queries.auth.set_auth_phone_status
-    - data.queries.auth.soft_delete_auth_phone_by_account

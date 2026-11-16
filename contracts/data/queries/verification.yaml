@@ -34,6 +34,8 @@ queries:
           - expire_at
           - created_at
     index_ref: [ data.tables.verification_body.pk ]
+    used_by:
+      - cap.methods.verification.send
 
   - name: MarkVerificationSent
     tables:
@@ -45,6 +47,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.pk ]
+    used_by:
+      - cap.methods.verification.send
 
   - name: GetLatestVerification
     tables:
@@ -70,6 +74,9 @@ queries:
           - status
           - sent_at
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
+    used_by:
+      - cap.methods.verification.send
+      - cap.methods.verification.verify
 
   - name: ConsumeVerification
     tables:
@@ -81,6 +88,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.pk ]
+    used_by:
+      - cap.methods.verification.verify
 
   - name: IncrementVerificationAttempt
     tables:
@@ -92,6 +101,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.pk ]
+    used_by:
+      - cap.methods.verification.verify
 
   - name: RevokeActiveVerificationsByAuth
     tables:
@@ -104,6 +115,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
+    used_by:
+      - cap.methods.verification.revoke_by_auth
 
   - name: RevokeActiveVerificationsByAccount
     tables:
@@ -114,6 +127,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.verification_body.idx_verification_account_id ]
+    used_by:
+      - cap.methods.verification.revoke_by_account
 
   - name: CreateVerificationAction
     tables:
@@ -139,6 +154,9 @@ queries:
           - result
           - created_at
     index_ref: [ data.tables.verification_action.pk ]
+    used_by:
+      - cap.methods.verification.send
+      - cap.methods.verification.verify
 
   - name: ListVerificationActions
     tables:
@@ -161,6 +179,7 @@ queries:
           - location
           - created_at
     index_ref: [ data.tables.verification_action.idx_verification_action_body ]
+    used_by: []
 
   - name: ListVerificationActionsByAccount
     tables:
@@ -183,4 +202,4 @@ queries:
           - location
           - created_at
     index_ref: [ data.tables.verification_action.idx_verification_action_account ]
-
+    used_by: []

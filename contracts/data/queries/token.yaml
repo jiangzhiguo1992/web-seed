@@ -38,6 +38,9 @@ queries:
     index_ref:
       - data.tables.token.uq_token_access_hash
       - data.tables.token.uq_token_refresh_hash
+    used_by:
+      - cap.methods.token.issue
+      - cap.methods.token.refresh
 
   - name: GetTokenByRefresh
     tables:
@@ -60,6 +63,9 @@ queries:
           - replaced_by_id
           - status
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
+    used_by:
+      - cap.methods.token.logout
+      - cap.methods.token.refresh
 
   - name: GetTokenByAccess
     tables:
@@ -82,6 +88,8 @@ queries:
           - replaced_by_id
           - status
     index_ref: [ data.tables.token.uq_token_access_hash ]
+    used_by:
+      - cap.methods.token.verify
 
   - name: RevokeToken
     tables:
@@ -94,6 +102,9 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
+    used_by:
+      - cap.methods.token.logout
+      - cap.methods.token.refresh
 
   - name: RevokeTokensByAccount
     tables:
@@ -105,6 +116,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.token.idx_token_account_status ]
+    used_by:
+      - cap.methods.token.revoke_by_account
 
   - name: DeleteExpiredTokens
     tables:
@@ -114,6 +127,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
+    used_by:
+      - cap.methods.token.purge_expired
 
   - name: ListTokensByAccount
     tables:
@@ -140,3 +155,4 @@ queries:
           - created_at
           - updated_at
     index_ref: [ data.tables.token.idx_token_account_status ]
+    used_by: []

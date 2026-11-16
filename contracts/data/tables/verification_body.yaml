@@ -22,6 +22,14 @@ table:
     - data.tables.base
   entities:
     - data.entities.verification_body
+  queries:
+    - data.queries.verification.consume_verification
+    - data.queries.verification.create_verification
+    - data.queries.verification.get_latest_verification
+    - data.queries.verification.increment_verification_attempt
+    - data.queries.verification.mark_verification_sent
+    - data.queries.verification.revoke_active_verifications_by_account
+    - data.queries.verification.revoke_active_verifications_by_auth
 
 columns:
   - name: account_id
@@ -125,13 +133,3 @@ indexes:
     comment: "账号软删时作废该账号未消费的验证体"
     used_by:
       - data.queries.verification.revoke_active_verifications_by_account
-
-used_by:
-  queries:
-    - data.queries.verification.consume_verification
-    - data.queries.verification.create_verification
-    - data.queries.verification.get_latest_verification
-    - data.queries.verification.increment_verification_attempt
-    - data.queries.verification.mark_verification_sent
-    - data.queries.verification.revoke_active_verifications_by_account
-    - data.queries.verification.revoke_active_verifications_by_auth

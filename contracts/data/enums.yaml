@@ -53,7 +53,8 @@ enums:
         - data.entities.auth_email
         - data.entities.auth_phone
         - data.entities.auth_pwd
-      capabilities: []
+      capabilities:
+        - cap.methods.auth
 
   - name: token_status
     description: "令牌状态"

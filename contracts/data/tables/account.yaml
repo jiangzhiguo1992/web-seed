@@ -16,6 +16,15 @@ table:
     - data.tables.base
   entities:
     - data.entities.account
+  queries:
+    - data.queries.account.create_account
+    - data.queries.account.exists_account_number
+    - data.queries.account.get_account
+    - data.queries.account.get_account_by_number
+    - data.queries.account.list_accounts
+    - data.queries.account.set_account_status
+    - data.queries.account.soft_delete_account
+    - data.queries.account.update_account
 
 columns:
   - name: own_type
@@ -88,14 +97,3 @@ indexes:
     comment: "列表游标分页"
     used_by:
       - data.queries.account.list_accounts
-
-used_by:
-  queries:
-    - data.queries.account.create_account
-    - data.queries.account.exists_account_number
-    - data.queries.account.get_account
-    - data.queries.account.get_account_by_number
-    - data.queries.account.list_accounts
-    - data.queries.account.set_account_status
-    - data.queries.account.soft_delete_account
-    - data.queries.account.update_account

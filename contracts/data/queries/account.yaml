@@ -18,6 +18,14 @@ queries:
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
     index_ref: [ data.tables.account.pk ]
+    used_by:
+      - cap.methods.account.activate
+      - cap.methods.account.delete
+      - cap.methods.account.get
+      - cap.methods.account.suspend
+      - cap.methods.account.update
+      - cap.methods.auth.login
+      - cap.methods.token.verify
 
   - name: GetAccountByNumber
     tables:
@@ -27,6 +35,7 @@ queries:
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
     index_ref: [ data.tables.account.uq_account_number ]
+    used_by: [ ]
 
   - name: ExistsAccountNumber
     tables:
@@ -36,6 +45,8 @@ queries:
     returns:
       - { name: exists, kind: scalar, type: boolean }
     index_ref: [ data.tables.account.uq_account_number ]
+    used_by:
+      - cap.methods.account.create
 
   - name: ListAccounts
     tables:
@@ -50,6 +61,8 @@ queries:
     index_ref:
       - data.tables.account.idx_account_created_at_id
       - data.tables.account.idx_account_own_type_own_id
+    used_by:
+      - cap.methods.account.list
 
   - name: CreateAccount
     tables:
@@ -64,6 +77,8 @@ queries:
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
     index_ref: [ data.tables.account.uq_account_number ]
+    used_by:
+      - cap.methods.account.create
 
   - name: UpdateAccount
     tables:
@@ -74,6 +89,8 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]
+    used_by:
+      - cap.methods.account.update
 
   - name: SetAccountStatus
     tables:
@@ -84,6 +101,9 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]
+    used_by:
+      - cap.methods.account.activate
+      - cap.methods.account.suspend
 
   - name: SoftDeleteAccount
     tables:
@@ -93,3 +113,5 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
     index_ref: [ data.tables.account.pk ]
+    used_by:
+      - cap.methods.account.delete
