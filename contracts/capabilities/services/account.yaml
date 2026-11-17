@@ -9,16 +9,9 @@ do_not:
 
 interface:
   name: AccountService
-  package: internal/modules/account/api
 
-persistence:
-  tables:
-    - data.tables.account
-  constraint_errors:
-    uq_account_number: platform.errors.ACCOUNT_NUMBER_TAKEN
-    ck_account_deleted_consistent: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
-types:
+schemas:
   ListAccountsFilter:
     type: object
     additionalProperties: false
@@ -67,8 +60,6 @@ services:
     errors:
       - platform.errors.ACCOUNT_NOT_FOUND
       - platform.errors.COMMON_FORBIDDEN
-    permissions:
-      - platform.security.permissions.account_read
     transaction: read_only
     steps:
       - id: load
@@ -95,9 +86,6 @@ services:
     errors:
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_RATE_LIMITED
-    permissions:
-      - platform.security.permissions.account_read
-    rate_limit: {requests: 60, window_seconds: 60}
     transaction: read_only
     steps:
       - id: query
@@ -124,12 +112,7 @@ services:
       - platform.errors.ACCOUNT_OWN_INVALID
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
-      - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
-    permissions:
-      - platform.security.permissions.account_write
-    audit: true
     transaction: required
-    idempotency: {key: "account_create:{input.number}", window: 24h}
     steps:
       - id: create
         kind: logic
@@ -166,9 +149,6 @@ services:
       - platform.errors.ACCOUNT_ALREADY_DELETED
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
-    permissions:
-      - platform.security.permissions.account_write
-    audit: true
     transaction: required
     steps:
       - id: update
@@ -198,15 +178,11 @@ services:
     errors:
       - platform.errors.ACCOUNT_NOT_FOUND
       - platform.errors.ACCOUNT_ALREADY_DELETED
+      - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_INTERNAL
       - platform.errors.COMMON_AUDIT_FAILED
-      - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
-    permissions:
-      - platform.security.permissions.account_delete
-    audit: true
     transaction: required
-    idempotency: {key: "account_delete:{id}", window: 24h}
     steps:
       - id: load
         kind: query
@@ -233,6 +209,7 @@ services:
         errors:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.ACCOUNT_ALREADY_DELETED
+          - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
           - platform.errors.COMMON_INTERNAL
         output: []
         queries:
@@ -258,9 +235,6 @@ services:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
-    permissions:
-      - platform.security.permissions.account_write
-    audit: true
     transaction: required
     steps:
       - id: transition
@@ -292,9 +266,6 @@ services:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
-    permissions:
-      - platform.security.permissions.account_write
-    audit: true
     transaction: required
     steps:
       - id: transition

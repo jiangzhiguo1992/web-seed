@@ -125,7 +125,7 @@ scripts/cmd/
   - `data/storage.yaml` 的 `tables.<engine>`：按 supported_engines 分组，覆盖每张物理表且无孤儿；`caches` 只登记非权威副本；`size_class`/`retention`/`partition` 按表登记
   - `table.entities` 显式记录映射本表的实体，checker 校验；`table.queries` 只记生成的 `queries`
   - `owner_module` 与 capabilities 写表归属一致（只有 `cap.services` 可写）；跨模块读通过 `kind: service` 调用，`read_only_tables` 已移除
-  - service steps 的 `kind: query` / `kind: logic.queries` 引用的查询项必须存在；每个写查询必须被某个 service step 引用，且写表归属一致；`kind: query` 不得跨模块写；`persistence.constraint_errors` 的键必须是所写表的约束或索引名
+  - service steps 的 `kind: query` / `kind: logic.queries` 引用的查询项必须存在；每个写查询必须被某个 service step 引用，且写表归属一致；`kind: query` 不得跨模块写；query 的 `errors` 必须是存在的 `platform.errors.*`，且被引用它的 step 覆盖
   - 索引名同一 schema 内必须全局唯一
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
   - 所有契约的顶层 `fields` 必须竖排（block style），嵌套 `item_fields` 不限制（`schema.fields-style`）；`table.extends/entities`、`model.extends/tables/included_by` 必须竖排（`schema.list-style`）

@@ -8,21 +8,7 @@ do_not:
   - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
 interface:
   name: AuthService
-  package: internal/modules/account/auth/api
-persistence:
-  tables:
-    - data.tables.auth_pwd
-    - data.tables.auth_phone
-    - data.tables.auth_email
-  constraint_errors:
-    uq_auth_pwd_username: platform.errors.AUTH_USERNAME_TAKEN
-    uq_auth_pwd_account: platform.errors.AUTH_USERNAME_TAKEN
-    ck_auth_pwd_username_lowercase: platform.errors.AUTH_INVALID_CREDENTIALS
-    uq_auth_phone_number: platform.errors.AUTH_PHONE_TAKEN
-    uq_auth_email_username_domain: platform.errors.AUTH_EMAIL_TAKEN
-    ck_auth_email_domain_lowercase: platform.errors.AUTH_EMAIL_INVALID
-    ck_auth_email_username_lowercase: platform.errors.AUTH_EMAIL_INVALID
-types:
+schemas:
   LoginInput:
     type: object
     additionalProperties: false
@@ -94,8 +80,6 @@ services:
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_RATE_LIMITED
-    audit: true
-    rate_limit: {requests: 10, window_seconds: 60}
     transaction: required
     steps:
       - id: login

@@ -49,31 +49,18 @@ fields:
   - name: interface
     type: object
     required: true
-    description: "Go interface；方法签名由 services[].params/returns 派生，不在此重复"
+    description: "Go interface；包路径固定为 internal/modules/<owner_module>/api，方法签名由 services[].params/returns 派生"
     fields:
       - name: name
         type: string
         required: true
         pattern: '^[A-Z][A-Za-z0-9]*$'
         description: "interface 名，PascalCase"
-      - name: package
-        type: string
-        required: true
-        pattern: '^internal/modules/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*$'
-        description: "Go 接口包路径；跨模块只允许 import 此包"
 
-  - name: persistence
-    type: object
-    required: true
-    description: "持久化归属：本服务文件可写的表与约束错误映射"
-    fields:
-      - { name: tables, type: list<string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "本服务可写的表" }
-      - { name: constraint_errors, type: map<string>, required: false, description: "约束/索引名到错误 ID" }
-
-  - name: types
+  - name: schemas
     type: any
     required: false
-    description: "本地类型；值是 OpenAPI-ish schema；跨文件引用用类型名"
+    description: "本地对象 schema；值是受限 OpenAPI schema，仅允许 type/format/nullable/required/properties/items/enum/const/minimum/maximum/minLength/maxLength/pattern/default/readOnly/writeOnly/additionalProperties/description/x-auth-response；跨文件引用用类型名"
 
   - name: services
     type: list<object>
@@ -104,32 +91,7 @@ fields:
 
       - { name: errors, type: list<string>, required: true, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "本服务对外错误集" }
 
-      - name: permissions
-        type: list<string>
-        required: false
-        unique: true
-        pattern: '^platform\.security\.permissions\.[a-z][a-z0-9_]*$'
-        description: "入口权限点；由 handler/worker 生成器消费，service 实现不读取"
-
-      - { name: audit, type: boolean, required: false, description: "是否写审计日志；由入口生成器消费" }
-
-      - name: rate_limit
-        type: object
-        required: false
-        description: "入口限流；由入口生成器消费"
-        fields:
-          - { name: requests, type: integer, required: true, min: 1, description: "窗口内请求数" }
-          - { name: window_seconds, type: integer, required: true, min: 1, description: "窗口秒数" }
-
       - { name: transaction, type: string, required: true, enum: [ required, read_only, none ], description: "事务边界；usecase 生成器据此包裹方法体" }
-
-      - name: idempotency
-        type: object
-        required: false
-        description: "幂等键与窗口；由入口生成器消费"
-        fields:
-          - { name: key, type: string, required: true, description: "幂等键模板" }
-          - { name: window, type: string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "窗口，例如 24h" }
 
       - name: max_iterations
         type: integer
@@ -144,7 +106,7 @@ fields:
         description: "实现路径；kind 决定必填与专属字段"
         item_fields:
           - { name: id, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID，service 内唯一" }
-          - { name: kind, type: string, required: true, enum: [ query, service, logic, event, transition ], description: "步骤类型" }
+          - { name: kind, type: string, required: true, enum: [ query, service, logic, transition ], description: "步骤类型" }
           - { name: summary, type: string, required: true, description: "一句话说明" }
           - { name: depends_on, type: list<string>, required: false, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "依赖的前序步骤 ID" }
           - { name: when, type: string, required: false, description: "受限布尔表达式：true/false、!、&&、||、括号、input.<path> / step.<id>.<path> 与字面量比较" }
@@ -171,27 +133,21 @@ fields:
           - { name: query, type: string, required: false, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=query 时的目标查询" }
           - { name: service, type: string, required: false, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=service 时的目标服务项" }
           - { name: params, type: map<string>, required: false, description: "query/service 步骤的参数映射；key 是目标参数名" }
-          - { name: queries, type: list<string>, required: false, unique: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=logic/transition 时调用的查询；用于 query.used_by 反向索引" }
+          - { name: queries, type: list<string>, required: false, unique: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=logic/transition 时调用的查询；用于 query.used_by 反向索引与错误覆盖" }
           - { name: events, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=logic/transition 时发射的事件" }
           - { name: rules, type: list<string>, required: false, unique: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=logic/transition 时的业务规则依据" }
-          - { name: event, type: string, required: false, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=event 时发射的事件" }
-          - name: payload
-            type: map<string>
-            required: false
-            description: "kind=event 时的事件字段映射；key 是 payload 字段名，value 是表达式"
           - { name: transitions, type: list<string>, required: false, unique: true, pattern: '^feature\.states\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=transition 时执行的状态转换 ID 列表" }
 
 rules:
   - { id: service-id, text: "契约 ID 必须与 targets 派生一致，且全局唯一；service 项 ID 全局唯一", implemented_by: [ service-id ] }
-  - { id: service-structure, text: "interface.package 必须位于 internal/modules/<owner_module>/ 下；types 名全局唯一且 object 必须 additionalProperties: false；params[0] 必须是 ctx，params/returns name 唯一，returns 末位必须是 err；step.id 在 service 内唯一；depends_on 只能引用前序步骤；output 只允许 logic/transition 且 name 唯一；logic 必须声明 output 与 errors", implemented_by: [ service-structure ] }
-  - { id: service-ref, text: "query/service/event/transition/rules 引用必须存在；params/returns/types 中的 data.enums.* / data.entities.* / 本地类型必须存在，data.tables.* 禁止；permissions 必须存在于 platform.security.permissions", implemented_by: [ service-ref ] }
-  - { id: service-owner-write, text: "kind=query 的写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service；persistence.tables 必须覆盖所有 query 写表", implemented_by: [ service-owner-write ] }
-  - { id: service-errors, text: "service.errors 必须覆盖所有可达步骤的未处理错误与入口策略错误；步骤 errors 必须是目标 query/service 错误集的子集，缺省取目标全部", implemented_by: [ service-errors ] }
+  - { id: service-structure, text: "interface.name 全局唯一；schemas 名全局唯一；object 必须 additionalProperties: false；未知 schema 键拒绝；params[0] 必须是 ctx，params/returns name 唯一，returns 末位必须是 err；step.id 在 service 内唯一；depends_on 只能引用前序步骤；output 只允许 logic/transition 且 name 唯一；logic 必须声明 output 与 errors", implemented_by: [ service-structure ] }
+  - { id: service-ref, text: "query/service/transition/rules/events 引用必须存在；params/returns/schemas 中的 data.enums.* / data.entities.* / 本地类型必须存在，data.tables.* 禁止", implemented_by: [ service-ref ] }
+  - { id: service-owner-write, text: "kind=query 的写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service", implemented_by: [ service-owner-write ] }
+  - { id: service-errors, text: "service.errors 必须覆盖所有可达步骤的未处理错误与入口策略错误；step.errors 必须覆盖其 queries 的 errors（kind=query 缺省取 query 全部），且 kind=service 时必须是目标错误集的子集", implemented_by: [ service-errors ] }
   - { id: service-control, text: "on_error 按 error 唯一；target 仅 goto 可用且必须存在；存在后向/自环 goto 时 service.max_iterations 必填", implemented_by: [ service-control ] }
-  - { id: service-when, text: "静态 false 的步骤不可达；引用的 step 必须是前序步骤，字段必须存在于目标 returns、logic output 或 query 返回；$ref / oneOf / anyOf / allOf / 列表索引按 schema 解析", implemented_by: [ service-when ] }
+  - { id: service-when, text: "静态 false 的步骤不可达；step 引用必须是前序步骤，字段必须存在于目标 returns、logic output 或 query 返回；input 引用必须是 service params，且嵌套字段按 param 类型解析；$ref / oneOf / anyOf / allOf / 列表索引按 schema 解析", implemented_by: [ service-when ] }
   - { id: service-visibility, text: "cap.protocols.http.x-service 只能指向 visibility=public 且无 async job 的 service；跨模块 kind=service 只能指向 visibility=public 的目标；internal 目标只能被同模块引用", implemented_by: [ service-visibility ] }
-  - { id: service-steps-kind, text: "kind=query 必须有 query；kind=service 必须有 service；kind=logic 必须有 output+errors；kind=event 必须有 event；kind=transition 必须有 transitions；params 出现时 key 必须是目标参数；每个 kind 只允许公共字段与自身专属字段", implemented_by: [ service-steps-kind ] }
+  - { id: service-steps-kind, text: "kind=query 必须有 query；kind=service 必须有 service；kind=logic 必须有 output+errors；kind=transition 必须有 transitions；params 出现时 key 必须是目标参数；每个 kind 只允许公共字段与自身专属字段", implemented_by: [ service-steps-kind ] }
   - { id: service-cycle, text: "kind=service 调用图必须无环", implemented_by: [ service-cycle ] }
   - { id: service-params, text: "params 的值必须是 input.* / step.<id>.* 表达式或字面量；input 字段必须存在，step 字段必须存在于前序步骤输出", implemented_by: [ service-params ] }
   - { id: service-output, text: "kind=logic 的 output 必须覆盖 service returns 的全部业务字段（err 除外）", implemented_by: [ service-output ] }
-  - { id: service-event-payload, text: "kind=event 的 payload key 必须属于事件 payload.properties", implemented_by: [ service-event-payload ] }

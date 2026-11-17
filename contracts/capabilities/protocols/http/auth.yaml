@@ -125,25 +125,25 @@ paths:
 components:
   schemas:
     LoginInput:
-      x-service-type: cap.services.auth.types.LoginInput
+      x-service-type: cap.services.auth.schemas.LoginInput
 
     SendVerificationInput:
-      x-service-type: cap.services.verification.types.SendVerificationInput
+      x-service-type: cap.services.verification.schemas.SendVerificationInput
 
     VerifyCodeInput:
-      x-service-type: cap.services.verification.types.VerifyCodeInput
+      x-service-type: cap.services.verification.schemas.VerifyCodeInput
 
     TokenPair:
-      x-service-type: cap.services.token.types.TokenPair
+      x-service-type: cap.services.token.schemas.TokenPair
 
     AuthSession:
-      x-service-type: cap.services.auth.types.AuthSession
+      x-service-type: cap.services.auth.schemas.AuthSession
 
     VerificationPurpose:
       x-enum: data.enums.verification_purpose
 
     VerificationSent:
-      x-service-type: cap.services.verification.types.VerificationSent
+      x-service-type: cap.services.verification.schemas.VerificationSent
 
     VerificationResult:
-      x-service-type: cap.services.verification.types.VerificationResult
+      x-service-type: cap.services.verification.schemas.VerificationResult

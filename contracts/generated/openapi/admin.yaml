@@ -161,7 +161,7 @@ components:
         - has_more
         - next_cursor
       type: object
-      x-service-type: cap.services.account.types.AccountPage
+      x-service-type: cap.services.account.schemas.AccountPage
     AccountStatus:
       enum:
         - pending
@@ -181,7 +181,7 @@ components:
         - account
         - tokens
       type: object
-      x-service-type: cap.services.auth.types.AuthSession
+      x-service-type: cap.services.auth.schemas.AuthSession
     CreateAccountInput:
       additionalProperties: false
       properties:
@@ -211,7 +211,7 @@ components:
         - number
         - nickname
       type: object
-      x-service-type: cap.services.account.types.CreateAccountInput
+      x-service-type: cap.services.account.schemas.CreateAccountInput
     LoginInput:
       additionalProperties: false
       properties:
@@ -241,7 +241,7 @@ components:
         - auth_type
         - identifier
       type: object
-      x-service-type: cap.services.auth.types.LoginInput
+      x-service-type: cap.services.auth.schemas.LoginInput
     OwnType:
       enum:
         - user
@@ -336,7 +336,7 @@ components:
         - target
         - purpose
       type: object
-      x-service-type: cap.services.verification.types.SendVerificationInput
+      x-service-type: cap.services.verification.schemas.SendVerificationInput
     TokenPair:
       additionalProperties: false
       properties:
@@ -363,7 +363,7 @@ components:
         - refresh_expire_at
       type: object
       x-auth-response: true
-      x-service-type: cap.services.token.types.TokenPair
+      x-service-type: cap.services.token.schemas.TokenPair
     UpdateAccountInput:
       additionalProperties: false
       properties:
@@ -374,7 +374,7 @@ components:
       required:
         - nickname
       type: object
-      x-service-type: cap.services.account.types.UpdateAccountInput
+      x-service-type: cap.services.account.schemas.UpdateAccountInput
     VerificationPurpose:
       enum:
         - register
@@ -404,7 +404,7 @@ components:
         - verified
         - verification_id
       type: object
-      x-service-type: cap.services.verification.types.VerificationResult
+      x-service-type: cap.services.verification.schemas.VerificationResult
     VerificationSent:
       additionalProperties: false
       properties:
@@ -420,7 +420,7 @@ components:
         - masked_target
         - expire_at
       type: object
-      x-service-type: cap.services.verification.types.VerificationSent
+      x-service-type: cap.services.verification.schemas.VerificationSent
     VerifyCodeInput:
       additionalProperties: false
       properties:
@@ -461,7 +461,7 @@ components:
         - purpose
         - code
       type: object
-      x-service-type: cap.services.verification.types.VerifyCodeInput
+      x-service-type: cap.services.verification.schemas.VerifyCodeInput
 info:
   title: web-seed admin API
   version: 0.1.0

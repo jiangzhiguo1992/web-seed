@@ -1,0 +1,18 @@
+id: platform.security.access
+summary: "入口访问策略（权限、审计、限流）"
+schema_version: 1
+stability: draft
+do_not:
+  - "入口策略只在此绑定；service 契约不重复声明"
+bindings:
+  - { target: cap.services.account.get, permissions: [platform.security.permissions.account_read] }
+  - { target: cap.services.account.list, permissions: [platform.security.permissions.account_read], rate_limit: { requests: 60, window_seconds: 60 } }
+  - { target: cap.services.account.create, permissions: [platform.security.permissions.account_write], audit: true }
+  - { target: cap.services.account.update, permissions: [platform.security.permissions.account_write], audit: true }
+  - { target: cap.services.account.delete, permissions: [platform.security.permissions.account_delete], audit: true }
+  - { target: cap.services.account.activate, permissions: [platform.security.permissions.account_write], audit: true }
+  - { target: cap.services.account.suspend, permissions: [platform.security.permissions.account_write], audit: true }
+  - { target: cap.services.auth.login, audit: true, rate_limit: { requests: 10, window_seconds: 60 } }
+  - { target: cap.services.token.logout, audit: true }
+  - { target: cap.services.verification.send, audit: true, rate_limit: { requests: 5, window_seconds: 60 } }
+  - { target: cap.services.verification.verify, audit: true, rate_limit: { requests: 10, window_seconds: 60 } }

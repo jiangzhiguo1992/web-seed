@@ -67,4 +67,4 @@ fields:
 
 rules:
   - { id: event-structure, text: "事件名在文件内唯一、以文件主体为前缀且 item ID 必须为 cap.events.<name>；payload 为 inline object 时必须 additionalProperties: false；emitted_by 必须指向存在的 cap.services.*", implemented_by: [ event-structure ] }
-  - { id: event-payload-ref, text: "payload.$ref 必须是存在的 object 类型（data.entities.* / cap.services.*.types.*）；properties.<field>.type 引用的 data.enums.* / data.entities.* 必须存在，data.enums.* 不得作为 $ref", implemented_by: [ event-payload-ref ] }
+  - { id: event-payload-ref, text: "payload.$ref 必须是存在的 object 类型（data.entities.* / cap.services.*.schemas.*）；properties.<field>.type 引用的 data.enums.* / data.entities.* 必须存在，data.enums.* 不得作为 $ref", implemented_by: [ event-payload-ref ] }

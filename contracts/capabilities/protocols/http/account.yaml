@@ -162,10 +162,10 @@ components:
       x-entity: data.entities.account
 
     CreateAccountInput:
-      x-service-type: cap.services.account.types.CreateAccountInput
+      x-service-type: cap.services.account.schemas.CreateAccountInput
 
     UpdateAccountInput:
-      x-service-type: cap.services.account.types.UpdateAccountInput
+      x-service-type: cap.services.account.schemas.UpdateAccountInput
 
     AccountPage:
-      x-service-type: cap.services.account.types.AccountPage
+      x-service-type: cap.services.account.schemas.AccountPage

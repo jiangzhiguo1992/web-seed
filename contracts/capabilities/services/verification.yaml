@@ -9,15 +9,7 @@ do_not:
   - "换绑、解绑或停用认证绑定必须调用 revoke_by_auth"
 interface:
   name: VerificationService
-  package: internal/modules/account/auth/verification/api
-persistence:
-  tables:
-    - data.tables.verification_body
-    - data.tables.verification_action
-  constraint_errors:
-    ck_verification_auth_type: platform.errors.AUTH_VERIFICATION_TARGET_INVALID
-    ck_verification_consumed_status: platform.errors.AUTH_VERIFICATION_INVALID
-types:
+schemas:
   SendVerificationInput:
     type: object
     additionalProperties: false
@@ -70,8 +62,6 @@ services:
       - platform.errors.AUTH_EMAIL_INVALID
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_RATE_LIMITED
-    audit: true
-    rate_limit: {requests: 5, window_seconds: 60}
     transaction: required
     steps:
       - id: send
@@ -112,8 +102,6 @@ services:
       - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_RATE_LIMITED
-    audit: true
-    rate_limit: {requests: 10, window_seconds: 60}
     transaction: required
     steps:
       - id: verify

@@ -8,15 +8,7 @@ do_not:
   - "verify 只校验 access token；refresh token 只在 refresh/logout 中使用"
 interface:
   name: TokenService
-  package: internal/modules/account/auth/token/api
-persistence:
-  tables:
-    - data.tables.token
-  constraint_errors:
-    ck_token_revoked_consistent: platform.errors.AUTH_TOKEN_INVALID
-    ck_token_revoke_reason_consistent: platform.errors.AUTH_TOKEN_INVALID
-    ck_token_replaced_by_self: platform.errors.COMMON_CONFLICT
-types:
+schemas:
   TokenPair:
     type: object
     additionalProperties: false
@@ -89,10 +81,7 @@ services:
     errors:
       - platform.errors.AUTH_TOKEN_INVALID
       - platform.errors.COMMON_AUDIT_FAILED
-      - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
-    audit: true
     transaction: required
-    idempotency: {key: "auth_logout:{refresh_token_hash}", window: 24h}
     steps:
       - id: logout
         kind: logic

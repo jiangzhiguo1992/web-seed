@@ -19,9 +19,9 @@
 
 - **service = 一个可调用单元**，有明确的 params/returns/errors 和 steps；同步调用，不声明 trigger。
 - **async = 一个异步任务**，引用一个同步 service 作为 handler，声明 trigger/retry/concurrency。
-- **step = 服务实现路径上的一步**，五类：query / service / logic / event / transition。
+- **step = 服务实现路径上的一步**，四类：query / service / logic / transition。
 - **rule / state 在 features**，被 service 的 `kind: logic` / `kind: transition` step 引用。
-- **event = 跨模块消息契约**，由 service step 的 `events` / `kind: event` 发射，被 async 的 `trigger.event` 消费。
+- **event = 跨模块消息契约**，由 service step 的 `events` 发射，被 async 的 `trigger.event` 消费。
 - **protocol = service 到传输协议的绑定**，只写协议差异。
 
 ---
@@ -48,7 +48,7 @@ async ──service──> services
 | service → service | `services/*.yaml` 的 steps | `kind: service` + `service` |
 | service → rule | `services/*.yaml` 的 steps | `kind: logic/transition` + `rules` |
 | service → state | `services/*.yaml` 的 steps | `kind: transition` + `transitions` |
-| service → event | `services/*.yaml` 的 steps | `kind: logic/transition` + `events`；显式 payload 用 `kind: event` |
+| service → event | `services/*.yaml` 的 steps | `kind: logic/transition` + `events` |
 | async → service | `async/*.yaml` 的 jobs | `service` |
 | async → event | `async/*.yaml` 的 jobs | `trigger.event` |
 | feature → service | `features/**` | `capability: cap.services.*` |
@@ -68,11 +68,12 @@ async ──service──> services
 
 `services/<module>.yaml` 一个文件对应一个 Go interface。`services[]` 的每一项是一个可调用单元。
 
-文件级必须声明：
+文件级字段：
 
-- `interface.name` / `interface.package`（`internal/modules/<module>/api`）
-- `persistence.tables` / `persistence.constraint_errors`（本文件可写的表与约束错误映射）
-- `types`（本地对象 schema；可跨文件引用）
+- `interface.name`（必须；包路径固定为 `internal/modules/<owner_module>/api`）
+- `schemas`（可选；本地对象 schema，可跨文件引用）
+
+入口权限、审计与限流在 `contracts/platform/security/access.yaml` 绑定，不在 service 项声明。query 的 `errors` 在 `data/queries/*.yaml` 的查询项上声明；它只列 query 自身的领域错误，输入校验、权限与 DB 引擎错误不在 query 内枚举，`errors: []` 表示没有领域错误。
 
 service 项必须声明：
 
@@ -81,29 +82,28 @@ service 项必须声明：
 - `transaction`（`required` / `read_only` / `none`）
 - `steps`（至少一步）
 
-可选：`permissions` / `audit` / `rate_limit` / `idempotency`（入口策略）；`max_iterations`（后向 goto）。
+可选：`max_iterations`（后向 goto）。
 
 ### 3.1 steps
 
 | kind | 必填 | 说明 |
 |---|---|---|
-| `query` | `query` + `params` | 调用本模块 `data.queries.*` |
+| `query` | `query` + `params` | 调用本模块 `data.queries.*`；`step.errors` 必须覆盖 `query.errors` |
 | `service` | `service` + `params` | 调用其他（或本模块）service；跨模块目标必须 `public` |
-| `logic` | `output` + `errors`；可选 `queries` / `rules` / `events` | 手写实现；`queries` 用于 query 反向索引，`rules` 是业务依据 |
-| `event` | `event` | 发射 `cap.events.*`；`payload` 可选，用于显式字段映射 |
+| `logic` | `output` + `errors`；可选 `queries` / `rules` / `events` | 手写实现；`queries` 用于 query 反向索引与错误覆盖，`rules` 是业务依据 |
 | `transition` | `transitions` | 执行 `feature.states.*` 转换；可选 `queries` / `rules` / `events` / `output` |
 
 通用字段：`id` / `kind` / `summary` / `depends_on` / `when` / `on_error` / `errors`。
 
-- `when` 是受限布尔表达式（`true/false`、`!`、`&&`、`||`、括号、`input.*` / `step.<id>.*` 与字面量比较）；静态 false 的步骤不可达。
+- `when` 是受限布尔表达式（`true/false`、`!`、`&&`、`||`、括号、`input.*` / `step.<id>.*` 与字面量比较）；`input.*` 必须是 service params，嵌套字段按 param 类型解析；静态 false 的步骤不可达。
 - `on_error` 是 `{error, action, target}` 列表；`action: abort | continue | goto`；存在后向/自环 goto 时 `max_iterations` 必填。
-- `service.errors` 必须覆盖所有可达步骤的未处理错误与入口策略错误（权限→`COMMON_FORBIDDEN`、限流→`COMMON_RATE_LIMITED`、审计→`COMMON_AUDIT_FAILED`、幂等→`COMMON_IDEMPOTENCY_CONFLICT`、循环耗尽→`COMMON_LOOP_EXHAUSTED`）。
+- `service.errors` 必须覆盖所有可达步骤的未处理错误与入口策略错误（权限→`COMMON_FORBIDDEN`、限流→`COMMON_RATE_LIMITED`、审计→`COMMON_AUDIT_FAILED`、循环耗尽→`COMMON_LOOP_EXHAUSTED`）。
 
 ### 3.2 事务与写归属
 
 - `transaction` 是 service 级事务边界；生成器在 usecase 方法体外层包裹 `WithTx`。
 - `kind: query` 的写表必须属于文件 `owner_module`；跨模块写必须走 `kind: service`。
-- `persistence.tables` 必须覆盖所有 query 写表；`constraint_errors` 的键必须是所写表的约束或索引名。
+- 写表由 query 的 `tables[].write` 反向推导，不再单独声明；`step.queries` 中每个 query 的 `errors` 必须被 `step.errors` 覆盖。
 - `query.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，且不得为空。
 
 ---
@@ -138,9 +138,9 @@ capabilities 不再有 `rules/` / `states/` 目录。
 `events/<subject>.yaml` 按业务主体组织（不按生产者模块）：
 
 - 每个事件有 `id` / `name` / `version` / `payload` / `emitted_by` / `consumers`；
-- `payload` 可以是 inline object（必须 `additionalProperties: false`）或 `$ref`（`data.entities.*` / `cap.services.*.types.*`）；
+- `payload` 可以是 inline object（必须 `additionalProperties: false`）或 `$ref`（`data.entities.*` / `cap.services.*.schemas.*`）；
 - `emitted_by` 指向发射事件的服务项，`consumers` 由 async job 的 `trigger.event` 生成，二者都由 `make gen-graph` 维护；
-- 事件发射由 service step 的 `events`（或显式 payload 的 `kind: event` step）声明，不是 service 项。
+- 事件发射由 service step 的 `events` 声明，不是 service 项。
 
 ---
 
@@ -153,13 +153,13 @@ capabilities 不再有 `rules/` / `states/` 目录。
 - request/response 的 schema `$ref`；request 用 `x-service-type`、response 用 `x-service-return` 指向 service 的 params/returns
 - `components.schemas` 通过 `x-service-type` / `x-enum` / `x-entity` 指向唯一来源
 
-**不要写**：权限、审计、限流、幂等、事务——这些在 service。
+**不要写**：权限、审计（在 `platform/security/access.yaml`）、限流（在 service 项）、事务（在 service 项）。
 
 HTTP 约束：
 
 - 响应 schema 必须 `additionalProperties: false`。
 - 错误响应统一引用 `protocols/http/shared.yaml` 的 `Problem`。
-- 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明。
+- 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明；operation 需要更细粒度时用 `x-default-errors` 覆盖。
 - 503 必须通过 shared 的 `ServiceUnavailable` 返回 `Retry-After`。
 - 每个 operation 必须写 `x-contract-id` 与 `x-service`；`x-service` 只能指向 `public` 且无 async job 的同步 service。
 
