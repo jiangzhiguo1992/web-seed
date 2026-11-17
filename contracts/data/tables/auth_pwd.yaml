@@ -32,11 +32,8 @@ columns:
     comment: "关联账号"
 
   - name: username
-    type: string
+    type: auth_username
     nullable: false
-    min_len: 1
-    max_len: 254
-    normalize: lower
     sensitivity: pii
     comment: "登录名；小写归一且唯一"
 

@@ -47,9 +47,8 @@ columns:
     comment: "关联账号"
 
   - name: device_id
-    type: string
+    type: device_id
     nullable: true
-    max_len: 128
     comment: "设备标识；多端登录时区分设备"
 
   - name: user_id

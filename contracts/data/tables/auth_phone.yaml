@@ -29,19 +29,13 @@ columns:
     comment: "关联账号"
 
   - name: code
-    type: string
+    type: phone_code
     nullable: false
-    min_len: 2
-    max_len: 8
-    pattern: "^\\+[0-9]{1,4}$"
     comment: "国际区号，例如 +86"
 
   - name: number
-    type: string
+    type: phone_number
     nullable: false
-    min_len: 1
-    max_len: 32
-    pattern: "^[0-9]{1,32}$"
     sensitivity: pii
     comment: "手机号；只允许数字，与 code 拼成 E.164 快照"
 

@@ -43,19 +43,13 @@ columns:
     comment: "归属 ID；与 own_type 组成归属主体"
 
   - name: number
-    type: string
+    type: account_number
     nullable: false
-    min_len: 4
-    max_len: 64
-    pattern: "^[A-Za-z0-9_-]+$"
-    normalize: upper
     comment: "账号编号"
 
   - name: nickname
-    type: string
+    type: account_nickname
     nullable: false
-    min_len: 1
-    max_len: 100
     sensitivity: pii
     comment: "昵称"
 

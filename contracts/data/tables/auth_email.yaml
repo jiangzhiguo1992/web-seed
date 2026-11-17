@@ -29,19 +29,14 @@ columns:
     comment: "关联账号"
 
   - name: username
-    type: string
+    type: email_username
     nullable: false
-    min_len: 1
-    max_len: 64
-    normalize: lower
     sensitivity: pii
     comment: "邮箱 @ 前的本地部分；小写归一"
 
   - name: domain
-    type: string
+    type: email_domain
     nullable: false
-    min_len: 1
-    max_len: 190
     comment: "完整域名，例如 example.com；小写归一"
 
   - name: entity
