@@ -39,10 +39,9 @@ type SharedTypes struct {
 // 两层语法：Kinds 描述值域节点，Property 描述 object.properties[] 的槽位条目。
 // 节点种类就是 Kinds 的键集，不维护第二份 one_of 清单。
 type SharedSchemas struct {
-	ID       string                `yaml:"id"`
-	Title    string                `yaml:"title"`
-	Kinds    map[string]SchemaKind `yaml:"kinds"`
-	Property SchemaKind            `yaml:"property"`
+	ID    string                `yaml:"id"`
+	Title string                `yaml:"title"`
+	Kinds map[string]SchemaKind `yaml:"kinds"`
 }
 
 // SchemaNodeKind 返回 schema 节点的种类：ref 优先，其次由 type 的 object/array/其他值决定。
@@ -68,7 +67,7 @@ func SchemaNodeKind(node map[string]any, kinds map[string]SchemaKind) (string, b
 }
 
 // SchemaKind 描述一种 schema 节点的判别键与允许键；判别键隐式必填。
-// Keys 复用通用 Field 规范，使元规范能声明 required/const/min/pattern。
+// Keys 复用通用 Field 规范；object 的属性条目由 properties.item_fields 承载。
 type SchemaKind struct {
 	Description string  `yaml:"description"`
 	Keys        []Field `yaml:"keys"`
@@ -236,15 +235,6 @@ var schemaNodeRequiredKeys = map[string][]string{
 	"ref":    {"ref"},
 }
 
-func hasSchemaKey(keys []Field, name string) bool {
-	for _, key := range keys {
-		if key.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
 // LoadSharedSchemas 严格解析 `_meta/_schemas.yaml`；文件缺失时返回 os.ErrNotExist。
 func LoadSharedSchemas(dir string) (*SharedSchemas, error) {
 	path := filepath.Join(dir, "_schemas.yaml")
@@ -268,8 +258,12 @@ func LoadSharedSchemas(dir string) (*SharedSchemas, error) {
 			return nil, fmt.Errorf("%s: kinds must define %s", path, kind)
 		}
 		for _, name := range required {
-			if !hasSchemaKey(spec.Keys, name) {
+			key, ok := findSchemaKey(spec.Keys, name)
+			if !ok {
 				return nil, fmt.Errorf("%s: kind %s keys must define %s", path, kind, name)
+			}
+			if !key.Required {
+				return nil, fmt.Errorf("%s: kind %s key %s must be required", path, kind, name)
 			}
 		}
 	}
@@ -278,7 +272,7 @@ func LoadSharedSchemas(dir string) (*SharedSchemas, error) {
 			return nil, fmt.Errorf("%s: unknown kind %s (SchemaNodeKind supports object/array/scalar/ref)", path, name)
 		}
 	}
-	keyTypes := map[string]bool{"": true, "string": true, "boolean": true, "integer": true, "any": true, "schema": true, "list<property>": true, "list<string>": true}
+	keyTypes := map[string]bool{"": true, "string": true, "boolean": true, "integer": true, "any": true, "schema": true, "list<object>": true, "list<string>": true}
 	for name, kind := range sh.Kinds {
 		if strings.TrimSpace(kind.Description) == "" {
 			return nil, fmt.Errorf("%s: kind %s missing description", path, name)
@@ -287,10 +281,42 @@ func LoadSharedSchemas(dir string) (*SharedSchemas, error) {
 			return nil, err
 		}
 	}
-	if err := validateSchemaKeys(path, "property", sh.Property.Keys, keyTypes); err != nil {
+	object := sh.Kinds["object"]
+	propsKey, ok := findSchemaKey(object.Keys, "properties")
+	if !ok || len(propsKey.ItemFields) == 0 {
+		return nil, fmt.Errorf("%s: kind object properties must define item_fields", path)
+	}
+	if err := validateSchemaKeys(path, "kind object properties item_fields", propsKey.ItemFields, keyTypes); err != nil {
 		return nil, err
 	}
+	for name, kind := range sh.Kinds {
+		if name != "object" {
+			if _, ok := findSchemaKey(kind.Keys, "properties"); ok {
+				return nil, fmt.Errorf("%s: kind %s must not define properties (only object has properties)", path, name)
+			}
+		}
+	}
 	return &sh, nil
+}
+
+// sharedObjectPropertyKeys 返回 object.properties 的条目键规范。
+func sharedObjectPropertyKeys(sh *SharedSchemas) []Field {
+	if obj, ok := sh.Kinds["object"]; ok {
+		if key, ok := findSchemaKey(obj.Keys, "properties"); ok {
+			return key.ItemFields
+		}
+	}
+	return nil
+}
+
+// findSchemaKey 按名返回 schema 键规范。
+func findSchemaKey(keys []Field, name string) (Field, bool) {
+	for _, key := range keys {
+		if key.Name == name {
+			return key, true
+		}
+	}
+	return Field{}, false
 }
 
 // validateSchemaKeys 校验一组 schema 键规范：非空、唯一、类型合法、说明完整。
@@ -339,7 +365,7 @@ func LoadSchema(path string) (*Schema, error) {
 	}
 	if sh, err := LoadSharedSchemas(filepath.Dir(path)); err == nil {
 		s.NodeKinds = sh.Kinds
-		s.PropertyKeys = sh.Property.Keys
+		s.PropertyKeys = sharedObjectPropertyKeys(sh)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}

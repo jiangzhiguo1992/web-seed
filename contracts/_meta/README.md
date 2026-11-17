@@ -56,7 +56,7 @@ scripts/cmd/
 
 三个正交轴：`required` 管键是否必须出现，`nullable` 管值是否可为 null，`read_only` / `write_only` 管方向。三者默认都是 false，省略不写。槽位键出现在节点位置即报 `schema.slot-position`，因此 `read_only` 不会被误读为“这个类型只读”，`array.items` 也不可能有方向。
 
-`_schemas.yaml` 用项目自己的 `Field` 语言描述自身：`kinds.<kind>.keys` 是该种节点允许的键，`property.keys` 是槽位条目允许的键；节点种类就是 `kinds` 的键集，不维护第二份 `one_of` 清单。两处都能声明 `required` / `const` / `min` / `pattern`，校验器不再为 schema DSL 维护硬编码特例。节点由 `ref` 或 `type` 判定：`type: object` 用 `properties`（property 条目列表），`type: array` 用 `items`；其他 `type` 是标量；`ref` 是引用。`gen_openapi` 把 property 聚合成 OpenAPI 的 `properties` map 与 `required` 数组；标量约束不在这里定义，family 与自定义类型都来自 `_meta/_types.yaml`。`cap.services` 的 `schemas` 类型是 `map<schema>`，`cap.events.payload` 是 `schema`。
+`_schemas.yaml` 用项目自己的 `Field` 语言描述自身：`kinds.<kind>.keys` 是该种节点允许的键，`kinds.object.keys.properties.item_fields` 是属性条目允许的键；节点种类就是 `kinds` 的键集，不维护第二份 `one_of` 清单。判别键（`type` / `ref`）与结构键（`properties` / `items`）必须标记 `required: true`，`properties` 只属于 `object`，元规范错误在加载期暴露。`schema` 与 `list<object>` 类型由通用校验器递归，结构分支不重复。`kinds.<kind>.keys` 与 `item_fields` 都能声明 `required` / `const` / `min` / `pattern`，校验器不再为 schema DSL 维护硬编码特例。节点由 `ref` 或 `type` 判定：`type: object` 用 `properties`（property 条目列表），`type: array` 用 `items`；其他 `type` 是标量；`ref` 是引用。`gen_openapi` 把 property 聚合成 OpenAPI 的 `properties` map 与 `required` 数组；标量约束不在这里定义，family 与自定义类型都来自 `_meta/_types.yaml`。`cap.services` 的 `schemas` 类型是 `map<schema>`，`cap.events.payload` 是 `schema`。
 
 **没有 `schema/`、没有 `templates/`。**
 字段说明和值域在同一个文件、同一个字段节点里；`contract-new` 只生成最小骨架，字段规范以本目录为准，不维护第二份字段清单。
@@ -212,7 +212,7 @@ scripts/cmd/
 | `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`min_items` 只约束 list；`map<string>` 是通用 schema 类型（键 → 字符串映射） |
 | `examples` | 列参数/骨架的示例值；实体字段不再支持 |
 | `schema` / `map<schema>` | schema 值域节点 / 类型名到节点的映射；`ref` 或 `type` 选节点种类，`kinds.<kind>.keys` 是结构约束，标量约束引用 `_types` |
-| `list<property>` | `object.properties[]` 的槽位条目列表；条目键由 `_schemas.property.keys` 定义（`name` + `schema` + 方向/存在性/可空/默认值/说明） |
+| `list<object>` + `item_fields` | `object.properties` 的属性条目列表；条目键由 `item_fields` 定义（`name` + `schema` + 方向/存在性/可空/默认值/说明） |
 | `type_families` / `custom_types` | `_types.yaml` 顶层：`type_families` 是类型族映射，`custom_types` 是自定义类型（family + 固定参数）；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
 | `columns[].type` | 类型族键、自定义类型，或硬编码的 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*` |
 | `targets` | `dir`/`glob` 扫描路径；`file` 是单文件契约的固定路径；`id` 是 ID 模板（`<file>` → 文件 stem；单例契约直接写固定 ID）；`naming` 是文件名规则（`snake_case`）；基类固定 `_base.yaml`，不在此声明 |

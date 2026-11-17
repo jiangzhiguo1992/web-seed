@@ -1,44 +1,87 @@
 # 共享受限 schema DSL：cap.services.schemas 与 cap.events.payload。
 # 两层语法：schema 节点只描述值域；property 条目只描述槽位。
-# 槽位键（required/nullable/read_only/write_only/default/description）
-# 只允许出现在 object.properties[] 的条目上，节点位置出现即报 schema.slot-position。
+# property 是 object.properties 的 item_fields，槽位键只允许出现在这里，
+# 节点位置出现即报 schema.slot-position。
 
 id: meta.schemas
 title: "schema DSL"
 
 kinds:
   object:
-    description: "对象节点；properties 是 property 条目列表"
+    description: "对象节点；properties 是属性条目列表"
     keys:
-      - { name: type, type: string, required: true, const: object, description: "固定为 object" }
-      - { name: properties, type: list<property>, required: true, description: "对象属性；每个条目是 name + schema + 槽位注解" }
+      - name: type
+        type: string
+        required: true
+        const: object
+        description: "固定为 object"
+      - name: properties
+        type: list<object>
+        required: true
+        description: "对象属性；每个条目是 name + schema + 槽位注解"
+        item_fields:
+          - name: name
+            type: string
+            required: true
+            pattern: '^[a-z][a-z0-9_]*$'
+            description: "属性名；对象内唯一"
+          - name: schema
+            type: schema
+            required: true
+            description: "属性值域；object/array/scalar/ref 任一"
+          - name: required
+            type: boolean
+            description: "键是否必须出现；默认 false"
+          - name: nullable
+            type: boolean
+            description: "值是否可为 null；默认 false"
+          - name: read_only
+            type: boolean
+            description: "仅响应输出；默认 false"
+          - name: write_only
+            type: boolean
+            description: "仅请求输入；默认 false"
+          - name: default
+            type: any
+            description: "缺省值；仅槽位层"
+          - name: description
+            type: string
+            required: true
+            description: "属性说明"
 
   array:
     description: "数组节点；items 是元素值域"
     keys:
-      - { name: type, type: string, required: true, const: array, description: "固定为 array" }
-      - { name: items, type: schema, required: true, description: "数组元素值域" }
-      - { name: min_items, type: integer, min: 0, description: "数组最小长度" }
-      - { name: max_items, type: integer, min: 0, description: "数组最大长度" }
+      - name: type
+        type: string
+        required: true
+        const: array
+        description: "固定为 array"
+      - name: items
+        type: schema
+        required: true
+        description: "数组元素值域"
+      - name: min_items
+        type: integer
+        min: 0
+        description: "数组最小长度"
+      - name: max_items
+        type: integer
+        min: 0
+        description: "数组最大长度"
 
   scalar:
     description: "标量节点；type 指向 _types 的 family 或自定义类型"
     keys:
-      - { name: type, type: string, required: true, description: "标量类型" }
+      - name: type
+        type: string
+        required: true
+        description: "标量类型"
 
   ref:
     description: "引用节点；ref 指向 entity、enum 或本地 schema"
     keys:
-      - { name: ref, type: string, required: true, description: "引用 entity / enum / 本地 schema" }
-
-property:
-  description: "object.properties[] 条目：name + 值域 schema + 槽位注解"
-  keys:
-    - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "属性名；对象内唯一" }
-    - { name: schema, type: schema, required: true, description: "属性值域；object/array/scalar/ref 任一" }
-    - { name: required, type: boolean, description: "键是否必须出现；默认 false" }
-    - { name: nullable, type: boolean, description: "值是否可为 null；默认 false" }
-    - { name: read_only, type: boolean, description: "仅响应输出；默认 false" }
-    - { name: write_only, type: boolean, description: "仅请求输入；默认 false" }
-    - { name: default, type: any, description: "缺省值；仅槽位层" }
-    - { name: description, type: string, required: true, description: "属性说明" }
+      - name: ref
+        type: string
+        required: true
+        description: "引用 entity / enum / 本地 schema"

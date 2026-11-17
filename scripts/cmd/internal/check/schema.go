@@ -64,7 +64,8 @@ func (c *Checker) validateSchemaNodeWith(v any, path string) {
 	c.validateSchemaKeyValues(m, path, kindSpec.Keys)
 }
 
-// validateObjectNode 校验对象节点：properties 是 property 条目列表。
+// validateObjectNode 校验对象节点的额外不变量：属性名唯一、方向互斥、槽位默认值。
+// 字段是否齐全、类型是否正确由 properties.item_fields 的通用校验负责。
 func (c *Checker) validateObjectNode(m map[string]any, path string) {
 	raw, present := m["properties"]
 	if !present {
@@ -73,16 +74,13 @@ func (c *Checker) validateObjectNode(m map[string]any, path string) {
 	}
 	props, ok := asList2(raw)
 	if !ok {
-		c.rulef("schema.type", "%s.properties: must be list", path)
-		return
+		return // validateValue 的 list<object> 会报 must be list
 	}
 	names := map[string]bool{}
 	for i, item := range props {
-		where := fmt.Sprintf("%s.properties[%d]", path, i)
 		pm, ok := asMap(item)
 		if !ok {
-			c.rulef("schema.type", "%s: must be a property object", where)
-			continue
+			continue // validateValue 的 list<object> 会报 must be object
 		}
 		if name, _ := pm["name"].(string); name != "" {
 			if names[name] {
@@ -90,35 +88,18 @@ func (c *Checker) validateObjectNode(m map[string]any, path string) {
 			}
 			names[name] = true
 		}
-		c.validateProperty(pm, where)
+		c.validatePropertyExtras(pm, fmt.Sprintf("%s.properties[%d]", path, i))
 	}
 }
 
-// validateProperty 校验一个槽位条目：name + schema + 槽位注解。
-func (c *Checker) validateProperty(m map[string]any, path string) {
-	allowed := map[string]bool{}
-	for _, key := range c.propertyKeys {
-		allowed[key.Name] = true
-	}
-	for key := range m {
-		if !allowed[key] {
-			c.rulef("schema.unknown-field", "%s: unknown property key %q", path, key)
+// validatePropertyExtras 校验 properties 条目的额外不变量；通用字段规则由
+// properties.item_fields 负责，这里不重复。
+func (c *Checker) validatePropertyExtras(m map[string]any, path string) {
+	if raw, ok := m["description"]; ok {
+		if s, _ := raw.(string); strings.TrimSpace(s) == "" {
+			c.rulef("schema.non-empty", "%s.description: must not be empty", path)
 		}
 	}
-	if _, ok := m["name"]; !ok {
-		c.rulef("schema.required", "%s.name: required", path)
-	} else if name, _ := m["name"].(string); strings.TrimSpace(name) == "" {
-		c.rulef("schema.non-empty", "%s.name: must not be empty", path)
-	}
-	if raw, ok := m["schema"]; ok {
-		c.validateSchemaNodeWith(raw, path+".schema")
-	} else {
-		c.rulef("schema.required", "%s: property requires schema", path)
-	}
-	if _, ok := m["description"]; !ok {
-		c.rulef("schema.required", "%s.description: required", path)
-	}
-	c.validateSchemaKeyValues(m, path, c.propertyKeys)
 	if ro, _ := m["read_only"].(bool); ro {
 		if wo, _ := m["write_only"].(bool); wo {
 			c.rulef("schema.conflict", "%s: read_only and write_only cannot both be true", path)
@@ -153,11 +134,8 @@ func (c *Checker) propertyKeySet() map[string]bool {
 }
 
 func (c *Checker) validateArrayNode(m map[string]any, path string) {
-	items, present := m["items"]
-	if !present {
+	if _, present := m["items"]; !present {
 		c.rulef("schema.required", "%s: array node requires items", path)
-	} else {
-		c.validateSchemaNodeWith(items, path+".items")
 	}
 	min, hasMin := toInt(m["min_items"])
 	max, hasMax := toInt(m["max_items"])
@@ -211,15 +189,15 @@ func (c *Checker) validateRefNode(m map[string]any, path string) {
 	}
 }
 
-// validateSchemaKeyValues 按 Field 规范校验键值类型；结构键由各 kind 分支处理。
+// validateSchemaKeyValues 按 Field 规范校验键值类型；schema / list<object>
+// 由 validateValue 统一递归，结构分支不再重复。
 func (c *Checker) validateSchemaKeyValues(m map[string]any, path string, keys []contractspec.Field) {
 	for _, key := range keys {
-		switch key.Type {
-		case "", "schema", "list<property>":
+		if key.Type == "" {
 			continue
 		}
 		v, present := m[key.Name]
-		if !present || v == nil {
+		if !present {
 			continue
 		}
 		c.validateValue(v, key, path+"."+key.Name)
@@ -231,13 +209,16 @@ func (c *Checker) validateSchemaKeyValues(m map[string]any, path string, keys []
 	}
 }
 
-// valueType 返回标量类型对应的类型族；自定义类型解析到 family。
+// valueType 返回标量类型对应的类型族；自定义类型解析到 family，
+// family 不存在时返回空，避免 schema 层把断链的 custom type 当成有效类型。
 func (c *Checker) valueType(typ string) string {
 	if _, ok := c.valueTypes.TypeFamilies[typ]; ok {
 		return typ
 	}
 	if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
-		return customType.Family
+		if _, ok := c.valueTypes.TypeFamilies[customType.Family]; ok {
+			return customType.Family
+		}
 	}
 	return ""
 }

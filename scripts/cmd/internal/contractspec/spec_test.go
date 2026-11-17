@@ -3,6 +3,7 @@ package contractspec
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -90,28 +91,106 @@ title: "schema"
 kinds:
   object:
     keys:
-      - { name: type, type: string, description: "类型" }
-      - { name: properties, type: list<property>, description: "属性" }
+      - { name: type, type: string, required: true, description: "类型" }
+      - name: properties
+        type: list<object>
+        required: true
+        description: "属性"
+        item_fields:
+          - { name: name, type: string, required: true, description: "名" }
+          - { name: schema, type: schema, required: true, description: "值域" }
   array:
     description: "数组"
     keys:
-      - { name: type, type: string, description: "类型" }
-      - { name: items, type: schema, description: "元素" }
+      - { name: type, type: string, required: true, description: "类型" }
+      - { name: items, type: schema, required: true, description: "元素" }
   scalar:
     description: "标量"
     keys:
-      - { name: type, type: string, description: "类型" }
+      - { name: type, type: string, required: true, description: "类型" }
   ref:
     description: "引用"
     keys:
-      - { name: ref, type: string, description: "引用" }
-property:
-  keys:
-    - { name: name, type: string, description: "名" }
-    - { name: schema, type: schema, description: "值域" }
+      - { name: ref, type: string, required: true, description: "引用" }
 `)
 	if _, err := LoadSharedSchemas(filepath.Join(root, "contracts/_meta")); err == nil {
 		t.Fatal("missing kind description must fail")
+	}
+}
+
+func TestLoadSharedSchemasKindKeys(t *testing.T) {
+	base := `id: meta.schemas
+title: "schema"
+kinds:
+  object:
+    description: "对象"
+    keys:
+      - { name: type, type: string, required: true, description: "类型" }
+      - name: properties
+        type: list<object>
+        required: true
+        description: "属性"
+        item_fields:
+          - { name: name, type: string, required: true, description: "名" }
+          - { name: schema, type: schema, required: true, description: "值域" }
+  array:
+    description: "数组"
+    keys:
+      - { name: type, type: string, required: true, description: "类型" }
+      - { name: items, type: schema, required: true, description: "元素" }
+  scalar:
+    description: "标量"
+    keys:
+      - { name: type, type: string, required: true, description: "类型" }
+  ref:
+    description: "引用"
+    keys:
+      - { name: ref, type: string, required: true, description: "引用" }
+`
+	cases := []struct{ name, patch, want string }{
+		{
+			"missing properties key",
+			strings.Replace(base, `      - name: properties
+        type: list<object>
+        required: true
+        description: "属性"
+        item_fields:
+          - { name: name, type: string, required: true, description: "名" }
+          - { name: schema, type: schema, required: true, description: "值域" }
+`, "", 1),
+			"must define properties",
+		},
+		{
+			"discriminator not required",
+			strings.Replace(base,
+				"      - { name: type, type: string, required: true, description: \"类型\" }\n      - name: properties",
+				"      - { name: type, type: string, description: \"类型\" }\n      - name: properties", 1),
+			"key type must be required",
+		},
+		{
+			"properties missing item_fields",
+			strings.Replace(base, `        item_fields:
+          - { name: name, type: string, required: true, description: "名" }
+          - { name: schema, type: schema, required: true, description: "值域" }
+`, "", 1),
+			"must define item_fields",
+		},
+		{
+			"array defines properties",
+			strings.Replace(base, "      - { name: items, type: schema, required: true, description: \"元素\" }\n",
+				"      - { name: items, type: schema, required: true, description: \"元素\" }\n      - { name: properties, type: list<object>, description: \"非法\" }\n", 1),
+			"must not define properties",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeMeta(t, root, "_schemas.yaml", tc.patch)
+			_, err := LoadSharedSchemas(filepath.Join(root, "contracts/_meta"))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want %q, got %v", tc.want, err)
+			}
+		})
 	}
 }
 
@@ -123,27 +202,28 @@ kinds:
   object:
     description: "对象"
     keys:
-      - { name: type, type: string, description: "类型" }
-      - { name: properties, type: list<property>, description: "属性" }
+      - { name: type, type: string, required: true, description: "类型" }
+      - name: properties
+        type: list<object>
+        required: true
+        description: "属性"
+        item_fields:
+          - { name: name, type: string, required: true, description: "名" }
+          - { name: schema, type: schema, required: true, description: "值域" }
+          - { name: required, type: boolean, description: "必填" }
   array:
     description: "数组"
     keys:
-      - { name: type, type: string, description: "类型" }
-      - { name: items, type: schema, description: "元素" }
+      - { name: type, type: string, required: true, description: "类型" }
+      - { name: items, type: schema, required: true, description: "元素" }
   scalar:
     description: "标量"
     keys:
-      - { name: type, type: string, description: "类型" }
+      - { name: type, type: string, required: true, description: "类型" }
   ref:
     description: "引用"
     keys:
-      - { name: ref, type: string, description: "引用" }
-property:
-  description: "属性"
-  keys:
-    - { name: name, type: string, description: "名" }
-    - { name: schema, type: schema, description: "值域" }
-    - { name: required, type: boolean, description: "必填" }
+      - { name: ref, type: string, required: true, description: "引用" }
 `)
 	sh, err := LoadSharedSchemas(filepath.Join(root, "contracts/_meta"))
 	if err != nil {
@@ -158,7 +238,7 @@ property:
 			t.Fatalf("missing key spec %s: %#v", want, sh.Kinds["object"].Keys)
 		}
 	}
-	if len(sh.Property.Keys) != 3 {
-		t.Fatalf("property keys not loaded: %#v", sh.Property.Keys)
+	if props, ok := findSchemaKey(sh.Kinds["object"].Keys, "properties"); !ok || len(props.ItemFields) != 3 {
+		t.Fatalf("object properties item_fields not loaded: %#v", props)
 	}
 }
