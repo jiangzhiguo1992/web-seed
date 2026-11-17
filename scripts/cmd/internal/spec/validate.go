@@ -6,6 +6,26 @@ import (
 	"strings"
 )
 
+// DefaultResponseName 返回默认错误状态码对应的 components.responses 名称。
+// 契约与生成器共用同一张表，避免默认响应被静默跳过。
+func DefaultResponseName(status int) (string, bool) {
+	name, ok := defaultResponseNames[status]
+	return name, ok
+}
+
+var defaultResponseNames = map[int]string{
+	400: "BadRequest",
+	401: "Unauthorized",
+	403: "Forbidden",
+	404: "NotFound",
+	409: "Conflict",
+	422: "UnprocessableEntity",
+	423: "Locked",
+	429: "TooManyRequests",
+	500: "Internal",
+	503: "ServiceUnavailable",
+}
+
 // Validate 检查 spec 的关键结构：operationId、x-service、$ref 与 required。
 func Validate(spec map[string]any) error {
 	if spec["openapi"] == nil {
@@ -56,8 +76,47 @@ func Validate(spec map[string]any) error {
 		if err := checkRequired(schema, name); err != nil {
 			return err
 		}
+		if err := checkSchemaTypes(schema, name); err != nil {
+			return err
+		}
 		if err := checkRefs(schema, schemas, responses, headers, parameters); err != nil {
 			return fmt.Errorf("schema %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+var jsonSchemaTypes = map[string]bool{
+	"object": true, "array": true, "string": true, "number": true,
+	"integer": true, "boolean": true, "null": true,
+}
+
+// checkSchemaTypes 拒绝未展开的类型名（如本地类型未生成 components.schemas 别名）。
+func checkSchemaTypes(schema map[string]any, name string) error {
+	if typ, ok := schema["type"].(string); ok && !jsonSchemaTypes[typ] {
+		return fmt.Errorf("schema %s: unresolved type %q", name, typ)
+	}
+	if props := asMap(schema["properties"]); props != nil {
+		for field, raw := range props {
+			if child := asMap(raw); child != nil {
+				if err := checkSchemaTypes(child, name+"."+field); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if items := asMap(schema["items"]); items != nil {
+		if err := checkSchemaTypes(items, name+".items"); err != nil {
+			return err
+		}
+	}
+	for _, key := range []string{"allOf", "oneOf", "anyOf"} {
+		for i, raw := range asList(schema[key]) {
+			if child := asMap(raw); child != nil {
+				if err := checkSchemaTypes(child, fmt.Sprintf("%s.%s[%d]", name, key, i)); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil

@@ -1,5 +1,3 @@
-# 认证会话 service；令牌见 token.yaml，验证码见 verification.yaml。
-
 id: cap.services.auth
 summary: "认证会话服务：登录、认证绑定与账号注销编排"
 owner_module: account
@@ -7,7 +5,6 @@ schema_version: 1
 stability: draft
 do_not:
   - "auth.login 不直接写 token 表；通过 cap.services.token.issue 签发"
-  - "revoke_all_for_account 必须编排 token.revoke_by_account 与 verification.revoke_by_account"
   - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
 interface:
   name: AuthService

@@ -21,7 +21,7 @@ transitions:
     description: "激活账号"
     from: [pending]
     to: active
-    guard: {rule: "feature.rules.account.number_format"}
+    guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     side_effects: [cap.events.account.activated]
     implemented_by: [ cap.services.account.activate ]

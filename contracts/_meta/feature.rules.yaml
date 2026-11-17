@@ -68,5 +68,5 @@ fields:
       - { name: then, type: string, required: false, description: "policy 的期望结果（人工实现依据，不做机器校验）" }
 
 rules:
-  - { id: rule-structure, text: "kind=constraint 必须有 field/op/value；kind=invariant 必须有 assert；kind=policy 必须有 summary 与 implemented_by；implemented_by 必须指向存在的 cap.services.*；on_violation 必须存在", implemented_by: [ rule-structure ] }
-  - { id: rule-id-unique, text: "规则 ID 全局唯一，且必须等于文件 ID + snake_case(name) 的显式值", implemented_by: [ rule-id-unique ] }
+  - { id: rule-structure, text: "kind=constraint 必须有 field/op/value；kind=invariant 必须有 assert；on_violation 必须存在；implemented_by 必须指向存在的 cap.services.*", implemented_by: [ rule-structure ] }
+  - { id: rule-id-unique, text: "规则 ID 全局唯一，且必须以文件 ID 为前缀", implemented_by: [ rule-id-unique ] }

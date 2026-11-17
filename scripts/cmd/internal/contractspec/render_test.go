@@ -549,9 +549,6 @@ func TestRenderAsync(t *testing.T) {
 	if doc["id"] != "cap.async.invoice" {
 		t.Fatalf("id = %v", doc["id"])
 	}
-	if doc["scope"] != "invoice" {
-		t.Fatalf("scope = %v", doc["scope"])
-	}
 	jobs, _ := doc["jobs"].([]any)
 	if len(jobs) != 1 {
 		t.Fatalf("jobs = %#v", jobs)

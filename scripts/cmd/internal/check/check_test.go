@@ -3694,7 +3694,7 @@ func TestFlowImplementationErrors(t *testing.T) {
 			"errors": []any{},
 			"output": []any{map[string]any{"name": "value", "type": "data.entities.account"}},
 		})}, []any{})
-		want(t, check(t, doc), "output is only allowed for logic/transition")
+		want(t, check(t, doc), "does not allow field output")
 	})
 
 	t.Run("internal step output path", func(t *testing.T) {

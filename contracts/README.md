@@ -191,9 +191,9 @@ feature ──> capabilities ──> data
 | feature → capabilities | 页面契约 | `capability:` / `feature.rules.*` / `feature.states.*` |
 | capabilities/protocols → capabilities/services | protocol operation | `x-service` |
 | capabilities/services → capabilities/services | service steps | `kind: service` + `service` |
-| capabilities/services → capabilities/rules | service steps | `kind: logic` + `rules` |
-| capabilities/services → capabilities/states | service steps | `kind: transition` + `transition` |
-| capabilities/services → capabilities/events | service steps | `kind: event` + `event` |
+| capabilities/services → features/rules | service steps | `kind: logic/transition` + `rules` |
+| capabilities/services → features/states | service steps | `kind: transition` + `transitions` |
+| capabilities/services → capabilities/events | service steps | `kind: logic/transition` + `events`；显式 payload 用 `kind: event` + `event` |
 | capabilities/async → capabilities/services | async job | `service` |
 | capabilities/async → capabilities/events | async job | `trigger.event` |
 | capabilities/services → data | service 契约 | `steps[].query` / `steps[].queries` / `persistence.tables` / `constraint_errors` |
@@ -210,12 +210,12 @@ capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，�
 | 不要写 | 改写为 |
 |---|---|
 | `returns: data.tables.account.row` | `returns: data.entities.account` |
-| `emits: cap.events.*` | 由 `cap.events.*.emitted_by` 声明；service 的 `kind: event` step 引用事件 |
-| `x-preconditions: feature.rules.*` | 由 `feature.rules.*.implemented_by` 声明；service 的 `kind: logic` step 引用规则 |
+| `emits: cap.events.*` | 由 `cap.events.*.emitted_by` 声明；service 的 `kind: logic/transition` step 用 `events` 引用 |
+| `x-preconditions: feature.rules.*` | 由 `feature.rules.*.implemented_by` 声明；service 的 `kind: logic/transition` step 引用规则 |
 
 理由：service 是规则的实现，**实现不反向声明"我实现了谁"**——那由 `implemented_by` / `emitted_by` 锚点。两处都写必然漂移。
 
-capabilities 内部允许 `services → rules/states/events`：`kind: logic` 的 `rules`、`kind: transition` 的 `transitions`、`kind: event` 的 `event`。这是同组内的业务依据，不是跨层引用。
+capabilities 内部允许 `services → rules/states/events`：`kind: logic/transition` 的 `rules`、`kind: transition` 的 `transitions`、`kind: logic/transition` 的 `events`、`kind: event` 的 `event`。这是同组内的业务依据，不是跨层引用。
 
 `rules` / `states` 允许引用 `data.entities.*` 作为业务主体（状态机的 `subject`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。`business.*` 已全部移除。
 

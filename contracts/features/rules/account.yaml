@@ -57,16 +57,16 @@ rules:
     summary: "已软删账号不可修改、不可再次删除"
     severity: error
     on_violation: platform.errors.ACCOUNT_ALREADY_DELETED
-    implemented_by: [ cap.services.account.update ]
+    implemented_by: [ cap.services.account.delete, cap.services.account.update ]
     given: "deleted_at != nil"
-    when: "update / activate / suspend / delete"
+    when: "update / delete"
     then: "拒绝，返回 ACCOUNT_ALREADY_DELETED"
   - id: feature.rules.account.delete_revokes_auth
     kind: policy
     summary: "软删账号必须同时软删认证绑定、作废未消费验证体并吊销全部令牌"
     severity: error
     on_violation: platform.errors.COMMON_INTERNAL
-    implemented_by: []
+    implemented_by: [ cap.services.account.delete ]
     given: "account.delete 只更新 account.status/deleted_at"
     when: "软删账号"
     then: "调用 cap.services.auth.revoke_all_for_account；失败则回滚整个删除"

@@ -57,7 +57,6 @@ var knownRuleIDs = map[string]bool{
 	"enum-values-unique":          true,
 	"event-payload-ref":           true,
 	"event-structure":             true,
-	"event-version":               true,
 	"extends-conflict":            true,
 	"extends-ref":                 true,
 	"family-decimal":              true,

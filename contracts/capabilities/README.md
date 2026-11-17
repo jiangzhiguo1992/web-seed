@@ -12,7 +12,7 @@
 |---|---|---|---|
 | `services/<module>.yaml` | 模块能提供哪些可调用单元、如何实现 | interface、services[]、steps、errors、事务、持久化归属 | Go interface、usecase 骨架、写归属校验 |
 | `async/<module>.yaml` | 哪些任务异步执行、如何触发与重试 | jobs[]、trigger、retry、concurrency、handler service | worker 注册表、调度配置 |
-| `events/<subject>.yaml` | 跨模块异步消息长什么样 | name、version、payload、emitted_by | 事件常量、payload 类型 |
+| `events/<subject>.yaml` | 跨模块异步消息长什么样 | name、version、payload、emitted_by、consumers | 事件常量、payload 类型 |
 | `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露 | path、method、status、header、schema 引用 | server 类型、client、合并 spec |
 
 一句话区分：
@@ -21,7 +21,7 @@
 - **async = 一个异步任务**，引用一个同步 service 作为 handler，声明 trigger/retry/concurrency。
 - **step = 服务实现路径上的一步**，五类：query / service / logic / event / transition。
 - **rule / state 在 features**，被 service 的 `kind: logic` / `kind: transition` step 引用。
-- **event = 跨模块消息契约**，被 service 的 `kind: event` step 发射，被 async 的 `trigger.event` 消费。
+- **event = 跨模块消息契约**，由 service step 的 `events` / `kind: event` 发射，被 async 的 `trigger.event` 消费。
 - **protocol = service 到传输协议的绑定**，只写协议差异。
 
 ---
@@ -46,9 +46,9 @@ async ──service──> services
 | protocol → service | `protocols/<protocol>/*.yaml` | `x-service` |
 | service → query | `services/*.yaml` 的 steps | `kind: query` + `query` |
 | service → service | `services/*.yaml` 的 steps | `kind: service` + `service` |
-| service → rule | `services/*.yaml` 的 steps | `kind: logic` + `rules` |
+| service → rule | `services/*.yaml` 的 steps | `kind: logic/transition` + `rules` |
 | service → state | `services/*.yaml` 的 steps | `kind: transition` + `transitions` |
-| service → event | `services/*.yaml` 的 steps | `kind: event` + `event` |
+| service → event | `services/*.yaml` 的 steps | `kind: logic/transition` + `events`；显式 payload 用 `kind: event` |
 | async → service | `async/*.yaml` 的 jobs | `service` |
 | async → event | `async/*.yaml` 的 jobs | `trigger.event` |
 | feature → service | `features/**` | `capability: cap.services.*` |
@@ -89,9 +89,9 @@ service 项必须声明：
 |---|---|---|
 | `query` | `query` + `params` | 调用本模块 `data.queries.*` |
 | `service` | `service` + `params` | 调用其他（或本模块）service；跨模块目标必须 `public` |
-| `logic` | `output` + `errors`；可选 `queries` / `rules` | 手写实现；`queries` 用于 query 反向索引，`rules` 是业务依据 |
-| `event` | `event` + `payload` | 发射 `cap.events.*`，生成器在事务提交后执行 |
-| `transition` | `transitions` | 执行 `feature.states.*` 转换；可选 `queries` / `output` |
+| `logic` | `output` + `errors`；可选 `queries` / `rules` / `events` | 手写实现；`queries` 用于 query 反向索引，`rules` 是业务依据 |
+| `event` | `event` | 发射 `cap.events.*`；`payload` 可选，用于显式字段映射 |
+| `transition` | `transitions` | 执行 `feature.states.*` 转换；可选 `queries` / `rules` / `events` / `output` |
 
 通用字段：`id` / `kind` / `summary` / `depends_on` / `when` / `on_error` / `errors`。
 
@@ -124,7 +124,7 @@ capabilities 不再有 `rules/` / `states/` 目录。
 
 `async/<module>.yaml` 按归属模块组织。一个 job 只做调度，业务步骤属于被引用的 service。
 
-- 文件级：`id` / `summary` / `owner_module` / `schema_version` / `stability` / `do_not` / `scope` / `jobs`
+- 文件级：`id` / `summary` / `owner_module` / `schema_version` / `stability` / `do_not` / `jobs`
 - job 项：`id` / `name` / `summary` / `service` / `trigger` / `retry` / `concurrency`
 - `service` 必须与 async 文件同 `owner_module`；被 async 引用的 service 不得再被 `cap.protocols.http` 绑定。
 - `trigger.type`：`cron`（必须 `schedule`）/ `event`（必须存在的 `cap.events.*`）/ `webhook`（不得写 `schedule`/`event`）。
@@ -139,8 +139,8 @@ capabilities 不再有 `rules/` / `states/` 目录。
 
 - 每个事件有 `id` / `name` / `version` / `payload` / `emitted_by` / `consumers`；
 - `payload` 可以是 inline object（必须 `additionalProperties: false`）或 `$ref`（`data.entities.*` / `cap.services.*.types.*`）；
-- `emitted_by` 指向 `cap.services.*`；`consumers` 是消费模块；
-- 事件发射是 service 的 `kind: event` step，不是 service 项。
+- `emitted_by` 指向发射事件的服务项，`consumers` 由 async job 的 `trigger.event` 生成，二者都由 `make gen-graph` 维护；
+- 事件发射由 service step 的 `events`（或显式 payload 的 `kind: event` step）声明，不是 service 项。
 
 ---
 

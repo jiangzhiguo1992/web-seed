@@ -96,7 +96,7 @@ entries:
       - "在 handler 里直接读 r.URL.Query() 而不用生成参数"
       - "逐接口重复声明 4xx/5xx 响应（已由 default_error_responses 注入）"
       - 响应 schema 缺少 additionalProperties: false
-      - "忘记 x-flow 锚点到 cap.services"
+      - "忘记 x-service 绑定到 cap.services"
   - { id: cap.protocols.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/登出/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号服务：查询、创建、更新、状态转换与软删编排", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
   - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证会话服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
@@ -161,8 +161,8 @@ global_notes:
   - "错误响应由 capabilities/http 的 default_error_responses 注入，不要逐接口声明"
   - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.returns"
   - "data.entities 的字段名与表列名可能不同：entity 用 source.column 指明来源；method 返回 entity，不重复列映射"
-  - "领域事件由 cap.events 的 emitted_by 声明；service 的 kind=event step 引用事件，不写 emits"
-  - "services.steps 允许引用 feature.rules/feature.states/cap.events；不得引用 business.*，也不得直接引用 data.queries 之外的跨层实现"
+  - "领域事件由 cap.events 的 emitted_by/consumers 声明；service step 用 events 引用事件，不写 emits"
+  - "services.steps 只能引用 data.queries / cap.services / feature.rules / feature.states / cap.events；不得引用 data.tables 或 business.*"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table.queries / model.queries / query.used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
   - "引擎分组与表级物理事实（tables.<engine>/caches/size_class/retention/partition）只在 data/storage.yaml 声明；冗余列表直接写在 columns[].redundancy"

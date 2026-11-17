@@ -46,6 +46,15 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
       description: 服务端错误
+    Locked:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 认证锁定中，可稍后重试
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
     NotFound:
       content:
         application/problem+json:
@@ -73,6 +82,12 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
       description: 未认证
+    UnprocessableEntity:
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      description: 语义校验失败
   schemas:
     Account:
       additionalProperties: false
@@ -147,6 +162,14 @@ components:
         - next_cursor
       type: object
       x-service-type: cap.services.account.types.AccountPage
+    AccountStatus:
+      enum:
+        - pending
+        - active
+        - suspended
+        - deleted
+      type: string
+      x-enum: data.enums.account_status
     AuthSession:
       additionalProperties: false
       properties:
@@ -219,6 +242,13 @@ components:
         - identifier
       type: object
       x-service-type: cap.services.auth.types.LoginInput
+    OwnType:
+      enum:
+        - user
+        - admin
+        - system
+      type: string
+      x-enum: data.enums.own_type
     PageInfo:
       additionalProperties: false
       properties:
@@ -234,7 +264,7 @@ components:
       additionalProperties: false
       properties:
         code:
-          example: NOTE_NOT_FOUND
+          example: ACCOUNT_NOT_FOUND
           type: string
         detail:
           type: string
@@ -445,21 +475,12 @@ paths:
           name: status
           required: false
           schema:
-            enum:
-              - pending
-              - active
-              - suspended
-              - deleted
-            type: string
+            $ref: '#/components/schemas/AccountStatus'
         - in: query
           name: own_type
           required: false
           schema:
-            enum:
-              - user
-              - admin
-              - system
-            type: string
+            $ref: '#/components/schemas/OwnType'
         - in: query
           name: cursor
           required: false
@@ -503,7 +524,7 @@ paths:
         "409":
           $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -546,7 +567,7 @@ paths:
         "409":
           $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -580,7 +601,7 @@ paths:
         "409":
           $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -617,7 +638,7 @@ paths:
         "409":
           $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -660,7 +681,7 @@ paths:
         "409":
           $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -698,7 +719,7 @@ paths:
         "409":
           $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -750,7 +771,7 @@ paths:
         "409":
           $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -788,12 +809,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
-        "404":
-          $ref: '#/components/responses/NotFound'
-        "409":
-          $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
+        "423":
+          $ref: '#/components/responses/Locked'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -829,12 +848,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
-        "404":
-          $ref: '#/components/responses/NotFound'
-        "409":
-          $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
+        "423":
+          $ref: '#/components/responses/Locked'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -874,12 +891,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
-        "404":
-          $ref: '#/components/responses/NotFound'
-        "409":
-          $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
+        "423":
+          $ref: '#/components/responses/Locked'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -917,12 +932,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
-        "404":
-          $ref: '#/components/responses/NotFound'
-        "409":
-          $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
+        "423":
+          $ref: '#/components/responses/Locked'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":
@@ -961,12 +974,10 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
-        "404":
-          $ref: '#/components/responses/NotFound'
-        "409":
-          $ref: '#/components/responses/Conflict'
         "422":
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/UnprocessableEntity'
+        "423":
+          $ref: '#/components/responses/Locked'
         "429":
           $ref: '#/components/responses/TooManyRequests'
         "500":

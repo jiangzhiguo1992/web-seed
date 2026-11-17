@@ -1,23 +1,7 @@
-// Package check 实现契约校验：结构、ID、基类、列/约束/索引、引用、used_by、index 与 stability。
+// Package check 实现契约校验：结构、ID、引用、写归属与生成字段一致性。
 //
-// 当前覆盖：
-//   - contracts 下 YAML 重复键拒绝；文本字段（description/comment/summary/do_not 等）双引号强制
-//   - data.tables / data.tables.base 的结构、ID/文件、基类 5 列、列/约束/索引、used_by、do_not 具体性
-//   - data/enums.yaml 的结构、item ID、值/code/类型名唯一性、code int32 范围、stability 与 summary
-//   - data.entities 的字段来源（column/computed）、指针/可空、字段校验、关系字段、used_by
-//   - data.queries 的 ID/名称、tables/joins、params、returns、伪 SQL 子句、index_ref、写归属与敏感列
-//   - data.storage 的引擎分组与表级物理事实（tables/size_class/retention/partition/caches）
-//   - 表列引用的 data.tables.<t>.col.<c> 是否存在；表列不引用 data.enums.*
-//   - 任意契约中的 data.enums.* 类型引用必须存在
-//   - status 由基类提供且为 integer；物理表不得重声明；枚举只在 entity
-//   - 禁止 foreign_key；约束只允许 check；唯一性只由 indexes[].unique/live_only 表达
-//   - owner_module 写归属（capabilities.persistence / data.queries 写查询）
-//   - entity/query/capability 的表引用是否存在；每张物理表至少一个 entity
-//
-// 不覆盖（后续扩展）：
-//   - graph.json / 越层引用
-//   - generated diff
-//   - SQL 语义（交给 sqlc / EXPLAIN）
+// 覆盖 data.*、capabilities.*、features.* 的字段规范、索引登记与交叉引用；
+// 不覆盖 OpenAPI 结构、SQL 语义与生成物 diff（分别由 gen_openapi、sqlc、make gen-check 负责）。
 package check
 
 import (
@@ -306,6 +290,9 @@ func (c *Checker) loadSchemaByType(typ string) (*Schema, error) {
 	if err := validateFieldTypes(s.Fields); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := validateFieldMarkers(s.Fields); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 	return s, nil
 }
 
@@ -318,6 +305,9 @@ func loadSchema(path string) (*Schema, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if err := validateFieldTypes(s.Fields); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if err := validateFieldMarkers(s.Fields); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return s, nil

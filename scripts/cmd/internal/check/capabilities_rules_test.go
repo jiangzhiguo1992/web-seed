@@ -227,6 +227,9 @@ func TestHTTPRequestBodyType(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
 paths:
   /x:
     post:
@@ -245,17 +248,14 @@ components:
   schemas:
     WrongInput: {}
 `)
-	c := &Checker{}
-	schema := &Schema{Targets: Targets{
-		Dir:  filepath.Join(root, "contracts/capabilities/protocols/http"),
-		Glob: "*.yaml",
-	}}
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.create": {
 			visibility: "public",
 			paramTypes: map[string]bool{"XInput": true},
 		},
-	}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-service-type]") {
 		t.Fatalf("requestBody type mismatch not reported: %v", c.errs)
 	}
@@ -265,6 +265,9 @@ func TestHTTPRequestBodyTypeMultipleMedia(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
 paths:
   /x:
     post:
@@ -285,14 +288,11 @@ components:
   schemas:
     WrongInput: {}
 `)
-	c := &Checker{}
-	schema := &Schema{Targets: Targets{
-		Dir:  filepath.Join(root, "contracts/capabilities/protocols/http"),
-		Glob: "*.yaml",
-	}}
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.create": {visibility: "public", paramTypes: map[string]bool{"XInput": true}},
-	}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
 	if got := strings.Count(strings.Join(c.errs, "\n"), "[http-service-type]"); got != 2 {
 		t.Fatalf("want 2 http-service-type errors, got %d: %v", got, c.errs)
 	}
@@ -302,6 +302,9 @@ func TestHTTPRequestBodyTypeInlineSkipped(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
 paths:
   /x:
     post:
@@ -323,14 +326,11 @@ paths:
 components:
   schemas: {}
 `)
-	c := &Checker{}
-	schema := &Schema{Targets: Targets{
-		Dir:  filepath.Join(root, "contracts/capabilities/protocols/http"),
-		Glob: "*.yaml",
-	}}
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.create": {visibility: "public", paramTypes: map[string]bool{"XInput": true}},
-	}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
 	if len(c.errs) != 0 {
 		t.Fatalf("inline requestBody reported: %v", c.errs)
 	}
@@ -376,8 +376,8 @@ rules:
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &Checker{root: root}
-	c.checkRuleDoc(doc, rel, schema, serviceIDs, map[string]bool{})
+	c := &Checker{root: root, errCodeSet: map[string]bool{"COMMON_INTERNAL": true}}
+	c.checkRuleDoc(doc, rel, schema, serviceIDs)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid rule reported: %v", c.errs)
 	}
@@ -401,7 +401,7 @@ rules:
 		t.Fatal(err)
 	}
 	c.errs = nil
-	c.checkRuleDoc(doc, rel, schema, serviceIDs, map[string]bool{})
+	c.checkRuleDoc(doc, rel, schema, serviceIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[rule-structure]") {
 		t.Fatalf("constraint without field/op/value not reported: %v", c.errs)
 	}
@@ -425,7 +425,7 @@ rules:
 		t.Fatal(err)
 	}
 	c.errs = nil
-	c.checkRuleDoc(doc, rel, schema, serviceIDs, map[string]bool{})
+	c.checkRuleDoc(doc, rel, schema, serviceIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown service cap.services.missing.create") {
 		t.Fatalf("unknown implemented_by service not reported: %v", c.errs)
 	}
@@ -466,7 +466,7 @@ transitions:
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &Checker{root: root}
+	c := &Checker{root: root, errCodeSet: map[string]bool{"COMMON_INTERNAL": true}}
 	c.checkStateDoc(doc, rel, schema, serviceIDs, map[string]bool{}, map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid state machine reported: %v", c.errs)
@@ -499,6 +499,9 @@ func TestHTTPComponentFields(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
 paths: {}
 components:
   schemas:
@@ -509,11 +512,8 @@ components:
       properties:
         id: { type: string }
 `)
-	c := &Checker{}
-	schema := &Schema{Targets: Targets{
-		Dir:  filepath.Join(root, "contracts/capabilities/protocols/http"),
-		Glob: "*.yaml",
-	}}
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.get": {
 			visibility: "public",
@@ -522,7 +522,7 @@ components:
 				"X": {"properties": map[string]any{"id": map[string]any{"type": "integer"}}},
 			},
 		},
-	}, map[string]bool{}, map[string]bool{"X": true}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{"X": true}, map[string]bool{}, map[string]asyncMeta{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-service-type]") {
 		t.Fatalf("component field mismatch not reported: %v", c.errs)
 	}
@@ -607,7 +607,6 @@ owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
-scope: "x"
 delivery: at_least_once
 events:
   - id: cap.events.x.created
@@ -617,6 +616,7 @@ events:
       $ref: data.entities.account
     summary: "x"
     emitted_by: []
+    consumers: []
 `
 	writeCapFile(t, root, rel, valid)
 	doc, err := loadYAML(filepath.Join(root, rel))
@@ -666,7 +666,6 @@ owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
-scope: "x"
 jobs:
   - id: cap.async.x.job
     name: job
@@ -717,6 +716,9 @@ func TestHTTPAsyncBinding(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
 paths:
   /hook:
     post:
@@ -728,23 +730,133 @@ paths:
 components:
   schemas: {}
 `)
-	schema := &Schema{Targets: Targets{
-		Dir:  filepath.Join(root, "contracts/capabilities/protocols/http"),
-		Glob: "*.yaml",
-	}}
-	c := &Checker{}
-	c.checkHTTPBindings(schema, map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{
-		"cap.async.x.job": {triggerType: "webhook", module: "x"},
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{
+		"cap.async.x.job": {triggerType: "webhook"},
 	})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid x-async reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkHTTPBindings(schema, map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{
-		"cap.async.x.job": {triggerType: "cron", module: "x"},
+	c.checkHTTPBindings(schema, map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{
+		"cap.async.x.job": {triggerType: "cron"},
 	})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-binding]") {
 		t.Fatalf("cron async job not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPDocStructure(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.protocols.http")
+	rel := "contracts/capabilities/protocols/http/x.yaml"
+	writeCapFile(t, root, rel, `id: cap.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+paths:
+  /x:
+    get:
+      operationId: getX
+      x-contract-id: cap.protocols.http.x.get
+      x-service: cap.services.x.get
+      responses:
+        "200": { description: OK }
+    post:
+      operationId: postX
+      x-contract-id: cap.protocols.http.x.get
+      x-service: cap.services.x.get
+      responses:
+        "200": { description: OK }
+default_error_responses: [418]
+`)
+	c := &Checker{root: root}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {visibility: "public", paramTypes: map[string]bool{}},
+	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		`missing required field "do_not"`,
+		`id "cap.http.x" must be "cap.protocols.http.x"`,
+		"duplicate x-contract-id",
+		"default status 418 has no components.responses mapping",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestServiceDocConventions(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.services")
+	rel := "contracts/capabilities/services/x.yaml"
+	writeCapFile(t, root, rel, `id: cap.services.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+interface:
+  name: XService
+  package: internal/modules/other/api
+persistence:
+  tables: []
+types: {}
+services:
+  - name: get
+    summary: "x"
+    visibility: public
+    params:
+      - {name: id, type: integer}
+    returns:
+      - {name: value, type: string}
+    errors: []
+    permissions: [platform.security.permissions.missing]
+    transaction: read_only
+    steps:
+      - id: load
+        kind: logic
+        summary: "x"
+        errors: []
+        output: []
+`)
+	doc, err := loadYAML(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root, errCodeSet: map[string]bool{}, permissionSet: map[string]bool{}}
+	c.checkServiceDoc(doc, rel, schema, map[string]bool{})
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"interface.package",
+		"params[0] must be ctx",
+		"returns must end with err",
+		"unknown permission platform.security.permissions.missing",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestTransitionRulesValidated(t *testing.T) {
+	c := &Checker{}
+	doc := map[string]any{
+		"returns": []any{map[string]any{"name": "err", "type": "error"}},
+		"steps": []any{map[string]any{
+			"id": "t", "kind": "transition", "summary": "x",
+			"transitions": []any{"feature.states.x.t"},
+			"rules":       []any{"feature.rules.x.missing"},
+			"output":      []any{},
+		}},
+	}
+	c.checkServiceItem(doc, "contracts/capabilities/services/x.yaml", "cap.services.x.get", "x",
+		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{},
+		map[string]bool{"feature.states.x.t": true}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown rule feature.rules.x.missing") {
+		t.Fatalf("transition rule not validated: %v", c.errs)
 	}
 }

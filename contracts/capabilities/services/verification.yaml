@@ -1,5 +1,3 @@
-# 验证码 service。
-
 id: cap.services.verification
 summary: "验证码服务：发送、校验与作废"
 owner_module: account
@@ -8,7 +6,6 @@ stability: draft
 do_not:
   - "send / verify 不要返回 code_hash / content / target 原文；只返回 masked_target"
   - "verify 写 verification_action 必须与业务结果同事务，失败不得留下不一致记录"
-  - "验证码校验失败不要枚举 target 是否存在"
   - "换绑、解绑或停用认证绑定必须调用 revoke_by_auth"
 interface:
   name: VerificationService

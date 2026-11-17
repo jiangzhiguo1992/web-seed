@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
@@ -121,7 +122,7 @@ func build(root string) (map[string][]byte, error) {
 		}
 		paths := spec["paths"].(map[string]any)
 		components := spec["components"].(map[string]any)
-		defaultErrors := map[string]bool{}
+		opDefaults := map[string]map[string]bool{}
 		serverURL := ""
 		for _, include := range app.Includes {
 			doc := byID[include]
@@ -131,8 +132,20 @@ func build(root string) (map[string][]byte, error) {
 			if base, _ := doc["base_path"].(string); base != "" && serverURL == "" {
 				serverURL = base
 			}
-			for _, raw := range asList(doc["default_error_responses"]) {
-				defaultErrors[fmt.Sprint(raw)] = true
+			for path, rawItem := range asMap(doc["paths"]) {
+				for method, rawOp := range asMap(rawItem) {
+					op := asMap(rawOp)
+					if op == nil {
+						continue
+					}
+					key := path + "\x00" + method
+					if opDefaults[key] == nil {
+						opDefaults[key] = map[string]bool{}
+					}
+					for _, raw := range asList(doc["default_error_responses"]) {
+						opDefaults[key][fmt.Sprint(raw)] = true
+					}
+				}
 			}
 			mergeMap(paths, asMap(doc["paths"]))
 			mergeMap(components, asMap(doc["components"]))
@@ -142,11 +155,6 @@ func build(root string) (map[string][]byte, error) {
 			spec["servers"] = []any{map[string]any{"url": serverURL}}
 		}
 		responses := asMap(asMap(components["responses"]))
-		statusNames := map[string]string{
-			"400": "BadRequest", "401": "Unauthorized", "403": "Forbidden",
-			"404": "NotFound", "409": "Conflict", "422": "BadRequest",
-			"429": "TooManyRequests", "500": "Internal", "503": "ServiceUnavailable",
-		}
 		for _, path := range sortedKeys(paths) {
 			item := asMap(paths[path])
 			for method, rawOp := range item {
@@ -159,16 +167,20 @@ func build(root string) (map[string][]byte, error) {
 					resp = map[string]any{}
 					op["responses"] = resp
 				}
-				for status := range defaultErrors {
+				for status := range opDefaults[path+"\x00"+method] {
 					if _, exists := resp[status]; exists {
 						continue
 					}
-					name := statusNames[status]
-					if name == "" {
-						continue
+					n, ok := toInt(status)
+					if !ok {
+						return nil, fmt.Errorf("app %s: default status %s is not an integer", appName, status)
+					}
+					name, ok := openapispec.DefaultResponseName(n)
+					if !ok {
+						return nil, fmt.Errorf("app %s: default status %d has no response mapping", appName, n)
 					}
 					if _, ok := responses[name]; !ok {
-						return nil, fmt.Errorf("app %s: default error %s needs components.responses.%s", appName, status, name)
+						return nil, fmt.Errorf("app %s: default error %d needs components.responses.%s", appName, n, name)
 					}
 					resp[status] = map[string]any{"$ref": "#/components/responses/" + name}
 				}
@@ -252,6 +264,21 @@ func asList(v any) []any {
 		return l
 	}
 	return nil
+}
+
+func toInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case uint64:
+		return int(n), true
+	case string:
+		parsed, err := strconv.Atoi(n)
+		return parsed, err == nil
+	}
+	return 0, false
 }
 
 func sortedBytesKeys(m map[string][]byte) []string {
@@ -410,9 +437,6 @@ func expandSchema(schema map[string]any, types map[string]map[string]any, enums 
 				expandSchema(child, types, enums, entities, known, seen)
 			}
 		}
-	}
-	if items := asMap(schema["items"]); items != nil {
-		expandSchema(items, types, enums, entities, known, seen)
 	}
 }
 

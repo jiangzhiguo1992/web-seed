@@ -1,9 +1,9 @@
-// capabilities.go 校验 services / rules / states / events / protocols 五类契约：
-//   - services 的 interface/visibility/steps/errors/参数映射
-//   - rules 的 constraint/invariant/policy 结构与服务引用
-//   - states 的状态/转换/守卫/副作用
-//   - events 的 payload/版本/生产与消费锚点
-//   - protocol 的 x-service 绑定、异步 service 不得绑定
+// capabilities.go 校验 services / async / events / protocols 与 features(rules/states) 契约：
+//   - services：interface/visibility/steps/errors/参数映射/写归属
+//   - async：trigger/retry/concurrency 与 handler service
+//   - events：payload/版本/生产与消费锚点
+//   - protocols：x-service/x-async 绑定、默认错误响应与组件引用
+//   - features：规则结构与服务锚点、状态机穷举与转换
 package check
 
 import (
@@ -12,11 +12,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
 )
 
 type asyncMeta struct {
 	triggerType string
-	module      string
 }
 
 type serviceMeta struct {
@@ -27,6 +28,15 @@ type serviceMeta struct {
 	typeSchemas map[string]map[string]any
 	errors      map[string]bool
 	returns     map[string]string
+}
+
+// stepKindFields 是每种 step kind 的专属字段；公共字段由 checkServiceItem 统一放行。
+var stepKindFields = map[string][]string{
+	"query":      {"query", "params"},
+	"service":    {"service", "params"},
+	"logic":      {"output", "queries", "events", "rules"},
+	"event":      {"event", "payload"},
+	"transition": {"transitions", "output", "queries", "events", "rules"},
 }
 
 func (c *Checker) checkCapabilities() {
@@ -62,10 +72,12 @@ func (c *Checker) checkCapabilities() {
 	}
 	for _, s := range []*Schema{serviceSchema, ruleSchema, stateSchema, eventSchema, httpSchema, asyncSchema} {
 		c.checkRules(s)
+		c.checkTargets(s)
 	}
 
 	serviceFiles := glob(c.root, filepath.Join(serviceSchema.Targets.Dir, serviceSchema.Targets.Glob))
 	typeNames := map[string]bool{}
+	typeOwners := map[string]string{}
 	c.methodTypeDefs = map[string]map[string]any{}
 	c.methodReturns = map[string]map[string]string{}
 	for _, file := range serviceFiles {
@@ -73,8 +85,13 @@ func (c *Checker) checkCapabilities() {
 		if err != nil {
 			continue
 		}
+		rel := relPath(c.root, file)
 		types, _ := asMap(doc["types"])
 		for name, raw := range types {
+			if prev, ok := typeOwners[name]; ok && prev != rel {
+				c.rulef("service-structure", "%s: type %s already defined in %s", rel, name, prev)
+			}
+			typeOwners[name] = rel
 			typeNames[name] = true
 			if def, ok := asMap(raw); ok {
 				c.methodTypeDefs[name] = def
@@ -196,7 +213,7 @@ func (c *Checker) checkCapabilities() {
 			c.rulef("schema.load", "%s: %v", relPath(c.root, file), err)
 			continue
 		}
-		c.checkServiceDoc(doc, relPath(c.root, file), serviceSchema, typeNames, serviceMetaByID)
+		c.checkServiceDoc(doc, relPath(c.root, file), serviceSchema, typeNames)
 	}
 
 	// rules / states / events 先收集 ID，再互相校验。
@@ -209,9 +226,13 @@ func (c *Checker) checkCapabilities() {
 		for _, raw := range asList(doc["rules"]) {
 			item, _ := asMap(raw)
 			id, _ := item["id"].(string)
-			if id != "" {
-				ruleIDs[id] = true
+			if id == "" {
+				continue
 			}
+			if ruleIDs[id] {
+				c.rulef("rule-id-unique", "%s: duplicate rule id %s", relPath(c.root, file), id)
+			}
+			ruleIDs[id] = true
 		}
 	}
 	eventIDs := map[string]bool{}
@@ -226,6 +247,9 @@ func (c *Checker) checkCapabilities() {
 			id, _ := item["id"].(string)
 			if id == "" {
 				continue
+			}
+			if eventIDs[id] {
+				c.rulef("event-structure", "%s: duplicate event id %s", relPath(c.root, file), id)
 			}
 			eventIDs[id] = true
 			keys := map[string]bool{}
@@ -281,7 +305,7 @@ func (c *Checker) checkCapabilities() {
 		if err != nil {
 			continue
 		}
-		c.checkRuleDoc(doc, relPath(c.root, file), ruleSchema, serviceItemIDs, eventIDs)
+		c.checkRuleDoc(doc, relPath(c.root, file), ruleSchema, serviceItemIDs)
 	}
 	for _, file := range glob(c.root, filepath.Join(stateSchema.Targets.Dir, stateSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
@@ -298,12 +322,13 @@ func (c *Checker) checkCapabilities() {
 		c.checkEventDoc(doc, relPath(c.root, file), eventSchema, serviceItemIDs)
 	}
 	asyncServices, asyncJobs := c.checkAsyncDoc(asyncSchema, serviceMetaByID, eventIDs)
-	c.checkHTTPBindings(httpSchema, serviceMetaByID, eventIDs, typeNames, asyncServices, asyncJobs)
+	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, asyncServices, asyncJobs)
 }
 
-func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema, typeNames map[string]bool, serviceMeta map[string]serviceMeta) {
+func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema, typeNames map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})
+	c.checkTargetFileName(schema, filepath.Base(rel), rel)
 	if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 	}
@@ -311,6 +336,15 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 	want := schema.Targets.FileID(filepath.Base(rel))
 	if fileID != want {
 		c.rulef("service-id", "%s: id %q must be %q", rel, fileID, want)
+	}
+	module, _ := doc["owner_module"].(string)
+	if iface, ok := asMap(doc["interface"]); ok {
+		if pkg, _ := iface["package"].(string); pkg != "" {
+			base := "internal/modules/" + module
+			if pkg != base && !strings.HasPrefix(pkg, base+"/") {
+				c.rulef("service-structure", "%s: interface.package %q must be under %s", rel, pkg, base)
+			}
+		}
 	}
 	if types, ok := asMap(doc["types"]); ok {
 		c.checkTypeRefs(types, typeNames, rel)
@@ -327,9 +361,42 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 		if s, _ := item["summary"].(string); strings.TrimSpace(s) == "" {
 			c.rulef("schema.non-empty", "%s.%s: summary must not be empty", rel, name)
 		}
-		visibility, _ := item["visibility"].(string)
-		if visibility == "" {
-			c.rulef("service-structure", "%s.%s: visibility required", rel, name)
+		params := asList(item["params"])
+		if len(params) == 0 {
+			c.rulef("service-structure", "%s.%s: params[0] must be ctx", rel, name)
+		} else if first, _ := asMap(params[0]); first["name"] != "ctx" || first["type"] != "context.Context" {
+			c.rulef("service-structure", "%s.%s: params[0] must be ctx context.Context", rel, name)
+		}
+		seenParams := map[string]bool{}
+		for _, rawParam := range params {
+			pm, _ := asMap(rawParam)
+			if pn, _ := pm["name"].(string); pn != "" {
+				if seenParams[pn] {
+					c.rulef("service-structure", "%s.%s: duplicate param %s", rel, name, pn)
+				}
+				seenParams[pn] = true
+			}
+		}
+		returns := asList(item["returns"])
+		if len(returns) == 0 {
+			c.rulef("service-structure", "%s.%s: returns must end with err", rel, name)
+		} else if last, _ := asMap(returns[len(returns)-1]); last["name"] != "err" || last["type"] != "error" {
+			c.rulef("service-structure", "%s.%s: returns must end with err error", rel, name)
+		}
+		seenReturns := map[string]bool{}
+		for _, rawReturn := range returns {
+			rm, _ := asMap(rawReturn)
+			if rn, _ := rm["name"].(string); rn != "" {
+				if seenReturns[rn] {
+					c.rulef("service-structure", "%s.%s: duplicate return %s", rel, name, rn)
+				}
+				seenReturns[rn] = true
+			}
+		}
+		for _, rawPerm := range asList(item["permissions"]) {
+			if perm, _ := rawPerm.(string); perm != "" && !c.permissionExists(perm) {
+				c.rulef("service-ref", "%s.%s: unknown permission %s", rel, name, perm)
+			}
 		}
 		for _, rawParam := range asList(item["params"]) {
 			pm, _ := asMap(rawParam)
@@ -341,10 +408,6 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 		}
 		for _, rawErr := range asList(item["errors"]) {
 			code, _ := rawErr.(string)
-			if !strings.HasPrefix(code, "platform.errors.") {
-				c.rulef("service-ref", "%s.%s: error %q must be platform.errors.*", rel, name, code)
-				continue
-			}
 			if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
 				c.rulef("service-ref", "%s.%s: unknown error %s", rel, name, code)
 			}
@@ -384,6 +447,18 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		kind, _ := step["kind"].(string)
 		if s, _ := step["summary"].(string); strings.TrimSpace(s) == "" {
 			c.rulef("schema.non-empty", "%s: step %s summary must not be empty", rel, stepID)
+		}
+		allowed := map[string]bool{
+			"id": true, "kind": true, "summary": true, "depends_on": true,
+			"when": true, "on_error": true, "errors": true,
+		}
+		for _, field := range stepKindFields[kind] {
+			allowed[field] = true
+		}
+		for field := range step {
+			if !allowed[field] {
+				c.rulef("service-steps-kind", "%s: step %s kind=%s does not allow field %s", rel, stepID, kind, field)
+			}
 		}
 
 		var targetErrors map[string]bool
@@ -438,24 +513,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			if step["errors"] == nil {
 				c.rulef("service-steps-kind", "%s: step %s kind=logic requires errors", rel, stepID)
 			}
-			for _, rawQ := range asList(step["queries"]) {
-				qid, _ := rawQ.(string)
-				if _, ok := c.queries[qid]; !ok {
-					c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
-				}
-			}
-			for _, rawRule := range asList(step["rules"]) {
-				rid, _ := rawRule.(string)
-				if !ruleIDs[rid] {
-					c.rulef("service-ref", "%s: step %s unknown rule %s", rel, stepID, rid)
-				}
-			}
-			for _, rawEvent := range asList(step["events"]) {
-				ev, _ := rawEvent.(string)
-				if !eventIDs[ev] {
-					c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
-				}
-			}
+			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
 		case "event":
 			ev, _ := step["event"].(string)
 			if ev == "" {
@@ -481,21 +539,14 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 					c.rulef("service-ref", "%s: step %s unknown transition %s", rel, stepID, tr)
 				}
 			}
-			for _, rawEvent := range asList(step["events"]) {
-				ev, _ := rawEvent.(string)
-				if !eventIDs[ev] {
-					c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
-				}
-			}
+			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
 		default:
 			c.rulef("service-structure", "%s: step %s kind must be query/service/logic/event/transition", rel, stepID)
 		}
 
 		stepOutput := map[string]string{}
 		if step["output"] != nil {
-			if kind != "logic" && kind != "transition" {
-				c.rulef("service-structure", "%s: step %s output is only allowed for logic/transition", rel, stepID)
-			} else {
+			if kind == "logic" || kind == "transition" {
 				seenOut := map[string]bool{}
 				for _, rawOut := range asList(step["output"]) {
 					om, _ := asMap(rawOut)
@@ -680,7 +731,28 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 	}
 }
 
-func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, serviceIDs, eventIDs map[string]bool) {
+func (c *Checker) checkLogicRefs(step map[string]any, rel, stepID string, ruleIDs, eventIDs map[string]bool) {
+	for _, rawQ := range asList(step["queries"]) {
+		qid, _ := rawQ.(string)
+		if _, ok := c.queries[qid]; !ok {
+			c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
+		}
+	}
+	for _, rawRule := range asList(step["rules"]) {
+		rid, _ := rawRule.(string)
+		if !ruleIDs[rid] {
+			c.rulef("service-ref", "%s: step %s unknown rule %s", rel, stepID, rid)
+		}
+	}
+	for _, rawEvent := range asList(step["events"]) {
+		ev, _ := rawEvent.(string)
+		if !eventIDs[ev] {
+			c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
+		}
+	}
+}
+
+func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, serviceIDs map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})
 	fileID, _ := doc["id"].(string)
@@ -693,7 +765,6 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 		item, _ := asMap(raw)
 		id, _ := item["id"].(string)
 		if id == "" {
-			c.rulef("rule-structure", "%s: rule id required", rel)
 			continue
 		}
 		if seen[id] {
@@ -714,11 +785,11 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 				c.rulef("rule-structure", "%s: invariant %s requires assert", rel, id)
 			}
 		case "policy":
-			if item["implemented_by"] == nil {
-				c.rulef("rule-structure", "%s: policy %s requires implemented_by", rel, id)
-			}
 		default:
 			c.rulef("rule-structure", "%s: rule %s kind must be constraint/invariant/policy", rel, id)
+		}
+		if code, _ := item["on_violation"].(string); code != "" && !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+			c.rulef("rule-structure", "%s: rule %s unknown on_violation %s", rel, id, code)
 		}
 		for _, rawSvc := range asList(item["implemented_by"]) {
 			svc, _ := rawSvc.(string)
@@ -732,6 +803,7 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 func (c *Checker) checkStateDoc(doc map[string]any, rel string, schema *Schema, serviceIDs, eventIDs, ruleIDs map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})
+	c.checkTargetFileName(schema, filepath.Base(rel), rel)
 	fileID, _ := doc["id"].(string)
 	want := schema.Targets.FileID(filepath.Base(rel))
 	if fileID != want {
@@ -772,6 +844,9 @@ func (c *Checker) checkStateDoc(doc map[string]any, rel string, schema *Schema, 
 		to, _ := item["to"].(string)
 		if !stateNames[to] {
 			c.rulef("state-structure", "%s: transition %s unknown to state %s", rel, name, to)
+		}
+		if code, _ := item["on_violation"].(string); code != "" && !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+			c.rulef("state-structure", "%s: transition %s unknown on_violation %s", rel, name, code)
 		}
 		guard, _ := asMap(item["guard"])
 		if guard == nil {
@@ -821,24 +896,41 @@ func (c *Checker) checkStateDoc(doc map[string]any, rel string, schema *Schema, 
 func (c *Checker) checkEventDoc(doc map[string]any, rel string, schema *Schema, serviceIDs map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})
+	c.checkTargetFileName(schema, filepath.Base(rel), rel)
 	fileID, _ := doc["id"].(string)
 	want := schema.Targets.FileID(filepath.Base(rel))
 	if fileID != want {
 		c.rulef("event-structure", "%s: id %q must be %q", rel, fileID, want)
 	}
 	names := map[string]bool{}
+	subject := strings.TrimSuffix(filepath.Base(rel), ".yaml")
 	for _, raw := range asList(doc["events"]) {
 		item, _ := asMap(raw)
 		id, _ := item["id"].(string)
 		name, _ := item["name"].(string)
 		if names[name] {
-			c.rulef("event-version", "%s: duplicate event name %s", rel, name)
+			c.rulef("event-structure", "%s: duplicate event name %s", rel, name)
 		}
 		names[name] = true
-		if !strings.HasPrefix(id, fileID+".") {
-			c.rulef("event-structure", "%s: event id %s must start with %s.", rel, id, fileID)
+		if name != "" && !strings.HasPrefix(name, subject+".") {
+			c.rulef("event-structure", "%s: event name %s must start with %s.", rel, name, subject)
+		}
+		if id != "" && name != "" && id != "cap.events."+name {
+			c.rulef("event-structure", "%s: event id %s must be cap.events.%s", rel, id, name)
 		}
 		if payload, ok := asMap(item["payload"]); ok {
+			if props, ok := asMap(payload["properties"]); ok {
+				for name, rawProp := range props {
+					prop, _ := asMap(rawProp)
+					typ, _ := prop["type"].(string)
+					switch {
+					case strings.HasPrefix(typ, "data.enums.") && !c.enumIDs[typ]:
+						c.rulef("event-payload-ref", "%s: event %s payload.%s references unknown enum %s", rel, id, name, typ)
+					case strings.HasPrefix(typ, "data.entities.") && c.entities[typ] == nil:
+						c.rulef("event-payload-ref", "%s: event %s payload.%s references unknown entity %s", rel, id, name, typ)
+					}
+				}
+			}
 			if ref, _ := payload["$ref"].(string); ref != "" {
 				if strings.HasPrefix(ref, "data.enums.") {
 					c.rulef("event-payload-ref", "%s: event %s payload $ref %s must be an object type; use payload.properties.<field>.type for enums", rel, id, ref)
@@ -876,6 +968,7 @@ func (c *Checker) eventPayloadRef(ref string) bool {
 func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMeta, eventIDs map[string]bool) (map[string]bool, map[string]asyncMeta) {
 	asyncServices := map[string]bool{}
 	asyncJobs := map[string]asyncMeta{}
+	bound := map[string]bool{}
 	for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -885,14 +978,17 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 		rel := relPath(c.root, file)
 		c.validateDoc(doc, schema.Fields, rel)
 		c.checkFieldOrder(rel, schema.Fields, orderRules{})
+		c.checkTargetFileName(schema, filepath.Base(rel), rel)
 		fileID, _ := doc["id"].(string)
+		if want := schema.Targets.FileID(filepath.Base(rel)); fileID != want {
+			c.rulef("async-structure", "%s: id %q must be %q", rel, fileID, want)
+		}
 		module, _ := doc["owner_module"].(string)
 		names := map[string]bool{}
 		for _, raw := range asList(doc["jobs"]) {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
 			if name == "" {
-				c.rulef("async-structure", "%s: job name required", rel)
 				continue
 			}
 			if names[name] {
@@ -900,35 +996,36 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 			}
 			names[name] = true
 			id, _ := item["id"].(string)
-			if id == "" {
-				c.rulef("async-structure", "%s.%s: job id required", rel, name)
-			} else if fileID != "" && id != fileID+"."+name {
+			if id != "" && fileID != "" && id != fileID+"."+name {
 				c.rulef("async-structure", "%s.%s: job id %q must be %s", rel, name, id, fileID+"."+name)
 			}
-			svc, _ := item["service"].(string)
-			if svc == "" {
-				c.rulef("async-service", "%s.%s: service required", rel, name)
-			} else if meta, ok := serviceMeta[svc]; !ok {
-				c.rulef("async-service", "%s.%s: unknown service %s", rel, name, svc)
-			} else {
-				if meta.module != module {
-					c.rulef("async-service", "%s.%s: service %s belongs to module %s, not %s", rel, name, svc, meta.module, module)
+			if id != "" {
+				if _, exists := asyncJobs[id]; exists {
+					c.rulef("async-structure", "%s.%s: duplicate job id %s", rel, name, id)
 				}
-				asyncServices[svc] = true
+			}
+			svc, _ := item["service"].(string)
+			if svc != "" {
+				if meta, ok := serviceMeta[svc]; !ok {
+					c.rulef("async-service", "%s.%s: unknown service %s", rel, name, svc)
+				} else {
+					if meta.module != module {
+						c.rulef("async-service", "%s.%s: service %s belongs to module %s, not %s", rel, name, svc, meta.module, module)
+					}
+					asyncServices[svc] = true
+				}
 			}
 			trigger, _ := asMap(item["trigger"])
 			triggerType := ""
-			if trigger == nil {
-				c.rulef("async-trigger", "%s.%s: trigger required", rel, name)
-			} else {
+			if trigger != nil {
 				triggerType, _ = trigger["type"].(string)
-				switch typ := triggerType; typ {
+				switch triggerType {
 				case "cron":
 					if v, _ := trigger["schedule"].(string); strings.TrimSpace(v) == "" {
 						c.rulef("async-trigger", "%s.%s: trigger.schedule required for cron", rel, name)
 					}
-					if trigger["event"] != nil || trigger["path"] != nil || trigger["method"] != nil {
-						c.rulef("async-trigger", "%s.%s: cron trigger must not declare event/path/method", rel, name)
+					if trigger["event"] != nil {
+						c.rulef("async-trigger", "%s.%s: cron trigger must not declare event", rel, name)
 					}
 				case "event":
 					ev, _ := trigger["event"].(string)
@@ -937,57 +1034,62 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 					} else if !eventIDs[ev] {
 						c.rulef("async-trigger", "%s.%s: unknown event %s", rel, name, ev)
 					}
-					if trigger["schedule"] != nil || trigger["path"] != nil || trigger["method"] != nil {
-						c.rulef("async-trigger", "%s.%s: event trigger must not declare schedule/path/method", rel, name)
+					if trigger["schedule"] != nil {
+						c.rulef("async-trigger", "%s.%s: event trigger must not declare schedule", rel, name)
 					}
 				case "webhook":
-					if trigger["schedule"] != nil || trigger["event"] != nil || trigger["path"] != nil || trigger["method"] != nil {
-						c.rulef("async-trigger", "%s.%s: webhook trigger must not declare schedule/event/path/method; bind path via cap.protocols.http x-async", rel, name)
+					if trigger["schedule"] != nil || trigger["event"] != nil {
+						c.rulef("async-trigger", "%s.%s: webhook trigger must not declare schedule/event; bind path via cap.protocols.http x-async", rel, name)
 					}
-				default:
-					c.rulef("async-trigger", "%s.%s: trigger.type must be cron/event/webhook", rel, name)
 				}
+			}
+			if triggerType != "" && svc != "" {
+				key := triggerType + "\x00" + svc
+				if bound[key] {
+					c.rulef("async-structure", "%s.%s: duplicate (trigger, service) %s/%s", rel, name, triggerType, svc)
+				}
+				bound[key] = true
 			}
 			if id != "" {
-				asyncJobs[id] = asyncMeta{triggerType: triggerType, module: module}
-			}
-			if retry, ok := asMap(item["retry"]); ok && retry != nil {
-				if n, ok := toInt(retry["max_attempts"]); !ok || n < 1 {
-					c.rulef("async-structure", "%s.%s: retry.max_attempts must be >= 1", rel, name)
-				}
-				if b, _ := retry["backoff"].(string); b != "fixed" && b != "exponential" {
-					c.rulef("async-structure", "%s.%s: retry.backoff must be fixed/exponential", rel, name)
-				}
-			}
-			if conc, ok := asMap(item["concurrency"]); ok && conc != nil {
-				if k, _ := conc["key"].(string); strings.TrimSpace(k) == "" {
-					c.rulef("async-structure", "%s.%s: concurrency.key required", rel, name)
-				}
+				asyncJobs[id] = asyncMeta{triggerType: triggerType}
 			}
 		}
 	}
 	return asyncServices, asyncJobs
 }
 
-func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]serviceMeta, eventIDs map[string]bool, typeNames map[string]bool, asyncServices map[string]bool, asyncJobs map[string]asyncMeta) {
+func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]serviceMeta, typeNames map[string]bool, asyncServices map[string]bool, asyncJobs map[string]asyncMeta) {
 	httpFiles := glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
 	httpSchemas := map[string]bool{}
 	httpHeaders := map[string]bool{}
+	httpResponses := map[string]bool{}
 	var serviceUnavailable map[string]any
 	hasDefault503 := false
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
+			c.rulef("schema.load", "%s: %v", relPath(c.root, file), err)
 			continue
 		}
 		rel := relPath(c.root, file)
+		c.validateDoc(doc, schema.Fields, rel)
 		c.checkFieldOrder(rel, schema.Fields, orderRules{})
+		c.checkTargetFileName(schema, filepath.Base(rel), rel)
+		if want := schema.Targets.FileID(filepath.Base(rel)); doc["id"] != want {
+			c.rulef("http-binding", "%s: id %q must be %q", rel, doc["id"], want)
+		}
+		if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
+			c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
+		}
 		components, _ := asMap(doc["components"])
 		headers, _ := asMap(components["headers"])
 		for name := range headers {
 			httpHeaders[name] = true
 		}
 		responses, _ := asMap(components["responses"])
+		for name := range responses {
+			httpResponses[name] = true
+		}
 		if raw, ok := responses["ServiceUnavailable"]; ok {
 			serviceUnavailable, _ = asMap(raw)
 		}
@@ -1024,12 +1126,23 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					c.rulef("http-components", "%s: components.schemas.%s.x-entity references unknown entity %s", rel, name, ref)
 				}
 			}
-			if typ, _ := s["type"].(string); typ == "object" {
-				if v, ok := s["additionalProperties"]; !ok || v != false {
-					c.rulef("http-components", "%s: components.schemas.%s must set additionalProperties: false", rel, name)
+			c.checkClosedObjects(s, rel, "components.schemas."+name)
+		}
+	}
+	for _, file := range httpFiles {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		rel := relPath(c.root, file)
+		components, _ := asMap(doc["components"])
+		collectRefs(components, func(ref string) {
+			if strings.HasPrefix(ref, "#/components/schemas/") {
+				if name := strings.TrimPrefix(ref, "#/components/schemas/"); !httpSchemas[name] {
+					c.rulef("http-components", "%s: unknown schema $ref %s", rel, ref)
 				}
 			}
-		}
+		})
 	}
 	if hasDefault503 {
 		if !httpHeaders["RetryAfter"] {
@@ -1041,6 +1154,9 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			c.rulef("http-retry-after", "components.responses.ServiceUnavailable must declare Retry-After")
 		}
 	}
+	contractIDs := map[string]string{}
+	operationIDs := map[string]string{}
+	operations := map[string]string{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -1048,14 +1164,20 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			continue
 		}
 		rel := relPath(c.root, file)
-		if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
-			c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
-		}
+		components, _ := asMap(doc["components"])
+		schemas, _ := asMap(components["schemas"])
 		defaultErrors := map[string]bool{}
 		for _, raw := range asList(doc["default_error_responses"]) {
 			n, ok := toInt(raw)
 			if !ok || n < 100 || n > 599 {
 				c.rulef("http-binding", "%s: default_error_responses must contain HTTP status codes 100-599, got %v", rel, raw)
+				continue
+			}
+			name, ok := openapispec.DefaultResponseName(n)
+			if !ok {
+				c.rulef("http-binding", "%s: default status %d has no components.responses mapping", rel, n)
+			} else if !httpResponses[name] {
+				c.rulef("http-binding", "%s: default status %d requires components.responses.%s", rel, n, name)
 			}
 			defaultErrors[fmt.Sprint(raw)] = true
 		}
@@ -1067,9 +1189,18 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if !ok {
 					continue
 				}
+				if prev, exists := operations[path+"\x00"+method]; exists {
+					c.rulef("http-binding", "%s %s %s: duplicate operation (%s)", rel, method, path, prev)
+				} else {
+					operations[path+"\x00"+method] = rel
+				}
 				opID, _ := op["operationId"].(string)
 				if opID == "" {
 					c.rulef("http-binding", "%s %s %s: operationId required", rel, method, path)
+				} else if prev, exists := operationIDs[opID]; exists {
+					c.rulef("http-binding", "%s %s %s: duplicate operationId %s (also in %s)", rel, method, path, opID, prev)
+				} else {
+					operationIDs[opID] = rel
 				}
 				contractID, _ := op["x-contract-id"].(string)
 				switch {
@@ -1077,6 +1208,12 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					c.rulef("http-binding", "%s %s %s: x-contract-id required", rel, method, path)
 				case !match(`^cap\.protocols\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`, contractID):
 					c.rulef("http-binding", "%s %s %s: x-contract-id %q must match cap.protocols.http.<file>.<operation>", rel, method, path, contractID)
+				default:
+					if prev, exists := contractIDs[contractID]; exists {
+						c.rulef("http-binding", "%s %s %s: duplicate x-contract-id %s (also in %s)", rel, method, path, contractID, prev)
+					} else {
+						contractIDs[contractID] = rel
+					}
 				}
 				if raw, ok := op["x-timeout-ms"]; ok {
 					if n, ok := toInt(raw); !ok || n <= 0 {
@@ -1092,8 +1229,9 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					if content, ok := asMap(resp["content"]); ok {
 						for _, rawMedia := range content {
 							media, _ := asMap(rawMedia)
-							schema, _ := asMap(media["schema"])
-							ret, _ := schema["x-service-return"].(string)
+							mediaSchema, _ := asMap(media["schema"])
+							c.checkClosedObjects(mediaSchema, rel, method+" "+path+" responses")
+							ret, _ := mediaSchema["x-service-return"].(string)
 							if ret == "" {
 								continue
 							}
@@ -1172,17 +1310,55 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					if content, ok := asMap(rb["content"]); ok {
 						for _, rawMedia := range content {
 							media, _ := asMap(rawMedia)
-							schema, _ := asMap(media["schema"])
-							if ref, _ := schema["$ref"].(string); ref != "" {
+							mediaSchema, _ := asMap(media["schema"])
+							c.checkClosedObjects(mediaSchema, rel, method+" "+path+" requestBody")
+							if ref, _ := mediaSchema["$ref"].(string); ref != "" {
 								name := strings.TrimPrefix(ref, "#/components/schemas/")
 								if !target.paramTypes[name] {
 									c.rulef("http-service-type", "%s %s %s: requestBody $ref %s is not a param of %s", rel, method, path, name, serviceRef)
+								} else if comp, ok := asMap(schemas[name]); ok {
+									fileRef := serviceRef
+									if i := strings.LastIndex(serviceRef, "."); i > 0 {
+										fileRef = serviceRef[:i]
+									}
+									if xt, _ := comp["x-service-type"].(string); xt != "" && !strings.HasPrefix(xt, fileRef+".types.") {
+										c.rulef("http-service-type", "%s %s %s: requestBody $ref %s points at %s, not %s.types.*", rel, method, path, name, xt, fileRef)
+									}
 								}
 							}
 						}
 					}
 				}
 			}
+		}
+	}
+}
+
+// checkClosedObjects 递归校验 schema 中的 object 均关闭额外字段。
+func (c *Checker) checkClosedObjects(v any, rel, where string) {
+	m, ok := asMap(v)
+	if !ok {
+		return
+	}
+	if typ, _ := m["type"].(string); typ == "object" {
+		if ap, ok := m["additionalProperties"]; !ok || ap != false {
+			c.rulef("http-components", "%s: %s must set additionalProperties: false", rel, where)
+		}
+	}
+	if props, ok := asMap(m["properties"]); ok {
+		for name, raw := range props {
+			c.checkClosedObjects(raw, rel, where+"."+name)
+		}
+	}
+	if items, ok := asMap(m["items"]); ok {
+		c.checkClosedObjects(items, rel, where+".items")
+	}
+	if ap, ok := asMap(m["additionalProperties"]); ok {
+		c.checkClosedObjects(ap, rel, where+".additionalProperties")
+	}
+	for _, key := range []string{"allOf", "oneOf", "anyOf"} {
+		for i, raw := range asList(m[key]) {
+			c.checkClosedObjects(raw, rel, fmt.Sprintf("%s.%s[%d]", where, key, i))
 		}
 	}
 }
@@ -1202,19 +1378,38 @@ func retryAfterHeader(resp map[string]any) bool {
 
 func (c *Checker) checkServiceTypes(types map[string]any, rel string) {
 	for name, raw := range types {
-		m, _ := asMap(raw)
-		if typ, _ := m["type"].(string); typ != "object" {
-			continue
-		}
-		if v, ok := m["additionalProperties"]; !ok || v != false {
-			c.rulef("service-structure", "%s: types.%s must set additionalProperties: false", rel, name)
+		c.checkServiceType(raw, rel, "types."+name)
+	}
+}
+
+func (c *Checker) checkServiceType(v any, rel, where string) {
+	m, ok := asMap(v)
+	if !ok {
+		return
+	}
+	if typ, _ := m["type"].(string); typ == "object" {
+		if ap, ok := m["additionalProperties"]; !ok || ap != false {
+			c.rulef("service-structure", "%s: %s must set additionalProperties: false", rel, where)
 		}
 		props, _ := asMap(m["properties"])
 		for _, rawReq := range asList(m["required"]) {
 			field, _ := rawReq.(string)
 			if props[field] == nil {
-				c.rulef("service-structure", "%s: types.%s required field %q not in properties", rel, name, field)
+				c.rulef("service-structure", "%s: %s required field %q not in properties", rel, where, field)
 			}
+		}
+	}
+	if props, ok := asMap(m["properties"]); ok {
+		for name, raw := range props {
+			c.checkServiceType(raw, rel, where+"."+name)
+		}
+	}
+	if items, ok := asMap(m["items"]); ok {
+		c.checkServiceType(items, rel, where+".items")
+	}
+	for _, key := range []string{"allOf", "oneOf", "anyOf"} {
+		for i, raw := range asList(m[key]) {
+			c.checkServiceType(raw, rel, fmt.Sprintf("%s.%s[%d]", where, key, i))
 		}
 	}
 }
@@ -1917,45 +2112,6 @@ func (c *Checker) entityFieldType(entityID, name string) (string, bool) {
 	return "", false
 }
 
-// gotoCycle 在顺序边 i→i+1 与 goto 边上做 DFS，返回一个环（节点索引）或 nil。
-// flowLevelErrors 返回 flow 自身必须暴露的错误：
-// permissions 拒绝→COMMON_FORBIDDEN；rate_limit→COMMON_RATE_LIMITED；
-// audit 失败→COMMON_AUDIT_FAILED；idempotency 冲突→COMMON_IDEMPOTENCY_CONFLICT；
-// 存在后向/自环 goto→COMMON_LOOP_EXHAUSTED。
-func flowLevelErrors(doc map[string]any, hasBackwardGoto bool) map[string]bool {
-	required := map[string]bool{}
-	if len(asList(doc["permissions"])) > 0 {
-		required["platform.errors.COMMON_FORBIDDEN"] = true
-	}
-	if doc["rate_limit"] != nil {
-		required["platform.errors.COMMON_RATE_LIMITED"] = true
-	}
-	if audit, _ := doc["audit"].(bool); audit {
-		required["platform.errors.COMMON_AUDIT_FAILED"] = true
-	}
-	if doc["idempotency"] != nil {
-		required["platform.errors.COMMON_IDEMPOTENCY_CONFLICT"] = true
-	}
-	if hasBackwardGoto {
-		required["platform.errors.COMMON_LOOP_EXHAUSTED"] = true
-	}
-	return required
-}
-
-func (c *Checker) validFlowUse(use string, methodIDs map[string]bool) bool {
-	if use == "" {
-		return true // 无 use 的步骤是 flow 内部逻辑
-	}
-	switch {
-	case strings.HasPrefix(use, "cap.methods."):
-		return methodIDs[use]
-	case strings.HasPrefix(use, "platform.security.permissions."):
-		return c.permissionExists(use)
-	default:
-		return false
-	}
-}
-
 func (c *Checker) permissionExists(id string) bool {
 	if c.permissionSet == nil {
 		c.permissionSet = map[string]bool{}
@@ -2046,79 +2202,6 @@ func collectRefs(v any, fn func(string)) {
 	for _, item := range asList(v) {
 		collectRefs(item, fn)
 	}
-}
-
-// checkFlowItem 是旧测试的兼容入口：把旧 flow 文档适配为 service item。
-func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, methodIDs map[string]bool, methodErrors map[string]map[string]bool, typeNames map[string]bool) {
-	metaByID := map[string]serviceMeta{}
-	for mid := range methodIDs {
-		metaByID[mid] = serviceMeta{
-			module:     module,
-			visibility: "public",
-			params:     map[string]bool{},
-			errors:     methodErrors[mid],
-			returns:    c.methodReturns[mid],
-		}
-	}
-	steps := []any{}
-	for _, raw := range asList(doc["steps"]) {
-		old, _ := asMap(raw)
-		step := map[string]any{"summary": "x"}
-		for k, v := range old {
-			step[k] = v
-		}
-		use, _ := old["use"].(string)
-		switch {
-		case use == "":
-			step["kind"] = "logic"
-			if step["output"] == nil {
-				step["output"] = []any{}
-			}
-			if step["errors"] == nil {
-				step["errors"] = []any{}
-			}
-		case strings.HasPrefix(use, "cap.methods."):
-			step["kind"] = "service"
-			step["service"] = use
-		default:
-			step["kind"] = "logic"
-			if step["output"] == nil {
-				step["output"] = []any{}
-			}
-			if step["errors"] == nil {
-				step["errors"] = []any{}
-			}
-		}
-		steps = append(steps, step)
-	}
-	if method, _ := doc["method"].(string); method != "" {
-		steps = append(steps, map[string]any{
-			"id":      "call",
-			"kind":    "service",
-			"summary": "x",
-			"service": method,
-		})
-	}
-	doc2 := map[string]any{
-		"summary":        doc["summary"],
-		"transaction":    doc["transaction"],
-		"permissions":    doc["permissions"],
-		"errors":         doc["errors"],
-		"rate_limit":     doc["rate_limit"],
-		"audit":          doc["audit"],
-		"idempotency":    doc["idempotency"],
-		"steps":          steps,
-		"max_iterations": doc["max_iterations"],
-		"trigger":        doc["trigger"],
-		"retry":          doc["retry"],
-		"concurrency":    doc["concurrency"],
-	}
-	for k, v := range doc2 {
-		if v == nil {
-			delete(doc2, k)
-		}
-	}
-	c.checkServiceItem(doc2, rel, id, module, metaByID, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, typeNames)
 }
 
 // checkServiceParamExpr 校验 params 表达式：input.* 必须存在于 service 入参，

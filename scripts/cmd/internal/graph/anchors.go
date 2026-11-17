@@ -1,7 +1,7 @@
 // anchors.go 从 service steps 反向生成 rules/states/events 的实现锚点。
 //
 // 生成物：feature.rules.rules[].implemented_by、feature.states.transitions[].implemented_by、
-// cap.events.events[].emitted_by。checker 负责结构，gen-graph 负责一致性。
+// cap.events.events[].emitted_by / consumers。checker 负责结构，gen-graph 负责一致性。
 package graph
 
 import (
@@ -120,6 +120,10 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 						stateID, _ := rawState.(string)
 						a.addState(stateID, serviceID)
 					}
+					for _, rawRule := range asList(step["rules"]) {
+						ruleID, _ := rawRule.(string)
+						a.addRule(ruleID, serviceID)
+					}
 					for _, rawEvent := range asList(step["events"]) {
 						eventID, _ := rawEvent.(string)
 						a.addEvent(eventID, serviceID)
@@ -175,7 +179,6 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				id, _ := item["id"].(string)
 				if id != "" {
 					a.EventFiles[relFile] = append(a.EventFiles[relFile], id)
-					a.EventConsumers[id] = append(a.EventConsumers[id], stringList(item["consumers"])...)
 				}
 			}
 		}

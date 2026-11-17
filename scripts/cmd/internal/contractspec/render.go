@@ -553,10 +553,6 @@ func requireSupported(fields []Field, supported map[string]bool, where string) e
 	return nil
 }
 
-func quoted(s string) yaml.Node {
-	return yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: s, Style: yaml.DoubleQuotedStyle}
-}
-
 func marshal2(v any) ([]byte, error) {
 	var raw bytes.Buffer
 	enc := yaml.NewEncoder(&raw)
@@ -725,7 +721,6 @@ type asyncFileScaffold struct {
 	SchemaVersion int                `yaml:"schema_version"`
 	Stability     string             `yaml:"stability"`
 	DoNot         []string           `yaml:"do_not"`
-	Scope         yaml.Node          `yaml:"scope"`
 	Jobs          []asyncJobScaffold `yaml:"jobs"`
 }
 
@@ -765,7 +760,6 @@ type eventFileScaffold struct {
 	SchemaVersion int             `yaml:"schema_version"`
 	Stability     string          `yaml:"stability"`
 	DoNot         []string        `yaml:"do_not"`
-	Scope         yaml.Node       `yaml:"scope"`
 	Delivery      string          `yaml:"delivery"`
 	Events        []eventScaffold `yaml:"events"`
 }
@@ -777,6 +771,7 @@ type eventScaffold struct {
 	Summary   string         `yaml:"summary"`
 	Payload   map[string]any `yaml:"payload"`
 	EmittedBy []string       `yaml:"emitted_by"`
+	Consumers []string       `yaml:"consumers"`
 }
 
 type httpFileScaffold struct {
@@ -801,6 +796,71 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 	}
 	if strings.TrimSpace(summary) == "" {
 		return nil, fmt.Errorf("RenderService: summary must not be empty")
+	}
+	if err := requireSupported(s.Fields, map[string]bool{
+		"id": true, "summary": true, "owner_module": true, "schema_version": true,
+		"stability": true, "do_not": true, "interface": true, "persistence": true,
+		"types": true, "services": true,
+	}, "cap.services"); err != nil {
+		return nil, err
+	}
+	if f, ok := FindField(s.Fields, "interface"); ok {
+		if err := requireSupported(f.Fields, map[string]bool{"name": true, "package": true}, "cap.services.interface"); err != nil {
+			return nil, err
+		}
+	}
+	if f, ok := FindField(s.Fields, "persistence"); ok {
+		if err := requireSupported(f.Fields, map[string]bool{"tables": true, "constraint_errors": true}, "cap.services.persistence"); err != nil {
+			return nil, err
+		}
+	}
+	if f, ok := FindField(s.Fields, "services"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{
+			"name": true, "summary": true, "visibility": true, "params": true,
+			"returns": true, "errors": true, "permissions": true, "audit": true,
+			"rate_limit": true, "transaction": true, "idempotency": true,
+			"max_iterations": true, "steps": true,
+		}, "cap.services.services"); err != nil {
+			return nil, err
+		}
+		if steps, ok := FindField(f.ItemFields, "steps"); ok {
+			if err := requireSupported(steps.ItemFields, map[string]bool{
+				"id": true, "kind": true, "summary": true, "depends_on": true,
+				"when": true, "on_error": true, "errors": true, "output": true,
+				"query": true, "service": true, "params": true, "queries": true,
+				"events": true, "rules": true, "event": true, "payload": true,
+				"transitions": true,
+			}, "cap.services.steps"); err != nil {
+				return nil, err
+			}
+			if onError, ok := FindField(steps.ItemFields, "on_error"); ok {
+				if err := requireSupported(onError.ItemFields, map[string]bool{"error": true, "action": true, "target": true}, "cap.services.steps.on_error"); err != nil {
+					return nil, err
+				}
+			}
+			if output, ok := FindField(steps.ItemFields, "output"); ok {
+				if err := requireSupported(output.ItemFields, map[string]bool{"name": true, "type": true}, "cap.services.steps.output"); err != nil {
+					return nil, err
+				}
+			}
+		}
+		for _, arg := range []string{"params", "returns"} {
+			if f, ok := FindField(f.ItemFields, arg); ok {
+				if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "type": true, "nullable": true}, "cap.services."+arg); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if rl, ok := FindField(f.ItemFields, "rate_limit"); ok {
+			if err := requireSupported(rl.Fields, map[string]bool{"requests": true, "window_seconds": true}, "cap.services.rate_limit"); err != nil {
+				return nil, err
+			}
+		}
+		if idem, ok := FindField(f.ItemFields, "idempotency"); ok {
+			if err := requireSupported(idem.Fields, map[string]bool{"key": true, "window": true}, "cap.services.idempotency"); err != nil {
+				return nil, err
+			}
+		}
 	}
 	fileID := s.Targets.FileID(name + ".yaml")
 	if fileID == "" {
@@ -857,6 +917,14 @@ func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
 	if !validName(name) || !validName(module) {
 		return nil, fmt.Errorf("RenderRule: invalid name/module")
 	}
+	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "rules": true}, "feature.rules"); err != nil {
+		return nil, err
+	}
+	if f, ok := FindField(s.Fields, "rules"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "kind": true, "summary": true, "severity": true, "on_violation": true, "implemented_by": true}, "feature.rules.rules"); err != nil {
+			return nil, err
+		}
+	}
 	fileID := s.Targets.FileID(name + ".yaml")
 	doc := ruleFileScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
@@ -888,6 +956,19 @@ func RenderState(s *Schema, name, module, summary string) ([]byte, error) {
 	}
 	if !validName(name) || !validName(module) {
 		return nil, fmt.Errorf("RenderState: invalid name/module")
+	}
+	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "machine": true, "subject": true, "states": true, "initial": true, "transitions": true, "forbidden_examples": true, "idempotent_transitions": true}, "feature.states"); err != nil {
+		return nil, err
+	}
+	if f, ok := FindField(s.Fields, "states"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "description": true, "terminal": true}, "feature.states.states"); err != nil {
+			return nil, err
+		}
+	}
+	if f, ok := FindField(s.Fields, "transitions"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "description": true, "from": true, "to": true, "guard": true, "on_violation": true, "side_effects": true, "implemented_by": true}, "feature.states.transitions"); err != nil {
+			return nil, err
+		}
 	}
 	fileID := s.Targets.FileID(name + ".yaml")
 	doc := stateFileScaffold{
@@ -929,6 +1010,14 @@ func RenderEvent(s *Schema, name, module, summary string) ([]byte, error) {
 	if !validName(name) || !validName(module) {
 		return nil, fmt.Errorf("RenderEvent: invalid name/module")
 	}
+	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "delivery": true, "events": true}, "cap.events"); err != nil {
+		return nil, err
+	}
+	if f, ok := FindField(s.Fields, "events"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "name": true, "version": true, "payload": true, "summary": true, "emitted_by": true, "consumers": true}, "cap.events.events"); err != nil {
+			return nil, err
+		}
+	}
 	fileID := s.Targets.FileID(name + ".yaml")
 	doc := eventFileScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
@@ -937,7 +1026,6 @@ func RenderEvent(s *Schema, name, module, summary string) ([]byte, error) {
 		Stability:     scaffoldStability,
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
-		Scope:         quoted(name),
 		Delivery:      "at_least_once",
 		Events: []eventScaffold{{
 			ID:      fileID + ".created",
@@ -967,6 +1055,19 @@ func RenderAsync(s *Schema, name, module, summary string) ([]byte, error) {
 	if !validName(name) || !validName(module) {
 		return nil, fmt.Errorf("RenderAsync: invalid name/module")
 	}
+	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "jobs": true}, "cap.async"); err != nil {
+		return nil, err
+	}
+	if f, ok := FindField(s.Fields, "jobs"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "name": true, "summary": true, "service": true, "trigger": true, "retry": true, "concurrency": true}, "cap.async.jobs"); err != nil {
+			return nil, err
+		}
+		if trigger, ok := FindField(f.ItemFields, "trigger"); ok {
+			if err := requireSupported(trigger.Fields, map[string]bool{"type": true, "schedule": true, "event": true}, "cap.async.jobs.trigger"); err != nil {
+				return nil, err
+			}
+		}
+	}
 	fileID := s.Targets.FileID(name + ".yaml")
 	if fileID == "" {
 		return nil, fmt.Errorf("RenderAsync: cannot derive id from targets.id")
@@ -978,7 +1079,6 @@ func RenderAsync(s *Schema, name, module, summary string) ([]byte, error) {
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		Stability:     scaffoldStability,
 		DoNot:         []string{"TODO: 实例级负向约束"},
-		Scope:         quoted(name),
 		Jobs: []asyncJobScaffold{{
 			ID:          fileID + ".job",
 			Name:        "job",
@@ -1006,6 +1106,9 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 	}
 	if strings.TrimSpace(summary) == "" {
 		return nil, fmt.Errorf("RenderHTTP: summary must not be empty")
+	}
+	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "base_path": true, "default_error_responses": true, "paths": true, "components": true}, "cap.protocols.http"); err != nil {
+		return nil, err
 	}
 	if !strings.HasPrefix(service, "cap.services.") {
 		return nil, fmt.Errorf("RenderHTTP: service must be cap.services.*")

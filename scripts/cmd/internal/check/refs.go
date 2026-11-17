@@ -52,7 +52,9 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 		module, _ := doc["owner_module"].(string)
 		p, _ := asMap(doc["persistence"])
 		tables := tableRefs(p)
+		declaredTables := map[string]bool{}
 		for _, t := range tables {
+			declaredTables[t] = true
 			if c.isBaseTableRef(t) {
 				c.rulef("schema.ref", "%s: base contract is not a physical table", rel)
 			} else if _, ok := tableIDs[t]; !ok {
@@ -115,6 +117,9 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 					}
 					for _, target := range q.Writes {
 						c.declaredWrites[qid] = true
+						if !declaredTables[target] {
+							c.rulef("service-owner-write", "%s.%s: query %s writes %s but persistence.tables does not declare it", rel, name, qid, target)
+						}
 						if owner := c.tableOwners[target]; owner != "" && owner != module {
 							c.rulef("service-owner-write", "%s.%s: module %q cannot write %s via %s (owner_module %q); cross-module writes must go through kind=service", rel, name, module, target, qid, owner)
 						}
@@ -293,105 +298,25 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 			}
 		}
 	}
-}
-
-// checkServicePersistenceDoc 校验单个 service 文档的写归属。
-func (c *Checker) checkServicePersistenceDoc(doc map[string]any, rel, module string, tableIDs map[string]string) {
-	if c.declaredWrites == nil {
-		c.declaredWrites = map[string]bool{}
-	}
-	p, _ := asMap(doc["persistence"])
-	tables := tableRefs(p)
-	for _, t := range tables {
-		if c.isBaseTableRef(t) {
-			c.rulef("schema.ref", "%s: base contract is not a physical table", rel)
-		} else if _, ok := tableIDs[t]; !ok {
-			c.rulef("schema.ref", "%s: persistence references unknown table %s", rel, t)
+	// capabilities/features/platform 也必须登记：新增契约不得游离在 index 之外。
+	for _, file := range walkYAML(c.root, "contracts") {
+		rel := relPath(c.root, file)
+		if strings.HasPrefix(rel, "contracts/_meta/") || strings.HasPrefix(rel, "contracts/generated/") ||
+			strings.HasPrefix(rel, "contracts/data/") || rel == "contracts/index.yaml" {
+			continue
 		}
-		if owner := c.tableOwners[t]; owner != "" && owner != module {
-			c.rulef("service-owner-write", "%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
-		}
-	}
-	if rawCE, ok := p["constraint_errors"]; ok {
-		ce, ok := asMap(rawCE)
+		p := strings.TrimPrefix(rel, "contracts/")
+		got, ok := byPath[p]
 		if !ok {
-			c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
-		} else {
-			for name, rawVal := range ce {
-				if name == "" {
-					c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
-					continue
-				}
-				if !c.tableObjectExists(tables, name) {
-					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
-				}
-				code, _ := rawVal.(string)
-				if !strings.HasPrefix(code, "platform.errors.") {
-					c.rulef("schema.pattern", "%s: persistence.constraint_errors.%s must be platform.errors.*", rel, name)
-				} else if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
-					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s references unknown error %s", rel, name, code)
-				}
-			}
+			c.rulef("schema.index", "%s: missing entry for %s", rel, p)
+			continue
+		}
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		if id, _ := doc["id"].(string); id != "" && got != id {
+			c.rulef("schema.index", "%s: path %s has id %s, expected %s", rel, p, got, id)
 		}
 	}
-	for _, raw := range asList(doc["services"]) {
-		item, _ := asMap(raw)
-		name, _ := item["name"].(string)
-		for _, rawStep := range asList(item["steps"]) {
-			step, _ := asMap(rawStep)
-			kind, _ := step["kind"].(string)
-			var qids []string
-			switch kind {
-			case "query":
-				qid, _ := step["query"].(string)
-				if qid != "" {
-					qids = append(qids, qid)
-				}
-			case "logic", "transition":
-				for _, rawQ := range asList(step["queries"]) {
-					qid, _ := rawQ.(string)
-					if qid != "" {
-						qids = append(qids, qid)
-					}
-				}
-			}
-			for _, qid := range qids {
-				q := c.queries[qid]
-				if q == nil {
-					continue
-				}
-				if queryReturnsAffectedRows(q) && len(q.Writes) == 0 {
-					c.rulef("service-owner-write", "%s.%s: query %s returns affected_rows without a write table", rel, name, qid)
-				}
-				for _, target := range q.Writes {
-					c.declaredWrites[qid] = true
-					if owner := c.tableOwners[target]; owner != "" && owner != module {
-						c.rulef("service-owner-write", "%s.%s: module %q cannot write %s via %s (owner_module %q); cross-module writes must go through kind=service", rel, name, module, target, qid, owner)
-					}
-				}
-			}
-		}
-	}
-}
-
-// checkMethodPersistence 是旧测试的兼容入口：把 interface.methods[].queries 适配为 logic steps。
-func (c *Checker) checkMethodPersistence(doc map[string]any, rel string, tableIDs map[string]string) {
-	module, _ := doc["owner_module"].(string)
-	iface, _ := asMap(doc["interface"])
-	var services []any
-	for _, raw := range asList(iface["methods"]) {
-		m, _ := asMap(raw)
-		services = append(services, map[string]any{
-			"name": m["name"],
-			"steps": []any{map[string]any{
-				"kind":    "logic",
-				"queries": m["queries"],
-			}},
-		})
-	}
-	c.checkServicePersistenceDoc(map[string]any{
-		"owner_module": module,
-		"persistence":  doc["persistence"],
-		"services":     services,
-	}, rel, module, tableIDs)
 }

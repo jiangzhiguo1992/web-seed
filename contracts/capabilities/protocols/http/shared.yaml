@@ -1,9 +1,9 @@
-# HTTP 共享组件。各模块 OpenAPI 引用的公共 schema 与参数。
-
 id: cap.protocols.http.shared
 summary: "HTTP 共享组件"
 schema_version: 1
 stability: stable
+do_not:
+  - "shared 只放跨模块复用组件，不放 operation 或模块专属 schema"
 
 components:
   schemas:
@@ -17,7 +17,7 @@ components:
         status: { type: integer, minimum: 100, maximum: 599, example: 404 }
         detail: { type: string }
         instance: { type: string, format: uri-reference }
-        code: { type: string, example: "NOTE_NOT_FOUND" }
+        code: { type: string, example: "ACCOUNT_NOT_FOUND" }
         errors:
           type: array
           items:
@@ -77,6 +77,19 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
     Conflict:
       description: "状态冲突"
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    UnprocessableEntity:
+      description: "语义校验失败"
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Locked:
+      description: "认证锁定中，可稍后重试"
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }

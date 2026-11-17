@@ -1,5 +1,4 @@
-# cap.async 类型规范：异步任务契约，按模块组织。
-# 异步任务引用一个同步 service 作为 handler；trigger/retry/concurrency 只在此声明。
+# cap.async：异步任务只做调度，业务步骤属于被引用的同步 service。
 
 id: meta.cap.async
 type: cap.async
@@ -47,12 +46,6 @@ fields:
     unique: true
     description: "实例级负向约束"
 
-  - name: scope
-    type: string
-    required: true
-    pattern: '^[a-z][a-z0-9_]*$'
-    description: "业务范围"
-
   - name: jobs
     type: list<object>
     required: true
@@ -69,8 +62,8 @@ fields:
         description: "触发方式"
         fields:
           - { name: type, type: string, required: true, enum: [ cron, event, webhook ], description: "触发类型" }
-          - { name: schedule, type: string, required: false, description: "cron 表达式；type=cron 时必须" }
-          - { name: event, type: string, required: false, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "事件 ID；type=event 时必须" }
+          - { name: schedule, type: string, required: false, description: "cron 表达式" }
+          - { name: event, type: string, required: false, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "事件 ID" }
       - name: retry
         type: object
         required: false
@@ -85,9 +78,9 @@ fields:
         description: "并发与分布式锁"
         fields:
           - { name: key, type: string, required: true, description: "并发键模板" }
-          - { name: ttl, type: string, required: false, pattern: '^[0-9]+(s|m|h|d)$', description: "锁 TTL" }
+          - { name: ttl, type: string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁 TTL" }
 
 rules:
-  - { id: async-service, text: "service 必须存在且与 async 文件的 owner_module 同模块；被 async 引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service ] }
+  - { id: async-service, text: "service 必须存在且与 async 文件的 owner_module 同模块；被 async 引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service, http-binding ] }
   - { id: async-trigger, text: "type=cron 必须有 schedule；type=event 必须有存在的事件；type=webhook 不得写 schedule/event，path/method 由 cap.protocols.http 的 x-async 绑定", implemented_by: [ async-trigger ] }
-  - { id: async-structure, text: "job name 在文件内唯一；retry.max_attempts >= 1；concurrency.key 必填；async job 不得重复声明同一 (trigger, service)", implemented_by: [ async-structure ] }
+  - { id: async-structure, text: "job name 在文件内唯一；job.id 必须等于 <file-id>.<name>；不得重复声明同一 (trigger.type, service)", implemented_by: [ async-structure ] }

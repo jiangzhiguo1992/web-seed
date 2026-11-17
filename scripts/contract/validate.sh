@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 契约校验入口：rule_ids 与 used_by 新鲜度、data.* 结构/引用、storage、冗余列、capabilities 写归属。
-# 后续扩展：其余契约类型、graph.json 越层/循环、generated diff。
+# 契约校验入口：rule_ids 与 used_by 新鲜度 + 全部契约结构与引用校验。
+# 生成物（openapi/db/errors）由 make gen-check 单独校验。
 
 set -euo pipefail
 

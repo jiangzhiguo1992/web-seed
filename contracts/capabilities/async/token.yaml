@@ -1,14 +1,10 @@
-# 令牌异步任务。
-
 id: cap.async.token
 summary: "令牌异步任务"
 owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "异步任务只做调度，不在 async 里写业务步骤；步骤属于 service"
-  - "被 async 引用的 service 不得再被 cap.protocols.http 绑定"
-scope: "token"
+  - "purge_expired 只清理过期令牌，不得顺带吊销有效令牌"
 jobs:
   - id: cap.async.token.purge_expired
     name: purge_expired

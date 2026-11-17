@@ -1,5 +1,4 @@
-# cap.protocols.http 类型规范：flow 到 HTTP 协议的绑定。
-# paths 的关键绑定（operationId/x-contract-id/x-flow/错误响应）由 checker 校验；完整 OpenAPI 结构由生成器负责。
+# cap.protocols.http：service 到 HTTP 的协议绑定；OpenAPI 结构由生成器负责。
 
 id: meta.cap.protocols.http
 type: cap.protocols.http
@@ -14,7 +13,7 @@ fields:
   - name: id
     type: string
     required: true
-    pattern: '^cap\.http\.[a-z][a-z0-9_]*$'
+    pattern: '^cap\.protocols\.http\.[a-z][a-z0-9_]*$'
     description: "契约 ID"
 
   - name: summary
@@ -26,7 +25,7 @@ fields:
     type: string
     required: false
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "所属模块；shared.yaml 可省略"
+    description: "所属模块；纯组件文件可省略"
 
   - name: schema_version
     type: integer
@@ -50,28 +49,28 @@ fields:
   - name: base_path
     type: string
     required: false
-    pattern: '^/[A-Za-z0-9_\-/]*$'
+    pattern: '^/[A-Za-z0-9_\-]+(/[A-Za-z0-9_\-]+)*$'
     description: "URL 前缀，例如 /v1"
 
   - name: default_error_responses
-    type: list<any>
+    type: list<integer>
     required: false
     unique: true
-    description: "默认注入的错误状态码；operation 不得重复声明这些状态码"
+    description: "默认注入的错误状态码"
 
   - name: paths
     type: any
-    required: true
-    description: "OpenAPI 3.1 path item；每个 operation 必须写 operationId、x-contract-id、x-flow"
+    required: false
+    description: "OpenAPI 3.1 path item"
 
   - name: components
     type: any
     required: false
-    description: "协议层共享 schema/参数/响应；schema 可用 x-method-type / x-enum / x-entity 指向唯一来源，生成器展开"
+    description: "协议层共享 schema/参数/响应；schema 可用 x-service-type / x-enum / x-entity 指向唯一来源，生成器展开"
 
 rules:
-  - { id: http-binding, text: "每个 http operation 必须有 operationId、x-contract-id 与 x-service 或 x-async；x-service 必须指向存在的同步 service；x-async 必须指向存在的 webhook async job；x-service 与 x-async 互斥；同步 service 必须有至少一个 protocol 入边；x-contract-id 必须唯一；operation 不得重复声明 default_error_responses 中的状态码", implemented_by: [ http-binding ] }
-  - { id: http-components, text: "components.schemas 的 object 必须 additionalProperties: false；x-service-type/x-enum/x-entity 必须指向存在的来源；$ref 必须指向存在的 schema", implemented_by: [ http-components ] }
-  - { id: http-retry-after, text: "503 响应必须声明 Retry-After；default_error_responses 含 503 时 shared 必须定义 components.headers.RetryAfter 与 components.responses.ServiceUnavailable，且 ServiceUnavailable.headers.Retry-After 指向 RetryAfter；Retry-After 取值必须是非负整数秒或 HTTP-date", implemented_by: [ http-retry-after ] }
-  - { id: http-service-type, text: "requestBody 的 $ref 必须是 x-service 指向的 service 的 params 类型", implemented_by: [ http-service-type ] }
+  - { id: http-binding, text: "每个 operation 必须有全局唯一的 operationId、x-contract-id、x-service 或 x-async；x-contract-id 全局唯一且匹配 cap.protocols.http.<file>.<operation>；path+method 全局唯一；x-service 与 x-async 互斥；x-service 必须指向存在的 public 同步 service，x-async 必须指向存在的 webhook job；x-timeout-ms 必须为正整数；不得声明 x-flow；operation 不得重复声明 default_error_responses 中的状态码，且每个默认状态码必须有 components.responses 映射", implemented_by: [ http-binding ] }
+  - { id: http-components, text: "components.schemas 与 operation 内联 schema 的 object 必须 additionalProperties: false；x-service-type/x-enum/x-entity 必须指向存在的来源；所有 $ref 必须指向存在的 schema", implemented_by: [ http-components ] }
+  - { id: http-retry-after, text: "default_error_responses 含 503 时必须定义 components.headers.RetryAfter 与 components.responses.ServiceUnavailable，且该响应声明 Retry-After；operation 的 503 响应必须声明 Retry-After", implemented_by: [ http-retry-after ] }
+  - { id: http-service-type, text: "requestBody 的 $ref 必须是 x-service 指向的 service 的 params 类型，且该 component 的 x-service-type 必须属于同一 service", implemented_by: [ http-service-type ] }
   - { id: http-service-return, text: "response schema 的 x-service-return 必须是 x-service 指向的 service 的 returns 类型之一", implemented_by: [ http-service-return ] }

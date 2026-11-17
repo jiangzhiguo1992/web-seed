@@ -34,7 +34,7 @@ func main() {
 	flag.Parse()
 
 	if *typ == "" || *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|feature.rules|feature.states|cap.events|cap.protocols.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
+		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|cap.async|feature.rules|feature.states|cap.events|cap.protocols.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
 		os.Exit(2)
 	}
 	if *module == "" {
@@ -101,7 +101,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace the EXISTS skeleton; declare write queries in capabilities persistence.write_queries/writes; register in contracts/index.yaml; make gen-graph; make contract-check")
+		writeOut(*out, b, "next: replace the EXISTS skeleton; reference it from a service step; register in contracts/index.yaml; make gen-graph; make contract-check")
 
 	case "data.enums":
 		b, err := contractspec.RenderEnumItem(schema, *name)
@@ -122,21 +122,21 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; choose constraint/invariant/policy; point implemented_by at cap.services.*; register in contracts/index.yaml; make contract-check")
+		writeOut(*out, b, "next: replace TODO; choose constraint/invariant/policy; implemented_by is maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
 
 	case "feature.states":
 		b, err := contractspec.RenderState(schema, *name, *module, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; exhaust states/transitions; set guard/side_effects/implemented_by; register in contracts/index.yaml; make contract-check")
+		writeOut(*out, b, "next: replace TODO; exhaust states/transitions; set guard/side_effects; implemented_by is maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
 
 	case "cap.events":
 		b, err := contractspec.RenderEvent(schema, *name, *module, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; add payload fields; point emitted_by at cap.services.*; register in contracts/index.yaml; make contract-check")
+		writeOut(*out, b, "next: replace TODO; add payload fields; emitted_by/consumers are maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
 
 	case "cap.async":
 		b, err := contractspec.RenderAsync(schema, *name, *module, *summary)

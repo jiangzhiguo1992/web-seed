@@ -53,6 +53,7 @@ services:
       - id: activate
         kind: transition
         transitions: [feature.states.x.activate]
+        rules: [feature.rules.x.r1]
         events: [cap.events.x.activated]
   - name: consume
     steps:
@@ -115,7 +116,7 @@ events:
 	}
 
 	checks := map[string]string{
-		"contracts/features/rules/x.yaml":  "implemented_by: [ cap.services.x.create ]",
+		"contracts/features/rules/x.yaml":  "implemented_by: [ cap.services.x.activate, cap.services.x.create ]",
 		"contracts/features/states/x.yaml": "implemented_by: [ cap.services.x.activate ]",
 	}
 	for file, want := range checks {
@@ -134,10 +135,13 @@ events:
 	for _, want := range []string{
 		"emitted_by: [ cap.services.x.create ]",
 		"emitted_by: [ cap.services.x.activate ]",
-		"consumers: [ audit, x ]",
+		"consumers: [ x ]",
 	} {
 		if !strings.Contains(string(events), want) {
 			t.Fatalf("events missing %q:\n%s", want, events)
 		}
+	}
+	if strings.Contains(string(events), "audit") {
+		t.Fatalf("stale consumer not removed:\n%s", events)
 	}
 }

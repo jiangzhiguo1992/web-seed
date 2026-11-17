@@ -1,13 +1,10 @@
-# 令牌 service。
-
 id: cap.services.token
 summary: "令牌服务：签发、刷新、吊销与校验"
 owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "token 持久化前必须哈希；数据库只存 hash，不存原文"
-  - "issue 返回 TokenPair 是唯一允许暴露原文的位置"
+  - "token 只存 hash；原文只通过 issue 返回 TokenPair 暴露"
   - "verify 只校验 access token；refresh token 只在 refresh/logout 中使用"
 interface:
   name: TokenService

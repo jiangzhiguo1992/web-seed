@@ -73,5 +73,6 @@ jobs:
           go-version-file: scripts/cmd/go.mod
       - run: make check-rule-ids
       - run: make contract-check
+      - run: make gen-check
       - run: make gen-db-check
       - run: make gen-errors-check

@@ -26,7 +26,7 @@ func validatePatterns(fields []Field) error {
 var schemaFieldTypes = map[string]bool{
 	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
 	"boolean": true, "any": true, "object": true,
-	"list<string>": true, "list<object>": true, "list<list<string>>": true, "list<any>": true,
+	"list<string>": true, "list<integer>": true, "list<object>": true, "list<list<string>>": true, "list<any>": true,
 	"map<string>": true,
 }
 
@@ -41,6 +41,29 @@ func validateFieldTypes(fields []Field) error {
 			return err
 		}
 		if err := validateFieldTypes(f.ItemFields); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateFieldMarkers 校验 generated/write 成对出现：
+// 生成字段必须标记为不可手写，write 只允许 forbidden。
+func validateFieldMarkers(fields []Field) error {
+	for _, f := range fields {
+		if f.Write != "" && f.Write != "forbidden" {
+			return fmt.Errorf("field %s: write must be forbidden, got %q", f.Name, f.Write)
+		}
+		if f.Generated && f.Write != "forbidden" {
+			return fmt.Errorf("field %s: generated fields must set write: forbidden", f.Name)
+		}
+		if f.Write == "forbidden" && !f.Generated {
+			return fmt.Errorf("field %s: write: forbidden requires generated: true", f.Name)
+		}
+		if err := validateFieldMarkers(f.Fields); err != nil {
+			return err
+		}
+		if err := validateFieldMarkers(f.ItemFields); err != nil {
 			return err
 		}
 	}
@@ -137,6 +160,26 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			if f.Pattern != "" && !match(f.Pattern, s) {
 				c.rulef("schema.pattern", "%s[%d]: %q does not match %s", path, i, s, f.Pattern)
 			}
+		}
+	case "list<integer>":
+		l, ok := asList2(v)
+		if !ok {
+			c.rulef("schema.type", "%s: must be list", path)
+			return
+		}
+		c.checkMinItems(l, f, path)
+		seenInt := map[int]bool{}
+		for i, item := range l {
+			n, ok := toInt(item)
+			if !ok {
+				c.rulef("schema.type", "%s[%d]: must be integer", path, i)
+				continue
+			}
+			if f.Unique && seenInt[n] {
+				c.rulef("schema.unique", "%s[%d]: duplicate %d", path, i, n)
+			}
+			seenInt[n] = true
+			c.checkIntRange(n, f, path)
 		}
 	case "list<object>":
 		l, ok := asList2(v)
