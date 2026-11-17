@@ -470,9 +470,8 @@ func TestRenderService(t *testing.T) {
 	if doc["id"] != "cap.services.invoice" {
 		t.Fatalf("id = %v", doc["id"])
 	}
-	iface, _ := doc["interface"].(map[string]any)
-	if iface["name"] != "InvoiceService" {
-		t.Fatalf("interface = %#v", iface)
+	if _, ok := doc["interface"]; ok {
+		t.Fatalf("interface scaffold must be removed, got %#v", doc["interface"])
 	}
 	services, _ := doc["services"].([]any)
 	if len(services) != 1 {
@@ -556,5 +555,19 @@ func TestRenderAsync(t *testing.T) {
 	job, _ := jobs[0].(map[string]any)
 	if job["service"] != "cap.services.invoice.job" {
 		t.Fatalf("job = %#v", job)
+	}
+}
+
+func TestServiceInterfaceName(t *testing.T) {
+	cases := []struct{ owner, file, want string }{
+		{"account", "account", "AccountService"},
+		{"account", "auth", "AccountAuthService"},
+		{"account", "token", "AccountTokenService"},
+		{"notes", "notes", "NotesService"},
+	}
+	for _, c := range cases {
+		if got := ServiceInterfaceName(c.owner, c.file); got != c.want {
+			t.Fatalf("ServiceInterfaceName(%q, %q) = %q, want %q", c.owner, c.file, got, c.want)
+		}
 	}
 }

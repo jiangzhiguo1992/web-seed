@@ -12,6 +12,7 @@
 contracts/_meta/
 ├── README.md             # 本文件：AI 入口
 ├── _types.yaml           # 共享值类型：类型族与参数（不绑定存储引擎）
+├── _schemas.yaml         # 共享受限 schema：services.schemas 与 events.payload
 ├── data.tables.yaml      # data.tables 的字段树 + 值域 + 说明
 ├── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
 ├── data.entities.yaml    # data.entities 的字段树 + 值域 + 说明
@@ -45,6 +46,12 @@ scripts/cmd/
 - `columns[].type` 的列引用规则写死在 checker：只允许 `data.tables.<t>.col.<c>`，不是类型族，也不是外键；
 - checker 对 `_types.yaml` 使用 `KnownFields` 严格解析，缺少文件或 families 为空会直接失败。
 
+### 1.2 为什么有 `_schemas.yaml`
+
+`cap.services.schemas` 与 `cap.events.events[].payload` 使用同一套受限 schema 方言（object/properties/items/enum/...）；`cap.async` 没有内联 schema，只引用 service/event；`cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份受限模板。
+
+`_schemas.yaml` 只放 `keys`：schema 允许的键、值类型与顺序。`LoadSchema` 会把 `keys` 注入所有 `schema_object` / `map<schema_object>` / `list<schema_object>` 字段，checker 据此做结构、递归与键顺序校验，避免在 `cap.services` / `cap.events` 各写一份。
+
 **没有 `schema/`、没有 `templates/`。**
 字段说明和值域在同一个文件、同一个字段节点里；`contract-new` 只生成最小骨架，字段规范以本目录为准，不维护第二份字段清单。
 
@@ -76,7 +83,7 @@ scripts/cmd/
 | `make contract-new type=data.enums name=note_status` | 按 `_meta/data.enums.yaml` 打印枚举项片段 | 新增枚举时 |
 | `make contract-new type=data.entities name=note table=note` | 按 `_meta/data.entities.yaml` 生成单表读模型骨架；owner_module 从目标表读取（目标表必须已存在） | 新建实体时 |
 | `make contract-new type=data.queries name=note module=notes table=note` | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在） | 新建查询集时 |
-| `make contract-new type=cap.services name=invoice module=invoice` | 按 `_meta/cap.services.yaml` 生成服务文件骨架（interface + 一个 service + 一条 logic step） | 新建服务契约前 |
+| `make contract-new type=cap.services name=invoice module=invoice` | 按 `_meta/cap.services.yaml` 生成服务文件骨架（一个 service + 一条 logic step；interface 名由 owner_module + file 派生） | 新建服务契约前 |
 | `make contract-new type=feature.rules name=invoice module=invoice` | 生成 feature.rules 骨架（一个 policy） | 新建规则集前 |
 | `make contract-new type=feature.states name=invoice module=invoice` | 生成 feature.states 骨架（pending/active + activate） | 新建状态机前 |
 | `make contract-new type=cap.events name=invoice module=invoice` | 生成 cap.events 骨架（一个 created 事件） | 新建事件集前 |

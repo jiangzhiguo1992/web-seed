@@ -3,6 +3,7 @@
 package check
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -65,6 +66,12 @@ func (c *Checker) checkNodeOrder(n *yaml.Node, fields []Field, rel, path string,
 		value := n.Content[i+1]
 		childPath := joinPath(path, key)
 		switch {
+		case value.Kind == yaml.MappingNode && f.Type == "map<schema_object>":
+			for j := 0; j+1 < len(value.Content); j += 2 {
+				c.checkSchemaOrder(value.Content[j+1], f.Keys, rel, childPath+"."+value.Content[j].Value, rules)
+			}
+		case value.Kind == yaml.MappingNode && f.Type == "schema_object":
+			c.checkSchemaOrder(value, f.Keys, rel, childPath, rules)
 		case value.Kind == yaml.MappingNode && len(f.Fields) > 0:
 			c.checkNodeOrder(value, f.Fields, rel, childPath, rules)
 		case value.Kind == yaml.SequenceNode && len(f.ItemFields) > 0:
@@ -72,6 +79,42 @@ func (c *Checker) checkNodeOrder(n *yaml.Node, fields []Field, rel, path string,
 				if item.Kind == yaml.MappingNode {
 					c.checkNodeOrder(item, f.ItemFields, rel, childPath+"[]", rules)
 				}
+			}
+		}
+	}
+}
+
+// checkSchemaOrder 按共享 keys 校验一个 schema_object 的键顺序，并递归 properties/items/组合分支。
+func (c *Checker) checkSchemaOrder(n *yaml.Node, keys []Field, rel, path string, rules orderRules) {
+	if n == nil || n.Kind != yaml.MappingNode || len(keys) == 0 {
+		return
+	}
+	pos := make(map[string]int, len(keys))
+	for i, f := range keys {
+		pos[f.Name] = i
+	}
+	last, lastKey := -1, ""
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		key := n.Content[i].Value
+		if idx, ok := pos[key]; ok {
+			if idx < last {
+				c.reportOrder(rules.nested, rel, path, key, lastKey)
+			}
+			last, lastKey = idx, key
+		}
+		value := n.Content[i+1]
+		switch key {
+		case "properties":
+			if value.Kind == yaml.MappingNode {
+				for j := 0; j+1 < len(value.Content); j += 2 {
+					c.checkSchemaOrder(value.Content[j+1], keys, rel, path+".properties."+value.Content[j].Value, rules)
+				}
+			}
+		case "items":
+			c.checkSchemaOrder(value, keys, rel, path+".items", rules)
+		case "allOf", "oneOf", "anyOf":
+			for k, item := range value.Content {
+				c.checkSchemaOrder(item, keys, rel, fmt.Sprintf("%s.%s[%d]", path, key, k), rules)
 			}
 		}
 	}

@@ -7,10 +7,6 @@ do_not:
   - "返回 data.entities.account，不要返回表行"
   - "不要在 interface 里暴露 *sql.Tx 或 HTTP 类型"
 
-interface:
-  name: AccountService
-
-
 schemas:
   ListAccountsFilter:
     type: object

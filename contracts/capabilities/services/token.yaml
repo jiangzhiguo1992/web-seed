@@ -6,8 +6,7 @@ stability: draft
 do_not:
   - "token 只存 hash；原文只通过 issue 返回 TokenPair 暴露"
   - "verify 只校验 access token；refresh token 只在 refresh/logout 中使用"
-interface:
-  name: TokenService
+
 schemas:
   TokenPair:
     type: object

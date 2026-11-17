@@ -18,6 +18,7 @@ type Schema struct {
 	Title       string      `yaml:"title"`
 	Targets     Targets     `yaml:"targets"`
 	ColumnTypes ColumnTypes `yaml:"-"`
+	SchemaKeys  []Field     `yaml:"-"`
 	Fields      []Field     `yaml:"fields"`
 	Rules       []Rule      `yaml:"rules"`
 }
@@ -28,6 +29,14 @@ type SharedTypes struct {
 	ID          string      `yaml:"id"`
 	Title       string      `yaml:"title"`
 	ColumnTypes ColumnTypes `yaml:"column_types"`
+}
+
+// SharedSchemas 是 _meta/_schemas.yaml 的严格解析结果：services.schemas 与
+// events.payload 共用的受限 schema 键表。
+type SharedSchemas struct {
+	ID    string  `yaml:"id"`
+	Title string  `yaml:"title"`
+	Keys  []Field `yaml:"keys"`
 }
 
 type Rule struct {
@@ -84,6 +93,7 @@ type Field struct {
 	Unique      bool    `yaml:"unique"`
 	Fields      []Field `yaml:"fields"`
 	ItemFields  []Field `yaml:"item_fields"`
+	Keys        []Field `yaml:"keys"`
 	// Unordered 标记运行时注入的字段（如类型族参数），不参与模板顺序校验。
 	Unordered bool `yaml:"-"`
 }
@@ -160,6 +170,42 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 	return &t, nil
 }
 
+// LoadSharedSchemas 严格解析 `_meta/_schemas.yaml`；文件缺失时返回 os.ErrNotExist。
+func LoadSharedSchemas(dir string) (*SharedSchemas, error) {
+	path := filepath.Join(dir, "_schemas.yaml")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	dec.KnownFields(true)
+	var sh SharedSchemas
+	if err := dec.Decode(&sh); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if len(sh.Keys) == 0 {
+		return nil, fmt.Errorf("%s: keys must not be empty", path)
+	}
+	for _, f := range sh.Keys {
+		if strings.TrimSpace(f.Description) == "" {
+			return nil, fmt.Errorf("%s: key %s missing description", path, f.Name)
+		}
+	}
+	return &sh, nil
+}
+
+// injectSchemaKeys 把共享 schema 键注入所有 schema_object 字段。
+func injectSchemaKeys(fields []Field, keys []Field) {
+	for i := range fields {
+		switch fields[i].Type {
+		case "schema_object", "map<schema_object>", "list<schema_object>":
+			fields[i].Keys = keys
+		}
+		injectSchemaKeys(fields[i].Fields, keys)
+		injectSchemaKeys(fields[i].ItemFields, keys)
+	}
+}
+
 func LoadSchema(path string) (*Schema, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -177,6 +223,12 @@ func LoadSchema(path string) (*Schema, error) {
 	// LoadSchemaByType 再对依赖类型族的契约类型强制要求它存在。
 	if t, err := LoadSharedTypes(filepath.Dir(path)); err == nil {
 		s.ColumnTypes = t.ColumnTypes
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	if sh, err := LoadSharedSchemas(filepath.Dir(path)); err == nil {
+		s.SchemaKeys = sh.Keys
+		injectSchemaKeys(s.Fields, sh.Keys)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}

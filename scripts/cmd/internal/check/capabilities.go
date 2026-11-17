@@ -1,5 +1,5 @@
 // capabilities.go 校验 services / async / events / protocols 与 features(rules/states) 契约：
-//   - services：interface/visibility/steps/errors/参数映射/写归属
+//   - services：visibility/steps/errors/参数映射/写归属
 //   - async：trigger/retry/concurrency 与 handler service
 //   - events：payload/版本/生产与消费锚点
 //   - protocols：x-service/x-async 绑定、默认错误响应与组件引用
@@ -108,20 +108,10 @@ func (c *Checker) checkCapabilities() {
 	serviceEdges := map[string][]string{}
 	serviceMetaByID := map[string]serviceMeta{}
 	serviceItemIDs := map[string]bool{}
-	interfaceNames := map[string]string{}
 	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
 			continue
-		}
-		rel := relPath(c.root, file)
-		if iface, ok := asMap(doc["interface"]); ok {
-			if name, _ := iface["name"].(string); name != "" {
-				if prev, exists := interfaceNames[name]; exists && prev != rel {
-					c.rulef("service-structure", "%s: interface %s already defined in %s", rel, name, prev)
-				}
-				interfaceNames[name] = rel
-			}
 		}
 		fileID, _ := doc["id"].(string)
 		module, _ := doc["owner_module"].(string)
@@ -1439,27 +1429,14 @@ func retryAfterHeader(resp map[string]any) bool {
 
 func (c *Checker) checkServiceTypes(types map[string]any, rel string) {
 	for name, raw := range types {
-		c.checkServiceType(raw, rel, "types."+name)
+		c.checkServiceType(raw, rel, "schemas."+name)
 	}
-}
-
-var serviceTypeKeys = map[string]bool{
-	"type": true, "format": true, "nullable": true, "required": true,
-	"properties": true, "items": true, "enum": true, "const": true,
-	"minimum": true, "maximum": true, "minLength": true, "maxLength": true,
-	"pattern": true, "default": true, "readOnly": true, "writeOnly": true,
-	"additionalProperties": true, "description": true, "x-auth-response": true,
 }
 
 func (c *Checker) checkServiceType(v any, rel, where string) {
 	m, ok := asMap(v)
 	if !ok {
 		return
-	}
-	for key := range m {
-		if !serviceTypeKeys[key] {
-			c.rulef("service-structure", "%s: %s has unknown schema key %s", rel, where, key)
-		}
 	}
 	if typ, _ := m["type"].(string); typ == "object" {
 		if ap, ok := m["additionalProperties"]; !ok || ap != false {

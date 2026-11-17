@@ -1,0 +1,97 @@
+# 共享受限 schema：cap.services.schemas 与 cap.events.payload。
+id: meta.schemas
+title: "受限 schema"
+keys:
+  - name: type
+    type: string
+    required: false
+    description: "object/array/string/integer/number/boolean 或 data.enums.* / data.entities.* / 本地类型名"
+  - name: additionalProperties
+    type: boolean
+    required: false
+    description: "object 必须显式设为 false；其他类型不使用"
+  - name: x-auth-response
+    type: boolean
+    required: false
+    description: "是否作为认证响应暴露；仅服务/HTTP 响应使用"
+  - name: format
+    type: string
+    required: false
+    description: "OpenAPI format，例如 date-time"
+  - name: nullable
+    type: boolean
+    required: false
+    description: "字段是否可为 null"
+  - name: required
+    type: list<string>
+    required: false
+    unique: true
+    description: "object 的必填字段名列表"
+  - name: properties
+    type: map<schema_object>
+    required: false
+    description: "object 的字段名 → schema"
+  - name: items
+    type: schema_object
+    required: false
+    description: "array 的元素 schema"
+  - name: enum
+    type: list<any>
+    required: false
+    description: "允许的字面量集合"
+  - name: const
+    type: any
+    required: false
+    description: "固定字面量"
+  - name: minimum
+    type: number
+    required: false
+    description: "数值下限"
+  - name: maximum
+    type: number
+    required: false
+    description: "数值上限"
+  - name: minLength
+    type: integer
+    required: false
+    description: "字符串最小长度"
+  - name: maxLength
+    type: integer
+    required: false
+    description: "字符串最大长度"
+  - name: pattern
+    type: string
+    required: false
+    description: "字符串正则"
+  - name: default
+    type: any
+    required: false
+    description: "默认值"
+  - name: readOnly
+    type: boolean
+    required: false
+    description: "响应只读字段"
+  - name: writeOnly
+    type: boolean
+    required: false
+    description: "请求只写字段"
+  - name: description
+    type: string
+    required: false
+    description: "字段说明"
+  - name: allOf
+    type: list<schema_object>
+    required: false
+    description: "所有子 schema 同时满足"
+  - name: oneOf
+    type: list<schema_object>
+    required: false
+    description: "恰好一个子 schema 满足"
+  - name: anyOf
+    type: list<schema_object>
+    required: false
+    description: "至少一个子 schema 满足"
+  - name: $ref
+    type: string
+    required: false
+    description: "跨文件引用；仅事件 payload 使用"

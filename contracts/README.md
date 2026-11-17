@@ -91,7 +91,7 @@ contracts/
 │   └── storage.yaml          #   单例：引擎归属 / size_class / 保留 / 分区
 │
 ├── capabilities/             # ② 能力层：services + async + events + protocols
-│   ├── services/<module>.yaml #   服务：interface + services + schemas
+│   ├── services/<module>.yaml #   服务：services + schemas（interface 名由 owner_module + file 派生）
 │   ├── async/<module>.yaml     #   异步任务：trigger + retry + concurrency
 │   ├── events/<subject>.yaml   #   领域事件与 payload（按业务主体）
 │   └── protocols/
@@ -328,7 +328,7 @@ table:
 |---|---|---|
 | `data/tables/*` | 一物理表一文件 | **不限** |
 | `data/entities/*` | 一逻辑实体一文件 | 150 |
-| `capabilities/services/*` | 一模块一文件（interface + services + schemas） | 250 |
+| `capabilities/services/*` | 一模块一文件（services + schemas；interface 名由 owner_module + file 派生） | 250 |
 | `capabilities/async/*` | 一模块一文件 | 120 |
 | `capabilities/events/*` | 一业务主体一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |

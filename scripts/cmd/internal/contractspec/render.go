@@ -535,6 +535,19 @@ func lowerCamel(s string) string {
 	return strings.Join(parts, "")
 }
 
+// ServiceInterfaceName 按 owner_module + file 派生 Go interface 名：
+// owner 与 file 相同（account/account）时折叠为 AccountService，否则为 AccountAuthService。
+func ServiceInterfaceName(ownerModule, file string) string {
+	owner := pascal(ownerModule)
+	stem := pascal(file)
+	if strings.EqualFold(owner, stem) {
+		return owner + "Service"
+	}
+	return owner + stem + "Service"
+}
+
+func boolPtr(v bool) *bool { return &v }
+
 func pascal(s string) string {
 	parts := strings.Split(s, "_")
 	for i, p := range parts {
@@ -619,19 +632,21 @@ func quoteScaffoldProse(n *yaml.Node) {
 }
 
 type serviceFileScaffold struct {
-	ID            string                   `yaml:"id"`
-	Summary       string                   `yaml:"summary"`
-	OwnerModule   string                   `yaml:"owner_module"`
-	SchemaVersion int                      `yaml:"schema_version"`
-	Stability     string                   `yaml:"stability"`
-	DoNot         []string                 `yaml:"do_not"`
-	Interface     serviceInterfaceScaffold `yaml:"interface"`
-	Schemas       map[string]any           `yaml:"schemas,omitempty"`
-	Services      []serviceItemScaffold    `yaml:"services"`
+	ID            string                           `yaml:"id"`
+	Summary       string                           `yaml:"summary"`
+	OwnerModule   string                           `yaml:"owner_module"`
+	SchemaVersion int                              `yaml:"schema_version"`
+	Stability     string                           `yaml:"stability"`
+	DoNot         []string                         `yaml:"do_not"`
+	Schemas       map[string]serviceSchemaScaffold `yaml:"schemas,omitempty"`
+	Services      []serviceItemScaffold            `yaml:"services"`
 }
 
-type serviceInterfaceScaffold struct {
-	Name string `yaml:"name"`
+type serviceSchemaScaffold struct {
+	Type                 string                           `yaml:"type"`
+	AdditionalProperties *bool                            `yaml:"additionalProperties,omitempty"`
+	Required             []string                         `yaml:"required,omitempty"`
+	Properties           map[string]serviceSchemaScaffold `yaml:"properties,omitempty"`
 }
 
 type serviceItemScaffold struct {
@@ -793,15 +808,10 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 	}
 	if err := requireSupported(s.Fields, map[string]bool{
 		"id": true, "summary": true, "owner_module": true, "schema_version": true,
-		"stability": true, "do_not": true, "interface": true,
+		"stability": true, "do_not": true,
 		"schemas": true, "services": true,
 	}, "cap.services"); err != nil {
 		return nil, err
-	}
-	if f, ok := FindField(s.Fields, "interface"); ok {
-		if err := requireSupported(f.Fields, map[string]bool{"name": true}, "cap.services.interface"); err != nil {
-			return nil, err
-		}
 	}
 	if f, ok := FindField(s.Fields, "services"); ok {
 		if err := requireSupported(f.ItemFields, map[string]bool{
@@ -852,13 +862,12 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 		Stability:     scaffoldStability,
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
-		Interface:     serviceInterfaceScaffold{Name: pascal(module) + "Service"},
-		Schemas: map[string]any{
-			"GetInput": map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"required":             []any{"id"},
-				"properties":           map[string]any{"id": map[string]any{"type": "integer"}},
+		Schemas: map[string]serviceSchemaScaffold{
+			"GetInput": {
+				Type:                 "object",
+				AdditionalProperties: boolPtr(false),
+				Required:             []string{"id"},
+				Properties:           map[string]serviceSchemaScaffold{"id": {Type: "integer"}},
 			},
 		},
 		Services: []serviceItemScaffold{{

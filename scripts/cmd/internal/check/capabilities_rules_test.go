@@ -312,6 +312,9 @@ func copyMeta(t *testing.T, root, typ string) *Schema {
 		t.Fatal(err)
 	}
 	writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", string(b))
+	if shared, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "contracts", "_meta", "_schemas.yaml")); err == nil {
+		writeCapFile(t, root, "contracts/_meta/_schemas.yaml", string(shared))
+	}
 	s, _, err := contractspec.LoadSchemaByType(root, typ)
 	if err != nil {
 		t.Fatal(err)
@@ -766,9 +769,7 @@ owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
-interface:
-  name: XService
-types: {}
+schemas: {}
 services:
   - name: get
     summary: "x"
@@ -990,4 +991,98 @@ func TestQueryErrorPropagation(t *testing.T) {
 		}, []any{})
 		want(t, check(t, doc), "step run does not declare query data.queries.x.q error platform.errors.A")
 	})
+}
+
+func TestServiceSchemaTemplate(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.services")
+	rel := "contracts/capabilities/services/x.yaml"
+	writeCapFile(t, root, rel, `id: cap.services.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+schemas:
+  XInput:
+    type: object
+    additionalProperties: false
+    properties:
+      nested:
+        type: object
+        additionalProperties: false
+        properties:
+          id: {type: integer}
+        typo: 1
+    allOf:
+      - {type: object, additionalProperties: false, properties: {}}
+services:
+  - name: get
+    summary: "x"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: input, type: XInput}
+    returns:
+      - {name: value, type: string}
+      - {name: err, type: error}
+    errors: []
+    transaction: read_only
+    steps:
+      - {id: load, kind: logic, summary: "x", errors: [], output: []}
+`)
+	doc, err := loadYAML(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root, errCodeSet: map[string]bool{}, permissionSet: map[string]bool{}}
+	c.checkServiceDoc(doc, rel, schema, map[string]bool{})
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, `unknown schema key "typo"`) {
+		t.Fatalf("nested schema key not rejected: %v", c.errs)
+	}
+	if strings.Contains(got, `unknown schema key "allOf"`) {
+		t.Fatalf("allOf must be allowed by the template: %v", c.errs)
+	}
+}
+
+func TestServiceSchemaKeyOrder(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.services")
+	rel := "contracts/capabilities/services/x.yaml"
+	writeCapFile(t, root, rel, `id: cap.services.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+schemas:
+  XInput:
+    type: object
+    properties: {}
+    additionalProperties: false
+services:
+  - name: get
+    summary: "x"
+    visibility: public
+    params:
+      - {name: ctx, type: context.Context}
+      - {name: input, type: XInput}
+    returns:
+      - {name: value, type: string}
+      - {name: err, type: error}
+    errors: []
+    transaction: read_only
+    steps:
+      - {id: load, kind: logic, summary: "x", errors: [], output: []}
+`)
+	doc, err := loadYAML(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root, errCodeSet: map[string]bool{}, permissionSet: map[string]bool{}}
+	c.checkServiceDoc(doc, rel, schema, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "schema.field-order") {
+		t.Fatalf("schema key order not enforced: %v", c.errs)
+	}
 }

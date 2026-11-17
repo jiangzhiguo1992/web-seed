@@ -10,7 +10,7 @@
 
 | 目录 | 回答的问题 | 真相源内容 | 产物 |
 |---|---|---|---|
-| `services/<module>.yaml` | 模块能提供哪些可调用单元、如何实现 | interface、services[]、steps、errors、事务、持久化归属 | Go interface、usecase 骨架、写归属校验 |
+| `services/<module>.yaml` | 模块能提供哪些可调用单元、如何实现 | services[]、steps、errors、事务、写归属 | Go interface、usecase 骨架、写归属校验 |
 | `async/<module>.yaml` | 哪些任务异步执行、如何触发与重试 | jobs[]、trigger、retry、concurrency、handler service | worker 注册表、调度配置 |
 | `events/<subject>.yaml` | 跨模块异步消息长什么样 | name、version、payload、emitted_by、consumers | 事件常量、payload 类型 |
 | `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露 | path、method、status、header、schema 引用 | server 类型、client、合并 spec |
@@ -66,12 +66,11 @@ async ──service──> services
 
 ## 3. services
 
-`services/<module>.yaml` 一个文件对应一个 Go interface。`services[]` 的每一项是一个可调用单元。
+`services/<module>.yaml` 一个文件对应一个 Go interface，接口名由 `owner_module + file` 派生：`<Owner><File>Service`，owner 与 file 相同时折叠为 `<Owner>Service`（account/account → AccountService，account/auth → AccountAuthService）。`services[]` 的每一项是一个可调用单元。
 
 文件级字段：
 
-- `interface.name`（必须；包路径固定为 `internal/modules/<owner_module>/api`）
-- `schemas`（可选；本地对象 schema，可跨文件引用）
+- `schemas`（可选；本地对象 schema，值按 `_meta/_schemas.yaml` 的 keys 校验，可跨文件引用）
 
 入口权限、审计与限流在 `contracts/platform/security/access.yaml` 绑定，不在 service 项声明。query 的 `errors` 在 `data/queries/*.yaml` 的查询项上声明；它只列 query 自身的领域错误，输入校验、权限与 DB 引擎错误不在 query 内枚举，`errors: []` 表示没有领域错误。
 

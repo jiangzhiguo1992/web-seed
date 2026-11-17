@@ -83,3 +83,17 @@ fields:
 		t.Fatal("unknown meta field must fail instead of being ignored")
 	}
 }
+
+func TestLoadSharedSchemasRequiresDescription(t *testing.T) {
+	root := t.TempDir()
+	writeMeta(t, root, "_schemas.yaml", `id: meta.schemas
+title: "schema"
+keys:
+  - name: type
+    type: string
+    required: false
+`)
+	if _, err := LoadSharedSchemas(filepath.Join(root, "contracts/_meta")); err == nil {
+		t.Fatal("missing key description must fail")
+	}
+}

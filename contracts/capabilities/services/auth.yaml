@@ -6,8 +6,7 @@ stability: draft
 do_not:
   - "auth.login 不直接写 token 表；通过 cap.services.token.issue 签发"
   - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
-interface:
-  name: AuthService
+
 schemas:
   LoginInput:
     type: object
@@ -16,7 +15,7 @@ schemas:
     properties:
       auth_type: {type: data.enums.auth_type}
       identifier: {type: string, minLength: 1, maxLength: 254}
-      password: {type: string, writeOnly: true, nullable: true}
+      password: {type: string, nullable: true, writeOnly: true}
       code: {type: string, nullable: true, description: "手机号区号，例如 +86"}
       device_id: {type: string, nullable: true, maxLength: 128}
   BindPasswordInput:
@@ -27,7 +26,7 @@ schemas:
       account_id: {type: integer}
       action: {type: string, enum: [create, update, enable, disable]}
       username: {type: string, nullable: true, maxLength: 254}
-      password: {type: string, writeOnly: true, nullable: true}
+      password: {type: string, nullable: true, writeOnly: true}
   BindPhoneInput:
     type: object
     additionalProperties: false
