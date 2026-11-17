@@ -27,7 +27,6 @@ pagination:
 headers:
   request:
     - { name: X-Request-Id, required: false, note: "客户端可传，服务端校验或生成" }
-    - { name: Idempotency-Key, required: false, note: "幂等端点建议必传" }
     - { name: Accept-Language, required: false, note: "用于错误文案" }
   response:
     - { name: X-Request-Id, required: true, note: "必须回传，便于关联日志" }
@@ -69,9 +68,3 @@ cors:
   allowed_origins_source: platform.environments
   allow_credentials: true
   max_age_seconds: 600
-
-idempotency:
-  header: Idempotency-Key
-  window: 24h
-  scope: ["需要严格重放的 POST 创建类端点"]
-  storage: "业务唯一约束优先；需要严格重放时再引入幂等键表"

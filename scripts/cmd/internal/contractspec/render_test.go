@@ -471,7 +471,7 @@ func TestRenderService(t *testing.T) {
 		t.Fatalf("id = %v", doc["id"])
 	}
 	iface, _ := doc["interface"].(map[string]any)
-	if iface["name"] != "InvoiceService" || iface["package"] != "internal/modules/invoice/api" {
+	if iface["name"] != "InvoiceService" {
 		t.Fatalf("interface = %#v", iface)
 	}
 	services, _ := doc["services"].([]any)

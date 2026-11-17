@@ -1203,7 +1203,7 @@ func TestUndeclaredWriteQueryRejected(t *testing.T) {
 			"data.queries.x.create": {ID: "data.queries.x.create", Writes: []string{"data.tables.x"}},
 		},
 	}
-	c.checkCapabilityPersistence(map[string]string{})
+	c.checkCapabilityWrites(map[string]string{})
 	if !strings.Contains(entityErrs(c), "not referenced by any service step") {
 		t.Fatalf("undeclared write table query not reported: %v", c.errs)
 	}

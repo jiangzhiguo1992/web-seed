@@ -1,0 +1,15 @@
+id: platform.errors.account
+summary: "账号错误码"
+schema_version: 1
+stability: stable
+do_not:
+  - "账号错误与认证错误分开，不要把认证失败塞进 ACCOUNT_*"
+errors:
+  - { code: ACCOUNT_NOT_FOUND, status: 404, retryable: false, i18n: errors.account.not_found, message: "账号不存在" }
+  - { code: ACCOUNT_NUMBER_TAKEN, status: 409, retryable: false, i18n: errors.account.number_taken, message: "账号编号已被使用" }
+  - { code: ACCOUNT_NUMBER_INVALID, status: 422, retryable: false, i18n: errors.account.number_invalid, message: "账号编号格式不合法" }
+  - { code: ACCOUNT_NICKNAME_INVALID, status: 422, retryable: false, i18n: errors.account.nickname_invalid, message: "昵称长度不合法" }
+  - { code: ACCOUNT_OWN_INVALID, status: 422, retryable: false, i18n: errors.account.own_invalid, message: "账号归属不合法" }
+  - { code: ACCOUNT_SUSPENDED, status: 403, retryable: false, i18n: errors.account.suspended, message: "账号已被封禁" }
+  - { code: ACCOUNT_ILLEGAL_TRANSITION, status: 409, retryable: false, i18n: errors.account.illegal_transition, message: "当前状态不允许该操作" }
+  - { code: ACCOUNT_ALREADY_DELETED, status: 409, retryable: false, i18n: errors.account.already_deleted, message: "账号已删除" }

@@ -115,7 +115,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; add services/steps/queries/rules; set persistence.tables; register in contracts/index.yaml; make gen-graph; make contract-check")
+		writeOut(*out, b, "next: replace TODO; add services/steps/queries/rules; add permissions/audit/rate_limit to platform/security/access.yaml if needed; register in contracts/index.yaml; make gen-graph; make contract-check")
 
 	case "feature.rules":
 		b, err := contractspec.RenderRule(schema, *name, *module, *summary)

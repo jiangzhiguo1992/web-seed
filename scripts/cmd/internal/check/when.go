@@ -75,8 +75,8 @@ func parseWhen(expr string) (*whenNode, error) {
 	return n, nil
 }
 
-// whenStepFields 返回表达式引用的完整 step 字段路径，例如 step.load.account.status。
-func whenStepFields(n *whenNode) []string {
+// whenFields 返回表达式引用的、以 prefix 开头的完整字段路径。
+func whenFields(n *whenNode, prefix string) []string {
 	var fields []string
 	var walk func(*whenNode)
 	walk = func(node *whenNode) {
@@ -84,7 +84,7 @@ func whenStepFields(n *whenNode) []string {
 			return
 		}
 		if node.kind == "field" {
-			if path, _ := node.value.(string); strings.HasPrefix(path, "step.") {
+			if path, _ := node.value.(string); strings.HasPrefix(path, prefix) {
 				fields = append(fields, path)
 			}
 		}
@@ -93,6 +93,16 @@ func whenStepFields(n *whenNode) []string {
 	}
 	walk(n)
 	return fields
+}
+
+// whenStepFields 返回表达式引用的完整 step 字段路径，例如 step.load.account.status。
+func whenStepFields(n *whenNode) []string {
+	return whenFields(n, "step.")
+}
+
+// whenInputFields 返回表达式引用的完整 input 字段路径，例如 input.account.number。
+func whenInputFields(n *whenNode) []string {
+	return whenFields(n, "input.")
 }
 
 // whenStepRefs 返回表达式引用的 step ID，用于校验引用是前序步骤。

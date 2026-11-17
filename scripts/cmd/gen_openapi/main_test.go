@@ -44,10 +44,10 @@ paths:
 components:
   schemas:
     X:
-      x-service-type: cap.services.x.types.X
+      x-service-type: cap.services.x.schemas.X
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
-types:
+schemas:
   X:
     type: object
     additionalProperties: false
@@ -131,7 +131,7 @@ components:
       additionalProperties: false
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
-types: {}
+schemas: {}
 services: []
 `)
 	writeFixture(t, root, "contracts/data/enums.yaml", `id: data.enums
@@ -152,5 +152,56 @@ enums: []
 	}
 	if !strings.Contains(b, `"423"`) || strings.Contains(b, `"422"`) {
 		t.Fatalf("file b defaults wrong:\n%s", b)
+	}
+}
+
+func TestBuildOperationDefaultOverride(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "contracts/project.yaml", `project:
+  name: test
+  version: "1"
+apps:
+  api:
+    kind: api
+    includes: [cap.protocols.http.a, cap.protocols.http.shared]
+    generated:
+      spec: generated/openapi/x.yaml
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: cap.protocols.http.a
+paths:
+  /a:
+    get:
+      operationId: getA
+      x-contract-id: cap.protocols.http.a.get
+      x-service: cap.services.x.get
+      x-default-errors: [423]
+      responses:
+        "200": { description: OK }
+default_error_responses: [422]
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
+components:
+  responses:
+    UnprocessableEntity: { description: "422" }
+    Locked: { description: "423" }
+`)
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+schemas: {}
+services: []
+`)
+	writeFixture(t, root, "contracts/data/enums.yaml", `id: data.enums
+enums: []
+`)
+	if err := os.MkdirAll(filepath.Join(root, "contracts/data/entities"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(files["generated/openapi/x.yaml"])
+	paths := out[strings.Index(out, "paths:"):]
+	if !strings.Contains(paths, `"423"`) || strings.Contains(paths, `"422"`) {
+		t.Fatalf("operation override not applied:\n%s", out)
 	}
 }

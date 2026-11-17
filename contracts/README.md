@@ -62,7 +62,7 @@
 | 表结构与迁移一致 | 事务边界与并发是否正确 | 集成测试 + race |
 | 前后端类型一致 | 性能是否退化 | 基准测试 |
 | 枚举、权限、错误码一致 | 契约本身是否写错 | review + 真实用例回归 |
-| 引用关系不越层 | 时序与重试的真实行为 | `idempotency` 声明 + 测试 |
+| 引用关系不越层 | 时序与重试的真实行为 | 并发与重试测试 |
 
 **结论**：契约决定"能编译什么"，闸门决定"能合入什么"，流程决定"AI 会先做什么"。三者缺一，一致性只是口号。不要指望契约替代测试；契约没覆盖时，先问能否扩展表达力。
 
@@ -91,7 +91,7 @@ contracts/
 │   └── storage.yaml          #   单例：引擎归属 / size_class / 保留 / 分区
 │
 ├── capabilities/             # ② 能力层：services + async + events + protocols
-│   ├── services/<module>.yaml #   服务：interface + steps + persistence
+│   ├── services/<module>.yaml #   服务：interface + services + schemas
 │   ├── async/<module>.yaml     #   异步任务：trigger + retry + concurrency
 │   ├── events/<subject>.yaml   #   领域事件与 payload（按业务主体）
 │   └── protocols/
@@ -106,7 +106,7 @@ contracts/
 ├── platform/                 # ④ 平台契约（工程约束）
 │   ├── environments.yaml     #   环境清单与差异
 │   ├── versioning.yaml       #   版本与兼容策略
-│   ├── errors.yaml           #   错误码、HTTP 映射、文案 key
+│   ├── errors/               #   错误码按域拆分（_base / common / account / auth ...）
 │   ├── http_conventions.yaml #   信封、分页、header、状态码
 │   ├── quality.yaml          #   测试策略与门槛
 │   ├── config/env.json  architecture/{go_arch.yaml,web_deps.json}
@@ -181,7 +181,7 @@ feature ──> capabilities ──> data
 | 环节 | 职责 | 锚点写在哪 |
 |---|---|---|
 | feature | 定义用户功能 | 锚 `capabilities`（service / rule / state） |
-| capabilities | 实现 + 业务规格 | service 锚 `data`（steps → queries / `persistence.tables`）；service 锚 `rules/states/events` |
+| capabilities | 实现 + 业务规格 | service 锚 `data`（steps → queries；写表由 query 反向推导）；service 锚 `rules/states/events` |
 | data | 持久化 | 无下游 |
 
 **所有跨层关系只在上游写一处**：
@@ -193,10 +193,10 @@ feature ──> capabilities ──> data
 | capabilities/services → capabilities/services | service steps | `kind: service` + `service` |
 | capabilities/services → features/rules | service steps | `kind: logic/transition` + `rules` |
 | capabilities/services → features/states | service steps | `kind: transition` + `transitions` |
-| capabilities/services → capabilities/events | service steps | `kind: logic/transition` + `events`；显式 payload 用 `kind: event` + `event` |
+| capabilities/services → capabilities/events | service steps | `kind: logic/transition` + `events` |
 | capabilities/async → capabilities/services | async job | `service` |
 | capabilities/async → capabilities/events | async job | `trigger.event` |
-| capabilities/services → data | service 契约 | `steps[].query` / `steps[].queries` / `persistence.tables` / `constraint_errors` |
+| capabilities/services → data | service 契约 | `steps[].query` / `steps[].queries` / query `errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `join_column_from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `table.queries`（生成物） |
@@ -215,7 +215,7 @@ capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，�
 
 理由：service 是规则的实现，**实现不反向声明"我实现了谁"**——那由 `implemented_by` / `emitted_by` 锚点。两处都写必然漂移。
 
-capabilities 内部允许 `services → rules/states/events`：`kind: logic/transition` 的 `rules`、`kind: transition` 的 `transitions`、`kind: logic/transition` 的 `events`、`kind: event` 的 `event`。这是同组内的业务依据，不是跨层引用。
+capabilities 内部允许 `services → rules/states/events`：`kind: logic/transition` 的 `rules`、`kind: transition` 的 `transitions`、`kind: logic/transition` 的 `events`。这是同组内的业务依据，不是跨层引用。
 
 `rules` / `states` 允许引用 `data.entities.*` 作为业务主体（状态机的 `subject`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。`business.*` 已全部移除。
 
@@ -328,7 +328,7 @@ table:
 |---|---|---|
 | `data/tables/*` | 一物理表一文件 | **不限** |
 | `data/entities/*` | 一逻辑实体一文件 | 150 |
-| `capabilities/services/*` | 一模块一文件（interface + services + persistence + 类型） | 250 |
+| `capabilities/services/*` | 一模块一文件（interface + services + schemas） | 250 |
 | `capabilities/async/*` | 一模块一文件 | 120 |
 | `capabilities/events/*` | 一业务主体一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
@@ -399,7 +399,7 @@ table:
 
 | 文件 | 来源 | 状态 |
 |---|---|---|
-| `errors.md` | `platform/errors.yaml` | ✅ `make gen-errors` |
+| `errors.md` | `platform/errors/*.yaml` | ✅ `make gen-errors` |
 | `permissions.md` | `platform/security/permissions.yaml` | ⬜ P2 |
 | `data.md` | `data/tables/*.yaml` | ⬜ P2 |
 | `lineage.md` | 按需生成的 graph | ⬜ P2 |
@@ -441,9 +441,9 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | 生成器 | 输出 | 状态 |
 |---|---|---|
 | graph | `used_by` 写回；rules/states/events 锚点 | ✅ 写回 / ⬜ lineage |
-| errors | `platform/errors.yaml` → 错误码文档 | ✅ |
+| errors | `platform/errors/*.yaml` → 错误码文档 | ✅ |
 | db | DDL / migrations / sqlc 输入 | ✅ `schema.sql` + `0001_baseline.sql`；增量 diff ⬜ P5 |
-| openapi | 合并 spec 并展开 service types | ✅ |
+| openapi | 合并 spec 并展开 service schemas | ✅ |
 | features | 路由、页面骨架、类型 | ⬜ P2 |
 | platform | 配置校验、常量、CSS 变量 | ⬜ P2 |
 | rules/states | `feature.rules` / `feature.states` → 校验函数 / 状态机 | ⬜ P2 |

@@ -103,7 +103,7 @@
 - [x] 契约元规范试点：`_meta/{data.tables,data.enums}` + `make contract-new` + `make contract-check`（结构 / ID / 约束 / 索引 / used_by / owner 写归属）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
 - [ ] `data/enums.yaml` → Go 常量 + TS union + entity 整数映射
-- [ ] `platform/errors.yaml` + `platform/security/permissions.yaml` → 两端常量
+- [ ] `platform/errors/*.yaml` + `platform/security/permissions.yaml` → 两端常量
 - [ ] `platform/config/env.json` → `.env.example`（`gen-env.sh`）
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
 - [ ] `features/rules|states` + `capabilities/events/**` → 状态机常量 + 断言 + 测试骨架
@@ -226,7 +226,7 @@ data/tables/*.yaml ──> gen-db ──> schema.sql + migrations/*.sql
 
 capabilities/protocols/http/*.yaml + shared.yaml ──> gen-openapi ──> generated/openapi/admin.yaml
 
-platform/errors.yaml ──> gen-errors ──> docs/contracts/generated/errors.md
+platform/errors/*.yaml ──> gen-errors ──> docs/contracts/generated/errors.md
 
 capabilities/services/*.yaml ──> (P2) Go interface / usecase / handler
 capabilities/async/*.yaml ──> (P2) worker 注册表
@@ -391,7 +391,7 @@ apps:
 ### 5.2 错误处理
 
 - HTTP 层用 RFC 9457 `application/problem+json`：`{type,title,status,detail,instance,code,errors[]}`
-- 业务错误码与 HTTP 状态解耦，映射表在 `platform/errors.yaml`
+- 业务错误码与 HTTP 状态解耦，映射表在 `platform/errors/`
 - 不返回的 error 必须记录（含栈 + 上下文）
 
 ### 5.3 事务边界

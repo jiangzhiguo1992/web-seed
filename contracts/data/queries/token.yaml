@@ -106,7 +106,6 @@ queries:
       - { name: affected_rows, kind: affected_rows }
     errors:
       - platform.errors.AUTH_TOKEN_INVALID
-      - platform.errors.COMMON_CONFLICT
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
     used_by:
       - cap.services.token.logout

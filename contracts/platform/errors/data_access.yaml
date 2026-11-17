@@ -1,0 +1,10 @@
+id: platform.errors.data_access
+summary: "数据访问基础设施错误基线"
+schema_version: 1
+stability: draft
+do_not:
+  - "query.errors 只写业务错误，不要重复本基线"
+common_errors:
+  - platform.errors.COMMON_INTERNAL
+  - platform.errors.COMMON_UNAVAILABLE
+  - platform.errors.COMMON_CONFLICT

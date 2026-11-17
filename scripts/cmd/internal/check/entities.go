@@ -1212,22 +1212,42 @@ func entityRef(s string) (string, bool) {
 	return "", false
 }
 
-// errorCodes 读取 platform/errors.yaml 的错误码集合；文件缺失时返回空。
+// errorCodes 汇总 contracts/platform/errors/*.yaml 的错误码；文件缺失时返回空。
 func (c *Checker) errorCodes() map[string]bool {
 	if c.errCodeSet != nil {
 		return c.errCodeSet
 	}
 	c.errCodeSet = map[string]bool{}
-	doc, err := loadYAML(filepath.Join(c.root, "contracts/platform/errors.yaml"))
-	if err != nil {
-		return c.errCodeSet
-	}
-	for _, raw := range asList(doc["errors"]) {
-		if m, ok := asMap(raw); ok {
-			if code, _ := m["code"].(string); code != "" {
-				c.errCodeSet[code] = true
+	for _, file := range glob(c.root, "contracts/platform/errors/*.yaml") {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		for _, raw := range asList(doc["errors"]) {
+			if m, ok := asMap(raw); ok {
+				if code, _ := m["code"].(string); code != "" {
+					c.errCodeSet[code] = true
+				}
 			}
 		}
 	}
 	return c.errCodeSet
+}
+
+// dataAccessErrors 返回数据访问基础设施错误基线。
+func (c *Checker) dataAccessErrors() map[string]bool {
+	if c.dataAccessErrSet != nil {
+		return c.dataAccessErrSet
+	}
+	c.dataAccessErrSet = map[string]bool{}
+	doc, err := loadYAML(filepath.Join(c.root, "contracts/platform/errors/data_access.yaml"))
+	if err != nil {
+		return c.dataAccessErrSet
+	}
+	for _, raw := range asList(doc["common_errors"]) {
+		if code, _ := raw.(string); code != "" {
+			c.dataAccessErrSet[code] = true
+		}
+	}
+	return c.dataAccessErrSet
 }

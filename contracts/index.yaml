@@ -23,7 +23,7 @@ groups:
     layers: [routes, pages, rules, states]
   platform:
     description: "平台约定：环境、错误、架构、观测、安全等。"
-    layers: [environments, versioning, errors, http_conventions, quality, config, architecture, design, observability, analytics, security]
+    layers: [environments, versioning, errors, http_conventions, quality, config, architecture, design, observability, analytics, security, modules]
 
 # enforcement: generated | generated+tested | tested | review-only
 # stability: stable | draft | deprecated
@@ -139,7 +139,13 @@ entries:
   # ---------- platform ----------
   - { id: platform.environments, path: platform/environments.yaml, summary: "环境清单与差异", consumers: [ops, api, web/admin], enforcement: tested, stability: stable }
   - { id: platform.versioning, path: platform/versioning.yaml, summary: "版本与兼容策略", consumers: [api, web/admin, ops], enforcement: tested, stability: stable }
-  - { id: platform.errors, path: platform/errors.yaml, summary: "错误码与 HTTP 映射", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: platform.errors.base, path: platform/errors/_base.yaml, summary: "错误码全局约定", consumers: [api, web/admin, tools], enforcement: tested, stability: stable }
+  - { id: platform.errors.common, path: platform/errors/common.yaml, summary: "通用错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: platform.errors.account, path: platform/errors/account.yaml, summary: "账号错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: platform.errors.auth, path: platform/errors/auth.yaml, summary: "认证错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: platform.errors.verification, path: platform/errors/verification.yaml, summary: "验证码错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: platform.errors.token, path: platform/errors/token.yaml, summary: "令牌错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
+  - { id: platform.errors.data_access, path: platform/errors/data_access.yaml, summary: "数据访问基础设施错误基线", consumers: [api, tools], enforcement: tested, stability: draft }
   - { id: platform.http_conventions, path: platform/http_conventions.yaml, summary: "信封、分页、header、状态码", consumers: [api, web/admin], enforcement: generated, stability: stable }
   - { id: platform.quality, path: platform/quality.yaml, summary: "测试策略与门槛", consumers: [tools], enforcement: tested, stability: stable }
   - { id: platform.config.env, path: platform/config/env.json, summary: "环境变量 schema", consumers: [api, web/admin, ops], enforcement: generated+tested, stability: stable }
@@ -149,6 +155,8 @@ entries:
   - { id: platform.observability.log_fields, path: platform/observability/log_fields.yaml, summary: "日志字段与 PII 规则", consumers: [api, ops], enforcement: generated+tested, stability: stable }
   - { id: platform.observability.metrics, path: platform/observability/metrics.yaml, summary: "指标名与标签", consumers: [api, ops], enforcement: generated, stability: stable }
   - { id: platform.analytics.events, path: platform/analytics/events.yaml, summary: "埋点事件与属性", consumers: [web/admin, api], enforcement: generated, stability: draft }
+  - { id: platform.modules, path: platform/modules.yaml, summary: "模块清单", consumers: [api, worker, tools], enforcement: tested, stability: draft }
+  - { id: platform.security.access, path: platform/security/access.yaml, summary: "入口访问策略（权限与审计）", consumers: [api, worker], enforcement: tested, stability: draft }
   - { id: platform.security.permissions, path: platform/security/permissions.yaml, summary: "权限点", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
   - { id: platform.security.roles, path: platform/security/roles.yaml, summary: "角色与权限映射", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
   - { id: platform.security.auth_policy, path: platform/security/auth_policy.yaml, summary: "会话与认证策略", consumers: [api, web/admin], enforcement: tested, stability: stable }
@@ -161,7 +169,7 @@ global_notes:
   - "错误响应由 capabilities/http 的 default_error_responses 注入，不要逐接口声明"
   - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.returns"
   - "data.entities 的字段名与表列名可能不同：entity 用 source.column 指明来源；method 返回 entity，不重复列映射"
-  - "领域事件由 cap.events 的 emitted_by/consumers 声明；service step 用 events 引用事件，不写 emits"
+  - "领域事件由 cap.events 的 emitted_by/consumers 声明；service step 用 events 引用事件，不写 emits/event"
   - "services.steps 只能引用 data.queries / cap.services / feature.rules / feature.states / cap.events；不得引用 data.tables 或 business.*"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table.queries / model.queries / query.used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"

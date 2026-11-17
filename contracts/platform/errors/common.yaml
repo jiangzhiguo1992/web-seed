@@ -1,0 +1,17 @@
+id: platform.errors.common
+summary: "通用错误码"
+schema_version: 1
+stability: stable
+do_not:
+  - "通用错误码不绑定具体业务域"
+errors:
+  - { code: COMMON_BAD_REQUEST, status: 400, retryable: false, i18n: errors.common.bad_request, message: "请求参数不合法" }
+  - { code: COMMON_UNAUTHORIZED, status: 401, retryable: false, i18n: errors.common.unauthorized, message: "未认证" }
+  - { code: COMMON_FORBIDDEN, status: 403, retryable: false, i18n: errors.common.forbidden, message: "无权限" }
+  - { code: COMMON_NOT_FOUND, status: 404, retryable: false, i18n: errors.common.not_found, message: "资源不存在" }
+  - { code: COMMON_CONFLICT, status: 409, retryable: false, i18n: errors.common.conflict, message: "状态冲突" }
+  - { code: COMMON_RATE_LIMITED, status: 429, retryable: true, i18n: errors.common.rate_limited, message: "请求过于频繁" }
+  - { code: COMMON_INTERNAL, status: 500, retryable: true, i18n: errors.common.internal, message: "服务端错误" }
+  - { code: COMMON_AUDIT_FAILED, status: 500, retryable: true, i18n: errors.common.audit_failed, message: "审计写入失败" }
+  - { code: COMMON_LOOP_EXHAUSTED, status: 503, retryable: true, i18n: errors.common.loop_exhausted, message: "循环次数超过上限，请稍后重试" }
+  - { code: COMMON_UNAVAILABLE, status: 503, retryable: true, i18n: errors.common.unavailable, message: "服务暂不可用" }

@@ -11,7 +11,7 @@
 |---|---|---|
 | `environments.yaml` | 环境清单、域名、差异项、密钥来源 | tested |
 | `versioning.yaml` | API 版本、契约版本、弃用窗口 | tested |
-| `errors.yaml` | 错误码、HTTP 映射、文案 key、可重试性 | generated+tested |
+| `errors/` | 错误码按域拆分；`_base.yaml` 全局约定，`data_access.yaml` 基础设施基线 | generated+tested |
 | `http_conventions.yaml` | 信封、分页、header、状态码映射 | generated |
 | `quality.yaml` | 覆盖率门槛、必测路径、禁止项 | tested |
 | `config/env.json` | 环境变量 schema | generated+tested |
@@ -27,7 +27,7 @@
 
 ## 2. 硬规则
 
-1. **错误码集中定义**，代码里禁止裸字符串；文案 key 由错误码派生。
+1. **错误码按域集中定义**，代码里禁止裸字符串；文案 key 由错误码派生。
 2. **日志字段名必须登记**，未登记字段 CI 警告；标 `pii: true` 的字段禁止进入日志（生成时剔除）。
 3. **权限点只增不改**；删除权限点必须走弃用流程。
 4. **架构规则是契约**，`go-arch-lint` / `dependency-cruiser` 违反即 CI 失败。

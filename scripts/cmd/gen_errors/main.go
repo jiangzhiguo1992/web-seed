@@ -1,4 +1,4 @@
-// generrors 从 platform/errors.yaml 生成人读错误码视图。
+// generrors 从 contracts/platform/errors/*.yaml 生成人读错误码视图。
 //
 // 用法（在 scripts/cmd 下）：
 //
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -24,10 +25,12 @@ type errorEntry struct {
 	Message   string `yaml:"message"`
 }
 
-type errorsDoc struct {
-	ID      string       `yaml:"id"`
-	Summary string       `yaml:"summary"`
-	Errors  []errorEntry `yaml:"errors"`
+type errorFile struct {
+	ID           string       `yaml:"id"`
+	Summary      string       `yaml:"summary"`
+	Errors       []errorEntry `yaml:"errors"`
+	CommonErrors []string     `yaml:"common_errors"`
+	Order        []string     `yaml:"order"`
 }
 
 func main() {
@@ -39,19 +42,49 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	src := filepath.Join(abs, "contracts/platform/errors.yaml")
-	b, err := os.ReadFile(src)
+	dir := filepath.Join(abs, "contracts/platform/errors")
+	files, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
 	if err != nil {
 		fail(err)
 	}
-	var doc errorsDoc
-	if err := yaml.Unmarshal(b, &doc); err != nil {
-		fail(fmt.Errorf("%s: %w", src, err))
+	if len(files) == 0 {
+		fail(fmt.Errorf("%s: no error files", dir))
 	}
-	if doc.ID != "platform.errors" {
-		fail(fmt.Errorf("%s: id must be platform.errors, got %q", src, doc.ID))
+	sort.Strings(files)
+	docs := map[string]errorFile{}
+	for _, file := range files {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			fail(err)
+		}
+		var doc errorFile
+		if err := yaml.Unmarshal(b, &doc); err != nil {
+			fail(fmt.Errorf("%s: %w", file, err))
+		}
+		stem := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+		docs[stem] = doc
 	}
-	out := render(doc)
+	base, ok := docs["_base"]
+	if !ok {
+		fail(fmt.Errorf("%s/_base.yaml is missing", dir))
+	}
+	var entries []errorEntry
+	used := map[string]bool{}
+	for _, stem := range base.Order {
+		doc, ok := docs[stem]
+		if !ok || len(doc.Errors) == 0 {
+			fail(fmt.Errorf("_base.yaml order references missing/empty error file %s", stem))
+		}
+		entries = append(entries, doc.Errors...)
+		used[stem] = true
+	}
+	for stem, doc := range docs {
+		if len(doc.Errors) > 0 && !used[stem] {
+			fail(fmt.Errorf("%s.yaml is not listed in _base.yaml order", stem))
+		}
+	}
+	dataAccess := docs["data_access"].CommonErrors
+	out := render(entries, dataAccess)
 	dst := filepath.Join(abs, "docs/contracts/generated/errors.md")
 	if *check {
 		old, err := os.ReadFile(dst)
@@ -73,15 +106,22 @@ func main() {
 	fmt.Println("generated", dst)
 }
 
-func render(doc errorsDoc) string {
+func render(entries []errorEntry, dataAccess []string) string {
 	var b strings.Builder
 	b.WriteString("# 错误码\n\n")
-	b.WriteString("> 本文件由 `contracts/platform/errors.yaml` 生成，禁止手改。生成命令：`make gen-errors`。\n\n")
-	fmt.Fprintf(&b, "**ID**: `%s`\n\n", doc.ID)
+	b.WriteString("> 本文件由 `contracts/platform/errors/*.yaml` 生成，禁止手改。生成命令：`make gen-errors`。\n\n")
+	b.WriteString("**ID**: `platform.errors`\n\n")
 	b.WriteString("| code | status | retryable | i18n | message |\n")
 	b.WriteString("|---|---|---|---|---|\n")
-	for _, e := range doc.Errors {
+	for _, e := range entries {
 		fmt.Fprintf(&b, "| `%s` | %d | %t | `%s` | %s |\n", e.Code, e.Status, e.Retryable, e.I18n, escape(e.Message))
+	}
+	if len(dataAccess) > 0 {
+		b.WriteString("\n## 数据访问基线\n\n")
+		b.WriteString("以下错误由 repository / transaction 层统一映射，不写入每个 query 的 errors：\n\n")
+		for _, code := range dataAccess {
+			fmt.Fprintf(&b, "- `%s`\n", code)
+		}
 	}
 	return b.String()
 }

@@ -103,48 +103,15 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 			},
 		}
 	}
-	c.checkServiceItem(doc([]any{map[string]any{"name": "account", "type": "any"}}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, map[string]bool{})
+	c.checkServiceItem(doc([]any{map[string]any{"name": "account", "type": "any"}}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("covered output reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, map[string]bool{})
+	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-output]") {
 		t.Fatalf("missing return not reported: %v", c.errs)
-	}
-}
-
-func TestServiceEventPayload(t *testing.T) {
-	c := &Checker{}
-	doc := func(payload map[string]any) map[string]any {
-		return map[string]any{
-			"summary": "x",
-			"params":  []any{},
-			"returns": []any{},
-			"errors":  []any{},
-			"steps": []any{
-				map[string]any{
-					"id":      "emit",
-					"kind":    "event",
-					"summary": "x",
-					"event":   "cap.events.x.created",
-					"payload": payload,
-				},
-			},
-		}
-	}
-	eventIDs := map[string]bool{"cap.events.x.created": true}
-	payloads := map[string]map[string]bool{"cap.events.x.created": {"id": true}}
-	c.checkServiceItem(doc(map[string]any{"id": "input.id"}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, eventIDs, payloads, map[string]bool{}, map[string]bool{})
-	if len(c.errs) != 0 {
-		t.Fatalf("valid payload reported: %v", c.errs)
-	}
-
-	c.errs = nil
-	c.checkServiceItem(doc(map[string]any{"missing": "input.id"}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, eventIDs, payloads, map[string]bool{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-event-payload]") {
-		t.Fatalf("unknown payload field not reported: %v", c.errs)
 	}
 }
 
@@ -506,7 +473,7 @@ paths: {}
 components:
   schemas:
     X:
-      x-service-type: cap.services.x.types.X
+      x-service-type: cap.services.x.schemas.X
       type: object
       additionalProperties: false
       properties:
@@ -801,9 +768,6 @@ stability: draft
 do_not: []
 interface:
   name: XService
-  package: internal/modules/other/api
-persistence:
-  tables: []
 types: {}
 services:
   - name: get
@@ -814,7 +778,6 @@ services:
     returns:
       - {name: value, type: string}
     errors: []
-    permissions: [platform.security.permissions.missing]
     transaction: read_only
     steps:
       - id: load
@@ -831,10 +794,8 @@ services:
 	c.checkServiceDoc(doc, rel, schema, map[string]bool{})
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
-		"interface.package",
 		"params[0] must be ctx",
 		"returns must end with err",
-		"unknown permission platform.security.permissions.missing",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
@@ -854,9 +815,179 @@ func TestTransitionRulesValidated(t *testing.T) {
 		}},
 	}
 	c.checkServiceItem(doc, "contracts/capabilities/services/x.yaml", "cap.services.x.get", "x",
-		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{},
+		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{},
 		map[string]bool{"feature.states.x.t": true}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown rule feature.rules.x.missing") {
 		t.Fatalf("transition rule not validated: %v", c.errs)
 	}
+}
+
+func TestHTTPOperationDefaults(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.protocols.http")
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+components:
+  responses:
+    UnprocessableEntity: { description: "422" }
+    Locked: { description: "423" }
+`)
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+default_error_responses: [422]
+paths:
+  /x:
+    get:
+      operationId: getX
+      x-contract-id: cap.protocols.http.x.get
+      x-service: cap.services.x.get
+      x-default-errors: [423]
+      x-typo: true
+      responses:
+        "200": { description: OK }
+        "423": { description: "should be injected" }
+`)
+	c := &Checker{root: root}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {visibility: "public", paramTypes: map[string]bool{}},
+	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"unknown operation extension x-typo",
+		"status 423 is injected by default errors",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestAccessBindings(t *testing.T) {
+	root := t.TempDir()
+	rel := "contracts/platform/security/access.yaml"
+	writeCapFile(t, root, rel, `id: platform.security.access
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+bindings:
+  - { target: cap.services.x.get, permissions: [platform.security.permissions.missing] }
+  - { target: cap.services.x.create, audit: "yes", rate_limt: { requests: 1, window_seconds: 1 } }
+  - { target: cap.services.x.missing, audit: true }
+`)
+	c := &Checker{root: root, permissionSet: map[string]bool{}}
+	c.checkAccess(map[string]bool{"cap.services.x.get": true, "cap.services.x.create": true})
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"unknown permission platform.security.permissions.missing",
+		"is not a service item",
+		"unknown field rate_limt",
+		"audit must be a boolean",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestAccessRateLimit(t *testing.T) {
+	root := t.TempDir()
+	rel := "contracts/platform/security/access.yaml"
+	writeCapFile(t, root, rel, `id: platform.security.access
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+bindings:
+  - { target: cap.services.x.list, rate_limit: { requests: 60, window_seconds: 60 } }
+  - { target: cap.services.x.get, rate_limit: { requests: 0, window_seconds: 0, extra: 1 } }
+`)
+	c := &Checker{root: root}
+	c.checkAccess(map[string]bool{
+		"cap.services.x.list": true,
+		"cap.services.x.get":  true,
+	})
+	if !c.accessBindings["cap.services.x.list"].rateLimited {
+		t.Fatalf("valid rate_limit not recorded: %v", c.errs)
+	}
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"rate_limit.extra is not allowed",
+		"rate_limit.requests must be >= 1",
+		"rate_limit.window_seconds must be >= 1",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestQueryErrorPropagation(t *testing.T) {
+	query := &queryInfo{
+		ID:     "data.queries.x.q",
+		File:   "contracts/data/queries/x.yaml",
+		Errors: []string{"platform.errors.A"},
+	}
+	base := func(step map[string]any, serviceErrors []any) map[string]any {
+		return map[string]any{
+			"summary":     "x",
+			"transaction": "required",
+			"errors":      serviceErrors,
+			"steps":       []any{step},
+		}
+	}
+	check := func(t *testing.T, doc map[string]any) []string {
+		t.Helper()
+		c := &Checker{
+			errCodeSet: map[string]bool{"A": true, "B": true},
+			queries:    map[string]*queryInfo{"data.queries.x.q": query},
+		}
+		c.checkServiceItem(doc, "f", "cap.services.x.run", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		return c.errs
+	}
+	want := func(t *testing.T, errs []string, text string) {
+		t.Helper()
+		if !strings.Contains(strings.Join(errs, "\n"), text) {
+			t.Fatalf("want %q, got %v", text, errs)
+		}
+	}
+
+	t.Run("query step inherits query errors", func(t *testing.T) {
+		doc := base(map[string]any{
+			"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.q",
+		}, []any{"platform.errors.A"})
+		if errs := check(t, doc); len(errs) != 0 {
+			t.Fatalf("valid query error reported: %v", errs)
+		}
+	})
+
+	t.Run("query step missing service error", func(t *testing.T) {
+		doc := base(map[string]any{
+			"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.q",
+		}, []any{})
+		want(t, check(t, doc), "missing error platform.errors.A produced")
+	})
+
+	t.Run("query step may add local errors", func(t *testing.T) {
+		doc := base(map[string]any{
+			"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.q",
+			"errors": []any{"platform.errors.B"},
+		}, []any{"platform.errors.A", "platform.errors.B"})
+		want(t, check(t, doc), "does not declare query error platform.errors.A")
+	})
+
+	t.Run("logic step must declare query errors", func(t *testing.T) {
+		doc := base(map[string]any{
+			"id": "run", "kind": "logic", "summary": "x",
+			"errors": []any{}, "output": []any{},
+			"queries": []any{"data.queries.x.q"},
+		}, []any{})
+		want(t, check(t, doc), "step run does not declare query data.queries.x.q error platform.errors.A")
+	})
 }

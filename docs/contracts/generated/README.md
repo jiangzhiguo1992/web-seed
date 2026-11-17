@@ -5,7 +5,7 @@
 
 | 文件 | 来源 | 状态 |
 |---|---|---|
-| `errors.md` | `contracts/platform/errors.yaml` | ✅ `make gen-errors` |
+| `errors.md` | `contracts/platform/errors/*.yaml` | ✅ `make gen-errors` |
 | `permissions.md` | `contracts/platform/security/permissions.yaml` | ⬜ P2 |
 | `data.md` | `contracts/data/tables/*.yaml` | ⬜ P2 |
 | `lineage.md` | `make gen-graph`（按需生成） | ⬜ P2 |

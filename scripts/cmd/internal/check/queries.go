@@ -47,6 +47,7 @@ type queryInfo struct {
 	Returns     []queryReturn
 	HasReturns  bool
 	IndexRef    []string
+	Errors      []string
 	UsedBy      []string
 }
 
@@ -54,6 +55,15 @@ type queryDoc struct {
 	rel    string
 	fileID string
 	doc    map[string]any
+}
+
+// errorSet 返回查询的领域错误集合。
+func (q *queryInfo) errorSet() map[string]bool {
+	out := map[string]bool{}
+	for _, code := range q.Errors {
+		out[code] = true
+	}
+	return out
 }
 
 // tableSet 返回查询读写的表集合。
@@ -136,6 +146,7 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		q.HasReturns = true
 	}
 	q.IndexRef = stringList(m["index_ref"])
+	q.Errors = stringList(m["errors"])
 	q.UsedBy = stringList(m["used_by"])
 	for _, raw := range asList(m["params"]) {
 		pm, ok := asMap(raw)
@@ -210,6 +221,20 @@ func (c *Checker) checkQueries(schema *Schema) {
 		c.checkQueryParams(q)
 		c.checkQueryParamColumns(q)
 		c.checkQueryReturns(q)
+		c.checkQueryErrors(q)
+	}
+}
+
+func (c *Checker) checkQueryErrors(q *queryInfo) {
+	baseline := c.dataAccessErrors()
+	for _, code := range q.Errors {
+		if baseline[code] {
+			c.rulef("query-errors", "%s: query %s must not repeat data-access baseline error %s", q.File, q.ID, code)
+			continue
+		}
+		if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+			c.rulef("query-errors", "%s: query %s references unknown error %s", q.File, q.ID, code)
+		}
 	}
 }
 

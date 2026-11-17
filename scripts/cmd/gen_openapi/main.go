@@ -139,11 +139,16 @@ func build(root string) (map[string][]byte, error) {
 						continue
 					}
 					key := path + "\x00" + method
-					if opDefaults[key] == nil {
+					if raw, ok := op["x-default-errors"]; ok {
 						opDefaults[key] = map[string]bool{}
-					}
-					for _, raw := range asList(doc["default_error_responses"]) {
-						opDefaults[key][fmt.Sprint(raw)] = true
+						for _, item := range asList(raw) {
+							opDefaults[key][fmt.Sprint(item)] = true
+						}
+					} else if opDefaults[key] == nil {
+						opDefaults[key] = map[string]bool{}
+						for _, raw := range asList(doc["default_error_responses"]) {
+							opDefaults[key][fmt.Sprint(raw)] = true
+						}
 					}
 				}
 			}
@@ -328,7 +333,7 @@ func loadServiceTypes(root string) (map[string]map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		for name, raw := range asMap(doc["types"]) {
+		for name, raw := range asMap(doc["schemas"]) {
 			if schema := asMap(raw); schema != nil {
 				out[name] = schema
 			}

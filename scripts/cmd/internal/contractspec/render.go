@@ -104,6 +104,7 @@ type queryItemScaffold struct {
 	Tables   []queryTableScaffold  `yaml:"tables"`
 	Params   []queryParamScaffold  `yaml:"params"`
 	Returns  []queryReturnScaffold `yaml:"returns"`
+	Errors   []string              `yaml:"errors"`
 	IndexRef flowStrings           `yaml:"index_ref"`
 	UsedBy   []string              `yaml:"used_by"`
 }
@@ -358,7 +359,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 	}
 	if err := requireSupported(queriesField.ItemFields, map[string]bool{
 		"name": true, "tables": true,
-		"params": true, "returns": true, "index_ref": true, "used_by": true,
+		"params": true, "returns": true, "errors": true, "index_ref": true, "used_by": true,
 	}, "data.queries.queries"); err != nil {
 		return nil, err
 	}
@@ -405,6 +406,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 			Tables:   []queryTableScaffold{{Table: tableID}},
 			Params:   []queryParamScaffold{{Name: "id", Type: "integer", Column: tableID + ".col.id"}},
 			Returns:  []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}},
+			Errors:   []string{},
 			IndexRef: flowStrings{tableID + ".pk"},
 			UsedBy:   []string{},
 		}},
@@ -617,21 +619,19 @@ func quoteScaffoldProse(n *yaml.Node) {
 }
 
 type serviceFileScaffold struct {
-	ID            string                     `yaml:"id"`
-	Summary       string                     `yaml:"summary"`
-	OwnerModule   string                     `yaml:"owner_module"`
-	SchemaVersion int                        `yaml:"schema_version"`
-	Stability     string                     `yaml:"stability"`
-	DoNot         []string                   `yaml:"do_not"`
-	Interface     serviceInterfaceScaffold   `yaml:"interface"`
-	Persistence   servicePersistenceScaffold `yaml:"persistence"`
-	Types         map[string]any             `yaml:"types,omitempty"`
-	Services      []serviceItemScaffold      `yaml:"services"`
+	ID            string                   `yaml:"id"`
+	Summary       string                   `yaml:"summary"`
+	OwnerModule   string                   `yaml:"owner_module"`
+	SchemaVersion int                      `yaml:"schema_version"`
+	Stability     string                   `yaml:"stability"`
+	DoNot         []string                 `yaml:"do_not"`
+	Interface     serviceInterfaceScaffold `yaml:"interface"`
+	Schemas       map[string]any           `yaml:"schemas,omitempty"`
+	Services      []serviceItemScaffold    `yaml:"services"`
 }
 
 type serviceInterfaceScaffold struct {
-	Name    string `yaml:"name"`
-	Package string `yaml:"package"`
+	Name string `yaml:"name"`
 }
 
 type serviceItemScaffold struct {
@@ -641,7 +641,6 @@ type serviceItemScaffold struct {
 	Params      []methodArgScaffold `yaml:"params"`
 	Returns     []methodArgScaffold `yaml:"returns"`
 	Errors      []string            `yaml:"errors"`
-	Permissions []string            `yaml:"permissions"`
 	Transaction string              `yaml:"transaction"`
 	Steps       []stepScaffold      `yaml:"steps"`
 }
@@ -658,11 +657,6 @@ type stepScaffold struct {
 type methodArgScaffold struct {
 	Name string `yaml:"name"`
 	Type string `yaml:"type"`
-}
-
-type servicePersistenceScaffold struct {
-	Tables           []string          `yaml:"tables"`
-	ConstraintErrors map[string]string `yaml:"constraint_errors,omitempty"`
 }
 
 type ruleFileScaffold struct {
@@ -799,26 +793,21 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 	}
 	if err := requireSupported(s.Fields, map[string]bool{
 		"id": true, "summary": true, "owner_module": true, "schema_version": true,
-		"stability": true, "do_not": true, "interface": true, "persistence": true,
-		"types": true, "services": true,
+		"stability": true, "do_not": true, "interface": true,
+		"schemas": true, "services": true,
 	}, "cap.services"); err != nil {
 		return nil, err
 	}
 	if f, ok := FindField(s.Fields, "interface"); ok {
-		if err := requireSupported(f.Fields, map[string]bool{"name": true, "package": true}, "cap.services.interface"); err != nil {
-			return nil, err
-		}
-	}
-	if f, ok := FindField(s.Fields, "persistence"); ok {
-		if err := requireSupported(f.Fields, map[string]bool{"tables": true, "constraint_errors": true}, "cap.services.persistence"); err != nil {
+		if err := requireSupported(f.Fields, map[string]bool{"name": true}, "cap.services.interface"); err != nil {
 			return nil, err
 		}
 	}
 	if f, ok := FindField(s.Fields, "services"); ok {
 		if err := requireSupported(f.ItemFields, map[string]bool{
 			"name": true, "summary": true, "visibility": true, "params": true,
-			"returns": true, "errors": true, "permissions": true, "audit": true,
-			"rate_limit": true, "transaction": true, "idempotency": true,
+			"returns": true, "errors": true,
+			"transaction":    true,
 			"max_iterations": true, "steps": true,
 		}, "cap.services.services"); err != nil {
 			return nil, err
@@ -851,16 +840,6 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 				}
 			}
 		}
-		if rl, ok := FindField(f.ItemFields, "rate_limit"); ok {
-			if err := requireSupported(rl.Fields, map[string]bool{"requests": true, "window_seconds": true}, "cap.services.rate_limit"); err != nil {
-				return nil, err
-			}
-		}
-		if idem, ok := FindField(f.ItemFields, "idempotency"); ok {
-			if err := requireSupported(idem.Fields, map[string]bool{"key": true, "window": true}, "cap.services.idempotency"); err != nil {
-				return nil, err
-			}
-		}
 	}
 	fileID := s.Targets.FileID(name + ".yaml")
 	if fileID == "" {
@@ -873,9 +852,8 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 		Stability:     scaffoldStability,
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
-		Interface:     serviceInterfaceScaffold{Name: pascal(module) + "Service", Package: "internal/modules/" + module + "/api"},
-		Persistence:   servicePersistenceScaffold{Tables: []string{}},
-		Types: map[string]any{
+		Interface:     serviceInterfaceScaffold{Name: pascal(module) + "Service"},
+		Schemas: map[string]any{
 			"GetInput": map[string]any{
 				"type":                 "object",
 				"additionalProperties": false,
@@ -890,7 +868,6 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 			Params:      []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: "GetInput"}},
 			Returns:     []methodArgScaffold{{Name: "value", Type: "any"}, {Name: "err", Type: "error"}},
 			Errors:      []string{"platform.errors.COMMON_INTERNAL"},
-			Permissions: []string{},
 			Transaction: "read_only",
 			Steps: []stepScaffold{{
 				ID:      "load",

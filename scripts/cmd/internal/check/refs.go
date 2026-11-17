@@ -33,7 +33,7 @@ func (c *Checker) isBaseTableRef(ref string) bool {
 	return c.baseID != "" && (ref == c.baseID || strings.HasPrefix(ref, c.baseID+".col."))
 }
 
-func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
+func (c *Checker) checkCapabilityWrites(tableIDs map[string]string) {
 	c.declaredWrites = map[string]bool{}
 	for _, f := range walkYAML(c.root, "contracts/capabilities") {
 		doc, err := loadYAML(f)
@@ -50,42 +50,6 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 			continue
 		}
 		module, _ := doc["owner_module"].(string)
-		p, _ := asMap(doc["persistence"])
-		tables := tableRefs(p)
-		declaredTables := map[string]bool{}
-		for _, t := range tables {
-			declaredTables[t] = true
-			if c.isBaseTableRef(t) {
-				c.rulef("schema.ref", "%s: base contract is not a physical table", rel)
-			} else if _, ok := tableIDs[t]; !ok {
-				c.rulef("schema.ref", "%s: persistence references unknown table %s", rel, t)
-			}
-			if owner := c.tableOwners[t]; owner != "" && owner != module {
-				c.rulef("service-owner-write", "%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
-			}
-		}
-		if rawCE, ok := p["constraint_errors"]; ok {
-			ce, ok := asMap(rawCE)
-			if !ok {
-				c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
-			} else {
-				for name, rawVal := range ce {
-					if name == "" {
-						c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
-						continue
-					}
-					if !c.tableObjectExists(tables, name) {
-						c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
-					}
-					code, _ := rawVal.(string)
-					if !strings.HasPrefix(code, "platform.errors.") {
-						c.rulef("schema.pattern", "%s: persistence.constraint_errors.%s must be platform.errors.*", rel, name)
-					} else if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
-						c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s references unknown error %s", rel, name, code)
-					}
-				}
-			}
-		}
 		for _, raw := range asList(doc["services"]) {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
@@ -117,9 +81,6 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 					}
 					for _, target := range q.Writes {
 						c.declaredWrites[qid] = true
-						if !declaredTables[target] {
-							c.rulef("service-owner-write", "%s.%s: query %s writes %s but persistence.tables does not declare it", rel, name, qid, target)
-						}
 						if owner := c.tableOwners[target]; owner != "" && owner != module {
 							c.rulef("service-owner-write", "%s.%s: module %q cannot write %s via %s (owner_module %q); cross-module writes must go through kind=service", rel, name, module, target, qid, owner)
 						}
@@ -127,6 +88,7 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 				}
 			}
 		}
+
 	}
 	for _, qid := range c.queryOrder {
 		q := c.queries[qid]
@@ -134,15 +96,6 @@ func (c *Checker) checkCapabilityPersistence(tableIDs map[string]string) {
 			c.rulef("owner-write", "query %s has write tables or returns affected_rows but is not referenced by any service step", qid)
 		}
 	}
-}
-
-func (c *Checker) tableObjectExists(tables []string, name string) bool {
-	for _, t := range tables {
-		if c.tableObjects[t][name] {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *Checker) checkUsedBy(tableIDs map[string]string) {

@@ -62,11 +62,8 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 	doc2 := map[string]any{
 		"summary":        doc["summary"],
 		"transaction":    doc["transaction"],
-		"permissions":    doc["permissions"],
 		"errors":         doc["errors"],
-		"rate_limit":     doc["rate_limit"],
-		"audit":          doc["audit"],
-		"idempotency":    doc["idempotency"],
+		"params":         doc["params"],
 		"steps":          steps,
 		"max_iterations": doc["max_iterations"],
 		"trigger":        doc["trigger"],
@@ -78,7 +75,22 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 			delete(doc2, k)
 		}
 	}
-	c.checkServiceItem(doc2, rel, id, module, metaByID, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, typeNames)
+	if c.accessBindings == nil {
+		c.accessBindings = map[string]accessPolicy{}
+	}
+	policy := accessPolicy{}
+	for _, rawPerm := range asList(doc["permissions"]) {
+		perm, _ := rawPerm.(string)
+		policy.permissions = append(policy.permissions, perm)
+	}
+	policy.audit, _ = doc["audit"].(bool)
+	policy.rateLimited = doc["rate_limit"] != nil
+	if len(policy.permissions) > 0 || policy.audit || policy.rateLimited {
+		c.accessBindings[id] = policy
+	} else {
+		delete(c.accessBindings, id)
+	}
+	c.checkServiceItem(doc2, rel, id, module, metaByID, map[string]bool{}, map[string]bool{}, map[string]bool{}, typeNames)
 }
 
 // checkServicePersistenceDoc 校验单个 service 文档的写归属。
@@ -98,28 +110,7 @@ func (c *Checker) checkServicePersistenceDoc(doc map[string]any, rel, module str
 			c.rulef("service-owner-write", "%s: module %q cannot write %s (owner_module %q)", rel, module, t, owner)
 		}
 	}
-	if rawCE, ok := p["constraint_errors"]; ok {
-		ce, ok := asMap(rawCE)
-		if !ok {
-			c.rulef("schema.type", "%s: persistence.constraint_errors must be a map", rel)
-		} else {
-			for name, rawVal := range ce {
-				if name == "" {
-					c.rulef("schema.non-empty", "%s: persistence.constraint_errors key must not be empty", rel)
-					continue
-				}
-				if !c.tableObjectExists(tables, name) {
-					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s is not a constraint/index of %v", rel, name, tables)
-				}
-				code, _ := rawVal.(string)
-				if !strings.HasPrefix(code, "platform.errors.") {
-					c.rulef("schema.pattern", "%s: persistence.constraint_errors.%s must be platform.errors.*", rel, name)
-				} else if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
-					c.rulef("constraint-error-ref", "%s: persistence.constraint_errors.%s references unknown error %s", rel, name, code)
-				}
-			}
-		}
-	}
+
 	for _, raw := range asList(doc["services"]) {
 		item, _ := asMap(raw)
 		name, _ := item["name"].(string)
@@ -180,4 +171,13 @@ func (c *Checker) checkMethodPersistence(doc map[string]any, rel string, tableID
 		"persistence":  doc["persistence"],
 		"services":     services,
 	}, rel, module, tableIDs)
+}
+
+func (c *Checker) tableObjectExists(tables []string, name string) bool {
+	for _, t := range tables {
+		if c.tableObjects[t][name] {
+			return true
+		}
+	}
+	return false
 }

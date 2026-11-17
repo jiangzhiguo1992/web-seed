@@ -56,10 +56,12 @@ type Checker struct {
 	enumCodes         map[string]map[int]bool
 	enumIDs           map[string]bool
 	errCodeSet        map[string]bool
+	dataAccessErrSet  map[string]bool
 	permissionSet     map[string]bool
 	methodReturns     map[string]map[string]string
 	methodTypeDefs    map[string]map[string]any
 	queryReturnTypes  map[string]map[string]string
+	accessBindings    map[string]accessPolicy
 	inlineSeq         int
 }
 
@@ -83,6 +85,8 @@ func (c *Checker) run() {
 	c.checkContractProseQuotes()
 	c.checkFieldPlacement()
 	c.checkDoNotDuplicates()
+	c.checkModules()
+	c.checkErrorFiles()
 	tableSchema, err := c.loadSchemaByType("data.tables")
 	if err != nil {
 		c.rulef("schema.load", "load tables schema: %v", err)
@@ -134,7 +138,7 @@ func (c *Checker) run() {
 	c.checkCapabilities()
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues)
-	c.checkCapabilityPersistence(tableIDs)
+	c.checkCapabilityWrites(tableIDs)
 	c.checkEntities(entitySchema)
 	c.checkQueries(querySchema)
 	c.checkEntityUsedBy()

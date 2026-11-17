@@ -31,11 +31,15 @@ type serviceMeta struct {
 }
 
 // stepKindFields 是每种 step kind 的专属字段；公共字段由 checkServiceItem 统一放行。
+var allowedOperationExtensions = map[string]bool{
+	"x-contract-id": true, "x-service": true, "x-async": true,
+	"x-timeout-ms": true, "x-default-errors": true,
+}
+
 var stepKindFields = map[string][]string{
 	"query":      {"query", "params"},
 	"service":    {"service", "params"},
 	"logic":      {"output", "queries", "events", "rules"},
-	"event":      {"event", "payload"},
 	"transition": {"transitions", "output", "queries", "events", "rules"},
 }
 
@@ -86,7 +90,7 @@ func (c *Checker) checkCapabilities() {
 			continue
 		}
 		rel := relPath(c.root, file)
-		types, _ := asMap(doc["types"])
+		types, _ := asMap(doc["schemas"])
 		for name, raw := range types {
 			if prev, ok := typeOwners[name]; ok && prev != rel {
 				c.rulef("service-structure", "%s: type %s already defined in %s", rel, name, prev)
@@ -104,10 +108,20 @@ func (c *Checker) checkCapabilities() {
 	serviceEdges := map[string][]string{}
 	serviceMetaByID := map[string]serviceMeta{}
 	serviceItemIDs := map[string]bool{}
+	interfaceNames := map[string]string{}
 	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
 			continue
+		}
+		rel := relPath(c.root, file)
+		if iface, ok := asMap(doc["interface"]); ok {
+			if name, _ := iface["name"].(string); name != "" {
+				if prev, exists := interfaceNames[name]; exists && prev != rel {
+					c.rulef("service-structure", "%s: interface %s already defined in %s", rel, name, prev)
+				}
+				interfaceNames[name] = rel
+			}
 		}
 		fileID, _ := doc["id"].(string)
 		module, _ := doc["owner_module"].(string)
@@ -127,7 +141,7 @@ func (c *Checker) checkCapabilities() {
 			params := map[string]bool{}
 			paramTypes := map[string]bool{}
 			typeSchemas := map[string]map[string]any{}
-			if types, ok := asMap(doc["types"]); ok {
+			if types, ok := asMap(doc["schemas"]); ok {
 				for name, raw := range types {
 					if def, ok := asMap(raw); ok {
 						typeSchemas[name] = def
@@ -176,6 +190,8 @@ func (c *Checker) checkCapabilities() {
 			}
 		}
 	}
+
+	c.checkAccess(serviceItemIDs)
 
 	// query 返回类型：供 kind=query 的 when 路径解析。
 	c.queryReturnTypes = map[string]map[string]string{}
@@ -236,7 +252,6 @@ func (c *Checker) checkCapabilities() {
 		}
 	}
 	eventIDs := map[string]bool{}
-	eventPayloads := map[string]map[string]bool{}
 	for _, file := range glob(c.root, filepath.Join(eventSchema.Targets.Dir, eventSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -252,15 +267,6 @@ func (c *Checker) checkCapabilities() {
 				c.rulef("event-structure", "%s: duplicate event id %s", relPath(c.root, file), id)
 			}
 			eventIDs[id] = true
-			keys := map[string]bool{}
-			if payload, ok := asMap(item["payload"]); ok {
-				if props, ok := asMap(payload["properties"]); ok {
-					for k := range props {
-						keys[k] = true
-					}
-				}
-			}
-			eventPayloads[id] = keys
 		}
 	}
 	transitionIDs := map[string]bool{}
@@ -293,7 +299,7 @@ func (c *Checker) checkCapabilities() {
 			if name == "" {
 				continue
 			}
-			c.checkServiceItem(item, relPath(c.root, file), fileID+"."+name, module, serviceMetaByID, ruleIDs, eventIDs, eventPayloads, transitionIDs, typeNames)
+			c.checkServiceItem(item, relPath(c.root, file), fileID+"."+name, module, serviceMetaByID, ruleIDs, eventIDs, transitionIDs, typeNames)
 		}
 	}
 
@@ -337,16 +343,7 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 	if fileID != want {
 		c.rulef("service-id", "%s: id %q must be %q", rel, fileID, want)
 	}
-	module, _ := doc["owner_module"].(string)
-	if iface, ok := asMap(doc["interface"]); ok {
-		if pkg, _ := iface["package"].(string); pkg != "" {
-			base := "internal/modules/" + module
-			if pkg != base && !strings.HasPrefix(pkg, base+"/") {
-				c.rulef("service-structure", "%s: interface.package %q must be under %s", rel, pkg, base)
-			}
-		}
-	}
-	if types, ok := asMap(doc["types"]); ok {
+	if types, ok := asMap(doc["schemas"]); ok {
 		c.checkTypeRefs(types, typeNames, rel)
 		c.checkServiceTypes(types, rel)
 	}
@@ -393,11 +390,6 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 				seenReturns[rn] = true
 			}
 		}
-		for _, rawPerm := range asList(item["permissions"]) {
-			if perm, _ := rawPerm.(string); perm != "" && !c.permissionExists(perm) {
-				c.rulef("service-ref", "%s.%s: unknown permission %s", rel, name, perm)
-			}
-		}
 		for _, rawParam := range asList(item["params"]) {
 			pm, _ := asMap(rawParam)
 			c.checkTypeName(pm["type"], typeNames, rel+":"+name)
@@ -415,7 +407,7 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 	}
 }
 
-func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, eventPayloads map[string]map[string]bool, transitionIDs map[string]bool, typeNames map[string]bool) {
+func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, transitionIDs map[string]bool, typeNames map[string]bool) {
 	steps := asList(doc["steps"])
 	if len(steps) == 0 {
 		c.rulef("service-structure", "%s: service requires steps", rel)
@@ -461,7 +453,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			}
 		}
 
-		var targetErrors map[string]bool
+		var targetErrors, queryErrors map[string]bool
 		switch kind {
 		case "query":
 			qid, _ := step["query"].(string)
@@ -470,6 +462,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			} else if q, ok := c.queries[qid]; !ok {
 				c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
 			} else {
+				queryErrors = q.errorSet()
 				if refs, ok := asMap(step["params"]); ok {
 					for name, rawExpr := range refs {
 						found := false
@@ -514,20 +507,6 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				c.rulef("service-steps-kind", "%s: step %s kind=logic requires errors", rel, stepID)
 			}
 			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
-		case "event":
-			ev, _ := step["event"].(string)
-			if ev == "" {
-				c.rulef("service-steps-kind", "%s: step %s kind=event requires event", rel, stepID)
-			} else if !eventIDs[ev] {
-				c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
-			}
-			if payload, ok := asMap(step["payload"]); ok {
-				for name := range payload {
-					if !eventPayloads[ev][name] {
-						c.rulef("service-event-payload", "%s: step %s event %s has no payload field %s", rel, stepID, ev, name)
-					}
-				}
-			}
 		case "transition":
 			trs := asList(step["transitions"])
 			if len(trs) == 0 {
@@ -620,11 +599,17 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 						c.rulef("service-when", "%s: step %s when references %s: %v", rel, stepID, field, err)
 					}
 				}
+				for _, field := range whenInputFields(node) {
+					if err := c.checkInputPath(doc, field); err != nil {
+						c.rulef("service-when", "%s: step %s when references %s: %v", rel, stepID, field, err)
+					}
+				}
 			}
 		}
 
 		stepErrors := map[string]bool{}
-		if targetErrors != nil {
+		switch {
+		case targetErrors != nil:
 			if step["errors"] != nil {
 				for _, rawErr := range asList(step["errors"]) {
 					code, _ := rawErr.(string)
@@ -638,7 +623,27 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 					stepErrors[code] = true
 				}
 			}
-		} else {
+		case queryErrors != nil:
+			if step["errors"] == nil {
+				for code := range queryErrors {
+					stepErrors[code] = true
+				}
+			} else {
+				for _, rawErr := range asList(step["errors"]) {
+					code, _ := rawErr.(string)
+					if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+						c.rulef("service-ref", "%s: step %s unknown error %s", rel, stepID, code)
+					}
+					stepErrors[code] = true
+				}
+				for code := range queryErrors {
+					if !stepErrors[code] {
+						c.rulef("service-errors", "%s: step %s does not declare query error %s", rel, stepID, code)
+						stepErrors[code] = true
+					}
+				}
+			}
+		default:
 			for _, rawErr := range asList(step["errors"]) {
 				code, _ := rawErr.(string)
 				if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
@@ -646,6 +651,9 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				}
 				stepErrors[code] = true
 			}
+		}
+		if kind == "logic" || kind == "transition" {
+			c.checkStepQueryErrors(step, rel, stepID)
 		}
 
 		handled := map[string]bool{}
@@ -704,7 +712,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 	if hasBackwardGoto && doc["max_iterations"] == nil {
 		c.rulef("service-control", "%s: backward/self goto requires service.max_iterations", rel)
 	}
-	req := serviceLevelErrors(doc, hasBackwardGoto)
+	req := c.serviceLevelErrors(id, hasBackwardGoto)
 	for code := range req {
 		requiredErrors[code] = true
 	}
@@ -726,6 +734,33 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				c.rulef("service-errors", "%s: missing service-level error %s", rel, code)
 			} else {
 				c.rulef("service-errors", "%s: missing error %s produced by a reachable, unhandled step", rel, code)
+			}
+		}
+	}
+}
+
+// checkStepQueryErrors 要求 logic/transition step 显式覆盖其 queries 的领域错误。
+func (c *Checker) checkStepQueryErrors(step map[string]any, rel, stepID string) {
+	declared := map[string]bool{}
+	for _, raw := range asList(step["errors"]) {
+		if code, _ := raw.(string); code != "" {
+			declared[code] = true
+		}
+	}
+	seen := map[string]bool{}
+	for _, raw := range asList(step["queries"]) {
+		qid, _ := raw.(string)
+		q := c.queries[qid]
+		if q == nil {
+			continue
+		}
+		for _, code := range q.Errors {
+			if seen[code] {
+				continue
+			}
+			seen[code] = true
+			if !declared[code] {
+				c.rulef("service-errors", "%s: step %s does not declare query %s error %s", rel, stepID, qid, code)
 			}
 		}
 	}
@@ -956,8 +991,8 @@ func (c *Checker) eventPayloadRef(ref string) bool {
 	if strings.HasPrefix(ref, "data.entities.") {
 		return c.entities[ref] != nil
 	}
-	if strings.HasPrefix(ref, "cap.services.") && strings.Contains(ref, ".types.") {
-		parts := strings.Split(ref, ".types.")
+	if strings.HasPrefix(ref, "cap.services.") && strings.Contains(ref, ".schemas.") {
+		parts := strings.Split(ref, ".schemas.")
 		if len(parts) == 2 && parts[1] != "" {
 			return c.methodTypeDefs[parts[1]] != nil
 		}
@@ -1103,8 +1138,8 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			httpSchemas[name] = true
 			s, _ := asMap(raw)
 			if ref, _ := s["x-service-type"].(string); ref != "" {
-				if !match(`^cap\.services\.[a-z][a-z0-9_]*\.types\.[A-Z][A-Za-z0-9]*$`, ref) {
-					c.rulef("http-components", "%s: components.schemas.%s.x-service-type must match cap.services.<file>.types.<Type>", rel, name)
+				if !match(`^cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Z][A-Za-z0-9]*$`, ref) {
+					c.rulef("http-components", "%s: components.schemas.%s.x-service-type must match cap.services.<file>.schemas.<Type>", rel, name)
 				} else if typ, ok := serviceTypeRef(ref); !ok || !typeNames[typ] {
 					c.rulef("http-components", "%s: components.schemas.%s.x-service-type references unknown %s", rel, name, ref)
 				} else if props, ok := asMap(s["properties"]); ok {
@@ -1189,6 +1224,14 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if !ok {
 					continue
 				}
+				for key := range op {
+					if !strings.HasPrefix(key, "x-") || key == "x-flow" {
+						continue
+					}
+					if !allowedOperationExtensions[key] {
+						c.rulef("http-binding", "%s %s %s: unknown operation extension %s", rel, method, path, key)
+					}
+				}
 				if prev, exists := operations[path+"\x00"+method]; exists {
 					c.rulef("http-binding", "%s %s %s: duplicate operation (%s)", rel, method, path, prev)
 				} else {
@@ -1220,10 +1263,28 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 						c.rulef("http-binding", "%s %s %s: x-timeout-ms must be a positive integer", rel, method, path)
 					}
 				}
+				effectiveDefaults := defaultErrors
+				if raw, ok := op["x-default-errors"]; ok {
+					effectiveDefaults = map[string]bool{}
+					for _, item := range asList(raw) {
+						n, ok := toInt(item)
+						if !ok {
+							c.rulef("http-binding", "%s %s %s: x-default-errors must contain HTTP status codes", rel, method, path)
+							continue
+						}
+						name, ok := openapispec.DefaultResponseName(n)
+						if !ok {
+							c.rulef("http-binding", "%s %s %s: x-default-errors status %d has no components.responses mapping", rel, method, path, n)
+						} else if !httpResponses[name] {
+							c.rulef("http-binding", "%s %s %s: x-default-errors status %d requires components.responses.%s", rel, method, path, n, name)
+						}
+						effectiveDefaults[fmt.Sprint(n)] = true
+					}
+				}
 				responses, _ := asMap(op["responses"])
 				for status, rawResp := range responses {
-					if defaultErrors[status] {
-						c.rulef("http-binding", "%s %s %s: status %s is injected by default_error_responses; do not repeat it", rel, method, path, status)
+					if effectiveDefaults[status] {
+						c.rulef("http-binding", "%s %s %s: status %s is injected by default errors; do not repeat it", rel, method, path, status)
 					}
 					resp, _ := asMap(rawResp)
 					if content, ok := asMap(resp["content"]); ok {
@@ -1321,8 +1382,8 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 									if i := strings.LastIndex(serviceRef, "."); i > 0 {
 										fileRef = serviceRef[:i]
 									}
-									if xt, _ := comp["x-service-type"].(string); xt != "" && !strings.HasPrefix(xt, fileRef+".types.") {
-										c.rulef("http-service-type", "%s %s %s: requestBody $ref %s points at %s, not %s.types.*", rel, method, path, name, xt, fileRef)
+									if xt, _ := comp["x-service-type"].(string); xt != "" && !strings.HasPrefix(xt, fileRef+".schemas.") {
+										c.rulef("http-service-type", "%s %s %s: requestBody $ref %s points at %s, not %s.schemas.*", rel, method, path, name, xt, fileRef)
 									}
 								}
 							}
@@ -1382,10 +1443,23 @@ func (c *Checker) checkServiceTypes(types map[string]any, rel string) {
 	}
 }
 
+var serviceTypeKeys = map[string]bool{
+	"type": true, "format": true, "nullable": true, "required": true,
+	"properties": true, "items": true, "enum": true, "const": true,
+	"minimum": true, "maximum": true, "minLength": true, "maxLength": true,
+	"pattern": true, "default": true, "readOnly": true, "writeOnly": true,
+	"additionalProperties": true, "description": true, "x-auth-response": true,
+}
+
 func (c *Checker) checkServiceType(v any, rel, where string) {
 	m, ok := asMap(v)
 	if !ok {
 		return
+	}
+	for key := range m {
+		if !serviceTypeKeys[key] {
+			c.rulef("service-structure", "%s: %s has unknown schema key %s", rel, where, key)
+		}
 	}
 	if typ, _ := m["type"].(string); typ == "object" {
 		if ap, ok := m["additionalProperties"]; !ok || ap != false {
@@ -1448,32 +1522,85 @@ func serviceTypeRef(ref string) (string, bool) {
 		return "", false
 	}
 	rest := strings.TrimPrefix(ref, "cap.services.")
-	parts := strings.Split(rest, ".types.")
+	parts := strings.Split(rest, ".schemas.")
 	if len(parts) != 2 || parts[1] == "" {
 		return "", false
 	}
 	return parts[1], true
 }
 
-func serviceLevelErrors(doc map[string]any, hasBackwardGoto bool) map[string]bool {
+func (c *Checker) serviceLevelErrors(id string, hasBackwardGoto bool) map[string]bool {
 	required := map[string]bool{}
-	if len(asList(doc["permissions"])) > 0 {
+	if policy, ok := c.accessBindings[id]; ok && len(policy.permissions) > 0 {
 		required["platform.errors.COMMON_FORBIDDEN"] = true
 	}
-	if doc["rate_limit"] != nil {
+	if policy, ok := c.accessBindings[id]; ok && policy.rateLimited {
 		required["platform.errors.COMMON_RATE_LIMITED"] = true
 	}
-	if audit, _ := doc["audit"].(bool); audit {
+	if policy, ok := c.accessBindings[id]; ok && policy.audit {
 		required["platform.errors.COMMON_AUDIT_FAILED"] = true
-	}
-	if doc["idempotency"] != nil {
-		required["platform.errors.COMMON_IDEMPOTENCY_CONFLICT"] = true
 	}
 	if hasBackwardGoto {
 		required["platform.errors.COMMON_LOOP_EXHAUSTED"] = true
 	}
 	return required
 }
+
+// checkInputPath 校验 when 的 input.<path>：根字段必须是 service param，嵌套字段按 param 类型解析。
+func (c *Checker) checkInputPath(doc map[string]any, field string) error {
+	path, ok := splitInputField(field)
+	if !ok {
+		return fmt.Errorf("field %q must be input.<path>", field)
+	}
+	segs, err := parseWhenPath(path)
+	if err != nil {
+		return err
+	}
+	root := segs[0]
+	var typ string
+	found := false
+	for _, raw := range asList(doc["params"]) {
+		pm, _ := asMap(raw)
+		if name, _ := pm["name"].(string); name == root.name {
+			typ, _ = pm["type"].(string)
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("unknown input %s", root.name)
+	}
+	if typ == "" {
+		return fmt.Errorf("input %s has no type", root.name)
+	}
+	prefix := whenSegmentPath(root)
+	if root.hasIndex {
+		typ, err = indexWhenType(typ)
+		if err != nil {
+			return fmt.Errorf("input %s: %v", root.name, err)
+		}
+	}
+	for _, seg := range segs[1:] {
+		typ = strings.TrimPrefix(typ, "*")
+		if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
+			return fmt.Errorf("list input requires index before %s", seg.name)
+		}
+		next, ok := c.resolveTypeField(typ, seg.name, whenFormula{}, "", prefix)
+		if !ok {
+			return fmt.Errorf("unknown field %s of %s", seg.name, typ)
+		}
+		typ = next
+		prefix += "." + whenSegmentPath(seg)
+		if seg.hasIndex {
+			typ, err = indexWhenType(typ)
+			if err != nil {
+				return fmt.Errorf("field %s: %v", seg.name, err)
+			}
+		}
+	}
+	return nil
+}
+
 func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]string, path string, formula whenFormula, stepRef string) error {
 	segs, err := parseWhenPath(path)
 	if err != nil {
@@ -1500,8 +1627,6 @@ func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]str
 		if typ == "" {
 			return fmt.Errorf("unknown output %s", root.name)
 		}
-	case "event":
-		return fmt.Errorf("event step has no output")
 	default:
 		return fmt.Errorf("unknown step kind %q", kind)
 	}

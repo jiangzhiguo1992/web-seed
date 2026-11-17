@@ -74,7 +74,7 @@ gen-graph: ## 按引用计算并写回 table/entity 的 used_by
 gen-graph-check: ## 校验 used_by 是否最新（CI）
 	cd scripts/cmd && go run ./gen_graph -root "$(CURDIR)" -check
 
-gen-errors: ## platform/errors.yaml → docs/contracts/generated/errors.md
+gen-errors: ## platform/errors/*.yaml → docs/contracts/generated/errors.md
 	cd scripts/cmd && go run ./gen_errors -root "$(CURDIR)"
 
 gen-errors-check: ## 校验 errors.md 是否最新（CI）

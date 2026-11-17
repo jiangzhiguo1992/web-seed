@@ -1,0 +1,9 @@
+id: platform.errors.token
+summary: "令牌错误码"
+schema_version: 1
+stability: stable
+do_not:
+  - "令牌错误不要暴露令牌原文或 hash"
+errors:
+  - { code: AUTH_TOKEN_INVALID, status: 401, retryable: false, i18n: errors.auth.token_invalid, message: "令牌无效" }
+  - { code: AUTH_TOKEN_EXPIRED, status: 401, retryable: true, i18n: errors.auth.token_expired, message: "令牌已过期" }

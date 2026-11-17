@@ -128,9 +128,6 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 						eventID, _ := rawEvent.(string)
 						a.addEvent(eventID, serviceID)
 					}
-				case "event":
-					eventID, _ := step["event"].(string)
-					a.addEvent(eventID, serviceID)
 				}
 			}
 		}

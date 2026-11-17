@@ -769,7 +769,7 @@ persistence:
 		t.Fatal(err)
 	}
 	c := &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
-	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	c.checkCapabilityWrites(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services may declare persistence/writes") {
 		t.Fatalf("http write layer not rejected: %v", c.errs)
 	}
@@ -783,7 +783,7 @@ writes:
 		t.Fatal(err)
 	}
 	c = &Checker{root: root, tableOwners: map[string]string{"data.tables.x": "x"}}
-	c.checkCapabilityPersistence(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	c.checkCapabilityWrites(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services may declare persistence/writes") {
 		t.Fatalf("http top-level writes not rejected: %v", c.errs)
 	}
@@ -811,7 +811,6 @@ func TestPersistenceReadOnlyRejected(t *testing.T) {
 	fields := []Field{{Name: "persistence", Type: "object", Required: true, Fields: []Field{
 		{Name: "table", Type: "string"},
 		{Name: "tables", Type: "list<string>"},
-		{Name: "constraint_errors", Type: "map<string>"},
 	}}}
 	doc := map[string]any{"persistence": map[string]any{
 		"tables":           []any{"data.tables.auth_pwd"},
@@ -1928,7 +1927,6 @@ func TestPersistenceQueriesExist(t *testing.T) {
 	fields := []Field{{Name: "persistence", Type: "object", Required: true, Fields: []Field{
 		{Name: "table", Type: "string"},
 		{Name: "tables", Type: "list<string>"},
-		{Name: "constraint_errors", Type: "map<string>"},
 	}}}
 	doc := map[string]any{"persistence": map[string]any{
 		"table":   "data.tables.x",
@@ -2899,43 +2897,32 @@ func TestCollectTableObjectsGlobalNames(t *testing.T) {
 	}
 }
 
-func TestConstraintErrorRef(t *testing.T) {
-	root := t.TempDir()
-	p := filepath.Join(root, "contracts/capabilities/services/x.yaml")
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		t.Fatal(err)
+func TestQueryErrors(t *testing.T) {
+	c := &Checker{errCodeSet: map[string]bool{"X": true}}
+	q := &queryInfo{
+		ID:     "data.queries.x.q",
+		File:   "contracts/data/queries/x.yaml",
+		Writes: []string{"data.tables.x"},
+		Errors: []string{"platform.errors.X"},
 	}
-	body := `
-id: cap.services.x
-owner_module: x
-persistence:
-  tables: [data.tables.x]
-  constraint_errors:
-    ck_missing: platform.errors.X
-`
-	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	tableIDs := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
-	c := &Checker{
-		root:         root,
-		tableOwners:  map[string]string{"data.tables.x": "x"},
-		tableObjects: map[string]map[string]bool{"data.tables.x": {"uq_x_code": true}},
-	}
-	c.checkCapabilityPersistence(tableIDs)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[constraint-error-ref]") {
-		t.Fatalf("dangling constraint_errors key not reported: %v", c.errs)
+	c.checkQueryErrors(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid query errors reported: %v", c.errs)
 	}
 
-	c = &Checker{
-		root:         root,
-		tableOwners:  map[string]string{"data.tables.x": "x"},
-		tableObjects: map[string]map[string]bool{"data.tables.x": {"ck_missing": true}},
-		errCodeSet:   map[string]bool{"X": true},
+	c.errs = nil
+	q.Errors = []string{"platform.errors.MISSING"}
+	c.checkQueryErrors(q)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "references unknown error platform.errors.MISSING") {
+		t.Fatalf("unknown query error not reported: %v", c.errs)
 	}
-	c.checkCapabilityPersistence(tableIDs)
-	if len(c.errs) != 0 {
-		t.Fatalf("valid constraint_errors key reported: %v", c.errs)
+
+	c.errs = nil
+	c.dataAccessErrSet = map[string]bool{"platform.errors.COMMON_INTERNAL": true}
+	q.Errors = []string{"platform.errors.COMMON_INTERNAL"}
+	c.checkQueryErrors(q)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must not repeat data-access baseline error") {
+		t.Fatalf("baseline duplicate not reported: %v", c.errs)
 	}
 }
 
@@ -2948,7 +2935,7 @@ func TestFlowImplementationErrors(t *testing.T) {
 		errCodeSet: map[string]bool{
 			"A": true, "B": true, "C": true,
 			"COMMON_FORBIDDEN": true, "COMMON_RATE_LIMITED": true,
-			"COMMON_AUDIT_FAILED": true, "COMMON_IDEMPOTENCY_CONFLICT": true,
+			"COMMON_AUDIT_FAILED":   true,
 			"COMMON_LOOP_EXHAUSTED": true,
 		},
 		permissionSet: map[string]bool{"platform.security.permissions.x": true},
@@ -3372,6 +3359,10 @@ func TestFlowImplementationErrors(t *testing.T) {
 		return map[string]any{
 			"summary": "x", "implementation": "flow",
 			"transaction": "required", "permissions": []any{},
+			"params": []any{
+				map[string]any{"name": "x", "type": "string"},
+				map[string]any{"name": "payment", "type": "Payment"},
+			},
 			"steps": steps, "errors": errors,
 		}
 	}
@@ -3571,6 +3562,19 @@ func TestFlowImplementationErrors(t *testing.T) {
 		})}, []any{})
 		want(t, check(t, doc), "operand must be compared")
 	})
+	t.Run("when input must be a declared param", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"when": "input.unknown == 1", "errors": []any{},
+		})}, []any{})
+		want(t, check(t, doc), "unknown input unknown")
+	})
+
+	t.Run("when input nested field must exist", func(t *testing.T) {
+		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
+			"when": `input.payment.missing == "x"`, "errors": []any{},
+		})}, []any{})
+		want(t, check(t, doc), "unknown field missing of Payment")
+	})
 
 	t.Run("rate_limit allows rate limited", func(t *testing.T) {
 		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{"platform.errors.COMMON_RATE_LIMITED"})
@@ -3585,14 +3589,6 @@ func TestFlowImplementationErrors(t *testing.T) {
 		doc["audit"] = true
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("audit failed reported: %v", errs)
-		}
-	})
-
-	t.Run("idempotency allows idempotency conflict", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{"platform.errors.COMMON_IDEMPOTENCY_CONFLICT"})
-		doc["idempotency"] = map[string]any{"key": "x", "window": "1h"}
-		if errs := check(t, doc); len(errs) != 0 {
-			t.Fatalf("idempotency conflict reported: %v", errs)
 		}
 	})
 
@@ -3611,12 +3607,6 @@ func TestFlowImplementationErrors(t *testing.T) {
 		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
 		doc["audit"] = true
 		want(t, check(t, doc), "missing service-level error platform.errors.COMMON_AUDIT_FAILED")
-	})
-
-	t.Run("idempotency requires idempotency conflict", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
-		doc["idempotency"] = map[string]any{"key": "x", "window": "1h"}
-		want(t, check(t, doc), "missing service-level error platform.errors.COMMON_IDEMPOTENCY_CONFLICT")
 	})
 
 	t.Run("when references earlier step", func(t *testing.T) {
