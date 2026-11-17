@@ -1,9 +1,9 @@
-# 共享值类型：类型族 + 参数；tables/entities/queries 共用。
+# 共享值类型：类型族 + 具名类型；tables/entities/queries/schemas 共用。
 
 id: meta.types
 title: "共享值类型"
 
-column_types:
+value_types:
   families:
     string:
       description: "字符序列"
@@ -56,3 +56,90 @@ column_types:
         min_len: { type: integer, required: false, min: 0, description: "最小长度" }
         max_len: { type: integer, required: false, min: 1, description: "最大长度" }
         fixed: { type: boolean, required: false, default: false, description: "定长" }
+
+  named:
+    account_number:
+      family: string
+      description: "账号编号；大写归一"
+      params:
+        min_len: 4
+        max_len: 64
+        pattern: "^[A-Za-z0-9_-]+$"
+        normalize: "upper"
+    account_nickname:
+      family: string
+      description: "账号昵称"
+      params:
+        min_len: 1
+        max_len: 100
+    auth_identifier:
+      family: string
+      description: "登录标识：用户名、邮箱或手机号"
+      params:
+        min_len: 1
+        max_len: 254
+    auth_username:
+      family: string
+      description: "密码认证用户名；小写归一"
+      params:
+        min_len: 1
+        max_len: 254
+        normalize: "lower"
+    email_username:
+      family: string
+      description: "邮箱本地部分；小写归一"
+      params:
+        min_len: 1
+        max_len: 64
+        normalize: "lower"
+    email_domain:
+      family: string
+      description: "邮箱域名；小写归一"
+      params:
+        min_len: 1
+        max_len: 190
+        normalize: "lower"
+    phone_code:
+      family: string
+      description: "国际区号，例如 +86"
+      params:
+        min_len: 2
+        max_len: 8
+        pattern: "^\\+[0-9]{1,4}$"
+    phone_number:
+      family: string
+      description: "手机号；只允许数字"
+      params:
+        min_len: 1
+        max_len: 32
+        pattern: "^[0-9]{1,32}$"
+    device_id:
+      family: string
+      description: "设备标识"
+      params:
+        max_len: 128
+    page_size:
+      family: integer
+      description: "分页大小"
+      params:
+        min: 1
+        max: 100
+        default: 20
+    verification_target:
+      family: string
+      description: "验证码接收目标"
+      params:
+        min_len: 1
+        max_len: 320
+    verification_code:
+      family: string
+      description: "验证码"
+      params:
+        min_len: 4
+        max_len: 12
+    token_type:
+      family: string
+      description: "令牌类型；固定 Bearer"
+      params:
+        pattern: "^Bearer$"
+        default: "Bearer"
