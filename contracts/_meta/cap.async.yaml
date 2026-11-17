@@ -71,6 +71,8 @@ fields:
           - { name: type, type: string, required: true, enum: [ cron, event, webhook ], description: "触发类型" }
           - { name: schedule, type: string, required: false, description: "cron 表达式；type=cron 时必须" }
           - { name: event, type: string, required: false, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "事件 ID；type=event 时必须" }
+          - { name: path, type: string, required: false, pattern: '^/', description: "webhook 路径；type=webhook 时必须" }
+          - { name: method, type: string, required: false, enum: [ get, post, put, patch, delete ], description: "webhook HTTP 方法；type=webhook 时必须" }
       - name: retry
         type: object
         required: false
@@ -89,5 +91,5 @@ fields:
 
 rules:
   - { id: async-service, text: "service 必须存在且与 async 文件的 owner_module 同模块；被 async 引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service ] }
-  - { id: async-trigger, text: "type=cron 必须有 schedule；type=event 必须有存在的事件；type=webhook 不得写 schedule/event", implemented_by: [ async-trigger ] }
+  - { id: async-trigger, text: "type=cron 必须有 schedule；type=event 必须有存在的事件；type=webhook 必须有 path/method；其余类型不得写 schedule/event/path/method", implemented_by: [ async-trigger ] }
   - { id: async-structure, text: "job name 在文件内唯一；retry.max_attempts >= 1；concurrency.key 必填；async job 不得重复声明同一 (trigger, service)", implemented_by: [ async-structure ] }

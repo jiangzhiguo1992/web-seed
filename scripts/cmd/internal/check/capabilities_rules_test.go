@@ -714,3 +714,57 @@ func TestServicePolicyRef(t *testing.T) {
 		t.Fatalf("unknown policy not reported: %v", c.errs)
 	}
 }
+
+func TestCheckAsyncDoc(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.async")
+	rel := "contracts/capabilities/async/x.yaml"
+	valid := `id: cap.async.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+scope: "x"
+jobs:
+  - id: cap.async.x.job
+    name: job
+    summary: "x"
+    service: cap.services.x.get
+    trigger: {type: cron, schedule: "0 3 * * *"}
+    retry: {max_attempts: 3, backoff: exponential, dead_letter: true}
+    concurrency: {key: x_job, ttl: 1h}
+`
+	writeCapFile(t, root, rel, valid)
+	if _, err := loadYAML(filepath.Join(root, rel)); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	async := c.checkAsyncDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	if len(c.errs) != 0 {
+		t.Fatalf("valid async reported: %v", c.errs)
+	}
+	if !async["cap.services.x.get"] {
+		t.Fatalf("async service not collected: %v", async)
+	}
+
+	writeCapFile(t, root, rel, strings.Replace(valid, "cap.services.x.get", "cap.services.y.get", 1))
+	if _, err := loadYAML(filepath.Join(root, rel)); err != nil {
+		t.Fatal(err)
+	}
+	c.errs = nil
+	c.checkAsyncDoc(schema, map[string]serviceMeta{"cap.services.y.get": {module: "y"}}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[async-service]") {
+		t.Fatalf("cross-module service not reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, strings.Replace(valid, "{type: cron, schedule: \"0 3 * * *\"}", "{type: webhook}", 1))
+	if _, err := loadYAML(filepath.Join(root, rel)); err != nil {
+		t.Fatal(err)
+	}
+	c.errs = nil
+	c.checkAsyncDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[async-trigger]") {
+		t.Fatalf("webhook without path/method not reported: %v", c.errs)
+	}
+}

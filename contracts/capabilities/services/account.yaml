@@ -44,6 +44,16 @@ types:
     required: [nickname]
     properties:
       nickname: {type: string, minLength: 1, maxLength: 100}
+  AccountPage:
+    type: object
+    additionalProperties: false
+    required: [items, has_more, next_cursor]
+    properties:
+      items:
+        type: array
+        items: {type: data.entities.account}
+      has_more: {type: boolean}
+      next_cursor: {type: string, nullable: true}
 services:
   - name: get
     summary: "按 ID 获取账号"
@@ -79,8 +89,7 @@ services:
       - {name: ctx, type: context.Context}
       - {name: filter, type: ListAccountsFilter}
     returns:
-      - {name: accounts, type: List<data.entities.account>}
-      - {name: next_cursor, type: string, nullable: true}
+      - {name: page, type: AccountPage}
       - {name: err, type: error}
     errors:
       - platform.errors.COMMON_FORBIDDEN
@@ -94,8 +103,7 @@ services:
         errors:
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - {name: accounts, type: List<data.entities.account>}
-          - {name: next_cursor, type: string}
+          - {name: page, type: AccountPage}
         queries:
           - data.queries.account.list_accounts
   - name: create

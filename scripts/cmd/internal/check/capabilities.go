@@ -955,6 +955,9 @@ func (c *Checker) eventPayloadRef(ref string) bool {
 	if strings.HasPrefix(ref, "data.entities.") {
 		return c.entities[ref] != nil
 	}
+	if strings.HasPrefix(ref, "data.enums.") {
+		return c.enumIDs[ref]
+	}
 	if strings.HasPrefix(ref, "cap.services.") && strings.Contains(ref, ".types.") {
 		parts := strings.Split(ref, ".types.")
 		if len(parts) == 2 && parts[1] != "" {
@@ -1015,8 +1018,8 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 					if v, _ := trigger["schedule"].(string); strings.TrimSpace(v) == "" {
 						c.rulef("async-trigger", "%s.%s: trigger.schedule required for cron", rel, name)
 					}
-					if trigger["event"] != nil {
-						c.rulef("async-trigger", "%s.%s: cron trigger must not declare event", rel, name)
+					if trigger["event"] != nil || trigger["path"] != nil || trigger["method"] != nil {
+						c.rulef("async-trigger", "%s.%s: cron trigger must not declare event/path/method", rel, name)
 					}
 				case "event":
 					ev, _ := trigger["event"].(string)
@@ -1025,12 +1028,23 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 					} else if !eventIDs[ev] {
 						c.rulef("async-trigger", "%s.%s: unknown event %s", rel, name, ev)
 					}
-					if trigger["schedule"] != nil {
-						c.rulef("async-trigger", "%s.%s: event trigger must not declare schedule", rel, name)
+					if trigger["schedule"] != nil || trigger["path"] != nil || trigger["method"] != nil {
+						c.rulef("async-trigger", "%s.%s: event trigger must not declare schedule/path/method", rel, name)
 					}
 				case "webhook":
 					if trigger["schedule"] != nil || trigger["event"] != nil {
 						c.rulef("async-trigger", "%s.%s: webhook trigger must not declare schedule/event", rel, name)
+					}
+					p, _ := trigger["path"].(string)
+					if strings.TrimSpace(p) == "" {
+						c.rulef("async-trigger", "%s.%s: trigger.path required for webhook", rel, name)
+					} else if !strings.HasPrefix(p, "/") {
+						c.rulef("async-trigger", "%s.%s: trigger.path must start with /", rel, name)
+					}
+					switch m, _ := trigger["method"].(string); m {
+					case "get", "post", "put", "patch", "delete":
+					default:
+						c.rulef("async-trigger", "%s.%s: trigger.method must be get/post/put/patch/delete", rel, name)
 					}
 				default:
 					c.rulef("async-trigger", "%s.%s: trigger.type must be cron/event/webhook", rel, name)

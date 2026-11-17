@@ -401,6 +401,9 @@ func expandSchema(schema map[string]any, types map[string]map[string]any, enums 
 		delete(schema, "type")
 		schema["$ref"] = "#/components/schemas/" + typ
 	}
+	if items := asMap(schema["items"]); items != nil {
+		expandSchema(items, types, enums, entities, known, seen)
+	}
 	if props := asMap(schema["properties"]); props != nil {
 		for _, raw := range props {
 			if child := asMap(raw); child != nil {

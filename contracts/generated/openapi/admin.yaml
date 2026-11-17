@@ -129,6 +129,24 @@ components:
         - auth_email
       type: object
       x-entity: data.entities.account
+    AccountPage:
+      additionalProperties: false
+      properties:
+        has_more:
+          type: boolean
+        items:
+          items:
+            $ref: '#/components/schemas/Account'
+          type: array
+        next_cursor:
+          nullable: true
+          type: string
+      required:
+        - items
+        - has_more
+        - next_cursor
+      type: object
+      x-service-type: cap.services.account.types.AccountPage
     AuthSession:
       additionalProperties: false
       properties:
@@ -460,6 +478,7 @@ paths:
           content:
             application/json:
               example:
+                has_more: false
                 items:
                   - created_at: "2026-11-11T09:30:00Z"
                     id: 1
@@ -468,22 +487,10 @@ paths:
                     own_id: 2
                     own_type: user
                     status: active
-                page:
-                  has_more: false
-                  next_cursor: null
+                next_cursor: null
               schema:
-                additionalProperties: false
-                properties:
-                  items:
-                    items:
-                      $ref: '#/components/schemas/Account'
-                    type: array
-                  page:
-                    $ref: '#/components/schemas/PageInfo'
-                required:
-                  - items
-                  - page
-                type: object
+                $ref: '#/components/schemas/AccountPage'
+                x-service-return: AccountPage
           description: 成功
         "400":
           $ref: '#/components/responses/BadRequest'

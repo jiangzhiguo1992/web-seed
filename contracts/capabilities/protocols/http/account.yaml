@@ -31,18 +31,13 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: false
-                required: [items, page]
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/Account" }
-                  page: { $ref: "#/components/schemas/PageInfo" }
+                $ref: "#/components/schemas/AccountPage"
+                x-service-return: AccountPage
               example:
                 items:
                   - { id: 1, own_type: user, own_id: 2, number: "ACC-0001", nickname: "管理员", status: active, created_at: "2026-11-11T09:30:00Z" }
-                page: { has_more: false, next_cursor: null }
+                has_more: false
+                next_cursor: null
 
     post:
       operationId: createAccount
@@ -167,3 +162,6 @@ components:
 
     UpdateAccountInput:
       x-service-type: cap.services.account.types.UpdateAccountInput
+
+    AccountPage:
+      x-service-type: cap.services.account.types.AccountPage

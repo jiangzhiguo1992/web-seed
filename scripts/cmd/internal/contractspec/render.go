@@ -750,14 +750,33 @@ type asyncFileScaffold struct {
 	Jobs          []asyncJobScaffold `yaml:"jobs"`
 }
 
+type asyncTriggerScaffold struct {
+	Type     string `yaml:"type"`
+	Schedule string `yaml:"schedule,omitempty"`
+	Event    string `yaml:"event,omitempty"`
+	Path     string `yaml:"path,omitempty"`
+	Method   string `yaml:"method,omitempty"`
+}
+
+type asyncRetryScaffold struct {
+	MaxAttempts int    `yaml:"max_attempts"`
+	Backoff     string `yaml:"backoff"`
+	DeadLetter  bool   `yaml:"dead_letter"`
+}
+
+type asyncConcurrencyScaffold struct {
+	Key string `yaml:"key"`
+	TTL string `yaml:"ttl,omitempty"`
+}
+
 type asyncJobScaffold struct {
-	ID          string         `yaml:"id"`
-	Name        string         `yaml:"name"`
-	Summary     string         `yaml:"summary"`
-	Service     string         `yaml:"service"`
-	Trigger     map[string]any `yaml:"trigger"`
-	Retry       map[string]any `yaml:"retry,omitempty"`
-	Concurrency map[string]any `yaml:"concurrency,omitempty"`
+	ID          string                    `yaml:"id"`
+	Name        string                    `yaml:"name"`
+	Summary     string                    `yaml:"summary"`
+	Service     string                    `yaml:"service"`
+	Trigger     asyncTriggerScaffold      `yaml:"trigger"`
+	Retry       *asyncRetryScaffold       `yaml:"retry,omitempty"`
+	Concurrency *asyncConcurrencyScaffold `yaml:"concurrency,omitempty"`
 }
 
 type eventFileScaffold struct {
@@ -1020,9 +1039,9 @@ func RenderAsync(s *Schema, name, module, summary string) ([]byte, error) {
 			Name:        "job",
 			Summary:     "TODO: 任务说明",
 			Service:     "cap.services." + module + ".job",
-			Trigger:     map[string]any{"type": "cron", "schedule": "0 3 * * *"},
-			Retry:       map[string]any{"max_attempts": 3, "backoff": "exponential", "dead_letter": true},
-			Concurrency: map[string]any{"key": name + "_job"},
+			Trigger:     asyncTriggerScaffold{Type: "cron", Schedule: "0 3 * * *"},
+			Retry:       &asyncRetryScaffold{MaxAttempts: 3, Backoff: "exponential", DeadLetter: true},
+			Concurrency: &asyncConcurrencyScaffold{Key: name + "_job"},
 		}},
 	}
 	b, err := marshal2(doc)
