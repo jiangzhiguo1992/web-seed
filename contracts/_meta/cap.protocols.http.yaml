@@ -70,7 +70,7 @@ fields:
     description: "协议层共享 schema/参数/响应；schema 可用 x-method-type / x-enum / x-entity 指向唯一来源，生成器展开"
 
 rules:
-  - { id: http-binding, text: "每个 http operation 必须有 operationId、x-contract-id 与 x-service；x-service 必须指向存在的同步 service；同步 service 必须有至少一个 protocol 入边；x-contract-id 必须唯一；operation 不得重复声明 default_error_responses 中的状态码", implemented_by: [ http-binding ] }
+  - { id: http-binding, text: "每个 http operation 必须有 operationId、x-contract-id 与 x-service 或 x-async；x-service 必须指向存在的同步 service；x-async 必须指向存在的 webhook async job；x-service 与 x-async 互斥；同步 service 必须有至少一个 protocol 入边；x-contract-id 必须唯一；operation 不得重复声明 default_error_responses 中的状态码", implemented_by: [ http-binding ] }
   - { id: http-components, text: "components.schemas 的 object 必须 additionalProperties: false；x-service-type/x-enum/x-entity 必须指向存在的来源；$ref 必须指向存在的 schema", implemented_by: [ http-components ] }
   - { id: http-retry-after, text: "503 响应必须声明 Retry-After；default_error_responses 含 503 时 shared 必须定义 components.headers.RetryAfter 与 components.responses.ServiceUnavailable，且 ServiceUnavailable.headers.Retry-After 指向 RetryAfter；Retry-After 取值必须是非负整数秒或 HTTP-date", implemented_by: [ http-retry-after ] }
   - { id: http-service-type, text: "requestBody 的 $ref 必须是 x-service 指向的 service 的 params 类型", implemented_by: [ http-service-type ] }

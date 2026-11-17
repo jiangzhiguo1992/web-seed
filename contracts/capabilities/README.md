@@ -1,18 +1,17 @@
 # 能力契约（capabilities）
 
-> 能力层分五类：**services**（服务）、**async**（异步任务）、**policies**（入口策略）、**events**（领域事件）、**protocols**（传输协议）。
+> 能力层分四类：**services**（服务）、**async**（异步任务）、**events**（领域事件）、**protocols**（传输协议）。
 > 业务规则与状态机属于功能规格，放在 `features/{rules,states}`。
-> 依赖方向：`protocols → services → data.queries`；`services → feature.rules / feature.states / policies / events`；`async → services / events`；`features.pages → services`。
+> 依赖方向：`protocols → services → data.queries`；`services → feature.rules / feature.states / events`；`async → services / events`；`features.pages → services`。
 
 ---
 
-## 1. 五类职责
+## 1. 四类职责
 
 | 目录 | 回答的问题 | 真相源内容 | 产物 |
 |---|---|---|---|
 | `services/<module>.yaml` | 模块能提供哪些可调用单元、如何实现 | interface、services[]、steps、errors、事务、持久化归属 | Go interface、usecase 骨架、写归属校验 |
 | `async/<module>.yaml` | 哪些任务异步执行、如何触发与重试 | jobs[]、trigger、retry、concurrency、handler service | worker 注册表、调度配置 |
-| `policies/<module>.yaml` | 入口的权限/审计/限流/幂等 | policies[] | 中间件链配置 |
 | `events/<subject>.yaml` | 跨模块异步消息长什么样 | name、version、payload、emitted_by | 事件常量、payload 类型 |
 | `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露 | path、method、status、header、schema 引用 | server 类型、client、合并 spec |
 
@@ -20,7 +19,6 @@
 
 - **service = 一个可调用单元**，有明确的 params/returns/errors 和 steps；同步调用，不声明 trigger。
 - **async = 一个异步任务**，引用一个同步 service 作为 handler，声明 trigger/retry/concurrency。
-- **policy = 一个入口策略**，声明 permissions/audit/rate_limit/idempotency，被 service 引用。
 - **step = 服务实现路径上的一步**，五类：query / service / logic / event / transition。
 - **rule / state 在 features**，被 service 的 `kind: logic` / `kind: transition` step 引用。
 - **event = 跨模块消息契约**，被 service 的 `kind: event` step 发射，被 async 的 `trigger.event` 消费。
@@ -34,7 +32,6 @@
 protocols ──x-service──> services ──steps──> data.queries
      │                     │
      │                     ├──kind=service──> services（跨模块）
-     │                     ├──policy────────> policies
      │                     ├──rules─────────> features.rules
      │                     ├──transition────> features.states
      │                     └──event─────────> events
@@ -47,7 +44,6 @@ async ──service──> services
 | 边 | 写在哪 | 字段 |
 |---|---|---|
 | protocol → service | `protocols/<protocol>/*.yaml` | `x-service` |
-| service → policy | `services/*.yaml` | `policy` |
 | service → query | `services/*.yaml` 的 steps | `kind: query` + `query` |
 | service → service | `services/*.yaml` 的 steps | `kind: service` + `service` |
 | service → rule | `services/*.yaml` 的 steps | `kind: logic` + `rules` |
@@ -85,7 +81,7 @@ service 项必须声明：
 - `transaction`（`required` / `read_only` / `none`）
 - `steps`（至少一步）
 
-可选：`policy`（入口策略，指向 `cap.policies.*`）；`max_iterations`（后向 goto）。
+可选：`permissions` / `audit` / `rate_limit` / `idempotency`（入口策略）；`max_iterations`（后向 goto）。
 
 ### 3.1 steps
 
@@ -137,19 +133,7 @@ capabilities 不再有 `rules/` / `states/` 目录。
 
 ---
 
-## 6. policies
-
-`policies/<module>.yaml` 按归属模块组织，一个 policy 对应一个入口策略。
-
-- 文件级：`id` / `summary` / `owner_module` / `schema_version` / `stability` / `do_not` / `scope` / `policies`
-- policy 项：`id` / `name` / `summary` / `permissions` / `audit` / `rate_limit` / `idempotency`
-- 至少声明 `permissions` / `audit` / `rate_limit` / `idempotency` 之一。
-- service 用 `policy: cap.policies.*` 引用；policy 的 `owner_module` 必须与 service 文件一致。
-- service 不再内联 `permissions` / `audit` / `rate_limit` / `idempotency`。
-
----
-
-## 7. events
+## 6. events
 
 `events/<subject>.yaml` 按业务主体组织（不按生产者模块）：
 
@@ -160,7 +144,7 @@ capabilities 不再有 `rules/` / `states/` 目录。
 
 ---
 
-## 8. protocols
+## 7. protocols
 
 `protocols/<protocol>/<module>.yaml` 只写协议差异：
 
@@ -169,7 +153,7 @@ capabilities 不再有 `rules/` / `states/` 目录。
 - request/response 的 schema `$ref`；request 用 `x-service-type`、response 用 `x-service-return` 指向 service 的 params/returns
 - `components.schemas` 通过 `x-service-type` / `x-enum` / `x-entity` 指向唯一来源
 
-**不要写**：权限、审计、限流、幂等、事务——这些在 service / policy。
+**不要写**：权限、审计、限流、幂等、事务——这些在 service。
 
 HTTP 约束：
 
@@ -181,14 +165,13 @@ HTTP 约束：
 
 ---
 
-## 9. 目录与 ID
+## 8. 目录与 ID
 
 ```
 contracts/capabilities/
 ├── README.md
 ├── services/<module>.yaml
 ├── async/<module>.yaml
-├── policies/<module>.yaml
 ├── events/<subject>.yaml
 └── protocols/
     ├── http/
@@ -202,7 +185,6 @@ contracts/capabilities/
 |---|---|---|
 | `services/` | `cap.services.<file>` | `cap.services.account` |
 | `async/` | `cap.async.<file>` | `cap.async.token` |
-| `policies/` | `cap.policies.<file>` | `cap.policies.account` |
 | `events/` | `cap.events.<file>` | `cap.events.account` |
 | `protocols/http/` | `cap.protocols.http.<file>` | `cap.protocols.http.account` |
 
@@ -210,7 +192,6 @@ contracts/capabilities/
 
 - service 项：`cap.services.<file>.<snake_case(name)>`
 - async job：`cap.async.<file>.<snake_case(name)>`
-- policy 项：`cap.policies.<file>.<snake_case(name)>`
 - rule 项：显式 `id`
 - state 转换：`feature.states.<file>.<snake_case(transition)>`
 - event 项：显式 `id`
@@ -218,11 +199,10 @@ contracts/capabilities/
 
 ---
 
-## 10. 当前落地状态
+## 9. 当前落地状态
 
 - `services/*.yaml` 已合并原 methods + flows；每个 service 项都有 steps。
 - `async/*.yaml` 承载异步调度；`services` 不再声明 `trigger/retry/concurrency`。
-- `policies/*.yaml` 承载入口策略；`services` 用 `policy` 引用，不再内联权限/审计/限流/幂等。
 - `features/rules/*` / `features/states/*` 承载业务规则与状态机；`capabilities/events/*` 承载领域事件。
 - `protocols/http/*.yaml` 已全部使用 `x-service` 指向同步 service，response 用 `x-service-return` 绑定 returns。
 - `data.queries.*.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，不得为空。

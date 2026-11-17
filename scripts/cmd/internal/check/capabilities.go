@@ -1,5 +1,5 @@
 // capabilities.go 校验 services / rules / states / events / protocols 五类契约：
-//   - services 的 interface/visibility/policy/steps/errors/参数映射
+//   - services 的 interface/visibility/steps/errors/参数映射
 //   - rules 的 constraint/invariant/policy 结构与服务引用
 //   - states 的状态/转换/守卫/副作用
 //   - events 的 payload/版本/生产与消费锚点
@@ -14,12 +14,9 @@ import (
 	"strings"
 )
 
-type policyMeta struct {
+type asyncMeta struct {
+	triggerType string
 	module      string
-	permissions []string
-	audit       bool
-	rateLimit   bool
-	idempotency bool
 }
 
 type serviceMeta struct {
@@ -63,12 +60,7 @@ func (c *Checker) checkCapabilities() {
 		c.rulef("schema.load", "load cap.async schema: %v", err)
 		return
 	}
-	policySchema, err := c.loadSchemaByType("cap.policies")
-	if err != nil {
-		c.rulef("schema.load", "load cap.policies schema: %v", err)
-		return
-	}
-	for _, s := range []*Schema{serviceSchema, ruleSchema, stateSchema, eventSchema, httpSchema, asyncSchema, policySchema} {
+	for _, s := range []*Schema{serviceSchema, ruleSchema, stateSchema, eventSchema, httpSchema, asyncSchema} {
 		c.checkRules(s)
 	}
 
@@ -164,30 +156,6 @@ func (c *Checker) checkCapabilities() {
 						serviceEdges[id] = append(serviceEdges[id], ref)
 					}
 				}
-			}
-		}
-	}
-
-	policyMetas := map[string]policyMeta{}
-	for _, file := range glob(c.root, filepath.Join(policySchema.Targets.Dir, policySchema.Targets.Glob)) {
-		doc, err := loadYAML(file)
-		if err != nil {
-			continue
-		}
-		module, _ := doc["owner_module"].(string)
-		for _, raw := range asList(doc["policies"]) {
-			item, _ := asMap(raw)
-			id, _ := item["id"].(string)
-			if id == "" {
-				continue
-			}
-			audit, _ := item["audit"].(bool)
-			policyMetas[id] = policyMeta{
-				module:      module,
-				permissions: stringList(item["permissions"]),
-				audit:       audit,
-				rateLimit:   item["rate_limit"] != nil,
-				idempotency: item["idempotency"] != nil,
 			}
 		}
 	}
@@ -301,7 +269,7 @@ func (c *Checker) checkCapabilities() {
 			if name == "" {
 				continue
 			}
-			c.checkServiceItem(item, relPath(c.root, file), fileID+"."+name, module, serviceMetaByID, ruleIDs, eventIDs, eventPayloads, transitionIDs, typeNames, policyMetas)
+			c.checkServiceItem(item, relPath(c.root, file), fileID+"."+name, module, serviceMetaByID, ruleIDs, eventIDs, eventPayloads, transitionIDs, typeNames)
 		}
 	}
 
@@ -329,16 +297,8 @@ func (c *Checker) checkCapabilities() {
 		}
 		c.checkEventDoc(doc, relPath(c.root, file), eventSchema, serviceItemIDs)
 	}
-	for _, file := range glob(c.root, filepath.Join(policySchema.Targets.Dir, policySchema.Targets.Glob)) {
-		doc, err := loadYAML(file)
-		if err != nil {
-			continue
-		}
-		c.checkPolicyDoc(doc, relPath(c.root, file), policySchema)
-	}
-
-	asyncServices := c.checkAsyncDoc(asyncSchema, serviceMetaByID, eventIDs)
-	c.checkHTTPBindings(httpSchema, serviceMetaByID, eventIDs, typeNames, asyncServices)
+	asyncServices, asyncJobs := c.checkAsyncDoc(asyncSchema, serviceMetaByID, eventIDs)
+	c.checkHTTPBindings(httpSchema, serviceMetaByID, eventIDs, typeNames, asyncServices, asyncJobs)
 }
 
 func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema, typeNames map[string]bool, serviceMeta map[string]serviceMeta) {
@@ -392,17 +352,7 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 	}
 }
 
-func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, eventPayloads map[string]map[string]bool, transitionIDs map[string]bool, typeNames map[string]bool, policyMetas map[string]policyMeta) {
-	var policy *policyMeta
-	if p, _ := doc["policy"].(string); p != "" {
-		if meta, ok := policyMetas[p]; !ok {
-			c.rulef("policy-ref", "%s: unknown policy %s", rel, p)
-		} else if meta.module != module {
-			c.rulef("policy-ref", "%s: policy %s belongs to module %s, not %s", rel, p, meta.module, module)
-		} else {
-			policy = &meta
-		}
-	}
+func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, eventPayloads map[string]map[string]bool, transitionIDs map[string]bool, typeNames map[string]bool) {
 	steps := asList(doc["steps"])
 	if len(steps) == 0 {
 		c.rulef("service-structure", "%s: service requires steps", rel)
@@ -703,7 +653,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 	if hasBackwardGoto && doc["max_iterations"] == nil {
 		c.rulef("service-control", "%s: backward/self goto requires service.max_iterations", rel)
 	}
-	req := serviceLevelErrors(doc, hasBackwardGoto, policy)
+	req := serviceLevelErrors(doc, hasBackwardGoto)
 	for code := range req {
 		requiredErrors[code] = true
 	}
@@ -725,49 +675,6 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				c.rulef("service-errors", "%s: missing service-level error %s", rel, code)
 			} else {
 				c.rulef("service-errors", "%s: missing error %s produced by a reachable, unhandled step", rel, code)
-			}
-		}
-	}
-}
-
-func (c *Checker) checkPolicyDoc(doc map[string]any, rel string, schema *Schema) {
-	c.validateDoc(doc, schema.Fields, rel)
-	c.checkFieldOrder(rel, schema.Fields, orderRules{})
-	names := map[string]bool{}
-	for _, raw := range asList(doc["policies"]) {
-		item, _ := asMap(raw)
-		name, _ := item["name"].(string)
-		if name == "" {
-			c.rulef("policy-structure", "%s: policy name required", rel)
-			continue
-		}
-		if names[name] {
-			c.rulef("policy-structure", "%s: duplicate policy name %s", rel, name)
-		}
-		names[name] = true
-		if item["permissions"] == nil && item["audit"] == nil && item["rate_limit"] == nil && item["idempotency"] == nil {
-			c.rulef("policy-structure", "%s.%s: policy must declare at least one of permissions/audit/rate_limit/idempotency", rel, name)
-		}
-		for _, rawPerm := range asList(item["permissions"]) {
-			pid, _ := rawPerm.(string)
-			if !c.permissionExists(pid) {
-				c.rulef("policy-structure", "%s.%s: unknown permission %s", rel, name, pid)
-			}
-		}
-		if rl, ok := asMap(item["rate_limit"]); ok && rl != nil {
-			if n, ok := toInt(rl["requests"]); !ok || n < 1 {
-				c.rulef("policy-structure", "%s.%s: rate_limit.requests must be >= 1", rel, name)
-			}
-			if n, ok := toInt(rl["window_seconds"]); !ok || n < 1 {
-				c.rulef("policy-structure", "%s.%s: rate_limit.window_seconds must be >= 1", rel, name)
-			}
-		}
-		if idem, ok := asMap(item["idempotency"]); ok && idem != nil {
-			if k, _ := idem["key"].(string); strings.TrimSpace(k) == "" {
-				c.rulef("policy-structure", "%s.%s: idempotency.key required", rel, name)
-			}
-			if w, _ := idem["window"].(string); !match(`^[0-9]+(s|m|h|d)$`, w) {
-				c.rulef("policy-structure", "%s.%s: idempotency.window must match <n><s|m|h|d>", rel, name)
 			}
 		}
 	}
@@ -933,7 +840,9 @@ func (c *Checker) checkEventDoc(doc map[string]any, rel string, schema *Schema, 
 		}
 		if payload, ok := asMap(item["payload"]); ok {
 			if ref, _ := payload["$ref"].(string); ref != "" {
-				if !c.eventPayloadRef(ref) {
+				if strings.HasPrefix(ref, "data.enums.") {
+					c.rulef("event-payload-ref", "%s: event %s payload $ref %s must be an object type; use payload.properties.<field>.type for enums", rel, id, ref)
+				} else if !c.eventPayloadRef(ref) {
 					c.rulef("event-payload-ref", "%s: event %s payload $ref %s is unknown", rel, id, ref)
 				}
 			} else if typ, _ := payload["type"].(string); typ == "object" {
@@ -955,9 +864,6 @@ func (c *Checker) eventPayloadRef(ref string) bool {
 	if strings.HasPrefix(ref, "data.entities.") {
 		return c.entities[ref] != nil
 	}
-	if strings.HasPrefix(ref, "data.enums.") {
-		return c.enumIDs[ref]
-	}
 	if strings.HasPrefix(ref, "cap.services.") && strings.Contains(ref, ".types.") {
 		parts := strings.Split(ref, ".types.")
 		if len(parts) == 2 && parts[1] != "" {
@@ -967,8 +873,9 @@ func (c *Checker) eventPayloadRef(ref string) bool {
 	return false
 }
 
-func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMeta, eventIDs map[string]bool) map[string]bool {
+func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMeta, eventIDs map[string]bool) (map[string]bool, map[string]asyncMeta) {
 	asyncServices := map[string]bool{}
+	asyncJobs := map[string]asyncMeta{}
 	for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -1010,10 +917,12 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 				asyncServices[svc] = true
 			}
 			trigger, _ := asMap(item["trigger"])
+			triggerType := ""
 			if trigger == nil {
 				c.rulef("async-trigger", "%s.%s: trigger required", rel, name)
 			} else {
-				switch typ, _ := trigger["type"].(string); typ {
+				triggerType, _ = trigger["type"].(string)
+				switch typ := triggerType; typ {
 				case "cron":
 					if v, _ := trigger["schedule"].(string); strings.TrimSpace(v) == "" {
 						c.rulef("async-trigger", "%s.%s: trigger.schedule required for cron", rel, name)
@@ -1032,23 +941,15 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 						c.rulef("async-trigger", "%s.%s: event trigger must not declare schedule/path/method", rel, name)
 					}
 				case "webhook":
-					if trigger["schedule"] != nil || trigger["event"] != nil {
-						c.rulef("async-trigger", "%s.%s: webhook trigger must not declare schedule/event", rel, name)
-					}
-					p, _ := trigger["path"].(string)
-					if strings.TrimSpace(p) == "" {
-						c.rulef("async-trigger", "%s.%s: trigger.path required for webhook", rel, name)
-					} else if !strings.HasPrefix(p, "/") {
-						c.rulef("async-trigger", "%s.%s: trigger.path must start with /", rel, name)
-					}
-					switch m, _ := trigger["method"].(string); m {
-					case "get", "post", "put", "patch", "delete":
-					default:
-						c.rulef("async-trigger", "%s.%s: trigger.method must be get/post/put/patch/delete", rel, name)
+					if trigger["schedule"] != nil || trigger["event"] != nil || trigger["path"] != nil || trigger["method"] != nil {
+						c.rulef("async-trigger", "%s.%s: webhook trigger must not declare schedule/event/path/method; bind path via cap.protocols.http x-async", rel, name)
 					}
 				default:
 					c.rulef("async-trigger", "%s.%s: trigger.type must be cron/event/webhook", rel, name)
 				}
+			}
+			if id != "" {
+				asyncJobs[id] = asyncMeta{triggerType: triggerType, module: module}
 			}
 			if retry, ok := asMap(item["retry"]); ok && retry != nil {
 				if n, ok := toInt(retry["max_attempts"]); !ok || n < 1 {
@@ -1065,10 +966,10 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 			}
 		}
 	}
-	return asyncServices
+	return asyncServices, asyncJobs
 }
 
-func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]serviceMeta, eventIDs map[string]bool, typeNames map[string]bool, asyncServices map[string]bool) {
+func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]serviceMeta, eventIDs map[string]bool, typeNames map[string]bool, asyncServices map[string]bool, asyncJobs map[string]asyncMeta) {
 	httpFiles := glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
 	httpSchemas := map[string]bool{}
 	httpHeaders := map[string]bool{}
@@ -1232,8 +1133,27 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					}
 				})
 				serviceRef, _ := op["x-service"].(string)
-				if serviceRef == "" {
-					c.rulef("http-binding", "%s %s %s: x-service required", rel, method, path)
+				asyncRef, _ := op["x-async"].(string)
+				if asyncRef != "" && !match(`^cap\.async\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`, asyncRef) {
+					c.rulef("http-binding", "%s %s %s: x-async %q must match cap.async.<file>.<job>", rel, method, path, asyncRef)
+				}
+				if serviceRef == "" && asyncRef == "" {
+					c.rulef("http-binding", "%s %s %s: x-service or x-async required", rel, method, path)
+					continue
+				}
+				if serviceRef != "" && asyncRef != "" {
+					c.rulef("http-binding", "%s %s %s: x-service and x-async are mutually exclusive", rel, method, path)
+					continue
+				}
+				if asyncRef != "" {
+					job, ok := asyncJobs[asyncRef]
+					if !ok {
+						c.rulef("http-binding", "%s %s %s: unknown async job %s", rel, method, path, asyncRef)
+						continue
+					}
+					if job.triggerType != "webhook" {
+						c.rulef("http-binding", "%s %s %s: async job %s is not webhook-triggered", rel, method, path, asyncRef)
+					}
 					continue
 				}
 				target, ok := serviceMeta[serviceRef]
@@ -1340,34 +1260,19 @@ func serviceTypeRef(ref string) (string, bool) {
 	return parts[1], true
 }
 
-func serviceLevelErrors(doc map[string]any, hasBackwardGoto bool, policy *policyMeta) map[string]bool {
+func serviceLevelErrors(doc map[string]any, hasBackwardGoto bool) map[string]bool {
 	required := map[string]bool{}
-	if policy != nil {
-		if len(policy.permissions) > 0 {
-			required["platform.errors.COMMON_FORBIDDEN"] = true
-		}
-		if policy.rateLimit {
-			required["platform.errors.COMMON_RATE_LIMITED"] = true
-		}
-		if policy.audit {
-			required["platform.errors.COMMON_AUDIT_FAILED"] = true
-		}
-		if policy.idempotency {
-			required["platform.errors.COMMON_IDEMPOTENCY_CONFLICT"] = true
-		}
-	} else {
-		if len(asList(doc["permissions"])) > 0 {
-			required["platform.errors.COMMON_FORBIDDEN"] = true
-		}
-		if doc["rate_limit"] != nil {
-			required["platform.errors.COMMON_RATE_LIMITED"] = true
-		}
-		if audit, _ := doc["audit"].(bool); audit {
-			required["platform.errors.COMMON_AUDIT_FAILED"] = true
-		}
-		if doc["idempotency"] != nil {
-			required["platform.errors.COMMON_IDEMPOTENCY_CONFLICT"] = true
-		}
+	if len(asList(doc["permissions"])) > 0 {
+		required["platform.errors.COMMON_FORBIDDEN"] = true
+	}
+	if doc["rate_limit"] != nil {
+		required["platform.errors.COMMON_RATE_LIMITED"] = true
+	}
+	if audit, _ := doc["audit"].(bool); audit {
+		required["platform.errors.COMMON_AUDIT_FAILED"] = true
+	}
+	if doc["idempotency"] != nil {
+		required["platform.errors.COMMON_IDEMPOTENCY_CONFLICT"] = true
 	}
 	if hasBackwardGoto {
 		required["platform.errors.COMMON_LOOP_EXHAUSTED"] = true
@@ -2213,7 +2118,7 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 			delete(doc2, k)
 		}
 	}
-	c.checkServiceItem(doc2, rel, id, module, metaByID, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, typeNames, map[string]policyMeta{})
+	c.checkServiceItem(doc2, rel, id, module, metaByID, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, typeNames)
 }
 
 // checkServiceParamExpr 校验 params 表达式：input.* 必须存在于 service 入参，

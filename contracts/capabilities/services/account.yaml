@@ -67,7 +67,8 @@ services:
     errors:
       - platform.errors.ACCOUNT_NOT_FOUND
       - platform.errors.COMMON_FORBIDDEN
-    policy: cap.policies.account.get
+    permissions:
+      - platform.security.permissions.account_read
     transaction: read_only
     steps:
       - id: load
@@ -94,7 +95,9 @@ services:
     errors:
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_RATE_LIMITED
-    policy: cap.policies.account.list
+    permissions:
+      - platform.security.permissions.account_read
+    rate_limit: {requests: 60, window_seconds: 60}
     transaction: read_only
     steps:
       - id: query
@@ -122,8 +125,11 @@ services:
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
-    policy: cap.policies.account.create
+    permissions:
+      - platform.security.permissions.account_write
+    audit: true
     transaction: required
+    idempotency: {key: "account_create:{input.number}", window: 24h}
     steps:
       - id: create
         kind: logic
@@ -160,7 +166,9 @@ services:
       - platform.errors.ACCOUNT_ALREADY_DELETED
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
-    policy: cap.policies.account.update
+    permissions:
+      - platform.security.permissions.account_write
+    audit: true
     transaction: required
     steps:
       - id: update
@@ -194,8 +202,11 @@ services:
       - platform.errors.COMMON_INTERNAL
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
-    policy: cap.policies.account.delete
+    permissions:
+      - platform.security.permissions.account_delete
+    audit: true
     transaction: required
+    idempotency: {key: "account_delete:{id}", window: 24h}
     steps:
       - id: load
         kind: query
@@ -247,7 +258,9 @@ services:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
-    policy: cap.policies.account.activate
+    permissions:
+      - platform.security.permissions.account_write
+    audit: true
     transaction: required
     steps:
       - id: transition
@@ -279,7 +292,9 @@ services:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
-    policy: cap.policies.account.suspend
+    permissions:
+      - platform.security.permissions.account_write
+    audit: true
     transaction: required
     steps:
       - id: transition

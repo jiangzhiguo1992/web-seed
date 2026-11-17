@@ -73,7 +73,8 @@ services:
       - platform.errors.AUTH_EMAIL_INVALID
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_RATE_LIMITED
-    policy: cap.policies.verification.send
+    audit: true
+    rate_limit: {requests: 5, window_seconds: 60}
     transaction: required
     steps:
       - id: send
@@ -114,7 +115,8 @@ services:
       - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_RATE_LIMITED
-    policy: cap.policies.verification.verify
+    audit: true
+    rate_limit: {requests: 10, window_seconds: 60}
     transaction: required
     steps:
       - id: verify

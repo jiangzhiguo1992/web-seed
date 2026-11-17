@@ -21,7 +21,7 @@ import (
 
 func main() {
 	root := flag.String("root", "../..", "repo root")
-	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.async | cap.policies | cap.protocols.http")
+	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.async | cap.protocols.http")
 	name := flag.String("name", "", "snake_case name")
 	module := flag.String("module", "", "owner_module / query module (default: name)")
 	table := flag.String("table", "", "table stem (default: name)")
@@ -56,7 +56,7 @@ func main() {
 		fail(err)
 	}
 	switch *typ {
-	case "data.tables", "data.entities", "data.queries", "cap.services", "feature.rules", "feature.states", "cap.events", "cap.async", "cap.policies", "cap.protocols.http":
+	case "data.tables", "data.entities", "data.queries", "cap.services", "feature.rules", "feature.states", "cap.events", "cap.async", "cap.protocols.http":
 		if *out == "auto" {
 			if schema.Targets.Dir == "" {
 				fail(fmt.Errorf("targets.dir is empty"))
@@ -144,13 +144,6 @@ func main() {
 			fail(err)
 		}
 		writeOut(*out, b, "next: replace TODO; add jobs/trigger/retry/concurrency; point service at a sync cap.services.* handler; register in contracts/index.yaml; make contract-check")
-
-	case "cap.policies":
-		b, err := contractspec.RenderPolicy(schema, *name, *module, *summary)
-		if err != nil {
-			fail(err)
-		}
-		writeOut(*out, b, "next: replace TODO; add permissions/audit/rate_limit/idempotency; register in contracts/index.yaml; make contract-check")
 
 	case "cap.protocols.http":
 		if *service == "" {

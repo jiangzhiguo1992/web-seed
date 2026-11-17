@@ -74,5 +74,5 @@ fields:
 
 rules:
   - { id: event-structure, text: "事件名在文件内唯一；version >= 1；payload 可以是 inline object（必须 additionalProperties: false）或 $ref；emitted_by 必须指向存在的 cap.services.*；consumers 只能是已声明模块", implemented_by: [ event-structure ] }
-  - { id: event-payload-ref, text: "payload.$ref 必须是存在的 data.entities.* / data.enums.* / cap.services.*.types.*", implemented_by: [ event-payload-ref ] }
+  - { id: event-payload-ref, text: "payload.$ref 必须是存在的 object 类型（data.entities.* / cap.services.*.types.*）；data.enums.* 只能作为 payload.properties.<field>.type", implemented_by: [ event-payload-ref ] }
   - { id: event-version, text: "同一事件名不得重复；破坏兼容必须升 version，不得原地改 payload", implemented_by: [ event-version ] }

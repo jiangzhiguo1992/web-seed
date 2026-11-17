@@ -718,27 +718,6 @@ type transitionScaffold struct {
 	ImplementedBy []string `yaml:"implemented_by"`
 }
 
-type policyFileScaffold struct {
-	ID            string               `yaml:"id"`
-	Summary       string               `yaml:"summary"`
-	OwnerModule   string               `yaml:"owner_module"`
-	SchemaVersion int                  `yaml:"schema_version"`
-	Stability     string               `yaml:"stability"`
-	DoNot         []string             `yaml:"do_not"`
-	Scope         yaml.Node            `yaml:"scope"`
-	Policies      []policyItemScaffold `yaml:"policies"`
-}
-
-type policyItemScaffold struct {
-	ID          string         `yaml:"id"`
-	Name        string         `yaml:"name"`
-	Summary     string         `yaml:"summary"`
-	Permissions []string       `yaml:"permissions,omitempty"`
-	Audit       bool           `yaml:"audit,omitempty"`
-	RateLimit   map[string]any `yaml:"rate_limit,omitempty"`
-	Idempotency map[string]any `yaml:"idempotency,omitempty"`
-}
-
 type asyncFileScaffold struct {
 	ID            string             `yaml:"id"`
 	Summary       string             `yaml:"summary"`
@@ -971,40 +950,6 @@ func RenderEvent(s *Schema, name, module, summary string) ([]byte, error) {
 				"properties":           map[string]any{"id": map[string]any{"type": "integer"}},
 			},
 			EmittedBy: []string{},
-		}},
-	}
-	b, err := marshal2(doc)
-	if err != nil {
-		return nil, err
-	}
-	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
-}
-
-// RenderPolicy 生成 cap.policies 的最小策略骨架。
-func RenderPolicy(s *Schema, name, module, summary string) ([]byte, error) {
-	if s == nil || s.Type != "cap.policies" {
-		return nil, fmt.Errorf("RenderPolicy: want cap.policies schema")
-	}
-	if !validName(name) || !validName(module) {
-		return nil, fmt.Errorf("RenderPolicy: invalid name/module")
-	}
-	fileID := s.Targets.FileID(name + ".yaml")
-	if fileID == "" {
-		return nil, fmt.Errorf("RenderPolicy: cannot derive id from targets.id")
-	}
-	doc := policyFileScaffold{
-		ID:            fileID,
-		Summary:       summary,
-		OwnerModule:   module,
-		SchemaVersion: intConst(s.Fields, "schema_version", 1),
-		Stability:     scaffoldStability,
-		DoNot:         []string{"TODO: 实例级负向约束"},
-		Scope:         quoted(name),
-		Policies: []policyItemScaffold{{
-			ID:          fileID + ".read",
-			Name:        "read",
-			Summary:     "TODO: 策略说明",
-			Permissions: []string{"platform.security.permissions.todo"},
 		}},
 	}
 	b, err := marshal2(doc)

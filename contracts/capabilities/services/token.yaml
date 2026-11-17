@@ -93,8 +93,9 @@ services:
       - platform.errors.AUTH_TOKEN_INVALID
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
-    policy: cap.policies.token.logout
+    audit: true
     transaction: required
+    idempotency: {key: "auth_logout:{refresh_token_hash}", window: 24h}
     steps:
       - id: logout
         kind: logic

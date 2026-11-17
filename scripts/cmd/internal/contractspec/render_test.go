@@ -561,29 +561,3 @@ func TestRenderAsync(t *testing.T) {
 		t.Fatalf("job = %#v", job)
 	}
 }
-
-func TestRenderPolicy(t *testing.T) {
-	s := loadSchemaByType(t, "cap.policies")
-	b, err := RenderPolicy(s, "invoice", "invoice", "发票策略")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var doc map[string]any
-	if err := yaml.Unmarshal(b, &doc); err != nil {
-		t.Fatal(err)
-	}
-	if doc["id"] != "cap.policies.invoice" {
-		t.Fatalf("id = %v", doc["id"])
-	}
-	if doc["scope"] != "invoice" {
-		t.Fatalf("scope = %v", doc["scope"])
-	}
-	policies, _ := doc["policies"].([]any)
-	if len(policies) != 1 {
-		t.Fatalf("policies = %#v", policies)
-	}
-	item, _ := policies[0].(map[string]any)
-	if item["name"] != "read" {
-		t.Fatalf("policy = %#v", item)
-	}
-}

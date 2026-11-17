@@ -40,8 +40,8 @@ func Validate(spec map[string]any) error {
 			if op["responses"] == nil {
 				return fmt.Errorf("%s %s: responses required", method, path)
 			}
-			if op["x-service"] == nil {
-				return fmt.Errorf("%s %s: x-service required", method, path)
+			if op["x-service"] == nil && op["x-async"] == nil {
+				return fmt.Errorf("%s %s: x-service or x-async required", method, path)
 			}
 			if err := checkRefs(op, schemas, responses, headers, parameters); err != nil {
 				return fmt.Errorf("%s %s: %w", method, path, err)

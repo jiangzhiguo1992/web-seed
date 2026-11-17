@@ -80,8 +80,6 @@ var knownRuleIDs = map[string]bool{
 	"owner-write":                 true,
 	"physical-name-unique":        true,
 	"physical-primary-key":        true,
-	"policy-ref":                  true,
-	"policy-structure":            true,
 	"query-do-not-specific":       true,
 	"query-entity-coverage":       true,
 	"query-index-ref":             true,
