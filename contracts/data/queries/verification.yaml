@@ -25,15 +25,7 @@ queries:
       - { name: content, type: text, column: data.tables.verification_body.col.content, nullable: true }
       - { name: expire_at, type: timestamp, column: data.tables.verification_body.col.expire_at }
     returns:
-      - name: row
-        kind: table
-        table: data.tables.verification_body
-        columns:
-          - id
-          - status
-          - sent_at
-          - expire_at
-          - created_at
+      - { name: row, kind: entity, entity: data.entities.verification_body }
     errors:
       - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
     index_ref: [ data.tables.verification_body.pk ]
@@ -65,20 +57,7 @@ queries:
       - { name: auth_id, type: integer, column: data.tables.verification_body.col.auth_id }
       - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
     returns:
-      - name: row
-        kind: table
-        table: data.tables.verification_body
-        columns:
-          - id
-          - account_id
-          - auth_type
-          - purpose
-          - auth_id
-          - code_hash
-          - expire_at
-          - attempt_count
-          - status
-          - sent_at
+      - { name: row, kind: entity, entity: data.entities.verification_body }
     errors: []
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
@@ -159,15 +138,7 @@ queries:
       - { name: location, type: text, column: data.tables.verification_action.col.location, nullable: true }
       - { name: input_hash, type: text, column: data.tables.verification_action.col.input_hash }
     returns:
-      - name: row
-        kind: table
-        table: data.tables.verification_action
-        columns:
-          - id
-          - verification_id
-          - account_id
-          - result
-          - created_at
+      - { name: row, kind: entity, entity: data.entities.verification_action }
     errors: []
     index_ref: [ data.tables.verification_action.pk ]
     used_by:

@@ -26,16 +26,7 @@ queries:
       - { name: access_expire_at, type: timestamp, column: data.tables.token.col.access_expire_at }
       - { name: refresh_expire_at, type: timestamp, column: data.tables.token.col.refresh_expire_at }
     returns:
-      - name: row
-        kind: table
-        table: data.tables.token
-        columns:
-          - id
-          - account_id
-          - device_id
-          - access_expire_at
-          - refresh_expire_at
-          - status
+      - { name: row, kind: entity, entity: data.entities.token }
     errors: []
     index_ref:
       - data.tables.token.uq_token_access_hash
@@ -51,20 +42,7 @@ queries:
     params:
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
     returns:
-      - name: row
-        kind: table
-        table: data.tables.token
-        columns:
-          - id
-          - account_id
-          - device_id
-          - user_id
-          - access_expire_at
-          - refresh_expire_at
-          - revoked_at
-          - revoke_reason
-          - replaced_by_id
-          - status
+      - { name: row, kind: entity, entity: data.entities.token }
     errors: []
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
     used_by:
@@ -78,20 +56,7 @@ queries:
     params:
       - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
     returns:
-      - name: row
-        kind: table
-        table: data.tables.token
-        columns:
-          - id
-          - account_id
-          - device_id
-          - user_id
-          - access_expire_at
-          - refresh_expire_at
-          - revoked_at
-          - revoke_reason
-          - replaced_by_id
-          - status
+      - { name: row, kind: entity, entity: data.entities.token }
     errors: []
     index_ref: [ data.tables.token.uq_token_access_hash ]
     used_by:
