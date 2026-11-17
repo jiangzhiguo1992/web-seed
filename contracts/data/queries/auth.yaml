@@ -28,6 +28,7 @@ queries:
           - failed_login_count
           - locked_until
           - status
+    errors: []
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_username ]
     used_by:
       - cap.services.auth.login
@@ -52,6 +53,9 @@ queries:
           - status
           - created_at
           - updated_at
+    errors:
+      - platform.errors.AUTH_USERNAME_TAKEN
+      - platform.errors.AUTH_INVALID_CREDENTIALS
     index_ref:
       - data.tables.auth_pwd.uq_auth_pwd_username
       - data.tables.auth_pwd.uq_auth_pwd_account
@@ -66,6 +70,7 @@ queries:
       - { name: password_hash, type: text, column: data.tables.auth_pwd.col.password_hash }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
       - cap.services.auth.bind_password
@@ -77,6 +82,7 @@ queries:
       - { name: id, type: integer, column: data.tables.auth_pwd.col.id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
       - cap.services.auth.login
@@ -89,6 +95,7 @@ queries:
       - { name: lock_until, type: timestamp, column: data.tables.auth_pwd.col.locked_until, nullable: true }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
       - cap.services.auth.login
@@ -110,6 +117,7 @@ queries:
           - number
           - operator
           - status
+    errors: []
     index_ref: [ data.tables.auth_phone.uq_auth_phone_number ]
     used_by:
       - cap.services.auth.login
@@ -137,6 +145,8 @@ queries:
           - status
           - created_at
           - updated_at
+    errors:
+      - platform.errors.AUTH_PHONE_TAKEN
     index_ref:
       - data.tables.auth_phone.uq_auth_phone_number
       - data.tables.auth_phone.uq_auth_phone_account
@@ -161,6 +171,7 @@ queries:
           - entity
           - tld
           - status
+    errors: []
     index_ref: [ data.tables.auth_email.uq_auth_email_username_domain ]
     used_by:
       - cap.services.auth.login
@@ -190,6 +201,9 @@ queries:
           - status
           - created_at
           - updated_at
+    errors:
+      - platform.errors.AUTH_EMAIL_TAKEN
+      - platform.errors.AUTH_EMAIL_INVALID
     index_ref:
       - data.tables.auth_email.uq_auth_email_username_domain
       - data.tables.auth_email.uq_auth_email_account
@@ -203,6 +217,7 @@ queries:
       - { name: account_id, type: integer, column: data.tables.auth_pwd.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_account ]
     used_by:
       - cap.services.auth.revoke_all_for_account
@@ -214,6 +229,7 @@ queries:
       - { name: account_id, type: integer, column: data.tables.auth_phone.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.auth_phone.uq_auth_phone_account ]
     used_by:
       - cap.services.auth.revoke_all_for_account
@@ -225,6 +241,7 @@ queries:
       - { name: account_id, type: integer, column: data.tables.auth_email.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.auth_email.uq_auth_email_account ]
     used_by:
       - cap.services.auth.revoke_all_for_account
@@ -237,6 +254,7 @@ queries:
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_phone.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.auth_phone.pk ]
     used_by:
       - cap.services.auth.bind_phone
@@ -249,6 +267,7 @@ queries:
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_email.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.auth_email.pk ]
     used_by:
       - cap.services.auth.bind_email
@@ -261,6 +280,7 @@ queries:
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_pwd.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
       - cap.services.auth.bind_password

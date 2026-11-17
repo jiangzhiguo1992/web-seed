@@ -158,7 +158,6 @@ rules:
   - { id: index-used-by, text: "每条索引的 used_by 不得为空，至少引用一个查询项 ID", implemented_by: [ index-used-by ] }
   - { id: index-used-by-ref, text: "index.used_by 必须指向存在的 data.queries.* 项，且该查询的 tables 必须包含当前表", implemented_by: [ index-used-by-ref ] }
   - { id: index-name-unique, text: "索引名同一 schema 内必须全局唯一", implemented_by: [ index-name-unique ] }
-  - { id: constraint-error-ref, text: "capabilities.persistence.constraint_errors 的键必须是所写表声明的约束或索引名", implemented_by: [ constraint-error-ref ] }
   - { id: redundant-group, text: "columns[].redundancy 每组必须恰好一个 source 且包含声明列自身；组内每列必须声明完全相同的列表；同一列不得跨组；列表不得重复列；基类列不得声明 redundancy", implemented_by: [ redundant-group ] }
   - { id: redundant-ref, text: "redundancy 的 column 必须是存在的物理表自声明列（继承列/基类列不允许）；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
   - { id: default-type, text: "列 default 的 YAML 类型必须与列类型族兼容；长度/范围按本列声明的参数校验（不展开 data.tables.*.col.* 引用）", implemented_by: [ default-type ] }

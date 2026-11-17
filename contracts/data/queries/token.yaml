@@ -35,6 +35,7 @@ queries:
           - access_expire_at
           - refresh_expire_at
           - status
+    errors: []
     index_ref:
       - data.tables.token.uq_token_access_hash
       - data.tables.token.uq_token_refresh_hash
@@ -62,6 +63,7 @@ queries:
           - revoke_reason
           - replaced_by_id
           - status
+    errors: []
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
     used_by:
       - cap.services.token.logout
@@ -87,6 +89,7 @@ queries:
           - revoke_reason
           - replaced_by_id
           - status
+    errors: []
     index_ref: [ data.tables.token.uq_token_access_hash ]
     used_by:
       - cap.services.token.verify
@@ -101,6 +104,9 @@ queries:
       - { name: replaced_by_id, type: integer, column: data.tables.token.col.replaced_by_id, nullable: true }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors:
+      - platform.errors.AUTH_TOKEN_INVALID
+      - platform.errors.COMMON_CONFLICT
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
     used_by:
       - cap.services.token.logout
@@ -115,6 +121,7 @@ queries:
       - { name: revoke_reason, type: data.enums.token_revoke_reason, column: data.tables.token.col.revoke_reason }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.token.idx_token_account_status ]
     used_by:
       - cap.services.token.revoke_by_account
@@ -126,6 +133,7 @@ queries:
       - { name: limit, type: integer, nullable: true, default: 100 }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
     used_by:
       - cap.services.token.purge_expired

@@ -33,6 +33,8 @@ queries:
           - sent_at
           - expire_at
           - created_at
+    errors:
+      - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
       - cap.services.verification.send
@@ -46,6 +48,7 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
       - cap.services.verification.send
@@ -73,6 +76,7 @@ queries:
           - attempt_count
           - status
           - sent_at
+    errors: []
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
       - cap.services.verification.send
@@ -87,6 +91,8 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors:
+      - platform.errors.AUTH_VERIFICATION_INVALID
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
       - cap.services.verification.verify
@@ -100,6 +106,7 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
       - cap.services.verification.verify
@@ -114,6 +121,7 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
       - cap.services.verification.revoke_by_auth
@@ -126,6 +134,7 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.verification_body.idx_verification_account_id ]
     used_by:
       - cap.services.verification.revoke_by_account
@@ -151,6 +160,7 @@ queries:
           - account_id
           - result
           - created_at
+    errors: []
     index_ref: [ data.tables.verification_action.pk ]
     used_by:
       - cap.services.verification.verify

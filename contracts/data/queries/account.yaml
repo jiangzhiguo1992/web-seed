@@ -17,6 +17,7 @@ queries:
       - { name: id, type: integer, column: data.tables.account.col.id }
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
+    errors: []
     index_ref: [ data.tables.account.pk ]
     used_by:
       - cap.services.account.activate
@@ -34,6 +35,7 @@ queries:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns:
       - { name: exists, kind: scalar, type: boolean }
+    errors: []
     index_ref: [ data.tables.account.uq_account_number ]
     used_by:
       - cap.services.account.create
@@ -48,6 +50,7 @@ queries:
       - { name: limit, type: integer, nullable: true, default: 20 }
     returns:
       - { name: accounts, list: true, kind: entity, entity: data.entities.account }
+    errors: []
     index_ref:
       - data.tables.account.idx_account_created_at_id
       - data.tables.account.idx_account_own_type_own_id
@@ -66,6 +69,8 @@ queries:
       - { name: user_id, type: integer, column: data.tables.account.col.user_id, nullable: true }
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
+    errors:
+      - platform.errors.ACCOUNT_NUMBER_TAKEN
     index_ref: [ data.tables.account.uq_account_number ]
     used_by:
       - cap.services.account.create
@@ -78,6 +83,7 @@ queries:
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors: []
     index_ref: [ data.tables.account.pk ]
     used_by:
       - cap.services.account.update
@@ -90,6 +96,8 @@ queries:
       - { name: status, type: integer, column: data.tables.account.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors:
+      - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     index_ref: [ data.tables.account.pk ]
     used_by:
       - cap.services.account.activate
@@ -102,6 +110,8 @@ queries:
       - { name: id, type: integer, column: data.tables.account.col.id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+    errors:
+      - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     index_ref: [ data.tables.account.pk ]
     used_by:
       - cap.services.account.delete
