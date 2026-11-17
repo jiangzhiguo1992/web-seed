@@ -169,7 +169,7 @@ indexes:
       - data.queries.account.get_account_by_number
 ```
 
-`live_only: true` 只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。
+`live_only: true` 只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
 
 ### 5.2 查询：参数 + 返回 + 索引引用
 
@@ -187,7 +187,7 @@ indexes:
     - data.tables.account.idx_account_created_at_id
 ```
 
-返回值用 `kind` 区分：`entity` / `scalar` / `affected_rows`；没有 `column` / `table`。单表已有 entity 映射时返回 entity；entity 默认投影排除 `secret`，同模块需要 `secret`（如认证查询的 `password_hash`）时必须在 entity `columns` 中显式列出，跨模块禁止。
+返回值用 `kind` 区分：`scalar` / `affected_rows` / `entity` / `columns`；没有 `column` / `table`。`entity` 只写 entity、不能写 columns；`columns` 只在没有对应 entity 时使用，必须写列引用；`secret` 只有同模块可显式列出，跨模块禁止。
 
 ### 5.3 实体：列来源 + 枚举映射 + 关系
 

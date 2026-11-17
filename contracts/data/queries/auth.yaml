@@ -8,7 +8,7 @@ stability: draft
 do_not:
   - "auth 之外的普通业务查询不要引用本文件"
   - "auth 查询不要返回 password_hash 给非认证调用方"
-  - "auth 查询需要返回 secret 字段时，必须在 entity columns 中显式列出该列；跨模块不得返回 password_hash"
+  - "auth 跨模块不得返回 password_hash"
 
 queries:
   - name: GetAuthPwdByUsername
