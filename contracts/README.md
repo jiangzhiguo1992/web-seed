@@ -90,9 +90,11 @@ contracts/
 │   ├── enums.yaml            #   跨端枚举：integer code ↔ 名称
 │   └── storage.yaml          #   单例：引擎归属 / size_class / 保留 / 分区
 │
-├── capabilities/             # ② 能力层：services + events + protocols
+├── capabilities/             # ② 能力层：services + async + policies + events + protocols
 │   ├── services/<module>.yaml #   服务：interface + steps + persistence
-│   ├── events/<subject>.yaml  #   领域事件与 payload（按业务主体）
+│   ├── async/<module>.yaml     #   异步任务：trigger + retry + concurrency
+│   ├── policies/<module>.yaml  #   入口策略：权限/审计/限流/幂等
+│   ├── events/<subject>.yaml   #   领域事件与 payload（按业务主体）
 │   └── protocols/
 │       └── http/<module>.yaml #   HTTP 绑定：只写协议差异，x-service 指回 service
 │
@@ -144,7 +146,7 @@ contracts/
 | 组 | 示例 |
 |---|---|
 | data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_account_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
-| capabilities | `cap.services.account.get`、`feature.rules.account.number_format`、`feature.states.account`、`cap.events.account.created`、`cap.http.account.create` |
+| capabilities | `cap.services.account.get`、`cap.async.token.purge_expired`、`cap.policies.account.create`、`feature.rules.account.number_format`、`feature.states.account`、`cap.events.account.created`、`cap.protocols.http.account.create` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
 | platform | `platform.errors.ACCOUNT_NOT_FOUND`、`platform.security.permissions.account_read`、`platform.security.roles.admin`、`platform.analytics.events.page.account_list_viewed` |
 
@@ -171,7 +173,8 @@ contracts/
 ```
 feature ──> capabilities ──> data
               ├── services ──> data.queries
-              └── services ──> rules / states / events
+              ├── services ──> policies / rules / states / events
+              └── async ──> services / events
 ```
 
 契约依赖只有这一条链，**没有反向**。capabilities 内部允许 `services → rules/states/events`（业务依据）；`rules/states` 允许引用 `data.entities.*` 作为业务主体，但禁止引用 `data.tables` / `data.queries` / `data.storage`。
@@ -192,6 +195,9 @@ feature ──> capabilities ──> data
 | capabilities/services → capabilities/rules | service steps | `kind: logic` + `rules` |
 | capabilities/services → capabilities/states | service steps | `kind: transition` + `transition` |
 | capabilities/services → capabilities/events | service steps | `kind: event` + `event` |
+| capabilities/services → capabilities/policies | service 契约 | `policy` |
+| capabilities/async → capabilities/services | async job | `service` |
+| capabilities/async → capabilities/events | async job | `trigger.event` |
 | capabilities/services → data | service 契约 | `steps[].query` / `steps[].queries` / `persistence.tables` / `constraint_errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `join_column_from/to` |
@@ -211,7 +217,7 @@ capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，�
 
 理由：service 是规则的实现，**实现不反向声明"我实现了谁"**——那由 `implemented_by` / `emitted_by` 锚点。两处都写必然漂移。
 
-capabilities 内部允许 `services → rules/states/events`：`kind: logic` 的 `rules`、`kind: transition` 的 `transition`、`kind: event` 的 `event`。这是同组内的业务依据，不是跨层引用。
+capabilities 内部允许 `services → policies/rules/states/events`：`policy`、`kind: logic` 的 `rules`、`kind: transition` 的 `transitions`、`kind: event` 的 `event`。这是同组内的业务依据，不是跨层引用。
 
 `rules` / `states` 允许引用 `data.entities.*` 作为业务主体（状态机的 `subject`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。`business.*` 已全部移除。
 
@@ -237,9 +243,9 @@ make contract-impact id=data.tables.account.col.number
 
 ```
 feature.pages.account_list
-  ├─ cap.http.account.list ─x-service→ cap.services.account.list
+  ├─ cap.protocols.http.account.list ─x-service→ cap.services.account.list
   │    └─ kind=logic → data.queries.account.list_accounts
-  └─ cap.http.account.create ─x-service→ cap.services.account.create
+  └─ cap.protocols.http.account.create ─x-service→ cap.services.account.create
        ├─ kind=logic → data.queries.account.create_account
        └─ rules → feature.rules.account.*
             └─ implemented_by → cap.services.account.create
@@ -325,6 +331,8 @@ table:
 | `data/tables/*` | 一物理表一文件 | **不限** |
 | `data/entities/*` | 一逻辑实体一文件 | 150 |
 | `capabilities/services/*` | 一模块一文件（interface + services + persistence + 类型） | 250 |
+| `capabilities/async/*` | 一模块一文件 | 120 |
+| `capabilities/policies/*` | 一模块一文件 | 120 |
 | `capabilities/events/*` | 一业务主体一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
 | `features/states/*` | 一状态机一文件 | 150 |

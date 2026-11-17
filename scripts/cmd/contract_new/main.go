@@ -21,20 +21,20 @@ import (
 
 func main() {
 	root := flag.String("root", "../..", "repo root")
-	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.http")
+	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.async | cap.policies | cap.protocols.http")
 	name := flag.String("name", "", "snake_case name")
 	module := flag.String("module", "", "owner_module / query module (default: name)")
 	table := flag.String("table", "", "table stem (default: name)")
 	summary := flag.String("summary", "", "summary (default: name)")
 	out := flag.String("out", "", "output file (data.tables/entities/queries); empty prints to stdout; auto uses targets.dir")
 	columnType := flag.String("column-type", "", "first column type family (default: schema default)")
-	service := flag.String("service", "", "cap.http: service item ID (cap.services.*.*)")
-	path := flag.String("path", "", "cap.http: URL path (default: /<name>)")
-	httpMethod := flag.String("http-method", "get", "cap.http: HTTP method")
+	service := flag.String("service", "", "cap.protocols.http: service item ID (cap.services.*.*)")
+	path := flag.String("path", "", "cap.protocols.http: URL path (default: /<name>)")
+	httpMethod := flag.String("http-method", "get", "cap.protocols.http: HTTP method")
 	flag.Parse()
 
 	if *typ == "" || *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|feature.rules|feature.states|cap.events|cap.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
+		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|feature.rules|feature.states|cap.events|cap.protocols.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
 		os.Exit(2)
 	}
 	if *module == "" {
@@ -56,7 +56,7 @@ func main() {
 		fail(err)
 	}
 	switch *typ {
-	case "data.tables", "data.entities", "data.queries", "cap.services", "feature.rules", "feature.states", "cap.events", "cap.http":
+	case "data.tables", "data.entities", "data.queries", "cap.services", "feature.rules", "feature.states", "cap.events", "cap.async", "cap.policies", "cap.protocols.http":
 		if *out == "auto" {
 			if schema.Targets.Dir == "" {
 				fail(fmt.Errorf("targets.dir is empty"))
@@ -138,9 +138,23 @@ func main() {
 		}
 		writeOut(*out, b, "next: replace TODO; add payload fields; point emitted_by at cap.services.*; register in contracts/index.yaml; make contract-check")
 
-	case "cap.http":
+	case "cap.async":
+		b, err := contractspec.RenderAsync(schema, *name, *module, *summary)
+		if err != nil {
+			fail(err)
+		}
+		writeOut(*out, b, "next: replace TODO; add jobs/trigger/retry/concurrency; point service at a sync cap.services.* handler; register in contracts/index.yaml; make contract-check")
+
+	case "cap.policies":
+		b, err := contractspec.RenderPolicy(schema, *name, *module, *summary)
+		if err != nil {
+			fail(err)
+		}
+		writeOut(*out, b, "next: replace TODO; add permissions/audit/rate_limit/idempotency; register in contracts/index.yaml; make contract-check")
+
+	case "cap.protocols.http":
 		if *service == "" {
-			fail(fmt.Errorf("-service is required for cap.http"))
+			fail(fmt.Errorf("-service is required for cap.protocols.http"))
 		}
 		if *path == "" {
 			*path = "/" + *name

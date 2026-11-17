@@ -553,6 +553,10 @@ func requireSupported(fields []Field, supported map[string]bool, where string) e
 	return nil
 }
 
+func quoted(s string) yaml.Node {
+	return yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: s, Style: yaml.DoubleQuotedStyle}
+}
+
 func marshal2(v any) ([]byte, error) {
 	var raw bytes.Buffer
 	enc := yaml.NewEncoder(&raw)
@@ -714,6 +718,48 @@ type transitionScaffold struct {
 	ImplementedBy []string `yaml:"implemented_by"`
 }
 
+type policyFileScaffold struct {
+	ID            string               `yaml:"id"`
+	Summary       string               `yaml:"summary"`
+	OwnerModule   string               `yaml:"owner_module"`
+	SchemaVersion int                  `yaml:"schema_version"`
+	Stability     string               `yaml:"stability"`
+	DoNot         []string             `yaml:"do_not"`
+	Scope         yaml.Node            `yaml:"scope"`
+	Policies      []policyItemScaffold `yaml:"policies"`
+}
+
+type policyItemScaffold struct {
+	ID          string         `yaml:"id"`
+	Name        string         `yaml:"name"`
+	Summary     string         `yaml:"summary"`
+	Permissions []string       `yaml:"permissions,omitempty"`
+	Audit       bool           `yaml:"audit,omitempty"`
+	RateLimit   map[string]any `yaml:"rate_limit,omitempty"`
+	Idempotency map[string]any `yaml:"idempotency,omitempty"`
+}
+
+type asyncFileScaffold struct {
+	ID            string             `yaml:"id"`
+	Summary       string             `yaml:"summary"`
+	OwnerModule   string             `yaml:"owner_module"`
+	SchemaVersion int                `yaml:"schema_version"`
+	Stability     string             `yaml:"stability"`
+	DoNot         []string           `yaml:"do_not"`
+	Scope         yaml.Node          `yaml:"scope"`
+	Jobs          []asyncJobScaffold `yaml:"jobs"`
+}
+
+type asyncJobScaffold struct {
+	ID          string         `yaml:"id"`
+	Name        string         `yaml:"name"`
+	Summary     string         `yaml:"summary"`
+	Service     string         `yaml:"service"`
+	Trigger     map[string]any `yaml:"trigger"`
+	Retry       map[string]any `yaml:"retry,omitempty"`
+	Concurrency map[string]any `yaml:"concurrency,omitempty"`
+}
+
 type eventFileScaffold struct {
 	ID            string          `yaml:"id"`
 	Summary       string          `yaml:"summary"`
@@ -721,7 +767,7 @@ type eventFileScaffold struct {
 	SchemaVersion int             `yaml:"schema_version"`
 	Stability     string          `yaml:"stability"`
 	DoNot         []string        `yaml:"do_not"`
-	Scope         string          `yaml:"scope"`
+	Scope         yaml.Node       `yaml:"scope"`
 	Delivery      string          `yaml:"delivery"`
 	Events        []eventScaffold `yaml:"events"`
 }
@@ -805,7 +851,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
 }
 
-// RenderRule 生成 cap.rules 的最小 policy 骨架。
+// RenderRule 生成 feature.rules 的最小 policy 骨架。
 func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
 	if s == nil || s.Type != "feature.rules" {
 		return nil, fmt.Errorf("RenderRule: want feature.rules schema")
@@ -837,7 +883,7 @@ func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
 	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
 }
 
-// RenderState 生成 cap.states 的最小状态机骨架。
+// RenderState 生成 feature.states 的最小状态机骨架。
 func RenderState(s *Schema, name, module, summary string) ([]byte, error) {
 	if s == nil || s.Type != "feature.states" {
 		return nil, fmt.Errorf("RenderState: want feature.states schema")
@@ -893,7 +939,7 @@ func RenderEvent(s *Schema, name, module, summary string) ([]byte, error) {
 		Stability:     scaffoldStability,
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
-		Scope:         name,
+		Scope:         quoted(name),
 		Delivery:      "at_least_once",
 		Events: []eventScaffold{{
 			ID:      fileID + ".created",
@@ -915,10 +961,81 @@ func RenderEvent(s *Schema, name, module, summary string) ([]byte, error) {
 	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
 }
 
-// RenderHTTP 生成 cap.http 的最小单 operation 骨架。
+// RenderPolicy 生成 cap.policies 的最小策略骨架。
+func RenderPolicy(s *Schema, name, module, summary string) ([]byte, error) {
+	if s == nil || s.Type != "cap.policies" {
+		return nil, fmt.Errorf("RenderPolicy: want cap.policies schema")
+	}
+	if !validName(name) || !validName(module) {
+		return nil, fmt.Errorf("RenderPolicy: invalid name/module")
+	}
+	fileID := s.Targets.FileID(name + ".yaml")
+	if fileID == "" {
+		return nil, fmt.Errorf("RenderPolicy: cannot derive id from targets.id")
+	}
+	doc := policyFileScaffold{
+		ID:            fileID,
+		Summary:       summary,
+		OwnerModule:   module,
+		SchemaVersion: intConst(s.Fields, "schema_version", 1),
+		Stability:     scaffoldStability,
+		DoNot:         []string{"TODO: 实例级负向约束"},
+		Scope:         quoted(name),
+		Policies: []policyItemScaffold{{
+			ID:          fileID + ".read",
+			Name:        "read",
+			Summary:     "TODO: 策略说明",
+			Permissions: []string{"platform.security.permissions.todo"},
+		}},
+	}
+	b, err := marshal2(doc)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
+}
+
+// RenderAsync 生成 cap.async 的最小任务骨架。
+func RenderAsync(s *Schema, name, module, summary string) ([]byte, error) {
+	if s == nil || s.Type != "cap.async" {
+		return nil, fmt.Errorf("RenderAsync: want cap.async schema")
+	}
+	if !validName(name) || !validName(module) {
+		return nil, fmt.Errorf("RenderAsync: invalid name/module")
+	}
+	fileID := s.Targets.FileID(name + ".yaml")
+	if fileID == "" {
+		return nil, fmt.Errorf("RenderAsync: cannot derive id from targets.id")
+	}
+	doc := asyncFileScaffold{
+		ID:            fileID,
+		Summary:       summary,
+		OwnerModule:   module,
+		SchemaVersion: intConst(s.Fields, "schema_version", 1),
+		Stability:     scaffoldStability,
+		DoNot:         []string{"TODO: 实例级负向约束"},
+		Scope:         quoted(name),
+		Jobs: []asyncJobScaffold{{
+			ID:          fileID + ".job",
+			Name:        "job",
+			Summary:     "TODO: 任务说明",
+			Service:     "cap.services." + module + ".job",
+			Trigger:     map[string]any{"type": "cron", "schedule": "0 3 * * *"},
+			Retry:       map[string]any{"max_attempts": 3, "backoff": "exponential", "dead_letter": true},
+			Concurrency: map[string]any{"key": name + "_job"},
+		}},
+	}
+	b, err := marshal2(doc)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
+}
+
+// RenderHTTP 生成 cap.protocols.http 的最小单 operation 骨架。
 func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod string) ([]byte, error) {
-	if s == nil || s.Type != "cap.http" {
-		return nil, fmt.Errorf("RenderHTTP: want cap.http schema")
+	if s == nil || s.Type != "cap.protocols.http" {
+		return nil, fmt.Errorf("RenderHTTP: want cap.protocols.http schema")
 	}
 	if !validName(name) || !validName(module) {
 		return nil, fmt.Errorf("RenderHTTP: invalid name/module")

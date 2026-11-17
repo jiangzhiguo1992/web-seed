@@ -760,7 +760,7 @@ func TestHTTPCapabilityWriteLayerRejected(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	body := `id: cap.http.x
+	body := `id: cap.protocols.http.x
 owner_module: x
 persistence:
   tables: [ data.tables.x ]
@@ -774,7 +774,7 @@ persistence:
 		t.Fatalf("http write layer not rejected: %v", c.errs)
 	}
 
-	body = `id: cap.http.x
+	body = `id: cap.protocols.http.x
 owner_module: x
 writes:
   - data.queries.x.q

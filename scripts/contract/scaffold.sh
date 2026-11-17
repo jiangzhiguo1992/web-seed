@@ -17,7 +17,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 usage() {
   echo "usage: type=<type> name=<name> [module=<module>] [summary=<text>] [column_type=<family>] [table=<stem>] [service=<cap.services.*.*>] [path=</x>] [http_method=<verb>] $0" >&2
   echo "       make contract-new type=<type> name=<name> [module=...] [summary=...] [service=...] [path=...]" >&2
-  echo "  type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.http" >&2
+  echo "  type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.protocols.http" >&2
   exit 2
 }
 
@@ -78,9 +78,9 @@ case "$type" in
     go run ./contract_new -root "$ROOT" -type cap.events -name "$name" -module "$module" -summary "$summary" -out auto
     ;;
 
-  cap.http)
-    [[ -n "$service" ]] || { echo "cap.http requires service=cap.services.*.*" >&2; exit 2; }
-    go run ./contract_new -root "$ROOT" -type cap.http -name "$name" -module "$module" -summary "$summary" -service "$service" -path "$path" -http-method "$http_method" -out auto
+  cap.protocols.http)
+    [[ -n "$service" ]] || { echo "cap.protocols.http requires service=cap.services.*.*" >&2; exit 2; }
+    go run ./contract_new -root "$ROOT" -type cap.protocols.http -name "$name" -module "$module" -summary "$summary" -service "$service" -path "$path" -http-method "$http_method" -out auto
     ;;
 
   *)

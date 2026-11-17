@@ -3,6 +3,9 @@
 package check
 
 var knownRuleIDs = map[string]bool{
+	"async-service":               true,
+	"async-structure":             true,
+	"async-trigger":               true,
 	"base-columns":                true,
 	"base-file":                   true,
 	"base-only":                   true,
@@ -52,6 +55,7 @@ var knownRuleIDs = map[string]bool{
 	"enum-type-unique":            true,
 	"enum-used-by":                true,
 	"enum-values-unique":          true,
+	"event-payload-ref":           true,
 	"event-structure":             true,
 	"event-version":               true,
 	"extends-conflict":            true,
@@ -63,6 +67,7 @@ var knownRuleIDs = map[string]bool{
 	"http-binding":                true,
 	"http-components":             true,
 	"http-retry-after":            true,
+	"http-service-return":         true,
 	"http-service-type":           true,
 	"index-comment":               true,
 	"index-definition":            true,
@@ -75,6 +80,8 @@ var knownRuleIDs = map[string]bool{
 	"owner-write":                 true,
 	"physical-name-unique":        true,
 	"physical-primary-key":        true,
+	"policy-ref":                  true,
+	"policy-structure":            true,
 	"query-do-not-specific":       true,
 	"query-entity-coverage":       true,
 	"query-index-ref":             true,
@@ -134,7 +141,6 @@ var knownRuleIDs = map[string]bool{
 	"service-ref":                 true,
 	"service-steps-kind":          true,
 	"service-structure":           true,
-	"service-trigger":             true,
 	"service-visibility":          true,
 	"service-when":                true,
 	"state-exhaustive":            true,

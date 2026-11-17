@@ -1,0 +1,19 @@
+# 令牌异步任务。
+
+id: cap.async.token
+summary: "令牌异步任务"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "异步任务只做调度，不在 async 里写业务步骤；步骤属于 service"
+  - "被 async 引用的 service 不得再被 cap.protocols.http 绑定"
+scope: "token"
+jobs:
+  - id: cap.async.token.purge_expired
+    name: purge_expired
+    summary: "清理已过期令牌"
+    service: cap.services.token.purge_expired
+    trigger: {type: cron, schedule: "0 3 * * *"}
+    retry: {max_attempts: 3, backoff: exponential, dead_letter: true}
+    concurrency: {key: token_purge, ttl: 1h}

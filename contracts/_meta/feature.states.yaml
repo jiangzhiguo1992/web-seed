@@ -87,7 +87,7 @@ fields:
       - name: guard
         type: any
         required: true
-        description: "守卫：true 表示无额外条件；{ rule: cap.rules.* } 表示结构化规则"
+        description: "守卫：true 表示无额外条件；{ rule: feature.rules.* } 表示结构化规则"
       - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "非法转换错误码" }
       - { name: side_effects, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "副作用事件" }
       - { name: implemented_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的服务项" }
@@ -109,5 +109,5 @@ fields:
     description: "幂等转换"
 
 rules:
-  - { id: state-structure, text: "状态名唯一；initial 必须是已声明状态；transitions 的 from/to 必须是已声明状态；forbidden_examples 的 from/transition 必须存在且不是合法转换；guard 只能是 true 或 { rule: cap.rules.* }；side_effects 必须指向存在的 cap.events.*；implemented_by 必须指向存在的 cap.services.*", implemented_by: [ state-structure ] }
+  - { id: state-structure, text: "状态名唯一；initial 必须是已声明状态；transitions 的 from/to 必须是已声明状态；forbidden_examples 的 from/transition 必须存在且不是合法转换；guard 只能是 true 或 { rule: feature.rules.* }；side_effects 必须指向存在的 cap.events.*；implemented_by 必须指向存在的 cap.services.*", implemented_by: [ state-structure ] }
   - { id: state-exhaustive, text: "每个非终态必须有出边；终态不得有出边；转换名唯一", implemented_by: [ state-exhaustive ] }

@@ -48,7 +48,7 @@ func TestCapabilityFileFieldOrder(t *testing.T) {
 		{
 			name:   "http stability before summary",
 			rel:    "contracts/capabilities/protocols/http/x.yaml",
-			body:   "id: cap.http.x\nstability: draft\nsummary: \"x\"\nowner_module: x\nschema_version: 1\ndo_not: []\npaths: {}\n",
+			body:   "id: cap.protocols.http.x\nstability: draft\nsummary: \"x\"\nowner_module: x\nschema_version: 1\ndo_not: []\npaths: {}\n",
 			fields: httpFields,
 			want:   "field summary must come before stability",
 		},

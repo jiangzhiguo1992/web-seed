@@ -70,6 +70,23 @@ func contains(values []string, value string) bool {
 // computeAnchors 扫描 services 的 steps，并登记 rules/states/events 的文件归属。
 func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 	a := newAnchors()
+	if asyncTarget, err := resolveTarget(root, "cap.async"); err == nil {
+		for _, f := range glob(root, filepath.Join(asyncTarget.dir, asyncTarget.glob)) {
+			doc, err := loadYAML(f)
+			if err != nil {
+				return nil, err
+			}
+			module, _ := doc["owner_module"].(string)
+			for _, raw := range asList(doc["jobs"]) {
+				job, _ := asMap(raw)
+				if trigger, ok := asMap(job["trigger"]); ok {
+					if ev, _ := trigger["event"].(string); ev != "" {
+						a.EventConsumers[ev] = append(a.EventConsumers[ev], module)
+					}
+				}
+			}
+		}
+	}
 	for _, f := range glob(root, filepath.Join(serviceTarget.dir, serviceTarget.glob)) {
 		doc, err := loadYAML(f)
 		if err != nil {
@@ -79,7 +96,6 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 		if fileID == "" {
 			continue
 		}
-		module, _ := doc["owner_module"].(string)
 		for _, raw := range asList(doc["services"]) {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
@@ -87,11 +103,6 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				continue
 			}
 			serviceID := fileID + "." + name
-			if trigger, ok := asMap(item["trigger"]); ok {
-				if ev, _ := trigger["event"].(string); ev != "" {
-					a.EventConsumers[ev] = append(a.EventConsumers[ev], module)
-				}
-			}
 			for _, rawStep := range asList(item["steps"]) {
 				step, _ := asMap(rawStep)
 				switch kind, _ := step["kind"].(string); kind {

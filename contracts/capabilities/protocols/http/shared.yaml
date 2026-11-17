@@ -1,6 +1,6 @@
 # HTTP 共享组件。各模块 OpenAPI 引用的公共 schema 与参数。
 
-id: cap.http.shared
+id: cap.protocols.http.shared
 summary: "HTTP 共享组件"
 schema_version: 1
 stability: stable

@@ -24,7 +24,7 @@
 | 要做的事 | 先读 playbook | 再读契约 |
 |---|---|---|
 | 改任何契约 | `playbooks/contract-change.md` | `_meta/README.md` → `_meta/<type>.yaml` → `index.yaml` → 目标文件 |
-| 新增 / 修改 API | `contract-change` + `add-endpoint`（P7） | `capabilities/README.md`、`capabilities/http/*.yaml`、`project.yaml`（apps） |
+| 新增 / 修改 API | `contract-change` + `add-endpoint`（P7） | `capabilities/README.md`、`capabilities/protocols/http/*.yaml`、`project.yaml`（apps） |
 | 新增表 / 迁移 | `contract-change` + `add-table`（P7） | `data/README.md`、`_meta/data.tables.yaml`、`data/tables/_base.yaml`、`data/tables/*.yaml`、`data/storage.yaml` |
 | 改业务规则 / 状态机 | `contract-change` | `features/README.md`、`features/{rules,states}/*.yaml`、`capabilities/README.md` |
 | 改存储引擎 | `contract-change` | `data/storage.yaml` |

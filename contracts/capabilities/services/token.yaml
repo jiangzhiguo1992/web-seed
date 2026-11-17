@@ -67,7 +67,6 @@ services:
     errors:
       - platform.errors.AUTH_TOKEN_INVALID
       - platform.errors.AUTH_TOKEN_EXPIRED
-    permissions: []
     transaction: required
     steps:
       - id: refresh
@@ -94,10 +93,8 @@ services:
       - platform.errors.AUTH_TOKEN_INVALID
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_IDEMPOTENCY_CONFLICT
-    permissions: []
-    audit: true
+    policy: cap.policies.token.logout
     transaction: required
-    idempotency: {key: "auth_logout:{refresh_token_hash}", window: 24h}
     steps:
       - id: logout
         kind: logic
@@ -164,9 +161,6 @@ services:
     errors:
       - platform.errors.COMMON_INTERNAL
     transaction: none
-    trigger: {type: cron, schedule: "0 3 * * *"}
-    retry: {max_attempts: 3, backoff: exponential, dead_letter: true}
-    concurrency: {key: token_purge, ttl: 1h}
     steps:
       - id: purge
         kind: logic

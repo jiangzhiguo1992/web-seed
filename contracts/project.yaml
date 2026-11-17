@@ -33,9 +33,9 @@ apps:
     kind: api
     description: "管理端 API"
     includes:
-      - cap.http.shared
-      - cap.http.account
-      - cap.http.auth
+      - cap.protocols.http.shared
+      - cap.protocols.http.account
+      - cap.protocols.http.auth
     generated:
       spec: generated/openapi/admin.yaml
       server: apps/api/internal/generated/openapi

@@ -33,6 +33,12 @@ targets:
   glob: "*.yaml"
   id: "cap.events.<file>"
 `)
+	writeFixture(t, root, "contracts/_meta/cap.async.yaml", `type: cap.async
+targets:
+  dir: contracts/capabilities/async
+  glob: "*.yaml"
+  id: "cap.async.<file>"
+`)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 owner_module: x
 services:
@@ -49,10 +55,17 @@ services:
         transitions: [feature.states.x.activate]
         events: [cap.events.x.activated]
   - name: consume
-    trigger: {type: event, event: cap.events.x.activated}
     steps:
       - id: handle
         kind: logic
+`)
+	writeFixture(t, root, "contracts/capabilities/async/x.yaml", `id: cap.async.x
+owner_module: x
+jobs:
+  - id: cap.async.x.consume_activated
+    name: consume_activated
+    service: cap.services.x.consume
+    trigger: {type: event, event: cap.events.x.activated}
 `)
 	writeFixture(t, root, "contracts/features/rules/x.yaml", `id: feature.rules.x
 rules:

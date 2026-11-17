@@ -80,7 +80,7 @@ gen-errors: ## platform/errors.yaml → docs/contracts/generated/errors.md
 gen-errors-check: ## 校验 errors.md 是否最新（CI）
 	cd scripts/cmd && go run ./gen_errors -root "$(CURDIR)" -check
 
-contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|feature.rules|feature.states|cap.events|cap.http）
+contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|feature.rules|feature.states|cap.events|cap.protocols.http）
 	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" service="$(service)" path="$(path)" http_method="$(http_method)" ./scripts/contract/scaffold.sh
 
 contract-check: ## 校验契约结构与 used_by（data.tables/enums/entities/queries）

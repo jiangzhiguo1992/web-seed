@@ -26,17 +26,17 @@ func TestBuildExpandsServiceTypes(t *testing.T) {
 apps:
   api:
     kind: api
-    includes: [cap.http.x]
+    includes: [cap.protocols.http.x]
     generated:
       spec: generated/openapi/x.yaml
 `)
-	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.http.x
+	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 base_path: /v1
 paths:
   /x:
     get:
       operationId: getX
-      x-contract-id: cap.http.x.get
+      x-contract-id: cap.protocols.http.x.get
       x-service: cap.services.x.get
       responses:
         "200":

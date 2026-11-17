@@ -1,0 +1,84 @@
+# cap.policies 类型规范：入口策略契约，按模块组织。
+# service 只引用 policy；权限/审计/限流/幂等只在此声明。
+
+id: meta.cap.policies
+type: cap.policies
+title: "入口策略契约"
+targets:
+  dir: "contracts/capabilities/policies"
+  glob: "*.yaml"
+  id: "cap.policies.<file>"
+  naming: "snake_case"
+
+fields:
+  - name: id
+    type: string
+    required: true
+    pattern: '^cap\.policies\.[a-z][a-z0-9_]*$'
+    description: "契约 ID"
+
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明"
+
+  - name: owner_module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "策略归属模块"
+
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: list<string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: scope
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "业务范围"
+
+  - name: policies
+    type: list<object>
+    required: true
+    min_items: 1
+    description: "策略项；item ID = cap.policies.<file>.<snake_case(name)>"
+    item_fields:
+      - { name: id, type: string, required: true, pattern: '^cap\.policies\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "策略 ID" }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "策略名" }
+      - { name: summary, type: string, required: true, description: "一句话说明" }
+      - { name: permissions, type: list<string>, required: false, unique: true, pattern: '^platform\.security\.permissions\.[a-z][a-z0-9_]*$', description: "入口权限点" }
+      - { name: audit, type: boolean, required: false, description: "是否写审计日志" }
+      - name: rate_limit
+        type: object
+        required: false
+        description: "入口限流"
+        fields:
+          - { name: requests, type: integer, required: true, min: 1, description: "窗口内请求数" }
+          - { name: window_seconds, type: integer, required: true, min: 1, description: "窗口秒数" }
+      - name: idempotency
+        type: object
+        required: false
+        description: "幂等键与窗口"
+        fields:
+          - { name: key, type: string, required: true, description: "幂等键模板" }
+          - { name: window, type: string, required: true, pattern: '^[0-9]+(s|m|h|d)$', description: "窗口，例如 24h" }
+
+rules:
+  - { id: policy-structure, text: "policy 至少声明 permissions/audit/rate_limit/idempotency 之一；permissions 必须是存在的 platform.security.permissions.*；rate_limit.requests/window_seconds >= 1；idempotency.window 格式必须合法", implemented_by: [ policy-structure ] }
+  - { id: policy-ref, text: "service.policy 必须指向存在的 cap.policies.*；policy 的 owner_module 必须与引用它的 service 文件一致", implemented_by: [ policy-ref ] }

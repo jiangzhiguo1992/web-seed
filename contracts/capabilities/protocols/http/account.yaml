@@ -1,6 +1,6 @@
 # 账号 HTTP 接口（OpenAPI 片段）。
 
-id: cap.http.account
+id: cap.protocols.http.account
 summary: "账号 HTTP 接口"
 owner_module: account
 schema_version: 1
@@ -16,7 +16,7 @@ paths:
   /account:
     get:
       operationId: listAccounts
-      x-contract-id: cap.http.account.list
+      x-contract-id: cap.protocols.http.account.list
       x-service: cap.services.account.list
       summary: "列出账号"
       x-timeout-ms: 3000
@@ -46,7 +46,7 @@ paths:
 
     post:
       operationId: createAccount
-      x-contract-id: cap.http.account.create
+      x-contract-id: cap.protocols.http.account.create
       x-service: cap.services.account.create
       summary: "创建账号"
       x-timeout-ms: 5000
@@ -61,12 +61,14 @@ paths:
           description: "已创建"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Account" }
+              schema:
+                $ref: "#/components/schemas/Account"
+                x-service-return: data.entities.account
 
   /account/{id}:
     get:
       operationId: getAccount
-      x-contract-id: cap.http.account.get
+      x-contract-id: cap.protocols.http.account.get
       x-service: cap.services.account.get
       summary: "获取账号"
       parameters:
@@ -76,11 +78,13 @@ paths:
           description: "成功"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Account" }
+              schema:
+                $ref: "#/components/schemas/Account"
+                x-service-return: data.entities.account
 
     patch:
       operationId: updateAccount
-      x-contract-id: cap.http.account.update
+      x-contract-id: cap.protocols.http.account.update
       x-service: cap.services.account.update
       summary: "更新账号资料"
       parameters:
@@ -95,11 +99,13 @@ paths:
           description: "成功"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Account" }
+              schema:
+                $ref: "#/components/schemas/Account"
+                x-service-return: data.entities.account
 
     delete:
       operationId: deleteAccount
-      x-contract-id: cap.http.account.delete
+      x-contract-id: cap.protocols.http.account.delete
       x-service: cap.services.account.delete
       summary: "删除账号（软删）"
       parameters:
@@ -110,7 +116,7 @@ paths:
   /account/{id}/activate:
     post:
       operationId: activateAccount
-      x-contract-id: cap.http.account.activate
+      x-contract-id: cap.protocols.http.account.activate
       x-service: cap.services.account.activate
       summary: "激活账号"
       parameters:
@@ -120,12 +126,14 @@ paths:
           description: "成功"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Account" }
+              schema:
+                $ref: "#/components/schemas/Account"
+                x-service-return: data.entities.account
 
   /account/{id}/suspend:
     post:
       operationId: suspendAccount
-      x-contract-id: cap.http.account.suspend
+      x-contract-id: cap.protocols.http.account.suspend
       x-service: cap.services.account.suspend
       summary: "封禁账号"
       parameters:
@@ -145,7 +153,9 @@ paths:
           description: "成功"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Account" }
+              schema:
+                $ref: "#/components/schemas/Account"
+                x-service-return: data.entities.account
 
 components:
   schemas:

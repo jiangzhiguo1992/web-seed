@@ -504,7 +504,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 列出账号
-      x-contract-id: cap.http.account.list
+      x-contract-id: cap.protocols.http.account.list
       x-service: cap.services.account.list
       x-timeout-ms: 3000
     post:
@@ -526,6 +526,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Account'
+                x-service-return: data.entities.account
           description: 已创建
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -546,7 +547,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 创建账号
-      x-contract-id: cap.http.account.create
+      x-contract-id: cap.protocols.http.account.create
       x-service: cap.services.account.create
       x-timeout-ms: 5000
   /account/{id}:
@@ -580,7 +581,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 删除账号（软删）
-      x-contract-id: cap.http.account.delete
+      x-contract-id: cap.protocols.http.account.delete
       x-service: cap.services.account.delete
     get:
       operationId: getAccount
@@ -596,6 +597,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Account'
+                x-service-return: data.entities.account
           description: 成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -616,7 +618,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 获取账号
-      x-contract-id: cap.http.account.get
+      x-contract-id: cap.protocols.http.account.get
       x-service: cap.services.account.get
     patch:
       operationId: updateAccount
@@ -638,6 +640,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Account'
+                x-service-return: data.entities.account
           description: 成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -658,7 +661,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 更新账号资料
-      x-contract-id: cap.http.account.update
+      x-contract-id: cap.protocols.http.account.update
       x-service: cap.services.account.update
   /account/{id}/activate:
     post:
@@ -675,6 +678,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Account'
+                x-service-return: data.entities.account
           description: 成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -695,7 +699,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 激活账号
-      x-contract-id: cap.http.account.activate
+      x-contract-id: cap.protocols.http.account.activate
       x-service: cap.services.account.activate
   /account/{id}/suspend:
     post:
@@ -726,6 +730,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Account'
+                x-service-return: data.entities.account
           description: 成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -746,7 +751,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 封禁账号
-      x-contract-id: cap.http.account.suspend
+      x-contract-id: cap.protocols.http.account.suspend
       x-service: cap.services.account.suspend
   /auth/login:
     post:
@@ -768,6 +773,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthSession'
+                x-service-return: AuthSession
           description: 登录成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -788,7 +794,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 登录
-      x-contract-id: cap.http.auth.login
+      x-contract-id: cap.protocols.http.auth.login
       x-service: cap.services.auth.login
       x-timeout-ms: 5000
   /auth/logout:
@@ -829,7 +835,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 登出
-      x-contract-id: cap.http.auth.logout
+      x-contract-id: cap.protocols.http.auth.logout
       x-service: cap.services.token.logout
   /auth/refresh:
     post:
@@ -853,6 +859,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenPair'
+                x-service-return: TokenPair
           description: 成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -873,7 +880,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 刷新令牌
-      x-contract-id: cap.http.auth.refresh
+      x-contract-id: cap.protocols.http.auth.refresh
       x-service: cap.services.token.refresh
       x-timeout-ms: 3000
   /auth/verification/send:
@@ -895,6 +902,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VerificationSent'
+                x-service-return: VerificationSent
           description: 已受理
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -915,7 +923,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 发送验证码
-      x-contract-id: cap.http.auth.verification_send
+      x-contract-id: cap.protocols.http.auth.verification_send
       x-service: cap.services.verification.send
       x-timeout-ms: 5000
   /auth/verification/verify:
@@ -938,6 +946,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VerificationResult'
+                x-service-return: VerificationResult
           description: 校验成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -958,7 +967,7 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 校验验证码
-      x-contract-id: cap.http.auth.verification_verify
+      x-contract-id: cap.protocols.http.auth.verification_verify
       x-service: cap.services.verification.verify
       x-timeout-ms: 5000
 servers:

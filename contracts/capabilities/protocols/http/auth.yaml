@@ -1,6 +1,6 @@
 # 认证 HTTP 接口（OpenAPI 片段）。
 
-id: cap.http.auth
+id: cap.protocols.http.auth
 summary: "认证 HTTP 接口"
 owner_module: account
 schema_version: 1
@@ -16,7 +16,7 @@ paths:
   /auth/login:
     post:
       operationId: login
-      x-contract-id: cap.http.auth.login
+      x-contract-id: cap.protocols.http.auth.login
       x-service: cap.services.auth.login
       summary: "登录"
       x-timeout-ms: 5000
@@ -31,12 +31,14 @@ paths:
           description: "登录成功"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/AuthSession" }
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+                x-service-return: AuthSession
 
   /auth/verification/send:
     post:
       operationId: sendVerification
-      x-contract-id: cap.http.auth.verification_send
+      x-contract-id: cap.protocols.http.auth.verification_send
       x-service: cap.services.verification.send
       summary: "发送验证码"
       x-timeout-ms: 5000
@@ -51,12 +53,14 @@ paths:
           description: "已受理"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/VerificationSent" }
+              schema:
+                $ref: "#/components/schemas/VerificationSent"
+                x-service-return: VerificationSent
 
   /auth/verification/verify:
     post:
       operationId: verifyCode
-      x-contract-id: cap.http.auth.verification_verify
+      x-contract-id: cap.protocols.http.auth.verification_verify
       x-service: cap.services.verification.verify
       summary: "校验验证码"
       x-timeout-ms: 5000
@@ -71,12 +75,14 @@ paths:
           description: "校验成功"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/VerificationResult" }
+              schema:
+                $ref: "#/components/schemas/VerificationResult"
+                x-service-return: VerificationResult
 
   /auth/refresh:
     post:
       operationId: refreshToken
-      x-contract-id: cap.http.auth.refresh
+      x-contract-id: cap.protocols.http.auth.refresh
       x-service: cap.services.token.refresh
       summary: "刷新令牌"
       x-timeout-ms: 3000
@@ -95,12 +101,14 @@ paths:
           description: "成功"
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/TokenPair" }
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+                x-service-return: TokenPair
 
   /auth/logout:
     post:
       operationId: logout
-      x-contract-id: cap.http.auth.logout
+      x-contract-id: cap.protocols.http.auth.logout
       x-service: cap.services.token.logout
       summary: "登出"
       requestBody:

@@ -97,9 +97,7 @@ services:
       - platform.errors.COMMON_FORBIDDEN
       - platform.errors.COMMON_AUDIT_FAILED
       - platform.errors.COMMON_RATE_LIMITED
-    permissions: []
-    audit: true
-    rate_limit: {requests: 10, window_seconds: 60}
+    policy: cap.policies.auth.login
     transaction: required
     steps:
       - id: login

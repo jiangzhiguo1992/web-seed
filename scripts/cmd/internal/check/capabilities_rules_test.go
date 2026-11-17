@@ -103,13 +103,13 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 			},
 		}
 	}
-	c.checkServiceItem(doc([]any{map[string]any{"name": "account", "type": "any"}}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, map[string]bool{})
+	c.checkServiceItem(doc([]any{map[string]any{"name": "account", "type": "any"}}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]policyMeta{})
 	if len(c.errs) != 0 {
 		t.Fatalf("covered output reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, map[string]bool{})
+	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]policyMeta{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-output]") {
 		t.Fatalf("missing return not reported: %v", c.errs)
 	}
@@ -136,13 +136,13 @@ func TestServiceEventPayload(t *testing.T) {
 	}
 	eventIDs := map[string]bool{"cap.events.x.created": true}
 	payloads := map[string]map[string]bool{"cap.events.x.created": {"id": true}}
-	c.checkServiceItem(doc(map[string]any{"id": "input.id"}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, eventIDs, payloads, map[string]bool{}, map[string]bool{})
+	c.checkServiceItem(doc(map[string]any{"id": "input.id"}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, eventIDs, payloads, map[string]bool{}, map[string]bool{}, map[string]policyMeta{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid payload reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceItem(doc(map[string]any{"missing": "input.id"}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, eventIDs, payloads, map[string]bool{}, map[string]bool{})
+	c.checkServiceItem(doc(map[string]any{"missing": "input.id"}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, eventIDs, payloads, map[string]bool{}, map[string]bool{}, map[string]policyMeta{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-event-payload]") {
 		t.Fatalf("unknown payload field not reported: %v", c.errs)
 	}
@@ -177,7 +177,7 @@ fields:
   - {name: persistence, type: any}
   - {name: services, type: any}
 `)
-	for _, typ := range []string{"feature.rules", "feature.states", "cap.events", "cap.http"} {
+	for _, typ := range []string{"feature.rules", "feature.states", "cap.events", "cap.protocols.http", "cap.async", "cap.policies"} {
 		writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", "type: "+typ+`
 targets:
   dir: contracts/features/unused
@@ -225,13 +225,13 @@ services:
 
 func TestHTTPRequestBodyType(t *testing.T) {
 	root := t.TempDir()
-	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.http.x
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
 paths:
   /x:
     post:
       operationId: createX
-      x-contract-id: cap.http.x.create
+      x-contract-id: cap.protocols.http.x.create
       x-service: cap.services.x.create
       responses:
         "200":
@@ -255,7 +255,7 @@ components:
 			visibility: "public",
 			paramTypes: map[string]bool{"XInput": true},
 		},
-	}, map[string]bool{}, map[string]bool{})
+	}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-service-type]") {
 		t.Fatalf("requestBody type mismatch not reported: %v", c.errs)
 	}
@@ -263,13 +263,13 @@ components:
 
 func TestHTTPRequestBodyTypeMultipleMedia(t *testing.T) {
 	root := t.TempDir()
-	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.http.x
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
 paths:
   /x:
     post:
       operationId: createX
-      x-contract-id: cap.http.x.create
+      x-contract-id: cap.protocols.http.x.create
       x-service: cap.services.x.create
       responses:
         "200":
@@ -292,7 +292,7 @@ components:
 	}}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.create": {visibility: "public", paramTypes: map[string]bool{"XInput": true}},
-	}, map[string]bool{}, map[string]bool{})
+	}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	if got := strings.Count(strings.Join(c.errs, "\n"), "[http-service-type]"); got != 2 {
 		t.Fatalf("want 2 http-service-type errors, got %d: %v", got, c.errs)
 	}
@@ -300,13 +300,13 @@ components:
 
 func TestHTTPRequestBodyTypeInlineSkipped(t *testing.T) {
 	root := t.TempDir()
-	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.http.x
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
 paths:
   /x:
     post:
       operationId: createX
-      x-contract-id: cap.http.x.create
+      x-contract-id: cap.protocols.http.x.create
       x-service: cap.services.x.create
       responses:
         "200":
@@ -330,7 +330,7 @@ components:
 	}}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.create": {visibility: "public", paramTypes: map[string]bool{"XInput": true}},
-	}, map[string]bool{}, map[string]bool{})
+	}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("inline requestBody reported: %v", c.errs)
 	}
@@ -497,7 +497,7 @@ func TestServiceCycleMultiple(t *testing.T) {
 
 func TestHTTPComponentFields(t *testing.T) {
 	root := t.TempDir()
-	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.http.x
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
 paths: {}
 components:
@@ -522,7 +522,7 @@ components:
 				"X": {"properties": map[string]any{"id": map[string]any{"type": "integer"}}},
 			},
 		},
-	}, map[string]bool{}, map[string]bool{"X": true})
+	}, map[string]bool{}, map[string]bool{"X": true}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-service-type]") {
 		t.Fatalf("component field mismatch not reported: %v", c.errs)
 	}
@@ -594,5 +594,123 @@ transitions:
 				t.Fatalf("want %s, got %v", tc.want, c.errs)
 			}
 		})
+	}
+}
+
+func TestCheckEventPayloadRef(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.events")
+	rel := "contracts/capabilities/events/x.yaml"
+	valid := `id: cap.events.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+scope: "x"
+delivery: at_least_once
+events:
+  - id: cap.events.x.created
+    name: x.created
+    version: 1
+    payload:
+      $ref: data.entities.account
+    summary: "x"
+    emitted_by: []
+`
+	writeCapFile(t, root, rel, valid)
+	doc, err := loadYAML(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{
+		root:           root,
+		entities:       map[string]*entityInfo{"data.entities.account": {}},
+		methodTypeDefs: map[string]map[string]any{"AuthSession": {}},
+	}
+	c.checkEventDoc(doc, rel, schema, map[string]bool{})
+	if len(c.errs) != 0 {
+		t.Fatalf("valid $ref reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, strings.Replace(valid, "data.entities.account", "data.entities.missing", 1))
+	doc, err = loadYAML(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.errs = nil
+	c.checkEventDoc(doc, rel, schema, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-payload-ref]") {
+		t.Fatalf("unknown $ref not reported: %v", c.errs)
+	}
+}
+
+func TestCheckPolicyDoc(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.policies")
+	rel := "contracts/capabilities/policies/x.yaml"
+	valid := `id: cap.policies.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+scope: "x"
+policies:
+  - id: cap.policies.x.read
+    name: read
+    summary: "x"
+    permissions: [platform.security.permissions.account_read]
+`
+	writeCapFile(t, root, rel, valid)
+	doc, err := loadYAML(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root, permissionSet: map[string]bool{"platform.security.permissions.account_read": true}}
+	c.checkPolicyDoc(doc, rel, schema)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid policy reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, `id: cap.policies.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+scope: "x"
+policies:
+  - id: cap.policies.x.empty
+    name: empty
+    summary: "x"
+`)
+	doc, err = loadYAML(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.errs = nil
+	c.checkPolicyDoc(doc, rel, schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[policy-structure]") {
+		t.Fatalf("empty policy not reported: %v", c.errs)
+	}
+}
+
+func TestServicePolicyRef(t *testing.T) {
+	c := &Checker{}
+	c.checkServiceItem(map[string]any{
+		"summary":     "x",
+		"visibility":  "public",
+		"params":      []any{},
+		"returns":     []any{},
+		"errors":      []any{},
+		"transaction": "none",
+		"policy":      "cap.policies.x.missing",
+		"steps": []any{
+			map[string]any{"id": "step", "kind": "logic", "summary": "x", "errors": []any{}, "output": []any{}},
+		},
+	}, "f", "cap.services.x.get", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]policyMeta{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[policy-ref]") {
+		t.Fatalf("unknown policy not reported: %v", c.errs)
 	}
 }

@@ -16,8 +16,8 @@ groups:
     description: "tables 物理结构，entities 读模型，queries 装载桥，storage 表级约束。"
     layers: [tables, entities, queries, storage, policy]
   capabilities:
-    description: "HTTP / 异步 / 跨模块 service / 领域事件。"
-    layers: [http, async, services, events]
+    description: "services / async / policies / events / protocols。"
+    layers: [http, async, services, policies, events]
   features:
     description: "路由、页面、业务规则、状态机。"
     layers: [routes, pages, rules, states]
@@ -85,8 +85,8 @@ entries:
   - { id: data.enums, path: data/enums.yaml, summary: "跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated, stability: draft }
 
   # ---------- capabilities ----------
-  - { id: cap.http.shared, path: capabilities/protocols/http/shared.yaml, summary: "HTTP 共享组件", consumers: [api, web/admin], enforcement: generated, stability: stable }
-  - id: cap.http.account
+  - { id: cap.protocols.http.shared, path: capabilities/protocols/http/shared.yaml, summary: "HTTP 共享组件", consumers: [api, web/admin], enforcement: generated, stability: stable }
+  - id: cap.protocols.http.account
     path: capabilities/protocols/http/account.yaml
     summary: "账号 HTTP 接口"
     consumers: [api, web/admin]
@@ -97,11 +97,16 @@ entries:
       - "逐接口重复声明 4xx/5xx 响应（已由 default_error_responses 注入）"
       - 响应 schema 缺少 additionalProperties: false
       - "忘记 x-flow 锚点到 cap.services"
-  - { id: cap.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/登出/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: cap.protocols.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/登出/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号服务：查询、创建、更新、状态转换与软删编排", consumers: [api, web/admin], enforcement: generated+tested, stability: stable }
   - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证会话服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：签发、刷新、吊销与校验", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.async.token, path: capabilities/async/token.yaml, summary: "令牌异步任务：过期清理", consumers: [worker], enforcement: generated+tested, stability: draft }
+  - { id: cap.policies.account, path: capabilities/policies/account.yaml, summary: "账号入口策略", consumers: [api], enforcement: tested, stability: stable }
+  - { id: cap.policies.auth, path: capabilities/policies/auth.yaml, summary: "认证入口策略", consumers: [api], enforcement: tested, stability: draft }
+  - { id: cap.policies.token, path: capabilities/policies/token.yaml, summary: "令牌入口策略", consumers: [api], enforcement: tested, stability: draft }
+  - { id: cap.policies.verification, path: capabilities/policies/verification.yaml, summary: "验证码入口策略", consumers: [api], enforcement: tested, stability: draft }
 
   # ---------- rules / states / events ----------
   - id: feature.states.account

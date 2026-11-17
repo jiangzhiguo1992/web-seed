@@ -16,11 +16,13 @@ contracts/_meta/
 ├── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
 ├── data.entities.yaml    # data.entities 的字段树 + 值域 + 说明
 ├── data.queries.yaml     # data.queries 的字段树 + 值域 + 说明
-├── cap.services.yaml     # cap.services 的 targets + 字段树（服务 + steps）
-├── feature.rules.yaml        # feature.rules 的 targets + 字段树（业务规则）
-├── feature.states.yaml       # feature.states 的 targets + 字段树（状态机）
-├── cap.events.yaml       # cap.events 的 targets + 字段树（领域事件）
-└── cap.http.yaml         # cap.http 的 targets + 字段树（HTTP 绑定）
+├── cap.services.yaml       # cap.services 的 targets + 字段树（服务 + steps）
+├── cap.async.yaml          # cap.async 的 targets + 字段树（异步任务）
+├── cap.policies.yaml       # cap.policies 的 targets + 字段树（入口策略）
+├── feature.rules.yaml      # feature.rules 的 targets + 字段树（业务规则）
+├── feature.states.yaml     # feature.states 的 targets + 字段树（状态机）
+├── cap.events.yaml         # cap.events 的 targets + 字段树（领域事件）
+└── cap.protocols.http.yaml # cap.protocols.http 的 targets + 字段树（HTTP 绑定）
 
 scripts/contract/
 ├── scaffold.sh           # make contract-new
@@ -79,7 +81,9 @@ scripts/cmd/
 | `make contract-new type=feature.rules name=invoice module=invoice` | 生成 feature.rules 骨架（一个 policy） | 新建规则集前 |
 | `make contract-new type=feature.states name=invoice module=invoice` | 生成 feature.states 骨架（pending/active + activate） | 新建状态机前 |
 | `make contract-new type=cap.events name=invoice module=invoice` | 生成 cap.events 骨架（一个 created 事件） | 新建事件集前 |
-| `make contract-new type=cap.http name=invoice service=cap.services.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-service` 必填 | 新建 HTTP 绑定前 |
+| `make contract-new type=cap.async name=invoice module=invoice` | 生成 cap.async 骨架（一个 cron job） | 新建异步任务前 |
+| `make contract-new type=cap.policies name=invoice module=invoice` | 生成 cap.policies 骨架（一个 read 策略） | 新建入口策略前 |
+| `make contract-new type=cap.protocols.http name=invoice service=cap.services.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-service` 必填 | 新建 HTTP 绑定前 |
 | `make gen-graph` | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` / 锚点 | 改完表/实体/查询/service 后 |
 | `make gen-graph-check` | 只校验上述反向索引是否最新（CI） | CI |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / 反向索引 / owner / entity 投影 / query 参数与返回 / service steps | 每次改完契约 |
@@ -88,7 +92,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.services` / `feature.rules` / `feature.states` / `cap.events` / `cap.http`；类型族来自 `_meta/_types.yaml`。cap.* 生成最小骨架（一个 service + logic step、一个 policy、一个状态机、一个事件、一个 operation），不生成 `types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.services` / `cap.async` / `cap.policies` / `feature.rules` / `feature.states` / `cap.events` / `cap.protocols.http`；类型族来自 `_meta/_types.yaml`。cap.* 生成最小骨架（一个 service + logic step、一个 async job、一个入口策略、一个规则、一个状态机、一个事件、一个 operation），不生成 `types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 

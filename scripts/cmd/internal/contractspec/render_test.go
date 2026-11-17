@@ -516,7 +516,7 @@ func TestRenderRule(t *testing.T) {
 }
 
 func TestRenderHTTP(t *testing.T) {
-	s := loadSchemaByType(t, "cap.http")
+	s := loadSchemaByType(t, "cap.protocols.http")
 	b, err := RenderHTTP(s, "invoice", "invoice", "发票 HTTP", "cap.services.invoice.get", "/invoice", "get")
 	if err != nil {
 		t.Fatal(err)
@@ -525,13 +525,13 @@ func TestRenderHTTP(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["id"] != "cap.http.invoice" {
+	if doc["id"] != "cap.protocols.http.invoice" {
 		t.Fatalf("id = %v", doc["id"])
 	}
 	paths, _ := doc["paths"].(map[string]any)
 	path, _ := paths["/invoice"].(map[string]any)
 	op, _ := path["get"].(map[string]any)
-	if op["x-contract-id"] != "cap.http.invoice.get" || op["x-service"] != "cap.services.invoice.get" {
+	if op["x-contract-id"] != "cap.protocols.http.invoice.get" || op["x-service"] != "cap.services.invoice.get" {
 		t.Fatalf("operation = %#v", op)
 	}
 }
