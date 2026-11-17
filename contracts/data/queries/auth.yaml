@@ -12,6 +12,7 @@ do_not:
 
 queries:
   - name: GetAuthPwdByUsername
+    description: "按登录名读取密码认证记录"
     tables:
       - { table: data.tables.auth_pwd }
     params:
@@ -34,6 +35,7 @@ queries:
       - cap.services.auth.login
 
   - name: CreateAuthPwd
+    description: "创建密码认证记录"
     tables:
       - { table: data.tables.auth_pwd, write: true }
     params:
@@ -63,6 +65,7 @@ queries:
       - cap.services.auth.bind_password
 
   - name: UpdateAuthPwdHash
+    description: "更新密码哈希"
     tables:
       - { table: data.tables.auth_pwd, write: true }
     params:
@@ -76,6 +79,7 @@ queries:
       - cap.services.auth.bind_password
 
   - name: RecordAuthPwdLoginSuccess
+    description: "记录登录成功并清零失败计数"
     tables:
       - { table: data.tables.auth_pwd, write: true }
     params:
@@ -88,6 +92,7 @@ queries:
       - cap.services.auth.login
 
   - name: RecordAuthPwdLoginFailure
+    description: "记录登录失败并写入锁定时间"
     tables:
       - { table: data.tables.auth_pwd, write: true }
     params:
@@ -101,6 +106,7 @@ queries:
       - cap.services.auth.login
 
   - name: GetAuthPhoneByNumber
+    description: "按区号与手机号读取认证记录"
     tables:
       - { table: data.tables.auth_phone }
     params:
@@ -123,6 +129,7 @@ queries:
       - cap.services.auth.login
 
   - name: CreateAuthPhone
+    description: "创建手机号认证记录"
     tables:
       - { table: data.tables.auth_phone, write: true }
     params:
@@ -154,6 +161,7 @@ queries:
       - cap.services.auth.bind_phone
 
   - name: GetAuthEmailByUsernameDomain
+    description: "按本地部分与域名读取邮箱认证记录"
     tables:
       - { table: data.tables.auth_email }
     params:
@@ -177,6 +185,7 @@ queries:
       - cap.services.auth.login
 
   - name: CreateAuthEmail
+    description: "创建邮箱认证记录"
     tables:
       - { table: data.tables.auth_email, write: true }
     params:
@@ -211,6 +220,7 @@ queries:
       - cap.services.auth.bind_email
 
   - name: SoftDeleteAuthPwdByAccount
+    description: "按账号软删全部密码认证记录"
     tables:
       - { table: data.tables.auth_pwd, write: true }
     params:
@@ -223,6 +233,7 @@ queries:
       - cap.services.auth.revoke_all_for_account
 
   - name: SoftDeleteAuthPhoneByAccount
+    description: "按账号软删全部手机号认证记录"
     tables:
       - { table: data.tables.auth_phone, write: true }
     params:
@@ -235,6 +246,7 @@ queries:
       - cap.services.auth.revoke_all_for_account
 
   - name: SoftDeleteAuthEmailByAccount
+    description: "按账号软删全部邮箱认证记录"
     tables:
       - { table: data.tables.auth_email, write: true }
     params:
@@ -247,6 +259,7 @@ queries:
       - cap.services.auth.revoke_all_for_account
 
   - name: SetAuthPhoneStatus
+    description: "设置手机号认证状态"
     tables:
       - { table: data.tables.auth_phone, write: true }
     params:
@@ -260,6 +273,7 @@ queries:
       - cap.services.auth.bind_phone
 
   - name: SetAuthEmailStatus
+    description: "设置邮箱认证状态"
     tables:
       - { table: data.tables.auth_email, write: true }
     params:
@@ -273,6 +287,7 @@ queries:
       - cap.services.auth.bind_email
 
   - name: SetAuthPwdStatus
+    description: "设置密码认证状态"
     tables:
       - { table: data.tables.auth_pwd, write: true }
     params:

@@ -20,10 +20,8 @@ enums:
       - { value: suspended, code: 2, description: "已封禁，不能登录" }
       - { value: deleted, code: 3, description: "已软删，终态；与 deleted_at 同步" }
     used_by:
-      entities:
-        - data.entities.account
-      capabilities:
-        - cap.services.account
+      - data.entities.account
+      - cap.services.account
 
   - name: account_created_status
     description: "账号创建事件状态"
@@ -33,9 +31,7 @@ enums:
       - { value: pending, code: 0, description: "待激活" }
       - { value: active, code: 1, description: "已激活" }
     used_by:
-      entities: []
-      capabilities:
-        - cap.events.account
+      - cap.events.account
 
   - name: own_type
     description: "数据归属主体类型"
@@ -46,11 +42,9 @@ enums:
       - { value: admin, code: 1, description: "管理员" }
       - { value: system, code: 2, description: "系统" }
     used_by:
-      entities:
-        - data.entities.account
-        - data.entities.token
-      capabilities:
-        - cap.services.account
+      - data.entities.account
+      - data.entities.token
+      - cap.services.account
 
   - name: auth_status
     description: "认证记录状态"
@@ -61,12 +55,10 @@ enums:
       - { value: verified, code: 1, description: "已认证" }
       - { value: disabled, code: 2, description: "已停用" }
     used_by:
-      entities:
-        - data.entities.auth_email
-        - data.entities.auth_phone
-        - data.entities.auth_pwd
-      capabilities:
-        - cap.services.auth
+      - data.entities.auth_email
+      - data.entities.auth_phone
+      - data.entities.auth_pwd
+      - cap.services.auth
 
   - name: token_status
     description: "令牌状态"
@@ -77,9 +69,7 @@ enums:
       - { value: revoked, code: 1, description: "已吊销" }
       - { value: expired, code: 2, description: "已过期" }
     used_by:
-      entities:
-        - data.entities.token
-      capabilities: []
+      - data.entities.token
 
   - name: token_revoke_reason
     description: "令牌吊销原因"
@@ -94,9 +84,7 @@ enums:
       - { value: phone_change, code: 5, description: "手机变更" }
       - { value: email_change, code: 6, description: "邮箱变更" }
     used_by:
-      entities:
-        - data.entities.token
-      capabilities: []
+      - data.entities.token
 
   - name: auth_type
     description: "认证方式"
@@ -107,11 +95,9 @@ enums:
       - { value: phone, code: 1, description: "手机号认证" }
       - { value: email, code: 2, description: "邮箱认证" }
     used_by:
-      entities:
-        - data.entities.verification_body
-      capabilities:
-        - cap.services.auth
-        - cap.services.verification
+      - data.entities.verification_body
+      - cap.services.auth
+      - cap.services.verification
 
   - name: verification_status
     description: "验证体状态"
@@ -125,9 +111,7 @@ enums:
       - { value: revoked, code: 4, description: "已作废，终态" }
       - { value: failed, code: 5, description: "发送失败，终态" }
     used_by:
-      entities:
-        - data.entities.verification_body
-      capabilities: []
+      - data.entities.verification_body
 
   - name: verification_purpose
     description: "验证用途"
@@ -145,10 +129,8 @@ enums:
       - { value: change_email, code: 8, description: "换绑邮箱" }
       - { value: delete_account, code: 9, description: "注销账号" }
     used_by:
-      entities:
-        - data.entities.verification_body
-      capabilities:
-        - cap.services.verification
+      - data.entities.verification_body
+      - cap.services.verification
 
   - name: verification_result
     description: "验证动作结果"
@@ -160,9 +142,7 @@ enums:
       - { value: expired, code: 3, description: "验证码已过期" }
       - { value: attempts_exceeded, code: 4, description: "失败次数超过上限" }
     used_by:
-      entities:
-        - data.entities.verification_action
-      capabilities: []
+      - data.entities.verification_action
 
   - name: auth_bind_action
     description: "认证绑定动作（手机/邮箱）"
@@ -173,9 +153,7 @@ enums:
       - { value: enable, code: 1, description: "启用绑定" }
       - { value: disable, code: 2, description: "停用绑定" }
     used_by:
-      entities: []
-      capabilities:
-        - cap.services.auth
+      - cap.services.auth
 
   - name: auth_password_action
     description: "密码认证绑定动作"
@@ -187,9 +165,7 @@ enums:
       - { value: enable, code: 2, description: "启用密码" }
       - { value: disable, code: 3, description: "停用密码" }
     used_by:
-      entities: []
-      capabilities:
-        - cap.services.auth
+      - cap.services.auth
 
   - name: login_failed_reason
     description: "登录失败原因"
@@ -201,6 +177,4 @@ enums:
       - { value: suspended, code: 2, description: "账号封禁" }
       - { value: not_found, code: 3, description: "账号不存在" }
     used_by:
-      entities: []
-      capabilities:
-        - cap.events.account
+      - cap.events.account

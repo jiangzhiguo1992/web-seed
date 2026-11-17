@@ -24,74 +24,63 @@ fields:
     type: data.enums.token_status
     description: "令牌状态"
     source: { column: data.tables.token.col.status }
-    validation: { column: data.tables.token.col.status }
 
   - name: OwnType
     type: data.enums.own_type
     description: "数据归属主体类型"
     source: { column: data.tables.token.col.own_type }
-    validation: { column: data.tables.token.col.own_type }
 
   - name: OwnID
     description: "归属 ID"
     source: { column: data.tables.token.col.own_id }
-    validation: { column: data.tables.token.col.own_id }
 
   - name: AccountID
     description: "关联账号"
     source: { column: data.tables.token.col.account_id }
-    validation: { column: data.tables.token.col.account_id }
 
   - name: DeviceID
     description: "设备标识；多端登录时区分设备"
     source: { column: data.tables.token.col.device_id }
-    validation: { column: data.tables.token.col.device_id }
 
   - name: UserID
     description: "关联用户 ID"
     source: { column: data.tables.token.col.user_id }
-    validation: { column: data.tables.token.col.user_id }
 
   - name: accessTokenHash
     description: "访问令牌哈希"
     source: { column: data.tables.token.col.access_token_hash }
-    validation: { column: data.tables.token.col.access_token_hash }
 
   - name: refreshTokenHash
     description: "刷新令牌哈希"
     source: { column: data.tables.token.col.refresh_token_hash }
-    validation: { column: data.tables.token.col.refresh_token_hash }
 
   - name: AccessExpireAt
     description: "访问令牌过期时间"
     source: { column: data.tables.token.col.access_expire_at }
-    validation: { column: data.tables.token.col.access_expire_at }
 
   - name: RefreshExpireAt
     description: "刷新令牌过期时间"
     source: { column: data.tables.token.col.refresh_expire_at }
-    validation: { column: data.tables.token.col.refresh_expire_at }
 
   - name: RevokedAt
     description: "吊销时间；为空表示未吊销"
     source: { column: data.tables.token.col.revoked_at }
-    validation: { column: data.tables.token.col.revoked_at }
 
   - name: RevokeReason
     type: data.enums.token_revoke_reason
     nullable: true
     description: "吊销原因"
     source: { column: data.tables.token.col.revoke_reason }
-    validation: { column: data.tables.token.col.revoke_reason }
 
   - name: ReplacedByID
     description: "轮换后新令牌 ID（旧→新的前向指针）；不是吊销者 ID"
     source: { column: data.tables.token.col.replaced_by_id }
-    validation: { column: data.tables.token.col.replaced_by_id }
 
   - name: Account
     type: data.entities.account
     description: "所属账号"
-    join_column_from: data.tables.token.col.account_id
-    join_column_to: data.tables.account.col.id
-    load: lazy
+    source:
+      join:
+        from: data.tables.token.col.account_id
+        to: data.tables.account.col.id
+        lazy: true

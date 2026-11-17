@@ -11,6 +11,7 @@ do_not:
 
 queries:
   - name: GetAccount
+    description: "按 ID 读取账号实体"
     tables:
       - { table: data.tables.account }
     params:
@@ -29,6 +30,7 @@ queries:
       - cap.services.token.verify
 
   - name: ExistsAccountNumber
+    description: "判断账号编号是否已被占用"
     tables:
       - { table: data.tables.account }
     params:
@@ -41,6 +43,7 @@ queries:
       - cap.services.account.create
 
   - name: ListAccounts
+    description: "按状态与归属筛选账号列表"
     tables:
       - { table: data.tables.account }
     params:
@@ -58,6 +61,7 @@ queries:
       - cap.services.account.list
 
   - name: CreateAccount
+    description: "创建账号并返回实体"
     tables:
       - { table: data.tables.account, write: true }
     params:
@@ -76,6 +80,7 @@ queries:
       - cap.services.account.create
 
   - name: UpdateAccount
+    description: "更新账号昵称"
     tables:
       - { table: data.tables.account, write: true }
     params:
@@ -89,6 +94,7 @@ queries:
       - cap.services.account.update
 
   - name: SetAccountStatus
+    description: "设置账号状态；用于激活、封禁与软删"
     tables:
       - { table: data.tables.account, write: true }
     params:
@@ -104,6 +110,7 @@ queries:
       - cap.services.account.suspend
 
   - name: SoftDeleteAccount
+    description: "软删账号并同步 deleted_at"
     tables:
       - { table: data.tables.account, write: true }
     params:

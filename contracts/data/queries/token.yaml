@@ -11,6 +11,7 @@ do_not:
 
 queries:
   - name: CreateToken
+    description: "创建访问与刷新令牌记录"
     tables:
       - { table: data.tables.token, write: true }
     params:
@@ -44,6 +45,7 @@ queries:
       - cap.services.token.refresh
 
   - name: GetTokenByRefresh
+    description: "按刷新令牌哈希读取令牌"
     tables:
       - { table: data.tables.token }
     params:
@@ -70,6 +72,7 @@ queries:
       - cap.services.token.refresh
 
   - name: GetTokenByAccess
+    description: "按访问令牌哈希读取令牌"
     tables:
       - { table: data.tables.token }
     params:
@@ -95,6 +98,7 @@ queries:
       - cap.services.token.verify
 
   - name: RevokeToken
+    description: "吊销单个令牌并记录原因"
     tables:
       - { table: data.tables.token, write: true }
     params:
@@ -112,6 +116,7 @@ queries:
       - cap.services.token.refresh
 
   - name: RevokeTokensByAccount
+    description: "按账号批量吊销令牌"
     tables:
       - { table: data.tables.token, write: true }
     params:
@@ -126,6 +131,7 @@ queries:
       - cap.services.token.revoke_by_account
 
   - name: DeleteExpiredTokens
+    description: "物理清理已过期的令牌"
     tables:
       - { table: data.tables.token, write: true }
     params:

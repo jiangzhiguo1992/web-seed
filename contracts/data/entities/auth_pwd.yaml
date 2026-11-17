@@ -23,39 +23,35 @@ fields:
     type: data.enums.auth_status
     description: "认证记录状态"
     source: { column: data.tables.auth_pwd.col.status }
-    validation: { column: data.tables.auth_pwd.col.status }
 
   - name: AccountID
     description: "关联账号"
     source: { column: data.tables.auth_pwd.col.account_id }
-    validation: { column: data.tables.auth_pwd.col.account_id }
 
   - name: Username
     description: "登录名；唯一"
     source: { column: data.tables.auth_pwd.col.username }
-    validation: { column: data.tables.auth_pwd.col.username }
 
   - name: passwordHash
     description: "口令哈希"
     source: { column: data.tables.auth_pwd.col.password_hash }
-    validation: { column: data.tables.auth_pwd.col.password_hash }
 
   - name: FailedLoginCount
     description: "连续失败次数；成功登录后归零"
     source: { column: data.tables.auth_pwd.col.failed_login_count }
-    validation: { column: data.tables.auth_pwd.col.failed_login_count }
 
   - name: LockedUntil
     description: "锁定截止时间；为空表示未锁定"
     source: { column: data.tables.auth_pwd.col.locked_until }
-    validation: { column: data.tables.auth_pwd.col.locked_until }
 
   - name: Account
     type: data.entities.account
     description: "所属账号"
-    join_column_from: data.tables.auth_pwd.col.account_id
-    join_column_to: data.tables.account.col.id
-    load: lazy
+    source:
+      join:
+        from: data.tables.auth_pwd.col.account_id
+        to: data.tables.account.col.id
+        lazy: true
 
 validation:
   - name: lock_consistency

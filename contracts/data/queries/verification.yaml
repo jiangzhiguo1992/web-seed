@@ -12,6 +12,7 @@ do_not:
 
 queries:
   - name: CreateVerification
+    description: "创建验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
@@ -40,6 +41,7 @@ queries:
       - cap.services.verification.send
 
   - name: MarkVerificationSent
+    description: "标记验证体已发送"
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
@@ -54,6 +56,7 @@ queries:
       - cap.services.verification.send
 
   - name: GetLatestVerification
+    description: "读取指定认证目标的最新验证体"
     tables:
       - { table: data.tables.verification_body }
     params:
@@ -83,6 +86,7 @@ queries:
       - cap.services.verification.verify
 
   - name: ConsumeVerification
+    description: "消费验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
@@ -98,6 +102,7 @@ queries:
       - cap.services.verification.verify
 
   - name: IncrementVerificationAttempt
+    description: "递增验证失败次数并更新状态"
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
@@ -112,6 +117,7 @@ queries:
       - cap.services.verification.verify
 
   - name: RevokeActiveVerificationsByAuth
+    description: "按认证目标作废活跃验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
@@ -127,6 +133,7 @@ queries:
       - cap.services.verification.revoke_by_auth
 
   - name: RevokeActiveVerificationsByAccount
+    description: "按账号作废活跃验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
@@ -140,6 +147,7 @@ queries:
       - cap.services.verification.revoke_by_account
 
   - name: CreateVerificationAction
+    description: "追加验证动作记录"
     tables:
       - { table: data.tables.verification_action, write: true }
     params:

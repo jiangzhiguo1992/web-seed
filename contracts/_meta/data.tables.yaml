@@ -76,6 +76,7 @@ fields:
         type: list<string>
         required: true
         unique: true
+        min_items: 1
         pattern: '^data\.queries\.'
         generated: true
         write: forbidden
@@ -119,12 +120,12 @@ fields:
     description: "索引"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名" }
-      - { name: columns, type: list<string>, required: false, unique: true, description: "索引列" }
+      - { name: columns, type: list<string>, required: false, unique: true, min_items: 1, description: "索引列" }
       - { name: expression, type: string, required: false, description: "表达式索引；checker 只校验非空" }
       - { name: unique, type: boolean, required: false, description: "是否唯一" }
       - { name: live_only, type: boolean, required: false, default: false, description: "是否只约束未软删行；false 含软删行" }
       - { name: comment, type: string, required: true, description: "索引用途" }
-      - { name: used_by, type: list<string>, required: true, unique: true, description: "使用该索引的 query 项 ID" }
+      - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, description: "使用该索引的 query 项 ID" }
 
 rules:
   - { id: table-key-order, text: "表契约字段顺序必须与 _meta/data.tables.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ table-key-order ] }

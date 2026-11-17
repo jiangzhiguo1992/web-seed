@@ -29,58 +29,60 @@ fields:
     type: data.enums.account_status
     description: "账号状态"
     source: { column: data.tables.account.col.status }
-    validation: { column: data.tables.account.col.status }
 
   - name: OwnType
     type: data.enums.own_type
     description: "数据归属主体类型"
     source: { column: data.tables.account.col.own_type }
-    validation: { column: data.tables.account.col.own_type }
 
   - name: OwnID
     description: "归属 ID；与 own_type 组成归属主体"
     source: { column: data.tables.account.col.own_id }
-    validation: { column: data.tables.account.col.own_id }
 
   - name: Number
     description: "账号编号"
     source: { column: data.tables.account.col.number }
-    validation: { column: data.tables.account.col.number }
 
   - name: Nickname
     description: "昵称"
     source: { column: data.tables.account.col.nickname }
-    validation: { column: data.tables.account.col.nickname }
 
   - name: UserID
     description: "关联用户 ID"
     source: { column: data.tables.account.col.user_id }
-    validation: { column: data.tables.account.col.user_id }
 
   - name: Tokens
     type: data.entities.token
     description: "账号的设备令牌"
-    join_column_from: data.tables.account.col.id
-    join_column_to: data.tables.token.col.account_id
-    load: lazy
+    source:
+      join:
+        from: data.tables.account.col.id
+        to: data.tables.token.col.account_id
+        lazy: true
 
   - name: AuthPwd
     type: data.entities.auth_pwd
     description: "账号的密码认证记录"
-    join_column_from: data.tables.account.col.id
-    join_column_to: data.tables.auth_pwd.col.account_id
-    load: lazy
+    source:
+      join:
+        from: data.tables.account.col.id
+        to: data.tables.auth_pwd.col.account_id
+        lazy: true
 
   - name: AuthPhone
     type: data.entities.auth_phone
     description: "账号绑定的手机号"
-    join_column_from: data.tables.account.col.id
-    join_column_to: data.tables.auth_phone.col.account_id
-    load: lazy
+    source:
+      join:
+        from: data.tables.account.col.id
+        to: data.tables.auth_phone.col.account_id
+        lazy: true
 
   - name: AuthEmail
     type: data.entities.auth_email
     description: "账号绑定的邮箱"
-    join_column_from: data.tables.account.col.id
-    join_column_to: data.tables.auth_email.col.account_id
-    load: lazy
+    source:
+      join:
+        from: data.tables.account.col.id
+        to: data.tables.auth_email.col.account_id
+        lazy: true

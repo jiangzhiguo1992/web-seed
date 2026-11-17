@@ -52,9 +52,11 @@ fields:
     description: "查询项列表"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "方法名" }
+      - { name: description, type: string, required: true, description: "查询语义说明" }
       - name: tables
         type: list<object>
         required: true
+        min_items: 1
         description: "读写的表；第一项为主表"
         item_fields:
           - { name: table, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "表 ID" }

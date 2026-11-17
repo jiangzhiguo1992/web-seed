@@ -17,24 +17,19 @@ fields:
   - name: ID
     description: "实体唯一主键；来自主表 id 列（integer）"
     source: { column: data.tables.base.col.id }
-    validation: { column: data.tables.base.col.id }
 
   - name: Status
     description: "业务状态整数码；具体实体可用 data.enums.* 特化"
     source: { column: data.tables.base.col.status }
-    validation: { column: data.tables.base.col.status }
 
   - name: CreatedAt
     description: "创建时间"
     source: { column: data.tables.base.col.created_at }
-    validation: { column: data.tables.base.col.created_at }
 
   - name: UpdatedAt
     description: "更新时间"
     source: { column: data.tables.base.col.updated_at }
-    validation: { column: data.tables.base.col.updated_at }
 
   - name: DeletedAt
     description: "软删时间；为空表示未删除"
     source: { column: data.tables.base.col.deleted_at }
-    validation: { column: data.tables.base.col.deleted_at }
