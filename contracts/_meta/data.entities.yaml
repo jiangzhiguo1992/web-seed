@@ -93,6 +93,7 @@ fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "校验名" }
       - { name: expr, type: string, required: true, description: "布尔表达式文本；checker 只校验非空（不解析）" }
       - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "失败错误码" }
+      - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "消费该不变量的 service 项 ID" }
 
 rules:
   - { id: entity-base-file, text: "基类契约固定位于 contracts/data/entities/_base.yaml，ID 固定为 data.entities.base", implemented_by: [ entity-base-file ] }
@@ -123,6 +124,7 @@ rules:
   - { id: entity-relation-eager-index, text: "lazy: false 的关系，其 source.join.to 必须有索引或主键", implemented_by: [ entity-relation-eager-index ] }
   - { id: entity-relation-eager-cycle, text: "eager 关系链不得成环；自引用不得 eager", implemented_by: [ entity-relation-eager-cycle ] }
   - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；expr 非空；on_violation 必须存在", implemented_by: [ entity-validation ] }
+  - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
   - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入，禁止手改", implemented_by: [ entity-used-by ] }
   - { id: entity-included-by, text: "model.included_by 必须等于关系字段 type 指向本实体的 entity 集合；每个 entity 必须存在且确实指向本实体", implemented_by: [ entity-included-by ] }
   - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

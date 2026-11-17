@@ -63,8 +63,12 @@ columns:
 
 constraints:
   - name: ck_account_deleted_consistent
-    type: check
     expr: "(status = 3) = (deleted_at IS NOT NULL)"
+    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    used_by:
+      - data.queries.account.create_account
+      - data.queries.account.set_account_status
+      - data.queries.account.soft_delete_account
 
 indexes:
   - name: uq_account_number

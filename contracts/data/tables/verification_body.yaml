@@ -91,32 +91,51 @@ columns:
 
 constraints:
   - name: ck_verification_auth_type
-    type: check
     expr: "auth_type IN (1, 2)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.create_verification
 
   - name: ck_verification_purpose_auth_type
-    type: check
     expr: "(purpose IN (3, 5, 7) AND auth_type = 1) OR (purpose IN (4, 6, 8) AND auth_type = 2) OR purpose IN (0, 1, 2, 9)"
+    on_violation: platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+    used_by:
+      - data.queries.verification.create_verification
 
   - name: ck_verification_status
-    type: check
     expr: "status IN (0, 1, 2, 3, 4, 5)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.create_verification
+      - data.queries.verification.mark_verification_sent
+      - data.queries.verification.consume_verification
+      - data.queries.verification.increment_verification_attempt
+      - data.queries.verification.revoke_active_verifications_by_auth
+      - data.queries.verification.revoke_active_verifications_by_account
 
   - name: ck_verification_expire_order
-    type: check
     expr: "expire_at > created_at"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.create_verification
 
   - name: ck_verification_sent_order
-    type: check
     expr: "sent_at IS NULL OR (sent_at >= created_at AND sent_at < expire_at)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.mark_verification_sent
 
   - name: ck_verification_consumed_order
-    type: check
     expr: "consumed_at IS NULL OR (consumed_at >= created_at AND consumed_at <= expire_at AND (sent_at IS NULL OR consumed_at >= sent_at))"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.consume_verification
 
   - name: ck_verification_consumed_status
-    type: check
     expr: "(status = 2) = (consumed_at IS NOT NULL)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.consume_verification
 
 indexes:
   - name: idx_verification_auth_purpose

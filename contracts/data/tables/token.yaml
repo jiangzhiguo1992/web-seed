@@ -102,20 +102,30 @@ columns:
 
 constraints:
   - name: ck_token_expire_order
-    type: check
     expr: "refresh_expire_at > access_expire_at"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.token.create_token
 
   - name: ck_token_revoked_consistent
-    type: check
     expr: "(status = 1) = (revoked_at IS NOT NULL)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.token.revoke_token
+      - data.queries.token.revoke_tokens_by_account
 
   - name: ck_token_revoke_reason_consistent
-    type: check
     expr: "(status = 1) = (revoke_reason IS NOT NULL)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.token.revoke_token
+      - data.queries.token.revoke_tokens_by_account
 
   - name: ck_token_replaced_by_self
-    type: check
     expr: "replaced_by_id IS NULL OR replaced_by_id <> id"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.token.revoke_token
 
 indexes:
   - name: uq_token_access_hash

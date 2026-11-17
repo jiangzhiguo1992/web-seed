@@ -59,12 +59,17 @@ columns:
 
 constraints:
   - name: ck_auth_pwd_username_lowercase
-    type: check
     expr: "username = lower(username)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.auth.create_auth_pwd
 
   - name: ck_auth_pwd_status
-    type: check
     expr: "status IN (1, 2)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.auth.create_auth_pwd
+      - data.queries.auth.set_auth_pwd_status
 
 indexes:
   - name: uq_auth_pwd_username

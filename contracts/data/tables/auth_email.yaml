@@ -53,16 +53,23 @@ columns:
 
 constraints:
   - name: ck_auth_email_domain_lowercase
-    type: check
     expr: "domain = lower(domain)"
+    on_violation: platform.errors.AUTH_EMAIL_INVALID
+    used_by:
+      - data.queries.auth.create_auth_email
 
   - name: ck_auth_email_username_lowercase
-    type: check
     expr: "username = lower(username)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.auth.create_auth_email
 
   - name: ck_auth_email_status
-    type: check
     expr: "status IN (0, 1, 2)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.auth.create_auth_email
+      - data.queries.auth.set_auth_email_status
 
 indexes:
   - name: uq_auth_email_username_domain

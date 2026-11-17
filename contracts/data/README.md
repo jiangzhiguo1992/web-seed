@@ -63,7 +63,7 @@ storage    ──(tables / partition)──>  tables
 
 ### 3.1 表不使用外键
 
-**选择**：跨表一致性由应用服务与 `feature.rules` 保证（`[强制: no-foreign-key]`）。
+**选择**：跨表一致性由应用服务与 `feature.rules` 保证，表 `constraints` 只写单行可表达的 CHECK；契约里没有 `foreign_key`。
 **理由**：外键把部署顺序、分库分表、软删语义绑死在数据库上；契约层要允许引擎替换（`storage.yaml` 的 `supported_engines`）。
 **代价**：一致性校验必须显式写，漏写不会报错。跨表不变量的落点是 `feature.rules`，不是注释。
 
@@ -153,8 +153,11 @@ columns:
 ```yaml
 constraints:
   - name: ck_account_deleted_consistent
-    type: check
     expr: "(status = 3) = (deleted_at IS NOT NULL)"
+    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    used_by:
+      - data.queries.account.set_account_status
+      - data.queries.account.soft_delete_account
 
 indexes:
   - name: uq_account_number
@@ -172,6 +175,7 @@ indexes:
 
 ```yaml
 - name: ListAccounts
+  description: "按状态与归属筛选账号列表"
   tables:
     - table: data.tables.account
   params:
@@ -183,7 +187,7 @@ indexes:
     - data.tables.account.idx_account_created_at_id
 ```
 
-返回值用 `kind` 区分：`column` / `entity` / `table` / `scalar` / `affected_rows`。需要 `secret` 列（如认证查询的 `password_hash`）时用 `kind: table` + `columns` 显式列出，不要为它放宽 entity。
+返回值用 `kind` 区分：`entity` / `scalar` / `affected_rows`；没有 `column` / `table`。单表已有 entity 映射时返回 entity；entity 默认投影排除 `secret`，同模块需要 `secret`（如认证查询的 `password_hash`）时必须在 entity `columns` 中显式列出，跨模块禁止。
 
 ### 5.3 实体：列来源 + 枚举映射 + 关系
 
@@ -192,16 +196,18 @@ indexes:
   type: data.enums.account_status
   description: "账号状态"
   source: { column: data.tables.account.col.status }
-  validation: { column: data.tables.account.col.status }
 
 - name: Tokens
   type: data.entities.token
   description: "账号的设备令牌"
-  join_column_from: data.tables.account.col.id
-  join_column_to: data.tables.token.col.account_id
+  source:
+    join:
+      from: data.tables.account.col.id
+      to: data.tables.token.col.account_id
+      lazy: true
 ```
 
-标量字段与关系字段互斥：标量写 `source` + `validation`，关系写 `type` + `join_column_*` + `load`，两套键不得混用（`[强制: entity-field-variant]`）。实体不重复物理长度参数；统计口径不同时用 query 的 `returns`，不要把查询专属聚合塞进实体。
+标量字段与关系字段互斥：标量写 `source.column/computed/soft`，关系写 `type` + `source.join.from/to/lazy`，两套键不得混用（`[强制: entity-field-variant]`）。实体不重复物理长度参数；统计口径不同时用 query 的 `returns`，不要把查询专属聚合塞进实体。
 
 ---
 

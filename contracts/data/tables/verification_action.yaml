@@ -69,19 +69,27 @@ columns:
 
 constraints:
   - name: ck_verification_action_result
-    type: check
     expr: "result IN (1, 2, 3, 4)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.create_verification_action
 
   - name: ck_verification_action_input
-    type: check
     expr: "input_hash IS NOT NULL"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.create_verification_action
 
   - name: ck_verification_action_status
-    type: check
     expr: "status = 0"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.create_verification_action
 
   - name: ck_verification_action_no_soft_delete
-    type: check
     expr: "deleted_at IS NULL"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.verification.create_verification_action
 
 indexes: []

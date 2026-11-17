@@ -108,11 +108,12 @@ fields:
   - name: constraints
     type: list<object>
     required: false
-    description: "DDL 约束；唯一性用 indexes[].unique"
+    description: "DDL CHECK 约束；唯一性用 indexes[].unique"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^ck_[a-z][a-z0-9_]*$', description: "约束名" }
-      - { name: type, type: string, required: true, enum: [ check ], description: "约束类型" }
-      - { name: expr, type: string, required: false, description: "CHECK 表达式；checker 只校验非空" }
+      - { name: expr, type: string, required: true, description: "CHECK 表达式；checker 只校验非空" }
+      - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "违反约束时映射的错误码" }
+      - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "依赖该约束的写查询 ID" }
 
   - name: indexes
     type: list<object>
@@ -140,9 +141,9 @@ rules:
   - { id: family-length, text: "min_len <= max_len；fixed 为 true 时必须写 max_len，若写 min_len 必须等于 max_len", implemented_by: [ family-length ] }
   - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内", implemented_by: [ family-range ] }
   - { id: family-decimal, text: "scale <= precision", implemented_by: [ family-decimal ] }
-  - { id: no-foreign-key, text: "禁止 foreign_key；跨表一致性由应用/业务规则保证", implemented_by: [ no-foreign-key ] }
   - { id: index-live-only, text: "live_only: true 要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
-  - { id: constraint-fields, text: "type=check 的约束必须写非空 expr", implemented_by: [ constraint-fields ] }
+  - { id: constraint-fields, text: "约束必须写非空 expr 和 on_violation；on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
+  - { id: constraint-used-by, text: "constraints[].used_by 必须是非空去重的 data.queries.* 写查询 ID，且查询写本表", implemented_by: [ constraint-used-by ] }
   - { id: enum-code-literal, text: "表 CHECK 引用枚举列时，整数码必须存在于对应 data.enums 的 code 集合", implemented_by: [ enum-code-literal ] }
   - { id: storage-registry, text: "storage.yaml 的 tables 必须按 supported_engines 分组，覆盖每张物理表且只引用已存在的表；每张表只能出现在一个权威引擎下；基类不是物理表；caches 只登记非权威副本", implemented_by: [ storage-registry ] }
   - { id: storage-entry, text: "size_class/retention/partition 的键必须是已登记的表；size_class 只能是 small/large", implemented_by: [ storage-entry ] }
