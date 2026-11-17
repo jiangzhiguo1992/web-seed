@@ -322,6 +322,9 @@ func (c *Checker) checkCapabilities() {
 }
 
 func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema, typeNames map[string]bool) {
+	c.nodeKinds = schema.NodeKinds
+	c.propertyKeys = schema.PropertyKeys
+	c.valueTypes = schema.ValueTypes
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})
 	c.checkTargetFileName(schema, filepath.Base(rel), rel)
@@ -335,7 +338,6 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 	}
 	if types, ok := asMap(doc["schemas"]); ok {
 		c.checkTypeRefs(types, typeNames, rel)
-		c.checkServiceTypes(types, rel)
 	}
 	seen := map[string]bool{}
 	for _, raw := range asList(doc["services"]) {
@@ -919,6 +921,9 @@ func (c *Checker) checkStateDoc(doc map[string]any, rel string, schema *Schema, 
 }
 
 func (c *Checker) checkEventDoc(doc map[string]any, rel string, schema *Schema, serviceIDs map[string]bool) {
+	c.nodeKinds = schema.NodeKinds
+	c.propertyKeys = schema.PropertyKeys
+	c.valueTypes = schema.ValueTypes
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})
 	c.checkTargetFileName(schema, filepath.Base(rel), rel)
@@ -943,31 +948,6 @@ func (c *Checker) checkEventDoc(doc map[string]any, rel string, schema *Schema, 
 		if id != "" && name != "" && id != "cap.events."+name {
 			c.rulef("event-structure", "%s: event id %s must be cap.events.%s", rel, id, name)
 		}
-		if payload, ok := asMap(item["payload"]); ok {
-			if props, ok := asMap(payload["properties"]); ok {
-				for name, rawProp := range props {
-					prop, _ := asMap(rawProp)
-					typ, _ := prop["type"].(string)
-					switch {
-					case strings.HasPrefix(typ, "data.enums.") && !c.enumIDs[typ]:
-						c.rulef("event-payload-ref", "%s: event %s payload.%s references unknown enum %s", rel, id, name, typ)
-					case strings.HasPrefix(typ, "data.entities.") && c.entities[typ] == nil:
-						c.rulef("event-payload-ref", "%s: event %s payload.%s references unknown entity %s", rel, id, name, typ)
-					}
-				}
-			}
-			if ref, _ := payload["$ref"].(string); ref != "" {
-				if strings.HasPrefix(ref, "data.enums.") {
-					c.rulef("event-payload-ref", "%s: event %s payload $ref %s must be an object type; use payload.properties.<field>.type for enums", rel, id, ref)
-				} else if !c.eventPayloadRef(ref) {
-					c.rulef("event-payload-ref", "%s: event %s payload $ref %s is unknown", rel, id, ref)
-				}
-			} else if typ, _ := payload["type"].(string); typ == "object" {
-				if v, ok := payload["additionalProperties"]; !ok || v != false {
-					c.rulef("event-structure", "%s: event %s payload must set additionalProperties: false", rel, id)
-				}
-			}
-		}
 		for _, rawSvc := range asList(item["emitted_by"]) {
 			svc, _ := rawSvc.(string)
 			if !serviceIDs[svc] {
@@ -975,19 +955,6 @@ func (c *Checker) checkEventDoc(doc map[string]any, rel string, schema *Schema, 
 			}
 		}
 	}
-}
-
-func (c *Checker) eventPayloadRef(ref string) bool {
-	if strings.HasPrefix(ref, "data.entities.") {
-		return c.entities[ref] != nil
-	}
-	if strings.HasPrefix(ref, "cap.services.") && strings.Contains(ref, ".schemas.") {
-		parts := strings.Split(ref, ".schemas.")
-		if len(parts) == 2 && parts[1] != "" {
-			return c.methodTypeDefs[parts[1]] != nil
-		}
-	}
-	return false
 }
 
 func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMeta, eventIDs map[string]bool) (map[string]bool, map[string]asyncMeta) {
@@ -1134,8 +1101,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					c.rulef("http-components", "%s: components.schemas.%s.x-service-type references unknown %s", rel, name, ref)
 				} else if props, ok := asMap(s["properties"]); ok {
 					if def := findTypeSchema(serviceMeta, typ); def != nil {
-						defProps, _ := asMap(def["properties"])
-						if !sameSchemaFields(props, defProps) {
+						if !sameSchemaFields(props, schemaPropertyMap(def["properties"])) {
 							c.rulef("http-service-type", "%s: components.schemas.%s fields differ from %s", rel, name, ref)
 						}
 					}
@@ -1427,44 +1393,6 @@ func retryAfterHeader(resp map[string]any) bool {
 	return ok
 }
 
-func (c *Checker) checkServiceTypes(types map[string]any, rel string) {
-	for name, raw := range types {
-		c.checkServiceType(raw, rel, "schemas."+name)
-	}
-}
-
-func (c *Checker) checkServiceType(v any, rel, where string) {
-	m, ok := asMap(v)
-	if !ok {
-		return
-	}
-	if typ, _ := m["type"].(string); typ == "object" {
-		if ap, ok := m["additionalProperties"]; !ok || ap != false {
-			c.rulef("service-structure", "%s: %s must set additionalProperties: false", rel, where)
-		}
-		props, _ := asMap(m["properties"])
-		for _, rawReq := range asList(m["required"]) {
-			field, _ := rawReq.(string)
-			if props[field] == nil {
-				c.rulef("service-structure", "%s: %s required field %q not in properties", rel, where, field)
-			}
-		}
-	}
-	if props, ok := asMap(m["properties"]); ok {
-		for name, raw := range props {
-			c.checkServiceType(raw, rel, where+"."+name)
-		}
-	}
-	if items, ok := asMap(m["items"]); ok {
-		c.checkServiceType(items, rel, where+".items")
-	}
-	for _, key := range []string{"allOf", "oneOf", "anyOf"} {
-		for i, raw := range asList(m[key]) {
-			c.checkServiceType(raw, rel, fmt.Sprintf("%s.%s[%d]", where, key, i))
-		}
-	}
-}
-
 func findTypeSchema(meta map[string]serviceMeta, typ string) map[string]any {
 	for _, m := range meta {
 		if def := m.typeSchemas[typ]; def != nil {
@@ -1492,6 +1420,26 @@ func sameSchemaFields(a, b map[string]any) bool {
 		}
 	}
 	return true
+}
+
+// schemaPropertyMap 把 DSL 的 property 条目列表转成 name → schema 映射，
+// 供 HTTP components（标准 OpenAPI map）与 service schema 比较字段。
+func schemaPropertyMap(v any) map[string]any {
+	if m, ok := asMap(v); ok {
+		return m
+	}
+	out := map[string]any{}
+	for _, raw := range asList(v) {
+		item, _ := asMap(raw)
+		name, _ := item["name"].(string)
+		if name == "" {
+			continue
+		}
+		if schema, ok := asMap(item["schema"]); ok {
+			out[name] = schema
+		}
+	}
+	return out
 }
 
 func serviceTypeRef(ref string) (string, bool) {
@@ -2257,6 +2205,9 @@ func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) 
 		return
 	}
 	if isBuiltinType(base) {
+		return
+	}
+	if c.valueType(base) != "" {
 		return
 	}
 	if !typeNames[base] {

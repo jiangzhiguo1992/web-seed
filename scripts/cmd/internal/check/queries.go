@@ -514,7 +514,7 @@ func paramLogicalType(typ string) (family string, array, enum, ok bool) {
 	return family, array, false, ok
 }
 
-// paramFamily 把非数组参数/标量返回类型映射到 column_types 类型族。
+// paramFamily 把非数组参数/标量返回类型映射到 type_families 类型族。
 func paramFamily(typ string) (family string, ok bool) {
 	base := strings.ToLower(strings.TrimSpace(typ))
 	switch base {

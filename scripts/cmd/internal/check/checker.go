@@ -15,7 +15,9 @@ import (
 
 type Schema = contractspec.Schema
 type Targets = contractspec.Targets
-type ColumnTypes = contractspec.ColumnTypes
+type ValueTypes = contractspec.ValueTypes
+type SchemaKind = contractspec.SchemaKind
+type CustomValueType = contractspec.CustomValueType
 type Rule = contractspec.Rule
 type ValueTypeFamily = contractspec.ValueTypeFamily
 type Field = contractspec.Field
@@ -53,6 +55,7 @@ type Checker struct {
 	queryDocs         []queryDoc
 	queryDupIDs       map[string]bool
 	queryOrder        []string
+	enumValues        map[string]map[string]bool
 	enumCodes         map[string]map[int]bool
 	enumIDs           map[string]bool
 	errCodeSet        map[string]bool
@@ -63,6 +66,9 @@ type Checker struct {
 	queryReturnTypes  map[string]map[string]string
 	accessBindings    map[string]accessPolicy
 	inlineSeq         int
+	nodeKinds         map[string]contractspec.SchemaKind
+	propertyKeys      []contractspec.Field
+	valueTypes        contractspec.ValueTypes
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -109,12 +115,16 @@ func (c *Checker) run() {
 	}
 
 	c.checkSharedTypes(tableSchema)
+	c.valueTypes = tableSchema.ValueTypes
 	c.tableTargets = tableSchema.Targets
 	c.entityTargets = entitySchema.Targets
 	c.queryTargets = querySchema.Targets
 	c.loadQueryIndex(querySchema)
 	c.tableTypeFamilies = map[string]bool{}
-	for name := range tableSchema.ColumnTypes.ValueTypeFamilies {
+	for name := range tableSchema.ValueTypes.TypeFamilies {
+		c.tableTypeFamilies[name] = true
+	}
+	for name := range tableSchema.ValueTypes.CustomTypes {
 		c.tableTypeFamilies[name] = true
 	}
 	tableIDs, cols := c.checkTables(tableSchema)
@@ -126,6 +136,7 @@ func (c *Checker) run() {
 	c.loadTableIndexes(tableIDs)
 	c.checkQueryIndexRefs()
 	enumValues := c.checkEnums(enumSchema)
+	c.enumValues = enumValues
 	c.enumIDs = map[string]bool{}
 	for id := range enumValues {
 		c.enumIDs[id] = true

@@ -42,7 +42,7 @@ func run(root string, check bool) error {
 	if err != nil {
 		return err
 	}
-	tables, err := loadTables(root, schema.Targets)
+	tables, err := loadTables(root, schema.Targets, schema.ValueTypes.CustomTypes)
 	if err != nil {
 		return err
 	}
@@ -118,13 +118,13 @@ type index struct {
 	LiveOnly   bool
 }
 
-func loadTables(root string, targets contractspec.Targets) ([]table, error) {
+func loadTables(root string, targets contractspec.Targets, customTypes map[string]contractspec.CustomValueType) ([]table, error) {
 	basePath := filepath.Join(root, targets.Dir, "_base.yaml")
 	baseDoc, err := loadYAML(basePath)
 	if err != nil {
 		return nil, err
 	}
-	baseCols, err := parseColumns(baseDoc["columns"])
+	baseCols, err := parseColumns(baseDoc["columns"], customTypes)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", basePath, err)
 	}
@@ -155,7 +155,7 @@ func loadTables(root string, targets contractspec.Targets) ([]table, error) {
 	var out []table
 	for _, id := range sortedKeys(docs) {
 		doc := docs[id]
-		cols, err := resolveColumns(id, docs, baseCols, map[string]bool{})
+		cols, err := resolveColumns(id, docs, baseCols, customTypes, map[string]bool{})
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", ids[id], err)
 		}
@@ -172,7 +172,7 @@ func loadTables(root string, targets contractspec.Targets) ([]table, error) {
 	return out, nil
 }
 
-func resolveColumns(id string, docs map[string]map[string]any, baseCols []column, visiting map[string]bool) ([]column, error) {
+func resolveColumns(id string, docs map[string]map[string]any, baseCols []column, customTypes map[string]contractspec.CustomValueType, visiting map[string]bool) ([]column, error) {
 	if id == "data.tables.base" {
 		return append([]column{}, baseCols...), nil
 	}
@@ -189,13 +189,13 @@ func resolveColumns(id string, docs map[string]map[string]any, baseCols []column
 	tm, _ := asMap(doc["table"])
 	var cols []column
 	for _, parent := range stringList(tm["extends"]) {
-		parentCols, err := resolveColumns(parent, docs, baseCols, visiting)
+		parentCols, err := resolveColumns(parent, docs, baseCols, customTypes, visiting)
 		if err != nil {
 			return nil, err
 		}
 		cols = append(cols, parentCols...)
 	}
-	own, err := parseColumns(doc["columns"])
+	own, err := parseColumns(doc["columns"], customTypes)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +237,7 @@ func parseTable(id string, doc map[string]any) (table, error) {
 	return t, nil
 }
 
-func parseColumns(raw any) ([]column, error) {
+func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) ([]column, error) {
 	var out []column
 	for _, item := range asList(raw) {
 		m, _ := asMap(item)
@@ -260,9 +260,38 @@ func parseColumns(raw any) ([]column, error) {
 		if c.Name == "" || c.Type == "" {
 			return nil, fmt.Errorf("column name/type required")
 		}
+		if nt, ok := customTypes[c.Type]; ok {
+			c.Type = nt.Family
+			applyCustomParams(&c, nt.Params)
+		}
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+func applyCustomParams(c *column, params map[string]any) {
+	for k, v := range params {
+		switch k {
+		case "bits":
+			c.Bits = intValue(v)
+		case "unsigned":
+			c.Unsigned = boolValue(v)
+		case "min_len":
+			c.MinLen = intValue(v)
+		case "max_len":
+			c.MaxLen = intValue(v)
+		case "fixed":
+			c.Fixed = boolValue(v)
+		case "precision":
+			c.Precision = intValue(v)
+		case "scale":
+			c.Scale = intValue(v)
+		case "default":
+			if c.Default == nil {
+				c.Default = v
+			}
+		}
+	}
 }
 
 func mergeColumns(cols []column) ([]column, error) {

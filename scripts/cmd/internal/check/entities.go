@@ -369,6 +369,9 @@ func (c *Checker) applyEntityFieldDefaults(e *entityInfo) {
 		}
 		if !f.HasType {
 			typ := meta.typ
+			if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
+				typ = customType.Family
+			}
 			if meta.nullable && !f.HasNullable {
 				typ = "*" + typ
 			}
@@ -782,7 +785,7 @@ func (c *Checker) checkScalarField(e *entityInfo, f entityFieldInfo, where strin
 				if colType != "integer" {
 					c.rulef("entity-field-type", "%s: enum requires integer column, got %s", where, colType)
 				}
-			} else if base != colType {
+			} else if baseFamily := c.valueType(base); !(baseFamily == colType || (baseFamily == "" && base == colType)) {
 				c.rulef("entity-field-type", "%s: type %s does not match column type %s", where, base, colType)
 			}
 			if pointer != meta.nullable {
@@ -833,7 +836,7 @@ func (c *Checker) checkFieldValidation(e *entityInfo, f entityFieldInfo, where, 
 			c.rulef("entity-field-validation", "%s: validation column %s not found", where, f.ValidationRef)
 		}
 	case "pattern":
-		if baseType != "string" {
+		if c.valueType(baseType) != "string" && baseType != "string" {
 			c.rulef("entity-field-validation", "%s: pattern validation requires string type, got %s", where, baseType)
 		}
 		if _, err := regexp.Compile(f.ValidationRef); err != nil {
@@ -1029,6 +1032,9 @@ func (c *Checker) columnUnique(table, col string) bool {
 
 // resolvedColumnType 把列引用链解析为实际类型族；非引用/断链/成环时原样返回。
 func (c *Checker) resolvedColumnType(typ string) string {
+	if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
+		return customType.Family
+	}
 	seen := map[string]bool{}
 	for strings.HasPrefix(typ, "data.tables.") {
 		if seen[typ] {

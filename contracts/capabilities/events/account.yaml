@@ -13,13 +13,11 @@ events:
     version: 1
     payload:
       type: object
-      additionalProperties: false
-      required: [id, number, status, created_at]
       properties:
-        id: {type: integer}
-        number: {type: string}
-        status: {type: string, enum: [pending, active]}
-        created_at: {type: string, format: date-time}
+        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
+        - { name: number, schema: { type: account_number }, required: true, description: "账号编号" }
+        - { name: status, schema: { ref: data.enums.account_created_status }, required: true, description: "账号创建后的状态" }
+        - { name: created_at, schema: { type: timestamp }, required: true, description: "创建时间" }
     summary: "账号创建"
     emitted_by: [ cap.services.account.create ]
     consumers: []
@@ -28,11 +26,9 @@ events:
     version: 1
     payload:
       type: object
-      additionalProperties: false
-      required: [id, activated_at]
       properties:
-        id: {type: integer}
-        activated_at: {type: string, format: date-time}
+        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
+        - { name: activated_at, schema: { type: timestamp }, required: true, description: "账号激活时间" }
     summary: "账号激活或解封"
     emitted_by: [ cap.services.account.activate ]
     consumers: []
@@ -41,12 +37,10 @@ events:
     version: 1
     payload:
       type: object
-      additionalProperties: false
-      required: [id, suspended_at, reason]
       properties:
-        id: {type: integer}
-        reason: {type: string}
-        suspended_at: {type: string, format: date-time}
+        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
+        - { name: reason, schema: { type: string }, required: true, description: "失败或停用原因" }
+        - { name: suspended_at, schema: { type: timestamp }, required: true, description: "账号停用时间" }
     summary: "账号封禁"
     emitted_by: [ cap.services.account.suspend ]
     consumers: []
@@ -55,11 +49,9 @@ events:
     version: 1
     payload:
       type: object
-      additionalProperties: false
-      required: [id, reactivated_at]
       properties:
-        id: {type: integer}
-        reactivated_at: {type: string, format: date-time}
+        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
+        - { name: reactivated_at, schema: { type: timestamp }, required: true, description: "账号重新激活时间" }
     summary: "账号解封"
     emitted_by: [ cap.services.account.activate ]
     consumers: []
@@ -68,11 +60,9 @@ events:
     version: 1
     payload:
       type: object
-      additionalProperties: false
-      required: [id, deleted_at]
       properties:
-        id: {type: integer}
-        deleted_at: {type: string, format: date-time}
+        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
+        - { name: deleted_at, schema: { type: timestamp }, required: true, description: "软删时间" }
     summary: "账号软删"
     emitted_by: [ cap.services.account.delete ]
     consumers: []
@@ -81,13 +71,11 @@ events:
     version: 1
     payload:
       type: object
-      additionalProperties: false
-      required: [id, login_at]
       properties:
-        id: {type: integer}
-        ip: {type: string}
-        user_agent: {type: string}
-        login_at: {type: string, format: date-time}
+        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
+        - { name: ip, schema: { type: string }, description: "客户端 IP" }
+        - { name: user_agent, schema: { type: string }, description: "客户端 User-Agent" }
+        - { name: login_at, schema: { type: timestamp }, required: true, description: "登录时间" }
     summary: "登录成功"
     emitted_by: [ cap.services.auth.login ]
     consumers: []
@@ -96,12 +84,10 @@ events:
     version: 1
     payload:
       type: object
-      additionalProperties: false
-      required: [reason, failed_at]
       properties:
-        account_id: {type: integer, nullable: true}
-        reason: {type: string, enum: [bad_password, locked, suspended, not_found]}
-        failed_at: {type: string, format: date-time}
+        - { name: account_id, schema: { type: integer }, nullable: true, description: "账号 ID；未知账号为 null" }
+        - { name: reason, schema: { ref: data.enums.login_failed_reason }, required: true, description: "失败或停用原因" }
+        - { name: failed_at, schema: { type: timestamp }, required: true, description: "登录失败时间" }
     summary: "登录失败"
     emitted_by: [ cap.services.auth.login ]
     consumers: []

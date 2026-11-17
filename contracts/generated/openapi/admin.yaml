@@ -148,12 +148,15 @@ components:
       additionalProperties: false
       properties:
         has_more:
+          description: 是否还有下一页
           type: boolean
         items:
+          description: 分页项列表
           items:
             $ref: '#/components/schemas/Account'
           type: array
         next_cursor:
+          description: 下一页游标；无更多时为 null
           nullable: true
           type: string
       required:
@@ -175,8 +178,10 @@ components:
       properties:
         account:
           $ref: '#/components/schemas/Account'
+          description: 账号实体
         tokens:
           $ref: '#/components/schemas/TokenPair'
+          description: 令牌对
       required:
         - account
         - tokens
@@ -186,23 +191,28 @@ components:
       additionalProperties: false
       properties:
         nickname:
+          description: 账号昵称
           maxLength: 100
           minLength: 1
           type: string
         number:
+          description: 账号编号
           maxLength: 64
           minLength: 4
           pattern: ^[A-Za-z0-9_-]+$
           type: string
         own_id:
+          description: 归属对象 ID
           type: integer
         own_type:
+          description: 归属类型
           enum:
             - user
             - admin
             - system
           type: string
         user_id:
+          description: 关联用户 ID
           nullable: true
           type: integer
       required:
@@ -216,6 +226,7 @@ components:
       additionalProperties: false
       properties:
         auth_type:
+          description: 认证类型
           enum:
             - pwd
             - phone
@@ -223,17 +234,23 @@ components:
           type: string
         code:
           description: 手机号区号，例如 +86
+          maxLength: 8
+          minLength: 2
           nullable: true
+          pattern: ^\+[0-9]{1,4}$
           type: string
         device_id:
+          description: 设备标识
           maxLength: 128
           nullable: true
           type: string
         identifier:
+          description: 登录标识
           maxLength: 254
           minLength: 1
           type: string
         password:
+          description: 密码；仅请求写入，不回显
           nullable: true
           type: string
           writeOnly: true
@@ -309,12 +326,14 @@ components:
           nullable: true
           type: integer
         auth_type:
+          description: 认证类型
           enum:
             - pwd
             - phone
             - email
           type: string
         purpose:
+          description: 验证码用途
           enum:
             - register
             - login
@@ -328,6 +347,7 @@ components:
             - delete_account
           type: string
         target:
+          description: 验证码接收目标
           maxLength: 320
           minLength: 1
           type: string
@@ -341,20 +361,25 @@ components:
       additionalProperties: false
       properties:
         access_expire_at:
+          description: 访问令牌过期时间
           format: date-time
           type: string
         access_token:
+          description: 访问令牌
           readOnly: true
           type: string
         refresh_expire_at:
+          description: 刷新令牌过期时间
           format: date-time
           type: string
         refresh_token:
+          description: 刷新令牌
           readOnly: true
           type: string
         token_type:
-          enum:
-            - Bearer
+          default: Bearer
+          description: 令牌类型；固定 Bearer
+          pattern: ^Bearer$
           type: string
       required:
         - access_token
@@ -368,6 +393,7 @@ components:
       additionalProperties: false
       properties:
         nickname:
+          description: 账号昵称
           maxLength: 100
           minLength: 1
           type: string
@@ -393,12 +419,15 @@ components:
       additionalProperties: false
       properties:
         consumed_at:
+          description: 验证码消费时间；未消费为 null
           format: date-time
           nullable: true
           type: string
         verification_id:
+          description: 验证记录 ID
           type: integer
         verified:
+          description: 是否验证通过
           type: boolean
       required:
         - verified
@@ -409,11 +438,14 @@ components:
       additionalProperties: false
       properties:
         expire_at:
+          description: 过期时间
           format: date-time
           type: string
         id:
+          description: 验证记录 ID
           type: integer
         masked_target:
+          description: 脱敏后的接收目标
           type: string
       required:
         - id
@@ -429,16 +461,19 @@ components:
           nullable: true
           type: integer
         auth_type:
+          description: 认证类型
           enum:
             - pwd
             - phone
             - email
           type: string
         code:
+          description: 验证码
           maxLength: 12
           minLength: 4
           type: string
         purpose:
+          description: 验证码用途
           enum:
             - register
             - login
@@ -452,6 +487,7 @@ components:
             - delete_account
           type: string
         target:
+          description: 验证码接收目标
           maxLength: 320
           minLength: 1
           type: string

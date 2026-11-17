@@ -11,39 +11,31 @@ do_not:
 schemas:
   SendVerificationInput:
     type: object
-    additionalProperties: false
-    required: [auth_type, target, purpose]
     properties:
-      auth_type: {type: data.enums.auth_type}
-      account_id: {type: integer, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析"}
-      target: {type: string, minLength: 1, maxLength: 320}
-      purpose: {type: data.enums.verification_purpose}
+      - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
+      - { name: account_id, schema: { type: integer }, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
+      - { name: target, schema: { type: verification_target }, required: true, description: "验证码接收目标" }
+      - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
   VerificationSent:
     type: object
-    additionalProperties: false
-    required: [id, masked_target, expire_at]
     properties:
-      id: {type: integer}
-      masked_target: {type: string}
-      expire_at: {type: string, format: date-time}
+      - { name: id, schema: { type: integer }, required: true, description: "验证记录 ID" }
+      - { name: masked_target, schema: { type: string }, required: true, description: "脱敏后的接收目标" }
+      - { name: expire_at, schema: { type: timestamp }, required: true, description: "过期时间" }
   VerifyCodeInput:
     type: object
-    additionalProperties: false
-    required: [auth_type, target, purpose, code]
     properties:
-      auth_type: {type: data.enums.auth_type}
-      account_id: {type: integer, nullable: true, description: "注册时必传；其他用途可省略"}
-      target: {type: string, minLength: 1, maxLength: 320}
-      purpose: {type: data.enums.verification_purpose}
-      code: {type: string, minLength: 4, maxLength: 12}
+      - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
+      - { name: account_id, schema: { type: integer }, nullable: true, description: "注册时必传；其他用途可省略" }
+      - { name: target, schema: { type: verification_target }, required: true, description: "验证码接收目标" }
+      - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
+      - { name: code, schema: { type: verification_code }, required: true, description: "验证码" }
   VerificationResult:
     type: object
-    additionalProperties: false
-    required: [verified, verification_id]
     properties:
-      verified: {type: boolean}
-      verification_id: {type: integer}
-      consumed_at: {type: string, format: date-time, nullable: true}
+      - { name: verified, schema: { type: boolean }, required: true, description: "是否验证通过" }
+      - { name: verification_id, schema: { type: integer }, required: true, description: "验证记录 ID" }
+      - { name: consumed_at, schema: { type: timestamp }, nullable: true, description: "验证码消费时间；未消费为 null" }
 services:
   - name: send
     summary: "发送短信/邮件验证码"

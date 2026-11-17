@@ -25,6 +25,18 @@ enums:
       capabilities:
         - cap.services.account
 
+  - name: account_created_status
+    description: "账号创建事件状态"
+    go_type: AccountCreatedStatus
+    ts_type: AccountCreatedStatus
+    values:
+      - { value: pending, code: 0, description: "待激活" }
+      - { value: active, code: 1, description: "已激活" }
+    used_by:
+      entities: []
+      capabilities:
+        - cap.events.account
+
   - name: own_type
     description: "数据归属主体类型"
     go_type: OwnType
@@ -151,3 +163,44 @@ enums:
       entities:
         - data.entities.verification_action
       capabilities: []
+
+  - name: auth_bind_action
+    description: "认证绑定动作（手机/邮箱）"
+    go_type: AuthBindAction
+    ts_type: AuthBindAction
+    values:
+      - { value: create, code: 0, description: "创建绑定" }
+      - { value: enable, code: 1, description: "启用绑定" }
+      - { value: disable, code: 2, description: "停用绑定" }
+    used_by:
+      entities: []
+      capabilities:
+        - cap.services.auth
+
+  - name: auth_password_action
+    description: "密码认证绑定动作"
+    go_type: AuthPasswordAction
+    ts_type: AuthPasswordAction
+    values:
+      - { value: create, code: 0, description: "创建密码" }
+      - { value: update, code: 1, description: "修改密码" }
+      - { value: enable, code: 2, description: "启用密码" }
+      - { value: disable, code: 3, description: "停用密码" }
+    used_by:
+      entities: []
+      capabilities:
+        - cap.services.auth
+
+  - name: login_failed_reason
+    description: "登录失败原因"
+    go_type: LoginFailedReason
+    ts_type: LoginFailedReason
+    values:
+      - { value: bad_password, code: 0, description: "密码错误" }
+      - { value: locked, code: 1, description: "账号锁定" }
+      - { value: suspended, code: 2, description: "账号封禁" }
+      - { value: not_found, code: 3, description: "账号不存在" }
+    used_by:
+      entities: []
+      capabilities:
+        - cap.events.account

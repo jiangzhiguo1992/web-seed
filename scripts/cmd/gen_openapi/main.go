@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -94,11 +95,15 @@ func build(root string) (map[string][]byte, error) {
 			byID[id] = doc
 		}
 	}
-	typeIdx, err := loadServiceTypes(root)
+	enumIdx, err := loadEnums(root)
 	if err != nil {
 		return nil, err
 	}
-	enumIdx, err := loadEnums(root)
+	customTypeIdx, err := loadCustomTypes(root)
+	if err != nil {
+		return nil, err
+	}
+	typeIdx, err := loadServiceTypes(root, customTypeIdx, enumIdx)
 	if err != nil {
 		return nil, err
 	}
@@ -322,8 +327,21 @@ func fail(err error) {
 	os.Exit(1)
 }
 
-func loadServiceTypes(root string) (map[string]map[string]any, error) {
-	out := map[string]map[string]any{}
+func loadCustomTypes(root string) (map[string]contractspec.CustomValueType, error) {
+	t, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts/_meta"))
+	if err != nil {
+		return nil, err
+	}
+	return t.CustomTypes, nil
+}
+
+func loadServiceTypes(root string, customTypes map[string]contractspec.CustomValueType, enums map[string][]any) (map[string]map[string]any, error) {
+	shared, err := contractspec.LoadSharedSchemas(filepath.Join(root, "contracts/_meta"))
+	if err != nil {
+		return nil, err
+	}
+	kinds := shared.Kinds
+	raw := map[string]map[string]any{}
 	files, err := globYAML(filepath.Join(root, "contracts/capabilities/services"))
 	if err != nil {
 		return nil, err
@@ -333,13 +351,165 @@ func loadServiceTypes(root string) (map[string]map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		for name, raw := range asMap(doc["schemas"]) {
-			if schema := asMap(raw); schema != nil {
-				out[name] = schema
+		for name, r := range asMap(doc["schemas"]) {
+			if schema := asMap(r); schema != nil {
+				raw[name] = schema
 			}
 		}
 	}
+	known := map[string]bool{}
+	for name := range raw {
+		known[name] = true
+	}
+	out := map[string]map[string]any{}
+	for name, node := range raw {
+		schema, err := renderSchemaNode(node, customTypes, enums, known, kinds)
+		if err != nil {
+			return nil, fmt.Errorf("schema %s: %w", name, err)
+		}
+		out[name] = schema
+	}
 	return out, nil
+}
+
+func renderSchemaNode(node map[string]any, customTypes map[string]contractspec.CustomValueType, enums map[string][]any, known map[string]bool, kinds map[string]contractspec.SchemaKind) (map[string]any, error) {
+	kind, ok := contractspec.SchemaNodeKind(node, kinds)
+	if !ok {
+		return nil, fmt.Errorf("schema node must have exactly one of ref or type")
+	}
+	switch kind {
+	case "object":
+		propsOut := map[string]any{}
+		var required []any
+		for _, raw := range asList(node["properties"]) {
+			prop := asMap(raw)
+			if prop == nil {
+				return nil, fmt.Errorf("properties: property must be an object")
+			}
+			name, _ := prop["name"].(string)
+			if name == "" {
+				return nil, fmt.Errorf("properties: property name required")
+			}
+			if _, dup := propsOut[name]; dup {
+				return nil, fmt.Errorf("properties.%s: duplicate property", name)
+			}
+			child, err := renderSchemaNode(asMap(prop["schema"]), customTypes, enums, known, kinds)
+			if err != nil {
+				return nil, fmt.Errorf("properties.%s: %w", name, err)
+			}
+			applyPropertyAnnotations(prop, child)
+			propsOut[name] = child
+			if v, _ := prop["required"].(bool); v {
+				required = append(required, name)
+			}
+		}
+		out := map[string]any{"type": "object", "additionalProperties": false, "properties": propsOut}
+		if len(required) > 0 {
+			out["required"] = required
+		}
+		return out, nil
+	case "array":
+		item, err := renderSchemaNode(asMap(node["items"]), customTypes, enums, known, kinds)
+		if err != nil {
+			return nil, fmt.Errorf("items: %w", err)
+		}
+		out := map[string]any{"type": "array", "items": item}
+		if v, ok := toInt(node["min_items"]); ok {
+			out["minItems"] = v
+		}
+		if v, ok := toInt(node["max_items"]); ok {
+			out["maxItems"] = v
+		}
+		return out, nil
+	case "scalar":
+		typ, _ := node["type"].(string)
+		return scalarSchema(typ, customTypes), nil
+	case "ref":
+		ref, _ := node["ref"].(string)
+		switch {
+		case strings.HasPrefix(ref, "data.enums."):
+			return map[string]any{"type": "string", "enum": enums[lastSegment(ref)]}, nil
+		case strings.HasPrefix(ref, "data.entities."):
+			return map[string]any{"$ref": "#/components/schemas/" + pascal(lastSegment(ref))}, nil
+		default:
+			if !known[ref] {
+				return nil, fmt.Errorf("unknown schema ref %s", ref)
+			}
+			return map[string]any{"$ref": "#/components/schemas/" + ref}, nil
+		}
+	}
+	return nil, fmt.Errorf("unknown schema kind")
+}
+
+// applyPropertyAnnotations 把槽位注解映射到 OpenAPI property schema。
+// 注解只存在于 property 条目，schema 节点没有方向/可空/默认值语义。
+func applyPropertyAnnotations(prop, out map[string]any) {
+	if v, _ := prop["description"].(string); strings.TrimSpace(v) != "" {
+		out["description"] = v
+	}
+	if v, _ := prop["nullable"].(bool); v {
+		out["nullable"] = true
+	}
+	if v, _ := prop["read_only"].(bool); v {
+		out["readOnly"] = true
+	}
+	if v, _ := prop["write_only"].(bool); v {
+		out["writeOnly"] = true
+	}
+	if v, ok := prop["default"]; ok {
+		out["default"] = v
+	}
+}
+
+func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueType) map[string]any {
+	family := typ
+	var params map[string]any
+	if nt, ok := customTypes[typ]; ok {
+		family = nt.Family
+		params = nt.Params
+	}
+	out := map[string]any{}
+	switch family {
+	case "string":
+		out["type"] = "string"
+	case "integer":
+		out["type"] = "integer"
+	case "boolean":
+		out["type"] = "boolean"
+	case "timestamp", "datetime":
+		out["type"] = "string"
+		out["format"] = "date-time"
+	case "float", "decimal":
+		out["type"] = "number"
+	case "json":
+		out["type"] = "object"
+	case "bytes":
+		out["type"] = "string"
+		out["format"] = "byte"
+	default:
+		out["type"] = "object"
+	}
+	applyScalarParams(out, params)
+	return out
+}
+
+func applyScalarParams(out map[string]any, params map[string]any) {
+	for k, v := range params {
+		switch k {
+		case "min_len":
+			out["minLength"] = v
+		case "max_len":
+			out["maxLength"] = v
+		case "pattern":
+			out["pattern"] = v
+		case "min":
+			out["minimum"] = v
+		case "max":
+			out["maximum"] = v
+		case "default":
+			out["default"] = v
+		}
+	}
 }
 
 func loadEnums(root string) (map[string][]any, error) {

@@ -597,8 +597,8 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.rulef("default-vs-default-sql", "%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, name)
 			}
 		}
-		if t, _ := m["type"].(string); !isColumnType(t, schema.ColumnTypes) {
-			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (families %v or data.tables.<t>.col.<c>)", rel, i, name, t, familyNames(schema.ColumnTypes))
+		if t, _ := m["type"].(string); !isColumnType(t, schema.ValueTypes) {
+			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (type_families/custom_types %v or data.tables.<t>.col.<c>)", rel, i, name, t, valueTypeNames(schema.ValueTypes))
 		} else {
 			c.checkFamilyParams(m, t, rel, i, name, schema)
 		}
@@ -796,7 +796,7 @@ func (c *Checker) checkStability(doc map[string]any, rel string) {
 }
 
 // commonColumnFields 从 schema 的 columns.item_fields 派生通用列字段。
-// 类型族扩展字段由 families.params 注入，必须排除，避免把
+// 类型族扩展字段由 type_families.params 注入，必须排除，避免把
 // “只属于某个族”的字段误认为所有列都可写。
 func commonColumnFields(schema *Schema) map[string]bool {
 	cols, ok := contractspec.FindField(schema.Fields, "columns")
@@ -804,7 +804,7 @@ func commonColumnFields(schema *Schema) map[string]bool {
 		return nil
 	}
 	familyParams := map[string]bool{}
-	for _, fam := range schema.ColumnTypes.ValueTypeFamilies {
+	for _, fam := range schema.ValueTypes.TypeFamilies {
 		for k := range fam.Params {
 			familyParams[k] = true
 		}
@@ -821,14 +821,14 @@ func commonColumnFields(schema *Schema) map[string]bool {
 // checkSharedTypes 校验 _meta/_types.yaml 的类型族定义本身：
 // 未使用的族也必须可解析，避免拼错 type 后只在某列使用时才暴露。
 func (c *Checker) checkSharedTypes(schema *Schema) {
-	if len(schema.ColumnTypes.ValueTypeFamilies) == 0 {
-		c.rulef("schema.types", "types: column_types.families must not be empty")
+	if len(schema.ValueTypes.TypeFamilies) == 0 {
+		c.rulef("schema.types", "types: type_families must not be empty")
 		return
 	}
-	for _, name := range familyNames(schema.ColumnTypes) {
-		fam := schema.ColumnTypes.ValueTypeFamilies[name]
+	for _, name := range familyNames(schema.ValueTypes) {
+		fam := schema.ValueTypes.TypeFamilies[name]
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(fam.Description) == "" {
-			c.rulef("schema.types", "types.families.%s: name and description must not be empty", name)
+			c.rulef("schema.types", "types.type_families.%s: name and description must not be empty", name)
 		}
 		paramNames := make([]string, 0, len(fam.Params))
 		for pname := range fam.Params {
@@ -838,23 +838,63 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 		for _, pname := range paramNames {
 			def := fam.Params[pname]
 			if strings.TrimSpace(pname) == "" {
-				c.rulef("schema.types", "types.families.%s: param name must not be empty", name)
+				c.rulef("schema.types", "types.type_families.%s: param name must not be empty", name)
 			}
 			if err := validateFieldTypes([]Field{{Name: pname, Type: def.Type}}); err != nil {
-				c.rulef("schema.types", "types.families.%s.params.%s: %v", name, pname, err)
+				c.rulef("schema.types", "types.type_families.%s.params.%s: %v", name, pname, err)
 			}
 			if def.Pattern != "" {
 				if _, err := regexp.Compile(def.Pattern); err != nil {
-					c.rulef("schema.types", "types.families.%s.params.%s: invalid pattern: %v", name, pname, err)
+					c.rulef("schema.types", "types.type_families.%s.params.%s: invalid pattern: %v", name, pname, err)
 				}
 			}
 		}
 	}
+	customTypeNames := make([]string, 0, len(schema.ValueTypes.CustomTypes))
+	for name := range schema.ValueTypes.CustomTypes {
+		customTypeNames = append(customTypeNames, name)
+	}
+	sort.Strings(customTypeNames)
+	for _, name := range customTypeNames {
+		customType := schema.ValueTypes.CustomTypes[name]
+		fam, ok := schema.ValueTypes.TypeFamilies[customType.Family]
+		if !ok {
+			c.rulef("schema.types", "types.custom_types.%s: unknown family %s", name, customType.Family)
+			continue
+		}
+		if strings.TrimSpace(customType.Description) == "" {
+			c.rulef("schema.types", "types.custom_types.%s: description must not be empty", name)
+		}
+		for pname := range customType.Params {
+			if pname == "default" {
+				continue
+			}
+			if _, ok := fam.Params[pname]; !ok {
+				c.rulef("schema.types", "types.custom_types.%s: param %s not allowed by family %s", name, pname, customType.Family)
+			}
+		}
+		c.checkFamilyParams(customType.Params, customType.Family, "types.custom_types."+name, 0, name, schema)
+	}
 }
 
-func familyNames(ct ColumnTypes) []string {
-	out := make([]string, 0, len(ct.ValueTypeFamilies))
-	for k := range ct.ValueTypeFamilies {
+func familyNames(ct ValueTypes) []string {
+	out := make([]string, 0, len(ct.TypeFamilies))
+	for k := range ct.TypeFamilies {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func valueTypeNames(vt ValueTypes) []string {
+	out := append(familyNames(vt), customTypeNames(vt)...)
+	sort.Strings(out)
+	return out
+}
+
+func customTypeNames(vt ValueTypes) []string {
+	out := make([]string, 0, len(vt.CustomTypes))
+	for k := range vt.CustomTypes {
 		out = append(out, k)
 	}
 	sort.Strings(out)
@@ -868,7 +908,12 @@ func familyNames(ct ColumnTypes) []string {
 //   - default 的 YAML 类型、长度、范围必须与族定义兼容。
 func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name string, schema *Schema) {
 	common := commonColumnFields(schema)
-	fam, ok := schema.ColumnTypes.ValueTypeFamilies[t]
+	customType, isCustom := schema.ValueTypes.CustomTypes[t]
+	family := t
+	if isCustom {
+		family = customType.Family
+	}
+	fam, ok := schema.ValueTypes.TypeFamilies[family]
 	if !ok {
 		if common != nil {
 			for k := range m {
@@ -883,8 +928,10 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 	for k := range common {
 		allowed[k] = true
 	}
-	for k := range fam.Params {
-		allowed[k] = true
+	if !isCustom {
+		for k := range fam.Params {
+			allowed[k] = true
+		}
 	}
 	if common != nil {
 		for k := range m {
@@ -895,7 +942,7 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 	}
 	for pk, def := range fam.Params {
 		v, present := m[pk]
-		if def.Required && !present {
+		if def.Required && !present && !isCustom {
 			c.rulef("family-params", "%s: columns[%d] (%s): missing required param %q for type %s", rel, i, name, pk, t)
 			continue
 		}
@@ -910,8 +957,8 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 			}
 		}
 	}
-	c.checkColumnDefaultType(m, t, rel, i, name)
-	switch t {
+	c.checkColumnDefaultType(m, family, rel, i, name)
+	switch family {
 	case "string", "bytes":
 		if a, ok := toInt(m["min_len"]); ok {
 			if b, ok2 := toInt(m["max_len"]); ok2 && a > b {
@@ -929,7 +976,7 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 		}
 		if s, ok := m["default"].(string); ok {
 			n := utf8.RuneCountInString(s)
-			if t == "bytes" {
+			if family == "bytes" {
 				n = len(s)
 			}
 			if minLen, ok := toInt(m["min_len"]); ok && n < minLen {
@@ -945,14 +992,14 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 				c.rulef("family-range", "%s: columns[%d] (%s): min > max", rel, i, name)
 			}
 		}
-		if t == "decimal" {
+		if family == "decimal" {
 			if p, ok := toInt(m["precision"]); ok {
 				if s, ok2 := toInt(m["scale"]); ok2 && s > p {
 					c.rulef("family-decimal", "%s: columns[%d] (%s): scale > precision", rel, i, name)
 				}
 			}
 		}
-		if t == "integer" {
+		if family == "integer" {
 			if unsigned, _ := m["unsigned"].(bool); unsigned {
 				if v, ok := toInt(m["min"]); ok && v < 0 {
 					c.rulef("family-range", "%s: columns[%d] (%s): unsigned integer min must be >= 0", rel, i, name)
@@ -982,35 +1029,43 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 
 // checkColumnDefaultType 校验字面量 default 的 YAML 类型与列类型族兼容。
 // 引用列（data.tables.<t>.col.<c>）的具体类型暂不递归展开。
-func (c *Checker) checkColumnDefaultType(m map[string]any, t, rel string, i int, name string) {
-	def, ok := m["default"]
-	if !ok || def == nil {
-		return
-	}
+// defaultMatchesType 判断 default 是否匹配类型族；不匹配时返回期望的类型描述。
+func defaultMatchesType(def any, t string) (bool, string) {
 	switch t {
 	case "string", "bytes":
 		if _, ok := def.(string); !ok {
-			c.rulef("default-type", "%s: columns[%d] (%s): default must be string for type %s", rel, i, name, t)
+			return false, "string"
 		}
 	case "datetime", "timestamp":
 		switch def.(type) {
 		case string, time.Time:
 		default:
-			c.rulef("default-type", "%s: columns[%d] (%s): default must be string/time for type %s", rel, i, name, t)
+			return false, "string/time"
 		}
 	case "boolean":
 		if _, ok := def.(bool); !ok {
-			c.rulef("default-type", "%s: columns[%d] (%s): default must be boolean for type %s", rel, i, name, t)
+			return false, "boolean"
 		}
 	case "integer":
 		if _, ok := toInt(def); !ok {
-			c.rulef("default-type", "%s: columns[%d] (%s): default must be integer for type %s", rel, i, name, t)
+			return false, "integer"
 		}
 	case "float", "decimal":
 		if _, ok := toFloat(def); !ok {
-			c.rulef("default-type", "%s: columns[%d] (%s): default must be number for type %s", rel, i, name, t)
+			return false, "number"
 		}
 	case "json":
 		// JSON 文档允许任意 YAML 结构。
+	}
+	return true, ""
+}
+
+func (c *Checker) checkColumnDefaultType(m map[string]any, t, rel string, i int, name string) {
+	def, ok := m["default"]
+	if !ok || def == nil {
+		return
+	}
+	if ok, want := defaultMatchesType(def, t); !ok {
+		c.rulef("default-type", "%s: columns[%d] (%s): default must be %s for type %s", rel, i, name, want, t)
 	}
 }

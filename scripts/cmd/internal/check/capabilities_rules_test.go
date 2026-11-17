@@ -128,6 +128,12 @@ func writeCapFile(t *testing.T, root, rel, body string) {
 
 func TestCheckCapabilitiesServiceCycle(t *testing.T) {
 	root := t.TempDir()
+	writeCapFile(t, root, "contracts/_meta/_types.yaml", `id: meta.types
+type_families:
+  string: { description: "string", params: {} }
+custom_types: {}
+`)
+	writeCapFile(t, root, "contracts/_meta/_schemas.yaml", string(mustRead(t, filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_schemas.yaml"))))
 	writeCapFile(t, root, "contracts/_meta/cap.services.yaml", `type: cap.services
 targets:
   dir: contracts/capabilities/services
@@ -303,6 +309,15 @@ components:
 	}
 }
 
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 func copyMeta(t *testing.T, root, typ string) *Schema {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
@@ -312,8 +327,10 @@ func copyMeta(t *testing.T, root, typ string) *Schema {
 		t.Fatal(err)
 	}
 	writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", string(b))
-	if shared, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "contracts", "_meta", "_schemas.yaml")); err == nil {
-		writeCapFile(t, root, "contracts/_meta/_schemas.yaml", string(shared))
+	for _, name := range []string{"_schemas.yaml", "_types.yaml"} {
+		if shared, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "contracts", "_meta", name)); err == nil {
+			writeCapFile(t, root, "contracts/_meta/"+name, string(shared))
+		}
 	}
 	s, _, err := contractspec.LoadSchemaByType(root, typ)
 	if err != nil {
@@ -583,7 +600,7 @@ events:
     name: x.created
     version: 1
     payload:
-      $ref: data.entities.account
+      ref: data.entities.account
     summary: "x"
     emitted_by: []
     consumers: []
@@ -600,7 +617,7 @@ events:
 	}
 	c.checkEventDoc(doc, rel, schema, map[string]bool{})
 	if len(c.errs) != 0 {
-		t.Fatalf("valid $ref reported: %v", c.errs)
+		t.Fatalf("valid ref reported: %v", c.errs)
 	}
 
 	writeCapFile(t, root, rel, strings.Replace(valid, "data.entities.account", "data.entities.missing", 1))
@@ -610,19 +627,8 @@ events:
 	}
 	c.errs = nil
 	c.checkEventDoc(doc, rel, schema, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-payload-ref]") {
-		t.Fatalf("unknown $ref not reported: %v", c.errs)
-	}
-
-	writeCapFile(t, root, rel, strings.Replace(valid, "data.entities.account", "data.enums.account_status", 1))
-	doc, err = loadYAML(filepath.Join(root, rel))
-	if err != nil {
-		t.Fatal(err)
-	}
-	c.errs = nil
-	c.checkEventDoc(doc, rel, schema, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "must be an object type") {
-		t.Fatalf("enum $ref not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-ref]") {
+		t.Fatalf("unknown ref not reported: %v", c.errs)
 	}
 }
 
@@ -1006,16 +1012,18 @@ do_not: []
 schemas:
   XInput:
     type: object
-    additionalProperties: false
     properties:
-      nested:
-        type: object
-        additionalProperties: false
-        properties:
-          id: {type: integer}
-        typo: 1
-    allOf:
-      - {type: object, additionalProperties: false, properties: {}}
+      - name: nested
+        schema:
+          type: object
+          properties:
+            - { name: id, schema: { type: integer }, description: "id" }
+            - name: typo
+              schema:
+                type: string
+                bogus: 1
+              description: "typo"
+        description: "nested"
 services:
   - name: get
     summary: "x"
@@ -1038,11 +1046,8 @@ services:
 	c := &Checker{root: root, errCodeSet: map[string]bool{}, permissionSet: map[string]bool{}}
 	c.checkServiceDoc(doc, rel, schema, map[string]bool{})
 	got := strings.Join(c.errs, "\n")
-	if !strings.Contains(got, `unknown schema key "typo"`) {
-		t.Fatalf("nested schema key not rejected: %v", c.errs)
-	}
-	if strings.Contains(got, `unknown schema key "allOf"`) {
-		t.Fatalf("allOf must be allowed by the template: %v", c.errs)
+	if !strings.Contains(got, `unknown schema key "bogus"`) {
+		t.Fatalf("nested schema node not rejected: %v", c.errs)
 	}
 }
 
@@ -1059,8 +1064,13 @@ do_not: []
 schemas:
   XInput:
     type: object
-    properties: {}
-    additionalProperties: false
+    properties:
+      - name: nested
+        description: "nested"
+        schema:
+          type: object
+          properties:
+            - { name: id, schema: { type: integer }, description: "id" }
 services:
   - name: get
     summary: "x"
@@ -1084,5 +1094,177 @@ services:
 	c.checkServiceDoc(doc, rel, schema, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "schema.field-order") {
 		t.Fatalf("schema key order not enforced: %v", c.errs)
+	}
+}
+
+func TestSchemaEmptyTypeAndRef(t *testing.T) {
+	c := &Checker{nodeKinds: map[string]SchemaKind{
+		"scalar": {Keys: []contractspec.Field{{Name: "type"}}},
+		"ref":    {Keys: []contractspec.Field{{Name: "ref"}}},
+	}}
+	c.validateSchemaNode(map[string]any{"type": ""}, "x")
+	c.validateSchemaNode(map[string]any{"ref": ""}, "y")
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, "x: schema node must have exactly one of ref or type") || !strings.Contains(got, "y.ref: must not be empty") {
+		t.Fatalf("empty type/ref accepted: %v", c.errs)
+	}
+}
+
+func TestSchemaPropertyDefault(t *testing.T) {
+	c := &Checker{
+		nodeKinds: map[string]SchemaKind{
+			"object": {Keys: []contractspec.Field{
+				{Name: "type", Type: "string"},
+				{Name: "properties", Type: "list<property>"},
+			}},
+			"scalar": {Keys: []contractspec.Field{{Name: "type", Type: "string"}}},
+			"ref":    {Keys: []contractspec.Field{{Name: "ref", Type: "string"}}},
+		},
+		propertyKeys: []contractspec.Field{
+			{Name: "name", Type: "string"},
+			{Name: "schema", Type: "schema"},
+			{Name: "default", Type: "any"},
+			{Name: "description", Type: "string"},
+		},
+		valueTypes: contractspec.ValueTypes{
+			TypeFamilies: map[string]contractspec.ValueTypeFamily{
+				"integer": {Description: "integer"},
+			},
+		},
+		enumIDs: map[string]bool{"data.enums.mode": true},
+		enumValues: map[string]map[string]bool{
+			"data.enums.mode": {"a": true, "b": true},
+		},
+	}
+	c.validateSchemaNode(map[string]any{
+		"type": "object",
+		"properties": []any{
+			map[string]any{"name": "ok_enum", "schema": map[string]any{"ref": "data.enums.mode"}, "default": "a", "description": "ok"},
+			map[string]any{"name": "bad_enum", "schema": map[string]any{"ref": "data.enums.mode"}, "default": "z", "description": "bad"},
+			map[string]any{"name": "bad_int", "schema": map[string]any{"type": "integer"}, "default": "x", "description": "bad"},
+		},
+	}, "x")
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		`x.properties[1].default: z is not a value of data.enums.mode`,
+		`x.properties[2].default: must be integer for type integer`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q: %v", want, c.errs)
+		}
+	}
+	if strings.Contains(got, "x.properties[0].default") {
+		t.Fatalf("valid enum default rejected: %v", c.errs)
+	}
+}
+
+func TestCustomTypeParamConsistency(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "data.tables")
+	if schema.ValueTypes.CustomTypes == nil {
+		schema.ValueTypes.CustomTypes = map[string]CustomValueType{}
+	}
+	schema.ValueTypes.CustomTypes["bad"] = CustomValueType{
+		Family:      "string",
+		Description: "bad",
+		Params:      map[string]any{"min_len": 10, "max_len": 5},
+	}
+	c := &Checker{}
+	c.checkSharedTypes(schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "family-length") {
+		t.Fatalf("custom type length mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestSchemaFieldSpecs(t *testing.T) {
+	c := &Checker{
+		nodeKinds: map[string]SchemaKind{
+			"object": {Keys: []contractspec.Field{
+				{Name: "type", Type: "string"},
+				{Name: "properties", Type: "list<property>"},
+			}},
+			"scalar": {Keys: []contractspec.Field{
+				{Name: "type", Type: "string"},
+			}},
+		},
+		propertyKeys: []contractspec.Field{
+			{Name: "name", Type: "string"},
+			{Name: "schema", Type: "schema"},
+			{Name: "required", Type: "boolean"},
+			{Name: "nullable", Type: "boolean"},
+			{Name: "read_only", Type: "boolean"},
+			{Name: "write_only", Type: "boolean"},
+			{Name: "description", Type: "string"},
+		},
+		valueTypes: contractspec.ValueTypes{
+			TypeFamilies: map[string]contractspec.ValueTypeFamily{
+				"string": {Description: "string"},
+			},
+		},
+	}
+	c.validateSchemaNode(map[string]any{
+		"type": "object",
+		"properties": []any{
+			map[string]any{
+				"name":        "id",
+				"schema":      map[string]any{"type": "string"},
+				"nullable":    "yes",
+				"description": "id",
+				"read_only":   true,
+				"write_only":  true,
+			},
+			map[string]any{
+				"name":        "id",
+				"schema":      map[string]any{"type": "string"},
+				"description": "duplicate",
+			},
+			map[string]any{
+				"name":        "ok",
+				"schema":      map[string]any{"type": "string"},
+				"description": "missing schema field",
+				"required":    "yes",
+			},
+		},
+		"read_only": true,
+	}, "x")
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"x.properties[0].nullable: must be boolean",
+		"read_only and write_only cannot both be true",
+		`x: duplicate property "id"`,
+		"x.properties[2].required: must be boolean",
+		`x: "read_only" is a property key and must not appear on a schema node`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q: %v", want, c.errs)
+		}
+	}
+}
+
+func TestSchemaPropertyRequiresSchemaAndDescription(t *testing.T) {
+	c := &Checker{
+		nodeKinds: map[string]SchemaKind{
+			"object": {Keys: []contractspec.Field{
+				{Name: "type", Type: "string"},
+				{Name: "properties", Type: "list<property>"},
+			}},
+		},
+		propertyKeys: []contractspec.Field{
+			{Name: "name", Type: "string"},
+			{Name: "schema", Type: "schema"},
+			{Name: "description", Type: "string"},
+		},
+	}
+	c.validateSchemaNode(map[string]any{
+		"type": "object",
+		"properties": []any{
+			map[string]any{"name": "id"},
+		},
+	}, "x")
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{"x.properties[0]: property requires schema", "x.properties[0].description: required"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q: %v", want, c.errs)
+		}
 	}
 }

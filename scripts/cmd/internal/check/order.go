@@ -66,12 +66,12 @@ func (c *Checker) checkNodeOrder(n *yaml.Node, fields []Field, rel, path string,
 		value := n.Content[i+1]
 		childPath := joinPath(path, key)
 		switch {
-		case value.Kind == yaml.MappingNode && f.Type == "map<schema_object>":
+		case value.Kind == yaml.MappingNode && f.Type == "schema":
+			c.checkSchemaNodeOrder(value, rel, childPath, rules)
+		case value.Kind == yaml.MappingNode && f.Type == "map<schema>":
 			for j := 0; j+1 < len(value.Content); j += 2 {
-				c.checkSchemaOrder(value.Content[j+1], f.Keys, rel, childPath+"."+value.Content[j].Value, rules)
+				c.checkSchemaNodeOrder(value.Content[j+1], rel, childPath+"."+value.Content[j].Value, rules)
 			}
-		case value.Kind == yaml.MappingNode && f.Type == "schema_object":
-			c.checkSchemaOrder(value, f.Keys, rel, childPath, rules)
 		case value.Kind == yaml.MappingNode && len(f.Fields) > 0:
 			c.checkNodeOrder(value, f.Fields, rel, childPath, rules)
 		case value.Kind == yaml.SequenceNode && len(f.ItemFields) > 0:
@@ -84,40 +84,111 @@ func (c *Checker) checkNodeOrder(n *yaml.Node, fields []Field, rel, path string,
 	}
 }
 
-// checkSchemaOrder 按共享 keys 校验一个 schema_object 的键顺序，并递归 properties/items/组合分支。
-func (c *Checker) checkSchemaOrder(n *yaml.Node, keys []Field, rel, path string, rules orderRules) {
-	if n == nil || n.Kind != yaml.MappingNode || len(keys) == 0 {
+// checkSchemaNodeOrder 按 _schemas.kinds 的 allowed 顺序校验 schema 节点自身的键顺序；
+// object.properties 是 property 条目列表，条目顺序按 _schemas.property.keys 校验。
+func (c *Checker) checkSchemaNodeOrder(n *yaml.Node, rel, path string, rules orderRules) {
+	if n == nil || n.Kind != yaml.MappingNode {
 		return
 	}
-	pos := make(map[string]int, len(keys))
-	for i, f := range keys {
-		pos[f.Name] = i
+	nodeKind := schemaNodeKindFromYAML(n, c.nodeKinds)
+	if nodeKind == "" {
+		return
+	}
+	spec, ok := c.nodeKinds[nodeKind]
+	if !ok {
+		return
+	}
+	pos := map[string]int{}
+	for i, key := range spec.Keys {
+		pos[key.Name] = i
 	}
 	last, lastKey := -1, ""
 	for i := 0; i+1 < len(n.Content); i += 2 {
 		key := n.Content[i].Value
+		idx, ok := pos[key]
+		if !ok {
+			continue
+		}
+		if idx < last {
+			c.reportOrder(rules.nested, rel, path, key, lastKey)
+		}
+		last, lastKey = idx, key
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		key, value := n.Content[i].Value, n.Content[i+1]
+		switch {
+		case key == "items" && value.Kind == yaml.MappingNode:
+			c.checkSchemaNodeOrder(value, rel, path+".items", rules)
+		case key == "properties" && value.Kind == yaml.SequenceNode:
+			for j, item := range value.Content {
+				if item.Kind == yaml.MappingNode {
+					c.checkPropertyOrder(item, rel, fmt.Sprintf("%s.properties[%d]", path, j), rules)
+				}
+			}
+		}
+	}
+}
+
+// checkPropertyOrder 按 _schemas.property.keys 的顺序校验属性条目，并递归其 schema 子树。
+func (c *Checker) checkPropertyOrder(n *yaml.Node, rel, path string, rules orderRules) {
+	if n == nil || n.Kind != yaml.MappingNode {
+		return
+	}
+	pos := map[string]int{}
+	for i, key := range c.propertyKeys {
+		pos[key.Name] = i
+	}
+	last, lastKey := -1, ""
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		key, value := n.Content[i].Value, n.Content[i+1]
 		if idx, ok := pos[key]; ok {
 			if idx < last {
 				c.reportOrder(rules.nested, rel, path, key, lastKey)
 			}
 			last, lastKey = idx, key
 		}
-		value := n.Content[i+1]
-		switch key {
-		case "properties":
-			if value.Kind == yaml.MappingNode {
-				for j := 0; j+1 < len(value.Content); j += 2 {
-					c.checkSchemaOrder(value.Content[j+1], keys, rel, path+".properties."+value.Content[j].Value, rules)
-				}
-			}
-		case "items":
-			c.checkSchemaOrder(value, keys, rel, path+".items", rules)
-		case "allOf", "oneOf", "anyOf":
-			for k, item := range value.Content {
-				c.checkSchemaOrder(item, keys, rel, fmt.Sprintf("%s.%s[%d]", path, key, k), rules)
-			}
+		if key == "schema" && value.Kind == yaml.MappingNode {
+			c.checkSchemaNodeOrder(value, rel, path+".schema", rules)
 		}
 	}
+}
+
+// schemaNodeKindFromYAML 从映射节点读取 ref/type，按标准 schema 语义判定节点种类。
+func schemaNodeKindFromYAML(n *yaml.Node, kinds map[string]SchemaKind) string {
+	if n == nil || n.Kind != yaml.MappingNode {
+		return ""
+	}
+	hasRef := false
+	typ := ""
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		switch n.Content[i].Value {
+		case "ref":
+			hasRef = true
+		case "type":
+			typ = n.Content[i+1].Value
+		}
+	}
+	if hasRef && typ != "" {
+		return ""
+	}
+	kind := ""
+	switch {
+	case hasRef:
+		kind = "ref"
+	case typ == "object":
+		kind = "object"
+	case typ == "array":
+		kind = "array"
+	case typ != "":
+		kind = "scalar"
+	}
+	if kind == "" {
+		return ""
+	}
+	if _, ok := kinds[kind]; !ok {
+		return ""
+	}
+	return kind
 }
 
 // reportOrder 保留字面量 rulef 调用，供 gen_rule_ids 的 AST 扫描收集规则 ID。

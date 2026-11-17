@@ -230,6 +230,11 @@ func (c *Checker) collectEnumRefs(v any, fn func(string)) {
 					}
 				}
 			}
+			if k == "ref" {
+				if t, ok := child.(string); ok && strings.HasPrefix(t, "data.enums.") {
+					fn(t)
+				}
+			}
 			c.collectEnumRefs(child, fn)
 		}
 		return
@@ -329,6 +334,13 @@ func (c *Checker) scanEnumTypeRefs(v any, rel, path string, enums map[string]map
 						if _, found := enums[enumID]; !found {
 							c.rulef("schema.ref", "%s: %s: unknown enum %s", rel, childPath, enumID)
 						}
+					}
+				}
+			}
+			if k == "ref" {
+				if t, ok := child.(string); ok && strings.HasPrefix(t, "data.enums.") {
+					if _, found := enums[t]; !found {
+						c.rulef("schema.ref", "%s: %s: unknown enum %s", rel, childPath, t)
 					}
 				}
 			}

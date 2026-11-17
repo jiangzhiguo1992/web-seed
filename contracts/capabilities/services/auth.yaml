@@ -10,58 +10,46 @@ do_not:
 schemas:
   LoginInput:
     type: object
-    additionalProperties: false
-    required: [auth_type, identifier]
     properties:
-      auth_type: {type: data.enums.auth_type}
-      identifier: {type: string, minLength: 1, maxLength: 254}
-      password: {type: string, nullable: true, writeOnly: true}
-      code: {type: string, nullable: true, description: "手机号区号，例如 +86"}
-      device_id: {type: string, nullable: true, maxLength: 128}
+      - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
+      - { name: identifier, schema: { type: auth_identifier }, required: true, description: "登录标识" }
+      - { name: password, schema: { type: string }, nullable: true, write_only: true, description: "密码；仅请求写入，不回显" }
+      - { name: code, schema: { type: phone_code }, nullable: true, description: "手机号区号，例如 +86" }
+      - { name: device_id, schema: { type: device_id }, nullable: true, description: "设备标识" }
   BindPasswordInput:
     type: object
-    additionalProperties: false
-    required: [account_id, action]
     properties:
-      account_id: {type: integer}
-      action: {type: string, enum: [create, update, enable, disable]}
-      username: {type: string, nullable: true, maxLength: 254}
-      password: {type: string, nullable: true, writeOnly: true}
+      - { name: account_id, schema: { type: integer }, required: true, description: "账号 ID" }
+      - { name: action, schema: { ref: data.enums.auth_password_action }, required: true, description: "认证绑定动作" }
+      - { name: username, schema: { type: auth_username }, nullable: true, description: "用户名" }
+      - { name: password, schema: { type: string }, nullable: true, write_only: true, description: "密码；仅请求写入，不回显" }
   BindPhoneInput:
     type: object
-    additionalProperties: false
-    required: [account_id, action]
     properties:
-      account_id: {type: integer}
-      action: {type: string, enum: [create, enable, disable]}
-      code: {type: string, nullable: true, description: "手机号区号，例如 +86"}
-      number: {type: string, nullable: true, maxLength: 32}
+      - { name: account_id, schema: { type: integer }, required: true, description: "账号 ID" }
+      - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
+      - { name: code, schema: { type: phone_code }, nullable: true, description: "手机号区号，例如 +86" }
+      - { name: number, schema: { type: phone_number }, nullable: true, description: "手机号；只允许数字" }
   BindEmailInput:
     type: object
-    additionalProperties: false
-    required: [account_id, action]
     properties:
-      account_id: {type: integer}
-      action: {type: string, enum: [create, enable, disable]}
-      username: {type: string, nullable: true, maxLength: 254}
-      domain: {type: string, nullable: true, maxLength: 255}
+      - { name: account_id, schema: { type: integer }, required: true, description: "账号 ID" }
+      - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
+      - { name: username, schema: { type: email_username }, nullable: true, description: "用户名" }
+      - { name: domain, schema: { type: email_domain }, nullable: true, description: "邮箱域名" }
   AuthBinding:
     type: object
-    additionalProperties: false
-    required: [auth_type, auth_id, account_id, status]
     properties:
-      auth_type: {type: data.enums.auth_type}
-      auth_id: {type: integer}
-      account_id: {type: integer}
-      status: {type: data.enums.auth_status}
-      masked_target: {type: string}
+      - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
+      - { name: auth_id, schema: { type: integer }, required: true, description: "认证绑定 ID" }
+      - { name: account_id, schema: { type: integer }, required: true, description: "账号 ID" }
+      - { name: status, schema: { ref: data.enums.auth_status }, required: true, description: "认证绑定状态" }
+      - { name: masked_target, schema: { type: string }, description: "脱敏后的接收目标" }
   AuthSession:
     type: object
-    additionalProperties: false
-    required: [account, tokens]
     properties:
-      account: {type: data.entities.account}
-      tokens: {type: TokenPair}
+      - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
+      - { name: tokens, schema: { ref: TokenPair }, required: true, description: "令牌对" }
 services:
   - name: login
     summary: "登录：校验认证绑定，签发令牌"

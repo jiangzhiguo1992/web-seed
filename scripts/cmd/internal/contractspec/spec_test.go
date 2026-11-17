@@ -22,10 +22,9 @@ func TestLoadSchemaByType(t *testing.T) {
 	writeMeta(t, root, "_helpers.yaml", "id: meta._helpers\n")
 	writeMeta(t, root, "_types.yaml", `
 id: meta.types
-column_types:
-  families:
-    string:
-      description: "string"
+type_families:
+  string:
+    description: "string"
 `)
 	writeMeta(t, root, "data.tables.yaml", `
 id: meta.data.tables
@@ -88,12 +87,78 @@ func TestLoadSharedSchemasRequiresDescription(t *testing.T) {
 	root := t.TempDir()
 	writeMeta(t, root, "_schemas.yaml", `id: meta.schemas
 title: "schema"
-keys:
-  - name: type
-    type: string
-    required: false
+kinds:
+  object:
+    keys:
+      - { name: type, type: string, description: "类型" }
+      - { name: properties, type: list<property>, description: "属性" }
+  array:
+    description: "数组"
+    keys:
+      - { name: type, type: string, description: "类型" }
+      - { name: items, type: schema, description: "元素" }
+  scalar:
+    description: "标量"
+    keys:
+      - { name: type, type: string, description: "类型" }
+  ref:
+    description: "引用"
+    keys:
+      - { name: ref, type: string, description: "引用" }
+property:
+  keys:
+    - { name: name, type: string, description: "名" }
+    - { name: schema, type: schema, description: "值域" }
 `)
 	if _, err := LoadSharedSchemas(filepath.Join(root, "contracts/_meta")); err == nil {
-		t.Fatal("missing key description must fail")
+		t.Fatal("missing kind description must fail")
+	}
+}
+
+func TestLoadSharedSchemasFields(t *testing.T) {
+	root := t.TempDir()
+	writeMeta(t, root, "_schemas.yaml", `id: meta.schemas
+title: "schema"
+kinds:
+  object:
+    description: "对象"
+    keys:
+      - { name: type, type: string, description: "类型" }
+      - { name: properties, type: list<property>, description: "属性" }
+  array:
+    description: "数组"
+    keys:
+      - { name: type, type: string, description: "类型" }
+      - { name: items, type: schema, description: "元素" }
+  scalar:
+    description: "标量"
+    keys:
+      - { name: type, type: string, description: "类型" }
+  ref:
+    description: "引用"
+    keys:
+      - { name: ref, type: string, description: "引用" }
+property:
+  description: "属性"
+  keys:
+    - { name: name, type: string, description: "名" }
+    - { name: schema, type: schema, description: "值域" }
+    - { name: required, type: boolean, description: "必填" }
+`)
+	sh, err := LoadSharedSchemas(filepath.Join(root, "contracts/_meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, key := range sh.Kinds["object"].Keys {
+		names[key.Name] = true
+	}
+	for _, want := range []string{"type", "properties"} {
+		if !names[want] {
+			t.Fatalf("missing key spec %s: %#v", want, sh.Kinds["object"].Keys)
+		}
+	}
+	if len(sh.Property.Keys) != 3 {
+		t.Fatalf("property keys not loaded: %#v", sh.Property.Keys)
 	}
 }

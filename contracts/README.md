@@ -76,7 +76,7 @@ contracts/
 ├── index.yaml                # 契约地图：所有条目的 ID / 路径 / 消费者 / 强度
 ├── _meta/                    # 契约元规范（非业务契约，不登记 index）
 │   ├── README.md             #   AI 入口：写前读什么、写后跑什么
-│   ├── _types.yaml           #   共享值类型：类型族与参数（所有契约共用）
+│   ├── _types.yaml           #   共享值类型：类型族 + 自定义类型
 │   ├── data.tables.yaml      #   物理表字段树 + 值域 + 规则（单一源）
 │   ├── data.entities.yaml    #   实体字段树 + 值域 + 规则
 │   ├── data.queries.yaml     #   查询字段树 + 值域 + 规则

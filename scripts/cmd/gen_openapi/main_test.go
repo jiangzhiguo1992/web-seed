@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func writeFixture(t *testing.T, root, rel, body string) {
@@ -18,8 +20,33 @@ func writeFixture(t *testing.T, root, rel, body string) {
 	}
 }
 
+func writeTypes(t *testing.T, root string) {
+	t.Helper()
+	writeFixture(t, root, "contracts/_meta/_types.yaml", `id: meta.types
+type_families:
+  string: { description: "string", params: {} }
+custom_types: {}
+`)
+	shared, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "_meta", "_schemas.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, root, "contracts/_meta/_schemas.yaml", string(shared))
+
+}
+
+func testNodeKinds() map[string]contractspec.SchemaKind {
+	return map[string]contractspec.SchemaKind{
+		"object": {Keys: []contractspec.Field{{Name: "type"}, {Name: "properties"}}},
+		"array":  {Keys: []contractspec.Field{{Name: "type"}, {Name: "items"}}},
+		"scalar": {Keys: []contractspec.Field{{Name: "type"}}},
+		"ref":    {Keys: []contractspec.Field{{Name: "ref"}}},
+	}
+}
+
 func TestBuildExpandsServiceTypes(t *testing.T) {
 	root := t.TempDir()
+	writeTypes(t, root)
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
@@ -50,7 +77,6 @@ components:
 schemas:
   X:
     type: object
-    additionalProperties: false
     properties:
       id:
         type: integer
@@ -80,6 +106,7 @@ enums: []
 
 func TestBuildAppliesDefaultsPerFile(t *testing.T) {
 	root := t.TempDir()
+	writeTypes(t, root)
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
@@ -157,6 +184,7 @@ enums: []
 
 func TestBuildOperationDefaultOverride(t *testing.T) {
 	root := t.TempDir()
+	writeTypes(t, root)
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
@@ -203,5 +231,43 @@ enums: []
 	paths := out[strings.Index(out, "paths:"):]
 	if !strings.Contains(paths, `"423"`) || strings.Contains(paths, `"422"`) {
 		t.Fatalf("operation override not applied:\n%s", out)
+	}
+}
+
+func TestRenderSchemaAnnotations(t *testing.T) {
+	obj := map[string]any{
+		"type": "object",
+		"properties": []any{
+			map[string]any{
+				"name":        "id",
+				"schema":      map[string]any{"type": "string"},
+				"description": "id",
+				"nullable":    true,
+				"read_only":   true,
+				"required":    true,
+			},
+		},
+	}
+	out, err := renderSchemaNode(obj, nil, nil, map[string]bool{}, testNodeKinds())
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := asMap(asMap(out["properties"])["id"])
+	if child["description"] != "id" || child["nullable"] != true || child["readOnly"] != true {
+		t.Fatalf("property annotations lost: %#v", child)
+	}
+	req := asList(out["required"])
+	if len(req) != 1 || req[0] != "id" {
+		t.Fatalf("required aggregation lost: %#v", out)
+	}
+
+	list := map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+	out, err = renderSchemaNode(list, nil, nil, map[string]bool{}, testNodeKinds())
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := asMap(out["items"])
+	if item["type"] != "string" {
+		t.Fatalf("array items lost: %#v", item)
 	}
 }

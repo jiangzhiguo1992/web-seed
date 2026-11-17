@@ -13,30 +13,65 @@ import (
 )
 
 type Schema struct {
-	ID          string      `yaml:"id"`
-	Type        string      `yaml:"type"`
-	Title       string      `yaml:"title"`
-	Targets     Targets     `yaml:"targets"`
-	ColumnTypes ColumnTypes `yaml:"-"`
-	SchemaKeys  []Field     `yaml:"-"`
-	Fields      []Field     `yaml:"fields"`
-	Rules       []Rule      `yaml:"rules"`
+	ID         string                `yaml:"id"`
+	Type       string                `yaml:"type"`
+	Title      string                `yaml:"title"`
+	Targets    Targets               `yaml:"targets"`
+	ValueTypes ValueTypes            `yaml:"-"`
+	NodeKinds  map[string]SchemaKind `yaml:"-"`
+	// PropertyKeys 是 object.properties[] 条目的键规范；槽位键只允许出现在这里。
+	PropertyKeys []Field `yaml:"-"`
+	Fields       []Field `yaml:"fields"`
+	Rules        []Rule  `yaml:"rules"`
 }
 
 // SharedTypes 是 _meta/_types.yaml 的严格解析结果：类型族由所有契约类型共享，
 // 不再挂靠在 data.tables 的字段规范里。
 type SharedTypes struct {
-	ID          string      `yaml:"id"`
-	Title       string      `yaml:"title"`
-	ColumnTypes ColumnTypes `yaml:"column_types"`
+	ID           string                     `yaml:"id"`
+	Title        string                     `yaml:"title"`
+	TypeFamilies map[string]ValueTypeFamily `yaml:"type_families"`
+	CustomTypes  map[string]CustomValueType `yaml:"custom_types"`
 }
 
 // SharedSchemas 是 _meta/_schemas.yaml 的严格解析结果：services.schemas 与
-// events.payload 共用的受限 schema 键表。
+// events.payload 共用的 schema 节点语法。
+// 两层语法：Kinds 描述值域节点，Property 描述 object.properties[] 的槽位条目。
+// 节点种类就是 Kinds 的键集，不维护第二份 one_of 清单。
 type SharedSchemas struct {
-	ID    string  `yaml:"id"`
-	Title string  `yaml:"title"`
-	Keys  []Field `yaml:"keys"`
+	ID       string                `yaml:"id"`
+	Title    string                `yaml:"title"`
+	Kinds    map[string]SchemaKind `yaml:"kinds"`
+	Property SchemaKind            `yaml:"property"`
+}
+
+// SchemaNodeKind 返回 schema 节点的种类：ref 优先，其次由 type 的 object/array/其他值决定。
+func SchemaNodeKind(node map[string]any, kinds map[string]SchemaKind) (string, bool) {
+	_, hasRef := node["ref"]
+	typ, _ := node["type"].(string)
+	if hasRef && typ != "" {
+		return "", false
+	}
+	if hasRef {
+		return "ref", kinds["ref"].Keys != nil
+	}
+	switch typ {
+	case "":
+		return "", false
+	case "object":
+		return "object", kinds["object"].Keys != nil
+	case "array":
+		return "array", kinds["array"].Keys != nil
+	default:
+		return "scalar", kinds["scalar"].Keys != nil
+	}
+}
+
+// SchemaKind 描述一种 schema 节点的判别键与允许键；判别键隐式必填。
+// Keys 复用通用 Field 规范，使元规范能声明 required/const/min/pattern。
+type SchemaKind struct {
+	Description string  `yaml:"description"`
+	Keys        []Field `yaml:"keys"`
 }
 
 type Rule struct {
@@ -63,8 +98,16 @@ func (t Targets) FileID(file string) string {
 	return strings.ReplaceAll(t.ID, "<file>", stem)
 }
 
-type ColumnTypes struct {
-	ValueTypeFamilies map[string]ValueTypeFamily `yaml:"families"`
+type ValueTypes struct {
+	TypeFamilies map[string]ValueTypeFamily `yaml:"type_families"`
+	CustomTypes  map[string]CustomValueType `yaml:"custom_types"`
+}
+
+// CustomValueType 是自定义值类型：一个类型族加上固定参数，供表列与 schema 共享。
+type CustomValueType struct {
+	Family      string         `yaml:"family"`
+	Description string         `yaml:"description"`
+	Params      map[string]any `yaml:"params"`
 }
 
 // ValueTypeFamily 描述一个类型族及其允许的扩展字段。
@@ -93,7 +136,6 @@ type Field struct {
 	Unique      bool    `yaml:"unique"`
 	Fields      []Field `yaml:"fields"`
 	ItemFields  []Field `yaml:"item_fields"`
-	Keys        []Field `yaml:"keys"`
 	// Unordered 标记运行时注入的字段（如类型族参数），不参与模板顺序校验。
 	Unordered bool `yaml:"-"`
 }
@@ -136,8 +178,11 @@ func LoadSchemaByType(root, typ string) (*Schema, string, error) {
 	if found == nil {
 		return nil, "", fmt.Errorf("no meta schema for type %q under %s", typ, dir)
 	}
-	if needsSharedTypes(typ) && len(found.ColumnTypes.ValueTypeFamilies) == 0 {
-		return nil, "", fmt.Errorf("%s: missing %s (column_types.families is empty)", foundPath, filepath.Join(dir, "_types.yaml"))
+	if needsSharedTypes(typ) && len(found.ValueTypes.TypeFamilies) == 0 {
+		return nil, "", fmt.Errorf("%s: missing %s (type_families is empty)", foundPath, filepath.Join(dir, "_types.yaml"))
+	}
+	if needsSharedSchemas(typ) && len(found.NodeKinds) == 0 {
+		return nil, "", fmt.Errorf("%s: missing %s (kinds is empty)", foundPath, filepath.Join(dir, "_schemas.yaml"))
 	}
 	return found, foundPath, nil
 }
@@ -145,7 +190,15 @@ func LoadSchemaByType(root, typ string) (*Schema, string, error) {
 // needsSharedTypes 标记依赖 `_meta/_types.yaml` 类型族的契约类型。
 func needsSharedTypes(typ string) bool {
 	switch typ {
-	case "data.tables", "data.entities", "data.queries":
+	case "data.tables", "data.entities", "data.queries", "cap.services", "cap.events":
+		return true
+	}
+	return false
+}
+
+func needsSharedSchemas(typ string) bool {
+	switch typ {
+	case "cap.services", "cap.events":
 		return true
 	}
 	return false
@@ -164,10 +217,32 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 	if err := dec.Decode(&t); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if len(t.ColumnTypes.ValueTypeFamilies) == 0 {
-		return nil, fmt.Errorf("%s: column_types.families must not be empty", path)
+	vt := ValueTypes{TypeFamilies: t.TypeFamilies, CustomTypes: t.CustomTypes}
+	if len(vt.TypeFamilies) == 0 {
+		return nil, fmt.Errorf("%s: type_families must not be empty", path)
+	}
+	if err := validateValueTypes(path, vt); err != nil {
+		return nil, err
 	}
 	return &t, nil
+}
+
+// schemaNodeRequiredKeys 是 SchemaNodeKind 硬编码的四种节点及其结构键。
+// 加新 kind 必须同时改 SchemaNodeKind，元规范不能单方面扩展种类。
+var schemaNodeRequiredKeys = map[string][]string{
+	"object": {"type", "properties"},
+	"array":  {"type", "items"},
+	"scalar": {"type"},
+	"ref":    {"ref"},
+}
+
+func hasSchemaKey(keys []Field, name string) bool {
+	for _, key := range keys {
+		if key.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // LoadSharedSchemas 严格解析 `_meta/_schemas.yaml`；文件缺失时返回 os.ErrNotExist。
@@ -183,27 +258,63 @@ func LoadSharedSchemas(dir string) (*SharedSchemas, error) {
 	if err := dec.Decode(&sh); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if len(sh.Keys) == 0 {
-		return nil, fmt.Errorf("%s: keys must not be empty", path)
+	if len(sh.Kinds) == 0 {
+		return nil, fmt.Errorf("%s: kinds must not be empty", path)
 	}
-	for _, f := range sh.Keys {
-		if strings.TrimSpace(f.Description) == "" {
-			return nil, fmt.Errorf("%s: key %s missing description", path, f.Name)
+	// SchemaNodeKind 硬编码了四种节点；元规范不能单方面增减 kind。
+	for kind, required := range schemaNodeRequiredKeys {
+		spec, ok := sh.Kinds[kind]
+		if !ok {
+			return nil, fmt.Errorf("%s: kinds must define %s", path, kind)
 		}
+		for _, name := range required {
+			if !hasSchemaKey(spec.Keys, name) {
+				return nil, fmt.Errorf("%s: kind %s keys must define %s", path, kind, name)
+			}
+		}
+	}
+	for name := range sh.Kinds {
+		if _, ok := schemaNodeRequiredKeys[name]; !ok {
+			return nil, fmt.Errorf("%s: unknown kind %s (SchemaNodeKind supports object/array/scalar/ref)", path, name)
+		}
+	}
+	keyTypes := map[string]bool{"": true, "string": true, "boolean": true, "integer": true, "any": true, "schema": true, "list<property>": true, "list<string>": true}
+	for name, kind := range sh.Kinds {
+		if strings.TrimSpace(kind.Description) == "" {
+			return nil, fmt.Errorf("%s: kind %s missing description", path, name)
+		}
+		if err := validateSchemaKeys(path, "kind "+name, kind.Keys, keyTypes); err != nil {
+			return nil, err
+		}
+	}
+	if err := validateSchemaKeys(path, "property", sh.Property.Keys, keyTypes); err != nil {
+		return nil, err
 	}
 	return &sh, nil
 }
 
-// injectSchemaKeys 把共享 schema 键注入所有 schema_object 字段。
-func injectSchemaKeys(fields []Field, keys []Field) {
-	for i := range fields {
-		switch fields[i].Type {
-		case "schema_object", "map<schema_object>", "list<schema_object>":
-			fields[i].Keys = keys
-		}
-		injectSchemaKeys(fields[i].Fields, keys)
-		injectSchemaKeys(fields[i].ItemFields, keys)
+// validateSchemaKeys 校验一组 schema 键规范：非空、唯一、类型合法、说明完整。
+func validateSchemaKeys(path, where string, keys []Field, keyTypes map[string]bool) error {
+	if len(keys) == 0 {
+		return fmt.Errorf("%s: %s keys must not be empty", path, where)
 	}
+	seen := map[string]bool{}
+	for _, key := range keys {
+		if strings.TrimSpace(key.Name) == "" {
+			return fmt.Errorf("%s: %s key name must not be empty", path, where)
+		}
+		if seen[key.Name] {
+			return fmt.Errorf("%s: %s duplicate key %s", path, where, key.Name)
+		}
+		seen[key.Name] = true
+		if !keyTypes[key.Type] {
+			return fmt.Errorf("%s: %s key %s has invalid type %q", path, where, key.Name, key.Type)
+		}
+		if strings.TrimSpace(key.Description) == "" {
+			return fmt.Errorf("%s: %s key %s missing description", path, where, key.Name)
+		}
+	}
+	return nil
 }
 
 func LoadSchema(path string) (*Schema, error) {
@@ -222,13 +333,13 @@ func LoadSchema(path string) (*Schema, error) {
 	// 类型族是项目级共享源；单文件加载时若同目录存在 _types.yaml 就注入，
 	// LoadSchemaByType 再对依赖类型族的契约类型强制要求它存在。
 	if t, err := LoadSharedTypes(filepath.Dir(path)); err == nil {
-		s.ColumnTypes = t.ColumnTypes
+		s.ValueTypes = ValueTypes{TypeFamilies: t.TypeFamilies, CustomTypes: t.CustomTypes}
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 	if sh, err := LoadSharedSchemas(filepath.Dir(path)); err == nil {
-		s.SchemaKeys = sh.Keys
-		injectSchemaKeys(s.Fields, sh.Keys)
+		s.NodeKinds = sh.Kinds
+		s.PropertyKeys = sh.Property.Keys
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -257,7 +368,7 @@ func injectFamilyParams(s *Schema) {
 	for _, f := range s.Fields[idx].ItemFields {
 		seen[f.Name] = true
 	}
-	for _, fam := range s.ColumnTypes.ValueTypeFamilies {
+	for _, fam := range s.ValueTypes.TypeFamilies {
 		for name := range fam.Params {
 			if seen[name] {
 				continue
@@ -266,6 +377,42 @@ func injectFamilyParams(s *Schema) {
 			seen[name] = true
 		}
 	}
+}
+
+func validateValueTypes(path string, vt ValueTypes) error {
+	for name, fam := range vt.TypeFamilies {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(fam.Description) == "" {
+			return fmt.Errorf("%s: family %s must have a name and description", path, name)
+		}
+	}
+	for name, custom := range vt.CustomTypes {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(custom.Description) == "" {
+			return fmt.Errorf("%s: custom type %s must have a name and description", path, name)
+		}
+		if _, ok := vt.TypeFamilies[name]; ok {
+			return fmt.Errorf("%s: custom type %s collides with a family", path, name)
+		}
+		fam, ok := vt.TypeFamilies[custom.Family]
+		if !ok {
+			return fmt.Errorf("%s: custom type %s uses unknown family %s", path, name, custom.Family)
+		}
+		for pname := range custom.Params {
+			if pname == "default" {
+				continue
+			}
+			if _, ok := fam.Params[pname]; !ok {
+				return fmt.Errorf("%s: custom type %s param %s not allowed by family %s", path, name, pname, custom.Family)
+			}
+		}
+		for pname, def := range fam.Params {
+			if def.Required {
+				if _, ok := custom.Params[pname]; !ok {
+					return fmt.Errorf("%s: custom type %s missing required param %s", path, name, pname)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func FindField(fields []Field, name string) (Field, bool) {

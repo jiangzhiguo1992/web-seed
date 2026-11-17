@@ -19,9 +19,6 @@ func validatePatterns(fields []Field) error {
 		if err := validatePatterns(f.ItemFields); err != nil {
 			return err
 		}
-		if err := validatePatterns(f.Keys); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -30,7 +27,7 @@ var schemaFieldTypes = map[string]bool{
 	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
 	"boolean": true, "any": true, "object": true,
 	"list<string>": true, "list<integer>": true, "list<object>": true, "list<list<string>>": true, "list<any>": true,
-	"map<string>": true, "map<schema_object>": true, "list<schema_object>": true, "schema_object": true,
+	"map<string>": true, "schema": true, "map<schema>": true,
 }
 
 // validateFieldTypes 校验 _meta 自身的 type 词汇；避免把列类型族的
@@ -44,9 +41,6 @@ func validateFieldTypes(fields []Field) error {
 			return err
 		}
 		if err := validateFieldTypes(f.ItemFields); err != nil {
-			return err
-		}
-		if err := validateFieldTypes(f.Keys); err != nil {
 			return err
 		}
 	}
@@ -70,9 +64,6 @@ func validateFieldMarkers(fields []Field) error {
 			return err
 		}
 		if err := validateFieldMarkers(f.ItemFields); err != nil {
-			return err
-		}
-		if err := validateFieldMarkers(f.Keys); err != nil {
 			return err
 		}
 	}
@@ -249,9 +240,9 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 				c.rulef("schema.type", "%s.%s: must be string", path, k)
 			}
 		}
-	case "schema_object":
-		c.validateSchemaObject(v, f.Keys, path)
-	case "map<schema_object>":
+	case "schema":
+		c.validateSchemaNode(v, path)
+	case "map<schema>":
 		m, ok := asMap(v)
 		if !ok {
 			c.rulef("schema.type", "%s: must be map", path)
@@ -262,49 +253,10 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 				c.rulef("schema.non-empty", "%s: map key must not be empty", path)
 				continue
 			}
-			c.validateSchemaObject(item, f.Keys, path+"."+k)
-		}
-	case "list<schema_object>":
-		l, ok := asList2(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be list", path)
-			return
-		}
-		for i, item := range l {
-			c.validateSchemaObject(item, f.Keys, fmt.Sprintf("%s[%d]", path, i))
+			c.validateSchemaNode(item, path+"."+k)
 		}
 	default:
 		c.rulef("schema.type", "%s: unknown schema type %q", path, f.Type)
-	}
-}
-
-// validateSchemaObject 按 keys 定义的 schema_object 递归校验一个 schema 节点。
-func (c *Checker) validateSchemaObject(v any, keys []Field, path string) {
-	m, ok := asMap(v)
-	if !ok {
-		c.rulef("schema.type", "%s: must be map", path)
-		return
-	}
-	known := map[string]bool{}
-	for _, f := range keys {
-		known[f.Name] = true
-	}
-	for k := range m {
-		if !known[k] {
-			c.rulef("schema.unknown-field", "%s: unknown schema key %q", path, k)
-		}
-	}
-	for _, f := range keys {
-		raw, ok := m[f.Name]
-		if !ok || raw == nil {
-			if f.Required {
-				c.rulef("schema.required", "%s: missing required field %q", path, f.Name)
-			}
-			continue
-		}
-		kf := f
-		kf.Keys = keys
-		c.validateValue(raw, kf, path+"."+f.Name)
 	}
 }
 

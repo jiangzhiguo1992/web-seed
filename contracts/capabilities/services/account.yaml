@@ -10,38 +10,29 @@ do_not:
 schemas:
   ListAccountsFilter:
     type: object
-    additionalProperties: false
     properties:
-      status: {type: data.enums.account_status, nullable: true}
-      own_type: {type: data.enums.own_type, nullable: true}
-      cursor: {type: string, nullable: true}
-      page_size: {type: integer, minimum: 1, maximum: 100, default: 20}
+      - { name: status, schema: { ref: data.enums.account_status }, nullable: true, description: "账号状态过滤" }
+      - { name: own_type, schema: { ref: data.enums.own_type }, nullable: true, description: "归属类型过滤" }
+      - { name: cursor, schema: { type: string }, nullable: true, description: "分页游标" }
+      - { name: page_size, schema: { type: page_size }, description: "分页大小" }
   CreateAccountInput:
     type: object
-    additionalProperties: false
-    required: [own_type, own_id, number, nickname]
     properties:
-      own_type: {type: data.enums.own_type}
-      own_id: {type: integer}
-      number: {type: string, minLength: 4, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$"}
-      nickname: {type: string, minLength: 1, maxLength: 100}
-      user_id: {type: integer, nullable: true}
+      - { name: own_type, schema: { ref: data.enums.own_type }, required: true, description: "归属类型" }
+      - { name: own_id, schema: { type: integer }, required: true, description: "归属对象 ID" }
+      - { name: number, schema: { type: account_number }, required: true, description: "账号编号" }
+      - { name: nickname, schema: { type: account_nickname }, required: true, description: "账号昵称" }
+      - { name: user_id, schema: { type: integer }, nullable: true, description: "关联用户 ID" }
   UpdateAccountInput:
     type: object
-    additionalProperties: false
-    required: [nickname]
     properties:
-      nickname: {type: string, minLength: 1, maxLength: 100}
+      - { name: nickname, schema: { type: account_nickname }, required: true, description: "账号昵称" }
   AccountPage:
     type: object
-    additionalProperties: false
-    required: [items, has_more, next_cursor]
     properties:
-      items:
-        type: array
-        items: {type: data.entities.account}
-      has_more: {type: boolean}
-      next_cursor: {type: string, nullable: true}
+      - { name: items, schema: { type: array, items: { ref: data.entities.account } }, required: true, description: "分页项列表" }
+      - { name: has_more, schema: { type: boolean }, required: true, description: "是否还有下一页" }
+      - { name: next_cursor, schema: { type: string }, required: true, nullable: true, description: "下一页游标；无更多时为 null" }
 
 services:
   - name: get

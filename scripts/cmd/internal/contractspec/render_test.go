@@ -269,7 +269,7 @@ func TestRenderTableDecimalFamilyParams(t *testing.T) {
 
 func TestRenderTableScaffoldRequiresParamValue(t *testing.T) {
 	s := loadTestSchema(t)
-	s.ColumnTypes.ValueTypeFamilies["weird"] = ValueTypeFamily{Params: map[string]Field{
+	s.ValueTypes.TypeFamilies["weird"] = ValueTypeFamily{Params: map[string]Field{
 		"missing": {Type: "integer", Required: true},
 	}}
 	if _, err := RenderTableWithColumnType(s, "note", "notes", "备注表", "weird"); err == nil {

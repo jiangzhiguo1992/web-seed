@@ -70,7 +70,7 @@ async ──service──> services
 
 文件级字段：
 
-- `schemas`（可选；本地对象 schema，值按 `_meta/_schemas.yaml` 的 keys 校验，可跨文件引用）
+- `schemas`（可选；本地 schema，值是值域节点，`object.properties[]` 的条目按 `_meta/_schemas.yaml` 的 `property.keys` 校验，标量约束引用 `_types`，可跨文件引用）
 
 入口权限、审计与限流在 `contracts/platform/security/access.yaml` 绑定，不在 service 项声明。query 的 `errors` 在 `data/queries/*.yaml` 的查询项上声明；它只列 query 自身的领域错误，输入校验、权限与 DB 引擎错误不在 query 内枚举，`errors: []` 表示没有领域错误。
 
@@ -137,7 +137,7 @@ capabilities 不再有 `rules/` / `states/` 目录。
 `events/<subject>.yaml` 按业务主体组织（不按生产者模块）：
 
 - 每个事件有 `id` / `name` / `version` / `payload` / `emitted_by` / `consumers`；
-- `payload` 可以是 inline object（必须 `additionalProperties: false`）或 `$ref`（`data.entities.*` / `cap.services.*.schemas.*`）；
+- `payload` 是 schema 值域节点：`type: object` + `properties`（property 条目列表，条目携带 `required`/`nullable`/方向注解）、`type: array` + `items`、标量 `type` 或 `ref`（entity/enum/本地 schema）；
 - `emitted_by` 指向发射事件的服务项，`consumers` 由 async job 的 `trigger.event` 生成，二者都由 `make gen-graph` 维护；
 - 事件发射由 service step 的 `events` 声明，不是 service 项。
 
@@ -152,11 +152,11 @@ capabilities 不再有 `rules/` / `states/` 目录。
 - request/response 的 schema `$ref`；request 用 `x-service-type`、response 用 `x-service-return` 指向 service 的 params/returns
 - `components.schemas` 通过 `x-service-type` / `x-enum` / `x-entity` 指向唯一来源
 
-**不要写**：权限、审计（在 `platform/security/access.yaml`）、限流（在 service 项）、事务（在 service 项）。
+**不要写**：权限、审计、限流（在 `platform/security/access.yaml`）、事务（在 service 项）。
 
 HTTP 约束：
 
-- 响应 schema 必须 `additionalProperties: false`。
+- 响应 schema 由 `cap.services.schemas` 生成，object 默认封闭。
 - 错误响应统一引用 `protocols/http/shared.yaml` 的 `Problem`。
 - 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明；operation 需要更细粒度时用 `x-default-errors` 覆盖。
 - 503 必须通过 shared 的 `ServiceUnavailable` 返回 `Retry-After`。

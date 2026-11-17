@@ -88,7 +88,11 @@ func TestRenderVerificationResultConstraint(t *testing.T) {
 func TestLoadTablesInheritance(t *testing.T) {
 	root := filepath.Join("..", "..", "..")
 	targets := contractspec.Targets{Dir: "contracts/data/tables", Glob: "*.yaml", ID: "data.tables.<file>"}
-	tables, err := loadTables(root, targets)
+	schema, _, err := contractspec.LoadSchemaByType(root, "data.tables")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables, err := loadTables(root, targets, schema.ValueTypes.CustomTypes)
 	if err != nil {
 		t.Fatal(err)
 	}

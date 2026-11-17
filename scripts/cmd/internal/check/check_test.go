@@ -20,8 +20,8 @@ func testTargets() Targets {
 }
 
 func TestIsColumnType(t *testing.T) {
-	ct := ColumnTypes{
-		ValueTypeFamilies: map[string]ValueTypeFamily{
+	ct := ValueTypes{
+		TypeFamilies: map[string]ValueTypeFamily{
 			"string": {}, "timestamp": {}, "integer": {}, "datetime": {}, "decimal": {}, "float": {},
 		},
 	}
@@ -115,7 +115,7 @@ enums:
 
 func TestCheckSharedTypes(t *testing.T) {
 	c := &Checker{}
-	c.checkSharedTypes(&Schema{ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
+	c.checkSharedTypes(&Schema{ValueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{
 		"string": {
 			Description: "string",
 			Params:      map[string]Field{"bad": {Type: "integre"}},
@@ -177,7 +177,7 @@ func TestCommonColumnFieldsExcludesFamilyParams(t *testing.T) {
 				{Name: "comment", Type: "string"},
 			},
 		}},
-		ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
+		ValueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{
 			"string": {Params: map[string]Field{"min_len": {Type: "integer"}}},
 		}},
 	}
@@ -199,7 +199,7 @@ func TestFamilyParams(t *testing.T) {
 				{Name: "nullable", Type: "boolean"},
 			},
 		}},
-		ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
+		ValueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{
 			"decimal": {Params: map[string]Field{
 				"precision": {Type: "integer", Required: true, Min: 1},
 				"scale":     {Type: "integer", Min: 0},
@@ -266,8 +266,8 @@ func TestValidateDocRequiredAndUnknown(t *testing.T) {
 func TestTableRulesRejectUnknownColumn(t *testing.T) {
 	schema := &Schema{
 		Targets: testTargets(),
-		ColumnTypes: ColumnTypes{
-			ValueTypeFamilies: map[string]ValueTypeFamily{
+		ValueTypes: ValueTypes{
+			TypeFamilies: map[string]ValueTypeFamily{
 				"string": {Params: map[string]Field{
 					"min_len": {Type: "integer", Min: 0},
 					"max_len": {Type: "integer", Min: 0},
@@ -394,7 +394,7 @@ func minimalTableDoc() map[string]any {
 func minimalTableSchema() *Schema {
 	return &Schema{
 		Targets: testTargets(),
-		ColumnTypes: ColumnTypes{ValueTypeFamilies: map[string]ValueTypeFamily{
+		ValueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{
 			"string":  {},
 			"integer": {},
 		}},

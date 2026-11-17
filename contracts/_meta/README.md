@@ -11,7 +11,7 @@
 ```
 contracts/_meta/
 ├── README.md             # 本文件：AI 入口
-├── _types.yaml           # 共享值类型：类型族与参数（不绑定存储引擎）
+├── _types.yaml           # 共享值类型：类型族 + 自定义类型（不绑定存储引擎）
 ├── _schemas.yaml         # 共享受限 schema：services.schemas 与 events.payload
 ├── data.tables.yaml      # data.tables 的字段树 + 值域 + 说明
 ├── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
@@ -40,17 +40,23 @@ scripts/cmd/
 
 ### 1.1 为什么有 `_types.yaml`
 
-类型族是 `data.tables` / `data.entities` / `data.queries` 共用的值类型词汇（string/integer/timestamp/...）。把它挂在 `data.tables.yaml` 会让实体和查询间接依赖表规范，也无法独立演进。
+值类型是 `data.tables` / `data.entities` / `data.queries` / `cap.services` / `cap.events` 共用的词汇（string/integer/timestamp/...）。把它挂在 `data.tables.yaml` 会让实体、查询和 schema 间接依赖表规范，也无法独立演进。
 
-- `_types.yaml` 只放 `column_types.families`：类型族键、`description`、`params`；
-- `columns[].type` 的列引用规则写死在 checker：只允许 `data.tables.<t>.col.<c>`，不是类型族，也不是外键；
-- checker 对 `_types.yaml` 使用 `KnownFields` 严格解析，缺少文件或 families 为空会直接失败。
+- `_types.yaml` 顶层放 `type_families`（类型族键、`description`、`params`）与 `custom_types`（自定义值类型：family + 固定参数）；
+- 自定义类型同时供表列与 schema 标量使用，约束只在一个地方定义；
+- `columns[].type` 允许类型族、自定义类型或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`；
+- checker 对 `_types.yaml` 使用 `KnownFields` 严格解析，缺少文件、type_families 为空、自定义类型参数非法都会直接失败。
 
 ### 1.2 为什么有 `_schemas.yaml`
 
-`cap.services.schemas` 与 `cap.events.events[].payload` 使用同一套受限 schema 方言（object/properties/items/enum/...）；`cap.async` 没有内联 schema，只引用 service/event；`cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份受限模板。
+`cap.services.schemas` 与 `cap.events.events[].payload` 使用同一套受限 schema DSL，分两层：
 
-`_schemas.yaml` 只放 `keys`：schema 允许的键、值类型与顺序。`LoadSchema` 会把 `keys` 注入所有 `schema_object` / `map<schema_object>` / `list<schema_object>` 字段，checker 据此做结构、递归与键顺序校验，避免在 `cap.services` / `cap.events` 各写一份。
+- **schema 节点只描述值域**：`object`（`type: object` + `properties`）、`array`（`type: array` + `items`）、`scalar`（`type` 指向 `_types` 的 family 或自定义类型）、`ref`（指向 entity / enum / 本地 schema）。`cap.async` 没有内联 schema，只引用 service/event；`cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份 DSL。
+- **property 条目只描述槽位**：`name` + `schema` + `required` / `nullable` / `read_only` / `write_only` / `default` / `description`，只允许出现在 `object.properties[]`。
+
+三个正交轴：`required` 管键是否必须出现，`nullable` 管值是否可为 null，`read_only` / `write_only` 管方向。三者默认都是 false，省略不写。槽位键出现在节点位置即报 `schema.slot-position`，因此 `read_only` 不会被误读为“这个类型只读”，`array.items` 也不可能有方向。
+
+`_schemas.yaml` 用项目自己的 `Field` 语言描述自身：`kinds.<kind>.keys` 是该种节点允许的键，`property.keys` 是槽位条目允许的键；节点种类就是 `kinds` 的键集，不维护第二份 `one_of` 清单。两处都能声明 `required` / `const` / `min` / `pattern`，校验器不再为 schema DSL 维护硬编码特例。节点由 `ref` 或 `type` 判定：`type: object` 用 `properties`（property 条目列表），`type: array` 用 `items`；其他 `type` 是标量；`ref` 是引用。`gen_openapi` 把 property 聚合成 OpenAPI 的 `properties` map 与 `required` 数组；标量约束不在这里定义，family 与自定义类型都来自 `_meta/_types.yaml`。`cap.services` 的 `schemas` 类型是 `map<schema>`，`cap.events.payload` 是 `schema`。
 
 **没有 `schema/`、没有 `templates/`。**
 字段说明和值域在同一个文件、同一个字段节点里；`contract-new` 只生成最小骨架，字段规范以本目录为准，不维护第二份字段清单。
@@ -97,7 +103,7 @@ scripts/cmd/
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.services` / `cap.async` / `feature.rules` / `feature.states` / `cap.events` / `cap.protocols.http`；类型族来自 `_meta/_types.yaml`。cap.* 生成最小骨架（一个 service + logic step、一个 async job、一个规则、一个状态机、一个事件、一个 operation），不生成 `types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.services` / `cap.async` / `feature.rules` / `feature.states` / `cap.events` / `cap.protocols.http`；类型族与自定义类型来自 `_meta/_types.yaml`。cap.* 生成最小骨架（一个 service + logic step、一个 async job、一个规则、一个状态机、一个事件、一个 operation），不生成 `types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new` 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage.retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑 `contract-check` 完成硬约束校验。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
 
 ---
 
@@ -106,12 +112,12 @@ scripts/cmd/
 `contract-check` 当前覆盖：
 
 - `_meta/<type>.yaml` 字段规范按 `KnownFields` 严格解析：未知字段（如 `requred`）直接失败，不再静默忽略
-- `_meta/_types.yaml` 的 `column_types.families` 由 tables/entities/queries 共用；文件缺失、families 为空、族/参数定义非法都会直接失败（`schema.types`）
+- `_meta/_types.yaml` 的 `type_families` / `custom_types` 由 tables/entities/queries/schemas 共用；文件缺失、type_families 为空、族/参数定义非法都会直接失败（`schema.types`）
 - 模板字段顺序是唯一顺序源：tables/entities/queries/enums 实例的顶层与嵌套对象（含 `fields` / `item_fields`）都按 `_meta/<type>.yaml` 的字段顺序校验；新增字段只改模板
 - 没有 `_meta` 模板的契约（`data.storage`、features/platform 的部分类型）暂不做字段顺序校验；需要覆盖时先补该类型的 `_meta` 模板
 - `data.tables/*.yaml`
   - `targets.dir/glob` 决定扫描路径；`targets.id/naming` 由 checker 校验（ID 模板、snake_case）
-  - `columns[].type` 只允许类型族键或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`
+  - `columns[].type` 允许类型族、自定义类型或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`
   - 必填字段、类型、枚举、`const`、`pattern`、`allowed`、`unique`
   - `id` 按 `targets.id` 模板生成；基类 `_base.yaml` 的路径/ID 写死在 checker，不参与模板
   - 物理表 `table.extends` 是父表列表：可指向 `data.tables.base` 或任意已存在的表；多父同名列只有来源相同（钻石继承）才允许；链不得成环且必须到达基类；不得重复任何继承列
@@ -205,8 +211,10 @@ scripts/cmd/
 | `description` | 字段的准确含义 |
 | `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`min_items` 只约束 list；`map<string>` 是通用 schema 类型（键 → 字符串映射） |
 | `examples` | 列参数/骨架的示例值；实体字段不再支持 |
-| `column_types` | `_types.yaml` 中的类型族策略：`families` 是类型族映射，每个族声明 `description` 与 `params`；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
-| `columns[].type` | 类型族键，或硬编码的 `data.tables.<t>.col.<c>`；不是类型族，也不是外键；表列不引用 `data.enums.*` |
+| `schema` / `map<schema>` | schema 值域节点 / 类型名到节点的映射；`ref` 或 `type` 选节点种类，`kinds.<kind>.keys` 是结构约束，标量约束引用 `_types` |
+| `list<property>` | `object.properties[]` 的槽位条目列表；条目键由 `_schemas.property.keys` 定义（`name` + `schema` + 方向/存在性/可空/默认值/说明） |
+| `type_families` / `custom_types` | `_types.yaml` 顶层：`type_families` 是类型族映射，`custom_types` 是自定义类型（family + 固定参数）；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number |
+| `columns[].type` | 类型族键、自定义类型，或硬编码的 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*` |
 | `targets` | `dir`/`glob` 扫描路径；`file` 是单文件契约的固定路径；`id` 是 ID 模板（`<file>` → 文件 stem；单例契约直接写固定 ID）；`naming` 是文件名规则（`snake_case`）；基类固定 `_base.yaml`，不在此声明 |
 | `columns[].redundancy` | 同组冗余列引用列表；`source: true` 标记权威列，每组恰好一个，组内各列声明完全一致 |
 | `indexes[].comment` | 索引必须写非空用途说明；生成 `COMMENT ON INDEX` |
@@ -244,7 +252,7 @@ scripts/cmd/
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`；`contract-check` 会校验 `implemented_by` 必须包含规则自身 ID、每个 ID 都有实际输出，并反向检查所有非 `schema.*` 输出都已被规则声明；但不会判断检查逻辑本身是否正确（后者靠测试）。
 - 不要在本文件之外再写一份通用字段语义；类型文件只写类型特有内容。
-- 不要把 `column_types` 写回 `data.tables.yaml`；类型族只放在 `_types.yaml`。
+- 不要把 `type_families` / `custom_types` 写回 `data.tables.yaml`；类型族与自定义类型只放在 `_types.yaml`。
 - 不要在 checker 里解析 `CHECK expr` 的 SQL 语义；checker 只校验非空，语义属于生成器/数据库验证的软区。
 - 不要在 `_meta` 下写 `do_not`；不要在具体契约写顶层 `rules`（`features/rules` 与 `platform` 的领域规则集除外）。`contract-check` 的 `schema.meta-placement` 会拦住。
 - 不要在 `contracts/_meta/` 里写业务实例；它只描述类型。

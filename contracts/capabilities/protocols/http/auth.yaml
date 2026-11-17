@@ -135,6 +135,7 @@ components:
 
     TokenPair:
       x-service-type: cap.services.token.schemas.TokenPair
+      x-auth-response: true
 
     AuthSession:
       x-service-type: cap.services.auth.schemas.AuthSession

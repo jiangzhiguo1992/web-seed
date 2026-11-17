@@ -89,8 +89,11 @@ func hasNonEmptyString(m map[string]any, key string) bool {
 // tableColumnTypeRe 是表列类型引用的硬约束：只允许 data.tables.<t>.col.<c>。
 var tableColumnTypeRe = regexp.MustCompile(`^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$`)
 
-func isColumnType(t string, ct ColumnTypes) bool {
-	if _, ok := ct.ValueTypeFamilies[t]; ok {
+func isColumnType(t string, ct ValueTypes) bool {
+	if _, ok := ct.TypeFamilies[t]; ok {
+		return true
+	}
+	if _, ok := ct.CustomTypes[t]; ok {
 		return true
 	}
 	return isTableColumnType(t)

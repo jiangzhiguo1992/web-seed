@@ -47,9 +47,9 @@ fields:
     description: "实例级负向约束"
 
   - name: schemas
-    type: map<schema_object>
+    type: map<schema>
     required: false
-    description: "本地对象 schema；键是类型名，值按 _meta/_schemas.yaml 的 keys 校验"
+    description: "本地 schema；键是类型名，值是值域节点，object 的 properties 按 _meta/_schemas.yaml 的 property 条目校验"
 
   - name: services
     type: list<object>
@@ -129,7 +129,7 @@ fields:
 
 rules:
   - { id: service-id, text: "契约 ID 必须与 targets 派生一致，且全局唯一；service 项 ID 全局唯一", implemented_by: [ service-id ] }
-  - { id: service-structure, text: "schemas 名全局唯一；object 必须 additionalProperties: false；未知 schema 键拒绝；params[0] 必须是 ctx，params/returns name 唯一，returns 末位必须是 err；step.id 在 service 内唯一；depends_on 只能引用前序步骤；output 只允许 logic/transition 且 name 唯一；logic 必须声明 output 与 errors", implemented_by: [ service-structure ] }
+  - { id: service-structure, text: "schemas 名全局唯一；schema 节点按 _meta/_schemas.yaml 校验，标量类型必须来自 _types；params[0] 必须是 ctx，params/returns name 唯一，returns 末位必须是 err；step.id 在 service 内唯一；depends_on 只能引用前序步骤；output 只允许 logic/transition 且 name 唯一；logic 必须声明 output 与 errors", implemented_by: [ service-structure ] }
   - { id: service-ref, text: "query/service/transition/rules/events 引用必须存在；params/returns/schemas 中的 data.enums.* / data.entities.* / 本地类型必须存在，data.tables.* 禁止", implemented_by: [ service-ref ] }
   - { id: service-owner-write, text: "kind=query 的写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service", implemented_by: [ service-owner-write ] }
   - { id: service-errors, text: "service.errors 必须覆盖所有可达步骤的未处理错误与入口策略错误；step.errors 必须覆盖其 queries 的 errors（kind=query 缺省取 query 全部），且 kind=service 时必须是目标错误集的子集", implemented_by: [ service-errors ] }

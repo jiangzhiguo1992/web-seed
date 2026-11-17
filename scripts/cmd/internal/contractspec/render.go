@@ -186,8 +186,10 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	columnName := firstExample(columnField.ItemFields, "name", "name")
 	columnType := defaultString(columnField.ItemFields, "type", "string")
 	if columnTypeOverride != "" {
-		if _, ok := s.ColumnTypes.ValueTypeFamilies[columnTypeOverride]; !ok {
-			return nil, fmt.Errorf("RenderTable: unknown column type %q (not in families)", columnTypeOverride)
+		_, familyOK := s.ValueTypes.TypeFamilies[columnTypeOverride]
+		_, customOK := s.ValueTypes.CustomTypes[columnTypeOverride]
+		if !familyOK && !customOK {
+			return nil, fmt.Errorf("RenderTable: unknown column type %q (not a family or custom type)", columnTypeOverride)
 		}
 		columnType = columnTypeOverride
 	}
@@ -420,7 +422,10 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 }
 
 func scaffoldFamilyParams(s *Schema, columnType string) (map[string]any, error) {
-	fam, ok := s.ColumnTypes.ValueTypeFamilies[columnType]
+	if _, custom := s.ValueTypes.CustomTypes[columnType]; custom {
+		return nil, nil
+	}
+	fam, ok := s.ValueTypes.TypeFamilies[columnType]
 	if !ok {
 		return nil, nil
 	}
@@ -546,8 +551,6 @@ func ServiceInterfaceName(ownerModule, file string) string {
 	return owner + stem + "Service"
 }
 
-func boolPtr(v bool) *bool { return &v }
-
 func pascal(s string) string {
 	parts := strings.Split(s, "_")
 	for i, p := range parts {
@@ -643,10 +646,25 @@ type serviceFileScaffold struct {
 }
 
 type serviceSchemaScaffold struct {
-	Type                 string                           `yaml:"type"`
-	AdditionalProperties *bool                            `yaml:"additionalProperties,omitempty"`
-	Required             []string                         `yaml:"required,omitempty"`
-	Properties           map[string]serviceSchemaScaffold `yaml:"properties,omitempty"`
+	Type       string                    `yaml:"type,omitempty"`
+	Properties []servicePropertyScaffold `yaml:"properties,omitempty"`
+	Items      *serviceSchemaScaffold    `yaml:"items,omitempty"`
+	Ref        string                    `yaml:"ref,omitempty"`
+	MinItems   *int                      `yaml:"min_items,omitempty"`
+	MaxItems   *int                      `yaml:"max_items,omitempty"`
+}
+
+// servicePropertyScaffold 是 object.properties[] 的槽位条目：值域用 schema，
+// 方向/存在性/可空/默认值只在这里出现。
+type servicePropertyScaffold struct {
+	Name        string                `yaml:"name"`
+	Schema      serviceSchemaScaffold `yaml:"schema"`
+	Required    bool                  `yaml:"required,omitempty"`
+	Nullable    bool                  `yaml:"nullable,omitempty"`
+	ReadOnly    bool                  `yaml:"read_only,omitempty"`
+	WriteOnly   bool                  `yaml:"write_only,omitempty"`
+	Default     any                   `yaml:"default,omitempty"`
+	Description string                `yaml:"description"`
 }
 
 type serviceItemScaffold struct {
@@ -864,10 +882,13 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 		OwnerModule:   module,
 		Schemas: map[string]serviceSchemaScaffold{
 			"GetInput": {
-				Type:                 "object",
-				AdditionalProperties: boolPtr(false),
-				Required:             []string{"id"},
-				Properties:           map[string]serviceSchemaScaffold{"id": {Type: "integer"}},
+				Type: "object",
+				Properties: []servicePropertyScaffold{{
+					Name:        "id",
+					Schema:      serviceSchemaScaffold{Type: "integer"},
+					Required:    true,
+					Description: "TODO: 字段说明",
+				}},
 			},
 		},
 		Services: []serviceItemScaffold{{
