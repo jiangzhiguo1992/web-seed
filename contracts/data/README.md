@@ -30,7 +30,7 @@ feature ──> capabilities ──> data
 | `entities/<entity>.yaml` | 业务怎么读它 | Go 读模型：字段语义、关系、跨字段校验 | 不是写模型 |
 | `queries/<scope>.yaml` | 能怎么读写 | 入参、返回、目标表、索引引用 | 不是 SQL |
 | `enums.yaml` | 值是什么 | 跨端词汇：integer `code` ↔ 名称 | 不是表约束 |
-| `storage.yaml` | 物理侧事实 | 引擎归属、`size_class`、保留、分区、归档 | 不是部署配置，也不是索引或视图 |
+| `storage.yaml` | 物理侧事实 | 引擎归属、扁平保留、分区、归档 | 不是部署配置，也不是索引或视图 |
 
 `enums.yaml` / `storage.yaml` 是**固定文件**：文件名不随实例增长。`storage` 只有一个契约 ID；`enums.yaml` 承载多个 `data.enums.<name>` 项。`tables/` / `entities/` / `queries/` 按实例一文件一契约，实例清单以 `contracts/index.yaml` 为准，本文件不列举。
 
@@ -87,9 +87,9 @@ storage    ──(table 条目)──────────>  tables
 
 ### 3.5 storage 独立成单例
 
-**选择**：引擎归属、`size_class`、`retention`、`partition`、`archive` 不写在单表里，而是内聚在 `storage.tables.<engine>` 的条目对象中。
-**理由**：这些是项目级物理事实，不是表的业务结构。放在单表里会让"换引擎"变成改 N 个文件；条目化让同一张表的存储事实只有一个落点，也让不同引擎的字段差异（`partition`/`archive` 只属于关系库）可被脚本强制。
-**代价**：新增表要登记两处（`tables/` + `storage.tables.<engine>`），漏登记被 `[强制: storage-registry]` 拦住。存储类特性用结构化字段表达（条目内 `partition` / `archive` / `indexes[].expression`），不设 `ddl_ext` 逃生口。
+**选择**：引擎归属、`retention`、`partition` 不写在单表里，而是内聚在 `storage.tables.<engine>` 的普通条目中；普通条目必须写 `description` 且等于表契约的 `summary`；归档用同位置的 `archive_of` 条目表达。
+**理由**：这些是项目级物理事实，不是表的业务结构。放在单表里会让"换引擎"变成改 N 个文件；条目化让同一张表的存储事实只有一个落点，也让不同引擎的字段差异（`partition` 只属于关系库）可被脚本强制。
+**代价**：新增表要登记两处（`tables/` + `storage.tables.<engine>`），漏登记被 `[强制: storage-registry]` 拦住。存储类特性用结构化字段表达（条目内 `partition`、`archive_of` 归档条目、`indexes[].expression`），不设 `ddl_ext` 逃生口。
 
 ---
 
@@ -136,6 +136,18 @@ columns:
     references: { column: data.tables.account.col.id, on_delete: cascade }
 ```
 
+`redundancy` 与 `references` 不互斥：反规范化外键可以同时是"同值副本"和"删除级联"。当前契约没有该场景；新增时不要为了二选一拆成两列。
+
+```yaml
+# 示例（假设存在 tenant 表）：tenant_id 是 tenant.id 的副本，同时承担删除级联
+columns:
+  - name: tenant_id
+    redundancy:
+      - { column: data.tables.tenant.col.id, source: true }
+      - { column: data.tables.order.col.tenant_id, source: false }
+    references: { column: data.tables.tenant.col.id, on_delete: cascade }
+```
+
 ### 4.3 哪些是手写，哪些是生成的
 
 反向映射与生成物是两类东西，混淆是最高频的错误：
@@ -143,7 +155,7 @@ columns:
 | 字段 | 谁写 | 含义 |
 |---|---|---|
 | `table.entities` | 手写 | 映射本表的 entity 集合（`[强制: table-entities]`） |
-| `model.included_by` | 手写 | 通过关系字段指向本实体的 entity（`[强制: entity-included-by]`） |
+| `model.included_by` | `make gen-graph` | 通过关系字段指向本实体的 entity（`[强制: entity-included-by]`，禁止手改） |
 | `table.referenced_by` | `make gen-graph` | 指向本表列的 `references` 源列（`[强制: table-referenced-by]`，禁止手改） |
 | `indexes[].used_by` | 手写 | 使用该索引的 query（设计声明） |
 | `table.queries` | `make gen-graph` | 使用本表的 query（`[强制: table-queries-generated]`，禁止手改） |
@@ -154,7 +166,7 @@ columns:
 
 ### 4.4 保留策略是选择，不是枚举
 
-`storage.tables.<engine>[].retention` 不是从若干策略里四选一：`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只在确实存在对应清理策略时才写；主数据与认证绑定默认不写。**这是选择判据，`[评审]`。** 值域与约束由 `[强制: storage-retention]` 校验；缓存副本必须写 `caches.<engine>[].retention`，只允许 `cache_ttl`，且不得超过权威表条目的 `ttl`。归档用条目内的 `archive: { engine, database, unit, after }` 表达；`after` 是数据年龄阈值，与 `retention.ttl` 是独立维度，由 `[强制: storage-archive]` 校验。
+`storage.tables.<engine>[].retention` 是布尔开关，开启后 `unit` 与 `pending` / `soft_delete` / `hard_delete` / `ttl` 是同级字段，不是四选一：`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只在确实存在对应清理策略时才写；主数据与认证绑定默认不写。**这是选择判据，`[评审]`。** 值域与约束由 `[强制: storage-retention]` 校验；缓存副本必须写 `caches.<engine>[].retention: true`，只允许 `unit` / `cache_ttl`，且不得超过权威表条目的 `ttl`。归档用独立条目表达：`archive_of` 指向已登记的权威表，`table` 是归档物理表名，`age_by` 是 `created_at` / `updated_at`，`after` 是按该列计算的数据年龄阈值。归档表只封存原数据，不建 `data.tables` 契约、实体或查询；同一张表只能有一条归档，由 `[强制: storage-archive]` 校验。
 
 ---
 
@@ -237,6 +249,7 @@ indexes:
 | 在表里声明引擎 | 引擎归属只在 `storage.tables.<engine>` | 登记到 `storage.yaml` 的引擎条目 |
 | 在表里写 `initial_rows` / seed | 字段不存在，生成器不识别 | 先扩展 `_meta/data.tables.yaml` 与生成器 |
 | 枚举值复用旧 `code` | 历史行仍引用旧码 | 新增 `code` |
+| `summary` / 列 `comment` 超长 | MySQL 会静默截断 COMMENT | `summary` <= 2048、列 `comment` <= 1024（`[强制: table-summary-length]` / `[强制: column-comment-length]`） |
 
 ---
 

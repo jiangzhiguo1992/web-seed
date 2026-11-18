@@ -54,7 +54,7 @@ fields:
       - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名；首字母大小写表示导出性" }
       - { name: extends, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "实体基类" }
       - { name: tables, type: list<string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "映射的物理表" }
-      - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "指向本实体的关系 entity ID 列表" }
+      - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "指向本实体的关系 entity ID 列表；由 gen-graph 生成" }
       - { name: queries, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.', generated: true, write: forbidden, description: "returns 本实体的 query 项 ID；由 gen-graph 生成；不得为空" }
 
   - name: fields
@@ -126,5 +126,5 @@ rules:
   - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；expr 非空；on_violation 必须存在", implemented_by: [ entity-validation ] }
   - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
   - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入，禁止手改", implemented_by: [ entity-used-by ] }
-  - { id: entity-included-by, text: "model.included_by 必须等于关系字段 type 指向本实体的 entity 集合；每个 entity 必须存在且确实指向本实体", implemented_by: [ entity-included-by ] }
+  - { id: entity-included-by, text: "model.included_by 由 gen-graph 生成，禁止手改；必须等于关系字段 type 指向本实体的 entity 集合；每个 entity 必须存在且确实指向本实体", implemented_by: [ entity-included-by ] }
   - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

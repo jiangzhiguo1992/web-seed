@@ -46,7 +46,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
       - cap.services.verification.send
@@ -64,7 +64,7 @@ queries:
     returns:
       - { name: row, kind: entity, entity: data.entities.verification_body }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
       - cap.services.verification.send
@@ -100,7 +100,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
       - cap.services.verification.verify
@@ -118,7 +118,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
       - cap.services.verification.revoke_by_auth
@@ -134,7 +134,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.verification_body.idx_verification_account_id ]
     used_by:
       - cap.services.verification.revoke_by_account
@@ -155,9 +155,7 @@ queries:
     returns:
       - { name: row, kind: entity, entity: data.entities.verification_action }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.verification_action.pk ]
     used_by:
       - cap.services.verification.verify
-
-

@@ -45,7 +45,7 @@ services:
       - {name: id, type: integer}
     returns:
       - {name: account, type: data.entities.account}
-      - {name: err, type: none}
+      - {name: err, type: error}
     steps:
       - id: load
         kind: logic
@@ -70,7 +70,7 @@ services:
       - {name: filter, type: ListAccountsFilter}
     returns:
       - {name: page, type: AccountPage}
-      - {name: err, type: none}
+      - {name: err, type: error}
     steps:
       - id: query
         kind: logic
@@ -96,7 +96,7 @@ services:
       - {name: input, type: CreateAccountInput}
     returns:
       - {name: account, type: data.entities.account}
-      - {name: err, type: none}
+      - {name: err, type: error}
     steps:
       - id: create
         kind: logic
@@ -138,7 +138,7 @@ services:
       - {name: input, type: UpdateAccountInput}
     returns:
       - {name: account, type: data.entities.account}
-      - {name: err, type: none}
+      - {name: err, type: error}
     steps:
       - id: update
         kind: logic
@@ -168,7 +168,7 @@ services:
       - {name: ctx, type: context.Context}
       - {name: id, type: integer}
     returns:
-      - {name: err, type: none}
+      - {name: err, type: error}
     steps:
       - id: load
         kind: query
@@ -216,7 +216,7 @@ services:
       - {name: id, type: integer}
     returns:
       - {name: account, type: data.entities.account}
-      - {name: err, type: none}
+      - {name: err, type: error}
     steps:
       - id: transition
         kind: transition
@@ -244,7 +244,7 @@ services:
       - {name: reason, type: string}
     returns:
       - {name: account, type: data.entities.account}
-      - {name: err, type: none}
+      - {name: err, type: error}
     steps:
       - id: transition
         kind: transition

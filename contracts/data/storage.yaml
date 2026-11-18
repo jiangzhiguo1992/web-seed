@@ -1,6 +1,8 @@
 # 数据存储约束（项目级单例）。
-# tables.<engine> 的条目字段按引擎区分：mysql/postgres 允许 table/size_class/retention/partition/archive；
-# mongodb 只允许 table/size_class/retention；caches 条目只允许 table/retention。
+# tables.<engine> 的条目分两类：
+# - 普通表条目：mysql/postgres 允许 table/description/retention/unit/时长/partition；mongodb 允许 table/description/retention/unit/时长；
+# - 归档条目：archive_of/table/description/retention/unit/时长/age_by/after_unit/after，archive_of 指向已登记的权威表；
+# caches 条目只允许 table/retention。
 
 id: data.storage
 summary: "数据存储约束"
@@ -10,7 +12,7 @@ do_not:
   - "未列出的引擎与拓扑一律视为不支持，禁止自行引入"
   - "Redis 只作为 caches 中的非权威副本；权威表数据只能落在 supported_engines 中的引擎"
   - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
-  - "archive.engine/database 是逻辑归档目标；连接串、实例地址与迁移调度属于运行时配置"
+  - "归档条目用 archive_of 指向原表；归档表只封存原数据，不建 data.tables 契约、实体或查询"
 
 supported_engines: [mysql, postgres, mongodb]
 not_supported_topologies: [sharding, multi-primary, cross-region, outbox]
@@ -18,25 +20,38 @@ not_supported_topologies: [sharding, multi-primary, cross-region, outbox]
 tables:
   mysql:
     - table: data.tables.account
-      size_class: large
+      description: "账号主表"
     - table: data.tables.token
-      size_class: large
-      retention: { unit: days, ttl: 30 }
+      description: "令牌表"
     - table: data.tables.auth_pwd
+      description: "密码认证表"
     - table: data.tables.auth_phone
+      description: "手机号认证表"
     - table: data.tables.auth_email
+      description: "邮箱认证表"
     - table: data.tables.verification_body
-      size_class: small
-      retention: { unit: minutes, ttl: 10 }
+      description: "验证体（一次性验证凭证与消息快照）"
+      retention: true
+      unit: minutes
+      ttl: 10
     - table: data.tables.verification_action
-      size_class: large
-      archive: { engine: postgres, database: web_seed_archive, unit: days, after: 90 }
-  postgres: []
+      description: "验证动作（校验请求记录）"
+  postgres:
+    - archive_of: data.tables.verification_action
+      table: verification_action_archive
+      description: "验证动作冷数据归档"
+      age_by: created_at
+      after_unit: days
+      after: 90
   mongodb: []
 
 caches:
   redis:
     - table: data.tables.token
-      retention: { unit: days, cache_ttl: 30 }
+      retention: true
+      unit: days
+      cache_ttl: 30
     - table: data.tables.verification_body
-      retention: { unit: minutes, cache_ttl: 10 }
+      retention: true
+      unit: minutes
+      cache_ttl: 10

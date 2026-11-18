@@ -14,7 +14,6 @@ do_not:
 
 table:
   name: verification_action
-  comment: "验证动作：校验请求的追加日志"
   extends:
     - data.tables.base
   entities:

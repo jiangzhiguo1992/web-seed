@@ -17,7 +17,6 @@ do_not:
 
 table:
   name: verification_body
-  comment: "验证体：一次性验证凭证与短信/邮件消息快照"
   extends:
     - data.tables.base
   entities:
