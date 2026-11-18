@@ -26,7 +26,7 @@ kinds:
             pattern: '^[a-z][a-z0-9_]*$'
             description: "属性名；对象内唯一"
           - name: schema
-            types: [scalar, object, array, ref]
+            types: [ scalar, object, array, ref ]
             required: true
             description: "属性值域"
           - name: required
@@ -70,7 +70,7 @@ kinds:
         required: true
         description: "固定为 array"
       - name: items
-        types: [object, array, scalar, ref]
+        types: [ object, array, scalar, ref ]
         required: true
         description: "数组元素值域"
       - name: min_items

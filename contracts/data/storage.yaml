@@ -2,7 +2,7 @@
 # tables.<engine> 的条目分两类：
 # - 普通表条目：mysql/postgres 允许 table/description/retention/unit/时长/partition；mongodb 允许 table/description/retention/unit/时长；
 # - 归档条目：archive_of/table/description/retention/unit/时长/age_by/after_unit/after，archive_of 指向已登记的权威表；
-# caches 条目只允许 table/key/retention/unit/cache_ttl；同一表可按不同 key 建多条缓存。
+# caches 条目只允许 cache_of/key/retention/unit/cache_ttl；同一表可按不同 key 建多条缓存。
 
 id: data.storage
 summary: "数据存储约束"
@@ -32,6 +32,10 @@ tables:
 
 caches:
   redis:
-    - { table: data.tables.token, key: [ col.account_id ], retention: true, unit: days, cache_ttl: 30 }
-    - { table: data.tables.token, key: [ col.user_id ], retention: true, unit: days, cache_ttl: 30 }
-    - { table: data.tables.verification_body, key: [ col.account_id ], retention: true, unit: minutes, cache_ttl: 10 }
+    - { cache_of: data.tables.token, key: [ col.access_token_hash ], retention: true, unit: days, cache_ttl: 30 }
+    - { cache_of: data.tables.token, key: [ col.own_type, col.own_id ], retention: true, unit: days, cache_ttl: 30 }
+    - { cache_of: data.tables.token, key: [ col.account_id ], retention: true, unit: days, cache_ttl: 30 }
+    - { cache_of: data.tables.token, key: [ col.user_id ], retention: true, unit: days, cache_ttl: 30 }
+    - { cache_of: data.tables.token, key: [ col.device_id ], retention: true, unit: days, cache_ttl: 30 }
+    - { cache_of: data.tables.account, key: [ col.id ], retention: true, unit: minutes, cache_ttl: 30 }
+    - { cache_of: data.tables.verification_body, key: [ col.account_id ], retention: true, unit: minutes, cache_ttl: 10 }
