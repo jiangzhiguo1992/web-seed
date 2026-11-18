@@ -4,6 +4,8 @@ package check
 import (
 	"strings"
 	"testing"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func inputList(m map[string]any) []any {
@@ -18,6 +20,24 @@ func runServiceItem(t *testing.T, doc map[string]any, c *Checker) string {
 	t.Helper()
 	if c.errCodeSet == nil {
 		c.errCodeSet = map[string]bool{"COMMON_INTERNAL": true}
+	}
+	// 事务边界由 tx_begin/tx_commit 包裹；与用例无关时由 helper 补齐，事务本身另有专项测试。
+	transaction, _ := doc["transaction"].(string)
+	if transaction == "read_only" || transaction == "required" {
+		steps := asList(doc["steps"])
+		bracketed := false
+		for _, raw := range steps {
+			step, _ := asMap(raw)
+			if kind, _ := step["kind"].(string); kind == "tx_begin" || kind == "tx_commit" {
+				bracketed = true
+				break
+			}
+		}
+		if !bracketed {
+			begin := map[string]any{"id": "tx_begin", "kind": "tx_begin", "summary": "x"}
+			commit := map[string]any{"id": "tx_commit", "kind": "tx_commit", "summary": "x"}
+			doc["steps"] = append(append([]any{begin}, steps...), commit)
+		}
 	}
 	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
 		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
@@ -240,19 +260,14 @@ func TestServiceNestedInputPath(t *testing.T) {
 	}
 }
 
-func TestServiceExprInput(t *testing.T) {
+func TestServiceExprInputRejected(t *testing.T) {
 	c := &Checker{}
 	doc := map[string]any{"params": []any{
 		map[string]any{"name": "ctx", "type": "context.Context"},
 	}}
 	c.checkServiceParamExpr("expr: hash(password)", doc, map[string]int{}, nil, nil, "f", "s")
-	if len(c.errs) != 0 {
-		t.Fatalf("valid expr reported: %v", c.errs)
-	}
-	c.errs = nil
-	c.checkServiceParamExpr("expr: ", doc, map[string]int{}, nil, nil, "f", "s")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "empty expr") {
-		t.Fatalf("empty expr not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "inline expressions are not allowed") {
+		t.Fatalf("expr input not rejected: %v", c.errs)
 	}
 }
 
@@ -278,11 +293,254 @@ func TestServiceInputSourceIsHardConstrained(t *testing.T) {
 	if got := run(inputList(map[string]any{"id": "params.nope"})); !strings.Contains(got, "references params.nope") {
 		t.Fatalf("unknown params source not rejected: %s", got)
 	}
-	if got := run(inputList(map[string]any{"id": "expr: step.nope.x"})); !strings.Contains(got, "not an earlier step") {
+	if got := run(inputList(map[string]any{"id": "expr: step.nope.x"})); !strings.Contains(got, "inline expressions are not allowed") {
+		t.Fatalf("expr source not rejected: %s", got)
+	}
+	if got := run(inputList(map[string]any{"id": "step.nope.x"})); !strings.Contains(got, "not an earlier step") {
 		t.Fatalf("unknown step source not rejected: %s", got)
 	}
 	if got := run(map[string]any{"id": "params.id"}); !strings.Contains(got, "input must be a list") {
 		t.Fatalf("map input not rejected: %s", got)
+	}
+}
+
+func TestServiceTransactionSteps(t *testing.T) {
+	begin := map[string]any{"id": "begin", "kind": "tx_begin", "summary": "x"}
+	commit := map[string]any{"id": "commit", "kind": "tx_commit", "summary": "x"}
+	work := map[string]any{"id": "work", "kind": "logic", "summary": "x", "errors": []any{}, "output": []any{}}
+	run := func(transaction string, steps []any) string {
+		c := &Checker{}
+		doc := map[string]any{"summary": "x", "transaction": transaction, "steps": steps}
+		c.checkServiceItem(doc, "f", "cap.services.x.run", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		return strings.Join(c.errs, "\n")
+	}
+
+	if got := run("required", []any{begin, work, commit}); strings.TrimSpace(got) != "" {
+		t.Fatalf("valid transaction bracket reported: %s", got)
+	}
+	if got := run("read_only", []any{begin, work, commit}); strings.TrimSpace(got) != "" {
+		t.Fatalf("valid read_only bracket reported: %s", got)
+	}
+	if got := run("required", []any{begin, work}); !strings.Contains(got, "requires exactly one tx_begin and one tx_commit") {
+		t.Fatalf("missing tx_commit not reported: %s", got)
+	}
+	if got := run("read_only", []any{work, commit}); !strings.Contains(got, "requires exactly one tx_begin and one tx_commit") {
+		t.Fatalf("missing tx_begin not reported: %s", got)
+	}
+	if got := run("required", []any{begin, work, commit, begin}); !strings.Contains(got, "requires exactly one tx_begin and one tx_commit") {
+		t.Fatalf("duplicate tx_begin not reported: %s", got)
+	}
+	if got := run("required", []any{begin, commit, work}); !strings.Contains(got, "tx_commit must be the last step") {
+		t.Fatalf("non-last tx_commit not reported: %s", got)
+	}
+	if got := run("none", []any{begin, work, commit}); !strings.Contains(got, "transaction=none must not declare tx_begin or tx_commit") {
+		t.Fatalf("none with tx steps not reported: %s", got)
+	}
+	badBegin := map[string]any{"id": "begin", "kind": "tx_begin", "summary": "x", "errors": []any{}}
+	if got := run("required", []any{badBegin, work, commit}); !strings.Contains(got, "does not allow field errors") {
+		t.Fatalf("tx step extra field not reported: %s", got)
+	}
+}
+
+func TestServiceParamDefault(t *testing.T) {
+	c := &Checker{}
+	c.checkServiceParamDefault(map[string]any{"name": "limit", "type": "integer", "nullable": true, "default": 20}, "f", "s")
+	if len(c.errs) != 0 {
+		t.Fatalf("valid default reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkServiceParamDefault(map[string]any{"name": "limit", "type": "integer", "default": 20}, "f", "s")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "default requires nullable:true") {
+		t.Fatalf("non-nullable default not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkServiceParamDefault(map[string]any{"name": "limit", "type": "integer", "nullable": true, "default": "x"}, "f", "s")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "default must be an integer") {
+		t.Fatalf("wrong default type not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkServiceParamDefault(map[string]any{"name": "ctx", "type": "context.Context", "default": "x"}, "f", "s")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "ctx must not declare default") {
+		t.Fatalf("ctx default not reported: %v", c.errs)
+	}
+}
+
+func TestServiceTypeGrammar(t *testing.T) {
+	c := &Checker{
+		enumIDs:  map[string]bool{"data.enums.x": true},
+		entities: map[string]*entityInfo{"data.entities.e": {}},
+	}
+	for _, typ := range []string{"integer", "context.Context", "error", "any", "*data.entities.e", "List<data.entities.e>", "data.enums.x"} {
+		c.errs = nil
+		c.checkTypeName(typ, map[string]bool{"Local": true}, "x")
+		if len(c.errs) != 0 {
+			t.Fatalf("valid type %s reported: %v", typ, c.errs)
+		}
+	}
+	for typ, want := range map[string]string{
+		"List<List<integer>>": "malformed type",
+		"**integer":           "malformed type",
+		"List<>":              "malformed type",
+		"Map<integer>":        "malformed type",
+		"data.foo.bar":        "unknown type",
+		"Local":               "",
+	} {
+		c.errs = nil
+		c.checkTypeName(typ, map[string]bool{"Local": true}, "x")
+		got := strings.Join(c.errs, "\n")
+		if want == "" {
+			if got != "" {
+				t.Fatalf("local type reported: %s", got)
+			}
+			continue
+		}
+		if !strings.Contains(got, want) {
+			t.Fatalf("%s not reported as %q: %s", typ, want, got)
+		}
+	}
+}
+
+func TestServiceNestedRequiredTransactionRejected(t *testing.T) {
+	target := serviceMeta{
+		module:         "x",
+		visibility:     "public",
+		transaction:    "required",
+		params:         map[string]bool{"ctx": true},
+		requiredParams: map[string]bool{},
+	}
+	doc := map[string]any{
+		"summary": "x", "transaction": "read_only",
+		"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
+		"returns": []any{},
+		"steps": []any{
+			map[string]any{"id": "begin", "kind": "tx_begin", "summary": "x"},
+			map[string]any{"id": "call", "kind": "service", "summary": "x", "services": []any{
+				map[string]any{"service": "cap.services.x.target"},
+			}},
+			map[string]any{"id": "commit", "kind": "tx_commit", "summary": "x"},
+		},
+	}
+	c := &Checker{}
+	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
+		map[string]serviceMeta{"cap.services.x.target": target}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must not call transaction=required") {
+		t.Fatalf("nested required transaction not reported: %v", c.errs)
+	}
+}
+
+func TestServiceInputTypeCompatibility(t *testing.T) {
+	q := &queryInfo{
+		ID:     "data.queries.x.q",
+		Params: []queryParam{{Name: "id", Type: "integer"}, {Name: "name", Type: "text"}, {Name: "ids", Type: "List<integer>"}, {Name: "status", Type: "integer"}},
+	}
+	doc := map[string]any{"params": []any{
+		map[string]any{"name": "ctx", "type": "context.Context"},
+		map[string]any{"name": "id", "type": "integer"},
+		map[string]any{"name": "name", "type": "string"},
+		map[string]any{"name": "code", "type": "page_limit"},
+		map[string]any{"name": "ids", "type": "List<integer>"},
+		map[string]any{"name": "status", "type": "data.enums.account_status"},
+	}}
+	tc := stepTypeContext{doc: doc, stepIndex: map[string]int{}, steps: []any{}, stepOutputs: []map[string]returnType{}}
+	c := &Checker{valueTypes: contractspec.ValueTypes{CustomTypes: map[string]contractspec.CustomValueType{
+		"page_limit": {Family: "integer"},
+	}}}
+	c.checkQueryInput(map[string]any{
+		"id": "params.id", "name": "params.name", "ids": "params.ids", "status": "params.status",
+	}, q, q.ID, "f", "s", tc)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid input types reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkQueryInput(map[string]any{"id": "params.name", "ids": "params.id"}, q, q.ID, "f", "s", tc)
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"input id type string is not compatible with integer",
+		"input ids type integer is not compatible with List<integer>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q: %s", want, got)
+		}
+	}
+
+	// 自定义类型经类型族比较：page_limit（integer 族）可赋给 integer。
+	c.errs = nil
+	c.checkQueryInput(map[string]any{
+		"id": "params.code", "name": "params.name", "ids": "params.ids", "status": "params.status",
+	}, q, q.ID, "f", "s", tc)
+	if len(c.errs) != 0 {
+		t.Fatalf("custom type family reported: %v", c.errs)
+	}
+}
+
+func TestServiceCallTypeCompatibility(t *testing.T) {
+	target := serviceMeta{
+		params:         map[string]bool{"ctx": true, "id": true, "label": true},
+		requiredParams: map[string]bool{"id": true},
+		paramDecls:     map[string]string{"id": "integer", "label": "*string"},
+	}
+	doc := map[string]any{"params": []any{
+		map[string]any{"name": "ctx", "type": "context.Context"},
+		map[string]any{"name": "id", "type": "integer"},
+		map[string]any{"name": "label", "type": "string"},
+	}}
+	tc := stepTypeContext{doc: doc, stepIndex: map[string]int{}, steps: []any{}, stepOutputs: []map[string]returnType{}}
+	c := &Checker{}
+	c.checkServiceInput(map[string]any{"id": "params.id", "label": "params.label"}, target, "cap.services.x.y", "f", "s", tc)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid service input types reported: %v", c.errs)
+	}
+	c.errs = nil
+	c.checkServiceInput(map[string]any{"id": "params.label"}, target, "cap.services.x.y", "f", "s", tc)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "input id type string is not compatible with integer") {
+		t.Fatalf("service input type mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestServiceWriteClosure(t *testing.T) {
+	writes := computeServiceWriteClosure(
+		map[string]bool{"cap.services.x.writer": true},
+		map[string][]string{
+			"cap.services.x.a": {"cap.services.x.b"},
+			"cap.services.x.b": {"cap.services.x.writer"},
+		},
+	)
+	if !writes["cap.services.x.a"] || !writes["cap.services.x.b"] || !writes["cap.services.x.writer"] {
+		t.Fatalf("write closure not propagated: %v", writes)
+	}
+	if writes["cap.services.x.reader"] {
+		t.Fatalf("unexpected write: %v", writes)
+	}
+}
+
+func TestServiceReadOnlyRejectsTransitiveWriter(t *testing.T) {
+	target := serviceMeta{
+		module:      "x",
+		visibility:  "public",
+		transaction: "none",
+		params:      map[string]bool{"ctx": true},
+	}
+	doc := map[string]any{
+		"summary": "x", "transaction": "read_only",
+		"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
+		"returns": []any{},
+		"steps": []any{
+			map[string]any{"id": "begin", "kind": "tx_begin", "summary": "x"},
+			map[string]any{"id": "call", "kind": "service", "summary": "x", "services": []any{
+				map[string]any{"service": "cap.services.x.writer"},
+			}},
+			map[string]any{"id": "commit", "kind": "tx_commit", "summary": "x"},
+		},
+	}
+	c := &Checker{serviceWrites: map[string]bool{"cap.services.x.writer": true}}
+	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
+		map[string]serviceMeta{"cap.services.x.writer": target}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "transaction=read_only cannot call service cap.services.x.writer that writes tables") {
+		t.Fatalf("transitive writer not reported: %v", c.errs)
 	}
 }
 

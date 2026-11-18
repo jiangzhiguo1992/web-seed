@@ -196,7 +196,7 @@ feature ──> capabilities ──> data
 | capabilities/services → capabilities/events | service steps | `kind: logic/transition` + `events` |
 | capabilities/async → capabilities/services | async job | `service` |
 | capabilities/async → capabilities/events | async job | `trigger.event` |
-| capabilities/services → data | service 契约 | `steps[].query` / `steps[].queries[].query` / query `errors` |
+| capabilities/services → data | service 契约 | `steps[].queries[].query` / query `errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `source.join.from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `table.queries`（生成物） |

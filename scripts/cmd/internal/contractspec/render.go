@@ -671,13 +671,26 @@ type serviceItemScaffold struct {
 }
 
 type stepScaffold struct {
-	ID      string              `yaml:"id"`
-	Kind    string              `yaml:"kind"`
-	Summary string              `yaml:"summary"`
-	Errors  []string            `yaml:"errors"`
-	Input   map[string]any      `yaml:"input,omitempty"`
-	Output  []methodArgScaffold `yaml:"output"`
-	Queries []queryScaffold     `yaml:"queries"`
+	ID        string           `yaml:"id"`
+	Kind      string           `yaml:"kind"`
+	Summary   string           `yaml:"summary"`
+	DependsOn []string         `yaml:"depends_on,omitempty"`
+	Input     []inputScaffold  `yaml:"input,omitempty"`
+	Output    []outputScaffold `yaml:"output,omitempty"`
+	Errors    []string         `yaml:"errors,omitempty"`
+	Queries   []queryScaffold  `yaml:"queries,omitempty"`
+}
+
+type inputScaffold struct {
+	Name        string `yaml:"name"`
+	Value       string `yaml:"value"`
+	Description string `yaml:"description"`
+}
+
+type outputScaffold struct {
+	Name        string `yaml:"name"`
+	Type        string `yaml:"type"`
+	Description string `yaml:"description"`
 }
 
 type queryScaffold struct {
@@ -686,8 +699,10 @@ type queryScaffold struct {
 }
 
 type methodArgScaffold struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"`
+	Name     string `yaml:"name"`
+	Type     string `yaml:"type"`
+	Nullable bool   `yaml:"nullable,omitempty"`
+	Default  any    `yaml:"default,omitempty"`
 }
 
 type ruleFileScaffold struct {
@@ -832,35 +847,33 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 	if f, ok := FindField(s.Fields, "services"); ok {
 		if err := requireSupported(f.ItemFields, map[string]bool{
 			"name": true, "summary": true, "visibility": true, "params": true,
-			"returns": true, "transaction": true,
-			"max_iterations": true, "steps": true,
+			"returns": true, "transaction": true, "steps": true,
 		}, "cap.services.services"); err != nil {
 			return nil, err
 		}
 		if steps, ok := FindField(f.ItemFields, "steps"); ok {
 			if err := requireSupported(steps.ItemFields, map[string]bool{
 				"id": true, "kind": true, "summary": true, "depends_on": true,
-				"when": true, "on_error": true, "errors": true, "output": true,
-				"query": true, "service": true, "input": true, "queries": true,
-				"events": true, "rules": true, "event": true, "payload": true,
-				"transitions": true,
+				"input": true, "output": true, "errors": true,
+				"services": true, "queries": true, "events": true,
+				"rules": true, "transitions": true,
 			}, "cap.services.steps"); err != nil {
 				return nil, err
 			}
-			if onError, ok := FindField(steps.ItemFields, "on_error"); ok {
-				if err := requireSupported(onError.ItemFields, map[string]bool{"error": true, "action": true, "target": true}, "cap.services.steps.on_error"); err != nil {
+			if output, ok := FindField(steps.ItemFields, "output"); ok {
+				if err := requireSupported(output.ItemFields, map[string]bool{"name": true, "type": true, "description": true, "nullable": true}, "cap.services.steps.output"); err != nil {
 					return nil, err
 				}
 			}
-			if output, ok := FindField(steps.ItemFields, "output"); ok {
-				if err := requireSupported(output.ItemFields, map[string]bool{"name": true, "type": true, "nullable": true}, "cap.services.steps.output"); err != nil {
+			if input, ok := FindField(steps.ItemFields, "input"); ok {
+				if err := requireSupported(input.ItemFields, map[string]bool{"name": true, "value": true, "description": true}, "cap.services.steps.input"); err != nil {
 					return nil, err
 				}
 			}
 		}
 		for _, arg := range []string{"params", "returns"} {
 			if f, ok := FindField(f.ItemFields, arg); ok {
-				if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "type": true, "nullable": true}, "cap.services."+arg); err != nil {
+				if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "type": true, "nullable": true, "default": true}, "cap.services."+arg); err != nil {
 					return nil, err
 				}
 			}
@@ -895,15 +908,18 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 			Params:      []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: "GetInput"}},
 			Returns:     []methodArgScaffold{{Name: "value", Type: "any"}, {Name: "err", Type: "error"}},
 			Transaction: "read_only",
-			Steps: []stepScaffold{{
-				ID:      "load",
-				Kind:    "logic",
-				Summary: "TODO: 实现步骤",
-				Errors:  []string{"platform.errors.COMMON_INTERNAL"},
-				Input:   map[string]any{"input": "input.input"},
-				Output:  []methodArgScaffold{{Name: "value", Type: "any"}},
-				Queries: []queryScaffold{},
-			}},
+			Steps: []stepScaffold{
+				{ID: "begin", Kind: "tx_begin", Summary: "开启只读事务"},
+				{
+					ID:      "load",
+					Kind:    "logic",
+					Summary: "TODO: 实现步骤",
+					Input:   []inputScaffold{{Name: "input", Value: "params.input", Description: "TODO: 入参用途"}},
+					Output:  []outputScaffold{{Name: "value", Type: "any", Description: "TODO: 产出说明"}},
+					Errors:  []string{"platform.errors.COMMON_INTERNAL"},
+				},
+				{ID: "commit", Kind: "tx_commit", Summary: "提交只读事务"},
+			},
 		}},
 	}
 	b, err := marshal2(doc)

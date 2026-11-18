@@ -178,10 +178,11 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
     - `table.entities` 显式记录映射本表的实体，checker 校验；`table.queries` 只记生成的 `queries`
     - `owner_module` 与 capabilities 写表归属一致（只有 `cap.services` 可写）；跨模块读通过 `kind: service` 调用，
       `read_only_tables` 已移除
-    - service steps 的 `kind: query` / `kind: logic.queries[].query` 引用的查询项必须存在；每个写查询必须被某个 service
-      step 引用，且写表归属一致；`kind: query` 不得跨模块写；query 的 `errors` 必须是存在的 `platform.errors.*`，且被引用它的
-      step 覆盖；`input` 的 key 必须是目标参数名或本步局部名，必填参数必须全部出现，引用 `step.<id>` 时必须列入
-      `depends_on`；service 不声明 `errors`；service/query 的 `returns` 最后一项必须是 err（query 用 `kind: error`）
+    - service steps 的 `queries[].query` 引用的查询项必须存在；每个写查询必须被某个 service step 引用，且写表归属一致；
+      `kind: query` 不得跨模块写；query 的 `errors` 必须是存在的 `platform.errors.*`，且被引用它的 step 覆盖；
+      `queries[].input` 与 `services[].input` 的 key 必须是目标参数名，必填参数必须全部出现；`input.value` 只能是
+      `params.<path>` 或 `step.<id>.<path>`，引用 `step.<id>` 只要求在前序，不要求写入 `depends_on`；service 不声明 `errors`；
+      service/query 的 `returns` 最后一项必须是 err（query 用 `kind: error`）
     - 索引名同一 schema 内必须全局唯一
     - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
     - 所有契约的顶层 `fields` 必须竖排（block style），嵌套 `item_fields` 不限制（`schema.fields-style`）；

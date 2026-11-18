@@ -20,7 +20,7 @@
 
 - **service = 一个可调用单元**，有明确的 params/returns（末位显式 `err`）和 steps；同步调用，不声明 trigger。
 - **async = 一个异步任务**，引用一个同步 service 作为 handler，声明 trigger/retry/concurrency。
-- **step = 服务实现路径上的一步**，四类：query / service / logic / transition。
+- **step = 服务实现路径上的一步**，六类：query / service / logic / transition / tx_begin / tx_commit；其中 `transition` 是状态机转换，`tx_*` 是事务边界，二者不是一回事。
 - **rule / state 在 features**，被 service 的 `kind: logic` / `kind: transition` step 引用。
 - **event = 跨模块消息契约**，由 service step 的 `events` 发射，被 async 的 `trigger.event` 消费。
 - **protocol = service 到传输协议的绑定**，只写协议差异。
@@ -83,7 +83,8 @@ async ──service──> services
 service 项必须声明：
 
 - `name` / `summary` / `visibility`（`public` 跨模块可见，`internal` 仅本模块可见）
-- `params` / `returns`；最后一项必须是 `{name: err, type: error}`，不能省略；无业务返回值也必须写 `err`
+- `params` / `returns`；最后一项必须是 `{name: err, type: error}`，不能省略；无业务返回值也必须写 `err`；`params[].default` 只在
+  `nullable: true` 时允许，调用方省略时取该值
 - `transaction`（`required` / `read_only` / `none`）
 - `steps`（至少一步）
 
@@ -94,12 +95,15 @@ service 项必须声明：
 | `query`      | `queries`                                                               | 调用本模块 `data.queries.*`；`queries[].input` 的 key 必须是查询参数名，必填参数必须全部出现，不写 `ctx`（生成器注入）；`step.errors` 缺省取所有 query 错误的并集 |
 | `service`    | `services`                                                              | 调用其他（或本模块）service；`services[].input[].name` 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`                                            |
 | `logic`      | `output` + `errors`；可选 `input` / `queries` / `rules` / `events`      | 手写实现；`queries` 是 `{query, input}` 对象列表；`input` 声明本步读取的入参与用途                                                                                |
-| `transition` | `transitions`；可选 `input` / `output` / `queries` / `rules` / `events` | 执行 `feature.states.*` 转换                                                                                                                                      |
+| `transition` | `transitions`；可选 `input` / `output` / `queries` / `rules` / `events` | 执行 `feature.states.*` 状态机转换                                                                                                                                |
+| `tx_begin`   | —                                                                       | 事务开始；只允许 `id` / `kind` / `summary`，`transaction≠none` 时必须是首步                                                                                       |
+| `tx_commit`  | —                                                                       | 事务提交；只允许 `id` / `kind` / `summary`，`transaction≠none` 时必须是末步，关闭不得遗漏                                                                          |
 
-通用字段：`id` / `kind` / `summary` / `depends_on` / `errors` / `input`。
+通用字段（按模板顺序）：`id` / `kind` / `summary` / `depends_on` / `input` / `output` / `errors`。
 
-- `input` 是 `{name, value, description}` 列表；`value` 只能是 `params.<path>`、`step.<id>.<path>` 或 `expr:` 表达式；
+- `input` 是 `{name, value, description}` 列表；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式；
   `description` 说明这项输入的业务含义，分支条件也写在这里。
+- 计算值必须先落成前序 `kind: logic` step 的 `output`，再以 `step.<id>.<path>` 引用；`expr:` 软区已移除。
 - `depends_on` 是可选顺序提示；`input` / `queries[].input` 引用 `step.<id>` 只要求该步骤在前序，不要求写入 `depends_on`。
 - `queries` 是 `{query, input}` 列表；`kind: query` 也使用它，一步可以声明多个 query，由实现决定实际执行哪个。
 - `services` 是 `{service, input}` 列表，`input` 是 `{name, value, description}` 列表；一步可以调用多个 service。
@@ -107,17 +111,19 @@ service 项必须声明：
   拥有，service 与 step 不重复声明。
 - `step.errors` 只列该步骤实际返回的领域错误：`kind: query` 缺省取所有 queries 的并集；`kind: service` 必须是目标 service
   错误并集的子集；`logic/transition` 必须覆盖其 `queries` 与 `rules.on_violation` 的 `errors`。
-- 数据链是硬约束：`input` 的值只能是 `params.<path>`、`step.<id>.<path>` 或显式 `expr:`；`logic/transition` 的每个显式
+- 数据链是硬约束：`input` 的值只能是 `params.<path>` 或 `step.<id>.<path>`；`logic/transition` 的每个显式
   `output` 必须被后续 `input`/`queries[].input` 引用，或与 `returns` 业务字段同名；`returns` 的每个业务字段必须有同名、类型一致且
   `nullable` 一致的产出（`*T` 视为可空；`err` 不参与）；service 的每个非 `ctx` 参数必须被至少一个 `input` 引用。
-- `expr:` 是显式软区：表示该值由本步内部计算，checker 只校验非空，不解析来源，也不把它计入 `input`/`step` 的消费关系；能用
-  `input.` / `step.` 表达的来源不得用 `expr:` 绕过。
+- `params[].type` 只允许基础类型、`data.enums.*`、`data.entities.*`、本地 schema 或 `_types` 类型族；指针与 `List<>` 各最多一层。
 - 分支、循环与错误流转由实现决定；契约不声明 `when` / `on_error` / `max_iterations`。
 
 ### 3.2 事务与写归属
 
-- `transaction` 是 service 级事务边界；生成器在 usecase 方法体外层包裹 `WithTx`。`read_only` 不得调用写表或返回
-  `affected_rows` 的 query；写操作必须声明 `required` 或 `none`。
+- `transaction` 是 service 级事务边界，并且必须用显式步骤声明：`required` / `read_only` 时首步是 `tx_begin`、末步是
+  `tx_commit`，各且只有一个；`none` 不得出现两者。生成器据此包裹方法体，提交步骤不得遗漏。
+- `transaction≠none` 的 service 不得调用 `transaction=required` 的 service（避免嵌套事务）；跨事务调用目标必须是
+  `none`（或由调用方持有事务时的显式约定）。
+- `read_only` 不得调用写表或返回 `affected_rows` 的 query；写操作必须声明 `required` 或 `none`。
 - `kind: query` 的写表必须属于文件 `owner_module`；跨模块写必须走 `kind: service`。
 - 写表由 query 的 `tables[].write` 反向推导，不再单独声明；`queries[].query` 的 `errors` 必须被 `step.errors` 覆盖。
 - `query.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，且不得为空。

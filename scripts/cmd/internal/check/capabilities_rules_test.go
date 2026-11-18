@@ -85,8 +85,9 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 	c := &Checker{errCodeSet: map[string]bool{"COMMON_INTERNAL": true}}
 	doc := func(output []any) map[string]any {
 		return map[string]any{
-			"summary": "x",
-			"params":  []any{},
+			"summary":     "x",
+			"transaction": "none",
+			"params":      []any{},
 			"returns": []any{
 				map[string]any{"name": "account", "type": "any"},
 			},
@@ -943,7 +944,11 @@ func TestQueryErrorPropagation(t *testing.T) {
 		return map[string]any{
 			"summary":     "x",
 			"transaction": "required",
-			"steps":       []any{step},
+			"steps": []any{
+				map[string]any{"id": "tx_begin", "kind": "tx_begin", "summary": "x"},
+				step,
+				map[string]any{"id": "tx_commit", "kind": "tx_commit", "summary": "x"},
+			},
 		}
 	}
 	check := func(t *testing.T, doc map[string]any) []string {

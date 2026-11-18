@@ -425,7 +425,9 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 			c.rulef("query-params", "%s: default requires nullable:true (null means use default)", pw)
 		}
 		if p.HasDefault && !isPaginationParam(p.Name) {
-			c.checkQueryParamDefault(p, pw)
+			for _, msg := range c.paramDefaultErrors(p.Type, p.DefaultValue, pw) {
+				c.rulef("query-params", "%s", msg)
+			}
 		}
 	}
 }
@@ -435,51 +437,55 @@ func isPaginationParam(name string) bool {
 	return name == "offset" || name == "limit"
 }
 
-// checkQueryParamDefault 校验 default 的 YAML 类型与 param.type 兼容。
+// paramDefaultErrors 返回 default 与 param.type 不兼容的问题描述。
 // 枚举默认值可能是 value 或 code，无法脚本判定，交给生成器；数组只校验外层 list。
-func (c *Checker) checkQueryParamDefault(p queryParam, where string) {
-	if p.DefaultValue == nil {
-		return
+func (c *Checker) paramDefaultErrors(typ string, value any, where string) []string {
+	if value == nil {
+		return nil
 	}
-	family, array, enum, ok := paramLogicalType(p.Type)
+	family, array, enum, ok := paramLogicalType(typ)
 	if !ok {
-		return
+		return nil
 	}
 	if array {
-		if _, ok := asList2(p.DefaultValue); !ok {
-			c.rulef("query-params", "%s: default must be a list for %s", where, p.Type)
+		if _, ok := asList2(value); !ok {
+			return []string{fmt.Sprintf("%s: default must be a list for %s", where, typ)}
 		}
-		return
+		return nil
 	}
 	if enum {
-		return
+		return nil
+	}
+	bad := func(want string) []string {
+		return []string{fmt.Sprintf("%s: default must be %s for %s", where, want, typ)}
 	}
 	switch family {
 	case "string", "bytes":
-		if _, ok := p.DefaultValue.(string); !ok {
-			c.rulef("query-params", "%s: default must be a string for %s", where, p.Type)
+		if _, ok := value.(string); !ok {
+			return bad("a string")
 		}
 	case "integer":
-		if _, ok := toInt(p.DefaultValue); !ok {
-			c.rulef("query-params", "%s: default must be an integer for %s", where, p.Type)
+		if _, ok := toInt(value); !ok {
+			return bad("an integer")
 		}
 	case "float", "decimal":
-		if _, ok := toFloat(p.DefaultValue); !ok {
-			c.rulef("query-params", "%s: default must be a number for %s", where, p.Type)
+		if _, ok := toFloat(value); !ok {
+			return bad("a number")
 		}
 	case "boolean":
-		if _, ok := p.DefaultValue.(bool); !ok {
-			c.rulef("query-params", "%s: default must be a boolean for %s", where, p.Type)
+		if _, ok := value.(bool); !ok {
+			return bad("a boolean")
 		}
 	case "timestamp", "datetime":
-		switch p.DefaultValue.(type) {
+		switch value.(type) {
 		case string, time.Time:
 		default:
-			c.rulef("query-params", "%s: default must be a string/time for %s", where, p.Type)
+			return bad("a string/time")
 		}
 	case "json":
 		// JSON 默认值允许任意 YAML 结构。
 	}
+	return nil
 }
 
 // checkQueryParamColumns 校验 params[].column 的列存在性与类型族兼容。

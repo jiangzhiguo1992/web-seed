@@ -467,10 +467,15 @@ func TestRenderService(t *testing.T) {
 		t.Fatalf("service = %#v", m)
 	}
 	steps, _ := m["steps"].([]any)
-	if len(steps) != 1 {
+	if len(steps) != 3 {
 		t.Fatalf("steps = %#v", steps)
 	}
-	step, _ := steps[0].(map[string]any)
+	begin, _ := steps[0].(map[string]any)
+	step, _ := steps[1].(map[string]any)
+	commit, _ := steps[2].(map[string]any)
+	if begin["kind"] != "tx_begin" || commit["kind"] != "tx_commit" {
+		t.Fatalf("transaction bracket missing: %#v", steps)
+	}
 	if step["kind"] != "logic" {
 		t.Fatalf("step = %#v", step)
 	}

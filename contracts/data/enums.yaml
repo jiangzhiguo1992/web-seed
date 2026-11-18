@@ -85,6 +85,7 @@ enums:
       - { value: phone_change, code: 5, description: "手机变更" }
       - { value: email_change, code: 6, description: "邮箱变更" }
     used_by:
+      - cap.services.token
       - data.entities.token
 
   - name: auth_type
@@ -112,6 +113,7 @@ enums:
       - { value: revoked, code: 4, description: "已作废，终态" }
       - { value: failed, code: 5, description: "发送失败，终态" }
     used_by:
+      - cap.services.verification
       - data.entities.verification_body
 
   - name: verification_purpose
@@ -143,6 +145,7 @@ enums:
       - { value: expired, code: 3, description: "验证码已过期" }
       - { value: attempts_exceeded, code: 4, description: "失败次数超过上限" }
     used_by:
+      - cap.services.verification
       - data.entities.verification_action
 
   # TODO:GG

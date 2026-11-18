@@ -64,6 +64,7 @@ type Checker struct {
 	methodReturns     map[string]map[string]returnType
 	methodTypeDefs    map[string]map[string]any
 	serviceQueries    map[string]map[string]bool
+	serviceWrites     map[string]bool
 	ruleErrors        map[string]string
 	ruleOwners        map[string][]string
 	queryReturnTypes  map[string]map[string]returnType

@@ -35,30 +35,48 @@ services:
         queries:
           - query: data.queries.account.get_account
             input:
-              - {name: id, value: params.account_id, description: "待签发令牌的账号 ID"}
+              - { name: id, value: params.account_id, description: "待签发令牌的账号 ID" }
+      - id: issue_tokens
+        kind: logic
+        summary: "生成 access/refresh 令牌对与过期时间"
+        output:
+          - { name: tokens, type: TokenPair, description: "新签发的令牌对" }
+        errors: [ ]
+      - id: hash_tokens
+        kind: logic
+        summary: "计算访问令牌与刷新令牌的哈希"
+        input:
+          - { name: access_token, value: step.issue_tokens.tokens.access_token, description: "新访问令牌" }
+          - { name: refresh_token, value: step.issue_tokens.tokens.refresh_token, description: "新刷新令牌" }
+        output:
+          - { name: access_token_hash, type: string, description: "访问令牌哈希" }
+          - { name: refresh_token_hash, type: string, description: "刷新令牌哈希" }
+        errors: [ ]
+      - id: new_id
+        kind: logic
+        summary: "生成新令牌 ID"
+        output:
+          - { name: id, type: integer, description: "新令牌 ID" }
+        errors: [ ]
       - id: issue
         kind: logic
-        summary: "生成令牌对，哈希后持久化 refresh token"
-        depends_on: [ load_account ]
+        summary: "持久化令牌记录"
+        output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        input:
-          - { name: account, value: step.load_account.account, description: "令牌归属账号，用于写入 own_type/own_id" }
-        output:
-          - {name: tokens, type: TokenPair, description: "新签发的令牌对"}
         queries:
           - query: data.queries.token.create_token
             input:
-              - {name: id, value: "expr: new_id()", description: "新令牌 ID"}
-              - {name: own_type, value: step.load_account.account.own_type, description: "令牌归属主体类型"}
-              - {name: own_id, value: step.load_account.account.own_id, description: "令牌归属主体 ID"}
-              - {name: account_id, value: params.account_id, description: "令牌归属账号 ID"}
-              - {name: device_id, value: params.device_id, description: "签发设备标识"}
-              - {name: user_id, value: step.load_account.account.user_id, description: "令牌关联用户 ID"}
-              - {name: access_token_hash, value: "expr: hash_token(access_token)", description: "访问令牌哈希"}
-              - {name: refresh_token_hash, value: "expr: hash_token(refresh_token)", description: "刷新令牌哈希"}
-              - {name: access_expire_at, value: "expr: access_expire_at()", description: "访问令牌过期时间"}
-              - {name: refresh_expire_at, value: "expr: refresh_expire_at()", description: "刷新令牌过期时间"}
+              - { name: id, value: step.new_id.id, description: "新令牌 ID" }
+              - { name: own_type, value: step.load_account.account.own_type, description: "令牌归属主体类型" }
+              - { name: own_id, value: step.load_account.account.own_id, description: "令牌归属主体 ID" }
+              - { name: account_id, value: params.account_id, description: "令牌归属账号 ID" }
+              - { name: device_id, value: params.device_id, description: "签发设备标识" }
+              - { name: user_id, value: step.load_account.account.user_id, description: "令牌关联用户 ID" }
+              - { name: access_token_hash, value: step.hash_tokens.access_token_hash, description: "访问令牌哈希" }
+              - { name: refresh_token_hash, value: step.hash_tokens.refresh_token_hash, description: "刷新令牌哈希" }
+              - { name: access_expire_at, value: step.issue_tokens.tokens.access_expire_at, description: "访问令牌过期时间" }
+              - { name: refresh_expire_at, value: step.issue_tokens.tokens.refresh_expire_at, description: "刷新令牌过期时间" }
 
   - name: refresh
     summary: "用刷新令牌换取新令牌对"
@@ -71,43 +89,85 @@ services:
       - { name: tokens, type: TokenPair }
       - { name: err, type: error }
     steps:
+      - { id: begin, kind: tx_begin, summary: "开启写事务" }
+      - id: hash_old
+        kind: logic
+        summary: "计算旧刷新令牌的哈希"
+        input:
+          - { name: refresh_token, value: params.refresh_token, description: "待换新的刷新令牌" }
+        output:
+          - { name: refresh_token_hash, type: string, description: "旧刷新令牌哈希" }
+        errors: [ ]
       - id: load_old
         kind: query
         summary: "按刷新令牌读取旧令牌"
         queries:
           - query: data.queries.token.get_token_by_refresh
             input:
-              - {name: refresh_token_hash, value: "expr: hash_token(params.refresh_token)", description: "待换新的刷新令牌哈希"}
+              - { name: refresh_token_hash, value: step.hash_old.refresh_token_hash, description: "待换新的刷新令牌哈希" }
+      - id: issue_tokens
+        kind: logic
+        summary: "生成新的 access/refresh 令牌对与过期时间"
+        output:
+          - { name: tokens, type: TokenPair, description: "换新后的令牌对" }
+        errors: [ ]
+      - id: hash_new
+        kind: logic
+        summary: "计算新访问令牌与新刷新令牌的哈希"
+        input:
+          - { name: access_token, value: step.issue_tokens.tokens.access_token, description: "新访问令牌" }
+          - { name: refresh_token, value: step.issue_tokens.tokens.refresh_token, description: "新刷新令牌" }
+        output:
+          - { name: access_token_hash, type: string, description: "新访问令牌哈希" }
+          - { name: refresh_token_hash, type: string, description: "新刷新令牌哈希" }
+        errors: [ ]
+      - id: new_id
+        kind: logic
+        summary: "生成新令牌 ID"
+        output:
+          - { name: id, type: integer, description: "新令牌 ID" }
+        errors: [ ]
+      - id: now
+        kind: logic
+        summary: "取当前时间作为旧令牌作废时间"
+        output:
+          - { name: revoked_at, type: timestamp, description: "旧令牌作废时间" }
+        errors: [ ]
+      - id: reason
+        kind: logic
+        summary: "构造令牌作废原因：rotated"
+        output:
+          - { name: revoke_reason, type: data.enums.token_revoke_reason, description: "作废原因：正常轮换" }
+        errors: [ ]
       - id: refresh
         kind: logic
         summary: "校验 refresh token，作废旧令牌并签发新令牌对"
-        depends_on: [ load_old ]
+        input:
+          - { name: refresh_token, value: params.refresh_token, description: "待换新的刷新令牌" }
+          - { name: old_token, value: step.load_old.row, description: "旧令牌行，用于校验过期与吊销状态" }
+        output: [ ]
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
           - platform.errors.AUTH_TOKEN_EXPIRED
-        input:
-          - { name: refresh_token, value: params.refresh_token, description: "待换新的刷新令牌" }
-          - { name: old_token, value: step.load_old.row, description: "旧令牌行，用于作废与继承 own_type/own_id" }
-        output:
-          - {name: tokens, type: TokenPair, description: "换新后的令牌对"}
         queries:
           - query: data.queries.token.create_token
             input:
-              - {name: id, value: "expr: new_id()", description: "新令牌 ID"}
-              - {name: own_type, value: step.load_old.row.own_type, description: "继承的归属主体类型"}
-              - {name: own_id, value: step.load_old.row.own_id, description: "继承的归属主体 ID"}
-              - {name: account_id, value: step.load_old.row.account_id, description: "继承的账号 ID"}
-              - {name: device_id, value: step.load_old.row.device_id, description: "继承的设备标识"}
-              - {name: user_id, value: step.load_old.row.user_id, description: "继承的用户 ID"}
-              - {name: access_token_hash, value: "expr: hash_token(access_token)", description: "访问令牌哈希"}
-              - {name: refresh_token_hash, value: "expr: hash_token(refresh_token)", description: "刷新令牌哈希"}
-              - {name: access_expire_at, value: "expr: access_expire_at()", description: "访问令牌过期时间"}
-              - {name: refresh_expire_at, value: "expr: refresh_expire_at()", description: "刷新令牌过期时间"}
+              - { name: id, value: step.new_id.id, description: "新令牌 ID" }
+              - { name: own_type, value: step.load_old.row.own_type, description: "继承的归属主体类型" }
+              - { name: own_id, value: step.load_old.row.own_id, description: "继承的归属主体 ID" }
+              - { name: account_id, value: step.load_old.row.account_id, description: "继承的账号 ID" }
+              - { name: device_id, value: step.load_old.row.device_id, description: "继承的设备标识" }
+              - { name: user_id, value: step.load_old.row.user_id, description: "继承的用户 ID" }
+              - { name: access_token_hash, value: step.hash_new.access_token_hash, description: "新访问令牌哈希" }
+              - { name: refresh_token_hash, value: step.hash_new.refresh_token_hash, description: "新刷新令牌哈希" }
+              - { name: access_expire_at, value: step.issue_tokens.tokens.access_expire_at, description: "访问令牌过期时间" }
+              - { name: refresh_expire_at, value: step.issue_tokens.tokens.refresh_expire_at, description: "刷新令牌过期时间" }
           - query: data.queries.token.revoke_token
             input:
-              - {name: refresh_token_hash, value: "expr: hash_token(params.refresh_token)", description: "待作废的旧刷新令牌哈希"}
-              - {name: revoked_at, value: "expr: now()", description: "旧令牌作废时间"}
-              - {name: revoke_reason, value: "expr: token_revoke_reason('rotated')", description: "旧令牌作废原因：rotated"}
+              - { name: refresh_token_hash, value: step.hash_old.refresh_token_hash, description: "待作废的旧刷新令牌哈希" }
+              - { name: revoked_at, value: step.now.revoked_at, description: "旧令牌作废时间" }
+              - { name: revoke_reason, value: step.reason.revoke_reason, description: "旧令牌作废原因：rotated" }
+      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: logout
     summary: "吊销刷新令牌"
@@ -119,23 +179,43 @@ services:
     returns:
       - { name: err, type: error }
     steps:
+      - { id: begin, kind: tx_begin, summary: "开启写事务" }
+      - id: hash
+        kind: logic
+        summary: "计算待吊销刷新令牌的哈希"
+        input:
+          - { name: refresh_token, value: params.refresh_token, description: "要吊销的刷新令牌" }
+        output:
+          - { name: refresh_token_hash, type: string, description: "待吊销的刷新令牌哈希" }
+        errors: [ ]
+      - id: now
+        kind: logic
+        summary: "取当前时间作为吊销时间"
+        output:
+          - { name: revoked_at, type: timestamp, description: "吊销时间" }
+        errors: [ ]
+      - id: reason
+        kind: logic
+        summary: "构造令牌吊销原因：logout"
+        output:
+          - { name: revoke_reason, type: data.enums.token_revoke_reason, description: "吊销原因：登出" }
+        errors: [ ]
       - id: logout
         kind: logic
         summary: "校验并吊销 refresh token"
+        output: [ ]
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
-        input:
-          - { name: refresh_token, value: params.refresh_token, description: "要吊销的刷新令牌" }
-        output: [ ]
         queries:
           - query: data.queries.token.get_token_by_refresh
             input:
-              - {name: refresh_token_hash, value: "expr: hash_token(params.refresh_token)", description: "待吊销的刷新令牌哈希"}
+              - { name: refresh_token_hash, value: step.hash.refresh_token_hash, description: "待吊销的刷新令牌哈希" }
           - query: data.queries.token.revoke_token
             input:
-              - {name: refresh_token_hash, value: "expr: hash_token(params.refresh_token)", description: "待吊销的刷新令牌哈希"}
-              - {name: revoked_at, value: "expr: now()", description: "吊销时间"}
-              - {name: revoke_reason, value: "expr: token_revoke_reason('logout')", description: "吊销原因：logout"}
+              - { name: refresh_token_hash, value: step.hash.refresh_token_hash, description: "待吊销的刷新令牌哈希" }
+              - { name: revoked_at, value: step.now.revoked_at, description: "吊销时间" }
+              - { name: revoke_reason, value: step.reason.revoke_reason, description: "吊销原因：logout" }
+      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: revoke_by_account
     summary: "吊销账号的全部令牌"
@@ -147,18 +227,30 @@ services:
     returns:
       - { name: err, type: error }
     steps:
+      - id: now
+        kind: logic
+        summary: "取当前时间作为吊销时间"
+        output:
+          - { name: revoked_at, type: timestamp, description: "吊销时间" }
+        errors: [ ]
+      - id: reason
+        kind: logic
+        summary: "构造令牌吊销原因：account_revoked"
+        output:
+          - { name: revoke_reason, type: data.enums.token_revoke_reason, description: "吊销原因：账号注销" }
+        errors: [ ]
       - id: revoke
         kind: logic
         summary: "吊销账号全部有效令牌"
+        output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        output: [ ]
         queries:
           - query: data.queries.token.revoke_tokens_by_account
             input:
-              - {name: account_id, value: params.account_id, description: "被吊销令牌的账号 ID"}
-              - {name: revoked_at, value: "expr: now()", description: "吊销时间"}
-              - {name: revoke_reason, value: "expr: token_revoke_reason('account_revoked')", description: "吊销原因：account_revoked"}
+              - { name: account_id, value: params.account_id, description: "被吊销令牌的账号 ID" }
+              - { name: revoked_at, value: step.now.revoked_at, description: "吊销时间" }
+              - { name: revoke_reason, value: step.reason.revoke_reason, description: "吊销原因：account_revoked" }
 
   - name: verify
     summary: "校验访问令牌并返回账号"
@@ -171,29 +263,38 @@ services:
       - { name: account, type: data.entities.account }
       - { name: err, type: error }
     steps:
+      - { id: begin, kind: tx_begin, summary: "开启只读事务" }
+      - id: hash
+        kind: logic
+        summary: "计算待校验访问令牌的哈希"
+        input:
+          - { name: access_token, value: params.access_token, description: "待校验的访问令牌" }
+        output:
+          - { name: access_token_hash, type: string, description: "待校验的访问令牌哈希" }
+        errors: [ ]
       - id: load_token
         kind: query
         summary: "按访问令牌读取令牌"
         queries:
           - query: data.queries.token.get_token_by_access
             input:
-              - {name: access_token_hash, value: "expr: hash_token(params.access_token)", description: "待校验的访问令牌哈希"}
+              - { name: access_token_hash, value: step.hash.access_token_hash, description: "待校验的访问令牌哈希" }
       - id: verify
         kind: logic
         summary: "校验 access token 并加载账号"
-        depends_on: [ load_token ]
-        errors:
-          - platform.errors.AUTH_TOKEN_INVALID
-          - platform.errors.AUTH_TOKEN_EXPIRED
         input:
           - { name: access_token, value: params.access_token, description: "待校验的访问令牌" }
           - { name: token, value: step.load_token.row, description: "令牌行，用于校验过期与吊销状态" }
         output:
-          - {name: account, type: data.entities.account, description: "令牌归属账号"}
+          - { name: account, type: data.entities.account, description: "令牌归属账号" }
+        errors:
+          - platform.errors.AUTH_TOKEN_INVALID
+          - platform.errors.AUTH_TOKEN_EXPIRED
         queries:
           - query: data.queries.account.get_account
             input:
-              - {name: id, value: step.load_token.row.account_id, description: "令牌归属账号 ID"}
+              - { name: id, value: step.load_token.row.account_id, description: "令牌归属账号 ID" }
+      - { id: commit, kind: tx_commit, summary: "提交只读事务" }
 
   - name: purge_expired
     summary: "清理已过期令牌"
@@ -205,14 +306,20 @@ services:
       - { name: affected_rows, type: integer }
       - { name: err, type: error }
     steps:
+      - id: batch_limit
+        kind: logic
+        summary: "取单批删除上限"
+        output:
+          - { name: limit, type: integer, description: "单批删除上限" }
+        errors: [ ]
       - id: purge
         kind: logic
         summary: "删除过期令牌"
-        errors:
-          - platform.errors.COMMON_INTERNAL
         output:
           - { name: affected_rows, type: integer, description: "影响行数" }
+        errors:
+          - platform.errors.COMMON_INTERNAL
         queries:
           - query: data.queries.token.delete_expired_tokens
             input:
-              - {name: limit, value: "expr: batch_limit()", description: "单批删除上限"}
+              - { name: limit, value: step.batch_limit.limit, description: "单批删除上限" }

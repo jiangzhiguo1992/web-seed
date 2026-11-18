@@ -142,20 +142,11 @@ func (c *Checker) checkServicePersistenceDoc(doc map[string]any, rel, module str
 		name, _ := item["name"].(string)
 		for _, rawStep := range asList(item["steps"]) {
 			step, _ := asMap(rawStep)
-			kind, _ := step["kind"].(string)
 			var qids []string
-			switch kind {
-			case "query":
-				qid, _ := step["query"].(string)
-				if qid != "" {
+			for _, rawQ := range asList(step["queries"]) {
+				qo, _ := asMap(rawQ)
+				if qid, _ := qo["query"].(string); qid != "" {
 					qids = append(qids, qid)
-				}
-			case "logic", "transition":
-				for _, rawQ := range asList(step["queries"]) {
-					qo, _ := asMap(rawQ)
-					if qid, _ := qo["query"].(string); qid != "" {
-						qids = append(qids, qid)
-					}
 				}
 			}
 			for _, qid := range qids {
