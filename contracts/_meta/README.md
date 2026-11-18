@@ -35,8 +35,7 @@ scripts/cmd/
 ├── internal/graph/       # used_by 入边计算与写回
 ├── contract_new/
 ├── contract_check/
-├── gen_graph/
-└── gen_capabilities/      # cap.services steps → 契约测试骨架
+└── gen_graph/
 ```
 
 ### 1.1 为什么有 `_types.yaml`
@@ -112,11 +111,9 @@ false，省略不写。槽位键出现在节点位置即报 `schema.slot-positio
 | `make contract-new type=cap.protocols.http name=invoice service=cap.services.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-service` 必填                                                                              | 新建 HTTP 绑定前            |
 | `make gen-graph`                                                                                        | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` / 锚点                                              | 改完表/实体/查询/service 后 |
 | `make gen-graph-check`                                                                                  | 只校验上述反向索引是否最新（CI）                                                                                         | CI                          |
-| `make gen-capabilities`                                                                                 | 按 `cap.services` 的 steps 生成 `apps/api/internal/contracttest/generated/` 测试骨架                                     | 改完 service steps 后       |
-| `make gen-capabilities-check`                                                                           | 只校验测试骨架是否最新（CI）                                                                                             | CI                          |
 | `make contract-check`                                                                                   | 结构 / ID / 约束 / 索引 / 反向索引 / owner / entity 投影 / query 参数与返回 / service steps                              | 每次改完契约                |
-| `make gen`                                                                                              | 生成 DDL / OpenAPI spec / 反向索引 / 错误文档 / 契约测试骨架                                                             | `contract-check` 通过后     |
-| `make gen-openapi` / `gen-db` / `gen-graph` / `gen-errors` / `gen-capabilities`                         | 单独投影                                                                                                                 | 按需                        |
+| `make gen`                                                                                              | 生成 DDL / OpenAPI spec / 反向索引 / 错误文档                                                                            | `contract-check` 通过后     |
+| `make gen-openapi` / `gen-db` / `gen-graph` / `gen-errors`                                              | 单独投影                                                                                                                 | 按需                        |
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
@@ -258,14 +255,6 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
       不得直接引用 `data.queries.*`
 - 实体/查询/能力对表的引用存在
 - `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复；entities/queries 文件必须登记
-- `capabilities/services/*.yaml` 的 steps → `apps/api/internal/contracttest/generated/`
-    - 每个 service/step 生成一个显式 `t.Run`；注释固定列出 input / output / errors / when / depends_on / queries /
-      events / rules / transitions，空值写 `-`
-    - 生成的测试对每个 step 断言规格值级完整（ID / kind 专属字段 / 输入输出 / 错误前缀）；行为断言写在非生成测试中（导入
-      generated 的规格数据），不要手改生成物
-    - 生成物入库，`make gen-capabilities-check` 在 CI 校验；禁止手改
-    - 同一 service 内同一 when 路径的 `==` 分支必须覆盖枚举全 code 或 boolean true/false；`when: default` 可代替覆盖，但要求恰好一个
-      `==` 组且最多一个 default（少于两个分支的组不检查）
 
 **尚未机器化**（写在 `_meta` 的 `description` / `rules`，靠 review）：
 
@@ -334,7 +323,6 @@ README 或 `<type>/_base.yaml`，`_meta` 下禁止出现 `do_not`。
 - 不要手写生成的反向索引（`table.referenced_by` / `model.included_by` / `table.queries` / `model.queries` /
   `query.used_by` / `used_by.flows`）；它们由 `make gen-graph` 写入，`contract-check` 校验。method item 的 `used_by`
   是手写正向依赖。
-- 不要手改 `apps/api/internal/contracttest/generated/`；契约变更后跑 `make gen-capabilities`。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`；`contract-check` 会校验 `implemented_by` 必须包含规则自身 ID、每个
   ID 都有实际输出，并反向检查所有非 `schema.*` 输出都已被规则声明；但不会判断检查逻辑本身是否正确（后者靠测试）。

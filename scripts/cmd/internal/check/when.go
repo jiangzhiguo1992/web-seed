@@ -95,30 +95,6 @@ func whenFields(n *whenNode, prefix string) []string {
 	return fields
 }
 
-// whenStepFields 返回表达式引用的完整 step 字段路径，例如 step.load.account.status。
-func whenStepFields(n *whenNode) []string {
-	return whenFields(n, "step.")
-}
-
-// whenInputFields 返回表达式引用的完整 input 字段路径，例如 input.account.number。
-func whenInputFields(n *whenNode) []string {
-	return whenFields(n, "input.")
-}
-
-// whenStepRefs 返回表达式引用的 step ID，用于校验引用是前序步骤。
-func whenStepRefs(n *whenNode) []string {
-	seen := map[string]bool{}
-	var refs []string
-	for _, field := range whenStepFields(n) {
-		parts := strings.Split(field, ".")
-		if len(parts) >= 2 && parts[1] != "" && !seen[parts[1]] {
-			seen[parts[1]] = true
-			refs = append(refs, parts[1])
-		}
-	}
-	return refs
-}
-
 // splitStepField 拆分 step.<id>.<path> 为 id 与 path。
 func splitStepField(field string) (string, string, bool) {
 	parts := strings.Split(field, ".")
@@ -331,10 +307,12 @@ func compareConstraint(n *whenNode) map[string]map[string]whenConstraint {
 }
 
 func splitInputField(field string) (string, bool) {
-	if strings.HasPrefix(field, "input.") {
-		rest := strings.TrimPrefix(field, "input.")
-		if rest != "" {
-			return rest, true
+	for _, prefix := range []string{"input.", "params."} {
+		if strings.HasPrefix(field, prefix) {
+			rest := strings.TrimPrefix(field, prefix)
+			if rest != "" {
+				return rest, true
+			}
 		}
 	}
 	return "", false

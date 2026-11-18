@@ -10,7 +10,7 @@ components:
     Problem:
       type: object
       additionalProperties: false
-      required: [type, title, status]
+      required: [ type, title, status ]
       properties:
         type: { type: string, format: uri-reference, example: "about:blank" }
         title: { type: string, example: "not found" }
@@ -23,7 +23,7 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [field, message]
+            required: [ field, message ]
             properties:
               field: { type: string }
               message: { type: string }
@@ -31,7 +31,7 @@ components:
     PageInfo:
       type: object
       additionalProperties: false
-      required: [has_more]
+      required: [ has_more ]
       properties:
         has_more: { type: boolean }
 

@@ -8,7 +8,7 @@ do_not:
   - "token 只允许出现在 /auth/login 与 /auth/refresh 的响应"
 
 base_path: /v1
-default_error_responses: [400, 401, 403, 422, 423, 429, 500, 503]
+default_error_responses: [ 400, 401, 403, 422, 423, 429, 500, 503 ]
 
 paths:
   /auth/login:
@@ -91,7 +91,7 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [refresh_token]
+              required: [ refresh_token ]
               properties:
                 refresh_token: { type: string, minLength: 1 }
       responses:
@@ -116,7 +116,7 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [refresh_token]
+              required: [ refresh_token ]
               properties:
                 refresh_token: { type: string, minLength: 1 }
       responses:

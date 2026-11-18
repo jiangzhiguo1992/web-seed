@@ -6,6 +6,14 @@ import (
 	"testing"
 )
 
+func inputList(m map[string]any) []any {
+	var items []any
+	for name, value := range m {
+		items = append(items, map[string]any{"name": name, "value": value, "description": "x"})
+	}
+	return items
+}
+
 func runServiceItem(t *testing.T, doc map[string]any, c *Checker) string {
 	t.Helper()
 	if c.errCodeSet == nil {
@@ -23,10 +31,9 @@ func TestServiceQueryInputRequiredAndExact(t *testing.T) {
 		Returns: []queryReturn{{Name: "row", Kind: "scalar", Type: "string"}, {Name: "err", Kind: "error"}},
 	}
 	base := func(input map[string]any) map[string]any {
-		step := map[string]any{"id": "run", "kind": "query", "summary": "x", "query": q.ID}
-		if input != nil {
-			step["input"] = input
-		}
+		step := map[string]any{"id": "run", "kind": "query", "summary": "x", "queries": []any{
+			map[string]any{"query": q.ID, "input": inputList(input)},
+		}}
 		return map[string]any{
 			"summary": "x", "transaction": "read_only",
 			"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
@@ -41,13 +48,13 @@ func TestServiceQueryInputRequiredAndExact(t *testing.T) {
 		}
 	}
 
-	if got := runServiceItem(t, base(map[string]any{"id": "input.ctx"}), checker()); strings.Contains(got, "missing required param id") {
+	if got := runServiceItem(t, base(map[string]any{"id": "params.ctx"}), checker()); strings.Contains(got, "missing required param id") {
 		t.Fatalf("nullable param treated as required: %s", got)
 	}
 	if got := runServiceItem(t, base(nil), checker()); !strings.Contains(got, "missing required param id") {
 		t.Fatalf("missing required query param not reported: %s", got)
 	}
-	if got := runServiceItem(t, base(map[string]any{"id": "input.ctx", "nope": "input.ctx"}), checker()); !strings.Contains(got, "has no param nope") {
+	if got := runServiceItem(t, base(map[string]any{"id": "params.ctx", "nope": "params.ctx"}), checker()); !strings.Contains(got, "has no param nope") {
 		t.Fatalf("extra query param not reported: %s", got)
 	}
 }
@@ -61,10 +68,15 @@ func TestServiceCallInputRequiredAndExact(t *testing.T) {
 		returns:        map[string]returnType{"value": {typ: "string"}},
 	}
 	base := func(input map[string]any) map[string]any {
-		step := map[string]any{"id": "call", "kind": "service", "summary": "x", "service": "cap.services.x.target"}
+		item := map[string]any{"service": "cap.services.x.target"}
 		if input != nil {
-			step["input"] = input
+			items := make([]any, 0, len(input))
+			for name, value := range input {
+				items = append(items, map[string]any{"name": name, "value": value, "description": "x"})
+			}
+			item["input"] = items
 		}
+		step := map[string]any{"id": "call", "kind": "service", "summary": "x", "services": []any{item}}
 		return map[string]any{
 			"summary": "x", "transaction": "read_only",
 			"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}, map[string]any{"name": "account_id", "type": "integer"}},
@@ -82,13 +94,13 @@ func TestServiceCallInputRequiredAndExact(t *testing.T) {
 		return strings.Join(c.errs, "\n")
 	}
 
-	if got := run(base(map[string]any{"account_id": "input.account_id"})); strings.Contains(got, "missing required param") || strings.Contains(got, "must not pass ctx") {
+	if got := run(base(map[string]any{"account_id": "params.account_id"})); strings.Contains(got, "missing required param") || strings.Contains(got, "must not pass ctx") {
 		t.Fatalf("valid service input reported: %s", got)
 	}
 	if got := run(base(nil)); !strings.Contains(got, "missing required param account_id") {
 		t.Fatalf("missing required service param not reported: %s", got)
 	}
-	if got := run(base(map[string]any{"account_id": "input.account_id", "ctx": "input.ctx"})); !strings.Contains(got, "must not pass ctx") {
+	if got := run(base(map[string]any{"account_id": "params.account_id", "ctx": "params.ctx"})); !strings.Contains(got, "must not pass ctx") {
 		t.Fatalf("ctx input not reported: %s", got)
 	}
 }
@@ -130,7 +142,7 @@ func TestServiceChainOutputAndParamUsage(t *testing.T) {
 			},
 			map[string]any{
 				"id": "use", "kind": "logic", "summary": "x", "depends_on": []any{"load"},
-				"errors": []any{}, "input": map[string]any{"v": "step.load.value"},
+				"errors": []any{}, "input": []any{map[string]any{"name": "v", "value": "step.load.value", "description": "x"}},
 				"output": []any{},
 			},
 		}, []any{map[string]any{"name": "ctx", "type": "context.Context"}}, []any{})
@@ -139,7 +151,7 @@ func TestServiceChainOutputAndParamUsage(t *testing.T) {
 		}
 	})
 
-	t.Run("step reference requires depends_on", func(t *testing.T) {
+	t.Run("step reference does not require depends_on", func(t *testing.T) {
 		doc := base([]any{
 			map[string]any{
 				"id": "load", "kind": "logic", "summary": "x",
@@ -147,12 +159,12 @@ func TestServiceChainOutputAndParamUsage(t *testing.T) {
 			},
 			map[string]any{
 				"id": "use", "kind": "logic", "summary": "x",
-				"errors": []any{}, "input": map[string]any{"v": "step.load.value"},
+				"errors": []any{}, "input": []any{map[string]any{"name": "v", "value": "step.load.value", "description": "x"}},
 				"output": []any{},
 			},
 		}, []any{map[string]any{"name": "ctx", "type": "context.Context"}}, []any{})
-		if got := run(doc); !strings.Contains(got, "not declared in depends_on") {
-			t.Fatalf("missing depends_on not reported: %s", got)
+		if got := run(doc); strings.TrimSpace(got) != "" {
+			t.Fatalf("step reference without depends_on reported: %s", got)
 		}
 	})
 
@@ -175,7 +187,7 @@ func TestServiceLogicQueriesInput(t *testing.T) {
 	doc := func(input map[string]any) map[string]any {
 		item := map[string]any{"query": q.ID}
 		if input != nil {
-			item["input"] = input
+			item["input"] = inputList(input)
 		}
 		return map[string]any{
 			"summary": "x", "transaction": "read_only",
@@ -193,13 +205,13 @@ func TestServiceLogicQueriesInput(t *testing.T) {
 		return runServiceItem(t, doc, c)
 	}
 
-	if got := run(doc(map[string]any{"id": "input.id"})); len(strings.TrimSpace(got)) != 0 {
+	if got := run(doc(map[string]any{"id": "params.id"})); len(strings.TrimSpace(got)) != 0 {
 		t.Fatalf("valid logic query input reported: %s", got)
 	}
 	if got := run(doc(nil)); !strings.Contains(got, "missing required param id") {
 		t.Fatalf("missing logic query input not reported: %s", got)
 	}
-	if got := run(doc(map[string]any{"id": "input.id", "extra": "input.id"})); !strings.Contains(got, "has no param extra") {
+	if got := run(doc(map[string]any{"id": "params.id", "extra": "params.id"})); !strings.Contains(got, "has no param extra") {
 		t.Fatalf("extra logic query input not reported: %s", got)
 	}
 }
@@ -217,12 +229,12 @@ func TestServiceNestedInputPath(t *testing.T) {
 		map[string]any{"name": "ctx", "type": "context.Context"},
 		map[string]any{"name": "filter", "type": "Filter"},
 	}}
-	c.checkServiceParamExpr("input.filter.status", doc, map[string]int{}, nil, nil, map[string]bool{}, "f", "s")
+	c.checkServiceParamExpr("params.filter.status", doc, map[string]int{}, nil, nil, "f", "s")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid nested input reported: %v", c.errs)
 	}
 	c.errs = nil
-	c.checkServiceParamExpr("input.filter.missing", doc, map[string]int{}, nil, nil, map[string]bool{}, "f", "s")
+	c.checkServiceParamExpr("params.filter.missing", doc, map[string]int{}, nil, nil, "f", "s")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown field missing") {
 		t.Fatalf("unknown nested input not reported: %v", c.errs)
 	}
@@ -233,14 +245,44 @@ func TestServiceExprInput(t *testing.T) {
 	doc := map[string]any{"params": []any{
 		map[string]any{"name": "ctx", "type": "context.Context"},
 	}}
-	c.checkServiceParamExpr("expr: hash(password)", doc, map[string]int{}, nil, nil, nil, "f", "s")
+	c.checkServiceParamExpr("expr: hash(password)", doc, map[string]int{}, nil, nil, "f", "s")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid expr reported: %v", c.errs)
 	}
 	c.errs = nil
-	c.checkServiceParamExpr("expr: ", doc, map[string]int{}, nil, nil, nil, "f", "s")
+	c.checkServiceParamExpr("expr: ", doc, map[string]int{}, nil, nil, "f", "s")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "empty expr") {
 		t.Fatalf("empty expr not reported: %v", c.errs)
+	}
+}
+
+func TestServiceInputSourceIsHardConstrained(t *testing.T) {
+	q := &queryInfo{ID: "data.queries.x.q", Params: []queryParam{{Name: "id"}}}
+	run := func(input any) string {
+		step := map[string]any{"id": "run", "kind": "query", "summary": "x", "queries": []any{
+			map[string]any{"query": q.ID, "input": input},
+		}}
+		doc := map[string]any{
+			"summary": "x", "transaction": "read_only",
+			"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}, map[string]any{"name": "id", "type": "integer"}},
+			"returns": []any{},
+			"steps":   []any{step},
+		}
+		c := &Checker{queries: map[string]*queryInfo{q.ID: q}}
+		return runServiceItem(t, doc, c)
+	}
+
+	if got := run(inputList(map[string]any{"id": "input.id"})); !strings.Contains(got, "must be params.<path>") {
+		t.Fatalf("input.* source not rejected: %s", got)
+	}
+	if got := run(inputList(map[string]any{"id": "params.nope"})); !strings.Contains(got, "references params.nope") {
+		t.Fatalf("unknown params source not rejected: %s", got)
+	}
+	if got := run(inputList(map[string]any{"id": "expr: step.nope.x"})); !strings.Contains(got, "not an earlier step") {
+		t.Fatalf("unknown step source not rejected: %s", got)
+	}
+	if got := run(map[string]any{"id": "params.id"}); !strings.Contains(got, "input must be a list") {
+		t.Fatalf("map input not rejected: %s", got)
 	}
 }
 
@@ -256,7 +298,8 @@ func TestServiceReadOnlyRejectsWriteQuery(t *testing.T) {
 			"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
 			"returns": []any{},
 			"steps": []any{map[string]any{
-				"id": "run", "kind": "query", "summary": "x", "query": q.ID,
+				"id": "run", "kind": "query", "summary": "x",
+				"queries": []any{map[string]any{"query": q.ID}},
 			}},
 		}
 	}

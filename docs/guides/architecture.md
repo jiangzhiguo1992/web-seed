@@ -107,7 +107,6 @@
 - [ ] `platform/config/env.json` → `.env.example`（`gen-env.sh`）
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
 - [ ] `features/rules|states` + `capabilities/events/**` → 状态机常量 + 断言 + 测试骨架
-- [x] `capabilities/services/*.yaml` steps → 契约测试骨架（`apps/api/internal/contracttest/generated/`）
 - [ ] `features/**` → 路由表 + 页面骨架 + 类型
 - [ ] 结构化依赖 → 按需生成 graph；`lineage.md` → `docs/contracts/generated/lineage.md`
 - [x] `make gen` 幂等：连续两次生成结果一致
@@ -229,7 +228,6 @@ capabilities/protocols/http/*.yaml + shared.yaml ──> gen-openapi ──> gen
 
 platform/errors/*.yaml ──> gen-errors ──> docs/contracts/generated/errors.md
 
-capabilities/services/*.yaml ──> gen-capabilities ──> 契约测试骨架（usecase/interface 仍 P2）
 capabilities/services/*.yaml ──> (P2) Go interface / usecase / handler
 capabilities/async/*.yaml ──> (P2) worker 注册表
 data/queries/*.yaml ──> (P2) queries/*.sql ──> sqlc

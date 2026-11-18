@@ -62,20 +62,20 @@ func TestServiceParamExpr(t *testing.T) {
 			}},
 		},
 	}
-	c.checkServiceParamExpr("input.id", doc, stepIndex, stepOutputs, steps, map[string]bool{"load": true}, "f", "s")
-	c.checkServiceParamExpr("step.load.account.id", doc, stepIndex, stepOutputs, steps, map[string]bool{"load": true}, "f", "s")
+	c.checkServiceParamExpr("params.id", doc, stepIndex, stepOutputs, steps, "f", "s")
+	c.checkServiceParamExpr("step.load.account.id", doc, stepIndex, stepOutputs, steps, "f", "s")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid params reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceParamExpr("input.missing", doc, stepIndex, stepOutputs, steps, map[string]bool{"load": true}, "f", "s")
+	c.checkServiceParamExpr("params.missing", doc, stepIndex, stepOutputs, steps, "f", "s")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-params]") {
 		t.Fatalf("unknown input not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceParamExpr("step.load.missing", doc, stepIndex, stepOutputs, steps, map[string]bool{"load": true}, "f", "s")
+	c.checkServiceParamExpr("step.load.missing", doc, stepIndex, stepOutputs, steps, "f", "s")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-params]") {
 		t.Fatalf("unknown step field not reported: %v", c.errs)
 	}
@@ -170,7 +170,7 @@ services:
     visibility: public
     transaction: read_only
     steps:
-      - {id: call, kind: service, summary: "x", service: cap.services.b.get}
+      - {id: call, kind: service, summary: "x", services: [{service: cap.services.b.get}]}
 `)
 	writeCapFile(t, root, "contracts/capabilities/services/b.yaml", `id: cap.services.b
 summary: "b"
@@ -184,7 +184,7 @@ services:
     visibility: public
     transaction: read_only
     steps:
-      - {id: call, kind: service, summary: "x", service: cap.services.a.get}
+      - {id: call, kind: service, summary: "x", services: [{service: cap.services.a.get}]}
 `)
 
 	c := &Checker{root: root}
@@ -964,7 +964,8 @@ func TestQueryErrorPropagation(t *testing.T) {
 
 	t.Run("query step inherits query errors", func(t *testing.T) {
 		doc := base(map[string]any{
-			"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.q",
+			"id": "run", "kind": "query", "summary": "x",
+			"queries": []any{map[string]any{"query": "data.queries.x.q"}},
 		})
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("valid query error reported: %v", errs)
@@ -973,8 +974,9 @@ func TestQueryErrorPropagation(t *testing.T) {
 
 	t.Run("query step may add local errors", func(t *testing.T) {
 		doc := base(map[string]any{
-			"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.q",
-			"errors": []any{"platform.errors.B"},
+			"id": "run", "kind": "query", "summary": "x",
+			"queries": []any{map[string]any{"query": "data.queries.x.q"}},
+			"errors":  []any{"platform.errors.B"},
 		})
 		want(t, check(t, doc), "does not declare query error platform.errors.A")
 	})

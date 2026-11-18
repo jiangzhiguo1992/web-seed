@@ -11,6 +11,6 @@ jobs:
     name: purge_expired
     summary: "清理已过期令牌"
     service: cap.services.token.purge_expired
-    trigger: {type: cron, schedule: "0 3 * * *"}
-    retry: {max_attempts: 3, backoff: exponential, dead_letter: true}
-    concurrency: {key: token_purge, ttl: 1h}
+    trigger: { type: cron, schedule: "0 3 * * *" }
+    retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
+    concurrency: { key: token_purge, ttl: 1h }

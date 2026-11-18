@@ -80,58 +80,64 @@ fields:
           - { name: type, type: string, required: true, description: "返回类型" }
           - { name: nullable, type: boolean, required: false, description: "是否可空" }
 
-      - name: max_iterations
-        type: integer
-        required: false
-        min: 1
-        description: "service 级循环预算"
-
       - name: steps
         type: list<object>
         required: true
         min_items: 1
-        description: "实现路径；kind 决定必填与专属字段"
+        description: "步骤清单：声明本步读取的入参、调用的 query/service、产出、错误与联动；分支与顺序由实现决定"
         item_fields:
           - { name: id, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID，service 内唯一" }
           - { name: kind, type: string, required: true, enum: [ query, service, logic, transition ], description: "步骤类型" }
           - { name: summary, type: string, required: true, description: "一句话说明" }
-          - { name: depends_on, type: list<string>, required: false, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "依赖的前序步骤 ID" }
-          - { name: when, type: string, required: false, description: "受限布尔表达式：true/false、!、&&、||、括号、input.<path> / step.<id>.<path> 与字面量比较；枚举字段用整数 code 比较；default 表示兜底分支" }
-
-          - name: on_error
-            type: list<object>
-            required: false
-            description: "错误处理；未列出的错误默认 abort"
-            item_fields:
-              - { name: error, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "错误码" }
-              - { name: action, type: string, required: true, enum: [ abort, continue, goto ], description: "abort=向上传播；continue=吞掉继续；goto=吞掉并跳转" }
-              - { name: target, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "action=goto 时的目标 step ID" }
-
-          - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误；query/service 缺省取目标错误集，logic/transition 必须覆盖其 queries 的错误" }
-
-          - { name: query, type: string, required: false, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=query 时的目标查询" }
-          - { name: service, type: string, required: false, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=service 时的目标服务项" }
+          - { name: depends_on, type: list<string>, required: false, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "可选的顺序提示；input 引用只要求目标步骤在前序，不要求写入本字段" }
+          - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误；query 缺省取所有 queries 的错误并集，logic/transition 必须覆盖其 queries 的错误" }
 
           - name: input
-            type: map<string>
+            type: list<object>
             required: false
-            description: "本步输入映射：query/service 的 key 是目标参数名；logic/transition 的 key 是局部名。值必须是 input.<path>、step.<id>.<path>、字面量或 expr: 表达式；引用 step 时该 step 必须在 depends_on 中"
+            description: "本步读取的入参：name 是局部名（query/service 时为目标参数名），value 是来源表达式，description 说明用途；分支条件写在 description"
+            item_fields:
+              - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输入名；同一步内唯一" }
+              - { name: value, type: string, required: true, description: "来源：params.<path>、step.<id>.<path> 或 expr: 表达式" }
+              - { name: description, type: string, required: true, description: "这项输入的业务含义；分支条件也在这里说明" }
           - name: output
             type: list<object>
             required: false
-            description: "logic/transition 的输出；每一项必须被后续 step 的 input 引用，或与 service returns 的业务字段同名"
+            description: "显式产出；kind=query 有多个 query 时用于声明跨 query 的字段"
             item_fields:
               - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
               - { name: type, type: string, required: true, description: "输出类型" }
               - { name: nullable, type: boolean, required: false, description: "是否可空；必须与 returns 的同名项一致" }
 
+          - name: services
+            type: list<object>
+            required: false
+            description: "kind=service 时调用的目标服务；可以多个"
+            item_fields:
+              - { name: service, type: string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标服务项" }
+              - name: input
+                type: list<object>
+                required: false
+                description: "调用入参：name 是目标参数名，value 是来源表达式，description 说明用途"
+                item_fields:
+                  - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标参数名" }
+                  - { name: value, type: string, required: true, description: "来源：params.<path>、step.<id>.<path> 或 expr: 表达式" }
+                  - { name: description, type: string, required: true, description: "这项入参的业务含义" }
+
           - name: queries
             type: list<object>
             required: false
-            description: "kind=logic/transition 时调用的查询；用于 query.used_by 反向索引与错误覆盖"
+            description: "本步调用的查询；kind=query 时必填，其他 kind 可选；用于 query.used_by 反向索引与错误覆盖"
             item_fields:
               - { name: query, type: string, required: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标查询" }
-              - { name: input, type: map<string>, required: false, description: "该查询的参数映射；key 必须是查询参数名，必填参数必须全部出现" }
+              - name: input
+                type: list<object>
+                required: false
+                description: "该查询的参数映射：name 是查询参数名，value 是来源表达式，description 说明用途"
+                item_fields:
+                  - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "查询参数名" }
+                  - { name: value, type: string, required: true, description: "来源：params.<path>、step.<id>.<path> 或 expr: 表达式" }
+                  - { name: description, type: string, required: true, description: "这项参数的业务含义" }
 
           - { name: events, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=logic/transition 时发射的事件" }
           - { name: rules, type: list<string>, required: false, unique: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=logic/transition 时的业务规则依据" }
@@ -139,17 +145,14 @@ fields:
 
 rules:
   - { id: service-id, text: "契约 ID 必须与 targets 派生一致，且全局唯一；service 项 ID 全局唯一", implemented_by: [ service-id ] }
-  - { id: service-structure, text: "schemas 名全局唯一；schema 节点按 _meta/_schemas.yaml 校验，标量类型必须来自 _types；params[0] 必须是 ctx context.Context，params/returns name 唯一；returns 最后一项必须是 {name: err, type: error}，且只能出现一次；step.id 在 service 内唯一；depends_on 只能引用前序步骤；output 只允许 logic/transition 且 name 唯一；logic 必须声明 output 与 errors", implemented_by: [ service-structure ] }
-  - { id: service-ref, text: "query/service/queries/transition/rules/events 引用必须存在；params/returns/schemas/input 中的 data.enums.* / data.entities.* / 本地类型必须存在，data.tables.* 禁止", implemented_by: [ service-ref ] }
-  - { id: service-owner-write, text: "kind=query 的写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service", implemented_by: [ service-owner-write ] }
-  - { id: service-errors, text: "step.errors 必须是存在的 platform.errors.*；kind=query 未声明时取 query.errors，声明时必须覆盖 query.errors；kind=service 未声明时取目标 service 所有步骤显式声明或 query 缺省的错误并集，声明时必须是其子集；logic/transition 必须覆盖其 queries 与 rules[].on_violation 的错误；service 项不再声明 errors", implemented_by: [ service-errors ] }
-  - { id: service-control, text: "on_error 按 error 唯一；target 仅 goto 可用且必须存在；存在后向/自环 goto 时 service.max_iterations 必填", implemented_by: [ service-control ] }
-  - { id: service-when, text: "step 引用必须是前序步骤，字段必须存在于目标 returns、logic output 或 query 返回；input 引用必须是 service params，且嵌套字段按 param 类型解析；$ref / oneOf / anyOf / allOf / 列表索引按 schema 解析", implemented_by: [ service-when ] }
-  - { id: service-when-exhaustive, text: "同一 service 内同一 when 路径的 == 分支必须覆盖枚举全 code 或 boolean true/false；when: default 可代替覆盖，但要求 service 内恰好一个 == 组且最多一个 default；少于两个分支的组不检查", implemented_by: [ service-when-exhaustive ] }
+  - { id: service-structure, text: "schemas 名全局唯一；schema 节点按 _meta/_schemas.yaml 校验，标量类型必须来自 _types；params[0] 必须是 ctx context.Context，params/returns name 唯一；returns 最后一项必须是 {name: err, type: error}，且只能出现一次；step.id 在 service 内唯一；depends_on 只能引用前序步骤；input 项 name 唯一；output 的 name 在 step 内唯一；logic 必须声明 output 与 errors", implemented_by: [ service-structure ] }
+  - { id: service-ref, text: "queries[].query / services[].service / transitions / rules / events 引用必须存在；params/returns/schemas/input 中的 data.enums.* / data.entities.* / 本地类型必须存在，data.tables.* 禁止", implemented_by: [ service-ref ] }
+  - { id: service-owner-write, text: "queries 的写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service", implemented_by: [ service-owner-write ] }
+  - { id: service-errors, text: "step.errors 必须是存在的 platform.errors.*；kind=query 未声明时取所有 queries 的错误并集，声明时必须覆盖并集；kind=service 未声明时取所有 services 的错误并集，声明时必须是其子集；logic/transition 必须覆盖其 queries 与 rules[].on_violation 的错误；service 项不再声明 errors", implemented_by: [ service-errors ] }
   - { id: service-visibility, text: "cap.protocols.http.x-service 只能指向 visibility=public 且无 async job 的 service；跨模块 kind=service 只能指向 visibility=public 的目标；internal 目标只能被同模块引用", implemented_by: [ service-visibility ] }
-  - { id: service-steps-kind, text: "kind=query 必须有 query；kind=service 必须有 service；kind=logic 必须有 output+errors；kind=transition 必须有 transitions；queries 的每一项只允许 query/input；每个 kind 只允许公共字段与自身专属字段", implemented_by: [ service-steps-kind ] }
+  - { id: service-steps-kind, text: "kind=query 必须有 queries；kind=service 必须有 services；kind=logic 必须有 output+errors；kind=transition 必须有 transitions；queries 与 services 的每一项只允许自身字段；每个 kind 只允许公共字段与自身专属字段", implemented_by: [ service-steps-kind ] }
   - { id: service-cycle, text: "kind=service 调用图必须无环", implemented_by: [ service-cycle ] }
-  - { id: service-params, text: "input 的值必须是 input.<path>、step.<id>.<path>、字面量或 expr: 表达式；input 字段必须存在且嵌套字段按 param 类型解析；step 字段必须存在于前序步骤输出，且该前序步骤必须在 depends_on 中；query/service 的 input key 必须是目标参数名且不得多余，必填参数（ctx 除外）必须全部出现；logic/transition 的 queries[].input 按目标 query 参数同样校验", implemented_by: [ service-params ] }
-  - { id: service-output, text: "service returns 的每个业务字段必须由某个 step 的输出提供（logic/transition 显式 output 或 query/service 目标返回，同名、类型一致且 nullable 一致；指针与 List<> 归一化后比较，*T 视为可空）；error 不计入", implemented_by: [ service-output ] }
-  - { id: service-chain, text: "logic/transition 的每个显式 output 必须被后续 step 的 input（含 queries[].input）引用，或与 returns 业务字段同名；service 的每个非 ctx 参数必须被至少一个 step 的 input 值或 when 引用", implemented_by: [ service-chain ] }
+  - { id: service-params, text: "input.value 必须是 params.<path>、step.<id>.<path> 或 expr: 表达式；params 字段必须存在且嵌套字段按 param 类型解析；step 字段必须存在于前序步骤输出；queries[].input 与 services[].input 的 name 必须是目标参数名且不得多余，必填参数（ctx 除外）必须全部出现", implemented_by: [ service-params ] }
+  - { id: service-output, text: "service returns 的每个业务字段必须由某个 step 的输出提供（output 显式声明或 query/service 目标返回，同名、类型一致且 nullable 一致；指针与 List<> 归一化后比较，*T 视为可空）；error 不计入", implemented_by: [ service-output ] }
+  - { id: service-chain, text: "logic/transition 的每个显式 output 必须被后续 step 的 input（含 queries[].input）引用，或与 returns 业务字段同名；service 的每个非 ctx 参数必须被至少一个 step 的 input 值引用", implemented_by: [ service-chain ] }
   - { id: service-transaction, text: "transaction=read_only 的 service 不得调用写表或返回 affected_rows 的 query；写操作必须声明 transaction=required 或 none", implemented_by: [ service-transaction ] }

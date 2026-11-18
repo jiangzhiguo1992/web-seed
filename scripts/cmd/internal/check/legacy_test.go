@@ -65,19 +65,19 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 	}
 	if method, _ := doc["method"].(string); method != "" {
 		steps = append(steps, map[string]any{
-			"id":      "call",
-			"kind":    "service",
-			"summary": "x",
-			"service": method,
+			"id":       "call",
+			"kind":     "service",
+			"summary":  "x",
+			"services": []any{map[string]any{"service": method}},
 		})
 	}
 	// 旧 flow 的 params 没有步骤级映射：把它们声明为前置 logic step 的输入，
 	// 以保留“参数被消费”的语义。
-	input := map[string]any{}
+	input := []any{}
 	for _, raw := range asList(doc["params"]) {
 		pm, _ := asMap(raw)
 		if name, _ := pm["name"].(string); name != "" && name != "ctx" {
-			input[name] = "input." + name
+			input = append(input, map[string]any{"name": name, "value": "params." + name, "description": "旧 flow 参数"})
 		}
 	}
 	if len(input) > 0 {
@@ -85,33 +85,6 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 			"id": "p", "kind": "logic", "summary": "x",
 			"input": input, "output": []any{}, "errors": []any{},
 		}}, steps...)
-	}
-	// 旧 flow 的 when 可以引用步骤而未声明 depends_on；新契约要求数据/控制引用
-	// 都进入 depends_on，这里把 when 引用补进依赖以保留旧用例语义。
-	for _, raw := range steps {
-		step, _ := asMap(raw)
-		when, _ := step["when"].(string)
-		if when == "" {
-			continue
-		}
-		node, err := parseWhen(when)
-		if err != nil {
-			continue
-		}
-		deps := map[string]bool{}
-		for _, rawDep := range asList(step["depends_on"]) {
-			if dep, _ := rawDep.(string); dep != "" {
-				deps[dep] = true
-			}
-		}
-		for _, ref := range whenStepRefs(node) {
-			deps[ref] = true
-		}
-		list := []any{}
-		for dep := range deps {
-			list = append(list, dep)
-		}
-		step["depends_on"] = list
 	}
 	doc2 := map[string]any{
 		"summary":        doc["summary"],

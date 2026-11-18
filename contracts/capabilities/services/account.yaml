@@ -41,11 +41,11 @@ services:
     visibility: public
     transaction: read_only
     params:
-      - {name: ctx, type: context.Context}
-      - {name: id, type: integer}
+      - { name: ctx, type: context.Context }
+      - { name: id, type: integer }
     returns:
-      - {name: account, type: data.entities.account}
-      - {name: err, type: error}
+      - { name: account, type: data.entities.account }
+      - { name: err, type: error }
     steps:
       - id: load
         kind: logic
@@ -54,10 +54,11 @@ services:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - {name: account, type: data.entities.account}
+          - { name: account, type: data.entities.account }
         queries:
           - query: data.queries.account.get_account
-            input: {id: "input.id"}
+            input:
+              - {name: id, value: params.id, description: "记录 ID"}
         rules:
           - "feature.rules.account.self_only"
 
@@ -66,11 +67,11 @@ services:
     visibility: public
     transaction: read_only
     params:
-      - {name: ctx, type: context.Context}
-      - {name: filter, type: ListAccountsFilter}
+      - { name: ctx, type: context.Context }
+      - { name: filter, type: ListAccountsFilter }
     returns:
-      - {name: page, type: AccountPage}
-      - {name: err, type: error}
+      - { name: page, type: AccountPage }
+      - { name: err, type: error }
     steps:
       - id: query
         kind: logic
@@ -78,25 +79,25 @@ services:
         errors:
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - {name: page, type: AccountPage}
+          - { name: page, type: AccountPage }
         queries:
           - query: data.queries.account.list_accounts
             input:
-              status: "input.filter.status"
-              own_type: "input.filter.own_type"
-              offset: "input.filter.offset"
-              limit: "input.filter.limit"
+              - {name: status, value: params.filter.status, description: "目标状态码"}
+              - {name: own_type, value: params.filter.own_type, description: "归属主体类型"}
+              - {name: offset, value: params.filter.offset, description: "分页偏移"}
+              - {name: limit, value: params.filter.limit, description: "批量上限"}
 
   - name: create
     summary: "创建账号"
     visibility: public
     transaction: required
     params:
-      - {name: ctx, type: context.Context}
-      - {name: input, type: CreateAccountInput}
+      - { name: ctx, type: context.Context }
+      - { name: input, type: CreateAccountInput }
     returns:
-      - {name: account, type: data.entities.account}
-      - {name: err, type: error}
+      - { name: account, type: data.entities.account }
+      - { name: err, type: error }
     steps:
       - id: create
         kind: logic
@@ -108,18 +109,19 @@ services:
           - platform.errors.ACCOUNT_NICKNAME_INVALID
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - {name: account, type: data.entities.account}
+          - { name: account, type: data.entities.account }
         queries:
           - query: data.queries.account.exists_account_number
-            input: {number: "input.input.number"}
+            input:
+              - {name: number, value: params.input.number, description: "手机号"}
           - query: data.queries.account.create_account
             input:
-              id: "expr: new_id()"
-              own_type: "input.input.own_type"
-              own_id: "input.input.own_id"
-              number: "input.input.number"
-              nickname: "input.input.nickname"
-              user_id: "input.input.user_id"
+              - {name: id, value: "expr: new_id()", description: "记录 ID"}
+              - {name: own_type, value: params.input.own_type, description: "归属主体类型"}
+              - {name: own_id, value: params.input.own_id, description: "归属主体 ID"}
+              - {name: number, value: params.input.number, description: "手机号"}
+              - {name: nickname, value: params.input.nickname, description: "昵称"}
+              - {name: user_id, value: params.input.user_id, description: "用户 ID"}
         events:
           - cap.events.account.created
         rules:
@@ -133,12 +135,12 @@ services:
     visibility: public
     transaction: required
     params:
-      - {name: ctx, type: context.Context}
-      - {name: id, type: integer}
-      - {name: input, type: UpdateAccountInput}
+      - { name: ctx, type: context.Context }
+      - { name: id, type: integer }
+      - { name: input, type: UpdateAccountInput }
     returns:
-      - {name: account, type: data.entities.account}
-      - {name: err, type: error}
+      - { name: account, type: data.entities.account }
+      - { name: err, type: error }
     steps:
       - id: update
         kind: logic
@@ -149,12 +151,15 @@ services:
           - platform.errors.ACCOUNT_NICKNAME_INVALID
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - {name: account, type: data.entities.account}
+          - { name: account, type: data.entities.account }
         queries:
           - query: data.queries.account.get_account
-            input: {id: "input.id"}
+            input:
+              - {name: id, value: params.id, description: "记录 ID"}
           - query: data.queries.account.update_account
-            input: {id: "input.id", nickname: "input.input.nickname"}
+            input:
+              - {name: id, value: params.id, description: "记录 ID"}
+              - {name: nickname, value: params.input.nickname, description: "昵称"}
         rules:
           - "feature.rules.account.nickname_length"
           - "feature.rules.account.self_only"
@@ -165,10 +170,10 @@ services:
     visibility: public
     transaction: required
     params:
-      - {name: ctx, type: context.Context}
-      - {name: id, type: integer}
+      - { name: ctx, type: context.Context }
+      - { name: id, type: integer }
     returns:
-      - {name: err, type: error}
+      - { name: err, type: error }
     steps:
       - id: load
         kind: query
@@ -176,47 +181,52 @@ services:
         errors:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.COMMON_FORBIDDEN
-        query: data.queries.account.get_account
-        input: {id: "input.id"}
+        queries:
+          - query: data.queries.account.get_account
+            input:
+              - {name: id, value: params.id, description: "记录 ID"}
       - id: revoke_auth
         kind: service
         summary: "软删认证绑定并吊销令牌、作废验证体"
-        depends_on: [load]
+        depends_on: [ load ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        service: cap.services.auth.revoke_all_for_account
-        input: {account_id: "input.id"}
+        services:
+          - service: cap.services.auth.revoke_all_for_account
+            input:
+              - { name: account_id, value: params.id, description: "被注销账号的 ID" }
       - id: soft_delete
         kind: transition
         summary: "软删账号并保证 status/deleted_at 一致"
-        depends_on: [revoke_auth]
+        depends_on: [ revoke_auth ]
         errors:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
           - platform.errors.COMMON_INTERNAL
-        output: []
+        output: [ ]
         queries:
           - query: data.queries.account.soft_delete_account
-            input: {id: "input.id"}
+            input:
+              - {name: id, value: params.id, description: "记录 ID"}
         events:
           - cap.events.account.deleted
         rules:
           - "feature.rules.account.deleted_cannot_modify"
           - "feature.rules.account.delete_revokes_auth"
           - "feature.rules.account.deleted_status_consistent"
-        transitions: [feature.states.account.delete]
+        transitions: [ feature.states.account.delete ]
 
   - name: activate
     summary: "激活或解封账号"
     visibility: public
     transaction: required
     params:
-      - {name: ctx, type: context.Context}
-      - {name: id, type: integer}
+      - { name: ctx, type: context.Context }
+      - { name: id, type: integer }
     returns:
-      - {name: account, type: data.entities.account}
-      - {name: err, type: error}
+      - { name: account, type: data.entities.account }
+      - { name: err, type: error }
     steps:
       - id: transition
         kind: transition
@@ -226,25 +236,28 @@ services:
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
         output:
-          - {name: account, type: data.entities.account}
+          - { name: account, type: data.entities.account }
         queries:
           - query: data.queries.account.get_account
-            input: {id: "input.id"}
+            input:
+              - {name: id, value: params.id, description: "记录 ID"}
           - query: data.queries.account.set_account_status
-            input: {id: "input.id", status: "expr: transition_target()"}
-        transitions: [feature.states.account.activate, feature.states.account.reactivate]
+            input:
+              - {name: id, value: params.id, description: "记录 ID"}
+              - {name: status, value: "expr: transition_target()", description: "目标状态码"}
+        transitions: [ feature.states.account.activate, feature.states.account.reactivate ]
 
   - name: suspend
     summary: "封禁账号"
     visibility: public
     transaction: required
     params:
-      - {name: ctx, type: context.Context}
-      - {name: id, type: integer}
-      - {name: reason, type: string}
+      - { name: ctx, type: context.Context }
+      - { name: id, type: integer }
+      - { name: reason, type: string }
     returns:
-      - {name: account, type: data.entities.account}
-      - {name: err, type: error}
+      - { name: account, type: data.entities.account }
+      - { name: err, type: error }
     steps:
       - id: transition
         kind: transition
@@ -253,12 +266,16 @@ services:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-        input: {reason: "input.reason"}
+        input:
+          - { name: reason, value: params.reason, description: "封禁原因，供审计或事件使用" }
         output:
-          - {name: account, type: data.entities.account}
+          - { name: account, type: data.entities.account }
         queries:
           - query: data.queries.account.get_account
-            input: {id: "input.id"}
+            input:
+              - {name: id, value: params.id, description: "记录 ID"}
           - query: data.queries.account.set_account_status
-            input: {id: "input.id", status: "expr: transition_target()"}
-        transitions: [feature.states.account.suspend]
+            input:
+              - {name: id, value: params.id, description: "记录 ID"}
+              - {name: status, value: "expr: transition_target()", description: "目标状态码"}
+        transitions: [ feature.states.account.suspend ]

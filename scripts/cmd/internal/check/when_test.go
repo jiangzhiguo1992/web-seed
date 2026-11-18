@@ -59,17 +59,6 @@ func TestEvalWhen(t *testing.T) {
 	}
 }
 
-func TestWhenStepRefs(t *testing.T) {
-	n, err := parseWhen(`step.load.status == "pending" && (step.verify.ok == true || input.x == 1)`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	refs := whenStepRefs(n)
-	if len(refs) != 2 || refs[0] != "load" || refs[1] != "verify" {
-		t.Fatalf("refs = %v", refs)
-	}
-}
-
 func TestWhenDiscriminatorValues(t *testing.T) {
 	n, err := parseWhen(`step.payment.method == "card" && step.payment.card_number != null`)
 	if err != nil {

@@ -122,11 +122,10 @@ make gen
 make gen-openapi   # capabilities/http/* + apps/* → generated/openapi/<app>.yaml
 make gen-db        # data/tables/* → schema.sql + migrations
 make gen-graph     # 结构化依赖 → used_by；graph/lineage 按需生成
-make gen-capabilities # cap.services steps → apps/api/internal/contracttest/generated 测试骨架
 make gen-client    # 合并 spec → apps/web/packages/api-client/src/generated
 ```
 
-> 生成物入库。**禁止手改** `contracts/generated/`、`apps/api/internal/generated/`、`apps/api/internal/contracttest/generated/`、`apps/api/migrations/`。
+> 生成物入库。**禁止手改** `contracts/generated/`、`apps/api/internal/generated/`、`apps/api/migrations/`。
 
 ---
 
@@ -198,7 +197,7 @@ PR 描述模板已包含上述清单。
 ## 9. 完成定义（DoD）
 
 - [ ] `make gen` 幂等（连续两次无 diff）
-- [ ] `make gen-check` 通过（含 `gen-capabilities-check`）
+- [ ] `make gen-check` 通过
 - [ ] `make contract-check` 通过
 - [ ] `make contract-graph` 通过
 - [ ] 编译通过（Go + TS）

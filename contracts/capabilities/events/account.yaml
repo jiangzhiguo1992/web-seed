@@ -22,7 +22,7 @@ events:
         - { name: created_at, schema: { type: timestamp }, required: true, description: "创建时间" }
     summary: "账号创建"
     emitted_by: [ cap.services.account.create ]
-    consumers: []
+    consumers: [ ]
   - id: cap.events.account.activated
     name: account.activated
     version: 1
@@ -33,7 +33,7 @@ events:
         - { name: activated_at, schema: { type: timestamp }, required: true, description: "账号激活时间" }
     summary: "账号激活或解封"
     emitted_by: [ cap.services.account.activate ]
-    consumers: []
+    consumers: [ ]
   - id: cap.events.account.suspended
     name: account.suspended
     version: 1
@@ -45,7 +45,7 @@ events:
         - { name: suspended_at, schema: { type: timestamp }, required: true, description: "账号停用时间" }
     summary: "账号封禁"
     emitted_by: [ cap.services.account.suspend ]
-    consumers: []
+    consumers: [ ]
   - id: cap.events.account.reactivated
     name: account.reactivated
     version: 1
@@ -56,7 +56,7 @@ events:
         - { name: reactivated_at, schema: { type: timestamp }, required: true, description: "账号重新激活时间" }
     summary: "账号解封"
     emitted_by: [ cap.services.account.activate ]
-    consumers: []
+    consumers: [ ]
   - id: cap.events.account.deleted
     name: account.deleted
     version: 1
@@ -67,7 +67,7 @@ events:
         - { name: deleted_at, schema: { type: timestamp }, required: true, description: "软删时间" }
     summary: "账号软删"
     emitted_by: [ cap.services.account.delete ]
-    consumers: []
+    consumers: [ ]
   - id: cap.events.account.login_succeeded
     name: account.login_succeeded
     version: 1
@@ -80,7 +80,7 @@ events:
         - { name: login_at, schema: { type: timestamp }, required: true, description: "登录时间" }
     summary: "登录成功"
     emitted_by: [ cap.services.auth.login ]
-    consumers: []
+    consumers: [ ]
   - id: cap.events.account.login_failed
     name: account.login_failed
     version: 1
@@ -92,4 +92,4 @@ events:
         - { name: failed_at, schema: { type: timestamp }, required: true, description: "登录失败时间" }
     summary: "登录失败"
     emitted_by: [ cap.services.auth.login ]
-    consumers: []
+    consumers: [ ]
