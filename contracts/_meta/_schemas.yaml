@@ -50,6 +50,7 @@ kinds:
             description: "属性说明"
       - name: validation
         type: list<object>
+        required: false
         description: "对象级校验规则；每条 rule 是受限布尔表达式，引用 input.<属性名>"
         item_fields:
           - name: rule
@@ -80,6 +81,19 @@ kinds:
         type: integer
         min: 0
         description: "数组最大长度"
+      - name: validation
+        type: list<object>
+        required: false
+        description: "数组级校验规则；每条 rule 是受限布尔表达式，引用 value"
+        item_fields:
+          - name: rule
+            type: string
+            required: true
+            description: "受限布尔表达式；数组节点引用 value"
+          - name: message
+            type: string
+            required: true
+            description: "违反规则时的错误文案"
 
   scalar:
     description: "标量节点；type 指向 _types 的 family 或自定义类型"
@@ -88,6 +102,19 @@ kinds:
         type: string
         required: true
         description: "标量类型"
+      - name: validation
+        type: list<object>
+        required: false
+        description: "标量级校验规则；每条 rule 是受限布尔表达式，引用 value"
+        item_fields:
+          - name: rule
+            type: string
+            required: true
+            description: "受限布尔表达式；标量节点引用 value"
+          - name: message
+            type: string
+            required: true
+            description: "违反规则时的错误文案"
 
   ref:
     description: "引用节点；ref 指向 entity、enum 或本地 schema"
@@ -96,3 +123,16 @@ kinds:
         type: string
         required: true
         description: "引用 entity / enum / 本地 schema"
+      - name: validation
+        type: list<object>
+        required: false
+        description: "引用级校验规则；每条 rule 是受限布尔表达式，引用 value 或 value.<path>"
+        item_fields:
+          - name: rule
+            type: string
+            required: true
+            description: "受限布尔表达式；ref 节点引用 value 或 value.<path>"
+          - name: message
+            type: string
+            required: true
+            description: "违反规则时的错误文案"
