@@ -9,7 +9,7 @@ do_not:
 
 delivery: at_least_once
 
-events:
+topics:
   - id: cap.events.account.created
     name: account.created
     version: 1

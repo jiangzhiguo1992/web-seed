@@ -1,8 +1,8 @@
-// capabilities.go 校验 services / async / events / protocols 与 features(rules/states) 契约：
+// capabilities.go 校验 services / events / protocols 与 features(rules/states) 契约：
 //   - services：visibility/steps/errors/参数映射/写归属
-//   - async：trigger/retry/concurrency 与 handler service
+//   - events：topics（payload/发布/订阅）与 jobs 的 trigger/retry/concurrency
 //   - events：payload/版本/生产与消费锚点
-//   - protocols：x-service/x-async 绑定、默认错误响应与组件引用
+//   - protocols：x-service 绑定、默认错误响应与组件引用
 //   - features：规则结构与服务锚点、状态机穷举与转换
 package check
 
@@ -15,10 +15,6 @@ import (
 
 	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
 )
-
-type asyncMeta struct {
-	triggerType string
-}
 
 type returnType struct {
 	typ      string
@@ -40,12 +36,12 @@ type serviceMeta struct {
 
 // stepKindFields 是每种 step kind 的专属字段；公共字段由 checkServiceItem 统一放行。
 var allowedOperationExtensions = map[string]bool{
-	"x-contract-id": true, "x-service": true, "x-async": true,
+	"x-contract-id": true, "x-service": true,
 	"x-timeout-ms": true, "x-default-errors": true,
 }
 
 var stepKindFields = map[string][]string{
-	"query":      {"queries", "input", "output"},
+	"query":      {"queries", "output"},
 	"service":    {"services"},
 	"logic":      {"input", "output", "queries", "events", "rules"},
 	"transition": {"input", "transitions", "output", "queries", "events", "rules"},
@@ -79,12 +75,7 @@ func (c *Checker) checkCapabilities() {
 		c.rulef("schema.load", "load cap.protocols.http schema: %v", err)
 		return
 	}
-	asyncSchema, err := c.loadSchemaByType("cap.async")
-	if err != nil {
-		c.rulef("schema.load", "load cap.async schema: %v", err)
-		return
-	}
-	for _, s := range []*Schema{serviceSchema, ruleSchema, stateSchema, eventSchema, httpSchema, asyncSchema} {
+	for _, s := range []*Schema{serviceSchema, ruleSchema, stateSchema, eventSchema, httpSchema} {
 		c.checkRules(s)
 		c.checkTargets(s)
 	}
@@ -318,7 +309,7 @@ func (c *Checker) checkCapabilities() {
 		if err != nil {
 			continue
 		}
-		for _, raw := range asList(doc["events"]) {
+		for _, raw := range asList(doc["topics"]) {
 			item, _ := asMap(raw)
 			id, _ := item["id"].(string)
 			if id == "" {
@@ -381,15 +372,8 @@ func (c *Checker) checkCapabilities() {
 		}
 		c.checkStateDoc(doc, relPath(c.root, file), stateSchema, serviceItemIDs, eventIDs, ruleIDs)
 	}
-	for _, file := range glob(c.root, filepath.Join(eventSchema.Targets.Dir, eventSchema.Targets.Glob)) {
-		doc, err := loadYAML(file)
-		if err != nil {
-			continue
-		}
-		c.checkEventDoc(doc, relPath(c.root, file), eventSchema, serviceItemIDs)
-	}
-	asyncServices, asyncJobs := c.checkAsyncDoc(asyncSchema, serviceMetaByID, eventIDs)
-	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, asyncServices, asyncJobs)
+	jobServices := c.checkEventsDoc(eventSchema, serviceMetaByID, serviceItemIDs)
+	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, jobServices)
 }
 
 func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema, typeNames map[string]bool) {
@@ -1103,81 +1087,117 @@ func (c *Checker) checkStateDoc(doc map[string]any, rel string, schema *Schema, 
 	}
 }
 
-func (c *Checker) checkEventDoc(doc map[string]any, rel string, schema *Schema, serviceIDs map[string]bool) {
-	c.nodeKinds = schema.NodeKinds
-	c.propertyKeys = schema.PropertyKeys
-	c.valueTypes = schema.ValueTypes
-	c.validateDoc(doc, schema.Fields, rel)
-	c.checkFieldOrder(rel, schema.Fields, orderRules{})
-	c.checkTargetFileName(schema, filepath.Base(rel), rel)
-	fileID, _ := doc["id"].(string)
-	want := schema.Targets.FileID(filepath.Base(rel))
-	if fileID != want {
-		c.rulef("event-structure", "%s: id %q must be %q", rel, fileID, want)
-	}
-	names := map[string]bool{}
-	subject := strings.TrimSuffix(filepath.Base(rel), ".yaml")
-	for _, raw := range asList(doc["events"]) {
-		item, _ := asMap(raw)
-		id, _ := item["id"].(string)
-		name, _ := item["name"].(string)
-		if names[name] {
-			c.rulef("event-structure", "%s: duplicate event name %s", rel, name)
+// checkEventsDoc 校验合并后的异步事件层：
+//   - topics：发布/订阅主题（payload、emitted_by、consumers）
+//   - jobs：异步任务（service、trigger cron/topic、retry、concurrency）
+//
+// 返回被 job 引用的 service 集合，供 HTTP 绑定互斥校验。
+func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceMeta, serviceIDs map[string]bool) map[string]bool {
+	files := glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
+	topicIDs := map[string]bool{}
+	jobIDs := map[string]bool{}
+	for _, file := range files {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
 		}
-		names[name] = true
-		if name != "" && !strings.HasPrefix(name, subject+".") {
-			c.rulef("event-structure", "%s: event name %s must start with %s.", rel, name, subject)
-		}
-		if id != "" && name != "" && id != "cap.events."+name {
-			c.rulef("event-structure", "%s: event id %s must be cap.events.%s", rel, id, name)
-		}
-		for _, rawSvc := range asList(item["emitted_by"]) {
-			svc, _ := rawSvc.(string)
-			if !serviceIDs[svc] {
-				c.rulef("event-structure", "%s: event %s unknown service %s", rel, id, svc)
+		for _, raw := range asList(doc["topics"]) {
+			item, _ := asMap(raw)
+			if id, _ := item["id"].(string); id != "" {
+				topicIDs[id] = true
 			}
 		}
+		for _, raw := range asList(doc["jobs"]) {
+			item, _ := asMap(raw)
+			id, _ := item["id"].(string)
+			if id == "" {
+				continue
+			}
+			if jobIDs[id] {
+				c.rulef("async-structure", "%s: duplicate job id %s", relPath(c.root, file), id)
+			}
+			jobIDs[id] = true
+		}
 	}
-}
+	for id := range topicIDs {
+		if jobIDs[id] {
+			c.rulef("event-file-shape", "cap.events id %s is used by both a topic and a job", id)
+		}
+	}
 
-func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMeta, eventIDs map[string]bool) (map[string]bool, map[string]asyncMeta) {
-	asyncServices := map[string]bool{}
-	asyncJobs := map[string]asyncMeta{}
-	bound := map[string]bool{}
-	for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
+	jobServices := map[string]bool{}
+	for _, file := range files {
 		doc, err := loadYAML(file)
 		if err != nil {
 			c.rulef("schema.load", "%s: %v", relPath(c.root, file), err)
 			continue
 		}
 		rel := relPath(c.root, file)
+		c.nodeKinds = schema.NodeKinds
+		c.propertyKeys = schema.PropertyKeys
+		c.valueTypes = schema.ValueTypes
 		c.validateDoc(doc, schema.Fields, rel)
 		c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		c.checkTargetFileName(schema, filepath.Base(rel), rel)
 		fileID, _ := doc["id"].(string)
 		if want := schema.Targets.FileID(filepath.Base(rel)); fileID != want {
-			c.rulef("async-structure", "%s: id %q must be %q", rel, fileID, want)
+			c.rulef("event-structure", "%s: id %q must be %q", rel, fileID, want)
 		}
 		module, _ := doc["owner_module"].(string)
-		names := map[string]bool{}
-		for _, raw := range asList(doc["jobs"]) {
+		subject := strings.TrimSuffix(filepath.Base(rel), ".yaml")
+		topics := asList(doc["topics"])
+		jobs := asList(doc["jobs"])
+		if len(topics) == 0 && len(jobs) == 0 {
+			c.rulef("event-file-shape", "%s: topics or jobs must not be empty", rel)
+		}
+		if len(topics) > 0 && doc["delivery"] == nil {
+			c.rulef("event-file-shape", "%s: delivery is required when topics are declared", rel)
+		}
+
+		topicNames := map[string]bool{}
+		for _, raw := range topics {
+			item, _ := asMap(raw)
+			id, _ := item["id"].(string)
+			name, _ := item["name"].(string)
+			if topicNames[name] {
+				c.rulef("event-structure", "%s: duplicate topic name %s", rel, name)
+			}
+			topicNames[name] = true
+			if name != "" && !strings.HasPrefix(name, subject+".") {
+				c.rulef("event-structure", "%s: topic name %s must start with %s.", rel, name, subject)
+			}
+			if id != "" && name != "" && id != "cap.events."+name {
+				c.rulef("event-structure", "%s: topic id %s must be cap.events.%s", rel, id, name)
+			}
+			for _, rawSvc := range asList(item["emitted_by"]) {
+				svc, _ := rawSvc.(string)
+				if !serviceIDs[svc] {
+					c.rulef("event-structure", "%s: topic %s unknown service %s", rel, id, svc)
+				}
+			}
+			for _, rawConsumer := range asList(item["consumers"]) {
+				consumer, _ := rawConsumer.(string)
+				if consumer != "" && !jobIDs[consumer] {
+					c.rulef("event-structure", "%s: topic %s unknown consumer %s", rel, id, consumer)
+				}
+			}
+		}
+
+		jobNames := map[string]bool{}
+		bound := map[string]bool{}
+		for _, raw := range jobs {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
 			if name == "" {
 				continue
 			}
-			if names[name] {
+			if jobNames[name] {
 				c.rulef("async-structure", "%s: duplicate job name %s", rel, name)
 			}
-			names[name] = true
+			jobNames[name] = true
 			id, _ := item["id"].(string)
 			if id != "" && fileID != "" && id != fileID+"."+name {
 				c.rulef("async-structure", "%s.%s: job id %q must be %s", rel, name, id, fileID+"."+name)
-			}
-			if id != "" {
-				if _, exists := asyncJobs[id]; exists {
-					c.rulef("async-structure", "%s.%s: duplicate job id %s", rel, name, id)
-				}
 			}
 			svc, _ := item["service"].(string)
 			if svc != "" {
@@ -1187,7 +1207,7 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 					if meta.module != module {
 						c.rulef("async-service", "%s.%s: service %s belongs to module %s, not %s", rel, name, svc, meta.module, module)
 					}
-					asyncServices[svc] = true
+					jobServices[svc] = true
 				}
 			}
 			trigger, _ := asMap(item["trigger"])
@@ -1199,22 +1219,18 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 					if v, _ := trigger["schedule"].(string); strings.TrimSpace(v) == "" {
 						c.rulef("async-trigger", "%s.%s: trigger.schedule required for cron", rel, name)
 					}
-					if trigger["event"] != nil {
-						c.rulef("async-trigger", "%s.%s: cron trigger must not declare event", rel, name)
+					if trigger["topic"] != nil {
+						c.rulef("async-trigger", "%s.%s: cron trigger must not declare topic", rel, name)
 					}
-				case "event":
-					ev, _ := trigger["event"].(string)
-					if ev == "" {
-						c.rulef("async-trigger", "%s.%s: trigger.event required for event", rel, name)
-					} else if !eventIDs[ev] {
-						c.rulef("async-trigger", "%s.%s: unknown event %s", rel, name, ev)
+				case "topic":
+					topic, _ := trigger["topic"].(string)
+					if topic == "" {
+						c.rulef("async-trigger", "%s.%s: trigger.topic required for topic", rel, name)
+					} else if !topicIDs[topic] {
+						c.rulef("async-trigger", "%s.%s: unknown topic %s", rel, name, topic)
 					}
 					if trigger["schedule"] != nil {
-						c.rulef("async-trigger", "%s.%s: event trigger must not declare schedule", rel, name)
-					}
-				case "webhook":
-					if trigger["schedule"] != nil || trigger["event"] != nil {
-						c.rulef("async-trigger", "%s.%s: webhook trigger must not declare schedule/event; bind path via cap.protocols.http x-async", rel, name)
+						c.rulef("async-trigger", "%s.%s: topic trigger must not declare schedule", rel, name)
 					}
 				}
 			}
@@ -1225,15 +1241,12 @@ func (c *Checker) checkAsyncDoc(schema *Schema, serviceMeta map[string]serviceMe
 				}
 				bound[key] = true
 			}
-			if id != "" {
-				asyncJobs[id] = asyncMeta{triggerType: triggerType}
-			}
 		}
 	}
-	return asyncServices, asyncJobs
+	return jobServices
 }
 
-func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]serviceMeta, typeNames map[string]bool, asyncServices map[string]bool, asyncJobs map[string]asyncMeta) {
+func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]serviceMeta, typeNames map[string]bool, jobServices map[string]bool) {
 	httpFiles := glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
 	httpSchemas := map[string]bool{}
 	httpHeaders := map[string]bool{}
@@ -1471,27 +1484,8 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					}
 				})
 				serviceRef, _ := op["x-service"].(string)
-				asyncRef, _ := op["x-async"].(string)
-				if asyncRef != "" && !match(`^cap\.async\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`, asyncRef) {
-					c.rulef("http-binding", "%s %s %s: x-async %q must match cap.async.<file>.<job>", rel, method, path, asyncRef)
-				}
-				if serviceRef == "" && asyncRef == "" {
-					c.rulef("http-binding", "%s %s %s: x-service or x-async required", rel, method, path)
-					continue
-				}
-				if serviceRef != "" && asyncRef != "" {
-					c.rulef("http-binding", "%s %s %s: x-service and x-async are mutually exclusive", rel, method, path)
-					continue
-				}
-				if asyncRef != "" {
-					job, ok := asyncJobs[asyncRef]
-					if !ok {
-						c.rulef("http-binding", "%s %s %s: unknown async job %s", rel, method, path, asyncRef)
-						continue
-					}
-					if job.triggerType != "webhook" {
-						c.rulef("http-binding", "%s %s %s: async job %s is not webhook-triggered", rel, method, path, asyncRef)
-					}
+				if serviceRef == "" {
+					c.rulef("http-binding", "%s %s %s: x-service required", rel, method, path)
 					continue
 				}
 				target, ok := serviceMeta[serviceRef]
@@ -1499,8 +1493,8 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					c.rulef("http-binding", "%s %s %s: unknown service %s", rel, method, path, serviceRef)
 					continue
 				}
-				if asyncServices[serviceRef] {
-					c.rulef("http-binding", "%s %s %s: async service %s cannot be bound to http", rel, method, path, serviceRef)
+				if jobServices[serviceRef] {
+					c.rulef("http-binding", "%s %s %s: service %s is used by a cap.events job and cannot be bound to http", rel, method, path, serviceRef)
 					continue
 				}
 				if target.visibility != "public" {
@@ -2668,6 +2662,10 @@ func (c *Checker) serviceTypesCompatible(src, dst string) bool {
 	}
 	if s.base == d.base {
 		return true
+	}
+	// 枚举值可以按 integer 持久化，但任意 integer 不能反喂枚举参数。
+	if strings.HasPrefix(d.base, "data.enums.") {
+		return false
 	}
 	sf, sok := c.serviceTypeFamily(s.base)
 	df, dok := c.serviceTypeFamily(d.base)

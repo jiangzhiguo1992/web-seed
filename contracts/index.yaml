@@ -16,8 +16,8 @@ groups:
     description: "tables 物理结构，entities 读模型，queries 装载桥，storage 表级约束。"
     layers: [tables, entities, queries, storage, policy]
   capabilities:
-    description: "services / async / events / protocols。"
-    layers: [http, async, services, events]
+    description: "services / events / protocols。"
+    layers: [http, services, events]
   features:
     description: "路由、页面、业务规则、状态机。"
     layers: [routes, pages, rules, states]
@@ -102,7 +102,7 @@ entries:
   - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证会话服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：签发、刷新、吊销与校验", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.async.token, path: capabilities/async/token.yaml, summary: "令牌异步任务：过期清理", consumers: [worker], enforcement: generated+tested, stability: draft }
+  - { id: cap.events.token, path: capabilities/events/token.yaml, summary: "令牌异步任务：过期清理", consumers: [worker], enforcement: generated+tested, stability: draft }
 
   # ---------- rules / states / events ----------
   - id: feature.states.account

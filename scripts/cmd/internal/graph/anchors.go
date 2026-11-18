@@ -1,7 +1,7 @@
 // anchors.go 从 service steps 反向生成 rules/states/events 的实现锚点。
 //
 // 生成物：feature.rules.rules[].implemented_by、feature.states.transitions[].implemented_by、
-// cap.events.events[].emitted_by / consumers。checker 负责结构，gen-graph 负责一致性。
+// cap.events.topics[].emitted_by / consumers。checker 负责结构，gen-graph 负责一致性。
 package graph
 
 import (
@@ -70,18 +70,22 @@ func contains(values []string, value string) bool {
 // computeAnchors 扫描 services 的 steps，并登记 rules/states/events 的文件归属。
 func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 	a := newAnchors()
-	if asyncTarget, err := resolveTarget(root, "cap.async"); err == nil {
-		for _, f := range glob(root, filepath.Join(asyncTarget.dir, asyncTarget.glob)) {
+	if eventTarget, err := resolveTarget(root, "cap.events"); err == nil {
+		for _, f := range glob(root, filepath.Join(eventTarget.dir, eventTarget.glob)) {
 			doc, err := loadYAML(f)
 			if err != nil {
 				return nil, err
 			}
-			module, _ := doc["owner_module"].(string)
+			fileID, _ := doc["id"].(string)
 			for _, raw := range asList(doc["jobs"]) {
 				job, _ := asMap(raw)
+				name, _ := job["name"].(string)
+				if name == "" {
+					continue
+				}
 				if trigger, ok := asMap(job["trigger"]); ok {
-					if ev, _ := trigger["event"].(string); ev != "" {
-						a.EventConsumers[ev] = append(a.EventConsumers[ev], module)
+					if topic, _ := trigger["topic"].(string); topic != "" {
+						a.EventConsumers[topic] = append(a.EventConsumers[topic], fileID+"."+name)
 					}
 				}
 			}
@@ -171,7 +175,7 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				return nil, err
 			}
 			relFile := rel(root, f)
-			for _, raw := range asList(doc["events"]) {
+			for _, raw := range asList(doc["topics"]) {
 				item, _ := asMap(raw)
 				id, _ := item["id"].(string)
 				if id != "" {
@@ -254,14 +258,14 @@ func (a *Anchors) Write(root string) ([]string, error) {
 	}
 	for _, file := range sortedStringKeys(a.EventFiles) {
 		for _, id := range a.EventFiles[file] {
-			ok, err := syncItemField(filepath.Join(root, file), "events", "id", id, "emitted_by", a.Events[id])
+			ok, err := syncItemField(filepath.Join(root, file), "topics", "id", id, "emitted_by", a.Events[id])
 			if err != nil {
 				return changed, err
 			}
 			if ok {
 				changed = append(changed, file)
 			}
-			ok, err = syncItemField(filepath.Join(root, file), "events", "id", id, "consumers", a.EventConsumers[id])
+			ok, err = syncItemField(filepath.Join(root, file), "topics", "id", id, "consumers", a.EventConsumers[id])
 			if err != nil {
 				return changed, err
 			}
@@ -314,7 +318,7 @@ func (a *Anchors) Check(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, raw := range asList(doc["events"]) {
+		for _, raw := range asList(doc["topics"]) {
 			item, _ := asMap(raw)
 			id, _ := item["id"].(string)
 			if id == "" {

@@ -33,12 +33,6 @@ targets:
   glob: "*.yaml"
   id: "cap.events.<file>"
 `)
-	writeFixture(t, root, "contracts/_meta/cap.async.yaml", `type: cap.async
-targets:
-  dir: contracts/capabilities/async
-  glob: "*.yaml"
-  id: "cap.async.<file>"
-`)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 owner_module: x
 services:
@@ -60,14 +54,6 @@ services:
       - id: handle
         kind: logic
 `)
-	writeFixture(t, root, "contracts/capabilities/async/x.yaml", `id: cap.async.x
-owner_module: x
-jobs:
-  - id: cap.async.x.consume_activated
-    name: consume_activated
-    service: cap.services.x.consume
-    trigger: {type: event, event: cap.events.x.activated}
-`)
 	writeFixture(t, root, "contracts/features/rules/x.yaml", `id: feature.rules.x
 rules:
   - id: feature.rules.x.r1
@@ -80,13 +66,18 @@ transitions:
     implemented_by: []
 `)
 	writeFixture(t, root, "contracts/capabilities/events/x.yaml", `id: cap.events.x
-events:
+topics:
   - id: cap.events.x.created
     emitted_by: []
     consumers: []
   - id: cap.events.x.activated
     emitted_by: []
-    consumers: [audit]
+    consumers: [cap.events.x.consume_activated]
+jobs:
+  - id: cap.events.x.consume_activated
+    name: consume_activated
+    service: cap.services.x.consume
+    trigger: {type: topic, topic: cap.events.x.activated}
 `)
 
 	target, err := resolveTarget(root, "cap.services")
@@ -135,7 +126,7 @@ events:
 	for _, want := range []string{
 		"emitted_by: [ cap.services.x.create ]",
 		"emitted_by: [ cap.services.x.activate ]",
-		"consumers: [ x ]",
+		"consumers: [ cap.events.x.consume_activated ]",
 	} {
 		if !strings.Contains(string(events), want) {
 			t.Fatalf("events missing %q:\n%s", want, events)

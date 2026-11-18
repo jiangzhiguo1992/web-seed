@@ -18,10 +18,9 @@ contracts/_meta/
 ├── data.entities.yaml    # data.entities 的字段树 + 值域 + 说明
 ├── data.queries.yaml     # data.queries 的字段树 + 值域 + 说明
 ├── cap.services.yaml       # cap.services 的 targets + 字段树（服务 + steps）
-├── cap.async.yaml          # cap.async 的 targets + 字段树（异步任务）
 ├── feature.rules.yaml      # feature.rules 的 targets + 字段树（业务规则）
 ├── feature.states.yaml     # feature.states 的 targets + 字段树（状态机）
-├── cap.events.yaml         # cap.events 的 targets + 字段树（领域事件）
+├── cap.events.yaml         # cap.events 的 targets + 字段树（topics + jobs）
 └── cap.protocols.http.yaml # cap.protocols.http 的 targets + 字段树（HTTP 绑定）
 
 scripts/contract/
@@ -50,11 +49,11 @@ scripts/cmd/
 
 ### 1.2 为什么有 `_schemas.yaml`
 
-`cap.services.schemas` 与 `cap.events.events[].payload` 使用同一套受限 schema DSL，分两层：
+`cap.services.schemas` 与 `cap.events.topics[].payload` 使用同一套受限 schema DSL，分两层：
 
 - **schema 节点只描述值域**：`object`（`type: object` + `properties`）、`array`（`type: array` + `items`）、`scalar`（`type` 指向
-  `_types` 的 family 或自定义类型）、`ref`（指向 entity / enum / 本地 schema）。`cap.async` 没有内联 schema，只引用
-  service/event；`cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份 DSL。
+  `_types` 的 family 或自定义类型）、`ref`（指向 entity / enum / 本地 schema）。`cap.events` 的 jobs 只引用 service/topic；
+  `cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份 DSL。
 - **property 条目只描述槽位**：`name` + `schema` + `required` / `nullable` / `read_only` / `write_only` / `default` /
   `description`，只允许出现在 `object.properties[]`。
 
@@ -106,8 +105,7 @@ false，省略不写。槽位键出现在节点位置即报 `schema.slot-positio
 | `make contract-new type=cap.services name=invoice module=invoice`                                       | 按 `_meta/cap.services.yaml` 生成服务文件骨架（一个 service + 一条 logic step；interface 名由 owner_module + file 派生） | 新建服务契约前              |
 | `make contract-new type=feature.rules name=invoice module=invoice`                                      | 生成 feature.rules 骨架（一个 policy）                                                                                   | 新建规则集前                |
 | `make contract-new type=feature.states name=invoice module=invoice`                                     | 生成 feature.states 骨架（pending/active + activate）                                                                    | 新建状态机前                |
-| `make contract-new type=cap.events name=invoice module=invoice`                                         | 生成 cap.events 骨架（一个 created 事件）                                                                                | 新建事件集前                |
-| `make contract-new type=cap.async name=invoice module=invoice`                                          | 生成 cap.async 骨架（一个 cron job）                                                                                     | 新建异步任务前              |
+| `make contract-new type=cap.events name=invoice module=invoice`                                         | 生成 cap.events 骨架（一个 created topic）                                                            | 新建异步层前                |
 | `make contract-new type=cap.protocols.http name=invoice service=cap.services.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-service` 必填                                                                              | 新建 HTTP 绑定前            |
 | `make gen-graph`                                                                                        | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` / 锚点                                              | 改完表/实体/查询/service 后 |
 | `make gen-graph-check`                                                                                  | 只校验上述反向索引是否最新（CI）                                                                                         | CI                          |
@@ -117,9 +115,9 @@ false，省略不写。槽位键出现在节点位置即报 `schema.slot-positio
 
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.services` / `cap.async` /
+`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.services` /
 `feature.rules` / `feature.states` / `cap.events` / `cap.protocols.http`；类型族与自定义类型来自 `_meta/_types.yaml`
-。cap.* 生成最小骨架（一个 service + logic step、一个 async job、一个规则、一个状态机、一个事件、一个 operation），不生成
+。cap.* 生成最小骨架（一个 service + logic step、一个 topic + job、一个规则、一个状态机、一个 operation），不生成
 `types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要
 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new`
 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage` 条目内的

@@ -1,6 +1,6 @@
 # web-seed 架构设计与实施方案
 
-> **版本** v3.3 · **状态** P0/P1 完成；契约层已重构为四组（capabilities 内含 services/async/events/protocols，rules/states 在 features）；P2 进行中 · **更新** 2026-11-17
+> **版本** v3.3 · **状态** P0/P1 完成；契约层已重构为四组（capabilities 内含 services/events/protocols，rules/states 在 features）；P2 进行中 · **更新** 2026-11-17
 > **已定决策**：目录形态 `1A`（`apps/api` + `apps/web`）· UI `2A`（Tailwind + shadcn-vue）· 能力档 `3C`（全家桶，默认关闭）
 >
 > 本文是模板种子工程自身的架构设计与实施计划，不是派生项目的业务文档。
@@ -213,7 +213,7 @@
 | 组 | 职责 | 真相源 |
 |---|---|---|
 | `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储约束、冗余关系、逻辑外键、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` |
-| `capabilities/` | 能力层：`services` 服务、`async` 异步任务、`events` 领域事件、`protocols` 协议绑定 | `capabilities/**` |
+| `capabilities/` | 能力层：`services` 服务、`events` 异步事件与任务、`protocols` 协议绑定 | `capabilities/**` |
 | `features/` | 功能定义：路由、页面、业务规则、状态机 | `features/**` |
 | `platform/` | 横切：环境、版本、错误、枚举、HTTP 约定、质量、配置、架构、设计、观测、埋点、安全 | `platform/**` |
 
@@ -229,7 +229,7 @@ capabilities/protocols/http/*.yaml + shared.yaml ──> gen-openapi ──> gen
 platform/errors/*.yaml ──> gen-errors ──> docs/contracts/generated/errors.md
 
 capabilities/services/*.yaml ──> (P2) Go interface / usecase / handler
-capabilities/async/*.yaml ──> (P2) worker 注册表
+capabilities/events/*.yaml ──> (P2) topic 常量 / payload 类型 / worker 注册表
 data/queries/*.yaml ──> (P2) queries/*.sql ──> sqlc
 capabilities/events/** + features/{rules,states}/** ──> (P2) 状态机 / 常量 / 断言 / 测试骨架
 features/** ──> (P2) 路由 / 页面骨架 / 类型
@@ -272,7 +272,7 @@ web-seed/
 │   ├── index.yaml                    #   契约地图（AI 入口）
 │   ├── project.yaml                  #   项目元信息（derive 输入）
 │   ├── data/                         #   tables(_base) / entities / queries / storage
-│   ├── capabilities/                 #   services / async / events / protocols
+│   ├── capabilities/                 #   services / events / protocols
 │   ├── features/                     #   routes / pages / flows
 │   ├── platform/                     #   环境/版本/错误/枚举/HTTP/质量/配置/架构/设计/观测/埋点/安全
 │   └── generated/                    #   openapi/admin.yaml（机器产物）
@@ -518,7 +518,7 @@ self:     doctor（模板自身健康）
 |---|---|
 | 0001 | 采用 ADR 记录架构决策（含 Rejected alternatives） |
 | 0002 | **契约层为唯一真相源**：migrations / queries / 类型 / 路由均由契约生成 |
-| 0003 | 四组契约模型：`data / capabilities / features / platform`（capabilities 内含 services/async/events/protocols） |
+| 0003 | 四组契约模型：`data / capabilities / features / platform`（capabilities 内含 services/events/protocols） |
 | 0004 | 锚点机制：全局 ID + 结构化引用 + 分层约束 + 图校验 |
 | 0005 | 模块化单体 + 多应用装配层 + 每应用契约组合 |
 | 0006 | copy-on-derive，不承诺上游同步 |

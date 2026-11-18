@@ -1,8 +1,9 @@
-# cap.events：跨模块领域事件；发射与消费分别由 service step 与 async trigger 派生。
+# cap.events：不属于 services 的异步功能定义：发布/订阅主题与异步任务。
+# 共同机制：异步、项目自持、不直接绑定 protocols；topic 是发布/订阅的唯一区分键。
 
 id: meta.cap.events
 type: cap.events
-title: "领域事件契约"
+title: "异步事件与任务契约"
 targets:
   dir: "contracts/capabilities/events"
   glob: "*.yaml"
@@ -25,7 +26,7 @@ fields:
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "事件归属模块；按业务主体而非生产者模块"
+    description: "归属模块；job 的 service 必须同模块"
 
   - name: schema_version
     type: integer
@@ -45,25 +46,64 @@ fields:
     required: true
     unique: true
     description: "实例级负向约束"
+
   - name: delivery
     type: string
-    required: true
+    required: false
     enum: [ at_least_once, at_most_once, exactly_once ]
-    description: "投递语义"
+    description: "主题投递语义；topics 非空时必填"
 
-  - name: events
+  - name: topics
     type: list<object>
-    required: true
+    required: false
     min_items: 1
-    description: "事件项；item ID = cap.events.<name>"
+    description: "发布/订阅主题；item ID = cap.events.<topic name>"
     item_fields:
-      - { name: id, type: string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "事件 ID" }
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$', description: "事件名，例如 account.created" }
-      - { name: version, type: integer, required: true, min: 1, description: "事件版本" }
+      - { name: id, type: string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "主题 ID" }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$', description: "主题名，例如 account.created" }
+      - { name: version, type: integer, required: true, min: 1, description: "主题版本" }
       - { name: payload, types: [ object, array, scalar, ref ], required: true, description: "payload 值域节点；object 的 properties 按 _schemas.yaml 的 item_fields 校验" }
       - { name: summary, type: string, required: true, description: "一句话说明" }
-      - { name: emitted_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "发射该事件的服务项；由 service step 生成" }
-      - { name: consumers, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^[a-z][a-z0-9_]*$', description: "消费该事件的模块；由 async job trigger.event 生成" }
+      - { name: emitted_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "发射该主题的服务项；由 service step 生成" }
+      - { name: consumers, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "订阅该主题的 job 项；由 job 的 trigger.topic 生成" }
+
+  - name: jobs
+    type: list<object>
+    required: false
+    min_items: 1
+    description: "异步任务项；item ID = cap.events.<file>.<snake_case(name)>"
+    item_fields:
+      - { name: id, type: string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "任务 ID" }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "任务名" }
+      - { name: summary, type: string, required: true, description: "一句话说明" }
+      - { name: service, type: string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "同步 handler service；必须与文件 owner_module 同模块" }
+      - name: trigger
+        type: object
+        required: true
+        description: "触发方式"
+        fields:
+          - { name: type, type: string, required: true, enum: [ cron, topic ], description: "触发类型" }
+          - { name: schedule, type: string, required: false, description: "cron 表达式；type=cron 必填" }
+          - { name: topic, type: string, required: false, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "订阅的主题 ID；type=topic 必填" }
+      - name: retry
+        type: object
+        required: false
+        description: "重试与死信"
+        fields:
+          - { name: max_attempts, type: integer, required: true, min: 1, description: "最大尝试次数" }
+          - { name: backoff, type: string, required: true, enum: [ fixed, exponential ], description: "退避策略" }
+          - { name: dead_letter, type: boolean, required: true, description: "是否进入死信" }
+      - name: concurrency
+        type: object
+        required: false
+        description: "并发与分布式锁"
+        fields:
+          - { name: key, type: string, required: true, description: "并发键模板" }
+          - { name: ttl, type: string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁 TTL" }
 
 rules:
-  - { id: event-structure, text: "事件名在文件内唯一、以文件主体为前缀且 item ID 必须为 cap.events.<name>；payload 必须是 _schemas.yaml 允许的值域节点；emitted_by 必须指向存在的 cap.services.*", implemented_by: [ event-structure ] }
+  - { id: event-structure, text: "topic name 在文件内唯一；topic.id 必须为 cap.events.<name> 且全局唯一；version >= 1；payload 必须是 _schemas.yaml 允许的值域节点；emitted_by 必须指向存在的 cap.services.*，consumers 必须指向存在的 job 项", implemented_by: [ event-structure ] }
+  - { id: event-file-shape, text: "topics 与 jobs 至少一个非空；topics 非空时 delivery 必填；topic.id 与 job.id 共享 cap.events.* ID 空间，不得重名", implemented_by: [ event-file-shape ] }
+  - { id: async-service, text: "job.service 必须存在且与 events 文件的 owner_module 同模块；被 job 引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service, http-binding ] }
+  - { id: async-trigger, text: "type=cron 必须有 schedule 且不得写 topic；type=topic 必须有存在的 topic 且不得写 schedule", implemented_by: [ async-trigger ] }
+  - { id: async-structure, text: "job name 在文件内唯一；job.id 必须等于 <file-id>.<name> 且全局唯一；不得重复声明同一 (trigger.type, service)", implemented_by: [ async-structure ] }

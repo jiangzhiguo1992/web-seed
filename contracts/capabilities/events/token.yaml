@@ -1,4 +1,4 @@
-id: cap.async.token
+id: cap.events.token
 summary: "令牌异步任务"
 owner_module: account
 schema_version: 1
@@ -7,7 +7,7 @@ do_not:
   - "purge_expired 只清理过期令牌，不得顺带吊销有效令牌"
 
 jobs:
-  - id: cap.async.token.purge_expired
+  - id: cap.events.token.purge_expired
     name: purge_expired
     summary: "清理已过期令牌"
     service: cap.services.token.purge_expired

@@ -149,7 +149,7 @@ fields:
   - {name: persistence, type: any}
   - {name: services, type: any}
 `)
-	for _, typ := range []string{"feature.rules", "feature.states", "cap.events", "cap.protocols.http", "cap.async"} {
+	for _, typ := range []string{"feature.rules", "feature.states", "cap.events", "cap.protocols.http"} {
 		writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", "type: "+typ+`
 targets:
   dir: contracts/features/unused
@@ -227,7 +227,7 @@ components:
 			visibility: "public",
 			paramTypes: map[string]bool{"XInput": true},
 		},
-	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-service-type]") {
 		t.Fatalf("requestBody type mismatch not reported: %v", c.errs)
 	}
@@ -264,7 +264,7 @@ components:
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.create": {visibility: "public", paramTypes: map[string]bool{"XInput": true}},
-	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{}, map[string]bool{})
 	if got := strings.Count(strings.Join(c.errs, "\n"), "[http-service-type]"); got != 2 {
 		t.Fatalf("want 2 http-service-type errors, got %d: %v", got, c.errs)
 	}
@@ -302,7 +302,7 @@ components:
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.create": {visibility: "public", paramTypes: map[string]bool{"XInput": true}},
-	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{}, map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("inline requestBody reported: %v", c.errs)
 	}
@@ -508,7 +508,7 @@ components:
 				"X": {"properties": map[string]any{"id": map[string]any{"type": "integer"}}},
 			},
 		},
-	}, map[string]bool{"X": true}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{"X": true}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-service-type]") {
 		t.Fatalf("component field mismatch not reported: %v", c.errs)
 	}
@@ -594,7 +594,7 @@ schema_version: 1
 stability: draft
 do_not: []
 delivery: at_least_once
-events:
+topics:
   - id: cap.events.x.created
     name: x.created
     version: 1
@@ -605,121 +605,196 @@ events:
     consumers: []
 `
 	writeCapFile(t, root, rel, valid)
-	doc, err := loadYAML(filepath.Join(root, rel))
-	if err != nil {
-		t.Fatal(err)
-	}
 	c := &Checker{
 		root:           root,
 		entities:       map[string]*entityInfo{"data.entities.account": {}},
 		methodTypeDefs: map[string]map[string]any{"AuthSession": {}},
 	}
-	c.checkEventDoc(doc, rel, schema, map[string]bool{})
+	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid ref reported: %v", c.errs)
 	}
 
 	writeCapFile(t, root, rel, strings.Replace(valid, "data.entities.account", "data.entities.missing", 1))
-	doc, err = loadYAML(filepath.Join(root, rel))
-	if err != nil {
-		t.Fatal(err)
-	}
 	c.errs = nil
-	c.checkEventDoc(doc, rel, schema, map[string]bool{})
+	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-ref]") {
 		t.Fatalf("unknown ref not reported: %v", c.errs)
 	}
 }
 
-func TestCheckAsyncDoc(t *testing.T) {
+func TestCheckEventsDoc(t *testing.T) {
 	root := t.TempDir()
-	schema := copyMeta(t, root, "cap.async")
-	rel := "contracts/capabilities/async/x.yaml"
-	valid := `id: cap.async.x
+	schema := copyMeta(t, root, "cap.events")
+	rel := "contracts/capabilities/events/x.yaml"
+	valid := `id: cap.events.x
 summary: "x"
 owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
+delivery: at_least_once
+topics:
+  - id: cap.events.x.created
+    name: x.created
+    version: 1
+    payload:
+      type: object
+      properties:
+        - { name: id, schema: { type: integer }, required: true, description: "id" }
+    summary: "x"
+    emitted_by: []
+    consumers: [cap.events.x.consume]
 jobs:
-  - id: cap.async.x.job
-    name: job
+  - id: cap.events.x.consume
+    name: consume
     summary: "x"
     service: cap.services.x.get
-    trigger: {type: cron, schedule: "0 3 * * *"}
+    trigger: {type: topic, topic: cap.events.x.created}
     retry: {max_attempts: 3, backoff: exponential, dead_letter: true}
-    concurrency: {key: x_job, ttl: 1h}
+    concurrency: {key: x_consume, ttl: 1h}
 `
 	writeCapFile(t, root, rel, valid)
-	if _, err := loadYAML(filepath.Join(root, rel)); err != nil {
-		t.Fatal(err)
-	}
 	c := &Checker{root: root}
-	async, jobs := c.checkAsyncDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	jobServices := c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
 	if len(c.errs) != 0 {
-		t.Fatalf("valid async reported: %v", c.errs)
+		t.Fatalf("valid events reported: %v", c.errs)
 	}
-	if !async["cap.services.x.get"] {
-		t.Fatalf("async service not collected: %v", async)
+	if !jobServices["cap.services.x.get"] {
+		t.Fatalf("job service not collected: %v", jobServices)
 	}
 
 	writeCapFile(t, root, rel, strings.Replace(valid, "cap.services.x.get", "cap.services.y.get", 1))
-	if _, err := loadYAML(filepath.Join(root, rel)); err != nil {
-		t.Fatal(err)
-	}
 	c.errs = nil
-	c.checkAsyncDoc(schema, map[string]serviceMeta{"cap.services.y.get": {module: "y"}}, map[string]bool{})
+	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.y.get": {module: "y"}}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[async-service]") {
 		t.Fatalf("cross-module service not reported: %v", c.errs)
 	}
 
-	writeCapFile(t, root, rel, strings.Replace(valid, "{type: cron, schedule: \"0 3 * * *\"}", "{type: webhook}", 1))
-	if _, err := loadYAML(filepath.Join(root, rel)); err != nil {
-		t.Fatal(err)
-	}
+	writeCapFile(t, root, rel, strings.Replace(valid, "topic: cap.events.x.created", "topic: cap.events.x.missing", 1))
 	c.errs = nil
-	_, jobs = c.checkAsyncDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
-	if len(c.errs) != 0 {
-		t.Fatalf("webhook trigger reported: %v", c.errs)
+	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[async-trigger]") {
+		t.Fatalf("unknown topic not reported: %v", c.errs)
 	}
-	if jobs["cap.async.x.job"].triggerType != "webhook" {
-		t.Fatalf("webhook trigger not collected: %v", jobs)
+
+	writeCapFile(t, root, rel, strings.Replace(valid, "consumers: [cap.events.x.consume]", "consumers: [cap.events.x.missing]", 1))
+	c.errs = nil
+	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-structure]") {
+		t.Fatalf("unknown consumer not reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, strings.Replace(valid, "emitted_by: []", "emitted_by: [cap.services.x.missing]", 1))
+	c.errs = nil
+	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-structure]") {
+		t.Fatalf("unknown emitter not reported: %v", c.errs)
 	}
 }
 
-func TestHTTPAsyncBinding(t *testing.T) {
+func TestCheckEventsFileShape(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.events")
+	rel := "contracts/capabilities/events/x.yaml"
+	valid := `id: cap.events.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+delivery: at_least_once
+topics:
+  - id: cap.events.x.created
+    name: x.created
+    version: 1
+    payload: { type: integer }
+    summary: "x"
+    emitted_by: []
+    consumers: []
+`
+	writeCapFile(t, root, rel, valid)
+	c := &Checker{root: root}
+	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
+	if len(c.errs) != 0 {
+		t.Fatalf("valid file reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, strings.Replace(valid, "delivery: at_least_once\n", "", 1))
+	c.errs = nil
+	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-file-shape]") {
+		t.Fatalf("missing delivery not reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, `id: cap.events.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+`)
+	c.errs = nil
+	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-file-shape]") {
+		t.Fatalf("empty topics/jobs not reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, `id: cap.events.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+delivery: at_least_once
+topics:
+  - id: cap.events.x.created
+    name: x.created
+    version: 1
+    payload: { type: integer }
+    summary: "x"
+    emitted_by: []
+    consumers: []
+jobs:
+  - id: cap.events.x.created
+    name: created
+    summary: "x"
+    service: cap.services.x.get
+    trigger: { type: cron, schedule: "0 3 * * *" }
+`)
+	c.errs = nil
+	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-file-shape]") {
+		t.Fatalf("topic/job id collision not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPJobServiceBinding(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
+owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
 paths:
-  /hook:
+  /job:
     post:
-      operationId: hook
-      x-contract-id: cap.protocols.http.x.hook
-      x-async: cap.async.x.job
+      operationId: job
+      x-contract-id: cap.protocols.http.x.job
+      x-service: cap.services.x.job
       responses:
-        "202": { description: "accepted" }
+        "200": { description: "ok" }
 components:
   schemas: {}
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
-	c.checkHTTPBindings(schema, map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{
-		"cap.async.x.job": {triggerType: "webhook"},
-	})
-	if len(c.errs) != 0 {
-		t.Fatalf("valid x-async reported: %v", c.errs)
-	}
-
-	c.errs = nil
-	c.checkHTTPBindings(schema, map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{
-		"cap.async.x.job": {triggerType: "cron"},
-	})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-binding]") {
-		t.Fatalf("cron async job not reported: %v", c.errs)
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.job": {visibility: "public", paramTypes: map[string]bool{}},
+	}, map[string]bool{}, map[string]bool{"cap.services.x.job": true})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "used by a cap.events job") {
+		t.Fatalf("job service http binding not reported: %v", c.errs)
 	}
 }
 
@@ -750,7 +825,7 @@ default_error_responses: [418]
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.get": {visibility: "public", paramTypes: map[string]bool{}},
-	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{}, map[string]bool{})
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		`missing required field "do_not"`,
@@ -862,7 +937,7 @@ paths:
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.get": {visibility: "public", paramTypes: map[string]bool{}},
-	}, map[string]bool{}, map[string]bool{}, map[string]asyncMeta{})
+	}, map[string]bool{}, map[string]bool{})
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"unknown operation extension x-typo",

@@ -525,9 +525,9 @@ func TestRenderHTTP(t *testing.T) {
 	}
 }
 
-func TestRenderAsync(t *testing.T) {
-	s := loadSchemaByType(t, "cap.async")
-	b, err := RenderAsync(s, "invoice", "invoice", "发票任务")
+func TestRenderEvents(t *testing.T) {
+	s := loadSchemaByType(t, "cap.events")
+	b, err := RenderEvents(s, "invoice", "invoice", "发票异步层")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -535,16 +535,16 @@ func TestRenderAsync(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["id"] != "cap.async.invoice" {
+	if doc["id"] != "cap.events.invoice" {
 		t.Fatalf("id = %v", doc["id"])
 	}
-	jobs, _ := doc["jobs"].([]any)
-	if len(jobs) != 1 {
-		t.Fatalf("jobs = %#v", jobs)
+	topics, _ := doc["topics"].([]any)
+	if len(topics) != 1 {
+		t.Fatalf("topics = %#v", topics)
 	}
-	job, _ := jobs[0].(map[string]any)
-	if job["service"] != "cap.services.invoice.job" {
-		t.Fatalf("job = %#v", job)
+	topic, _ := topics[0].(map[string]any)
+	if topic["id"] != "cap.events.invoice.created" || topic["name"] != "invoice.created" {
+		t.Fatalf("topic = %#v", topic)
 	}
 }
 

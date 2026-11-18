@@ -67,7 +67,7 @@ make contract-impact id=<被修改的 ID>
 |---|---|
 | 接口 | `contracts/capabilities/http/<module>.yaml` |
 | 应用包含哪些接口 | `contracts/project.yaml` 的 `apps` 段 |
-| 定时任务 / 消费者 | `contracts/capabilities/async/<job>.yaml` |
+| 定时任务 / 消费者 | `contracts/capabilities/events/<module>.yaml` 的 `jobs` |
 | 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
 | 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables.<engine>` 普通条目（`description` / `retention` / `partition`）；归档用 `archive_of` 条目 |
 | 查询 | `contracts/data/queries/<scope>.yaml` |

@@ -90,10 +90,9 @@ contracts/
 │   ├── enums.yaml            #   跨端枚举：integer code ↔ 名称
 │   └── storage.yaml          #   单例：引擎归属 / 条目化的保留 / 分区 / 归档 / 多 key 缓存
 │
-├── capabilities/             # ② 能力层：services + async + events + protocols
+├── capabilities/             # ② 能力层：services + events（topics/jobs）+ protocols
 │   ├── services/<module>.yaml #   服务：services + schemas（interface 名由 owner_module + file 派生）
-│   ├── async/<module>.yaml     #   异步任务：trigger + retry + concurrency
-│   ├── events/<subject>.yaml   #   领域事件与 payload（按业务主体）
+│   ├── events/<module>.yaml   #   异步主题与任务：topics + jobs
 │   └── protocols/
 │       └── http/<module>.yaml #   HTTP 绑定：只写协议差异，x-service 指回 service
 │
@@ -145,7 +144,7 @@ contracts/
 | 组 | 示例 |
 |---|---|
 | data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_account_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
-| capabilities | `cap.services.account.get`、`cap.async.token.purge_expired`、`feature.rules.account.number_format`、`feature.states.account`、`cap.events.account.created`、`cap.protocols.http.account.create` |
+| capabilities | `cap.services.account.get`、`cap.events.token.purge_expired`、`feature.rules.account.number_format`、`feature.states.account`、`cap.events.account.created`、`cap.protocols.http.account.create` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
 | platform | `platform.errors.ACCOUNT_NOT_FOUND`、`platform.security.permissions.account_read`、`platform.security.roles.admin`、`platform.analytics.events.page.account_list_viewed` |
 
@@ -173,7 +172,7 @@ contracts/
 feature ──> capabilities ──> data
               ├── services ──> data.queries
               ├── services ──> rules / states / events
-              └── async ──> services / events
+              └── events ──> services / topics
 ```
 
 契约依赖只有这一条链，**没有反向**。capabilities 内部允许 `services → rules/states/events`（业务依据）；`rules/states` 允许引用 `data.entities.*` 作为业务主体，但禁止引用 `data.tables` / `data.queries` / `data.storage`。
@@ -194,8 +193,8 @@ feature ──> capabilities ──> data
 | capabilities/services → features/rules | service steps | `kind: logic/transition` + `rules` |
 | capabilities/services → features/states | service steps | `kind: transition` + `transitions` |
 | capabilities/services → capabilities/events | service steps | `kind: logic/transition` + `events` |
-| capabilities/async → capabilities/services | async job | `service` |
-| capabilities/async → capabilities/events | async job | `trigger.event` |
+| capabilities/events → capabilities/services | job | `service` |
+| capabilities/events → capabilities/events | job | `trigger.topic` |
 | capabilities/services → data | service 契约 | `steps[].queries[].query` / query `errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `source.join.from/to` |
@@ -329,7 +328,7 @@ table:
 | `data/tables/*` | 一物理表一文件 | **不限** |
 | `data/entities/*` | 一逻辑实体一文件 | 150 |
 | `capabilities/services/*` | 一模块一文件（services + schemas；interface 名由 owner_module + file 派生） | 250 |
-| `capabilities/async/*` | 一模块一文件 | 120 |
+| `capabilities/events/*` | 一模块一文件 | 120 |
 | `capabilities/events/*` | 一业务主体一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
 | `features/states/*` | 一状态机一文件 | 150 |

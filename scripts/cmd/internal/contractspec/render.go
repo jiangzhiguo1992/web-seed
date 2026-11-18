@@ -754,64 +754,30 @@ type transitionScaffold struct {
 	ImplementedBy []string `yaml:"implemented_by"`
 }
 
-type asyncFileScaffold struct {
-	ID            string             `yaml:"id"`
-	Summary       string             `yaml:"summary"`
-	OwnerModule   string             `yaml:"owner_module"`
-	SchemaVersion int                `yaml:"schema_version"`
-	Stability     string             `yaml:"stability"`
-	DoNot         []string           `yaml:"do_not"`
-	Jobs          []asyncJobScaffold `yaml:"jobs"`
+type eventsFileScaffold struct {
+	ID            string               `yaml:"id"`
+	Summary       string               `yaml:"summary"`
+	OwnerModule   string               `yaml:"owner_module"`
+	SchemaVersion int                  `yaml:"schema_version"`
+	Stability     string               `yaml:"stability"`
+	DoNot         []string             `yaml:"do_not"`
+	Delivery      string               `yaml:"delivery,omitempty"`
+	Topics        []eventTopicScaffold `yaml:"topics,omitempty"`
 }
 
-type asyncTriggerScaffold struct {
-	Type     string `yaml:"type"`
-	Schedule string `yaml:"schedule,omitempty"`
-	Event    string `yaml:"event,omitempty"`
-	Path     string `yaml:"path,omitempty"`
-	Method   string `yaml:"method,omitempty"`
+type eventTopicScaffold struct {
+	ID        string               `yaml:"id"`
+	Name      string               `yaml:"name"`
+	Version   int                  `yaml:"version"`
+	Payload   eventPayloadScaffold `yaml:"payload"`
+	Summary   string               `yaml:"summary"`
+	EmittedBy []string             `yaml:"emitted_by"`
+	Consumers []string             `yaml:"consumers"`
 }
 
-type asyncRetryScaffold struct {
-	MaxAttempts int    `yaml:"max_attempts"`
-	Backoff     string `yaml:"backoff"`
-	DeadLetter  bool   `yaml:"dead_letter"`
-}
-
-type asyncConcurrencyScaffold struct {
-	Key string `yaml:"key"`
-	TTL string `yaml:"ttl,omitempty"`
-}
-
-type asyncJobScaffold struct {
-	ID          string                    `yaml:"id"`
-	Name        string                    `yaml:"name"`
-	Summary     string                    `yaml:"summary"`
-	Service     string                    `yaml:"service"`
-	Trigger     asyncTriggerScaffold      `yaml:"trigger"`
-	Retry       *asyncRetryScaffold       `yaml:"retry,omitempty"`
-	Concurrency *asyncConcurrencyScaffold `yaml:"concurrency,omitempty"`
-}
-
-type eventFileScaffold struct {
-	ID            string          `yaml:"id"`
-	Summary       string          `yaml:"summary"`
-	OwnerModule   string          `yaml:"owner_module"`
-	SchemaVersion int             `yaml:"schema_version"`
-	Stability     string          `yaml:"stability"`
-	DoNot         []string        `yaml:"do_not"`
-	Delivery      string          `yaml:"delivery"`
-	Events        []eventScaffold `yaml:"events"`
-}
-
-type eventScaffold struct {
-	ID        string         `yaml:"id"`
-	Name      string         `yaml:"name"`
-	Version   int            `yaml:"version"`
-	Summary   string         `yaml:"summary"`
-	Payload   map[string]any `yaml:"payload"`
-	EmittedBy []string       `yaml:"emitted_by"`
-	Consumers []string       `yaml:"consumers"`
+type eventPayloadScaffold struct {
+	Type       string                    `yaml:"type"`
+	Properties []servicePropertyScaffold `yaml:"properties"`
 }
 
 type httpFileScaffold struct {
@@ -1023,23 +989,34 @@ func RenderState(s *Schema, name, module, summary string) ([]byte, error) {
 }
 
 // RenderEvent 生成 cap.events 的最小事件骨架。
-func RenderEvent(s *Schema, name, module, summary string) ([]byte, error) {
+// RenderEvents 生成 cap.events 的最小骨架：一个 topic + 一个订阅它的 job。
+func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 	if s == nil || s.Type != "cap.events" {
-		return nil, fmt.Errorf("RenderEvent: want cap.events schema")
+		return nil, fmt.Errorf("RenderEvents: want cap.events schema")
 	}
 	if !validName(name) || !validName(module) {
-		return nil, fmt.Errorf("RenderEvent: invalid name/module")
+		return nil, fmt.Errorf("RenderEvents: invalid name/module")
 	}
-	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "delivery": true, "events": true}, "cap.events"); err != nil {
+	if err := requireSupported(s.Fields, map[string]bool{
+		"id": true, "summary": true, "owner_module": true, "schema_version": true,
+		"stability": true, "do_not": true, "delivery": true, "topics": true,
+	}, "cap.events"); err != nil {
 		return nil, err
 	}
-	if f, ok := FindField(s.Fields, "events"); ok {
-		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "name": true, "version": true, "payload": true, "summary": true, "emitted_by": true, "consumers": true}, "cap.events.events"); err != nil {
+	if f, ok := FindField(s.Fields, "topics"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{
+			"id": true, "name": true, "version": true, "payload": true,
+			"summary": true, "emitted_by": true, "consumers": true,
+		}, "cap.events.topics"); err != nil {
 			return nil, err
 		}
 	}
 	fileID := s.Targets.FileID(name + ".yaml")
-	doc := eventFileScaffold{
+	if fileID == "" {
+		return nil, fmt.Errorf("RenderEvents: cannot derive id from targets.id")
+	}
+	topicID := fileID + ".created"
+	doc := eventsFileScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            fileID,
 		Summary:       summary,
@@ -1047,66 +1024,22 @@ func RenderEvent(s *Schema, name, module, summary string) ([]byte, error) {
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
 		Delivery:      "at_least_once",
-		Events: []eventScaffold{{
-			ID:      fileID + ".created",
+		Topics: []eventTopicScaffold{{
+			ID:      topicID,
 			Name:    name + ".created",
 			Version: 1,
-			Summary: "TODO: 事件说明",
-			Payload: map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"properties":           map[string]any{"id": map[string]any{"type": "integer"}},
+			Payload: eventPayloadScaffold{
+				Type: "object",
+				Properties: []servicePropertyScaffold{{
+					Name:        "id",
+					Schema:      serviceSchemaScaffold{Type: "integer"},
+					Required:    true,
+					Description: "TODO: id 说明",
+				}},
 			},
+			Summary:   "TODO: 主题说明",
 			EmittedBy: []string{},
-		}},
-	}
-	b, err := marshal2(doc)
-	if err != nil {
-		return nil, err
-	}
-	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
-}
-
-// RenderAsync 生成 cap.async 的最小任务骨架。
-func RenderAsync(s *Schema, name, module, summary string) ([]byte, error) {
-	if s == nil || s.Type != "cap.async" {
-		return nil, fmt.Errorf("RenderAsync: want cap.async schema")
-	}
-	if !validName(name) || !validName(module) {
-		return nil, fmt.Errorf("RenderAsync: invalid name/module")
-	}
-	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "jobs": true}, "cap.async"); err != nil {
-		return nil, err
-	}
-	if f, ok := FindField(s.Fields, "jobs"); ok {
-		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "name": true, "summary": true, "service": true, "trigger": true, "retry": true, "concurrency": true}, "cap.async.jobs"); err != nil {
-			return nil, err
-		}
-		if trigger, ok := FindField(f.ItemFields, "trigger"); ok {
-			if err := requireSupported(trigger.Fields, map[string]bool{"type": true, "schedule": true, "event": true}, "cap.async.jobs.trigger"); err != nil {
-				return nil, err
-			}
-		}
-	}
-	fileID := s.Targets.FileID(name + ".yaml")
-	if fileID == "" {
-		return nil, fmt.Errorf("RenderAsync: cannot derive id from targets.id")
-	}
-	doc := asyncFileScaffold{
-		ID:            fileID,
-		Summary:       summary,
-		OwnerModule:   module,
-		SchemaVersion: intConst(s.Fields, "schema_version", 1),
-		Stability:     scaffoldStability,
-		DoNot:         []string{"TODO: 实例级负向约束"},
-		Jobs: []asyncJobScaffold{{
-			ID:          fileID + ".job",
-			Name:        "job",
-			Summary:     "TODO: 任务说明",
-			Service:     "cap.services." + module + ".job",
-			Trigger:     asyncTriggerScaffold{Type: "cron", Schedule: "0 3 * * *"},
-			Retry:       &asyncRetryScaffold{MaxAttempts: 3, Backoff: "exponential", DeadLetter: true},
-			Concurrency: &asyncConcurrencyScaffold{Key: name + "_job"},
+			Consumers: []string{},
 		}},
 	}
 	b, err := marshal2(doc)
