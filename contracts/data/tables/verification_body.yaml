@@ -30,12 +30,14 @@ table:
     - data.queries.verification.mark_verification_sent
     - data.queries.verification.revoke_active_verifications_by_account
     - data.queries.verification.revoke_active_verifications_by_auth
+  referenced_by: []
 
 columns:
   - name: account_id
     type: integer
     nullable: false
-    comment: "账号 ID；验证体不早于 account 存在，不建外键"
+    references: { column: data.tables.account.col.id, on_delete: cascade }
+    comment: "账号 ID；验证体不早于 account 存在，不建数据库外键"
 
   - name: auth_type
     type: integer

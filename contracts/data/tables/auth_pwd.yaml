@@ -24,11 +24,13 @@ table:
     - data.queries.auth.set_auth_pwd_status
     - data.queries.auth.soft_delete_auth_pwd_by_account
     - data.queries.auth.update_auth_pwd_hash
+  referenced_by: []
 
 columns:
   - name: account_id
     type: integer
     nullable: false
+    references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
   - name: username

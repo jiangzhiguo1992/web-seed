@@ -68,3 +68,12 @@ fields:
   - name: AttemptCount
     description: "校验失败次数；达到上限后作废"
     source: { column: data.tables.verification_body.col.attempt_count }
+
+  - name: Account
+    type: data.entities.account
+    description: "所属账号；账号硬删时验证体级联删除"
+    source:
+      join:
+        from: data.tables.verification_body.col.account_id
+        to: data.tables.account.col.id
+        lazy: true

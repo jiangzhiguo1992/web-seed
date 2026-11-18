@@ -23,6 +23,8 @@ model:
     - data.entities.auth_phone
     - data.entities.auth_email
     - data.entities.token
+    - data.entities.verification_body
+    - data.entities.verification_action
 
 fields:
   - name: Status

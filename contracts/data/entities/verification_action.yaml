@@ -49,3 +49,12 @@ fields:
   - name: inputHash
     description: "提交内容的 HMAC-SHA256；不存原文"
     source: { column: data.tables.verification_action.col.input_hash }
+
+  - name: Account
+    type: data.entities.account
+    description: "所属账号快照；账号硬删后允许悬空"
+    source:
+      join:
+        from: data.tables.verification_action.col.account_id
+        to: data.tables.account.col.id
+        lazy: true

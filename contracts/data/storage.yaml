@@ -1,4 +1,6 @@
 # 数据存储约束（项目级单例）。
+# tables.<engine> 的条目字段按引擎区分：mysql/postgres 允许 table/size_class/retention/partition/archive；
+# mongodb 只允许 table/size_class/retention；caches 条目只允许 table/retention。
 
 id: data.storage
 summary: "数据存储约束"
@@ -8,33 +10,33 @@ do_not:
   - "未列出的引擎与拓扑一律视为不支持，禁止自行引入"
   - "Redis 只作为 caches 中的非权威副本；权威表数据只能落在 supported_engines 中的引擎"
   - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
+  - "archive.engine/database 是逻辑归档目标；连接串、实例地址与迁移调度属于运行时配置"
 
 supported_engines: [mysql, postgres, mongodb]
 not_supported_topologies: [sharding, multi-primary, cross-region, outbox]
 
 tables:
   mysql:
-    - data.tables.account
-    - data.tables.token
-    - data.tables.auth_pwd
-    - data.tables.auth_phone
-    - data.tables.auth_email
-    - data.tables.verification_body
-    - data.tables.verification_action
+    - table: data.tables.account
+      size_class: large
+    - table: data.tables.token
+      size_class: large
+      retention: { unit: days, ttl: 30 }
+    - table: data.tables.auth_pwd
+    - table: data.tables.auth_phone
+    - table: data.tables.auth_email
+    - table: data.tables.verification_body
+      size_class: small
+      retention: { unit: minutes, ttl: 10 }
+    - table: data.tables.verification_action
+      size_class: large
+      archive: { engine: postgres, database: web_seed_archive, unit: days, after: 90 }
   postgres: []
   mongodb: []
 
 caches:
   redis:
-    - data.tables.token
-    - data.tables.verification_body
-
-size_class:
-  data.tables.account: large
-  data.tables.token: large
-  data.tables.verification_body: small
-  data.tables.verification_action: large
-
-retention:
-  data.tables.token: { unit: days, ttl: 30, cache_ttl: 30 }
-  data.tables.verification_body: { unit: minutes, ttl: 10, cache_ttl: 10 }
+    - table: data.tables.token
+      retention: { unit: days, cache_ttl: 30 }
+    - table: data.tables.verification_body
+      retention: { unit: minutes, cache_ttl: 10 }

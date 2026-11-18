@@ -21,11 +21,13 @@ table:
     - data.queries.auth.get_auth_email_by_username_domain
     - data.queries.auth.set_auth_email_status
     - data.queries.auth.soft_delete_auth_email_by_account
+  referenced_by: []
 
 columns:
   - name: account_id
     type: integer
     nullable: false
+    references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
   - name: username

@@ -81,6 +81,12 @@ fields:
         generated: true
         write: forbidden
         description: "使用本表的 query 项 ID；由 gen-graph 生成"
+      - name: referenced_by
+        type: list<string>
+        required: true
+        unique: true
+        pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
+        description: "引用本表列的源列引用列表；与 columns[].references 双向对账"
 
   - name: columns
     type: list<object>
@@ -103,6 +109,13 @@ fields:
         item_fields:
           - { name: column, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "同组列引用" }
           - { name: source, type: boolean, required: true, description: "是否为权威列；每组恰好一个" }
+      - name: references
+        type: object
+        required: false
+        description: "逻辑外键：本列指向目标表唯一列；数据库不建外键，硬删按 on_delete 执行；多态或无单一目标的关联不写本字段"
+        fields:
+          - { name: column, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标列引用；必须是目标表主键或单列唯一索引列" }
+          - { name: on_delete, type: string, required: true, enum: [ cascade, restrict, set_null, no_action ], description: "硬删除目标行时的动作；软删不由此字段表达" }
       - { name: comment, type: string, required: false, description: "列 COMMENT" }
 
   - name: constraints
@@ -145,14 +158,17 @@ rules:
   - { id: constraint-fields, text: "约束必须写非空 expr 和 on_violation；on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
   - { id: constraint-used-by, text: "constraints[].used_by 必须是非空去重的 data.queries.* 写查询 ID，且查询写本表", implemented_by: [ constraint-used-by ] }
   - { id: enum-code-literal, text: "表 CHECK 引用枚举列时，整数码必须存在于对应 data.enums 的 code 集合", implemented_by: [ enum-code-literal ] }
-  - { id: storage-registry, text: "storage.yaml 的 tables 必须按 supported_engines 分组，覆盖每张物理表且只引用已存在的表；每张表只能出现在一个权威引擎下；基类不是物理表；caches 只登记非权威副本", implemented_by: [ storage-registry ] }
-  - { id: storage-entry, text: "size_class/retention/partition 的键必须是已登记的表；size_class 只能是 small/large", implemented_by: [ storage-entry ] }
-  - { id: storage-engine, text: "storage.tables 的键必须在 supported_engines 中，且每个 supported_engine 都必须有对应列表", implemented_by: [ storage-engine ] }
-  - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/supported_engines/tables/caches/size_class/retention/partition/not_supported_topologies；supported_engines 必填且必须是非空字符串列表，not_supported_topologies 若存在必须是非空字符串列表", implemented_by: [ storage-doc ] }
-  - { id: storage-retention, text: "retention 只允许 unit/pending/soft_delete/hard_delete/ttl/cache_ttl；必须写 unit 和至少一个时长；unit 只能是 minutes/hours/days；各时长必须 >= 1；cache_ttl 只能用于 caches 中的表，且不得超过 ttl", implemented_by: [ storage-retention ] }
+  - { id: storage-registry, text: "storage.tables 每个引擎条目是 list<object>：table 必填、同引擎内不重复、覆盖每张物理表且只引用已存在的表；每张表只能出现在一个权威引擎下；基类不是物理表；caches 条目是 list<object>，只能引用已登记的权威表且不得重复", implemented_by: [ storage-registry ] }
+  - { id: storage-entry-fields, text: "tables 条目只允许 table/size_class/retention/partition/archive；mysql/postgres 允许全部，mongodb 只允许 table/size_class/retention；caches 条目只允许 table/retention", implemented_by: [ storage-entry-fields ] }
+  - { id: storage-entry, text: "size_class 只能是 small/large", implemented_by: [ storage-entry ] }
+  - { id: storage-engine, text: "storage.tables 的键必须在 supported_engines 中，且每个 supported_engine 都必须有对应条目列表", implemented_by: [ storage-engine ] }
+  - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/supported_engines/tables/caches/not_supported_topologies；supported_engines 必填且必须是非空字符串列表，not_supported_topologies 若存在必须是非空字符串列表", implemented_by: [ storage-doc ] }
+  - { id: storage-retention, text: "表条目 retention 只允许 unit/pending/soft_delete/hard_delete/ttl，必须写 unit 和至少一个时长；cache 条目必须写 retention，只允许 unit/cache_ttl；unit 只能是 minutes/hours/days，各时长必须 >= 1；cache_ttl 不得超过权威表条目的 ttl（若声明）", implemented_by: [ storage-retention ] }
   - { id: storage-partition, text: "partition 只允许 strategy/columns/interval；strategy 只能是 range/list/hash；columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
+  - { id: storage-archive, text: "archive 只允许 engine/database/unit/after；engine 必须是 supported_engines；database 必须是非空 snake_case；unit 只能是 minutes/hours/days；after >= 1；after 是数据年龄阈值，与 retention.ttl 是独立维度；引擎字段矩阵由 storage-entry-fields 限制", implemented_by: [ storage-archive ] }
   - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
+  - { id: table-referenced-by, text: "table.referenced_by 必须等于所有指向本表列的 references 源列集合；每项必须是存在的列引用且其 references.column 指向本表", implemented_by: [ table-referenced-by ] }
   - { id: owner-write, text: "只有 owner_module 相同的 cap.services 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 service step 的 query/queries 中；写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service，不允许一个 query 写多模块表", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-comment, text: "索引必须写非空 comment", implemented_by: [ index-comment ] }
@@ -162,6 +178,10 @@ rules:
   - { id: index-name-unique, text: "索引名同一 schema 内必须全局唯一", implemented_by: [ index-name-unique ] }
   - { id: redundant-group, text: "columns[].redundancy 每组必须恰好一个 source 且包含声明列自身；组内每列必须声明完全相同的列表；同一列不得跨组；列表不得重复列；基类列不得声明 redundancy", implemented_by: [ redundant-group ] }
   - { id: redundant-ref, text: "redundancy 的 column 必须是存在的物理表自声明列（继承列/基类列不允许）；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
+  - { id: reference-exclusive, text: "同一列不得同时声明 redundancy 与 references：冗余副本表达同值派生，references 表达逻辑外键", implemented_by: [ reference-exclusive ] }
+  - { id: reference-target, text: "references.column 必须是已存在的物理表列；源列必须是本表自声明列；目标列必须是目标表主键或全局唯一（live_only: false）的单列索引列；两端类型族一致", implemented_by: [ reference-target ] }
+  - { id: reference-on-delete, text: "on_delete 只约束硬删：cascade 级联删除、restrict 拒绝删除、set_null 置空、no_action 保留悬空；set_null 要求源列 nullable；软删不由此字段表达", implemented_by: [ reference-on-delete ] }
+  - { id: reference-join, text: "references 与 entity 关系字段的 join 列对必须双向一致：每条 references 必须有同列对的 join，每个 join 必须有同列对的 references（列对比较不看 from/to 方向）", implemented_by: [ reference-join ] }
   - { id: default-type, text: "列 default 的 YAML 类型必须与列类型族兼容；长度/范围按本列声明的参数校验（不展开 data.tables.*.col.* 引用）", implemented_by: [ default-type ] }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
   - { id: physical-primary-key, text: "物理表不得声明 primary_key；主键统一由基类 id 提供", implemented_by: [ physical-primary-key ] }

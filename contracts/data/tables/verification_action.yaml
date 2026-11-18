@@ -21,6 +21,7 @@ table:
     - data.entities.verification_action
   queries:
     - data.queries.verification.create_verification_action
+  referenced_by: []
 
 columns:
   - name: verification_id
@@ -31,7 +32,8 @@ columns:
   - name: account_id
     type: integer
     nullable: false
-    comment: "账号 ID 快照；验证体清理后仍可按账号追溯；不作为冗余副本声明"
+    references: { column: data.tables.account.col.id, on_delete: no_action }
+    comment: "账号 ID 快照；账号硬删后保留；验证体清理后仍可按账号追溯；不作为冗余副本声明"
 
   - name: result
     type: integer

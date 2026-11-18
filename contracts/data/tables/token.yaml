@@ -23,6 +23,7 @@ table:
     - data.queries.token.get_token_by_refresh
     - data.queries.token.revoke_token
     - data.queries.token.revoke_tokens_by_account
+  referenced_by: []
 
 columns:
   - name: own_type
@@ -44,6 +45,7 @@ columns:
   - name: account_id
     type: integer
     nullable: false
+    references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
   - name: device_id
