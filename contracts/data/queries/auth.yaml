@@ -21,7 +21,7 @@ queries:
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_pwd }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_username ]
     used_by:
       - cap.services.auth.login
@@ -60,7 +60,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
       - cap.services.auth.bind_password
@@ -75,7 +75,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
       - cap.services.auth.login
@@ -91,7 +91,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
       - cap.services.auth.login
@@ -107,7 +107,7 @@ queries:
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_phone }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_phone.uq_auth_phone_number ]
     used_by:
       - cap.services.auth.login
@@ -146,7 +146,7 @@ queries:
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_email }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_email.uq_auth_email_username_domain ]
     used_by:
       - cap.services.auth.login
@@ -186,7 +186,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_account ]
     used_by:
       - cap.services.auth.revoke_all_for_account
@@ -201,7 +201,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_phone.uq_auth_phone_account ]
     used_by:
       - cap.services.auth.revoke_all_for_account
@@ -216,7 +216,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_email.uq_auth_email_account ]
     used_by:
       - cap.services.auth.revoke_all_for_account
@@ -232,7 +232,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_phone.pk ]
     used_by:
       - cap.services.auth.bind_phone
@@ -248,7 +248,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_email.pk ]
     used_by:
       - cap.services.auth.bind_email
@@ -264,7 +264,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
       - cap.services.auth.bind_password

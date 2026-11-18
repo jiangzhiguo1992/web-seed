@@ -14,8 +14,8 @@ do_not:
   - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
   - "归档条目用 archive_of 指向原表；归档表只封存原数据，不建 data.tables 契约、实体或查询"
 
-supported_engines: [mysql, postgres, mongodb]
-not_supported_topologies: [sharding, multi-primary, cross-region, outbox]
+supported_engines: [ mysql, postgres, mongodb ]
+not_supported_topologies: [ sharding, multi-primary, cross-region, outbox ]
 
 tables:
   mysql:
@@ -43,7 +43,7 @@ tables:
       age_by: created_at
       after_unit: days
       after: 90
-  mongodb: []
+  mongodb: [ ]
 
 caches:
   redis:

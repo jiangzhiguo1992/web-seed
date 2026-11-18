@@ -16,7 +16,7 @@ model:
     - data.entities.base
   tables:
     - data.tables.verification_body
-  included_by: []
+  included_by: [ ]
   queries:
     - data.queries.verification.create_verification
     - data.queries.verification.get_latest_verification

@@ -20,7 +20,7 @@ queries:
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.account.pk ]
     used_by:
       - cap.services.account.activate
@@ -42,7 +42,7 @@ queries:
     returns:
       - { name: exists, kind: scalar, type: boolean }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.account.uq_account_number ]
     used_by:
       - cap.services.account.create
@@ -60,7 +60,7 @@ queries:
     returns:
       - { name: accounts, list: true, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref:
       - data.tables.account.idx_account_created_at_id
       - data.tables.account.idx_account_own_type_own_id
@@ -99,7 +99,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.account.pk ]
     used_by:
       - cap.services.account.update

@@ -29,7 +29,7 @@ queries:
     returns:
       - { name: row, kind: entity, entity: data.entities.token }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref:
       - data.tables.token.uq_token_access_hash
       - data.tables.token.uq_token_refresh_hash
@@ -47,7 +47,7 @@ queries:
     returns:
       - { name: row, kind: entity, entity: data.entities.token }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
     used_by:
       - cap.services.token.logout
@@ -63,7 +63,7 @@ queries:
     returns:
       - { name: row, kind: entity, entity: data.entities.token }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.token.uq_token_access_hash ]
     used_by:
       - cap.services.token.verify
@@ -100,7 +100,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.token.idx_token_account_status ]
     used_by:
       - cap.services.token.revoke_by_account
@@ -115,7 +115,7 @@ queries:
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
-    errors: []
+    errors: [ ]
     index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
     used_by:
       - cap.services.token.purge_expired

@@ -18,7 +18,7 @@ table:
     - data.tables.base
   entities:
     - data.entities.verification_action
-  referenced_by: []
+  referenced_by: [ ]
   queries:
     - data.queries.verification.create_verification_action
 
@@ -93,4 +93,4 @@ constraints:
     used_by:
       - data.queries.verification.create_verification_action
 
-indexes: []
+indexes: [ ]

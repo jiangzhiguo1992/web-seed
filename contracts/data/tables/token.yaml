@@ -15,7 +15,7 @@ table:
     - data.tables.base
   entities:
     - data.entities.token
-  referenced_by: []
+  referenced_by: [ ]
   queries:
     - data.queries.token.create_token
     - data.queries.token.delete_expired_tokens
