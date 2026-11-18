@@ -15,6 +15,7 @@ queries:
     tables:
       - { table: data.tables.account }
     params:
+      - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
@@ -36,6 +37,7 @@ queries:
     tables:
       - { table: data.tables.account }
     params:
+      - { name: ctx, type: context.Context }
       - { name: number, type: text, column: data.tables.account.col.number }
     returns:
       - { name: exists, kind: scalar, type: boolean }
@@ -50,6 +52,7 @@ queries:
     tables:
       - { table: data.tables.account }
     params:
+      - { name: ctx, type: context.Context }
       - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
       - { name: own_type, type: data.enums.own_type, column: data.tables.account.col.own_type, nullable: true }
       - { name: offset, type: integer, nullable: true, default: 0 }
@@ -69,6 +72,7 @@ queries:
     tables:
       - { table: data.tables.account, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: own_type, type: data.enums.own_type, column: data.tables.account.col.own_type }
       - { name: own_id, type: integer, column: data.tables.account.col.own_id }
@@ -89,6 +93,7 @@ queries:
     tables:
       - { table: data.tables.account, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
     returns:
@@ -104,6 +109,7 @@ queries:
     tables:
       - { table: data.tables.account, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: status, type: integer, column: data.tables.account.col.status }
     returns:
@@ -121,6 +127,7 @@ queries:
     tables:
       - { table: data.tables.account, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
     returns:
       - { name: affected_rows, kind: affected_rows }

@@ -16,6 +16,7 @@ queries:
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
       - { name: account_id, type: integer, column: data.tables.verification_body.col.account_id }
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
@@ -38,6 +39,7 @@ queries:
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
       - { name: sent_at, type: timestamp, column: data.tables.verification_body.col.sent_at }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
@@ -54,6 +56,7 @@ queries:
     tables:
       - { table: data.tables.verification_body }
     params:
+      - { name: ctx, type: context.Context }
       - { name: account_id, type: integer, column: data.tables.verification_body.col.account_id }
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
       - { name: auth_id, type: integer, column: data.tables.verification_body.col.auth_id }
@@ -72,6 +75,7 @@ queries:
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
       - { name: consumed_at, type: timestamp, column: data.tables.verification_body.col.consumed_at }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
@@ -89,6 +93,7 @@ queries:
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
       - { name: attempt_count, type: integer, column: data.tables.verification_body.col.attempt_count }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
@@ -105,6 +110,7 @@ queries:
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
       - { name: auth_id, type: integer, column: data.tables.verification_body.col.auth_id }
       - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
@@ -122,6 +128,7 @@ queries:
     tables:
       - { table: data.tables.verification_body, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: account_id, type: integer, column: data.tables.verification_body.col.account_id }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
@@ -137,6 +144,7 @@ queries:
     tables:
       - { table: data.tables.verification_action, write: true }
     params:
+      - { name: ctx, type: context.Context }
       - { name: verification_id, type: integer, column: data.tables.verification_action.col.verification_id }
       - { name: account_id, type: integer, column: data.tables.verification_action.col.account_id }
       - { name: result, type: data.enums.verification_result, column: data.tables.verification_action.col.result }

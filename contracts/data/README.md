@@ -81,7 +81,7 @@ storage    ──(tables / partition)──>  tables
 
 ### 3.4 query 不写 SQL
 
-**选择**：只声明 `tables` / `params` / `returns` / `index_ref`。`returns` 最后一项必须是 `{name: err, kind: error}`；`error` 不能省略。
+**选择**：只声明 `tables` / `params` / `returns` / `index_ref`。`params` 第一项必须是 `ctx context.Context`（生成器注入，SQL 参数从第二项开始）；`returns` 最后一项必须是 `{name: err, kind: error}`，不能省略。
 **理由**：SQL 语义 checker 无法验证；写进契约就是第二份真相，必然与 `.sql` 实现漂移。
 **代价**：SQL 质量靠 `EXPLAIN` 与评审。契约只保证"这个查询被设计过、用的索引被登记过"。
 
