@@ -155,14 +155,27 @@ components:
           items:
             $ref: '#/components/schemas/Account'
           type: array
-        next_cursor:
-          description: 下一页游标；无更多时为 null
+        limit:
+          default: 20
+          description: 当前页大小
+          maximum: 100
+          minimum: 1
+          type: integer
+        next_offset:
+          description: 下一页偏移；无更多时为 null
           nullable: true
-          type: string
+          type: integer
+        offset:
+          default: 0
+          description: 当前页偏移
+          minimum: 0
+          type: integer
       required:
         - items
+        - offset
+        - limit
         - has_more
-        - next_cursor
+        - next_offset
       type: object
       x-service-type: cap.services.account.schemas.AccountPage
     AccountStatus:
@@ -271,9 +284,9 @@ components:
       properties:
         has_more:
           type: boolean
-        next_cursor:
+        next_offset:
           nullable: true
-          type: string
+          type: integer
       required:
         - has_more
       type: object
@@ -518,12 +531,14 @@ paths:
           schema:
             $ref: '#/components/schemas/OwnType'
         - in: query
-          name: cursor
+          name: offset
           required: false
           schema:
-            type: string
+            default: 0
+            minimum: 0
+            type: integer
         - in: query
-          name: page_size
+          name: limit
           required: false
           schema:
             default: 20
@@ -544,7 +559,9 @@ paths:
                     own_id: 2
                     own_type: user
                     status: active
-                next_cursor: null
+                limit: 20
+                next_offset: null
+                offset: 0
               schema:
                 $ref: '#/components/schemas/AccountPage'
                 x-service-return: AccountPage

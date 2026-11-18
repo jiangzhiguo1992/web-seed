@@ -16,6 +16,8 @@ schemas:
       - { name: password, schema: { type: string }, nullable: true, write_only: true, description: "密码；仅请求写入，不回显" }
       - { name: code, schema: { type: phone_code }, nullable: true, description: "手机号区号，例如 +86" }
       - { name: device_id, schema: { type: device_id }, nullable: true, description: "设备标识" }
+    validation:
+      - { rule: "input.auth_type != \"pwd\" || input.password != null", message: "密码认证必须提供密码" }
   BindPasswordInput:
     type: object
     properties:
@@ -23,6 +25,8 @@ schemas:
       - { name: action, schema: { ref: data.enums.auth_password_action }, required: true, description: "认证绑定动作" }
       - { name: username, schema: { type: auth_username }, nullable: true, description: "用户名" }
       - { name: password, schema: { type: string }, nullable: true, write_only: true, description: "密码；仅请求写入，不回显" }
+    validation:
+      - { rule: "input.action != \"create\" && input.action != \"update\" || input.password != null", message: "创建或修改密码必须提供密码" }
   BindPhoneInput:
     type: object
     properties:
@@ -30,6 +34,8 @@ schemas:
       - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
       - { name: code, schema: { type: phone_code }, nullable: true, description: "手机号区号，例如 +86" }
       - { name: number, schema: { type: phone_number }, nullable: true, description: "手机号；只允许数字" }
+    validation:
+      - { rule: "input.action != \"create\" || input.number != null", message: "创建手机绑定必须提供手机号" }
   BindEmailInput:
     type: object
     properties:
@@ -37,6 +43,8 @@ schemas:
       - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
       - { name: username, schema: { type: email_username }, nullable: true, description: "用户名" }
       - { name: domain, schema: { type: email_domain }, nullable: true, description: "邮箱域名" }
+    validation:
+      - { rule: "input.action != \"create\" || input.username != null && input.domain != null", message: "创建邮箱绑定必须提供用户名和域名" }
   AuthBinding:
     type: object
     properties:

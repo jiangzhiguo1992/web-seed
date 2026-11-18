@@ -16,6 +16,8 @@ schemas:
       - { name: account_id, schema: { type: integer }, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
       - { name: target, schema: { type: verification_target }, required: true, description: "验证码接收目标" }
       - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
+    validation:
+      - { rule: "input.purpose != \"register\" || input.account_id != null", message: "注册验证必须携带 pending account ID" }
   VerificationSent:
     type: object
     properties:
@@ -30,6 +32,8 @@ schemas:
       - { name: target, schema: { type: verification_target }, required: true, description: "验证码接收目标" }
       - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
       - { name: code, schema: { type: verification_code }, required: true, description: "验证码" }
+    validation:
+      - { rule: "input.purpose != \"register\" || input.account_id != null", message: "注册验证必须携带 pending account ID" }
   VerificationResult:
     type: object
     properties:

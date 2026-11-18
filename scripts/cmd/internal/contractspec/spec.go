@@ -156,8 +156,10 @@ type Field struct {
 	Generated   bool     `yaml:"generated"`
 	Write       string   `yaml:"write"`
 	Unique      bool     `yaml:"unique"`
-	Fields      []Field  `yaml:"fields"`
-	ItemFields  []Field  `yaml:"item_fields"`
+	// UniqueKey 声明 list<object> 按哪个字段判重，例如 properties 用 name。
+	UniqueKey  string  `yaml:"unique_key"`
+	Fields     []Field `yaml:"fields"`
+	ItemFields []Field `yaml:"item_fields"`
 	// Unordered 标记运行时注入的字段（如类型族参数），不参与模板顺序校验。
 	Unordered bool `yaml:"-"`
 }
@@ -382,6 +384,12 @@ func validateSchemaKeys(path, where string, keys []Field, keyTypes map[string]bo
 			return fmt.Errorf("%s: %s key %s: map requires types", path, where, key.Name)
 		} else if key.Type == "" {
 			return fmt.Errorf("%s: %s key %s must declare type or types", path, where, key.Name)
+		}
+		if key.UniqueKey != "" && key.Type != "list<object>" {
+			return fmt.Errorf("%s: %s key %s: unique_key requires list<object>", path, where, key.Name)
+		}
+		if len(key.Types) > 1 && key.Default != nil {
+			return fmt.Errorf("%s: %s key %s: types with multiple kinds must not declare default", path, where, key.Name)
 		}
 		if strings.TrimSpace(key.Description) == "" {
 			return fmt.Errorf("%s: %s key %s missing description", path, where, key.Name)

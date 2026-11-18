@@ -131,6 +131,7 @@ var knownRuleIDs = map[string]bool{
 	"schema.unique":               true,
 	"schema.unique-names":         true,
 	"schema.unknown-field":        true,
+	"schema.validation":           true,
 	"service-control":             true,
 	"service-cycle":               true,
 	"service-errors":              true,

@@ -117,7 +117,13 @@ custom_types:
     description: "设备标识"
     params:
       max_len: 128
-  page_size:
+  page_offset:
+    family: integer
+    description: "分页偏移"
+    params:
+      min: 0
+      default: 0
+  page_limit:
     family: integer
     description: "分页大小"
     params:

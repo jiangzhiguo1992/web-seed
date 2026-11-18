@@ -59,6 +59,12 @@ func validateFieldTypes(fields []Field) error {
 		} else if !schemaFieldTypes[f.Type] {
 			return fmt.Errorf("field %s: unknown schema type %q", f.Name, f.Type)
 		}
+		if f.UniqueKey != "" && f.Type != "list<object>" {
+			return fmt.Errorf("field %s: unique_key requires list<object>", f.Name)
+		}
+		if len(f.Types) > 1 && f.Default != nil {
+			return fmt.Errorf("field %s: types with multiple kinds must not declare default", f.Name)
+		}
 		if err := validateFieldTypes(f.Fields); err != nil {
 			return err
 		}
@@ -229,11 +235,20 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			return
 		}
 		c.checkMinItems(l, f, path)
+		seenKeys := map[string]bool{}
 		for i, item := range l {
 			m, ok := asMap(item)
 			if !ok {
 				c.rulef("schema.type", "%s[%d]: must be object", path, i)
 				continue
+			}
+			if f.UniqueKey != "" {
+				if key, _ := m[f.UniqueKey].(string); key != "" {
+					if seenKeys[key] {
+						c.rulef("schema.unique", "%s[%d]: duplicate %s %q", path, i, f.UniqueKey, key)
+					}
+					seenKeys[key] = true
+				}
 			}
 			c.validateDoc(m, f.ItemFields, fmt.Sprintf("%s[%d]", path, i))
 		}

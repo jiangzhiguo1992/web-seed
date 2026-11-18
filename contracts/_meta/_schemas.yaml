@@ -13,11 +13,11 @@ kinds:
       - name: type
         type: string
         required: true
-        const: object
         description: "固定为 object"
       - name: properties
         type: list<object>
         required: true
+        unique_key: name
         description: "对象属性；每个条目是 name + schema + 槽位注解"
         item_fields:
           - name: name
@@ -48,6 +48,18 @@ kinds:
             type: string
             required: true
             description: "属性说明"
+      - name: validation
+        type: list<object>
+        description: "对象级校验规则；每条 rule 是受限布尔表达式，引用 input.<属性名>"
+        item_fields:
+          - name: rule
+            type: string
+            required: true
+            description: "受限布尔表达式；字段用 input.<属性名>，操作符 == != > >= < <= && || !"
+          - name: message
+            type: string
+            required: true
+            description: "违反规则时的错误文案"
 
   array:
     description: "数组节点；items 是元素值域"
@@ -55,7 +67,6 @@ kinds:
       - name: type
         type: string
         required: true
-        const: array
         description: "固定为 array"
       - name: items
         types: [object, array, scalar, ref]

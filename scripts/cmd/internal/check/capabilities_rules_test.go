@@ -1121,7 +1121,7 @@ func TestSchemaPropertyDefault(t *testing.T) {
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
 				{Name: "type", Type: "string"},
-				{Name: "properties", Type: "list<object>", ItemFields: propertyKeys},
+				{Name: "properties", Type: "list<object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 			"scalar": {Keys: []contractspec.Field{{Name: "type", Type: "string"}}},
 			"ref":    {Keys: []contractspec.Field{{Name: "ref", Type: "string"}}},
@@ -1169,7 +1169,7 @@ func TestSchemaNestedValueIsValidated(t *testing.T) {
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
 				{Name: "type", Type: "string"},
-				{Name: "properties", Type: "list<object>", ItemFields: propertyKeys},
+				{Name: "properties", Type: "list<object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 			"array": {Keys: []contractspec.Field{
 				{Name: "type", Type: "string"},
@@ -1206,7 +1206,7 @@ func TestSchemaTypesConstraint(t *testing.T) {
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
 				{Name: "type", Type: "string"},
-				{Name: "properties", Type: "list<object>", ItemFields: propertyKeys},
+				{Name: "properties", Type: "list<object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 			"scalar": {Keys: []contractspec.Field{{Name: "type", Type: "string"}}},
 		},
@@ -1248,6 +1248,9 @@ func TestValidateFieldTypesSchemaKinds(t *testing.T) {
 		{"type and types", Field{Name: "x", Type: "string", Types: []string{"scalar"}}, false},
 		{"map without types", Field{Name: "x", Type: "map"}, false},
 		{"types with pattern", Field{Name: "x", Types: []string{"scalar"}, Pattern: "^a$"}, false},
+		{"types multi with default", Field{Name: "x", Types: []string{"scalar", "object"}, Default: 1}, false},
+		{"unique_key on non list", Field{Name: "x", Type: "string", UniqueKey: "name"}, false},
+		{"unique_key on list", Field{Name: "x", Type: "list<object>", UniqueKey: "name"}, true},
 	}
 	for _, tc := range cases {
 		err := validateFieldTypes([]Field{tc.field})
@@ -1257,6 +1260,52 @@ func TestValidateFieldTypesSchemaKinds(t *testing.T) {
 		if !tc.valid && err == nil {
 			t.Fatalf("%s: expected error", tc.name)
 		}
+	}
+}
+
+func TestObjectValidation(t *testing.T) {
+	propertyKeys := []contractspec.Field{
+		{Name: "name", Type: "string", Required: true},
+		{Name: "schema", Types: []string{"object", "array", "scalar", "ref"}, Required: true},
+		{Name: "description", Type: "string", Required: true},
+	}
+	c := &Checker{
+		nodeKinds: map[string]SchemaKind{
+			"object": {Keys: []contractspec.Field{
+				{Name: "type", Type: "string"},
+				{Name: "properties", Type: "list<object>", ItemFields: propertyKeys},
+				{Name: "validation", Type: "list<object>", ItemFields: []contractspec.Field{
+					{Name: "rule", Type: "string", Required: true},
+					{Name: "message", Type: "string", Required: true},
+				}},
+			}},
+			"scalar": {Keys: []contractspec.Field{{Name: "type", Type: "string"}}},
+		},
+		propertyKeys: propertyKeys,
+	}
+	c.validateSchemaNode(map[string]any{
+		"type": "object",
+		"properties": []any{
+			map[string]any{"name": "status", "schema": map[string]any{"type": "string"}, "description": "状态"},
+			map[string]any{"name": "own_type", "schema": map[string]any{"type": "string"}, "description": "归属"},
+		},
+		"validation": []any{
+			map[string]any{"rule": "input.status != null || input.own_type != null", "message": "至少一个条件"},
+			map[string]any{"rule": "input.missing == 1", "message": "未知属性"},
+			map[string]any{"rule": "input.status ==", "message": "语法错误"},
+		},
+	}, "x")
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"x.validation[1].rule: unknown property missing",
+		"x.validation[2].rule: missing right operand",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q: %v", want, c.errs)
+		}
+	}
+	if strings.Contains(got, "x.validation[0]") {
+		t.Fatalf("valid rule rejected: %v", c.errs)
 	}
 }
 
@@ -1319,13 +1368,14 @@ func TestSchemaFieldSpecs(t *testing.T) {
 		{Name: "nullable", Type: "boolean"},
 		{Name: "read_only", Type: "boolean"},
 		{Name: "write_only", Type: "boolean"},
+		{Name: "default", Type: "any"},
 		{Name: "description", Type: "string"},
 	}
 	c := &Checker{
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
 				{Name: "type", Type: "string"},
-				{Name: "properties", Type: "list<object>", ItemFields: propertyKeys},
+				{Name: "properties", Type: "list<object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 			"scalar": {Keys: []contractspec.Field{
 				{Name: "type", Type: "string"},
@@ -1360,6 +1410,13 @@ func TestSchemaFieldSpecs(t *testing.T) {
 				"description": "missing schema field",
 				"required":    "yes",
 			},
+			map[string]any{
+				"name":        "ro_default",
+				"schema":      map[string]any{"type": "string"},
+				"description": "read_only with default",
+				"read_only":   true,
+				"default":     "x",
+			},
 		},
 		"read_only": true,
 	}, "x")
@@ -1367,9 +1424,10 @@ func TestSchemaFieldSpecs(t *testing.T) {
 	for _, want := range []string{
 		"x.properties[0].nullable: must be boolean",
 		"read_only and write_only cannot both be true",
-		`x: duplicate property "id"`,
+		`x.properties[1]: duplicate name "id"`,
 		"x.properties[2].required: must be boolean",
 		`x: "read_only" is a property key and must not appear on a schema node`,
+		"x.properties[3]: read_only must not declare default",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q: %v", want, c.errs)
@@ -1387,7 +1445,7 @@ func TestSchemaPropertyRequiresSchemaAndDescription(t *testing.T) {
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
 				{Name: "type", Type: "string"},
-				{Name: "properties", Type: "list<object>", ItemFields: propertyKeys},
+				{Name: "properties", Type: "list<object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 		},
 		propertyKeys: propertyKeys,

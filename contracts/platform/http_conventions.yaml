@@ -13,16 +13,13 @@ response:
     body: "无"
 
 pagination:
-  style: cursor
+  style: offset
   request:
-    - { name: cursor, in: query, required: false }
-    - { name: page_size, in: query, required: false, default: 20, max: 100 }
+    - { name: offset, in: query, required: false, default: 0, min: 0 }
+    - { name: limit, in: query, required: false, default: 20, max: 100 }
   response:
-    shape: "{ items: [], page: { has_more, next_cursor } }"
+    shape: "{ items: [], has_more, next_offset }"
     ordering: "必须稳定（有唯一 tiebreaker，如 id）"
-  offset:
-    allowed: false
-    reason: "深分页性能与一致性不可控"
 
 headers:
   request:

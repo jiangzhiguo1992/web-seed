@@ -89,12 +89,44 @@ func (c *Checker) validateObjectNode(m map[string]any, path string) {
 			continue // validateValue 的 list<object> 会报 must be object
 		}
 		if name, _ := pm["name"].(string); name != "" {
-			if names[name] {
-				c.rulef("schema.unique", "%s: duplicate property %q", path, name)
-			}
 			names[name] = true
 		}
 		c.validatePropertyExtras(pm, fmt.Sprintf("%s.properties[%d]", path, i))
+	}
+	c.validateObjectRules(m, path, names)
+}
+
+// validateObjectRules 校验对象级 validation：rule 可解析，且只引用本对象属性。
+func (c *Checker) validateObjectRules(m map[string]any, path string, names map[string]bool) {
+	raw, ok := m["validation"]
+	if !ok {
+		return
+	}
+	list, ok := asList2(raw)
+	if !ok {
+		return // validateValue 的 list<object> 会报 must be list
+	}
+	for i, item := range list {
+		where := fmt.Sprintf("%s.validation[%d]", path, i)
+		vm, ok := asMap(item)
+		if !ok {
+			continue
+		}
+		rule, _ := vm["rule"].(string)
+		if strings.TrimSpace(rule) == "" {
+			continue // validateDoc 会报 required
+		}
+		node, err := parseWhen(rule)
+		if err != nil {
+			c.rulef("schema.validation", "%s.rule: %v", where, err)
+			continue
+		}
+		for _, field := range whenInputFields(node) {
+			prop := strings.TrimPrefix(field, "input.")
+			if !names[prop] {
+				c.rulef("schema.validation", "%s.rule: unknown property %s", where, prop)
+			}
+		}
 	}
 }
 
@@ -109,6 +141,9 @@ func (c *Checker) validatePropertyExtras(m map[string]any, path string) {
 	if ro, _ := m["read_only"].(bool); ro {
 		if wo, _ := m["write_only"].(bool); wo {
 			c.rulef("schema.conflict", "%s: read_only and write_only cannot both be true", path)
+		}
+		if _, ok := m["default"]; ok {
+			c.rulef("schema.conflict", "%s: read_only must not declare default", path)
 		}
 	}
 	if def, ok := m["default"]; ok {

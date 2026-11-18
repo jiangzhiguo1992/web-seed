@@ -18,7 +18,8 @@ data:
     params:
       status: { from: query.status, enum: feature.states.account.states, optional: true }
       own_type: { from: query.own_type, optional: true }
-      page_size: { from: query.page_size, type: integer, default: 20 }
+      offset: { from: query.offset, type: integer, default: 0 }
+      limit: { from: query.limit, type: integer, default: 20 }
     cache:
       stale_time: 30s
       refetch_on_focus: false
@@ -87,10 +88,10 @@ filters:
   - { name: own_type, type: string, multiple: false, label: "归属类型" }
 
 pagination:
-  style: cursor
-  param: cursor
-  page_size_default: 20
-  page_size_max: 100
+  style: offset
+  param: offset
+  limit_default: 20
+  limit_max: 100
 
 empty_copy:
   title: "还没有账号"
