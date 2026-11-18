@@ -15,7 +15,7 @@ CREATE TABLE `account` (
   `user_id` INT COMMENT '关联用户 ID；不做数据库外键',
   CONSTRAINT `ck_account_deleted_consistent` CHECK ((status = 3) = (deleted_at IS NOT NULL)),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账号（业务主体）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账号主表';
 CREATE UNIQUE INDEX `uq_account_number` ON `account` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `number`);
 CREATE INDEX `idx_account_own_type_own_id` ON `account` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `own_type`, `own_id`);
 CREATE INDEX `idx_account_created_at_id` ON `account` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `created_at`, `id`);
@@ -35,7 +35,7 @@ CREATE TABLE `auth_email` (
   CONSTRAINT `ck_auth_email_username_lowercase` CHECK (username = lower(username)),
   CONSTRAINT `ck_auth_email_status` CHECK (status IN (0, 1, 2)),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邮箱认证';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邮箱认证表';
 CREATE UNIQUE INDEX `uq_auth_email_username_domain` ON `auth_email` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `username`, `domain`);
 CREATE UNIQUE INDEX `uq_auth_email_account` ON `auth_email` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `account_id`);
 
@@ -51,7 +51,7 @@ CREATE TABLE `auth_phone` (
   `operator` VARCHAR(32) COMMENT '运营商',
   CONSTRAINT `ck_auth_phone_status` CHECK (status IN (0, 1, 2)),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='手机号认证';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='手机号认证表';
 CREATE UNIQUE INDEX `uq_auth_phone_number` ON `auth_phone` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `code`, `number`);
 CREATE UNIQUE INDEX `uq_auth_phone_account` ON `auth_phone` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `account_id`);
 
@@ -69,7 +69,7 @@ CREATE TABLE `auth_pwd` (
   CONSTRAINT `ck_auth_pwd_username_lowercase` CHECK (username = lower(username)),
   CONSTRAINT `ck_auth_pwd_status` CHECK (status IN (1, 2)),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密码认证';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密码认证表';
 CREATE UNIQUE INDEX `uq_auth_pwd_username` ON `auth_pwd` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `username`);
 CREATE UNIQUE INDEX `uq_auth_pwd_account` ON `auth_pwd` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `account_id`);
 
@@ -96,7 +96,7 @@ CREATE TABLE `token` (
   CONSTRAINT `ck_token_revoke_reason_consistent` CHECK ((status = 1) = (revoke_reason IS NOT NULL)),
   CONSTRAINT `ck_token_replaced_by_self` CHECK (replaced_by_id IS NULL OR replaced_by_id <> id),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌（访问令牌与刷新令牌）';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌表';
 CREATE UNIQUE INDEX `uq_token_access_hash` ON `token` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `access_token_hash`);
 CREATE UNIQUE INDEX `uq_token_refresh_hash` ON `token` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `refresh_token_hash`);
 CREATE INDEX `idx_token_account_status` ON `token` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `account_id`, `status`);
@@ -109,7 +109,7 @@ CREATE TABLE `verification_action` (
   `updated_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '更新时间；应用层写入',
   `deleted_at` DATETIME(6) COMMENT '软删时间；应用层写入；为空表示未删除',
   `verification_id` INT NOT NULL COMMENT '验证体 ID；不建外键，验证体清理后允许悬空',
-  `account_id` INT NOT NULL COMMENT '账号 ID 快照；验证体清理后仍可按账号追溯；不作为冗余副本声明',
+  `account_id` INT NOT NULL COMMENT '账号 ID 快照；账号硬删后保留；验证体清理后仍可按账号追溯；不作为冗余副本声明',
   `result` INT NOT NULL COMMENT '结果整数码；映射 data.enums.verification_result',
   `request_ip` VARCHAR(45) COMMENT '本次请求 IP 快照；风控与审计',
   `device_id` VARCHAR(128) COMMENT '客户端设备标识；与 LoginInput.device_id 对齐',
@@ -120,7 +120,7 @@ CREATE TABLE `verification_action` (
   CONSTRAINT `ck_verification_action_status` CHECK (status = 0),
   CONSTRAINT `ck_verification_action_no_soft_delete` CHECK (deleted_at IS NULL),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='验证动作：校验请求的追加日志';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='验证动作（校验请求记录）';
 
 CREATE TABLE `verification_body` (
   `id` BIGINT NOT NULL COMMENT '主键 integer（bits: 64）；生成方式由实现决定',
@@ -128,7 +128,7 @@ CREATE TABLE `verification_body` (
   `created_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '创建时间；数据库默认 now()',
   `updated_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '更新时间；应用层写入',
   `deleted_at` DATETIME(6) COMMENT '软删时间；应用层写入；为空表示未删除',
-  `account_id` INT NOT NULL COMMENT '账号 ID；验证体不早于 account 存在，不建外键',
+  `account_id` INT NOT NULL COMMENT '账号 ID；验证体不早于 account 存在，不建数据库外键',
   `auth_type` INT NOT NULL COMMENT '认证方式整数码；映射 data.enums.auth_type；只允许 phone/email',
   `auth_id` INT NOT NULL COMMENT '认证绑定 ID；auth_type=phone 指向 auth_phone，auth_type=email 指向 auth_email；不建外键',
   `purpose` INT NOT NULL COMMENT '验证用途整数码；映射 data.enums.verification_purpose，例如注册/登录/重置密码',
@@ -146,7 +146,7 @@ CREATE TABLE `verification_body` (
   CONSTRAINT `ck_verification_consumed_order` CHECK (consumed_at IS NULL OR (consumed_at >= created_at AND consumed_at <= expire_at AND (sent_at IS NULL OR consumed_at >= sent_at))),
   CONSTRAINT `ck_verification_consumed_status` CHECK ((status = 2) = (consumed_at IS NOT NULL)),
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='验证体：一次性验证凭证与短信/邮件消息快照';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='验证体（一次性验证凭证与消息快照）';
 CREATE INDEX `idx_verification_auth_purpose` ON `verification_body` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `auth_type`, `auth_id`, `purpose`, `created_at`);
 CREATE INDEX `idx_verification_account_id` ON `verification_body` (`account_id`);
 

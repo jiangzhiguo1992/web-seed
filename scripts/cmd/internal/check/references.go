@@ -45,9 +45,6 @@ func (c *Checker) checkReferences(tableIDs map[string]string) {
 				continue
 			}
 			where := fmt.Sprintf("%s: columns.%s.references", tableIDs[id], name)
-			if _, hasRedundancy := m["redundancy"]; hasRedundancy {
-				c.rulef("reference-exclusive", "%s: column must not declare both redundancy and references", where)
-			}
 			ref, ok := asMap(rawRef)
 			if !ok {
 				continue // 结构错误由 schema 校验报出

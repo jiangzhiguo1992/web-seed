@@ -72,8 +72,11 @@ func TestRenderTableUsesSchemaDefaults(t *testing.T) {
 	if strings.Contains(string(b), "data.enums.") {
 		t.Fatalf("table scaffold must not reference enums:\n%s", b)
 	}
-	if !strings.Contains(string(b), `comment: "TODO: 表说明"`) {
-		t.Fatalf("scaffold prose must be double-quoted:\n%s", b)
+	if _, ok := table["comment"]; ok {
+		t.Fatalf("table.comment must not be scaffolded:\n%s", b)
+	}
+	if !strings.Contains(string(b), `summary: "备注表"`) {
+		t.Fatalf("scaffold summary must be double-quoted:\n%s", b)
 	}
 }
 

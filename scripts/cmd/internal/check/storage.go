@@ -1,5 +1,5 @@
 // storage.go 校验 data/storage.yaml 的存储拓扑：
-// tables 按引擎分组，每个条目内聚 size_class/retention/partition/archive；
+// tables 按引擎分组；普通条目内聚 description/retention/partition，归档条目用 archive_of；
 // caches 记录非权威副本及其缓存保留；引擎版本、连接池、部署拓扑等运行时配置不在契约内。
 package check
 
@@ -11,25 +11,44 @@ import (
 	"strings"
 )
 
-// storageIdentifierRe 约束逻辑库名，避免把连接串或实例地址写进契约。
-var storageIdentifierRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+var storageNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // storageEngineFields 是各权威引擎允许的条目字段（storage-entry-fields）。
 // 新引擎必须先在这里登记字段集，避免不同引擎的物理事实被混写。
 var storageEngineFields = map[string]map[string]bool{
-	"mysql":    storageFieldSet("table", "size_class", "retention", "partition", "archive"),
-	"postgres": storageFieldSet("table", "size_class", "retention", "partition", "archive"),
-	"mongodb":  storageFieldSet("table", "size_class", "retention"),
+	"mysql":    storageFieldSet("table", "description", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "partition"),
+	"postgres": storageFieldSet("table", "description", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "partition"),
+	"mongodb":  storageFieldSet("table", "description", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl"),
 }
 
+// storageArchiveFields 是归档条目的字段集：archive_of 指向原表，table 是归档物理表名。
+var storageArchiveFields = storageFieldSet("archive_of", "table", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "age_by", "after_unit", "after")
+
 // storageCacheFields 是非权威副本条目的字段集。
-var storageCacheFields = storageFieldSet("table", "retention")
+var storageCacheFields = storageFieldSet("cache_of", "key", "retention", "unit", "cache_ttl")
 
 // storageEntry 是一张权威表在 storage.yaml 中的登记。
 type storageEntry struct {
 	table     string
 	engine    string
-	retention map[string]any
+	retention *storageRetention
+}
+
+// storageRetention 是扁平化 retention 的解析结果；ttl 为 0 表示未声明。
+type storageRetention struct {
+	unit string
+	ttl  int
+}
+
+// storageArchiveEntry 是一条归档条目：把 archive_of 的冷数据封存到 table。
+type storageArchiveEntry struct {
+	engine string
+	name   string
+	source string
+	ageBy  string
+	unit   string
+	after  int
+	where  string
 }
 
 // storageUnitMinutes 把保留/归档时长归一化为分钟；未知单位返回 0。
@@ -79,13 +98,15 @@ func (c *Checker) checkStorage(tableIDs map[string]string) {
 		}
 	}
 
-	entries := c.checkStorageTables(rawTables, tableIDs, supported, rel)
+	entries, archives := c.checkStorageTables(rawTables, tableIDs, rel)
+	c.checkStorageArchives(archives, entries, tableIDs)
 	c.checkStorageCaches(doc, entries, rel)
 }
 
 // checkStorageTables 校验 tables.<engine> 的条目形状、覆盖与表级物理事实。
-func (c *Checker) checkStorageTables(rawTables map[string]any, tableIDs map[string]string, supported map[string]bool, rel string) map[string]*storageEntry {
+func (c *Checker) checkStorageTables(rawTables map[string]any, tableIDs map[string]string, rel string) (map[string]*storageEntry, []storageArchiveEntry) {
 	registered := map[string]*storageEntry{}
+	var archives []storageArchiveEntry
 	for _, engine := range sortedAnyKeys(rawTables) {
 		list, ok := asList2(rawTables[engine])
 		if !ok {
@@ -103,6 +124,12 @@ func (c *Checker) checkStorageTables(rawTables map[string]any, tableIDs map[stri
 			entry, ok := asMap(raw)
 			if !ok {
 				c.rulef("storage-registry", "%s must be an object", where)
+				continue
+			}
+			if archiveOf, isArchive := entry["archive_of"]; isArchive {
+				if a := c.parseStorageArchive(engine, archiveOf, entry, where); a != nil {
+					archives = append(archives, *a)
+				}
 				continue
 			}
 			for _, key := range sortedAnyKeys(entry) {
@@ -133,23 +160,15 @@ func (c *Checker) checkStorageTables(rawTables map[string]any, tableIDs map[stri
 				continue
 			}
 			e := &storageEntry{table: id, engine: engine}
-			if rawClass, ok := entry["size_class"]; ok {
-				class, _ := rawClass.(string)
-				if class != "small" && class != "large" {
-					c.rulef("storage-entry", "%s: size_class must be small or large, got %v", where, rawClass)
-				}
+			desc, _ := entry["description"].(string)
+			if desc == "" {
+				c.rulef("storage-entry-description", "%s: description is required", where)
+			} else if summary, _ := c.tableDocs[id]["summary"].(string); desc != summary {
+				c.rulef("storage-entry-description", "%s: description %q must equal summary %q", where, desc, summary)
 			}
-			if rawRetention, ok := entry["retention"]; ok {
-				if m, ok := asMap(rawRetention); ok {
-					e.retention = m
-				}
-				c.checkStorageRetention(rawRetention, where)
-			}
+			e.retention = c.parseStorageRetention(entry, where, false)
 			if rawPartition, ok := entry["partition"]; ok {
 				c.checkStoragePartition(id, rawPartition, where)
-			}
-			if rawArchive, ok := entry["archive"]; ok {
-				c.checkStorageArchive(rawArchive, supported, where)
 			}
 			registered[id] = e
 		}
@@ -162,7 +181,7 @@ func (c *Checker) checkStorageTables(rawTables map[string]any, tableIDs map[stri
 			c.rulef("storage-registry", "%s: physical table %s is not registered", rel, id)
 		}
 	}
-	return registered
+	return registered, archives
 }
 
 // checkStorageCaches 校验非权威副本：条目形状、权威登记与 cache_ttl 上限。
@@ -195,27 +214,70 @@ func (c *Checker) checkStorageCaches(doc map[string]any, entries map[string]*sto
 					c.rulef("storage-entry-fields", "%s: field %q is not allowed for cache entries", where, key)
 				}
 			}
-			id, _ := entry["table"].(string)
+			id, _ := entry["cache_of"].(string)
 			if id == "" {
-				c.rulef("storage-registry", "%s: table is required", where)
+				c.rulef("storage-registry", "%s: cache_of is required", where)
 				continue
 			}
-			if seen[id] {
-				c.rulef("storage-registry", "%s: duplicates %s", where, id)
-				continue
-			}
-			seen[id] = true
 			authority, ok := entries[id]
 			if !ok {
 				c.rulef("storage-registry", "%s: %s is not a registered authority table", where, id)
 				continue
 			}
-			rawRetention, ok := entry["retention"]
+			rawKey, ok := entry["key"]
 			if !ok {
-				c.rulef("storage-retention", "%s: retention is required for cache entries", where)
+				c.rulef("storage-cache-key", "%s: key is required", where)
 				continue
 			}
-			c.checkStorageCacheRetention(id, authority, rawRetention, where)
+			keyList, ok := asList2(rawKey)
+			if !ok {
+				c.rulef("storage-cache-key", "%s: key must be a list", where)
+				continue
+			}
+			keyRefs := stringList(keyList)
+			if len(keyRefs) == 0 {
+				c.rulef("storage-cache-key", "%s: key must not be empty", where)
+				continue
+			}
+			validKey := true
+			seenRefs := map[string]bool{}
+			cols := make([]string, 0, len(keyRefs))
+			for _, ref := range keyRefs {
+				col, ok := cacheKeyColumn(ref, id)
+				if !ok {
+					c.rulef("storage-cache-key", "%s: key %s is not a column of %s", where, ref, id)
+					validKey = false
+					continue
+				}
+				if seenRefs[col] {
+					c.rulef("storage-cache-key", "%s: key repeats %s", where, ref)
+					validKey = false
+					continue
+				}
+				seenRefs[col] = true
+				if !c.columnExists(id, col) {
+					c.rulef("storage-cache-key", "%s: key %s is not a column of %s", where, ref, id)
+					validKey = false
+					continue
+				}
+				cols = append(cols, col)
+			}
+			keyID := id + "\x00" + strings.Join(cols, ",")
+			if seen[keyID] {
+				c.rulef("storage-cache-key", "%s: duplicates (table,key) %s", where, id)
+				continue
+			}
+			seen[keyID] = true
+			if !validKey {
+				continue
+			}
+			retention := c.parseStorageRetention(entry, where, true)
+			if retention == nil || authority.retention == nil || authority.retention.ttl < 1 {
+				continue
+			}
+			if storageUnitMinutes(retention.unit, retention.ttl) > storageUnitMinutes(authority.retention.unit, authority.retention.ttl) {
+				c.rulef("storage-retention", "%s: cache_ttl must not exceed %s ttl", where, id)
+			}
 		}
 	}
 }
@@ -284,91 +346,87 @@ func (c *Checker) checkStorageDoc(doc map[string]any, rel string) {
 	}
 }
 
-// checkStorageRetention 校验权威表条目的保留策略。
-func (c *Checker) checkStorageRetention(raw any, where string) {
-	r, ok := asMap(raw)
+// parseStorageRetention 解析扁平 retention：retention 是开关，unit 与时长是同级字段。
+func (c *Checker) parseStorageRetention(entry map[string]any, where string, cache bool) *storageRetention {
+	raw, ok := entry["retention"]
 	if !ok {
-		c.rulef("storage-retention", "%s: retention must be an object", where)
-		return
-	}
-	allowed := storageFieldSet("unit", "pending", "soft_delete", "hard_delete", "ttl")
-	for k := range r {
-		if !allowed[k] {
-			c.rulef("storage-retention", "%s: retention unknown field %q", where, k)
+		if cache {
+			c.rulef("storage-retention", "%s: retention is required for cache entries", where)
 		}
+		c.rejectRetentionFields(entry, where, cache)
+		return nil
 	}
-	c.retentionUnit(r, where)
+	enabled, ok := raw.(bool)
+	if !ok {
+		c.rulef("storage-retention", "%s: retention must be a boolean", where)
+		return nil
+	}
+	if !enabled {
+		if cache {
+			c.rulef("storage-retention", "%s: retention must be true for cache entries", where)
+		}
+		c.rejectRetentionFields(entry, where, cache)
+		return nil
+	}
+	unit := c.retentionUnit(entry, where)
+	if cache {
+		rawTTL, ok := entry["cache_ttl"]
+		if !ok {
+			c.rulef("storage-retention", "%s: cache_ttl is required when retention is true", where)
+			return nil
+		}
+		ttl, ok := toInt(rawTTL)
+		if !ok || ttl < 1 {
+			c.rulef("storage-retention", "%s: cache_ttl must be an integer >= 1", where)
+			return nil
+		}
+		return &storageRetention{unit: unit, ttl: ttl}
+	}
 	hasDuration := false
 	for _, key := range []string{"pending", "soft_delete", "hard_delete", "ttl"} {
-		rawDuration, ok := r[key]
+		rawTime, ok := entry[key]
 		if !ok {
 			continue
 		}
 		hasDuration = true
-		if n, ok := toInt(rawDuration); !ok || n < 1 {
-			c.rulef("storage-retention", "%s: retention.%s must be an integer >= 1", where, key)
+		if n, ok := toInt(rawTime); !ok || n < 1 {
+			c.rulef("storage-retention", "%s: %s must be an integer >= 1", where, key)
 		}
 	}
 	if !hasDuration {
-		c.rulef("storage-retention", "%s: retention must declare at least one duration", where)
+		c.rulef("storage-retention", "%s: retention requires at least one of pending/soft_delete/hard_delete/ttl", where)
 	}
+	ttl, _ := toInt(entry["ttl"])
+	return &storageRetention{unit: unit, ttl: ttl}
 }
 
-// checkStorageCacheRetention 校验缓存条目的 cache_ttl，并与权威表 ttl 比较。
-func (c *Checker) checkStorageCacheRetention(id string, authority *storageEntry, raw any, where string) {
-	r, ok := asMap(raw)
-	if !ok {
-		c.rulef("storage-retention", "%s: retention must be an object", where)
-		return
+// rejectRetentionFields 拒绝 retention 未开启时出现的保留字段。
+func (c *Checker) rejectRetentionFields(entry map[string]any, where string, cache bool) {
+	keys := []string{"unit", "pending", "soft_delete", "hard_delete", "ttl"}
+	if cache {
+		keys = []string{"unit", "cache_ttl"}
 	}
-	allowed := storageFieldSet("unit", "cache_ttl")
-	for k := range r {
-		if !allowed[k] {
-			c.rulef("storage-retention", "%s: retention unknown field %q", where, k)
+	for _, key := range keys {
+		if _, ok := entry[key]; ok {
+			c.rulef("storage-retention", "%s: %s is only allowed when retention is true", where, key)
 		}
-	}
-	unit := c.retentionUnit(r, where)
-	rawTTL, hasTTL := r["cache_ttl"]
-	if !hasTTL {
-		c.rulef("storage-retention", "%s: retention.cache_ttl is required", where)
-		return
-	}
-	cacheTTL, ok := toInt(rawTTL)
-	if !ok || cacheTTL < 1 {
-		c.rulef("storage-retention", "%s: retention.cache_ttl must be an integer >= 1", where)
-		return
-	}
-	if authority == nil || authority.retention == nil {
-		return
-	}
-	authorityUnit, _ := authority.retention["unit"].(string)
-	rawTableTTL, ok := authority.retention["ttl"]
-	if !ok {
-		return
-	}
-	tableTTL, ok := toInt(rawTableTTL)
-	if !ok || tableTTL < 1 || authorityUnit == "" {
-		return
-	}
-	if storageUnitMinutes(unit, cacheTTL) > storageUnitMinutes(authorityUnit, tableTTL) {
-		c.rulef("storage-retention", "%s: cache_ttl must not exceed %s ttl", where, id)
 	}
 }
 
 // retentionUnit 校验并返回 unit；缺失或非法时返回空串。
-func (c *Checker) retentionUnit(r map[string]any, where string) string {
-	rawUnit, ok := r["unit"]
+func (c *Checker) retentionUnit(entry map[string]any, where string) string {
+	rawUnit, ok := entry["unit"]
 	if !ok {
-		c.rulef("storage-retention", "%s: retention.unit is required", where)
+		c.rulef("storage-retention", "%s: unit is required when retention is true", where)
 		return ""
 	}
 	unit, ok := rawUnit.(string)
 	if !ok {
-		c.rulef("storage-retention", "%s: retention.unit must be a string", where)
+		c.rulef("storage-retention", "%s: unit must be a string", where)
 		return ""
 	}
 	if unit != "minutes" && unit != "hours" && unit != "days" {
-		c.rulef("storage-retention", "%s: retention.unit must be minutes/hours/days, got %q", where, unit)
+		c.rulef("storage-retention", "%s: unit must be minutes/hours/days, got %q", where, unit)
 		return ""
 	}
 	return unit
@@ -426,44 +484,105 @@ func (c *Checker) checkStoragePartition(id string, raw any, where string) {
 	}
 }
 
-// checkStorageArchive 校验归档目标与触发阈值。
-func (c *Checker) checkStorageArchive(raw any, supported map[string]bool, where string) {
-	a, ok := asMap(raw)
-	if !ok {
-		c.rulef("storage-archive", "%s: archive must be an object", where)
-		return
+// parseStorageArchive 解析归档条目：archive_of 指向原表，table 是归档物理表名。
+func (c *Checker) parseStorageArchive(engine string, rawArchiveOf any, entry map[string]any, where string) *storageArchiveEntry {
+	archiveOf, _ := rawArchiveOf.(string)
+	if archiveOf == "" {
+		c.rulef("storage-archive", "%s: archive_of must be a non-empty table ID", where)
+		return nil
 	}
-	allowed := storageFieldSet("engine", "database", "unit", "after")
-	for k := range a {
-		if !allowed[k] {
-			c.rulef("storage-archive", "%s: archive unknown field %q", where, k)
+	for _, key := range sortedAnyKeys(entry) {
+		if !storageArchiveFields[key] {
+			c.rulef("storage-entry-fields", "%s: field %q is not allowed for archive entries", where, key)
 		}
 	}
-	engine, _ := a["engine"].(string)
-	if engine == "" {
-		c.rulef("storage-archive", "%s: archive.engine is required", where)
-	} else if !supported[engine] {
-		c.rulef("storage-archive", "%s: archive.engine %q is not a supported engine", where, engine)
+	name, _ := entry["table"].(string)
+	if name == "" {
+		c.rulef("storage-archive", "%s: table is required", where)
+		return nil
 	}
-	database, _ := a["database"].(string)
-	if database == "" {
-		c.rulef("storage-archive", "%s: archive.database is required", where)
-	} else if !storageIdentifierRe.MatchString(database) {
-		c.rulef("storage-archive", "%s: archive.database %q must be snake_case", where, database)
+	if !storageNameRe.MatchString(name) {
+		c.rulef("storage-archive", "%s: archive table %q must be snake_case", where, name)
 	}
-	unit, _ := a["unit"].(string)
-	if unit != "minutes" && unit != "hours" && unit != "days" {
-		c.rulef("storage-archive", "%s: archive.unit must be minutes/hours/days, got %q", where, unit)
+	c.parseStorageRetention(entry, where, false)
+	ageBy, _ := entry["age_by"].(string)
+	if ageBy != "created_at" && ageBy != "updated_at" {
+		c.rulef("storage-archive", "%s: age_by must be created_at or updated_at, got %q", where, ageBy)
 	}
-	rawAfter, ok := a["after"]
+	afterUnit, _ := entry["after_unit"].(string)
+	if afterUnit != "minutes" && afterUnit != "hours" && afterUnit != "days" {
+		c.rulef("storage-archive", "%s: after_unit must be minutes/hours/days, got %q", where, afterUnit)
+	}
+	rawAfter, ok := entry["after"]
 	if !ok {
-		c.rulef("storage-archive", "%s: archive.after is required", where)
-		return
+		c.rulef("storage-archive", "%s: after is required", where)
+		return nil
 	}
 	after, ok := toInt(rawAfter)
 	if !ok || after < 1 {
-		c.rulef("storage-archive", "%s: archive.after must be an integer >= 1", where)
+		c.rulef("storage-archive", "%s: after must be an integer >= 1", where)
+		return nil
 	}
+	return &storageArchiveEntry{engine: engine, name: name, source: archiveOf, ageBy: ageBy, unit: afterUnit, after: after, where: where}
+}
+
+// checkStorageArchives 校验归档条目：原表已登记、一表一条、表名唯一、age_by 存在。
+func (c *Checker) checkStorageArchives(archives []storageArchiveEntry, registered map[string]*storageEntry, tableIDs map[string]string) {
+	sources := map[string]string{}
+	names := map[string]string{}
+	physical := map[string]string{}
+	for _, id := range sortedStringMapKeys(tableIDs) {
+		if id == c.baseID {
+			continue
+		}
+		if name := c.physicalTableName(id); name != "" {
+			physical[name] = id
+		}
+	}
+	for _, a := range archives {
+		if _, ok := registered[a.source]; !ok {
+			c.rulef("storage-archive", "%s: archive_of %s is not a registered authority table", a.where, a.source)
+			continue
+		}
+		if prev, ok := sources[a.source]; ok {
+			c.rulef("storage-archive", "%s: %s already has archive %s", a.where, a.source, prev)
+			continue
+		}
+		sources[a.source] = a.name
+		if prev, ok := names[a.name]; ok {
+			c.rulef("storage-archive", "%s: archive table %s already declared by %s", a.where, a.name, prev)
+			continue
+		}
+		names[a.name] = a.where
+		if prev, ok := physical[a.name]; ok {
+			c.rulef("storage-archive", "%s: archive table %s conflicts with physical table %s", a.where, a.name, prev)
+		}
+		if _, ok := c.tableColumns[a.source][a.ageBy]; !ok {
+			c.rulef("storage-archive", "%s: age_by column %s not found on %s", a.where, a.ageBy, a.source)
+		}
+	}
+}
+
+// cacheKeyColumn 解析缓存 key：支持 account_id、col.account_id 与完整列引用。
+func cacheKeyColumn(ref, table string) (string, bool) {
+	if strings.HasPrefix(ref, "col.") {
+		col := strings.TrimPrefix(ref, "col.")
+		return col, col != ""
+	}
+	if t, col, ok := splitColumnRef(ref); ok {
+		return col, t == table
+	}
+	return ref, ref != ""
+}
+
+// physicalTableName 取物理表名；缺失时回退到契约 ID 的 file stem。
+func (c *Checker) physicalTableName(id string) string {
+	if table, ok := asMap(c.tableDocs[id]["table"]); ok {
+		if name, _ := table["name"].(string); name != "" {
+			return name
+		}
+	}
+	return strings.TrimPrefix(id, "data.tables.")
 }
 
 func sortedAnyKeys(m map[string]any) []string {

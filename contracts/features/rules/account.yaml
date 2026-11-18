@@ -76,4 +76,4 @@ rules:
     severity: error
     assert: "(status == deleted) == (deleted_at != nil)"
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    implemented_by: []
+    implemented_by: [ cap.services.account.delete ]

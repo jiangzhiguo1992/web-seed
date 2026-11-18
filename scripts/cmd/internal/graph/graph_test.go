@@ -60,6 +60,8 @@ table:
   extends: [ data.tables.base ]
   entities: []
   queries: []
+columns:
+  - { name: account_id, type: integer, references: { column: data.tables.a.col.id, on_delete: cascade } }
 `)
 	writeFixture(t, root, "contracts/data/entities/e1.yaml", `# entity e1
 id: data.entities.e1
@@ -78,8 +80,8 @@ model:
   name: e2
   extends: [ data.entities.base ]
   tables: [ data.tables.b ]
+  included_by: []
   queries: []
-  included_by: [ data.entities.e1 ]
 `)
 	writeFixture(t, root, "contracts/data/queries/q.yaml", `id: data.queries.q
 queries:
@@ -115,8 +117,14 @@ func TestCompute(t *testing.T) {
 	if got := snap.Tables["data.tables.a"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("table a queries = %v", got)
 	}
+	if got := snap.Tables["data.tables.a"].ReferencedBy; len(got) != 1 || got[0] != "data.tables.b.col.account_id" {
+		t.Fatalf("table a referenced_by = %v", got)
+	}
 	if got := snap.Entities["data.entities.e1"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("entity e1 queries = %v", got)
+	}
+	if got := snap.Entities["data.entities.e2"].IncludedBy; len(got) != 1 || got[0] != "data.entities.e1" {
+		t.Fatalf("entity e2 included_by = %v", got)
 	}
 	if got := snap.Queries["data.queries.q.get_a"]; len(got) != 1 || got[0] != "cap.services.x.get" {
 		t.Fatalf("query get_a used_by = %v", got)
@@ -203,6 +211,9 @@ func TestWriteAndCheck(t *testing.T) {
 	if !strings.Contains(string(a), "queries:\n    - data.queries.q.get_a") {
 		t.Fatalf("table a queries not written:\n%s", a)
 	}
+	if !strings.Contains(string(a), "referenced_by:\n    - data.tables.b.col.account_id") {
+		t.Fatalf("table a referenced_by not written:\n%s", a)
+	}
 	b, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/b.yaml"))
 	if !strings.Contains(string(b), "data.queries.q.get_b") {
 		t.Fatalf("table b queries not written:\n%s", b)
@@ -210,6 +221,10 @@ func TestWriteAndCheck(t *testing.T) {
 	e1, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e1.yaml"))
 	if !strings.Contains(string(e1), "queries:\n    - data.queries.q.get_a") {
 		t.Fatalf("entity e1 queries not written:\n%s", e1)
+	}
+	e2, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e2.yaml"))
+	if !strings.Contains(string(e2), "included_by:\n    - data.entities.e1") {
+		t.Fatalf("entity e2 included_by not written:\n%s", e2)
 	}
 	q, _ := os.ReadFile(filepath.Join(root, "contracts/data/queries/q.yaml"))
 	if !strings.Contains(string(q), "used_by:\n      - cap.services.x.get") {
@@ -286,5 +301,23 @@ func TestApplyNestedListReplacesAndInserts(t *testing.T) {
 	}
 	if !strings.HasSuffix(string(out), "\n") {
 		t.Fatalf("output must end with newline:\n%s", out)
+	}
+}
+
+func TestComputeRejectsUnknownReferenceTarget(t *testing.T) {
+	root := fixtureRoot(t)
+	writeFixture(t, root, "contracts/data/tables/b.yaml", `# table b
+id: data.tables.b
+summary: "b"
+table:
+  comment: "b"
+  extends: [ data.tables.base ]
+  entities: []
+  queries: []
+columns:
+  - { name: account_id, type: integer, references: { column: data.tables.missing.col.id, on_delete: cascade } }
+`)
+	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "is not a data.tables contract") {
+		t.Fatalf("unknown reference target not reported: %v", err)
 	}
 }

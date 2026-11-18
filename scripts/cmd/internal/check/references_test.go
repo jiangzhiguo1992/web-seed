@@ -182,21 +182,6 @@ func TestEntityJoinRequiresReferences(t *testing.T) {
 	}
 }
 
-func TestReferencesExclusiveWithRedundancy(t *testing.T) {
-	c := referenceTestChecker(map[string]any{
-		"name": "a_id",
-		"redundancy": []any{
-			map[string]any{"column": "data.tables.a.col.id", "source": true},
-			map[string]any{"column": "data.tables.b.col.a_id", "source": false},
-		},
-		"references": map[string]any{"column": "data.tables.a.col.id", "on_delete": "cascade"},
-	}, []any{"data.tables.b.col.a_id"})
-	c.checkReferences(referenceTestTables())
-	if !strings.Contains(entityErrs(c), "column must not declare both redundancy and references") {
-		t.Fatalf("redundancy+references not reported: %v", c.errs)
-	}
-}
-
 func TestTableReferencedByMismatch(t *testing.T) {
 	c := referenceTestChecker(map[string]any{
 		"name":       "a_id",
@@ -214,5 +199,30 @@ func TestTableReferencedByMismatch(t *testing.T) {
 	c.checkReferences(referenceTestTables())
 	if !strings.Contains(entityErrs(c), "table.referenced_by must be [data.tables.b.col.a_id], got [data.tables.b.col.opt_id]") {
 		t.Fatalf("extra referenced_by not reported: %v", c.errs)
+	}
+}
+
+func TestReferencesCoexistWithRedundancy(t *testing.T) {
+	c := referenceTestChecker(map[string]any{
+		"name": "a_id",
+		"redundancy": []any{
+			map[string]any{"column": "data.tables.a.col.id", "source": true},
+			map[string]any{"column": "data.tables.b.col.a_id", "source": false},
+		},
+		"references": map[string]any{"column": "data.tables.a.col.id", "on_delete": "cascade"},
+	}, []any{"data.tables.b.col.a_id"})
+	c.entities = map[string]*entityInfo{
+		"data.entities.a": {
+			ID:  "data.entities.a",
+			Rel: "contracts/data/entities/a.yaml",
+			Fields: []entityFieldInfo{
+				relationField("Items", "data.entities.b", "data.tables.a", "id", "data.tables.b", "a_id", "lazy"),
+			},
+		},
+	}
+	c.entityOrder = []string{"data.entities.a"}
+	c.checkReferences(referenceTestTables())
+	if len(c.errs) != 0 {
+		t.Fatalf("redundancy + references reported: %v", c.errs)
 	}
 }

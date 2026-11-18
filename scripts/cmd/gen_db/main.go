@@ -49,6 +49,17 @@ func run(root string, check bool) error {
 	if err != nil {
 		return err
 	}
+	mysqlTables, err := loadEngineTables(root, "mysql")
+	if err != nil {
+		return err
+	}
+	filtered := make([]table, 0, len(tables))
+	for _, t := range tables {
+		if mysqlTables[t.ID] {
+			filtered = append(filtered, t)
+		}
+	}
+	tables = filtered
 	schemaSQL, migrationSQL, err := render(tables)
 	if err != nil {
 		return err
@@ -86,6 +97,37 @@ func run(root string, check bool) error {
 	fmt.Printf("generated %s\n", migrationPath)
 	fmt.Printf("generated %s\n", constraintErrorsPath)
 	return nil
+}
+
+// loadEngineTables 读取 storage.yaml 中某个引擎的权威表 ID，DDL 只生成该引擎的表。
+func loadEngineTables(root, engine string) (map[string]bool, error) {
+	doc, err := loadYAML(filepath.Join(root, "contracts/data/storage.yaml"))
+	if err != nil {
+		return nil, err
+	}
+	rawTables, ok := asMap(doc["tables"])
+	if !ok {
+		return nil, fmt.Errorf("contracts/data/storage.yaml: tables must be a map")
+	}
+	rawList, ok := rawTables[engine]
+	if !ok {
+		return nil, fmt.Errorf("contracts/data/storage.yaml: tables.%s is required", engine)
+	}
+	list, ok := rawList.([]any)
+	if !ok {
+		return nil, fmt.Errorf("contracts/data/storage.yaml: tables.%s must be a list", engine)
+	}
+	out := map[string]bool{}
+	for _, raw := range list {
+		entry, _ := asMap(raw)
+		if _, isArchive := entry["archive_of"]; isArchive {
+			continue
+		}
+		if id, _ := entry["table"].(string); id != "" {
+			out[id] = true
+		}
+	}
+	return out, nil
 }
 
 // renderConstraintErrors 生成 CHECK 约束名到领域错误码的映射，供 API 层把
@@ -252,7 +294,7 @@ func parseTable(id string, doc map[string]any) (table, error) {
 	if name == "" {
 		return table{}, fmt.Errorf("table.name required")
 	}
-	comment, _ := tm["comment"].(string)
+	comment, _ := doc["summary"].(string)
 	t := table{ID: id, Name: name, Comment: comment}
 	for _, raw := range asList(doc["constraints"]) {
 		m, _ := asMap(raw)

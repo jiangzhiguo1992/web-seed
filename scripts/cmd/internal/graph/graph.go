@@ -17,11 +17,13 @@ import (
 )
 
 type TableUsedBy struct {
-	Queries []string
+	Queries      []string
+	ReferencedBy []string
 }
 
 type EntityUsedBy struct {
-	Queries []string
+	Queries    []string
+	IncludedBy []string
 }
 
 type Snapshot struct {
@@ -35,11 +37,13 @@ type Snapshot struct {
 }
 
 type tableSet struct {
-	queries map[string]bool
+	queries      map[string]bool
+	referencedBy map[string]bool
 }
 
 type entitySet struct {
-	queries map[string]bool
+	queries    map[string]bool
+	includedBy map[string]bool
 }
 
 // scanTarget 是 _meta targets 的扫描路径与 ID 模板。
@@ -130,34 +134,81 @@ func Compute(root string) (*Snapshot, error) {
 	queryServices := map[string]map[string]bool{}
 
 	tableIDTemplate := contractspec.Targets{ID: tableTarget.id}
+	tableDocs := map[string]map[string]any{}
 	for _, f := range glob(root, filepath.Join(tableTarget.dir, tableTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
 			continue
 		}
-		if _, err := loadYAML(f); err != nil {
+		doc, err := loadYAML(f)
+		if err != nil {
 			return nil, err
 		}
 		id := tableIDTemplate.FileID(filepath.Base(f))
 		if id == "" {
 			continue
 		}
-		tables[id] = &tableSet{queries: map[string]bool{}}
+		tableDocs[id] = doc
+		tables[id] = &tableSet{queries: map[string]bool{}, referencedBy: map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 	}
+	// table.referenced_by：把每条列级 references 的源列登记到目标表。
+	for id, doc := range tableDocs {
+		for _, raw := range asList(doc["columns"]) {
+			col, _ := asMap(raw)
+			ref, _ := asMap(col["references"])
+			target, _ := ref["column"].(string)
+			targetTable, _, ok := splitTableColumnRef(target)
+			if !ok {
+				continue
+			}
+			name, _ := col["name"].(string)
+			if name == "" {
+				continue
+			}
+			if ts := tables[targetTable]; ts != nil {
+				ts.referencedBy[id+".col."+name] = true
+			} else {
+				return nil, fmt.Errorf("%s: columns.%s.references target %s is not a data.tables contract", tableFiles[id], name, target)
+			}
+		}
+	}
 	entityIDTemplate := contractspec.Targets{ID: entityTarget.id}
+	entityDocs := map[string]map[string]any{}
 	for _, f := range glob(root, filepath.Join(entityTarget.dir, entityTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
 			continue
 		}
-		if _, err := loadYAML(f); err != nil {
+		doc, err := loadYAML(f)
+		if err != nil {
 			return nil, err
 		}
 		id := entityIDTemplate.FileID(filepath.Base(f))
 		if id == "" {
 			continue
 		}
-		entities[id] = &entitySet{queries: map[string]bool{}}
+		entityDocs[id] = doc
+		entities[id] = &entitySet{queries: map[string]bool{}, includedBy: map[string]bool{}}
 		entityFiles[id] = rel(root, f)
+	}
+	// model.included_by：把关系字段的来源实体登记到目标实体。
+	for id, doc := range entityDocs {
+		for _, raw := range asList(doc["fields"]) {
+			field, _ := asMap(raw)
+			typ, _ := field["type"].(string)
+			if !strings.HasPrefix(typ, "data.entities.") {
+				continue
+			}
+			src, _ := asMap(field["source"])
+			if _, ok := asMap(src["join"]); !ok {
+				continue
+			}
+			target := entities[typ]
+			if target == nil {
+				name, _ := field["name"].(string)
+				return nil, fmt.Errorf("%s: fields.%s type %s is not a data.entities contract", entityFiles[id], name, typ)
+			}
+			target.includedBy[id] = true
+		}
 	}
 	queryIDTemplate := contractspec.Targets{ID: queryTarget.id}
 	seenQueries := map[string]string{}
@@ -254,10 +305,10 @@ func Compute(root string) (*Snapshot, error) {
 		QueryFiles:  queryFiles,
 	}
 	for id, ts := range tables {
-		snap.Tables[id] = TableUsedBy{Queries: sortedKeys(ts.queries)}
+		snap.Tables[id] = TableUsedBy{Queries: sortedKeys(ts.queries), ReferencedBy: sortedKeys(ts.referencedBy)}
 	}
 	for id, es := range entities {
-		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries)}
+		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries), IncludedBy: sortedKeys(es.includedBy)}
 	}
 	for id, qs := range queryServices {
 		snap.Queries[id] = sortedKeys(qs)
@@ -270,7 +321,14 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	var changed []string
 	for _, id := range sortedFileKeys(s.TableFiles) {
 		file := s.TableFiles[id]
-		ok, err := syncNestedQueriesFile(filepath.Join(root, file), "table", "entities", s.Tables[id].Queries)
+		ok, err := syncNestedListFile(filepath.Join(root, file), "table", "entities", "referenced_by", s.Tables[id].ReferencedBy)
+		if err != nil {
+			return changed, err
+		}
+		if ok {
+			changed = append(changed, file)
+		}
+		ok, err = syncNestedListFile(filepath.Join(root, file), "table", "referenced_by", "queries", s.Tables[id].Queries)
 		if err != nil {
 			return changed, err
 		}
@@ -280,7 +338,14 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	}
 	for _, id := range sortedFileKeys(s.EntityFiles) {
 		file := s.EntityFiles[id]
-		ok, err := syncNestedQueriesFile(filepath.Join(root, file), "model", "tables", s.Entities[id].Queries)
+		ok, err := syncNestedListFile(filepath.Join(root, file), "model", "tables", "included_by", s.Entities[id].IncludedBy)
+		if err != nil {
+			return changed, err
+		}
+		if ok {
+			changed = append(changed, file)
+		}
+		ok, err = syncNestedListFile(filepath.Join(root, file), "model", "included_by", "queries", s.Entities[id].Queries)
 		if err != nil {
 			return changed, err
 		}
@@ -321,7 +386,12 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		got := nestedQueries(doc, "table")
+		gotRefs := nestedList(doc, "table", "referenced_by")
+		wantRefs := s.Tables[id].ReferencedBy
+		if !sameSet(gotRefs, wantRefs) {
+			drift = append(drift, fmt.Sprintf("%s: table.referenced_by must be %v, got %v", file, wantRefs, gotRefs))
+		}
+		got := nestedList(doc, "table", "queries")
 		want := s.Tables[id].Queries
 		if !sameSet(got, want) {
 			drift = append(drift, fmt.Sprintf("%s: table.queries must be %v, got %v", file, want, got))
@@ -333,7 +403,12 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		got := nestedQueries(doc, "model")
+		gotIncluded := nestedList(doc, "model", "included_by")
+		wantIncluded := s.Entities[id].IncludedBy
+		if !sameSet(gotIncluded, wantIncluded) {
+			drift = append(drift, fmt.Sprintf("%s: model.included_by must be %v, got %v", file, wantIncluded, gotIncluded))
+		}
+		got := nestedList(doc, "model", "queries")
 		want := s.Entities[id].Queries
 		if !sameSet(got, want) {
 			drift = append(drift, fmt.Sprintf("%s: model.queries must be %v, got %v", file, want, got))
@@ -367,7 +442,7 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 	return drift, nil
 }
 
-func syncNestedQueriesFile(path, parentKey, afterKey string, queries []string) (bool, error) {
+func syncNestedListFile(path, parentKey, afterKey, childKey string, values []string) (bool, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return false, err
@@ -376,10 +451,10 @@ func syncNestedQueriesFile(path, parentKey, afterKey string, queries []string) (
 	if err := yaml.Unmarshal(src, &doc); err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
-	if sameSet(nestedQueries(doc, parentKey), queries) {
+	if sameSet(nestedList(doc, parentKey, childKey), values) {
 		return false, nil
 	}
-	out, err := applyNestedList(src, parentKey, afterKey, "queries", queries)
+	out, err := applyNestedList(src, parentKey, afterKey, childKey, values)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
@@ -443,10 +518,19 @@ func writeAtomic(path string, out []byte) error {
 	return os.Rename(tmpName, path)
 }
 
-// nestedQueries 读取 table/model 下的 queries 列表。
-func nestedQueries(doc map[string]any, parentKey string) []string {
+// nestedList 读取 table/model 下的列表字段。
+func nestedList(doc map[string]any, parentKey, childKey string) []string {
 	p, _ := asMap(doc[parentKey])
-	return stringList(p["queries"])
+	return stringList(p[childKey])
+}
+
+// splitTableColumnRef 解析 data.tables.<t>.col.<c>。
+func splitTableColumnRef(ref string) (table, col string, ok bool) {
+	parts := strings.Split(ref, ".col.")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }
 
 // queryItemUsedBy 按 queries 列表顺序返回每项的 used_by。

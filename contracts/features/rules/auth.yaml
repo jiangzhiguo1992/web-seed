@@ -150,4 +150,4 @@ rules:
     severity: error
     assert: "(status == consumed) == (consumed_at != nil)"
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
-    implemented_by: []
+    implemented_by: [ cap.services.verification.verify ]

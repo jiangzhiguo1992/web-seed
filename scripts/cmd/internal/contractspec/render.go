@@ -25,11 +25,10 @@ type tableScaffold struct {
 
 type tableDef struct {
 	Name         string   `yaml:"name"`
-	Comment      string   `yaml:"comment"`
 	Extends      []string `yaml:"extends"`
 	Entities     []string `yaml:"entities"`
-	Queries      []string `yaml:"queries"`
 	ReferencedBy []string `yaml:"referenced_by"`
+	Queries      []string `yaml:"queries"`
 }
 
 type columnDef struct {
@@ -77,8 +76,8 @@ type entityModelScaffold struct {
 	Name       string   `yaml:"name"`
 	Extends    []string `yaml:"extends"`
 	Tables     []string `yaml:"tables"`
-	Queries    []string `yaml:"queries"`
 	IncludedBy []string `yaml:"included_by"`
+	Queries    []string `yaml:"queries"`
 }
 
 type entityFieldScaffold struct {
@@ -161,7 +160,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		return nil, err
 	}
 	tableField, _ := FindField(s.Fields, "table")
-	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "comment": true, "extends": true, "entities": true, "queries": true, "referenced_by": true}, s.Type+".table"); err != nil {
+	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "extends": true, "entities": true, "queries": true, "referenced_by": true}, s.Type+".table"); err != nil {
 		return nil, err
 	}
 	columnField, _ := FindField(s.Fields, "columns")
@@ -205,7 +204,6 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		DoNot:         []string{},
 		Table: tableDef{
 			Name:         name,
-			Comment:      "TODO: 表说明",
 			Extends:      []string{baseTableID},
 			Entities:     []string{},
 			Queries:      []string{},

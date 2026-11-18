@@ -31,7 +31,7 @@
 | 实现由契约生成 | 类型、常量、路由、状态机、DDL 均从本目录产出 |
 | 生成物不可手改 | `**/generated/` 与 `apps/api/migrations/` 是产物；手改会被 CI 拦截 |
 | 需求变更先改契约 | 禁止"先写代码后补契约" |
-| 契约不丢信息 | SQL 特性用结构化字段表达（`storage.partition` / `indexes[].expression`），禁止塞回原生 DDL |
+| 契约不丢信息 | SQL 特性用结构化字段表达（`storage.tables.<engine>[].partition`、归档条目、`indexes[].expression`），禁止塞回原生 DDL |
 
 ### 1.2 契约的判定标准
 
@@ -88,7 +88,7 @@ contracts/
 │   ├── entities/<file>.yaml  #   业务读模型（_base.yaml 为基类）
 │   ├── queries/<scope>.yaml  #   读写形状：入参/返回/索引引用，不含 SQL
 │   ├── enums.yaml            #   跨端枚举：integer code ↔ 名称
-│   └── storage.yaml          #   单例：引擎归属 / size_class / 保留 / 分区
+│   └── storage.yaml          #   单例：引擎归属 / 条目化的保留 / 分区 / 归档 / 多 key 缓存
 │
 ├── capabilities/             # ② 能力层：services + async + events + protocols
 │   ├── services/<module>.yaml #   服务：services + schemas（interface 名由 owner_module + file 派生）
@@ -480,7 +480,7 @@ AI 对负向约束的敏感度高于正向描述。
 data/tables/_base.yaml + tables/*.yaml ──> schema.sql（目标态）
                                              ├─ diff 当前 DB ──> migrations/<ts>_<name>.sql
                                              └─> sqlc 输入
-data/storage.yaml ──> 按引擎分组的表清单 + 表级物理事实
+data/storage.yaml ──> 按引擎分组的表条目 + 表级物理事实
 ```
 
 | 规则 | 说明 |
@@ -489,7 +489,7 @@ data/storage.yaml ──> 按引擎分组的表清单 + 表级物理事实
 | 目标引擎 | MySQL 8.0.16+；`live_only` 索引用 functional unique index 表达（`deleted_at IS NULL` 表达式键），不是 PostgreSQL partial index |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验（⬜ P5） | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
-| 结构化 DDL | 分区用 `storage.partition.<id>`，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
+| 结构化 DDL | 分区用 `storage.tables.<engine>[].partition`，归档用 `archive_of` 条目，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
 
 ### 6.1 迁移禁止操作
 
@@ -501,7 +501,6 @@ data/storage.yaml ──> 按引擎分组的表清单 + 表级物理事实
 | `RENAME COLUMN` | 加新列 → 双写 → 回填 → 切读 → 删旧列 |
 | 给已有数据的表加 `NOT NULL` 且无默认值 | 加可空 → 回填 → 加约束 |
 | 原地改列类型 | 新列 + 回填 + 切换 |
-| `size_class.<table>=large` 的表非 `CONCURRENTLY` 建索引 | `CREATE INDEX CONCURRENTLY`（`transaction: false`） |
 
 迁移文件名：`<utc_timestamp>_<snake_case_name>.sql`。
 

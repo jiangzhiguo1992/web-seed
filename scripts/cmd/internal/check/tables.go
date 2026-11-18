@@ -23,6 +23,10 @@ const (
 	baseContractID   = "data.tables.base"
 	baseContractFile = "_base.yaml"
 	baseContractPath = "contracts/data/tables/_base.yaml"
+
+	// MySQL 表 COMMENT 上限 2048 字符、列 COMMENT 上限 1024 字符。
+	tableSummaryMaxRunes  = 2048
+	columnCommentMaxRunes = 1024
 )
 
 func (c *Checker) checkTargets(schema *Schema) {
@@ -411,6 +415,24 @@ func (c *Checker) recordIndexName(name, rel string) {
 	c.rulef("index-name-unique", "%s: index %q already declared in %s", rel, name, prevRel)
 }
 
+// checkTableTextLengths 校验会进入 DDL COMMENT 的文本长度，避免 MySQL 静默截断。
+func (c *Checker) checkTableTextLengths(doc map[string]any, rel string) {
+	if summary, _ := doc["summary"].(string); utf8.RuneCountInString(summary) > tableSummaryMaxRunes {
+		c.rulef("table-summary-length", "%s: summary must be <= %d characters, got %d", rel, tableSummaryMaxRunes, utf8.RuneCountInString(summary))
+	}
+	for _, raw := range asList(doc["columns"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		comment, _ := m["comment"].(string)
+		if n := utf8.RuneCountInString(comment); n > columnCommentMaxRunes {
+			c.rulef("column-comment-length", "%s: columns.%s.comment must be <= %d characters, got %d", rel, name, columnCommentMaxRunes, n)
+		}
+	}
+}
+
 // checkPhysicalTable 先按 schema 校验结构，再跑表级规则。
 func (c *Checker) checkPhysicalTable(doc map[string]any, rel string, schema *Schema) {
 	c.validateDoc(doc, schema.Fields, rel)
@@ -431,6 +453,7 @@ var baseColumnShape = map[string]struct {
 }
 
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
+	c.checkTableTextLengths(doc, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{top: "table-key-order", nested: "table-key-order"})
 	if filepath.Base(rel) != baseContractFile {
 		c.rulef("base-file", "%s: base contract must live in %s", rel, baseContractFile)
@@ -507,6 +530,7 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 }
 
 func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema) {
+	c.checkTableTextLengths(doc, rel)
 	id, _ := doc["id"].(string)
 	if s, ok := doc["summary"].(string); ok && s == "" {
 		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
@@ -525,9 +549,11 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if n, ok := table["name"].(string); ok && n == "" {
 			c.rulef("schema.non-empty", "%s: table.name must not be empty", rel)
 		}
-		if _, ok := table["comment"]; ok && !hasNonEmptyString(table, "comment") {
-			c.rulef("schema.non-empty", "%s: table.comment must not be empty", rel)
-		}
+	}
+	if summary, _ := doc["summary"].(string); summary == "" {
+		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
+	}
+	if table != nil {
 		if list, isList := table["extends"].([]any); isList && len(list) == 0 {
 			c.rulef("base-only", "%s: table.extends must not be empty", rel)
 		}
