@@ -48,7 +48,7 @@ fields:
 
   - name: schemas
     type: map
-    types: [object, array, scalar, ref]
+    types: [ object, array, scalar, ref ]
     required: false
     description: "本地 schema；键是类型名，值是值域节点，object 的 properties 按 _schemas.yaml 的 item_fields 校验"
 
@@ -74,9 +74,9 @@ fields:
       - name: returns
         type: list<object>
         required: true
-        description: "业务返回值；error 隐式追加，不得显式声明；无业务返回值写 []"
+        description: "返回值；最后一项必须是 {name: err, type: error}，不能省略"
         item_fields:
-          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名；不得为 err" }
+          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名；err 只能出现在最后一项" }
           - { name: type, type: string, required: true, description: "返回类型" }
           - { name: nullable, type: boolean, required: false, description: "是否可空" }
 
@@ -96,7 +96,7 @@ fields:
           - { name: kind, type: string, required: true, enum: [ query, service, logic, transition ], description: "步骤类型" }
           - { name: summary, type: string, required: true, description: "一句话说明" }
           - { name: depends_on, type: list<string>, required: false, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "依赖的前序步骤 ID" }
-          - { name: when, type: string, required: false, description: "受限布尔表达式：true/false、!、&&、||、括号、input.<path> / step.<id>.<path> 与字面量比较" }
+          - { name: when, type: string, required: false, description: "受限布尔表达式：true/false、!、&&、||、括号、input.<path> / step.<id>.<path> 与字面量比较；枚举字段用整数 code 比较；default 表示兜底分支" }
 
           - name: on_error
             type: list<object>
@@ -139,12 +139,13 @@ fields:
 
 rules:
   - { id: service-id, text: "契约 ID 必须与 targets 派生一致，且全局唯一；service 项 ID 全局唯一", implemented_by: [ service-id ] }
-  - { id: service-structure, text: "schemas 名全局唯一；schema 节点按 _meta/_schemas.yaml 校验，标量类型必须来自 _types；params[0] 必须是 ctx context.Context，params/returns name 唯一；returns 不得包含 err（error 由生成器隐式追加），无业务返回值时必须写 []；step.id 在 service 内唯一；depends_on 只能引用前序步骤；output 只允许 logic/transition 且 name 唯一；logic 必须声明 output 与 errors", implemented_by: [ service-structure ] }
+  - { id: service-structure, text: "schemas 名全局唯一；schema 节点按 _meta/_schemas.yaml 校验，标量类型必须来自 _types；params[0] 必须是 ctx context.Context，params/returns name 唯一；returns 最后一项必须是 {name: err, type: error}，且只能出现一次；step.id 在 service 内唯一；depends_on 只能引用前序步骤；output 只允许 logic/transition 且 name 唯一；logic 必须声明 output 与 errors", implemented_by: [ service-structure ] }
   - { id: service-ref, text: "query/service/queries/transition/rules/events 引用必须存在；params/returns/schemas/input 中的 data.enums.* / data.entities.* / 本地类型必须存在，data.tables.* 禁止", implemented_by: [ service-ref ] }
   - { id: service-owner-write, text: "kind=query 的写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service", implemented_by: [ service-owner-write ] }
   - { id: service-errors, text: "step.errors 必须是存在的 platform.errors.*；kind=query 未声明时取 query.errors，声明时必须覆盖 query.errors；kind=service 未声明时取目标 service 所有步骤显式声明或 query 缺省的错误并集，声明时必须是其子集；logic/transition 必须覆盖其 queries 与 rules[].on_violation 的错误；service 项不再声明 errors", implemented_by: [ service-errors ] }
   - { id: service-control, text: "on_error 按 error 唯一；target 仅 goto 可用且必须存在；存在后向/自环 goto 时 service.max_iterations 必填", implemented_by: [ service-control ] }
   - { id: service-when, text: "step 引用必须是前序步骤，字段必须存在于目标 returns、logic output 或 query 返回；input 引用必须是 service params，且嵌套字段按 param 类型解析；$ref / oneOf / anyOf / allOf / 列表索引按 schema 解析", implemented_by: [ service-when ] }
+  - { id: service-when-exhaustive, text: "同一 service 内同一 when 路径的 == 分支必须覆盖枚举全 code 或 boolean true/false；when: default 可代替覆盖，但要求 service 内恰好一个 == 组且最多一个 default；少于两个分支的组不检查", implemented_by: [ service-when-exhaustive ] }
   - { id: service-visibility, text: "cap.protocols.http.x-service 只能指向 visibility=public 且无 async job 的 service；跨模块 kind=service 只能指向 visibility=public 的目标；internal 目标只能被同模块引用", implemented_by: [ service-visibility ] }
   - { id: service-steps-kind, text: "kind=query 必须有 query；kind=service 必须有 service；kind=logic 必须有 output+errors；kind=transition 必须有 transitions；queries 的每一项只允许 query/input；每个 kind 只允许公共字段与自身专属字段", implemented_by: [ service-steps-kind ] }
   - { id: service-cycle, text: "kind=service 调用图必须无环", implemented_by: [ service-cycle ] }
