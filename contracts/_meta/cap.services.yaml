@@ -107,6 +107,7 @@ fields:
             item_fields:
               - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
               - { name: type, type: string, required: true, description: "输出类型" }
+              - { name: description, type: string, required: true, description: "这项产出的业务含义" }
               - { name: nullable, type: boolean, required: false, description: "是否可空；必须与 returns 的同名项一致" }
 
           - name: services

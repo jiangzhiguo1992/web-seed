@@ -54,11 +54,11 @@ services:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - { name: account, type: data.entities.account }
+          - {name: account, type: data.entities.account, description: "读取到的账号"}
         queries:
           - query: data.queries.account.get_account
             input:
-              - {name: id, value: params.id, description: "记录 ID"}
+              - {name: id, value: params.id, description: "待读取的账号 ID"}
         rules:
           - "feature.rules.account.self_only"
 
@@ -79,14 +79,14 @@ services:
         errors:
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - { name: page, type: AccountPage }
+          - {name: page, type: AccountPage, description: "账号分页结果"}
         queries:
           - query: data.queries.account.list_accounts
             input:
-              - {name: status, value: params.filter.status, description: "目标状态码"}
-              - {name: own_type, value: params.filter.own_type, description: "归属主体类型"}
+              - {name: status, value: params.filter.status, description: "账号状态筛选"}
+              - {name: own_type, value: params.filter.own_type, description: "归属类型筛选"}
               - {name: offset, value: params.filter.offset, description: "分页偏移"}
-              - {name: limit, value: params.filter.limit, description: "批量上限"}
+              - {name: limit, value: params.filter.limit, description: "分页上限"}
 
   - name: create
     summary: "创建账号"
@@ -109,19 +109,19 @@ services:
           - platform.errors.ACCOUNT_NICKNAME_INVALID
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - { name: account, type: data.entities.account }
+          - {name: account, type: data.entities.account, description: "新建的账号"}
         queries:
           - query: data.queries.account.exists_account_number
             input:
-              - {name: number, value: params.input.number, description: "手机号"}
+              - {name: number, value: params.input.number, description: "待创建账号的手机号"}
           - query: data.queries.account.create_account
             input:
-              - {name: id, value: "expr: new_id()", description: "记录 ID"}
-              - {name: own_type, value: params.input.own_type, description: "归属主体类型"}
-              - {name: own_id, value: params.input.own_id, description: "归属主体 ID"}
-              - {name: number, value: params.input.number, description: "手机号"}
-              - {name: nickname, value: params.input.nickname, description: "昵称"}
-              - {name: user_id, value: params.input.user_id, description: "用户 ID"}
+              - {name: id, value: "expr: new_id()", description: "新账号 ID"}
+              - {name: own_type, value: params.input.own_type, description: "账号归属类型"}
+              - {name: own_id, value: params.input.own_id, description: "账号归属主体 ID"}
+              - {name: number, value: params.input.number, description: "账号手机号"}
+              - {name: nickname, value: params.input.nickname, description: "账号昵称"}
+              - {name: user_id, value: params.input.user_id, description: "关联用户 ID"}
         events:
           - cap.events.account.created
         rules:
@@ -151,15 +151,15 @@ services:
           - platform.errors.ACCOUNT_NICKNAME_INVALID
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - { name: account, type: data.entities.account }
+          - {name: account, type: data.entities.account, description: "更新后的账号"}
         queries:
           - query: data.queries.account.get_account
             input:
-              - {name: id, value: params.id, description: "记录 ID"}
+              - {name: id, value: params.id, description: "账号 ID"}
           - query: data.queries.account.update_account
             input:
-              - {name: id, value: params.id, description: "记录 ID"}
-              - {name: nickname, value: params.input.nickname, description: "昵称"}
+              - {name: id, value: params.id, description: "待更新账号 ID"}
+              - {name: nickname, value: params.input.nickname, description: "新昵称"}
         rules:
           - "feature.rules.account.nickname_length"
           - "feature.rules.account.self_only"
@@ -184,7 +184,7 @@ services:
         queries:
           - query: data.queries.account.get_account
             input:
-              - {name: id, value: params.id, description: "记录 ID"}
+              - {name: id, value: params.id, description: "待删除账号 ID"}
       - id: revoke_auth
         kind: service
         summary: "软删认证绑定并吊销令牌、作废验证体"
@@ -194,7 +194,7 @@ services:
         services:
           - service: cap.services.auth.revoke_all_for_account
             input:
-              - { name: account_id, value: params.id, description: "被注销账号的 ID" }
+              - {name: account_id, value: params.id, description: "被注销账号 ID"}
       - id: soft_delete
         kind: transition
         summary: "软删账号并保证 status/deleted_at 一致"
@@ -208,7 +208,7 @@ services:
         queries:
           - query: data.queries.account.soft_delete_account
             input:
-              - {name: id, value: params.id, description: "记录 ID"}
+              - {name: id, value: params.id, description: "待软删账号 ID"}
         events:
           - cap.events.account.deleted
         rules:
@@ -236,15 +236,15 @@ services:
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
         output:
-          - { name: account, type: data.entities.account }
+          - {name: account, type: data.entities.account, description: "激活后的账号"}
         queries:
           - query: data.queries.account.get_account
             input:
-              - {name: id, value: params.id, description: "记录 ID"}
+              - {name: id, value: params.id, description: "账号 ID"}
           - query: data.queries.account.set_account_status
             input:
-              - {name: id, value: params.id, description: "记录 ID"}
-              - {name: status, value: "expr: transition_target()", description: "目标状态码"}
+              - {name: id, value: params.id, description: "待激活账号 ID"}
+              - {name: status, value: "expr: transition_target()", description: "目标状态：激活"}
         transitions: [ feature.states.account.activate, feature.states.account.reactivate ]
 
   - name: suspend
@@ -269,13 +269,13 @@ services:
         input:
           - { name: reason, value: params.reason, description: "封禁原因，供审计或事件使用" }
         output:
-          - { name: account, type: data.entities.account }
+          - {name: account, type: data.entities.account, description: "封禁后的账号"}
         queries:
           - query: data.queries.account.get_account
             input:
-              - {name: id, value: params.id, description: "记录 ID"}
+              - {name: id, value: params.id, description: "账号 ID"}
           - query: data.queries.account.set_account_status
             input:
-              - {name: id, value: params.id, description: "记录 ID"}
-              - {name: status, value: "expr: transition_target()", description: "目标状态码"}
+              - {name: id, value: params.id, description: "待封禁账号 ID"}
+              - {name: status, value: "expr: transition_target()", description: "目标状态：封禁"}
         transitions: [ feature.states.account.suspend ]

@@ -79,11 +79,11 @@ services:
         input:
           - { name: auth_type, value: params.input.auth_type, description: "决定读取密码/手机/邮箱哪一种绑定" }
           - { name: identifier, value: params.input.identifier, description: "登录标识：用户名、手机号或邮箱" }
-          - { name: code, value: params.input.code, description: "手机号区号；手机认证时使用" }
+          - { name: code, value: params.input.code, description: "手机号区号" }
         output:
-          - { name: account_id, type: integer }
-          - { name: auth_id, type: integer }
-          - { name: auth_pwd_id, type: integer }
+          - { name: account_id, type: integer, description: "命中的账号 ID" }
+          - { name: auth_id, type: integer, description: "命中的认证绑定 ID" }
+          - { name: auth_pwd_id, type: integer, description: "密码绑定 ID" }
         queries:
           - query: data.queries.auth.get_auth_pwd_by_username
             input:
@@ -102,7 +102,7 @@ services:
         queries:
           - query: data.queries.account.get_account
             input:
-              - { name: id, value: step.load.account_id, description: "目标记录 ID" }
+              - { name: id, value: step.load.account_id, description: "认证绑定 ID" }
       - id: check
         kind: logic
         summary: "校验凭据、锁定与账号状态，签发令牌"
@@ -117,9 +117,9 @@ services:
           - { name: auth_id, value: step.load.auth_id, description: "命中的认证绑定 ID" }
           - { name: auth_pwd_id, value: step.load.auth_pwd_id, description: "密码绑定 ID；手机/邮箱认证时为空" }
         output:
-          - { name: session, type: AuthSession }
-          - { name: success, type: boolean }
-          - { name: auth_pwd_id, type: integer }
+          - { name: session, type: AuthSession, description: "登录会话" }
+          - { name: success, type: boolean, description: "登录是否成功" }
+          - { name: auth_pwd_id, type: integer, description: "密码绑定 ID" }
         rules:
           - "feature.rules.auth.auth_login_requires_verified"
       - id: record
@@ -133,10 +133,10 @@ services:
         queries:
           - query: data.queries.auth.record_auth_pwd_login_success
             input:
-              - { name: id, value: step.check.auth_pwd_id, description: "目标记录 ID" }
+              - { name: id, value: step.check.auth_pwd_id, description: "认证绑定 ID" }
           - query: data.queries.auth.record_auth_pwd_login_failure
             input:
-              - { name: id, value: step.check.auth_pwd_id, description: "目标记录 ID" }
+              - { name: id, value: step.check.auth_pwd_id, description: "认证绑定 ID" }
               - { name: lock_until, value: "expr: lock_until()", description: "锁定截止时间" }
         events:
           - cap.events.account.login_succeeded
@@ -161,23 +161,23 @@ services:
           - platform.errors.AUTH_INVALID_CREDENTIALS
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - { name: binding, type: AuthBinding }
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
         queries:
           - query: data.queries.auth.create_auth_pwd
             input:
-              - { name: id, value: "expr: new_id()", description: "目标记录 ID" }
+              - { name: id, value: "expr: new_id()", description: "认证绑定 ID" }
               - { name: account_id, value: params.input.account_id, description: "账号 ID" }
-              - { name: status, value: "expr: bind_status(params.input.action)", description: "目标状态码" }
+              - { name: status, value: "expr: bind_status(params.input.action)", description: "绑定状态码" }
               - { name: username, value: params.input.username, description: "用户名" }
               - { name: password_hash, value: "expr: hash_password(params.input.password)", description: "密码哈希" }
           - query: data.queries.auth.update_auth_pwd_hash
             input:
-              - { name: id, value: "expr: binding.id", description: "目标记录 ID" }
+              - { name: id, value: "expr: binding.id", description: "认证绑定 ID" }
               - { name: password_hash, value: "expr: hash_password(params.input.password)", description: "密码哈希" }
           - query: data.queries.auth.set_auth_pwd_status
             input:
-              - { name: id, value: "expr: binding.id", description: "目标记录 ID" }
-              - { name: status, value: "expr: bind_status(params.input.action)", description: "目标状态码" }
+              - { name: id, value: "expr: binding.id", description: "认证绑定 ID" }
+              - { name: status, value: "expr: bind_status(params.input.action)", description: "绑定状态码" }
 
   - name: bind_phone
     summary: "创建或启停手机号认证绑定"
@@ -198,20 +198,20 @@ services:
           - platform.errors.AUTH_PHONE_INVALID
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - { name: binding, type: AuthBinding }
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
         queries:
           - query: data.queries.auth.create_auth_phone
             input:
-              - { name: id, value: "expr: new_id()", description: "目标记录 ID" }
+              - { name: id, value: "expr: new_id()", description: "认证绑定 ID" }
               - { name: account_id, value: params.input.account_id, description: "账号 ID" }
-              - { name: status, value: "expr: bind_status(params.input.action)", description: "目标状态码" }
+              - { name: status, value: "expr: bind_status(params.input.action)", description: "绑定状态码" }
               - { name: code, value: params.input.code, description: "手机号区号" }
               - { name: number, value: params.input.number, description: "手机号" }
               - { name: operator, value: "expr: request_operator()", description: "操作者标识" }
           - query: data.queries.auth.set_auth_phone_status
             input:
-              - { name: id, value: "expr: binding.id", description: "目标记录 ID" }
-              - { name: status, value: "expr: bind_status(params.input.action)", description: "目标状态码" }
+              - { name: id, value: "expr: binding.id", description: "认证绑定 ID" }
+              - { name: status, value: "expr: bind_status(params.input.action)", description: "绑定状态码" }
 
   - name: bind_email
     summary: "创建或启停邮箱认证绑定"
@@ -232,21 +232,21 @@ services:
           - platform.errors.AUTH_EMAIL_INVALID
           - platform.errors.COMMON_FORBIDDEN
         output:
-          - { name: binding, type: AuthBinding }
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
         queries:
           - query: data.queries.auth.create_auth_email
             input:
-              - { name: id, value: "expr: new_id()", description: "目标记录 ID" }
+              - { name: id, value: "expr: new_id()", description: "认证绑定 ID" }
               - { name: account_id, value: params.input.account_id, description: "账号 ID" }
-              - { name: status, value: "expr: bind_status(params.input.action)", description: "目标状态码" }
+              - { name: status, value: "expr: bind_status(params.input.action)", description: "绑定状态码" }
               - { name: username, value: params.input.username, description: "用户名" }
               - { name: domain, value: params.input.domain, description: "邮箱域名" }
               - { name: entity, value: "expr: email_parts(params.input.domain).entity", description: "域名主体" }
               - { name: tld, value: "expr: email_parts(params.input.domain).tld", description: "顶级域" }
           - query: data.queries.auth.set_auth_email_status
             input:
-              - { name: id, value: "expr: binding.id", description: "目标记录 ID" }
-              - { name: status, value: "expr: bind_status(params.input.action)", description: "目标状态码" }
+              - { name: id, value: "expr: binding.id", description: "认证绑定 ID" }
+              - { name: status, value: "expr: bind_status(params.input.action)", description: "绑定状态码" }
 
   - name: revoke_all_for_account
     summary: "软删账号的认证绑定，并编排令牌吊销与验证体作废"
@@ -283,7 +283,7 @@ services:
         services:
           - service: cap.services.token.revoke_by_account
             input:
-              - { name: account_id, value: params.account_id, description: "要注销的账号 ID" }
+              - { name: account_id, value: params.account_id, description: "账号 ID" }
       - id: revoke_verifications
         kind: service
         summary: "作废账号未消费的验证体"
@@ -293,4 +293,4 @@ services:
         services:
           - service: cap.services.verification.revoke_by_account
             input:
-              - { name: account_id, value: params.account_id, description: "要注销的账号 ID" }
+              - { name: account_id, value: params.account_id, description: "账号 ID" }
