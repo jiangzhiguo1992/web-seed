@@ -20,16 +20,13 @@ services:
   - name: issue
     summary: "为账号签发 access + refresh 令牌对"
     visibility: public
+    transaction: none
     params:
       - {name: ctx, type: context.Context}
       - {name: account_id, type: integer}
       - {name: device_id, type: string, nullable: true}
     returns:
       - {name: tokens, type: TokenPair}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.COMMON_INTERNAL
-    transaction: none
     steps:
       - id: issue
         kind: logic
@@ -39,20 +36,28 @@ services:
         output:
           - {name: tokens, type: TokenPair}
         queries:
-          - data.queries.token.create_token
+          - query: data.queries.token.create_token
+            input:
+              id: "expr: new_id()"
+              own_type: "expr: account.own_type"
+              own_id: "expr: account.own_id"
+              account_id: "input.account_id"
+              device_id: "input.device_id"
+              user_id: "expr: account.user_id"
+              access_token_hash: "expr: hash_token(access_token)"
+              refresh_token_hash: "expr: hash_token(refresh_token)"
+              access_expire_at: "expr: access_expire_at()"
+              refresh_expire_at: "expr: refresh_expire_at()"
+
   - name: refresh
     summary: "用刷新令牌换取新令牌对"
     visibility: public
+    transaction: required
     params:
       - {name: ctx, type: context.Context}
       - {name: refresh_token, type: string}
     returns:
       - {name: tokens, type: TokenPair}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_TOKEN_INVALID
-      - platform.errors.AUTH_TOKEN_EXPIRED
-    transaction: required
     steps:
       - id: refresh
         kind: logic
@@ -60,45 +65,63 @@ services:
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
           - platform.errors.AUTH_TOKEN_EXPIRED
+        input: {refresh_token: "input.refresh_token"}
         output:
           - {name: tokens, type: TokenPair}
         queries:
-          - data.queries.token.get_token_by_refresh
-          - data.queries.token.create_token
-          - data.queries.token.revoke_token
+          - query: data.queries.token.get_token_by_refresh
+            input: {refresh_token_hash: "expr: hash_token(input.refresh_token)"}
+          - query: data.queries.token.create_token
+            input:
+              id: "expr: new_id()"
+              own_type: "expr: old_token.own_type"
+              own_id: "expr: old_token.own_id"
+              account_id: "expr: old_token.account_id"
+              device_id: "expr: old_token.device_id"
+              user_id: "expr: old_token.user_id"
+              access_token_hash: "expr: hash_token(access_token)"
+              refresh_token_hash: "expr: hash_token(refresh_token)"
+              access_expire_at: "expr: access_expire_at()"
+              refresh_expire_at: "expr: refresh_expire_at()"
+          - query: data.queries.token.revoke_token
+            input:
+              refresh_token_hash: "expr: hash_token(input.refresh_token)"
+              revoked_at: "expr: now()"
+              revoke_reason: "expr: token_revoke_reason('rotated')"
+
   - name: logout
     summary: "吊销刷新令牌"
     visibility: public
+    transaction: required
     params:
       - {name: ctx, type: context.Context}
       - {name: refresh_token, type: string}
-    returns:
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_TOKEN_INVALID
-      - platform.errors.COMMON_AUDIT_FAILED
-    transaction: required
+    returns: []
     steps:
       - id: logout
         kind: logic
         summary: "校验并吊销 refresh token"
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
+        input: {refresh_token: "input.refresh_token"}
         output: []
         queries:
-          - data.queries.token.get_token_by_refresh
-          - data.queries.token.revoke_token
+          - query: data.queries.token.get_token_by_refresh
+            input: {refresh_token_hash: "expr: hash_token(input.refresh_token)"}
+          - query: data.queries.token.revoke_token
+            input:
+              refresh_token_hash: "expr: hash_token(input.refresh_token)"
+              revoked_at: "expr: now()"
+              revoke_reason: "expr: token_revoke_reason('logout')"
+
   - name: revoke_by_account
     summary: "吊销账号的全部令牌"
     visibility: public
+    transaction: none
     params:
       - {name: ctx, type: context.Context}
       - {name: account_id, type: integer}
-    returns:
-      - {name: err, type: error}
-    errors:
-      - platform.errors.COMMON_INTERNAL
-    transaction: none
+    returns: []
     steps:
       - id: revoke
         kind: logic
@@ -107,20 +130,21 @@ services:
           - platform.errors.COMMON_INTERNAL
         output: []
         queries:
-          - data.queries.token.revoke_tokens_by_account
+          - query: data.queries.token.revoke_tokens_by_account
+            input:
+              account_id: "input.account_id"
+              revoked_at: "expr: now()"
+              revoke_reason: "expr: token_revoke_reason('account_revoked')"
+
   - name: verify
     summary: "校验访问令牌并返回账号"
     visibility: public
+    transaction: read_only
     params:
       - {name: ctx, type: context.Context}
       - {name: access_token, type: string}
     returns:
       - {name: account, type: data.entities.account}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_TOKEN_INVALID
-      - platform.errors.AUTH_TOKEN_EXPIRED
-    transaction: read_only
     steps:
       - id: verify
         kind: logic
@@ -128,22 +152,23 @@ services:
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
           - platform.errors.AUTH_TOKEN_EXPIRED
+        input: {access_token: "input.access_token"}
         output:
           - {name: account, type: data.entities.account}
         queries:
-          - data.queries.token.get_token_by_access
-          - data.queries.account.get_account
+          - query: data.queries.token.get_token_by_access
+            input: {access_token_hash: "expr: hash_token(input.access_token)"}
+          - query: data.queries.account.get_account
+            input: {id: "expr: token.account_id"}
+
   - name: purge_expired
     summary: "清理已过期令牌"
     visibility: internal
+    transaction: none
     params:
       - {name: ctx, type: context.Context}
     returns:
       - {name: affected_rows, type: integer}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.COMMON_INTERNAL
-    transaction: none
     steps:
       - id: purge
         kind: logic
@@ -153,4 +178,5 @@ services:
         output:
           - {name: affected_rows, type: integer}
         queries:
-          - data.queries.token.delete_expired_tokens
+          - query: data.queries.token.delete_expired_tokens
+            input: {limit: "expr: batch_limit()"}

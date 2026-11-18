@@ -18,7 +18,7 @@ pagination:
     - { name: offset, in: query, required: false, default: 0, min: 0 }
     - { name: limit, in: query, required: false, default: 20, max: 100 }
   response:
-    shape: "{ items: [], has_more, next_offset }"
+    shape: "{ items: [], offset, limit, has_more }"
     ordering: "必须稳定（有唯一 tiebreaker，如 id）"
 
 headers:

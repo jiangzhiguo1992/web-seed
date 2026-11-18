@@ -101,7 +101,7 @@ services:
       - id: load
         kind: logic
         queries:
-          - data.queries.q.get_a
+          - query: data.queries.q.get_a
 `)
 	return root
 }

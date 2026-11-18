@@ -25,6 +25,18 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 			if k == "use" {
 				continue
 			}
+			if k == "queries" {
+				conv := []any{}
+				for _, q := range asList(v) {
+					if qid, ok := q.(string); ok {
+						conv = append(conv, map[string]any{"query": qid})
+					} else {
+						conv = append(conv, q)
+					}
+				}
+				step[k] = conv
+				continue
+			}
 			step[k] = v
 		}
 		use, _ := old["use"].(string)
@@ -59,10 +71,51 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 			"service": method,
 		})
 	}
+	// 旧 flow 的 params 没有步骤级映射：把它们声明为前置 logic step 的输入，
+	// 以保留“参数被消费”的语义。
+	input := map[string]any{}
+	for _, raw := range asList(doc["params"]) {
+		pm, _ := asMap(raw)
+		if name, _ := pm["name"].(string); name != "" && name != "ctx" {
+			input[name] = "input." + name
+		}
+	}
+	if len(input) > 0 {
+		steps = append([]any{map[string]any{
+			"id": "p", "kind": "logic", "summary": "x",
+			"input": input, "output": []any{}, "errors": []any{},
+		}}, steps...)
+	}
+	// 旧 flow 的 when 可以引用步骤而未声明 depends_on；新契约要求数据/控制引用
+	// 都进入 depends_on，这里把 when 引用补进依赖以保留旧用例语义。
+	for _, raw := range steps {
+		step, _ := asMap(raw)
+		when, _ := step["when"].(string)
+		if when == "" {
+			continue
+		}
+		node, err := parseWhen(when)
+		if err != nil {
+			continue
+		}
+		deps := map[string]bool{}
+		for _, rawDep := range asList(step["depends_on"]) {
+			if dep, _ := rawDep.(string); dep != "" {
+				deps[dep] = true
+			}
+		}
+		for _, ref := range whenStepRefs(node) {
+			deps[ref] = true
+		}
+		list := []any{}
+		for dep := range deps {
+			list = append(list, dep)
+		}
+		step["depends_on"] = list
+	}
 	doc2 := map[string]any{
 		"summary":        doc["summary"],
 		"transaction":    doc["transaction"],
-		"errors":         doc["errors"],
 		"params":         doc["params"],
 		"steps":          steps,
 		"max_iterations": doc["max_iterations"],
@@ -126,8 +179,8 @@ func (c *Checker) checkServicePersistenceDoc(doc map[string]any, rel, module str
 				}
 			case "logic", "transition":
 				for _, rawQ := range asList(step["queries"]) {
-					qid, _ := rawQ.(string)
-					if qid != "" {
+					qo, _ := asMap(rawQ)
+					if qid, _ := qo["query"].(string); qid != "" {
 						qids = append(qids, qid)
 					}
 				}
@@ -158,11 +211,15 @@ func (c *Checker) checkMethodPersistence(doc map[string]any, rel string, tableID
 	var services []any
 	for _, raw := range asList(iface["methods"]) {
 		m, _ := asMap(raw)
+		qs := []any{}
+		for _, q := range asList(m["queries"]) {
+			qs = append(qs, map[string]any{"query": q})
+		}
 		services = append(services, map[string]any{
 			"name": m["name"],
 			"steps": []any{map[string]any{
 				"kind":    "logic",
-				"queries": m["queries"],
+				"queries": qs,
 			}},
 		})
 	}

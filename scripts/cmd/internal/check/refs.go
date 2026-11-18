@@ -65,7 +65,8 @@ func (c *Checker) checkCapabilityWrites(tableIDs map[string]string) {
 					}
 				case "logic", "transition":
 					for _, rawQ := range asList(step["queries"]) {
-						qid, _ := rawQ.(string)
+						qo, _ := asMap(rawQ)
+						qid, _ := qo["query"].(string)
 						if qid != "" {
 							qids = append(qids, qid)
 						}

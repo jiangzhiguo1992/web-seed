@@ -52,8 +52,8 @@ func TestServiceParamExpr(t *testing.T) {
 			},
 		},
 	}
-	stepOutputs := []map[string]string{
-		{"account": "data.entities.account"},
+	stepOutputs := []map[string]returnType{
+		{"account": {typ: "data.entities.account"}},
 	}
 	c := &Checker{
 		entities: map[string]*entityInfo{
@@ -62,20 +62,20 @@ func TestServiceParamExpr(t *testing.T) {
 			}},
 		},
 	}
-	c.checkServiceParamExpr("input.id", doc, stepIndex, stepOutputs, steps, "f", "s")
-	c.checkServiceParamExpr("step.load.account.id", doc, stepIndex, stepOutputs, steps, "f", "s")
+	c.checkServiceParamExpr("input.id", doc, stepIndex, stepOutputs, steps, map[string]bool{"load": true}, "f", "s")
+	c.checkServiceParamExpr("step.load.account.id", doc, stepIndex, stepOutputs, steps, map[string]bool{"load": true}, "f", "s")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid params reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceParamExpr("input.missing", doc, stepIndex, stepOutputs, steps, "f", "s")
+	c.checkServiceParamExpr("input.missing", doc, stepIndex, stepOutputs, steps, map[string]bool{"load": true}, "f", "s")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-params]") {
 		t.Fatalf("unknown input not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceParamExpr("step.load.missing", doc, stepIndex, stepOutputs, steps, "f", "s")
+	c.checkServiceParamExpr("step.load.missing", doc, stepIndex, stepOutputs, steps, map[string]bool{"load": true}, "f", "s")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-params]") {
 		t.Fatalf("unknown step field not reported: %v", c.errs)
 	}
@@ -89,9 +89,7 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 			"params":  []any{},
 			"returns": []any{
 				map[string]any{"name": "account", "type": "any"},
-				map[string]any{"name": "err", "type": "error"},
 			},
-			"errors": []any{"platform.errors.COMMON_INTERNAL"},
 			"steps": []any{
 				map[string]any{
 					"id":      "create",
@@ -780,12 +778,12 @@ services:
   - name: get
     summary: "x"
     visibility: public
+    transaction: read_only
     params:
       - {name: id, type: integer}
     returns:
       - {name: value, type: string}
-    errors: []
-    transaction: read_only
+      - {name: err, type: error}
     steps:
       - id: load
         kind: logic
@@ -802,7 +800,7 @@ services:
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"params[0] must be ctx",
-		"returns must end with err",
+		"returns must not declare err",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
@@ -813,7 +811,7 @@ services:
 func TestTransitionRulesValidated(t *testing.T) {
 	c := &Checker{}
 	doc := map[string]any{
-		"returns": []any{map[string]any{"name": "err", "type": "error"}},
+		"returns": []any{},
 		"steps": []any{map[string]any{
 			"id": "t", "kind": "transition", "summary": "x",
 			"transitions": []any{"feature.states.x.t"},
@@ -941,11 +939,10 @@ func TestQueryErrorPropagation(t *testing.T) {
 		File:   "contracts/data/queries/x.yaml",
 		Errors: []string{"platform.errors.A"},
 	}
-	base := func(step map[string]any, serviceErrors []any) map[string]any {
+	base := func(step map[string]any) map[string]any {
 		return map[string]any{
 			"summary":     "x",
 			"transaction": "required",
-			"errors":      serviceErrors,
 			"steps":       []any{step},
 		}
 	}
@@ -968,24 +965,17 @@ func TestQueryErrorPropagation(t *testing.T) {
 	t.Run("query step inherits query errors", func(t *testing.T) {
 		doc := base(map[string]any{
 			"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.q",
-		}, []any{"platform.errors.A"})
+		})
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("valid query error reported: %v", errs)
 		}
-	})
-
-	t.Run("query step missing service error", func(t *testing.T) {
-		doc := base(map[string]any{
-			"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.q",
-		}, []any{})
-		want(t, check(t, doc), "missing error platform.errors.A produced")
 	})
 
 	t.Run("query step may add local errors", func(t *testing.T) {
 		doc := base(map[string]any{
 			"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.q",
 			"errors": []any{"platform.errors.B"},
-		}, []any{"platform.errors.A", "platform.errors.B"})
+		})
 		want(t, check(t, doc), "does not declare query error platform.errors.A")
 	})
 
@@ -993,8 +983,8 @@ func TestQueryErrorPropagation(t *testing.T) {
 		doc := base(map[string]any{
 			"id": "run", "kind": "logic", "summary": "x",
 			"errors": []any{}, "output": []any{},
-			"queries": []any{"data.queries.x.q"},
-		}, []any{})
+			"queries": []any{map[string]any{"query": "data.queries.x.q"}},
+		})
 		want(t, check(t, doc), "step run does not declare query data.queries.x.q error platform.errors.A")
 	})
 }
@@ -1306,6 +1296,126 @@ func TestObjectValidation(t *testing.T) {
 	}
 	if strings.Contains(got, "x.validation[0]") {
 		t.Fatalf("valid rule rejected: %v", c.errs)
+	}
+}
+
+func TestNodeValidationKinds(t *testing.T) {
+	ruleKeys := []contractspec.Field{
+		{Name: "rule", Type: "string", Required: true},
+		{Name: "message", Type: "string", Required: true},
+	}
+	propertyKeys := []contractspec.Field{
+		{Name: "name", Type: "string", Required: true},
+		{Name: "schema", Types: []string{"scalar", "object", "array", "ref"}, Required: true},
+		{Name: "description", Type: "string", Required: true},
+	}
+	c := &Checker{
+		nodeKinds: map[string]SchemaKind{
+			"object": {Keys: []contractspec.Field{
+				{Name: "type", Type: "string"},
+				{Name: "properties", Type: "list<object>", UniqueKey: "name", ItemFields: propertyKeys},
+				{Name: "validation", Type: "list<object>", ItemFields: ruleKeys},
+			}},
+			"array": {Keys: []contractspec.Field{
+				{Name: "type", Type: "string"},
+				{Name: "items", Types: []string{"scalar"}},
+				{Name: "validation", Type: "list<object>", ItemFields: ruleKeys},
+			}},
+			"scalar": {Keys: []contractspec.Field{
+				{Name: "type", Type: "string"},
+				{Name: "validation", Type: "list<object>", ItemFields: ruleKeys},
+			}},
+			"ref": {Keys: []contractspec.Field{
+				{Name: "ref", Type: "string"},
+				{Name: "validation", Type: "list<object>", ItemFields: ruleKeys},
+			}},
+		},
+		propertyKeys:   propertyKeys,
+		methodTypeDefs: map[string]map[string]any{"X": {"type": "object"}},
+		valueTypes: contractspec.ValueTypes{
+			TypeFamilies: map[string]contractspec.ValueTypeFamily{"string": {Description: "string"}},
+		},
+	}
+	c.validateSchemaNode(map[string]any{"type": "string", "validation": []any{
+		map[string]any{"rule": "value != null", "message": "ok"},
+	}}, "scalar_ok")
+	c.validateSchemaNode(map[string]any{"type": "string", "validation": []any{
+		map[string]any{"rule": "value.x != null", "message": "bad"},
+	}}, "scalar_bad")
+	c.validateSchemaNode(map[string]any{"ref": "X", "validation": []any{
+		map[string]any{"rule": "value.status != null", "message": "ok"},
+	}}, "ref_ok")
+	c.validateSchemaNode(map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "validation": []any{
+		map[string]any{"rule": "value.x != null", "message": "bad"},
+	}}, "array_bad")
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"scalar_bad.validation[0].rule: scalar nodes may only reference value",
+		"array_bad.validation[0].rule: array nodes may only reference value",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q: %v", want, c.errs)
+		}
+	}
+	if strings.Contains(got, "scalar_ok") || strings.Contains(got, "ref_ok") {
+		t.Fatalf("valid rules rejected: %v", c.errs)
+	}
+}
+
+func TestRefValidationEntityPath(t *testing.T) {
+	ruleKeys := []contractspec.Field{
+		{Name: "rule", Type: "string"},
+		{Name: "message", Type: "string"},
+	}
+	c := &Checker{
+		nodeKinds: map[string]SchemaKind{
+			"ref": {Keys: []contractspec.Field{
+				{Name: "ref", Type: "string"},
+				{Name: "validation", Type: "list<object>", ItemFields: ruleKeys},
+			}},
+		},
+		entities: map[string]*entityInfo{
+			"data.entities.account": {Fields: []entityFieldInfo{
+				{Name: "Status", JSONName: "status", Type: "data.enums.account_status"},
+				{Name: "Own", JSONName: "own", Type: "data.entities.own"},
+			}},
+			"data.entities.own": {Fields: []entityFieldInfo{
+				{Name: "Kind", JSONName: "kind"},
+			}},
+		},
+		enumValues: map[string]map[string]bool{
+			"data.enums.account_status": {"pending": true, "active": true},
+		},
+	}
+	c.validateSchemaNode(map[string]any{
+		"ref": "data.entities.account",
+		"validation": []any{
+			map[string]any{"rule": "value.status != \"active\"", "message": "ok enum"},
+			map[string]any{"rule": "value.own.kind == 1", "message": "ok nested"},
+			map[string]any{"rule": "value.own.missing == 1", "message": "bad nested"},
+			map[string]any{"rule": "value.missing == 1", "message": "bad"},
+			map[string]any{"rule": "value.status.x == 1", "message": "bad traverse"},
+			map[string]any{"rule": "value.status == \"deleted\"", "message": "bad enum"},
+			map[string]any{"rule": "value.own == \"x\"", "message": "bad entity compare"},
+			map[string]any{"rule": "value.own == null", "message": "ok null"},
+		},
+	}, "x")
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"x.validation[2].rule: unknown entity field missing",
+		"x.validation[3].rule: unknown entity field missing",
+		"x.validation[4].rule: status is not an entity; cannot traverse",
+		`x.validation[5].rule: "deleted" is not a value of data.enums.account_status`,
+		"x.validation[6].rule: value.own is an entity; compare with null only",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q: %v", want, c.errs)
+		}
+	}
+	for _, idx := range []string{"x.validation[0]", "x.validation[1]", "x.validation[7]"} {
+		if strings.Contains(got, idx) {
+			t.Fatalf("valid rule rejected (%s): %v", idx, c.errs)
+		}
 	}
 }
 

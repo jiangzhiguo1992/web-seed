@@ -579,7 +579,7 @@ func TestEntityModelTableDuplicateRejectedBySchema(t *testing.T) {
 
 func TestEntityValidationUsedBy(t *testing.T) {
 	c := &Checker{
-		methodReturns:  map[string]map[string]string{"cap.services.x.get": {}},
+		methodReturns:  map[string]map[string]returnType{"cap.services.x.get": {}},
 		serviceQueries: map[string]map[string]bool{"cap.services.x.get": {"data.queries.x.get": true}},
 		queryTables:    map[string]map[string]bool{"data.queries.x.get": {"data.tables.x": true}},
 	}
@@ -953,6 +953,13 @@ func TestQueryReturnsShape(t *testing.T) {
 	c.checkQueryReturns(q)
 	if !strings.Contains(entityErrs(c), "duplicate return name") {
 		t.Fatalf("duplicate return name not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	q.Returns = []queryReturn{{Name: "err", Kind: "scalar", Type: "string"}}
+	c.checkQueryReturns(q)
+	if !strings.Contains(entityErrs(c), "must not declare err") {
+		t.Fatalf("explicit err return not reported: %v", c.errs)
 	}
 
 	c = &Checker{}

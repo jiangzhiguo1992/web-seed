@@ -1010,6 +1010,10 @@ func whenOperand(t whenToken) (*whenNode, error) {
 		case "null":
 			return &whenNode{kind: "literal", value: nil}, nil
 		}
+		// value 是 schema validation 的当前节点值；value.<path> 用于 ref 节点。
+		if t.text == "value" || strings.HasPrefix(t.text, "value.") {
+			return &whenNode{kind: "field", value: t.text}, nil
+		}
 		parts := strings.Split(t.text, ".")
 		if len(parts) < 2 || (parts[0] != "input" && parts[0] != "step") {
 			return nil, fmt.Errorf("field %q must be input.<path> or step.<id>.<path>", t.text)

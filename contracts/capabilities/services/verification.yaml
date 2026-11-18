@@ -44,20 +44,12 @@ services:
   - name: send
     summary: "发送短信/邮件验证码"
     visibility: public
+    transaction: required
     params:
       - {name: ctx, type: context.Context}
       - {name: input, type: SendVerificationInput}
     returns:
       - {name: verification, type: VerificationSent}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_VERIFICATION_INVALID
-      - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
-      - platform.errors.AUTH_PHONE_INVALID
-      - platform.errors.AUTH_EMAIL_INVALID
-      - platform.errors.COMMON_AUDIT_FAILED
-      - platform.errors.COMMON_RATE_LIMITED
-    transaction: required
     steps:
       - id: send
         kind: logic
@@ -67,12 +59,31 @@ services:
           - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
           - platform.errors.AUTH_PHONE_INVALID
           - platform.errors.AUTH_EMAIL_INVALID
+          - platform.errors.COMMON_INTERNAL
         output:
           - {name: verification, type: VerificationSent}
         queries:
-          - data.queries.verification.get_latest_verification
-          - data.queries.verification.create_verification
-          - data.queries.verification.mark_verification_sent
+          - query: data.queries.verification.get_latest_verification
+            input:
+              account_id: "input.input.account_id"
+              auth_type: "input.input.auth_type"
+              auth_id: "expr: resolve_auth_id(input.input)"
+              purpose: "input.input.purpose"
+          - query: data.queries.verification.create_verification
+            input:
+              id: "expr: new_id()"
+              account_id: "input.input.account_id"
+              auth_type: "input.input.auth_type"
+              purpose: "input.input.purpose"
+              auth_id: "expr: resolve_auth_id(input.input)"
+              code_hash: "expr: hash_code(code)"
+              content: "expr: render_content(input.input)"
+              expire_at: "expr: expire_at()"
+          - query: data.queries.verification.mark_verification_sent
+            input:
+              id: "expr: verification.id"
+              sent_at: "expr: now()"
+              status: "expr: verification_status('sent')"
         rules:
           - "feature.rules.auth.verification_resend"
           - "feature.rules.auth.verification_target_normalization"
@@ -81,23 +92,16 @@ services:
           - "feature.rules.auth.verification_register_account"
           - "feature.rules.auth.verification_auth_binding"
           - "feature.rules.auth.verification_purpose_status"
+
   - name: verify
     summary: "校验并消费验证码，记录每次校验动作"
     visibility: public
+    transaction: required
     params:
       - {name: ctx, type: context.Context}
       - {name: input, type: VerifyCodeInput}
     returns:
       - {name: result, type: VerificationResult}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_VERIFICATION_INVALID
-      - platform.errors.AUTH_VERIFICATION_EXPIRED
-      - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
-      - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
-      - platform.errors.COMMON_AUDIT_FAILED
-      - platform.errors.COMMON_RATE_LIMITED
-    transaction: required
     steps:
       - id: verify
         kind: logic
@@ -107,13 +111,35 @@ services:
           - platform.errors.AUTH_VERIFICATION_EXPIRED
           - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
           - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+          - platform.errors.COMMON_INTERNAL
         output:
           - {name: result, type: VerificationResult}
         queries:
-          - data.queries.verification.get_latest_verification
-          - data.queries.verification.consume_verification
-          - data.queries.verification.increment_verification_attempt
-          - data.queries.verification.create_verification_action
+          - query: data.queries.verification.get_latest_verification
+            input:
+              account_id: "input.input.account_id"
+              auth_type: "input.input.auth_type"
+              auth_id: "expr: resolve_auth_id(input.input)"
+              purpose: "input.input.purpose"
+          - query: data.queries.verification.consume_verification
+            input:
+              id: "expr: verification.id"
+              consumed_at: "expr: now()"
+              status: "expr: verification_status('consumed')"
+          - query: data.queries.verification.increment_verification_attempt
+            input:
+              id: "expr: verification.id"
+              attempt_count: "expr: verification.attempt_count + 1"
+              status: "expr: verification_status('failed')"
+          - query: data.queries.verification.create_verification_action
+            input:
+              verification_id: "expr: verification.id"
+              account_id: "input.input.account_id"
+              result: "expr: verification_result(verified)"
+              request_ip: "expr: request_ip()"
+              device_id: "expr: request_device_id()"
+              location: "expr: request_location()"
+              input_hash: "expr: hash_code(input.input.code)"
         rules:
           - "feature.rules.auth.verification_one_time"
           - "feature.rules.auth.verification_expiry"
@@ -126,19 +152,16 @@ services:
           - "feature.rules.auth.verification_success_sets_verified"
           - "feature.rules.auth.verification_action_recorded"
           - "feature.rules.auth.verification_action_append_only"
+
   - name: revoke_by_auth
     summary: "换绑/解绑/停用认证绑定时作废对应未消费验证体"
     visibility: public
+    transaction: none
     params:
       - {name: ctx, type: context.Context}
       - {name: auth_type, type: data.enums.auth_type}
       - {name: auth_id, type: integer}
-    returns:
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
-      - platform.errors.COMMON_INTERNAL
-    transaction: none
+    returns: []
     steps:
       - id: revoke
         kind: logic
@@ -148,20 +171,23 @@ services:
           - platform.errors.COMMON_INTERNAL
         output: []
         queries:
-          - data.queries.verification.revoke_active_verifications_by_auth
+          - query: data.queries.verification.revoke_active_verifications_by_auth
+            input:
+              auth_type: "input.auth_type"
+              auth_id: "input.auth_id"
+              purpose: "expr: any_purpose()"
+              status: "expr: verification_status('revoked')"
         rules:
           - "feature.rules.auth.verification_auth_change"
+
   - name: revoke_by_account
     summary: "作废账号的全部未消费验证体"
     visibility: public
+    transaction: none
     params:
       - {name: ctx, type: context.Context}
       - {name: account_id, type: integer}
-    returns:
-      - {name: err, type: error}
-    errors:
-      - platform.errors.COMMON_INTERNAL
-    transaction: none
+    returns: []
     steps:
       - id: revoke
         kind: logic
@@ -170,4 +196,7 @@ services:
           - platform.errors.COMMON_INTERNAL
         output: []
         queries:
-          - data.queries.verification.revoke_active_verifications_by_account
+          - query: data.queries.verification.revoke_active_verifications_by_account
+            input:
+              account_id: "input.account_id"
+              status: "expr: verification_status('revoked')"

@@ -93,11 +93,12 @@ func (c *Checker) validateObjectNode(m map[string]any, path string) {
 		}
 		c.validatePropertyExtras(pm, fmt.Sprintf("%s.properties[%d]", path, i))
 	}
-	c.validateObjectRules(m, path, names)
+	c.validateNodeRules(m, "object", path, names)
 }
 
-// validateObjectRules 校验对象级 validation：rule 可解析，且只引用本对象属性。
-func (c *Checker) validateObjectRules(m map[string]any, path string, names map[string]bool) {
+// validateNodeRules 校验节点级 validation：rule 可解析，字段引用符合 kind。
+// object 引用 input.<属性名>；scalar/array 引用 value；ref 引用 value 或 value.<path>。
+func (c *Checker) validateNodeRules(m map[string]any, kind, path string, names map[string]bool) {
 	raw, ok := m["validation"]
 	if !ok {
 		return
@@ -121,11 +122,43 @@ func (c *Checker) validateObjectRules(m map[string]any, path string, names map[s
 			c.rulef("schema.validation", "%s.rule: %v", where, err)
 			continue
 		}
-		for _, field := range whenInputFields(node) {
-			prop := strings.TrimPrefix(field, "input.")
-			if !names[prop] {
-				c.rulef("schema.validation", "%s.rule: unknown property %s", where, prop)
+		var refPaths map[string]*entityFieldInfo
+		if kind == "ref" {
+			refPaths = map[string]*entityFieldInfo{}
+		}
+		for _, field := range whenFields(node, "") {
+			if strings.HasPrefix(field, "input.") {
+				if kind != "object" {
+					c.rulef("schema.validation", "%s.rule: only object rules may reference %s", where, field)
+					continue
+				}
+				prop := strings.TrimPrefix(field, "input.")
+				if !names[prop] {
+					c.rulef("schema.validation", "%s.rule: unknown property %s", where, prop)
+				}
+				continue
 			}
+			if field == "value" || strings.HasPrefix(field, "value.") {
+				if kind == "object" {
+					c.rulef("schema.validation", "%s.rule: object rules must reference input.<property>, not %s", where, field)
+					continue
+				}
+				if kind != "ref" && field != "value" {
+					c.rulef("schema.validation", "%s.rule: %s nodes may only reference value", where, kind)
+					continue
+				}
+				if kind == "ref" && strings.HasPrefix(field, "value.") {
+					rest := strings.TrimPrefix(field, "value.")
+					if _, ok := refPaths[rest]; !ok {
+						refPaths[rest] = c.resolveRefValuePath(m, rest, where)
+					}
+				}
+				continue
+			}
+			c.rulef("schema.validation", "%s.rule: unknown field %s", where, field)
+		}
+		if kind == "ref" {
+			c.checkRefEnumRules(node, refPaths, where)
 		}
 	}
 }
@@ -165,6 +198,92 @@ func (c *Checker) validatePropertyExtras(m map[string]any, path string) {
 	}
 }
 
+// resolveRefValuePath 解析 ref 节点的 value.<path> 到目标 entity 字段。
+// 只展开 data.entities.*；多级路径按 relation 的 type 递归进入目标 entity。
+func (c *Checker) resolveRefValuePath(m map[string]any, rest, where string) *entityFieldInfo {
+	ref, _ := m["ref"].(string)
+	cur := c.entities[ref]
+	if cur == nil {
+		return nil
+	}
+	segs := strings.Split(rest, ".")
+	for i, seg := range segs {
+		f := findEntityField(cur, seg)
+		if f == nil {
+			// 规则通常写 JSON 名（snake_case），findEntityField 只匹配 Go 名。
+			for j := range cur.Fields {
+				if cur.Fields[j].JSONName == seg {
+					f = &cur.Fields[j]
+					break
+				}
+			}
+		}
+		if f == nil {
+			c.rulef("schema.validation", "%s.rule: unknown entity field %s", where, seg)
+			return nil
+		}
+		if i == len(segs)-1 {
+			return f
+		}
+		typ := strings.TrimPrefix(strings.TrimPrefix(f.Type, "*"), "List<")
+		typ = strings.TrimSuffix(typ, ">")
+		next := c.entities[typ]
+		if next == nil {
+			c.rulef("schema.validation", "%s.rule: %s is not an entity; cannot traverse", where, seg)
+			return nil
+		}
+		cur = next
+	}
+	return nil
+}
+
+// checkRefEnumRules 校验 ref 规则的比较字面量：
+// 枚举字段的值必须来自枚举，relation/entity 字段只能与 null 比较。
+func (c *Checker) checkRefEnumRules(node *whenNode, paths map[string]*entityFieldInfo, where string) {
+	walkWhenCompares(node, func(cmp *whenNode) {
+		field, lit := cmp.left, cmp.right
+		if field.kind != "field" && lit.kind == "field" {
+			field, lit = lit, field
+		}
+		if field.kind != "field" || lit.kind != "literal" {
+			return
+		}
+		path, _ := field.value.(string)
+		if !strings.HasPrefix(path, "value.") {
+			return
+		}
+		f := paths[strings.TrimPrefix(path, "value.")]
+		if f == nil {
+			return
+		}
+		if f.IsRelation || strings.HasPrefix(f.Type, "data.entities.") {
+			if lit.value != nil {
+				c.rulef("schema.validation", "%s.rule: %s is an entity; compare with null only", where, path)
+			}
+			return
+		}
+		s, ok := lit.value.(string)
+		if !ok || !strings.HasPrefix(f.Type, "data.enums.") {
+			return
+		}
+		if values := c.enumValues[f.Type]; values != nil && !values[s] {
+			c.rulef("schema.validation", "%s.rule: %q is not a value of %s", where, s, f.Type)
+		}
+	})
+}
+
+// walkWhenCompares 深度优先遍历比较节点。
+func walkWhenCompares(n *whenNode, fn func(*whenNode)) {
+	if n == nil {
+		return
+	}
+	if n.kind == "compare" {
+		fn(n)
+	}
+	walkWhenCompares(n.left, fn)
+	walkWhenCompares(n.right, fn)
+}
+
 // propertyKeySet 返回槽位键集合，用于区分「节点上放错位置的槽位键」与真正未知的键。
 func (c *Checker) propertyKeySet() map[string]bool {
 	set := make(map[string]bool, len(c.propertyKeys))
@@ -189,6 +308,7 @@ func (c *Checker) validateArrayNode(m map[string]any, path string) {
 	if hasMin && hasMax && min > max {
 		c.rulef("schema.range", "%s: min_items must be <= max_items", path)
 	}
+	c.validateNodeRules(m, "array", path, nil)
 }
 
 func (c *Checker) validateScalarNode(m map[string]any, path string) {
@@ -204,6 +324,7 @@ func (c *Checker) validateScalarNode(m map[string]any, path string) {
 	if c.valueType(typ) == "" {
 		c.rulef("schema.type", "%s.type: unknown value type %q", path, typ)
 	}
+	c.validateNodeRules(m, "scalar", path, nil)
 }
 
 func (c *Checker) validateRefNode(m map[string]any, path string) {
@@ -228,6 +349,7 @@ func (c *Checker) validateRefNode(m map[string]any, path string) {
 			c.rulef("service-ref", "%s.ref: unknown schema %s", path, ref)
 		}
 	}
+	c.validateNodeRules(m, "ref", path, nil)
 }
 
 // validateSchemaKeyValues 按 Field 规范校验键值类型；types 与 type: schema

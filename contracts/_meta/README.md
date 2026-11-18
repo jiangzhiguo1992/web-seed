@@ -137,7 +137,7 @@ scripts/cmd/
   - `data/storage.yaml` 的 `tables.<engine>`：按 supported_engines 分组，覆盖每张物理表且无孤儿；`caches` 只登记非权威副本；`size_class`/`retention`/`partition` 按表登记
   - `table.entities` 显式记录映射本表的实体，checker 校验；`table.queries` 只记生成的 `queries`
   - `owner_module` 与 capabilities 写表归属一致（只有 `cap.services` 可写）；跨模块读通过 `kind: service` 调用，`read_only_tables` 已移除
-  - service steps 的 `kind: query` / `kind: logic.queries` 引用的查询项必须存在；每个写查询必须被某个 service step 引用，且写表归属一致；`kind: query` 不得跨模块写；query 的 `errors` 必须是存在的 `platform.errors.*`，且被引用它的 step 覆盖
+  - service steps 的 `kind: query` / `kind: logic.queries[].query` 引用的查询项必须存在；每个写查询必须被某个 service step 引用，且写表归属一致；`kind: query` 不得跨模块写；query 的 `errors` 必须是存在的 `platform.errors.*`，且被引用它的 step 覆盖；`input` 的 key 必须是目标参数名或本步局部名，必填参数必须全部出现，引用 `step.<id>` 时必须列入 `depends_on`；service 不声明 `errors`，`returns` 不声明 `err`
   - 索引名同一 schema 内必须全局唯一
   - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
   - 所有契约的顶层 `fields` 必须竖排（block style），嵌套 `item_fields` 不限制（`schema.fields-style`）；`table.extends/entities`、`model.extends/tables/included_by` 必须竖排（`schema.list-style`）
@@ -180,7 +180,7 @@ scripts/cmd/
   - `tables` 是查询读写的表；每项 `{table, write}`，`write: true` 表示写该表；必须存在、不是 `data.tables.base`、不得重复；第一项为主表；可以多表；实例必须竖排
   - `offset` / `limit` 是保留分页参数名：出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数；list 返回必须同时声明两者
   - `params` 只声明接口入参；name 唯一、type 非空；未绑定 `column` 时 type 必须映射到类型族或 `data.enums.*`；`column` 绑定列后类型族必须与列一致（`data.enums.*` 按 integer 列）；`expr` 与 `column` 互斥；`default` 只在 `nullable: true` 时允许，checker 校验可判定的标量/数组外层，枚举值与数组元素交给生成器
-  - `returns` 是 list<object>：每项用 `kind` 区分 `scalar` / `affected_rows` / `entity` / `columns`；kind 专属字段必须出现，互斥字段不得出现；`entity` 只写 entity、不能写 columns；`columns` 用于没有对应 entity 的投影且必须写 columns；secret 只有同模块可显式列出
+  - `returns` 是 list<object>：`name` 不得为 `err`（error 由生成器隐式追加）；每项用 `kind` 区分 `scalar` / `affected_rows` / `entity` / `columns`；kind 专属字段必须出现，互斥字段不得出现；`entity` 只写 entity、不能写 columns；`columns` 用于没有对应 entity 的投影且必须写 columns；secret 只有同模块可显式列出
   - 同一 query 的多项 `list` 必须一致；`affected_rows` 必须是唯一返回项且不得为列表
   - `columns` 只用于 `kind: columns`；每项必须是查询表上的 `data.tables.<t>.col.<c>`
   - 单表 query 至少一个 `index_ref`；显式索引必须与 `used_by` 双向一致

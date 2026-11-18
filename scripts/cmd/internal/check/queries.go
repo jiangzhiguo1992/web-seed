@@ -560,6 +560,9 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 			c.rulef("query-returns", "%s: duplicate return name %s", rw, r.Name)
 		}
 		names[r.Name] = true
+		if r.Name == "err" {
+			c.rulef("query-returns", "%s: returns must not declare err; error is implicit", rw)
+		}
 		if hasList && r.List != listSet {
 			c.rulef("query-returns", "%s: list must be consistent across return items", rw)
 		}
@@ -718,7 +721,8 @@ func (c *Checker) checkQueryUsedBy() {
 					}
 				case "logic", "transition":
 					for _, rawQ := range asList(step["queries"]) {
-						qid, _ := rawQ.(string)
+						qo, _ := asMap(rawQ)
+						qid, _ := qo["query"].(string)
 						if qid != "" {
 							qids = append(qids, qid)
 						}

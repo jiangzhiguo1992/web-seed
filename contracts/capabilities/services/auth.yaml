@@ -58,24 +58,17 @@ schemas:
     properties:
       - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
       - { name: tokens, schema: { ref: TokenPair }, required: true, description: "令牌对" }
+
 services:
   - name: login
     summary: "登录：校验认证绑定，签发令牌"
     visibility: public
+    transaction: required
     params:
       - {name: ctx, type: context.Context}
       - {name: input, type: LoginInput}
     returns:
       - {name: session, type: AuthSession}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_INVALID_CREDENTIALS
-      - platform.errors.AUTH_LOCKED
-      - platform.errors.ACCOUNT_SUSPENDED
-      - platform.errors.COMMON_FORBIDDEN
-      - platform.errors.COMMON_AUDIT_FAILED
-      - platform.errors.COMMON_RATE_LIMITED
-    transaction: required
     steps:
       - id: login
         kind: logic
@@ -88,31 +81,35 @@ services:
         output:
           - {name: session, type: AuthSession}
         queries:
-          - data.queries.account.get_account
-          - data.queries.auth.get_auth_pwd_by_username
-          - data.queries.auth.get_auth_phone_by_number
-          - data.queries.auth.get_auth_email_by_username_domain
-          - data.queries.auth.record_auth_pwd_login_success
-          - data.queries.auth.record_auth_pwd_login_failure
+          - query: data.queries.account.get_account
+            input: {id: "expr: auth_row.account_id"}
+          - query: data.queries.auth.get_auth_pwd_by_username
+            input: {username: "input.input.identifier"}
+          - query: data.queries.auth.get_auth_phone_by_number
+            input: {code: "input.input.code", number: "input.input.identifier"}
+          - query: data.queries.auth.get_auth_email_by_username_domain
+            input:
+              username: "expr: split_identifier(input.input.identifier).username"
+              domain: "expr: split_identifier(input.input.identifier).domain"
+          - query: data.queries.auth.record_auth_pwd_login_success
+            input: {id: "expr: auth_pwd.id"}
+          - query: data.queries.auth.record_auth_pwd_login_failure
+            input: {id: "expr: auth_pwd.id", lock_until: "expr: lock_until()"}
         events:
           - cap.events.account.login_succeeded
           - cap.events.account.login_failed
         rules:
           - "feature.rules.auth.auth_login_requires_verified"
+
   - name: bind_password
     summary: "创建、更新或启停密码认证绑定"
     visibility: public
+    transaction: none
     params:
       - {name: ctx, type: context.Context}
       - {name: input, type: BindPasswordInput}
     returns:
       - {name: binding, type: AuthBinding}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_USERNAME_TAKEN
-      - platform.errors.AUTH_INVALID_CREDENTIALS
-      - platform.errors.COMMON_FORBIDDEN
-    transaction: none
     steps:
       - id: bind
         kind: logic
@@ -124,23 +121,27 @@ services:
         output:
           - {name: binding, type: AuthBinding}
         queries:
-          - data.queries.auth.create_auth_pwd
-          - data.queries.auth.update_auth_pwd_hash
-          - data.queries.auth.set_auth_pwd_status
+          - query: data.queries.auth.create_auth_pwd
+            input:
+              id: "expr: new_id()"
+              account_id: "input.input.account_id"
+              status: "expr: bind_status(input.input.action)"
+              username: "input.input.username"
+              password_hash: "expr: hash_password(input.input.password)"
+          - query: data.queries.auth.update_auth_pwd_hash
+            input: {id: "expr: binding.id", password_hash: "expr: hash_password(input.input.password)"}
+          - query: data.queries.auth.set_auth_pwd_status
+            input: {id: "expr: binding.id", status: "expr: bind_status(input.input.action)"}
+
   - name: bind_phone
     summary: "创建或启停手机号认证绑定"
     visibility: public
+    transaction: none
     params:
       - {name: ctx, type: context.Context}
       - {name: input, type: BindPhoneInput}
     returns:
       - {name: binding, type: AuthBinding}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_PHONE_TAKEN
-      - platform.errors.AUTH_PHONE_INVALID
-      - platform.errors.COMMON_FORBIDDEN
-    transaction: none
     steps:
       - id: bind
         kind: logic
@@ -152,22 +153,26 @@ services:
         output:
           - {name: binding, type: AuthBinding}
         queries:
-          - data.queries.auth.create_auth_phone
-          - data.queries.auth.set_auth_phone_status
+          - query: data.queries.auth.create_auth_phone
+            input:
+              id: "expr: new_id()"
+              account_id: "input.input.account_id"
+              status: "expr: bind_status(input.input.action)"
+              code: "input.input.code"
+              number: "input.input.number"
+              operator: "expr: request_operator()"
+          - query: data.queries.auth.set_auth_phone_status
+            input: {id: "expr: binding.id", status: "expr: bind_status(input.input.action)"}
+
   - name: bind_email
     summary: "创建或启停邮箱认证绑定"
     visibility: public
+    transaction: none
     params:
       - {name: ctx, type: context.Context}
       - {name: input, type: BindEmailInput}
     returns:
       - {name: binding, type: AuthBinding}
-      - {name: err, type: error}
-    errors:
-      - platform.errors.AUTH_EMAIL_TAKEN
-      - platform.errors.AUTH_EMAIL_INVALID
-      - platform.errors.COMMON_FORBIDDEN
-    transaction: none
     steps:
       - id: bind
         kind: logic
@@ -179,19 +184,26 @@ services:
         output:
           - {name: binding, type: AuthBinding}
         queries:
-          - data.queries.auth.create_auth_email
-          - data.queries.auth.set_auth_email_status
+          - query: data.queries.auth.create_auth_email
+            input:
+              id: "expr: new_id()"
+              account_id: "input.input.account_id"
+              status: "expr: bind_status(input.input.action)"
+              username: "input.input.username"
+              domain: "input.input.domain"
+              entity: "expr: email_parts(input.input.domain).entity"
+              tld: "expr: email_parts(input.input.domain).tld"
+          - query: data.queries.auth.set_auth_email_status
+            input: {id: "expr: binding.id", status: "expr: bind_status(input.input.action)"}
+
   - name: revoke_all_for_account
     summary: "软删账号的认证绑定，并编排令牌吊销与验证体作废"
     visibility: public
+    transaction: none
     params:
       - {name: ctx, type: context.Context}
       - {name: account_id, type: integer}
-    returns:
-      - {name: err, type: error}
-    errors:
-      - platform.errors.COMMON_INTERNAL
-    transaction: none
+    returns: []
     steps:
       - id: revoke_bindings
         kind: logic
@@ -200,9 +212,12 @@ services:
           - platform.errors.COMMON_INTERNAL
         output: []
         queries:
-          - data.queries.auth.soft_delete_auth_pwd_by_account
-          - data.queries.auth.soft_delete_auth_phone_by_account
-          - data.queries.auth.soft_delete_auth_email_by_account
+          - query: data.queries.auth.soft_delete_auth_pwd_by_account
+            input: {account_id: "input.account_id"}
+          - query: data.queries.auth.soft_delete_auth_phone_by_account
+            input: {account_id: "input.account_id"}
+          - query: data.queries.auth.soft_delete_auth_email_by_account
+            input: {account_id: "input.account_id"}
       - id: revoke_tokens
         kind: service
         summary: "吊销账号全部令牌"
@@ -210,8 +225,7 @@ services:
         errors:
           - platform.errors.COMMON_INTERNAL
         service: cap.services.token.revoke_by_account
-        params:
-          account_id: "input.account_id"
+        input: {account_id: "input.account_id"}
       - id: revoke_verifications
         kind: service
         summary: "作废账号未消费的验证体"
@@ -219,5 +233,4 @@ services:
         errors:
           - platform.errors.COMMON_INTERNAL
         service: cap.services.verification.revoke_by_account
-        params:
-          account_id: "input.account_id"
+        input: {account_id: "input.account_id"}

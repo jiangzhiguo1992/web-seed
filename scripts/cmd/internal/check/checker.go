@@ -61,9 +61,11 @@ type Checker struct {
 	errCodeSet        map[string]bool
 	dataAccessErrSet  map[string]bool
 	permissionSet     map[string]bool
-	methodReturns     map[string]map[string]string
+	methodReturns     map[string]map[string]returnType
 	methodTypeDefs    map[string]map[string]any
 	serviceQueries    map[string]map[string]bool
+	ruleErrors        map[string]string
+	ruleOwners        map[string][]string
 	queryReturnTypes  map[string]map[string]string
 	accessBindings    map[string]accessPolicy
 	inlineSeq         int

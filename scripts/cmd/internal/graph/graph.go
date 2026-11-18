@@ -224,8 +224,8 @@ func Compute(root string) (*Snapshot, error) {
 					}
 				case "logic", "transition":
 					for _, rawQ := range asList(step["queries"]) {
-						qid, _ := rawQ.(string)
-						if qid != "" {
+						qo, _ := asMap(rawQ)
+						if qid, _ := qo["query"].(string); qid != "" {
 							qids = append(qids, qid)
 						}
 					}

@@ -34,7 +34,6 @@ components:
       required: [has_more]
       properties:
         has_more: { type: boolean }
-        next_offset: { type: integer, nullable: true }
 
   parameters:
     IdempotencyKey:

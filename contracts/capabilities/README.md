@@ -10,14 +10,14 @@
 
 | 目录 | 回答的问题 | 真相源内容 | 产物 |
 |---|---|---|---|
-| `services/<module>.yaml` | 模块能提供哪些可调用单元、如何实现 | services[]、steps、errors、事务、写归属 | Go interface、usecase 骨架、写归属校验 |
+| `services/<module>.yaml` | 模块能提供哪些可调用单元、如何实现 | services[]、steps、input/output 数据链、事务、写归属 | Go interface、usecase 骨架、写归属校验 |
 | `async/<module>.yaml` | 哪些任务异步执行、如何触发与重试 | jobs[]、trigger、retry、concurrency、handler service | worker 注册表、调度配置 |
 | `events/<subject>.yaml` | 跨模块异步消息长什么样 | name、version、payload、emitted_by、consumers | 事件常量、payload 类型 |
 | `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露 | path、method、status、header、schema 引用 | server 类型、client、合并 spec |
 
 一句话区分：
 
-- **service = 一个可调用单元**，有明确的 params/returns/errors 和 steps；同步调用，不声明 trigger。
+- **service = 一个可调用单元**，有明确的 params/returns（error 隐式）和 steps；同步调用，不声明 trigger。
 - **async = 一个异步任务**，引用一个同步 service 作为 handler，声明 trigger/retry/concurrency。
 - **step = 服务实现路径上的一步**，四类：query / service / logic / transition。
 - **rule / state 在 features**，被 service 的 `kind: logic` / `kind: transition` step 引用。
@@ -77,7 +77,7 @@ async ──service──> services
 service 项必须声明：
 
 - `name` / `summary` / `visibility`（`public` 跨模块可见，`internal` 仅本模块可见）
-- `params` / `returns` / `errors`
+- `params` / `returns`；`error` 由生成器隐式追加，不写 `err`；无业务返回值写 `returns: []`
 - `transaction`（`required` / `read_only` / `none`）
 - `steps`（至少一步）
 
@@ -87,22 +87,26 @@ service 项必须声明：
 
 | kind | 必填 | 说明 |
 |---|---|---|
-| `query` | `query` + `params` | 调用本模块 `data.queries.*`；`step.errors` 必须覆盖 `query.errors` |
-| `service` | `service` + `params` | 调用其他（或本模块）service；跨模块目标必须 `public` |
-| `logic` | `output` + `errors`；可选 `queries` / `rules` / `events` | 手写实现；`queries` 用于 query 反向索引与错误覆盖，`rules` 是业务依据 |
-| `transition` | `transitions` | 执行 `feature.states.*` 转换；可选 `queries` / `rules` / `events` / `output` |
+| `query` | `query` + `input` | 调用本模块 `data.queries.*`；`input` 的 key 必须是查询参数名，必填参数必须全部出现；`step.errors` 必须覆盖 `query.errors` |
+| `service` | `service` + `input` | 调用其他（或本模块）service；`input` 的 key 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public` |
+| `logic` | `output` + `errors`；可选 `input` / `queries` / `rules` / `events` | 手写实现；`queries` 是 `{query, input}` 对象列表；`input` 声明本步读取的局部输入；`rules` 是业务依据 |
+| `transition` | `transitions`；可选 `input` / `output` / `queries` / `rules` / `events` | 执行 `feature.states.*` 转换 |
 
-通用字段：`id` / `kind` / `summary` / `depends_on` / `when` / `on_error` / `errors`。
+通用字段：`id` / `kind` / `summary` / `depends_on` / `when` / `on_error` / `errors` / `input`。
 
-- `when` 是受限布尔表达式（`true/false`、`!`、`&&`、`||`、括号、`input.*` / `step.<id>.*` 与字面量比较）；`input.*` 必须是 service params，嵌套字段按 param 类型解析；静态 false 的步骤不可达。
+- `when` 是受限布尔表达式（`true/false`、`!`、`&&`、`||`、括号、`input.*` / `step.<id>.*` 与字面量比较）；`input.*` 必须是 service params，嵌套字段按 param 类型解析。
 - `on_error` 是 `{error, action, target}` 列表；`action: abort | continue | goto`；存在后向/自环 goto 时 `max_iterations` 必填。
-- `service.errors` 必须覆盖所有可达步骤的未处理错误与入口策略错误（权限→`COMMON_FORBIDDEN`、限流→`COMMON_RATE_LIMITED`、审计→`COMMON_AUDIT_FAILED`、循环耗尽→`COMMON_LOOP_EXHAUSTED`）。
+- 入口策略错误（权限→`COMMON_FORBIDDEN`、限流→`COMMON_RATE_LIMITED`、审计→`COMMON_AUDIT_FAILED`）只由 `access.yaml` 拥有，service 与 step 不重复声明。
+- `step.errors` 只列该步骤实际返回的领域错误：`kind: query` 缺省继承 `query.errors`；`kind: service` 必须是目标 service 所有步骤显式声明或 query 缺省的错误并集的子集；`logic/transition` 必须覆盖其 `queries` 与 `rules.on_violation` 的 `errors`。
+- 数据链是硬约束：`input` 的值只能是 `input.<path>`、`step.<id>.<path>`、字面量或显式 `expr:` 表达式；引用 `step.<id>` 时该步骤必须在 `depends_on` 中；`logic/transition` 的每个显式 `output` 必须被后续 `input`/`when` 引用，或与 `returns` 业务字段同名；`returns` 的每个业务字段必须有同名、类型一致且 `nullable` 一致的产出步骤（指针与 `List<>` 归一化后，`*T` 视为可空）；service 的每个非 `ctx` 参数必须被至少一个 `input` 或 `when` 引用。
+- `expr:` 是显式软区：表示该值由本步内部计算，checker 只校验非空，不解析来源，也不把它计入 `input`/`step` 的消费关系；能用 `input.` / `step.` 表达的来源不得用 `expr:` 绕过。
+- `COMMON_LOOP_EXHAUSTED` 由生成器在 `max_iterations` 用尽时隐式返回，不在 `step.errors` 声明。
 
 ### 3.2 事务与写归属
 
-- `transaction` 是 service 级事务边界；生成器在 usecase 方法体外层包裹 `WithTx`。
+- `transaction` 是 service 级事务边界；生成器在 usecase 方法体外层包裹 `WithTx`。`read_only` 不得调用写表或返回 `affected_rows` 的 query；写操作必须声明 `required` 或 `none`。
 - `kind: query` 的写表必须属于文件 `owner_module`；跨模块写必须走 `kind: service`。
-- 写表由 query 的 `tables[].write` 反向推导，不再单独声明；`step.queries` 中每个 query 的 `errors` 必须被 `step.errors` 覆盖。
+- 写表由 query 的 `tables[].write` 反向推导，不再单独声明；`queries[].query` 的 `errors` 必须被 `step.errors` 覆盖。
 - `query.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，且不得为空。
 
 ---

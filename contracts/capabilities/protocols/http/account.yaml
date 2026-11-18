@@ -37,7 +37,6 @@ paths:
                 offset: 0
                 limit: 20
                 has_more: false
-                next_offset: null
 
     post:
       operationId: createAccount

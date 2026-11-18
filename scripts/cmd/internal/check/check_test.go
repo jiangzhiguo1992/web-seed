@@ -2949,10 +2949,10 @@ func TestFlowImplementationErrors(t *testing.T) {
 			"COMMON_LOOP_EXHAUSTED": true,
 		},
 		permissionSet: map[string]bool{"platform.security.permissions.x": true},
-		methodReturns: map[string]map[string]string{
+		methodReturns: map[string]map[string]returnType{
 			"cap.methods.x.get": {
-				"account":  "data.entities.account",
-				"accounts": "List<data.entities.account>",
+				"account":  {typ: "data.entities.account"},
+				"accounts": {typ: "List<data.entities.account>"},
 			},
 		},
 		methodTypeDefs: map[string]map[string]any{
@@ -3397,16 +3397,6 @@ func TestFlowImplementationErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("missing unhandled error", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", nil)}, []any{"platform.errors.A"})
-		want(t, check(t, doc), "missing error platform.errors.B")
-	})
-
-	t.Run("extra error", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", nil)}, []any{"platform.errors.A", "platform.errors.B", "platform.errors.C"})
-		want(t, check(t, doc), "not produced by a reachable, unhandled step")
-	})
-
 	t.Run("handled error is excluded", func(t *testing.T) {
 		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
 			"on_error": []any{onError("platform.errors.B", "continue", "")},
@@ -3414,13 +3404,6 @@ func TestFlowImplementationErrors(t *testing.T) {
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("handled error reported: %v", errs)
 		}
-	})
-
-	t.Run("handled error must not be exposed", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
-			"on_error": []any{onError("platform.errors.B", "continue", "")},
-		})}, []any{"platform.errors.A", "platform.errors.B"})
-		want(t, check(t, doc), "not produced by a reachable, unhandled step")
 	})
 
 	t.Run("when false is unreachable", func(t *testing.T) {
@@ -3432,13 +3415,6 @@ func TestFlowImplementationErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("unreachable step error must not be exposed", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
-			"when": "false", "errors": []any{"platform.errors.A"},
-		})}, []any{"platform.errors.A"})
-		want(t, check(t, doc), "not produced by a reachable, unhandled step")
-	})
-
 	t.Run("dependency on unreachable step", func(t *testing.T) {
 		doc := base([]any{
 			step("off", "cap.methods.x.get", map[string]any{"when": "false", "errors": []any{"platform.errors.A"}}),
@@ -3447,14 +3423,6 @@ func TestFlowImplementationErrors(t *testing.T) {
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("dependency chain reported: %v", errs)
 		}
-	})
-
-	t.Run("dependency error must not be exposed", func(t *testing.T) {
-		doc := base([]any{
-			step("off", "cap.methods.x.get", map[string]any{"when": "false", "errors": []any{"platform.errors.A"}}),
-			step("after", "cap.methods.x.get", map[string]any{"depends_on": []any{"off"}, "errors": []any{"platform.errors.B"}}),
-		}, []any{"platform.errors.B"})
-		want(t, check(t, doc), "not produced by a reachable, unhandled step")
 	})
 
 	t.Run("depends_on must reference earlier step", func(t *testing.T) {
@@ -3531,15 +3499,6 @@ func TestFlowImplementationErrors(t *testing.T) {
 		}
 	})
 
-	t.Run("bounded self goto requires loop exhausted", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
-			"errors":   []any{"platform.errors.A"},
-			"on_error": []any{onError("platform.errors.A", "goto", "call")},
-		})}, []any{})
-		doc["max_iterations"] = 3
-		want(t, check(t, doc), "missing service-level error platform.errors.COMMON_LOOP_EXHAUSTED")
-	})
-
 	t.Run("continue target is forbidden", func(t *testing.T) {
 		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{
 			"errors":   []any{"platform.errors.A"},
@@ -3600,23 +3559,6 @@ func TestFlowImplementationErrors(t *testing.T) {
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("audit failed reported: %v", errs)
 		}
-	})
-
-	t.Run("flow level error without feature", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{"platform.errors.COMMON_RATE_LIMITED"})
-		want(t, check(t, doc), "not produced by a reachable, unhandled step")
-	})
-
-	t.Run("rate_limit requires rate limited", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
-		doc["rate_limit"] = map[string]any{"requests": 1, "window_seconds": 1}
-		want(t, check(t, doc), "missing service-level error platform.errors.COMMON_RATE_LIMITED")
-	})
-
-	t.Run("audit requires audit failed", func(t *testing.T) {
-		doc := base([]any{step("call", "cap.methods.x.get", map[string]any{"errors": []any{}})}, []any{})
-		doc["audit"] = true
-		want(t, check(t, doc), "missing service-level error platform.errors.COMMON_AUDIT_FAILED")
 	})
 
 	t.Run("when references earlier step", func(t *testing.T) {
@@ -4329,39 +4271,6 @@ func TestFlowImplementationErrors(t *testing.T) {
 		doc["max_iterations"] = 0
 		want(t, check(t, doc), "max_iterations must be >= 1")
 	})
-}
-
-func TestDirectFlowLevelErrors(t *testing.T) {
-	methodErrors := map[string]map[string]bool{"cap.methods.x.get": {"platform.errors.A": true}}
-	methodIDs := map[string]bool{"cap.methods.x.get": true}
-	c := &Checker{errCodeSet: map[string]bool{"A": true, "COMMON_RATE_LIMITED": true}}
-	doc := map[string]any{
-		"summary": "x", "implementation": "direct",
-		"method": "cap.methods.x.get", "transaction": "read_only",
-		"permissions": []any{},
-		"rate_limit":  map[string]any{"requests": 1, "window_seconds": 1},
-		"errors":      []any{"platform.errors.A", "platform.errors.COMMON_RATE_LIMITED"},
-	}
-	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{})
-	if len(c.errs) != 0 {
-		t.Fatalf("direct flow level error reported: %v", c.errs)
-	}
-
-	doc["errors"] = []any{"platform.errors.A"}
-	c.errs = nil
-	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "missing service-level error platform.errors.COMMON_RATE_LIMITED") {
-		t.Fatalf("missing rate limit error not reported: %v", c.errs)
-	}
-
-	doc["rate_limit"] = nil
-	doc["permissions"] = []any{"platform.security.permissions.x"}
-	c.permissionSet = map[string]bool{"platform.security.permissions.x": true}
-	c.errs = nil
-	c.checkFlowItem(doc, "f", "cap.flows.x.get", "x", methodIDs, methodErrors, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "missing service-level error platform.errors.COMMON_FORBIDDEN") {
-		t.Fatalf("missing forbidden error not reported: %v", c.errs)
-	}
 }
 
 func TestMethodTypeRefs(t *testing.T) {

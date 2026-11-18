@@ -23,6 +23,7 @@ enums:
       - data.entities.account
       - cap.services.account
 
+  # TODO:GG
   - name: account_created_status
     description: "账号创建事件状态"
     go_type: AccountCreatedStatus
@@ -144,6 +145,7 @@ enums:
     used_by:
       - data.entities.verification_action
 
+  # TODO:GG
   - name: auth_bind_action
     description: "认证绑定动作（手机/邮箱）"
     go_type: AuthBindAction
@@ -155,6 +157,7 @@ enums:
     used_by:
       - cap.services.auth
 
+  # TODO:GG
   - name: auth_password_action
     description: "密码认证绑定动作"
     go_type: AuthPasswordAction
@@ -167,6 +170,7 @@ enums:
     used_by:
       - cap.services.auth
 
+  # TODO:GG
   - name: login_failed_reason
     description: "登录失败原因"
     go_type: LoginFailedReason

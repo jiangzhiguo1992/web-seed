@@ -20,14 +20,20 @@ type asyncMeta struct {
 	triggerType string
 }
 
+type returnType struct {
+	typ      string
+	nullable bool
+}
+
 type serviceMeta struct {
-	module      string
-	visibility  string
-	params      map[string]bool
-	paramTypes  map[string]bool
-	typeSchemas map[string]map[string]any
-	errors      map[string]bool
-	returns     map[string]string
+	module         string
+	visibility     string
+	params         map[string]bool
+	requiredParams map[string]bool
+	paramTypes     map[string]bool
+	typeSchemas    map[string]map[string]any
+	errors         map[string]bool
+	returns        map[string]returnType
 }
 
 // stepKindFields 是每种 step kind 的专属字段；公共字段由 checkServiceItem 统一放行。
@@ -37,10 +43,10 @@ var allowedOperationExtensions = map[string]bool{
 }
 
 var stepKindFields = map[string][]string{
-	"query":      {"query", "params"},
-	"service":    {"service", "params"},
-	"logic":      {"output", "queries", "events", "rules"},
-	"transition": {"transitions", "output", "queries", "events", "rules"},
+	"query":      {"query", "input"},
+	"service":    {"service", "input"},
+	"logic":      {"input", "output", "queries", "events", "rules"},
+	"transition": {"input", "transitions", "output", "queries", "events", "rules"},
 }
 
 func (c *Checker) checkCapabilities() {
@@ -83,7 +89,7 @@ func (c *Checker) checkCapabilities() {
 	typeNames := map[string]bool{}
 	typeOwners := map[string]string{}
 	c.methodTypeDefs = map[string]map[string]any{}
-	c.methodReturns = map[string]map[string]string{}
+	c.methodReturns = map[string]map[string]returnType{}
 	c.serviceQueries = map[string]map[string]bool{}
 	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
@@ -130,6 +136,7 @@ func (c *Checker) checkCapabilities() {
 			serviceItemIDs[id] = true
 			visibility, _ := item["visibility"].(string)
 			params := map[string]bool{}
+			requiredParams := map[string]bool{}
 			paramTypes := map[string]bool{}
 			typeSchemas := map[string]map[string]any{}
 			if types, ok := asMap(doc["schemas"]); ok {
@@ -144,6 +151,12 @@ func (c *Checker) checkCapabilities() {
 				pn, _ := pm["name"].(string)
 				if pn != "" {
 					params[pn] = true
+					// ctx 由生成器注入，不作为调用方 input。
+					if pn != "ctx" {
+						if nullable, _ := pm["nullable"].(bool); !nullable {
+							requiredParams[pn] = true
+						}
+					}
 				}
 				pt, _ := pm["type"].(string)
 				pt = strings.TrimPrefix(pt, "*")
@@ -154,22 +167,40 @@ func (c *Checker) checkCapabilities() {
 					paramTypes[pt] = true
 				}
 			}
+			// service 不再声明 errors：错误集由各 step 的声明与 query 默认值推导，
+			// 用于 kind=service 的 step.errors 子集校验。
 			errs := map[string]bool{}
-			for _, rawErr := range asList(item["errors"]) {
-				code, _ := rawErr.(string)
-				errs[code] = true
+			for _, rawStep := range asList(item["steps"]) {
+				step, _ := asMap(rawStep)
+				kind, _ := step["kind"].(string)
+				if kind == "query" && step["errors"] == nil {
+					qid, _ := step["query"].(string)
+					if q, ok := c.queries[qid]; ok {
+						for _, code := range q.Errors {
+							errs[code] = true
+						}
+					}
+					continue
+				}
+				for _, rawErr := range asList(step["errors"]) {
+					code, _ := rawErr.(string)
+					if code != "" {
+						errs[code] = true
+					}
+				}
 			}
-			returns := map[string]string{}
+			returns := map[string]returnType{}
 			for _, rawReturn := range asList(item["returns"]) {
 				rm, _ := asMap(rawReturn)
 				rn, _ := rm["name"].(string)
 				rt, _ := rm["type"].(string)
+				nullable, _ := rm["nullable"].(bool)
 				if rn != "" && rt != "" && rn != "err" {
-					returns[rn] = rt
+					returns[rn] = returnType{typ: rt, nullable: nullable}
 				}
 			}
 			c.methodReturns[id] = returns
-			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, params: params, paramTypes: paramTypes, typeSchemas: typeSchemas, errors: errs, returns: returns}
+			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, params: params, requiredParams: requiredParams, paramTypes: paramTypes, typeSchemas: typeSchemas, errors: errs, returns: returns}
 			stepQueries := map[string]bool{}
 			for _, rawStep := range asList(item["steps"]) {
 				step, _ := asMap(rawStep)
@@ -185,7 +216,8 @@ func (c *Checker) checkCapabilities() {
 					}
 				case "logic", "transition":
 					for _, rawQ := range asList(step["queries"]) {
-						if qid, _ := rawQ.(string); qid != "" {
+						qo, _ := asMap(rawQ)
+						if qid, _ := qo["query"].(string); qid != "" {
 							stepQueries[qid] = true
 						}
 					}
@@ -235,6 +267,8 @@ func (c *Checker) checkCapabilities() {
 
 	// rules / states / events 先收集 ID，再互相校验。
 	ruleIDs := map[string]bool{}
+	ruleErrors := map[string]string{}
+	ruleOwners := map[string][]string{}
 	for _, file := range glob(c.root, filepath.Join(ruleSchema.Targets.Dir, ruleSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -250,8 +284,18 @@ func (c *Checker) checkCapabilities() {
 				c.rulef("rule-id-unique", "%s: duplicate rule id %s", relPath(c.root, file), id)
 			}
 			ruleIDs[id] = true
+			if code, _ := item["on_violation"].(string); code != "" {
+				ruleErrors[id] = code
+			}
+			for _, rawOwner := range asList(item["implemented_by"]) {
+				if owner, _ := rawOwner.(string); owner != "" {
+					ruleOwners[id] = append(ruleOwners[id], owner)
+				}
+			}
 		}
 	}
+	c.ruleErrors = ruleErrors
+	c.ruleOwners = ruleOwners
 	eventIDs := map[string]bool{}
 	for _, file := range glob(c.root, filepath.Join(eventSchema.Targets.Dir, eventSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
@@ -378,15 +422,14 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 			}
 		}
 		returns := asList(item["returns"])
-		if len(returns) == 0 {
-			c.rulef("service-structure", "%s.%s: returns must end with err", rel, name)
-		} else if last, _ := asMap(returns[len(returns)-1]); last["name"] != "err" || last["type"] != "error" {
-			c.rulef("service-structure", "%s.%s: returns must end with err error", rel, name)
-		}
 		seenReturns := map[string]bool{}
 		for _, rawReturn := range returns {
 			rm, _ := asMap(rawReturn)
-			if rn, _ := rm["name"].(string); rn != "" {
+			rn, _ := rm["name"].(string)
+			if rn == "err" {
+				c.rulef("service-structure", "%s.%s: returns must not declare err; error is implicit", rel, name)
+			}
+			if rn != "" {
 				if seenReturns[rn] {
 					c.rulef("service-structure", "%s.%s: duplicate return %s", rel, name, rn)
 				}
@@ -401,12 +444,6 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 			rm, _ := asMap(rawReturn)
 			c.checkTypeName(rm["type"], typeNames, rel+":"+name)
 		}
-		for _, rawErr := range asList(item["errors"]) {
-			code, _ := rawErr.(string)
-			if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
-				c.rulef("service-ref", "%s.%s: unknown error %s", rel, name, code)
-			}
-		}
 	}
 }
 
@@ -416,7 +453,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		c.rulef("service-structure", "%s: service requires steps", rel)
 		return
 	}
-	stepOutputs := make([]map[string]string, len(steps))
+	stepOutputs := make([]map[string]returnType, len(steps))
 	allStepIndex := map[string]int{}
 	for i, raw := range steps {
 		step, _ := asMap(raw)
@@ -428,8 +465,9 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		}
 	}
 	stepIndex := map[string]int{}
-	reachableByIdx := map[int]bool{}
-	requiredErrors := map[string]bool{}
+	produced := map[string][]returnType{}
+	consumed := map[string]bool{}
+	usedParams := map[string]bool{}
 	hasBackwardGoto := false
 	for i, raw := range steps {
 		step, _ := asMap(raw)
@@ -440,9 +478,37 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			stepIndex[stepID] = i
 		}
 		kind, _ := step["kind"].(string)
+		transaction, _ := doc["transaction"].(string)
 		if s, _ := step["summary"].(string); strings.TrimSpace(s) == "" {
 			c.rulef("schema.non-empty", "%s: step %s summary must not be empty", rel, stepID)
 		}
+		input := map[string]any{}
+		if rawInput, ok := step["input"]; ok && rawInput != nil {
+			if m, ok := asMap(rawInput); ok {
+				input = m
+			} else {
+				c.rulef("service-steps-kind", "%s: step %s input must be a map", rel, stepID)
+			}
+		}
+		dependsOn := map[string]bool{}
+		for _, rawDep := range asList(step["depends_on"]) {
+			if depID, _ := rawDep.(string); depID != "" {
+				dependsOn[depID] = true
+			}
+		}
+		checkInputValues := func(refs map[string]any) {
+			for _, rawExpr := range refs {
+				c.checkServiceParamExpr(rawExpr, doc, stepIndex, stepOutputs, steps, dependsOn, rel, stepID)
+				expr, _ := rawExpr.(string)
+				if root, ok := inputExprRoot(expr); ok {
+					usedParams[root] = true
+				}
+				if ref, field, ok := splitStepField(expr); ok {
+					consumed[ref+"."+outputRoot(field)] = true
+				}
+			}
+		}
+		checkInputValues(input)
 		allowed := map[string]bool{
 			"id": true, "kind": true, "summary": true, "depends_on": true,
 			"when": true, "on_error": true, "errors": true,
@@ -466,20 +532,12 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
 			} else {
 				queryErrors = q.errorSet()
-				if refs, ok := asMap(step["params"]); ok {
-					for name, rawExpr := range refs {
-						found := false
-						for _, p := range q.Params {
-							if p.Name == name {
-								found = true
-								break
-							}
-						}
-						if !found {
-							c.rulef("service-steps-kind", "%s: step %s query %s has no param %s", rel, stepID, qid, name)
-						}
-						c.checkServiceParamExpr(rawExpr, doc, stepIndex, stepOutputs, steps, rel, stepID)
-					}
+				c.checkQueryInput(input, q, qid, rel, stepID)
+				if transaction == "read_only" && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) {
+					c.rulef("service-transaction", "%s: step %s calls write query %s under transaction=read_only", rel, stepID, qid)
+				}
+				for name, typ := range c.queryReturnTypes[qid] {
+					produced[name] = append(produced[name], returnType{typ: typ})
 				}
 			}
 		case "service":
@@ -493,13 +551,9 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				if target.module != module && target.visibility != "public" {
 					c.rulef("service-visibility", "%s: step %s cannot call internal %s from another module", rel, stepID, ref)
 				}
-				if refs, ok := asMap(step["params"]); ok {
-					for name, rawExpr := range refs {
-						if !target.params[name] {
-							c.rulef("service-steps-kind", "%s: step %s service %s has no param %s", rel, stepID, ref, name)
-						}
-						c.checkServiceParamExpr(rawExpr, doc, stepIndex, stepOutputs, steps, rel, stepID)
-					}
+				c.checkServiceInput(input, target, ref, rel, stepID)
+				for name, rt := range target.returns {
+					produced[name] = append(produced[name], rt)
 				}
 			}
 		case "logic":
@@ -526,7 +580,42 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			c.rulef("service-structure", "%s: step %s kind must be query/service/logic/event/transition", rel, stepID)
 		}
 
-		stepOutput := map[string]string{}
+		if kind == "logic" || kind == "transition" {
+			for _, rawQ := range asList(step["queries"]) {
+				qo, _ := asMap(rawQ)
+				if qo == nil {
+					c.rulef("service-steps-kind", "%s: step %s queries item must be an object", rel, stepID)
+					continue
+				}
+				for field := range qo {
+					if field != "query" && field != "input" {
+						c.rulef("service-steps-kind", "%s: step %s queries item does not allow field %s", rel, stepID, field)
+					}
+				}
+				qid, _ := qo["query"].(string)
+				if qid == "" {
+					c.rulef("service-steps-kind", "%s: step %s queries item requires query", rel, stepID)
+					continue
+				}
+				q, ok := c.queries[qid]
+				if !ok {
+					c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
+					continue
+				}
+				qInput := map[string]any{}
+				if rawIn, ok := qo["input"]; ok && rawIn != nil {
+					if m, ok := asMap(rawIn); ok {
+						qInput = m
+					} else {
+						c.rulef("service-steps-kind", "%s: step %s query %s input must be a map", rel, stepID, qid)
+					}
+				}
+				c.checkQueryInput(qInput, q, qid, rel, stepID)
+				checkInputValues(qInput)
+			}
+		}
+
+		stepOutput := map[string]returnType{}
 		if step["output"] != nil {
 			if kind == "logic" || kind == "transition" {
 				seenOut := map[string]bool{}
@@ -540,36 +629,21 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 					seenOut[name] = true
 					c.checkTypeName(om["type"], typeNames, rel+":"+stepID)
 					if name != "" && typ != "" {
-						stepOutput[name] = typ
+						nullable, _ := om["nullable"].(bool)
+						stepOutput[name] = returnType{typ: typ, nullable: nullable}
 					}
 				}
 			}
 		}
-		if kind == "logic" {
-			for _, rawReturn := range asList(doc["returns"]) {
-				rm, _ := asMap(rawReturn)
-				rn, _ := rm["name"].(string)
-				if rn == "" || rn == "err" {
-					continue
-				}
-				if _, ok := stepOutput[rn]; !ok {
-					c.rulef("service-output", "%s: step %s logic output missing return %s", rel, stepID, rn)
-				}
-			}
-		}
 		stepOutputs[i] = stepOutput
+		for name, rt := range stepOutput {
+			produced[name] = append(produced[name], rt)
+		}
 
-		reachable := true
 		for _, rawDep := range asList(step["depends_on"]) {
 			depID, _ := rawDep.(string)
-			idx, ok := stepIndex[depID]
-			if !ok {
+			if _, ok := stepIndex[depID]; !ok {
 				c.rulef("service-structure", "%s: step %s depends_on %s must reference an earlier step", rel, stepID, depID)
-				reachable = false
-				continue
-			}
-			if !reachableByIdx[idx] {
-				reachable = false
 			}
 		}
 		if when, ok := step["when"]; ok {
@@ -579,9 +653,6 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			} else if node, err := parseWhen(s); err != nil {
 				c.rulef("service-when", "%s: step %s when %q: %v", rel, stepID, s, err)
 			} else {
-				if evalWhenNode(node) == whenFalse {
-					reachable = false
-				}
 				formula := whenFormulaFromNode(node)
 				for _, ref := range whenStepRefs(node) {
 					if _, ok := stepIndex[ref]; !ok {
@@ -597,14 +668,21 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 					if !ok {
 						continue
 					}
+					if !dependsOn[ref] {
+						c.rulef("service-when", "%s: step %s when references step %s but it is not declared in depends_on", rel, stepID, ref)
+					}
 					target, _ := asMap(steps[idx])
 					if err := c.checkStepOutputPath(target, stepOutputs[idx], path, formula, ref); err != nil {
 						c.rulef("service-when", "%s: step %s when references %s: %v", rel, stepID, field, err)
 					}
+					consumed[ref+"."+outputRoot(path)] = true
 				}
 				for _, field := range whenInputFields(node) {
 					if err := c.checkInputPath(doc, field); err != nil {
 						c.rulef("service-when", "%s: step %s when references %s: %v", rel, stepID, field, err)
+					}
+					if root, ok := inputExprRoot(field); ok {
+						usedParams[root] = true
 					}
 				}
 			}
@@ -657,9 +735,29 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		}
 		if kind == "logic" || kind == "transition" {
 			c.checkStepQueryErrors(step, rel, stepID)
+			for _, rawRule := range asList(step["rules"]) {
+				rid, _ := rawRule.(string)
+				code := c.ruleErrors[rid]
+				if code == "" {
+					continue
+				}
+				owners := c.ruleOwners[rid]
+				if len(owners) == 0 {
+					owners = []string{id}
+				}
+				declared := false
+				for _, owner := range owners {
+					if serviceMeta[owner].errors[code] {
+						declared = true
+						break
+					}
+				}
+				if !declared {
+					c.rulef("service-errors", "%s: rule %s error %s is not declared by service(s) %v", rel, rid, code, owners)
+				}
+			}
 		}
 
-		handled := map[string]bool{}
 		seenOnError := map[string]bool{}
 		for _, rawErr := range asList(step["on_error"]) {
 			entry, _ := asMap(rawErr)
@@ -682,7 +780,6 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				if target != "" {
 					c.rulef("service-control", "%s: step %s on_error %s target is only allowed for goto", rel, stepID, code)
 				}
-				handled[code] = true
 			case "goto":
 				if target == "" {
 					c.rulef("service-control", "%s: step %s on_error %s goto requires target", rel, stepID, code)
@@ -691,19 +788,10 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				} else if targetIdx <= i {
 					hasBackwardGoto = true
 				}
-				handled[code] = true
 			default:
 				c.rulef("service-control", "%s: step %s on_error %s action must be abort, continue or goto", rel, stepID, code)
 			}
 		}
-		if reachable {
-			for code := range stepErrors {
-				if !handled[code] {
-					requiredErrors[code] = true
-				}
-			}
-		}
-		reachableByIdx[i] = reachable
 	}
 
 	if rawMax, ok := doc["max_iterations"]; ok {
@@ -715,29 +803,71 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 	if hasBackwardGoto && doc["max_iterations"] == nil {
 		c.rulef("service-control", "%s: backward/self goto requires service.max_iterations", rel)
 	}
-	req := c.serviceLevelErrors(id, hasBackwardGoto)
-	for code := range req {
-		requiredErrors[code] = true
-	}
-	allowedErrors := map[string]bool{}
-	for code := range requiredErrors {
-		allowedErrors[code] = true
-	}
-	serviceErrors := map[string]bool{}
-	for _, raw := range asList(doc["errors"]) {
-		code, _ := raw.(string)
-		serviceErrors[code] = true
-		if !allowedErrors[code] {
-			c.rulef("service-errors", "%s: error %s is not produced by a reachable, unhandled step", rel, code)
+
+	returns := map[string]bool{}
+	for _, rawReturn := range asList(doc["returns"]) {
+		rm, _ := asMap(rawReturn)
+		rn, _ := rm["name"].(string)
+		if rn == "" || rn == "err" {
+			continue
+		}
+		returns[rn] = true
+		rtyp, _ := rm["type"].(string)
+		rnullable, _ := rm["nullable"].(bool)
+		candidates := produced[rn]
+		if len(candidates) == 0 {
+			c.rulef("service-output", "%s: return %s has no producing step", rel, rn)
+			continue
+		}
+		matched := false
+		nullableMismatch := false
+		var types []string
+		for _, cand := range candidates {
+			types = append(types, cand.typ)
+			if !sameServiceType(cand.typ, rtyp) {
+				continue
+			}
+			candNullable := cand.nullable || strings.HasPrefix(strings.TrimSpace(cand.typ), "*")
+			if candNullable != rnullable {
+				nullableMismatch = true
+				continue
+			}
+			matched = true
+			break
+		}
+		if !matched {
+			if nullableMismatch {
+				c.rulef("service-output", "%s: return %s nullability (nullable=%t) does not match producing types %v", rel, rn, rnullable, types)
+			} else {
+				c.rulef("service-output", "%s: return %s type %s does not match producing types %v", rel, rn, rtyp, types)
+			}
 		}
 	}
-	for code := range requiredErrors {
-		if !serviceErrors[code] {
-			if req[code] {
-				c.rulef("service-errors", "%s: missing service-level error %s", rel, code)
-			} else {
-				c.rulef("service-errors", "%s: missing error %s produced by a reachable, unhandled step", rel, code)
+
+	// 显式 output 必须被后续 step 的 input/when 消费，或作为 returns 的业务字段。
+	for i, raw := range steps {
+		step, _ := asMap(raw)
+		stepID, _ := step["id"].(string)
+		kind, _ := step["kind"].(string)
+		if kind != "logic" && kind != "transition" {
+			continue
+		}
+		for name := range stepOutputs[i] {
+			if returns[name] || consumed[stepID+"."+name] {
+				continue
 			}
+			c.rulef("service-chain", "%s: step %s output %s is not consumed and is not a service return", rel, stepID, name)
+		}
+	}
+
+	for _, rawParam := range asList(doc["params"]) {
+		pm, _ := asMap(rawParam)
+		name, _ := pm["name"].(string)
+		if name == "" || name == "ctx" {
+			continue
+		}
+		if !usedParams[name] {
+			c.rulef("service-chain", "%s: param %s is not consumed by any step input or when", rel, name)
 		}
 	}
 }
@@ -752,7 +882,8 @@ func (c *Checker) checkStepQueryErrors(step map[string]any, rel, stepID string) 
 	}
 	seen := map[string]bool{}
 	for _, raw := range asList(step["queries"]) {
-		qid, _ := raw.(string)
+		qo, _ := asMap(raw)
+		qid, _ := qo["query"].(string)
 		q := c.queries[qid]
 		if q == nil {
 			continue
@@ -770,12 +901,6 @@ func (c *Checker) checkStepQueryErrors(step map[string]any, rel, stepID string) 
 }
 
 func (c *Checker) checkLogicRefs(step map[string]any, rel, stepID string, ruleIDs, eventIDs map[string]bool) {
-	for _, rawQ := range asList(step["queries"]) {
-		qid, _ := rawQ.(string)
-		if _, ok := c.queries[qid]; !ok {
-			c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
-		}
-	}
 	for _, rawRule := range asList(step["rules"]) {
 		rid, _ := rawRule.(string)
 		if !ruleIDs[rid] {
@@ -1269,8 +1394,8 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 								continue
 							}
 							found := false
-							for _, typ := range target.returns {
-								if typ == ret {
+							for _, rt := range target.returns {
+								if rt.typ == ret {
 									found = true
 									break
 								}
@@ -1465,23 +1590,6 @@ func serviceTypeRef(ref string) (string, bool) {
 	return parts[1], true
 }
 
-func (c *Checker) serviceLevelErrors(id string, hasBackwardGoto bool) map[string]bool {
-	required := map[string]bool{}
-	if policy, ok := c.accessBindings[id]; ok && len(policy.permissions) > 0 {
-		required["platform.errors.COMMON_FORBIDDEN"] = true
-	}
-	if policy, ok := c.accessBindings[id]; ok && policy.rateLimited {
-		required["platform.errors.COMMON_RATE_LIMITED"] = true
-	}
-	if policy, ok := c.accessBindings[id]; ok && policy.audit {
-		required["platform.errors.COMMON_AUDIT_FAILED"] = true
-	}
-	if hasBackwardGoto {
-		required["platform.errors.COMMON_LOOP_EXHAUSTED"] = true
-	}
-	return required
-}
-
 // checkInputPath 校验 when 的 input.<path>：根字段必须是 service param，嵌套字段按 param 类型解析。
 func (c *Checker) checkInputPath(doc map[string]any, field string) error {
 	path, ok := splitInputField(field)
@@ -1537,7 +1645,7 @@ func (c *Checker) checkInputPath(doc map[string]any, field string) error {
 	return nil
 }
 
-func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]string, path string, formula whenFormula, stepRef string) error {
+func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]returnType, path string, formula whenFormula, stepRef string) error {
 	segs, err := parseWhenPath(path)
 	if err != nil {
 		return err
@@ -1548,7 +1656,7 @@ func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]str
 	switch kind {
 	case "service":
 		ref, _ := step["service"].(string)
-		typ = c.methodReturns[ref][root.name]
+		typ = c.methodReturns[ref][root.name].typ
 		if typ == "" {
 			return fmt.Errorf("unknown output %s", root.name)
 		}
@@ -1559,7 +1667,7 @@ func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]str
 			return fmt.Errorf("unknown output %s", root.name)
 		}
 	case "logic", "transition":
-		typ = output[root.name]
+		typ = output[root.name].typ
 		if typ == "" {
 			return fmt.Errorf("unknown output %s", root.name)
 		}
@@ -1631,6 +1739,18 @@ func (c *Checker) resolveSchemaField(schema map[string]any, name string, seen ma
 		if raw, exists := props[name]; exists {
 			if prop, ok := schemaFromAny(raw); ok {
 				return c.schemaTypeName(prop)
+			}
+		}
+	}
+	// cap.services 的受限 schema DSL 用 properties 列表（每项 name + schema）。
+	if props, ok := asList2(schema["properties"]); ok {
+		for _, raw := range props {
+			prop, _ := asMap(raw)
+			if pn, _ := prop["name"].(string); pn == name {
+				if ps, ok := schemaFromAny(prop["schema"]); ok {
+					return c.schemaTypeName(ps)
+				}
+				return "", false
 			}
 		}
 	}
@@ -2097,6 +2217,10 @@ func (c *Checker) schemaTypeName(schema map[string]any) (string, bool) {
 	if ref, _ := schema["$ref"].(string); ref != "" {
 		return resolveTypeRef(ref)
 	}
+	// cap.services / cap.events 的受限 schema DSL 用 ref 键。
+	if ref, _ := schema["ref"].(string); ref != "" {
+		return resolveTypeRef(ref)
+	}
 	if isArraySchema(schema) {
 		elements := c.arrayElementSchemas(schema, -1, false)
 		if len(elements) == 1 {
@@ -2268,45 +2392,124 @@ func collectRefs(v any, fn func(string)) {
 	}
 }
 
-// checkServiceParamExpr 校验 params 表达式：input.* 必须存在于 service 入参，
-// step.<id>.* 必须存在于前序步骤输出。
-func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex map[string]int, stepOutputs []map[string]string, steps []any, rel, stepID string) {
+// checkServiceParamExpr 校验 input 值：input.* 必须存在于 service params，
+// step.<id>.* 必须存在于前序步骤输出且该步骤在 depends_on 中。
+func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex map[string]int, stepOutputs []map[string]returnType, steps []any, dependsOn map[string]bool, rel, stepID string) {
 	expr, ok := v.(string)
-	if !ok || expr == "" {
+	if !ok || strings.TrimSpace(expr) == "" {
+		c.rulef("service-params", "%s: step %s input value must be a non-empty expression", rel, stepID)
 		return
 	}
 	switch {
 	case strings.HasPrefix(expr, "input."):
-		field := strings.TrimPrefix(expr, "input.")
-		if i := strings.IndexByte(field, '.'); i >= 0 {
-			field = field[:i]
-		}
-		found := false
-		for _, raw := range asList(doc["params"]) {
-			pm, _ := asMap(raw)
-			name, _ := pm["name"].(string)
-			if name == field {
-				found = true
-				break
-			}
-		}
-		if !found {
-			c.rulef("service-params", "%s: step %s param references unknown input %s", rel, stepID, field)
+		if err := c.checkInputPath(doc, expr); err != nil {
+			c.rulef("service-params", "%s: step %s input references %s: %v", rel, stepID, expr, err)
 		}
 	case strings.HasPrefix(expr, "step."):
 		ref, path, ok := splitStepField(expr)
 		if !ok {
-			c.rulef("service-params", "%s: step %s param %q is not a valid step reference", rel, stepID, expr)
+			c.rulef("service-params", "%s: step %s input %q is not a valid step reference", rel, stepID, expr)
 			return
 		}
 		idx, exists := stepIndex[ref]
 		if !exists {
-			c.rulef("service-params", "%s: step %s param references step %s that is not an earlier step", rel, stepID, ref)
+			c.rulef("service-params", "%s: step %s input references step %s that is not an earlier step", rel, stepID, ref)
 			return
+		}
+		if !dependsOn[ref] {
+			c.rulef("service-params", "%s: step %s input references step %s but it is not declared in depends_on", rel, stepID, ref)
 		}
 		target, _ := asMap(steps[idx])
 		if err := c.checkStepOutputPath(target, stepOutputs[idx], path, whenFormula{}, ref); err != nil {
-			c.rulef("service-params", "%s: step %s param references %s: %v", rel, stepID, expr, err)
+			c.rulef("service-params", "%s: step %s input references %s: %v", rel, stepID, expr, err)
+		}
+	case strings.HasPrefix(expr, "expr:"):
+		if strings.TrimSpace(strings.TrimPrefix(expr, "expr:")) == "" {
+			c.rulef("service-params", "%s: step %s has an empty expr", rel, stepID)
+		}
+	}
+}
+
+// inputExprRoot 返回 input.<root> 的根参数名。
+func inputExprRoot(expr string) (string, bool) {
+	if !strings.HasPrefix(expr, "input.") {
+		return "", false
+	}
+	root := strings.TrimPrefix(expr, "input.")
+	if i := strings.IndexByte(root, '.'); i >= 0 {
+		root = root[:i]
+	}
+	if i := strings.IndexByte(root, '['); i >= 0 {
+		root = root[:i]
+	}
+	if root == "" {
+		return "", false
+	}
+	return root, true
+}
+
+// sameServiceType 比较返回类型，忽略指针与 List<> 包装差异。
+func sameServiceType(a, b string) bool {
+	a = strings.TrimPrefix(strings.TrimSpace(a), "*")
+	b = strings.TrimPrefix(strings.TrimSpace(b), "*")
+	if a == b {
+		return true
+	}
+	if strings.HasPrefix(a, "List<") && strings.HasSuffix(a, ">") &&
+		strings.HasPrefix(b, "List<") && strings.HasSuffix(b, ">") {
+		return sameServiceType(a[5:len(a)-1], b[5:len(b)-1])
+	}
+	return false
+}
+
+// outputRoot 返回 step 输出路径的根字段名。
+func outputRoot(path string) string {
+	root := path
+	if i := strings.IndexByte(root, '.'); i >= 0 {
+		root = root[:i]
+	}
+	if i := strings.IndexByte(root, '['); i >= 0 {
+		root = root[:i]
+	}
+	return root
+}
+
+// checkQueryInput 校验 query 的 input：key 必须是参数名，必填参数必须出现。
+func (c *Checker) checkQueryInput(input map[string]any, q *queryInfo, qid, rel, stepID string) {
+	params := map[string]bool{}
+	required := map[string]bool{}
+	for _, p := range q.Params {
+		params[p.Name] = true
+		if !p.Nullable && !p.HasDefault {
+			required[p.Name] = true
+		}
+	}
+	for name := range input {
+		if !params[name] {
+			c.rulef("service-params", "%s: step %s query %s has no param %s", rel, stepID, qid, name)
+		}
+	}
+	for name := range required {
+		if _, ok := input[name]; !ok {
+			c.rulef("service-params", "%s: step %s query %s missing required param %s", rel, stepID, qid, name)
+		}
+	}
+}
+
+// checkServiceInput 校验 service 调用的 input：key 必须是目标参数名，必填参数必须出现。
+func (c *Checker) checkServiceInput(input map[string]any, target serviceMeta, ref, rel, stepID string) {
+	for name := range input {
+		if name == "ctx" {
+			c.rulef("service-params", "%s: step %s service %s must not pass ctx", rel, stepID, ref)
+			continue
+		}
+		if !target.params[name] {
+			c.rulef("service-params", "%s: step %s service %s has no param %s", rel, stepID, ref, name)
+		}
+	}
+	for name := range target.requiredParams {
+		if _, ok := input[name]; !ok {
+			c.rulef("service-params", "%s: step %s service %s missing required param %s", rel, stepID, ref, name)
 		}
 	}
 }

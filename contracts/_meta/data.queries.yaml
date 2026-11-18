@@ -78,7 +78,7 @@ fields:
         required: true
         description: "结果形状"
         item_fields:
-          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回字段名" }
+          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回字段名；不得为 err（error 隐式追加）" }
           - { name: list, type: boolean, required: false, default: false, description: "是否为列表" }
           - { name: kind, type: string, required: true, enum: [ affected_rows, scalar, entity, columns ], description: "返回项类型" }
           - { name: type, type: string, required: false, description: "kind=scalar 的类型" }
@@ -97,7 +97,7 @@ rules:
   - { id: query-params, text: "params 的 name 不得重复；type 不得为空，未绑定 column 时必须映射到类型族（含别名）或 data.enums.*；column/expr 互斥且 expr 非空；default 只在 nullable:true 时允许；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器；offset/limit 按 query-pagination 校验", implemented_by: [ query-params ] }
   - { id: query-param-column, text: "params[].column 必须属于查询的 tables；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型；data.enums.* 按 integer 列校验）", implemented_by: [ query-param-column ] }
   - { id: query-pagination, text: "offset/limit 是保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；offset 默认 0，limit 默认必须为正数；list 返回必须同时声明两者", implemented_by: [ query-pagination ] }
-  - { id: query-returns, text: "returns 非空；name 不得重复；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的实体必须存在且主表在 tables 中，且不得写 columns；kind=columns 必须有 columns；scalar.type 必须是受支持的类型族、其别名或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
+  - { id: query-returns, text: "returns 非空；name 不得重复且不得为 err（error 隐式追加）；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的实体必须存在且主表在 tables 中，且不得写 columns；kind=columns 必须有 columns；scalar.type 必须是受支持的类型族、其别名或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
   - { id: query-return-columns, text: "kind=columns 的 columns（data.tables.<t>.col.<c>）必须是查询表上的列", implemented_by: [ query-return-columns ] }
   - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回或绑定为参数；kind=columns 的 secret 只有同模块可显式列出；entity 默认投影排除 secret，computed secret 不参与列裁剪、跨模块一律拒绝", implemented_by: [ query-sensitive-columns ] }
   - { id: query-errors, text: "errors 必须是存在的 platform.errors.*；[] 表示无领域错误", implemented_by: [ query-errors ] }

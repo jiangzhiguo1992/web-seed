@@ -161,10 +161,6 @@ components:
           maximum: 100
           minimum: 1
           type: integer
-        next_offset:
-          description: 下一页偏移；无更多时为 null
-          nullable: true
-          type: integer
         offset:
           default: 0
           description: 当前页偏移
@@ -175,7 +171,6 @@ components:
         - offset
         - limit
         - has_more
-        - next_offset
       type: object
       x-service-type: cap.services.account.schemas.AccountPage
     AccountStatus:
@@ -284,9 +279,6 @@ components:
       properties:
         has_more:
           type: boolean
-        next_offset:
-          nullable: true
-          type: integer
       required:
         - has_more
       type: object
@@ -560,7 +552,6 @@ paths:
                     own_type: user
                     status: active
                 limit: 20
-                next_offset: null
                 offset: 0
               schema:
                 $ref: '#/components/schemas/AccountPage'
