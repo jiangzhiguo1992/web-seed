@@ -286,7 +286,6 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 		"constraints": []any{
 			map[string]any{
 				"name": "ck_x_missing",
-				"type": "check",
 				"expr": "missing",
 			},
 		},
@@ -420,16 +419,14 @@ func TestPhysicalPrimaryKeyRejected(t *testing.T) {
 func TestTableRulesConstraintRequiresExpr(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
-	doc["constraints"] = []any{map[string]any{
-		"name": "ck_x_code", "type": "check",
-	}}
+	doc["constraints"] = []any{map[string]any{"name": "ck_x_code"}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "check requires expr") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "expr must not be empty") {
 		t.Fatalf("check without expr not reported: %v", c.errs)
 	}
 }
 
-func TestConstraintTypeOwnedByMetaEnum(t *testing.T) {
+func TestConstraintShapeFromMeta(t *testing.T) {
 	root, err := filepath.Abs("../../../..")
 	if err != nil {
 		t.Fatal(err)
@@ -442,39 +439,75 @@ func TestConstraintTypeOwnedByMetaEnum(t *testing.T) {
 	if !ok {
 		t.Fatal("constraints field missing in meta")
 	}
-	typeField, ok := contractspec.FindField(constraints.ItemFields, "type")
-	if !ok {
-		t.Fatal("constraints.type field missing in meta")
-	}
 	c := &Checker{}
-	c.validateValue("unique", typeField, "constraints[0].type")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.enum]") {
-		t.Fatalf("constraint type must be rejected by meta enum: %v", c.errs)
+	c.validateValue([]any{map[string]any{
+		"name": "ck_x_code", "type": "check", "expr": "code IS NOT NULL",
+	}}, constraints, "constraints")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `unknown field "type"`) {
+		t.Fatalf("constraint type must be rejected as unknown: %v", c.errs)
 	}
 
-	c = &Checker{}
-	doc := minimalTableDoc()
-	doc["constraints"] = []any{map[string]any{"name": "uq_x_code", "type": "unique"}}
-	c.checkTableRules(doc, "contracts/data/tables/x.yaml", schema)
+	c.errs = nil
+	c.validateValue([]any{map[string]any{
+		"name": "ck_x_code", "expr": "code IS NOT NULL",
+		"on_violation": "platform.errors.COMMON_INTERNAL",
+		"used_by":      []any{"data.queries.x.q"},
+	}}, constraints, "constraints")
 	if len(c.errs) != 0 {
-		t.Fatalf("constraint type must not be re-checked: %v", c.errs)
+		t.Fatalf("valid constraint reported: %v", c.errs)
 	}
 }
 
-func TestTableRulesForeignKeyRejected(t *testing.T) {
-	c := &Checker{}
+func TestConstraintUsedBy(t *testing.T) {
+	c := &Checker{queries: map[string]*queryInfo{
+		"data.queries.x.read":  {ID: "data.queries.x.read", Targets: []string{"data.tables.x"}},
+		"data.queries.x.write": {ID: "data.queries.x.write", Targets: []string{"data.tables.x"}, Writes: []string{"data.tables.x"}},
+	}}
 	doc := minimalTableDoc()
 	doc["constraints"] = []any{map[string]any{
-		"name": "fk_x_other", "type": "foreign_key",
-		"columns": []any{"code"}, "references": []any{"data.tables.other.col.id"},
+		"name": "ck_x_code", "expr": "code IS NOT NULL",
+		"used_by": []any{"data.queries.x.write"},
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "foreign_key is forbidden") {
-		t.Fatalf("foreign_key not rejected: %v", c.errs)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid constraint used_by reported: %v", c.errs)
 	}
-	if !strings.Contains(errs, "[no-foreign-key]") {
-		t.Fatalf("foreign_key rule id missing: %v", c.errs)
+
+	c.errs = nil
+	doc["constraints"] = []any{map[string]any{
+		"name": "ck_x_code", "expr": "code IS NOT NULL",
+		"used_by": []any{"data.queries.x.read"},
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "does not write table") {
+		t.Fatalf("read query accepted as constraint used_by: %v", c.errs)
+	}
+
+	c.errs = nil
+	doc["constraints"] = []any{map[string]any{
+		"name": "ck_x_code", "expr": "code IS NOT NULL",
+		"used_by": []any{"data.queries.x.missing"},
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown query") {
+		t.Fatalf("missing query accepted as constraint used_by: %v", c.errs)
+	}
+}
+
+func TestConstraintOnViolationMustExist(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	doc := minimalTableDoc()
+	doc["constraints"] = []any{map[string]any{
+		"name": "ck_x_code", "expr": "code IS NOT NULL",
+		"on_violation": "platform.errors.NOT_A_REAL_ERROR",
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown error code") {
+		t.Fatalf("unknown on_violation accepted: %v", c.errs)
 	}
 }
 
@@ -1351,8 +1384,7 @@ enums:
     values:
       - { value: active, code: 0 }
     used_by:
-      entities: []
-      capabilities: []
+      - cap.methods.x
 `
 	c := writeEnumContract(t, body)
 	entityPath := filepath.Join(c.root, "contracts/data/entities/account.yaml")
@@ -1373,8 +1405,35 @@ fields:
 	c.loadEntities(&Schema{Type: "data.entities", Targets: contractspec.Targets{Dir: "contracts/data/entities", Glob: "*.yaml"}})
 	c.checkEnums(loadEnumSchemaForTest(t))
 	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "[enum-used-by]") || !strings.Contains(errs, "used_by.entities must be") {
+	if !strings.Contains(errs, "[enum-used-by]") || !strings.Contains(errs, "used_by must be") {
 		t.Fatalf("enum used_by mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestEnumUsedByShape(t *testing.T) {
+	schema := loadEnumSchemaForTest(t)
+	enums, ok := contractspec.FindField(schema.Fields, "enums")
+	if !ok {
+		t.Fatal("enums field missing in meta")
+	}
+	usedBy, ok := contractspec.FindField(enums.ItemFields, "used_by")
+	if !ok {
+		t.Fatal("used_by field missing in meta")
+	}
+	c := &Checker{}
+	c.validateValue([]any{}, usedBy, "enums[].used_by")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.range]") {
+		t.Fatalf("empty used_by must fail min_items: %v", c.errs)
+	}
+	c.errs = nil
+	c.validateValue([]any{"bad.prefix"}, usedBy, "enums[].used_by")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.pattern]") {
+		t.Fatalf("invalid used_by prefix must fail pattern: %v", c.errs)
+	}
+	c.errs = nil
+	c.validateValue([]any{"data.enums.account_status"}, usedBy, "enums[].used_by")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.pattern]") {
+		t.Fatalf("enum ID must not be accepted as used_by: %v", c.errs)
 	}
 }
 
@@ -1417,7 +1476,6 @@ fields:
     json_name: status
     type: "*data.enums.x_status"
     source: { column: data.tables.x.col.status }
-    validation: { column: data.tables.x.col.status }
     description: "status"
 `
 	if err := os.WriteFile(entityPath, []byte(entity), 0o644); err != nil {
@@ -1452,8 +1510,7 @@ enums:
     values:
       - { value: active, code: 0 }
     used_by:
-      entities: []
-      capabilities: []
+      - cap.methods.x
 `
 	c := writeEnumContract(t, body)
 	c.checkEnums(loadEnumSchemaForTest(t))
@@ -1987,53 +2044,6 @@ func TestValidateEnum(t *testing.T) {
 	}
 }
 
-func TestForeignKeyReportsOnlyNoForeignKey(t *testing.T) {
-	root, err := filepath.Abs("../../../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	doc, err := loadYAML(filepath.Join(root, "contracts/data/tables/account.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	doc["constraints"] = append(asList(doc["constraints"]), map[string]any{
-		"name":       "fk_account_x",
-		"type":       "foreign_key",
-		"columns":    []any{"account_id"},
-		"references": []any{"data.tables.account.col.id"},
-	})
-	c := &Checker{}
-	c.checkPhysicalTable(doc, "contracts/data/tables/account.yaml", schema)
-	errs := strings.Join(c.errs, "\n")
-	if strings.Count(errs, "[no-foreign-key]") != 1 {
-		t.Fatalf("expected exactly one no-foreign-key error, got:\n%s", errs)
-	}
-	for _, bad := range []string{"[schema.unknown-field]", "[schema.pattern]", "[schema.enum]"} {
-		if strings.Contains(errs, bad) {
-			t.Fatalf("foreign_key produced extra %s error:\n%s", bad, errs)
-		}
-	}
-}
-
-func TestStripForeignKeysDoesNotMutateOriginal(t *testing.T) {
-	doc := minimalTableDoc()
-	doc["constraints"] = []any{
-		map[string]any{"name": "fk_x_other", "type": "foreign_key"},
-		map[string]any{"name": "uq_x_code", "type": "unique", "columns": []any{"code"}},
-	}
-	clean := stripForeignKeys(doc)
-	if len(asList(doc["constraints"])) != 2 {
-		t.Fatalf("original doc mutated: %v", doc["constraints"])
-	}
-	if len(asList(clean["constraints"])) != 1 {
-		t.Fatalf("foreign key not stripped: %v", clean["constraints"])
-	}
-}
-
 func TestProseQuoteCheckDetectsList(t *testing.T) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte("do_not:\n  - plain\n"), &doc); err != nil {
@@ -2245,7 +2255,7 @@ func TestCheckRulesImplementedBy(t *testing.T) {
 
 func TestImplementedByMustIncludeRuleID(t *testing.T) {
 	c := &Checker{}
-	c.checkImplementedBy("base-only", "meta.x: rules[0]", []string{"no-foreign-key"})
+	c.checkImplementedBy("base-only", "meta.x: rules[0]", []string{"constraint-used-by"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), `must include rule id "base-only"`) {
 		t.Fatalf("own rule id not enforced: %v", c.errs)
 	}
@@ -2879,7 +2889,7 @@ func TestCollectTableObjectsGlobalNames(t *testing.T) {
 		objectNames:  map[string]string{},
 	}
 	c.collectTableObjects(map[string]any{
-		"constraints": []any{map[string]any{"name": "ck_a_code", "type": "check"}},
+		"constraints": []any{map[string]any{"name": "ck_a_code"}},
 		"indexes":     []any{map[string]any{"name": "idx_a_code"}},
 	}, "contracts/data/tables/a.yaml", "data.tables.a")
 	if !c.tableObjects["data.tables.a"]["ck_a_code"] || !c.tableObjects["data.tables.a"]["idx_a_code"] {

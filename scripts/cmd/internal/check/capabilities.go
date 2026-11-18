@@ -84,6 +84,7 @@ func (c *Checker) checkCapabilities() {
 	typeOwners := map[string]string{}
 	c.methodTypeDefs = map[string]map[string]any{}
 	c.methodReturns = map[string]map[string]string{}
+	c.serviceQueries = map[string]map[string]bool{}
 	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -169,15 +170,28 @@ func (c *Checker) checkCapabilities() {
 			}
 			c.methodReturns[id] = returns
 			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, params: params, paramTypes: paramTypes, typeSchemas: typeSchemas, errors: errs, returns: returns}
+			stepQueries := map[string]bool{}
 			for _, rawStep := range asList(item["steps"]) {
 				step, _ := asMap(rawStep)
-				if k, _ := step["kind"].(string); k == "service" {
+				switch k, _ := step["kind"].(string); k {
+				case "service":
 					ref, _ := step["service"].(string)
 					if ref != "" {
 						serviceEdges[id] = append(serviceEdges[id], ref)
 					}
+				case "query":
+					if qid, _ := step["query"].(string); qid != "" {
+						stepQueries[qid] = true
+					}
+				case "logic", "transition":
+					for _, rawQ := range asList(step["queries"]) {
+						if qid, _ := rawQ.(string); qid != "" {
+							stepQueries[qid] = true
+						}
+					}
 				}
 			}
+			c.serviceQueries[id] = stepQueries
 		}
 	}
 
@@ -192,14 +206,10 @@ func (c *Checker) checkCapabilities() {
 			switch r.Kind {
 			case "entity":
 				typ = r.Entity
-			case "table":
-				typ = r.Table
 			case "scalar":
 				typ = r.Type
 			case "affected_rows":
 				typ = "integer"
-			case "column":
-				typ = "string"
 			}
 			if typ == "" {
 				typ = "any"
@@ -221,6 +231,7 @@ func (c *Checker) checkCapabilities() {
 		}
 		c.checkServiceDoc(doc, relPath(c.root, file), serviceSchema, typeNames)
 	}
+	c.checkSchemaCycles()
 
 	// rules / states / events 先收集 ID，再互相校验。
 	ruleIDs := map[string]bool{}

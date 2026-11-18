@@ -56,7 +56,7 @@ scripts/cmd/
 
 三个正交轴：`required` 管键是否必须出现，`nullable` 管值是否可为 null，`read_only` / `write_only` 管方向。三者默认都是 false，省略不写。槽位键出现在节点位置即报 `schema.slot-position`，因此 `read_only` 不会被误读为“这个类型只读”，`array.items` 也不可能有方向。
 
-`_schemas.yaml` 用项目自己的 `Field` 语言描述自身：`kinds.<kind>.keys` 是该种节点允许的键，`kinds.object.keys.properties.item_fields` 是属性条目允许的键；节点种类就是 `kinds` 的键集，不维护第二份 `one_of` 清单。判别键（`type` / `ref`）与结构键（`properties` / `items`）必须标记 `required: true`，`properties` 只属于 `object`，元规范错误在加载期暴露。`schema` 与 `list<object>` 类型由通用校验器递归，结构分支不重复。`kinds.<kind>.keys` 与 `item_fields` 都能声明 `required` / `const` / `min` / `pattern`，校验器不再为 schema DSL 维护硬编码特例。节点由 `ref` 或 `type` 判定：`type: object` 用 `properties`（property 条目列表），`type: array` 用 `items`；其他 `type` 是标量；`ref` 是引用。`gen_openapi` 把 property 聚合成 OpenAPI 的 `properties` map 与 `required` 数组；标量约束不在这里定义，family 与自定义类型都来自 `_meta/_types.yaml`。`cap.services` 的 `schemas` 类型是 `map<schema>`，`cap.events.payload` 是 `schema`。
+`_schemas.yaml` 用项目自己的 `Field` 语言描述自身：`kinds.<kind>.keys` 是该种节点允许的键，`kinds.object.keys.properties.item_fields` 是属性条目允许的键；节点种类就是 `kinds` 的键集，不维护第二份 `one_of` 清单。判别键（`type` / `ref`）与结构键（`properties` / `items`）必须标记 `required: true`，`properties` 只属于 `object`，元规范错误在加载期暴露。`types: [object, array, scalar, ref]` 声明某个位置允许的节点种类，校验器按列表检查；`list<object>` 由通用校验器递归。`kinds.<kind>.keys` 与 `item_fields` 都能声明 `required` / `const` / `min` / `pattern`，校验器不再为 schema DSL 维护硬编码特例。节点由 `ref` 或 `type` 判定：`type: object` 用 `properties`（property 条目列表），`type: array` 用 `items`；其他 `type` 是标量；`ref` 是引用。`gen_openapi` 把 property 聚合成 OpenAPI 的 `properties` map 与 `required` 数组；标量约束不在这里定义，family 与自定义类型都来自 `_meta/_types.yaml`。`cap.services` 的 `schemas` 类型是 `map<schema>`，`cap.events.payload` 是 `schema`。
 
 **没有 `schema/`、没有 `templates/`。**
 字段说明和值域在同一个文件、同一个字段节点里；`contract-new` 只生成最小骨架，字段规范以本目录为准，不维护第二份字段清单。
@@ -129,8 +129,7 @@ scripts/cmd/
   - 基类必须且只能是 5 列：`id` integer（bits: 64）主键、`status` integer 非空且非主键、三个时间列 timestamp（`created_at`/`updated_at` 非空、`deleted_at` 可空）
   - `do_not` 直接写在 `_base.yaml`；基类 `do_not` 允许类型级通用规则，物理表 `do_not` 必须含本表标识
   - 规则 `base-file`、`base-columns` 在 `_meta/data.tables.yaml` 的 `rules` 中声明
-  - `constraints` 只允许 `check`，必须写 `expr`；唯一性统一由 `indexes[].unique` 表达
-  - 禁止 `foreign_key`；跨表一致性由应用/业务规则保证
+  - `constraints` 是 CHECK 列表：必须写非空 `expr`、`on_violation` 与 `used_by`（写本表的 query）；没有 `type`；`gen-db` 生成 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors` 映射；唯一性统一由 `indexes[].unique` 表达，跨表一致性由应用/业务规则保证
   - 唯一索引的 `live_only` 决定作用域：`true` 只约束未软删行（要求 nullable `deleted_at`），`false`/省略约束全表（含软删行）
   - `indexes` 的 `comment`、`columns` xor `expression`、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表
   - `columns[].redundancy` 直接列出同组全部列引用（`column` + `source`）；组内各列声明必须完全一致，`type`/`nullable` 一致
@@ -155,35 +154,35 @@ scripts/cmd/
   - `name` / `go_type` / `ts_type` 在集合内唯一；类型名冲突会让 Go/TS 产物互相覆盖
   - `summary` 非空；`stability: stable` 不得含 TODO/FIXME
   - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
-  - `used_by.entities/capabilities` 必须与 entity 字段和 capability 引用完全一致；不列物理表或 feature，空列表合法；两个列表逐行竖排
+  - `used_by` 是 entity 与 capability ID 的并集，必须与 entity 字段和 capability 引用完全一致、不得为空、逐项竖排；不列物理表或 feature
   - `do_not` 每条必须含集合 ID `data.enums`、枚举 name 或 go_type/ts_type；通用规则放组 README
 - `data.entities.base`（`contracts/data/entities/_base.yaml`，单例）
   - 路径/ID 由 checker 写死识别；5 个字段固定为 `ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`
-  - `ID` / `Status` integer、`CreatedAt` / `UpdatedAt` timestamp、`DeletedAt` 可空 timestamp；类型从 `tables/_base.yaml` 继承，不在 `entities/_base.yaml` 重写；每个基类字段必须写 `source`/`validation`/`description`
+  - `ID` / `Status` integer、`CreatedAt` / `UpdatedAt` timestamp、`DeletedAt` 可空 timestamp；类型从 `tables/_base.yaml` 继承，不在 `entities/_base.yaml` 重写；每个基类字段必须写 `source`/`description`
   - `do_not` 直接写在 `_base.yaml`，承载 `data.entities` 类型级通用规则；具体实体 `do_not` 必须含本实体标识
 - `data/entities/*.yaml`
   - 结构按 `_meta/data.entities.yaml`；`model.extends` 必须是 `[data.entities.base]`；具体实体不得重声明基类字段，`Status` 可用 `data.enums.*` 特化
   - `model.tables` 必填、非空、去重；`model.tables[0]` 是主表；每张物理表至少一个 entity 映射
   - `owner_module` 必填且必须等于主表 `model.tables[0]` 的 `owner_module`
-  - 字段二选一：标量字段（`source`）或关系字段（`type` + `join_column_from` + `join_column_to` + `load`）；两套键不得混用
-  - 标量字段必须显式 `description`/`source`/`validation`；存在 `source.column` 时必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用
-  - `source` 三选一：`column`（物理列）、`computed`（计算/聚合）、`soft`（外部传入或无法脚本化的来源说明）；`computed` 必须显式 `type`、指针（`nullable: true` 或 `*T`）且不得引用 `@param`；`soft` 必须显式 `type`
+  - 字段二选一：标量字段（`source.column/computed/soft`）或关系字段（`type` + `source.join.from/to/lazy`）；两套键不得混用
+  - 标量字段必须显式 `description`/`source`；存在 `source.column` 时必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用
+  - `source` 四选一：`column`（物理列）、`computed`（计算/聚合）、`soft`（外部传入或无法脚本化的来源说明）、`join`（关系连接）；`computed` 必须显式 `type`、指针（`nullable: true` 或 `*T`）且不得引用 `@param`；`soft` 必须显式 `type`
   - `json_name` 省略时取 snake_case(name)；标量字段的 `type`/`sensitivity` 可省略并按来源列派生（`soft` 除外）；关系字段的 `type` 是目标 entity；显式标量 `type` 的 `*` 必须与列 `nullable` 一致
-  - `validation` 必填三选一：`column`（指向存在的列，且必须等于 `source.column`）、`pattern`（string 字段的合法正则）、`soft`（非空软表达式）；`soft` 来源不得用 `column`
+  - `source.join` 必填 `from`/`to`/`lazy`；`from` 属于当前 entity 的表，`to` 属于目标 entity 映射的表，两列类型族必须一致
   - 实体 `model.name` 是 Go 类型名：首字母大写 public，小写 internal；`model` 内字段顺序以 `_meta/data.entities.yaml` 的 `model.fields` 为准；不得重名
   - `ID` 是所有实体的唯一主键：来自主表 `id` 列、非指针、唯一主键
   - 字段 `name` 是 Go 字段名：首字母大写导出，小写不导出；`sensitivity: secret` 字段必须小写开头；`json_name` 省略时取 snake_case(name)，同实体唯一
-  - 关系字段的 type entity / join_column_to 所属表 / join_column_from/to 类型一致性；基数由两端唯一性推断；eager 必须有索引且不得成环
-  - 实体级 `validation[].name` 必须 snake_case 且实体内唯一，ID 派生为 `<entity-id>.<name>`；`expr` 非空、`on_violation` 必须存在
-  - `model.included_by` 显式声明，checker 校验与关系字段入边一致；`model.queries` 与 returns 本实体的 query 完全一致
+  - 关系字段的 type entity / `source.join.to` 所属表 / `source.join.from`/`to` 类型一致性；基数由两端唯一性推断；`lazy: false` 必须有索引且不得成环
+  - 实体级 `validation[].name` 必须 snake_case 且实体内唯一，ID 派生为 `<entity-id>.<name>`；`expr` 非空、`on_violation` 必须存在；`used_by` 必须是消费本实体主表的 `cap.services.*` 项且不得为空
+  - `model.included_by` 显式声明，checker 校验与关系字段入边一致；`model.queries` 与 returns 本实体的 query 完全一致且不得为空
 - `data/queries/*.yaml`
-  - 结构按 `_meta/data.queries.yaml`；item 不写 id，name=PascalCase 且全局唯一；项 ID 由 `<文件 id>.<snake_case(name)>` 派生
+  - 结构按 `_meta/data.queries.yaml`；item 不写 id，name=PascalCase 且全局唯一，必须写 `description`；项 ID 由 `<文件 id>.<snake_case(name)>` 派生
   - `tables` 是查询读写的表；每项 `{table, write}`，`write: true` 表示写该表；必须存在、不是 `data.tables.base`、不得重复；第一项为主表；可以多表；实例必须竖排
   - `offset` / `limit` 是保留分页参数名：出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit` 默认值按查询决定且必须为正数；list 返回必须同时声明两者
   - `params` 只声明接口入参；name 唯一、type 非空；未绑定 `column` 时 type 必须映射到类型族或 `data.enums.*`；`column` 绑定列后类型族必须与列一致（`data.enums.*` 按 integer 列）；`expr` 与 `column` 互斥；`default` 只在 `nullable: true` 时允许，checker 校验可判定的标量/数组外层，枚举值与数组元素交给生成器
-  - `returns` 是 list<object>：每项用 `kind` 区分 `column` / `entity` / `table` / `scalar` / `affected_rows`；kind 专属字段必须出现，互斥字段不得出现
+  - `returns` 是 list<object>：每项用 `kind` 区分 `scalar` / `affected_rows` / `entity` / `columns`；kind 专属字段必须出现，互斥字段不得出现；`entity` 只写 entity、不能写 columns；`columns` 用于没有对应 entity 的投影且必须写 columns；secret 只有同模块可显式列出
   - 同一 query 的多项 `list` 必须一致；`affected_rows` 必须是唯一返回项且不得为列表
-  - `columns` 只用于 `table` / `entity`；实体显式 `columns` 必须覆盖全部非指针、非 `secret` 字段
+  - `columns` 只用于 `kind: columns`；每项必须是查询表上的 `data.tables.<t>.col.<c>`
   - 单表 query 至少一个 `index_ref`；显式索引必须与 `used_by` 双向一致
   - `sensitivity: secret` 列只有同模块可显式返回；`pii` 可返回
   - 写查询必须在某个 method 的 `queries` 中声明；查询必须有至少一个 `write: true` 的表；checker 校验存在、每个写表归属；flow 不得直接引用 `data.queries.*`
@@ -209,7 +208,7 @@ scripts/cmd/
 | 键 | 用途 |
 |---|---|
 | `description` | 字段的准确含义 |
-| `required` / `type` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`min_items` 只约束 list；`map<string>` 是通用 schema 类型（键 → 字符串映射） |
+| `required` / `type` / `types` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`types` 是 schema 节点种类列表（与 `type` 互斥）；`min_items` 只约束 list；`map<string>` 是通用 schema 类型（键 → 字符串映射） |
 | `examples` | 列参数/骨架的示例值；实体字段不再支持 |
 | `schema` / `map<schema>` | schema 值域节点 / 类型名到节点的映射；`ref` 或 `type` 选节点种类，`kinds.<kind>.keys` 是结构约束，标量约束引用 `_types` |
 | `list<object>` + `item_fields` | `object.properties` 的属性条目列表；条目键由 `item_fields` 定义（`name` + `schema` + 方向/存在性/可空/默认值/说明） |

@@ -14,13 +14,12 @@ func entityErrs(c *Checker) string {
 	return strings.Join(c.errs, "\n")
 }
 
-// scalarField 构造合法的标量字段：column 来源 + column 校验 + 描述。
+// scalarField 构造合法的标量字段：column 来源 + 描述。
 func scalarField(name, typ, table, col string) entityFieldInfo {
 	ref := table + ".col." + col
 	return entityFieldInfo{
 		Name: name, Type: typ, HasType: true,
 		SourceColumnRef: ref, ColumnTable: table, Column: col,
-		ValidationKind: "column", ValidationRef: ref, ValidationCount: 1,
 		Description: name,
 	}
 }
@@ -34,11 +33,11 @@ func baseScalarField(name, typ string) entityFieldInfo {
 
 func relationField(name, targetEntity, fromTable, fromCol, toTable, toCol, load string) entityFieldInfo {
 	return entityFieldInfo{
-		Name: name, IsRelation: true,
+		Name: name, IsRelation: true, HasJoin: true,
 		Type: targetEntity, HasType: true,
 		JoinFromRef: fromTable + ".col." + fromCol, JoinFromTable: fromTable, JoinFromColumn: fromCol,
 		JoinToRef: toTable + ".col." + toCol, JoinToTable: toTable, JoinToColumn: toCol,
-		Load: load, Description: name,
+		Lazy: load == "lazy", HasLazy: true, Description: name,
 	}
 }
 
@@ -155,13 +154,6 @@ func TestEntityFieldProjectionRules(t *testing.T) {
 		t.Fatalf("missing description not reported: %v", c.errs)
 	}
 
-	c = newChecker()
-	e = newEntity()
-	e.Fields[1].ValidationCount = 0
-	c.checkEntityFields(e)
-	if !strings.Contains(entityErrs(c), "[entity-field-validation]") {
-		t.Fatalf("missing validation not reported: %v", c.errs)
-	}
 }
 
 func TestEntityComputedField(t *testing.T) {
@@ -178,8 +170,7 @@ func TestEntityComputedField(t *testing.T) {
 				f := scalarField("ID", "string", "data.tables.x", "id")
 				return f
 			}(),
-			{Name: "Total", Type: "*integer", HasType: true, SourceComputed: "COUNT(*)",
-				ValidationKind: "soft", ValidationRef: "非负", ValidationCount: 1, Description: "总数"},
+			{Name: "Total", Type: "*integer", HasType: true, SourceComputed: "COUNT(*)", Description: "总数"},
 		},
 	}
 	c.checkEntityFields(e)
@@ -218,7 +209,7 @@ func TestEntityComputedNullableFlag(t *testing.T) {
 				return f
 			}(),
 			{Name: "Total", Type: "integer", HasType: true, HasNullable: true, Nullable: true,
-				SourceComputed: "COUNT(*)", ValidationKind: "soft", ValidationRef: "非负", ValidationCount: 1, Description: "总数"},
+				SourceComputed: "COUNT(*)", Description: "总数"},
 		},
 	}
 	c.checkEntityFields(e)
@@ -403,38 +394,111 @@ func TestEntityRelationJoinColumnTypeMismatch(t *testing.T) {
 	e.Fields = append(e.Fields, relationField("Tokens", "data.entities.token", "data.tables.account", "id", "data.tables.token", "account_id", "lazy"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-via]") || !strings.Contains(entityErrs(c), "does not match") {
-		t.Fatalf("join_column type mismatch not reported: %v", c.errs)
+		t.Fatalf("join column type mismatch not reported: %v", c.errs)
 	}
 }
 
-func TestEntityRelationRejectsEmptySourceAndValidation(t *testing.T) {
+func TestEntityRelationRejectsEmptySource(t *testing.T) {
 	f := parseEntityField(map[string]any{
-		"name":             "Tokens",
-		"type":             "data.entities.token",
-		"description":      "tokens",
-		"source":           map[string]any{},
-		"validation":       map[string]any{},
-		"join_column_from": "data.tables.account.col.id",
-		"join_column_to":   "data.tables.token.col.account_id",
+		"name":        "Tokens",
+		"type":        "data.entities.token",
+		"description": "tokens",
+		"source":      map[string]any{},
 	})
-	if f == nil || !f.HasSource || !f.HasValidation {
-		t.Fatalf("empty source/validation maps must still count as declared: %#v", f)
+	if f == nil || !f.HasSource || !f.IsRelation {
+		t.Fatalf("type-driven relation must be recognized: %#v", f)
 	}
 	c := &Checker{}
 	c.checkRelationFieldShape(*f, "x")
 	if !strings.Contains(entityErrs(c), "[entity-field-variant]") {
-		t.Fatalf("empty source/validation on relation not reported: %v", c.errs)
+		t.Fatalf("empty source on relation not reported: %v", c.errs)
+	}
+}
+
+func TestEntityRelationJoinRequiresLazy(t *testing.T) {
+	f := parseEntityField(map[string]any{
+		"name":        "Tokens",
+		"type":        "data.entities.token",
+		"description": "tokens",
+		"source": map[string]any{"join": map[string]any{
+			"from": "data.tables.account.col.id",
+			"to":   "data.tables.token.col.account_id",
+		}},
+	})
+	c := &Checker{}
+	c.checkRelationFieldShape(*f, "x")
+	errs := entityErrs(c)
+	if !strings.Contains(errs, "[entity-field-variant]") || !strings.Contains(errs, "source.join.lazy") {
+		t.Fatalf("missing join.lazy not reported: %v", c.errs)
+	}
+}
+
+func TestEntityRelationJoinRequiresFromTo(t *testing.T) {
+	cases := map[string]map[string]any{
+		"missing from": {"to": "data.tables.token.col.account_id", "lazy": true},
+		"missing to":   {"from": "data.tables.account.col.id", "lazy": true},
+		"empty join":   {},
+	}
+	for name, join := range cases {
+		f := parseEntityField(map[string]any{
+			"name":        "Tokens",
+			"type":        "data.entities.token",
+			"description": "tokens",
+			"source":      map[string]any{"join": join},
+		})
+		c := &Checker{}
+		c.checkRelationFieldShape(*f, "x")
+		if !strings.Contains(entityErrs(c), "[entity-field-variant]") {
+			t.Fatalf("%s: incomplete join not reported: %v", name, c.errs)
+		}
+	}
+}
+
+func TestEntityRelationRejectsMixedSource(t *testing.T) {
+	f := parseEntityField(map[string]any{
+		"name":        "Tokens",
+		"type":        "data.entities.token",
+		"description": "tokens",
+		"source": map[string]any{
+			"column": "data.tables.account.col.id",
+			"join": map[string]any{
+				"from": "data.tables.account.col.id",
+				"to":   "data.tables.token.col.account_id",
+				"lazy": true,
+			},
+		},
+	})
+	c := &Checker{}
+	c.checkRelationFieldShape(*f, "x")
+	if !strings.Contains(entityErrs(c), "source must be join only") {
+		t.Fatalf("mixed relation source not reported: %v", c.errs)
+	}
+}
+
+func TestEntityScalarRejectsJoin(t *testing.T) {
+	c := &Checker{tableTypeFamilies: map[string]bool{"string": true}}
+	e := &entityInfo{ID: "data.entities.x", Rel: "x.yaml", Tables: []string{"data.tables.x"}}
+	f := entityFieldInfo{
+		Name: "Value", Type: "string", HasType: true, Description: "value",
+		HasJoin: true, SourceSoft: "external input",
+	}
+	c.checkScalarField(e, f, "x.yaml: fields.Value", map[string]string{})
+	if !strings.Contains(entityErrs(c), "scalar field must not declare source.join") {
+		t.Fatalf("scalar join not reported: %v", c.errs)
 	}
 }
 
 func TestEntityRelationRejectsNullable(t *testing.T) {
 	f := parseEntityField(map[string]any{
-		"name":             "Account",
-		"type":             "data.entities.account",
-		"nullable":         true,
-		"description":      "account",
-		"join_column_from": "data.tables.token.col.account_id",
-		"join_column_to":   "data.tables.account.col.id",
+		"name":        "Account",
+		"type":        "data.entities.account",
+		"nullable":    true,
+		"description": "account",
+		"source": map[string]any{"join": map[string]any{
+			"from": "data.tables.token.col.account_id",
+			"to":   "data.tables.account.col.id",
+			"lazy": true,
+		}},
 	})
 	c := &Checker{}
 	c.checkRelationFieldShape(*f, "x")
@@ -450,7 +514,7 @@ func TestEntitySoftSource(t *testing.T) {
 		Fields: []entityFieldInfo{
 			{
 				Name: "Soft", Type: "integer", HasType: true, Description: "soft",
-				SourceSoft: "derived by service or request input", ValidationKind: "soft", ValidationRef: "non-negative", ValidationCount: 1,
+				SourceSoft: "derived by service or request input",
 			},
 		},
 	}
@@ -466,7 +530,6 @@ func TestEntityComputedBlankRejected(t *testing.T) {
 	f := entityFieldInfo{
 		Name: "Derived", Type: "*string", HasType: true,
 		SourceComputed: "  ", HasSource: true,
-		ValidationKind: "soft", ValidationRef: "non-empty", ValidationCount: 1,
 		Description: "derived",
 	}
 	c.checkScalarField(e, f, "x.yaml: fields.Derived", map[string]string{})
@@ -483,7 +546,7 @@ func TestEntityScalarRequiresExplicitMetadata(t *testing.T) {
 	}
 	c.checkEntityFields(e)
 	errs := entityErrs(c)
-	for _, want := range []string{"[entity-field-description]", "[entity-field-source]", "[entity-field-validation]"} {
+	for _, want := range []string{"[entity-field-description]", "[entity-field-source]"} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %s in %v", want, c.errs)
 		}
@@ -514,21 +577,82 @@ func TestEntityModelTableDuplicateRejectedBySchema(t *testing.T) {
 	}
 }
 
-func TestEntityValidationColumnMustMatchSource(t *testing.T) {
-	c := &Checker{tableColumns: map[string]map[string]columnMeta{
-		"data.tables.x": {"a": {typ: "string"}, "b": {typ: "string"}},
-	}}
-	e := &entityInfo{
-		ID: "data.entities.x", Rel: "x.yaml", Tables: []string{"data.tables.x"},
-		Fields: []entityFieldInfo{{
-			Name: "Value", Type: "string", HasType: true, Description: "value",
-			SourceColumnRef: "data.tables.x.col.a", ColumnTable: "data.tables.x", Column: "a",
-			ValidationKind: "column", ValidationRef: "data.tables.x.col.b", ValidationCount: 1,
-		}},
+func TestEntityValidationUsedBy(t *testing.T) {
+	c := &Checker{
+		methodReturns:  map[string]map[string]string{"cap.services.x.get": {}},
+		serviceQueries: map[string]map[string]bool{"cap.services.x.get": {"data.queries.x.get": true}},
+		queryTables:    map[string]map[string]bool{"data.queries.x.get": {"data.tables.x": true}},
 	}
-	c.checkEntityFields(e)
-	if !strings.Contains(entityErrs(c), "must equal source.column") {
-		t.Fatalf("validation/source column mismatch not reported: %v", c.errs)
+	e := &entityInfo{ID: "data.entities.x", Rel: "x.yaml", Primary: "data.tables.x", Doc: map[string]any{
+		"validation": []any{map[string]any{
+			"name": "v", "expr": "x > 0", "on_violation": "platform.errors.COMMON_INTERNAL",
+			"used_by": []any{"cap.services.x.get"},
+		}},
+	}}
+	c.checkEntityValidation(e)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid validation used_by reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	e.Doc["validation"] = []any{map[string]any{
+		"name": "v", "expr": "x > 0", "on_violation": "platform.errors.COMMON_INTERNAL",
+		"used_by": []any{"cap.services.x.missing"},
+	}}
+	c.checkEntityValidation(e)
+	if !strings.Contains(entityErrs(c), "unknown service") {
+		t.Fatalf("unknown validation consumer not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.serviceQueries["cap.services.x.get"] = map[string]bool{}
+	e.Doc["validation"] = []any{map[string]any{
+		"name": "v", "expr": "x > 0", "on_violation": "platform.errors.COMMON_INTERNAL",
+		"used_by": []any{"cap.services.x.get"},
+	}}
+	c.checkEntityValidation(e)
+	if !strings.Contains(entityErrs(c), "does not query entity table") {
+		t.Fatalf("validation consumer without entity query not reported: %v", c.errs)
+	}
+}
+
+func TestColumnsReturnShape(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.x": {"id": {typ: "integer", primaryKey: true}},
+	}, tableOwners: map[string]string{"data.tables.x": "x"}}
+	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "x", Targets: []string{"data.tables.x"},
+		Returns: []queryReturn{{Name: "row", Kind: "columns"}}}
+	c.checkQueryReturns(q)
+	if !strings.Contains(entityErrs(c), "kind=columns requires columns") {
+		t.Fatalf("columns without projection not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Returns = []queryReturn{
+		{Name: "row", Kind: "columns", Columns: []string{"data.tables.x.col.id"}},
+		{Name: "total", Kind: "scalar", Type: "integer"},
+	}
+	c.checkQueryShape(q)
+	if !strings.Contains(entityErrs(c), "columns return must be the only return item") {
+		t.Fatalf("mixed columns return not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Returns = []queryReturn{{Name: "row", Kind: "columns", Columns: []string{"data.tables.x.col.id"}}}
+	c.checkQueryReturns(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid columns return reported: %v", c.errs)
+	}
+}
+
+func TestQueryReturnsRejectsRemovedKinds(t *testing.T) {
+	for _, kind := range []string{"table", "column"} {
+		c := &Checker{}
+		q := &queryInfo{ID: "q", File: "q.yaml", Returns: []queryReturn{{Name: "row", Kind: kind}}}
+		c.checkQueryReturns(q)
+		if !strings.Contains(entityErrs(c), `invalid kind "`+kind+`"`) {
+			t.Fatalf("kind %s not rejected: %v", kind, c.errs)
+		}
 	}
 }
 
@@ -596,69 +720,65 @@ func TestEagerCycles(t *testing.T) {
 	}
 }
 
-func TestQueryEntityCoverageAndSensitivity(t *testing.T) {
-	accountEntity := func(withSecret bool) *entityInfo {
-		fields := []entityFieldInfo{
-			func() entityFieldInfo {
-				f := scalarField("ID", "string", "data.tables.account", "id")
-				return f
-			}(),
+func TestQueryEntityAndColumnsSensitivity(t *testing.T) {
+	secretField := func() entityFieldInfo {
+		f := scalarField("secret", "string", "data.tables.account", "secret")
+		f.Sensitivity = sensitivitySecret
+		return f
+	}()
+	e := &entityInfo{
+		ID: "data.entities.account", OwnerModule: "account",
+		Tables: []string{"data.tables.account"}, Primary: "data.tables.account",
+		Fields: []entityFieldInfo{
+			scalarField("ID", "string", "data.tables.account", "id"),
 			scalarField("Nickname", "string", "data.tables.account", "nickname"),
-		}
-		if withSecret {
-			f := scalarField("secret", "string", "data.tables.account", "secret")
-			f.Sensitivity = sensitivitySecret
-			fields = append(fields, f)
-		}
-		return &entityInfo{ID: "data.entities.account", Tables: []string{"data.tables.account"}, Primary: "data.tables.account", Fields: fields}
+			secretField,
+		},
 	}
-	newChecker := func(withSecret bool) *Checker {
-		cols := map[string]columnMeta{
-			"id":       {typ: "string", primaryKey: true},
-			"nickname": {typ: "string"},
-		}
-		if withSecret {
-			cols["secret"] = columnMeta{typ: "string", sensitivity: sensitivitySecret}
-		}
-		return &Checker{
-			tableColumns: map[string]map[string]columnMeta{"data.tables.account": cols},
-			tableOwners:  map[string]string{"data.tables.account": "account"},
-			entities:     map[string]*entityInfo{"data.entities.account": accountEntity(withSecret)},
-		}
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{"data.tables.account": {
+			"id": {typ: "string", primaryKey: true}, "nickname": {typ: "string"},
+			"secret": {typ: "string", sensitivity: sensitivitySecret},
+		}},
+		tableOwners: map[string]string{"data.tables.account": "account"},
+		entities:    map[string]*entityInfo{"data.entities.account": e},
 	}
-
-	c := newChecker(false)
 	q := &queryInfo{
-		ID: "data.queries.account.get", File: "account.yaml", OwnerModule: "account",
+		ID: "data.queries.account.get", File: "account.yaml", OwnerModule: "other",
 		Targets: []string{"data.tables.account"},
 		Returns: []queryReturn{{Name: "account", Kind: "entity", Entity: "data.entities.account"}},
 	}
 	c.checkQueryReturns(q)
 	if len(c.errs) != 0 {
-		t.Fatalf("valid entity query reported: %v", c.errs)
+		t.Fatalf("entity default projection reported: %v", c.errs)
 	}
 
 	q.Returns[0].Columns = []string{"data.tables.account.col.id"}
 	c.checkQueryReturns(q)
-	if !strings.Contains(entityErrs(c), "omits required field Nickname") {
-		t.Fatalf("missing required coverage not reported: %v", c.errs)
+	if !strings.Contains(entityErrs(c), "kind=entity forbids type/columns") {
+		t.Fatalf("entity columns not rejected: %v", c.errs)
 	}
 
-	c = newChecker(true)
+	c.errs = nil
 	q = &queryInfo{
-		ID: "data.queries.account.get", File: "account.yaml", OwnerModule: "other",
+		ID: "data.queries.account.cols", File: "account.yaml", OwnerModule: "other",
 		Targets: []string{"data.tables.account"},
-		Returns: []queryReturn{{Name: "account", Kind: "entity", Entity: "data.entities.account", Columns: []string{
-			"data.tables.account.col.id", "data.tables.account.col.nickname", "data.tables.account.col.secret",
-		}}},
+		Returns: []queryReturn{{Name: "row", Kind: "columns", Columns: []string{"data.tables.account.col.secret"}}},
 	}
 	c.checkQueryReturns(q)
 	if !strings.Contains(entityErrs(c), "[query-sensitive-columns]") {
-		t.Fatalf("cross-module secret not reported: %v", c.errs)
+		t.Fatalf("cross-module columns secret not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.OwnerModule = "account"
+	c.checkQueryReturns(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("same-module columns secret reported: %v", c.errs)
 	}
 }
 
-func TestEntityReturnColumnsMultiTableQualified(t *testing.T) {
+func TestColumnProjectionMultiTableQualified(t *testing.T) {
 	c := &Checker{
 		tableColumns: map[string]map[string]columnMeta{
 			"data.tables.a": {"account_id": {typ: "integer"}},
@@ -666,103 +786,26 @@ func TestEntityReturnColumnsMultiTableQualified(t *testing.T) {
 		},
 		tableOwners: map[string]string{"data.tables.a": "x", "data.tables.b": "x"},
 	}
-	e := &entityInfo{
-		ID: "data.entities.x", OwnerModule: "x",
-		Tables: []string{"data.tables.a", "data.tables.b"}, Primary: "data.tables.a",
-		Fields: []entityFieldInfo{
-			scalarField("AID", "integer", "data.tables.a", "account_id"),
-			scalarField("BID", "integer", "data.tables.b", "account_id"),
-		},
-	}
 	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "x",
 		Targets: []string{"data.tables.a", "data.tables.b"}}
 
-	c.checkEntityReturnColumns("q", q, e, []string{
+	c.checkColumnProjection("q", q, []string{
 		"data.tables.a.col.account_id", "data.tables.b.col.account_id",
 	})
 	if len(c.errs) != 0 {
-		t.Fatalf("qualified multi-table entity columns reported: %v", c.errs)
+		t.Fatalf("qualified multi-table columns reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkEntityReturnColumns("q", q, e, []string{"account_id"})
+	c.checkColumnProjection("q", q, []string{"account_id"})
 	if len(c.errs) != 1 || !strings.Contains(entityErrs(c), "must be data.tables.<t>.col.<c>") {
-		t.Fatalf("bare multi-table entity column not rejected cleanly: %v", c.errs)
+		t.Fatalf("bare multi-table column not rejected cleanly: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkEntityReturnColumns("q", q, e, []string{"data.tables.c.col.account_id"})
-	if len(c.errs) != 1 || !strings.Contains(entityErrs(c), "does not belong to entity tables") {
-		t.Fatalf("foreign entity column not rejected cleanly: %v", c.errs)
-	}
-}
-
-func TestTableReturnColumnsRejectQualified(t *testing.T) {
-	c := &Checker{
-		tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"id": {typ: "integer"}}},
-		tableOwners:  map[string]string{"data.tables.x": "x"},
-	}
-	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "x", Targets: []string{"data.tables.x"}}
-	c.checkTableReturnColumns("q", q, "data.tables.x", []string{"id"})
-	if len(c.errs) != 0 {
-		t.Fatalf("valid table column reported: %v", c.errs)
-	}
-	c.errs = nil
-	c.checkTableReturnColumns("q", q, "data.tables.x", []string{"data.tables.x.col.id"})
-	if len(c.errs) != 1 || !strings.Contains(c.errs[0], "bare") {
-		t.Fatalf("qualified table column not rejected cleanly: %v", c.errs)
-	}
-}
-
-func TestTableReturnColumnsSecretScope(t *testing.T) {
-	c := &Checker{
-		tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"secret": {typ: "string", sensitivity: sensitivitySecret}}},
-		tableOwners:  map[string]string{"data.tables.x": "x"},
-	}
-	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "other", Targets: []string{"data.tables.x"}}
-	c.checkTableReturnColumns("q", q, "data.tables.x", []string{"secret"})
-	if len(c.errs) != 1 || !strings.Contains(c.errs[0], "[query-sensitive-columns]") {
-		t.Fatalf("cross-module table secret not reported: %v", c.errs)
-	}
-	c.errs = nil
-	q.OwnerModule = "x"
-	c.checkTableReturnColumns("q", q, "data.tables.x", []string{"secret"})
-	if len(c.errs) != 0 {
-		t.Fatalf("same-module table secret reported: %v", c.errs)
-	}
-}
-
-func TestTableReturnWithSecretColumnsRequiresProjection(t *testing.T) {
-	c := &Checker{
-		tableColumns: map[string]map[string]columnMeta{
-			"data.tables.x": {
-				"id":     {typ: "integer", primaryKey: true},
-				"secret": {typ: "string", sensitivity: sensitivitySecret},
-			},
-		},
-		tableOwners: map[string]string{"data.tables.x": "x"},
-	}
-	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "x", Targets: []string{"data.tables.x"},
-		Returns: []queryReturn{{Name: "row", Kind: "table", Table: "data.tables.x"}}}
-	c.checkQueryReturns(q)
-	if !strings.Contains(entityErrs(c), "requires explicit columns") {
-		t.Fatalf("secret table without explicit projection not reported: %v", c.errs)
-	}
-
-	c.errs = nil
-	q.Returns[0].Columns = []string{"id"}
-	c.checkQueryReturns(q)
-	if len(c.errs) != 0 {
-		t.Fatalf("explicit safe projection reported: %v", c.errs)
-	}
-
-	// 显式 columns: [] 由 schema.min_items 报错，这里不应重复报 secret 投影。
-	c.errs = nil
-	q.Returns[0].Columns = nil
-	q.Returns[0].HasColumns = true
-	c.checkQueryReturns(q)
-	if len(c.errs) != 0 {
-		t.Fatalf("explicit empty projection double-reported: %v", c.errs)
+	c.checkColumnProjection("q", q, []string{"data.tables.c.col.account_id"})
+	if len(c.errs) != 1 || !strings.Contains(entityErrs(c), "does not belong to query tables") {
+		t.Fatalf("foreign column not rejected cleanly: %v", c.errs)
 	}
 }
 
@@ -788,7 +831,7 @@ func TestQuerySecretParamScope(t *testing.T) {
 	}
 }
 
-func TestEntityCoverageComputedSensitive(t *testing.T) {
+func TestEntityComputedSecretSensitivity(t *testing.T) {
 	e := &entityInfo{ID: "data.entities.x", OwnerModule: "account", Tables: []string{"data.tables.x"}, Primary: "data.tables.x",
 		Fields: []entityFieldInfo{
 			func() entityFieldInfo {
@@ -796,23 +839,73 @@ func TestEntityCoverageComputedSensitive(t *testing.T) {
 				return f
 			}(),
 			{Name: "secretTotal", Type: "*integer", HasType: true, SourceComputed: "COUNT(*)",
-				Sensitivity: sensitivitySecret, ValidationKind: "soft", ValidationRef: "非负", ValidationCount: 1, Description: "敏感聚合"},
+				Sensitivity: sensitivitySecret, Description: "敏感聚合"},
 		}}
 	c := &Checker{tableColumns: map[string]map[string]columnMeta{
 		"data.tables.x": {"id": {typ: "string", primaryKey: true}},
 	}}
 	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "other", Targets: []string{"data.tables.x"},
 		Returns: []queryReturn{{Name: "x", Kind: "entity", Entity: "data.entities.x"}}}
-	c.checkEntityCoverage(q, e, nil)
+	c.checkEntitySecretProjection("q", q, e)
 	if !strings.Contains(entityErrs(c), "[query-sensitive-columns]") || !strings.Contains(entityErrs(c), "computed secret") {
 		t.Fatalf("computed secret field not reported: %v", c.errs)
 	}
 
 	c.errs = nil
 	q.OwnerModule = "account"
-	c.checkEntityCoverage(q, e, nil)
+	c.checkEntitySecretProjection("q", q, e)
 	if len(c.errs) != 0 {
 		t.Fatalf("same-module computed secret reported: %v", c.errs)
+	}
+}
+
+func TestSecretEntityProjectionBoundary(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.run()
+	c.errs = nil
+	for _, id := range []string{
+		"data.entities.token",
+		"data.entities.auth_pwd",
+		"data.entities.verification_body",
+		"data.entities.verification_action",
+	} {
+		e := c.entities[id]
+		if e == nil {
+			t.Fatalf("entity %s not loaded", id)
+		}
+		var secretRefs []string
+		for _, f := range e.Fields {
+			if !f.IsRelation && f.Column != "" && normalizeSensitivity(f.Sensitivity) == sensitivitySecret {
+				secretRefs = append(secretRefs, f.ColumnTable+".col."+f.Column)
+			}
+		}
+		if len(secretRefs) == 0 {
+			t.Fatalf("%s: expected at least one secret field", id)
+		}
+		q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "other", Targets: append([]string(nil), e.Tables...)}
+		c.errs = nil
+		c.checkEntitySecretProjection("q.returns[0]", q, e)
+		if strings.Contains(entityErrs(c), "[query-sensitive-columns]") {
+			t.Fatalf("%s: entity default projection must exclude secret fields: %v", id, c.errs)
+		}
+
+		c.errs = nil
+		c.checkColumnProjection("q.returns[0]", q, secretRefs)
+		if !strings.Contains(entityErrs(c), "[query-sensitive-columns]") {
+			t.Fatalf("%s: columns secret projection across modules must fail: %v", id, c.errs)
+		}
+
+		sameModule := *q
+		sameModule.OwnerModule = e.OwnerModule
+		c.errs = nil
+		c.checkColumnProjection("q.returns[0]", &sameModule, secretRefs)
+		if strings.Contains(entityErrs(c), "[query-sensitive-columns]") {
+			t.Fatalf("%s: same-module columns secret projection must be allowed: %v", id, c.errs)
+		}
 	}
 }
 
@@ -928,7 +1021,7 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	c = &Checker{}
 	q = &queryInfo{
 		ID: "q", File: "q.yaml",
-		Returns: []queryReturn{{Name: "rows", Kind: "table", Table: "data.tables.x", List: true}},
+		Returns: []queryReturn{{Name: "rows", Kind: "entity", Entity: "data.entities.x", List: true}},
 		Params: []queryParam{
 			{Name: "offset", Type: "integer", Nullable: true, HasDefault: true, DefaultValue: 0},
 			{Name: "limit", Type: "integer", Nullable: true, HasDefault: true, DefaultValue: 20},
@@ -955,7 +1048,7 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	c = &Checker{}
 	q = &queryInfo{
 		ID: "q", File: "q.yaml",
-		Returns: []queryReturn{{Name: "rows", Kind: "table", Table: "data.tables.x", List: true}},
+		Returns: []queryReturn{{Name: "rows", Kind: "entity", Entity: "data.entities.x", List: true}},
 	}
 	c.checkQueryPagination(q)
 	if !strings.Contains(entityErrs(c), "list return requires offset param") {
@@ -1139,7 +1232,7 @@ func TestEntityFieldDefaults(t *testing.T) {
 		{Name: "DeletedAt", SourceColumnRef: "data.tables.x.col.deleted_at", ColumnTable: "data.tables.x", Column: "deleted_at"},
 	}}
 	c.applyEntityFieldDefaults(e)
-	if e.Fields[0].JSONName != "id" || e.Fields[0].Type != "string" || e.Fields[0].ValidationKind != "" || e.Fields[0].Description != "" {
+	if e.Fields[0].JSONName != "id" || e.Fields[0].Type != "string" || e.Fields[0].Description != "" {
 		t.Fatalf("only mechanical defaults should apply: %#v", e.Fields[0])
 	}
 	if e.Fields[1].Sensitivity != sensitivityPII || e.Fields[1].Type != "string" || e.Fields[1].JSONName != "nickname" || e.Fields[1].Description != "" {

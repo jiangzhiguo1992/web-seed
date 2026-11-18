@@ -25,10 +25,8 @@ type queryParam struct {
 
 type queryReturn struct {
 	Name       string
-	Kind       string // column / entity / table / scalar / affected_rows
-	Column     string
+	Kind       string // scalar / affected_rows / entity / columns
 	Entity     string
-	Table      string
 	Type       string
 	Columns    []string
 	HasColumns bool
@@ -175,9 +173,7 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		r := queryReturn{}
 		r.Name, _ = rm["name"].(string)
 		r.Kind, _ = rm["kind"].(string)
-		r.Column, _ = rm["column"].(string)
 		r.Entity, _ = rm["entity"].(string)
-		r.Table, _ = rm["table"].(string)
 		r.Type, _ = rm["type"].(string)
 		r.Columns = stringList(rm["columns"])
 		_, r.HasColumns = rm["columns"]
@@ -272,7 +268,7 @@ func (c *Checker) checkQueryDoNot(qd queryDoc) {
 	}
 }
 
-// checkQueryShape 校验返回形状：affected_rows 单值、table 结果不能与其它项混用。
+// checkQueryShape 校验返回形状：affected_rows 必须是唯一返回项且不能是列表。
 func (c *Checker) checkQueryShape(q *queryInfo) {
 	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
 	if len(q.Returns) == 0 {
@@ -282,13 +278,13 @@ func (c *Checker) checkQueryShape(q *queryInfo) {
 		return
 	}
 	hasAffected := false
-	hasTable := false
+	hasColumns := false
 	for _, r := range q.Returns {
-		if r.Kind == "affected_rows" {
+		switch r.Kind {
+		case "affected_rows":
 			hasAffected = true
-		}
-		if r.Kind == "table" {
-			hasTable = true
+		case "columns":
+			hasColumns = true
 		}
 	}
 	if hasAffected && len(q.Returns) > 1 {
@@ -297,8 +293,8 @@ func (c *Checker) checkQueryShape(q *queryInfo) {
 	if hasAffected && len(q.Returns) == 1 && q.Returns[0].List {
 		c.rulef("query-shape", "%s: affected_rows must not be a list", where)
 	}
-	if hasTable && len(q.Returns) > 1 {
-		c.rulef("query-shape", "%s: table return must be the only return item", where)
+	if hasColumns && len(q.Returns) > 1 {
+		c.rulef("query-shape", "%s: columns return must be the only return item", where)
 	}
 }
 
@@ -570,22 +566,13 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 		listSet, hasList = r.List, true
 
 		switch r.Kind {
-		case "column":
-			if r.Column == "" {
-				c.rulef("query-returns", "%s: kind=column requires column", rw)
-				continue
-			}
-			if r.Entity != "" || r.Table != "" || r.Type != "" || len(r.Columns) > 0 {
-				c.rulef("query-returns", "%s: kind=column forbids entity/table/type/columns", rw)
-			}
-			c.checkReturnColumn(rw, q, r.Column)
 		case "entity":
 			if r.Entity == "" {
 				c.rulef("query-returns", "%s: kind=entity requires entity", rw)
 				continue
 			}
-			if r.Column != "" || r.Table != "" || r.Type != "" {
-				c.rulef("query-returns", "%s: kind=entity forbids column/table/type", rw)
+			if r.Type != "" || len(r.Columns) > 0 {
+				c.rulef("query-returns", "%s: kind=entity forbids type/columns", rw)
 			}
 			e := c.entities[r.Entity]
 			if e == nil {
@@ -595,41 +582,30 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 			if e.Primary != "" && !q.tableSet()[e.Primary] {
 				c.rulef("query-returns", "%s: entity %s primary table %s not in tables", rw, e.ID, e.Primary)
 			}
-			c.checkEntityReturnColumns(rw, q, e, r.Columns)
-		case "table":
-			if r.Table == "" {
-				c.rulef("query-returns", "%s: kind=table requires table", rw)
+			c.checkEntitySecretProjection(rw, q, e)
+		case "columns":
+			if len(r.Columns) == 0 {
+				c.rulef("query-returns", "%s: kind=columns requires columns", rw)
 				continue
 			}
-			if r.Column != "" || r.Entity != "" || r.Type != "" {
-				c.rulef("query-returns", "%s: kind=table forbids column/entity/type", rw)
+			if r.Entity != "" || r.Type != "" {
+				c.rulef("query-returns", "%s: kind=columns forbids entity/type", rw)
 			}
-			if len(q.Targets) == 0 || q.Targets[0] != r.Table {
-				c.rulef("query-returns", "%s: table must match tables[0]", rw)
-			}
-			if _, ok := c.tableColumns[r.Table]; !ok {
-				c.rulef("query-returns", "%s: unknown table %s", rw, r.Table)
-				continue
-			}
-			// 显式 columns: [] 由 schema.min_items 报错；这里只拦“省略 columns”的默认投影。
-			if !r.HasColumns && len(r.Columns) == 0 && c.tableHasSecretColumns(r.Table) {
-				c.rulef("query-sensitive-columns", "%s: kind=table on %s requires explicit columns (table has secret columns)", rw, r.Table)
-			}
-			c.checkTableReturnColumns(rw, q, r.Table, r.Columns)
+			c.checkColumnProjection(rw, q, r.Columns)
 		case "scalar":
 			if r.Type == "" {
 				c.rulef("query-returns", "%s: kind=scalar requires type", rw)
 				continue
 			}
-			if r.Column != "" || r.Entity != "" || r.Table != "" || len(r.Columns) > 0 {
-				c.rulef("query-returns", "%s: kind=scalar forbids column/entity/table/columns", rw)
+			if r.Entity != "" || len(r.Columns) > 0 {
+				c.rulef("query-returns", "%s: kind=scalar forbids entity/columns", rw)
 			}
 			if !c.scalarReturnType(r.Type) {
 				c.rulef("query-returns", "%s: unsupported scalar type %s", rw, r.Type)
 			}
 		case "affected_rows":
-			if r.Column != "" || r.Entity != "" || r.Table != "" || r.Type != "" || len(r.Columns) > 0 {
-				c.rulef("query-shape", "%s: affected_rows forbids column/entity/table/type/columns", rw)
+			if r.Entity != "" || r.Type != "" || len(r.Columns) > 0 {
+				c.rulef("query-shape", "%s: affected_rows forbids entity/type/columns", rw)
 			}
 		default:
 			c.rulef("query-returns", "%s: invalid kind %q", rw, r.Kind)
@@ -646,125 +622,43 @@ func (c *Checker) scalarReturnType(typ string) bool {
 	return ok
 }
 
-func (c *Checker) checkReturnColumn(where string, q *queryInfo, ref string) {
-	t, col, ok := splitColumnRef(ref)
-	if !ok {
-		c.rulef("query-return-columns", "%s: malformed column %q", where, ref)
-		return
-	}
-	if !q.tableSet()[t] {
-		c.rulef("query-return-columns", "%s: column %s does not belong to query tables", where, ref)
-		return
-	}
-	meta, ok := c.tableColumns[t][col]
-	if !ok {
-		c.rulef("query-return-columns", "%s: column %s not found", where, ref)
-		return
-	}
-	if normalizeSensitivity(meta.sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[t] {
-		c.rulef("query-sensitive-columns", "%s: returns secret column %s outside module %s", where, col, c.tableOwners[t])
-	}
-}
-
-// tableHasSecretColumns 判断表上是否有 secret 列；有则 kind=table 必须显式裁剪投影。
-func (c *Checker) tableHasSecretColumns(table string) bool {
-	for _, meta := range c.tableColumns[table] {
-		if normalizeSensitivity(meta.sensitivity) == sensitivitySecret {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *Checker) checkTableReturnColumns(where string, q *queryInfo, table string, columns []string) {
-	for _, col := range columns {
-		if _, _, ok := splitColumnRef(col); ok {
-			c.rulef("query-return-columns", "%s: kind=table columns must be bare names, got %s", where, col)
-			continue
-		}
-		meta, ok := c.tableColumns[table][col]
-		if !ok {
-			c.rulef("query-return-columns", "%s: return column %s not found in %s", where, col, table)
-			continue
-		}
-		if normalizeSensitivity(meta.sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[table] {
-			c.rulef("query-sensitive-columns", "%s: returns secret column %s outside module %s", where, col, c.tableOwners[table])
-		}
-	}
-}
-
-func (c *Checker) checkEntityReturnColumns(where string, q *queryInfo, e *entityInfo, columns []string) {
-	selected := map[string]bool{}
-	invalid := false
-	for _, ref := range columns {
-		t, col, ok := splitColumnRef(ref)
-		if !ok {
-			c.rulef("query-return-columns", "%s: entity column %q must be data.tables.<t>.col.<c>", where, ref)
-			invalid = true
-			continue
-		}
-		selected[t+"."+col] = true
-		if !containsString(e.Tables, t) {
-			c.rulef("query-return-columns", "%s: column %s does not belong to entity tables %v", where, ref, e.Tables)
-			invalid = true
-			continue
-		}
-		f := findEntityFieldByColumn(e, t, col)
-		if f == nil {
-			c.rulef("query-return-columns", "%s: return column %s not found in %s", where, ref, e.ID)
-			invalid = true
-			continue
-		}
-		if normalizeSensitivity(f.Sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[f.ColumnTable] {
-			c.rulef("query-sensitive-columns", "%s: returns secret field %s outside module %s", where, f.Name, c.tableOwners[f.ColumnTable])
-		}
-	}
-	if invalid {
-		// 投影本身非法时不再跑覆盖检查，避免同一处错误级联成“漏字段”噪音。
-		return
-	}
-	c.checkEntityCoverage(q, e, selected)
-}
-
-// checkEntityCoverage 校验实体返回的投影：来源表必须在查询表集合内，裁剪不得丢失必填字段。
-func (c *Checker) checkEntityCoverage(q *queryInfo, e *entityInfo, selected map[string]bool) {
-	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
-	tables := q.tableSet()
-	missing := map[string]bool{}
+// checkEntitySecretProjection 校验 entity 默认投影：computed secret 跨模块一律拒绝；
+// 列来源的 secret 字段由默认投影排除，不在此报错。
+func (c *Checker) checkEntitySecretProjection(where string, q *queryInfo, e *entityInfo) {
 	owner := e.OwnerModule
 	if owner == "" {
 		owner = c.tableOwners[e.Primary]
 	}
 	for _, f := range e.Fields {
-		if f.IsRelation {
+		if f.IsRelation || f.SourceComputed == "" {
 			continue
 		}
-		if f.SourceComputed != "" {
-			if normalizeSensitivity(f.Sensitivity) == sensitivitySecret && q.OwnerModule != owner {
-				c.rulef("query-sensitive-columns", "%s: returns computed secret field %s outside module %s", where, f.Name, owner)
-			}
-			continue
-		}
-		if f.Column == "" {
-			continue
-		}
-		key := f.ColumnTable + "." + f.Column
-		if len(selected) == 0 {
-			if normalizeSensitivity(f.Sensitivity) == sensitivitySecret {
-				continue
-			}
-		} else if !selected[key] {
-			if normalizeSensitivity(f.Sensitivity) != sensitivitySecret && !strings.HasPrefix(f.Type, "*") {
-				c.rulef("query-entity-coverage", "%s: omits required field %s", where, f.Name)
-			}
-			continue
-		}
-		if !tables[f.ColumnTable] {
-			missing[f.ColumnTable] = true
+		if normalizeSensitivity(f.Sensitivity) == sensitivitySecret && q.OwnerModule != owner {
+			c.rulef("query-sensitive-columns", "%s: returns computed secret field %s outside module %s", where, f.Name, owner)
 		}
 	}
-	for _, table := range sortedKeys(missing) {
-		c.rulef("query-entity-coverage", "%s: returns %s but does not read its source table %s", where, e.ID, table)
+}
+
+// checkColumnProjection 校验 kind=columns 的列引用、所属查询表与 secret 作用域。
+func (c *Checker) checkColumnProjection(where string, q *queryInfo, columns []string) {
+	for _, ref := range columns {
+		t, col, ok := splitColumnRef(ref)
+		if !ok {
+			c.rulef("query-return-columns", "%s: column %q must be data.tables.<t>.col.<c>", where, ref)
+			continue
+		}
+		if !q.tableSet()[t] {
+			c.rulef("query-return-columns", "%s: column %s does not belong to query tables", where, ref)
+			continue
+		}
+		meta, ok := c.tableColumns[t][col]
+		if !ok {
+			c.rulef("query-return-columns", "%s: column %s not found", where, ref)
+			continue
+		}
+		if normalizeSensitivity(meta.sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[t] {
+			c.rulef("query-sensitive-columns", "%s: returns secret column %s outside module %s", where, col, c.tableOwners[t])
+		}
 	}
 }
 
@@ -772,16 +666,6 @@ func findEntityField(e *entityInfo, name string) *entityFieldInfo {
 	for i := range e.Fields {
 		if e.Fields[i].Name == name {
 			return &e.Fields[i]
-		}
-	}
-	return nil
-}
-
-func findEntityFieldByColumn(e *entityInfo, table, column string) *entityFieldInfo {
-	for i := range e.Fields {
-		f := &e.Fields[i]
-		if !f.IsRelation && f.ColumnTable == table && f.Column == column {
-			return f
 		}
 	}
 	return nil

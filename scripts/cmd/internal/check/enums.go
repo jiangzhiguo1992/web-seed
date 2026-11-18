@@ -144,13 +144,9 @@ func (c *Checker) checkEnumSchema(schema *Schema) {
 			c.rulef("schema.meta", "%s: enums.%s must be required", schema.ID, name)
 		}
 	}
-	usedBy, ok := contractspec.FindField(enums.ItemFields, "used_by")
-	if ok {
-		for _, name := range []string{"entities", "capabilities"} {
-			f, found := contractspec.FindField(usedBy.Fields, name)
-			if !found || !f.Required {
-				c.rulef("schema.meta", "%s: enums.used_by.%s must be required", schema.ID, name)
-			}
+	if usedBy, ok := contractspec.FindField(enums.ItemFields, "used_by"); ok {
+		if usedBy.Type != "list<string>" || usedBy.MinItems == nil {
+			c.rulef("schema.meta", "%s: enums.used_by must be list<string> with min_items", schema.ID)
 		}
 	}
 	values, ok := contractspec.FindField(enums.ItemFields, "values")
@@ -259,29 +255,24 @@ func enumTypeRef(typ string) (string, bool) {
 	return "", false
 }
 
-// checkEnumUsedBy 要求 used_by.entities/capabilities 与实际引用完全一致。
+// checkEnumUsedBy 要求 used_by 与 entity 字段和 capability 引用的并集完全一致。
 func (c *Checker) checkEnumUsedBy(rel string, i int, id string, m map[string]any, usage *enumUsage) {
-	ub, ok := asMap(m["used_by"])
+	raw, ok := m["used_by"]
 	if !ok {
 		return // schema.required 报缺失
 	}
-	expectedEntities := map[string]bool{}
-	expectedCapabilities := map[string]bool{}
+	expected := map[string]bool{}
 	if usage != nil {
-		expectedEntities = usage.entities
-		expectedCapabilities = usage.capabilities
-	}
-	if raw, ok := ub["entities"]; ok {
-		declared := stringSet(asList(raw))
-		if !sameSet(declared, expectedEntities) {
-			c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.entities must be %v, got %v", rel, i, id, sortedKeys(expectedEntities), sortedKeys(declared))
+		for entityID := range usage.entities {
+			expected[entityID] = true
+		}
+		for capabilityID := range usage.capabilities {
+			expected[capabilityID] = true
 		}
 	}
-	if raw, ok := ub["capabilities"]; ok {
-		declared := stringSet(asList(raw))
-		if !sameSet(declared, expectedCapabilities) {
-			c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by.capabilities must be %v, got %v", rel, i, id, sortedKeys(expectedCapabilities), sortedKeys(declared))
-		}
+	declared := stringSet(asList(raw))
+	if !sameSet(declared, expected) {
+		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by must be %v, got %v", rel, i, id, sortedKeys(expected), sortedKeys(declared))
 	}
 }
 

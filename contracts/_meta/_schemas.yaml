@@ -26,24 +26,24 @@ kinds:
             pattern: '^[a-z][a-z0-9_]*$'
             description: "属性名；对象内唯一"
           - name: schema
-            type: schema
+            types: [scalar, object, array, ref]
             required: true
-            description: "属性值域；object/array/scalar/ref 任一"
+            description: "属性值域"
           - name: required
             type: boolean
             description: "键是否必须出现；默认 false"
           - name: nullable
             type: boolean
             description: "值是否可为 null；默认 false"
+          - name: default
+            type: any
+            description: "缺省值；仅槽位层"
           - name: read_only
             type: boolean
             description: "仅响应输出；默认 false"
           - name: write_only
             type: boolean
             description: "仅请求输入；默认 false"
-          - name: default
-            type: any
-            description: "缺省值；仅槽位层"
           - name: description
             type: string
             required: true
@@ -58,7 +58,7 @@ kinds:
         const: array
         description: "固定为 array"
       - name: items
-        type: schema
+        types: [object, array, scalar, ref]
         required: true
         description: "数组元素值域"
       - name: min_items

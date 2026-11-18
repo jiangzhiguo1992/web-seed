@@ -416,38 +416,12 @@ func TestRenderEnumItemUsesNameAsIDSource(t *testing.T) {
 	if doc["id"] != nil || doc["name"] != "note_status" {
 		t.Fatalf("item id is derived from name and must not be rendered: %#v", doc)
 	}
-	usedBy, ok := doc["used_by"].(map[string]any)
-	if !ok || usedBy["capabilities"] == nil {
-		t.Fatalf("used_by.capabilities must be scaffolded: %#v", doc)
+	usedBy, ok := doc["used_by"].([]any)
+	if !ok || len(usedBy) != 0 {
+		t.Fatalf("used_by list must be scaffolded empty for manual fill: %#v", doc)
 	}
 	if strings.Index(string(b), "values:") > strings.Index(string(b), "used_by:") {
 		t.Fatalf("scaffold must follow template order (values before used_by):\n%s", b)
-	}
-}
-
-func TestRenderEnumItemRejectsUnsupportedUsedByField(t *testing.T) {
-	path, err := filepath.Abs("../../../../contracts/_meta/data.enums.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := LoadSchema(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := range s.Fields {
-		if s.Fields[i].Name != "enums" {
-			continue
-		}
-		for j := range s.Fields[i].ItemFields {
-			if s.Fields[i].ItemFields[j].Name == "used_by" {
-				s.Fields[i].ItemFields[j].Fields = append(s.Fields[i].ItemFields[j].Fields, Field{
-					Name: "tables", Type: "list<string>", Required: true,
-				})
-			}
-		}
-	}
-	if _, err := RenderEnumItem(s, "note_status"); err == nil {
-		t.Fatal("expected unsupported required used_by child to fail")
 	}
 }
 

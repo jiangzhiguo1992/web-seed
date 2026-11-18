@@ -47,9 +47,10 @@ fields:
     description: "实例级负向约束"
 
   - name: schemas
-    type: map<schema>
+    type: map
+    types: [object, array, scalar, ref]
     required: false
-    description: "本地 schema；键是类型名，值是值域节点，object 的 properties 按 _meta/_schemas.yaml 的 property 条目校验"
+    description: "本地 schema；键是类型名，值是值域节点，object 的 properties 按 _schemas.yaml 的 item_fields 校验"
 
   - name: services
     type: list<object>

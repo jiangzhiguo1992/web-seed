@@ -198,7 +198,7 @@ feature ──> capabilities ──> data
 | capabilities/async → capabilities/events | async job | `trigger.event` |
 | capabilities/services → data | service 契约 | `steps[].query` / `steps[].queries` / query `errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` |
-| data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `join_column_from/to` |
+| data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `source.join.from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `table.queries`（生成物） |
 | data.entities → 上游（反向） | 实体文件 | `model.included_by`（显式，checker 校验） / `model.queries`（生成物） |
 | data.queries → 上游（反向） | 查询项 | `used_by`（生成物，指向 `cap.services.*`，不得为空） |

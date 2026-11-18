@@ -42,24 +42,21 @@ type entityFieldInfo struct {
 	Type            string
 	Nullable        bool
 	HasNullable     bool
-	ValidationKind  string
-	ValidationRef   string
-	ValidationCount int
-	HasValidation   bool
 	Sensitivity     string
 	HasSensitivity  bool
 	JSONName        string
 	Description     string
 	HasDescription  bool
 	IsRelation      bool
+	HasJoin         bool
 	JoinFromRef     string
 	JoinFromTable   string
 	JoinFromColumn  string
 	JoinToRef       string
 	JoinToTable     string
 	JoinToColumn    string
-	Load            string
-	HasLoad         bool
+	Lazy            bool
+	HasLazy         bool
 	FromBase        bool
 	OverridesBase   bool
 	BaseRedeclared  bool
@@ -238,7 +235,7 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 	if name == "" {
 		return nil
 	}
-	f := &entityFieldInfo{Name: name, Load: "lazy"}
+	f := &entityFieldInfo{Name: name}
 	f.JSONName, _ = m["json_name"].(string)
 	if _, ok := m["description"]; ok {
 		f.HasDescription = true
@@ -258,33 +255,31 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 		if t, col, ok := splitColumnRef(f.SourceColumnRef); ok {
 			f.ColumnTable, f.Column = t, col
 		}
-	}
-	if val, ok := asMap(m["validation"]); ok {
-		f.HasValidation = true
-		for _, kind := range []string{"column", "pattern", "soft"} {
-			if v, ok := val[kind].(string); ok && v != "" {
-				f.ValidationCount++
-				f.ValidationKind, f.ValidationRef = kind, v
+		if join, ok := asMap(src["join"]); ok {
+			f.HasJoin = true
+			if v, ok := join["from"].(string); ok && v != "" {
+				f.JoinFromRef, f.IsRelation = v, true
+				if t, col, ok := splitColumnRef(v); ok {
+					f.JoinFromTable, f.JoinFromColumn = t, col
+				}
+			}
+			if v, ok := join["to"].(string); ok && v != "" {
+				f.JoinToRef, f.IsRelation = v, true
+				if t, col, ok := splitColumnRef(v); ok {
+					f.JoinToTable, f.JoinToColumn = t, col
+				}
+			}
+			if v, ok := join["lazy"].(bool); ok {
+				f.Lazy, f.HasLazy = v, true
 			}
 		}
 	}
 	if v, ok := m["sensitivity"].(string); ok {
 		f.Sensitivity, f.HasSensitivity = v, true
 	}
-	if v, ok := m["join_column_from"].(string); ok && v != "" {
-		f.JoinFromRef, f.IsRelation = v, true
-		if t, col, ok := splitColumnRef(v); ok {
-			f.JoinFromTable, f.JoinFromColumn = t, col
-		}
-	}
-	if v, ok := m["join_column_to"].(string); ok && v != "" {
-		f.JoinToRef, f.IsRelation = v, true
-		if t, col, ok := splitColumnRef(v); ok {
-			f.JoinToTable, f.JoinToColumn = t, col
-		}
-	}
-	if v, ok := m["load"].(string); ok && v != "" {
-		f.Load, f.HasLoad = v, true
+	// 关系意图也由 type 判定，确保缺失 source.join 时走关系分支报错，而不是误报标量类型。
+	if strings.HasPrefix(strings.TrimPrefix(f.Type, "*"), "data.entities.") {
+		f.IsRelation = true
 	}
 	return f
 }
@@ -603,9 +598,6 @@ func (c *Checker) checkEntityBase(schema *Schema) {
 		if f.SourceColumnRef != ref || f.SourceComputed != "" {
 			c.rulef("entity-base-shape", "%s: source must be %s", where, ref)
 		}
-		if f.ValidationCount != 1 || f.ValidationKind != "column" || f.ValidationRef != ref {
-			c.rulef("entity-base-shape", "%s: validation must be column %s", where, ref)
-		}
 		if strings.TrimSpace(f.Description) == "" {
 			c.rulef("entity-base-shape", "%s: description must not be empty", where)
 		}
@@ -690,14 +682,17 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 
 // checkRelationFieldShape 校验关系字段的键集合与必填项。
 func (c *Checker) checkRelationFieldShape(f entityFieldInfo, where string) {
-	if f.HasSource || f.HasValidation || f.HasSensitivity {
-		c.rulef("entity-field-variant", "%s: relation field must not declare source/validation/sensitivity", where)
+	if f.SourceColumnRef != "" || f.SourceComputed != "" || f.SourceSoft != "" {
+		c.rulef("entity-field-variant", "%s: relation field source must be join only", where)
+	}
+	if f.HasSensitivity {
+		c.rulef("entity-field-variant", "%s: relation field must not declare sensitivity", where)
 	}
 	if f.HasNullable {
 		c.rulef("entity-field-variant", "%s: relation field must not declare nullable", where)
 	}
-	if !f.HasType || f.JoinFromRef == "" || f.JoinToRef == "" {
-		c.rulef("entity-field-variant", "%s: relation field requires type/join_column_from/join_column_to", where)
+	if !f.HasType || f.JoinFromRef == "" || f.JoinToRef == "" || !f.HasLazy {
+		c.rulef("entity-field-variant", "%s: relation field requires type/source.join.from/source.join.to/source.join.lazy", where)
 		return
 	}
 	if _, pointer := splitPointer(f.Type); pointer || !strings.HasPrefix(f.Type, "data.entities.") {
@@ -705,10 +700,10 @@ func (c *Checker) checkRelationFieldShape(f entityFieldInfo, where string) {
 	}
 }
 
-// checkScalarField 校验标量字段：来源、类型、指针/可空、敏感标记与字段校验。
+// checkScalarField 校验标量字段：来源、类型、指针/可空与敏感标记。
 func (c *Checker) checkScalarField(e *entityInfo, f entityFieldInfo, where string, cols map[string]string) {
-	if f.JoinFromRef != "" || f.JoinToRef != "" || f.HasLoad {
-		c.rulef("entity-field-variant", "%s: scalar field must not declare join_column_from/join_column_to/load", where)
+	if f.HasJoin {
+		c.rulef("entity-field-variant", "%s: scalar field must not declare source.join", where)
 	}
 	hasCol := f.SourceColumnRef != ""
 	hasComputed := f.SourceComputed != ""
@@ -730,7 +725,6 @@ func (c *Checker) checkScalarField(e *entityInfo, f entityFieldInfo, where strin
 	}
 	if !f.HasType {
 		c.rulef("entity-field-type", "%s: type is required", where)
-		c.checkFieldValidation(e, f, where, "")
 		return
 	}
 	base, star := splitPointer(f.Type)
@@ -798,54 +792,6 @@ func (c *Checker) checkScalarField(e *entityInfo, f entityFieldInfo, where strin
 	}
 	if normalizeSensitivity(f.Sensitivity) == sensitivitySecret && isExportedName(f.Name) {
 		c.rulef("entity-field-sensitive", "%s: secret field must start lowercase (unexported)", where)
-	}
-	c.checkFieldValidation(e, f, where, base)
-}
-
-// checkFieldValidation 校验 validation 三选一以及列/正则引用。
-func (c *Checker) checkFieldValidation(e *entityInfo, f entityFieldInfo, where, baseType string) {
-	if f.ValidationCount != 1 {
-		c.rulef("entity-field-validation", "%s: validation must declare exactly one of column/pattern/soft", where)
-		return
-	}
-	switch f.ValidationKind {
-	case "column":
-		if f.SourceColumnRef == "" {
-			c.rulef("entity-field-validation", "%s: validation column requires source.column", where)
-			return
-		}
-		if f.ValidationRef != f.SourceColumnRef {
-			c.rulef("entity-field-validation", "%s: validation column %s must equal source.column %s", where, f.ValidationRef, f.SourceColumnRef)
-		}
-		t, col, ok := splitColumnRef(f.ValidationRef)
-		if !ok || t == "" || col == "" {
-			c.rulef("entity-field-validation", "%s: malformed validation column %q", where, f.ValidationRef)
-			return
-		}
-		if t == c.baseID {
-			if !isBaseColumn(col) {
-				c.rulef("entity-field-validation", "%s: validation column %s not found", where, f.ValidationRef)
-			}
-			return
-		}
-		if !containsString(e.Tables, t) {
-			c.rulef("entity-field-validation", "%s: validation column %s does not belong to entity tables", where, f.ValidationRef)
-			return
-		}
-		if _, ok := c.tableColumns[t][col]; !ok {
-			c.rulef("entity-field-validation", "%s: validation column %s not found", where, f.ValidationRef)
-		}
-	case "pattern":
-		if c.valueType(baseType) != "string" && baseType != "string" {
-			c.rulef("entity-field-validation", "%s: pattern validation requires string type, got %s", where, baseType)
-		}
-		if _, err := regexp.Compile(f.ValidationRef); err != nil {
-			c.rulef("entity-field-validation", "%s: invalid pattern %q: %v", where, f.ValidationRef, err)
-		}
-	case "soft":
-		if strings.TrimSpace(f.ValidationRef) == "" {
-			c.rulef("entity-field-validation", "%s: soft validation must not be empty", where)
-		}
 	}
 }
 
@@ -953,11 +899,11 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			continue
 		}
 		if r.JoinToTable == "" || c.tableColumns[r.JoinToTable] == nil {
-			c.rulef("entity-relation-target", "%s: join_column_to table %s not found", where, r.JoinToTable)
+			c.rulef("entity-relation-target", "%s: source.join.to table %s not found", where, r.JoinToTable)
 			continue
 		}
 		if !containsString(target.Tables, r.JoinToTable) {
-			c.rulef("entity-relation-target", "%s: join_column_to table %s is not mapped by %s", where, r.JoinToTable, r.Type)
+			c.rulef("entity-relation-target", "%s: source.join.to table %s is not mapped by %s", where, r.JoinToTable, r.Type)
 			continue
 		}
 		if expected[r.Type] == nil {
@@ -967,16 +913,16 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 
 		fromMeta, fromOK := c.tableColumns[r.JoinFromTable][r.JoinFromColumn]
 		if !fromOK {
-			c.rulef("entity-relation-via", "%s: join_column_from %s not found", where, r.JoinFromRef)
+			c.rulef("entity-relation-via", "%s: source.join.from %s not found", where, r.JoinFromRef)
 			continue
 		}
 		toMeta, toOK := c.tableColumns[r.JoinToTable][r.JoinToColumn]
 		if !toOK {
-			c.rulef("entity-relation-via", "%s: join_column_to %s not found", where, r.JoinToRef)
+			c.rulef("entity-relation-via", "%s: source.join.to %s not found", where, r.JoinToRef)
 			continue
 		}
 		if !containsString(e.Tables, r.JoinFromTable) {
-			c.rulef("entity-relation-via", "%s: join_column_from table %s is not mapped by %s", where, r.JoinFromTable, e.ID)
+			c.rulef("entity-relation-via", "%s: source.join.from table %s is not mapped by %s", where, r.JoinFromTable, e.ID)
 			continue
 		}
 		if c.resolvedColumnType(fromMeta.typ) != c.resolvedColumnType(toMeta.typ) {
@@ -988,7 +934,7 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			c.rulef("entity-relation-cardinality", "%s: one side of join columns must be unique (PK or unique index)", where)
 			continue
 		}
-		if r.Load == "eager" {
+		if r.HasLazy && !r.Lazy {
 			if r.Type == e.ID {
 				c.rulef("entity-relation-eager-cycle", "%s: self relation must be lazy", where)
 			}
@@ -1089,6 +1035,41 @@ func (c *Checker) checkEntityValidation(e *entityInfo) {
 				c.rulef("entity-validation", "%s: unknown error code %s", where, code)
 			}
 		}
+		c.checkEntityValidationUsedBy(e, m, where)
+	}
+}
+
+// checkEntityValidationUsedBy 要求 used_by 是消费该实体主表的 service。
+func (c *Checker) checkEntityValidationUsedBy(e *entityInfo, m map[string]any, where string) {
+	raw, present := m["used_by"]
+	if !present || raw == nil {
+		return // 缺失/空列表由 schema.required 与 min_items 报出
+	}
+	for _, x := range asList(raw) {
+		sid, ok := x.(string)
+		if !ok || !strings.HasPrefix(sid, "cap.services.") {
+			c.rulef("entity-validation-used-by", "%s: used_by must be cap.services.* item IDs, got %v", where, x)
+			continue
+		}
+		if c.methodReturns != nil {
+			if _, found := c.methodReturns[sid]; !found {
+				c.rulef("entity-validation-used-by", "%s: unknown service %s", where, sid)
+				continue
+			}
+		}
+		if c.serviceQueries == nil {
+			continue
+		}
+		ok = false
+		for qid := range c.serviceQueries[sid] {
+			if c.queryTables[qid][e.Primary] {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			c.rulef("entity-validation-used-by", "%s: service %s does not query entity table %s", where, sid, e.Primary)
+		}
 	}
 }
 
@@ -1098,7 +1079,7 @@ func (c *Checker) checkEagerCycles() {
 	for id, e := range c.entities {
 		for _, r := range e.Fields {
 			// 自引用由 checkEntityRelations 报“self relation must be lazy”，这里只查多节点环。
-			if r.IsRelation && r.Load == "eager" && r.Type != "" && r.Type != id {
+			if r.IsRelation && r.HasLazy && !r.Lazy && r.Type != "" && r.Type != id {
 				adj[id] = append(adj[id], r.Type)
 			}
 		}

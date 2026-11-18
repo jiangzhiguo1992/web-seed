@@ -102,6 +102,27 @@ type ValueTypes struct {
 	CustomTypes  map[string]CustomValueType `yaml:"custom_types"`
 }
 
+// SchemaParamTargets 声明 family param 的消费方，避免新增参数后静默丢失：
+// openapi=生成到 OpenAPI，storage=仅存储层，runtime=业务运行时。
+var SchemaParamTargets = map[string]string{
+	"min_len":            "openapi",
+	"max_len":            "openapi",
+	"pattern":            "openapi",
+	"min":                "openapi",
+	"max":                "openapi",
+	"default":            "openapi",
+	"fixed":              "storage",
+	"normalize":          "runtime",
+	"bits":               "storage",
+	"unsigned":           "storage",
+	"precision":          "storage",
+	"scale":              "storage",
+	"mode":               "storage",
+	"timezone":           "storage",
+	"fractional_seconds": "storage",
+	"binary":             "storage",
+}
+
 // CustomValueType 是自定义值类型：一个类型族加上固定参数，供表列与 schema 共享。
 type CustomValueType struct {
 	Family      string         `yaml:"family"`
@@ -117,24 +138,26 @@ type ValueTypeFamily struct {
 }
 
 type Field struct {
-	Name        string  `yaml:"name"`
-	Type        string  `yaml:"type"`
-	Required    bool    `yaml:"required"`
-	Const       any     `yaml:"const"`
-	Enum        []any   `yaml:"enum"`
-	Allowed     []any   `yaml:"allowed"`
-	Min         any     `yaml:"min"`
-	Max         any     `yaml:"max"`
-	MinItems    any     `yaml:"min_items"`
-	Pattern     string  `yaml:"pattern"`
-	Description string  `yaml:"description"`
-	Examples    []any   `yaml:"examples"`
-	Default     any     `yaml:"default"`
-	Generated   bool    `yaml:"generated"`
-	Write       string  `yaml:"write"`
-	Unique      bool    `yaml:"unique"`
-	Fields      []Field `yaml:"fields"`
-	ItemFields  []Field `yaml:"item_fields"`
+	Name string `yaml:"name"`
+	Type string `yaml:"type"`
+	// Types 声明 schema 节点允许的种类；与 Type 互斥，用于代替抽象的 type: schema。
+	Types       []string `yaml:"types"`
+	Required    bool     `yaml:"required"`
+	Const       any      `yaml:"const"`
+	Enum        []any    `yaml:"enum"`
+	Allowed     []any    `yaml:"allowed"`
+	Min         any      `yaml:"min"`
+	Max         any      `yaml:"max"`
+	MinItems    any      `yaml:"min_items"`
+	Pattern     string   `yaml:"pattern"`
+	Description string   `yaml:"description"`
+	Examples    []any    `yaml:"examples"`
+	Default     any      `yaml:"default"`
+	Generated   bool     `yaml:"generated"`
+	Write       string   `yaml:"write"`
+	Unique      bool     `yaml:"unique"`
+	Fields      []Field  `yaml:"fields"`
+	ItemFields  []Field  `yaml:"item_fields"`
 	// Unordered 标记运行时注入的字段（如类型族参数），不参与模板顺序校验。
 	Unordered bool `yaml:"-"`
 }
@@ -272,7 +295,7 @@ func LoadSharedSchemas(dir string) (*SharedSchemas, error) {
 			return nil, fmt.Errorf("%s: unknown kind %s (SchemaNodeKind supports object/array/scalar/ref)", path, name)
 		}
 	}
-	keyTypes := map[string]bool{"": true, "string": true, "boolean": true, "integer": true, "any": true, "schema": true, "list<object>": true, "list<string>": true}
+	keyTypes := map[string]bool{"": true, "string": true, "boolean": true, "integer": true, "any": true, "map": true, "list<object>": true, "list<string>": true}
 	for name, kind := range sh.Kinds {
 		if strings.TrimSpace(kind.Description) == "" {
 			return nil, fmt.Errorf("%s: kind %s missing description", path, name)
@@ -333,8 +356,32 @@ func validateSchemaKeys(path, where string, keys []Field, keyTypes map[string]bo
 			return fmt.Errorf("%s: %s duplicate key %s", path, where, key.Name)
 		}
 		seen[key.Name] = true
-		if !keyTypes[key.Type] {
+		if key.Type != "" && !keyTypes[key.Type] {
 			return fmt.Errorf("%s: %s key %s has invalid type %q", path, where, key.Name, key.Type)
+		}
+		if len(key.Types) > 0 {
+			if key.Type != "" && key.Type != "map" {
+				return fmt.Errorf("%s: %s key %s: type and types are mutually exclusive", path, where, key.Name)
+			}
+			if key.Const != nil || len(key.Enum) > 0 || len(key.Allowed) > 0 || key.Pattern != "" || key.Min != nil || key.Max != nil || key.MinItems != nil || key.Unique {
+				return fmt.Errorf("%s: %s key %s: types only accepts required/description/default", path, where, key.Name)
+			}
+			kindSeen := map[string]bool{}
+			for _, kind := range key.Types {
+				if _, ok := schemaNodeRequiredKeys[kind]; !ok {
+					return fmt.Errorf("%s: %s key %s has unknown schema kind %q", path, where, key.Name, kind)
+				}
+				if kindSeen[kind] {
+					return fmt.Errorf("%s: %s key %s has duplicate schema kind %q", path, where, key.Name, kind)
+				}
+				kindSeen[kind] = true
+			}
+		} else if key.Types != nil {
+			return fmt.Errorf("%s: %s key %s: types must not be empty", path, where, key.Name)
+		} else if key.Type == "map" {
+			return fmt.Errorf("%s: %s key %s: map requires types", path, where, key.Name)
+		} else if key.Type == "" {
+			return fmt.Errorf("%s: %s key %s must declare type or types", path, where, key.Name)
 		}
 		if strings.TrimSpace(key.Description) == "" {
 			return fmt.Errorf("%s: %s key %s missing description", path, where, key.Name)

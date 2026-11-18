@@ -98,12 +98,12 @@ kinds:
         description: "属性"
         item_fields:
           - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, type: schema, required: true, description: "值域" }
+          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
   array:
     description: "数组"
     keys:
       - { name: type, type: string, required: true, description: "类型" }
-      - { name: items, type: schema, required: true, description: "元素" }
+      - { name: items, types: [object, array, scalar, ref], required: true, description: "元素" }
   scalar:
     description: "标量"
     keys:
@@ -132,12 +132,12 @@ kinds:
         description: "属性"
         item_fields:
           - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, type: schema, required: true, description: "值域" }
+          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
   array:
     description: "数组"
     keys:
       - { name: type, type: string, required: true, description: "类型" }
-      - { name: items, type: schema, required: true, description: "元素" }
+      - { name: items, types: [object, array, scalar, ref], required: true, description: "元素" }
   scalar:
     description: "标量"
     keys:
@@ -156,7 +156,7 @@ kinds:
         description: "属性"
         item_fields:
           - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, type: schema, required: true, description: "值域" }
+          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
 `, "", 1),
 			"must define properties",
 		},
@@ -171,15 +171,29 @@ kinds:
 			"properties missing item_fields",
 			strings.Replace(base, `        item_fields:
           - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, type: schema, required: true, description: "值域" }
+          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
 `, "", 1),
 			"must define item_fields",
 		},
 		{
 			"array defines properties",
-			strings.Replace(base, "      - { name: items, type: schema, required: true, description: \"元素\" }\n",
-				"      - { name: items, type: schema, required: true, description: \"元素\" }\n      - { name: properties, type: list<object>, description: \"非法\" }\n", 1),
+			strings.Replace(base, "      - { name: items, types: [object, array, scalar, ref], required: true, description: \"元素\" }\n",
+				"      - { name: items, types: [object, array, scalar, ref], required: true, description: \"元素\" }\n      - { name: properties, type: list<object>, description: \"非法\" }\n", 1),
 			"must not define properties",
+		},
+		{
+			"empty types",
+			strings.Replace(base,
+				"- { name: items, types: [object, array, scalar, ref], required: true, description: \"元素\" }",
+				"- { name: items, types: [], required: true, description: \"元素\" }", 1),
+			"types must not be empty",
+		},
+		{
+			"duplicate kind",
+			strings.Replace(base,
+				"- { name: items, types: [object, array, scalar, ref], required: true, description: \"元素\" }",
+				"- { name: items, types: [scalar, scalar], required: true, description: \"元素\" }", 1),
+			"duplicate schema kind",
 		},
 	}
 	for _, tc := range cases {
@@ -209,13 +223,13 @@ kinds:
         description: "属性"
         item_fields:
           - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, type: schema, required: true, description: "值域" }
+          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
           - { name: required, type: boolean, description: "必填" }
   array:
     description: "数组"
     keys:
       - { name: type, type: string, required: true, description: "类型" }
-      - { name: items, type: schema, required: true, description: "元素" }
+      - { name: items, types: [object, array, scalar, ref], required: true, description: "元素" }
   scalar:
     description: "标量"
     keys:

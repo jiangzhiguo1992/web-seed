@@ -75,15 +75,13 @@ enums:
     ts_type: XStatus
     values:
       - { value: active, code: 0 }
-    used_by:
-      entities: [ data.entities.x ]
-      capabilities: [ cap.methods.x ]
+    used_by: [ data.entities.x, cap.methods.x ]
 `)
 	c := &Checker{root: flow}
 	c.checkFieldPlacement()
 	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "enums[].used_by.entities") || !strings.Contains(errs, "enums[].used_by.capabilities") {
-		t.Fatalf("enum used_by flow lists not reported: %v", c.errs)
+	if !strings.Contains(errs, "enums[].used_by must be block style") {
+		t.Fatalf("enum used_by flow list not reported: %v", c.errs)
 	}
 
 	block := t.TempDir()
@@ -98,10 +96,8 @@ enums:
     values:
       - { value: active, code: 0 }
     used_by:
-      entities:
-        - data.entities.x
-      capabilities:
-        - cap.methods.x
+      - data.entities.x
+      - cap.methods.x
 `)
 	c = &Checker{root: block}
 	c.checkFieldPlacement()

@@ -63,6 +63,7 @@ type Checker struct {
 	permissionSet     map[string]bool
 	methodReturns     map[string]map[string]string
 	methodTypeDefs    map[string]map[string]any
+	serviceQueries    map[string]map[string]bool
 	queryReturnTypes  map[string]map[string]string
 	accessBindings    map[string]accessPolicy
 	inlineSeq         int

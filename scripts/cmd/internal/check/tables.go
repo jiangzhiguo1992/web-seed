@@ -412,39 +412,9 @@ func (c *Checker) recordIndexName(name, rel string) {
 }
 
 // checkPhysicalTable 先按 schema 校验结构，再跑表级规则。
-// foreign_key 已禁用：先从结构校验视图中剥离，避免同一错误被拆成
-// unknown field / pattern / enum 多条；表级规则只报一条 [no-foreign-key]。
 func (c *Checker) checkPhysicalTable(doc map[string]any, rel string, schema *Schema) {
-	c.validateDoc(stripForeignKeys(doc), schema.Fields, rel)
+	c.validateDoc(doc, schema.Fields, rel)
 	c.checkTableRules(doc, rel, schema)
-}
-
-// stripForeignKeys 返回去掉 foreign_key 约束的浅拷贝；没有 FK 时原样返回。
-func stripForeignKeys(doc map[string]any) map[string]any {
-	raw, ok := doc["constraints"]
-	if !ok {
-		return doc
-	}
-	list := asList(raw)
-	kept := make([]any, 0, len(list))
-	removed := false
-	for _, item := range list {
-		m, ok := asMap(item)
-		if ok && m["type"] == "foreign_key" {
-			removed = true
-			continue
-		}
-		kept = append(kept, item)
-	}
-	if !removed {
-		return doc
-	}
-	cp := make(map[string]any, len(doc))
-	for k, v := range doc {
-		cp[k] = v
-	}
-	cp["constraints"] = kept
-	return cp
 }
 
 // baseColumnShape 固定基类 5 列的物理形状；基类漂移会改变所有表的 DDL。
@@ -611,19 +581,20 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			continue
 		}
 		name, _ := m["name"].(string)
-		typ, _ := m["type"].(string)
-		if typ == "foreign_key" {
-			c.rulef("no-foreign-key", "%s: constraints[%d] (%s): foreign_key is forbidden; use application/service rules", rel, i, name)
-			continue
-		}
 		if !constraintNames[name] {
 			constraintNames[name] = true
 		} else {
 			c.rulef("schema.unique-names", "%s: constraints[%d]: duplicate constraint %q", rel, i, name)
 		}
-		if typ == "check" && !hasNonEmptyString(m, "expr") {
-			c.rulef("constraint-fields", "%s: constraints[%d] (%s): check requires expr", rel, i, name)
+		if !hasNonEmptyString(m, "expr") {
+			c.rulef("constraint-fields", "%s: constraints[%d] (%s): expr must not be empty", rel, i, name)
 		}
+		if code, _ := m["on_violation"].(string); code != "" {
+			if errs := c.errorCodes(); len(errs) > 0 && !errs[strings.TrimPrefix(code, "platform.errors.")] {
+				c.rulef("constraint-fields", "%s: constraints[%d] (%s): unknown error code %s", rel, i, name, code)
+			}
+		}
+		c.checkConstraintUsedBy(m, id, rel, i, name)
 	}
 
 	indexNames := map[string]bool{}
@@ -671,6 +642,29 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		}
 	}
 	c.checkDoNotSpecificity(doc, rel, strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel)), table, allCols, constraintNames, indexNames)
+}
+
+// checkConstraintUsedBy 校验约束的 used_by：查询存在且是写本表的查询。
+func (c *Checker) checkConstraintUsedBy(m map[string]any, tableID, rel string, i int, name string) {
+	raw, present := m["used_by"]
+	if !present || raw == nil {
+		return // 缺失/空列表由 schema.required 与 min_items 报出
+	}
+	for _, x := range asList(raw) {
+		qid, ok := x.(string)
+		if !ok || qid == "" || !strings.HasPrefix(qid, "data.queries.") {
+			c.rulef("constraint-used-by", "%s: constraints[%d] (%s): used_by must be data.queries.* item IDs, got %v", rel, i, name, x)
+			continue
+		}
+		q := c.queries[qid]
+		if q == nil {
+			c.rulef("constraint-used-by", "%s: constraints[%d] (%s): unknown query %s", rel, i, name, qid)
+			continue
+		}
+		if !containsString(q.Writes, tableID) {
+			c.rulef("constraint-used-by", "%s: constraints[%d] (%s): query %s does not write table %s", rel, i, name, qid, tableID)
+		}
+	}
 }
 
 // checkIndexUsedBy 校验索引的 used_by：至少一个查询项，且查询存在并引用当前表。
@@ -871,6 +865,9 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 			}
 			if _, ok := fam.Params[pname]; !ok {
 				c.rulef("schema.types", "types.custom_types.%s: param %s not allowed by family %s", name, pname, customType.Family)
+			}
+			if _, ok := contractspec.SchemaParamTargets[pname]; !ok {
+				c.rulef("schema.types", "types.custom_types.%s: param %s has no consumer target", name, pname)
 			}
 		}
 		c.checkFamilyParams(customType.Params, customType.Family, "types.custom_types."+name, 0, name, schema)

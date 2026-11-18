@@ -27,14 +27,36 @@ var schemaFieldTypes = map[string]bool{
 	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
 	"boolean": true, "any": true, "object": true,
 	"list<string>": true, "list<integer>": true, "list<object>": true, "list<list<string>>": true, "list<any>": true,
-	"map<string>": true, "schema": true, "map<schema>": true,
+	"map<string>": true, "map": true,
 }
 
 // validateFieldTypes 校验 _meta 自身的 type 词汇；避免把列类型族的
 // float/decimal 误写进 schema 的 Field.type 后，只在某列使用时才暴露。
+// types 是 schema 节点种类列表，与单值 type 互斥。
 func validateFieldTypes(fields []Field) error {
 	for _, f := range fields {
-		if !schemaFieldTypes[f.Type] {
+		if len(f.Types) > 0 {
+			if f.Type != "" && f.Type != "map" {
+				return fmt.Errorf("field %s: type and types are mutually exclusive", f.Name)
+			}
+			if f.Const != nil || len(f.Enum) > 0 || len(f.Allowed) > 0 || f.Pattern != "" || f.Min != nil || f.Max != nil || f.MinItems != nil || f.Unique {
+				return fmt.Errorf("field %s: types only accepts required/description/default", f.Name)
+			}
+			seen := map[string]bool{}
+			for _, kind := range f.Types {
+				if !schemaKindAllowed(kind) {
+					return fmt.Errorf("field %s: unknown schema kind %q", f.Name, kind)
+				}
+				if seen[kind] {
+					return fmt.Errorf("field %s: duplicate schema kind %q", f.Name, kind)
+				}
+				seen[kind] = true
+			}
+		} else if f.Types != nil {
+			return fmt.Errorf("field %s: types must not be empty", f.Name)
+		} else if f.Type == "map" {
+			return fmt.Errorf("field %s: map requires types", f.Name)
+		} else if !schemaFieldTypes[f.Type] {
 			return fmt.Errorf("field %s: unknown schema type %q", f.Name, f.Type)
 		}
 		if err := validateFieldTypes(f.Fields); err != nil {
@@ -93,6 +115,25 @@ func (c *Checker) validateDoc(doc map[string]any, fields []Field, path string) {
 }
 
 func (c *Checker) validateValue(v any, f Field, path string) {
+	if len(f.Types) > 0 {
+		if f.Type == "map" {
+			m, ok := asMap(v)
+			if !ok {
+				c.rulef("schema.type", "%s: must be map", path)
+				return
+			}
+			for k, item := range m {
+				if k == "" {
+					c.rulef("schema.non-empty", "%s: map key must not be empty", path)
+					continue
+				}
+				c.validateSchemaNodeWith(item, path+"."+k, f.Types)
+			}
+			return
+		}
+		c.validateSchemaNodeWith(v, path, f.Types)
+		return
+	}
 	switch f.Type {
 	case "string":
 		s, ok := v.(string)
@@ -239,21 +280,6 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			if _, ok := item.(string); !ok {
 				c.rulef("schema.type", "%s.%s: must be string", path, k)
 			}
-		}
-	case "schema":
-		c.validateSchemaNode(v, path)
-	case "map<schema>":
-		m, ok := asMap(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be map", path)
-			return
-		}
-		for k, item := range m {
-			if k == "" {
-				c.rulef("schema.non-empty", "%s: map key must not be empty", path)
-				continue
-			}
-			c.validateSchemaNode(item, path+"."+k)
 		}
 	default:
 		c.rulef("schema.type", "%s: unknown schema type %q", path, f.Type)

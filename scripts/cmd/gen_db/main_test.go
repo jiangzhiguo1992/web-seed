@@ -85,6 +85,28 @@ func TestRenderVerificationResultConstraint(t *testing.T) {
 	}
 }
 
+func TestRenderConstraintErrors(t *testing.T) {
+	got := string(renderConstraintErrors([]table{{
+		Checks: []check{
+			{Name: "ck_b", OnViolation: "platform.errors.B"},
+			{Name: "ck_a", OnViolation: "platform.errors.A"},
+			{Name: "ck_no_error"},
+		},
+	}}))
+	if !strings.Contains(got, `"ck_a": "platform.errors.A"`) || !strings.Contains(got, `"ck_b": "platform.errors.B"`) {
+		t.Fatalf("constraint mapping missing: %s", got)
+	}
+	if strings.Contains(got, "ck_no_error") {
+		t.Fatalf("constraint without on_violation must be omitted: %s", got)
+	}
+	if strings.Index(got, `"ck_a"`) > strings.Index(got, `"ck_b"`) {
+		t.Fatalf("constraint mapping must be sorted: %s", got)
+	}
+	if !strings.Contains(got, "package generated") || !strings.Contains(got, "var ConstraintErrors") {
+		t.Fatalf("generated Go shape missing: %s", got)
+	}
+}
+
 func TestLoadTablesInheritance(t *testing.T) {
 	root := filepath.Join("..", "..", "..")
 	targets := contractspec.Targets{Dir: "contracts/data/tables", Glob: "*.yaml", ID: "data.tables.<file>"}

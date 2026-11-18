@@ -70,7 +70,7 @@ model:
   queries: []
   included_by: []
 fields:
-  - { name: E2, target: data.tables.b, type: data.entities.e2, join_column_from: data.tables.a.col.id, join_column_to: data.tables.b.col.id, description: "e2" }
+  - { name: E2, type: data.entities.e2, source: { join: { from: data.tables.a.col.id, to: data.tables.b.col.id, lazy: true } }, description: "e2" }
 `)
 	writeFixture(t, root, "contracts/data/entities/e2.yaml", `# entity e2
 id: data.entities.e2

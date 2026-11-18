@@ -66,9 +66,9 @@ func (c *Checker) checkNodeOrder(n *yaml.Node, fields []Field, rel, path string,
 		value := n.Content[i+1]
 		childPath := joinPath(path, key)
 		switch {
-		case value.Kind == yaml.MappingNode && f.Type == "schema":
+		case value.Kind == yaml.MappingNode && len(f.Types) > 0 && f.Type != "map":
 			c.checkSchemaNodeOrder(value, rel, childPath, rules)
-		case value.Kind == yaml.MappingNode && f.Type == "map<schema>":
+		case value.Kind == yaml.MappingNode && f.Type == "map" && len(f.Types) > 0:
 			for j := 0; j+1 < len(value.Content); j += 2 {
 				c.checkSchemaNodeOrder(value.Content[j+1], rel, childPath+"."+value.Content[j].Value, rules)
 			}

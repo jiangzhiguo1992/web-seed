@@ -40,9 +40,10 @@ type columnDef struct {
 }
 
 type constraintDef struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"`
-	Expr string `yaml:"expr,omitempty"`
+	Name        string   `yaml:"name"`
+	Expr        string   `yaml:"expr"`
+	OnViolation string   `yaml:"on_violation"`
+	UsedBy      []string `yaml:"used_by"`
 }
 
 type enumItemScaffold struct {
@@ -51,12 +52,7 @@ type enumItemScaffold struct {
 	GoType      string              `yaml:"go_type"`
 	TSType      string              `yaml:"ts_type"`
 	Values      []enumValueScaffold `yaml:"values"`
-	UsedBy      enumUsedByScaffold  `yaml:"used_by"`
-}
-
-type enumUsedByScaffold struct {
-	Entities     []string `yaml:"entities"`
-	Capabilities []string `yaml:"capabilities"`
+	UsedBy      []string            `yaml:"used_by"`
 }
 
 type enumValueScaffold struct {
@@ -100,13 +96,14 @@ type queryFileScaffold struct {
 }
 
 type queryItemScaffold struct {
-	Name     string                `yaml:"name"`
-	Tables   []queryTableScaffold  `yaml:"tables"`
-	Params   []queryParamScaffold  `yaml:"params"`
-	Returns  []queryReturnScaffold `yaml:"returns"`
-	Errors   []string              `yaml:"errors"`
-	IndexRef flowStrings           `yaml:"index_ref"`
-	UsedBy   []string              `yaml:"used_by"`
+	Name        string                `yaml:"name"`
+	Description string                `yaml:"description"`
+	Tables      []queryTableScaffold  `yaml:"tables"`
+	Params      []queryParamScaffold  `yaml:"params"`
+	Returns     []queryReturnScaffold `yaml:"returns"`
+	Errors      []string              `yaml:"errors"`
+	IndexRef    flowStrings           `yaml:"index_ref"`
+	UsedBy      []string              `yaml:"used_by"`
 }
 
 type queryTableScaffold struct {
@@ -174,7 +171,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	}
 	constraintsField, _ := FindField(s.Fields, "constraints")
 	if err := requireSupported(constraintsField.ItemFields, map[string]bool{
-		"name": true, "type": true, "expr": true,
+		"name": true, "expr": true, "on_violation": true, "used_by": true,
 	}, s.Type+".constraints"); err != nil {
 		return nil, err
 	}
@@ -243,10 +240,6 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	}, s.Type+".enums"); err != nil {
 		return nil, err
 	}
-	usedByField, _ := FindField(enumsField.ItemFields, "used_by")
-	if err := requireSupported(usedByField.Fields, map[string]bool{"entities": true, "capabilities": true}, s.Type+".enums.used_by"); err != nil {
-		return nil, err
-	}
 	valuesField, _ := FindField(enumsField.ItemFields, "values")
 	if err := requireSupported(valuesField.ItemFields, map[string]bool{"value": true, "code": true, "description": true}, s.Type+".enums.values"); err != nil {
 		return nil, err
@@ -258,13 +251,13 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 		GoType:      pc,
 		TSType:      pc,
 		Values:      []enumValueScaffold{{Value: name, Code: -1, Description: "TODO: 枚举值说明"}},
-		UsedBy:      enumUsedByScaffold{Entities: []string{}, Capabilities: []string{}},
+		UsedBy:      []string{},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# 追加到 %s 的 enums 列表；示例 value/code 需替换。\n\n", s.Targets.File)
+	header := fmt.Sprintf("# 追加到 %s 的 enums 列表；示例 value/code 与 used_by 需替换。\n\n", s.Targets.File)
 	return append([]byte(header), b...), nil
 }
 
@@ -304,8 +297,7 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 	}
 	if err := requireSupported(fieldsField.ItemFields, map[string]bool{
 		"name": true, "json_name": true, "description": true, "type": true,
-		"source": true, "validation": true, "sensitivity": true,
-		"join_column_from": true, "join_column_to": true, "load": true,
+		"source": true, "sensitivity": true,
 	}, "data.entities.fields"); err != nil {
 		return nil, err
 	}
@@ -360,7 +352,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 		return nil, fmt.Errorf("RenderQuery: queries is missing in schema")
 	}
 	if err := requireSupported(queriesField.ItemFields, map[string]bool{
-		"name": true, "tables": true,
+		"name": true, "description": true, "tables": true,
 		"params": true, "returns": true, "errors": true, "index_ref": true, "used_by": true,
 	}, "data.queries.queries"); err != nil {
 		return nil, err
@@ -404,13 +396,14 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 		OwnerModule:   module,
 		DoNot:         []string{},
 		Queries: []queryItemScaffold{{
-			Name:     "Exists" + pascal(name),
-			Tables:   []queryTableScaffold{{Table: tableID}},
-			Params:   []queryParamScaffold{{Name: "id", Type: "integer", Column: tableID + ".col.id"}},
-			Returns:  []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}},
-			Errors:   []string{},
-			IndexRef: flowStrings{tableID + ".pk"},
-			UsedBy:   []string{},
+			Name:        "Exists" + pascal(name),
+			Description: "TODO: 查询语义",
+			Tables:      []queryTableScaffold{{Table: tableID}},
+			Params:      []queryParamScaffold{{Name: "id", Type: "integer", Column: tableID + ".col.id"}},
+			Returns:     []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}},
+			Errors:      []string{},
+			IndexRef:    flowStrings{tableID + ".pk"},
+			UsedBy:      []string{},
 		}},
 	}
 	b, err := marshal2(doc)
