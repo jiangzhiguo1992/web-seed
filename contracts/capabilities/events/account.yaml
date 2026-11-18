@@ -6,7 +6,9 @@ stability: stable
 do_not:
   - "事件 payload 不得包含密码、令牌、邮箱、手机号原文"
   - "破坏兼容必须升 version，不得原地修改 payload"
+
 delivery: at_least_once
+
 events:
   - id: cap.events.account.created
     name: account.created

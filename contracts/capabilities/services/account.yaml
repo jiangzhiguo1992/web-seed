@@ -45,6 +45,7 @@ services:
       - {name: id, type: integer}
     returns:
       - {name: account, type: data.entities.account}
+      - {name: err, type: none}
     steps:
       - id: load
         kind: logic
@@ -69,6 +70,7 @@ services:
       - {name: filter, type: ListAccountsFilter}
     returns:
       - {name: page, type: AccountPage}
+      - {name: err, type: none}
     steps:
       - id: query
         kind: logic
@@ -94,6 +96,7 @@ services:
       - {name: input, type: CreateAccountInput}
     returns:
       - {name: account, type: data.entities.account}
+      - {name: err, type: none}
     steps:
       - id: create
         kind: logic
@@ -135,6 +138,7 @@ services:
       - {name: input, type: UpdateAccountInput}
     returns:
       - {name: account, type: data.entities.account}
+      - {name: err, type: none}
     steps:
       - id: update
         kind: logic
@@ -163,7 +167,8 @@ services:
     params:
       - {name: ctx, type: context.Context}
       - {name: id, type: integer}
-    returns: []
+    returns:
+      - {name: err, type: none}
     steps:
       - id: load
         kind: query
@@ -199,6 +204,7 @@ services:
         rules:
           - "feature.rules.account.deleted_cannot_modify"
           - "feature.rules.account.delete_revokes_auth"
+          - "feature.rules.account.deleted_status_consistent"
         transitions: [feature.states.account.delete]
 
   - name: activate
@@ -210,6 +216,7 @@ services:
       - {name: id, type: integer}
     returns:
       - {name: account, type: data.entities.account}
+      - {name: err, type: none}
     steps:
       - id: transition
         kind: transition
@@ -237,6 +244,7 @@ services:
       - {name: reason, type: string}
     returns:
       - {name: account, type: data.entities.account}
+      - {name: err, type: none}
     steps:
       - id: transition
         kind: transition

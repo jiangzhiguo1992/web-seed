@@ -5,6 +5,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "purge_expired 只清理过期令牌，不得顺带吊销有效令牌"
+
 jobs:
   - id: cap.async.token.purge_expired
     name: purge_expired
