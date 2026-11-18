@@ -71,7 +71,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; add the table to contracts/data/storage.yaml tables.<engine>; add size_class/retention/partition if needed; add an entity mapping for this table (table.entities + entity.model.tables); make gen-graph; make contract-check")
+		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; add the table entry to contracts/data/storage.yaml tables.<engine>; add size_class/retention/partition/archive inside the entry if needed; add an entity mapping for this table (table.entities + entity.model.tables); make gen-graph; make contract-check")
 
 	case "data.entities":
 		tableSchema, err := loadTableSchema(abs)
@@ -122,7 +122,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; choose constraint/invariant/policy; implemented_by is maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
+		writeOut(*out, b, "next: replace TODO; choose constraint/invariant/policy; reference the rule from a service step then run make gen-graph; implemented_by must be non-empty; register in contracts/index.yaml; make contract-check")
 
 	case "feature.states":
 		b, err := contractspec.RenderState(schema, *name, *module, *summary)

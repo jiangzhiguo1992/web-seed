@@ -24,11 +24,12 @@ type tableScaffold struct {
 }
 
 type tableDef struct {
-	Name     string   `yaml:"name"`
-	Comment  string   `yaml:"comment"`
-	Extends  []string `yaml:"extends"`
-	Entities []string `yaml:"entities"`
-	Queries  []string `yaml:"queries"`
+	Name         string   `yaml:"name"`
+	Comment      string   `yaml:"comment"`
+	Extends      []string `yaml:"extends"`
+	Entities     []string `yaml:"entities"`
+	Queries      []string `yaml:"queries"`
+	ReferencedBy []string `yaml:"referenced_by"`
 }
 
 type columnDef struct {
@@ -160,12 +161,12 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		return nil, err
 	}
 	tableField, _ := FindField(s.Fields, "table")
-	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "comment": true, "extends": true, "entities": true, "queries": true}, s.Type+".table"); err != nil {
+	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "comment": true, "extends": true, "entities": true, "queries": true, "referenced_by": true}, s.Type+".table"); err != nil {
 		return nil, err
 	}
 	columnField, _ := FindField(s.Fields, "columns")
 	if err := requireSupported(columnField.ItemFields, map[string]bool{
-		"name": true, "type": true, "nullable": true, "comment": true, "redundancy": true,
+		"name": true, "type": true, "nullable": true, "comment": true, "redundancy": true, "references": true,
 	}, s.Type+".columns"); err != nil {
 		return nil, err
 	}
@@ -203,11 +204,12 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		OwnerModule:   module,
 		DoNot:         []string{},
 		Table: tableDef{
-			Name:     name,
-			Comment:  "TODO: 表说明",
-			Extends:  []string{baseTableID},
-			Entities: []string{},
-			Queries:  []string{},
+			Name:         name,
+			Comment:      "TODO: 表说明",
+			Extends:      []string{baseTableID},
+			Entities:     []string{},
+			Queries:      []string{},
+			ReferencedBy: []string{},
 		},
 		Columns: []columnDef{
 			{Name: columnName, Type: columnType, Nullable: columnNullable, Comment: "TODO: 列说明", Params: columnParams},
@@ -399,8 +401,8 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 			Name:        "Exists" + pascal(name),
 			Description: "TODO: 查询语义",
 			Tables:      []queryTableScaffold{{Table: tableID}},
-			Params:      []queryParamScaffold{{Name: "id", Type: "integer", Column: tableID + ".col.id"}},
-			Returns:     []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}},
+			Params:      []queryParamScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "integer", Column: tableID + ".col.id"}},
+			Returns:     []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}, {Name: "err", Kind: "error"}},
 			Errors:      []string{},
 			IndexRef:    flowStrings{tableID + ".pk"},
 			UsedBy:      []string{},
@@ -893,7 +895,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 			Summary:     "TODO: 服务说明",
 			Visibility:  "public",
 			Params:      []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: "GetInput"}},
-			Returns:     []methodArgScaffold{{Name: "value", Type: "any"}},
+			Returns:     []methodArgScaffold{{Name: "value", Type: "any"}, {Name: "err", Type: "error"}},
 			Transaction: "read_only",
 			Steps: []stepScaffold{{
 				ID:      "load",

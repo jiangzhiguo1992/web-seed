@@ -621,7 +621,7 @@ func TestColumnsReturnShape(t *testing.T) {
 		"data.tables.x": {"id": {typ: "integer", primaryKey: true}},
 	}, tableOwners: map[string]string{"data.tables.x": "x"}}
 	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "x", Targets: []string{"data.tables.x"},
-		Returns: []queryReturn{{Name: "row", Kind: "columns"}}}
+		Returns: []queryReturn{{Name: "row", Kind: "columns"}, {Name: "err", Kind: "error"}}}
 	c.checkQueryReturns(q)
 	if !strings.Contains(entityErrs(c), "kind=columns requires columns") {
 		t.Fatalf("columns without projection not reported: %v", c.errs)
@@ -633,12 +633,12 @@ func TestColumnsReturnShape(t *testing.T) {
 		{Name: "total", Kind: "scalar", Type: "integer"},
 	}
 	c.checkQueryShape(q)
-	if !strings.Contains(entityErrs(c), "columns return must be the only return item") {
+	if !strings.Contains(entityErrs(c), "columns return must be the only non-error return item") {
 		t.Fatalf("mixed columns return not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	q.Returns = []queryReturn{{Name: "row", Kind: "columns", Columns: []string{"data.tables.x.col.id"}}}
+	q.Returns = []queryReturn{{Name: "row", Kind: "columns", Columns: []string{"data.tables.x.col.id"}}, {Name: "err", Kind: "error"}}
 	c.checkQueryReturns(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid columns return reported: %v", c.errs)
@@ -648,7 +648,7 @@ func TestColumnsReturnShape(t *testing.T) {
 func TestQueryReturnsRejectsRemovedKinds(t *testing.T) {
 	for _, kind := range []string{"table", "column"} {
 		c := &Checker{}
-		q := &queryInfo{ID: "q", File: "q.yaml", Returns: []queryReturn{{Name: "row", Kind: kind}}}
+		q := &queryInfo{ID: "q", File: "q.yaml", Returns: []queryReturn{{Name: "row", Kind: kind}, {Name: "err", Kind: "error"}}}
 		c.checkQueryReturns(q)
 		if !strings.Contains(entityErrs(c), `invalid kind "`+kind+`"`) {
 			t.Fatalf("kind %s not rejected: %v", kind, c.errs)
@@ -691,7 +691,7 @@ func TestEntityUsedByQueries(t *testing.T) {
 			},
 		},
 		queries: map[string]*queryInfo{
-			"data.queries.account.get": {ID: "data.queries.account.get", Returns: []queryReturn{{Kind: "entity", Entity: "data.entities.account"}}},
+			"data.queries.account.get": {ID: "data.queries.account.get", Returns: []queryReturn{{Kind: "entity", Entity: "data.entities.account"}, {Name: "err", Kind: "error"}}},
 		},
 	}
 	c.checkEntityUsedBy()
@@ -746,7 +746,7 @@ func TestQueryEntityAndColumnsSensitivity(t *testing.T) {
 	q := &queryInfo{
 		ID: "data.queries.account.get", File: "account.yaml", OwnerModule: "other",
 		Targets: []string{"data.tables.account"},
-		Returns: []queryReturn{{Name: "account", Kind: "entity", Entity: "data.entities.account"}},
+		Returns: []queryReturn{{Name: "account", Kind: "entity", Entity: "data.entities.account"}, {Name: "err", Kind: "error"}},
 	}
 	c.checkQueryReturns(q)
 	if len(c.errs) != 0 {
@@ -763,7 +763,7 @@ func TestQueryEntityAndColumnsSensitivity(t *testing.T) {
 	q = &queryInfo{
 		ID: "data.queries.account.cols", File: "account.yaml", OwnerModule: "other",
 		Targets: []string{"data.tables.account"},
-		Returns: []queryReturn{{Name: "row", Kind: "columns", Columns: []string{"data.tables.account.col.secret"}}},
+		Returns: []queryReturn{{Name: "row", Kind: "columns", Columns: []string{"data.tables.account.col.secret"}}, {Name: "err", Kind: "error"}},
 	}
 	c.checkQueryReturns(q)
 	if !strings.Contains(entityErrs(c), "[query-sensitive-columns]") {
@@ -845,7 +845,7 @@ func TestEntityComputedSecretSensitivity(t *testing.T) {
 		"data.tables.x": {"id": {typ: "string", primaryKey: true}},
 	}}
 	q := &queryInfo{ID: "q", File: "q.yaml", OwnerModule: "other", Targets: []string{"data.tables.x"},
-		Returns: []queryReturn{{Name: "x", Kind: "entity", Entity: "data.entities.x"}}}
+		Returns: []queryReturn{{Name: "x", Kind: "entity", Entity: "data.entities.x"}, {Name: "err", Kind: "error"}}}
 	c.checkEntitySecretProjection("q", q, e)
 	if !strings.Contains(entityErrs(c), "[query-sensitive-columns]") || !strings.Contains(entityErrs(c), "computed secret") {
 		t.Fatalf("computed secret field not reported: %v", c.errs)
@@ -941,6 +941,7 @@ func TestQueryReturnsShape(t *testing.T) {
 		Returns: []queryReturn{
 			{Name: "status", Kind: "scalar", Type: "integer"},
 			{Name: "total", Kind: "scalar", Type: "integer"},
+			{Name: "err", Kind: "error"},
 		},
 	}
 	c.checkQueryReturns(q)
@@ -958,7 +959,7 @@ func TestQueryReturnsShape(t *testing.T) {
 	c = &Checker{}
 	q.Returns = []queryReturn{{Name: "err", Kind: "scalar", Type: "string"}}
 	c.checkQueryReturns(q)
-	if !strings.Contains(entityErrs(c), "must not declare err") {
+	if !strings.Contains(entityErrs(c), "err return must use kind=error") {
 		t.Fatalf("explicit err return not reported: %v", c.errs)
 	}
 
@@ -1001,7 +1002,7 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	c := &Checker{}
 	q := &queryInfo{
 		ID: "q", File: "q.yaml",
-		Params: []queryParam{{Name: "older_than_days", Type: "integer", Expr: "created_at < now()", HasExpr: true}},
+		Params: []queryParam{{Name: "ctx", Type: "context.Context"}, {Name: "older_than_days", Type: "integer", Expr: "created_at < now()", HasExpr: true}},
 	}
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
@@ -1009,7 +1010,7 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	}
 
 	c.errs = nil
-	q.Params[0].Column = "data.tables.account.col.id"
+	q.Params[1].Column = "data.tables.account.col.id"
 	c.checkQueryParams(q)
 	if !strings.Contains(entityErrs(c), "mutually exclusive") {
 		t.Fatalf("column+expr not reported: %v", c.errs)
@@ -1018,7 +1019,7 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	c = &Checker{}
 	q = &queryInfo{
 		ID: "q", File: "q.yaml",
-		Params: []queryParam{{Name: "older_than_days", Type: "integer", Expr: "  ", HasExpr: true}},
+		Params: []queryParam{{Name: "ctx", Type: "context.Context"}, {Name: "older_than_days", Type: "integer", Expr: "  ", HasExpr: true}},
 	}
 	c.checkQueryParams(q)
 	if !strings.Contains(entityErrs(c), "expr must not be blank") {
@@ -1028,8 +1029,9 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	c = &Checker{}
 	q = &queryInfo{
 		ID: "q", File: "q.yaml",
-		Returns: []queryReturn{{Name: "rows", Kind: "entity", Entity: "data.entities.x", List: true}},
+		Returns: []queryReturn{{Name: "rows", Kind: "entity", Entity: "data.entities.x", List: true}, {Name: "err", Kind: "error"}},
 		Params: []queryParam{
+			{Name: "ctx", Type: "context.Context"},
 			{Name: "offset", Type: "integer", Nullable: true, HasDefault: true, DefaultValue: 0},
 			{Name: "limit", Type: "integer", Nullable: true, HasDefault: true, DefaultValue: 20},
 		},
@@ -1044,8 +1046,8 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	}
 
 	c = &Checker{}
-	q.Params[0].DefaultValue = 1
-	q.Params[1].DefaultValue = 0
+	q.Params[1].DefaultValue = 1
+	q.Params[2].DefaultValue = 0
 	c.checkQueryPagination(q)
 	errs := entityErrs(c)
 	if !strings.Contains(errs, "offset default must be 0") || !strings.Contains(errs, "limit default must be positive") {
@@ -1055,7 +1057,7 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 	c = &Checker{}
 	q = &queryInfo{
 		ID: "q", File: "q.yaml",
-		Returns: []queryReturn{{Name: "rows", Kind: "entity", Entity: "data.entities.x", List: true}},
+		Returns: []queryReturn{{Name: "rows", Kind: "entity", Entity: "data.entities.x", List: true}, {Name: "err", Kind: "error"}},
 	}
 	c.checkQueryPagination(q)
 	if !strings.Contains(entityErrs(c), "list return requires offset param") {
@@ -1066,6 +1068,7 @@ func TestQueryParamExprAndPagination(t *testing.T) {
 func TestQueryDefaultRequiresNullable(t *testing.T) {
 	c := &Checker{}
 	q := &queryInfo{ID: "q", File: "q.yaml", Params: []queryParam{
+		{Name: "ctx", Type: "context.Context"},
 		{Name: "page_size", Type: "integer", HasDefault: true},
 	}}
 	c.checkQueryParams(q)
@@ -1074,7 +1077,7 @@ func TestQueryDefaultRequiresNullable(t *testing.T) {
 	}
 
 	c.errs = nil
-	q.Params[0].Nullable = true
+	q.Params[1].Nullable = true
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid nullable default reported: %v", c.errs)
@@ -1084,6 +1087,7 @@ func TestQueryDefaultRequiresNullable(t *testing.T) {
 func TestQueryParamTypeAndDefaultValidation(t *testing.T) {
 	c := &Checker{}
 	q := &queryInfo{ID: "q", File: "q.yaml", Params: []queryParam{
+		{Name: "ctx", Type: "context.Context"},
 		{Name: "mode", Type: "unknown_type"},
 	}}
 	c.checkQueryParams(q)
@@ -1092,49 +1096,49 @@ func TestQueryParamTypeAndDefaultValidation(t *testing.T) {
 	}
 
 	c.errs = nil
-	q.Params[0] = queryParam{Name: "status", Type: "data.enums.account_status"}
+	q.Params[1] = queryParam{Name: "status", Type: "data.enums.account_status"}
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("enum param reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	q.Params[0] = queryParam{Name: "page_size", Type: "integer", Nullable: true, HasDefault: true, DefaultValue: "20"}
+	q.Params[1] = queryParam{Name: "page_size", Type: "integer", Nullable: true, HasDefault: true, DefaultValue: "20"}
 	c.checkQueryParams(q)
 	if !strings.Contains(entityErrs(c), "default must be an integer") {
 		t.Fatalf("wrong default type not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	q.Params[0] = queryParam{Name: "ids", Type: "List<integer>", Nullable: true, HasDefault: true, DefaultValue: 1}
+	q.Params[1] = queryParam{Name: "ids", Type: "List<integer>", Nullable: true, HasDefault: true, DefaultValue: 1}
 	c.checkQueryParams(q)
 	if !strings.Contains(entityErrs(c), "default must be a list") {
 		t.Fatalf("non-list default for array not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	q.Params[0] = queryParam{Name: "since", Type: "timestamp", Nullable: true, HasDefault: true, DefaultValue: "2026-01-01T00:00:00Z"}
+	q.Params[1] = queryParam{Name: "since", Type: "timestamp", Nullable: true, HasDefault: true, DefaultValue: "2026-01-01T00:00:00Z"}
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid timestamp default reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	q.Params[0] = queryParam{Name: "statuses", Type: "List<data.enums.account_status>", Nullable: true}
+	q.Params[1] = queryParam{Name: "statuses", Type: "List<data.enums.account_status>", Nullable: true}
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("List<enum> param reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	q.Params[0] = queryParam{Name: "statuses", Type: "List<data.enums.account_status>", Nullable: true, HasDefault: true, DefaultValue: "bad"}
+	q.Params[1] = queryParam{Name: "statuses", Type: "List<data.enums.account_status>", Nullable: true, HasDefault: true, DefaultValue: "bad"}
 	c.checkQueryParams(q)
 	if !strings.Contains(entityErrs(c), "default must be a list") {
 		t.Fatalf("enum array default outer type not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	q.Params[0] = queryParam{Name: "since", Type: "timestamp", Nullable: true, HasDefault: true, DefaultValue: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	q.Params[1] = queryParam{Name: "since", Type: "timestamp", Nullable: true, HasDefault: true, DefaultValue: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 	c.checkQueryParams(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("time.Time default reported: %v", c.errs)
@@ -1372,7 +1376,7 @@ func TestQueryDerivedIDAndReturns(t *testing.T) {
 func TestQueryClauseShape(t *testing.T) {
 	c := &Checker{}
 	q := &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.x"},
-		Returns: []queryReturn{{Name: "exists", Kind: "scalar", Type: "boolean"}}}
+		Returns: []queryReturn{{Name: "exists", Kind: "scalar", Type: "boolean"}, {Name: "err", Kind: "error"}}}
 	c.checkQueryShape(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid scalar reported: %v", c.errs)
@@ -1392,10 +1396,10 @@ func TestQueryClauseShape(t *testing.T) {
 	}
 
 	q = &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.x"},
-		Returns: []queryReturn{{Name: "affected_rows", Kind: "affected_rows"}, {Name: "x", Kind: "scalar", Type: "integer"}}}
+		Returns: []queryReturn{{Name: "affected_rows", Kind: "affected_rows"}, {Name: "x", Kind: "scalar", Type: "integer"}, {Name: "err", Kind: "error"}}}
 	c.errs = nil
 	c.checkQueryShape(q)
-	if !strings.Contains(entityErrs(c), "must be the only return item") {
+	if !strings.Contains(entityErrs(c), "must be the only non-error return item") {
 		t.Fatalf("affected_rows mixed with other returns not reported: %v", c.errs)
 	}
 }
@@ -1573,5 +1577,26 @@ func TestSnakeCase(t *testing.T) {
 		if got := snakeCase(in); got != want {
 			t.Fatalf("snakeCase(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestQueryReturnNullable(t *testing.T) {
+	c := &Checker{}
+	q := &queryInfo{ID: "q", File: "q.yaml", Returns: []queryReturn{
+		{Name: "x", Kind: "scalar", Type: "integer", Nullable: true},
+		{Name: "err", Kind: "error"},
+	}}
+	c.checkQueryReturns(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("nullable scalar return reported: %v", c.errs)
+	}
+	c = &Checker{}
+	q.Returns = []queryReturn{
+		{Name: "affected_rows", Kind: "affected_rows", Nullable: true},
+		{Name: "err", Kind: "error"},
+	}
+	c.checkQueryReturns(q)
+	if !strings.Contains(entityErrs(c), "affected_rows forbids nullable") {
+		t.Fatalf("affected_rows nullable not reported: %v", c.errs)
 	}
 }

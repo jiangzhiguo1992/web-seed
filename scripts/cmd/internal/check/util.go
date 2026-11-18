@@ -189,3 +189,9 @@ func relPath(root, path string) string {
 	}
 	return r
 }
+
+// columnExists 判断列是否存在于已加载的物理表（含继承列）。
+func (c *Checker) columnExists(table, col string) bool {
+	_, ok := c.tableColumns[table][col]
+	return ok
+}

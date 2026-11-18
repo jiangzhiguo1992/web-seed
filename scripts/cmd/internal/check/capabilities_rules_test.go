@@ -782,8 +782,8 @@ services:
     params:
       - {name: id, type: integer}
     returns:
-      - {name: value, type: string}
       - {name: err, type: error}
+      - {name: value, type: string}
     steps:
       - id: load
         kind: logic
@@ -800,7 +800,7 @@ services:
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"params[0] must be ctx",
-		"returns must not declare err",
+		"returns must end with err error",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
@@ -1022,8 +1022,8 @@ services:
       - {name: ctx, type: context.Context}
       - {name: input, type: XInput}
     returns:
-      - {name: value, type: string}
       - {name: err, type: error}
+      - {name: value, type: string}
     errors: []
     transaction: read_only
     steps:
@@ -1069,8 +1069,8 @@ services:
       - {name: ctx, type: context.Context}
       - {name: input, type: XInput}
     returns:
-      - {name: value, type: string}
       - {name: err, type: error}
+      - {name: value, type: string}
     errors: []
     transaction: read_only
     steps:

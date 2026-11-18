@@ -171,14 +171,22 @@ func TestRenderQuery(t *testing.T) {
 		t.Fatalf("query item id must not be scaffolded: %#v", q)
 	}
 	returns, _ := q["returns"].([]any)
-	if len(returns) != 1 {
+	if len(returns) != 2 {
 		t.Fatalf("query returns not scaffolded: %#v", q)
 	}
+	errRet, _ := returns[1].(map[string]any)
+	if errRet["name"] != "err" || errRet["kind"] != "error" {
+		t.Fatalf("query err return not scaffolded: %#v", q["returns"])
+	}
 	params, _ := q["params"].([]any)
-	if len(params) != 1 {
+	if len(params) != 2 {
 		t.Fatalf("query params not scaffolded: %#v", q)
 	}
-	param, _ := params[0].(map[string]any)
+	ctxParam, _ := params[0].(map[string]any)
+	if ctxParam["name"] != "ctx" || ctxParam["type"] != "context.Context" {
+		t.Fatalf("query ctx param not scaffolded: %#v", q["params"])
+	}
+	param, _ := params[1].(map[string]any)
 	if param["type"] != "integer" || param["column"] != "data.tables.account.col.id" {
 		t.Fatalf("query id param must bind the integer primary key: %#v", param)
 	}

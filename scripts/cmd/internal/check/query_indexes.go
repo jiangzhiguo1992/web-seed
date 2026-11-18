@@ -7,10 +7,11 @@ import (
 )
 
 type tableIndex struct {
-	name    string
-	columns []string
-	unique  bool
-	usedBy  map[string]bool
+	name     string
+	columns  []string
+	unique   bool
+	liveOnly bool
+	usedBy   map[string]bool
 }
 
 // loadTableIndexes 收集物理表的显式索引与主键，供 query.index_ref 校验。
@@ -51,8 +52,9 @@ func (c *Checker) loadTableIndexes(tableIDs map[string]string) {
 				}
 			}
 			unique, _ := m["unique"].(bool)
+			liveOnly, _ := m["live_only"].(bool)
 			c.tableIndexes[tableID] = append(c.tableIndexes[tableID], tableIndex{
-				name: name, columns: cols, unique: unique, usedBy: used,
+				name: name, columns: cols, unique: unique, liveOnly: liveOnly, usedBy: used,
 			})
 		}
 	}

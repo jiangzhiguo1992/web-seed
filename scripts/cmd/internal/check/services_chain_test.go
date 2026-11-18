@@ -20,7 +20,7 @@ func TestServiceQueryInputRequiredAndExact(t *testing.T) {
 	q := &queryInfo{
 		ID:      "data.queries.x.q",
 		Params:  []queryParam{{Name: "id"}, {Name: "note", Nullable: true}},
-		Returns: []queryReturn{{Name: "row", Kind: "scalar", Type: "string"}},
+		Returns: []queryReturn{{Name: "row", Kind: "scalar", Type: "string"}, {Name: "err", Kind: "error"}},
 	}
 	base := func(input map[string]any) map[string]any {
 		step := map[string]any{"id": "run", "kind": "query", "summary": "x", "query": q.ID}
@@ -37,7 +37,7 @@ func TestServiceQueryInputRequiredAndExact(t *testing.T) {
 	checker := func() *Checker {
 		return &Checker{
 			queries:          map[string]*queryInfo{q.ID: q},
-			queryReturnTypes: map[string]map[string]string{q.ID: {"row": "string"}},
+			queryReturnTypes: map[string]map[string]returnType{q.ID: {"row": {typ: "string"}}},
 		}
 	}
 
@@ -263,7 +263,7 @@ func TestServiceReadOnlyRejectsWriteQuery(t *testing.T) {
 	run := func(transaction string) string {
 		c := &Checker{
 			queries:          map[string]*queryInfo{q.ID: q},
-			queryReturnTypes: map[string]map[string]string{q.ID: {}},
+			queryReturnTypes: map[string]map[string]returnType{q.ID: {}},
 		}
 		c.checkServiceItem(base(transaction), "f", "cap.services.x.run", "x",
 			map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
@@ -376,5 +376,31 @@ func TestServiceReturnNullability(t *testing.T) {
 	}
 	if got := run(false, true); !strings.Contains(got, "nullability") {
 		t.Fatalf("non-nullable return from nullable output not reported: %s", got)
+	}
+}
+
+func TestServiceRuleOwnerCoverage(t *testing.T) {
+	doc := map[string]any{
+		"summary": "x", "transaction": "read_only",
+		"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
+		"returns": []any{},
+		"steps": []any{map[string]any{
+			"id": "run", "kind": "logic", "summary": "x",
+			"errors": []any{}, "output": []any{},
+			"rules": []any{"feature.rules.x.r"},
+		}},
+	}
+	meta := map[string]serviceMeta{
+		"cap.services.x.run":   {module: "x", visibility: "public", errors: map[string]bool{}},
+		"cap.services.x.owner": {module: "x", visibility: "public", errors: map[string]bool{"platform.errors.A": true}},
+	}
+	c := &Checker{
+		ruleErrors: map[string]string{"feature.rules.x.r": "platform.errors.A"},
+		ruleOwners: map[string][]string{"feature.rules.x.r": {"cap.services.x.owner"}},
+	}
+	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
+		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	if got := strings.Join(c.errs, "\n"); strings.Contains(got, "is not declared by service") {
+		t.Fatalf("owner-declared rule error reported: %s", got)
 	}
 }

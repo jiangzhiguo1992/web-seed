@@ -107,6 +107,7 @@
 - [ ] `platform/config/env.json` → `.env.example`（`gen-env.sh`）
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
 - [ ] `features/rules|states` + `capabilities/events/**` → 状态机常量 + 断言 + 测试骨架
+- [x] `capabilities/services/*.yaml` steps → 契约测试骨架（`apps/api/internal/contracttest/generated/`）
 - [ ] `features/**` → 路由表 + 页面骨架 + 类型
 - [ ] 结构化依赖 → 按需生成 graph；`lineage.md` → `docs/contracts/generated/lineage.md`
 - [x] `make gen` 幂等：连续两次生成结果一致
@@ -212,7 +213,7 @@
 
 | 组 | 职责 | 真相源 |
 |---|---|---|
-| `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储约束、冗余关系、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` |
+| `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储约束、冗余关系、逻辑外键、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` |
 | `capabilities/` | 能力层：`services` 服务、`async` 异步任务、`events` 领域事件、`protocols` 协议绑定 | `capabilities/**` |
 | `features/` | 功能定义：路由、页面、业务规则、状态机 | `features/**` |
 | `platform/` | 横切：环境、版本、错误、枚举、HTTP 约定、质量、配置、架构、设计、观测、埋点、安全 | `platform/**` |
@@ -228,6 +229,7 @@ capabilities/protocols/http/*.yaml + shared.yaml ──> gen-openapi ──> gen
 
 platform/errors/*.yaml ──> gen-errors ──> docs/contracts/generated/errors.md
 
+capabilities/services/*.yaml ──> gen-capabilities ──> 契约测试骨架（usecase/interface 仍 P2）
 capabilities/services/*.yaml ──> (P2) Go interface / usecase / handler
 capabilities/async/*.yaml ──> (P2) worker 注册表
 data/queries/*.yaml ──> (P2) queries/*.sql ──> sqlc

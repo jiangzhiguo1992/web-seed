@@ -229,11 +229,14 @@ func (c *Checker) checkCapabilities() {
 
 	c.checkAccess(serviceItemIDs)
 
-	// query 返回类型：供 kind=query 的 when 路径解析。
-	c.queryReturnTypes = map[string]map[string]string{}
+	// query 返回类型：供 kind=query 的 when 路径解析；err 不参与结果形状。
+	c.queryReturnTypes = map[string]map[string]returnType{}
 	for qid, q := range c.queries {
-		m := map[string]string{}
+		m := map[string]returnType{}
 		for _, r := range q.Returns {
+			if r.Kind == "error" {
+				continue
+			}
 			typ := r.Type
 			switch r.Kind {
 			case "entity":
@@ -249,7 +252,7 @@ func (c *Checker) checkCapabilities() {
 			if r.List {
 				typ = "List<" + typ + ">"
 			}
-			m[r.Name] = typ
+			m[r.Name] = returnType{typ: typ, nullable: r.Nullable}
 		}
 		c.queryReturnTypes[qid] = m
 	}
@@ -422,13 +425,15 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 			}
 		}
 		returns := asList(item["returns"])
+		if len(returns) == 0 {
+			c.rulef("service-structure", "%s.%s: returns must end with err error", rel, name)
+		} else if last, _ := asMap(returns[len(returns)-1]); last["name"] != "err" || last["type"] != "error" {
+			c.rulef("service-structure", "%s.%s: returns must end with err error", rel, name)
+		}
 		seenReturns := map[string]bool{}
 		for _, rawReturn := range returns {
 			rm, _ := asMap(rawReturn)
 			rn, _ := rm["name"].(string)
-			if rn == "err" {
-				c.rulef("service-structure", "%s.%s: returns must not declare err; error is implicit", rel, name)
-			}
 			if rn != "" {
 				if seenReturns[rn] {
 					c.rulef("service-structure", "%s.%s: duplicate return %s", rel, name, rn)
@@ -442,6 +447,9 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 		}
 		for _, rawReturn := range asList(item["returns"]) {
 			rm, _ := asMap(rawReturn)
+			if rn, _ := rm["name"].(string); rn == "err" {
+				continue
+			}
 			c.checkTypeName(rm["type"], typeNames, rel+":"+name)
 		}
 	}
@@ -536,8 +544,8 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				if transaction == "read_only" && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) {
 					c.rulef("service-transaction", "%s: step %s calls write query %s under transaction=read_only", rel, stepID, qid)
 				}
-				for name, typ := range c.queryReturnTypes[qid] {
-					produced[name] = append(produced[name], returnType{typ: typ})
+				for name, rt := range c.queryReturnTypes[qid] {
+					produced[name] = append(produced[name], rt)
 				}
 			}
 		case "service":
@@ -650,6 +658,8 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			s, _ := when.(string)
 			if strings.TrimSpace(s) == "" {
 				c.rulef("service-when", "%s: step %s when must not be empty", rel, stepID)
+			} else if s == "default" {
+				// 兜底分支；唯一性与组关联由 checkWhenExhaustive 校验。
 			} else if node, err := parseWhen(s); err != nil {
 				c.rulef("service-when", "%s: step %s when %q: %v", rel, stepID, s, err)
 			} else {
@@ -870,6 +880,151 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			c.rulef("service-chain", "%s: param %s is not consumed by any step input or when", rel, name)
 		}
 	}
+
+	c.checkWhenExhaustive(doc, steps, stepOutputs, stepIndex, rel)
+}
+
+// checkWhenExhaustive 校验同一 service 内同一 when 路径的 == 分支覆盖完整值域。
+// 只处理单个 field == literal；&&/||/!= 与非顶层路径不参与，避免误判可选步骤。
+func (c *Checker) checkWhenExhaustive(doc map[string]any, steps []any, stepOutputs []map[string]returnType, stepIndex map[string]int, rel string) {
+	type group struct {
+		typ    string
+		values map[string]bool
+		count  int
+	}
+	groups := map[string]*group{}
+	defaultCount := 0
+	for _, raw := range steps {
+		step, _ := asMap(raw)
+		when, _ := step["when"].(string)
+		if when == "" {
+			continue
+		}
+		if when == "default" {
+			defaultCount++
+			continue
+		}
+		node, err := parseWhen(when)
+		if err != nil {
+			continue // service-when 已报语法错误
+		}
+		path, literal, ok := singleEquality(node)
+		if !ok {
+			continue
+		}
+		typ, ok := c.whenPathType(doc, steps, stepOutputs, stepIndex, path)
+		if !ok {
+			continue
+		}
+		if typ != "boolean" && !strings.HasPrefix(typ, "data.enums.") {
+			continue
+		}
+		key, ok := whenLiteralKey(literal)
+		if !ok {
+			continue
+		}
+		g := groups[path]
+		if g == nil {
+			g = &group{typ: typ, values: map[string]bool{}}
+			groups[path] = g
+		}
+		g.values[key] = true
+		g.count++
+	}
+	if defaultCount > 1 {
+		c.rulef("service-when-exhaustive", "%s: at most one when: default is allowed per service", rel)
+	}
+	if defaultCount == 1 {
+		if len(groups) != 1 {
+			c.rulef("service-when-exhaustive", "%s: when: default requires exactly one == branch group, found %d", rel, len(groups))
+		}
+		return
+	}
+	for path, g := range groups {
+		if g.count < 2 {
+			continue
+		}
+		var missing []string
+		if g.typ == "boolean" {
+			for _, v := range []string{"false", "true"} {
+				if !g.values[v] {
+					missing = append(missing, v)
+				}
+			}
+		} else {
+			codes, ok := c.enumCodes[g.typ]
+			if !ok {
+				continue
+			}
+			for code := range codes {
+				if !g.values[strconv.Itoa(code)] {
+					missing = append(missing, strconv.Itoa(code))
+				}
+			}
+			sort.Strings(missing)
+		}
+		if len(missing) > 0 {
+			c.rulef("service-when-exhaustive", "%s: when branches on %s must cover %s; missing %s", rel, path, g.typ, strings.Join(missing, ","))
+		}
+	}
+}
+
+// singleEquality 提取 when 中唯一的 field == literal 比较。
+func singleEquality(n *whenNode) (string, any, bool) {
+	if n == nil || n.kind != "compare" || n.op != "==" {
+		return "", nil, false
+	}
+	if n.left == nil || n.left.kind != "field" || n.right == nil || n.right.kind != "literal" {
+		return "", nil, false
+	}
+	path, _ := n.left.value.(string)
+	if path == "" {
+		return "", nil, false
+	}
+	return path, n.right.value, true
+}
+
+// whenLiteralKey 把 when 字面量规范化为可比较的字符串。
+// 字符串字面量不参与穷尽性：steps.when 的枚举约定是整数 code。
+func whenLiteralKey(v any) (string, bool) {
+	switch x := v.(type) {
+	case bool:
+		return strconv.FormatBool(x), true
+	case float64:
+		if x != float64(int(x)) {
+			return "", false
+		}
+		return strconv.Itoa(int(x)), true
+	}
+	return "", false
+}
+
+// whenPathType 解析 when 路径的类型；无法判定时返回 false。
+func (c *Checker) whenPathType(doc map[string]any, steps []any, stepOutputs []map[string]returnType, stepIndex map[string]int, path string) (string, bool) {
+	if strings.HasPrefix(path, "input.") {
+		typ, err := c.inputPathType(doc, path)
+		if err != nil {
+			return "", false
+		}
+		return typ, true
+	}
+	if strings.HasPrefix(path, "step.") {
+		ref, sub, ok := splitStepField(path)
+		if !ok {
+			return "", false
+		}
+		idx, ok := stepIndex[ref]
+		if !ok {
+			return "", false
+		}
+		step, _ := asMap(steps[idx])
+		typ, err := c.stepOutputPathType(step, stepOutputs[idx], sub, whenFormula{}, ref)
+		if err != nil {
+			return "", false
+		}
+		return typ, true
+	}
+	return "", false
 }
 
 // checkStepQueryErrors 要求 logic/transition step 显式覆盖其 queries 的领域错误。
@@ -1592,13 +1747,18 @@ func serviceTypeRef(ref string) (string, bool) {
 
 // checkInputPath 校验 when 的 input.<path>：根字段必须是 service param，嵌套字段按 param 类型解析。
 func (c *Checker) checkInputPath(doc map[string]any, field string) error {
+	_, err := c.inputPathType(doc, field)
+	return err
+}
+
+func (c *Checker) inputPathType(doc map[string]any, field string) (string, error) {
 	path, ok := splitInputField(field)
 	if !ok {
-		return fmt.Errorf("field %q must be input.<path>", field)
+		return "", fmt.Errorf("field %q must be input.<path>", field)
 	}
 	segs, err := parseWhenPath(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	root := segs[0]
 	var typ string
@@ -1612,43 +1772,48 @@ func (c *Checker) checkInputPath(doc map[string]any, field string) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("unknown input %s", root.name)
+		return "", fmt.Errorf("unknown input %s", root.name)
 	}
 	if typ == "" {
-		return fmt.Errorf("input %s has no type", root.name)
+		return "", fmt.Errorf("input %s has no type", root.name)
 	}
 	prefix := whenSegmentPath(root)
 	if root.hasIndex {
 		typ, err = indexWhenType(typ)
 		if err != nil {
-			return fmt.Errorf("input %s: %v", root.name, err)
+			return "", fmt.Errorf("input %s: %v", root.name, err)
 		}
 	}
 	for _, seg := range segs[1:] {
 		typ = strings.TrimPrefix(typ, "*")
 		if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
-			return fmt.Errorf("list input requires index before %s", seg.name)
+			return "", fmt.Errorf("list input requires index before %s", seg.name)
 		}
 		next, ok := c.resolveTypeField(typ, seg.name, whenFormula{}, "", prefix)
 		if !ok {
-			return fmt.Errorf("unknown field %s of %s", seg.name, typ)
+			return "", fmt.Errorf("unknown field %s of %s", seg.name, typ)
 		}
 		typ = next
 		prefix += "." + whenSegmentPath(seg)
 		if seg.hasIndex {
 			typ, err = indexWhenType(typ)
 			if err != nil {
-				return fmt.Errorf("field %s: %v", seg.name, err)
+				return "", fmt.Errorf("field %s: %v", seg.name, err)
 			}
 		}
 	}
-	return nil
+	return typ, nil
 }
 
 func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]returnType, path string, formula whenFormula, stepRef string) error {
+	_, err := c.stepOutputPathType(step, output, path, formula, stepRef)
+	return err
+}
+
+func (c *Checker) stepOutputPathType(step map[string]any, output map[string]returnType, path string, formula whenFormula, stepRef string) (string, error) {
 	segs, err := parseWhenPath(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	root := segs[0]
 	kind, _ := step["kind"].(string)
@@ -1658,48 +1823,48 @@ func (c *Checker) checkStepOutputPath(step map[string]any, output map[string]ret
 		ref, _ := step["service"].(string)
 		typ = c.methodReturns[ref][root.name].typ
 		if typ == "" {
-			return fmt.Errorf("unknown output %s", root.name)
+			return "", fmt.Errorf("unknown output %s", root.name)
 		}
 	case "query":
 		ref, _ := step["query"].(string)
-		typ = c.queryReturnTypes[ref][root.name]
+		typ = c.queryReturnTypes[ref][root.name].typ
 		if typ == "" {
-			return fmt.Errorf("unknown output %s", root.name)
+			return "", fmt.Errorf("unknown output %s", root.name)
 		}
 	case "logic", "transition":
 		typ = output[root.name].typ
 		if typ == "" {
-			return fmt.Errorf("unknown output %s", root.name)
+			return "", fmt.Errorf("unknown output %s", root.name)
 		}
 	default:
-		return fmt.Errorf("unknown step kind %q", kind)
+		return "", fmt.Errorf("unknown step kind %q", kind)
 	}
 	if root.hasIndex {
 		typ, err = indexWhenType(typ)
 		if err != nil {
-			return fmt.Errorf("output %s: %v", root.name, err)
+			return "", fmt.Errorf("output %s: %v", root.name, err)
 		}
 	}
 	prefix := whenSegmentPath(root)
 	for _, seg := range segs[1:] {
 		typ = strings.TrimPrefix(typ, "*")
 		if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
-			return fmt.Errorf("list output requires index before %s", seg.name)
+			return "", fmt.Errorf("list output requires index before %s", seg.name)
 		}
 		next, ok := c.resolveTypeField(typ, seg.name, formula, stepRef, prefix)
 		if !ok {
-			return fmt.Errorf("unknown field %s of %s", seg.name, typ)
+			return "", fmt.Errorf("unknown field %s of %s", seg.name, typ)
 		}
 		typ = next
 		prefix += "." + whenSegmentPath(seg)
 		if seg.hasIndex {
 			typ, err = indexWhenType(typ)
 			if err != nil {
-				return fmt.Errorf("field %s: %v", seg.name, err)
+				return "", fmt.Errorf("field %s: %v", seg.name, err)
 			}
 		}
 	}
-	return nil
+	return typ, nil
 }
 
 func indexWhenType(typ string) (string, error) {
@@ -2479,12 +2644,19 @@ func (c *Checker) checkQueryInput(input map[string]any, q *queryInfo, qid, rel, 
 	params := map[string]bool{}
 	required := map[string]bool{}
 	for _, p := range q.Params {
+		if p.Name == "ctx" {
+			continue
+		}
 		params[p.Name] = true
 		if !p.Nullable && !p.HasDefault {
 			required[p.Name] = true
 		}
 	}
 	for name := range input {
+		if name == "ctx" {
+			c.rulef("service-params", "%s: step %s query %s must not pass ctx", rel, stepID, qid)
+			continue
+		}
 		if !params[name] {
 			c.rulef("service-params", "%s: step %s query %s has no param %s", rel, stepID, qid, name)
 		}

@@ -25,12 +25,13 @@ type queryParam struct {
 
 type queryReturn struct {
 	Name       string
-	Kind       string // scalar / affected_rows / entity / columns
+	Kind       string // scalar / affected_rows / entity / columns / error
 	Entity     string
 	Type       string
 	Columns    []string
 	HasColumns bool
 	List       bool
+	Nullable   bool
 }
 
 type queryInfo struct {
@@ -178,6 +179,7 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		r.Columns = stringList(rm["columns"])
 		_, r.HasColumns = rm["columns"]
 		r.List, _ = rm["list"].(bool)
+		r.Nullable, _ = rm["nullable"].(bool)
 		q.Returns = append(q.Returns, r)
 	}
 	return q
@@ -277,9 +279,19 @@ func (c *Checker) checkQueryShape(q *queryInfo) {
 		}
 		return
 	}
+	nonErr := make([]queryReturn, 0, len(q.Returns))
+	for _, r := range q.Returns {
+		if r.Kind != "error" {
+			nonErr = append(nonErr, r)
+		}
+	}
+	if len(nonErr) == 0 {
+		c.rulef("query-shape", "%s: returns must contain at least one non-error item", where)
+		return
+	}
 	hasAffected := false
 	hasColumns := false
-	for _, r := range q.Returns {
+	for _, r := range nonErr {
 		switch r.Kind {
 		case "affected_rows":
 			hasAffected = true
@@ -287,14 +299,14 @@ func (c *Checker) checkQueryShape(q *queryInfo) {
 			hasColumns = true
 		}
 	}
-	if hasAffected && len(q.Returns) > 1 {
-		c.rulef("query-shape", "%s: affected_rows must be the only return item", where)
+	if hasAffected && len(nonErr) > 1 {
+		c.rulef("query-shape", "%s: affected_rows must be the only non-error return item", where)
 	}
-	if hasAffected && len(q.Returns) == 1 && q.Returns[0].List {
+	if hasAffected && len(nonErr) == 1 && nonErr[0].List {
 		c.rulef("query-shape", "%s: affected_rows must not be a list", where)
 	}
-	if hasColumns && len(q.Returns) > 1 {
-		c.rulef("query-shape", "%s: columns return must be the only return item", where)
+	if hasColumns && len(nonErr) > 1 {
+		c.rulef("query-shape", "%s: columns return must be the only non-error return item", where)
 	}
 }
 
@@ -376,31 +388,44 @@ func (c *Checker) checkPaginationParam(name string, p queryParam, where string) 
 }
 
 func (c *Checker) checkQueryParams(q *queryInfo) {
+	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
+	if len(q.Params) == 0 || q.Params[0].Name != "ctx" || q.Params[0].Type != "context.Context" {
+		c.rulef("query-params", "%s: params[0] must be ctx context.Context", where)
+	}
 	seen := map[string]bool{}
-	for _, p := range q.Params {
-		where := fmt.Sprintf("%s: query %s param %s", q.File, q.ID, p.Name)
+	for i, p := range q.Params {
+		pw := fmt.Sprintf("%s: query %s param %s", q.File, q.ID, p.Name)
 		if seen[p.Name] {
-			c.rulef("query-params", "%s: duplicate param", where)
+			c.rulef("query-params", "%s: duplicate param", pw)
 		}
 		seen[p.Name] = true
+		if p.Name == "ctx" {
+			if i != 0 {
+				c.rulef("query-params", "%s: ctx must be the first param", pw)
+			}
+			if p.Column != "" || p.HasExpr || p.HasDefault || p.Nullable {
+				c.rulef("query-params", "%s: ctx must not bind column/expr/default/nullable", pw)
+			}
+			continue
+		}
 		if strings.TrimSpace(p.Type) == "" {
-			c.rulef("query-params", "%s: type must not be empty", where)
+			c.rulef("query-params", "%s: type must not be empty", pw)
 		} else if p.Column == "" {
 			if _, _, _, ok := paramLogicalType(p.Type); !ok {
-				c.rulef("query-params", "%s: type %q cannot map to a type family or data.enums.*", where, p.Type)
+				c.rulef("query-params", "%s: type %q cannot map to a type family or data.enums.*", pw, p.Type)
 			}
 		}
 		if p.Column != "" && p.HasExpr {
-			c.rulef("query-params", "%s: column and expr are mutually exclusive", where)
+			c.rulef("query-params", "%s: column and expr are mutually exclusive", pw)
 		}
 		if p.HasExpr && strings.TrimSpace(p.Expr) == "" {
-			c.rulef("query-params", "%s: expr must not be blank", where)
+			c.rulef("query-params", "%s: expr must not be blank", pw)
 		}
 		if p.HasDefault && !p.Nullable && !isPaginationParam(p.Name) {
-			c.rulef("query-params", "%s: default requires nullable:true (null means use default)", where)
+			c.rulef("query-params", "%s: default requires nullable:true (null means use default)", pw)
 		}
 		if p.HasDefault && !isPaginationParam(p.Name) {
-			c.checkQueryParamDefault(p, where)
+			c.checkQueryParamDefault(p, pw)
 		}
 	}
 }
@@ -549,6 +574,10 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 	if len(q.Returns) == 0 {
 		return // query-returns 已报
 	}
+	last := q.Returns[len(q.Returns)-1]
+	if last.Name != "err" || last.Kind != "error" {
+		c.rulef("query-returns", "%s: returns must end with {name: err, kind: error}", where)
+	}
 	names := map[string]bool{}
 	var listSet bool
 	var hasList bool
@@ -560,8 +589,21 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 			c.rulef("query-returns", "%s: duplicate return name %s", rw, r.Name)
 		}
 		names[r.Name] = true
+
+		if r.Kind == "error" {
+			if r.Name != "err" {
+				c.rulef("query-returns", "%s: kind=error must be named err", rw)
+			}
+			if i != len(q.Returns)-1 {
+				c.rulef("query-returns", "%s: kind=error must be the last return item", rw)
+			}
+			if r.List || r.Type != "" || r.Entity != "" || len(r.Columns) > 0 || r.Nullable {
+				c.rulef("query-returns", "%s: kind=error forbids list/type/entity/columns/nullable", rw)
+			}
+			continue
+		}
 		if r.Name == "err" {
-			c.rulef("query-returns", "%s: returns must not declare err; error is implicit", rw)
+			c.rulef("query-returns", "%s: err return must use kind=error", rw)
 		}
 		if hasList && r.List != listSet {
 			c.rulef("query-returns", "%s: list must be consistent across return items", rw)
@@ -609,6 +651,9 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 		case "affected_rows":
 			if r.Entity != "" || r.Type != "" || len(r.Columns) > 0 {
 				c.rulef("query-shape", "%s: affected_rows forbids entity/type/columns", rw)
+			}
+			if r.Nullable {
+				c.rulef("query-shape", "%s: affected_rows forbids nullable", rw)
 			}
 		default:
 			c.rulef("query-returns", "%s: invalid kind %q", rw, r.Kind)

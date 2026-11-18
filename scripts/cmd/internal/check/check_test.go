@@ -548,14 +548,14 @@ func TestStorageRegistryAndEngine(t *testing.T) {
 	body := `supported_engines: [postgres, mysql]
 tables:
   postgres:
-    - data.tables.x
-    - data.tables.z
-    - data.tables.z
-    - data.tables.base
-    - data.tables.unknown
-    - data.tables.w
+    - table: data.tables.x
+    - table: data.tables.z
+    - table: data.tables.z
+    - table: data.tables.base
+    - table: data.tables.unknown
+    - table: data.tables.w
   mysql:
-    - data.tables.w
+    - table: data.tables.w
   mongodb: []
 `
 	if err := os.WriteFile(filepath.Join(dir, "storage.yaml"), []byte(body), 0o644); err != nil {
@@ -571,9 +571,9 @@ tables:
 	errs := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"physical table data.tables.y is not registered",
-		"does not match any data.tables contract",
-		"is the base contract, not a physical table",
-		"tables.postgres duplicates data.tables.z",
+		"data.tables.unknown does not match any data.tables contract",
+		"data.tables.base is the base contract, not a physical table",
+		"tables.postgres[2]: duplicates data.tables.z",
 		"table data.tables.w is registered under both mysql and postgres",
 		"tables.mongodb is not a supported engine",
 	} {
@@ -583,26 +583,57 @@ tables:
 	}
 }
 
-func TestStorageCachesAndMetadata(t *testing.T) {
+func TestStorageCacheEntries(t *testing.T) {
+	entries := map[string]*storageEntry{
+		"data.tables.x": {table: "data.tables.x", engine: "mysql"},
+	}
 	c := &Checker{}
 	c.checkStorageCaches(map[string]any{
-		"caches": map[string]any{"redis": []any{"data.tables.x", "data.tables.unknown"}},
-	}, map[string]string{"data.tables.x": "x.yaml"}, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "caches.redis references unknown table data.tables.unknown") {
-		t.Fatalf("unknown cache table not reported: %v", c.errs)
-	}
-
-	c = &Checker{}
-	c.checkStorageMetadata(map[string]any{
-		"size_class": map[string]any{"data.tables.unknown": "small"},
-		"retention":  map[string]any{"data.tables.unknown": map[string]any{"unit": "days"}},
-		"partition":  map[string]any{"data.tables.unknown": map[string]any{}},
-	}, map[string]string{"data.tables.x": "mysql"}, map[string]bool{}, "contracts/data/storage.yaml")
+		"caches": map[string]any{"redis": []any{
+			map[string]any{"table": "data.tables.x"},
+			map[string]any{"table": "data.tables.unknown"},
+			map[string]any{"table": "data.tables.x", "size_class": "small"},
+		}},
+	}, entries, "contracts/data/storage.yaml")
 	errs := strings.Join(c.errs, "\n")
 	for _, want := range []string{
-		"size_class.data.tables.unknown is not a registered table",
-		"retention.data.tables.unknown is not a registered table",
-		"partition.data.tables.unknown is not a registered table",
+		"duplicates data.tables.x",
+		"data.tables.unknown is not a registered authority table",
+		`field "size_class" is not allowed for cache entries`,
+	} {
+		if !strings.Contains(errs, want) {
+			t.Fatalf("missing %q in:\n%s", want, errs)
+		}
+	}
+}
+
+func TestStorageEntryFields(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `supported_engines: [mysql, mongodb]
+tables:
+  mysql:
+    - table: data.tables.x
+      partition: { strategy: hash, columns: [id] }
+  mongodb:
+    - table: data.tables.x
+      partition: { strategy: hash, columns: [id] }
+      archive: { engine: mysql, database: archive_cold, unit: days, after: 1 }
+`
+	if err := os.WriteFile(filepath.Join(dir, "storage.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root, baseID: "data.tables.base", tableColumns: map[string]map[string]columnMeta{
+		"data.tables.x": {"id": {typ: "integer", primaryKey: true}},
+	}}
+	c.checkStorage(map[string]string{"data.tables.x": "x.yaml"})
+	errs := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		`tables.mongodb[0]: field "partition" is not allowed for engine mongodb`,
+		`tables.mongodb[0]: field "archive" is not allowed for engine mongodb`,
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in:\n%s", want, errs)
@@ -617,6 +648,9 @@ func TestStorageDocShape(t *testing.T) {
 		"supported_engines": []any{"postgres", 1},
 		"engines":           map[string]any{"postgres": map[string]any{"enabled": "false"}},
 		"deploymnet":        map[string]any{},
+		"size_class":        map[string]any{"data.tables.x": "small"},
+		"retention":         map[string]any{},
+		"partition":         map[string]any{},
 	}
 	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
 	errs := strings.Join(c.errs, "\n")
@@ -624,6 +658,9 @@ func TestStorageDocShape(t *testing.T) {
 		"unknown top-level field \"deploymnet\"",
 		"unknown top-level field \"default_engine\"",
 		"unknown top-level field \"engines\"",
+		"unknown top-level field \"size_class\"",
+		"unknown top-level field \"retention\"",
+		"unknown top-level field \"partition\"",
 		"supported_engines[1] must be a non-empty string",
 	} {
 		if !strings.Contains(errs, want) {
@@ -677,43 +714,55 @@ func TestStorageDocRequiresSupportedEngines(t *testing.T) {
 
 func TestStorageRetentionRequiresUnitAndDuration(t *testing.T) {
 	c := &Checker{}
-	c.checkStorageRetention("data.tables.x", map[string]any{"pending": 7}, false, "contracts/data/storage.yaml")
-	if !strings.Contains(entityErrs(c), "retention.data.tables.x.unit is required") {
+	c.checkStorageRetention(map[string]any{"pending": 7}, "storage tables.mysql[0]")
+	if !strings.Contains(entityErrs(c), "retention.unit is required") {
 		t.Fatalf("missing retention unit not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
-	c.checkStorageRetention("data.tables.x", map[string]any{"unit": "days"}, false, "contracts/data/storage.yaml")
-	if !strings.Contains(entityErrs(c), "retention.data.tables.x must declare at least one duration") {
+	c.checkStorageRetention(map[string]any{"unit": "days"}, "storage tables.mysql[0]")
+	if !strings.Contains(entityErrs(c), "retention must declare at least one duration") {
 		t.Fatalf("retention without duration not reported: %v", c.errs)
 	}
 }
 
-func TestStorageRetentionCacheTTL(t *testing.T) {
+func TestStorageRetentionShape(t *testing.T) {
 	c := &Checker{}
-	c.checkStorageRetention("data.tables.x", map[string]any{"unit": "days", "ttl": 30, "cache_ttl": 30}, false, "contracts/data/storage.yaml")
-	if !strings.Contains(entityErrs(c), "cache_ttl requires the table in caches") {
-		t.Fatalf("cache_ttl without cache not reported: %v", c.errs)
+	c.checkStorageRetention(map[string]any{"unit": "days", "cache_ttl": 30}, "storage tables.mysql[0]")
+	errs := entityErrs(c)
+	if !strings.Contains(errs, `retention unknown field "cache_ttl"`) {
+		t.Fatalf("cache_ttl in table entry not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, "retention must declare at least one duration") {
+		t.Fatalf("missing duration not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
-	c.checkStorageRetention("data.tables.x", map[string]any{"unit": "days", "ttl": 30, "cache_ttl": 60}, true, "contracts/data/storage.yaml")
-	if !strings.Contains(entityErrs(c), "cache_ttl must not exceed ttl") {
+	c.checkStorageRetention(map[string]any{"unit": 5}, "storage tables.mysql[0]")
+	if !strings.Contains(entityErrs(c), "retention.unit must be a string") {
+		t.Fatalf("non-string retention unit not reported: %v", c.errs)
+	}
+}
+
+func TestStorageCacheRetention(t *testing.T) {
+	authority := &storageEntry{table: "data.tables.x", retention: map[string]any{"unit": "days", "ttl": 30}}
+
+	c := &Checker{}
+	c.checkStorageCacheRetention("data.tables.x", authority, map[string]any{"unit": "days", "cache_ttl": 60}, "storage caches.redis[0]")
+	if !strings.Contains(entityErrs(c), "cache_ttl must not exceed data.tables.x ttl") {
 		t.Fatalf("cache_ttl > ttl not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
-	c.checkStorageRetention("data.tables.x", map[string]any{"unit": "days", "ttl": 30, "cache_ttl": 30}, true, "contracts/data/storage.yaml")
+	c.checkStorageCacheRetention("data.tables.x", authority, map[string]any{"unit": "hours", "cache_ttl": 720}, "storage caches.redis[0]")
 	if len(c.errs) != 0 {
-		t.Fatalf("valid cache_ttl reported: %v", c.errs)
+		t.Fatalf("cache_ttl equal to ttl reported: %v", c.errs)
 	}
-}
 
-func TestStorageRetentionUnitType(t *testing.T) {
-	c := &Checker{}
-	c.checkStorageRetention("data.tables.x", map[string]any{"unit": 5}, false, "contracts/data/storage.yaml")
-	if !strings.Contains(entityErrs(c), "retention.data.tables.x.unit must be a string") {
-		t.Fatalf("non-string retention unit not reported: %v", c.errs)
+	c = &Checker{}
+	c.checkStorageCacheRetention("data.tables.x", authority, map[string]any{"unit": "days"}, "storage caches.redis[0]")
+	if !strings.Contains(entityErrs(c), "retention.cache_ttl is required") {
+		t.Fatalf("missing cache_ttl not reported: %v", c.errs)
 	}
 }
 
@@ -721,8 +770,8 @@ func TestStoragePartitionIntervalType(t *testing.T) {
 	c := &Checker{tableColumns: map[string]map[string]columnMeta{
 		"data.tables.x": {"created_at": {typ: "timestamp"}},
 	}}
-	c.checkStoragePartition("data.tables.x", map[string]any{"strategy": "range", "columns": []any{"created_at"}, "interval": 5}, "contracts/data/storage.yaml")
-	if !strings.Contains(entityErrs(c), "partition.data.tables.x.interval must be a string") {
+	c.checkStoragePartition("data.tables.x", map[string]any{"strategy": "range", "columns": []any{"created_at"}, "interval": 5}, "storage tables.mysql[0]")
+	if !strings.Contains(entityErrs(c), "partition.interval must be a string") {
 		t.Fatalf("non-string partition interval not reported: %v", c.errs)
 	}
 }
@@ -731,9 +780,33 @@ func TestStoragePartitionRangeInterval(t *testing.T) {
 	c := &Checker{tableColumns: map[string]map[string]columnMeta{
 		"data.tables.x": {"created_at": {typ: "timestamp"}},
 	}}
-	c.checkStoragePartition("data.tables.x", map[string]any{"strategy": "range", "columns": []any{"created_at"}}, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "partition.data.tables.x.interval is required for range") {
+	c.checkStoragePartition("data.tables.x", map[string]any{"strategy": "range", "columns": []any{"created_at"}}, "storage tables.mysql[0]")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "partition.interval is required for range") {
 		t.Fatalf("range partition without interval not reported: %v", c.errs)
+	}
+}
+
+func TestStorageArchive(t *testing.T) {
+	supported := map[string]bool{"mysql": true, "postgres": true}
+
+	c := &Checker{}
+	c.checkStorageArchive(map[string]any{"engine": "sqlite", "database": "Archive", "unit": "weeks", "after": 0}, supported, "storage tables.mysql[0]")
+	errs := entityErrs(c)
+	for _, want := range []string{
+		`archive.engine "sqlite" is not a supported engine`,
+		`archive.database "Archive" must be snake_case`,
+		"archive.unit must be minutes/hours/days",
+		"archive.after must be an integer >= 1",
+	} {
+		if !strings.Contains(errs, want) {
+			t.Fatalf("missing %q in:\n%s", want, errs)
+		}
+	}
+
+	c = &Checker{}
+	c.checkStorageArchive(map[string]any{"engine": "postgres", "database": "archive_cold", "unit": "days", "after": 90}, supported, "storage tables.mysql[0]")
+	if len(c.errs) != 0 {
+		t.Fatalf("valid archive reported: %v", c.errs)
 	}
 }
 

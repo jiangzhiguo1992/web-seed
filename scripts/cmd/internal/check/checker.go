@@ -66,7 +66,7 @@ type Checker struct {
 	serviceQueries    map[string]map[string]bool
 	ruleErrors        map[string]string
 	ruleOwners        map[string][]string
-	queryReturnTypes  map[string]map[string]string
+	queryReturnTypes  map[string]map[string]returnType
 	accessBindings    map[string]accessPolicy
 	inlineSeq         int
 	nodeKinds         map[string]contractspec.SchemaKind
@@ -159,6 +159,7 @@ func (c *Checker) run() {
 	c.checkUsedBy(tableIDs)
 	c.checkQueryUsedBy()
 	c.checkIndex(tableIDs, enumSchema, entitySchema, querySchema)
+	c.checkReferences(tableIDs)
 }
 
 // checkContractProseQuotes 强制 contracts 下文本字段使用双引号，
