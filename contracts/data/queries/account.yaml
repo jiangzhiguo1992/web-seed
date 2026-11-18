@@ -18,6 +18,7 @@ queries:
       - { name: id, type: integer, column: data.tables.account.col.id }
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.account.pk ]
     used_by:
@@ -27,6 +28,7 @@ queries:
       - cap.services.account.suspend
       - cap.services.account.update
       - cap.services.auth.login
+      - cap.services.token.issue
       - cap.services.token.verify
 
   - name: ExistsAccountNumber
@@ -37,6 +39,7 @@ queries:
       - { name: number, type: text, column: data.tables.account.col.number }
     returns:
       - { name: exists, kind: scalar, type: boolean }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.account.uq_account_number ]
     used_by:
@@ -53,6 +56,7 @@ queries:
       - { name: limit, type: integer, nullable: true, default: 20 }
     returns:
       - { name: accounts, list: true, kind: entity, entity: data.entities.account }
+      - { name: err, kind: error }
     errors: []
     index_ref:
       - data.tables.account.idx_account_created_at_id
@@ -73,6 +77,7 @@ queries:
       - { name: user_id, type: integer, column: data.tables.account.col.user_id, nullable: true }
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
+      - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_NUMBER_TAKEN
     index_ref: [ data.tables.account.uq_account_number ]
@@ -88,6 +93,7 @@ queries:
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.account.pk ]
     used_by:
@@ -102,6 +108,7 @@ queries:
       - { name: status, type: integer, column: data.tables.account.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     index_ref: [ data.tables.account.pk ]
@@ -117,6 +124,7 @@ queries:
       - { name: id, type: integer, column: data.tables.account.col.id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     index_ref: [ data.tables.account.pk ]

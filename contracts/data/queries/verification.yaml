@@ -26,6 +26,7 @@ queries:
       - { name: expire_at, type: timestamp, column: data.tables.verification_body.col.expire_at }
     returns:
       - { name: row, kind: entity, entity: data.entities.verification_body }
+      - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
     index_ref: [ data.tables.verification_body.pk ]
@@ -42,6 +43,7 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
@@ -58,6 +60,7 @@ queries:
       - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
     returns:
       - { name: row, kind: entity, entity: data.entities.verification_body }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
@@ -74,6 +77,7 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_VERIFICATION_INVALID
     index_ref: [ data.tables.verification_body.pk ]
@@ -90,6 +94,7 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.verification_body.pk ]
     used_by:
@@ -106,6 +111,7 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
@@ -120,6 +126,7 @@ queries:
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.verification_body.idx_verification_account_id ]
     used_by:
@@ -139,6 +146,7 @@ queries:
       - { name: input_hash, type: text, column: data.tables.verification_action.col.input_hash }
     returns:
       - { name: row, kind: entity, entity: data.entities.verification_action }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.verification_action.pk ]
     used_by:

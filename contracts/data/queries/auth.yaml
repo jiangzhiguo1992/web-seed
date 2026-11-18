@@ -19,6 +19,7 @@ queries:
       - { name: username, type: text, column: data.tables.auth_pwd.col.username }
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_pwd }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_username ]
     used_by:
@@ -36,6 +37,7 @@ queries:
       - { name: password_hash, type: text, column: data.tables.auth_pwd.col.password_hash }
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_pwd }
+      - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_USERNAME_TAKEN
       - platform.errors.AUTH_INVALID_CREDENTIALS
@@ -54,6 +56,7 @@ queries:
       - { name: password_hash, type: text, column: data.tables.auth_pwd.col.password_hash }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
@@ -67,6 +70,7 @@ queries:
       - { name: id, type: integer, column: data.tables.auth_pwd.col.id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
@@ -81,6 +85,7 @@ queries:
       - { name: lock_until, type: timestamp, column: data.tables.auth_pwd.col.locked_until, nullable: true }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:
@@ -95,6 +100,7 @@ queries:
       - { name: number, type: text, column: data.tables.auth_phone.col.number }
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_phone }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_phone.uq_auth_phone_number ]
     used_by:
@@ -113,6 +119,7 @@ queries:
       - { name: operator, type: text, column: data.tables.auth_phone.col.operator, nullable: true }
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_phone }
+      - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_PHONE_TAKEN
     index_ref:
@@ -130,6 +137,7 @@ queries:
       - { name: domain, type: text, column: data.tables.auth_email.col.domain }
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_email }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_email.uq_auth_email_username_domain ]
     used_by:
@@ -149,6 +157,7 @@ queries:
       - { name: tld, type: text, column: data.tables.auth_email.col.tld, nullable: true }
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_email }
+      - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_EMAIL_TAKEN
       - platform.errors.AUTH_EMAIL_INVALID
@@ -166,6 +175,7 @@ queries:
       - { name: account_id, type: integer, column: data.tables.auth_pwd.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_pwd.uq_auth_pwd_account ]
     used_by:
@@ -179,6 +189,7 @@ queries:
       - { name: account_id, type: integer, column: data.tables.auth_phone.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_phone.uq_auth_phone_account ]
     used_by:
@@ -192,6 +203,7 @@ queries:
       - { name: account_id, type: integer, column: data.tables.auth_email.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_email.uq_auth_email_account ]
     used_by:
@@ -206,6 +218,7 @@ queries:
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_phone.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_phone.pk ]
     used_by:
@@ -220,6 +233,7 @@ queries:
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_email.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_email.pk ]
     used_by:
@@ -234,6 +248,7 @@ queries:
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_pwd.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.auth_pwd.pk ]
     used_by:

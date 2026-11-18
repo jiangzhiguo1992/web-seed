@@ -27,6 +27,7 @@ queries:
       - { name: refresh_expire_at, type: timestamp, column: data.tables.token.col.refresh_expire_at }
     returns:
       - { name: row, kind: entity, entity: data.entities.token }
+      - { name: err, kind: error }
     errors: []
     index_ref:
       - data.tables.token.uq_token_access_hash
@@ -43,6 +44,7 @@ queries:
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
     returns:
       - { name: row, kind: entity, entity: data.entities.token }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
     used_by:
@@ -57,6 +59,7 @@ queries:
       - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
     returns:
       - { name: row, kind: entity, entity: data.entities.token }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.token.uq_token_access_hash ]
     used_by:
@@ -73,6 +76,7 @@ queries:
       - { name: replaced_by_id, type: integer, column: data.tables.token.col.replaced_by_id, nullable: true }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_TOKEN_INVALID
     index_ref: [ data.tables.token.uq_token_refresh_hash ]
@@ -90,6 +94,7 @@ queries:
       - { name: revoke_reason, type: data.enums.token_revoke_reason, column: data.tables.token.col.revoke_reason }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.token.idx_token_account_status ]
     used_by:
@@ -103,6 +108,7 @@ queries:
       - { name: limit, type: integer, nullable: true, default: 100 }
     returns:
       - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
     errors: []
     index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
     used_by:
