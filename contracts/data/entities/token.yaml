@@ -15,12 +15,12 @@ model:
     - data.entities.base
   tables:
     - data.tables.token
+  included_by:
+    - data.entities.account
   queries:
     - data.queries.token.create_token
     - data.queries.token.get_token_by_access
     - data.queries.token.get_token_by_refresh
-  included_by:
-    - data.entities.account
 
 fields:
   - name: Status

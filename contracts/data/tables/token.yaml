@@ -16,6 +16,7 @@ table:
     - data.tables.base
   entities:
     - data.entities.token
+  referenced_by: []
   queries:
     - data.queries.token.create_token
     - data.queries.token.delete_expired_tokens
@@ -23,7 +24,6 @@ table:
     - data.queries.token.get_token_by_refresh
     - data.queries.token.revoke_token
     - data.queries.token.revoke_tokens_by_account
-  referenced_by: []
 
 columns:
   - name: own_type

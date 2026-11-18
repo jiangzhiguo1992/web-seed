@@ -14,11 +14,11 @@ model:
     - data.entities.base
   tables:
     - data.tables.auth_phone
+  included_by:
+    - data.entities.account
   queries:
     - data.queries.auth.create_auth_phone
     - data.queries.auth.get_auth_phone_by_number
-  included_by:
-    - data.entities.account
 
 fields:
   - name: Status

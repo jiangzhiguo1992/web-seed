@@ -14,11 +14,11 @@ model:
     - data.entities.base
   tables:
     - data.tables.auth_pwd
+  included_by:
+    - data.entities.account
   queries:
     - data.queries.auth.create_auth_pwd
     - data.queries.auth.get_auth_pwd_by_username
-  included_by:
-    - data.entities.account
 
 fields:
   - name: Status

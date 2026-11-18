@@ -125,7 +125,7 @@ columns:
         source: false
 ```
 
-- **引用必须声明为逻辑外键**：`columns[].references` 只指向目标表主键或全局唯一（`live_only: false`）单列索引列，两端类型族一致（`[强制: reference-target]`）；同一列不得同时声明 `redundancy`（`[强制: reference-exclusive]`）；`on_delete` 表达**硬删**动作（`cascade` / `restrict` / `set_null` / `no_action`），软删不写在这里（`[强制: reference-on-delete]`）。每条 references 必须与 entity 关系字段的 `source.join` 列对双向一致（`[强制: reference-join]`）：实体声明了关系，表侧就必须给出删除策略；表侧写了逻辑外键，实体就必须有对应关系。
+- **引用必须声明为逻辑外键**：`columns[].references` 只指向目标表主键或全局唯一（`live_only: false`）单列索引列，两端类型族一致（`[强制: reference-target]`）；`on_delete` 表达**硬删**动作（`cascade` / `restrict` / `set_null` / `no_action`），软删不写在这里（`[强制: reference-on-delete]`）。每条 references 必须与 entity 关系字段的 `source.join` 列对双向一致（`[强制: reference-join]`）：实体声明了关系，表侧就必须给出删除策略；表侧写了逻辑外键，实体就必须有对应关系。
 
 ```yaml
 # 子表列：account 被硬删时级联删除本行
@@ -144,7 +144,7 @@ columns:
 |---|---|---|
 | `table.entities` | 手写 | 映射本表的 entity 集合（`[强制: table-entities]`） |
 | `model.included_by` | 手写 | 通过关系字段指向本实体的 entity（`[强制: entity-included-by]`） |
-| `table.referenced_by` | 手写 | 指向本表列的 `references` 源列（`[强制: table-referenced-by]`） |
+| `table.referenced_by` | `make gen-graph` | 指向本表列的 `references` 源列（`[强制: table-referenced-by]`，禁止手改） |
 | `indexes[].used_by` | 手写 | 使用该索引的 query（设计声明） |
 | `table.queries` | `make gen-graph` | 使用本表的 query（`[强制: table-queries-generated]`，禁止手改） |
 | `model.queries` | `make gen-graph` | 返回本实体的 query（`[强制: entity-used-by]`，禁止手改） |

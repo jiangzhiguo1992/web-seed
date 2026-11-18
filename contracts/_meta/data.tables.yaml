@@ -72,6 +72,14 @@ fields:
         unique: true
         pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
         description: "映射本表的 entity ID 列表"
+      - name: referenced_by
+        type: list<string>
+        required: true
+        unique: true
+        pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
+        generated: true
+        write: forbidden
+        description: "引用本表列的源列引用列表；由 gen-graph 生成；与 columns[].references 双向对账"
       - name: queries
         type: list<string>
         required: true
@@ -81,12 +89,6 @@ fields:
         generated: true
         write: forbidden
         description: "使用本表的 query 项 ID；由 gen-graph 生成"
-      - name: referenced_by
-        type: list<string>
-        required: true
-        unique: true
-        pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
-        description: "引用本表列的源列引用列表；与 columns[].references 双向对账"
 
   - name: columns
     type: list<object>
@@ -168,7 +170,7 @@ rules:
   - { id: storage-archive, text: "archive 只允许 engine/database/unit/after；engine 必须是 supported_engines；database 必须是非空 snake_case；unit 只能是 minutes/hours/days；after >= 1；after 是数据年龄阈值，与 retention.ttl 是独立维度；引擎字段矩阵由 storage-entry-fields 限制", implemented_by: [ storage-archive ] }
   - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
-  - { id: table-referenced-by, text: "table.referenced_by 必须等于所有指向本表列的 references 源列集合；每项必须是存在的列引用且其 references.column 指向本表", implemented_by: [ table-referenced-by ] }
+  - { id: table-referenced-by, text: "table.referenced_by 由 gen-graph 生成，禁止手改；必须等于所有指向本表列的 references 源列集合；每项必须是存在的列引用且其 references.column 指向本表", implemented_by: [ table-referenced-by ] }
   - { id: owner-write, text: "只有 owner_module 相同的 cap.services 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 service step 的 query/queries 中；写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service，不允许一个 query 写多模块表", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-comment, text: "索引必须写非空 comment", implemented_by: [ index-comment ] }
@@ -178,7 +180,6 @@ rules:
   - { id: index-name-unique, text: "索引名同一 schema 内必须全局唯一", implemented_by: [ index-name-unique ] }
   - { id: redundant-group, text: "columns[].redundancy 每组必须恰好一个 source 且包含声明列自身；组内每列必须声明完全相同的列表；同一列不得跨组；列表不得重复列；基类列不得声明 redundancy", implemented_by: [ redundant-group ] }
   - { id: redundant-ref, text: "redundancy 的 column 必须是存在的物理表自声明列（继承列/基类列不允许）；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
-  - { id: reference-exclusive, text: "同一列不得同时声明 redundancy 与 references：冗余副本表达同值派生，references 表达逻辑外键", implemented_by: [ reference-exclusive ] }
   - { id: reference-target, text: "references.column 必须是已存在的物理表列；源列必须是本表自声明列；目标列必须是目标表主键或全局唯一（live_only: false）的单列索引列；两端类型族一致", implemented_by: [ reference-target ] }
   - { id: reference-on-delete, text: "on_delete 只约束硬删：cascade 级联删除、restrict 拒绝删除、set_null 置空、no_action 保留悬空；set_null 要求源列 nullable；软删不由此字段表达", implemented_by: [ reference-on-delete ] }
   - { id: reference-join, text: "references 与 entity 关系字段的 join 列对必须双向一致：每条 references 必须有同列对的 join，每个 join 必须有同列对的 references（列对比较不看 from/to 方向）", implemented_by: [ reference-join ] }

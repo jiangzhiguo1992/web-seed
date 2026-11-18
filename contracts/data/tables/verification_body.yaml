@@ -22,6 +22,7 @@ table:
     - data.tables.base
   entities:
     - data.entities.verification_body
+  referenced_by: []
   queries:
     - data.queries.verification.consume_verification
     - data.queries.verification.create_verification
@@ -30,7 +31,6 @@ table:
     - data.queries.verification.mark_verification_sent
     - data.queries.verification.revoke_active_verifications_by_account
     - data.queries.verification.revoke_active_verifications_by_auth
-  referenced_by: []
 
 columns:
   - name: account_id

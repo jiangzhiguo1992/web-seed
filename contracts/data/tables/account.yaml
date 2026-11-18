@@ -16,6 +16,13 @@ table:
     - data.tables.base
   entities:
     - data.entities.account
+  referenced_by:
+    - data.tables.token.col.account_id
+    - data.tables.auth_pwd.col.account_id
+    - data.tables.auth_phone.col.account_id
+    - data.tables.auth_email.col.account_id
+    - data.tables.verification_body.col.account_id
+    - data.tables.verification_action.col.account_id
   queries:
     - data.queries.account.create_account
     - data.queries.account.exists_account_number
@@ -24,13 +31,6 @@ table:
     - data.queries.account.set_account_status
     - data.queries.account.soft_delete_account
     - data.queries.account.update_account
-  referenced_by:
-    - data.tables.token.col.account_id
-    - data.tables.auth_pwd.col.account_id
-    - data.tables.auth_phone.col.account_id
-    - data.tables.auth_email.col.account_id
-    - data.tables.verification_body.col.account_id
-    - data.tables.verification_action.col.account_id
 
 columns:
   - name: own_type

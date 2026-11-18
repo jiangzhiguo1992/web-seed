@@ -16,9 +16,9 @@ model:
     - data.entities.base
   tables:
     - data.tables.verification_action
+  included_by: []
   queries:
     - data.queries.verification.create_verification_action
-  included_by: []
 
 fields:
   - name: VerificationID
