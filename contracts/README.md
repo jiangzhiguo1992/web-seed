@@ -28,7 +28,7 @@
 
 | 推论 | 具体含义 |
 |---|---|
-| 实现由契约生成 | 类型、常量、路由、状态机、DDL 均从本目录产出 |
+| 实现由契约生成 | 类型、常量、路由、生命周期、DDL 均从本目录产出 |
 | 生成物不可手改 | `**/generated/` 与 `apps/api/migrations/` 是产物；手改会被 CI 拦截 |
 | 需求变更先改契约 | 禁止"先写代码后补契约" |
 | 契约不丢信息 | SQL 特性用结构化字段表达（`storage.tables.<engine>[].partition`、归档条目、`indexes[].expression`），禁止塞回原生 DDL |
@@ -90,8 +90,9 @@ contracts/
 │   ├── enums.yaml            #   跨端枚举：integer code ↔ 名称
 │   └── storage.yaml          #   单例：引擎归属 / 条目化的保留 / 分区 / 归档 / 多 key 缓存
 │
-├── capabilities/             # ② 能力层：services + events（topics/jobs）+ protocols
+├── capabilities/             # ② 能力层：services + lifecycles + events（topics/jobs）+ protocols
 │   ├── services/<module>.yaml #   服务：services + schemas（interface 名由 owner_module + file 派生）
+│   ├── lifecycles/<subject>.yaml # 生命周期：create/destroy/transitions，锚到 service step
 │   ├── events/<module>.yaml   #   异步主题与任务：topics + jobs
 │   └── protocols/
 │       └── http/<module>.yaml #   HTTP 绑定：只写协议差异，x-service 指回 service
@@ -99,8 +100,7 @@ contracts/
 ├── features/                 # ③ 功能契约（面向用户）
 │   ├── routes.yaml           #   路由、菜单、布局
 │   ├── pages/<page>.yaml     #   页面：数据源、四态、动作、字段
-│   ├── rules/<subject>.yaml  #   业务规则（constraint / invariant / policy）
-│   └── states/<machine>.yaml #   状态机（transitions 定义合法转换）
+│   └── rules/<subject>.yaml  #   业务规则（constraint / invariant / policy）
 │
 ├── platform/                 # ④ 平台契约（工程约束）
 │   ├── environments.yaml     #   环境清单与差异
@@ -126,8 +126,8 @@ contracts/
 |---|---|
 | `_meta/README.md` | 写 / 改任何契约字段前 |
 | `data/README.md` | 加表 / 写查询前 |
-| `capabilities/README.md` | 加 API / 异步任务 / 跨模块 service 前 |
-| `features/README.md` | 改状态机 / 规则前 |
+| `capabilities/README.md` | 加 API / 生命周期 / 异步任务 / 跨模块 service 前 |
+| `features/README.md` | 改规则前 |
 | `features/README.md` | 加页面 / 用户旅程前 |
 | `platform/README.md` | 改错误码 / 权限 / 配置 / 观测约定前 |
 
@@ -144,7 +144,7 @@ contracts/
 | 组 | 示例 |
 |---|---|
 | data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_account_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
-| capabilities | `cap.services.account.get`、`cap.events.token.purge_expired`、`feature.rules.account.number_format`、`feature.states.account`、`cap.events.account.created`、`cap.protocols.http.account.create` |
+| capabilities | `cap.services.account.get`、`cap.lifecycles.account`、`cap.events.token.purge_expired`、`feature.rules.account.number_format`、`cap.events.account.created`、`cap.protocols.http.account.create` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
 | platform | `platform.errors.ACCOUNT_NOT_FOUND`、`platform.security.permissions.account_read`、`platform.security.roles.admin`、`platform.analytics.events.page.account_list_viewed` |
 
@@ -171,27 +171,29 @@ contracts/
 ```
 feature ──> capabilities ──> data
               ├── services ──> data.queries
-              ├── services ──> rules / states / events
+              ├── services ──> lifecycles / rules / events
+              ├── lifecycles ──> services（step 锚点）
               └── events ──> services / topics
 ```
 
-契约依赖只有这一条链，**没有反向**。capabilities 内部允许 `services → rules/states/events`（业务依据）；`rules/states` 允许引用 `data.entities.*` 作为业务主体，但禁止引用 `data.tables` / `data.queries` / `data.storage`。
+契约依赖只有这一条链，**没有反向**。capabilities 内部允许 `services → lifecycles/rules/events`（业务依据）；`lifecycles/rules` 允许引用 `data.entities.*` 作为业务主体，但禁止引用 `data.tables` / `data.queries` / `data.storage`。
 
 | 环节 | 职责 | 锚点写在哪 |
 |---|---|---|
-| feature | 定义用户功能 | 锚 `capabilities`（service / rule / state） |
-| capabilities | 实现 + 业务规格 | service 锚 `data`（steps → queries；写表由 query 反向推导）；service 锚 `rules/states/events` |
+| feature | 定义用户功能 | 锚 `capabilities`（service / lifecycle / rule / event） |
+| capabilities | 实现 + 业务规格 | service 锚 `data`（steps → queries；写表由 query 反向推导）；service 锚 `lifecycles/rules/events` |
 | data | 持久化 | 无下游 |
 
 **所有跨层关系只在上游写一处**：
 
 | 边 | 写在 | 字段 |
 |---|---|---|
-| feature → capabilities | 页面契约 | `capability:` / `feature.rules.*` / `feature.states.*` |
+| feature → capabilities | 页面契约 | `capability:` / `feature.rules.*` / `cap.lifecycles.*` |
 | capabilities/protocols → capabilities/services | protocol operation | `x-service` |
 | capabilities/services → capabilities/services | service steps | `kind: service` + `service` |
 | capabilities/services → features/rules | service steps | `kind: logic/transition` + `rules` |
-| capabilities/services → features/states | service steps | `kind: transition` + `transitions` |
+| capabilities/services → capabilities/lifecycles | service steps | `lifecycle`（create/destroy/transition） |
+| capabilities/lifecycles → capabilities/services | lifecycle action | `step` / `implemented_by`（由 step.lifecycle 生成） |
 | capabilities/services → capabilities/events | service steps | `kind: logic/transition` + `events` |
 | capabilities/events → capabilities/services | job | `service` |
 | capabilities/events → capabilities/events | job | `trigger.topic` |
@@ -214,9 +216,9 @@ capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，�
 
 理由：service 是规则的实现，**实现不反向声明"我实现了谁"**——那由 `implemented_by` / `emitted_by` 锚点。两处都写必然漂移。
 
-capabilities 内部允许 `services → rules/states/events`：`kind: logic/transition` 的 `rules`、`kind: transition` 的 `transitions`、`kind: logic/transition` 的 `events`。这是同组内的业务依据，不是跨层引用。
+capabilities 内部允许 `services → lifecycles/rules/events`：`kind: logic/transition` 的 `rules`、step 的 `lifecycle`、`kind: logic/transition` 的 `events`。这是同组内的业务依据，不是跨层引用。
 
-`rules` / `states` 允许引用 `data.entities.*` 作为业务主体（状态机的 `subject`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。`business.*` 已全部移除。
+`lifecycles` / `rules` 允许引用 `data.entities.*` 作为业务主体（生命周期的 `subjects`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。`business.*` 已全部移除。
 
 ### 3.3 图校验（⬜ P2）
 
@@ -247,7 +249,7 @@ feature.pages.account_list
        └─ rules → feature.rules.account.*
             └─ implemented_by → cap.services.account.create
 
-feature.states.account ─subject→ data.entities.account ─table→ data.tables.account
+cap.lifecycles.account ─subjects→ data.entities.account ─table→ data.tables.account
 ```
 
 ### 3.4 契约变更流程
@@ -331,7 +333,7 @@ table:
 | `capabilities/events/*` | 一模块一文件 | 120 |
 | `capabilities/events/*` | 一业务主体一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
-| `features/states/*` | 一状态机一文件 | 150 |
+| `capabilities/lifecycles/*` | 一主体一文件 | 150 |
 | `features/rules/*` | 一规则集一文件 | 120 |
 | `features/pages/*` | 一页面一文件 | 150 |
 | `platform/**` | 一关注点一文件 | 150 |
@@ -445,7 +447,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | openapi | 合并 spec 并展开 service schemas | ✅ |
 | features | 路由、页面骨架、类型 | ⬜ P2 |
 | platform | 配置校验、常量、CSS 变量 | ⬜ P2 |
-| rules/states | `feature.rules` / `feature.states` → 校验函数 / 状态机 | ⬜ P2 |
+| rules/lifecycles | `feature.rules` / `cap.lifecycles` → 校验函数 / 生命周期 | ⬜ P2 |
 | service / usecase / handler / worker | apps 代码生成 | ⬜ P2 |
 
 已实现 4 个契约生成器；apps 代码生成属于实现层，不在契约阶段生成。

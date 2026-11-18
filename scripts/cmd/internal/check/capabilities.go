@@ -3,7 +3,7 @@
 //   - events：topics（payload/发布/订阅）与 jobs 的 trigger/retry/concurrency
 //   - events：payload/版本/生产与消费锚点
 //   - protocols：x-service 绑定、默认错误响应与组件引用
-//   - features：规则结构与服务锚点、状态机穷举与转换
+//   - features：规则结构与服务锚点；capabilities：生命周期结构/锚点
 package check
 
 import (
@@ -19,6 +19,10 @@ import (
 type returnType struct {
 	typ      string
 	nullable bool
+}
+
+type lifecycleAction struct {
+	kind string
 }
 
 type serviceMeta struct {
@@ -44,7 +48,7 @@ var stepKindFields = map[string][]string{
 	"query":      {"queries", "output"},
 	"service":    {"services"},
 	"logic":      {"input", "output", "queries", "events", "rules"},
-	"transition": {"input", "transitions", "output", "queries", "events", "rules"},
+	"transition": {"input", "output", "queries", "events", "rules"},
 	"tx_begin":   {},
 	"tx_commit":  {},
 }
@@ -60,9 +64,9 @@ func (c *Checker) checkCapabilities() {
 		c.rulef("schema.load", "load feature.rules schema: %v", err)
 		return
 	}
-	stateSchema, err := c.loadSchemaByType("feature.states")
+	lifecycleSchema, err := c.loadSchemaByType("cap.lifecycles")
 	if err != nil {
-		c.rulef("schema.load", "load feature.states schema: %v", err)
+		c.rulef("schema.load", "load cap.lifecycles schema: %v", err)
 		return
 	}
 	eventSchema, err := c.loadSchemaByType("cap.events")
@@ -75,7 +79,7 @@ func (c *Checker) checkCapabilities() {
 		c.rulef("schema.load", "load cap.protocols.http schema: %v", err)
 		return
 	}
-	for _, s := range []*Schema{serviceSchema, ruleSchema, stateSchema, eventSchema, httpSchema} {
+	for _, s := range []*Schema{serviceSchema, ruleSchema, lifecycleSchema, eventSchema, httpSchema} {
 		c.checkRules(s)
 		c.checkTargets(s)
 	}
@@ -111,6 +115,9 @@ func (c *Checker) checkCapabilities() {
 	directWrites := map[string]bool{}
 	serviceMetaByID := map[string]serviceMeta{}
 	serviceItemIDs := map[string]bool{}
+	stepIDs := map[string]bool{}
+	stepKinds := map[string]string{}
+	stepLifecycle := map[string][]string{}
 	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -227,6 +234,23 @@ func (c *Checker) checkCapabilities() {
 				}
 			}
 			c.serviceQueries[id] = stepQueries
+			for _, rawStep := range asList(item["steps"]) {
+				step, _ := asMap(rawStep)
+				sid, _ := step["id"].(string)
+				if sid == "" {
+					continue
+				}
+				stepID := id + "." + sid
+				stepIDs[stepID] = true
+				kind, _ := step["kind"].(string)
+				stepKinds[stepID] = kind
+				for _, rawL := range asList(step["lifecycle"]) {
+					action, _ := rawL.(string)
+					if action != "" {
+						stepLifecycle[stepID] = append(stepLifecycle[stepID], action)
+					}
+				}
+			}
 		}
 	}
 
@@ -321,18 +345,24 @@ func (c *Checker) checkCapabilities() {
 			eventIDs[id] = true
 		}
 	}
-	transitionIDs := map[string]bool{}
-	for _, file := range glob(c.root, filepath.Join(stateSchema.Targets.Dir, stateSchema.Targets.Glob)) {
+	lifecycleActions := map[string]lifecycleAction{}
+	for _, file := range glob(c.root, filepath.Join(lifecycleSchema.Targets.Dir, lifecycleSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
 			continue
 		}
 		fileID, _ := doc["id"].(string)
+		if _, ok := asMap(doc["create"]); ok {
+			lifecycleActions[fileID+".create"] = lifecycleAction{kind: "create"}
+		}
+		if _, ok := asMap(doc["destroy"]); ok {
+			lifecycleActions[fileID+".destroy"] = lifecycleAction{kind: "destroy"}
+		}
 		for _, raw := range asList(doc["transitions"]) {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
 			if name != "" {
-				transitionIDs[fileID+"."+name] = true
+				lifecycleActions[fileID+"."+name] = lifecycleAction{kind: "transition"}
 			}
 		}
 	}
@@ -351,7 +381,7 @@ func (c *Checker) checkCapabilities() {
 			if name == "" {
 				continue
 			}
-			c.checkServiceItem(item, relPath(c.root, file), fileID+"."+name, module, serviceMetaByID, ruleIDs, eventIDs, transitionIDs, typeNames)
+			c.checkServiceItem(item, relPath(c.root, file), fileID+"."+name, module, serviceMetaByID, ruleIDs, eventIDs, lifecycleActions, typeNames)
 		}
 	}
 
@@ -365,12 +395,18 @@ func (c *Checker) checkCapabilities() {
 		}
 		c.checkRuleDoc(doc, relPath(c.root, file), ruleSchema, serviceItemIDs)
 	}
-	for _, file := range glob(c.root, filepath.Join(stateSchema.Targets.Dir, stateSchema.Targets.Glob)) {
+	actionSteps := map[string][]string{}
+	for stepID, actions := range stepLifecycle {
+		for _, action := range actions {
+			actionSteps[action] = append(actionSteps[action], stepID)
+		}
+	}
+	for _, file := range glob(c.root, filepath.Join(lifecycleSchema.Targets.Dir, lifecycleSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
 			continue
 		}
-		c.checkStateDoc(doc, relPath(c.root, file), stateSchema, serviceItemIDs, eventIDs, ruleIDs)
+		c.checkLifecycleDoc(doc, relPath(c.root, file), lifecycleSchema, stepIDs, stepKinds, actionSteps, eventIDs, ruleIDs)
 	}
 	jobServices := c.checkEventsDoc(eventSchema, serviceMetaByID, serviceItemIDs)
 	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, jobServices)
@@ -453,7 +489,7 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 	}
 }
 
-func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, transitionIDs map[string]bool, typeNames map[string]bool) {
+func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, lifecycleActions map[string]lifecycleAction, typeNames map[string]bool) {
 	steps := asList(doc["steps"])
 	if len(steps) == 0 {
 		c.rulef("service-structure", "%s: service requires steps", rel)
@@ -494,7 +530,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		}
 		checkInputValues(input)
 		allowed := map[string]bool{
-			"id": true, "kind": true, "summary": true, "depends_on": true, "errors": true,
+			"id": true, "kind": true, "summary": true, "depends_on": true, "errors": true, "lifecycle": true,
 		}
 		for _, field := range stepKindFields[kind] {
 			allowed[field] = true
@@ -611,21 +647,34 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			}
 			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
 		case "transition":
-			trs := asList(step["transitions"])
-			if len(trs) == 0 {
-				c.rulef("service-steps-kind", "%s: step %s kind=transition requires transitions", rel, stepID)
-			}
-			for _, rawTr := range trs {
-				tr, _ := rawTr.(string)
-				if !transitionIDs[tr] {
-					c.rulef("service-ref", "%s: step %s unknown transition %s", rel, stepID, tr)
-				}
-			}
 			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
 		case "tx_begin", "tx_commit":
 			// 事务边界只允许 id/kind/summary，由 checkTransactionSteps 统一校验。
 		default:
 			c.rulef("service-structure", "%s: step %s kind must be query/service/logic/transition/tx_begin/tx_commit", rel, stepID)
+		}
+
+		lifecycles := asList(step["lifecycle"])
+		for _, rawL := range lifecycles {
+			actionID, _ := rawL.(string)
+			action, ok := lifecycleActions[actionID]
+			if !ok {
+				c.rulef("service-ref", "%s: step %s unknown lifecycle action %s", rel, stepID, actionID)
+				continue
+			}
+			switch action.kind {
+			case "create":
+				if kind != "logic" && kind != "query" {
+					c.rulef("service-steps-kind", "%s: step %s create lifecycle action %s requires logic/query", rel, stepID, actionID)
+				}
+			case "destroy", "transition":
+				if kind != "transition" {
+					c.rulef("service-steps-kind", "%s: step %s %s lifecycle action %s requires transition", rel, stepID, action.kind, actionID)
+				}
+			}
+		}
+		if kind == "transition" && len(lifecycles) == 0 {
+			c.rulef("service-steps-kind", "%s: step %s kind=transition requires lifecycle", rel, stepID)
 		}
 
 		if kind == "logic" || kind == "transition" {
@@ -994,84 +1043,207 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 	}
 }
 
-func (c *Checker) checkStateDoc(doc map[string]any, rel string, schema *Schema, serviceIDs, eventIDs, ruleIDs map[string]bool) {
+func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Schema, stepIDs map[string]bool, stepKinds map[string]string, actionSteps map[string][]string, eventIDs, ruleIDs map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})
 	c.checkTargetFileName(schema, filepath.Base(rel), rel)
 	fileID, _ := doc["id"].(string)
 	want := schema.Targets.FileID(filepath.Base(rel))
 	if fileID != want {
-		c.rulef("state-structure", "%s: id %q must be %q", rel, fileID, want)
+		c.rulef("lifecycle-structure", "%s: id %q must be %q", rel, fileID, want)
 	}
+
+	statusEnum := ""
+	for _, raw := range asList(doc["subjects"]) {
+		subject, _ := raw.(string)
+		ent := c.entities[subject]
+		if ent == nil {
+			c.rulef("lifecycle-subject", "%s: unknown subject %s", rel, subject)
+			continue
+		}
+		var statusType string
+		for _, f := range ent.Fields {
+			if f.Name == "Status" && !f.IsRelation {
+				statusType = f.Type
+				break
+			}
+		}
+		statusType = strings.TrimPrefix(statusType, "*")
+		if statusType == "" {
+			c.rulef("lifecycle-subject", "%s: subject %s has no status field", rel, subject)
+			continue
+		}
+		if !strings.HasPrefix(statusType, "data.enums.") {
+			c.rulef("lifecycle-subject", "%s: subject %s status must be data.enums.*, got %s", rel, subject, statusType)
+			continue
+		}
+		if statusEnum == "" {
+			statusEnum = statusType
+		} else if statusEnum != statusType {
+			c.rulef("lifecycle-subject", "%s: subjects must share one status enum, got %s and %s", rel, statusEnum, statusType)
+		}
+	}
+	enumValues := c.enumValues[statusEnum]
 	stateNames := map[string]bool{}
 	for _, raw := range asList(doc["states"]) {
 		item, _ := asMap(raw)
 		name, _ := item["name"].(string)
 		if stateNames[name] {
-			c.rulef("state-structure", "%s: duplicate state %s", rel, name)
+			c.rulef("lifecycle-structure", "%s: duplicate state %s", rel, name)
 		}
 		stateNames[name] = true
+		if enumValues != nil && !enumValues[name] {
+			c.rulef("lifecycle-subject", "%s: state %s is not a value of %s", rel, name, statusEnum)
+		}
 	}
 	initial, _ := doc["initial"].(string)
 	if !stateNames[initial] {
-		c.rulef("state-structure", "%s: initial %s is not a declared state", rel, initial)
+		c.rulef("lifecycle-structure", "%s: initial %s is not a declared state", rel, initial)
 	}
-	nonTerminalOut := map[string]bool{}
+	final, _ := doc["final"].(string)
+	if final != "" && !stateNames[final] {
+		c.rulef("lifecycle-structure", "%s: final %s is not a declared state", rel, final)
+	}
+
+	checkStep := func(actionID, step, kind string) {
+		if step == "" {
+			c.rulef("lifecycle-steps", "%s: %s requires step", rel, actionID)
+			return
+		}
+		if !stepIDs[step] {
+			c.rulef("lifecycle-steps", "%s: %s unknown step %s", rel, actionID, step)
+			return
+		}
+		if kind == "create" {
+			if k := stepKinds[step]; k != "logic" && k != "query" {
+				c.rulef("lifecycle-steps", "%s: %s step %s must be logic/query, got %s", rel, actionID, step, k)
+			}
+		} else if stepKinds[step] != "transition" {
+			c.rulef("lifecycle-steps", "%s: %s step %s must be transition, got %s", rel, actionID, step, stepKinds[step])
+		}
+		if !containsString(actionSteps[actionID], step) {
+			c.rulef("lifecycle-steps", "%s: %s step %s must declare lifecycle %s", rel, actionID, step, actionID)
+		}
+	}
+
+	create, hasCreate := asMap(doc["create"])
+	if hasCreate {
+		actionID := fileID + ".create"
+		step, _ := create["step"].(string)
+		checkStep(actionID, step, "create")
+		if got := actionSteps[actionID]; len(got) != 1 {
+			c.rulef("lifecycle-steps", "%s: %s must be implemented by exactly one step, got %v", rel, actionID, got)
+		}
+	}
+	destroy, hasDestroy := asMap(doc["destroy"])
+	if hasDestroy {
+		actionID := fileID + ".destroy"
+		step, _ := destroy["step"].(string)
+		checkStep(actionID, step, "destroy")
+		if got := actionSteps[actionID]; len(got) != 1 {
+			c.rulef("lifecycle-steps", "%s: %s must be implemented by exactly one step, got %v", rel, actionID, got)
+		}
+		for _, rawFrom := range asList(destroy["from"]) {
+			from, _ := rawFrom.(string)
+			if !stateNames[from] {
+				c.rulef("lifecycle-structure", "%s: destroy unknown from state %s", rel, from)
+			}
+			if final != "" && from == final {
+				c.rulef("lifecycle-exhaustive", "%s: final state %s must not be a destroy source", rel, final)
+			}
+		}
+		to, _ := destroy["to"].(string)
+		if final != "" {
+			if to != final {
+				c.rulef("lifecycle-structure", "%s: destroy.to %q must equal final %q", rel, to, final)
+			}
+		} else if to != "" {
+			c.rulef("lifecycle-structure", "%s: destroy.to requires final", rel)
+		}
+		for _, rawEv := range asList(destroy["side_effects"]) {
+			ev, _ := rawEv.(string)
+			if !eventIDs[ev] {
+				c.rulef("lifecycle-structure", "%s: destroy unknown event %s", rel, ev)
+			}
+		}
+	}
+
 	transitionNames := map[string]bool{}
+	outgoing := map[string]bool{}
 	for _, raw := range asList(doc["transitions"]) {
 		item, _ := asMap(raw)
 		name, _ := item["name"].(string)
+		actionID := fileID + "." + name
 		if transitionNames[name] {
-			c.rulef("state-exhaustive", "%s: duplicate transition %s", rel, name)
+			c.rulef("lifecycle-exhaustive", "%s: duplicate transition %s", rel, name)
 		}
 		transitionNames[name] = true
-		from := asList(item["from"])
-		fromNames := map[string]bool{}
-		for _, rawFrom := range from {
+		for _, rawFrom := range asList(item["from"]) {
 			s, _ := rawFrom.(string)
-			fromNames[s] = true
 			if !stateNames[s] {
-				c.rulef("state-structure", "%s: transition %s unknown from state %s", rel, name, s)
+				c.rulef("lifecycle-structure", "%s: transition %s unknown from state %s", rel, name, s)
 			}
-			nonTerminalOut[s] = true
+			outgoing[s] = true
+			if final != "" && s == final {
+				c.rulef("lifecycle-exhaustive", "%s: final state %s must not be a transition source", rel, final)
+			}
 		}
 		to, _ := item["to"].(string)
 		if !stateNames[to] {
-			c.rulef("state-structure", "%s: transition %s unknown to state %s", rel, name, to)
+			c.rulef("lifecycle-structure", "%s: transition %s unknown to state %s", rel, name, to)
+		}
+		if final != "" && to == final {
+			c.rulef("lifecycle-exhaustive", "%s: transition %s must not target final %s; use destroy", rel, name, final)
 		}
 		if code, _ := item["on_violation"].(string); code != "" && !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
-			c.rulef("state-structure", "%s: transition %s unknown on_violation %s", rel, name, code)
+			c.rulef("lifecycle-structure", "%s: transition %s unknown on_violation %s", rel, name, code)
 		}
 		guard, _ := asMap(item["guard"])
 		if guard == nil {
 			if _, ok := item["guard"].(bool); !ok {
-				c.rulef("state-structure", "%s: transition %s guard must be true or { rule: feature.rules.* }", rel, name)
+				c.rulef("lifecycle-structure", "%s: transition %s guard must be true or { rule: feature.rules.* }", rel, name)
 			}
 		} else if rule, _ := guard["rule"].(string); !ruleIDs[rule] {
-			c.rulef("state-structure", "%s: transition %s unknown guard rule %s", rel, name, rule)
+			c.rulef("lifecycle-structure", "%s: transition %s unknown guard rule %s", rel, name, rule)
 		}
-		for _, rawEvent := range asList(item["side_effects"]) {
-			ev, _ := rawEvent.(string)
+		for _, rawEv := range asList(item["side_effects"]) {
+			ev, _ := rawEv.(string)
 			if !eventIDs[ev] {
-				c.rulef("state-structure", "%s: transition %s unknown event %s", rel, name, ev)
+				c.rulef("lifecycle-structure", "%s: transition %s unknown event %s", rel, name, ev)
 			}
 		}
-		for _, rawSvc := range asList(item["implemented_by"]) {
-			svc, _ := rawSvc.(string)
-			if !serviceIDs[svc] {
-				c.rulef("state-structure", "%s: transition %s unknown service %s", rel, name, svc)
-			}
+		impl := stringList(item["implemented_by"])
+		if len(impl) == 0 {
+			c.rulef("lifecycle-steps", "%s: transition %s requires implemented_by", rel, name)
+		}
+		for _, step := range impl {
+			checkStep(actionID, step, "transition")
+		}
+		implSet := map[string]bool{}
+		for _, step := range impl {
+			implSet[step] = true
+		}
+		actionSet := map[string]bool{}
+		for _, step := range actionSteps[actionID] {
+			actionSet[step] = true
+		}
+		if !sameSet(implSet, actionSet) {
+			c.rulef("lifecycle-steps", "%s: transition %s implemented_by %v must match step.lifecycle %v", rel, name, impl, actionSteps[actionID])
 		}
 	}
-	for _, raw := range asList(doc["states"]) {
-		item, _ := asMap(raw)
-		name, _ := item["name"].(string)
-		terminal, _ := item["terminal"].(bool)
-		if !terminal && !nonTerminalOut[name] {
-			c.rulef("state-exhaustive", "%s: non-terminal state %s has no outgoing transition", rel, name)
+	for _, rawFrom := range asList(destroy["from"]) {
+		from, _ := rawFrom.(string)
+		outgoing[from] = true
+	}
+	for state := range stateNames {
+		if state == final {
+			if outgoing[state] {
+				c.rulef("lifecycle-exhaustive", "%s: final state %s must not have outgoing transitions", rel, state)
+			}
+			continue
 		}
-		if terminal && nonTerminalOut[name] {
-			c.rulef("state-exhaustive", "%s: terminal state %s must not have outgoing transitions", rel, name)
+		if !outgoing[state] {
+			c.rulef("lifecycle-exhaustive", "%s: non-final state %s has no outgoing transition", rel, state)
 		}
 	}
 	for _, raw := range asList(doc["forbidden_examples"]) {
@@ -1079,19 +1251,36 @@ func (c *Checker) checkStateDoc(doc map[string]any, rel string, schema *Schema, 
 		from, _ := item["from"].(string)
 		tr, _ := item["transition"].(string)
 		if !stateNames[from] {
-			c.rulef("state-structure", "%s: forbidden example unknown from state %s", rel, from)
+			c.rulef("lifecycle-structure", "%s: forbidden example unknown from state %s", rel, from)
 		}
 		if !transitionNames[tr] {
-			c.rulef("state-structure", "%s: forbidden example unknown transition %s", rel, tr)
+			c.rulef("lifecycle-structure", "%s: forbidden example unknown transition %s", rel, tr)
+			continue
+		}
+		allowed := false
+		for _, rawT := range asList(doc["transitions"]) {
+			t, _ := asMap(rawT)
+			if n, _ := t["name"].(string); n != tr {
+				continue
+			}
+			for _, rawFrom := range asList(t["from"]) {
+				if s, _ := rawFrom.(string); s == from {
+					allowed = true
+				}
+			}
+		}
+		if allowed {
+			c.rulef("lifecycle-structure", "%s: forbidden example %s from %s is actually allowed", rel, tr, from)
+		}
+	}
+	for _, raw := range asList(doc["idempotent_transitions"]) {
+		name, _ := raw.(string)
+		if !transitionNames[name] {
+			c.rulef("lifecycle-structure", "%s: idempotent transition %s does not exist", rel, name)
 		}
 	}
 }
 
-// checkEventsDoc 校验合并后的异步事件层：
-//   - topics：发布/订阅主题（payload、emitted_by、consumers）
-//   - jobs：异步任务（service、trigger cron/topic、retry、concurrency）
-//
-// 返回被 job 引用的 service 集合，供 HTTP 绑定互斥校验。
 func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceMeta, serviceIDs map[string]bool) map[string]bool {
 	files := glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
 	topicIDs := map[string]bool{}

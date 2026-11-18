@@ -548,6 +548,32 @@ func TestRenderEvents(t *testing.T) {
 	}
 }
 
+func TestRenderLifecycle(t *testing.T) {
+	s := loadSchemaByType(t, "cap.lifecycles")
+	b, err := RenderLifecycle(s, "invoice", "invoice", "发票生命周期")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["id"] != "cap.lifecycles.invoice" {
+		t.Fatalf("id = %v", doc["id"])
+	}
+	if doc["initial"] != "active" || doc["final"] != "active" {
+		t.Fatalf("initial/final = %v/%v", doc["initial"], doc["final"])
+	}
+	subjects, _ := doc["subjects"].([]any)
+	if len(subjects) != 1 || subjects[0] != "data.entities.invoice" {
+		t.Fatalf("subjects = %#v", subjects)
+	}
+	states, _ := doc["states"].([]any)
+	if len(states) != 1 {
+		t.Fatalf("states = %#v", states)
+	}
+}
+
 func TestServiceInterfaceName(t *testing.T) {
 	cases := []struct{ owner, file, want string }{
 		{"account", "account", "AccountService"},

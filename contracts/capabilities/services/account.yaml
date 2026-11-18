@@ -140,6 +140,7 @@ services:
           - "feature.rules.account.number_unique"
           - "feature.rules.account.own_pair"
           - "feature.rules.account.nickname_length"
+        lifecycle: [ cap.lifecycles.account.create ]
       - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: update
@@ -224,13 +225,11 @@ services:
           - query: data.queries.account.soft_delete_account
             input:
               - { name: id, value: params.id, description: "待软删账号 ID" }
-        events:
-          - cap.events.account.deleted
         rules:
           - "feature.rules.account.deleted_cannot_modify"
           - "feature.rules.account.delete_revokes_auth"
           - "feature.rules.account.deleted_status_consistent"
-        transitions: [ feature.states.account.delete ]
+        lifecycle: [ cap.lifecycles.account.destroy ]
       - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: activate
@@ -247,13 +246,13 @@ services:
       - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: target_status
         kind: logic
-        summary: "按状态机转换确定激活目标状态"
+        summary: "按生命周期动作确定激活目标状态"
         output:
           - { name: status, type: data.enums.account_status, description: "目标状态" }
         errors: [ ]
       - id: transition
         kind: transition
-        summary: "按账号状态机执行 activate / reactivate"
+        summary: "按账号生命周期执行 activate / reactivate"
         output:
           - { name: account, type: data.entities.account, description: "激活后的账号" }
         errors:
@@ -268,7 +267,7 @@ services:
             input:
               - { name: id, value: params.id, description: "待激活账号 ID" }
               - { name: status, value: step.target_status.status, description: "目标状态：激活" }
-        transitions: [ feature.states.account.activate, feature.states.account.reactivate ]
+        lifecycle: [ cap.lifecycles.account.activate, cap.lifecycles.account.reactivate ]
       - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: suspend
@@ -286,13 +285,13 @@ services:
       - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: target_status
         kind: logic
-        summary: "按状态机转换确定封禁目标状态"
+        summary: "按生命周期动作确定封禁目标状态"
         output:
           - { name: status, type: data.enums.account_status, description: "目标状态" }
         errors: [ ]
       - id: transition
         kind: transition
-        summary: "按账号状态机执行 suspend"
+        summary: "按账号生命周期执行 suspend"
         input:
           - { name: reason, value: params.reason, description: "封禁原因，供审计或事件使用" }
         output:
@@ -309,5 +308,5 @@ services:
             input:
               - { name: id, value: params.id, description: "待封禁账号 ID" }
               - { name: status, value: step.target_status.status, description: "目标状态：封禁" }
-        transitions: [ feature.states.account.suspend ]
+        lifecycle: [ cap.lifecycles.account.suspend ]
       - { id: commit, kind: tx_commit, summary: "提交写事务" }

@@ -19,7 +19,7 @@ contracts/_meta/
 ├── data.queries.yaml     # data.queries 的字段树 + 值域 + 说明
 ├── cap.services.yaml       # cap.services 的 targets + 字段树（服务 + steps）
 ├── feature.rules.yaml      # feature.rules 的 targets + 字段树（业务规则）
-├── feature.states.yaml     # feature.states 的 targets + 字段树（状态机）
+├── cap.lifecycles.yaml     # cap.lifecycles 的 targets + 字段树（生命周期）
 ├── cap.events.yaml         # cap.events 的 targets + 字段树（topics + jobs）
 └── cap.protocols.http.yaml # cap.protocols.http 的 targets + 字段树（HTTP 绑定）
 
@@ -104,7 +104,7 @@ false，省略不写。槽位键出现在节点位置即报 `schema.slot-positio
 | `make contract-new type=data.queries name=note module=notes table=note`                                 | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在）                                       | 新建查询集时                |
 | `make contract-new type=cap.services name=invoice module=invoice`                                       | 按 `_meta/cap.services.yaml` 生成服务文件骨架（一个 service + 一条 logic step；interface 名由 owner_module + file 派生） | 新建服务契约前              |
 | `make contract-new type=feature.rules name=invoice module=invoice`                                      | 生成 feature.rules 骨架（一个 policy）                                                                                   | 新建规则集前                |
-| `make contract-new type=feature.states name=invoice module=invoice`                                     | 生成 feature.states 骨架（pending/active + activate）                                                                    | 新建状态机前                |
+| `make contract-new type=cap.lifecycles name=invoice module=invoice`                                     | 生成 cap.lifecycles 骨架（单状态 + initial/final）                                                                      | 新建生命周期前              |
 | `make contract-new type=cap.events name=invoice module=invoice`                                         | 生成 cap.events 骨架（一个 created topic）                                                            | 新建异步层前                |
 | `make contract-new type=cap.protocols.http name=invoice service=cap.services.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-service` 必填                                                                              | 新建 HTTP 绑定前            |
 | `make gen-graph`                                                                                        | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` / 锚点                                              | 改完表/实体/查询/service 后 |
@@ -116,8 +116,8 @@ false，省略不写。槽位键出现在节点位置即报 `schema.slot-positio
 `contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
 
 `contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.services` /
-`feature.rules` / `feature.states` / `cap.events` / `cap.protocols.http`；类型族与自定义类型来自 `_meta/_types.yaml`
-。cap.* 生成最小骨架（一个 service + logic step、一个 topic + job、一个规则、一个状态机、一个 operation），不生成
+`cap.lifecycles` / `feature.rules` / `cap.events` / `cap.protocols.http`；类型族与自定义类型来自 `_meta/_types.yaml`
+。cap.* 生成最小骨架（一个 service + logic step、一个生命周期、一个 topic + job、一个规则、一个 operation），不生成
 `types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要
 public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [<表>.pk]` 的接口骨架，不伪造 SQL。`contract-new`
 生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage` 条目内的

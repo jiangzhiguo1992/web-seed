@@ -1,0 +1,134 @@
+# cap.lifecycles：业务实体的生命周期：创建、状态转换与销毁。
+# 生命周期是能力层契约，不是 feature；每条边都锚到具体 service step。
+
+id: meta.cap.lifecycles
+type: cap.lifecycles
+title: "实体生命周期契约"
+targets:
+  dir: "contracts/capabilities/lifecycles"
+  glob: "*.yaml"
+  id: "cap.lifecycles.<file>"
+  naming: "snake_case"
+
+fields:
+  - name: id
+    type: string
+    required: true
+    pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$'
+    description: "契约 ID"
+
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明"
+
+  - name: owner_module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "生命周期归属模块"
+
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: list<string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: subjects
+    type: list<string>
+    required: true
+    min_items: 1
+    unique: true
+    pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
+    description: "生命周期作用的实体；共享同一 status 枚举时可多个"
+
+  - name: initial
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "初始状态；创建步骤必须把实体落在该状态"
+
+  - name: final
+    type: string
+    required: false
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "最终状态；没有终态时省略"
+
+  - name: create
+    type: object
+    required: false
+    description: "创建动作；step 由 step.lifecycle 反向生成"
+    fields:
+      - { name: step, type: string, required: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "创建实体的 service step ID" }
+
+  - name: destroy
+    type: object
+    required: false
+    description: "销毁动作；step 由 step.lifecycle 反向生成"
+    fields:
+      - { name: step, type: string, required: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁实体的 service step ID" }
+      - { name: from, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许销毁的源状态" }
+      - { name: to, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "销毁后的状态；有 final 时必须等于 final" }
+      - { name: side_effects, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁副作用事件" }
+
+  - name: states
+    type: list<object>
+    required: true
+    min_items: 1
+    description: "状态列表；状态名必须是 subjects 的 status 枚举值"
+    item_fields:
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "状态名" }
+      - { name: description, type: string, required: true, description: "状态说明" }
+
+  - name: transitions
+    type: list<object>
+    required: false
+    min_items: 1
+    description: "状态转换；create/destroy 之外的合法转换"
+    item_fields:
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "转换名" }
+      - { name: description, type: string, required: true, description: "转换说明" }
+      - { name: from, type: list<string>, required: true, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "源状态" }
+      - { name: to, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标状态" }
+      - name: guard
+        type: any
+        required: true
+        description: "守卫：true 表示无额外条件；{ rule: feature.rules.* } 表示结构化规则"
+      - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "非法转换错误码" }
+      - { name: side_effects, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "副作用事件" }
+      - { name: implemented_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 service step ID；由 step.lifecycle 生成" }
+
+  - name: forbidden_examples
+    type: list<object>
+    required: false
+    description: "非法转换示例；用于生成负向测试"
+    item_fields:
+      - { name: from, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "源状态" }
+      - { name: transition, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "转换名" }
+      - { name: reason, type: string, required: true, description: "非法原因" }
+
+  - name: idempotent_transitions
+    type: list<string>
+    required: false
+    unique: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "幂等转换"
+
+rules:
+  - { id: lifecycle-structure, text: "states 名唯一；initial/final 必须是已声明状态；transitions 的 from/to 必须是已声明状态；guard 只能是 true 或 { rule: feature.rules.* }；on_violation 必须存在；side_effects 必须指向存在的 cap.events.*；forbidden_examples 的 from/transition 必须存在且该 from 确实不在 transition.from 中；destroy.from/to 必须是已声明状态，有 final 时 destroy.to 必须等于 final", implemented_by: [ lifecycle-structure ] }
+  - { id: lifecycle-exhaustive, text: "非 final 状态必须有一条出边（transition 或 destroy）；final 不得有出边；转换名唯一", implemented_by: [ lifecycle-exhaustive ] }
+  - { id: lifecycle-subject, text: "subjects 必须存在；每个 subject 必须有 status 字段且类型是同一个 data.enums.*；states/initial/final/from/to 必须是该枚举的值", implemented_by: [ lifecycle-subject ] }
+  - { id: lifecycle-steps, text: "create.step/destroy.step/transitions[].implemented_by 必须是存在的 cap.services.<file>.<service>.<step>；step 的 lifecycle 必须反向引用同一动作；create 只能由 logic/query step 实现，destroy/transition 只能由 transition step 实现；create/destroy 各只能有一个 step", implemented_by: [ lifecycle-steps ] }

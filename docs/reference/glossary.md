@@ -28,7 +28,7 @@
 | 角色 | role | 权限点的集合 | group、team |
 | 能力 | capability | 可调用单元（HTTP / 异步 / service） | API、endpoint（仅指 HTTP 时可用） |
 | 功能 | feature | 用户可见的功能单元 | module、function |
-| 业务规格 | rules / states / events | 状态机、规则、事件；rules/states 在 features，events 在 capabilities | business、logic、core |
+| 业务规格 | rules / lifecycles / events | 规则、生命周期、事件；rules 在 features，lifecycles/events 在 capabilities | business、logic、core |
 | 血缘 | lineage | 契约之间的引用链路 | dependency graph |
 
 ## 命名约定

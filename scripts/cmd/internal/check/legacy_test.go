@@ -116,7 +116,7 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 	} else {
 		delete(c.accessBindings, id)
 	}
-	c.checkServiceItem(doc2, rel, id, module, metaByID, map[string]bool{}, map[string]bool{}, map[string]bool{}, typeNames)
+	c.checkServiceItem(doc2, rel, id, module, metaByID, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, typeNames)
 }
 
 // checkServicePersistenceDoc 校验单个 service 文档的写归属。

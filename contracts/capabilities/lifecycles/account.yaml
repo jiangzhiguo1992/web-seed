@@ -1,0 +1,56 @@
+# 账号生命周期：创建、状态转换与软删。
+
+id: cap.lifecycles.account
+summary: "账号生命周期"
+owner_module: account
+schema_version: 1
+stability: stable
+do_not:
+  - "account 生命周期必须穷举所有合法转换，未列出即非法"
+  - "封禁与软删不要混用：suspended 可恢复，deleted 不可"
+
+subjects:
+  - data.entities.account
+initial: pending
+final: deleted
+create:
+  step: cap.services.account.create.create
+destroy:
+  step: cap.services.account.delete.soft_delete
+  from: [pending, active]
+  to: deleted
+  side_effects: [cap.events.account.deleted]
+states:
+  - { name: pending, description: "待激活，不能登录" }
+  - { name: active, description: "正常，可登录" }
+  - { name: suspended, description: "已封禁，不能登录" }
+  - { name: deleted, description: "已软删，终态" }
+transitions:
+  - name: activate
+    description: "激活账号"
+    from: [pending]
+    to: active
+    guard: true
+    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    side_effects: [cap.events.account.activated]
+    implemented_by: [ cap.services.account.activate.transition ]
+  - name: suspend
+    description: "封禁账号"
+    from: [active]
+    to: suspended
+    guard: true
+    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    side_effects: [cap.events.account.suspended]
+    implemented_by: [ cap.services.account.suspend.transition ]
+  - name: reactivate
+    description: "解封"
+    from: [suspended]
+    to: active
+    guard: true
+    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    side_effects: [cap.events.account.reactivated]
+    implemented_by: [ cap.services.account.activate.transition ]
+forbidden_examples:
+  - { from: deleted, transition: activate, reason: "已删除不可激活" }
+  - { from: pending, transition: suspend, reason: "待激活账号不可直接封禁" }
+idempotent_transitions: []

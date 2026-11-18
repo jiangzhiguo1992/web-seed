@@ -21,7 +21,7 @@ import (
 
 func main() {
 	root := flag.String("root", "../..", "repo root")
-	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.protocols.http")
+	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | cap.lifecycles | feature.rules | cap.events | cap.protocols.http")
 	name := flag.String("name", "", "snake_case name")
 	module := flag.String("module", "", "owner_module / query module (default: name)")
 	table := flag.String("table", "", "table stem (default: name)")
@@ -34,7 +34,7 @@ func main() {
 	flag.Parse()
 
 	if *typ == "" || *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|feature.rules|feature.states|cap.events|cap.protocols.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
+		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|cap.events|cap.protocols.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
 		os.Exit(2)
 	}
 	if *module == "" {
@@ -56,7 +56,7 @@ func main() {
 		fail(err)
 	}
 	switch *typ {
-	case "data.tables", "data.entities", "data.queries", "cap.services", "feature.rules", "feature.states", "cap.events", "cap.protocols.http":
+	case "data.tables", "data.entities", "data.queries", "cap.services", "cap.lifecycles", "feature.rules", "cap.events", "cap.protocols.http":
 		if *out == "auto" {
 			if schema.Targets.Dir == "" {
 				fail(fmt.Errorf("targets.dir is empty"))
@@ -124,12 +124,12 @@ func main() {
 		}
 		writeOut(*out, b, "next: replace TODO; choose constraint/invariant/policy; reference the rule from a service step then run make gen-graph; implemented_by must be non-empty; register in contracts/index.yaml; make contract-check")
 
-	case "feature.states":
-		b, err := contractspec.RenderState(schema, *name, *module, *summary)
+	case "cap.lifecycles":
+		b, err := contractspec.RenderLifecycle(schema, *name, *module, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; exhaust states/transitions; set guard/side_effects; implemented_by is maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
+		writeOut(*out, b, "next: replace TODO; add subjects/states/initial/final/create/destroy/transitions; step refs are maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
 
 	case "cap.events":
 		b, err := contractspec.RenderEvents(schema, *name, *module, *summary)

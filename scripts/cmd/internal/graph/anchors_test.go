@@ -21,11 +21,11 @@ targets:
   glob: "*.yaml"
   id: "feature.rules.<file>"
 `)
-	writeFixture(t, root, "contracts/_meta/feature.states.yaml", `type: feature.states
+	writeFixture(t, root, "contracts/_meta/cap.lifecycles.yaml", `type: cap.lifecycles
 targets:
-  dir: contracts/features/states
+  dir: contracts/capabilities/lifecycles
   glob: "*.yaml"
-  id: "feature.states.<file>"
+  id: "cap.lifecycles.<file>"
 `)
 	writeFixture(t, root, "contracts/_meta/cap.events.yaml", `type: cap.events
 targets:
@@ -42,13 +42,18 @@ services:
         kind: logic
         rules: [feature.rules.x.r1]
         events: [cap.events.x.created]
+        lifecycle: [cap.lifecycles.x.create]
   - name: activate
     steps:
-      - id: activate
+      - id: transition
         kind: transition
-        transitions: [feature.states.x.activate]
         rules: [feature.rules.x.r1]
-        events: [cap.events.x.activated]
+        lifecycle: [cap.lifecycles.x.activate]
+  - name: delete
+    steps:
+      - id: soft_delete
+        kind: transition
+        lifecycle: [cap.lifecycles.x.destroy]
   - name: consume
     steps:
       - id: handle
@@ -59,9 +64,28 @@ rules:
   - id: feature.rules.x.r1
     implemented_by: []
 `)
-	writeFixture(t, root, "contracts/features/states/x.yaml", `id: feature.states.x
+	writeFixture(t, root, "contracts/capabilities/lifecycles/x.yaml", `id: cap.lifecycles.x
+subjects: [data.entities.x]
+initial: pending
+final: deleted
+create:
+  step: ""
+destroy:
+  step: ""
+  from: [pending]
+  to: deleted
+  side_effects: [cap.events.x.deleted]
+states:
+  - { name: pending, description: "p" }
+  - { name: active, description: "a" }
+  - { name: deleted, description: "d" }
 transitions:
   - name: activate
+    description: "a"
+    from: [pending]
+    to: active
+    guard: true
+    on_violation: platform.errors.COMMON_INTERNAL
     side_effects: [cap.events.x.activated]
     implemented_by: []
 `)
@@ -107,8 +131,7 @@ jobs:
 	}
 
 	checks := map[string]string{
-		"contracts/features/rules/x.yaml":  "implemented_by: [ cap.services.x.activate, cap.services.x.create ]",
-		"contracts/features/states/x.yaml": "implemented_by: [ cap.services.x.activate ]",
+		"contracts/features/rules/x.yaml": "implemented_by: [ cap.services.x.activate, cap.services.x.create ]",
 	}
 	for file, want := range checks {
 		b, err := os.ReadFile(filepath.Join(root, file))
@@ -117,6 +140,19 @@ jobs:
 		}
 		if !strings.Contains(string(b), want) {
 			t.Fatalf("%s missing %q:\n%s", file, want, b)
+		}
+	}
+	lifecycle, err := os.ReadFile(filepath.Join(root, "contracts/capabilities/lifecycles/x.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"step: cap.services.x.create.create",
+		"step: cap.services.x.delete.soft_delete",
+		"implemented_by: [ cap.services.x.activate.transition ]",
+	} {
+		if !strings.Contains(string(lifecycle), want) {
+			t.Fatalf("lifecycle missing %q:\n%s", want, lifecycle)
 		}
 	}
 	events, err := os.ReadFile(filepath.Join(root, "contracts/capabilities/events/x.yaml"))

@@ -1,27 +1,29 @@
 # 能力契约（capabilities）
 
-> 能力层分三类： **services**（服务）、 **events**（异步事件与任务）、 **protocols**（传输协议）。
-> 业务规则与状态机属于功能规格，放在 `features/{rules,states}`。
-> 依赖方向：`protocols → services → data.queries`；`services → feature.rules / feature.states / events`；
-> `events → services`；`features.pages → services`。
+> 能力层分四类： **services**（服务）、 **lifecycles**（生命周期）、 **events**（异步事件与任务）、 **protocols**（传输协议）。
+> 业务规则仍属于功能规格，放在 `features/rules`；生命周期是能力层契约。
+> 依赖方向：`protocols → services → data.queries`；`services → feature.rules / cap.lifecycles / events`；
+> `lifecycles → services`；`events → services`；`features.pages → services / lifecycles`。
 
 ---
 
-## 1. 三类职责
+## 1. 四类职责
 
 | 目录                                 | 回答的问题                         | 真相源内容                                           | 产物                                   |
 |--------------------------------------|------------------------------------|------------------------------------------------------|----------------------------------------|
 | `services/<module>.yaml`             | 模块能提供哪些可调用单元、如何实现 | services[]、steps、input/output 数据链、事务、写归属 | Go interface、usecase 骨架、写归属校验 |
+| `lifecycles/<subject>.yaml`          | 实体如何创建、流转与销毁           | subjects[]、initial/final、create/destroy、transitions | 生命周期常量、转换表、非法动作测试     |
 | `events/<module>.yaml`               | 哪些异步主题与任务、如何触发与重试 | topics[]（payload/发布/订阅）、jobs[]（trigger/retry） | 事件常量、payload 类型、worker 注册表  |
 | `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露           | path、method、status、header、schema 引用            | server 类型、client、合并 spec         |
 
 一句话区分：
 
 - **service = 一个可调用单元**，有明确的 params/returns（末位显式 `err`）和 steps；同步调用，不声明 trigger。
+- **lifecycle = 一个实体的创建、状态转换与销毁**，每个动作（create/destroy/transition）锚到具体 service step。
 - **event = 异步事实**，由 service step 的 `events` 发布到 topic，由 job 的 `trigger.topic` 订阅。
 - **job = 异步任务**，引用一个同步 service 作为 handler，声明 `trigger`（cron/topic）/retry/concurrency。
-- **step = 服务实现路径上的一步**，六类：query / service / logic / transition / tx_begin / tx_commit；其中 `transition` 是状态机转换，`tx_*` 是事务边界，二者不是一回事。
-- **rule / state 在 features**，被 service 的 `kind: logic` / `kind: transition` step 引用。
+- **step = 服务实现路径上的一步**，六类：query / service / logic / transition / tx_begin / tx_commit；其中 `transition` 执行生命周期动作，`tx_*` 是事务边界，二者不是一回事。
+- **rule 在 features**，被 service 的 `kind: logic` / `kind: transition` step 引用；**lifecycle 在 capabilities**。
 - **protocol = service 到传输协议的绑定**，只写协议差异。
 
 ---
@@ -33,10 +35,11 @@ protocols ──x-service──> services ──steps──> data.queries
      │                     │
      │                     ├──kind=service──> services（跨模块）
      │                     ├──rules─────────> features.rules
-     │                     ├──transition────> features.states
+     │                     ├──lifecycle────> lifecycles
      │                     └──event─────────> events
      ├──不引用 queries      └──kind=query────> 本模块 data.queries
 
+lifecycles ──step──> services
 events/jobs ──service──> services
 events/jobs ──trigger.topic──> events/topics
 ```
@@ -47,12 +50,13 @@ events/jobs ──trigger.topic──> events/topics
 | service → query      | `services/*.yaml` 的 steps         | `kind: query` + `query`                |
 | service → service    | `services/*.yaml` 的 steps         | `kind: service` + `service`            |
 | service → rule       | `services/*.yaml` 的 steps         | `kind: logic/transition` + `rules`     |
-| service → state      | `services/*.yaml` 的 steps         | `kind: transition` + `transitions`     |
+| service → lifecycle  | `services/*.yaml` 的 steps         | `lifecycle`（create/destroy/transition） |
+| lifecycle → service  | `lifecycles/*.yaml` 的 actions     | `step` / `implemented_by`（生成）      |
 | service → event      | `services/*.yaml` 的 steps         | `kind: logic/transition` + `events`    |
 | event/job → service  | `events/*.yaml` 的 jobs            | `service`                              |
 | event/job → topic    | `events/*.yaml` 的 jobs            | `trigger.topic`                        |
 | feature → service    | `features/**`                      | `capability: cap.services.*`           |
-| feature → rule/state | `features/{pages,rules,states}/**` | `feature.rules.*` / `feature.states.*` |
+| feature → rule/lifecycle | `features/**`                    | `feature.rules.*` / `cap.lifecycles.*` |
 
 **禁止**：
 
@@ -61,6 +65,7 @@ events/jobs ──trigger.topic──> events/topics
 - service 调用图成环。
 - job 引用被 protocol 绑定的 service（异步 handler 不对外暴露）。
 - service 或 events 声明 `business.*`（business 层已移除）。
+- lifecycle 引用不存在的 service step，或 step 不回引 lifecycle 动作。
 
 ---
 
@@ -94,11 +99,11 @@ service 项必须声明：
 | `query`      | `queries`                                                               | 调用本模块 `data.queries.*`；`queries[].input` 的 key 必须是查询参数名，必填参数必须全部出现，不写 `ctx`（生成器注入）；`step.errors` 缺省取所有 query 错误的并集 |
 | `service`    | `services`                                                              | 调用其他（或本模块）service；`services[].input[].name` 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`                                            |
 | `logic`      | `output` + `errors`；可选 `input` / `queries` / `rules` / `events`      | 手写实现；`queries` 是 `{query, input}` 对象列表；`input` 声明本步读取的入参与用途                                                                                |
-| `transition` | `transitions`；可选 `input` / `output` / `queries` / `rules` / `events` | 执行 `feature.states.*` 状态机转换                                                                                                                                |
+| `transition` | `lifecycle`（只能引用 destroy/transition）；可选 `input` / `output` / `queries` / `rules` / `events` | 执行生命周期动作；create 只能由 `logic`/`query` step 实现                                                                                                          |
 | `tx_begin`   | —                                                                       | 事务开始；只允许 `id` / `kind` / `summary`，`transaction≠none` 时必须是首步                                                                                       |
 | `tx_commit`  | —                                                                       | 事务提交；只允许 `id` / `kind` / `summary`，`transaction≠none` 时必须是末步，关闭不得遗漏                                                                          |
 
-字段按 kind 取交集：`id` / `kind` / `summary` 恒有；`input` 仅 `logic` / `transition`；`output` 仅 `query` / `logic` /
+字段按 kind 取交集：`id` / `kind` / `summary` 恒有；`lifecycle` 是公共反向引用；`input` 仅 `logic` / `transition`；`output` 仅 `query` / `logic` /
 `transition`；`errors` 仅 `query` / `service` / `logic` / `transition`；`depends_on` 除 tx 步骤外可选（按模板顺序书写）。
 
 - `input` 是 `{name, value, description}` 列表；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式；
@@ -132,15 +137,17 @@ service 项必须声明：
 
 ---
 
-## 4. 业务规格在 features
+## 4. lifecycles 与 features 规则
 
-`rules` / `states` 属于功能规格，放在 `contracts/features/{rules,states}/`：
+`rules` 仍属于功能规格，放在 `contracts/features/rules/`；`lifecycles` 属于能力层，放在
+`contracts/capabilities/lifecycles/`：
 
 - service 的 `kind: logic` step 用 `rules: [feature.rules.*]` 引用业务规则；
-- service 的 `kind: transition` step 用 `transitions: [feature.states.*]` 引用状态转换；
-- `feature.rules` / `feature.states` 的 `implemented_by` 反向指向 `cap.services.*`。
+- 任意 step 用 `lifecycle: [cap.lifecycles.*.*]` 回引生命周期动作（create/destroy/transition）；
+- `cap.lifecycles` 的 `create.step` / `destroy.step` / `transitions[].implemented_by` 由 `make gen-graph` 写回；
+- `feature.rules` 的 `implemented_by` 仍指向 service 项。
 
-capabilities 不再有 `rules/` / `states/` 目录。
+capabilities 不承载 `rules/` 目录；features 不承载 `states/` 目录。
 
 ---
 
@@ -213,6 +220,7 @@ contracts/capabilities/
 | 目录              | ID                          | 示例                         |
 |-------------------|-----------------------------|------------------------------|
 | `services/`       | `cap.services.<file>`       | `cap.services.account`       |
+| `lifecycles/`     | `cap.lifecycles.<file>`     | `cap.lifecycles.account`      |
 | `events/`         | `cap.events.<file>`         | `cap.events.account`         |
 | `protocols/http/` | `cap.protocols.http.<file>` | `cap.protocols.http.account` |
 
@@ -221,7 +229,7 @@ contracts/capabilities/
 - service 项：`cap.services.<file>.<snake_case(name)>`
 - job 项：`cap.events.<file>.<snake_case(name)>`
 - rule 项：显式 `id`
-- state 转换：`feature.states.<file>.<snake_case(transition)>`
+- lifecycle 动作：`cap.lifecycles.<file>.<create|destroy|name>`
 - topic 项：显式 `id`（`cap.events.<topic name>`）
 - step：步骤内 `id`，不是全局契约 ID
 
@@ -231,7 +239,7 @@ contracts/capabilities/
 
 - `services/*.yaml` 已合并原 methods + flows；每个 service 项都有 steps。
 - `events/*.yaml` 同时承载 topics 与 jobs；`services` 不再声明 `trigger/retry/concurrency`。
-- `features/rules/*` / `features/states/*` 承载业务规则与状态机；`capabilities/events/*` 承载异步主题与任务。
+- `capabilities/lifecycles/*` 承载生命周期；`features/rules/*` 承载业务规则；`capabilities/events/*` 承载异步主题与任务。
 - `protocols/http/*.yaml` 已全部使用 `x-service` 指向同步 service，response 用 `x-service-return` 绑定 returns。
 - `data.queries.*.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，不得为空。
 - 术语表在 `docs/reference/glossary.md`（review-only，不占契约组）。

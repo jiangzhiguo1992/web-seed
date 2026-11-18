@@ -102,13 +102,13 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 			},
 		}
 	}
-	c.checkServiceItem(doc([]any{map[string]any{"name": "account", "type": "any"}}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	c.checkServiceItem(doc([]any{map[string]any{"name": "account", "type": "any"}}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("covered output reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-output]") {
 		t.Fatalf("missing return not reported: %v", c.errs)
 	}
@@ -149,7 +149,7 @@ fields:
   - {name: persistence, type: any}
   - {name: services, type: any}
 `)
-	for _, typ := range []string{"feature.rules", "feature.states", "cap.events", "cap.protocols.http"} {
+	for _, typ := range []string{"feature.rules", "cap.lifecycles", "cap.events", "cap.protocols.http"} {
 		writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", "type: "+typ+`
 targets:
   dir: contracts/features/unused
@@ -417,27 +417,44 @@ rules:
 	}
 }
 
-func TestCheckStateDoc(t *testing.T) {
+func TestCheckLifecycleDoc(t *testing.T) {
 	root := t.TempDir()
-	schema := copyMeta(t, root, "feature.states")
-	serviceIDs := map[string]bool{"cap.services.x.activate": true}
-	rel := "contracts/features/states/x.yaml"
-	valid := `id: feature.states.x
+	schema := copyMeta(t, root, "cap.lifecycles")
+	rel := "contracts/capabilities/lifecycles/x.yaml"
+	stepIDs := map[string]bool{
+		"cap.services.x.create.create":       true,
+		"cap.services.x.delete.soft_delete":  true,
+		"cap.services.x.activate.transition": true,
+	}
+	stepKinds := map[string]string{
+		"cap.services.x.create.create":       "logic",
+		"cap.services.x.delete.soft_delete":  "transition",
+		"cap.services.x.activate.transition": "transition",
+	}
+	actionSteps := map[string][]string{
+		"cap.lifecycles.x.create":   {"cap.services.x.create.create"},
+		"cap.lifecycles.x.destroy":  {"cap.services.x.delete.soft_delete"},
+		"cap.lifecycles.x.activate": {"cap.services.x.activate.transition"},
+	}
+	valid := `id: cap.lifecycles.x
 summary: "x"
 owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
-machine: x
-subject: data.entities.x
-states:
-  - name: pending
-    description: "p"
-    terminal: false
-  - name: active
-    description: "a"
-    terminal: true
+subjects: [data.entities.x]
 initial: pending
+final: deleted
+create:
+  step: cap.services.x.create.create
+destroy:
+  step: cap.services.x.delete.soft_delete
+  from: [pending, active]
+  to: deleted
+states:
+  - { name: pending, description: "p" }
+  - { name: active, description: "a" }
+  - { name: deleted, description: "d" }
 transitions:
   - name: activate
     description: "a"
@@ -445,17 +462,22 @@ transitions:
     to: active
     guard: true
     on_violation: platform.errors.COMMON_INTERNAL
-    implemented_by: [cap.services.x.activate]
+    implemented_by: [cap.services.x.activate.transition]
 `
 	writeCapFile(t, root, rel, valid)
 	doc, err := loadYAML(filepath.Join(root, rel))
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &Checker{root: root, errCodeSet: map[string]bool{"COMMON_INTERNAL": true}}
-	c.checkStateDoc(doc, rel, schema, serviceIDs, map[string]bool{}, map[string]bool{})
+	c := &Checker{
+		root:       root,
+		errCodeSet: map[string]bool{"COMMON_INTERNAL": true},
+		enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true, "deleted": true}},
+		entities:   map[string]*entityInfo{"data.entities.x": {Fields: []entityFieldInfo{{Name: "Status", Type: "data.enums.x_status"}}}},
+	}
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, stepKinds, actionSteps, map[string]bool{}, map[string]bool{})
 	if len(c.errs) != 0 {
-		t.Fatalf("valid state machine reported: %v", c.errs)
+		t.Fatalf("valid lifecycle reported: %v", c.errs)
 	}
 
 	writeCapFile(t, root, rel, strings.Replace(valid, "initial: pending", "initial: missing", 1))
@@ -464,8 +486,8 @@ transitions:
 		t.Fatal(err)
 	}
 	c.errs = nil
-	c.checkStateDoc(doc, rel, schema, serviceIDs, map[string]bool{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[state-structure]") {
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, stepKinds, actionSteps, map[string]bool{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[lifecycle-structure]") {
 		t.Fatalf("unknown initial state not reported: %v", c.errs)
 	}
 }
@@ -514,27 +536,44 @@ components:
 	}
 }
 
-func TestCheckStateDocErrors(t *testing.T) {
+func TestCheckLifecycleDocErrors(t *testing.T) {
 	root := t.TempDir()
-	schema := copyMeta(t, root, "feature.states")
-	serviceIDs := map[string]bool{"cap.services.x.activate": true}
-	rel := "contracts/features/states/x.yaml"
-	valid := `id: feature.states.x
+	schema := copyMeta(t, root, "cap.lifecycles")
+	rel := "contracts/capabilities/lifecycles/x.yaml"
+	stepIDs := map[string]bool{
+		"cap.services.x.create.create":       true,
+		"cap.services.x.delete.soft_delete":  true,
+		"cap.services.x.activate.transition": true,
+	}
+	stepKinds := map[string]string{
+		"cap.services.x.create.create":       "logic",
+		"cap.services.x.delete.soft_delete":  "transition",
+		"cap.services.x.activate.transition": "transition",
+	}
+	actionSteps := map[string][]string{
+		"cap.lifecycles.x.create":   {"cap.services.x.create.create"},
+		"cap.lifecycles.x.destroy":  {"cap.services.x.delete.soft_delete"},
+		"cap.lifecycles.x.activate": {"cap.services.x.activate.transition"},
+	}
+	valid := `id: cap.lifecycles.x
 summary: "x"
 owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
-machine: x
-subject: data.entities.x
-states:
-  - name: pending
-    description: "p"
-    terminal: false
-  - name: active
-    description: "a"
-    terminal: true
+subjects: [data.entities.x]
 initial: pending
+final: deleted
+create:
+  step: cap.services.x.create.create
+destroy:
+  step: cap.services.x.delete.soft_delete
+  from: [pending, active]
+  to: deleted
+states:
+  - { name: pending, description: "p" }
+  - { name: active, description: "a" }
+  - { name: deleted, description: "d" }
 transitions:
   - name: activate
     description: "a"
@@ -542,29 +581,37 @@ transitions:
     to: active
     guard: true
     on_violation: platform.errors.COMMON_INTERNAL
-    implemented_by: [cap.services.x.activate]
+    implemented_by: [cap.services.x.activate.transition]
 `
 	cases := []struct {
-		name  string
-		body  string
-		want  string
-		rule  string
-		extra map[string]bool
+		name string
+		body string
+		want string
 	}{
 		{
-			name: "terminal with outgoing edge",
-			body: strings.Replace(strings.Replace(valid, "from: [pending]", "from: [active]", 1), "to: active", "to: pending", 1),
-			want: "[state-exhaustive]",
+			name: "final with outgoing edge",
+			body: strings.Replace(valid, "from: [pending]", "from: [deleted]", 1),
+			want: "[lifecycle-exhaustive]",
 		},
 		{
 			name: "unknown guard rule",
 			body: strings.Replace(valid, "guard: true", "guard: { rule: feature.rules.missing }", 1),
-			want: "[state-structure]",
+			want: "[lifecycle-structure]",
 		},
 		{
-			name: "unknown implemented_by service",
-			body: strings.Replace(valid, "implemented_by: [cap.services.x.activate]", "implemented_by: [cap.services.missing.activate]", 1),
-			want: "[state-structure]",
+			name: "unknown implemented_by step",
+			body: strings.Replace(valid, "implemented_by: [cap.services.x.activate.transition]", "implemented_by: [cap.services.missing.activate]", 1),
+			want: "[lifecycle-steps]",
+		},
+		{
+			name: "missing create step back-reference",
+			body: strings.Replace(valid, "step: cap.services.x.create.create", "step: cap.services.x.create.other", 1),
+			want: "[lifecycle-steps]",
+		},
+		{
+			name: "state not in status enum",
+			body: strings.Replace(valid, "{ name: active, description: \"a\" }", "{ name: broken, description: \"a\" }", 1),
+			want: "[lifecycle-subject]",
 		},
 	}
 	for _, tc := range cases {
@@ -574,8 +621,13 @@ transitions:
 			if err != nil {
 				t.Fatal(err)
 			}
-			c := &Checker{root: root}
-			c.checkStateDoc(doc, rel, schema, serviceIDs, map[string]bool{}, map[string]bool{})
+			c := &Checker{
+				root:       root,
+				errCodeSet: map[string]bool{"COMMON_INTERNAL": true},
+				enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true, "deleted": true}},
+				entities:   map[string]*entityInfo{"data.entities.x": {Fields: []entityFieldInfo{{Name: "Status", Type: "data.enums.x_status"}}}},
+			}
+			c.checkLifecycleDoc(doc, rel, schema, stepIDs, stepKinds, actionSteps, map[string]bool{}, map[string]bool{})
 			if !strings.Contains(strings.Join(c.errs, "\n"), tc.want) {
 				t.Fatalf("want %s, got %v", tc.want, c.errs)
 			}
@@ -890,14 +942,14 @@ func TestTransitionRulesValidated(t *testing.T) {
 		"returns": []any{},
 		"steps": []any{map[string]any{
 			"id": "t", "kind": "transition", "summary": "x",
-			"transitions": []any{"feature.states.x.t"},
-			"rules":       []any{"feature.rules.x.missing"},
-			"output":      []any{},
+			"lifecycle": []any{"cap.lifecycles.x.t"},
+			"rules":     []any{"feature.rules.x.missing"},
+			"output":    []any{},
 		}},
 	}
 	c.checkServiceItem(doc, "contracts/capabilities/services/x.yaml", "cap.services.x.get", "x",
 		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{},
-		map[string]bool{"feature.states.x.t": true}, map[string]bool{})
+		map[string]lifecycleAction{"cap.lifecycles.x.t": {kind: "transition"}}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown rule feature.rules.x.missing") {
 		t.Fatalf("transition rule not validated: %v", c.errs)
 	}
@@ -1032,7 +1084,7 @@ func TestQueryErrorPropagation(t *testing.T) {
 			errCodeSet: map[string]bool{"A": true, "B": true},
 			queries:    map[string]*queryInfo{"data.queries.x.q": query},
 		}
-		c.checkServiceItem(doc, "f", "cap.services.x.run", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		c.checkServiceItem(doc, "f", "cap.services.x.run", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 		return c.errs
 	}
 	want := func(t *testing.T, errs []string, text string) {

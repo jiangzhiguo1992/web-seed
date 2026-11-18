@@ -17,7 +17,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 usage() {
   echo "usage: type=<type> name=<name> [module=<module>] [summary=<text>] [column_type=<family>] [table=<stem>] [service=<cap.services.*.*>] [path=</x>] [http_method=<verb>] $0" >&2
   echo "       make contract-new type=<type> name=<name> [module=...] [summary=...] [service=...] [path=...]" >&2
-  echo "  type: data.tables | data.enums | data.entities | data.queries | cap.services | feature.rules | feature.states | cap.events | cap.protocols.http" >&2
+  echo "  type: data.tables | data.enums | data.entities | data.queries | cap.services | cap.lifecycles | feature.rules | cap.events | cap.protocols.http" >&2
   exit 2
 }
 
@@ -71,8 +71,8 @@ case "$type" in
     go run ./contract_new -root "$ROOT" -type feature.rules -name "$name" -module "$module" -summary "$summary" -out auto
     ;;
 
-  feature.states)
-    go run ./contract_new -root "$ROOT" -type feature.states -name "$name" -module "$module" -summary "$summary" -out auto
+  cap.lifecycles)
+    go run ./contract_new -root "$ROOT" -type cap.lifecycles -name "$name" -module "$module" -summary "$summary" -out auto
     ;;
 
   cap.events)

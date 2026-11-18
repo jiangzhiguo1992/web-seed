@@ -724,34 +724,22 @@ type ruleScaffold struct {
 	ImplementedBy []string `yaml:"implemented_by"`
 }
 
-type stateFileScaffold struct {
-	ID            string               `yaml:"id"`
-	Summary       string               `yaml:"summary"`
-	OwnerModule   string               `yaml:"owner_module"`
-	SchemaVersion int                  `yaml:"schema_version"`
-	Stability     string               `yaml:"stability"`
-	DoNot         []string             `yaml:"do_not"`
-	Machine       string               `yaml:"machine"`
-	Subject       string               `yaml:"subject"`
-	States        []stateScaffold      `yaml:"states"`
-	Initial       string               `yaml:"initial"`
-	Transitions   []transitionScaffold `yaml:"transitions"`
+type lifecycleFileScaffold struct {
+	ID            string                   `yaml:"id"`
+	Summary       string                   `yaml:"summary"`
+	OwnerModule   string                   `yaml:"owner_module"`
+	SchemaVersion int                      `yaml:"schema_version"`
+	Stability     string                   `yaml:"stability"`
+	DoNot         []string                 `yaml:"do_not"`
+	Subjects      []string                 `yaml:"subjects"`
+	Initial       string                   `yaml:"initial"`
+	Final         string                   `yaml:"final"`
+	States        []lifecycleStateScaffold `yaml:"states"`
 }
 
-type stateScaffold struct {
+type lifecycleStateScaffold struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
-	Terminal    bool   `yaml:"terminal"`
-}
-
-type transitionScaffold struct {
-	Name          string   `yaml:"name"`
-	Description   string   `yaml:"description"`
-	From          []string `yaml:"from"`
-	To            string   `yaml:"to"`
-	Guard         any      `yaml:"guard"`
-	OnViolation   string   `yaml:"on_violation"`
-	ImplementedBy []string `yaml:"implemented_by"`
 }
 
 type eventsFileScaffold struct {
@@ -935,51 +923,42 @@ func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
 	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
 }
 
-// RenderState 生成 feature.states 的最小状态机骨架。
-func RenderState(s *Schema, name, module, summary string) ([]byte, error) {
-	if s == nil || s.Type != "feature.states" {
-		return nil, fmt.Errorf("RenderState: want feature.states schema")
+// RenderLifecycle 生成 cap.lifecycles 的最小生命周期骨架。
+func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
+	if s == nil || s.Type != "cap.lifecycles" {
+		return nil, fmt.Errorf("RenderLifecycle: want cap.lifecycles schema")
 	}
 	if !validName(name) || !validName(module) {
-		return nil, fmt.Errorf("RenderState: invalid name/module")
+		return nil, fmt.Errorf("RenderLifecycle: invalid name/module")
 	}
-	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "machine": true, "subject": true, "states": true, "initial": true, "transitions": true, "forbidden_examples": true, "idempotent_transitions": true}, "feature.states"); err != nil {
+	if err := requireSupported(s.Fields, map[string]bool{
+		"id": true, "summary": true, "owner_module": true, "schema_version": true,
+		"stability": true, "do_not": true, "subjects": true, "initial": true, "final": true,
+		"create": true, "destroy": true, "states": true, "transitions": true,
+		"forbidden_examples": true, "idempotent_transitions": true,
+	}, "cap.lifecycles"); err != nil {
 		return nil, err
 	}
 	if f, ok := FindField(s.Fields, "states"); ok {
-		if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "description": true, "terminal": true}, "feature.states.states"); err != nil {
-			return nil, err
-		}
-	}
-	if f, ok := FindField(s.Fields, "transitions"); ok {
-		if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "description": true, "from": true, "to": true, "guard": true, "on_violation": true, "side_effects": true, "implemented_by": true}, "feature.states.transitions"); err != nil {
+		if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "description": true}, "cap.lifecycles.states"); err != nil {
 			return nil, err
 		}
 	}
 	fileID := s.Targets.FileID(name + ".yaml")
-	doc := stateFileScaffold{
+	if fileID == "" {
+		return nil, fmt.Errorf("RenderLifecycle: cannot derive id from targets.id")
+	}
+	doc := lifecycleFileScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
 		ID:            fileID,
 		Summary:       summary,
 		Stability:     scaffoldStability,
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
-		Machine:       name,
-		Subject:       "data.entities." + name,
-		States: []stateScaffold{
-			{Name: "pending", Description: "TODO: 初始状态", Terminal: false},
-			{Name: "active", Description: "TODO: 终态", Terminal: true},
-		},
-		Initial: "pending",
-		Transitions: []transitionScaffold{{
-			Name:          "activate",
-			Description:   "TODO: 转换说明",
-			From:          []string{"pending"},
-			To:            "active",
-			Guard:         true,
-			OnViolation:   "platform.errors.COMMON_INTERNAL",
-			ImplementedBy: []string{},
-		}},
+		Subjects:      []string{"data.entities." + name},
+		Initial:       "active",
+		Final:         "active",
+		States:        []lifecycleStateScaffold{{Name: "active", Description: "TODO: 状态说明"}},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
@@ -988,7 +967,6 @@ func RenderState(s *Schema, name, module, summary string) ([]byte, error) {
 	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
 }
 
-// RenderEvent 生成 cap.events 的最小事件骨架。
 // RenderEvents 生成 cap.events 的最小骨架：一个 topic + 一个订阅它的 job。
 func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 	if s == nil || s.Type != "cap.events" {

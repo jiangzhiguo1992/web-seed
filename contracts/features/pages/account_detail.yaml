@@ -1,11 +1,11 @@
-# 账号详情页。四态与可用动作由状态机决定。
+# 账号详情页。四态与可用动作由生命周期决定。
 
 schema_version: 1
 id: feature.pages.account_detail
 summary: "账号详情页"
 stability: stable
 do_not:
-  - "不要在前端判断状态合法性，使用 feature.states.account 的转换表"
+  - "不要在前端判断状态合法性，使用 cap.lifecycles.account 的动作表"
   - "不要在页面展示密码、手机号、邮箱、令牌"
   - "认证信息只能通过认证接口获取，不要在本页拼装"
 
@@ -44,16 +44,16 @@ actions:
   activate:
     capability: cap.services.account.activate
     permission: platform.security.permissions.account_write
-    available_when: { transitions: [feature.states.account.activate, feature.states.account.reactivate] }
+    available_when: { transitions: [cap.lifecycles.account.activate, cap.lifecycles.account.reactivate] }
   suspend:
     capability: cap.services.account.suspend
     permission: platform.security.permissions.account_write
-    available_when: { transition: feature.states.account.suspend }
+    available_when: { transition: cap.lifecycles.account.suspend }
     confirm: true
   delete:
     capability: cap.services.account.delete
     permission: platform.security.permissions.account_delete
-    available_when: { transition: feature.states.account.delete }
+    available_when: { transition: cap.lifecycles.account.destroy }
     confirm: true
     danger: true
 
@@ -69,7 +69,7 @@ fields:
   - name: user_id
     render: code
   - name: status
-    enum: feature.states.account.states
+    enum: cap.lifecycles.account.states
     render: badge
   - name: created_at
     render: relative_time
@@ -77,5 +77,5 @@ fields:
     render: relative_time
 
 transition_ui:
-  source: feature.states.account.transitions
-  rule: "只渲染 from 包含当前状态的按钮；点击前调用 canTransition()"
+  source: cap.lifecycles.account.transitions
+  rule: "只渲染 from 包含当前状态的按钮（含 destroy）；点击前调用 canTransition()"

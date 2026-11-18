@@ -40,7 +40,7 @@ func runServiceItem(t *testing.T, doc map[string]any, c *Checker) string {
 		}
 	}
 	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
-		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 	return strings.Join(c.errs, "\n")
 }
 
@@ -110,7 +110,7 @@ func TestServiceCallInputRequiredAndExact(t *testing.T) {
 	run := func(doc map[string]any) string {
 		c := checker()
 		c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
-			map[string]serviceMeta{"cap.services.x.target": target}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+			map[string]serviceMeta{"cap.services.x.target": target}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 		return strings.Join(c.errs, "\n")
 	}
 
@@ -311,7 +311,7 @@ func TestServiceTransactionSteps(t *testing.T) {
 	run := func(transaction string, steps []any) string {
 		c := &Checker{}
 		doc := map[string]any{"summary": "x", "transaction": transaction, "steps": steps}
-		c.checkServiceItem(doc, "f", "cap.services.x.run", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		c.checkServiceItem(doc, "f", "cap.services.x.run", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 		return strings.Join(c.errs, "\n")
 	}
 
@@ -425,7 +425,7 @@ func TestServiceNestedRequiredTransactionRejected(t *testing.T) {
 	}
 	c := &Checker{}
 	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
-		map[string]serviceMeta{"cap.services.x.target": target}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		map[string]serviceMeta{"cap.services.x.target": target}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "must not call transaction=required") {
 		t.Fatalf("nested required transaction not reported: %v", c.errs)
 	}
@@ -544,7 +544,7 @@ func TestServiceReadOnlyRejectsTransitiveWriter(t *testing.T) {
 	}
 	c := &Checker{serviceWrites: map[string]bool{"cap.services.x.writer": true}}
 	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
-		map[string]serviceMeta{"cap.services.x.writer": target}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		map[string]serviceMeta{"cap.services.x.writer": target}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "transaction=read_only cannot call service cap.services.x.writer that writes tables") {
 		t.Fatalf("transitive writer not reported: %v", c.errs)
 	}
@@ -591,7 +591,7 @@ func TestServiceReadOnlyRejectsWriteQuery(t *testing.T) {
 			queryReturnTypes: map[string]map[string]returnType{q.ID: {}},
 		}
 		c.checkServiceItem(base(transaction), "f", "cap.services.x.run", "x",
-			map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+			map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 		return strings.Join(c.errs, "\n")
 	}
 
@@ -626,7 +626,7 @@ func TestServiceRuleOnViolationMustBeDeclared(t *testing.T) {
 		}
 		c := &Checker{ruleErrors: map[string]string{"feature.rules.x.r": "platform.errors.A"}}
 		c.checkServiceItem(base(errors), "f", "cap.services.x.run", "x",
-			meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+			meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 		return strings.Join(c.errs, "\n")
 	}
 
@@ -724,7 +724,7 @@ func TestServiceRuleOwnerCoverage(t *testing.T) {
 		ruleOwners: map[string][]string{"feature.rules.x.r": {"cap.services.x.owner"}},
 	}
 	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
-		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 	if got := strings.Join(c.errs, "\n"); strings.Contains(got, "is not declared by service") {
 		t.Fatalf("owner-declared rule error reported: %s", got)
 	}
