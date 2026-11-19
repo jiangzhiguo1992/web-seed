@@ -54,7 +54,6 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
-      - { name: own_type, type: data.enums.own_type, column: data.tables.account.col.own_type, nullable: true }
       - { name: offset, type: integer, nullable: true, default: 0 }
       - { name: limit, type: integer, nullable: true, default: 20 }
     returns:
@@ -63,7 +62,6 @@ queries:
     errors: [ ]
     index_ref:
       - data.tables.account.idx_account_created_at_id
-      - data.tables.account.idx_account_own_type_own_id
     used_by:
       - cap.services.account.list
 
@@ -75,8 +73,6 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: status, type: integer, column: data.tables.account.col.status }
-      - { name: own_type, type: data.enums.own_type, column: data.tables.account.col.own_type }
-      - { name: own_id, type: integer, column: data.tables.account.col.own_id }
       - { name: number, type: text, column: data.tables.account.col.number }
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
       - { name: user_id, type: integer, column: data.tables.account.col.user_id, nullable: true }

@@ -29,10 +29,10 @@ feature ──> capabilities ──> data
 | `tables/<file>.yaml` | 数据库里有什么 | 列、类型、可空、默认、CHECK、索引、继承 | 不是 DDL 文本容器 |
 | `entities/<entity>.yaml` | 业务怎么读它 | Go 读模型：字段语义、关系、跨字段校验 | 不是写模型 |
 | `queries/<scope>.yaml` | 能怎么读写 | 入参、返回、目标表、索引引用 | 不是 SQL |
-| `enums.yaml` | 值是什么 | 跨端词汇：integer `code` ↔ 名称 | 不是表约束 |
+| `enums/<module>.yaml` | 值是什么 | 跨端词汇：按 owner_module 拆分，integer `code` ↔ 名称 | 不是表约束 |
 | `storage.yaml` | 物理侧事实 | 引擎归属、扁平保留、分区、归档 | 不是部署配置，也不是索引或视图 |
 
-`enums.yaml` / `storage.yaml` 是**固定文件**：文件名不随实例增长。`storage` 只有一个契约 ID；`enums.yaml` 承载多个 `data.enums.<name>` 项。`tables/` / `entities/` / `queries/` 按实例一文件一契约，实例清单以 `contracts/index.yaml` 为准，本文件不列举。
+`storage.yaml` 是**固定文件**：文件名不随实例增长，只有一个契约 ID。`enums/` 按 `owner_module` 一文件一契约（文件 ID `data.enums.<module>`），文件内承载多个 `data.enums.<name>` 项；枚举项 ID 全局唯一。`tables/` / `entities/` / `queries/` / `enums/` 的实例清单以 `contracts/index.yaml` 为准，本文件不列举。
 
 ### 2.1 关系
 
@@ -115,13 +115,13 @@ storage    ──(table 条目)──────────>  tables
 - **冗余必须成组声明**：`columns[].redundancy` 直接列出同组全部列引用（`[强制: redundant-group]`、`[强制: redundant-ref]`）。`source: true` 标记权威列，每组恰好一个；组内每列声明完全相同的列表，`copy` 的 `type` / `nullable` 必须与 source 一致。成员只接受物理表自行声明的列，继承列与基类列不参与。
 
 ```yaml
-# tables/account.yaml 与 tables/token.yaml 的 own_type 列写同一份列表
+# tables/account.yaml 与 tables/token.yaml 的 user_id 列写同一份列表
 columns:
-  - name: own_type
+  - name: user_id
     redundancy:
-      - column: data.tables.account.col.own_type
+      - column: data.tables.account.col.user_id
         source: true
-      - column: data.tables.token.col.own_type
+      - column: data.tables.token.col.user_id
         source: false
 ```
 

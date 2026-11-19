@@ -28,15 +28,6 @@ fields:
     description: "令牌状态"
     source: { column: data.tables.token.col.status }
 
-  - name: OwnType
-    type: data.enums.own_type
-    description: "数据归属主体类型"
-    source: { column: data.tables.token.col.own_type }
-
-  - name: OwnID
-    description: "归属 ID"
-    source: { column: data.tables.token.col.own_id }
-
   - name: AccountID
     description: "关联账号"
     source: { column: data.tables.token.col.account_id }

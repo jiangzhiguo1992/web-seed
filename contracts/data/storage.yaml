@@ -29,7 +29,6 @@ tables:
 caches:
   redis:
     - { cache_of: data.tables.token, key: [ col.access_token_hash ], retention: true, unit: days, cache_ttl: 30 }
-    - { cache_of: data.tables.token, key: [ col.own_type, col.own_id ], retention: true, unit: days, cache_ttl: 30 }
     - { cache_of: data.tables.token, key: [ col.account_id ], retention: true, unit: days, cache_ttl: 30 }
     - { cache_of: data.tables.token, key: [ col.user_id ], retention: true, unit: days, cache_ttl: 30 }
     - { cache_of: data.tables.token, key: [ col.device_id ], retention: true, unit: days, cache_ttl: 30 }

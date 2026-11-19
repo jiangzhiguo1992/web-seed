@@ -7,7 +7,6 @@ schema_version: 1
 stability: draft
 do_not:
   - "account 表禁止写入密码/手机号/邮箱/令牌；这些在 auth_* / token 表"
-  - "own_type/own_id 表示数据归属，user_id 表示关联用户；不要把 user_id 当作 own_id 的别名"
 
 table:
   name: account
@@ -32,22 +31,6 @@ table:
     - data.queries.account.update_account
 
 columns:
-  - name: own_type
-    type: integer
-    nullable: false
-    redundancy:
-      - { column: data.tables.account.col.own_type, source: true }
-      - { column: data.tables.token.col.own_type, source: false }
-    comment: "归属类型整数码；映射 data.enums.own_type"
-
-  - name: own_id
-    type: integer
-    nullable: false
-    redundancy:
-      - { column: data.tables.account.col.own_id, source: true }
-      - { column: data.tables.token.col.own_id, source: false }
-    comment: "归属 ID；与 own_type 组成归属主体"
-
   - name: number
     type: account_number
     nullable: false
@@ -85,13 +68,6 @@ indexes:
     used_by:
       - data.queries.account.exists_account_number
       - data.queries.account.create_account
-
-  - name: idx_account_own_type_own_id
-    columns: [ own_type, own_id ]
-    live_only: true
-    comment: "按归属主体查询"
-    used_by:
-      - data.queries.account.list_accounts
 
   - name: idx_account_created_at_id
     columns: [ created_at, id ]

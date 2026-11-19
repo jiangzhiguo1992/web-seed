@@ -1,11 +1,13 @@
-# data.enums 类型规范：跨前后端枚举集合；枚举项无 id。
+# data.enums 类型规范：按 owner_module 拆分的跨前后端枚举集合；枚举项无 id。
 
 id: meta.data.enums
 type: data.enums
 title: "枚举集合契约"
 targets:
-  file: "contracts/data/enums.yaml"
-  id: "data.enums"
+  dir: "contracts/data/enums"
+  glob: "*.yaml"
+  id: "data.enums.<file>"
+  naming: "snake_case"
 
 fields:
   - name: id
@@ -17,6 +19,12 @@ fields:
     type: string
     required: true
     description: "一句话说明"
+
+  - name: owner_module
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "枚举集合归属模块"
 
   - name: schema_version
     type: integer
@@ -64,9 +72,9 @@ fields:
 
 rules:
   - { id: enum-key-order, text: "枚举集合字段顺序必须与 _meta/data.enums.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ enum-key-order ] }
-  - { id: enum-id, text: "集合 id 固定为 data.enums", implemented_by: [ enum-id ] }
+  - { id: enum-id, text: "文件 id 必须等于 targets 派生的 data.enums.<file>；枚举项 ID 固定为 data.enums.<name>", implemented_by: [ enum-id ] }
   - { id: enum-values-unique, text: "同一枚举的 values 不得重复", implemented_by: [ enum-values-unique ] }
   - { id: enum-code-unique, text: "同一枚举的 code 不得重复", implemented_by: [ enum-code-unique ] }
-  - { id: enum-type-unique, text: "同一集合内 go_type / ts_type 不得重复", implemented_by: [ enum-type-unique ] }
+  - { id: enum-type-unique, text: "go_type / ts_type 在全部枚举文件中不得重复", implemented_by: [ enum-type-unique ] }
   - { id: enum-used-by, text: "used_by 必须等于 entity 字段与 capability 引用的并集；不得为空；不统计物理表/query/feature", implemented_by: [ enum-used-by ] }
-  - { id: enum-do-not-specific, text: "do_not 每条必须含集合 ID data.enums、枚举 name 或 go_type/ts_type；通用规则放组 README，禁止复制", implemented_by: [ enum-do-not-specific ] }
+  - { id: enum-do-not-specific, text: "do_not 每条必须含文件 ID data.enums.<file>、枚举 name 或 go_type/ts_type；通用规则放组 README，禁止复制", implemented_by: [ enum-do-not-specific ] }

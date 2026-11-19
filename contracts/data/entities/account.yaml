@@ -32,15 +32,6 @@ fields:
     description: "账号状态"
     source: { column: data.tables.account.col.status }
 
-  - name: OwnType
-    type: data.enums.own_type
-    description: "数据归属主体类型"
-    source: { column: data.tables.account.col.own_type }
-
-  - name: OwnID
-    description: "归属 ID；与 own_type 组成归属主体"
-    source: { column: data.tables.account.col.own_id }
-
   - name: Number
     description: "账号编号"
     source: { column: data.tables.account.col.number }

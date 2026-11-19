@@ -1,13 +1,14 @@
-# 跨前后端枚举集合；模块内部枚举不进本文件。
+# 账号域跨前后端枚举集合；只放 account 模块跨端枚举。
 
-id: data.enums
-summary: "跨端枚举集合"
+id: data.enums.account
+summary: "账号域跨端枚举集合"
+owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "data.enums 的 value 删除后 code 不得复用；历史数据仍引用旧 code"
-  - "data.enums stable 后改名/删除 value 属破坏性变更"
-  - "表 CHECK 中的整数码必须与 data.enums 的对应 code 同步；改 code 前先改约束"
+  - "data.enums.account 的 value 删除后 code 不得复用；历史数据仍引用旧 code"
+  - "data.enums.account stable 后改名/删除 value 属破坏性变更"
+  - "表 CHECK 中的整数码必须与 data.enums.account 的对应 code 同步；改 code 前先改约束"
 
 enums:
   - name: account_status
@@ -33,19 +34,6 @@ enums:
       - { value: active, code: 1, description: "已激活" }
     used_by:
       - cap.events.account
-
-  - name: own_type
-    description: "数据归属主体类型"
-    go_type: OwnType
-    ts_type: OwnType
-    values:
-      - { value: user, code: 0, description: "用户" }
-      - { value: admin, code: 1, description: "管理员" }
-      - { value: system, code: 2, description: "系统" }
-    used_by:
-      - data.entities.account
-      - data.entities.token
-      - cap.services.account
 
   - name: auth_status
     description: "认证记录状态"
