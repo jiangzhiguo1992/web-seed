@@ -22,8 +22,9 @@ var storageEngineFields = map[string]map[string]bool{
 	"mongodb":  storageFieldSet("table", "description", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl"),
 }
 
-// storageArchiveFields 是归档条目的字段集：archive_of 指向原表，promotable 决定能否回迁，table 是归档物理表名。
-var storageArchiveFields = storageFieldSet("archive_of", "promotable", "table", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "age_by", "after_unit", "after")
+// storageArchiveFields 是归档条目的字段集：archive_of 指向原表，promotable 决定能否回迁，
+// on_conflict 是回迁冲突策略，table 是归档物理表名。
+var storageArchiveFields = storageFieldSet("archive_of", "promotable", "on_conflict", "table", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "age_by", "after_unit", "after")
 
 // storageCacheFields 是非权威副本条目的字段集。
 var storageCacheFields = storageFieldSet("cache_of", "key", "retention", "unit", "cache_ttl")
@@ -48,6 +49,7 @@ type storageArchiveEntry struct {
 	name       string
 	source     string
 	promotable bool
+	onConflict string
 	ageBy      string
 	unit       string
 	after      int
@@ -527,6 +529,22 @@ func (c *Checker) parseStorageArchive(engine string, rawArchiveOf any, entry map
 	} else {
 		promotable = p
 	}
+	onConflict := ""
+	if raw, ok := entry["on_conflict"]; ok {
+		switch v, _ := raw.(string); v {
+		case "skip", "overwrite", "error":
+			onConflict = v
+		default:
+			c.rulef("storage-archive", "%s: on_conflict must be skip/overwrite/error", where)
+		}
+	}
+	if promotable {
+		if _, ok := entry["on_conflict"]; !ok {
+			c.rulef("storage-archive", "%s: promotable archive requires on_conflict", where)
+		}
+	} else if _, ok := entry["on_conflict"]; ok {
+		c.rulef("storage-archive", "%s: on_conflict is only allowed when promotable is true", where)
+	}
 	name, _ := entry["table"].(string)
 	if name == "" {
 		c.rulef("storage-archive", "%s: table is required", where)
@@ -554,7 +572,7 @@ func (c *Checker) parseStorageArchive(engine string, rawArchiveOf any, entry map
 		c.rulef("storage-archive", "%s: after must be an integer >= 1", where)
 		return nil
 	}
-	return &storageArchiveEntry{engine: engine, name: name, source: archiveOf, promotable: promotable, ageBy: ageBy, unit: afterUnit, after: after, where: where}
+	return &storageArchiveEntry{engine: engine, name: name, source: archiveOf, promotable: promotable, onConflict: onConflict, ageBy: ageBy, unit: afterUnit, after: after, where: where}
 }
 
 // checkStorageArchives 校验归档条目：原表已登记、一表一条、表名唯一、age_by 存在。

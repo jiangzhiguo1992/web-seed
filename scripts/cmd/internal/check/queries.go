@@ -40,6 +40,12 @@ type queryIndexRef struct {
 	Columns []string
 }
 
+// queryArchiveRef 是 archive 的一项：归档 ID 与回迁时更新的年龄列。
+type queryArchiveRef struct {
+	Archive string
+	AgeBy   string
+}
+
 type queryInfo struct {
 	ID          string
 	Name        string
@@ -53,7 +59,7 @@ type queryInfo struct {
 	HasReturns  bool
 	IndexRef    []queryIndexRef
 	Caches      []string
-	Archive     []string
+	Archive     []queryArchiveRef
 	Errors      []string
 	UsedBy      []string
 }
@@ -163,7 +169,16 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		q.IndexRef = append(q.IndexRef, ref)
 	}
 	q.Caches = stringList(m["caches"])
-	q.Archive = stringList(m["archive"])
+	for _, raw := range asList(m["archive"]) {
+		am, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		ref := queryArchiveRef{}
+		ref.Archive, _ = am["archive"].(string)
+		ref.AgeBy, _ = am["age_by"].(string)
+		q.Archive = append(q.Archive, ref)
+	}
 	q.Errors = stringList(m["errors"])
 	q.UsedBy = stringList(m["used_by"])
 	for _, raw := range asList(m["params"]) {

@@ -784,14 +784,41 @@ func TestStoragePartitionRangeInterval(t *testing.T) {
 func TestStorageArchiveEntryShape(t *testing.T) {
 	c := &Checker{}
 	a := c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
-		"archive_of": "data.tables.src", "promotable": true, "table": "src_archive",
+		"archive_of": "data.tables.src", "promotable": true, "on_conflict": "skip", "table": "src_archive",
 		"age_by": "created_at", "after_unit": "days", "after": 90,
 	}, "storage tables.postgres[0]")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid archive entry reported: %v", c.errs)
 	}
-	if a == nil || a.name != "src_archive" || a.source != "data.tables.src" || !a.promotable || a.after != 90 {
+	if a == nil || a.name != "src_archive" || a.source != "data.tables.src" || !a.promotable || a.onConflict != "skip" || a.after != 90 {
 		t.Fatalf("unexpected archive entry: %#v", a)
+	}
+
+	c = &Checker{}
+	c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
+		"archive_of": "data.tables.src", "promotable": true, "table": "src_archive",
+		"age_by": "created_at", "after_unit": "days", "after": 90,
+	}, "storage tables.postgres[0]")
+	if !strings.Contains(entityErrs(c), "promotable archive requires on_conflict") {
+		t.Fatalf("missing on_conflict not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
+		"archive_of": "data.tables.src", "promotable": true, "on_conflict": "merge", "table": "src_archive",
+		"age_by": "created_at", "after_unit": "days", "after": 90,
+	}, "storage tables.postgres[0]")
+	if !strings.Contains(entityErrs(c), "on_conflict must be skip/overwrite/error") {
+		t.Fatalf("invalid on_conflict not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
+		"archive_of": "data.tables.src", "promotable": false, "on_conflict": "skip", "table": "src_archive",
+		"age_by": "created_at", "after_unit": "days", "after": 90,
+	}, "storage tables.postgres[0]")
+	if !strings.Contains(entityErrs(c), "on_conflict is only allowed when promotable is true") {
+		t.Fatalf("non-promotable on_conflict not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
@@ -2979,23 +3006,10 @@ func TestQueryIndexRefs(t *testing.T) {
 
 	c = newChecker()
 	c.tableIndexes["data.tables.x"][0].usedBy = nil
-	c.tableIndexes["data.tables.x"][2].usedBy = map[string]bool{"data.queries.x.q": true}
-	c.queries["data.queries.x.q"].IndexRef = []queryIndexRef{
-		{Index: "data.tables.x.pk", Columns: []string{"id"}},
-		{Index: "data.tables.x.idx_x_expr", Columns: []string{}},
-	}
-	c.checkQueryIndexRefs()
-	if len(c.errs) != 0 {
-		t.Fatalf("expression index with empty columns must be allowed: %v", c.errs)
-	}
-
-	c = newChecker()
-	c.tableIndexes["data.tables.x"][0].usedBy = nil
-	c.tableIndexes["data.tables.x"][2].usedBy = map[string]bool{"data.queries.x.q": true}
 	c.queries["data.queries.x.q"].IndexRef = []queryIndexRef{{Index: "data.tables.x.idx_x_expr", Columns: []string{"code"}}}
 	c.checkQueryIndexRefs()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "requires empty columns") {
-		t.Fatalf("expression index with columns not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "has no column list") {
+		t.Fatalf("pure expression index ref not reported: %v", c.errs)
 	}
 
 	c = newChecker()

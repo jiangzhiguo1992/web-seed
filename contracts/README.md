@@ -31,7 +31,7 @@
 | 实现由契约生成 | 类型、常量、路由、生命周期、DDL 均从本目录产出 |
 | 生成物不可手改 | `**/generated/` 与 `apps/api/migrations/` 是产物；手改会被 CI 拦截 |
 | 需求变更先改契约 | 禁止"先写代码后补契约" |
-| 契约不丢信息 | SQL 特性用结构化字段表达（`storage.tables.<engine>[].partition`、归档条目、`indexes[].expression`），禁止塞回原生 DDL |
+| 契约不丢信息 | SQL 特性用结构化字段表达（`storage.tables.<engine>[].partition`、归档条目、`columns` + `indexes[].expression` 混合表达式索引），禁止塞回原生 DDL |
 
 ### 1.2 契约的判定标准
 
@@ -487,10 +487,10 @@ data/storage.yaml ──> 按引擎分组的表条目 + 表级物理事实
 | 规则 | 说明 |
 |---|---|
 | 禁止手写迁移 | 改 `tables/*.yaml` 后跑 `make gen-db` |
-| 目标引擎 | MySQL 8.0.16+；`live_only` 索引用 functional unique index 表达（`deleted_at IS NULL` 表达式键），不是 PostgreSQL partial index |
+| 目标引擎 | MySQL 8.0.16+；`live_only` 唯一索引用 functional unique index 表达（`deleted_at IS NULL` 表达式键），非唯一索引用普通 `deleted_at` 前导；不是 PostgreSQL partial index |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验（⬜ P5） | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
-| 结构化 DDL | 分区用 `storage.tables.<engine>[].partition`，归档用 `archive_of` 条目（`promotable` 标明能否回迁），表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
+| 结构化 DDL | 分区用 `storage.tables.<engine>[].partition`，归档用 `archive_of` 条目（`promotable` 标明能否回迁，能回迁时必须写 `on_conflict`），混合表达式索引用 `columns` + `indexes[].expression`（纯表达式索引不支持）；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
 
 ### 6.1 迁移禁止操作
 

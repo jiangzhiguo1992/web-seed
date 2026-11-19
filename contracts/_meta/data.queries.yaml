@@ -62,12 +62,14 @@ fields:
           - { name: table, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "表 ID" }
           - { name: write, type: boolean, required: false, default: false, description: "是否写该表" }
       - name: archive
-        type: list<string>
+        type: list<object>
         required: false
-        unique: true
         min_items: 1
-        pattern: '^data\.tables\.[a-z][a-z0-9_]*\.archive$'
-        description: "允许穿透的归档（仅 promotable 归档）；主表未命中时查询归档并回迁热表；回迁属于存储层行为，不改变 tables[].write 的业务含义"
+        unique_key: archive
+        description: "允许穿透的归档（仅 promotable 归档）；主表未命中时查询归档并回迁热表；回迁属于存储层行为，不改变 tables[].write 的业务含义；回迁时更新 age_by 列以防再次被判定为冷数据"
+        item_fields:
+          - { name: archive, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.archive$', description: "归档引用" }
+          - { name: age_by, type: string, required: true, enum: [ created_at, updated_at ], description: "回迁时更新的年龄列；必须与 storage 归档条目的 age_by 一致" }
       - name: caches
         type: list<string>
         required: false
@@ -110,7 +112,7 @@ fields:
         description: "索引依赖；每项声明索引与实际使用的索引列前缀"
         item_fields:
           - { name: index, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "索引 ID：data.tables.<t>.pk 或 indexes[].name" }
-          - { name: columns, type: list<string>, required: true, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "查询使用的索引列，必须等于索引列的最左前缀且顺序一致；表达式索引固定为空列表" }
+          - { name: columns, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "查询使用的索引列，必须等于索引列的最左前缀且顺序一致" }
       - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "调用本 query 的 service 项；gen-graph 生成" }
 
 rules:
@@ -125,11 +127,10 @@ rules:
   - { id: query-return-columns, text: "kind=columns 的 columns（data.tables.<t>.col.<c>）必须是查询表上的列", implemented_by: [ query-return-columns ] }
   - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回或绑定为参数；kind=columns 的 secret 只有同模块可显式列出；entity 默认投影排除 secret，computed secret 不参与列裁剪、跨模块一律拒绝", implemented_by: [ query-sensitive-columns ] }
   - { id: query-errors, text: "errors 必须是存在的 platform.errors.*；[] 表示无领域错误", implemented_by: [ query-errors ] }
-  - { id: query-index-ref, text: "index_ref 每项必须指向查询表的 PK 或 indexes[].name；columns 去重且必须等于该索引列的最左前缀（顺序一致，PK 列为 id）；只有表达式索引允许 columns 为空且必须为空；显式索引必须在 index.used_by 中列出该查询；单表查询至少一个 index_ref", implemented_by: [ query-index-ref ] }
+  - { id: query-index-ref, text: "index_ref 每项必须指向查询表的 PK 或 indexes[].name；columns 非空、去重且必须等于该索引列的最左前缀（顺序一致，PK 列为 id）；显式索引必须在 index.used_by 中列出该查询；单表查询至少一个 index_ref", implemented_by: [ query-index-ref ] }
   - { id: query-index-used-by, text: "index.used_by 的每个查询必须在 index_ref 中引用该索引", implemented_by: [ query-index-used-by ] }
   - { id: query-cache-ref, text: "query.caches 每项必须是 storage.caches 已登记的逻辑缓存（data.tables.<t>.cache.<k>[+<k>]，同表同键跨引擎视为同一逻辑缓存），且 cache_of 在 query.tables 中；读查询的每个缓存键列必须出现在 params[].column 或同表 index_ref[].columns 中；读查询由 params 绑定全部缓存键时必须声明该缓存；写查询必须列出每个被写表的全部逻辑缓存（写同步项不要求键出现在 params/index_ref）", implemented_by: [ query-cache-ref ] }
-  - { id: query-cache-used-by, text: "每个 storage 逻辑缓存必须至少被一个查询的 caches 有效引用；未被引用的缓存必须从 storage 删除", implemented_by: [ query-cache-used-by ] }
-  - { id: query-archive-ref, text: "query.archive 每项必须是 storage 中 promotable:true 的归档（data.tables.<t>.archive），且源表在 query.tables 中", implemented_by: [ query-archive-ref ] }
+  - { id: query-archive-ref, text: "query.archive 每项是 {archive, age_by}：archive 必须是 storage 中 promotable:true 的归档（data.tables.<t>.archive），源表在 query.tables 中；age_by 必须与 storage 归档条目的 age_by 一致", implemented_by: [ query-archive-ref ] }
   - { id: query-archive-used-by, text: "每个 promotable 归档必须至少被一个查询的 archive 引用", implemented_by: [ query-archive-used-by ] }
   - { id: query-used-by, text: "query.used_by 必须等于 service steps 中引用本 query 的 service 项集合，由 gen-graph 写入，禁止手改", implemented_by: [ query-used-by ] }
   - { id: query-unused, text: "query 必须被至少一个 service step 引用；used_by 不得为空", implemented_by: [ query-unused ] }

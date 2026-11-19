@@ -42,7 +42,7 @@ queries:
     tables:
       - { table: data.tables.token }
     archive:
-      - data.tables.token.archive
+      - { archive: data.tables.token.archive, age_by: updated_at }
     params:
       - { name: ctx, type: context.Context }
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
@@ -61,7 +61,7 @@ queries:
     tables:
       - { table: data.tables.token }
     archive:
-      - data.tables.token.archive
+      - { archive: data.tables.token.archive, age_by: updated_at }
     caches:
       - data.tables.token.cache.access_token_hash
     params:

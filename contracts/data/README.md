@@ -90,7 +90,7 @@ storage    ──(table / cache_of / archive_of 条目)──>  tables
 
 **选择**：引擎归属、`retention`、`partition` 不写在单表里，而是内聚在 `storage.tables.<engine>` 的普通条目中；普通条目必须写 `description` 且等于表契约的 `summary`；归档用同位置的 `archive_of` 条目表达，`promotable` 标明该归档能否回迁热表。
 **理由**：这些是项目级物理事实，不是表的业务结构。放在单表里会让"换引擎"变成改 N 个文件；条目化让同一张表的存储事实只有一个落点，也让不同引擎的字段差异（`partition` 只属于关系库）可被脚本强制。
-**代价**：新增表要登记两处（`tables/` + `storage.tables.<engine>`），漏登记被 `[强制: storage-registry]` 拦住。存储类特性用结构化字段表达（条目内 `partition`、`archive_of`/`promotable` 归档条目、`indexes[].expression`），不设 `ddl_ext` 逃生口。
+**代价**：新增表要登记两处（`tables/` + `storage.tables.<engine>`），漏登记被 `[强制: storage-registry]` 拦住。存储类特性用结构化字段表达（条目内 `partition`、`archive_of`/`promotable`/`on_conflict` 归档条目、`columns` + `indexes[].expression` 混合表达式索引），不设 `ddl_ext` 逃生口。
 
 `retention` / `partition` / `caches` 是物理事实，不是 baseline DDL 的生成输入：`gen_db` 只消费 `tables.<engine>` 的权威表列表，生成列/约束/索引；清理、分区与缓存配置由部署层实现。声明 `partition` 时 `gen_db` 会显式失败，避免契约与 DDL 静默漂移。
 
@@ -169,7 +169,7 @@ columns:
 
 ### 4.4 保留策略是选择，不是枚举
 
-`storage.tables.<engine>[].retention` 是布尔开关，开启后 `unit` 与 `pending` / `soft_delete` / `hard_delete` / `ttl` 是同级字段，不是四选一：`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只在确实存在对应清理策略时才写；主数据与认证绑定默认不写。**这是选择判据，`[评审]`。** 值域与约束由 `[强制: storage-retention]` 校验；缓存副本必须写 `cache_of`（源表）与 `key`（列名列表，可写 `account_id` / `col.account_id` / 完整列引用；同一表可按不同 key 建多条缓存，`key` 顺序参与 `(cache_of,key)` 唯一性）以及 `caches.<engine>[].retention: true`，只允许 `unit` / `cache_ttl`，且不得超过权威表条目的 `ttl`。每个缓存必须被至少一个查询的 `caches` 有效引用，未引用的缓存必须删除；读查询的每个缓存键列必须出现在 `params[].column` 或同表 `index_ref[].columns` 中。归档用独立条目表达：`archive_of` 指向已登记的权威表，`promotable` 必填并决定能否回迁热表（能回迁的必须被查询的 `archive` 引用，且查询里的 `archive` 只能指向能回迁的归档），`table` 是归档物理表名，`age_by` 是 `created_at` / `updated_at`，`after` 是按该列计算的数据年龄阈值。归档表只封存源表的原始行，不建 `data.tables` 契约、实体或查询；同一张表只能有一条归档，由 `[强制: storage-archive]` 校验。
+`storage.tables.<engine>[].retention` 是布尔开关，开启后 `unit` 与 `pending` / `soft_delete` / `hard_delete` / `ttl` 是同级字段，不是四选一：`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只在确实存在对应清理策略时才写；主数据与认证绑定默认不写。**这是选择判据，`[评审]`。** 值域与约束由 `[强制: storage-retention]` 校验；缓存副本必须写 `cache_of`（源表）与 `key`（列名列表，可写 `account_id` / `col.account_id` / 完整列引用；同一表可按不同 key 建多条缓存，`key` 顺序参与 `(cache_of,key)` 唯一性）以及 `caches.<engine>[].retention: true`，只允许 `unit` / `cache_ttl`，且不得超过权威表条目的 `ttl`。每个缓存必须被至少一个查询的 `caches` 有效引用，未引用的缓存必须删除；读查询的每个缓存键列必须出现在 `params[].column` 或同表 `index_ref[].columns` 中。归档用独立条目表达：`archive_of` 指向已登记的权威表，`promotable` 必填并决定能否回迁热表（能回迁的必须被查询的 `archive` 引用，且查询里的 `archive` 只能指向能回迁的归档），能回迁时必须写 `on_conflict: skip|overwrite|error` 定义热表已有同唯一键行时的策略（skip 返回热表行并保留归档行，overwrite 用归档行覆盖热表行，error 返回冲突错误；不能回迁时禁止），`table` 是归档物理表名，`age_by` 是 `created_at` / `updated_at`，`after` 是按该列计算的数据年龄阈值。归档表只封存源表的原始行，不建 `data.tables` 契约、实体或查询；同一张表只能有一条归档，由 `[强制: storage-archive]` 校验。
 
 ---
 
@@ -196,7 +196,7 @@ indexes:
       - data.queries.account.get_account_by_number
 ```
 
-`live_only: true` 只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
+`live_only: true` 只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。MySQL 生成时，唯一索引用 `CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END` 表达式键排除软删行，非唯一索引用普通 `deleted_at` 前导，保证自然 SQL 的 `deleted_at IS NULL` 能命中。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
 
 ### 5.2 查询：参数 + 返回 + 索引/缓存/归档引用
 
@@ -214,7 +214,7 @@ indexes:
     - { index: data.tables.account.idx_account_created_at_id, columns: [ created_at, id ] }
 ```
 
-返回值用 `kind` 区分：`scalar` / `affected_rows` / `entity` / `columns`；没有 `column` / `table`。`entity` 只写 entity、不能写 columns；`columns` 只在没有对应 entity 时使用，必须写列引用；`secret` 只有同模块可显式列出，跨模块禁止。
+返回值用 `kind` 区分：`scalar` / `affected_rows` / `entity` / `columns`；没有 `column` / `table`。`entity` 只写 entity、不能写 columns；`columns` 只在没有对应 entity 时使用，必须写列引用；`secret` 只有同模块可显式列出，跨模块禁止。`caches` / `archive` 引用 storage；`archive` 每项写 `{archive, age_by}`，`age_by` 必须与 storage 归档条目一致，回迁时更新该列，避免再次被判定为冷数据。
 
 ### 5.3 实体：列来源 + 枚举映射 + 关系
 

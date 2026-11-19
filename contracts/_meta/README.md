@@ -158,7 +158,7 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
       `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors` 映射；唯一性统一由 `indexes[].unique`
       表达，跨表一致性由应用/业务规则保证
     - 唯一索引的 `live_only` 决定作用域：`true` 只约束未软删行（要求 nullable `deleted_at`），`false`/省略约束全表（含软删行）
-    - `indexes` 的 `comment`、`columns` xor `expression`、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表
+    - `indexes` 的 `comment`、`columns`（必填非空）与可选 `expression` 附加键、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表
     - `summary` 与 `columns[].comment` 会进入 DDL COMMENT：`summary` <= 2048 字符、列 `comment` <= 1024 字符（MySQL 上限，按
       rune 计数）
     - `columns[].redundancy` 直接列出同组全部列引用（`column` + `source`）；组内各列声明必须完全一致，`type`/`nullable` 一致
@@ -167,18 +167,18 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
     - `table.referenced_by` 是反向索引，由 `make gen-graph` 生成、禁止手改：必须等于所有指向本表列的 `references`
       源列集合；每项必须是存在的列引用且其 `references.column` 指向本表
     - `data/queries/*.yaml` 的 `index_ref`：每项是 `{index, columns}`；`index` 指向 `data.tables.<t>.pk` 或
-      `indexes[].name`，`columns` 必须是该索引列的最左前缀（顺序一致；PK 列为 `id`；表达式索引的 `columns` 必须为空）；显式索引必须在
+      `indexes[].name`，`columns` 非空且必须是该索引列的最左前缀（顺序一致；PK 列为 `id`）；纯表达式索引不可被引用；显式索引必须在
       `used_by` 中列出该 query
     - `data/queries/*.yaml` 的 `caches`：引用 storage 的逻辑缓存（`data.tables.<t>.cache.<k>[+<k>]`，同表同 key 跨引擎视为同
       一缓存）；读表为读穿透，每个键列必须出现在 `params[].column` 或同表 `index_ref[].columns` 中，且 params 绑定全部键时必须声明该缓存；
       写查询必须列出被写表的全部逻辑缓存（写同步项不要求键出现在 params/index_ref）
-    - `data/queries/*.yaml` 的 `archive`：引用 `promotable: true` 的归档（`data.tables.<t>.archive`），源表必须在
-      `query.tables` 中；主表未命中时查归档并回迁
+    - `data/queries/*.yaml` 的 `archive`：每项是 `{archive, age_by}`；`archive` 必须是 `promotable: true` 的归档
+      （`data.tables.<t>.archive`），源表必须在 `query.tables` 中；`age_by` 必须与 storage 归档条目的 `age_by` 一致，回迁时更新该列
     - `data/storage.yaml` 的 `tables.<engine>`：普通条目是 `list<object>`，`table` 与 `description` 必填（`description`
       必须等于表契约的 `summary`）并覆盖每张物理表且无孤儿；`retention` 是布尔开关，开启时 `unit` 与 `pending`/
       `soft_delete`/`hard_delete`/`ttl` 与 `retention` 同级，`partition` 内聚在条目里，顶层不再有这些映射；`partition` 只允许
       mysql/postgres；归档条目用 `archive_of` 指向已登记的权威表，`promotable` 必填并决定能否回迁（true 时必须被某个查询的
-      `archive` 引用），`after_unit`/`after` 是独立的触发阈值，`table`
+      `archive` 引用且必须写 `on_conflict: skip|overwrite|error`：skip 返回热表行并保留归档行，overwrite 用归档行覆盖热表行，error 返回冲突错误；false 时禁止），`after_unit`/`after` 是独立的触发阈值，`table`
       是归档物理表名，归档表不建 `data.tables` 契约、实体或查询；`caches` 也是条目列表，必须写 `retention` 且只允许
       `cache_ttl`，不得超过权威表 `ttl`
     - `table.entities` 显式记录映射本表的实体，checker 校验；`table.queries` 只记生成的 `queries`
@@ -257,7 +257,7 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
     - 同一 query 的多项 `list` 必须一致；`affected_rows` 必须是唯一返回项且不得为列表
     - `columns` 只用于 `kind: columns`；每项必须是查询表上的 `data.tables.<t>.col.<c>`
     - 单表 query 至少一个 `index_ref`；`columns` 必须是索引列的最左前缀；显式索引必须与 `used_by` 双向一致；缓存与归档引用分别与
-      storage 双向一致（见 `[query-cache-*]` / `[query-archive-*]`）
+      storage 双向一致（见 `[query-cache-ref]` / `[storage-cache-used-by]` / `[query-archive-*]`）
     - `sensitivity: secret` 列只有同模块可显式返回；`pii` 可返回
     - 写查询必须在某个 method 的 `queries` 中声明；查询必须有至少一个 `write: true` 的表；checker 校验存在、每个写表归属；flow
       不得直接引用 `data.queries.*`
@@ -295,10 +295,10 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
 | `table.referenced_by`                                                                                             | `make gen-graph` 生成的反向索引：指向本表列的源列引用；与 `columns[].references` 双向一致，禁止手改                                                                                                                                             |
 | `indexes[].comment`                                                                                               | 索引必须写非空用途说明；生成 `COMMENT ON INDEX`                                                                                                                                                                                                 |
 | `indexes[].used_by`                                                                                               | 使用该索引的 query item ID 列表；至少一个，防空索引                                                                                                                                                                                             |
-| `queries[].index_ref`                                                                                             | query 使用的索引与列前缀：`{index, columns}`；`columns` 必须是索引列的最左前缀（表达式索引为空）；与 `indexes[].used_by` 双向一致                                                                                                                |
+| `queries[].index_ref`                                                                                             | query 使用的索引与列前缀：`{index, columns}`；`columns` 非空且必须是索引列的最左前缀；纯表达式索引不可引用；与 `indexes[].used_by` 双向一致                                                                                                      |
 | `queries[].caches`                                                                                                | query 使用的逻辑缓存：`data.tables.<t>.cache.<k>[+<k>]`；读表为读穿透（键列必须出现在 params.column 或同表 index_ref.columns，params 绑定全部键时必须声明），写表为写后同步（写查询必须列全；写同步项不校验键来源）                                |
-| `queries[].archive`                                                                                               | query 允许穿透的归档：`data.tables.<t>.archive`，只允许 `promotable: true` 的归档；主表未命中时查归档并回迁                                                                                                                                      |
-| `data/storage.yaml` 的 `tables.<engine>`                                                                          | 按 engine 分组的普通表条目（`table`/`description`/扁平 `retention`/`partition`）与归档条目（`archive_of`/`promotable`/`table`/`description`/`age_by`/`after_unit`/`after`）；`caches` 为非权威副本及扁平 `retention`/`cache_ttl`，每个逻辑缓存必须被至少一个查询的 `caches` 有效引用；表契约不再承载这些物理事实 |
+| `queries[].archive`                                                                                               | query 允许穿透的归档：`{archive, age_by}`；`archive` 只允许 `promotable: true` 的归档，`age_by` 必须与 storage 一致并在回迁时更新；主表未命中时查归档并回迁                                                                                       |
+| `data/storage.yaml` 的 `tables.<engine>`                                                                          | 按 engine 分组的普通表条目（`table`/`description`/扁平 `retention`/`partition`）与归档条目（`archive_of`/`promotable`/`on_conflict`/`table`/`description`/`age_by`/`after_unit`/`after`）；`caches` 为非权威副本及扁平 `retention`/`cache_ttl`，每个逻辑缓存必须被至少一个查询的 `caches` 有效引用；表契约不再承载这些物理事实 |
 | `generated` / `write`                                                                                             | 生成物标记；`write: forbidden` 表示禁止手改                                                                                                                                                                                                     |
 | `rules`                                                                                                           | 本类型的专有规则；每条必须写 `implemented_by`（含规则自身 ID，指向 checker 实际输出的 `[rule-id]`）；通用结构规则由 checker 代码强制                                                                                                            |
 

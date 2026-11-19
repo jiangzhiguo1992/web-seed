@@ -75,7 +75,7 @@ func stringList(v any) []string {
 //   - 单表 query 至少声明一个 index_ref；
 //   - 每个 ref 的 index 指向查询表的 PK 或 indexes[].name；
 //   - ref.columns 必须等于该索引列的最左前缀（顺序一致；PK 列为 id）；
-//   - 表达式索引没有列清单，ref.columns 必须为空；
+//   - 纯表达式索引没有列清单，不可被引用；
 //   - 显式索引必须在 used_by 中列出该查询；
 //   - 反向：索引 used_by 的查询必须在 index_ref 中引用该索引。
 func (c *Checker) checkQueryIndexRefs() {
@@ -110,6 +110,10 @@ func (c *Checker) checkQueryIndexRefs() {
 					c.rulef("query-index-ref", "query %s: index %s is not declared on %s", qid, name, table)
 					continue
 				}
+				if len(idx.columns) == 0 {
+					c.rulef("query-index-ref", "query %s: index %s has no column list and cannot be referenced", qid, name)
+					continue
+				}
 				cols = idx.columns
 				used := false
 				for usedID := range idx.usedBy {
@@ -121,12 +125,6 @@ func (c *Checker) checkQueryIndexRefs() {
 				if !used {
 					c.rulef("query-index-ref", "query %s: index %s does not list the query in used_by", qid, name)
 				}
-			}
-			if len(cols) == 0 {
-				if len(ref.Columns) != 0 {
-					c.rulef("query-index-ref", "query %s: expression index %s requires empty columns, got %v", qid, name, ref.Columns)
-				}
-				continue
 			}
 			if !isLeftmostPrefix(ref.Columns, cols) {
 				c.rulef("query-index-ref", "query %s: columns %v must be the leftmost prefix of index %s columns %v", qid, ref.Columns, name, cols)

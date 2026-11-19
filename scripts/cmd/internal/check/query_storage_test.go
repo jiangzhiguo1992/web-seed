@@ -105,19 +105,27 @@ func TestQueryCacheRefs(t *testing.T) {
 }
 
 func TestQueryArchiveRefs(t *testing.T) {
-	archive := storageArchiveEntry{source: "data.tables.x", promotable: true}
+	archive := storageArchiveEntry{source: "data.tables.x", promotable: true, ageBy: "created_at"}
 	archives := map[string]storageArchiveEntry{"data.tables.x": archive}
-	ref := "data.tables.x.archive"
+	ref := queryArchiveRef{Archive: "data.tables.x.archive", AgeBy: "created_at"}
 	readQ := &queryInfo{
 		ID: "data.queries.x.q", File: "x.yaml",
 		Targets: []string{"data.tables.x"},
-		Archive: []string{ref},
+		Archive: []queryArchiveRef{ref},
 	}
 
 	c := newQueryStorageChecker(readQ, nil, archives)
 	c.checkQueryStorageRefs()
 	if len(c.errs) != 0 {
 		t.Fatalf("valid archive ref reported: %v", c.errs)
+	}
+
+	mismatchQ := *readQ
+	mismatchQ.Archive = []queryArchiveRef{{Archive: ref.Archive, AgeBy: "updated_at"}}
+	c = newQueryStorageChecker(&mismatchQ, nil, archives)
+	c.checkQueryStorageRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must match storage age_by") {
+		t.Fatalf("archive age_by mismatch not reported: %v", c.errs)
 	}
 
 	notPromotable := map[string]storageArchiveEntry{"data.tables.x": {source: "data.tables.x", promotable: false}}
@@ -131,7 +139,7 @@ func TestQueryArchiveRefs(t *testing.T) {
 	}
 
 	unknownQ := *readQ
-	unknownQ.Archive = []string{"data.tables.y.archive"}
+	unknownQ.Archive = []queryArchiveRef{{Archive: "data.tables.y.archive", AgeBy: "created_at"}}
 	c = newQueryStorageChecker(&unknownQ, nil, archives)
 	c.checkQueryStorageRefs()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "is not declared in storage.tables") {
@@ -147,7 +155,7 @@ func TestQueryArchiveRefs(t *testing.T) {
 	}
 
 	malformedQ := *readQ
-	malformedQ.Archive = []string{"data.tables.x.archived"}
+	malformedQ.Archive = []queryArchiveRef{{Archive: "data.tables.x.archived", AgeBy: "created_at"}}
 	c = newQueryStorageChecker(&malformedQ, nil, archives)
 	c.checkQueryStorageRefs()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "malformed archive ref") {

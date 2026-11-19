@@ -84,6 +84,15 @@ func TestLiveOnlyIndexUsesFunctionalKey(t *testing.T) {
 	}
 }
 
+func TestLiveOnlyNonUniqueIndexUsesDeletedAtPrefix(t *testing.T) {
+	idx := index{Name: "idx_account_created_at_id", Columns: []string{"created_at", "id"}, LiveOnly: true}
+	got := renderIndex("account", idx)
+	want := "CREATE INDEX `idx_account_created_at_id` ON `account` (`deleted_at`, `created_at`, `id`);\n"
+	if got != want {
+		t.Fatalf("non-unique live_only index = %q, want %q", got, want)
+	}
+}
+
 func TestRenderVerificationResultConstraint(t *testing.T) {
 	tbl := table{
 		ID:   "data.tables.verification_action",

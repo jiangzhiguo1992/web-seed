@@ -6,8 +6,9 @@
 //   - apps/api/internal/generated/constraint_errors_gen.go：CHECK 约束 → 错误码映射
 //
 // 迁移文件是生成物，禁止手改；表结构变更必须改 contracts/data/tables 后重新生
-// 成。live_only 索引用 MySQL 8.0.13+ 的 functional unique index 表达
-// （deleted_at IS NULL 的表达式键 + 业务列），而不是 PostgreSQL 的 partial index。
+// 成。live_only 索引：唯一索引用 MySQL 8.0.13+ 的 functional unique index 表达
+// （deleted_at IS NULL 的表达式键 + 业务列），把软删行排除在唯一性之外；非唯一索引
+// 用普通 deleted_at 前导，保证自然 SQL 的 deleted_at IS NULL 能命中索引。
 package main
 
 import (
@@ -552,7 +553,13 @@ func renderIndex(tableName string, idx index) string {
 	}
 	var keys []string
 	if idx.LiveOnly {
-		keys = append(keys, "(CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END)")
+		if idx.Unique {
+			// 唯一性必须排除软删行：表达式键为 NULL 时不参与唯一冲突。
+			keys = append(keys, "(CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END)")
+		} else {
+			// 普通 deleted_at 前导，WHERE deleted_at IS NULL 才能命中索引。
+			keys = append(keys, quoteIdent("deleted_at"))
+		}
 	}
 	for _, c := range idx.Columns {
 		keys = append(keys, quoteIdent(c))

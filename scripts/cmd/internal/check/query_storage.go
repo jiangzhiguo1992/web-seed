@@ -66,18 +66,18 @@ func (c *Checker) checkQueryStorageRefs() {
 			}
 		}
 		for _, ref := range q.Archive {
-			source, ok := archiveRefSource(ref)
+			source, ok := archiveRefSource(ref.Archive)
 			if !ok {
-				c.rulef("query-archive-ref", "%s: malformed archive ref %q", where, ref)
+				c.rulef("query-archive-ref", "%s: malformed archive ref %q", where, ref.Archive)
 				continue
 			}
 			entry, ok := c.archiveEntries[source]
 			if !ok {
-				c.rulef("query-archive-ref", "%s: archive %s is not declared in storage.tables", where, ref)
+				c.rulef("query-archive-ref", "%s: archive %s is not declared in storage.tables", where, ref.Archive)
 				continue
 			}
 			if !entry.promotable {
-				c.rulef("query-archive-ref", "%s: archive %s is not promotable", where, ref)
+				c.rulef("query-archive-ref", "%s: archive %s is not promotable", where, ref.Archive)
 			}
 			if !q.tableSet()[source] {
 				c.rulef("query-archive-ref", "%s: archive source %s is not in query tables", where, source)
@@ -86,11 +86,14 @@ func (c *Checker) checkQueryStorageRefs() {
 			if entry.promotable {
 				usedArchives[source] = true
 			}
+			if ref.AgeBy != entry.ageBy {
+				c.rulef("query-archive-ref", "%s: archive %s age_by %q must match storage age_by %q", where, ref.Archive, ref.AgeBy, entry.ageBy)
+			}
 		}
 	}
 	for _, ref := range cacheRefs {
 		if !usedCaches[ref] {
-			c.rulef("query-cache-used-by", "storage cache %s is not referenced by any query", ref)
+			c.rulef("storage-cache-used-by", "storage cache %s is not referenced by any query", ref)
 		}
 	}
 	sources := make([]string, 0, len(c.archiveEntries))
