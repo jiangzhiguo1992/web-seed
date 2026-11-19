@@ -65,7 +65,7 @@ func TestModelTableListStyle(t *testing.T) {
 
 func TestEnumUsedByListStyle(t *testing.T) {
 	flow := t.TempDir()
-	writePlacementFile(t, flow, "contracts/data/enums.yaml", `id: data.enums
+	writePlacementFile(t, flow, "contracts/data/enums/account.yaml", `id: data.enums
 summary: "x"
 schema_version: 1
 stability: stable
@@ -85,7 +85,7 @@ enums:
 	}
 
 	block := t.TempDir()
-	writePlacementFile(t, block, "contracts/data/enums.yaml", `id: data.enums
+	writePlacementFile(t, block, "contracts/data/enums/account.yaml", `id: data.enums
 summary: "x"
 schema_version: 1
 stability: stable

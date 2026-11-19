@@ -17,8 +17,6 @@ type Account struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time
-	OwnType   int32
-	OwnID     int64
 	Number    string
 	Nickname  string
 	UserID    *int64

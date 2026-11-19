@@ -10,21 +10,16 @@ do_not:
   - "封禁与软删不要混用：suspended 可恢复，deleted 不可"
 
 subjects:
-  - data.entities.account
+  - { entity: data.entities.account, field: status }
 initial: pending
 final: deleted
 create:
-  step: cap.services.account.create.create
+  steps: [ cap.services.account.create.create ]
 destroy:
-  step: cap.services.account.delete.soft_delete
+  steps: [ cap.services.account.delete.soft_delete ]
   from: [pending, active]
   to: deleted
-  side_effects: [cap.events.account.deleted]
-states:
-  - { name: pending, description: "待激活，不能登录" }
-  - { name: active, description: "正常，可登录" }
-  - { name: suspended, description: "已封禁，不能登录" }
-  - { name: deleted, description: "已软删，终态" }
+states: [pending, active, suspended, deleted]
 transitions:
   - name: activate
     description: "激活账号"
@@ -32,7 +27,6 @@ transitions:
     to: active
     guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    side_effects: [cap.events.account.activated]
     implemented_by: [ cap.services.account.activate.transition ]
   - name: suspend
     description: "封禁账号"
@@ -40,7 +34,6 @@ transitions:
     to: suspended
     guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    side_effects: [cap.events.account.suspended]
     implemented_by: [ cap.services.account.suspend.transition ]
   - name: reactivate
     description: "解封"
@@ -48,7 +41,6 @@ transitions:
     to: active
     guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    side_effects: [cap.events.account.reactivated]
     implemented_by: [ cap.services.account.activate.transition ]
 forbidden_examples:
   - { from: deleted, transition: activate, reason: "已删除不可激活" }

@@ -48,6 +48,8 @@ type entityFieldInfo struct {
 	Description     string
 	HasDescription  bool
 	IsRelation      bool
+	IsList          bool
+	TargetID        string
 	HasJoin         bool
 	JoinFromRef     string
 	JoinFromTable   string
@@ -278,8 +280,10 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 		f.Sensitivity, f.HasSensitivity = v, true
 	}
 	// 关系意图也由 type 判定，确保缺失 source.join 时走关系分支报错，而不是误报标量类型。
-	if strings.HasPrefix(strings.TrimPrefix(f.Type, "*"), "data.entities.") {
+	if target, ok := entityRef(f.Type); ok {
 		f.IsRelation = true
+		f.TargetID = target
+		f.IsList = strings.HasPrefix(strings.TrimSpace(f.Type), "List<")
 	}
 	return f
 }
@@ -695,8 +699,8 @@ func (c *Checker) checkRelationFieldShape(f entityFieldInfo, where string) {
 		c.rulef("entity-field-variant", "%s: relation field requires type/source.join.from/source.join.to/source.join.lazy", where)
 		return
 	}
-	if _, pointer := splitPointer(f.Type); pointer || !strings.HasPrefix(f.Type, "data.entities.") {
-		c.rulef("entity-relation-type", "%s: relation type must be a data.entities.* ID, got %s", where, f.Type)
+	if _, ok := entityRef(f.Type); !ok || strings.Contains(f.Type, "*") {
+		c.rulef("entity-relation-type", "%s: relation type must be data.entities.* or List<data.entities.*>, got %s", where, f.Type)
 	}
 }
 
@@ -893,7 +897,11 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			continue
 		}
 		where := fmt.Sprintf("%s: fields.%s", e.Rel, r.Name)
-		target := c.entities[r.Type]
+		targetID := r.TargetID
+		if targetID == "" {
+			targetID = r.Type
+		}
+		target := c.entities[targetID]
 		if target == nil {
 			c.rulef("entity-relation-target", "%s: type %s is not an entity", where, r.Type)
 			continue
@@ -903,13 +911,13 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			continue
 		}
 		if !containsString(target.Tables, r.JoinToTable) {
-			c.rulef("entity-relation-target", "%s: source.join.to table %s is not mapped by %s", where, r.JoinToTable, r.Type)
+			c.rulef("entity-relation-target", "%s: source.join.to table %s is not mapped by %s", where, r.JoinToTable, targetID)
 			continue
 		}
-		if expected[r.Type] == nil {
-			expected[r.Type] = map[string]bool{}
+		if expected[targetID] == nil {
+			expected[targetID] = map[string]bool{}
 		}
-		expected[r.Type][e.ID] = true
+		expected[targetID][e.ID] = true
 
 		fromMeta, fromOK := c.tableColumns[r.JoinFromTable][r.JoinFromColumn]
 		if !fromOK {
@@ -933,6 +941,12 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 		if card == "" {
 			c.rulef("entity-relation-cardinality", "%s: one side of join columns must be unique (PK or unique index)", where)
 			continue
+		}
+		if card == "one_to_many" && !r.IsList {
+			c.rulef("entity-relation-arity", "%s: one_to_many relation must use List<data.entities.*>, got %s", where, r.Type)
+		}
+		if card != "one_to_many" && r.IsList {
+			c.rulef("entity-relation-arity", "%s: List<data.entities.*> requires one_to_many cardinality, got %s", where, card)
 		}
 		if r.HasLazy && !r.Lazy {
 			if r.Type == e.ID {

@@ -87,12 +87,12 @@ contracts/
 │   ├── tables/<file>.yaml    #   物理表（_base.yaml 为基类，不是物理表）
 │   ├── entities/<file>.yaml  #   业务读模型（_base.yaml 为基类）
 │   ├── queries/<scope>.yaml  #   读写形状：入参/返回/索引引用，不含 SQL
-│   ├── enums.yaml            #   跨端枚举：integer code ↔ 名称
+│   ├── enums/<module>.yaml   #   跨端枚举：按 owner_module 拆分，integer code ↔ 名称
 │   └── storage.yaml          #   单例：引擎归属 / 条目化的保留 / 分区 / 归档 / 多 key 缓存
 │
 ├── capabilities/             # ② 能力层：services + lifecycles + events（topics/jobs）+ protocols
 │   ├── services/<module>.yaml #   服务：services + schemas（interface 名由 owner_module + file 派生）
-│   ├── lifecycles/<subject>.yaml # 生命周期：create/destroy/transitions，锚到 service step
+│   ├── lifecycles/<dimension>.yaml # 状态维度生命周期：subjects(entity+field)、create/destroy/transitions，锚到 service step
 │   ├── events/<module>.yaml   #   异步主题与任务：topics + jobs
 │   └── protocols/
 │       └── http/<module>.yaml #   HTTP 绑定：只写协议差异，x-service 指回 service
@@ -160,7 +160,7 @@ contracts/
 |---|---|---|
 | `data/tables/<file>.yaml` | `data.tables.<file>` | `data.tables.<file>.col.<column>` / `data.tables.<file>.constraint.<name>` |
 | `data/queries/<scope>.yaml` | `data.queries.<scope>` | `data.queries.<scope>.<snake_case(name)>`（name 显式） |
-| `data/enums.yaml` | `data.enums` | `data.enums.<name>`（name 派生，不写 id） |
+| `data/enums/<module>.yaml` | `data.enums.<module>` | `data.enums.<name>`（name 派生，不写 id；跨文件全局唯一） |
 | `platform/security/permissions.yaml` | `platform.security.permissions` | `platform.security.permissions.<code>` |
 | `platform/security/roles.yaml` | `platform.security.roles` | `platform.security.roles.<code>` |
 
@@ -218,7 +218,7 @@ capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，�
 
 capabilities 内部允许 `services → lifecycles/rules/events`：`kind: logic/transition` 的 `rules`、step 的 `lifecycle`、`kind: logic/transition` 的 `events`。这是同组内的业务依据，不是跨层引用。
 
-`lifecycles` / `rules` 允许引用 `data.entities.*` 作为业务主体（生命周期的 `subjects`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。`business.*` 已全部移除。
+`lifecycles` / `rules` 允许引用 `data.entities.*` 作为业务主体（生命周期的 `subjects[].entity`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。生命周期必须同时写 `subjects[].field`：一个契约只描述一个状态维度，同一实体的多个状态字段拆成多份契约。`business.*` 已全部移除。
 
 ### 3.3 图校验（⬜ P2）
 
@@ -249,7 +249,7 @@ feature.pages.account_list
        └─ rules → feature.rules.account.*
             └─ implemented_by → cap.services.account.create
 
-cap.lifecycles.account ─subjects→ data.entities.account ─table→ data.tables.account
+cap.lifecycles.account ─subjects(status)→ data.entities.account ─table→ data.tables.account
 ```
 
 ### 3.4 契约变更流程
@@ -333,7 +333,7 @@ table:
 | `capabilities/events/*` | 一模块一文件 | 120 |
 | `capabilities/events/*` | 一业务主体一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
-| `capabilities/lifecycles/*` | 一主体一文件 | 150 |
+| `capabilities/lifecycles/*` | 一个状态维度一文件 | 150 |
 | `features/rules/*` | 一规则集一文件 | 120 |
 | `features/pages/*` | 一页面一文件 | 150 |
 | `platform/**` | 一关注点一文件 | 150 |

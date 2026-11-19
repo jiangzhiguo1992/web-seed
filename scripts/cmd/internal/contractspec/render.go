@@ -4,6 +4,7 @@ package contractspec
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -223,16 +224,20 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	return append([]byte(header), b...), nil
 }
 
-func RenderEnumItem(s *Schema, name string) ([]byte, error) {
+func RenderEnumItem(s *Schema, name, module string) ([]byte, error) {
 	if s == nil || s.Type != "data.enums" {
 		return nil, fmt.Errorf("RenderEnumItem: want data.enums schema")
 	}
 	if !validName(name) {
 		return nil, fmt.Errorf("RenderEnumItem: invalid name %q (snake_case required)", name)
 	}
-	if s.Targets.ID == "" || s.Targets.File == "" {
-		return nil, fmt.Errorf("RenderEnumItem: targets.id and targets.file must not be empty")
+	if !validName(module) {
+		return nil, fmt.Errorf("RenderEnumItem: invalid module %q (snake_case required)", module)
 	}
+	if s.Targets.Dir == "" {
+		return nil, fmt.Errorf("RenderEnumItem: targets.dir must not be empty")
+	}
+	target := filepath.Join(s.Targets.Dir, module+".yaml")
 	enumsField, _ := FindField(s.Fields, "enums")
 	if err := requireSupported(enumsField.ItemFields, map[string]bool{
 		"name": true, "description": true,
@@ -257,7 +262,7 @@ func RenderEnumItem(s *Schema, name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	header := fmt.Sprintf("# 追加到 %s 的 enums 列表；示例 value/code 与 used_by 需替换。\n\n", s.Targets.File)
+	header := fmt.Sprintf("# 追加到 %s 的 enums 列表；文件不存在时先创建 id: data.enums.%s、owner_module: %s；示例 value/code 与 used_by 需替换。\n\n", target, module, module)
 	return append([]byte(header), b...), nil
 }
 
@@ -725,21 +730,21 @@ type ruleScaffold struct {
 }
 
 type lifecycleFileScaffold struct {
-	ID            string                   `yaml:"id"`
-	Summary       string                   `yaml:"summary"`
-	OwnerModule   string                   `yaml:"owner_module"`
-	SchemaVersion int                      `yaml:"schema_version"`
-	Stability     string                   `yaml:"stability"`
-	DoNot         []string                 `yaml:"do_not"`
-	Subjects      []string                 `yaml:"subjects"`
-	Initial       string                   `yaml:"initial"`
-	Final         string                   `yaml:"final"`
-	States        []lifecycleStateScaffold `yaml:"states"`
+	ID            string                     `yaml:"id"`
+	Summary       string                     `yaml:"summary"`
+	OwnerModule   string                     `yaml:"owner_module"`
+	SchemaVersion int                        `yaml:"schema_version"`
+	Stability     string                     `yaml:"stability"`
+	DoNot         []string                   `yaml:"do_not"`
+	Subjects      []lifecycleSubjectScaffold `yaml:"subjects"`
+	Initial       string                     `yaml:"initial"`
+	Final         string                     `yaml:"final"`
+	States        []string                   `yaml:"states"`
 }
 
-type lifecycleStateScaffold struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
+type lifecycleSubjectScaffold struct {
+	Entity string `yaml:"entity"`
+	Field  string `yaml:"field"`
 }
 
 type eventsFileScaffold struct {
@@ -939,8 +944,8 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 	}, "cap.lifecycles"); err != nil {
 		return nil, err
 	}
-	if f, ok := FindField(s.Fields, "states"); ok {
-		if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "description": true}, "cap.lifecycles.states"); err != nil {
+	if f, ok := FindField(s.Fields, "subjects"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{"entity": true, "field": true}, "cap.lifecycles.subjects"); err != nil {
 			return nil, err
 		}
 	}
@@ -955,10 +960,10 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 		Stability:     scaffoldStability,
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
-		Subjects:      []string{"data.entities." + name},
+		Subjects:      []lifecycleSubjectScaffold{{Entity: "data.entities." + name, Field: "status"}},
 		Initial:       "active",
 		Final:         "active",
-		States:        []lifecycleStateScaffold{{Name: "active", Description: "TODO: 状态说明"}},
+		States:        []string{"active"},
 	}
 	b, err := marshal2(doc)
 	if err != nil {

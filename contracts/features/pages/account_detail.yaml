@@ -62,10 +62,6 @@ fields:
     render: heading
   - name: nickname
     render: text
-  - name: own_type
-    render: tag
-  - name: own_id
-    render: code
   - name: user_id
     render: code
   - name: status

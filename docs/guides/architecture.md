@@ -102,7 +102,7 @@
 - [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/token/auth_* 拆分（契约已落盘）
 - [x] 契约元规范试点：`_meta/{data.tables,data.enums}` + `make contract-new` + `make contract-check`（结构 / ID / 约束 / 索引 / used_by / owner 写归属）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
-- [ ] `data/enums.yaml` → Go 常量 + TS union + entity 整数映射
+- [ ] `data/enums/<module>.yaml` → Go 常量 + TS union + entity 整数映射
 - [ ] `platform/errors/*.yaml` + `platform/security/permissions.yaml` → 两端常量
 - [ ] `platform/config/env.json` → `.env.example`（`gen-env.sh`）
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
@@ -525,6 +525,7 @@ self:     doctor（模板自身健康）
 | 0007 | 薄校验优先，生成器上限 6 个 |
 | 0008 | SPA 而非 SSR（记录 SEO 代价） |
 | 0009 | 模板默认 admin 端；user 端派生时按需新增 |
+| 0010 | 生命周期按状态维度建模：一个契约 = `{entity, field}`；跨维度前提用 `transitions[].requires`；事件只由 service step 的 `events` 声明 |
 
 ---
 

@@ -68,11 +68,9 @@ services:
           - query: data.queries.token.create_token
             input:
               - { name: id, value: step.new_id.id, description: "新令牌 ID" }
-              - { name: own_type, value: step.load_account.account.own_type, description: "令牌归属主体类型" }
-              - { name: own_id, value: step.load_account.account.own_id, description: "令牌归属主体 ID" }
               - { name: account_id, value: params.account_id, description: "令牌归属账号 ID" }
-              - { name: device_id, value: params.device_id, description: "签发设备标识" }
               - { name: user_id, value: step.load_account.account.user_id, description: "令牌关联用户 ID" }
+              - { name: device_id, value: params.device_id, description: "签发设备标识" }
               - { name: access_token_hash, value: step.hash_tokens.access_token_hash, description: "访问令牌哈希" }
               - { name: refresh_token_hash, value: step.hash_tokens.refresh_token_hash, description: "刷新令牌哈希" }
               - { name: access_expire_at, value: step.issue_tokens.tokens.access_expire_at, description: "访问令牌过期时间" }
@@ -153,11 +151,9 @@ services:
           - query: data.queries.token.create_token
             input:
               - { name: id, value: step.new_id.id, description: "新令牌 ID" }
-              - { name: own_type, value: step.load_old.row.own_type, description: "继承的归属主体类型" }
-              - { name: own_id, value: step.load_old.row.own_id, description: "继承的归属主体 ID" }
               - { name: account_id, value: step.load_old.row.account_id, description: "继承的账号 ID" }
-              - { name: device_id, value: step.load_old.row.device_id, description: "继承的设备标识" }
               - { name: user_id, value: step.load_old.row.user_id, description: "继承的用户 ID" }
+              - { name: device_id, value: step.load_old.row.device_id, description: "继承的设备标识" }
               - { name: access_token_hash, value: step.hash_new.access_token_hash, description: "新访问令牌哈希" }
               - { name: refresh_token_hash, value: step.hash_new.refresh_token_hash, description: "新刷新令牌哈希" }
               - { name: access_expire_at, value: step.issue_tokens.tokens.access_expire_at, description: "访问令牌过期时间" }

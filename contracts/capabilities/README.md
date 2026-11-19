@@ -12,7 +12,7 @@
 | 目录                                 | 回答的问题                         | 真相源内容                                           | 产物                                   |
 |--------------------------------------|------------------------------------|------------------------------------------------------|----------------------------------------|
 | `services/<module>.yaml`             | 模块能提供哪些可调用单元、如何实现 | services[]、steps、input/output 数据链、事务、写归属 | Go interface、usecase 骨架、写归属校验 |
-| `lifecycles/<subject>.yaml`          | 实体如何创建、流转与销毁           | subjects[]、initial/final、create/destroy、transitions | 生命周期常量、转换表、非法动作测试     |
+| `lifecycles/<dimension>.yaml`        | 实体的某个状态字段如何创建、流转与销毁 | subjects[{entity,field}]、initial/final、create/destroy、transitions | 生命周期常量、转换表、非法动作测试     |
 | `events/<module>.yaml`               | 哪些异步主题与任务、如何触发与重试 | topics[]（payload/发布/订阅）、jobs[]（trigger/retry） | 事件常量、payload 类型、worker 注册表  |
 | `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露           | path、method、status、header、schema 引用            | server 类型、client、合并 spec         |
 
@@ -98,16 +98,18 @@ service 项必须声明：
 |--------------|-------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `query`      | `queries`                                                               | 调用本模块 `data.queries.*`；`queries[].input` 的 key 必须是查询参数名，必填参数必须全部出现，不写 `ctx`（生成器注入）；`step.errors` 缺省取所有 query 错误的并集 |
 | `service`    | `services`                                                              | 调用其他（或本模块）service；`services[].input[].name` 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`                                            |
-| `logic`      | `output` + `errors`；可选 `input` / `queries` / `rules` / `events`      | 手写实现；`queries` 是 `{query, input}` 对象列表；`input` 声明本步读取的入参与用途                                                                                |
-| `transition` | `lifecycle`（只能引用 destroy/transition）；可选 `input` / `output` / `queries` / `rules` / `events` | 执行生命周期动作；create 只能由 `logic`/`query` step 实现                                                                                                          |
+| `logic`      | `output` + `errors`；可选 `input` / `when` / `queries` / `rules` / `events` | 手写实现；`queries` 是 `{query, input}` 对象列表；`input` 声明本步读取的入参与用途；`when` 声明静态跳过条件                                                         |
+| `transition` | `lifecycle`（只能引用 destroy/transition）；可选 `input` / `when` / `output` / `queries` / `rules` / `events` | 执行生命周期动作；create 只能由 `logic`/`query` step 实现                                                                                                          |
 | `tx_begin`   | —                                                                       | 事务开始；只允许 `id` / `kind` / `summary`，`transaction≠none` 时必须是首步                                                                                       |
 | `tx_commit`  | —                                                                       | 事务提交；只允许 `id` / `kind` / `summary`，`transaction≠none` 时必须是末步，关闭不得遗漏                                                                          |
 
-字段按 kind 取交集：`id` / `kind` / `summary` 恒有；`lifecycle` 是公共反向引用；`input` 仅 `logic` / `transition`；`output` 仅 `query` / `logic` /
+字段按 kind 取交集：`id` / `kind` / `summary` 恒有；`lifecycle` 是公共反向引用；`input` / `when` 仅 `logic` / `transition`；`output` 仅 `query` / `logic` /
 `transition`；`errors` 仅 `query` / `service` / `logic` / `transition`；`depends_on` 除 tx 步骤外可选（按模板顺序书写）。
 
 - `input` 是 `{name, value, description}` 列表；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式；
-  `description` 说明这项输入的业务含义，分支条件也写在这里。
+  `description` 说明这项输入的业务含义；静态分支用 `when`。
+- `when` 是 `{input, equals|in}` 列表，只允许 `logic` / `transition`；每个条件必须引用本步 `input`，`equals` 与 `in`
+  二选一；值类型必须与 input 的静态类型兼容（boolean / integer / string / 枚举名）；全部为真才执行本步。
 - 计算值必须先落成前序 `kind: logic` step 的 `output`，再以 `step.<id>.<path>` 引用；`expr:` 软区已移除。
 - `depends_on` 是可选顺序提示；`input` / `queries[].input` 引用 `step.<id>` 只要求该步骤在前序，不要求写入 `depends_on`。
 - `queries` 是 `{query, input}` 列表；`kind: query` 也使用它，一步可以声明多个 query，由实现决定实际执行哪个。
@@ -116,12 +118,14 @@ service 项必须声明：
   拥有，service 与 step 不重复声明。
 - `step.errors` 只列该步骤实际返回的领域错误：`kind: query` 缺省取所有 queries 的并集；`kind: service` 必须是目标 service
   错误并集的子集；`logic/transition` 必须覆盖其 `queries` 与 `rules.on_violation` 的 `errors`。
+- 生命周期 step 还必须声明 `state.write`：`status` 必须等于动作的 `to`（create 用 `initial`）；`queries` 必须是本步
+  `queries` 的子集，且写 subject 主表、存在参数绑定该维度的状态列；create/transition/有 `to` 的 destroy 必须声明。
 - 数据链是硬约束：`input` 的值只能是 `params.<path>` 或 `step.<id>.<path>`，且值的静态类型必须与目标参数类型兼容
   （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；`logic/transition` 的每个显式
   `output` 必须被后续 `input`/`queries[].input` 引用，或与 `returns` 业务字段同名；`returns` 的每个业务字段必须有同名、类型一致且
   `nullable` 一致的产出（`*T` 视为可空；`err` 不参与）；service 的每个非 `ctx` 参数必须被至少一个 `input` 引用。
 - `params[].type` 只允许基础类型、`data.enums.*`、`data.entities.*`、本地 schema 或 `_types` 类型族；指针与 `List<>` 各最多一层。
-- 分支、循环与错误流转由实现决定；契约不声明 `when` / `on_error` / `max_iterations`。
+- `when` 是唯一的静态跳过条件；循环与错误流转由实现决定；契约不声明 `on_error` / `max_iterations`。
 
 ### 3.2 事务与写归属
 
@@ -142,9 +146,14 @@ service 项必须声明：
 `rules` 仍属于功能规格，放在 `contracts/features/rules/`；`lifecycles` 属于能力层，放在
 `contracts/capabilities/lifecycles/`：
 
+- 一个 lifecycle = 一个状态维度：`subjects` 写 `{entity, field}`，同一实体的多个状态字段拆成多份契约，同一 `(entity, field)` 只能被一份契约声明；
+- `transitions[].requires` 声明跨维度前置状态（`{lifecycle, state}`，AND 语义）；目标维度不存在或不在该状态时必须返回该转换的 `on_violation`；
 - service 的 `kind: logic` step 用 `rules: [feature.rules.*]` 引用业务规则；
 - 任意 step 用 `lifecycle: [cap.lifecycles.*.*]` 回引生命周期动作（create/destroy/transition）；
-- `cap.lifecycles` 的 `create.step` / `destroy.step` / `transitions[].implemented_by` 由 `make gen-graph` 写回；
+- `cap.lifecycles` 的 `create.steps` / `destroy.steps` / `transitions[].implemented_by` 由 `make gen-graph` 写回；
+- 每个生命周期动作的 step 必须声明 `state.write`（status + queries）；create 的 status 等于 `initial`，transition/destroy 等于 `to`；
+  queries 必须写 subject 主表且参数绑定该维度的状态列；
+- 事件只由 service step 的 `events` 声明，lifecycle 不写 `side_effects`；
 - `feature.rules` 的 `implemented_by` 仍指向 service 项。
 
 capabilities 不承载 `rules/` 目录；features 不承载 `states/` 目录。

@@ -6,10 +6,9 @@
 
 | 术语 | 英文 / 标识符 | 定义 | 禁止使用 |
 |---|---|---|---|
-| 账号 | account | 业务主体，只含归属、编号、昵称、用户关联、状态；不含认证信息 | user、member（`user` 仅保留给未来 C 端） |
-| 归属 | own_type / own_id | 数据归属主体类型与 ID（user/admin/system），决定数据隔离与责任人 | owner（易与模块归属混淆） |
+| 账号 | account | 业务主体，只含编号、昵称、用户关联、状态；不含认证信息 | user、member（`user` 仅保留给未来 C 端） |
 | 认证状态 | auth_status | 未认证 / 已认证 / 已停用；只有已认证且未停用可用于登录 | active、inactive（易与 token_status 混淆） |
-| 关联用户 | user_id | 账号关联的用户 ID；与归属 ID 可不同，不等于 own_id 的别名 | owner_id、uid |
+| 关联用户 | user_id | 账号关联的用户 ID；不做数据库外键 | owner_id、uid |
 | 账号编号 | number | 账号的业务唯一编号 | code、sn（易与区号/序列号混淆） |
 | 密码认证 | auth_pwd | 账号的密码登录记录 | password、pwd（作为实体名） |
 | 手机认证 | auth_phone | 账号绑定的手机号记录 | mobile、phone（作为实体名） |

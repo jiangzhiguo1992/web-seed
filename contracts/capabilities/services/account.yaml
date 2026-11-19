@@ -12,14 +12,11 @@ schemas:
     type: object
     properties:
       - { name: status, schema: { ref: data.enums.account_status }, nullable: true, description: "账号状态过滤" }
-      - { name: own_type, schema: { ref: data.enums.own_type }, nullable: true, description: "归属类型过滤" }
       - { name: offset, schema: { type: page_offset }, description: "分页偏移；默认 0" }
       - { name: limit, schema: { type: page_limit }, description: "分页大小；默认 20" }
   CreateAccountInput:
     type: object
     properties:
-      - { name: own_type, schema: { ref: data.enums.own_type }, required: true, description: "归属类型" }
-      - { name: own_id, schema: { type: integer }, required: true, description: "归属对象 ID" }
       - { name: number, schema: { type: account_number }, required: true, description: "账号编号" }
       - { name: nickname, schema: { type: account_nickname }, required: true, description: "账号昵称" }
       - { name: user_id, schema: { type: integer }, nullable: true, description: "关联用户 ID" }
@@ -87,7 +84,6 @@ services:
           - query: data.queries.account.list_accounts
             input:
               - { name: status, value: params.filter.status, description: "账号状态筛选" }
-              - { name: own_type, value: params.filter.own_type, description: "归属类型筛选" }
               - { name: offset, value: params.filter.offset, description: "分页偏移" }
               - { name: limit, value: params.filter.limit, description: "分页上限" }
       - { id: commit, kind: tx_commit, summary: "提交只读事务" }
@@ -110,15 +106,22 @@ services:
         output:
           - { name: id, type: integer, description: "新账号 ID" }
         errors: [ ]
+      - id: status_pending
+        kind: logic
+        summary: "确定创建后的初始状态 pending"
+        output:
+          - { name: status, type: data.enums.account_status, description: "初始状态 pending" }
+        errors: [ ]
       - id: create
         kind: logic
         summary: "校验编号与归属规则，查重后插入账号"
+        input:
+          - { name: status, value: step.status_pending.status, description: "初始状态 pending" }
         output:
           - { name: account, type: data.entities.account, description: "新建的账号" }
         errors:
           - platform.errors.ACCOUNT_NUMBER_INVALID
           - platform.errors.ACCOUNT_NUMBER_TAKEN
-          - platform.errors.ACCOUNT_OWN_INVALID
           - platform.errors.ACCOUNT_NICKNAME_INVALID
           - platform.errors.COMMON_FORBIDDEN
         queries:
@@ -128,19 +131,20 @@ services:
           - query: data.queries.account.create_account
             input:
               - { name: id, value: step.new_id.id, description: "新账号 ID" }
-              - { name: own_type, value: params.input.own_type, description: "账号归属类型" }
-              - { name: own_id, value: params.input.own_id, description: "账号归属主体 ID" }
               - { name: number, value: params.input.number, description: "账号手机号" }
               - { name: nickname, value: params.input.nickname, description: "账号昵称" }
               - { name: user_id, value: params.input.user_id, description: "关联用户 ID" }
-        events:
-          - cap.events.account.created
+              - { name: status, value: step.status_pending.status, description: "初始状态 pending" }
+        events: [ cap.events.account.created ]
         rules:
           - "feature.rules.account.number_format"
           - "feature.rules.account.number_unique"
-          - "feature.rules.account.own_pair"
           - "feature.rules.account.nickname_length"
         lifecycle: [ cap.lifecycles.account.create ]
+        state:
+          write:
+            status: pending
+            queries: [ data.queries.account.create_account ]
       - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: update
@@ -211,10 +215,18 @@ services:
           - service: cap.services.auth.revoke_all_for_account
             input:
               - { name: account_id, value: params.id, description: "被注销账号 ID" }
+      - id: status_deleted
+        kind: logic
+        summary: "确定软删后的目标状态 deleted"
+        output:
+          - { name: status, type: data.enums.account_status, description: "目标状态 deleted" }
+        errors: [ ]
       - id: soft_delete
         kind: transition
         summary: "软删账号并保证 status/deleted_at 一致"
         depends_on: [ revoke_auth ]
+        input:
+          - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
         output: [ ]
         errors:
           - platform.errors.ACCOUNT_NOT_FOUND
@@ -225,11 +237,17 @@ services:
           - query: data.queries.account.soft_delete_account
             input:
               - { name: id, value: params.id, description: "待软删账号 ID" }
+              - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
+        events: [ cap.events.account.deleted ]
         rules:
           - "feature.rules.account.deleted_cannot_modify"
           - "feature.rules.account.delete_revokes_auth"
           - "feature.rules.account.deleted_status_consistent"
         lifecycle: [ cap.lifecycles.account.destroy ]
+        state:
+          write:
+            status: deleted
+            queries: [ data.queries.account.soft_delete_account ]
       - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: activate
@@ -267,7 +285,12 @@ services:
             input:
               - { name: id, value: params.id, description: "待激活账号 ID" }
               - { name: status, value: step.target_status.status, description: "目标状态：激活" }
+        events: [ cap.events.account.activated, cap.events.account.reactivated ]
         lifecycle: [ cap.lifecycles.account.activate, cap.lifecycles.account.reactivate ]
+        state:
+          write:
+            status: active
+            queries: [ data.queries.account.set_account_status ]
       - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: suspend
@@ -308,5 +331,10 @@ services:
             input:
               - { name: id, value: params.id, description: "待封禁账号 ID" }
               - { name: status, value: step.target_status.status, description: "目标状态：封禁" }
+        events: [ cap.events.account.suspended ]
         lifecycle: [ cap.lifecycles.account.suspend ]
+        state:
+          write:
+            status: suspended
+            queries: [ data.queries.account.set_account_status ]
       - { id: commit, kind: tx_commit, summary: "提交写事务" }

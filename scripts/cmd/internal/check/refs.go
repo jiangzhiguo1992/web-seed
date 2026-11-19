@@ -211,12 +211,21 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 			c.rulef("schema.index", "%s: path %s has id %s, expected %s", rel, p, got, id)
 		}
 	}
-	if enumSchema.Targets.File != "" && enumSchema.Targets.ID != "" {
-		p := strings.TrimPrefix(enumSchema.Targets.File, "contracts/")
-		if got, ok := byPath[p]; !ok {
-			c.rulef("schema.index", "%s: missing entry for %s", rel, p)
-		} else if got != enumSchema.Targets.ID {
-			c.rulef("schema.index", "%s: %s has id %s, expected %s", rel, p, got, enumSchema.Targets.ID)
+	if enumSchema.Targets.Dir != "" && enumSchema.Targets.Glob != "" {
+		for _, file := range glob(c.root, filepath.Join(enumSchema.Targets.Dir, enumSchema.Targets.Glob)) {
+			wantID := enumSchema.Targets.FileID(filepath.Base(file))
+			if wantID == "" {
+				continue
+			}
+			p := strings.TrimPrefix(relPath(c.root, file), "contracts/")
+			got, ok := byPath[p]
+			if !ok {
+				c.rulef("schema.index", "%s: missing entry for %s (%s)", rel, wantID, p)
+				continue
+			}
+			if got != wantID {
+				c.rulef("schema.index", "%s: path %s has id %s, expected %s", rel, p, got, wantID)
+			}
 		}
 	}
 	for _, schema := range []*Schema{entitySchema, querySchema} {

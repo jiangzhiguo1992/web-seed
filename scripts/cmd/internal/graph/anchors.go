@@ -204,17 +204,12 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 			fileID, _ := doc["id"].(string)
 			relFile := rel(root, f)
 			if _, ok := asMap(doc["create"]); ok {
-				a.LifecycleFiles[relFile] = append(a.LifecycleFiles[relFile], lifecycleFileAction{id: fileID + ".create", name: "create", kind: "create"})
+				actionID := fileID + ".create"
+				a.LifecycleFiles[relFile] = append(a.LifecycleFiles[relFile], lifecycleFileAction{id: actionID, name: "create", kind: "create"})
 			}
-			if destroy, ok := asMap(doc["destroy"]); ok {
+			if _, ok := asMap(doc["destroy"]); ok {
 				actionID := fileID + ".destroy"
 				a.LifecycleFiles[relFile] = append(a.LifecycleFiles[relFile], lifecycleFileAction{id: actionID, name: "destroy", kind: "destroy"})
-				for _, rawEvent := range asList(destroy["side_effects"]) {
-					eventID, _ := rawEvent.(string)
-					for _, stepID := range a.LifecycleSteps[actionID] {
-						a.addEvent(eventID, serviceIDFromStepID(stepID))
-					}
-				}
 			}
 			for _, raw := range asList(doc["transitions"]) {
 				item, _ := asMap(raw)
@@ -224,12 +219,6 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				}
 				actionID := fileID + "." + name
 				a.LifecycleFiles[relFile] = append(a.LifecycleFiles[relFile], lifecycleFileAction{id: actionID, name: name, kind: "transition"})
-				for _, rawEvent := range asList(item["side_effects"]) {
-					eventID, _ := rawEvent.(string)
-					for _, stepID := range a.LifecycleSteps[actionID] {
-						a.addEvent(eventID, serviceIDFromStepID(stepID))
-					}
-				}
 			}
 		}
 	}
@@ -280,11 +269,8 @@ func (a *Anchors) Write(root string) ([]string, error) {
 				}
 				continue
 			}
-			step := ""
-			if steps := a.LifecycleSteps[item.id]; len(steps) > 0 {
-				step = steps[0]
-			}
-			ok, err := syncNestedField(filepath.Join(root, file), item.kind, "step", step)
+			steps := a.LifecycleSteps[item.id]
+			ok, err := syncNestedField(filepath.Join(root, file), item.kind, "steps", renderFlowList(steps))
 			if err != nil {
 				return changed, err
 			}
@@ -356,16 +342,13 @@ func (a *Anchors) Check(root string) ([]string, error) {
 				continue
 			}
 			obj, _ := asMap(doc[item.kind])
-			got := ""
+			got := []string{}
 			if obj != nil {
-				got, _ = obj["step"].(string)
+				got = stringList(obj["steps"])
 			}
-			want := ""
-			if steps := a.LifecycleSteps[item.id]; len(steps) > 0 {
-				want = steps[0]
-			}
-			if got != want {
-				drift = append(drift, fmt.Sprintf("%s: %s.step must be %s, got %s", file, item.id, want, got))
+			want := a.LifecycleSteps[item.id]
+			if !sameSet(got, want) {
+				drift = append(drift, fmt.Sprintf("%s: %s.steps must be %v, got %v", file, item.id, want, got))
 			}
 		}
 	}
@@ -411,15 +394,6 @@ func sortedLifecycleFileKeys(m map[string][]lifecycleFileAction) []string {
 	return out
 }
 
-// serviceIDFromStepID 从 cap.services.<file>.<service>.<step> 取回 service item ID。
-func serviceIDFromStepID(stepID string) string {
-	parts := strings.Split(stepID, ".")
-	if len(parts) < 5 {
-		return ""
-	}
-	return strings.Join(parts[:4], ".")
-}
-
 // syncNestedField 在 top-level objectKey 块内设置 field。
 func syncNestedField(path, objectKey, field, value string) (bool, error) {
 	b, err := os.ReadFile(path)
@@ -450,7 +424,23 @@ func syncNestedField(path, objectKey, field, value string) (bool, error) {
 			if strings.TrimSpace(strings.TrimPrefix(trim, field+":")) == value {
 				return false, nil
 			}
-			lines[i] = "  " + field + ": " + value
+			j := i + 1
+			for j < end {
+				if strings.TrimSpace(lines[j]) == "" {
+					j++
+					continue
+				}
+				indent := len(lines[j]) - len(strings.TrimLeft(lines[j], " "))
+				if indent <= 2 {
+					break
+				}
+				j++
+			}
+			if j > i+1 {
+				lines = append(lines[:i], append([]string{"  " + field + ": " + value}, lines[j:]...)...)
+			} else {
+				lines[i] = "  " + field + ": " + value
+			}
 			return true, os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
 		}
 	}
@@ -510,7 +500,23 @@ func syncItemField(path, listKey, itemKey, itemValue, field string, values []str
 		if lines[fieldLine] == rendered {
 			return false, nil
 		}
-		lines[fieldLine] = rendered
+		j := fieldLine + 1
+		for j < itemEnd {
+			if strings.TrimSpace(lines[j]) == "" {
+				j++
+				continue
+			}
+			indent := len(lines[j]) - len(strings.TrimLeft(lines[j], " "))
+			if indent <= 4 {
+				break
+			}
+			j++
+		}
+		if j > fieldLine+1 {
+			lines = append(lines[:fieldLine], append([]string{rendered}, lines[j:]...)...)
+		} else {
+			lines[fieldLine] = rendered
+		}
 	} else {
 		anchor := "summary:"
 		switch field {

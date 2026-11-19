@@ -321,6 +321,60 @@ services:
               - { name: device_id, value: step.device_id.device_id, description: "请求设备标识" }
               - { name: location, value: step.location.location, description: "请求位置" }
               - { name: input_hash, value: step.input_hash.input_hash, description: "用户输入的哈希" }
+      - id: status_verified
+        kind: logic
+        summary: "目标状态：已认证"
+        output:
+          - { name: status, type: data.enums.auth_status, description: "目标状态：已认证" }
+        errors: [ ]
+      - id: apply_phone_verified
+        kind: transition
+        summary: "验证成功且 auth_type=phone 时把手机绑定置为 verified"
+        input:
+          - { name: auth_id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
+          - { name: auth_type, value: params.input.auth_type, description: "认证类型" }
+          - { name: verified, value: step.check.verified, description: "验证码是否匹配" }
+          - { name: status, value: step.status_verified.status, description: "目标状态：已认证" }
+        when:
+          - { input: verified, equals: true }
+          - { input: auth_type, equals: phone }
+        errors:
+          - platform.errors.AUTH_VERIFICATION_INVALID
+          - platform.errors.COMMON_INTERNAL
+        queries:
+          - query: data.queries.auth.set_auth_phone_status
+            input:
+              - { name: id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
+              - { name: status, value: step.status_verified.status, description: "目标状态：已认证" }
+        lifecycle: [ cap.lifecycles.auth_contact.verify ]
+        state:
+          write:
+            status: verified
+            queries: [ data.queries.auth.set_auth_phone_status ]
+      - id: apply_email_verified
+        kind: transition
+        summary: "验证成功且 auth_type=email 时把邮箱绑定置为 verified"
+        input:
+          - { name: auth_id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
+          - { name: auth_type, value: params.input.auth_type, description: "认证类型" }
+          - { name: verified, value: step.check.verified, description: "验证码是否匹配" }
+          - { name: status, value: step.status_verified.status, description: "目标状态：已认证" }
+        when:
+          - { input: verified, equals: true }
+          - { input: auth_type, equals: email }
+        errors:
+          - platform.errors.AUTH_VERIFICATION_INVALID
+          - platform.errors.COMMON_INTERNAL
+        queries:
+          - query: data.queries.auth.set_auth_email_status
+            input:
+              - { name: id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
+              - { name: status, value: step.status_verified.status, description: "目标状态：已认证" }
+        lifecycle: [ cap.lifecycles.auth_contact.verify ]
+        state:
+          write:
+            status: verified
+            queries: [ data.queries.auth.set_auth_email_status ]
       - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: revoke_by_auth

@@ -12,80 +12,106 @@ import (
 func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 	c.checkEnumSchema(schema)
 	c.enumCodes = map[string]map[int]bool{}
-	if schema.Targets.File == "" || schema.Targets.ID == "" {
-		c.rulef("schema.targets", "%s: targets.file and targets.id must not be empty", schema.ID)
+	files := c.enumFiles(schema)
+	if len(files) == 0 {
+		c.rulef("schema.targets", "%s: targets.dir/glob or targets.file must not be empty", schema.ID)
 		return map[string]map[string]bool{}
 	}
-	path := filepath.Join(c.root, schema.Targets.File)
-	rel := relPath(c.root, path)
-	doc, err := loadYAML(path)
-	if err != nil {
-		c.rulef("schema.load", "%s: %v", rel, err)
-		return map[string]map[string]bool{}
-	}
-	c.validateDoc(doc, schema.Fields, rel)
-	c.checkFieldOrder(rel, schema.Fields, orderRules{top: "enum-key-order", nested: "enum-key-order"})
-	c.checkStability(doc, rel)
-	if s, ok := doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
-		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
-	}
-	if id, ok := doc["id"].(string); ok && id != schema.Targets.ID {
-		c.rulef("enum-id", "%s: id must be %s", rel, schema.Targets.ID)
-	}
-	prefix := schema.Targets.ID + "."
 	usages := c.enumUsages()
 	enums := map[string]map[string]bool{}
-	names := map[string]bool{}
+	names := map[string]string{}
 	goTypes := map[string]string{}
 	tsTypes := map[string]string{}
-	rawEnums := asList(doc["enums"])
-	if _, present := doc["enums"]; present && len(rawEnums) == 0 {
-		c.rulef("schema.non-empty", "%s: enums must not be empty", rel)
-	}
-	for i, raw := range rawEnums {
-		m, ok := asMap(raw)
-		if !ok {
-			c.rulef("schema.type", "%s: enums[%d] must be an object", rel, i)
+	for _, path := range files {
+		rel := relPath(c.root, path)
+		doc, err := loadYAML(path)
+		if err != nil {
+			c.rulef("schema.load", "%s: %v", rel, err)
 			continue
 		}
-		name, _ := m["name"].(string)
-		id := prefix + name
-		if names[name] {
-			c.rulef("schema.unique-names", "%s: enums[%d]: duplicate name %s", rel, i, name)
+		c.validateDoc(doc, schema.Fields, rel)
+		c.checkFieldOrder(rel, schema.Fields, orderRules{top: "enum-key-order", nested: "enum-key-order"})
+		c.checkStability(doc, rel)
+		if s, ok := doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
+			c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 		}
-		names[name] = true
-		c.checkEnumTypeName(goTypes, "go_type", i, name, m, rel)
-		c.checkEnumTypeName(tsTypes, "ts_type", i, name, m, rel)
-		values := map[string]bool{}
-		codes := map[int]bool{}
-		rawValues := asList(m["values"])
-		if _, present := m["values"]; present && len(rawValues) == 0 {
-			c.rulef("schema.non-empty", "%s: enums[%d] (%s): values must not be empty", rel, i, name)
+		fileID := schema.Targets.FileID(filepath.Base(path))
+		if id, ok := doc["id"].(string); ok && id != fileID {
+			c.rulef("enum-id", "%s: id must be %s", rel, fileID)
 		}
-		for j, rv := range rawValues {
-			vm, ok := asMap(rv)
+		rawEnums := asList(doc["enums"])
+		if _, present := doc["enums"]; present && len(rawEnums) == 0 {
+			c.rulef("schema.non-empty", "%s: enums must not be empty", rel)
+		}
+		fileNames := map[string]bool{}
+		fileGoTypes := map[string]string{}
+		fileTSTypes := map[string]string{}
+		for i, raw := range rawEnums {
+			m, ok := asMap(raw)
 			if !ok {
-				c.rulef("schema.type", "%s: enums[%d].values[%d] must be an object", rel, i, j)
+				c.rulef("schema.type", "%s: enums[%d] must be an object", rel, i)
 				continue
 			}
-			v, _ := vm["value"].(string)
-			if values[v] {
-				c.rulef("enum-values-unique", "%s: enums[%d] (%s): duplicate value %s", rel, i, name, v)
+			name, _ := m["name"].(string)
+			id := enumIDPrefix + name
+			if prev, ok := names[name]; ok {
+				c.rulef("schema.unique-names", "%s: enums[%d]: duplicate name %s (also %s)", rel, i, name, prev)
 			}
-			values[v] = true
-			if n, ok := toInt(vm["code"]); ok {
-				if codes[n] {
-					c.rulef("enum-code-unique", "%s: enums[%d] (%s): duplicate code %d", rel, i, name, n)
+			names[name] = rel
+			fileNames[name] = true
+			if typ, _ := m["go_type"].(string); typ != "" {
+				fileGoTypes[typ] = name
+			}
+			if typ, _ := m["ts_type"].(string); typ != "" {
+				fileTSTypes[typ] = name
+			}
+			c.checkEnumTypeName(goTypes, "go_type", i, name, m, rel)
+			c.checkEnumTypeName(tsTypes, "ts_type", i, name, m, rel)
+			values := map[string]bool{}
+			codes := map[int]bool{}
+			rawValues := asList(m["values"])
+			if _, present := m["values"]; present && len(rawValues) == 0 {
+				c.rulef("schema.non-empty", "%s: enums[%d] (%s): values must not be empty", rel, i, name)
+			}
+			for j, rv := range rawValues {
+				vm, ok := asMap(rv)
+				if !ok {
+					c.rulef("schema.type", "%s: enums[%d].values[%d] must be an object", rel, i, j)
+					continue
 				}
-				codes[n] = true
+				v, _ := vm["value"].(string)
+				if values[v] {
+					c.rulef("enum-values-unique", "%s: enums[%d] (%s): duplicate value %s", rel, i, name, v)
+				}
+				values[v] = true
+				if n, ok := toInt(vm["code"]); ok {
+					if codes[n] {
+						c.rulef("enum-code-unique", "%s: enums[%d] (%s): duplicate code %d", rel, i, name, n)
+					}
+					codes[n] = true
+				}
 			}
+			if _, exists := enums[id]; exists {
+				c.rulef("schema.unique-names", "%s: enums[%d]: duplicate enum id %s", rel, i, id)
+			}
+			enums[id] = values
+			c.enumCodes[id] = codes
+			c.checkEnumUsedBy(rel, i, id, m, usages[id])
 		}
-		enums[id] = values
-		c.enumCodes[id] = codes
-		c.checkEnumUsedBy(rel, i, id, m, usages[id])
+		c.checkEnumDoNot(doc, rel, fileID, fileNames, fileGoTypes, fileTSTypes)
 	}
-	c.checkEnumDoNot(doc, rel, schema.Targets.ID, names, goTypes, tsTypes)
 	return enums
+}
+
+// enumIDPrefix 是枚举项 ID 的固定前缀；文件 ID 是 data.enums.<file>，与枚举项 ID 不同。
+const enumIDPrefix = "data.enums."
+
+// enumFiles 返回 targets.dir/glob 下的枚举文件。
+func (c *Checker) enumFiles(schema *Schema) []string {
+	if schema.Targets.Dir == "" || schema.Targets.Glob == "" {
+		return nil
+	}
+	return glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
 }
 
 // checkEnumDoNot 要求 do_not 命中集合 ID、枚举 name 或 go_type/ts_type，避免通用规则堆在实例。
@@ -124,7 +150,11 @@ func (c *Checker) checkEnumDoNot(doc map[string]any, rel, setID string, enumName
 
 // checkEnumSchema 防止 meta 字段树被误删；硬校验依赖这些 required 字段。
 func (c *Checker) checkEnumSchema(schema *Schema) {
-	for _, name := range []string{"schema_version", "id", "summary", "stability"} {
+	required := []string{"schema_version", "id", "summary", "stability"}
+	if schema.Targets.Dir != "" {
+		required = append(required, "owner_module")
+	}
+	for _, name := range required {
 		f, ok := contractspec.FindField(schema.Fields, name)
 		if !ok || !f.Required {
 			c.rulef("schema.meta", "%s: %s must be required", schema.ID, name)

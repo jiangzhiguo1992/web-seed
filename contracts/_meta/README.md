@@ -99,7 +99,7 @@ false，省略不写。槽位键出现在节点位置即报 `schema.slot-positio
 | 命令                                                                                                    | 作用                                                                                                                     | 何时跑                      |
 |---------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|-----------------------------|
 | `make contract-new type=data.tables name=note module=notes summary="备注表"`                            | 按 `_meta/data.tables.yaml` 生成最小表骨架；`column_type=decimal` 可指定第一列类型并带出扩展字段                         | 新建表前                    |
-| `make contract-new type=data.enums name=note_status`                                                    | 按 `_meta/data.enums.yaml` 打印枚举项片段                                                                                | 新增枚举时                  |
+| `make contract-new type=data.enums name=note_status module=notes`                                      | 按 `_meta/data.enums.yaml` 打印枚举项片段（目标文件 `contracts/data/enums/notes.yaml`）                                  | 新增枚举时                  |
 | `make contract-new type=data.entities name=note table=note`                                             | 按 `_meta/data.entities.yaml` 生成单表读模型骨架；owner_module 从目标表读取（目标表必须已存在）                          | 新建实体时                  |
 | `make contract-new type=data.queries name=note module=notes table=note`                                 | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在）                                       | 新建查询集时                |
 | `make contract-new type=cap.services name=invoice module=invoice`                                       | 按 `_meta/cap.services.yaml` 生成服务文件骨架（一个 service + 一条 logic step；interface 名由 owner_module + file 派生） | 新建服务契约前              |
@@ -197,10 +197,10 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
     - `_meta/*.yaml` 以 `type` 作为类型 registry；checker/contract-new 按 type 查找，不再写死 meta 路径
     - 错误统一带 `[rule-id]` 前缀：类型规则用 `_meta/<type>.yaml` 的 `rules`，通用结构/格式用 `schema.*`（含
       `schema.targets`）
-- `data/enums.yaml`
-    - 集合 ID；item 不写 id，item ID 由 `name` 派生为 `data.enums.<name>`；值唯一、`code` 唯一且为 int32（0..2147483647）
-    - `name` / `go_type` / `ts_type` 在集合内唯一；类型名冲突会让 Go/TS 产物互相覆盖
-    - `summary` 非空；`stability: stable` 不得含 TODO/FIXME
+- `data/enums/<module>.yaml`
+    - 文件 ID 为 `data.enums.<module>`；item 不写 id，item ID 由 `name` 派生为 `data.enums.<name>`，跨文件全局唯一；值唯一、`code` 唯一且为 int32（0..2147483647）
+    - `name` / `go_type` / `ts_type` 在全部枚举文件中唯一；类型名冲突会让 Go/TS 产物互相覆盖
+    - `summary` 非空；`owner_module` 必填；`stability: stable` 不得含 TODO/FIXME
     - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
     - `used_by` 是 entity 与 capability ID 的并集，必须与 entity 字段和 capability 引用完全一致、不得为空、逐项竖排；不列物理表或
       feature

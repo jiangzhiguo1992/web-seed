@@ -63,7 +63,7 @@ fields:
     description: "业务字段与关系字段"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名；首字母大小写表示导出性" }
-      - { name: type, type: string, required: false, description: "标量：类型族键；关系：目标 entity ID；nullable=true 表示指针" }
+      - { name: type, type: string, required: false, description: "标量：类型族键；关系：目标 entity ID，List<data.entities.*> 表示一对多；nullable=true 表示指针" }
       - { name: nullable, type: boolean, required: false, default: false, description: "显式指针；true 表示 *T；且必须与来源列 nullable 一致" }
       - { name: json_name, type: string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "JSON 字段名" }
       - { name: description, type: string, required: true, description: "字段语义" }
@@ -127,4 +127,5 @@ rules:
   - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
   - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入，禁止手改", implemented_by: [ entity-used-by ] }
   - { id: entity-included-by, text: "model.included_by 由 gen-graph 生成，禁止手改；必须等于关系字段 type 指向本实体的 entity 集合；每个 entity 必须存在且确实指向本实体", implemented_by: [ entity-included-by ] }
+  - { id: entity-relation-arity, text: "关系基数必须与类型形状一致：one_to_many 用 List<data.entities.*>，one_to_one/many_to_one 用单个 data.entities.*", implemented_by: [ entity-relation-arity ] }
   - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

@@ -15,8 +15,6 @@ data:
   submit:
     capability: cap.services.account.create
     params:
-      own_type: { from: form.own_type, type: string, required: true }
-      own_id: { from: form.own_id, type: integer, required: true }
       number: { from: form.number, type: string, required: true }
       nickname: { from: form.nickname, type: string, required: true }
       user_id: { from: form.user_id, type: integer, optional: true }
@@ -45,15 +43,6 @@ actions:
     on_success: "navigate(feature.pages.account_detail)"
 
 fields:
-  - name: own_type
-    type: string
-    required: true
-    maxLength: 32
-    label: "归属类型"
-  - name: own_id
-    type: integer
-    required: true
-    label: "归属 ID"
   - name: number
     type: string
     required: true

@@ -82,7 +82,7 @@ schemas:
         type: integer
 services: []
 `)
-	writeFixture(t, root, "contracts/data/enums.yaml", `id: data.enums
+	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
 enums: []
 `)
 	if err := os.MkdirAll(filepath.Join(root, "contracts/capabilities/services"), 0o755); err != nil {
@@ -161,7 +161,7 @@ components:
 schemas: {}
 services: []
 `)
-	writeFixture(t, root, "contracts/data/enums.yaml", `id: data.enums
+	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
 enums: []
 `)
 	if err := os.MkdirAll(filepath.Join(root, "contracts/data/entities"), 0o755); err != nil {
@@ -217,7 +217,7 @@ components:
 schemas: {}
 services: []
 `)
-	writeFixture(t, root, "contracts/data/enums.yaml", `id: data.enums
+	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
 enums: []
 `)
 	if err := os.MkdirAll(filepath.Join(root, "contracts/data/entities"), 0o755); err != nil {

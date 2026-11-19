@@ -195,14 +195,15 @@ func Compute(root string) (*Snapshot, error) {
 		for _, raw := range asList(doc["fields"]) {
 			field, _ := asMap(raw)
 			typ, _ := field["type"].(string)
-			if !strings.HasPrefix(typ, "data.entities.") {
+			targetID := entityTypeID(typ)
+			if targetID == "" {
 				continue
 			}
 			src, _ := asMap(field["source"])
 			if _, ok := asMap(src["join"]); !ok {
 				continue
 			}
-			target := entities[typ]
+			target := entities[targetID]
 			if target == nil {
 				name, _ := field["name"].(string)
 				return nil, fmt.Errorf("%s: fields.%s type %s is not a data.entities contract", entityFiles[id], name, typ)
@@ -896,4 +897,18 @@ func sameSet(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// entityTypeID 从实体字段 type 提取目标 entity ID，兼容 *T 与 List<T>。
+func entityTypeID(typ string) string {
+	typ = strings.TrimSpace(typ)
+	typ = strings.TrimPrefix(typ, "*")
+	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
+		typ = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"))
+		typ = strings.TrimPrefix(typ, "*")
+	}
+	if strings.HasPrefix(typ, "data.entities.") {
+		return typ
+	}
+	return ""
 }

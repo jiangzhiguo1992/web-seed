@@ -1,0 +1,39 @@
+# 密码认证绑定生命周期：创建即 verified，可停用/启用，软删账号时销毁。
+
+id: cap.lifecycles.auth_pwd
+summary: "密码认证绑定生命周期"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "密码创建即 verified；不要在创建后再走一次验证"
+  - "update 只改密码哈希，不改变 auth_status"
+
+subjects:
+  - { entity: data.entities.auth_pwd, field: status }
+initial: verified
+create:
+  steps: [ cap.services.auth.bind_password.create_bind ]
+destroy:
+  steps: [ cap.services.auth.revoke_all_for_account.revoke_bindings ]
+  from: [verified, disabled]
+states: [verified, disabled]
+transitions:
+  - name: disable
+    description: "停用密码认证"
+    from: [verified]
+    to: disabled
+    guard: true
+    on_violation: platform.errors.COMMON_INTERNAL
+    implemented_by: [ cap.services.auth.bind_password.disable_bind ]
+  - name: enable
+    description: "启用密码认证"
+    from: [disabled]
+    to: verified
+    guard: true
+    on_violation: platform.errors.COMMON_INTERNAL
+    implemented_by: [ cap.services.auth.bind_password.enable_bind ]
+forbidden_examples:
+  - { from: disabled, transition: disable, reason: "已停用不可重复停用" }
+  - { from: verified, transition: enable, reason: "已认证不可重复启用" }
+idempotent_transitions: []

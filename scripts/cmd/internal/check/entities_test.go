@@ -32,13 +32,18 @@ func baseScalarField(name, typ string) entityFieldInfo {
 }
 
 func relationField(name, targetEntity, fromTable, fromCol, toTable, toCol, load string) entityFieldInfo {
-	return entityFieldInfo{
+	f := entityFieldInfo{
 		Name: name, IsRelation: true, HasJoin: true,
 		Type: targetEntity, HasType: true,
 		JoinFromRef: fromTable + ".col." + fromCol, JoinFromTable: fromTable, JoinFromColumn: fromCol,
 		JoinToRef: toTable + ".col." + toCol, JoinToTable: toTable, JoinToColumn: toCol,
 		Lazy: load == "lazy", HasLazy: true, Description: name,
 	}
+	if target, ok := entityRef(targetEntity); ok {
+		f.TargetID = target
+	}
+	f.IsList = strings.HasPrefix(strings.TrimSpace(targetEntity), "List<")
+	return f
 }
 
 func TestEntityFieldProjectionRules(t *testing.T) {
@@ -342,15 +347,23 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 
 	c := newChecker(true)
 	e := c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Tokens", "data.entities.token", "data.tables.account", "id", "data.tables.token", "account_id", "eager"))
+	e.Fields = append(e.Fields, relationField("Tokens", "List<data.entities.token>", "data.tables.account", "id", "data.tables.token", "account_id", "eager"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid eager relation reported: %v", c.errs)
 	}
 
-	c = newChecker(false)
+	c = newChecker(true)
 	e = c.entities["data.entities.account"]
 	e.Fields = append(e.Fields, relationField("Tokens", "data.entities.token", "data.tables.account", "id", "data.tables.token", "account_id", "eager"))
+	c.checkEntityRelations(e, map[string]map[string]bool{})
+	if !strings.Contains(entityErrs(c), "[entity-relation-arity]") {
+		t.Fatalf("one_to_many single type not reported: %v", c.errs)
+	}
+
+	c = newChecker(false)
+	e = c.entities["data.entities.account"]
+	e.Fields = append(e.Fields, relationField("Tokens", "List<data.entities.token>", "data.tables.account", "id", "data.tables.token", "account_id", "eager"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-eager-index]") {
 		t.Fatalf("missing eager index not reported: %v", c.errs)

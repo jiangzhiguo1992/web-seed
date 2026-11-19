@@ -160,7 +160,7 @@ services:
       - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: bind_password
-    summary: "创建、更新或启停密码认证绑定"
+    summary: "创建、修改或启停密码认证绑定"
     visibility: public
     transaction: none
     params:
@@ -172,7 +172,7 @@ services:
     steps:
       - id: resolve
         kind: logic
-        summary: "按 action 定位目标密码绑定：create 生成新 ID，update/disable 使用现有绑定"
+        summary: "按 action 定位目标密码绑定：create 生成新 ID，update/enable/disable 使用现有绑定"
         input:
           - { name: action, value: params.input.action, description: "绑定动作" }
           - { name: account_id, value: params.input.account_id, description: "账号 ID" }
@@ -196,9 +196,9 @@ services:
         output:
           - { name: password_hash, type: string, description: "密码哈希" }
         errors: [ ]
-      - id: bind
+      - id: create_bind
         kind: logic
-        summary: "按 action 创建、改密或启停密码绑定"
+        summary: "创建密码绑定；创建即 verified"
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
@@ -213,14 +213,60 @@ services:
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
               - { name: username, value: params.input.username, description: "用户名" }
               - { name: password_hash, value: step.hash_password.password_hash, description: "密码哈希" }
+        lifecycle: [ cap.lifecycles.auth_pwd.create ]
+        state:
+          write:
+            status: verified
+            queries: [ data.queries.auth.create_auth_pwd ]
+      - id: update_bind
+        kind: logic
+        summary: "修改密码哈希；不改变认证状态"
+        output:
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
+        errors:
+          - platform.errors.AUTH_INVALID_CREDENTIALS
+          - platform.errors.COMMON_FORBIDDEN
+        queries:
           - query: data.queries.auth.update_auth_pwd_hash
             input:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: password_hash, value: step.hash_password.password_hash, description: "密码哈希" }
+      - id: enable_bind
+        kind: transition
+        summary: "启用密码绑定"
+        output:
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
+        errors:
+          - platform.errors.AUTH_INVALID_CREDENTIALS
+          - platform.errors.COMMON_FORBIDDEN
+        queries:
           - query: data.queries.auth.set_auth_pwd_status
             input:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
+        lifecycle: [ cap.lifecycles.auth_pwd.enable ]
+        state:
+          write:
+            status: verified
+            queries: [ data.queries.auth.set_auth_pwd_status ]
+      - id: disable_bind
+        kind: transition
+        summary: "停用密码绑定"
+        output:
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
+        errors:
+          - platform.errors.AUTH_INVALID_CREDENTIALS
+          - platform.errors.COMMON_FORBIDDEN
+        queries:
+          - query: data.queries.auth.set_auth_pwd_status
+            input:
+              - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
+              - { name: status, value: step.bind_status.status, description: "绑定状态码" }
+        lifecycle: [ cap.lifecycles.auth_pwd.disable ]
+        state:
+          write:
+            status: disabled
+            queries: [ data.queries.auth.set_auth_pwd_status ]
 
   - name: bind_phone
     summary: "创建或启停手机号认证绑定"
@@ -257,9 +303,9 @@ services:
         output:
           - { name: operator, type: string, description: "操作者标识" }
         errors: [ ]
-      - id: bind
+      - id: create_bind
         kind: logic
-        summary: "按 action 创建或启停手机号绑定"
+        summary: "创建手机号绑定；创建后为 unverified"
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
@@ -275,10 +321,47 @@ services:
               - { name: code, value: params.input.code, description: "手机号区号" }
               - { name: number, value: params.input.number, description: "手机号" }
               - { name: operator, value: step.request_operator.operator, description: "操作者标识" }
+        lifecycle: [ cap.lifecycles.auth_contact.create ]
+        state:
+          write:
+            status: unverified
+            queries: [ data.queries.auth.create_auth_phone ]
+      - id: enable_bind
+        kind: transition
+        summary: "启用手机号绑定"
+        output:
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
+        errors:
+          - platform.errors.AUTH_PHONE_INVALID
+          - platform.errors.COMMON_FORBIDDEN
+        queries:
           - query: data.queries.auth.set_auth_phone_status
             input:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
+        lifecycle: [ cap.lifecycles.auth_contact.enable ]
+        state:
+          write:
+            status: verified
+            queries: [ data.queries.auth.set_auth_phone_status ]
+      - id: disable_bind
+        kind: transition
+        summary: "停用手机号绑定"
+        output:
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
+        errors:
+          - platform.errors.AUTH_PHONE_INVALID
+          - platform.errors.COMMON_FORBIDDEN
+        queries:
+          - query: data.queries.auth.set_auth_phone_status
+            input:
+              - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
+              - { name: status, value: step.bind_status.status, description: "绑定状态码" }
+        lifecycle: [ cap.lifecycles.auth_contact.disable ]
+        state:
+          write:
+            status: disabled
+            queries: [ data.queries.auth.set_auth_phone_status ]
 
   - name: bind_email
     summary: "创建或启停邮箱认证绑定"
@@ -319,9 +402,9 @@ services:
           - { name: entity, type: string, description: "域名主体" }
           - { name: tld, type: string, description: "顶级域" }
         errors: [ ]
-      - id: bind
+      - id: create_bind
         kind: logic
-        summary: "按 action 创建或启停邮箱绑定"
+        summary: "创建邮箱绑定；创建后为 unverified"
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
@@ -338,10 +421,47 @@ services:
               - { name: domain, value: params.input.domain, description: "邮箱域名" }
               - { name: entity, value: step.email_parts.entity, description: "域名主体" }
               - { name: tld, value: step.email_parts.tld, description: "顶级域" }
+        lifecycle: [ cap.lifecycles.auth_contact.create ]
+        state:
+          write:
+            status: unverified
+            queries: [ data.queries.auth.create_auth_email ]
+      - id: enable_bind
+        kind: transition
+        summary: "启用邮箱绑定"
+        output:
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
+        errors:
+          - platform.errors.AUTH_EMAIL_INVALID
+          - platform.errors.COMMON_FORBIDDEN
+        queries:
           - query: data.queries.auth.set_auth_email_status
             input:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
+        lifecycle: [ cap.lifecycles.auth_contact.enable ]
+        state:
+          write:
+            status: verified
+            queries: [ data.queries.auth.set_auth_email_status ]
+      - id: disable_bind
+        kind: transition
+        summary: "停用邮箱绑定"
+        output:
+          - { name: binding, type: AuthBinding, description: "认证绑定" }
+        errors:
+          - platform.errors.AUTH_EMAIL_INVALID
+          - platform.errors.COMMON_FORBIDDEN
+        queries:
+          - query: data.queries.auth.set_auth_email_status
+            input:
+              - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
+              - { name: status, value: step.bind_status.status, description: "绑定状态码" }
+        lifecycle: [ cap.lifecycles.auth_contact.disable ]
+        state:
+          write:
+            status: disabled
+            queries: [ data.queries.auth.set_auth_email_status ]
 
   - name: revoke_all_for_account
     summary: "软删账号的认证绑定，并编排令牌吊销与验证体作废"
@@ -369,6 +489,7 @@ services:
           - query: data.queries.auth.soft_delete_auth_email_by_account
             input:
               - { name: account_id, value: params.account_id, description: "账号 ID" }
+        lifecycle: [ cap.lifecycles.auth_pwd.destroy, cap.lifecycles.auth_contact.destroy ]
       - id: revoke_tokens
         kind: service
         summary: "吊销账号全部令牌"

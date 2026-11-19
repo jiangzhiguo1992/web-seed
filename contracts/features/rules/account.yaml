@@ -29,13 +29,6 @@ rules:
     given: "已存在 active 账号 ACC-0001"
     when: "创建 ACC-0001"
     then: "拒绝，返回 ACCOUNT_NUMBER_TAKEN"
-  - id: feature.rules.account.own_pair
-    kind: invariant
-    summary: "own_type 与 own_id 必须同时存在"
-    severity: error
-    assert: "own_type != nil && own_id != nil"
-    on_violation: platform.errors.ACCOUNT_OWN_INVALID
-    implemented_by: [ cap.services.account.create ]
   - id: feature.rules.account.nickname_length
     kind: invariant
     summary: "昵称长度 1–100"

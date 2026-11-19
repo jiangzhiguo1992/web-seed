@@ -8,8 +8,6 @@ CREATE TABLE `account` (
   `created_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '创建时间；数据库默认 now()',
   `updated_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '更新时间；应用层写入',
   `deleted_at` DATETIME(6) COMMENT '软删时间；应用层写入；为空表示未删除',
-  `own_type` INT NOT NULL COMMENT '归属类型整数码；映射 data.enums.own_type',
-  `own_id` INT NOT NULL COMMENT '归属 ID；与 own_type 组成归属主体',
   `number` VARCHAR(64) NOT NULL COMMENT '账号编号',
   `nickname` VARCHAR(100) NOT NULL COMMENT '昵称',
   `user_id` INT COMMENT '关联用户 ID；不做数据库外键',
@@ -17,7 +15,6 @@ CREATE TABLE `account` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账号主表';
 CREATE UNIQUE INDEX `uq_account_number` ON `account` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `number`);
-CREATE INDEX `idx_account_own_type_own_id` ON `account` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `own_type`, `own_id`);
 CREATE INDEX `idx_account_created_at_id` ON `account` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `created_at`, `id`);
 
 CREATE TABLE `auth_email` (
@@ -79,11 +76,9 @@ CREATE TABLE `token` (
   `created_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '创建时间；数据库默认 now()',
   `updated_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '更新时间；应用层写入',
   `deleted_at` DATETIME(6) COMMENT '软删时间；应用层写入；为空表示未删除',
-  `own_type` INT NOT NULL COMMENT '归属类型整数码；映射 data.enums.own_type',
-  `own_id` INT NOT NULL COMMENT '归属 ID',
   `account_id` INT NOT NULL COMMENT '关联账号',
-  `device_id` VARCHAR(128) COMMENT '设备标识；多端登录时区分设备',
   `user_id` INT COMMENT '关联用户 ID',
+  `device_id` VARCHAR(128) COMMENT '设备标识；多端登录时区分设备',
   `access_token_hash` VARCHAR(128) NOT NULL COMMENT '访问令牌哈希',
   `refresh_token_hash` VARCHAR(128) NOT NULL COMMENT '刷新令牌哈希',
   `access_expire_at` DATETIME(6) NOT NULL COMMENT '访问令牌过期时间',

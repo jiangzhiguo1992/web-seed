@@ -72,7 +72,7 @@ func TestValidateFieldTypes(t *testing.T) {
 
 func TestFieldOrderUsesTemplate(t *testing.T) {
 	root := t.TempDir()
-	path := filepath.Join(root, "contracts/data/enums.yaml")
+	path := filepath.Join(root, "contracts/data/enums/account.yaml")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ enums:
 		}},
 	}
 	c := &Checker{root: root}
-	c.checkFieldOrder("contracts/data/enums.yaml", fields, orderRules{top: "enum-key-order", nested: "enum-key-order"})
+	c.checkFieldOrder("contracts/data/enums/account.yaml", fields, orderRules{top: "enum-key-order", nested: "enum-key-order"})
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "[enum-key-order]") ||
 		!strings.Contains(errs, "field summary must come before schema_version") ||
@@ -1254,8 +1254,9 @@ func TestStatusMustNotBeRedeclared(t *testing.T) {
 
 func TestEnumItemIDRejected(t *testing.T) {
 	body := `
-id: data.enums
+id: data.enums.account
 summary: "x"
+owner_module: account
 schema_version: 1
 stability: stable
 enums:
@@ -1308,13 +1309,14 @@ func TestEnumCodeLiterals(t *testing.T) {
 
 func TestEnumCodeUnique(t *testing.T) {
 	root := t.TempDir()
-	dir := filepath.Join(root, "contracts/data")
+	dir := filepath.Join(root, "contracts/data/enums")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	body := `
-id: data.enums
+id: data.enums.account
 summary: "x"
+owner_module: account
 schema_version: 1
 stability: stable
 enums:
@@ -1326,7 +1328,7 @@ enums:
       - { value: disabled, code: 0 }
     used_by: { entities: [], capabilities: [] }
 `
-	if err := os.WriteFile(filepath.Join(dir, "enums.yaml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "account.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	repoRoot, err := filepath.Abs("../../../..")
@@ -1344,10 +1346,57 @@ enums:
 	}
 }
 
+func TestEnumNewModuleFlow(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "data.enums")
+	writeCapFile(t, root, "contracts/data/enums/notes.yaml", `id: data.enums.notes
+summary: "备注域枚举"
+owner_module: notes
+schema_version: 1
+stability: draft
+do_not:
+  - "data.enums.notes 的 value 删除后 code 不得复用"
+enums:
+  - name: note_status
+    description: "备注状态"
+    go_type: NoteStatus
+    ts_type: NoteStatus
+    values:
+      - { value: active, code: 0, description: "有效" }
+      - { value: deleted, code: 1, description: "已删" }
+    used_by:
+      - data.entities.note
+`)
+	writeCapFile(t, root, "contracts/index.yaml", `entries:
+  - { id: data.enums.notes, path: data/enums/notes.yaml }
+`)
+	c := &Checker{
+		root: root,
+		entities: map[string]*entityInfo{
+			"data.entities.note": {ID: "data.entities.note", Fields: []entityFieldInfo{{
+				Name: "Status", Type: "data.enums.note_status",
+			}}},
+		},
+	}
+	enums := c.checkEnums(schema)
+	if len(c.errs) != 0 {
+		t.Fatalf("new module enum reported: %v", c.errs)
+	}
+	if !enums["data.enums.note_status"]["active"] {
+		t.Fatalf("enum values not collected: %v", enums)
+	}
+	c.errs = nil
+	c.checkIndex(map[string]string{}, schema, &Schema{}, &Schema{})
+	if len(c.errs) != 0 {
+		t.Fatalf("index entry reported: %v", c.errs)
+	}
+}
+
 func TestEnumCodeInt32Range(t *testing.T) {
 	body := `
-id: data.enums
+id: data.enums.account
 summary: "x"
+owner_module: account
 schema_version: 1
 stability: stable
 enums:
@@ -1386,11 +1435,11 @@ func loadEnumSchemaForTest(t *testing.T) *Schema {
 func writeEnumContract(t *testing.T, body string) *Checker {
 	t.Helper()
 	root := t.TempDir()
-	dir := filepath.Join(root, "contracts/data")
+	dir := filepath.Join(root, "contracts/data/enums")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "enums.yaml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "account.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return &Checker{root: root}
@@ -1398,8 +1447,9 @@ func writeEnumContract(t *testing.T, body string) *Checker {
 
 func TestEnumDoNotSpecific(t *testing.T) {
 	body := `
-id: data.enums
+id: data.enums.account
 summary: "x"
+owner_module: account
 schema_version: 1
 stability: stable
 do_not:
@@ -1465,8 +1515,9 @@ fields:
 
 func TestEnumTypeNamesUnique(t *testing.T) {
 	body := `
-id: data.enums
+id: data.enums.account
 summary: "x"
+owner_module: account
 schema_version: 1
 stability: stable
 enums:
@@ -1493,8 +1544,9 @@ enums:
 
 func TestEnumDuplicateName(t *testing.T) {
 	body := `
-id: data.enums
+id: data.enums.account
 summary: "x"
+owner_module: account
 schema_version: 1
 stability: stable
 enums:
@@ -1536,8 +1588,9 @@ func TestEnumSchemaShape(t *testing.T) {
 
 func TestEnumUsedByMismatch(t *testing.T) {
 	body := `
-id: data.enums
+id: data.enums.account
 summary: "x"
+owner_module: account
 schema_version: 1
 stability: stable
 enums:
@@ -1662,8 +1715,9 @@ fields:
 
 func TestEnumSummaryAndStability(t *testing.T) {
 	body := `# TODO
-id: data.enums
+id: data.enums.account
 summary: ""
+owner_module: account
 schema_version: 1
 stability: stable
 enums:

@@ -48,6 +48,7 @@ services:
       - id: transition
         kind: transition
         rules: [feature.rules.x.r1]
+        events: [cap.events.x.activated]
         lifecycle: [cap.lifecycles.x.activate]
   - name: delete
     steps:
@@ -65,20 +66,17 @@ rules:
     implemented_by: []
 `)
 	writeFixture(t, root, "contracts/capabilities/lifecycles/x.yaml", `id: cap.lifecycles.x
-subjects: [data.entities.x]
+subjects:
+  - { entity: data.entities.x, field: status }
 initial: pending
 final: deleted
 create:
-  step: ""
+  steps: []
 destroy:
-  step: ""
+  steps: []
   from: [pending]
   to: deleted
-  side_effects: [cap.events.x.deleted]
-states:
-  - { name: pending, description: "p" }
-  - { name: active, description: "a" }
-  - { name: deleted, description: "d" }
+states: [pending, active, deleted]
 transitions:
   - name: activate
     description: "a"
@@ -86,7 +84,6 @@ transitions:
     to: active
     guard: true
     on_violation: platform.errors.COMMON_INTERNAL
-    side_effects: [cap.events.x.activated]
     implemented_by: []
 `)
 	writeFixture(t, root, "contracts/capabilities/events/x.yaml", `id: cap.events.x
@@ -147,8 +144,8 @@ jobs:
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"step: cap.services.x.create.create",
-		"step: cap.services.x.delete.soft_delete",
+		"steps: [ cap.services.x.create.create ]",
+		"steps: [ cap.services.x.delete.soft_delete ]",
 		"implemented_by: [ cap.services.x.activate.transition ]",
 	} {
 		if !strings.Contains(string(lifecycle), want) {
@@ -170,5 +167,105 @@ jobs:
 	}
 	if strings.Contains(string(events), "audit") {
 		t.Fatalf("stale consumer not removed:\n%s", events)
+	}
+}
+
+func TestAnchorsReplaceMultilineFields(t *testing.T) {
+	root := t.TempDir()
+	writeFixture(t, root, "contracts/_meta/cap.services.yaml", `type: cap.services
+targets:
+  dir: contracts/capabilities/services
+  glob: "*.yaml"
+  id: "cap.services.<file>"
+`)
+	writeFixture(t, root, "contracts/_meta/cap.lifecycles.yaml", `type: cap.lifecycles
+targets:
+  dir: contracts/capabilities/lifecycles
+  glob: "*.yaml"
+  id: "cap.lifecycles.<file>"
+`)
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+owner_module: x
+services:
+  - name: create
+    steps:
+      - id: create
+        kind: logic
+        lifecycle: [cap.lifecycles.x.create]
+  - name: activate
+    steps:
+      - id: transition
+        kind: transition
+        lifecycle: [cap.lifecycles.x.activate]
+  - name: delete
+    steps:
+      - id: soft_delete
+        kind: transition
+        lifecycle: [cap.lifecycles.x.destroy]
+`)
+	writeFixture(t, root, "contracts/capabilities/lifecycles/x.yaml", `id: cap.lifecycles.x
+subjects:
+  - { entity: data.entities.x, field: status }
+initial: pending
+final: deleted
+create:
+  steps:
+    - cap.services.x.create.old
+destroy:
+  steps:
+    - cap.services.x.delete.old
+  from: [pending]
+  to: deleted
+states: [pending, active, deleted]
+transitions:
+  - name: activate
+    description: "a"
+    from: [pending]
+    to: active
+    guard: true
+    on_violation: platform.errors.COMMON_INTERNAL
+    implemented_by:
+      - cap.services.x.activate.old
+`)
+
+	target, err := resolveTarget(root, "cap.services")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := computeAnchors(root, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if drift, err := a.Check(root); err != nil {
+		t.Fatal(err)
+	} else if len(drift) == 0 {
+		t.Fatal("expected drift before write")
+	}
+	if _, err := a.Write(root); err != nil {
+		t.Fatal(err)
+	}
+	if drift, err := a.Check(root); err != nil {
+		t.Fatal(err)
+	} else if len(drift) != 0 {
+		t.Fatalf("drift after write: %v", drift)
+	}
+	lifecycle, err := os.ReadFile(filepath.Join(root, "contracts/capabilities/lifecycles/x.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(lifecycle)
+	for _, want := range []string{
+		"steps: [ cap.services.x.create.create ]",
+		"steps: [ cap.services.x.delete.soft_delete ]",
+		"implemented_by: [ cap.services.x.activate.transition ]",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("lifecycle missing %q:\n%s", want, text)
+		}
+	}
+	for _, stale := range []string{"create.old", "delete.old", "activate.old"} {
+		if strings.Contains(text, stale) {
+			t.Fatalf("lifecycle still contains %q:\n%s", stale, text)
+		}
 	}
 }

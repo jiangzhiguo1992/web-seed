@@ -513,25 +513,28 @@ func applyScalarParams(out map[string]any, params map[string]any) {
 }
 
 func loadEnums(root string) (map[string][]any, error) {
-	doc, err := loadYAML(filepath.Join(root, "contracts/data/enums.yaml"))
-	if err != nil {
-		return nil, err
-	}
+	files, _ := globYAML(filepath.Join(root, "contracts/data/enums"))
 	out := map[string][]any{}
-	for _, raw := range asList(doc["enums"]) {
-		item := asMap(raw)
-		name, _ := item["name"].(string)
-		if name == "" {
-			continue
+	for _, file := range files {
+		doc, err := loadYAML(file)
+		if err != nil {
+			return nil, err
 		}
-		var values []any
-		for _, rawValue := range asList(item["values"]) {
-			vm := asMap(rawValue)
-			if v, _ := vm["value"].(string); v != "" {
-				values = append(values, v)
+		for _, raw := range asList(doc["enums"]) {
+			item := asMap(raw)
+			name, _ := item["name"].(string)
+			if name == "" {
+				continue
 			}
+			var values []any
+			for _, rawValue := range asList(item["values"]) {
+				vm := asMap(rawValue)
+				if v, _ := vm["value"].(string); v != "" {
+					values = append(values, v)
+				}
+			}
+			out[name] = values
 		}
-		out[name] = values
 	}
 	return out, nil
 }

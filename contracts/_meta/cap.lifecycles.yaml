@@ -1,9 +1,10 @@
-# cap.lifecycles：业务实体的生命周期：创建、状态转换与销毁。
-# 生命周期是能力层契约，不是 feature；每条边都锚到具体 service step。
+# cap.lifecycles：业务实体的状态维度生命周期：创建、状态转换与销毁。
+# 一个契约 = 一个状态维度（实体 + 状态字段）；同一实体的多个状态字段拆成多个契约。
+# 每条边都锚到具体 service step；跨维度前提写在 transitions[].requires。
 
 id: meta.cap.lifecycles
 type: cap.lifecycles
-title: "实体生命周期契约"
+title: "实体状态维度生命周期契约"
 targets:
   dir: "contracts/capabilities/lifecycles"
   glob: "*.yaml"
@@ -26,7 +27,7 @@ fields:
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "生命周期归属模块"
+    description: "生命周期归属模块；必须等于每个 subject 实体的 owner_module"
 
   - name: schema_version
     type: integer
@@ -48,50 +49,49 @@ fields:
     description: "实例级负向约束"
 
   - name: subjects
-    type: list<string>
+    type: list<object>
     required: true
     min_items: 1
-    unique: true
-    pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
-    description: "生命周期作用的实体；共享同一 status 枚举时可多个"
+    description: "状态维度：实体 + 状态字段；同一状态机的同构实体可共享一份契约；同一 (entity, field) 只能被一个契约声明"
+    item_fields:
+      - { name: entity, type: string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "状态所属实体" }
+      - { name: field, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "实体上的状态字段名（snake_case，即 json_name）；必须是 data.enums.* 类型的标量列字段" }
 
   - name: initial
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "初始状态；创建步骤必须把实体落在该状态"
+    description: "该维度的初始状态；创建步骤必须把实体落在该状态"
 
   - name: final
     type: string
     required: false
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "最终状态；没有终态时省略"
+    description: "该维度的最终状态；没有终态时省略"
 
   - name: create
     type: object
     required: false
-    description: "创建动作；step 由 step.lifecycle 反向生成"
+    description: "创建动作；steps 由 step.lifecycle 反向生成"
     fields:
-      - { name: step, type: string, required: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "创建实体的 service step ID" }
+      - { name: steps, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "创建实体的 service step ID" }
 
   - name: destroy
     type: object
     required: false
-    description: "销毁动作；step 由 step.lifecycle 反向生成"
+    description: "销毁动作；steps 由 step.lifecycle 反向生成"
     fields:
-      - { name: step, type: string, required: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁实体的 service step ID" }
+      - { name: steps, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁实体的 service step ID" }
       - { name: from, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许销毁的源状态" }
       - { name: to, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "销毁后的状态；有 final 时必须等于 final" }
-      - { name: side_effects, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁副作用事件" }
 
   - name: states
-    type: list<object>
+    type: list<string>
     required: true
     min_items: 1
-    description: "状态列表；状态名必须是 subjects 的 status 枚举值"
-    item_fields:
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "状态名" }
-      - { name: description, type: string, required: true, description: "状态说明" }
+    unique: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "该维度启用的状态子集；状态值直接来自 subjects[].field 的枚举源，本契约只声明可达子集，不重复状态说明"
 
   - name: transitions
     type: list<object>
@@ -106,9 +106,16 @@ fields:
       - name: guard
         type: any
         required: true
-        description: "守卫：true 表示无额外条件；{ rule: feature.rules.* } 表示结构化规则"
-      - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "非法转换错误码" }
-      - { name: side_effects, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "副作用事件" }
+        description: "守卫：true 表示无额外条件；{ rule: feature.rules.* } 表示结构化规则；规则违反时用该规则的 on_violation，本动作的 on_violation 只用于 from 非法或 requires 不满足"
+      - name: requires
+        type: list<object>
+        required: false
+        min_items: 1
+        description: "跨维度前置状态：列表内全部满足（AND）才允许执行本转换；目标维度不存在或不在该状态时必须返回 on_violation"
+        item_fields:
+          - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属的生命周期契约；不能是本契约" }
+          - { name: state, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "前置状态；必须是目标生命周期已声明的状态" }
+      - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "非法转换错误码；from 非法或 requires 不满足时返回" }
       - { name: implemented_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 service step ID；由 step.lifecycle 生成" }
 
   - name: forbidden_examples
@@ -125,10 +132,13 @@ fields:
     required: false
     unique: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "幂等转换"
+    description: "幂等转换；重复执行同一动作不得报非法转换"
 
 rules:
-  - { id: lifecycle-structure, text: "states 名唯一；initial/final 必须是已声明状态；transitions 的 from/to 必须是已声明状态；guard 只能是 true 或 { rule: feature.rules.* }；on_violation 必须存在；side_effects 必须指向存在的 cap.events.*；forbidden_examples 的 from/transition 必须存在且该 from 确实不在 transition.from 中；destroy.from/to 必须是已声明状态，有 final 时 destroy.to 必须等于 final", implemented_by: [ lifecycle-structure ] }
+  - { id: lifecycle-structure, text: "states 名唯一；initial/final 必须是已声明状态；transitions 的 from/to 必须是已声明状态；guard 只能是 true 或 { rule: feature.rules.* }；on_violation 必须存在且为存在的 platform.errors.*；forbidden_examples 的 from/transition 必须存在且该 from 确实不在 transition.from 中；destroy.from/to 必须是已声明状态，有 final 时 destroy.to 必须等于 final", implemented_by: [ lifecycle-structure ] }
   - { id: lifecycle-exhaustive, text: "非 final 状态必须有一条出边（transition 或 destroy）；final 不得有出边；转换名唯一", implemented_by: [ lifecycle-exhaustive ] }
-  - { id: lifecycle-subject, text: "subjects 必须存在；每个 subject 必须有 status 字段且类型是同一个 data.enums.*；states/initial/final/from/to 必须是该枚举的值", implemented_by: [ lifecycle-subject ] }
-  - { id: lifecycle-steps, text: "create.step/destroy.step/transitions[].implemented_by 必须是存在的 cap.services.<file>.<service>.<step>；step 的 lifecycle 必须反向引用同一动作；create 只能由 logic/query step 实现，destroy/transition 只能由 transition step 实现；create/destroy 各只能有一个 step", implemented_by: [ lifecycle-steps ] }
+  - { id: lifecycle-subject, text: "subjects[].entity 必须是存在的 data.entities.*；subjects[].field 必须是该实体的非关系标量字段、类型为 data.enums.*、source 为 column；同一 lifecycle 的所有 subjects 的 field 类型必须相同；lifecycle.owner_module 必须等于每个 subject 实体的 owner_module；states/initial/final/from/to 必须是该枚举的值", implemented_by: [ lifecycle-subject ] }
+  - { id: lifecycle-dimension, text: "同一 (entity, field) 组合只能被一个 lifecycle 契约声明；同一 lifecycle 内不得重复声明同一 (entity, field)", implemented_by: [ lifecycle-dimension ] }
+  - { id: lifecycle-enum-coverage, text: "被 lifecycle 使用的 data.enums.*，每个枚举值必须至少被一个使用该枚举的 lifecycle states 声明；states 只允许该枚举的值", implemented_by: [ lifecycle-enum-coverage ] }
+  - { id: lifecycle-requires, text: "transitions[].requires 的 lifecycle 必须是存在的 cap.lifecycles.* 且不能是自身；state 必须是目标 lifecycle 已声明的状态；同一 transition 内同一个 lifecycle 只能出现一次；列表内全部满足（AND）", implemented_by: [ lifecycle-requires ] }
+  - { id: lifecycle-steps, text: "create.steps/destroy.steps/transitions[].implemented_by 必须是存在的 cap.services.<file>.<service>.<step>；step 的 lifecycle 必须反向引用同一动作；create 只能由 logic/query step 实现；destroy/transition 只能由 transition step 实现；有 destroy.to 时 destroy 步骤必须是 transition，无 destroy.to 时允许 logic/query；state.write 的 queries 必须写 subject 主表且参数绑定该维度的状态列", implemented_by: [ lifecycle-steps ] }

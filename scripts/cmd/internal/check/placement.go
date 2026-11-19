@@ -56,7 +56,7 @@ func (c *Checker) checkFieldPlacement() {
 		if strings.HasPrefix(rel, "contracts/data/queries/") && flowListInSequenceAt(&doc, "queries", "tables") {
 			c.rulef("schema.list-style", "%s: queries[].tables must be block style (one item per line)", rel)
 		}
-		if rel == "contracts/data/enums.yaml" && flowListInSequenceAt(&doc, "enums", "used_by") {
+		if strings.HasPrefix(rel, "contracts/data/enums/") && flowListInSequenceAt(&doc, "enums", "used_by") {
 			c.rulef("schema.list-style", "%s: enums[].used_by must be block style (one item per line)", rel)
 		}
 		if strings.HasPrefix(rel, "contracts/_meta/") {

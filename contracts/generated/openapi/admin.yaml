@@ -107,16 +107,6 @@ components:
         number:
           description: 账号编号
           type: object
-        own_i_d:
-          description: 归属 ID；与 own_type 组成归属主体
-          type: object
-        own_type:
-          description: 数据归属主体类型
-          enum:
-            - user
-            - admin
-            - system
-          type: string
         status:
           description: 账号状态
           enum:
@@ -126,15 +116,15 @@ components:
             - deleted
           type: string
         tokens:
-          description: 账号的设备令牌
-          type: object
+          description: 账号的设备令牌列表
+          items:
+            type: object
+          type: array
         user_i_d:
           description: 关联用户 ID
           type: object
       required:
         - status
-        - own_type
-        - own_i_d
         - number
         - nickname
         - user_i_d
@@ -209,23 +199,11 @@ components:
           minLength: 4
           pattern: ^[A-Za-z0-9_-]+$
           type: string
-        own_id:
-          description: 归属对象 ID
-          type: integer
-        own_type:
-          description: 归属类型
-          enum:
-            - user
-            - admin
-            - system
-          type: string
         user_id:
           description: 关联用户 ID
           nullable: true
           type: integer
       required:
-        - own_type
-        - own_id
         - number
         - nickname
       type: object
@@ -267,13 +245,6 @@ components:
         - identifier
       type: object
       x-service-type: cap.services.auth.schemas.LoginInput
-    OwnType:
-      enum:
-        - user
-        - admin
-        - system
-      type: string
-      x-enum: data.enums.own_type
     PageInfo:
       additionalProperties: false
       properties:
@@ -518,11 +489,6 @@ paths:
           schema:
             $ref: '#/components/schemas/AccountStatus'
         - in: query
-          name: own_type
-          required: false
-          schema:
-            $ref: '#/components/schemas/OwnType'
-        - in: query
           name: offset
           required: false
           schema:
@@ -548,8 +514,6 @@ paths:
                     id: 1
                     nickname: 管理员
                     number: ACC-0001
-                    own_id: 2
-                    own_type: user
                     status: active
                 limit: 20
                 offset: 0
@@ -587,8 +551,6 @@ paths:
             example:
               nickname: 管理员
               number: ACC-0001
-              own_id: 2
-              own_type: user
             schema:
               $ref: '#/components/schemas/CreateAccountInput'
         required: true

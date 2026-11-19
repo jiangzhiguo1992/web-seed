@@ -20,7 +20,6 @@ paths:
       x-timeout-ms: 3000
       parameters:
         - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/AccountStatus" } }
-        - { name: own_type, in: query, required: false, schema: { $ref: "#/components/schemas/OwnType" } }
         - { name: offset, in: query, required: false, schema: { type: integer, minimum: 0, default: 0 } }
         - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
       responses:
@@ -33,7 +32,7 @@ paths:
                 x-service-return: AccountPage
               example:
                 items:
-                  - { id: 1, own_type: user, own_id: 2, number: "ACC-0001", nickname: "管理员", status: active, created_at: "2026-11-11T09:30:00Z" }
+                  - { id: 1, number: "ACC-0001", nickname: "管理员", status: active, created_at: "2026-11-11T09:30:00Z" }
                 offset: 0
                 limit: 20
                 has_more: false
@@ -49,7 +48,7 @@ paths:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/CreateAccountInput" }
-            example: { own_type: user, own_id: 2, number: "ACC-0001", nickname: "管理员" }
+            example: { number: "ACC-0001", nickname: "管理员" }
       responses:
         "201":
           description: "已创建"
@@ -155,9 +154,6 @@ components:
   schemas:
     AccountStatus:
       x-enum: data.enums.account_status
-
-    OwnType:
-      x-enum: data.enums.own_type
 
     Account:
       x-entity: data.entities.account

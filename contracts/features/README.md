@@ -55,8 +55,9 @@ features ✗ data.tables / data.queries（禁止直接引用表或查询）
 **生命周期**
 
 - `cap.lifecycles.*` 承载 create/destroy/transitions；不要在 features 下再建生命周期。
+- 一个契约只描述一个状态维度：`subjects[]` 写 `{entity, field}`；同一实体的多个状态字段拆成多份契约。
 - 必须穷举：每个非 final 状态有出边，final 无出边；每条边锚到具体 `cap.services.<file>.<service>.<step>`。
-- `guard` 只能是 `true` 或 `{ rule: feature.rules.* }`；`side_effects` 只能是 `cap.events.*`。
+- `guard` 只能是 `true` 或 `{ rule: feature.rules.* }`；跨维度前提写 `requires: [{lifecycle, state}]`；事件由 service step 的 `events` 声明，lifecycle 不写 `side_effects`。
 
 ## 3. 页面契约必须声明的 `view_states` 四态
 

@@ -71,7 +71,7 @@ make contract-impact id=<被修改的 ID>
 | 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
 | 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables.<engine>` 普通条目（`description` / `retention` / `partition`）；归档用 `archive_of` 条目 |
 | 查询 | `contracts/data/queries/<scope>.yaml` |
-| 枚举 | `contracts/data/enums.yaml` |
+| 枚举 | `contracts/data/enums/<module>.yaml` |
 | 实体 / 生命周期 / 规则 / 流程 | `contracts/capabilities/{services,lifecycles,events}/**` + `contracts/features/rules/**` |
 | 路由 / 页面 / 用户旅程 | `contracts/features/**` |
 | 错误码 / 权限 / 配置 / 环境 | `contracts/platform/**` |
@@ -91,7 +91,7 @@ make contract-impact id=<被修改的 ID>
 ```bash
 make contract-new type=data.tables name=note module=notes summary="备注表"
 make contract-new type=data.tables name=account_balance module=account summary="账户余额" column_type=decimal
-make contract-new type=data.enums  name=note_status
+make contract-new type=data.enums name=note_status module=notes
 ```
 
 `column_type` 可选；指定后第一列使用该类型族，并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。

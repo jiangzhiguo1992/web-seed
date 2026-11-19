@@ -729,3 +729,188 @@ func TestServiceRuleOwnerCoverage(t *testing.T) {
 		t.Fatalf("owner-declared rule error reported: %s", got)
 	}
 }
+
+func TestServiceStateWrite(t *testing.T) {
+	q := &queryInfo{
+		ID:      "data.queries.x.set_status",
+		Targets: []string{"data.tables.x"},
+		Writes:  []string{"data.tables.x"},
+		Params: []queryParam{
+			{Name: "id", Type: "integer"},
+			{Name: "status", Type: "integer", Column: "data.tables.x.col.status"},
+		},
+	}
+	other := &queryInfo{
+		ID:      "data.queries.y.set_status",
+		Targets: []string{"data.tables.y"},
+		Writes:  []string{"data.tables.y"},
+		Params: []queryParam{
+			{Name: "id", Type: "integer"},
+			{Name: "status", Type: "integer", Column: "data.tables.y.col.status"},
+		},
+	}
+	lifecycle := map[string]lifecycleAction{
+		"cap.lifecycles.x.activate": {kind: "transition", to: "active", subjects: []lifecycleSubject{
+			{Entity: "data.entities.x", Field: "status", Table: "data.tables.x", ColumnRef: "data.tables.x.col.status"},
+		}},
+	}
+	entities := map[string]*entityInfo{
+		"data.entities.x": {
+			Primary: "data.tables.x",
+			Fields:  []entityFieldInfo{{Name: "Status", SourceColumnRef: "data.tables.x.col.status"}},
+		},
+	}
+	base := func(status string, qid string, queries []any) map[string]any {
+		return map[string]any{
+			"summary": "x", "transaction": "none",
+			"params": []any{
+				map[string]any{"name": "ctx", "type": "context.Context"},
+				map[string]any{"name": "id", "type": "integer"},
+				map[string]any{"name": "status", "type": "integer"},
+			},
+			"returns": []any{},
+			"steps": []any{map[string]any{
+				"id": "run", "kind": "transition", "summary": "x",
+				"lifecycle": []any{"cap.lifecycles.x.activate"},
+				"state":     map[string]any{"write": map[string]any{"status": status, "queries": []any{qid}}},
+				"queries":   queries,
+			}},
+		}
+	}
+	input := []any{
+		map[string]any{"name": "id", "value": "params.id", "description": "x"},
+		map[string]any{"name": "status", "value": "params.status", "description": "x"},
+	}
+	queriesFor := func(qid string) []any {
+		return []any{map[string]any{"query": qid, "input": input}}
+	}
+	run := func(status, qid string, queries []any) string {
+		c := &Checker{
+			queries:          map[string]*queryInfo{q.ID: q, other.ID: other},
+			queryReturnTypes: map[string]map[string]returnType{q.ID: {}, other.ID: {}},
+			entities:         entities,
+		}
+		c.checkServiceItem(base(status, qid, queries), "f", "cap.services.x.run", "x",
+			map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, lifecycle, map[string]bool{})
+		return strings.Join(c.errs, "\n")
+	}
+
+	if got := run("active", q.ID, queriesFor(q.ID)); strings.Contains(got, "state.write") {
+		t.Fatalf("valid state.write reported: %s", got)
+	}
+	if got := run("missing", q.ID, queriesFor(q.ID)); !strings.Contains(got, "state.write.status") {
+		t.Fatalf("wrong status not reported: %s", got)
+	}
+	if got := run("active", q.ID, []any{}); !strings.Contains(got, "state.write query") {
+		t.Fatalf("query not in step not reported: %s", got)
+	}
+	if got := run("active", other.ID, queriesFor(other.ID)); !strings.Contains(got, "does not write a subject table") {
+		t.Fatalf("non-subject query not reported: %s", got)
+	}
+}
+
+func TestServiceWhen(t *testing.T) {
+	input := []any{
+		map[string]any{"name": "verified", "value": "params.verified", "description": "x"},
+		map[string]any{"name": "auth_type", "value": "params.auth_type", "description": "x"},
+	}
+	base := func(kind string, input, when, output, errors []any) map[string]any {
+		return map[string]any{
+			"summary": "x", "transaction": "none",
+			"params": []any{
+				map[string]any{"name": "ctx", "type": "context.Context"},
+				map[string]any{"name": "verified", "type": "boolean"},
+				map[string]any{"name": "auth_type", "type": "data.enums.auth_type"},
+			},
+			"returns": []any{},
+			"steps": []any{map[string]any{
+				"id": "run", "kind": kind, "summary": "x",
+				"input": input, "when": when, "output": output, "errors": errors,
+			}},
+		}
+	}
+	run := func(kind string, input, when, output, errors []any) string {
+		c := &Checker{enumValues: map[string]map[string]bool{
+			"data.enums.auth_type": {"pwd": true, "phone": true, "email": true},
+		}}
+		c.checkServiceItem(base(kind, input, when, output, errors), "f", "cap.services.x.run", "x",
+			map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
+		return strings.Join(c.errs, "\n")
+	}
+
+	valid := []any{
+		map[string]any{"input": "verified", "equals": true},
+		map[string]any{"input": "auth_type", "in": []any{"phone", "email"}},
+	}
+	if got := run("logic", input, valid, []any{}, []any{}); strings.Contains(got, "service-when") {
+		t.Fatalf("valid when reported: %s", got)
+	}
+	cases := []struct {
+		name   string
+		kind   string
+		input  []any
+		when   []any
+		output []any
+		errors []any
+		want   string
+	}{
+		{
+			name: "query kind",
+			kind: "query", input: input, output: []any{}, errors: []any{},
+			when: []any{map[string]any{"input": "verified", "equals": true}},
+			want: "only allowed on logic/transition",
+		},
+		{
+			name: "unknown input",
+			kind: "logic", input: input, output: []any{}, errors: []any{},
+			when: []any{map[string]any{"input": "missing", "equals": true}},
+			want: "is not declared by step input",
+		},
+		{
+			name: "both equals and in",
+			kind: "logic", input: input, output: []any{}, errors: []any{},
+			when: []any{map[string]any{"input": "verified", "equals": true, "in": []any{true}}},
+			want: "requires exactly one of equals/in",
+		},
+		{
+			name: "neither equals nor in",
+			kind: "logic", input: input, output: []any{}, errors: []any{},
+			when: []any{map[string]any{"input": "verified"}},
+			want: "requires exactly one of equals/in",
+		},
+		{
+			name: "duplicate input",
+			kind: "logic", input: input, output: []any{}, errors: []any{},
+			when: []any{
+				map[string]any{"input": "verified", "equals": true},
+				map[string]any{"input": "verified", "equals": false},
+			},
+			want: "is duplicated",
+		},
+		{
+			name: "boolean mismatch",
+			kind: "logic", input: input, output: []any{}, errors: []any{},
+			when: []any{map[string]any{"input": "verified", "equals": "yes"}},
+			want: "expects boolean",
+		},
+		{
+			name: "enum mismatch",
+			kind: "logic", input: input, output: []any{}, errors: []any{},
+			when: []any{map[string]any{"input": "auth_type", "in": []any{"phone", "missing"}}},
+			want: "has unknown enum value",
+		},
+		{
+			name: "empty in",
+			kind: "logic", input: input, output: []any{}, errors: []any{},
+			when: []any{map[string]any{"input": "auth_type", "in": []any{}}},
+			want: "in must not be empty",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := run(tc.kind, tc.input, tc.when, tc.output, tc.errors); !strings.Contains(got, tc.want) {
+				t.Fatalf("want %q, got %s", tc.want, got)
+			}
+		})
+	}
+}

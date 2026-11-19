@@ -4,7 +4,7 @@
 //
 //	go run ./contract_new -root ../.. -type data.tables -name note -module notes -summary "备注表"
 //	go run ./contract_new -root ../.. -type data.tables -name balance -module account -column-type decimal
-//	go run ./contract_new -root ../.. -type data.enums  -name note_status
+//	go run ./contract_new -root ../.. -type data.enums  -name note_status -module notes
 //	go run ./contract_new -root ../.. -type data.entities -name note -table note -summary "备注实体"
 //	go run ./contract_new -root ../.. -type data.queries -name note -module notes -table note -summary "备注查询"
 package main
@@ -104,7 +104,7 @@ func main() {
 		writeOut(*out, b, "next: replace the EXISTS skeleton; reference it from a service step; register in contracts/index.yaml; make gen-graph; make contract-check")
 
 	case "data.enums":
-		b, err := contractspec.RenderEnumItem(schema, *name)
+		b, err := contractspec.RenderEnumItem(schema, *name, *module)
 		if err != nil {
 			fail(err)
 		}

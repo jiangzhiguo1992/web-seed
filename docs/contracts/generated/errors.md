@@ -20,7 +20,6 @@
 | `ACCOUNT_NUMBER_TAKEN` | 409 | false | `errors.account.number_taken` | 账号编号已被使用 |
 | `ACCOUNT_NUMBER_INVALID` | 422 | false | `errors.account.number_invalid` | 账号编号格式不合法 |
 | `ACCOUNT_NICKNAME_INVALID` | 422 | false | `errors.account.nickname_invalid` | 昵称长度不合法 |
-| `ACCOUNT_OWN_INVALID` | 422 | false | `errors.account.own_invalid` | 账号归属不合法 |
 | `ACCOUNT_SUSPENDED` | 403 | false | `errors.account.suspended` | 账号已被封禁 |
 | `ACCOUNT_ILLEGAL_TRANSITION` | 409 | false | `errors.account.illegal_transition` | 当前状态不允许该操作 |
 | `ACCOUNT_ALREADY_DELETED` | 409 | false | `errors.account.already_deleted` | 账号已删除 |
