@@ -41,20 +41,24 @@ services:
       - id: create
         kind: logic
         rules: [feature.rules.x.r1]
+        lifecycles: [cap.lifecycles.x.create]
+      - id: emit_created
+        kind: events
         events: [cap.events.x.created]
-        lifecycle: [cap.lifecycles.x.create]
   - name: activate
     steps:
       - id: transition
-        kind: transition
+        kind: logic
         rules: [feature.rules.x.r1]
+        lifecycles: [cap.lifecycles.x.activate]
+      - id: emit_activated
+        kind: events
         events: [cap.events.x.activated]
-        lifecycle: [cap.lifecycles.x.activate]
   - name: delete
     steps:
       - id: soft_delete
-        kind: transition
-        lifecycle: [cap.lifecycles.x.destroy]
+        kind: logic
+        lifecycles: [cap.lifecycles.x.destroy]
   - name: consume
     steps:
       - id: handle
@@ -191,17 +195,17 @@ services:
     steps:
       - id: create
         kind: logic
-        lifecycle: [cap.lifecycles.x.create]
+        lifecycles: [cap.lifecycles.x.create]
   - name: activate
     steps:
       - id: transition
-        kind: transition
-        lifecycle: [cap.lifecycles.x.activate]
+        kind: logic
+        lifecycles: [cap.lifecycles.x.activate]
   - name: delete
     steps:
       - id: soft_delete
-        kind: transition
-        lifecycle: [cap.lifecycles.x.destroy]
+        kind: logic
+        lifecycles: [cap.lifecycles.x.destroy]
 `)
 	writeFixture(t, root, "contracts/capabilities/lifecycles/x.yaml", `id: cap.lifecycles.x
 subjects:

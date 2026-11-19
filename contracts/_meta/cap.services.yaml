@@ -85,17 +85,19 @@ fields:
         type: list<object>
         required: true
         min_items: 1
-        description: "步骤清单：声明本步读取的入参、调用的 query/service、产出、错误与联动；when 是静态跳过条件，循环与错误流转由实现决定"
+        description: "步骤清单：声明本步读取的入参、调用的 query/service、产出、错误与控制流；分支、跳转与错误流转由步骤显式声明"
         item_fields:
           - { name: id, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID，service 内唯一" }
-          - { name: kind, type: string, required: true, enum: [ query, service, events, logic, transition ], description: "步骤类型；events 是纯事件发射，transition 是生命周期状态转换" }
+          - { name: kind, type: string, required: true, enum: [ when, query, service, events, logic ], description: "步骤类型：query 调查询、service 调服务、logic 手写逻辑、events 纯事件发射、when 条件分支" }
           - { name: summary, type: string, required: true, description: "一句话说明" }
           - { name: depends_on, type: list<string>, required: false, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "可选的顺序提示；input 引用只要求目标步骤在前序，不要求写入本字段" }
+          - { name: lifecycles, type: list<string>, required: false, unique: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "本步包含的状态流转标记，可列多个 lifecycle 动作；只是标记，不限制 kind，也不表示本步只做状态流转" }
+          - { name: goto, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "本步结束后无条件跳转的目标 step；必须指向本 service 的后续 step；kind=when 时作为所有分支都不匹配的默认跳转" }
 
           - name: input
             type: list<object>
             required: false
-            description: "本步读取的入参：name 是局部名（query/service 时为目标参数名），value 是来源，description 说明用途；静态分支用 when"
+            description: "本步读取的入参：name 是局部名（query/service 时为目标参数名），value 是来源，description 说明用途"
             item_fields:
               - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输入名；同一步内唯一" }
               - { name: value, type: string, required: true, description: "来源：params.<path> 或 step.<id>.<path>；计算值必须先落成前序 logic step 的 output，禁止内联表达式" }
@@ -105,11 +107,12 @@ fields:
             type: list<object>
             required: false
             min_items: 1
-            description: "静态跳过条件：列表内条件全部为真才执行本步；只允许 logic/transition；条件只能引用本步 input"
+            description: "kind=when 的条件分支：按列表顺序匹配，第一个满足的分支跳转到其 goto；都不满足时走本步 goto，仍没有则顺序下一步"
             item_fields:
-              - { name: input, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "本步 input 的局部名" }
+              - { name: input, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "本步 input 的局部名；条件只能引用本步 input" }
               - { name: equals, type: any, required: false, description: "等于该值" }
               - { name: in, type: list<any>, required: false, min_items: 1, unique: true, description: "属于该集合" }
+              - { name: goto, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "条件满足时跳转的目标 step；必须是本 service 的后续 step" }
 
           - name: output
             type: list<object>
@@ -121,28 +124,13 @@ fields:
               - { name: description, type: string, required: true, description: "这项产出的业务含义" }
               - { name: nullable, type: boolean, required: false, description: "是否可空；必须与 returns 的同名项一致" }
 
-          - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误；query 缺省取所有 queries 的错误并集，logic/transition 必须覆盖其 queries 的错误；events 可选" }
+          - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误；query 缺省取所有 queries 的错误并集，logic 必须覆盖其 queries 的错误；events 可选" }
 
-          - name: services
-            type: list<object>
+          - name: query
+            type: object
             required: false
-            description: "kind=service 时调用的目标服务；可以多个"
-            item_fields:
-              - { name: service, type: string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标服务项" }
-              - name: input
-                type: list<object>
-                required: false
-                description: "调用入参：name 是目标参数名，value 是来源，description 说明用途"
-                item_fields:
-                  - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标参数名" }
-                  - { name: value, type: string, required: true, description: "来源：params.<path> 或 step.<id>.<path>；禁止内联表达式" }
-                  - { name: description, type: string, required: true, description: "这项入参的业务含义" }
-
-          - name: queries
-            type: list<object>
-            required: false
-            description: "本步调用的查询；kind=query 时必填，其他 kind 可选；用于 query.used_by 反向索引与错误覆盖"
-            item_fields:
+            description: "kind=query 时唯一的目标查询；单值字段从结构上保证一步只查一个 query"
+            fields:
               - { name: query, type: string, required: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标查询" }
               - name: input
                 type: list<object>
@@ -153,21 +141,36 @@ fields:
                   - { name: value, type: string, required: true, description: "来源：params.<path> 或 step.<id>.<path>；禁止内联表达式" }
                   - { name: description, type: string, required: true, description: "这项参数的业务含义" }
 
-          - { name: events, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=logic/transition/events 时发射的事件；kind=events 时必填" }
-          - { name: rules, type: list<string>, required: false, unique: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=logic/transition 时的业务规则依据" }
-          - { name: lifecycle, type: list<string>, required: false, unique: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "step 实现的 cap.lifecycles 动作（create/destroy/transition）ID" }
+          - name: service
+            type: object
+            required: false
+            description: "kind=service 时唯一的目标服务；单值字段从结构上保证一步只调一个 service"
+            fields:
+              - { name: service, type: string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标服务项" }
+              - name: input
+                type: list<object>
+                required: false
+                description: "调用入参：name 是目标参数名，value 是来源，description 说明用途"
+                item_fields:
+                  - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标参数名" }
+                  - { name: value, type: string, required: true, description: "来源：params.<path> 或 step.<id>.<path>；禁止内联表达式" }
+                  - { name: description, type: string, required: true, description: "这项入参的业务含义" }
+
+          - { name: events, type: list<string>, required: false, min_items: 1, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=events 时发射的事件列表；一个 step 一组事件发射，按原子性至少一项" }
+          - { name: rules, type: list<string>, required: false, unique: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "kind=logic 时的业务规则依据" }
 
 rules:
   - { id: service-id, text: "契约 ID 必须与 targets 派生一致，且全局唯一；service 项 ID 全局唯一", implemented_by: [ service-id ] }
   - { id: service-structure, text: "schemas 名全局唯一；schema 节点按 _meta/_schemas.yaml 校验，标量类型必须来自 _types；params[0] 必须是 ctx context.Context，params/returns name 唯一；returns 最后一项必须是 {name: err, type: error}，且只能出现一次；step.id 在 service 内唯一；depends_on 只能引用前序步骤；input 项 name 唯一；output 的 name 在 step 内唯一；logic 必须声明 output 与 errors", implemented_by: [ service-structure ] }
-  - { id: service-ref, text: "queries[].query / services[].service / lifecycle / rules / events 引用必须存在；params/returns/schemas/input 中的 data.enums.* / data.entities.* / 本地类型必须存在，data.tables.* 禁止", implemented_by: [ service-ref ] }
+  - { id: service-ref, text: "query.query / service.service / events / lifecycles / rules 引用必须存在；params/returns/schemas/input 中的 data.enums.* / data.entities.* / 本地类型必须存在，data.tables.* 禁止", implemented_by: [ service-ref ] }
   - { id: service-owner-write, text: "queries 的写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service", implemented_by: [ service-owner-write ] }
-  - { id: service-errors, text: "step.errors 必须是存在的 platform.errors.*；kind=query 未声明时取所有 queries 的错误并集，声明时必须覆盖并集；kind=service 未声明时取所有 services 的错误并集，声明时必须是其子集；logic/transition 必须覆盖其 queries 与 rules[].on_violation 的错误；service 项不再声明 errors", implemented_by: [ service-errors ] }
+  - { id: service-errors, text: "step.errors 必须是存在的 platform.errors.*；kind=query 未声明时取 query 的错误集，声明时必须覆盖；kind=service 未声明时取 service 的错误集，声明时必须是其子集；logic 必须覆盖 rules[].on_violation 的错误；service 项不再声明 errors", implemented_by: [ service-errors ] }
   - { id: service-visibility, text: "cap.protocols.http.x-service 只能指向 visibility=public 且未被 `cap.events` job 引用的 service；跨模块 kind=service 只能指向 visibility=public 的目标；internal 目标只能被同模块引用", implemented_by: [ service-visibility ] }
-  - { id: service-steps-kind, text: "kind=query 必须有 queries；kind=service 必须有 services；kind=logic 必须有 output+errors；kind=transition 必须有 lifecycle（只能引用 destroy/transition）；kind=events 必须有 events；create 动作只能由 logic/query step 实现；when 只允许 logic/transition；queries 与 services 的每一项只允许自身字段；每个 kind 只允许公共字段与自身专属字段", implemented_by: [ service-steps-kind ] }
-  - { id: service-when, text: "when 只允许 logic/transition；每项必须引用本步 input 且不得重复；equals 与 in 恰好一个；in 非空且唯一；equals/in 值类型必须与 input 静态类型兼容（boolean 用 true/false，integer 用整数，string 用字符串，data.enums.* 用枚举名）；List/对象不可比较；when 条件按 AND 组合，全部为真才执行本步", implemented_by: [ service-when ] }
+  - { id: service-steps-kind, text: "kind=query 必须有 query（单值）；kind=service 必须有 service（单值）；kind=events 必须有 events；kind=logic 必须有 output+errors，只允许 rules 依据；kind=when 必须有 when；五类 kind 与装载字段一一对应：query→query、service→service、events→events、logic→rules、when→when；lifecycles 是任意 kind 都可带的标记，不限制 step 的实现方式；每个 kind 只允许公共字段、数据流字段与自身专属字段", implemented_by: [ service-steps-kind ] }
+  - { id: service-when, text: "when 只允许 kind=when；每项必须引用本步 input；equals 与 in 恰好一个；in 非空且唯一；equals/in 值类型必须与 input 静态类型兼容（boolean 用 true/false，integer 用整数，string 用字符串，data.enums.* 用枚举名）；每项必须有 goto 且目标为后续 step；同一 input 可以在多个分支中出现，按列表顺序匹配；第一个满足的分支生效；都不满足时走本步 goto，仍没有则顺序下一步", implemented_by: [ service-when ] }
+  - { id: service-goto, text: "goto 只能指向本 service 内更靠后的 step，不得指向自身或前序 step；kind=when 的每个分支 goto 同样；前向限制保证控制流无环", implemented_by: [ service-goto ] }
   - { id: service-cycle, text: "kind=service 调用图必须无环", implemented_by: [ service-cycle ] }
-  - { id: service-params, text: "input.value 必须是 params.<path> 或 step.<id>.<path>，禁止 expr 内联表达式（计算值必须落成前序 logic step 的 output）；值的静态类型必须与目标参数类型兼容（指针/List 与目标结构一致，类型族归一后比较，枚举按 integer 列）；params 字段必须存在且嵌套字段按 param 类型解析；params.default 只在 nullable:true 时允许，可判定时类型必须匹配；params 的 type 只允许基础类型、data.enums.*、data.entities.*、本地 schema 或 _types 类型族，指针与 List<> 各最多一层；step 字段必须存在于前序步骤输出；queries[].input 与 services[].input 的 name 必须是目标参数名且不得多余，必填参数（ctx 除外）必须全部出现", implemented_by: [ service-params ] }
+  - { id: service-params, text: "input.value 必须是 params.<path> 或 step.<id>.<path>，禁止 expr 内联表达式（计算值必须落成前序 logic step 的 output）；值的静态类型必须与目标参数类型兼容（指针/List 与目标结构一致，类型族归一后比较，枚举按 integer 列）；params 字段必须存在且嵌套字段按 param 类型解析；params.default 只在 nullable:true 时允许，可判定时类型必须匹配；params 的 type 只允许基础类型、data.enums.*、data.entities.*、本地 schema 或 _types 类型族，指针与 List<> 各最多一层；step 字段必须存在于前序步骤输出；query.input、service.input 的 name 必须是目标参数名且不得多余，必填参数（ctx 除外）必须全部出现", implemented_by: [ service-params ] }
   - { id: service-output, text: "service returns 的每个业务字段必须由某个 step 的输出提供（output 显式声明或 query/service 目标返回，同名、类型一致且 nullable 一致；指针与 List<> 归一化后比较，*T 视为可空）；error 不计入", implemented_by: [ service-output ] }
-  - { id: service-chain, text: "logic/transition 的每个显式 output 必须被后续 step 的 input（含 queries[].input）引用，或与 returns 业务字段同名；service 的每个非 ctx 参数必须被至少一个 step 的 input 值引用", implemented_by: [ service-chain ] }
+  - { id: service-chain, text: "logic 的每个显式 output 必须被后续 step 的 input 引用，或与 returns 业务字段同名；service 的每个非 ctx 参数必须被至少一个 step 的 input 值引用", implemented_by: [ service-chain ] }
   - { id: service-transaction, text: "tx_mode=read_only 的 service 不得直接写表，也不得经 kind=service 间接调用会写表的 service；写操作必须声明 tx_mode=required 或 none；tx_mode≠none 的 service 不得调用 tx_mode=required 的 service（避免嵌套事务）", implemented_by: [ service-transaction ] }

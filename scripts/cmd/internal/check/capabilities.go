@@ -57,11 +57,34 @@ var allowedOperationExtensions = map[string]bool{
 }
 
 var stepKindFields = map[string][]string{
-	"query":      {"queries", "output", "lifecycle"},
-	"service":    {"services"},
-	"logic":      {"input", "when", "output", "queries", "events", "rules", "lifecycle"},
-	"transition": {"input", "when", "output", "queries", "events", "rules", "lifecycle"},
-	"events":     {"events"},
+	"query":   {"query", "output"},
+	"service": {"service"},
+	"logic":   {"input", "output", "rules"},
+	"events":  {"events"},
+	"when":    {"input", "when"},
+}
+
+// stepQueryItems 返回 step 声明的 query 项；仅 kind=query 使用单值 query。
+func stepQueryItems(step map[string]any) []any {
+	items := []any{}
+	if q, ok := asMap(step["query"]); ok && q != nil {
+		items = append(items, q)
+	}
+	return items
+}
+
+// stepServiceItems 返回 step 声明的 service 项：kind=service 用单值 service，logic 用 services 列表。
+func stepServiceItems(step map[string]any) []any {
+	items := []any{}
+	if s, ok := asMap(step["service"]); ok && s != nil {
+		items = append(items, s)
+	}
+	return append(items, asList(step["services"])...)
+}
+
+// stepEventItems 返回 step 声明的事件列表；仅 kind=events 使用。
+func stepEventItems(step map[string]any) []any {
+	return asList(step["events"])
 }
 
 func (c *Checker) checkCapabilities() {
@@ -127,7 +150,6 @@ func (c *Checker) checkCapabilities() {
 	serviceMetaByID := map[string]serviceMeta{}
 	serviceItemIDs := map[string]bool{}
 	stepIDs := map[string]bool{}
-	stepKinds := map[string]string{}
 	stepLifecycle := map[string][]string{}
 	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
@@ -192,7 +214,7 @@ func (c *Checker) checkCapabilities() {
 				step, _ := asMap(rawStep)
 				kind, _ := step["kind"].(string)
 				if kind == "query" && step["errors"] == nil {
-					for _, rawQ := range asList(step["queries"]) {
+					for _, rawQ := range stepQueryItems(step) {
 						qo, _ := asMap(rawQ)
 						qid, _ := qo["query"].(string)
 						if q, ok := c.queries[qid]; ok {
@@ -226,13 +248,13 @@ func (c *Checker) checkCapabilities() {
 			stepQueries := map[string]bool{}
 			for _, rawStep := range asList(item["steps"]) {
 				step, _ := asMap(rawStep)
-				for _, rawS := range asList(step["services"]) {
+				for _, rawS := range stepServiceItems(step) {
 					so, _ := asMap(rawS)
 					if ref, _ := so["service"].(string); ref != "" {
 						serviceEdges[id] = append(serviceEdges[id], ref)
 					}
 				}
-				for _, rawQ := range asList(step["queries"]) {
+				for _, rawQ := range stepQueryItems(step) {
 					qo, _ := asMap(rawQ)
 					qid, _ := qo["query"].(string)
 					if qid == "" {
@@ -253,9 +275,7 @@ func (c *Checker) checkCapabilities() {
 				}
 				stepID := id + "." + sid
 				stepIDs[stepID] = true
-				kind, _ := step["kind"].(string)
-				stepKinds[stepID] = kind
-				for _, rawL := range asList(step["lifecycle"]) {
+				for _, rawL := range asList(step["lifecycles"]) {
 					action, _ := rawL.(string)
 					if action != "" {
 						stepLifecycle[stepID] = append(stepLifecycle[stepID], action)
@@ -457,7 +477,7 @@ func (c *Checker) checkCapabilities() {
 		if err != nil {
 			continue
 		}
-		c.checkLifecycleDoc(doc, relPath(c.root, file), lifecycleSchema, stepIDs, stepKinds, actionSteps, lifecycleStates, ruleIDs)
+		c.checkLifecycleDoc(doc, relPath(c.root, file), lifecycleSchema, stepIDs, actionSteps, lifecycleStates, ruleIDs)
 	}
 	jobServices := c.checkEventsDoc(eventSchema, serviceMetaByID, serviceItemIDs)
 	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, jobServices)
@@ -548,6 +568,13 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 	}
 	stepOutputs := make([]map[string]returnType, len(steps))
 	stepIndex := map[string]int{}
+	allIndex := map[string]int{}
+	for idx, raw := range steps {
+		step, _ := asMap(raw)
+		if sid, _ := step["id"].(string); sid != "" {
+			allIndex[sid] = idx
+		}
+	}
 	tc := stepTypeContext{doc: doc, stepIndex: stepIndex, steps: steps, stepOutputs: stepOutputs}
 	produced := map[string][]returnType{}
 	consumed := map[string]bool{}
@@ -579,9 +606,12 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			}
 		}
 		checkInputValues(input)
-		c.checkStepWhen(step, input, kind, tc, rel, stepID)
+		c.checkStepWhen(step, input, kind, tc, rel, stepID, allIndex, i)
+		if target, _ := step["goto"].(string); target != "" {
+			c.checkGoto(rel, stepID, target, allIndex, i)
+		}
 		allowed := map[string]bool{
-			"id": true, "kind": true, "summary": true, "depends_on": true, "errors": true,
+			"id": true, "kind": true, "summary": true, "depends_on": true, "errors": true, "lifecycles": true, "goto": true,
 		}
 		for _, field := range stepKindFields[kind] {
 			allowed[field] = true
@@ -595,98 +625,88 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		var targetErrors, queryErrors map[string]bool
 		switch kind {
 		case "query":
-			qs := asList(step["queries"])
-			if len(qs) == 0 {
-				c.rulef("service-steps-kind", "%s: step %s kind=query requires queries", rel, stepID)
-			}
+			qo, _ := asMap(step["query"])
 			queryErrors = map[string]bool{}
-			for _, rawQ := range qs {
-				qo, _ := asMap(rawQ)
+			if qo == nil {
+				c.rulef("service-steps-kind", "%s: step %s kind=query requires query", rel, stepID)
+			} else {
 				for field := range qo {
 					if field != "query" && field != "input" {
-						c.rulef("service-steps-kind", "%s: step %s queries item does not allow field %s", rel, stepID, field)
+						c.rulef("service-steps-kind", "%s: step %s query does not allow field %s", rel, stepID, field)
 					}
 				}
 				qid, _ := qo["query"].(string)
 				if qid == "" {
-					c.rulef("service-steps-kind", "%s: step %s queries item requires query", rel, stepID)
-					continue
-				}
-				q, ok := c.queries[qid]
-				if !ok {
+					c.rulef("service-steps-kind", "%s: step %s query requires query id", rel, stepID)
+				} else if q, ok := c.queries[qid]; !ok {
 					c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
-					continue
-				}
-				qInput := c.parseInputMap(qo["input"], rel, stepID, "query "+qid)
-				c.checkQueryInput(qInput, q, qid, rel, stepID, tc)
-				checkInputValues(qInput)
-				for code := range q.errorSet() {
-					queryErrors[code] = true
-				}
-				if txMode == "read_only" && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) {
-					c.rulef("service-transaction", "%s: step %s calls write query %s under tx_mode=read_only", rel, stepID, qid)
-				}
-				for name, rt := range c.queryReturnTypes[qid] {
-					produced[name] = append(produced[name], rt)
+				} else {
+					qInput := c.parseInputMap(qo["input"], rel, stepID, "query "+qid)
+					c.checkQueryInput(qInput, q, qid, rel, stepID, tc)
+					checkInputValues(qInput)
+					for code := range q.errorSet() {
+						queryErrors[code] = true
+					}
+					if txMode == "read_only" && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) {
+						c.rulef("service-transaction", "%s: step %s calls write query %s under tx_mode=read_only", rel, stepID, qid)
+					}
+					for name, rt := range c.queryReturnTypes[qid] {
+						produced[name] = append(produced[name], rt)
+					}
 				}
 			}
 		case "service":
-			svcs := asList(step["services"])
-			if len(svcs) == 0 {
-				c.rulef("service-steps-kind", "%s: step %s kind=service requires services", rel, stepID)
-			}
+			so, _ := asMap(step["service"])
 			targetErrors = map[string]bool{}
-			for _, rawS := range svcs {
-				so, _ := asMap(rawS)
+			if so == nil {
+				c.rulef("service-steps-kind", "%s: step %s kind=service requires service", rel, stepID)
+			} else {
 				for field := range so {
 					if field != "service" && field != "input" {
-						c.rulef("service-steps-kind", "%s: step %s services item does not allow field %s", rel, stepID, field)
+						c.rulef("service-steps-kind", "%s: step %s service does not allow field %s", rel, stepID, field)
 					}
 				}
 				ref, _ := so["service"].(string)
 				if ref == "" {
-					c.rulef("service-steps-kind", "%s: step %s services item requires service", rel, stepID)
-					continue
-				}
-				target, ok := serviceMeta[ref]
-				if !ok {
+					c.rulef("service-steps-kind", "%s: step %s service requires service id", rel, stepID)
+				} else if target, ok := serviceMeta[ref]; !ok {
 					c.rulef("service-ref", "%s: step %s unknown service %s", rel, stepID, ref)
-					continue
-				}
-				if target.module != module && target.visibility != "public" {
-					c.rulef("service-visibility", "%s: step %s cannot call internal %s from another module", rel, stepID, ref)
-				}
-				if txMode != "none" && target.txMode == "required" {
-					c.rulef("service-transaction", "%s: step %s tx_mode=%s must not call tx_mode=required service %s (nested transaction)", rel, stepID, txMode, ref)
-				}
-				if txMode == "read_only" && c.serviceWrites[ref] {
-					c.rulef("service-transaction", "%s: step %s tx_mode=read_only cannot call service %s that writes tables", rel, stepID, ref)
-				}
-				sInput := map[string]any{}
-				if rawIn, ok := so["input"]; ok && rawIn != nil {
-					items, ok := asList2(rawIn)
-					if !ok {
-						c.rulef("service-steps-kind", "%s: step %s service %s input must be a list", rel, stepID, ref)
-					} else {
-						for _, rawItem := range items {
-							item, _ := asMap(rawItem)
-							name, _ := item["name"].(string)
-							value, _ := item["value"].(string)
-							if name == "" || value == "" {
-								c.rulef("service-steps-kind", "%s: step %s service %s input item requires name and value", rel, stepID, ref)
-								continue
+				} else {
+					if target.module != module && target.visibility != "public" {
+						c.rulef("service-visibility", "%s: step %s cannot call internal %s from another module", rel, stepID, ref)
+					}
+					if txMode != "none" && target.txMode == "required" {
+						c.rulef("service-transaction", "%s: step %s tx_mode=%s must not call tx_mode=required service %s (nested transaction)", rel, stepID, txMode, ref)
+					}
+					if txMode == "read_only" && c.serviceWrites[ref] {
+						c.rulef("service-transaction", "%s: step %s tx_mode=read_only cannot call service %s that writes tables", rel, stepID, ref)
+					}
+					sInput := map[string]any{}
+					if rawIn, ok := so["input"]; ok && rawIn != nil {
+						items, ok := asList2(rawIn)
+						if !ok {
+							c.rulef("service-steps-kind", "%s: step %s service %s input must be a list", rel, stepID, ref)
+						} else {
+							for _, rawItem := range items {
+								item, _ := asMap(rawItem)
+								name, _ := item["name"].(string)
+								value, _ := item["value"].(string)
+								if name == "" || value == "" {
+									c.rulef("service-steps-kind", "%s: step %s service %s input item requires name and value", rel, stepID, ref)
+									continue
+								}
+								sInput[name] = value
 							}
-							sInput[name] = value
 						}
 					}
-				}
-				c.checkServiceInput(sInput, target, ref, rel, stepID, tc)
-				checkInputValues(sInput)
-				for code := range target.errors {
-					targetErrors[code] = true
-				}
-				for name, rt := range target.returns {
-					produced[name] = append(produced[name], rt)
+					c.checkServiceInput(sInput, target, ref, rel, stepID, tc)
+					checkInputValues(sInput)
+					for code := range target.errors {
+						targetErrors[code] = true
+					}
+					for name, rt := range target.returns {
+						produced[name] = append(produced[name], rt)
+					}
 				}
 			}
 		case "logic":
@@ -697,123 +717,29 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				c.rulef("service-steps-kind", "%s: step %s kind=logic requires errors", rel, stepID)
 			}
 			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
-		case "transition":
-			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
 		case "events":
-			if len(asList(step["events"])) == 0 {
+			evs := asList(step["events"])
+			if len(evs) == 0 {
 				c.rulef("service-steps-kind", "%s: step %s kind=events requires events", rel, stepID)
 			}
-			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
+			for _, raw := range evs {
+				if ev, _ := raw.(string); ev == "" || !eventIDs[ev] {
+					c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
+				}
+			}
+		case "when":
+			if len(asList(step["when"])) == 0 {
+				c.rulef("service-steps-kind", "%s: step %s kind=when requires when", rel, stepID)
+			}
 		default:
-			c.rulef("service-structure", "%s: step %s kind must be query/service/logic/transition/events", rel, stepID)
+			c.rulef("service-structure", "%s: step %s kind must be query/service/logic/events/when", rel, stepID)
 		}
 
-		lifecycles := asList(step["lifecycle"])
+		lifecycles := asList(step["lifecycles"])
 		for _, rawL := range lifecycles {
 			actionID, _ := rawL.(string)
-			action, ok := lifecycleActions[actionID]
-			if !ok {
+			if _, ok := lifecycleActions[actionID]; !ok {
 				c.rulef("service-ref", "%s: step %s unknown lifecycle action %s", rel, stepID, actionID)
-				continue
-			}
-			switch action.kind {
-			case "create":
-				if kind != "logic" && kind != "query" {
-					c.rulef("service-steps-kind", "%s: step %s create lifecycle action %s requires logic/query", rel, stepID, actionID)
-				}
-			case "destroy":
-				if action.to != "" {
-					if kind != "transition" {
-						c.rulef("service-steps-kind", "%s: step %s destroy lifecycle action %s requires transition", rel, stepID, actionID)
-					}
-				} else if kind != "logic" && kind != "query" && kind != "transition" {
-					c.rulef("service-steps-kind", "%s: step %s destroy lifecycle action %s requires logic/query/transition", rel, stepID, actionID)
-				}
-			case "transition":
-				if kind != "transition" {
-					c.rulef("service-steps-kind", "%s: step %s transition lifecycle action %s requires transition", rel, stepID, actionID)
-				}
-			}
-		}
-		if kind == "transition" && len(lifecycles) == 0 {
-			c.rulef("service-steps-kind", "%s: step %s kind=transition requires lifecycle", rel, stepID)
-		}
-
-		// 有目标状态的 lifecycle 动作，要求本步至少一个查询同时写 subject 主表并绑定状态列；
-		// 目标状态以 lifecycle 为唯一事实源，step 不再重复声明 state。
-		for _, rawL := range lifecycles {
-			actionID, _ := rawL.(string)
-			action, ok := lifecycleActions[actionID]
-			if !ok {
-				continue
-			}
-			want := action.initial
-			if action.kind != "create" {
-				want = action.to
-			}
-			if want == "" {
-				continue
-			}
-			satisfied := false
-			for _, rawQ := range asList(step["queries"]) {
-				qo, _ := asMap(rawQ)
-				qid, _ := qo["query"].(string)
-				q, ok := c.queries[qid]
-				if !ok {
-					continue
-				}
-				writesSubject, bound := false, false
-				for _, subj := range action.subjects {
-					if subj.Table != "" {
-						for _, table := range q.Writes {
-							if table == subj.Table {
-								writesSubject = true
-							}
-						}
-					}
-					if subj.ColumnRef != "" {
-						for _, p := range q.Params {
-							if p.Column == subj.ColumnRef {
-								bound = true
-							}
-						}
-					}
-				}
-				if writesSubject && bound {
-					satisfied = true
-					break
-				}
-			}
-			if !satisfied {
-				c.rulef("lifecycle-steps", "%s: step %s lifecycle action %s requires a query writing a subject table with a status column parameter", rel, stepID, actionID)
-			}
-		}
-
-		if kind == "logic" || kind == "transition" {
-			for _, rawQ := range asList(step["queries"]) {
-				qo, _ := asMap(rawQ)
-				if qo == nil {
-					c.rulef("service-steps-kind", "%s: step %s queries item must be an object", rel, stepID)
-					continue
-				}
-				for field := range qo {
-					if field != "query" && field != "input" {
-						c.rulef("service-steps-kind", "%s: step %s queries item does not allow field %s", rel, stepID, field)
-					}
-				}
-				qid, _ := qo["query"].(string)
-				if qid == "" {
-					c.rulef("service-steps-kind", "%s: step %s queries item requires query", rel, stepID)
-					continue
-				}
-				q, ok := c.queries[qid]
-				if !ok {
-					c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
-					continue
-				}
-				qInput := c.parseInputMap(qo["input"], rel, stepID, "query "+qid)
-				c.checkQueryInput(qInput, q, qid, rel, stepID, tc)
-				checkInputValues(qInput)
 			}
 		}
 
@@ -891,8 +817,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				stepErrors[code] = true
 			}
 		}
-		if kind == "logic" || kind == "transition" {
-			c.checkStepQueryErrors(step, rel, stepID)
+		if kind == "logic" {
 			for _, rawRule := range asList(step["rules"]) {
 				rid, _ := rawRule.(string)
 				code := c.ruleErrors[rid]
@@ -958,12 +883,12 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		}
 	}
 
-	// 显式 output 必须被后续 step 的 input/when 消费，或作为 returns 的业务字段。
+	// 显式 output 必须被后续 step 的 input 消费，或作为 returns 的业务字段。
 	for i, raw := range steps {
 		step, _ := asMap(raw)
 		stepID, _ := step["id"].(string)
 		kind, _ := step["kind"].(string)
-		if kind != "logic" && kind != "transition" {
+		if kind != "logic" {
 			continue
 		}
 		for name := range stepOutputs[i] {
@@ -987,9 +912,51 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 
 }
 
-// checkStepWhen 校验 step 的静态跳过条件：只允许 logic/transition，条件引用本步 input，
-// 值类型与 input 的静态类型兼容；条件按 AND 组合。
-func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind string, tc stepTypeContext, rel, stepID string) {
+// parseInputMap 把 {name, value, description} 列表解析为 name -> value。
+// description 的必填由 _meta 的 item_fields 校验。
+func (c *Checker) parseInputMap(v any, rel, stepID, where string) map[string]any {
+	out := map[string]any{}
+	if v == nil {
+		return out
+	}
+	items, ok := asList2(v)
+	if !ok {
+		c.rulef("service-steps-kind", "%s: step %s %s input must be a list", rel, stepID, where)
+		return out
+	}
+	seen := map[string]bool{}
+	for _, raw := range items {
+		item, _ := asMap(raw)
+		name, _ := item["name"].(string)
+		value, _ := item["value"].(string)
+		if name == "" || value == "" {
+			c.rulef("service-steps-kind", "%s: step %s %s input item requires name and value", rel, stepID, where)
+			continue
+		}
+		if seen[name] {
+			c.rulef("service-structure", "%s: step %s %s duplicate input %s", rel, stepID, where, name)
+		}
+		seen[name] = true
+		out[name] = value
+	}
+	return out
+}
+
+// checkGoto 校验跳转目标是同 service 内更靠后的 step（前向，无环）。
+func (c *Checker) checkGoto(rel, stepID, target string, allIndex map[string]int, pos int) {
+	t, ok := allIndex[target]
+	if !ok {
+		c.rulef("service-goto", "%s: step %s goto unknown step %s", rel, stepID, target)
+		return
+	}
+	if t <= pos {
+		c.rulef("service-goto", "%s: step %s goto %s must target a later step", rel, stepID, target)
+	}
+}
+
+// checkStepWhen 校验 kind=when 的条件分支：条件引用本步 input，equals/in 恰一，
+// 值类型与 input 静态类型兼容；每个分支必须有指向后续 step 的 goto。
+func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind string, tc stepTypeContext, rel, stepID string, allIndex map[string]int, pos int) {
 	whens := asList(step["when"])
 	if step["when"] != nil && len(whens) == 0 {
 		c.rulef("service-when", "%s: step %s when must not be empty", rel, stepID)
@@ -998,8 +965,8 @@ func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind 
 	if len(whens) == 0 {
 		return
 	}
-	if kind != "logic" && kind != "transition" {
-		c.rulef("service-when", "%s: step %s when is only allowed on logic/transition", rel, stepID)
+	if kind != "when" {
+		c.rulef("service-when", "%s: step %s when is only allowed on kind=when", rel, stepID)
 	}
 	inputTypes := map[string]string{}
 	for name, raw := range input {
@@ -1011,7 +978,6 @@ func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind 
 			inputTypes[name] = typ
 		}
 	}
-	seen := map[string]bool{}
 	for _, rawWhen := range whens {
 		wm, _ := asMap(rawWhen)
 		if wm == nil {
@@ -1019,7 +985,7 @@ func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind 
 			continue
 		}
 		for field := range wm {
-			if field != "input" && field != "equals" && field != "in" {
+			if field != "input" && field != "equals" && field != "in" && field != "goto" {
 				c.rulef("service-when", "%s: step %s when item does not allow field %s", rel, stepID, field)
 			}
 		}
@@ -1032,10 +998,11 @@ func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind 
 			c.rulef("service-when", "%s: step %s when input %s is not declared by step input", rel, stepID, name)
 			continue
 		}
-		if seen[name] {
-			c.rulef("service-when", "%s: step %s when input %s is duplicated", rel, stepID, name)
+		if target, _ := wm["goto"].(string); target == "" {
+			c.rulef("service-when", "%s: step %s when input %s requires goto", rel, stepID, name)
+		} else {
+			c.checkGoto(rel, stepID, target, allIndex, pos)
 		}
-		seen[name] = true
 		_, hasEquals := wm["equals"]
 		_, hasIn := wm["in"]
 		if hasEquals == hasIn {
@@ -1107,37 +1074,7 @@ func (c *Checker) checkWhenValue(typ string, value any, rel, stepID, name string
 	}
 }
 
-// parseInputMap 把 {name, value, description} 列表解析为 name -> value。
-// description 的必填由 _meta 的 item_fields 校验。
-func (c *Checker) parseInputMap(v any, rel, stepID, where string) map[string]any {
-	out := map[string]any{}
-	if v == nil {
-		return out
-	}
-	items, ok := asList2(v)
-	if !ok {
-		c.rulef("service-steps-kind", "%s: step %s %s input must be a list", rel, stepID, where)
-		return out
-	}
-	seen := map[string]bool{}
-	for _, raw := range items {
-		item, _ := asMap(raw)
-		name, _ := item["name"].(string)
-		value, _ := item["value"].(string)
-		if name == "" || value == "" {
-			c.rulef("service-steps-kind", "%s: step %s %s input item requires name and value", rel, stepID, where)
-			continue
-		}
-		if seen[name] {
-			c.rulef("service-structure", "%s: step %s %s duplicate input %s", rel, stepID, where, name)
-		}
-		seen[name] = true
-		out[name] = value
-	}
-	return out
-}
-
-// checkStepQueryErrors 要求 logic/transition step 显式覆盖其 queries 的领域错误。
+// checkStepQueryErrors 要求 logic step 显式覆盖其 queries 的领域错误。
 func (c *Checker) checkStepQueryErrors(step map[string]any, rel, stepID string) {
 	declared := map[string]bool{}
 	for _, raw := range asList(step["errors"]) {
@@ -1170,12 +1107,6 @@ func (c *Checker) checkLogicRefs(step map[string]any, rel, stepID string, ruleID
 		rid, _ := rawRule.(string)
 		if !ruleIDs[rid] {
 			c.rulef("service-ref", "%s: step %s unknown rule %s", rel, stepID, rid)
-		}
-	}
-	for _, rawEvent := range asList(step["events"]) {
-		ev, _ := rawEvent.(string)
-		if !eventIDs[ev] {
-			c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
 		}
 	}
 }
@@ -1290,7 +1221,7 @@ func findEntityFieldByJSONName(ent *entityInfo, jsonName string) *entityFieldInf
 	return nil
 }
 
-func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Schema, stepIDs map[string]bool, stepKinds map[string]string, actionSteps map[string][]string, lifecycleStates map[string]map[string]bool, ruleIDs map[string]bool) {
+func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Schema, stepIDs map[string]bool, actionSteps map[string][]string, lifecycleStates map[string]map[string]bool, ruleIDs map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})
 	c.checkTargetFileName(schema, filepath.Base(rel), rel)
@@ -1367,7 +1298,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 		c.rulef("lifecycle-structure", "%s: final %s is not a declared state", rel, final)
 	}
 
-	checkStep := func(actionID, step, kind string, requireTransition bool) {
+	checkStep := func(actionID, step string) {
 		if step == "" {
 			c.rulef("lifecycle-steps", "%s: %s requires step", rel, actionID)
 			return
@@ -1376,25 +1307,11 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			c.rulef("lifecycle-steps", "%s: %s unknown step %s", rel, actionID, step)
 			return
 		}
-		switch kind {
-		case "create":
-			if k := stepKinds[step]; k != "logic" && k != "query" {
-				c.rulef("lifecycle-steps", "%s: %s step %s must be logic/query, got %s", rel, actionID, step, k)
-			}
-		default:
-			if requireTransition {
-				if stepKinds[step] != "transition" {
-					c.rulef("lifecycle-steps", "%s: %s step %s must be transition, got %s", rel, actionID, step, stepKinds[step])
-				}
-			} else if k := stepKinds[step]; k != "transition" && k != "logic" && k != "query" {
-				c.rulef("lifecycle-steps", "%s: %s step %s must be transition/logic/query, got %s", rel, actionID, step, k)
-			}
-		}
 		if !containsString(actionSteps[actionID], step) {
-			c.rulef("lifecycle-steps", "%s: %s step %s must declare lifecycle %s", rel, actionID, step, actionID)
+			c.rulef("lifecycle-steps", "%s: %s step %s must declare lifecycles %s", rel, actionID, step, actionID)
 		}
 	}
-	checkSteps := func(actionID string, steps []string, kind string, requireTransition bool) {
+	checkSteps := func(actionID string, steps []string) {
 		if len(steps) == 0 {
 			c.rulef("lifecycle-steps", "%s: %s requires steps", rel, actionID)
 			return
@@ -1402,25 +1319,25 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 		set := map[string]bool{}
 		for _, step := range steps {
 			set[step] = true
-			checkStep(actionID, step, kind, requireTransition)
+			checkStep(actionID, step)
 		}
 		actionSet := map[string]bool{}
 		for _, step := range actionSteps[actionID] {
 			actionSet[step] = true
 		}
 		if !sameSet(set, actionSet) {
-			c.rulef("lifecycle-steps", "%s: %s steps %v must match step.lifecycle %v", rel, actionID, steps, actionSteps[actionID])
+			c.rulef("lifecycle-steps", "%s: %s steps %v must match step.lifecycles %v", rel, actionID, steps, actionSteps[actionID])
 		}
 	}
 
 	create, hasCreate := asMap(doc["create"])
 	if hasCreate {
-		checkSteps(fileID+".create", stringList(create["steps"]), "create", false)
+		checkSteps(fileID+".create", stringList(create["steps"]))
 	}
 	destroy, hasDestroy := asMap(doc["destroy"])
 	if hasDestroy {
 		to, _ := destroy["to"].(string)
-		checkSteps(fileID+".destroy", stringList(destroy["steps"]), "destroy", to != "")
+		checkSteps(fileID+".destroy", stringList(destroy["steps"]))
 		for _, rawFrom := range asList(destroy["from"]) {
 			from, _ := rawFrom.(string)
 			if !stateNames[from] {
@@ -1503,7 +1420,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			c.rulef("lifecycle-steps", "%s: transition %s requires implemented_by", rel, name)
 		}
 		for _, step := range impl {
-			checkStep(actionID, step, "transition", true)
+			checkStep(actionID, step)
 		}
 		implSet := map[string]bool{}
 		for _, step := range impl {
@@ -1514,7 +1431,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			actionSet[step] = true
 		}
 		if !sameSet(implSet, actionSet) {
-			c.rulef("lifecycle-steps", "%s: transition %s implemented_by %v must match step.lifecycle %v", rel, name, impl, actionSteps[actionID])
+			c.rulef("lifecycle-steps", "%s: transition %s implemented_by %v must match step.lifecycles %v", rel, name, impl, actionSteps[actionID])
 		}
 	}
 	for _, rawFrom := range asList(destroy["from"]) {
@@ -2184,12 +2101,10 @@ func (c *Checker) stepOutputPathType(step map[string]any, output map[string]retu
 		if out, ok := output[root.name]; ok && out.typ != "" {
 			typ = out.typ
 		} else {
-			for _, rawS := range asList(step["services"]) {
-				so, _ := asMap(rawS)
+			if so, ok := asMap(step["service"]); ok {
 				ref, _ := so["service"].(string)
 				if t := c.methodReturns[ref][root.name].typ; t != "" {
 					typ = t
-					break
 				}
 			}
 		}
@@ -2200,19 +2115,17 @@ func (c *Checker) stepOutputPathType(step map[string]any, output map[string]retu
 		if out, ok := output[root.name]; ok && out.typ != "" {
 			typ = out.typ
 		} else {
-			for _, rawQ := range asList(step["queries"]) {
-				qo, _ := asMap(rawQ)
+			if qo, ok := asMap(step["query"]); ok {
 				qid, _ := qo["query"].(string)
 				if t := c.queryReturnTypes[qid][root.name].typ; t != "" {
 					typ = t
-					break
 				}
 			}
 		}
 		if typ == "" {
 			return "", fmt.Errorf("unknown output %s", root.name)
 		}
-	case "logic", "transition":
+	case "logic":
 		typ = output[root.name].typ
 		if typ == "" {
 			return "", fmt.Errorf("unknown output %s", root.name)

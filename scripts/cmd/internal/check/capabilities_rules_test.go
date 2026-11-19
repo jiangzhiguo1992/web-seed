@@ -426,11 +426,6 @@ func TestCheckLifecycleDoc(t *testing.T) {
 		"cap.services.x.delete.soft_delete":  true,
 		"cap.services.x.activate.transition": true,
 	}
-	stepKinds := map[string]string{
-		"cap.services.x.create.create":       "logic",
-		"cap.services.x.delete.soft_delete":  "transition",
-		"cap.services.x.activate.transition": "transition",
-	}
 	actionSteps := map[string][]string{
 		"cap.lifecycles.x.create":   {"cap.services.x.create.create"},
 		"cap.lifecycles.x.destroy":  {"cap.services.x.delete.soft_delete"},
@@ -473,7 +468,7 @@ transitions:
 		enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true, "deleted": true}},
 		entities:   map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status"}}}},
 	}
-	c.checkLifecycleDoc(doc, rel, schema, stepIDs, stepKinds, actionSteps, map[string]map[string]bool{}, map[string]bool{})
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid lifecycle reported: %v", c.errs)
 	}
@@ -484,7 +479,7 @@ transitions:
 		t.Fatal(err)
 	}
 	c.errs = nil
-	c.checkLifecycleDoc(doc, rel, schema, stepIDs, stepKinds, actionSteps, map[string]map[string]bool{}, map[string]bool{})
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[lifecycle-structure]") {
 		t.Fatalf("unknown initial state not reported: %v", c.errs)
 	}
@@ -542,11 +537,6 @@ func TestCheckLifecycleDocErrors(t *testing.T) {
 		"cap.services.x.create.create":       true,
 		"cap.services.x.delete.soft_delete":  true,
 		"cap.services.x.activate.transition": true,
-	}
-	stepKinds := map[string]string{
-		"cap.services.x.create.create":       "logic",
-		"cap.services.x.delete.soft_delete":  "transition",
-		"cap.services.x.activate.transition": "transition",
 	}
 	actionSteps := map[string][]string{
 		"cap.lifecycles.x.create":   {"cap.services.x.create.create"},
@@ -628,7 +618,7 @@ transitions:
 				enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true, "deleted": true}},
 				entities:   map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status"}}}},
 			}
-			c.checkLifecycleDoc(doc, rel, schema, stepIDs, stepKinds, actionSteps, map[string]map[string]bool{}, map[string]bool{})
+			c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{})
 			if !strings.Contains(strings.Join(c.errs, "\n"), tc.want) {
 				t.Fatalf("want %s, got %v", tc.want, c.errs)
 			}
@@ -641,7 +631,6 @@ func TestCheckLifecycleRequires(t *testing.T) {
 	schema := copyMeta(t, root, "cap.lifecycles")
 	rel := "contracts/capabilities/lifecycles/x.yaml"
 	stepIDs := map[string]bool{"cap.services.x.activate.transition": true}
-	stepKinds := map[string]string{"cap.services.x.activate.transition": "transition"}
 	actionSteps := map[string][]string{"cap.lifecycles.x.activate": {"cap.services.x.activate.transition"}}
 	lifecycleStates := map[string]map[string]bool{
 		"cap.lifecycles.x": {"pending": true, "active": true, "deleted": true},
@@ -688,7 +677,7 @@ transitions:
 				Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status",
 			}}}},
 		}
-		c.checkLifecycleDoc(doc, rel, schema, stepIDs, stepKinds, actionSteps, lifecycleStates, map[string]bool{})
+		c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, lifecycleStates, map[string]bool{})
 		return strings.Join(c.errs, "\n")
 	}
 
@@ -1068,22 +1057,23 @@ services:
 	}
 }
 
-func TestTransitionRulesValidated(t *testing.T) {
+func TestLogicRulesValidated(t *testing.T) {
 	c := &Checker{}
 	doc := map[string]any{
 		"returns": []any{},
 		"steps": []any{map[string]any{
-			"id": "t", "kind": "transition", "summary": "x",
-			"lifecycle": []any{"cap.lifecycles.x.t"},
-			"rules":     []any{"feature.rules.x.missing"},
-			"output":    []any{},
+			"id": "t", "kind": "logic", "summary": "x",
+			"lifecycles": []any{"cap.lifecycles.x.t"},
+			"rules":      []any{"feature.rules.x.missing"},
+			"output":     []any{},
+			"errors":     []any{},
 		}},
 	}
 	c.checkServiceItem(doc, "contracts/capabilities/services/x.yaml", "cap.services.x.get", "x",
 		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{},
 		map[string]lifecycleAction{"cap.lifecycles.x.t": {kind: "transition"}}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown rule feature.rules.x.missing") {
-		t.Fatalf("transition rule not validated: %v", c.errs)
+		t.Fatalf("logic rule not validated: %v", c.errs)
 	}
 }
 
@@ -1225,7 +1215,7 @@ func TestQueryErrorPropagation(t *testing.T) {
 	t.Run("query step inherits query errors", func(t *testing.T) {
 		doc := base(map[string]any{
 			"id": "run", "kind": "query", "summary": "x",
-			"queries": []any{map[string]any{"query": "data.queries.x.q"}},
+			"query": map[string]any{"query": "data.queries.x.q"},
 		})
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("valid query error reported: %v", errs)
@@ -1235,19 +1225,10 @@ func TestQueryErrorPropagation(t *testing.T) {
 	t.Run("query step may add local errors", func(t *testing.T) {
 		doc := base(map[string]any{
 			"id": "run", "kind": "query", "summary": "x",
-			"queries": []any{map[string]any{"query": "data.queries.x.q"}},
-			"errors":  []any{"platform.errors.B"},
+			"query":  map[string]any{"query": "data.queries.x.q"},
+			"errors": []any{"platform.errors.B"},
 		})
 		want(t, check(t, doc), "does not declare query error platform.errors.A")
-	})
-
-	t.Run("logic step must declare query errors", func(t *testing.T) {
-		doc := base(map[string]any{
-			"id": "run", "kind": "logic", "summary": "x",
-			"errors": []any{}, "output": []any{},
-			"queries": []any{map[string]any{"query": "data.queries.x.q"}},
-		})
-		want(t, check(t, doc), "step run does not declare query data.queries.x.q error platform.errors.A")
 	})
 }
 

@@ -27,21 +27,21 @@ transitions:
     to: active
     guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    implemented_by: [ cap.services.account.activate.transition ]
+    implemented_by: [ cap.services.account.activate.apply ]
   - name: suspend
     description: "封禁账号"
     from: [active]
     to: suspended
     guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    implemented_by: [ cap.services.account.suspend.transition ]
+    implemented_by: [ cap.services.account.suspend.apply ]
   - name: reactivate
     description: "解封"
     from: [suspended]
     to: active
     guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    implemented_by: [ cap.services.account.activate.transition ]
+    implemented_by: [ cap.services.account.activate.apply ]
 forbidden_examples:
   - { from: deleted, transition: activate, reason: "已删除不可激活" }
   - { from: pending, transition: suspend, reason: "待激活账号不可直接封禁" }

@@ -815,7 +815,8 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 				"id": true, "kind": true, "summary": true, "depends_on": true,
 				"input": true, "output": true, "errors": true,
 				"services": true, "queries": true, "events": true,
-				"rules": true, "transitions": true,
+				"rules": true, "lifecycles": true,
+				"goto": true, "when": true, "query": true,
 			}, "cap.services.steps"); err != nil {
 				return nil, err
 			}

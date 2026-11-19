@@ -763,7 +763,7 @@ func (c *Checker) checkQueryUsedBy() {
 			for _, rawStep := range asList(item["steps"]) {
 				step, _ := asMap(rawStep)
 				var qids []string
-				for _, rawQ := range asList(step["queries"]) {
+				for _, rawQ := range stepQueryItems(step) {
 					qo, _ := asMap(rawQ)
 					qid, _ := qo["query"].(string)
 					if qid != "" {

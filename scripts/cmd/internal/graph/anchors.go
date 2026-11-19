@@ -119,7 +119,7 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				step, _ := asMap(rawStep)
 				stepID, _ := step["id"].(string)
 				fullStepID := serviceID + "." + stepID
-				for _, rawL := range asList(step["lifecycle"]) {
+				for _, rawL := range asList(step["lifecycles"]) {
 					actionID, _ := rawL.(string)
 					a.addLifecycleStep(actionID, fullStepID)
 				}
@@ -129,15 +129,7 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 						ruleID, _ := rawRule.(string)
 						a.addRule(ruleID, serviceID)
 					}
-					for _, rawEvent := range asList(step["events"]) {
-						eventID, _ := rawEvent.(string)
-						a.addEvent(eventID, serviceID)
-					}
-				case "transition":
-					for _, rawRule := range asList(step["rules"]) {
-						ruleID, _ := rawRule.(string)
-						a.addRule(ruleID, serviceID)
-					}
+				case "events":
 					for _, rawEvent := range asList(step["events"]) {
 						eventID, _ := rawEvent.(string)
 						a.addEvent(eventID, serviceID)

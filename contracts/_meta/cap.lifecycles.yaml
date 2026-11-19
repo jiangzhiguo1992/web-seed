@@ -72,14 +72,14 @@ fields:
   - name: create
     type: object
     required: false
-    description: "创建动作；steps 由 step.lifecycle 反向生成"
+    description: "创建动作；steps 由 step.lifecycles 反向生成"
     fields:
       - { name: steps, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "创建实体的 service step ID" }
 
   - name: destroy
     type: object
     required: false
-    description: "销毁动作；steps 由 step.lifecycle 反向生成"
+    description: "销毁动作；steps 由 step.lifecycles 反向生成"
     fields:
       - { name: steps, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁实体的 service step ID" }
       - { name: from, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许销毁的源状态" }
@@ -116,7 +116,7 @@ fields:
           - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属的生命周期契约；不能是本契约" }
           - { name: state, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "前置状态；必须是目标生命周期已声明的状态" }
       - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "非法转换错误码；from 非法或 requires 不满足时返回" }
-      - { name: implemented_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 service step ID；由 step.lifecycle 生成" }
+      - { name: implemented_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 service step ID；由 step.lifecycles 生成" }
 
   - name: forbidden_examples
     type: list<object>
@@ -141,4 +141,4 @@ rules:
   - { id: lifecycle-dimension, text: "同一 (entity, field) 组合只能被一个 lifecycle 契约声明；同一 lifecycle 内不得重复声明同一 (entity, field)", implemented_by: [ lifecycle-dimension ] }
   - { id: lifecycle-enum-coverage, text: "被 lifecycle 使用的 data.enums.*，每个枚举值必须至少被一个使用该枚举的 lifecycle states 声明；states 只允许该枚举的值", implemented_by: [ lifecycle-enum-coverage ] }
   - { id: lifecycle-requires, text: "transitions[].requires 的 lifecycle 必须是存在的 cap.lifecycles.* 且不能是自身；state 必须是目标 lifecycle 已声明的状态；同一 transition 内同一个 lifecycle 只能出现一次；列表内全部满足（AND）", implemented_by: [ lifecycle-requires ] }
-  - { id: lifecycle-steps, text: "create.steps/destroy.steps/transitions[].implemented_by 必须是存在的 cap.services.<file>.<service>.<step>；step 的 lifecycle 必须反向引用同一动作；create 只能由 logic/query step 实现；destroy/transition 只能由 transition step 实现；有 destroy.to 时 destroy 步骤必须是 transition，无 destroy.to 时允许 logic/query；有 to/initial 的动作，实现步骤的 queries 必须至少有一个查询同时写该动作的 subject 主表并绑定该维度状态列", implemented_by: [ lifecycle-steps ] }
+  - { id: lifecycle-steps, text: "create.steps/destroy.steps/transitions[].implemented_by 必须是存在的 cap.services.<file>.<service>.<step>；step 的 lifecycles 必须反向引用同一动作；lifecycles 不限制 step kind，也不要求本步的查询写状态列", implemented_by: [ lifecycle-steps ] }
