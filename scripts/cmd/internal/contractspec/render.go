@@ -97,14 +97,33 @@ type queryFileScaffold struct {
 }
 
 type queryItemScaffold struct {
-	Name        string                `yaml:"name"`
-	Description string                `yaml:"description"`
-	Tables      []queryTableScaffold  `yaml:"tables"`
-	Params      []queryParamScaffold  `yaml:"params"`
-	Returns     []queryReturnScaffold `yaml:"returns"`
-	Errors      []string              `yaml:"errors"`
-	IndexRef    flowStrings           `yaml:"index_ref"`
-	UsedBy      []string              `yaml:"used_by"`
+	Name        string                  `yaml:"name"`
+	Description string                  `yaml:"description"`
+	Tables      []queryTableScaffold    `yaml:"tables"`
+	Params      []queryParamScaffold    `yaml:"params"`
+	Returns     []queryReturnScaffold   `yaml:"returns"`
+	Errors      []string                `yaml:"errors"`
+	IndexRef    []queryIndexRefScaffold `yaml:"index_ref"`
+	UsedBy      []string                `yaml:"used_by"`
+}
+
+type queryIndexRefScaffold struct {
+	Index   string
+	Columns []string
+}
+
+// MarshalYAML 以 flow mapping 输出，保持 index_ref 一行一项。
+func (r queryIndexRefScaffold) MarshalYAML() (any, error) {
+	cols := &yaml.Node{Kind: yaml.SequenceNode, Style: yaml.FlowStyle}
+	for _, c := range r.Columns {
+		cols.Content = append(cols.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: c})
+	}
+	return &yaml.Node{Kind: yaml.MappingNode, Style: yaml.FlowStyle, Content: []*yaml.Node{
+		{Kind: yaml.ScalarNode, Value: "index"},
+		{Kind: yaml.ScalarNode, Value: r.Index},
+		{Kind: yaml.ScalarNode, Value: "columns"},
+		cols,
+	}}, nil
 }
 
 type queryTableScaffold struct {
@@ -116,17 +135,6 @@ type queryReturnScaffold struct {
 	Name string `yaml:"name"`
 	Kind string `yaml:"kind"`
 	Type string `yaml:"type,omitempty"`
-}
-
-// flowStrings 以 YAML flow list 输出，保持 query sql 的列清单横排。
-type flowStrings []string
-
-func (s flowStrings) MarshalYAML() (any, error) {
-	n := &yaml.Node{Kind: yaml.SequenceNode, Style: yaml.FlowStyle}
-	for _, v := range s {
-		n.Content = append(n.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: v})
-	}
-	return n, nil
 }
 
 type queryParamScaffold struct {
@@ -407,7 +415,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 			Params:      []queryParamScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "integer", Column: tableID + ".col.id"}},
 			Returns:     []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}, {Name: "err", Kind: "error"}},
 			Errors:      []string{},
-			IndexRef:    flowStrings{tableID + ".pk"},
+			IndexRef:    []queryIndexRefScaffold{{Index: tableID + ".pk", Columns: []string{"id"}}},
 			UsedBy:      []string{},
 		}},
 	}

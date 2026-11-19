@@ -159,7 +159,7 @@ func TestLoadTablesInheritance(t *testing.T) {
 	}
 	found := false
 	for _, ck := range action.Checks {
-		if ck.Name == "ck_verification_action_result" && ck.Expr == "result IN (1, 2, 3, 4)" {
+		if ck.Name == "ck_verification_action_result" && ck.Expr == "result IN (1, 2, 3, 4, 5)" {
 			found = true
 		}
 	}

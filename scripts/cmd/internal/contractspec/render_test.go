@@ -215,8 +215,13 @@ func TestRenderQuery(t *testing.T) {
 		t.Fatalf("query kind must not be scaffolded: %#v", q)
 	}
 	refs, _ := q["index_ref"].([]any)
-	if len(refs) != 1 || refs[0] != "data.tables.account.pk" {
+	if len(refs) != 1 {
 		t.Fatalf("index_ref not scaffolded: %#v", q["index_ref"])
+	}
+	ref, _ := refs[0].(map[string]any)
+	cols, _ := ref["columns"].([]any)
+	if ref["index"] != "data.tables.account.pk" || len(cols) != 1 || cols[0] != "id" {
+		t.Fatalf("index_ref must scaffold {index, columns}: %#v", q["index_ref"])
 	}
 	if _, ok := q["sql"]; ok {
 		t.Fatalf("query must not scaffold sql: %#v", q)

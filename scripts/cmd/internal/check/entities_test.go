@@ -915,7 +915,7 @@ func TestQueryIndexRefAllowsMultiTable(t *testing.T) {
 		queryOrder: []string{"data.queries.x.q"},
 		queries: map[string]*queryInfo{
 			"data.queries.x.q": {ID: "data.queries.x.q", Targets: []string{"data.tables.x", "data.tables.y"},
-				IndexRef: []string{"data.tables.x.idx_x_code"}},
+				IndexRef: []queryIndexRef{{Index: "data.tables.x.idx_x_code", Columns: []string{"code"}}}},
 		},
 		queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true, "data.tables.y": true}},
 		tableIndexes: map[string][]tableIndex{"data.tables.x": {

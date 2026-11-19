@@ -22,8 +22,8 @@ var storageEngineFields = map[string]map[string]bool{
 	"mongodb":  storageFieldSet("table", "description", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl"),
 }
 
-// storageArchiveFields 是归档条目的字段集：archive_of 指向原表，table 是归档物理表名。
-var storageArchiveFields = storageFieldSet("archive_of", "table", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "age_by", "after_unit", "after")
+// storageArchiveFields 是归档条目的字段集：archive_of 指向原表，promotable 决定能否回迁，table 是归档物理表名。
+var storageArchiveFields = storageFieldSet("archive_of", "promotable", "table", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "age_by", "after_unit", "after")
 
 // storageCacheFields 是非权威副本条目的字段集。
 var storageCacheFields = storageFieldSet("cache_of", "key", "retention", "unit", "cache_ttl")
@@ -41,15 +41,28 @@ type storageRetention struct {
 	ttl  int
 }
 
-// storageArchiveEntry 是一条归档条目：把 archive_of 的冷数据封存到 table。
+// storageArchiveEntry 是一条归档条目：把 archive_of 的冷数据封存到 table；
+// promotable 表示归档数据能否回迁热表。
 type storageArchiveEntry struct {
-	engine string
-	name   string
-	source string
-	ageBy  string
-	unit   string
-	after  int
-	where  string
+	engine     string
+	name       string
+	source     string
+	promotable bool
+	ageBy      string
+	unit       string
+	after      int
+	where      string
+}
+
+// storageCacheEntry 是一条逻辑缓存：同表同 key 跨引擎视为同一逻辑缓存。
+type storageCacheEntry struct {
+	table string
+	key   []string
+}
+
+// storageCacheRef 由 cache_of 与 key 派生缓存引用：data.tables.<t>.cache.<k>[+<k>]。
+func storageCacheRef(table string, key []string) string {
+	return table + ".cache." + strings.Join(key, "+")
 }
 
 // storageUnitMinutes 把保留/归档时长归一化为分钟；未知单位返回 0。
@@ -75,6 +88,8 @@ func storageFieldSet(names ...string) map[string]bool {
 
 func (c *Checker) checkStorage(tableIDs map[string]string) {
 	rel := "contracts/data/storage.yaml"
+	c.cacheEntries = map[string]storageCacheEntry{}
+	c.archiveEntries = map[string]storageArchiveEntry{}
 	doc, err := loadYAML(filepath.Join(c.root, rel))
 	if err != nil {
 		c.rulef("storage-registry", "%s: %v", rel, err)
@@ -271,6 +286,13 @@ func (c *Checker) checkStorageCaches(doc map[string]any, entries map[string]*sto
 			seen[keyID] = true
 			if !validKey {
 				continue
+			}
+			ref := storageCacheRef(id, cols)
+			if c.cacheEntries == nil {
+				c.cacheEntries = map[string]storageCacheEntry{}
+			}
+			if _, ok := c.cacheEntries[ref]; !ok {
+				c.cacheEntries[ref] = storageCacheEntry{table: id, key: cols}
 			}
 			retention := c.parseStorageRetention(entry, where, true)
 			if retention == nil || authority.retention == nil || authority.retention.ttl < 1 {
@@ -497,6 +519,14 @@ func (c *Checker) parseStorageArchive(engine string, rawArchiveOf any, entry map
 			c.rulef("storage-entry-fields", "%s: field %q is not allowed for archive entries", where, key)
 		}
 	}
+	promotable := false
+	if rawPromotable, ok := entry["promotable"]; !ok {
+		c.rulef("storage-archive", "%s: promotable is required", where)
+	} else if p, ok := rawPromotable.(bool); !ok {
+		c.rulef("storage-archive", "%s: promotable must be a boolean", where)
+	} else {
+		promotable = p
+	}
 	name, _ := entry["table"].(string)
 	if name == "" {
 		c.rulef("storage-archive", "%s: table is required", where)
@@ -524,7 +554,7 @@ func (c *Checker) parseStorageArchive(engine string, rawArchiveOf any, entry map
 		c.rulef("storage-archive", "%s: after must be an integer >= 1", where)
 		return nil
 	}
-	return &storageArchiveEntry{engine: engine, name: name, source: archiveOf, ageBy: ageBy, unit: afterUnit, after: after, where: where}
+	return &storageArchiveEntry{engine: engine, name: name, source: archiveOf, promotable: promotable, ageBy: ageBy, unit: afterUnit, after: after, where: where}
 }
 
 // checkStorageArchives 校验归档条目：原表已登记、一表一条、表名唯一、age_by 存在。
@@ -561,6 +591,10 @@ func (c *Checker) checkStorageArchives(archives []storageArchiveEntry, registere
 		if _, ok := c.tableColumns[a.source][a.ageBy]; !ok {
 			c.rulef("storage-archive", "%s: age_by column %s not found on %s", a.where, a.ageBy, a.source)
 		}
+		if c.archiveEntries == nil {
+			c.archiveEntries = map[string]storageArchiveEntry{}
+		}
+		c.archiveEntries[a.source] = a
 	}
 }
 

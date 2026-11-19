@@ -35,6 +35,8 @@ type Checker struct {
 	queryTables     map[string]map[string]bool
 	tableIndexes    map[string][]tableIndex
 	tablePrimaryKey map[string][]string
+	cacheEntries    map[string]storageCacheEntry
+	archiveEntries  map[string]storageArchiveEntry
 	tableObjects    map[string]map[string]bool
 	objectNames     map[string]string
 	tableTargets    contractspec.Targets
@@ -158,6 +160,7 @@ func (c *Checker) run() {
 	c.checkCapabilityWrites(tableIDs)
 	c.checkEntities(entitySchema)
 	c.checkQueries(querySchema)
+	c.checkQueryStorageRefs()
 	c.checkEntityUsedBy()
 	c.checkUsedBy(tableIDs)
 	c.checkQueryUsedBy()

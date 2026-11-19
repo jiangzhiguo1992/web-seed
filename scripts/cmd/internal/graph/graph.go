@@ -591,7 +591,7 @@ func applyListItemUsedBy(src []byte, itemIndex int, values []string) ([]byte, er
 	if found {
 		return replaceLines(lines, start, end, block), nil
 	}
-	return insertLines(lines, mappingInsertLine(item, "index_ref", itemEnd), block), nil
+	return insertLines(lines, mappingInsertLine(item, "archive", itemEnd), block), nil
 }
 
 func topLevelNode(root *yaml.Node, key string, total int) (int, int, *yaml.Node, bool) {

@@ -8,7 +8,7 @@ do_not:
   - "未列出的引擎与拓扑一律视为不支持，禁止自行引入"
   - "Redis 只作为 caches 中的非权威副本；权威表数据只能落在 supported_engines 中的引擎"
   - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
-  - "归档条目用 archive_of 指向原表；归档表只封存原数据，不建 data.tables 契约、实体或查询"
+  - "不要给归档表建 data.tables 契约、实体或独立查询；能否回迁只在归档条目的 promotable 声明，回迁入口写在源表查询的 archive"
 
 supported_engines: [ mysql, postgres, mongodb ]
 not_supported_topologies: [ sharding, multi-primary, cross-region, outbox ]
@@ -23,7 +23,7 @@ tables:
     - { table: data.tables.verification_body, description: "验证体（一次性验证凭证与消息快照）", retention: true, unit: minutes, ttl: 10 }
     - { table: data.tables.verification_action, description: "验证动作（校验请求记录）" }
   postgres:
-    - { table: verification_action_archive, archive_of: data.tables.verification_action, age_by: created_at, after_unit: days, after: 90 }
+    - { table: verification_action_archive, archive_of: data.tables.verification_action, promotable: false, age_by: created_at, after_unit: days, after: 90 }
   mongodb: [ ]
 
 caches:

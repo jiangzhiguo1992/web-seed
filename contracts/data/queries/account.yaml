@@ -14,6 +14,8 @@ queries:
     description: "按 ID 读取账号实体"
     tables:
       - { table: data.tables.account }
+    caches:
+      - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
@@ -21,7 +23,8 @@ queries:
       - { name: account, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.account.pk ]
+    index_ref:
+      - { index: data.tables.account.pk, columns: [ id ] }
     used_by:
       - cap.services.account.activate
       - cap.services.account.delete
@@ -49,7 +52,8 @@ queries:
       - { name: exists, kind: scalar, type: boolean }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.account.uq_account_number ]
+    index_ref:
+      - { index: data.tables.account.uq_account_number, columns: [ number ] }
     used_by:
       - cap.services.account.create
 
@@ -67,7 +71,7 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - data.tables.account.idx_account_created_at_id
+      - { index: data.tables.account.idx_account_created_at_id, columns: [ created_at, id ] }
     used_by:
       - cap.services.account.list
 
@@ -75,6 +79,8 @@ queries:
     description: "创建账号并返回实体"
     tables:
       - { table: data.tables.account, write: true }
+    caches:
+      - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
@@ -87,7 +93,8 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_NUMBER_TAKEN
-    index_ref: [ data.tables.account.uq_account_number ]
+    index_ref:
+      - { index: data.tables.account.uq_account_number, columns: [ number ] }
     used_by:
       - cap.services.account.create
 
@@ -95,6 +102,8 @@ queries:
     description: "更新账号昵称并返回更新后的实体"
     tables:
       - { table: data.tables.account, write: true }
+    caches:
+      - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
@@ -103,7 +112,8 @@ queries:
       - { name: account, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.account.pk ]
+    index_ref:
+      - { index: data.tables.account.pk, columns: [ id ] }
     used_by:
       - cap.services.account.update
 
@@ -111,6 +121,8 @@ queries:
     description: "设置账号状态并返回更新后的实体；用于激活与封禁"
     tables:
       - { table: data.tables.account, write: true }
+    caches:
+      - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
@@ -120,7 +132,8 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    index_ref: [ data.tables.account.pk ]
+    index_ref:
+      - { index: data.tables.account.pk, columns: [ id ] }
     used_by:
       - cap.services.account.activate
       - cap.services.account.suspend
@@ -129,6 +142,8 @@ queries:
     description: "软删账号并同步 status 与 deleted_at"
     tables:
       - { table: data.tables.account, write: true }
+    caches:
+      - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
@@ -138,6 +153,7 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    index_ref: [ data.tables.account.pk ]
+    index_ref:
+      - { index: data.tables.account.pk, columns: [ id ] }
     used_by:
       - cap.services.account.delete

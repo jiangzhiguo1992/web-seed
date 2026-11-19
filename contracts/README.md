@@ -198,7 +198,7 @@ feature ──> capabilities ──> data
 | capabilities/events → capabilities/services | job | `service` |
 | capabilities/events → capabilities/events | job | `trigger.topic` |
 | capabilities/services → data | service 契约 | `steps[].queries[].query` / query `errors` |
-| data.queries → data.tables | 查询项 | `tables` / `index_ref` |
+| data.queries → data.tables | 查询项 | `tables` / `index_ref` / `caches` / `archive` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `source.join.from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `table.queries`（生成物） |
 | data.entities → 上游（反向） | 实体文件 | `model.included_by`（显式，checker 校验） / `model.queries`（生成物） |
@@ -490,7 +490,7 @@ data/storage.yaml ──> 按引擎分组的表条目 + 表级物理事实
 | 目标引擎 | MySQL 8.0.16+；`live_only` 索引用 functional unique index 表达（`deleted_at IS NULL` 表达式键），不是 PostgreSQL partial index |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验（⬜ P5） | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
-| 结构化 DDL | 分区用 `storage.tables.<engine>[].partition`，归档用 `archive_of` 条目，表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
+| 结构化 DDL | 分区用 `storage.tables.<engine>[].partition`，归档用 `archive_of` 条目（`promotable` 标明能否回迁），表达式索引用 `indexes[].expression`；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
 
 ### 6.1 迁移禁止操作
 

@@ -34,6 +34,12 @@ type queryReturn struct {
 	Nullable   bool
 }
 
+// queryIndexRef 是 index_ref 的一项：索引 ID 与查询实际使用的索引列前缀。
+type queryIndexRef struct {
+	Index   string
+	Columns []string
+}
+
 type queryInfo struct {
 	ID          string
 	Name        string
@@ -45,7 +51,9 @@ type queryInfo struct {
 	Params      []queryParam
 	Returns     []queryReturn
 	HasReturns  bool
-	IndexRef    []string
+	IndexRef    []queryIndexRef
+	Caches      []string
+	Archive     []string
 	Errors      []string
 	UsedBy      []string
 }
@@ -144,7 +152,18 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 	if _, ok := m["returns"]; ok {
 		q.HasReturns = true
 	}
-	q.IndexRef = stringList(m["index_ref"])
+	for _, raw := range asList(m["index_ref"]) {
+		im, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		ref := queryIndexRef{}
+		ref.Index, _ = im["index"].(string)
+		ref.Columns = stringList(im["columns"])
+		q.IndexRef = append(q.IndexRef, ref)
+	}
+	q.Caches = stringList(m["caches"])
+	q.Archive = stringList(m["archive"])
 	q.Errors = stringList(m["errors"])
 	q.UsedBy = stringList(m["used_by"])
 	for _, raw := range asList(m["params"]) {

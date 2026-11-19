@@ -784,13 +784,13 @@ func TestStoragePartitionRangeInterval(t *testing.T) {
 func TestStorageArchiveEntryShape(t *testing.T) {
 	c := &Checker{}
 	a := c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
-		"archive_of": "data.tables.src", "table": "src_archive",
+		"archive_of": "data.tables.src", "promotable": true, "table": "src_archive",
 		"age_by": "created_at", "after_unit": "days", "after": 90,
 	}, "storage tables.postgres[0]")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid archive entry reported: %v", c.errs)
 	}
-	if a == nil || a.name != "src_archive" || a.source != "data.tables.src" || a.after != 90 {
+	if a == nil || a.name != "src_archive" || a.source != "data.tables.src" || !a.promotable || a.after != 90 {
 		t.Fatalf("unexpected archive entry: %#v", a)
 	}
 
@@ -2911,11 +2911,16 @@ func TestQueryIndexRefs(t *testing.T) {
 		return &Checker{
 			queryOrder: []string{"data.queries.x.q"},
 			queries: map[string]*queryInfo{
-				"data.queries.x.q": {ID: "data.queries.x.q", Targets: []string{"data.tables.x"}, IndexRef: []string{"data.tables.x.pk", "data.tables.x.idx_x_code"}},
+				"data.queries.x.q": {ID: "data.queries.x.q", Targets: []string{"data.tables.x"}, IndexRef: []queryIndexRef{
+					{Index: "data.tables.x.pk", Columns: []string{"id"}},
+					{Index: "data.tables.x.idx_x_code", Columns: []string{"code"}},
+				}},
 			},
 			queryTables: map[string]map[string]bool{"data.queries.x.q": {"data.tables.x": true}},
 			tableIndexes: map[string][]tableIndex{"data.tables.x": {
 				{name: "idx_x_code", columns: []string{"code"}, usedBy: map[string]bool{"data.queries.x.q": true}},
+				{name: "idx_x_code_region", columns: []string{"code", "region"}},
+				{name: "idx_x_expr", usedBy: map[string]bool{}},
 			}},
 		}
 	}
@@ -2934,17 +2939,63 @@ func TestQueryIndexRefs(t *testing.T) {
 	}
 
 	c = newChecker()
-	c.queries["data.queries.x.q"].IndexRef = []string{"data.tables.x.idx_missing"}
+	c.queries["data.queries.x.q"].IndexRef = []queryIndexRef{{Index: "data.tables.x.idx_missing", Columns: []string{"code"}}}
 	c.checkQueryIndexRefs()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "is not declared") {
 		t.Fatalf("unknown index ref not reported: %v", c.errs)
 	}
 
 	c = newChecker()
-	c.queries["data.queries.x.q"].IndexRef = []string{"data.tables.x.idx_x_code"}
+	c.queries["data.queries.x.q"].IndexRef = []queryIndexRef{{Index: "data.tables.x.idx_x_code", Columns: []string{"code"}}}
 	c.checkQueryIndexRefs()
 	if len(c.errs) != 0 {
 		t.Fatalf("explicit index ref with used_by reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.tableIndexes["data.tables.x"][1].usedBy = map[string]bool{"data.queries.x.q": true}
+	c.queries["data.queries.x.q"].IndexRef = []queryIndexRef{
+		{Index: "data.tables.x.idx_x_code", Columns: []string{"code"}},
+		{Index: "data.tables.x.idx_x_code_region", Columns: []string{"code"}},
+	}
+	c.checkQueryIndexRefs()
+	if len(c.errs) != 0 {
+		t.Fatalf("leftmost prefix must be allowed: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.queries["data.queries.x.q"].IndexRef = []queryIndexRef{{Index: "data.tables.x.idx_x_code_region", Columns: []string{"region", "code"}}}
+	c.checkQueryIndexRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "leftmost prefix") {
+		t.Fatalf("wrong column order not reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.queries["data.queries.x.q"].IndexRef = []queryIndexRef{{Index: "data.tables.x.idx_x_code_region", Columns: []string{"code", "region", "extra"}}}
+	c.checkQueryIndexRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "leftmost prefix") {
+		t.Fatalf("columns longer than index not reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.tableIndexes["data.tables.x"][0].usedBy = nil
+	c.tableIndexes["data.tables.x"][2].usedBy = map[string]bool{"data.queries.x.q": true}
+	c.queries["data.queries.x.q"].IndexRef = []queryIndexRef{
+		{Index: "data.tables.x.pk", Columns: []string{"id"}},
+		{Index: "data.tables.x.idx_x_expr", Columns: []string{}},
+	}
+	c.checkQueryIndexRefs()
+	if len(c.errs) != 0 {
+		t.Fatalf("expression index with empty columns must be allowed: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.tableIndexes["data.tables.x"][0].usedBy = nil
+	c.tableIndexes["data.tables.x"][2].usedBy = map[string]bool{"data.queries.x.q": true}
+	c.queries["data.queries.x.q"].IndexRef = []queryIndexRef{{Index: "data.tables.x.idx_x_expr", Columns: []string{"code"}}}
+	c.checkQueryIndexRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "requires empty columns") {
+		t.Fatalf("expression index with columns not reported: %v", c.errs)
 	}
 
 	c = newChecker()

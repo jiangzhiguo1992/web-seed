@@ -14,6 +14,11 @@ queries:
     description: "创建访问与刷新令牌记录"
     tables:
       - { table: data.tables.token, write: true }
+    caches:
+      - data.tables.token.cache.access_token_hash
+      - data.tables.token.cache.account_id
+      - data.tables.token.cache.user_id
+      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.token.col.id }
@@ -29,8 +34,8 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - data.tables.token.uq_token_access_hash
-      - data.tables.token.uq_token_refresh_hash
+      - { index: data.tables.token.uq_token_access_hash, columns: [ access_token_hash ] }
+      - { index: data.tables.token.uq_token_refresh_hash, columns: [ refresh_token_hash ] }
     used_by:
       - cap.services.token.issue
       - cap.services.token.refresh
@@ -46,7 +51,8 @@ queries:
       - { name: row, kind: entity, entity: data.entities.token }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.token.uq_token_refresh_hash ]
+    index_ref:
+      - { index: data.tables.token.uq_token_refresh_hash, columns: [ refresh_token_hash ] }
     used_by:
       - cap.services.token.logout
       - cap.services.token.refresh
@@ -55,6 +61,8 @@ queries:
     description: "按访问令牌哈希读取令牌"
     tables:
       - { table: data.tables.token }
+    caches:
+      - data.tables.token.cache.access_token_hash
     params:
       - { name: ctx, type: context.Context }
       - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
@@ -62,7 +70,8 @@ queries:
       - { name: row, kind: entity, entity: data.entities.token }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.token.uq_token_access_hash ]
+    index_ref:
+      - { index: data.tables.token.uq_token_access_hash, columns: [ access_token_hash ] }
     used_by:
       - cap.services.token.verify
 
@@ -70,6 +79,11 @@ queries:
     description: "吊销单个令牌并记录原因"
     tables:
       - { table: data.tables.token, write: true }
+    caches:
+      - data.tables.token.cache.access_token_hash
+      - data.tables.token.cache.account_id
+      - data.tables.token.cache.user_id
+      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
@@ -81,7 +95,8 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_TOKEN_INVALID
-    index_ref: [ data.tables.token.uq_token_refresh_hash ]
+    index_ref:
+      - { index: data.tables.token.uq_token_refresh_hash, columns: [ refresh_token_hash ] }
     used_by:
       - cap.services.token.logout
       - cap.services.token.refresh
@@ -90,6 +105,11 @@ queries:
     description: "按账号批量吊销令牌"
     tables:
       - { table: data.tables.token, write: true }
+    caches:
+      - data.tables.token.cache.access_token_hash
+      - data.tables.token.cache.account_id
+      - data.tables.token.cache.user_id
+      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: integer, column: data.tables.token.col.account_id }
@@ -99,7 +119,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.token.idx_token_account_status ]
+    index_ref:
+      - { index: data.tables.token.idx_token_account_status, columns: [ account_id, status ] }
     used_by:
       - cap.services.token.revoke_by_account
 
@@ -107,6 +128,11 @@ queries:
     description: "把超过 refresh_expire_at 的活跃令牌置为 expired"
     tables:
       - { table: data.tables.token, write: true }
+    caches:
+      - data.tables.token.cache.access_token_hash
+      - data.tables.token.cache.account_id
+      - data.tables.token.cache.user_id
+      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: now, type: timestamp }
@@ -116,7 +142,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
+    index_ref:
+      - { index: data.tables.token.idx_token_refresh_expire_at, columns: [ refresh_expire_at ] }
     used_by:
       - cap.services.token.expire
 
@@ -124,6 +151,11 @@ queries:
     description: "物理清理已过期的令牌"
     tables:
       - { table: data.tables.token, write: true }
+    caches:
+      - data.tables.token.cache.access_token_hash
+      - data.tables.token.cache.account_id
+      - data.tables.token.cache.user_id
+      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: limit, type: integer, nullable: true, default: 100 }
@@ -131,7 +163,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
+    index_ref:
+      - { index: data.tables.token.idx_token_refresh_expire_at, columns: [ refresh_expire_at ] }
     used_by:
       - cap.services.token.purge_expired
 

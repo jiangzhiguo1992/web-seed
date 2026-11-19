@@ -15,6 +15,8 @@ queries:
     description: "创建验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
+    caches:
+      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -30,7 +32,8 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
-    index_ref: [ data.tables.verification_body.pk ]
+    index_ref:
+      - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
       - cap.services.verification.send
 
@@ -38,6 +41,8 @@ queries:
     description: "标记验证体已发送"
     tables:
       - { table: data.tables.verification_body, write: true }
+    caches:
+      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -47,7 +52,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.verification_body.pk ]
+    index_ref:
+      - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
       - cap.services.verification.send
 
@@ -65,7 +71,8 @@ queries:
       - { name: row, kind: entity, entity: data.entities.verification_body }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
+    index_ref:
+      - { index: data.tables.verification_body.idx_verification_auth_purpose, columns: [ auth_type, auth_id, purpose, created_at ] }
     used_by:
       - cap.services.verification.verify
 
@@ -73,6 +80,8 @@ queries:
     description: "消费验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
+    caches:
+      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -83,7 +92,8 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_VERIFICATION_INVALID
-    index_ref: [ data.tables.verification_body.pk ]
+    index_ref:
+      - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
       - cap.services.verification.verify
 
@@ -91,6 +101,8 @@ queries:
     description: "递增验证失败次数并更新状态"
     tables:
       - { table: data.tables.verification_body, write: true }
+    caches:
+      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -100,7 +112,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.verification_body.pk ]
+    index_ref:
+      - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
       - cap.services.verification.verify
 
@@ -108,6 +121,8 @@ queries:
     description: "按 ID 设置验证体终态（如 failed）"
     tables:
       - { table: data.tables.verification_body, write: true }
+    caches:
+      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -116,7 +131,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.verification_body.pk ]
+    index_ref:
+      - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
       - cap.services.verification.send
 
@@ -124,6 +140,8 @@ queries:
     description: "把超过 expire_at 的 pending/sent 验证体置为 expired"
     tables:
       - { table: data.tables.verification_body, write: true }
+    caches:
+      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: now, type: timestamp }
@@ -133,7 +151,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.verification_body.idx_verification_expire_at ]
+    index_ref:
+      - { index: data.tables.verification_body.idx_verification_expire_at, columns: [ expire_at ] }
     used_by:
       - cap.services.verification.cleanup
 
@@ -141,6 +160,8 @@ queries:
     description: "把尝试次数达到上限的 sent 验证体置为 revoked"
     tables:
       - { table: data.tables.verification_body, write: true }
+    caches:
+      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: max_attempts, type: integer }
@@ -150,7 +171,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.verification_body.idx_verification_status_attempt ]
+    index_ref:
+      - { index: data.tables.verification_body.idx_verification_status_attempt, columns: [ status, attempt_count ] }
     used_by:
       - cap.services.verification.cleanup
 
@@ -158,6 +180,8 @@ queries:
     description: "按认证目标作废活跃验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
+    caches:
+      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
@@ -168,7 +192,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
+    index_ref:
+      - { index: data.tables.verification_body.idx_verification_auth_purpose, columns: [ auth_type, auth_id, purpose ] }
     used_by:
       - cap.services.verification.revoke_by_auth
       - cap.services.verification.send
@@ -177,6 +202,8 @@ queries:
     description: "按账号作废活跃验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
+    caches:
+      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: integer, column: data.tables.verification_body.col.account_id }
@@ -185,7 +212,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.verification_body.idx_verification_account_id ]
+    index_ref:
+      - { index: data.tables.verification_body.idx_verification_account_id, columns: [ account_id ] }
     used_by:
       - cap.services.verification.revoke_by_account
 
@@ -206,7 +234,8 @@ queries:
       - { name: row, kind: entity, entity: data.entities.verification_action }
       - { name: err, kind: error }
     errors: [ ]
-    index_ref: [ data.tables.verification_action.pk ]
+    index_ref:
+      - { index: data.tables.verification_action.pk, columns: [ id ] }
     used_by:
       - cap.services.verification.record_failure
       - cap.services.verification.verify
