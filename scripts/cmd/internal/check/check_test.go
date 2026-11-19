@@ -539,12 +539,34 @@ func TestUniqueIndexLiveOnlyOptional(t *testing.T) {
 func TestIndexLiveOnlyRequiresDeletedAt(t *testing.T) {
 	c := &Checker{
 		baseID:       "data.tables.base",
-		tableDocs:    map[string]map[string]any{"data.tables.x": {"indexes": []any{map[string]any{"name": "idx_x_code", "live_only": true}}}},
+		tableDocs:    map[string]map[string]any{"data.tables.x": {"indexes": []any{map[string]any{"name": "idx_x_code", "unique": true, "live_only": true}}}},
 		tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"code": {typ: "string"}}},
 	}
 	c.checkIndexLiveOnly(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[index-live-only]") {
 		t.Fatalf("live_only without deleted_at not reported: %v", c.errs)
+	}
+}
+
+func TestIndexLiveOnlyRequiresUnique(t *testing.T) {
+	c := &Checker{
+		baseID:       "data.tables.base",
+		tableDocs:    map[string]map[string]any{"data.tables.x": {"indexes": []any{map[string]any{"name": "idx_x_code", "live_only": true}}}},
+		tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"deleted_at": {typ: "timestamp", nullable: true}}},
+	}
+	c.checkIndexLiveOnly(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "live_only is only allowed on unique indexes") {
+		t.Fatalf("non-unique live_only not reported: %v", c.errs)
+	}
+
+	c = &Checker{
+		baseID:       "data.tables.base",
+		tableDocs:    map[string]map[string]any{"data.tables.x": {"indexes": []any{map[string]any{"name": "uq_x_code", "unique": true, "live_only": true}}}},
+		tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"deleted_at": {typ: "timestamp", nullable: true}}},
+	}
+	c.checkIndexLiveOnly(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
+	if len(c.errs) != 0 {
+		t.Fatalf("unique live_only reported: %v", c.errs)
 	}
 }
 

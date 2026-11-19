@@ -157,7 +157,7 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
     - `constraints` 是 CHECK 列表：必须写非空 `expr`、`on_violation` 与 `used_by`（写本表的 query）；没有 `type`；`gen-db` 生成
       `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors` 映射；唯一性统一由 `indexes[].unique`
       表达，跨表一致性由应用/业务规则保证
-    - 唯一索引的 `live_only` 决定作用域：`true` 只约束未软删行（要求 nullable `deleted_at`），`false`/省略约束全表（含软删行）
+    - `live_only` 只有唯一索引可设为 `true`，决定唯一性作用域：`true` 只约束未软删行（要求 nullable `deleted_at`），`false`/省略约束全表（含软删行）；非唯一索引不使用该字段
     - `indexes` 的 `comment`、`columns`（必填非空）与可选 `expression` 附加键、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表
     - `summary` 与 `columns[].comment` 会进入 DDL COMMENT：`summary` <= 2048 字符、列 `comment` <= 1024 字符（MySQL 上限，按
       rune 计数）

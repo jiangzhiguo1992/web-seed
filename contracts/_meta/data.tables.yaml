@@ -135,7 +135,7 @@ fields:
       - { name: columns, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "索引列；必须非空；纯表达式索引不受支持" }
       - { name: expression, type: string, soft: true, required: false, description: "soft zone：附加表达式键；必须与 columns 同时使用；纯表达式索引不受支持" }
       - { name: unique, type: boolean, required: false, description: "是否唯一" }
-      - { name: live_only, type: boolean, required: false, default: false, description: "只约束未软删行" }
+      - { name: live_only, type: boolean, required: false, default: false, description: "仅唯一索引可设为 true；设为 true 时只约束未软删行" }
       - { name: comment, type: string, required: true, description: "索引用途" }
       - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "使用该索引的 query 项 ID" }
 
@@ -154,7 +154,7 @@ rules:
   - { id: family-length, text: "min_len <= max_len；fixed 为 true 时必须写 max_len，若写 min_len 必须等于 max_len", implemented_by: [ family-length ] }
   - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内", implemented_by: [ family-range ] }
   - { id: family-decimal, text: "scale <= precision", implemented_by: [ family-decimal ] }
-  - { id: index-live-only, text: "live_only: true 要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
+  - { id: index-live-only, text: "live_only 只有 unique 索引可设为 true；设为 true 时要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
   - { id: constraint-fields, text: "on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
   - { id: constraint-used-by, text: "constraints[].used_by 必须是非空去重的 data.queries.* 写查询 ID，且查询写本表", implemented_by: [ constraint-used-by ] }
   - { id: enum-code-literal, text: "表 CHECK 引用枚举列时，整数码必须存在于对应 data.enums 的 code 集合", implemented_by: [ enum-code-literal ] }

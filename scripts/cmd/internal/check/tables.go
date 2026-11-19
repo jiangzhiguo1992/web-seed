@@ -702,7 +702,7 @@ func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int,
 	}
 }
 
-// checkIndexLiveOnly 在列元数据加载后校验 live_only 依赖 nullable deleted_at。
+// checkIndexLiveOnly 在列元数据加载后校验 live_only 只用于唯一索引，且依赖 nullable deleted_at。
 func (c *Checker) checkIndexLiveOnly(tableIDs map[string]string) {
 	for id, rel := range tableIDs {
 		if id == c.baseID {
@@ -719,6 +719,10 @@ func (c *Checker) checkIndexLiveOnly(tableIDs map[string]string) {
 				continue
 			}
 			name, _ := m["name"].(string)
+			unique, _ := m["unique"].(bool)
+			if !unique {
+				c.rulef("index-live-only", "%s: indexes[%d] (%s): live_only is only allowed on unique indexes", rel, i, name)
+			}
 			meta, ok := c.tableColumns[id]["deleted_at"]
 			if !ok || !meta.nullable {
 				c.rulef("index-live-only", "%s: indexes[%d] (%s): live_only requires nullable deleted_at", rel, i, name)

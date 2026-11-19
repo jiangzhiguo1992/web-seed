@@ -196,7 +196,7 @@ indexes:
       - data.queries.account.get_account_by_number
 ```
 
-`live_only: true` 只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。MySQL 生成时，唯一索引用 `CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END` 表达式键排除软删行，非唯一索引用普通 `deleted_at` 前导，保证自然 SQL 的 `deleted_at IS NULL` 能命中。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
+`live_only: true` 只用于唯一索引，表示唯一性只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。MySQL 生成时用 `CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END` 表达式键排除软删行；非唯一索引不使用该字段。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
 
 ### 5.2 查询：参数 + 返回 + 索引/缓存/归档引用
 

@@ -15,7 +15,7 @@ CREATE TABLE `account` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账号主表';
 CREATE UNIQUE INDEX `uq_account_number` ON `account` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `number`);
-CREATE INDEX `idx_account_created_at_id` ON `account` (`deleted_at`, `created_at`, `id`);
+CREATE INDEX `idx_account_created_at_id` ON `account` (`created_at`, `id`);
 
 CREATE TABLE `auth_email` (
   `id` BIGINT NOT NULL COMMENT '主键 integer（bits: 64）；生成方式由实现决定',
@@ -94,8 +94,8 @@ CREATE TABLE `token` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌表';
 CREATE UNIQUE INDEX `uq_token_access_hash` ON `token` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `access_token_hash`);
 CREATE UNIQUE INDEX `uq_token_refresh_hash` ON `token` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `refresh_token_hash`);
-CREATE INDEX `idx_token_account_status` ON `token` (`deleted_at`, `account_id`, `status`);
-CREATE INDEX `idx_token_refresh_expire_at` ON `token` (`deleted_at`, `refresh_expire_at`);
+CREATE INDEX `idx_token_account_status` ON `token` (`account_id`, `status`);
+CREATE INDEX `idx_token_refresh_expire_at` ON `token` (`refresh_expire_at`);
 
 CREATE TABLE `verification_action` (
   `id` BIGINT NOT NULL COMMENT '主键 integer（bits: 64）；生成方式由实现决定',
@@ -142,8 +142,8 @@ CREATE TABLE `verification_body` (
   CONSTRAINT `ck_verification_consumed_status` CHECK ((status = 2) = (consumed_at IS NOT NULL)),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='验证体（一次性验证凭证与消息快照）';
-CREATE INDEX `idx_verification_auth_purpose` ON `verification_body` (`deleted_at`, `auth_type`, `auth_id`, `purpose`, `created_at`);
+CREATE INDEX `idx_verification_auth_purpose` ON `verification_body` (`auth_type`, `auth_id`, `purpose`, `created_at`);
 CREATE INDEX `idx_verification_account_id` ON `verification_body` (`account_id`);
-CREATE INDEX `idx_verification_expire_at` ON `verification_body` (`deleted_at`, `expire_at`);
-CREATE INDEX `idx_verification_status_attempt` ON `verification_body` (`deleted_at`, `status`, `attempt_count`);
+CREATE INDEX `idx_verification_expire_at` ON `verification_body` (`expire_at`);
+CREATE INDEX `idx_verification_status_attempt` ON `verification_body` (`status`, `attempt_count`);
 

@@ -135,14 +135,12 @@ indexes:
 
   - name: idx_token_account_status
     columns: [ account_id, status ]
-    live_only: true
     comment: "按账号与状态列出/吊销令牌"
     used_by:
       - data.queries.token.revoke_tokens_by_account
 
   - name: idx_token_refresh_expire_at
     columns: [ refresh_expire_at ]
-    live_only: true
     comment: "过期令牌清理"
     used_by:
       - data.queries.token.delete_expired_tokens

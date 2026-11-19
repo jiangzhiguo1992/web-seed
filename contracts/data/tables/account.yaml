@@ -71,7 +71,6 @@ indexes:
 
   - name: idx_account_created_at_id
     columns: [ created_at, id ]
-    live_only: true
     comment: "列表游标分页"
     used_by:
       - data.queries.account.list_accounts
