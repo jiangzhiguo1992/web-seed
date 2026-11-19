@@ -91,6 +91,8 @@ storage    ──(table 条目)──────────>  tables
 **理由**：这些是项目级物理事实，不是表的业务结构。放在单表里会让"换引擎"变成改 N 个文件；条目化让同一张表的存储事实只有一个落点，也让不同引擎的字段差异（`partition` 只属于关系库）可被脚本强制。
 **代价**：新增表要登记两处（`tables/` + `storage.tables.<engine>`），漏登记被 `[强制: storage-registry]` 拦住。存储类特性用结构化字段表达（条目内 `partition`、`archive_of` 归档条目、`indexes[].expression`），不设 `ddl_ext` 逃生口。
 
+`retention` / `partition` / `caches` 是物理事实，不是 baseline DDL 的生成输入：`gen_db` 只消费 `tables.<engine>` 的权威表列表，生成列/约束/索引；清理、分区与缓存配置由部署层实现。声明 `partition` 时 `gen_db` 会显式失败，避免契约与 DDL 静默漂移。
+
 ---
 
 ## 4. 边界判据

@@ -1,4 +1,4 @@
-# data.entities 类型规范：读模型字段树与规则；类型族见 _types.yaml。
+# data.entities：实体字段树与读模型规则。
 
 id: meta.data.entities
 type: data.entities
@@ -51,29 +51,29 @@ fields:
     required: true
     description: "Go 类型声明"
     fields:
-      - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名；首字母大小写表示导出性" }
+      - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名" }
       - { name: extends, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "实体基类" }
       - { name: tables, type: list<string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "映射的物理表" }
-      - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "指向本实体的关系 entity ID 列表；由 gen-graph 生成" }
-      - { name: queries, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.', generated: true, write: forbidden, description: "returns 本实体的 query 项 ID；由 gen-graph 生成；不得为空" }
+      - { name: included_by, type: list<string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "指向本实体的关系 entity；gen-graph 生成" }
+      - { name: queries, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.', generated: true, write: forbidden, description: "returns 本实体的 query 项；gen-graph 生成" }
 
   - name: fields
     type: list<object>
     required: true
     description: "业务字段与关系字段"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名；首字母大小写表示导出性" }
-      - { name: type, type: string, required: false, description: "标量：类型族键；关系：目标 entity ID，List<data.entities.*> 表示一对多；nullable=true 表示指针" }
-      - { name: nullable, type: boolean, required: false, default: false, description: "显式指针；true 表示 *T；且必须与来源列 nullable 一致" }
+      - { name: name, type: string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名" }
+      - { name: type, type: string, required: false, description: "标量：类型族/自定义类型或 data.enums.*；关系：目标 entity ID（List 表示一对多）" }
+      - { name: nullable, type: boolean, required: false, default: false, description: "是否为指针" }
       - { name: json_name, type: string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "JSON 字段名" }
-      - { name: description, type: string, required: true, description: "字段语义" }
+      - { name: description, type: string, required: true, description: "字段语义；必须显式填写，不从列 comment 继承" }
       - name: source
         type: object
         required: false
-        description: "字段来源：标量 column/computed/soft，关系 join"
+        description: "字段来源"
         fields:
           - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "来源物理列" }
-          - { name: computed, type: string, required: false, description: "计算/聚合表达式；不得引用 @param" }
+          - { name: computed, type: string, required: false, description: "计算/聚合表达式" }
           - { name: soft, type: string, required: false, description: "外部输入或无法脚本化的来源" }
           - name: join
             type: object
@@ -83,7 +83,7 @@ fields:
               - { name: from, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "本端连接列" }
               - { name: to, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标端连接列" }
               - { name: lazy, type: boolean, required: true, description: "是否懒加载" }
-      - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], description: "敏感级别；省略时继承来源列，computed/soft 默认 public" }
+      - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], description: "敏感级别" }
 
   - name: validation
     type: list<object>
@@ -97,7 +97,7 @@ fields:
 
 rules:
   - { id: entity-base-file, text: "基类契约固定位于 contracts/data/entities/_base.yaml，ID 固定为 data.entities.base", implemented_by: [ entity-base-file ] }
-  - { id: entity-base-shape, text: "基类必须且只能是 ID/Status/CreatedAt/UpdatedAt/DeletedAt；type 从 tables/_base 继承不得重写，DeletedAt 为 *timestamp；每个基类字段必须写 source/description", implemented_by: [ entity-base-shape ] }
+  - { id: entity-base-shape, text: "基类必须且只能是 ID/Status/CreatedAt/UpdatedAt/DeletedAt；type 从 tables/_base 继承不得重写，DeletedAt 为 *timestamp；每个基类字段必须写 source", implemented_by: [ entity-base-shape ] }
   - { id: entity-base-only, text: "model.extends 必须恰好是 [data.entities.base]", implemented_by: [ entity-base-only ] }
   - { id: entity-no-base-fields, text: "具体实体不得重声明基类字段；Status 允许用 data.enums.* 特化", implemented_by: [ entity-no-base-fields ] }
   - { id: entity-base-field-first, text: "重声明的基类字段（当前仅 Status）必须是 fields 第一项", implemented_by: [ entity-base-field-first ] }
@@ -114,7 +114,6 @@ rules:
   - { id: entity-field-source, text: "source 四选一：column 指向本实体表的列；computed 非空、指针类型、不引用 @param；soft 非空且必须显式 type；join 只用于关系字段且必须写 from/to/lazy", implemented_by: [ entity-field-source ] }
   - { id: entity-field-type, text: "来源列字段的 type 可省略，省略时按列类型+nullable 派生；computed/soft 必填；nullable 显式指针且必须与来源列 nullable 一致；* 前缀为兼容写法，与 nullable 互斥；枚举只能映射 integer 列；禁止列表类型和 data.tables.* 行类型", implemented_by: [ entity-field-type ] }
   - { id: entity-field-column, text: "source.column 必须存在且属于本实体的表；同一列不得被两个字段引用；多表合成的每张表至少被一个字段引用", implemented_by: [ entity-field-column ] }
-  - { id: entity-field-description, text: "字段描述必须显式且非空，不从列 comment 继承", implemented_by: [ entity-field-description ] }
   - { id: entity-field-sensitive, text: "sensitivity 省略时继承来源列，computed/soft 省略时默认 public；显式值不得低于来源列；secret 字段名必须小写开头", implemented_by: [ entity-field-sensitive ] }
   - { id: entity-field-json-name, text: "json_name 可省略，默认取 snake_case(name)；同一实体内 JSON 名必须唯一", implemented_by: [ entity-field-json-name ] }
   - { id: entity-relation-type, text: "relation.type 必须是 data.entities.* ID，且不得为指针", implemented_by: [ entity-relation-type ] }
@@ -123,7 +122,7 @@ rules:
   - { id: entity-relation-cardinality, text: "关系基数由两端列唯一性推断：两端唯一 one_to_one；from 唯一 one_to_many；to 唯一 many_to_one；两端都不唯一则不允许", implemented_by: [ entity-relation-cardinality ] }
   - { id: entity-relation-eager-index, text: "lazy: false 的关系，其 source.join.to 必须有索引或主键", implemented_by: [ entity-relation-eager-index ] }
   - { id: entity-relation-eager-cycle, text: "eager 关系链不得成环；自引用不得 eager", implemented_by: [ entity-relation-eager-cycle ] }
-  - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；expr 非空；on_violation 必须存在", implemented_by: [ entity-validation ] }
+  - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；on_violation 必须存在", implemented_by: [ entity-validation ] }
   - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
   - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入，禁止手改", implemented_by: [ entity-used-by ] }
   - { id: entity-included-by, text: "model.included_by 由 gen-graph 生成，禁止手改；必须等于关系字段 type 指向本实体的 entity 集合；每个 entity 必须存在且确实指向本实体", implemented_by: [ entity-included-by ] }

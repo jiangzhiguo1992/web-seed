@@ -1,7 +1,4 @@
 # 共享受限 schema DSL：cap.services.schemas 与 cap.events.payload。
-# 两层语法：schema 节点只描述值域；property 条目只描述槽位。
-# property 是 object.properties 的 item_fields，槽位键只允许出现在这里，
-# 节点位置出现即报 schema.slot-position。
 
 id: meta.schemas
 title: "schema DSL"
@@ -18,32 +15,32 @@ kinds:
         type: list<object>
         required: true
         unique_key: name
-        description: "对象属性；每个条目是 name + schema + 槽位注解"
+        description: "对象属性条目"
         item_fields:
           - name: name
             type: string
             required: true
             pattern: '^[a-z][a-z0-9_]*$'
-            description: "属性名；对象内唯一"
+            description: "属性名"
           - name: schema
             types: [ scalar, object, array, ref ]
             required: true
             description: "属性值域"
           - name: required
             type: boolean
-            description: "键是否必须出现；默认 false"
+            description: "键是否必须出现"
           - name: nullable
             type: boolean
-            description: "值是否可为 null；默认 false"
+            description: "值是否可为 null"
           - name: default
             type: any
             description: "缺省值；仅槽位层"
           - name: read_only
             type: boolean
-            description: "仅响应输出；默认 false"
+            description: "仅响应输出"
           - name: write_only
             type: boolean
-            description: "仅请求输入；默认 false"
+            description: "仅请求输入"
           - name: description
             type: string
             required: true
@@ -51,7 +48,7 @@ kinds:
       - name: validation
         type: list<object>
         required: false
-        description: "对象级校验规则；每条 rule 是受限布尔表达式，引用 input.<属性名>"
+        description: "对象级校验规则"
         item_fields:
           - name: rule
             type: string
@@ -84,12 +81,12 @@ kinds:
       - name: validation
         type: list<object>
         required: false
-        description: "数组级校验规则；每条 rule 是受限布尔表达式，引用 value"
+        description: "数组级校验规则"
         item_fields:
           - name: rule
             type: string
             required: true
-            description: "受限布尔表达式；数组节点引用 value"
+            description: "受限布尔表达式；引用 value"
           - name: message
             type: string
             required: true
@@ -105,12 +102,12 @@ kinds:
       - name: validation
         type: list<object>
         required: false
-        description: "标量级校验规则；每条 rule 是受限布尔表达式，引用 value"
+        description: "标量级校验规则"
         item_fields:
           - name: rule
             type: string
             required: true
-            description: "受限布尔表达式；标量节点引用 value"
+            description: "受限布尔表达式；引用 value"
           - name: message
             type: string
             required: true
@@ -126,12 +123,12 @@ kinds:
       - name: validation
         type: list<object>
         required: false
-        description: "引用级校验规则；每条 rule 是受限布尔表达式，引用 value 或 value.<path>"
+        description: "引用级校验规则"
         item_fields:
           - name: rule
             type: string
             required: true
-            description: "受限布尔表达式；ref 节点引用 value 或 value.<path>"
+            description: "受限布尔表达式；引用 value 或 value.<path>"
           - name: message
             type: string
             required: true

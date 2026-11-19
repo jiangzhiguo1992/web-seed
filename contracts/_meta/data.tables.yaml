@@ -1,4 +1,4 @@
-# data.tables 类型规范：表、列、约束、索引；类型族见 _types.yaml。
+# data.tables：物理表、列、约束、索引。
 
 id: meta.data.tables
 type: data.tables
@@ -75,7 +75,7 @@ fields:
         pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
         generated: true
         write: forbidden
-        description: "引用本表列的源列引用列表；由 gen-graph 生成；与 columns[].references 双向对账"
+        description: "引用本表列的源列；gen-graph 生成"
       - name: queries
         type: list<string>
         required: true
@@ -84,7 +84,7 @@ fields:
         pattern: '^data\.queries\.'
         generated: true
         write: forbidden
-        description: "使用本表的 query 项 ID；由 gen-graph 生成"
+        description: "使用本表的 query 项；gen-graph 生成"
 
   - name: columns
     type: list<object>
@@ -92,28 +92,28 @@ fields:
     description: "物理列"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "列名" }
-      - { name: type, type: string, required: true, description: "类型族键或列引用" }
+      - { name: type, type: string, required: true, description: "类型族/自定义类型或列引用" }
       - { name: nullable, type: boolean, required: false, default: false, description: "是否可空" }
-      - { name: primary_key, type: boolean, required: false, description: "是否主键" }
+      - { name: primary_key, type: boolean, required: false, description: "仅基类使用；物理表禁止" }
       - { name: default, type: any, required: false, description: "字面量默认值" }
       - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值" }
       # 类型族参数由 _meta/_types.yaml 的 type_families.params 注入
-      - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], default: public, description: "敏感级别；secret 列禁止跨模块返回" }
+      - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], default: public, description: "敏感级别" }
       - name: redundancy
         type: list<object>
         required: false
         min_items: 2
-        description: "同组冗余列引用；每项用 source 标记权威列"
+        description: "同组冗余列"
         item_fields:
           - { name: column, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "同组列引用" }
           - { name: source, type: boolean, required: true, description: "是否为权威列；每组恰好一个" }
       - name: references
         type: object
         required: false
-        description: "逻辑外键：本列指向目标表唯一列；数据库不建外键，硬删按 on_delete 执行；多态或无单一目标的关联不写本字段"
+        description: "逻辑外键：本列指向目标表唯一列；数据库不建外键；多态或无单一目标的关联不写"
         fields:
-          - { name: column, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标列引用；必须是目标表主键或单列唯一索引列" }
-          - { name: on_delete, type: string, required: true, enum: [ cascade, restrict, set_null, no_action ], description: "硬删除目标行时的动作；软删不由此字段表达" }
+          - { name: column, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标列" }
+          - { name: on_delete, type: string, required: true, enum: [ cascade, restrict, set_null, no_action ], description: "硬删动作" }
       - { name: comment, type: string, required: false, description: "列 COMMENT" }
 
   - name: constraints
@@ -135,7 +135,7 @@ fields:
       - { name: columns, type: list<string>, required: false, unique: true, min_items: 1, description: "索引列" }
       - { name: expression, type: string, required: false, description: "表达式索引；checker 只校验非空" }
       - { name: unique, type: boolean, required: false, description: "是否唯一" }
-      - { name: live_only, type: boolean, required: false, default: false, description: "是否只约束未软删行；false 含软删行" }
+      - { name: live_only, type: boolean, required: false, default: false, description: "只约束未软删行" }
       - { name: comment, type: string, required: true, description: "索引用途" }
       - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, description: "使用该索引的 query 项 ID" }
 
@@ -155,7 +155,7 @@ rules:
   - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内", implemented_by: [ family-range ] }
   - { id: family-decimal, text: "scale <= precision", implemented_by: [ family-decimal ] }
   - { id: index-live-only, text: "live_only: true 要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
-  - { id: constraint-fields, text: "约束必须写非空 expr 和 on_violation；on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
+  - { id: constraint-fields, text: "on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
   - { id: constraint-used-by, text: "constraints[].used_by 必须是非空去重的 data.queries.* 写查询 ID，且查询写本表", implemented_by: [ constraint-used-by ] }
   - { id: enum-code-literal, text: "表 CHECK 引用枚举列时，整数码必须存在于对应 data.enums 的 code 集合", implemented_by: [ enum-code-literal ] }
   - { id: storage-registry, text: "storage.tables 每个引擎条目是 list<object>：table 必填、同引擎内不重复、覆盖每张物理表且只引用已存在的表；每张表只能出现在一个权威引擎下；基类不是物理表；caches 条目是 list<object>，cache_of 必须引用已登记的权威表", implemented_by: [ storage-registry ] }
@@ -166,13 +166,12 @@ rules:
   - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/supported_engines/tables/caches/not_supported_topologies；supported_engines 必填且必须是非空字符串列表，not_supported_topologies 若存在必须是非空字符串列表", implemented_by: [ storage-doc ] }
   - { id: storage-retention, text: "retention 是布尔开关；true 时表条目必须写 unit 和至少一个 pending/soft_delete/hard_delete/ttl，cache 条目必须写 unit/cache_ttl；false 或省略时禁止 unit 与任何时长字段；unit 只能是 minutes/hours/days；各时长必须 >= 1；cache_ttl 不得超过权威表条目的 ttl（若声明）", implemented_by: [ storage-retention ] }
   - { id: storage-partition, text: "partition 只允许 strategy/columns/interval；strategy 只能是 range/list/hash；columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
-  - { id: storage-archive, text: "归档条目必须写 archive_of/table/age_by/after_unit/after；archive_of 必须是已登记的权威表且一表只能有一条归档；table 是归档物理表名（snake_case），不得与物理表或其他归档表重名；age_by 只能是 created_at/updated_at 且必须是源表列；after_unit 只能是 minutes/hours/days；after >= 1；归档表只封存原数据，不建 data.tables 契约、实体或查询", implemented_by: [ storage-archive ] }
+  - { id: storage-archive, text: "归档条目必须写 archive_of/table/age_by/after_unit/after；archive_of 必须是已登记的权威表且一表只能有一条归档；table 是归档物理表名（snake_case），不得与物理表或其他归档表重名；age_by 只能是 created_at/updated_at 且必须是源表列；after_unit 只能是 minutes/hours/days；after >= 1", implemented_by: [ storage-archive ] }
   - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
   - { id: table-referenced-by, text: "table.referenced_by 由 gen-graph 生成，禁止手改；必须等于所有指向本表列的 references 源列集合；每项必须是存在的列引用且其 references.column 指向本表", implemented_by: [ table-referenced-by ] }
-  - { id: owner-write, text: "只有 owner_module 相同的 cap.services 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 service step 的 query/queries 中；写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service，不允许一个 query 写多模块表", implemented_by: [ owner-write ] }
+  - { id: owner-write, text: "只有 owner_module 相同的 cap.services 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 service step 的 query 中；写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service，不允许一个 query 写多模块表", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
-  - { id: index-comment, text: "索引必须写非空 comment", implemented_by: [ index-comment ] }
   - { id: index-definition, text: "索引必须有 columns 或 expression 之一；columns 必须存在；名称前缀匹配类型", implemented_by: [ index-definition ] }
   - { id: index-used-by, text: "每条索引的 used_by 不得为空，至少引用一个查询项 ID", implemented_by: [ index-used-by ] }
   - { id: index-used-by-ref, text: "index.used_by 必须指向存在的 data.queries.* 项，且该查询的 tables 必须包含当前表", implemented_by: [ index-used-by-ref ] }

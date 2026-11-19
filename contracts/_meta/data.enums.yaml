@@ -1,4 +1,4 @@
-# data.enums 类型规范：按 owner_module 拆分的跨前后端枚举集合；枚举项无 id。
+# data.enums：跨前后端枚举集合，按 owner_module 拆分。
 
 id: meta.data.enums
 type: data.enums
@@ -13,6 +13,7 @@ fields:
   - name: id
     type: string
     required: true
+    pattern: '^data\.enums\.[a-z][a-z0-9_]*$'
     description: "集合文件 ID"
 
   - name: summary
@@ -68,7 +69,7 @@ fields:
         unique: true
         min_items: 1
         pattern: '^(data\.entities\.[a-z][a-z0-9_]*|cap\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+)$'
-        description: "使用该枚举的 entity / capability ID 并集；不得为空"
+        description: "使用该枚举的 entity / capability"
 
 rules:
   - { id: enum-key-order, text: "枚举集合字段顺序必须与 _meta/data.enums.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ enum-key-order ] }

@@ -426,7 +426,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | `manifest.json` | 删除设计 | `index.yaml` + `project.yaml` 已覆盖，无消费者 |
 | `inbound.yaml` | 删除设计 | `used_by.*` / `table.entities` / `model.included_by` 已是反向索引 |
 
-`make gen` 是聚合入口（⬜ P2）；`make gen-graph` 只写回 `table.queries` / `model.queries` / `query.used_by` / `used_by.flows`，不产出本目录文件。
+`make gen` 是聚合入口；`make gen-graph` 只写回 `table.queries` / `model.queries` / `query.used_by` 与规则、生命周期、事件锚点，不产出本目录文件。
 
 ---
 

@@ -1,5 +1,4 @@
-# cap.events：不属于 services 的异步功能定义：发布/订阅主题与异步任务。
-# 共同机制：异步、项目自持、不直接绑定 protocols；topic 是发布/订阅的唯一区分键。
+# cap.events：异步主题与任务；topic 是发布/订阅的唯一区分键。
 
 id: meta.cap.events
 type: cap.events
@@ -26,7 +25,7 @@ fields:
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "归属模块；job 的 service 必须同模块"
+    description: "归属模块"
 
   - name: schema_version
     type: integer
@@ -51,40 +50,40 @@ fields:
     type: string
     required: false
     enum: [ at_least_once, at_most_once, exactly_once ]
-    description: "主题投递语义；topics 非空时必填"
+    description: "主题投递语义"
 
   - name: topics
     type: list<object>
     required: false
     min_items: 1
-    description: "发布/订阅主题；item ID = cap.events.<topic name>"
+    description: "发布/订阅主题"
     item_fields:
       - { name: id, type: string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "主题 ID" }
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$', description: "主题名，例如 account.created" }
+      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "主题名，例如 account.created" }
       - { name: version, type: integer, required: true, min: 1, description: "主题版本" }
-      - { name: payload, types: [ object, array, scalar, ref ], required: true, description: "payload 值域节点；object 的 properties 按 _schemas.yaml 的 item_fields 校验" }
+      - { name: payload, types: [ object, array, scalar, ref ], required: true, description: "payload 值域节点" }
       - { name: summary, type: string, required: true, description: "一句话说明" }
-      - { name: emitted_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "发射该主题的服务项；由 service step 生成" }
-      - { name: consumers, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "订阅该主题的 job 项；由 job 的 trigger.topic 生成" }
+      - { name: emitted_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "发射该主题的服务项；gen-graph 生成" }
+      - { name: consumers, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "订阅该主题的 job；gen-graph 生成" }
 
   - name: jobs
     type: list<object>
     required: false
     min_items: 1
-    description: "异步任务项；item ID = cap.events.<file>.<snake_case(name)>"
+    description: "异步任务项"
     item_fields:
       - { name: id, type: string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "任务 ID" }
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "任务名" }
       - { name: summary, type: string, required: true, description: "一句话说明" }
-      - { name: service, type: string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "同步 handler service；必须与文件 owner_module 同模块" }
+      - { name: service, type: string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "同步 handler service" }
       - name: trigger
         type: object
         required: true
         description: "触发方式"
         fields:
           - { name: type, type: string, required: true, enum: [ cron, topic ], description: "触发类型" }
-          - { name: schedule, type: string, required: false, description: "cron 表达式；type=cron 必填" }
-          - { name: topic, type: string, required: false, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "订阅的主题 ID；type=topic 必填" }
+          - { name: schedule, type: string, required: false, description: "cron 表达式" }
+          - { name: topic, type: string, required: false, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "订阅的主题" }
       - name: retry
         type: object
         required: false

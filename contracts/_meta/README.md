@@ -83,7 +83,7 @@ false，省略不写。槽位键出现在节点位置即报 `schema.slot-positio
 2. 读 contracts/_meta/<type>.yaml（字段含义、值域、生成行为、易错点）
 3. 新建：make contract-new type=data.tables name=note module=notes
 4. 改 YAML（只改契约，不写生成物）
-5. make gen-graph（写回 `table.queries` / `model.queries` / `query.used_by` / `used_by.flows`）
+5. make gen-graph（写回 `table.queries` / `model.queries` / `query.used_by` / 规则与生命周期锚点）
 6. make contract-check
 7. make gen
 8. git diff --exit-code
@@ -320,8 +320,8 @@ README 或 `<type>/_base.yaml`，`_meta` 下禁止出现 `do_not`。
 - 不要在 `_meta` 之外再手写一份字段模板；需要样板时用 `make contract-new`。
 - 不要把 `_meta` 或脚本放进 `contracts/generated/`。
 - 不要手写生成的反向索引（`table.referenced_by` / `model.included_by` / `table.queries` / `model.queries` /
-  `query.used_by` / `used_by.flows`）；它们由 `make gen-graph` 写入，`contract-check` 校验。method item 的 `used_by`
-  是手写正向依赖。
+  `query.used_by` / `feature.rules.implemented_by` / `cap.lifecycles` 的 step 锚点 / `cap.events` 的
+  `emitted_by`、`consumers`）；它们由 `make gen-graph` 写入，`contract-check` 校验。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`；`contract-check` 会校验 `implemented_by` 必须包含规则自身 ID、每个
   ID 都有实际输出，并反向检查所有非 `schema.*` 输出都已被规则声明；但不会判断检查逻辑本身是否正确（后者靠测试）。

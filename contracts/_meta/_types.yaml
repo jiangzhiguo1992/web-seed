@@ -1,4 +1,4 @@
-# 共享值类型：类型族 + 自定义类型；tables/entities/queries/schemas 共用。
+# 共享值类型：类型族 + 自定义类型。
 
 id: meta.types
 title: "共享值类型"
@@ -59,7 +59,7 @@ type_families:
 custom_types:
   account_number:
     family: string
-    description: "账号编号；大写归一"
+    description: "账号编号"
     params:
       min_len: 4
       max_len: 64
@@ -79,35 +79,35 @@ custom_types:
       max_len: 254
   auth_username:
     family: string
-    description: "密码认证用户名；小写归一"
+    description: "密码认证用户名"
     params:
       min_len: 1
       max_len: 254
       normalize: "lower"
   email_username:
     family: string
-    description: "邮箱本地部分；小写归一"
+    description: "邮箱本地部分"
     params:
       min_len: 1
       max_len: 64
       normalize: "lower"
   email_domain:
     family: string
-    description: "邮箱域名；小写归一"
+    description: "邮箱域名"
     params:
       min_len: 1
       max_len: 190
       normalize: "lower"
   phone_code:
     family: string
-    description: "国际区号，例如 +86"
+    description: "国际区号"
     params:
       min_len: 2
       max_len: 8
       pattern: "^\\+[0-9]{1,4}$"
   phone_number:
     family: string
-    description: "手机号；只允许数字"
+    description: "手机号"
     params:
       min_len: 1
       max_len: 32
@@ -144,7 +144,7 @@ custom_types:
       max_len: 12
   token_type:
     family: string
-    description: "令牌类型；固定 Bearer"
+    description: "令牌类型"
     params:
       pattern: "^Bearer$"
       default: "Bearer"
