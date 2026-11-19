@@ -163,7 +163,7 @@ services:
           - { name: purpose, value: params.input.purpose, description: "验证用途" }
           - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }
         output: [ ]
-        query: { ref: data.queries.verification.revoke_active_verifications_by_auth }
+        query: data.queries.verification.revoke_active_verifications_by_auth
         goto: create
       - id: create
         kind: query
@@ -179,7 +179,7 @@ services:
           - { name: expire_at, value: step.expire_at.expire_at, description: "验证码过期时间" }
         output:
           - { name: row, type: data.entities.verification_body, description: "query 返回的 row" }
-        query: { ref: data.queries.verification.create_verification }
+        query: data.queries.verification.create_verification
         goto: mark_sent
       - id: mark_sent
         kind: query
@@ -189,7 +189,7 @@ services:
           - { name: sent_at, value: step.now.sent_at, description: "发送时间" }
           - { name: status, value: step.status_sent.status, description: "目标状态：已发送" }
         output: [ ]
-        query: { ref: data.queries.verification.mark_verification_sent }
+        query: data.queries.verification.mark_verification_sent
         goto: send
       - id: send
         kind: logic
@@ -239,7 +239,7 @@ services:
           - { name: purpose, value: params.input.purpose, description: "验证用途" }
         output:
           - { name: row, type: data.entities.verification_body, description: "query 返回的 row" }
-        query: { ref: data.queries.verification.get_latest_verification }
+        query: data.queries.verification.get_latest_verification
         goto: now
       - id: now
         kind: logic
@@ -365,7 +365,7 @@ services:
           - { name: location, value: step.location.location, description: "请求位置" }
           - { name: input_hash, value: step.input_hash.input_hash, description: "用户输入的哈希" }
         output: [ ]
-        query: { ref: data.queries.verification.create_verification_action }
+        query: data.queries.verification.create_verification_action
         goto: record_branch
       - id: record_branch
         kind: when
@@ -386,7 +386,7 @@ services:
           - { name: consumed_at, value: step.now.consumed_at, description: "消费时间" }
           - { name: status, value: step.status_consumed.status, description: "目标状态：已消费" }
         output: [ ]
-        query: { ref: data.queries.verification.consume_verification }
+        query: data.queries.verification.consume_verification
         goto: record_done
       - id: increment
         kind: query
@@ -396,7 +396,7 @@ services:
           - { name: attempt_count, value: step.next_attempt.attempt_count, description: "递增后的尝试次数" }
           - { name: status, value: step.status_failed.status, description: "目标状态：失败" }
         output: [ ]
-        query: { ref: data.queries.verification.increment_verification_attempt }
+        query: data.queries.verification.increment_verification_attempt
         goto: record_done
       - id: record_done
         kind: logic
@@ -455,7 +455,7 @@ services:
         errors:
           - platform.errors.AUTH_VERIFICATION_INVALID
           - platform.errors.COMMON_INTERNAL
-        query: { ref: data.queries.auth.set_auth_phone_status }
+        query: data.queries.auth.set_auth_phone_status
         goto: $end
       - id: apply_email_verified
         kind: query
@@ -468,7 +468,7 @@ services:
         errors:
           - platform.errors.AUTH_VERIFICATION_INVALID
           - platform.errors.COMMON_INTERNAL
-        query: { ref: data.queries.auth.set_auth_email_status }
+        query: data.queries.auth.set_auth_email_status
         goto: $end
 
   - name: revoke_by_auth
@@ -522,7 +522,7 @@ services:
           - { name: purpose, value: step.no_purpose.purpose, description: "验证用途；null 表示任意" }
           - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }
         output: [ ]
-        query: { ref: data.queries.verification.revoke_active_verifications_by_auth }
+        query: data.queries.verification.revoke_active_verifications_by_auth
         goto: $end
 
   - name: revoke_by_account
@@ -553,5 +553,5 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        query: { ref: data.queries.verification.revoke_active_verifications_by_account }
+        query: data.queries.verification.revoke_active_verifications_by_account
         goto: $end

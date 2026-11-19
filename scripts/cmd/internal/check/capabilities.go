@@ -58,7 +58,9 @@ type typeShape struct {
 // stepQueryItems 返回 step 声明的 query 项；仅 kind=query 使用单值 query。
 func stepQueryItems(step map[string]any) []any {
 	items := []any{}
-	if q, ok := asMap(step["query"]); ok && q != nil {
+	if qid, _ := step["query"].(string); qid != "" {
+		items = append(items, map[string]any{"ref": qid})
+	} else if q, ok := asMap(step["query"]); ok && q != nil {
 		items = append(items, q)
 	}
 	return items
@@ -67,7 +69,9 @@ func stepQueryItems(step map[string]any) []any {
 // stepServiceItems 返回 step 声明的 service 项：kind=service 用单值 service，logic 用 services 列表。
 func stepServiceItems(step map[string]any) []any {
 	items := []any{}
-	if s, ok := asMap(step["service"]); ok && s != nil {
+	if ref, _ := step["service"].(string); ref != "" {
+		items = append(items, map[string]any{"ref": ref})
+	} else if s, ok := asMap(step["service"]); ok && s != nil {
 		items = append(items, s)
 	}
 	return append(items, asList(step["services"])...)

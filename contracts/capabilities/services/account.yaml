@@ -52,7 +52,7 @@ services:
           - { name: id, value: params.id, description: "待读取的账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.get_account }
+        query: data.queries.account.get_account
         goto: load
       - id: load
         kind: logic
@@ -87,7 +87,7 @@ services:
           - { name: limit, value: params.filter.limit, description: "分页上限" }
         output:
           - { name: accounts, type: List<data.entities.account>, description: "query 返回的 accounts" }
-        query: { ref: data.queries.account.list_accounts }
+        query: data.queries.account.list_accounts
         goto: paginate
       - id: paginate
         kind: logic
@@ -152,7 +152,7 @@ services:
           - { name: number, value: params.input.number, description: "待创建账号的编号" }
         output:
           - { name: exists, type: boolean, description: "query 返回的 exists" }
-        query: { ref: data.queries.account.exists_account_number }
+        query: data.queries.account.exists_account_number
         goto: check_unique
       - id: check_unique
         kind: logic
@@ -177,7 +177,7 @@ services:
           - { name: status, value: step.status_pending.status, description: "初始状态 pending" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.create_account }
+        query: data.queries.account.create_account
         goto: emit_created
       - id: emit_created
         kind: events
@@ -211,7 +211,7 @@ services:
           - { name: id, value: params.id, description: "账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.get_account }
+        query: data.queries.account.get_account
         goto: validate
       - id: validate
         kind: logic
@@ -238,7 +238,7 @@ services:
           - { name: nickname, value: params.input.nickname, description: "新昵称" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.update_account }
+        query: data.queries.account.update_account
         goto: $end
 
   - name: delete
@@ -258,7 +258,7 @@ services:
           - { name: id, value: params.id, description: "待删除账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.get_account }
+        query: data.queries.account.get_account
         goto: check
       - id: check
         kind: logic
@@ -284,7 +284,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        service: { ref: cap.services.auth.revoke_all_for_account }
+        service: cap.services.auth.revoke_all_for_account
         goto: now
       - id: now
         kind: logic
@@ -312,7 +312,7 @@ services:
           - { name: id, value: params.id, description: "待软删账号 ID" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
         output: [ ]
-        query: { ref: data.queries.account.soft_delete_account }
+        query: data.queries.account.soft_delete_account
         goto: emit_deleted
       - id: emit_deleted
         kind: events
@@ -343,7 +343,7 @@ services:
           - { name: id, value: params.id, description: "账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.get_account }
+        query: data.queries.account.get_account
         goto: check
       - id: check
         kind: logic
@@ -375,7 +375,7 @@ services:
           - { name: status, value: step.target_status.status, description: "目标状态：激活" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.set_account_status }
+        query: data.queries.account.set_account_status
         goto: now
       - id: now
         kind: logic
@@ -437,7 +437,7 @@ services:
           - { name: id, value: params.id, description: "账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.get_account }
+        query: data.queries.account.get_account
         goto: check
       - id: check
         kind: logic
@@ -469,7 +469,7 @@ services:
           - { name: status, value: step.target_status.status, description: "目标状态：封禁" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.set_account_status }
+        query: data.queries.account.set_account_status
         goto: now
       - id: now
         kind: logic

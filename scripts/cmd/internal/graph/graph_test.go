@@ -102,8 +102,7 @@ services:
     steps:
       - id: load
         kind: logic
-        query:
-          ref: data.queries.q.get_a
+        query: data.queries.q.get_a
 `)
 	return root
 }

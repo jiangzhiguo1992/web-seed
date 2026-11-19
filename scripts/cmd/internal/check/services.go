@@ -159,67 +159,47 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		var targetErrors, queryErrors map[string]bool
 		switch kind {
 		case "query":
-			qo, _ := asMap(step["query"])
 			queryErrors = map[string]bool{}
-			if qo == nil {
-				c.rulef("service-steps-kind", "%s: step %s kind=query requires query", rel, stepID)
+			qid, _ := step["query"].(string)
+			if qid == "" {
+				c.rulef("service-steps-kind", "%s: step %s kind=query requires query ref", rel, stepID)
+			} else if !match(queryRefPattern, qid) {
+				c.rulef("service-ref", "%s: step %s query ref %s does not match data.queries.<file>.<name>", rel, stepID, qid)
+			} else if q, ok := c.queries[qid]; !ok {
+				c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
 			} else {
-				for field := range qo {
-					if field != "ref" {
-						c.rulef("service-steps-kind", "%s: step %s query does not allow field %s", rel, stepID, field)
-					}
+				c.checkQueryInput(input, q, qid, rel, stepID, tc)
+				c.checkStepOutputTarget(step, c.queryReturnTypes[qid], "query "+qid, rel, stepID)
+				for code := range q.errorSet() {
+					queryErrors[code] = true
 				}
-				qid, _ := qo["ref"].(string)
-				if qid == "" {
-					c.rulef("service-steps-kind", "%s: step %s query requires ref", rel, stepID)
-				} else if !match(queryRefPattern, qid) {
-					c.rulef("service-ref", "%s: step %s query ref %s does not match data.queries.<file>.<name>", rel, stepID, qid)
-				} else if q, ok := c.queries[qid]; !ok {
-					c.rulef("service-ref", "%s: step %s unknown query %s", rel, stepID, qid)
-				} else {
-					c.checkQueryInput(input, q, qid, rel, stepID, tc)
-					c.checkStepOutputTarget(step, c.queryReturnTypes[qid], "query "+qid, rel, stepID)
-					for code := range q.errorSet() {
-						queryErrors[code] = true
-					}
-					if txMode == "read_only" && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) {
-						c.rulef("service-transaction", "%s: step %s calls write query %s under tx_mode=read_only", rel, stepID, qid)
-					}
+				if txMode == "read_only" && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) {
+					c.rulef("service-transaction", "%s: step %s calls write query %s under tx_mode=read_only", rel, stepID, qid)
 				}
 			}
 		case "service":
-			so, _ := asMap(step["service"])
 			targetErrors = map[string]bool{}
-			if so == nil {
-				c.rulef("service-steps-kind", "%s: step %s kind=service requires service", rel, stepID)
+			ref, _ := step["service"].(string)
+			if ref == "" {
+				c.rulef("service-steps-kind", "%s: step %s kind=service requires service ref", rel, stepID)
+			} else if !match(serviceRefPattern, ref) {
+				c.rulef("service-ref", "%s: step %s service ref %s does not match cap.services.<file>.<name>", rel, stepID, ref)
+			} else if target, ok := serviceMeta[ref]; !ok {
+				c.rulef("service-ref", "%s: step %s unknown service %s", rel, stepID, ref)
 			} else {
-				for field := range so {
-					if field != "ref" {
-						c.rulef("service-steps-kind", "%s: step %s service does not allow field %s", rel, stepID, field)
-					}
+				if target.module != module && target.visibility != "public" {
+					c.rulef("service-visibility", "%s: step %s cannot call internal %s from another module", rel, stepID, ref)
 				}
-				ref, _ := so["ref"].(string)
-				if ref == "" {
-					c.rulef("service-steps-kind", "%s: step %s service requires ref", rel, stepID)
-				} else if !match(serviceRefPattern, ref) {
-					c.rulef("service-ref", "%s: step %s service ref %s does not match cap.services.<file>.<name>", rel, stepID, ref)
-				} else if target, ok := serviceMeta[ref]; !ok {
-					c.rulef("service-ref", "%s: step %s unknown service %s", rel, stepID, ref)
-				} else {
-					if target.module != module && target.visibility != "public" {
-						c.rulef("service-visibility", "%s: step %s cannot call internal %s from another module", rel, stepID, ref)
-					}
-					if txMode != "none" && target.txMode == "required" {
-						c.rulef("service-transaction", "%s: step %s tx_mode=%s must not call tx_mode=required service %s (nested transaction)", rel, stepID, txMode, ref)
-					}
-					if txMode == "read_only" && c.serviceWrites[ref] {
-						c.rulef("service-transaction", "%s: step %s tx_mode=read_only cannot call service %s that writes tables", rel, stepID, ref)
-					}
-					c.checkServiceInput(input, target, ref, rel, stepID, tc)
-					c.checkStepOutputTarget(step, target.returns, "service "+ref, rel, stepID)
-					for code := range target.errors {
-						targetErrors[code] = true
-					}
+				if txMode != "none" && target.txMode == "required" {
+					c.rulef("service-transaction", "%s: step %s tx_mode=%s must not call tx_mode=required service %s (nested transaction)", rel, stepID, txMode, ref)
+				}
+				if txMode == "read_only" && c.serviceWrites[ref] {
+					c.rulef("service-transaction", "%s: step %s tx_mode=read_only cannot call service %s that writes tables", rel, stepID, ref)
+				}
+				c.checkServiceInput(input, target, ref, rel, stepID, tc)
+				c.checkStepOutputTarget(step, target.returns, "service "+ref, rel, stepID)
+				for code := range target.errors {
+					targetErrors[code] = true
 				}
 			}
 		case "logic":
@@ -466,29 +446,50 @@ func (c *Checker) checkStepEvents(step map[string]any, input map[string]any, rel
 		c.rulef("service-steps-kind", "%s: step %s kind=events requires events", rel, stepID)
 		return
 	}
-	if len(items) != 1 {
-		c.rulef("service-steps-kind", "%s: step %s kind=events requires exactly one event", rel, stepID)
-	}
-	item, _ := asMap(items[0])
-	if item == nil {
-		c.rulef("service-structure", "%s: step %s events item must be an object", rel, stepID)
-		return
-	}
-	for field := range item {
-		if field != "ref" {
-			c.rulef("service-steps-kind", "%s: step %s events item does not allow field %s", rel, stepID, field)
+	refs := make([]string, 0, len(items))
+	seen := map[string]bool{}
+	union := map[string]eventField{}
+	for _, raw := range items {
+		item, _ := asMap(raw)
+		if item == nil {
+			c.rulef("service-structure", "%s: step %s events item must be an object", rel, stepID)
+			continue
+		}
+		for field := range item {
+			if field != "ref" {
+				c.rulef("service-steps-kind", "%s: step %s events item does not allow field %s", rel, stepID, field)
+			}
+		}
+		ref, _ := item["ref"].(string)
+		if ref == "" {
+			c.rulef("service-structure", "%s: step %s events item requires ref", rel, stepID)
+			continue
+		}
+		if seen[ref] {
+			c.rulef("service-structure", "%s: step %s duplicate event %s", rel, stepID, ref)
+			continue
+		}
+		seen[ref] = true
+		if !eventIDs[ref] {
+			c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ref)
+			continue
+		}
+		refs = append(refs, ref)
+		for name, field := range c.eventPayloads[ref] {
+			union[name] = field
 		}
 	}
-	ref, _ := item["ref"].(string)
-	if ref == "" {
-		c.rulef("service-structure", "%s: step %s events item requires ref", rel, stepID)
+	if len(refs) == 0 {
 		return
 	}
-	if !eventIDs[ref] {
-		c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ref)
-		return
+	for name := range input {
+		if _, ok := union[name]; !ok {
+			c.rulef("service-params", "%s: step %s event input %s is not a payload field of any event in this step", rel, stepID, name)
+		}
 	}
-	c.checkEventInput(input, ref, rel, stepID, tc)
+	for _, ref := range refs {
+		c.checkEventInput(input, ref, rel, stepID, tc)
+	}
 }
 
 // checkEventInput 校验事件 payload 映射：字段必须存在、必填字段必须出现、类型必须兼容。
@@ -497,7 +498,6 @@ func (c *Checker) checkEventInput(input map[string]any, eventID, rel, stepID str
 	for name, raw := range input {
 		field, ok := fields[name]
 		if !ok {
-			c.rulef("service-params", "%s: step %s event %s has no payload field %s", rel, stepID, eventID, name)
 			continue
 		}
 		value, _ := raw.(string)

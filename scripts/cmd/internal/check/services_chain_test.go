@@ -38,7 +38,7 @@ func TestServiceQueryInputRequiredAndExact(t *testing.T) {
 	}
 	base := func(input map[string]any) map[string]any {
 		step := map[string]any{"id": "run", "kind": "query", "summary": "x", "input": inputList(input),
-			"query": map[string]any{"ref": q.ID}, "goto": "$end"}
+			"query": q.ID, "goto": "$end"}
 		return map[string]any{
 			"summary": "x", "tx_mode": "read_only",
 			"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
@@ -73,7 +73,7 @@ func TestServiceCallInputRequiredAndExact(t *testing.T) {
 		returns:        map[string]returnType{"value": {typ: "string"}},
 	}
 	base := func(input map[string]any) map[string]any {
-		step := map[string]any{"id": "call", "kind": "service", "summary": "x", "service": map[string]any{"ref": "cap.services.x.target"}, "goto": "$end"}
+		step := map[string]any{"id": "call", "kind": "service", "summary": "x", "service": "cap.services.x.target", "goto": "$end"}
 		if input != nil {
 			items := make([]any, 0, len(input))
 			for name, value := range input {
@@ -238,7 +238,7 @@ func TestServiceInputSourceIsHardConstrained(t *testing.T) {
 	q := &queryInfo{ID: "data.queries.x.q", Params: []queryParam{{Name: "id"}}}
 	run := func(input any) string {
 		step := map[string]any{"id": "run", "kind": "query", "summary": "x", "input": input,
-			"query": map[string]any{"ref": q.ID}, "goto": "$end"}
+			"query": q.ID, "goto": "$end"}
 		doc := map[string]any{
 			"summary": "x", "tx_mode": "read_only",
 			"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}, map[string]any{"name": "id", "type": "integer"}},
@@ -340,9 +340,7 @@ func TestServiceNestedRequiredTransactionRejected(t *testing.T) {
 		"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
 		"returns": []any{},
 		"steps": []any{
-			map[string]any{"id": "call", "kind": "service", "summary": "x", "goto": "$end", "service": map[string]any{
-				"ref": "cap.services.x.target",
-			}},
+			map[string]any{"id": "call", "kind": "service", "summary": "x", "goto": "$end", "service": "cap.services.x.target"},
 		},
 	}
 	c := &Checker{}
@@ -457,9 +455,7 @@ func TestServiceReadOnlyRejectsTransitiveWriter(t *testing.T) {
 		"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
 		"returns": []any{},
 		"steps": []any{
-			map[string]any{"id": "call", "kind": "service", "summary": "x", "goto": "$end", "service": map[string]any{
-				"ref": "cap.services.x.writer",
-			}},
+			map[string]any{"id": "call", "kind": "service", "summary": "x", "goto": "$end", "service": "cap.services.x.writer"},
 		},
 	}
 	c := &Checker{serviceWrites: map[string]bool{"cap.services.x.writer": true}}
@@ -484,7 +480,7 @@ func TestServiceQueryOutputMatchesReturns(t *testing.T) {
 			"steps": []any{map[string]any{
 				"id": "run", "kind": "query", "summary": "x", "goto": "$end",
 				"output": output,
-				"query":  map[string]any{"ref": q.ID},
+				"query":  q.ID,
 			}},
 		}
 		c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
@@ -515,7 +511,7 @@ func TestServiceReadOnlyRejectsWriteQuery(t *testing.T) {
 			"returns": []any{},
 			"steps": []any{map[string]any{
 				"id": "run", "kind": "query", "summary": "x", "goto": "$end",
-				"query": map[string]any{"ref": q.ID},
+				"query": q.ID,
 			}},
 		}
 	}
@@ -669,7 +665,11 @@ func TestServiceEventsStep(t *testing.T) {
 		c := &Checker{eventPayloads: payloads}
 		doc := map[string]any{
 			"summary": "x", "tx_mode": "none",
-			"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
+			"params": []any{
+				map[string]any{"name": "ctx", "type": "context.Context"},
+				map[string]any{"name": "id", "type": "integer"},
+				map[string]any{"name": "code", "type": "string"},
+			},
 			"returns": []any{},
 			"steps":   []any{step},
 		}
@@ -684,7 +684,7 @@ func TestServiceEventsStep(t *testing.T) {
 
 	if got := run(map[string]any{
 		"id": "emit", "kind": "events", "summary": "x", "goto": "$end",
-		"input":  []any{map[string]any{"name": "id", "value": "params.ctx", "description": "x"}},
+		"input":  []any{map[string]any{"name": "id", "value": "params.id", "description": "x"}},
 		"events": []any{map[string]any{"ref": "cap.events.x.created"}},
 	}, events, payloads); strings.Contains(got, "service-steps-kind") || strings.Contains(got, "service-ref") {
 		t.Fatalf("valid events step reported: %s", got)
@@ -709,8 +709,41 @@ func TestServiceEventsStep(t *testing.T) {
 		"id": "emit", "kind": "events", "summary": "x", "goto": "$end",
 		"input":  []any{map[string]any{"name": "nope", "value": "params.ctx", "description": "x"}},
 		"events": []any{map[string]any{"ref": "cap.events.x.created"}},
-	}, events, payloads); !strings.Contains(got, "has no payload field nope") {
+	}, events, payloads); !strings.Contains(got, "is not a payload field of any event in this step") {
 		t.Fatalf("unknown payload field not reported: %s", got)
+	}
+
+	multiEvents := map[string]bool{"cap.events.x.created": true, "cap.events.x.updated": true}
+	multiPayloads := map[string]map[string]eventField{
+		"cap.events.x.created": {"id": {typ: "integer", required: true}},
+		"cap.events.x.updated": {"id": {typ: "integer", required: true}, "note": {typ: "string"}},
+	}
+	multi := map[string]any{
+		"id": "emit", "kind": "events", "summary": "x", "goto": "$end",
+		"input": []any{
+			map[string]any{"name": "id", "value": "params.id", "description": "x"},
+			map[string]any{"name": "note", "value": "params.code", "description": "x"},
+		},
+		"events": []any{map[string]any{"ref": "cap.events.x.created"}, map[string]any{"ref": "cap.events.x.updated"}},
+	}
+	if got := run(multi, multiEvents, multiPayloads); got != "" {
+		t.Fatalf("valid multi-event step reported: %s", got)
+	}
+	missing := map[string]any{
+		"id": "emit", "kind": "events", "summary": "x", "goto": "$end",
+		"input":  []any{map[string]any{"name": "note", "value": "params.code", "description": "x"}},
+		"events": []any{map[string]any{"ref": "cap.events.x.created"}, map[string]any{"ref": "cap.events.x.updated"}},
+	}
+	if got := run(missing, multiEvents, multiPayloads); !strings.Contains(got, "missing required payload field id") {
+		t.Fatalf("multi-event missing required not reported: %s", got)
+	}
+	dup := map[string]any{
+		"id": "emit", "kind": "events", "summary": "x", "goto": "$end",
+		"input":  []any{map[string]any{"name": "id", "value": "params.id", "description": "x"}},
+		"events": []any{map[string]any{"ref": "cap.events.x.created"}, map[string]any{"ref": "cap.events.x.created"}},
+	}
+	if got := run(dup, multiEvents, multiPayloads); !strings.Contains(got, "duplicate event") {
+		t.Fatalf("duplicate event not reported: %s", got)
 	}
 }
 
@@ -815,7 +848,7 @@ func TestServiceQueryOutputRejected(t *testing.T) {
 			queries:          map[string]*queryInfo{q.ID: q},
 			queryReturnTypes: map[string]map[string]returnType{q.ID: {"value": {typ: "string"}}},
 		}
-		step := map[string]any{"id": "q", "kind": "query", "summary": "x", "goto": "$end", "query": map[string]any{"ref": q.ID}}
+		step := map[string]any{"id": "q", "kind": "query", "summary": "x", "goto": "$end", "query": q.ID}
 		if output != nil {
 			step["output"] = output
 		}
@@ -874,7 +907,7 @@ func TestServiceServiceReturnReference(t *testing.T) {
 	}
 	call := map[string]any{"id": "call", "kind": "service", "summary": "x", "goto": "$end",
 		"output":  []any{map[string]any{"name": "value", "type": "string", "description": "x"}},
-		"service": map[string]any{"ref": "cap.services.x.target"}}
+		"service": "cap.services.x.target"}
 	use := func(value string) map[string]any {
 		return map[string]any{
 			"id": "use", "kind": "logic", "summary": "x", "goto": "$end",

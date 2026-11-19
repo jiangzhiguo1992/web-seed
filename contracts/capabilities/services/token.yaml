@@ -36,7 +36,7 @@ services:
           - { name: id, value: params.account_id, description: "待签发令牌的账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.get_account }
+        query: data.queries.account.get_account
         goto: issue_tokens
       - id: issue_tokens
         kind: logic
@@ -81,7 +81,7 @@ services:
           - { name: access_expire_at, value: step.issue_tokens.tokens.access_expire_at, description: "访问令牌过期时间" }
           - { name: refresh_expire_at, value: step.issue_tokens.tokens.refresh_expire_at, description: "刷新令牌过期时间" }
         output: [ ]
-        query: { ref: data.queries.token.create_token }
+        query: data.queries.token.create_token
         goto: $end
   - name: refresh
     summary: "用刷新令牌换取新令牌对"
@@ -111,7 +111,7 @@ services:
           - { name: refresh_token_hash, value: step.hash_old.refresh_token_hash, description: "待换新的刷新令牌哈希" }
         output:
           - { name: row, type: data.entities.token, description: "query 返回的 row" }
-        query: { ref: data.queries.token.get_token_by_refresh }
+        query: data.queries.token.get_token_by_refresh
         goto: validate
       - id: validate
         kind: logic
@@ -186,7 +186,7 @@ services:
           - { name: access_expire_at, value: step.issue_tokens.tokens.access_expire_at, description: "访问令牌过期时间" }
           - { name: refresh_expire_at, value: step.issue_tokens.tokens.refresh_expire_at, description: "刷新令牌过期时间" }
         output: [ ]
-        query: { ref: data.queries.token.create_token }
+        query: data.queries.token.create_token
         goto: revoke_token
       - id: revoke_token
         kind: query
@@ -197,7 +197,7 @@ services:
           - { name: revoke_reason, value: step.reason.revoke_reason, description: "旧令牌作废原因：rotated" }
           - { name: replaced_by_id, value: step.new_id.id, description: "替换旧令牌的新令牌 ID" }
         output: [ ]
-        query: { ref: data.queries.token.revoke_token }
+        query: data.queries.token.revoke_token
         goto: $end
   - name: logout
     summary: "吊销刷新令牌"
@@ -244,7 +244,7 @@ services:
           - { name: refresh_token_hash, value: step.hash.refresh_token_hash, description: "待吊销的刷新令牌哈希" }
         output:
           - { name: row, type: data.entities.token, description: "query 返回的 row" }
-        query: { ref: data.queries.token.get_token_by_refresh }
+        query: data.queries.token.get_token_by_refresh
         goto: validate
       - id: validate
         kind: logic
@@ -264,7 +264,7 @@ services:
           - { name: revoked_at, value: step.now.revoked_at, description: "吊销时间" }
           - { name: revoke_reason, value: step.reason.revoke_reason, description: "吊销原因：logout" }
         output: [ ]
-        query: { ref: data.queries.token.revoke_token }
+        query: data.queries.token.revoke_token
         goto: $end
   - name: revoke_by_account
     summary: "吊销账号的全部令牌"
@@ -304,7 +304,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        query: { ref: data.queries.token.revoke_tokens_by_account }
+        query: data.queries.token.revoke_tokens_by_account
         goto: $end
   - name: verify
     summary: "校验访问令牌并返回账号"
@@ -334,7 +334,7 @@ services:
           - { name: access_token_hash, value: step.hash.access_token_hash, description: "待校验的访问令牌哈希" }
         output:
           - { name: row, type: data.entities.token, description: "query 返回的 row" }
-        query: { ref: data.queries.token.get_token_by_access }
+        query: data.queries.token.get_token_by_access
         goto: get_account
       - id: get_account
         kind: query
@@ -343,7 +343,7 @@ services:
           - { name: id, value: step.load_token.row.account_id, description: "令牌归属账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.get_account }
+        query: data.queries.account.get_account
         goto: verify
       - id: verify
         kind: logic
@@ -387,5 +387,5 @@ services:
           - { name: affected_rows, type: integer, description: "query 返回的 affected_rows" }
         errors:
           - platform.errors.COMMON_INTERNAL
-        query: { ref: data.queries.token.delete_expired_tokens }
+        query: data.queries.token.delete_expired_tokens
         goto: $end

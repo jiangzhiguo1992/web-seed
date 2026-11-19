@@ -118,7 +118,7 @@ services:
           - { name: username, value: params.input.identifier, description: "用户名" }
         output:
           - { name: row, type: data.entities.auth_pwd, description: "query 返回的 row" }
-        query: { ref: data.queries.auth.get_auth_pwd_by_username }
+        query: data.queries.auth.get_auth_pwd_by_username
         goto: load
       - id: get_auth_phone_by_number
         kind: query
@@ -128,7 +128,7 @@ services:
           - { name: number, value: params.input.identifier, description: "手机号" }
         output:
           - { name: row, type: data.entities.auth_phone, description: "query 返回的 row" }
-        query: { ref: data.queries.auth.get_auth_phone_by_number }
+        query: data.queries.auth.get_auth_phone_by_number
         goto: load
       - id: get_auth_email_by_username_domain
         kind: query
@@ -138,7 +138,7 @@ services:
           - { name: domain, value: step.split_identifier.domain, description: "邮箱域名" }
         output:
           - { name: row, type: data.entities.auth_email, description: "query 返回的 row" }
-        query: { ref: data.queries.auth.get_auth_email_by_username_domain }
+        query: data.queries.auth.get_auth_email_by_username_domain
         goto: load
       - id: load
         kind: logic
@@ -166,7 +166,7 @@ services:
           - { name: id, value: step.load.account_id, description: "认证绑定命中的账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
-        query: { ref: data.queries.account.get_account }
+        query: data.queries.account.get_account
         goto: check
       - id: check
         kind: logic
@@ -220,7 +220,7 @@ services:
           - { name: auth_pwd_id, value: step.load.auth_pwd_id, description: "密码绑定 ID；非密码登录为 null" }
           - { name: login_at, value: step.now.login_at, description: "登录时间" }
         output: [ ]
-        service: { ref: cap.services.auth.record_login_success }
+        service: cap.services.auth.record_login_success
         goto: issue_tokens
       - id: pwd_failure_id
         kind: logic
@@ -254,7 +254,7 @@ services:
           - { name: login_at, value: step.now.login_at, description: "登录时间" }
           - { name: reason, value: step.pwd_fail_reason.reason, description: "失败原因" }
         output: [ ]
-        service: { ref: cap.services.auth.record_login_failure }
+        service: cap.services.auth.record_login_failure
         goto: reject
       - id: fail_reason
         kind: logic
@@ -286,7 +286,7 @@ services:
           - { name: device_id, value: params.input.device_id, description: "设备标识" }
         output:
           - { name: tokens, type: cap.services.token.schemas.TokenPair, description: "service 返回的 tokens" }
-        service: { ref: cap.services.token.issue }
+        service: cap.services.token.issue
         goto: build_session
       - id: build_session
         kind: logic
@@ -406,7 +406,7 @@ services:
           - { name: username, value: step.create_username.username, description: "用户名" }
           - { name: password_hash, value: step.hash_create.password_hash, description: "密码哈希" }
         output: [ ]
-        query: { ref: data.queries.auth.create_auth_pwd }
+        query: data.queries.auth.create_auth_pwd
         goto: load
       - id: hash_update
         kind: logic
@@ -425,7 +425,7 @@ services:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: password_hash, value: step.hash_update.password_hash, description: "密码哈希" }
         output: [ ]
-        query: { ref: data.queries.auth.update_auth_pwd_hash }
+        query: data.queries.auth.update_auth_pwd_hash
         goto: load
       - id: enable_status
         kind: logic
@@ -444,7 +444,7 @@ services:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.enable_status.status, description: "绑定状态 verified" }
         output: [ ]
-        query: { ref: data.queries.auth.set_auth_pwd_status }
+        query: data.queries.auth.set_auth_pwd_status
         goto: load
       - id: disable_status
         kind: logic
@@ -463,7 +463,7 @@ services:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.disable_status.status, description: "绑定状态 disabled" }
         output: [ ]
-        query: { ref: data.queries.auth.set_auth_pwd_status }
+        query: data.queries.auth.set_auth_pwd_status
         goto: revoke_verifications
       - id: revoke_verifications
         kind: service
@@ -472,7 +472,7 @@ services:
           - { name: auth_type, value: step.resolve.auth_type, description: "认证类型" }
           - { name: auth_id, value: step.resolve.binding_id, description: "认证绑定 ID" }
         output: [ ]
-        service: { ref: cap.services.verification.revoke_by_auth }
+        service: cap.services.verification.revoke_by_auth
         goto: load
       - id: load
         kind: query
@@ -481,7 +481,7 @@ services:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
         output:
           - { name: row, type: data.entities.auth_pwd, description: "query 返回的 row" }
-        query: { ref: data.queries.auth.get_auth_pwd_by_id }
+        query: data.queries.auth.get_auth_pwd_by_id
         goto: to_binding
       - id: to_binding
         kind: logic
@@ -497,7 +497,7 @@ services:
   - name: bind_phone
     summary: "创建、换绑或启停手机号认证绑定"
     visibility: public
-    tx_mode: none
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: cap.services.auth.schemas.BindPhoneInput }
@@ -576,7 +576,7 @@ services:
         input:
           - { name: account_id, value: params.input.account_id, description: "账号 ID" }
         output: [ ]
-        query: { ref: data.queries.auth.soft_delete_auth_phone_by_account }
+        query: data.queries.auth.soft_delete_auth_phone_by_account
         goto: replace_revoke
       - id: replace_revoke
         kind: service
@@ -585,7 +585,7 @@ services:
           - { name: auth_type, value: step.resolve.auth_type, description: "认证类型" }
           - { name: auth_id, value: step.resolve.binding_id, description: "旧手机绑定 ID" }
         output: [ ]
-        service: { ref: cap.services.verification.revoke_by_auth }
+        service: cap.services.verification.revoke_by_auth
         goto: replace_operator
       - id: replace_operator
         kind: logic
@@ -608,7 +608,7 @@ services:
           - { name: number, value: step.replace_phone_target.number, description: "手机号" }
           - { name: operator, value: step.replace_operator.operator, description: "操作者标识" }
         output: [ ]
-        query: { ref: data.queries.auth.create_auth_phone }
+        query: data.queries.auth.create_auth_phone
         goto: merge_id
       - id: create_status
         kind: logic
@@ -653,7 +653,7 @@ services:
           - { name: number, value: step.create_phone.number, description: "手机号" }
           - { name: operator, value: step.request_operator.operator, description: "操作者标识" }
         output: [ ]
-        query: { ref: data.queries.auth.create_auth_phone }
+        query: data.queries.auth.create_auth_phone
         goto: merge_id
       - id: enable_status
         kind: logic
@@ -672,7 +672,7 @@ services:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.enable_status.status, description: "绑定状态 verified" }
         output: [ ]
-        query: { ref: data.queries.auth.set_auth_phone_status }
+        query: data.queries.auth.set_auth_phone_status
         goto: merge_id
       - id: disable_status
         kind: logic
@@ -691,7 +691,7 @@ services:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.disable_status.status, description: "绑定状态 disabled" }
         output: [ ]
-        query: { ref: data.queries.auth.set_auth_phone_status }
+        query: data.queries.auth.set_auth_phone_status
         goto: revoke_verifications
       - id: revoke_verifications
         kind: service
@@ -700,7 +700,7 @@ services:
           - { name: auth_type, value: step.resolve.auth_type, description: "认证类型" }
           - { name: auth_id, value: step.resolve.binding_id, description: "认证绑定 ID" }
         output: [ ]
-        service: { ref: cap.services.verification.revoke_by_auth }
+        service: cap.services.verification.revoke_by_auth
         goto: merge_id
       - id: merge_id
         kind: logic
@@ -721,7 +721,7 @@ services:
           - { name: id, value: step.merge_id.target_id, description: "认证绑定 ID" }
         output:
           - { name: row, type: data.entities.auth_phone, description: "query 返回的 row" }
-        query: { ref: data.queries.auth.get_auth_phone_by_id }
+        query: data.queries.auth.get_auth_phone_by_id
         goto: to_binding
       - id: to_binding
         kind: logic
@@ -737,7 +737,7 @@ services:
   - name: bind_email
     summary: "创建、换绑或启停邮箱认证绑定"
     visibility: public
-    tx_mode: none
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: cap.services.auth.schemas.BindEmailInput }
@@ -829,7 +829,7 @@ services:
         input:
           - { name: account_id, value: params.input.account_id, description: "账号 ID" }
         output: [ ]
-        query: { ref: data.queries.auth.soft_delete_auth_email_by_account }
+        query: data.queries.auth.soft_delete_auth_email_by_account
         goto: replace_revoke
       - id: replace_revoke
         kind: service
@@ -838,7 +838,7 @@ services:
           - { name: auth_type, value: step.resolve.auth_type, description: "认证类型" }
           - { name: auth_id, value: step.resolve.binding_id, description: "旧邮箱绑定 ID" }
         output: [ ]
-        service: { ref: cap.services.verification.revoke_by_auth }
+        service: cap.services.verification.revoke_by_auth
         goto: replace_create
       - id: replace_create
         kind: query
@@ -853,7 +853,7 @@ services:
           - { name: entity, value: step.replace_email_parts.entity, description: "域名主体" }
           - { name: tld, value: step.replace_email_parts.tld, description: "顶级域" }
         output: [ ]
-        query: { ref: data.queries.auth.create_auth_email }
+        query: data.queries.auth.create_auth_email
         goto: merge_id
       - id: create_status
         kind: logic
@@ -902,7 +902,7 @@ services:
           - { name: entity, value: step.email_parts.entity, description: "域名主体" }
           - { name: tld, value: step.email_parts.tld, description: "顶级域" }
         output: [ ]
-        query: { ref: data.queries.auth.create_auth_email }
+        query: data.queries.auth.create_auth_email
         goto: merge_id
       - id: enable_status
         kind: logic
@@ -921,7 +921,7 @@ services:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.enable_status.status, description: "绑定状态 verified" }
         output: [ ]
-        query: { ref: data.queries.auth.set_auth_email_status }
+        query: data.queries.auth.set_auth_email_status
         goto: merge_id
       - id: disable_status
         kind: logic
@@ -940,7 +940,7 @@ services:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.disable_status.status, description: "绑定状态 disabled" }
         output: [ ]
-        query: { ref: data.queries.auth.set_auth_email_status }
+        query: data.queries.auth.set_auth_email_status
         goto: revoke_verifications
       - id: revoke_verifications
         kind: service
@@ -949,7 +949,7 @@ services:
           - { name: auth_type, value: step.resolve.auth_type, description: "认证类型" }
           - { name: auth_id, value: step.resolve.binding_id, description: "认证绑定 ID" }
         output: [ ]
-        service: { ref: cap.services.verification.revoke_by_auth }
+        service: cap.services.verification.revoke_by_auth
         goto: merge_id
       - id: merge_id
         kind: logic
@@ -970,7 +970,7 @@ services:
           - { name: id, value: step.merge_id.target_id, description: "认证绑定 ID" }
         output:
           - { name: row, type: data.entities.auth_email, description: "query 返回的 row" }
-        query: { ref: data.queries.auth.get_auth_email_by_id }
+        query: data.queries.auth.get_auth_email_by_id
         goto: to_binding
       - id: to_binding
         kind: logic
@@ -1025,7 +1025,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        query: { ref: data.queries.auth.record_auth_pwd_login_success }
+        query: data.queries.auth.record_auth_pwd_login_success
         goto: emit_login_succeeded
       - id: emit_login_succeeded
         kind: events
@@ -1086,7 +1086,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        query: { ref: data.queries.auth.record_auth_pwd_login_failure }
+        query: data.queries.auth.record_auth_pwd_login_failure
         goto: emit_login_failed
       - id: emit_login_failed
         kind: events
@@ -1117,7 +1117,7 @@ services:
         input:
           - { name: account_id, value: params.account_id, description: "账号 ID" }
         output: [ ]
-        query: { ref: data.queries.auth.soft_delete_auth_pwd_by_account }
+        query: data.queries.auth.soft_delete_auth_pwd_by_account
         goto: soft_delete_auth_phone_by_account
       - id: soft_delete_auth_phone_by_account
         kind: query
@@ -1126,7 +1126,7 @@ services:
         input:
           - { name: account_id, value: params.account_id, description: "账号 ID" }
         output: [ ]
-        query: { ref: data.queries.auth.soft_delete_auth_phone_by_account }
+        query: data.queries.auth.soft_delete_auth_phone_by_account
         goto: soft_delete_auth_email_by_account
       - id: soft_delete_auth_email_by_account
         kind: query
@@ -1135,7 +1135,7 @@ services:
         input:
           - { name: account_id, value: params.account_id, description: "账号 ID" }
         output: [ ]
-        query: { ref: data.queries.auth.soft_delete_auth_email_by_account }
+        query: data.queries.auth.soft_delete_auth_email_by_account
         goto: revoke_tokens
       - id: revoke_tokens
         kind: service
@@ -1145,7 +1145,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        service: { ref: cap.services.token.revoke_by_account }
+        service: cap.services.token.revoke_by_account
         goto: revoke_verifications
       - id: revoke_verifications
         kind: service
@@ -1155,5 +1155,5 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        service: { ref: cap.services.verification.revoke_by_account }
+        service: cap.services.verification.revoke_by_account
         goto: $end

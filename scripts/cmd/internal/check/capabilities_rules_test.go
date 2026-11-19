@@ -1220,7 +1220,7 @@ func TestQueryErrorPropagation(t *testing.T) {
 	t.Run("query step inherits query errors", func(t *testing.T) {
 		doc := base(map[string]any{
 			"id": "run", "kind": "query", "summary": "x",
-			"query": map[string]any{"ref": "data.queries.x.q"},
+			"query": "data.queries.x.q",
 		})
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("valid query error reported: %v", errs)
@@ -1230,7 +1230,7 @@ func TestQueryErrorPropagation(t *testing.T) {
 	t.Run("query step may add local errors", func(t *testing.T) {
 		doc := base(map[string]any{
 			"id": "run", "kind": "query", "summary": "x",
-			"query":  map[string]any{"ref": "data.queries.x.q"},
+			"query":  "data.queries.x.q",
 			"errors": []any{"platform.errors.B"},
 		})
 		want(t, check(t, doc), "does not declare query error platform.errors.A")

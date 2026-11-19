@@ -179,7 +179,7 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
     - service steps 的 `queries[].query` 引用的查询项必须存在；每个写查询必须被某个 service step 引用，且写表归属一致；
       `kind: query` 不得跨模块写；query 的 `errors` 必须是存在的 `platform.errors.*`，且被引用它的 step 覆盖；
       step.input 的 key 必须是目标参数名（query/service）或 payload 字段名（events），必填项必须全部出现；`input.value` 只能是
-      `params.<path>` 或 `step.<id>.<path>`，引用 `step.<id>` 只要求在前序；每一步必须显式声明 `goto`（`$end` 表示结束）；所有 step 必须展示 input/output（无内容写 `[ ]`，events/when 的 output 必须为空）；业务返回项必须写 `value`；when 分支是 `{input, expr, goto}`，input 引用本步 input；query/service 的 step.input/output 分别按目标 params/returns 校验；query/service 是 inline 单值对象，只允许 `ref`；service 不声明 `errors`；
+      `params.<path>` 或 `step.<id>.<path>`，引用 `step.<id>` 只要求在前序；每一步必须显式声明 `goto`（`$end` 表示结束）；所有 step 必须展示 input/output（无内容写 `[ ]`，events/when 的 output 必须为空）；业务返回项必须写 `value`；when 分支是 `{input, expr, goto}`，input 引用本步 input；query/service 的 step.input/output 分别按目标 params/returns 校验；query/service 是单值字符串 ID；events 可声明多个事件，step.input 按所有事件 payload 的并集校验；service 不声明 `errors`；
       service/query 的 `returns` 最后一项必须是 err（query 用 `kind: error`）
     - 索引名同一 schema 内必须全局唯一
     - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）

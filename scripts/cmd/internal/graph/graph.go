@@ -267,10 +267,8 @@ func Compute(root string) (*Snapshot, error) {
 			for _, rawStep := range asList(item["steps"]) {
 				step, _ := asMap(rawStep)
 				var qids []string
-				if qo, ok := asMap(step["query"]); ok {
-					if qid, _ := qo["ref"].(string); qid != "" {
-						qids = append(qids, qid)
-					}
+				if qid, _ := step["query"].(string); qid != "" {
+					qids = append(qids, qid)
 				}
 				for _, rawQ := range asList(step["queries"]) {
 					qo, _ := asMap(rawQ)
