@@ -70,7 +70,7 @@ columns:
 
 constraints:
   - name: ck_verification_action_result
-    expr: "result IN (1, 2, 3, 4)"
+    expr: "result IN (1, 2, 3, 4, 5)"
     on_violation: platform.errors.COMMON_INTERNAL
     used_by:
       - data.queries.verification.create_verification_action

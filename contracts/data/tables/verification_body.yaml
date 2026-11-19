@@ -30,6 +30,7 @@ table:
     - data.queries.verification.mark_verification_sent
     - data.queries.verification.revoke_active_verifications_by_account
     - data.queries.verification.revoke_active_verifications_by_auth
+    - data.queries.verification.set_verification_status
 
 columns:
   - name: account_id
@@ -111,6 +112,7 @@ constraints:
       - data.queries.verification.mark_verification_sent
       - data.queries.verification.consume_verification
       - data.queries.verification.increment_verification_attempt
+      - data.queries.verification.set_verification_status
       - data.queries.verification.revoke_active_verifications_by_auth
       - data.queries.verification.revoke_active_verifications_by_account
 

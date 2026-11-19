@@ -103,6 +103,23 @@ queries:
     used_by:
       - cap.services.token.revoke_by_account
 
+  - name: ExpireTokens
+    description: "把超过 refresh_expire_at 的活跃令牌置为 expired"
+    tables:
+      - { table: data.tables.token, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: now, type: timestamp }
+      - { name: status, type: data.enums.token_status }
+      - { name: limit, type: integer, nullable: true, default: 100 }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref: [ data.tables.token.idx_token_refresh_expire_at ]
+    used_by:
+      - cap.services.token.expire
+
   - name: DeleteExpiredTokens
     description: "物理清理已过期的令牌"
     tables:

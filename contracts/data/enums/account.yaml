@@ -57,6 +57,7 @@ enums:
       - { value: revoked, code: 1, description: "已吊销" }
       - { value: expired, code: 2, description: "已过期" }
     used_by:
+      - cap.services.token.expire
       - data.entities.token
 
   - name: token_revoke_reason
@@ -149,9 +150,11 @@ enums:
       - { value: mismatch, code: 2, description: "验证码不匹配" }
       - { value: expired, code: 3, description: "验证码已过期" }
       - { value: attempts_exceeded, code: 4, description: "失败次数超过上限" }
+      - { value: invalid, code: 5, description: "验证体状态非法：已消费、已作废或已过期" }
     used_by:
-      - data.entities.verification_action
+      - cap.services.verification.record_failure
       - cap.services.verification.verify
+      - data.entities.verification_action
 
   # TODO:GG
   - name: auth_bind_action

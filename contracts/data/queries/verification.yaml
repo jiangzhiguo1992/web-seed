@@ -104,6 +104,22 @@ queries:
     used_by:
       - cap.services.verification.verify
 
+  - name: SetVerificationStatus
+    description: "按 ID 设置验证体终态（如 failed）"
+    tables:
+      - { table: data.tables.verification_body, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: integer, column: data.tables.verification_body.col.id }
+      - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref: [ data.tables.verification_body.pk ]
+    used_by:
+      - cap.services.verification.send
+
   - name: RevokeActiveVerificationsByAuth
     description: "按认证目标作废活跃验证体"
     tables:
@@ -158,4 +174,5 @@ queries:
     errors: [ ]
     index_ref: [ data.tables.verification_action.pk ]
     used_by:
+      - cap.services.verification.record_failure
       - cap.services.verification.verify

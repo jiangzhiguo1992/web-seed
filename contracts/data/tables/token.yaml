@@ -19,6 +19,7 @@ table:
   queries:
     - data.queries.token.create_token
     - data.queries.token.delete_expired_tokens
+    - data.queries.token.expire_tokens
     - data.queries.token.get_token_by_access
     - data.queries.token.get_token_by_refresh
     - data.queries.token.revoke_token
@@ -143,4 +144,6 @@ indexes:
     columns: [ refresh_expire_at ]
     live_only: true
     comment: "过期令牌清理"
-    used_by: [ data.queries.token.delete_expired_tokens ]
+    used_by:
+      - data.queries.token.delete_expired_tokens
+      - data.queries.token.expire_tokens
