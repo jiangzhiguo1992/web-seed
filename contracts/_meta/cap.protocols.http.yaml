@@ -67,12 +67,13 @@ fields:
 
   - name: components
     type: any
+    soft: true
     required: false
-    description: "协议层共享 schema/参数/响应；x-service-type/x-enum/x-entity 指向唯一来源，生成器展开"
+    description: "soft zone：OpenAPI components 深层结构由 gen_openapi/oapi-codegen 校验；contract-check 只校验 x-service-type/x-enum/x-entity/x-service-return 与 $ref"
 
 rules:
   - { id: http-binding, text: "每个 operation 必须有全局唯一的 operationId、x-contract-id、x-service；x-contract-id 全局唯一且匹配 cap.protocols.http.<file>.<operation>；path+method 全局唯一；x-service 必须指向存在的 public 同步 service，且不得是被 `cap.events` job 引用的 service；x-timeout-ms 必须为正整数；不得声明 x-flow；operation 不得重复声明生效的默认状态码；x-* 仅允许 x-contract-id/x-service/x-timeout-ms/x-default-errors；x-default-errors 覆盖文件默认，且每个默认状态码必须有 components.responses 映射", implemented_by: [ http-binding ] }
-  - { id: http-components, text: "components.schemas 与 operation 内联 schema 的 object 必须 additionalProperties: false；x-service-type/x-enum/x-entity 必须指向存在的来源；所有 $ref 必须指向存在的 schema", implemented_by: [ http-components ] }
+  - { id: http-components, text: "components.schemas 与 operation 内联 schema 的 object 必须 additionalProperties: false；x-service-type 必须是 cap.services.<file>.schemas.<Type>，x-enum/x-entity 必须全限定且指向存在的来源；所有 $ref 必须指向存在的 schema", implemented_by: [ http-components ] }
   - { id: http-retry-after, text: "default_error_responses 含 503 时必须定义 components.headers.RetryAfter 与 components.responses.ServiceUnavailable，且该响应声明 Retry-After；operation 的 503 响应必须声明 Retry-After", implemented_by: [ http-retry-after ] }
   - { id: http-service-type, text: "requestBody 的 $ref 必须是 x-service 指向的 service 的 params 类型，且该 component 的 x-service-type 必须属于同一 service", implemented_by: [ http-service-type ] }
-  - { id: http-service-return, text: "response schema 的 x-service-return 必须是 x-service 指向的 service 的 returns 类型之一", implemented_by: [ http-service-return ] }
+  - { id: http-service-return, text: "response schema 的 x-service-return 必须是 data.entities.* 或 cap.services.<file>.schemas.<Type>，且是 x-service 指向的 service 的 returns 类型之一", implemented_by: [ http-service-return ] }

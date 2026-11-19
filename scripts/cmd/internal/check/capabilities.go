@@ -11,6 +11,22 @@ type returnType struct {
 	nullable bool
 }
 
+// lifecycleSubject 是一个状态维度：实体上的某个状态字段。
+type lifecycleSubject struct {
+	Entity    string
+	Field     string
+	Table     string
+	ColumnRef string
+	Enum      string
+}
+
+type lifecycleAction struct {
+	kind     string
+	to       string
+	initial  string
+	subjects []lifecycleSubject
+}
+
 type serviceMeta struct {
 	module         string
 	visibility     string
@@ -90,6 +106,7 @@ func (c *Checker) checkCapabilities() {
 	serviceFiles := glob(c.root, filepath.Join(serviceSchema.Targets.Dir, serviceSchema.Targets.Glob))
 	typeNames := map[string]bool{}
 	typeOwners := map[string]string{}
+	bareTypeOwners := map[string]string{}
 	c.methodTypeDefs = map[string]map[string]any{}
 	c.methodReturns = map[string]map[string]returnType{}
 	c.serviceQueries = map[string]map[string]bool{}
@@ -99,15 +116,21 @@ func (c *Checker) checkCapabilities() {
 			continue
 		}
 		rel := relPath(c.root, file)
+		fileID, _ := doc["id"].(string)
 		types, _ := asMap(doc["schemas"])
 		for name, raw := range types {
-			if prev, ok := typeOwners[name]; ok && prev != rel {
-				c.rulef("service-structure", "%s: type %s already defined in %s", rel, name, prev)
+			if prev, ok := bareTypeOwners[name]; ok && prev != rel {
+				c.rulef("service-structure", "%s: schema name %s already defined in %s; OpenAPI component names are global", rel, name, prev)
 			}
-			typeOwners[name] = rel
-			typeNames[name] = true
+			bareTypeOwners[name] = rel
+			id := fileID + ".schemas." + name
+			if prev, ok := typeOwners[id]; ok && prev != rel {
+				c.rulef("service-structure", "%s: type %s already defined in %s", rel, id, prev)
+			}
+			typeOwners[id] = rel
+			typeNames[id] = true
 			if def, ok := asMap(raw); ok {
-				c.methodTypeDefs[name] = def
+				c.methodTypeDefs[id] = def
 			}
 		}
 	}
@@ -148,7 +171,7 @@ func (c *Checker) checkCapabilities() {
 			if types, ok := asMap(doc["schemas"]); ok {
 				for name, raw := range types {
 					if def, ok := asMap(raw); ok {
-						typeSchemas[name] = def
+						typeSchemas[fileID+".schemas."+name] = def
 					}
 				}
 			}

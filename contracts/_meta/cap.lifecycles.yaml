@@ -103,8 +103,9 @@ fields:
       - { name: to, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标状态" }
       - name: guard
         type: any
+        soft: true
         required: true
-        description: "守卫：true 或 { rule: feature.rules.* }"
+        description: "soft zone：true 或 { rule: feature.rules.* }；checker 只校验 rule 引用存在"
       - name: requires
         type: list<object>
         required: false

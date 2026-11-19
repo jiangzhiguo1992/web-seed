@@ -7,22 +7,6 @@ import (
 	"strings"
 )
 
-// lifecycleSubject 是一个状态维度：实体上的某个状态字段。
-type lifecycleSubject struct {
-	Entity    string
-	Field     string
-	Table     string
-	ColumnRef string
-	Enum      string
-}
-
-type lifecycleAction struct {
-	kind     string
-	to       string
-	initial  string
-	subjects []lifecycleSubject
-}
-
 // checkLifecycleEnumCoverage 校验被 lifecycle 使用的枚举值没有漏接：
 // 每个枚举值至少被一个使用该枚举的 lifecycle states 声明。
 func (c *Checker) checkLifecycleEnumCoverage(enumStates, enumOwners map[string]map[string]bool) {
@@ -73,18 +57,6 @@ func (c *Checker) lifecycleSubjects(raw any) []lifecycleSubject {
 }
 
 // findEntityFieldByJSONName 按 json_name（snake_case）查实体字段。
-func findEntityFieldByJSONName(ent *entityInfo, jsonName string) *entityFieldInfo {
-	if ent == nil || jsonName == "" {
-		return nil
-	}
-	for i := range ent.Fields {
-		if ent.Fields[i].JSONName == jsonName {
-			return &ent.Fields[i]
-		}
-	}
-	return nil
-}
-
 func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Schema, stepIDs map[string]bool, actionSteps map[string][]string, lifecycleStates map[string]map[string]bool, ruleIDs map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})

@@ -1643,6 +1643,16 @@ func TestEnumUsedByShape(t *testing.T) {
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.pattern]") {
 		t.Fatalf("enum ID must not be accepted as used_by: %v", c.errs)
 	}
+	c.errs = nil
+	c.validateValue([]any{"cap.services.verification"}, usedBy, "enums[].used_by")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.pattern]") {
+		t.Fatalf("file-level service ID must not be accepted as used_by: %v", c.errs)
+	}
+	c.errs = nil
+	c.validateValue([]any{"cap.services.verification.verify"}, usedBy, "enums[].used_by")
+	if len(c.errs) != 0 {
+		t.Fatalf("specific service item rejected as used_by: %v", c.errs)
+	}
 }
 
 func TestEnumCapabilityUsage(t *testing.T) {

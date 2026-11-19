@@ -353,6 +353,9 @@ func loadServiceTypes(root string, customTypes map[string]contractspec.CustomVal
 		}
 		for name, r := range asMap(doc["schemas"]) {
 			if schema := asMap(r); schema != nil {
+				if _, exists := raw[name]; exists {
+					return nil, fmt.Errorf("duplicate schema name %s across service files; OpenAPI component names must be unique", name)
+				}
 				raw[name] = schema
 			}
 		}
@@ -432,10 +435,14 @@ func renderSchemaNode(node map[string]any, customTypes map[string]contractspec.C
 		case strings.HasPrefix(ref, "data.entities."):
 			return map[string]any{"$ref": "#/components/schemas/" + pascal(lastSegment(ref))}, nil
 		default:
-			if !known[ref] {
+			name := ref
+			if strings.HasPrefix(ref, "cap.services.") && strings.Contains(ref, ".schemas.") {
+				name = lastSegment(ref)
+			}
+			if !known[name] {
 				return nil, fmt.Errorf("unknown schema ref %s", ref)
 			}
-			return map[string]any{"$ref": "#/components/schemas/" + ref}, nil
+			return map[string]any{"$ref": "#/components/schemas/" + name}, nil
 		}
 	}
 	return nil, fmt.Errorf("unknown schema kind")

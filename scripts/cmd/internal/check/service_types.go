@@ -849,19 +849,3 @@ func isBuiltinType(t string) bool {
 }
 
 // collectRefs 递归收集 map/list 中的 $ref 字符串。
-func collectRefs(v any, fn func(string)) {
-	if m, ok := asMap(v); ok {
-		for k, child := range m {
-			if k == "$ref" {
-				if s, ok := child.(string); ok {
-					fn(s)
-				}
-			}
-			collectRefs(child, fn)
-		}
-		return
-	}
-	for _, item := range asList(v) {
-		collectRefs(item, fn)
-	}
-}

@@ -31,7 +31,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthSession"
-                x-service-return: AuthSession
+                x-service-return: cap.services.auth.schemas.AuthSession
 
   /auth/verification/send:
     post:
@@ -53,7 +53,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VerificationSent"
-                x-service-return: VerificationSent
+                x-service-return: cap.services.verification.schemas.VerificationSent
 
   /auth/verification/verify:
     post:
@@ -75,7 +75,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VerificationResult"
-                x-service-return: VerificationResult
+                x-service-return: cap.services.verification.schemas.VerificationResult
 
   /auth/refresh:
     post:
@@ -101,7 +101,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TokenPair"
-                x-service-return: TokenPair
+                x-service-return: cap.services.token.schemas.TokenPair
 
   /auth/logout:
     post:

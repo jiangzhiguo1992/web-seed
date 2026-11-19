@@ -50,6 +50,7 @@ fields:
     type: map
     types: [ object, array, scalar, ref ]
     required: false
+    key_pattern: '^[A-Za-z][A-Za-z0-9]*$'
     description: "本地 schema；键是 Go 类型名，值是值域节点"
 
   - name: services
@@ -68,7 +69,7 @@ fields:
         description: "入参"
         item_fields:
           - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: string, required: true, description: "参数类型：基础类型、data.enums.*、data.entities.*、本地 schema、_types 类型族，可带单层 * 或 List<>" }
+          - { name: type, type: string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "参数类型：基础类型、data.enums.*、data.entities.*、全限定本地 schema cap.services.<file>.schemas.<Type>、_types 类型族，可带单层 * 或 List<>" }
           - { name: nullable, type: boolean, required: false, description: "是否可空；调用方可省略" }
           - { name: default, type: any, required: false, description: "缺省值；仅 nullable:true 时允许" }
 
@@ -78,7 +79,7 @@ fields:
         description: "返回值"
         item_fields:
           - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名" }
-          - { name: type, type: string, required: true, description: "返回类型" }
+          - { name: type, type: string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "返回类型：基础类型、data.enums.*、data.entities.*、全限定本地 schema cap.services.<file>.schemas.<Type>、_types 类型族，可带单层 * 或 List<>" }
           - { name: nullable, type: boolean, required: false, description: "是否可空" }
 
       - name: steps
@@ -109,7 +110,7 @@ fields:
             description: "显式产出；仅 logic/when"
             item_fields:
               - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
-              - { name: type, type: string, required: true, description: "输出类型" }
+              - { name: type, type: string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "输出类型：基础类型、data.enums.*、data.entities.*、全限定本地 schema cap.services.<file>.schemas.<Type>、_types 类型族，可带单层 * 或 List<>" }
               - { name: description, type: string, required: true, description: "这项产出的业务含义" }
               - { name: nullable, type: boolean, required: false, description: "是否可空" }
 

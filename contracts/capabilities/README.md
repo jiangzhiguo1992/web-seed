@@ -77,7 +77,7 @@ events/jobs ──trigger.topic──> events/topics
 
 文件级字段：
 
-- `schemas`（可选；本地 schema，值是值域节点，`object.properties[]` 的条目按 `_meta/_schemas.yaml` 的 `property.keys`
+- `schemas`（可选；本地 schema，键是 Go 类型名，引用时必须写 `cap.services.<file>.schemas.<Name>`；值是值域节点，`object.properties[]` 的条目按 `_meta/_schemas.yaml` 的 `property.keys`
   校验，标量约束引用 `_types`，可跨文件引用）
 
 入口权限、审计与限流在 `contracts/platform/security/access.yaml` 绑定，不在 service 项声明。query 的 `errors` 在
@@ -129,7 +129,7 @@ service 项必须声明：
   `step.<id>.<returns 字段>` 引用，不能声明 `output`；`service` 的 target 返回字段同样用 `step.<id>.<returns 字段>` 按需引用；
   `returns` 的每个业务字段必须有同名、类型一致且
   `nullable` 一致的产出（`*T` 视为可空；`err` 不参与）；service 的每个非 `ctx` 参数必须被至少一个 `input` 引用。
-- `params[].type` 只允许基础类型、`data.enums.*`、`data.entities.*`、本地 schema 或 `_types` 类型族；指针与 `List<>` 各最多一层。
+- `params[].type` 只允许基础类型、`data.enums.*`、`data.entities.*`、全限定本地 schema（`cap.services.<file>.schemas.<Type>`）或 `_types` 类型族；指针与 `List<>` 各最多一层。
 - 控制流由 `when` / `goto` 显式声明；`goto` 只允许前向，循环仍不支持；错误流转由实现决定；契约不声明 `on_error` / `max_iterations`。
 
 ### 3.2 事务与写归属
@@ -198,9 +198,9 @@ job 项：
 
 - path / method / operationId / `x-contract-id` / `x-service`
 - status code / content-type / header
-- request/response 的 schema `$ref`；request 用 `x-service-type`、response 用 `x-service-return` 指向 service 的
-  params/returns
-- `components.schemas` 通过 `x-service-type` / `x-enum` / `x-entity` 指向唯一来源
+- request/response 的 schema `$ref`；request 用 `x-service-type`、response 用 `x-service-return` 以全限定 ID 指向
+  service 的 params/returns
+- `components.schemas` 通过 `x-service-type` / `x-enum` / `x-entity` 以全限定 ID 指向唯一来源
 
 **不要写**：权限、审计、限流（在 `platform/security/access.yaml`）、事务（在 service 项）。
 

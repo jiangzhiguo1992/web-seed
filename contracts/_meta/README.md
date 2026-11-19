@@ -52,7 +52,7 @@ scripts/cmd/
 `cap.services.schemas` 与 `cap.events.topics[].payload` 使用同一套受限 schema DSL，分两层：
 
 - **schema 节点只描述值域**：`object`（`type: object` + `properties`）、`array`（`type: array` + `items`）、`scalar`（`type` 指向
-  `_types` 的 family 或自定义类型）、`ref`（指向 entity / enum / 本地 schema）。`cap.events` 的 jobs 只引用 service/topic；
+  `_types` 的 family 或自定义类型）、`ref`（指向 entity / enum / 全限定本地 schema）。`cap.events` 的 jobs 只引用 service/topic；
   `cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份 DSL。
 - **property 条目只描述槽位**：`name` + `schema` + `required` / `nullable` / `read_only` / `write_only` / `default` /
   `description`，只允许出现在 `object.properties[]`。
@@ -202,8 +202,8 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
     - `name` / `go_type` / `ts_type` 在全部枚举文件中唯一；类型名冲突会让 Go/TS 产物互相覆盖
     - `summary` 非空；`owner_module` 必填；`stability: stable` 不得含 TODO/FIXME
     - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
-    - `used_by` 是 entity 与 capability ID 的并集，必须与 entity 字段和 capability 引用完全一致、不得为空、逐项竖排；不列物理表或
-      feature
+    - `used_by` 是 entity 与具体 capability 使用点的并集（`cap.services.*.<item>` / `cap.events.*.<topic|job>` /
+      `cap.protocols.http.<file>.<operation>`），必须与 entity 字段和 capability 引用完全一致、不得为空、逐项竖排；不列物理表或 feature
     - `do_not` 每条必须含集合 ID `data.enums`、枚举 name 或 go_type/ts_type；通用规则放组 README
 - `data.entities.base`（`contracts/data/entities/_base.yaml`，单例）
     - 路径/ID 由 checker 写死识别；5 个字段固定为 `ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`
@@ -274,7 +274,7 @@ step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描�
 | 键                                                                                                                | 用途                                                                                                                                                                                                                                            |
 |-------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `description`                                                                                                     | 字段的准确含义                                                                                                                                                                                                                                  |
-| `required` / `type` / `types` / `enum` / `allowed` / `pattern` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`types` 是 schema 节点种类列表（与 `type` 互斥）；`min_items` 只约束 list；`map<string>` 是通用 schema 类型（键 → 字符串映射）                                                                                                        |
+| `required` / `type` / `types` / `enum` / `allowed` / `pattern` / `key_pattern` / `soft` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`types` 是 schema 节点种类列表（与 `type` 互斥）；`key_pattern` 约束 map 键；`soft` 标记无结构/语义校验的 soft zone（允许 `any`/`string`，字符串表达式只校验存在性）；`min_items` 只约束 list；`map<string>` 是通用 schema 类型（键 → 字符串映射）                                                                                                        |
 | `examples`                                                                                                        | 列参数/骨架的示例值；实体字段不再支持                                                                                                                                                                                                           |
 | `schema` / `map<schema>`                                                                                          | schema 值域节点 / 类型名到节点的映射；`ref` 或 `type` 选节点种类，`kinds.<kind>.keys` 是结构约束，标量约束引用 `_types`                                                                                                                         |
 | `list<object>` + `item_fields`                                                                                    | `object.properties` 的属性条目列表；条目键由 `item_fields` 定义（`name` + `schema` + 方向/存在性/可空/默认值/说明）                                                                                                                             |

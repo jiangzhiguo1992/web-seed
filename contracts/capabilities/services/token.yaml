@@ -26,7 +26,7 @@ services:
       - { name: account_id, type: integer }
       - { name: device_id, type: string, nullable: true }
     returns:
-      - { name: tokens, type: TokenPair }
+      - { name: tokens, type: cap.services.token.schemas.TokenPair }
       - { name: err, type: error }
     steps:
       - id: load_account
@@ -40,7 +40,7 @@ services:
         kind: logic
         summary: "生成 access/refresh 令牌对与过期时间"
         output:
-          - { name: tokens, type: TokenPair, description: "新签发的令牌对" }
+          - { name: tokens, type: cap.services.token.schemas.TokenPair, description: "新签发的令牌对" }
         errors: [ ]
         rules: [ ]
       - id: hash_tokens
@@ -90,7 +90,7 @@ services:
       - { name: ctx, type: context.Context }
       - { name: refresh_token, type: string }
     returns:
-      - { name: tokens, type: TokenPair }
+      - { name: tokens, type: cap.services.token.schemas.TokenPair }
       - { name: err, type: error }
     steps:
       - id: hash_old
@@ -113,7 +113,7 @@ services:
         kind: logic
         summary: "生成新的 access/refresh 令牌对与过期时间"
         output:
-          - { name: tokens, type: TokenPair, description: "换新后的令牌对" }
+          - { name: tokens, type: cap.services.token.schemas.TokenPair, description: "换新后的令牌对" }
         errors: [ ]
         rules: [ ]
       - id: hash_new

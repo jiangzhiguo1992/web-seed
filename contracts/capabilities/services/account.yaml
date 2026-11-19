@@ -68,9 +68,9 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: filter, type: ListAccountsFilter }
+      - { name: filter, type: cap.services.account.schemas.ListAccountsFilter }
     returns:
-      - { name: page, type: AccountPage }
+      - { name: page, type: cap.services.account.schemas.AccountPage }
       - { name: err, type: error }
     steps:
       - id: list_accounts
@@ -90,7 +90,7 @@ services:
           - { name: offset, value: params.filter.offset, description: "分页偏移" }
           - { name: limit, value: params.filter.limit, description: "分页上限" }
         output:
-          - { name: page, type: AccountPage, description: "账号分页结果" }
+          - { name: page, type: cap.services.account.schemas.AccountPage, description: "账号分页结果" }
         errors:
           - platform.errors.COMMON_FORBIDDEN
         rules: [ ]
@@ -100,7 +100,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: input, type: CreateAccountInput }
+      - { name: input, type: cap.services.account.schemas.CreateAccountInput }
     returns:
       - { name: account, type: data.entities.account }
       - { name: err, type: error }
@@ -166,7 +166,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer }
-      - { name: input, type: UpdateAccountInput }
+      - { name: input, type: cap.services.account.schemas.UpdateAccountInput }
     returns:
       - { name: account, type: data.entities.account }
       - { name: err, type: error }

@@ -57,7 +57,7 @@ schemas:
     type: object
     properties:
       - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
-      - { name: tokens, schema: { ref: TokenPair }, required: true, description: "令牌对" }
+      - { name: tokens, schema: { ref: cap.services.token.schemas.TokenPair }, required: true, description: "令牌对" }
 
 services:
   - name: login
@@ -66,9 +66,9 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: input, type: LoginInput }
+      - { name: input, type: cap.services.auth.schemas.LoginInput }
     returns:
-      - { name: session, type: AuthSession }
+      - { name: session, type: cap.services.auth.schemas.AuthSession }
       - { name: err, type: error }
     steps:
       - id: split_identifier
@@ -151,7 +151,7 @@ services:
           - { name: auth_id, value: step.load.auth_id, description: "命中的认证绑定 ID" }
           - { name: auth_pwd_id, value: step.load.auth_pwd_id, description: "密码绑定 ID；手机/邮箱认证时为空" }
         output:
-          - { name: session, type: AuthSession, description: "登录会话" }
+          - { name: session, type: cap.services.auth.schemas.AuthSession, description: "登录会话" }
           - { name: success, type: boolean, description: "登录是否成功" }
           - { name: auth_pwd_id, type: integer, description: "密码绑定 ID" }
         errors:
@@ -220,9 +220,9 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: input, type: BindPasswordInput }
+      - { name: input, type: cap.services.auth.schemas.BindPasswordInput }
     returns:
-      - { name: binding, type: AuthBinding }
+      - { name: binding, type: cap.services.auth.schemas.AuthBinding }
       - { name: err, type: error }
     steps:
       - id: resolve
@@ -276,7 +276,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_pwd.create ]
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_USERNAME_TAKEN
           - platform.errors.AUTH_INVALID_CREDENTIALS
@@ -295,7 +295,7 @@ services:
         summary: "修改密码哈希；不改变认证状态"
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_INVALID_CREDENTIALS
           - platform.errors.COMMON_FORBIDDEN
@@ -314,7 +314,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_pwd.enable ]
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_INVALID_CREDENTIALS
           - platform.errors.COMMON_FORBIDDEN
@@ -333,7 +333,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_pwd.disable ]
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_INVALID_CREDENTIALS
           - platform.errors.COMMON_FORBIDDEN
@@ -344,9 +344,9 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: input, type: BindPhoneInput }
+      - { name: input, type: cap.services.auth.schemas.BindPhoneInput }
     returns:
-      - { name: binding, type: AuthBinding }
+      - { name: binding, type: cap.services.auth.schemas.AuthBinding }
       - { name: err, type: error }
     steps:
       - id: resolve
@@ -398,7 +398,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_PHONE_TAKEN
           - platform.errors.AUTH_PHONE_INVALID
@@ -418,7 +418,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.enable ]
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_PHONE_INVALID
           - platform.errors.COMMON_FORBIDDEN
@@ -437,7 +437,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.disable ]
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_PHONE_INVALID
           - platform.errors.COMMON_FORBIDDEN
@@ -448,9 +448,9 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: input, type: BindEmailInput }
+      - { name: input, type: cap.services.auth.schemas.BindEmailInput }
     returns:
-      - { name: binding, type: AuthBinding }
+      - { name: binding, type: cap.services.auth.schemas.AuthBinding }
       - { name: err, type: error }
     steps:
       - id: resolve
@@ -507,7 +507,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_EMAIL_TAKEN
           - platform.errors.AUTH_EMAIL_INVALID
@@ -527,7 +527,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.enable ]
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_EMAIL_INVALID
           - platform.errors.COMMON_FORBIDDEN
@@ -546,7 +546,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.disable ]
         goto: $end
         output:
-          - { name: binding, type: AuthBinding, description: "认证绑定" }
+          - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_EMAIL_INVALID
           - platform.errors.COMMON_FORBIDDEN

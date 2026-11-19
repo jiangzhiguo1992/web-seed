@@ -142,21 +142,25 @@ type Field struct {
 	Name string `yaml:"name"`
 	Type string `yaml:"type"`
 	// Types 声明 schema 节点允许的种类；与 Type 互斥，用于代替抽象的 type: schema。
-	Types       []string `yaml:"types"`
-	Required    bool     `yaml:"required"`
-	Const       any      `yaml:"const"`
-	Enum        []any    `yaml:"enum"`
-	Allowed     []any    `yaml:"allowed"`
-	Min         any      `yaml:"min"`
-	Max         any      `yaml:"max"`
-	MinItems    any      `yaml:"min_items"`
-	Pattern     string   `yaml:"pattern"`
-	Description string   `yaml:"description"`
-	Examples    []any    `yaml:"examples"`
-	Default     any      `yaml:"default"`
-	Generated   bool     `yaml:"generated"`
-	Write       string   `yaml:"write"`
-	Unique      bool     `yaml:"unique"`
+	Types    []string `yaml:"types"`
+	Required bool     `yaml:"required"`
+	Const    any      `yaml:"const"`
+	Enum     []any    `yaml:"enum"`
+	Allowed  []any    `yaml:"allowed"`
+	// Soft 标记无结构校验的 soft zone；当前只允许 type: any。
+	Soft     bool   `yaml:"soft"`
+	Min      any    `yaml:"min"`
+	Max      any    `yaml:"max"`
+	MinItems any    `yaml:"min_items"`
+	Pattern  string `yaml:"pattern"`
+	// KeyPattern 是 map 键的正则；仅 type: map 时使用。
+	KeyPattern  string `yaml:"key_pattern"`
+	Description string `yaml:"description"`
+	Examples    []any  `yaml:"examples"`
+	Default     any    `yaml:"default"`
+	Generated   bool   `yaml:"generated"`
+	Write       string `yaml:"write"`
+	Unique      bool   `yaml:"unique"`
 	// UniqueKey 声明 list<object> 按哪个字段判重，例如 properties 用 name。
 	UniqueKey  string  `yaml:"unique_key"`
 	Fields     []Field `yaml:"fields"`

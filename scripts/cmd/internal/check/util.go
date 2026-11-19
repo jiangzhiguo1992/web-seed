@@ -177,6 +177,24 @@ func relPath(root, path string) string {
 	return r
 }
 
+// collectRefs 递归收集结构化文档中的 $ref。
+func collectRefs(v any, fn func(string)) {
+	if m, ok := asMap(v); ok {
+		for k, child := range m {
+			if k == "$ref" {
+				if s, ok := child.(string); ok {
+					fn(s)
+				}
+			}
+			collectRefs(child, fn)
+		}
+		return
+	}
+	for _, item := range asList(v) {
+		collectRefs(item, fn)
+	}
+}
+
 // columnExists 判断列是否存在于已加载的物理表（含继承列）。
 func (c *Checker) columnExists(table, col string) bool {
 	_, ok := c.tableColumns[table][col]

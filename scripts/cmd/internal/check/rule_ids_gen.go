@@ -108,6 +108,7 @@ var knownRuleIDs = map[string]bool{
 	"reference-target":            true,
 	"rule-id-unique":              true,
 	"rule-structure":              true,
+	"rule-value":                  true,
 	"schema.conflict":             true,
 	"schema.const":                true,
 	"schema.contract-id-unique":   true,

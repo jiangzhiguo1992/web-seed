@@ -47,9 +47,9 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: input, type: SendVerificationInput }
+      - { name: input, type: cap.services.verification.schemas.SendVerificationInput }
     returns:
-      - { name: verification, type: VerificationSent }
+      - { name: verification, type: cap.services.verification.schemas.VerificationSent }
       - { name: err, type: error }
     steps:
       - id: resolve_auth_id
@@ -160,7 +160,7 @@ services:
           - { name: target, value: params.input.target, description: "验证码接收目标，用于脱敏" }
           - { name: expire_at, value: step.expire_at.expire_at, description: "验证码过期时间" }
         output:
-          - { name: verification, type: VerificationSent, description: "发送后的验证体" }
+          - { name: verification, type: cap.services.verification.schemas.VerificationSent, description: "发送后的验证体" }
         errors:
           - platform.errors.AUTH_VERIFICATION_INVALID
           - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
@@ -182,9 +182,9 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: input, type: VerifyCodeInput }
+      - { name: input, type: cap.services.verification.schemas.VerifyCodeInput }
     returns:
-      - { name: result, type: VerificationResult }
+      - { name: result, type: cap.services.verification.schemas.VerificationResult }
       - { name: err, type: error }
     steps:
       - id: resolve_auth_id
@@ -351,7 +351,7 @@ services:
         input:
           - { name: outcome, value: step.outcome.outcome, description: "本次校验结果" }
         output:
-          - { name: result, type: VerificationResult, description: "校验结果" }
+          - { name: result, type: cap.services.verification.schemas.VerificationResult, description: "校验结果" }
         errors:
           - platform.errors.COMMON_INTERNAL
         rules: [ ]

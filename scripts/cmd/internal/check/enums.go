@@ -209,6 +209,7 @@ type enumUsage struct {
 }
 
 // enumUsages 扫描已解析的 entity 字段和 capability 中的 data.enums.* 引用。
+// capability 侧记录具体使用点：service 项 / event topic 或 job / 其他契约文件。
 func (c *Checker) enumUsages() map[string]*enumUsage {
 	usages := map[string]*enumUsage{}
 	for _, e := range c.entities {
@@ -218,20 +219,209 @@ func (c *Checker) enumUsages() map[string]*enumUsage {
 			}
 		}
 	}
+	type capDoc struct {
+		id  string
+		doc map[string]any
+	}
+	var docs []capDoc
+	serviceSchemas := map[string]map[string]any{}
 	for _, f := range walkYAML(c.root, "contracts/capabilities") {
 		doc, err := loadYAML(f)
 		if err != nil {
 			continue
 		}
-		capabilityID, _ := doc["id"].(string)
-		if capabilityID == "" {
+		id, _ := doc["id"].(string)
+		if id == "" {
 			continue
 		}
-		c.collectEnumRefs(doc, func(enumID string) {
-			enumUsageFor(usages, enumID).capabilities[capabilityID] = true
-		})
+		docs = append(docs, capDoc{id: id, doc: doc})
+		if strings.HasPrefix(id, "cap.services.") {
+			schemas, _ := asMap(doc["schemas"])
+			for name, raw := range schemas {
+				if def, ok := asMap(raw); ok {
+					serviceSchemas[id+".schemas."+name] = def
+				}
+			}
+		}
+	}
+	add := func(enumID, owner string) {
+		if owner != "" {
+			enumUsageFor(usages, enumID).capabilities[owner] = true
+		}
+	}
+	for _, d := range docs {
+		switch {
+		case strings.HasPrefix(d.id, "cap.services."):
+			for _, rawService := range asList(d.doc["services"]) {
+				service, _ := asMap(rawService)
+				name, _ := service["name"].(string)
+				if name == "" {
+					continue
+				}
+				owner := d.id + "." + name
+				c.collectServiceEnumRefs(service, serviceSchemas, func(enumID string) {
+					add(enumID, owner)
+				})
+			}
+		case strings.HasPrefix(d.id, "cap.events."):
+			for _, key := range []string{"topics", "jobs"} {
+				for _, rawItem := range asList(d.doc[key]) {
+					item, _ := asMap(rawItem)
+					owner, _ := item["id"].(string)
+					if owner == "" {
+						continue
+					}
+					c.collectServiceEnumRefs(item, serviceSchemas, func(enumID string) {
+						add(enumID, owner)
+					})
+				}
+			}
+		case strings.HasPrefix(d.id, "cap.protocols.http."):
+			c.collectHTTPEnumRefs(d.doc, d.id, serviceSchemas, add)
+		default:
+			c.collectEnumRefs(d.doc, func(enumID string) {
+				add(enumID, d.id)
+			})
+		}
 	}
 	return usages
+}
+
+// collectServiceEnumRefs 收集一个 service 项的直接枚举引用，以及它引用的本地 schema 中的枚举引用。
+func (c *Checker) collectServiceEnumRefs(v any, schemas map[string]map[string]any, fn func(string)) {
+	c.collectEnumRefs(v, fn)
+	seen := map[string]bool{}
+	var walk func(any)
+	walk = func(node any) {
+		if m, ok := asMap(node); ok {
+			for k, child := range m {
+				if k == "type" || k == "ref" {
+					if s, ok := child.(string); ok {
+						if id, ok := serviceSchemaID(s); ok && !seen[id] {
+							seen[id] = true
+							if def := schemas[id]; def != nil {
+								c.collectEnumRefs(def, fn)
+								walk(def)
+							}
+						}
+					}
+				}
+				walk(child)
+			}
+			return
+		}
+		for _, item := range asList(node) {
+			walk(item)
+		}
+	}
+	walk(v)
+}
+
+// collectHTTPEnumRefs 只把被 operation 引用的 x-enum component 计入使用；
+// 未被任何 operation 引用的 component 不算使用。
+func (c *Checker) collectHTTPEnumRefs(doc map[string]any, fileID string, serviceSchemas map[string]map[string]any, add func(string, string)) {
+	components, _ := asMap(doc["components"])
+	schemas, _ := asMap(components["schemas"])
+	responses, _ := asMap(components["responses"])
+	headers, _ := asMap(components["headers"])
+	parameters, _ := asMap(components["parameters"])
+	enumByComponent := map[string]string{}
+	for name, raw := range schemas {
+		component, _ := asMap(raw)
+		if enumID, _ := component["x-enum"].(string); strings.HasPrefix(enumID, "data.enums.") {
+			enumByComponent[name] = enumID
+		}
+	}
+	componentNode := func(kind, name string) map[string]any {
+		switch kind {
+		case "schemas":
+			node, _ := asMap(schemas[name])
+			return node
+		case "responses":
+			node, _ := asMap(responses[name])
+			return node
+		case "headers":
+			node, _ := asMap(headers[name])
+			return node
+		case "parameters":
+			node, _ := asMap(parameters[name])
+			return node
+		}
+		return nil
+	}
+	var walkNode func(node map[string]any, owner string, seen map[string]bool)
+	var walkRef func(ref, owner string, seen map[string]bool)
+	walkRef = func(ref, owner string, seen map[string]bool) {
+		prefix, name := "", ""
+		for _, candidate := range []string{"schemas", "responses", "headers", "parameters"} {
+			marker := "#/components/" + candidate + "/"
+			if strings.HasPrefix(ref, marker) {
+				prefix = candidate
+				name = strings.TrimPrefix(ref, marker)
+				break
+			}
+		}
+		if prefix == "" || name == "" {
+			return
+		}
+		key := prefix + ":" + name
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		if prefix == "schemas" {
+			if enumID := enumByComponent[name]; enumID != "" {
+				add(enumID, owner)
+			}
+			component, _ := asMap(schemas[name])
+			if serviceRef, _ := component["x-service-type"].(string); serviceRef != "" {
+				if id, ok := serviceSchemaID(serviceRef); ok {
+					if def := serviceSchemas[id]; def != nil {
+						c.collectServiceEnumRefs(def, serviceSchemas, func(enumID string) {
+							add(enumID, owner)
+						})
+					}
+				}
+			}
+		}
+		node := componentNode(prefix, name)
+		if node != nil {
+			collectRefs(node, func(child string) {
+				walkRef(child, owner, seen)
+			})
+		}
+	}
+	walkNode = func(node map[string]any, owner string, seen map[string]bool) {
+		collectRefs(node, func(ref string) {
+			walkRef(ref, owner, seen)
+		})
+	}
+	paths, _ := asMap(doc["paths"])
+	for _, rawPath := range paths {
+		path, _ := asMap(rawPath)
+		for method, rawOp := range path {
+			op, ok := asMap(rawOp)
+			if !ok {
+				continue
+			}
+			owner, _ := op["x-contract-id"].(string)
+			if owner == "" {
+				owner = fileID + "." + method
+			}
+			walkNode(op, owner, map[string]bool{})
+		}
+	}
+}
+
+func serviceSchemaID(v string) (string, bool) {
+	base, ok := parseServiceType(v)
+	if !ok {
+		return "", false
+	}
+	if strings.HasPrefix(base, "cap.services.") && strings.Contains(base, ".schemas.") {
+		return base, true
+	}
+	return "", false
 }
 
 func enumUsageFor(usages map[string]*enumUsage, id string) *enumUsage {
@@ -254,7 +444,7 @@ func (c *Checker) collectEnumRefs(v any, fn func(string)) {
 					}
 				}
 			}
-			if k == "ref" {
+			if k == "ref" || k == "x-enum" {
 				if t, ok := child.(string); ok && strings.HasPrefix(t, "data.enums.") {
 					fn(t)
 				}

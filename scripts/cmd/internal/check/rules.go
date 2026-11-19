@@ -3,6 +3,7 @@ package check
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -30,6 +31,7 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 			c.rulef("rule-id-unique", "%s: rule id %s must start with %s.", rel, id, fileID)
 		}
 		kind, _ := item["kind"].(string)
+		var fieldInfo *entityFieldInfo
 		reject := func(fields ...string) {
 			for _, field := range fields {
 				if item[field] != nil {
@@ -55,9 +57,12 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 				} else if f != nil && f.IsRelation {
 					c.rulef("rule-structure", "%s: constraint %s field %s must be scalar", rel, id, field)
 				}
+				fieldInfo = f
 			}
 			if field == "" || item["op"] == nil || item["value"] == nil {
 				c.rulef("rule-structure", "%s: constraint %s requires field/op/value", rel, id)
+			} else {
+				c.checkRuleValue(rel, id, fieldInfo, item["op"], item["value"])
 			}
 			reject("assert", "given", "when", "then")
 		case "invariant":
@@ -80,4 +85,89 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 			}
 		}
 	}
+}
+
+// checkRuleValue 校验 constraint 的 op/value 组合是否可判定。
+func (c *Checker) checkRuleValue(rel, id string, f *entityFieldInfo, opValue, value any) {
+	op, _ := opValue.(string)
+	fail := func(format string, args ...any) {
+		c.rulef("rule-value", "%s: rule %s "+format, append([]any{rel, id}, args...)...)
+	}
+	family := c.entityFieldFamily(f)
+	switch op {
+	case "pattern":
+		pattern, ok := value.(string)
+		if !ok || strings.TrimSpace(pattern) == "" {
+			fail("pattern value must be a non-empty string")
+			return
+		}
+		if _, err := regexp.Compile(pattern); err != nil {
+			fail("pattern value %q is not a valid regex: %v", pattern, err)
+		}
+		if family != "" && family != "string" {
+			fail("pattern requires a string field")
+		}
+	case "in", "not_in":
+		items, ok := asList2(value)
+		if !ok || len(items) == 0 {
+			fail("%s value must be a non-empty list", op)
+			return
+		}
+		for _, item := range items {
+			if !isScalarValue(item) {
+				fail("%s value items must be scalars", op)
+				return
+			}
+		}
+	case "min_len", "max_len":
+		n, ok := toInt(value)
+		if !ok || n < 0 {
+			fail("%s value must be a non-negative integer", op)
+		}
+		if family != "" && family != "string" {
+			fail("%s requires a string field", op)
+		}
+	case "required", "not_null":
+		if _, ok := value.(bool); !ok {
+			fail("%s value must be boolean", op)
+		}
+	case "eq", "ne":
+		if !isScalarValue(value) {
+			fail("%s value must be a scalar", op)
+		}
+	case "gt", "ge", "lt", "le":
+		if _, ok := toFloat(value); !ok {
+			fail("%s value must be a number", op)
+		}
+		switch family {
+		case "", "integer", "float", "decimal", "timestamp", "datetime":
+		default:
+			fail("%s requires a numeric or time field", op)
+		}
+	}
+}
+
+func (c *Checker) entityFieldFamily(f *entityFieldInfo) string {
+	if f == nil || f.Type == "" {
+		return ""
+	}
+	typ := strings.TrimPrefix(strings.TrimSpace(f.Type), "*")
+	if strings.HasPrefix(typ, "data.enums.") {
+		return "integer"
+	}
+	if family := c.valueType(typ); family != "" {
+		return family
+	}
+	if family, ok := paramFamily(typ); ok {
+		return family
+	}
+	return ""
+}
+
+func isScalarValue(v any) bool {
+	switch v.(type) {
+	case string, bool, int, int64, uint64, float64:
+		return true
+	}
+	return false
 }

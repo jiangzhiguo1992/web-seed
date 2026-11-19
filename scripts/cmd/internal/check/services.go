@@ -30,11 +30,6 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 		c.rulef("service-id", "%s: id %q must be %q", rel, fileID, want)
 	}
 	if types, ok := asMap(doc["schemas"]); ok {
-		for name := range types {
-			if !match(`^[A-Za-z][A-Za-z0-9]*$`, name) {
-				c.rulef("service-structure", "%s: schema name %q must be a Go identifier", rel, name)
-			}
-		}
 		c.checkTypeRefs(types, typeNames, rel)
 	}
 	seen := map[string]bool{}

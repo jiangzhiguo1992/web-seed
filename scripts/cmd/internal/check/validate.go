@@ -14,6 +14,11 @@ func validatePatterns(fields []Field) error {
 				return fmt.Errorf("field %s: invalid pattern %q: %w", f.Name, f.Pattern, err)
 			}
 		}
+		if f.KeyPattern != "" {
+			if _, err := regexp.Compile(f.KeyPattern); err != nil {
+				return fmt.Errorf("field %s: invalid key_pattern %q: %w", f.Name, f.KeyPattern, err)
+			}
+		}
 		if err := validatePatterns(f.Fields); err != nil {
 			return err
 		}
@@ -62,6 +67,12 @@ func validateFieldTypes(fields []Field) error {
 		}
 		if f.UniqueKey != "" && f.Type != "list<object>" {
 			return fmt.Errorf("field %s: unique_key requires list<object>", f.Name)
+		}
+		if f.KeyPattern != "" && f.Type != "map" {
+			return fmt.Errorf("field %s: key_pattern requires map", f.Name)
+		}
+		if f.Soft && f.Type != "any" && f.Type != "string" {
+			return fmt.Errorf("field %s: soft requires type: any or string", f.Name)
 		}
 		if len(f.Types) > 1 && f.Default != nil {
 			return fmt.Errorf("field %s: types with multiple kinds must not declare default", f.Name)
@@ -161,6 +172,9 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 				if k == "" {
 					c.rulef("schema.non-empty", "%s: map key must not be empty", path)
 					continue
+				}
+				if f.KeyPattern != "" && !match(f.KeyPattern, k) {
+					c.rulef("schema.pattern", "%s.%s: map key %q does not match %s", path, k, k, f.KeyPattern)
 				}
 				c.validateSchemaNodeWith(item, path+"."+k, f.Types)
 			}

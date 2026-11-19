@@ -709,6 +709,18 @@ func (c *Checker) checkColumnProjection(where string, q *queryInfo, columns []st
 	}
 }
 
+func findEntityFieldByJSONName(ent *entityInfo, jsonName string) *entityFieldInfo {
+	if ent == nil || jsonName == "" {
+		return nil
+	}
+	for i := range ent.Fields {
+		if ent.Fields[i].JSONName == jsonName {
+			return &ent.Fields[i]
+		}
+	}
+	return nil
+}
+
 func findEntityField(e *entityInfo, name string) *entityFieldInfo {
 	for i := range e.Fields {
 		if e.Fields[i].Name == name {

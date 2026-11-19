@@ -524,10 +524,10 @@ components:
 			visibility: "public",
 			paramTypes: map[string]bool{},
 			typeSchemas: map[string]map[string]any{
-				"X": {"properties": map[string]any{"id": map[string]any{"type": "integer"}}},
+				"cap.services.x.schemas.X": {"properties": map[string]any{"id": map[string]any{"type": "integer"}}},
 			},
 		},
-	}, map[string]bool{"X": true}, map[string]bool{})
+	}, map[string]bool{"cap.services.x.schemas.X": true}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-service-type]") {
 		t.Fatalf("component field mismatch not reported: %v", c.errs)
 	}

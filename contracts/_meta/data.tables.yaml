@@ -81,7 +81,7 @@ fields:
         required: true
         unique: true
         min_items: 1
-        pattern: '^data\.queries\.'
+        pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$'
         generated: true
         write: forbidden
         description: "使用本表的 query 项；gen-graph 生成"
@@ -92,11 +92,11 @@ fields:
     description: "物理列"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "列名" }
-      - { name: type, type: string, required: true, description: "类型族/自定义类型或列引用" }
+      - { name: type, type: string, required: true, pattern: '^(data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*|[a-z][a-z0-9_]*)$', description: "类型族/自定义类型或列引用" }
       - { name: nullable, type: boolean, required: false, default: false, description: "是否可空" }
       - { name: primary_key, type: boolean, required: false, description: "仅基类使用；物理表禁止" }
       - { name: default, type: any, required: false, description: "字面量默认值" }
-      - { name: default_sql, type: string, required: false, description: "SQL 表达式默认值" }
+      - { name: default_sql, type: string, soft: true, required: false, description: "soft zone：SQL 表达式默认值" }
       # 类型族参数由 _meta/_types.yaml 的 type_families.params 注入
       - { name: sensitivity, type: string, required: false, enum: [ public, pii, secret ], default: public, description: "敏感级别" }
       - name: redundancy
@@ -122,7 +122,7 @@ fields:
     description: "DDL CHECK 约束；唯一性用 indexes[].unique"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^ck_[a-z][a-z0-9_]*$', description: "约束名" }
-      - { name: expr, type: string, required: true, description: "CHECK 表达式；checker 只校验非空" }
+      - { name: expr, type: string, soft: true, required: true, description: "soft zone：CHECK 表达式；checker 只校验非空" }
       - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "违反约束时映射的错误码" }
       - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "依赖该约束的写查询 ID" }
 
@@ -132,12 +132,12 @@ fields:
     description: "索引"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名" }
-      - { name: columns, type: list<string>, required: false, unique: true, min_items: 1, description: "索引列" }
-      - { name: expression, type: string, required: false, description: "表达式索引；checker 只校验非空" }
+      - { name: columns, type: list<string>, required: false, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "索引列" }
+      - { name: expression, type: string, soft: true, required: false, description: "soft zone：表达式索引；checker 只校验非空" }
       - { name: unique, type: boolean, required: false, description: "是否唯一" }
       - { name: live_only, type: boolean, required: false, default: false, description: "只约束未软删行" }
       - { name: comment, type: string, required: true, description: "索引用途" }
-      - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, description: "使用该索引的 query 项 ID" }
+      - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "使用该索引的 query 项 ID" }
 
 rules:
   - { id: table-key-order, text: "表契约字段顺序必须与 _meta/data.tables.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ table-key-order ] }

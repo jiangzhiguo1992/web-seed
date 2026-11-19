@@ -29,7 +29,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AccountPage"
-                x-service-return: AccountPage
+                x-service-return: cap.services.account.schemas.AccountPage
               example:
                 items:
                   - { id: 1, number: "ACC-0001", nickname: "管理员", status: active, created_at: "2026-11-11T09:30:00Z" }

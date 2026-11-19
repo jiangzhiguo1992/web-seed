@@ -519,7 +519,7 @@ paths:
                 offset: 0
               schema:
                 $ref: '#/components/schemas/AccountPage'
-                x-service-return: AccountPage
+                x-service-return: cap.services.account.schemas.AccountPage
           description: 成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -807,7 +807,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthSession'
-                x-service-return: AuthSession
+                x-service-return: cap.services.auth.schemas.AuthSession
           description: 登录成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -889,7 +889,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenPair'
-                x-service-return: TokenPair
+                x-service-return: cap.services.token.schemas.TokenPair
           description: 成功
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -930,7 +930,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VerificationSent'
-                x-service-return: VerificationSent
+                x-service-return: cap.services.verification.schemas.VerificationSent
           description: 已受理
         "400":
           $ref: '#/components/responses/BadRequest'
@@ -972,7 +972,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VerificationResult'
-                x-service-return: VerificationResult
+                x-service-return: cap.services.verification.schemas.VerificationResult
           description: 校验成功
         "400":
           $ref: '#/components/responses/BadRequest'

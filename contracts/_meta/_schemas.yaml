@@ -1,4 +1,4 @@
-# 共享受限 schema DSL：cap.services.schemas 与 cap.events.payload。
+# 共享受限 schema DSL：cap.services 的 schemas 与 cap.events.payload。
 
 id: meta.schemas
 title: "schema DSL"
@@ -114,12 +114,13 @@ kinds:
             description: "违反规则时的错误文案"
 
   ref:
-    description: "引用节点；ref 指向 entity、enum 或本地 schema"
+    description: "引用节点；ref 指向 entity、enum 或全限定本地 schema"
     keys:
       - name: ref
         type: string
         required: true
-        description: "引用 entity / enum / 本地 schema"
+        pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*)$'
+        description: "全限定引用：data.entities.* / data.enums.* / cap.services.<file>.schemas.<Type>"
       - name: validation
         type: list<object>
         required: false

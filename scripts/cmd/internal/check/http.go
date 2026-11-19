@@ -58,7 +58,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			httpSchemas[name] = true
 			s, _ := asMap(raw)
 			if ref, _ := s["x-service-type"].(string); ref != "" {
-				if !match(`^cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Z][A-Za-z0-9]*$`, ref) {
+				if !match(`^cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*$`, ref) {
 					c.rulef("http-components", "%s: components.schemas.%s.x-service-type must match cap.services.<file>.schemas.<Type>", rel, name)
 				} else if typ, ok := serviceTypeRef(ref); !ok || !typeNames[typ] {
 					c.rulef("http-components", "%s: components.schemas.%s.x-service-type references unknown %s", rel, name, ref)
@@ -71,12 +71,16 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				}
 			}
 			if ref, _ := s["x-enum"].(string); ref != "" {
-				if !c.enumIDs[ref] {
+				if !match(`^data\.enums\.[a-z][a-z0-9_]*$`, ref) {
+					c.rulef("http-components", "%s: components.schemas.%s.x-enum must match data.enums.<name>", rel, name)
+				} else if !c.enumIDs[ref] {
 					c.rulef("http-components", "%s: components.schemas.%s.x-enum references unknown enum %s", rel, name, ref)
 				}
 			}
 			if ref, _ := s["x-entity"].(string); ref != "" {
-				if _, ok := c.entities[ref]; !ok {
+				if !match(`^data\.entities\.[a-z][a-z0-9_]*$`, ref) {
+					c.rulef("http-components", "%s: components.schemas.%s.x-entity must match data.entities.<name>", rel, name)
+				} else if _, ok := c.entities[ref]; !ok {
 					c.rulef("http-components", "%s: components.schemas.%s.x-entity references unknown entity %s", rel, name, ref)
 				}
 			}
@@ -89,12 +93,22 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			continue
 		}
 		rel := relPath(c.root, file)
-		components, _ := asMap(doc["components"])
-		collectRefs(components, func(ref string) {
-			if strings.HasPrefix(ref, "#/components/schemas/") {
+		collectRefs(doc, func(ref string) {
+			switch {
+			case strings.HasPrefix(ref, "#/components/schemas/"):
 				if name := strings.TrimPrefix(ref, "#/components/schemas/"); !httpSchemas[name] {
 					c.rulef("http-components", "%s: unknown schema $ref %s", rel, ref)
 				}
+			case strings.HasPrefix(ref, "#/components/headers/"):
+				if name := strings.TrimPrefix(ref, "#/components/headers/"); !httpHeaders[name] {
+					c.rulef("http-components", "%s: unknown header $ref %s", rel, ref)
+				}
+			case strings.HasPrefix(ref, "#/components/responses/"):
+				if name := strings.TrimPrefix(ref, "#/components/responses/"); !httpResponses[name] {
+					c.rulef("http-components", "%s: unknown response $ref %s", rel, ref)
+				}
+			default:
+				c.rulef("http-components", "%s: unsupported $ref %s; use #/components/{schemas,headers,responses}/<Name>", rel, ref)
 			}
 		})
 	}
@@ -215,6 +229,10 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 							if ret == "" {
 								continue
 							}
+							if !match(`^(data\.entities\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*)$`, ret) {
+								c.rulef("http-service-return", "%s %s %s: x-service-return %s must be data.entities.* or cap.services.<file>.schemas.<Type>", rel, method, path, ret)
+								continue
+							}
 							ref, _ := op["x-service"].(string)
 							target, foundOK := serviceMeta[ref]
 							if !foundOK {
@@ -275,14 +293,21 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 							c.checkClosedObjects(mediaSchema, rel, method+" "+path+" requestBody")
 							if ref, _ := mediaSchema["$ref"].(string); ref != "" {
 								name := strings.TrimPrefix(ref, "#/components/schemas/")
-								if !target.paramTypes[name] {
+								comp, hasComp := asMap(schemas[name])
+								xt, _ := comp["x-service-type"].(string)
+								key := name
+								if xt != "" {
+									key = xt
+								}
+								if !target.paramTypes[key] {
 									c.rulef("http-service-type", "%s %s %s: requestBody $ref %s is not a param of %s", rel, method, path, name, serviceRef)
-								} else if comp, ok := asMap(schemas[name]); ok {
+								}
+								if hasComp && xt != "" {
 									fileRef := serviceRef
 									if i := strings.LastIndex(serviceRef, "."); i > 0 {
 										fileRef = serviceRef[:i]
 									}
-									if xt, _ := comp["x-service-type"].(string); xt != "" && !strings.HasPrefix(xt, fileRef+".schemas.") {
+									if !strings.HasPrefix(xt, fileRef+".schemas.") {
 										c.rulef("http-service-type", "%s %s %s: requestBody $ref %s points at %s, not %s.schemas.*", rel, method, path, name, xt, fileRef)
 									}
 								}
@@ -392,8 +417,8 @@ func serviceTypeRef(ref string) (string, bool) {
 	}
 	rest := strings.TrimPrefix(ref, "cap.services.")
 	parts := strings.Split(rest, ".schemas.")
-	if len(parts) != 2 || parts[1] == "" {
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", false
 	}
-	return parts[1], true
+	return ref, true
 }

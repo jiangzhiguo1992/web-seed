@@ -82,7 +82,7 @@ fields:
         description: "触发方式"
         fields:
           - { name: type, type: string, required: true, enum: [ cron, topic ], description: "触发类型" }
-          - { name: schedule, type: string, required: false, description: "cron 表达式" }
+          - { name: schedule, type: string, soft: true, required: false, description: "soft zone：cron 表达式；checker 不解析" }
           - { name: topic, type: string, required: false, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "订阅的主题" }
       - name: retry
         type: object
@@ -97,7 +97,7 @@ fields:
         required: false
         description: "并发与分布式锁"
         fields:
-          - { name: key, type: string, required: true, description: "并发键模板" }
+          - { name: key, type: string, soft: true, required: true, description: "soft zone：并发键模板；checker 不解析" }
           - { name: ttl, type: string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁 TTL" }
 
 rules:
