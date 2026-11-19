@@ -50,13 +50,13 @@ actions:
   activate:
     capability: cap.services.account.activate
     permission: platform.security.permissions.account_write
-    available_when: { transitions: [cap.lifecycles.account.activate, cap.lifecycles.account.reactivate] }
+    available_when: { transitions: [cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate] }
     ui: "row-action"
     label: "激活"
   suspend:
     capability: cap.services.account.suspend
     permission: platform.security.permissions.account_write
-    available_when: { transition: cap.lifecycles.account.suspend }
+    available_when: { transition: cap.lifecycles.account.transitions.suspend }
     ui: "row-action"
     label: "封禁"
     confirm: true

@@ -92,7 +92,7 @@ fields:
           - { name: id, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID" }
           - { name: kind, type: string, required: true, enum: [ query, service, when, logic, events ], description: "步骤类型：query=查询、service=服务、logic=手写、events=事件、when=分支" }
           - { name: summary, type: string, required: true, description: "一句话说明" }
-          - { name: lifecycles, type: list<string>, required: false, unique: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "状态流转标记；不限制 kind" }
+          - { name: lifecycles, type: list<string>, required: false, unique: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "状态流转标记；create/destroy 直属，transition 必须带 transitions.<name>；不限制 kind" }
 
           - name: input
             type: list<object>

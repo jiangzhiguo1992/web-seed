@@ -229,7 +229,7 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				if name == "" {
 					continue
 				}
-				actionID := fileID + "." + name
+				actionID := fileID + ".transitions." + name
 				a.LifecycleFiles[relFile] = append(a.LifecycleFiles[relFile], lifecycleFileAction{id: actionID, name: name, kind: "transition"})
 			}
 		}
@@ -282,7 +282,7 @@ func (a *Anchors) Write(root string) ([]string, error) {
 				continue
 			}
 			steps := a.LifecycleServices[item.id]
-			ok, err := syncNestedField(filepath.Join(root, file), item.kind, "services", renderFlowList(steps))
+			ok, err := syncNestedField(filepath.Join(root, file), item.kind, "services", steps)
 			if err != nil {
 				return changed, err
 			}
@@ -343,7 +343,7 @@ func (a *Anchors) Check(root string) ([]string, error) {
 				for _, raw := range asList(doc["transitions"]) {
 					tr, _ := asMap(raw)
 					name, _ := tr["name"].(string)
-					if fileID+"."+name != item.id {
+					if fileID+".transitions."+name != item.id {
 						continue
 					}
 					got := stringList(tr["implemented_by"])
@@ -406,8 +406,8 @@ func sortedLifecycleFileKeys(m map[string][]lifecycleFileAction) []string {
 	return out
 }
 
-// syncNestedField 在 top-level objectKey 块内设置 field。
-func syncNestedField(path, objectKey, field, value string) (bool, error) {
+// syncNestedField 在 top-level objectKey 块内设置字段（块风格列表）。
+func syncNestedField(path, objectKey, field string, values []string) (bool, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return false, err
@@ -430,12 +430,17 @@ func syncNestedField(path, objectKey, field, value string) (bool, error) {
 			break
 		}
 	}
+	rendered := []string{"  " + field + ":"}
+	if len(values) == 0 {
+		rendered = []string{"  " + field + ": []"}
+	} else {
+		for _, value := range values {
+			rendered = append(rendered, "    - "+value)
+		}
+	}
 	for i := objStart + 1; i < end; i++ {
 		trim := strings.TrimSpace(lines[i])
 		if strings.HasPrefix(trim, field+":") {
-			if strings.TrimSpace(strings.TrimPrefix(trim, field+":")) == value {
-				return false, nil
-			}
 			j := i + 1
 			for j < end {
 				if strings.TrimSpace(lines[j]) == "" {
@@ -448,15 +453,14 @@ func syncNestedField(path, objectKey, field, value string) (bool, error) {
 				}
 				j++
 			}
-			if j > i+1 {
-				lines = append(lines[:i], append([]string{"  " + field + ": " + value}, lines[j:]...)...)
-			} else {
-				lines[i] = "  " + field + ": " + value
+			if sameLines(lines[i:j], rendered) {
+				return false, nil
 			}
+			lines = append(lines[:i], append(rendered, lines[j:]...)...)
 			return true, os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
 		}
 	}
-	lines = append(lines[:objStart+1], append([]string{"  " + field + ": " + value}, lines[objStart+1:]...)...)
+	lines = append(lines[:objStart+1], append(rendered, lines[objStart+1:]...)...)
 	return true, os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
 }
 

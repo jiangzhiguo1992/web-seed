@@ -465,7 +465,7 @@ services:
       - id: enable_pwd_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_pwd_status"
-        lifecycles: [ cap.lifecycles.auth_pwd.enable ]
+        lifecycles: [ cap.lifecycles.auth_pwd.transitions.enable ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.enable_status.status, description: "绑定状态 verified" }
@@ -484,7 +484,7 @@ services:
       - id: disable_pwd_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_pwd_status"
-        lifecycles: [ cap.lifecycles.auth_pwd.disable ]
+        lifecycles: [ cap.lifecycles.auth_pwd.transitions.disable ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.disable_status.status, description: "绑定状态 disabled" }
@@ -715,7 +715,7 @@ services:
       - id: enable_phone_status
         kind: query
         summary: "启用手机绑定"
-        lifecycles: [ cap.lifecycles.auth_contact.enable ]
+        lifecycles: [ cap.lifecycles.auth_contact.transitions.enable ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.enable_status.status, description: "绑定状态 verified" }
@@ -734,7 +734,7 @@ services:
       - id: disable_phone_status
         kind: query
         summary: "停用手机绑定"
-        lifecycles: [ cap.lifecycles.auth_contact.disable ]
+        lifecycles: [ cap.lifecycles.auth_contact.transitions.disable ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.disable_status.status, description: "绑定状态 disabled" }
@@ -986,7 +986,7 @@ services:
       - id: enable_email_status
         kind: query
         summary: "启用邮箱绑定"
-        lifecycles: [ cap.lifecycles.auth_contact.enable ]
+        lifecycles: [ cap.lifecycles.auth_contact.transitions.enable ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.enable_status.status, description: "绑定状态 verified" }
@@ -1005,7 +1005,7 @@ services:
       - id: disable_email_status
         kind: query
         summary: "停用邮箱绑定"
-        lifecycles: [ cap.lifecycles.auth_contact.disable ]
+        lifecycles: [ cap.lifecycles.auth_contact.transitions.disable ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.disable_status.status, description: "绑定状态 disabled" }

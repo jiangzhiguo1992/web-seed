@@ -155,7 +155,7 @@ service 项必须声明：
 - `create` / `destroy` 写 `services`（由 `make gen-graph` 从 step.lifecycles 反推）与 `events`（必须由对应 service 的 step 发出）；`transitions[].implemented_by` 仍由 gen-graph 写回；
 - `transitions[].requires` 声明跨维度前置状态：`{lifecycle, states: [...]}`，处于任一状态即可，列表内 AND；requires 图不得有环；实现该转换的 service 必须自行校验；
 - service 的 `kind: logic` / `kind: when` step 用 `rules: [{ rule: feature.rules.* }]` 引用业务规则；
-- 任意 step 用 `lifecycles: [cap.lifecycles.*.*]` 回引生命周期动作（create/destroy/transition）；`lifecycles` 不限制 step 的 kind，一个 step 可列多个动作；
+- 任意 step 用 `lifecycles: [cap.lifecycles.<lifecycle>.create|destroy|transitions.<name>]` 回引生命周期动作；`lifecycles` 不限制 step 的 kind，一个 step 可列多个动作；
 - 每个生命周期动作的 step 不再声明 `state.write`；`lifecycles` 只是标记，不限制 step kind，也不要求本步写状态列；
 - 事件只由 service step 的 `events` 声明（`kind: events`）；lifecycle 的 `create.events` / `destroy.events` 是对应动作的事件投影，必须能回指到 service step；
 - `feature.rules` 的 `implemented_by` 仍指向 service 项。

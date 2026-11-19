@@ -77,8 +77,8 @@ fields:
         item_fields:
           - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期；不能是自身" }
           - { name: states, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合；目标维度处于其中任一状态即可" }
-      - { name: services, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现创建动作的 service；gen-graph 从 step.lifecycles 反推" }
-      - { name: events, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "创建时发出的事件；必须由 services 中的 step 发出" }
+      - { name: services, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "至少一个实现创建动作的 service；events 不能单独构成 action；gen-graph 从 step.lifecycles 反推" }
+      - { name: events, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "创建时发出的事件（可选）；必须由 services 中的 step 发出" }
 
   - name: destroy
     type: object
@@ -93,8 +93,8 @@ fields:
         item_fields:
           - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期；不能是自身" }
           - { name: states, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合；目标维度处于其中任一状态即可" }
-      - { name: services, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现销毁动作的 service；gen-graph 从 step.lifecycles 反推" }
-      - { name: events, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁时发出的事件；必须由 services 中的 step 发出" }
+      - { name: services, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "至少一个实现销毁动作的 service；events 不能单独构成 action；gen-graph 从 step.lifecycles 反推" }
+      - { name: events, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁时发出的事件（可选）；必须由 services 中的 step 发出" }
 
   - name: transitions
     type: list<object>
@@ -104,7 +104,7 @@ fields:
     item_fields:
       - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "转换名" }
       - { name: description, type: string, required: true, description: "转换说明" }
-      - { name: from, type: list<string>, required: true, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "源状态" }
+      - { name: from, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "源状态" }
       - { name: to, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标状态" }
       - name: requires
         type: list<object>
@@ -114,12 +114,12 @@ fields:
         item_fields:
           - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期；不能是自身" }
           - { name: states, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合；目标维度处于其中任一状态即可" }
-      - { name: implemented_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 service step；gen-graph 生成" }
+      - { name: implemented_by, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "至少一个实现该转换的 service step；gen-graph 生成" }
 
 rules:
-  - { id: lifecycle-structure, text: "states.values 名唯一；initial/final/derived 必须是 values 中的状态；derived 必须是 final 子集；initial 不得是 derived；transitions 的 from/to 必须是 values；final/derived 不得作为 transition 的 from；derived 不得作为 transition 的 to；destroy 存在时 final 不得多于一个；destroy 与唯一 final 同时存在时 transition 不得指向该 final", implemented_by: [ lifecycle-structure ] }
-  - { id: lifecycle-exhaustive, text: "每个非 derived、非 final 状态必须从 initial 可达；非 final 状态必须有出边（transition 或 destroy）；final 不得有出边；转换名唯一", implemented_by: [ lifecycle-exhaustive ] }
-  - { id: lifecycle-subject, text: "subjects[].entity 必须是存在的 data.entities.*；subjects[].field 必须是该实体的非关系标量字段、类型为 data.enums.*、source 为 column；同一 lifecycle 的所有 subjects 的 field 类型必须相同；lifecycle.owner_module 必须等于每个 subject 实体的 owner_module；states.values/initial/final/derived/from/to 必须是该枚举的值", implemented_by: [ lifecycle-subject ] }
+  - { id: lifecycle-structure, text: "states.values 名唯一；initial/final 必须是 values 中的状态；transitions 的 from/to 必须是 values；final 不得作为 transition 的 from；destroy 存在时 final 不得多于一个；destroy 与唯一 final 同时存在时 transition 不得指向该 final", implemented_by: [ lifecycle-structure ] }
+  - { id: lifecycle-exhaustive, text: "每个 state 必须从 initial 可达；非 final 状态必须有出边（transition 或 destroy）；final 不得有出边；转换名唯一", implemented_by: [ lifecycle-exhaustive ] }
+  - { id: lifecycle-subject, text: "subjects[].entity 必须是存在的 data.entities.*；subjects[].field 必须是该实体的非关系标量字段、类型为存在的 data.enums.*、source 为 column；同一 lifecycle 的所有 subjects 的 field 类型必须相同；lifecycle.owner_module 必须等于每个 subject 实体的 owner_module；states.values/initial/final/from/to 必须是该枚举的值", implemented_by: [ lifecycle-subject ] }
   - { id: lifecycle-dimension, text: "同一 (entity, field) 组合只能被一个 lifecycle 契约声明；同一 lifecycle 内不得重复声明同一 (entity, field)", implemented_by: [ lifecycle-dimension ] }
   - { id: lifecycle-enum-coverage, text: "被 lifecycle 使用的 data.enums.*，每个枚举值必须至少被一个使用该枚举的 lifecycle states.values 声明；states.values 只允许该枚举的值", implemented_by: [ lifecycle-enum-coverage ] }
   - { id: lifecycle-requires, text: "requires[].states 必须非空且均为目标 lifecycle 的 states.values；lifecycle 必须是存在的 cap.lifecycles.* 且不能是自身；同一 action 内同一个 lifecycle 只能出现一次；requires 图不得有环；列表内全部满足（AND）", implemented_by: [ lifecycle-requires ] }

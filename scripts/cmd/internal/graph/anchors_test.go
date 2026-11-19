@@ -50,7 +50,7 @@ services:
       - id: transition
         kind: logic
         rules: [ { rule: feature.rules.x.r1 } ]
-        lifecycles: [cap.lifecycles.x.activate]
+        lifecycles: [cap.lifecycles.x.transitions.activate]
       - id: emit_activated
         kind: events
         events: [{ref: cap.events.x.activated}]
@@ -145,8 +145,8 @@ jobs:
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"services: [ cap.services.x.create ]",
-		"services: [ cap.services.x.delete ]",
+		"services:\n    - cap.services.x.create",
+		"services:\n    - cap.services.x.delete",
 		"implemented_by:\n      - cap.services.x.activate.transition",
 	} {
 		if !strings.Contains(string(lifecycle), want) {
@@ -197,7 +197,7 @@ services:
     steps:
       - id: transition
         kind: logic
-        lifecycles: [cap.lifecycles.x.activate]
+        lifecycles: [cap.lifecycles.x.transitions.activate]
   - name: delete
     steps:
       - id: soft_delete
@@ -253,8 +253,8 @@ transitions:
 	}
 	text := string(lifecycle)
 	for _, want := range []string{
-		"services: [ cap.services.x.create ]",
-		"services: [ cap.services.x.delete ]",
+		"services:\n    - cap.services.x.create",
+		"services:\n    - cap.services.x.delete",
 		"implemented_by:\n      - cap.services.x.activate.transition",
 	} {
 		if !strings.Contains(text, want) {

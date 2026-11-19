@@ -16,11 +16,15 @@ states:
   initial: pending
   final: [deleted]
 create:
-  services: [ cap.services.account.create ]
-  events: [ cap.events.account.created ]
+  services:
+    - cap.services.account.create
+  events:
+    - cap.events.account.created
 destroy:
-  services: [ cap.services.account.delete ]
-  events: [ cap.events.account.deleted ]
+  services:
+    - cap.services.account.delete
+  events:
+    - cap.events.account.deleted
 transitions:
   - name: activate
     description: "激活账号"

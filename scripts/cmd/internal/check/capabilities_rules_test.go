@@ -432,9 +432,9 @@ func TestCheckLifecycleDoc(t *testing.T) {
 		"cap.services.x.activate.transition": true,
 	}
 	actionSteps := map[string][]string{
-		"cap.lifecycles.x.create":   {"cap.services.x.create.create"},
-		"cap.lifecycles.x.destroy":  {"cap.services.x.delete.soft_delete"},
-		"cap.lifecycles.x.activate": {"cap.services.x.activate.transition"},
+		"cap.lifecycles.x.create":               {"cap.services.x.create.create"},
+		"cap.lifecycles.x.destroy":              {"cap.services.x.delete.soft_delete"},
+		"cap.lifecycles.x.transitions.activate": {"cap.services.x.activate.transition"},
 	}
 	valid := `id: cap.lifecycles.x
 summary: "x"
@@ -541,9 +541,9 @@ func TestCheckLifecycleDocErrors(t *testing.T) {
 		"cap.services.x.activate.transition": true,
 	}
 	actionSteps := map[string][]string{
-		"cap.lifecycles.x.create":   {"cap.services.x.create.create"},
-		"cap.lifecycles.x.destroy":  {"cap.services.x.delete.soft_delete"},
-		"cap.lifecycles.x.activate": {"cap.services.x.activate.transition"},
+		"cap.lifecycles.x.create":               {"cap.services.x.create.create"},
+		"cap.lifecycles.x.destroy":              {"cap.services.x.delete.soft_delete"},
+		"cap.lifecycles.x.transitions.activate": {"cap.services.x.activate.transition"},
 	}
 	valid := `id: cap.lifecycles.x
 summary: "x"
@@ -635,7 +635,7 @@ func TestCheckLifecycleRequires(t *testing.T) {
 	schema := copyMeta(t, root, "cap.lifecycles")
 	rel := "contracts/capabilities/lifecycles/x.yaml"
 	stepIDs := map[string]bool{"cap.services.x.activate.transition": true}
-	actionSteps := map[string][]string{"cap.lifecycles.x.activate": {"cap.services.x.activate.transition"}}
+	actionSteps := map[string][]string{"cap.lifecycles.x.transitions.activate": {"cap.services.x.activate.transition"}}
 	lifecycleStates := map[string]map[string]bool{
 		"cap.lifecycles.x": {"pending": true, "active": true, "deleted": true},
 		"cap.lifecycles.y": {"active": true},
@@ -1144,7 +1144,7 @@ func TestLogicRulesValidated(t *testing.T) {
 		"returns": []any{},
 		"steps": []any{map[string]any{
 			"id": "t", "kind": "logic", "summary": "x",
-			"lifecycles": []any{"cap.lifecycles.x.t"},
+			"lifecycles": []any{"cap.lifecycles.x.transitions.t"},
 			"rules":      []any{map[string]any{"rule": "feature.rules.x.missing"}},
 			"output":     []any{},
 			"errors":     []any{},
@@ -1152,7 +1152,7 @@ func TestLogicRulesValidated(t *testing.T) {
 	}
 	c.checkServiceItem(doc, "contracts/capabilities/services/x.yaml", "cap.services.x.get", "x",
 		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{},
-		map[string]bool{"cap.lifecycles.x.t": true}, map[string]bool{})
+		map[string]bool{"cap.lifecycles.x.transitions.t": true}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown rule feature.rules.x.missing") {
 		t.Fatalf("logic rule not validated: %v", c.errs)
 	}

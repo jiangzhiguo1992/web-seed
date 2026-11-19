@@ -181,7 +181,7 @@ services:
       - id: revoke_old
         kind: query
         summary: "重发前作废同一认证目标与用途的旧验证体"
-        lifecycles: [ cap.lifecycles.verification.revoke ]
+        lifecycles: [ cap.lifecycles.verification.transitions.revoke ]
         input:
           - { name: auth_type, value: params.input.auth_type, description: "认证类型" }
           - { name: auth_id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
@@ -210,7 +210,7 @@ services:
       - id: mark_sent
         kind: query
         summary: "标记验证体已发送"
-        lifecycles: [ cap.lifecycles.verification.send ]
+        lifecycles: [ cap.lifecycles.verification.transitions.send ]
         input:
           - { name: id, value: step.create.row.id, description: "待标记的验证体 ID" }
           - { name: sent_at, value: step.now.sent_at, description: "发送时间" }
@@ -275,7 +275,7 @@ services:
       - id: mark_failed
         kind: query
         summary: "发送失败时把验证体置为 failed"
-        lifecycles: [ cap.lifecycles.verification.fail ]
+        lifecycles: [ cap.lifecycles.verification.transitions.fail ]
         input:
           - { name: id, value: step.create.row.id, description: "待标记的验证体 ID" }
           - { name: status, value: step.status_failed.status, description: "目标状态：发送失败" }
@@ -527,7 +527,7 @@ services:
       - id: consume
         kind: query
         summary: "验证成功时一次性消费验证码"
-        lifecycles: [ cap.lifecycles.verification.consume ]
+        lifecycles: [ cap.lifecycles.verification.transitions.consume ]
         input:
           - { name: id, value: step.load_verification.row.id, description: "待消费的验证体 ID" }
           - { name: consumed_at, value: step.now.consumed_at, description: "消费时间" }
@@ -622,7 +622,7 @@ services:
       - id: apply_phone_verified
         kind: query
         summary: "验证成功且 auth_type=phone 时把手机绑定置为 verified"
-        lifecycles: [ cap.lifecycles.auth_contact.verify ]
+        lifecycles: [ cap.lifecycles.auth_contact.transitions.verify ]
         input:
           - { name: id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
           - { name: status, value: step.status_verified.status, description: "目标状态：已认证" }
@@ -635,7 +635,7 @@ services:
       - id: apply_email_verified
         kind: query
         summary: "验证成功且 auth_type=email 时把邮箱绑定置为 verified"
-        lifecycles: [ cap.lifecycles.auth_contact.verify ]
+        lifecycles: [ cap.lifecycles.auth_contact.transitions.verify ]
         input:
           - { name: id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
           - { name: status, value: step.status_verified.status, description: "目标状态：已认证" }
@@ -736,7 +736,7 @@ services:
       - id: expire_stale
         kind: query
         summary: "调用 data.queries.verification.expire_stale_verifications"
-        lifecycles: [ cap.lifecycles.verification.expire ]
+        lifecycles: [ cap.lifecycles.verification.transitions.expire ]
         input:
           - { name: now, value: step.now.now, description: "当前时间" }
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
@@ -748,7 +748,7 @@ services:
       - id: revoke_exhausted
         kind: query
         summary: "调用 data.queries.verification.revoke_exhausted_verifications"
-        lifecycles: [ cap.lifecycles.verification.revoke ]
+        lifecycles: [ cap.lifecycles.verification.transitions.revoke ]
         input:
           - { name: max_attempts, value: step.max_attempts.max_attempts, description: "尝试次数上限" }
           - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }
@@ -803,7 +803,7 @@ services:
       - id: revoke_active_verifications_by_auth
         kind: query
         summary: "调用 data.queries.verification.revoke_active_verifications_by_auth"
-        lifecycles: [ cap.lifecycles.verification.revoke ]
+        lifecycles: [ cap.lifecycles.verification.transitions.revoke ]
         input:
           - { name: auth_type, value: params.auth_type, description: "要作废的认证类型" }
           - { name: auth_id, value: params.auth_id, description: "要作废的认证绑定 ID" }
@@ -835,7 +835,7 @@ services:
       - id: revoke_active_verifications_by_account
         kind: query
         summary: "调用 data.queries.verification.revoke_active_verifications_by_account"
-        lifecycles: [ cap.lifecycles.verification.revoke ]
+        lifecycles: [ cap.lifecycles.verification.transitions.revoke ]
         input:
           - { name: account_id, value: params.account_id, description: "要作废验证体的账号 ID" }
           - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }

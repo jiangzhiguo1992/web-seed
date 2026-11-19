@@ -44,11 +44,11 @@ actions:
   activate:
     capability: cap.services.account.activate
     permission: platform.security.permissions.account_write
-    available_when: { transitions: [cap.lifecycles.account.activate, cap.lifecycles.account.reactivate] }
+    available_when: { transitions: [cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate] }
   suspend:
     capability: cap.services.account.suspend
     permission: platform.security.permissions.account_write
-    available_when: { transition: cap.lifecycles.account.suspend }
+    available_when: { transition: cap.lifecycles.account.transitions.suspend }
     confirm: true
   delete:
     capability: cap.services.account.delete

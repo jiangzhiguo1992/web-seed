@@ -738,6 +738,12 @@ type lifecycleFileScaffold struct {
 	DoNot         []string                   `yaml:"do_not"`
 	Subjects      []lifecycleSubjectScaffold `yaml:"subjects"`
 	States        lifecycleStatesScaffold    `yaml:"states"`
+	Create        lifecycleActionScaffold    `yaml:"create"`
+}
+
+type lifecycleActionScaffold struct {
+	Services []string `yaml:"services"`
+	Events   []string `yaml:"events,omitempty"`
 }
 
 type lifecycleStatesScaffold struct {
@@ -976,6 +982,9 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 			Values:  []string{"active"},
 			Initial: "active",
 			Final:   []string{"active"},
+		},
+		Create: lifecycleActionScaffold{
+			Services: []string{"cap.services." + name + ".create"},
 		},
 	}
 	b, err := marshal2(doc)

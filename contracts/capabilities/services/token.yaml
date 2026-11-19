@@ -224,7 +224,7 @@ services:
       - id: revoke_token
         kind: query
         summary: "调用 data.queries.token.revoke_token"
-        lifecycles: [ cap.lifecycles.token.revoke ]
+        lifecycles: [ cap.lifecycles.token.transitions.revoke ]
         input:
           - { name: refresh_token_hash, value: step.hash_old.refresh_token_hash, description: "待作废的旧刷新令牌哈希" }
           - { name: revoked_at, value: step.now.revoked_at, description: "旧令牌作废时间" }
@@ -293,7 +293,7 @@ services:
       - id: revoke_token
         kind: query
         summary: "调用 data.queries.token.revoke_token"
-        lifecycles: [ cap.lifecycles.token.revoke ]
+        lifecycles: [ cap.lifecycles.token.transitions.revoke ]
         input:
           - { name: refresh_token_hash, value: step.hash.refresh_token_hash, description: "待吊销的刷新令牌哈希" }
           - { name: revoked_at, value: step.now.revoked_at, description: "吊销时间" }
@@ -332,7 +332,7 @@ services:
       - id: revoke_tokens_by_account
         kind: query
         summary: "调用 data.queries.token.revoke_tokens_by_account"
-        lifecycles: [ cap.lifecycles.token.revoke ]
+        lifecycles: [ cap.lifecycles.token.transitions.revoke ]
         input:
           - { name: account_id, value: params.account_id, description: "被吊销令牌的账号 ID" }
           - { name: revoked_at, value: step.now.revoked_at, description: "吊销时间" }
@@ -382,7 +382,7 @@ services:
       - id: expire_tokens
         kind: query
         summary: "调用 data.queries.token.expire_tokens"
-        lifecycles: [ cap.lifecycles.token.expire ]
+        lifecycles: [ cap.lifecycles.token.transitions.expire ]
         input:
           - { name: now, value: step.now.now, description: "当前时间" }
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }

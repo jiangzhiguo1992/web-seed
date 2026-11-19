@@ -496,7 +496,7 @@ func (c *Checker) checkCapabilities() {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
 			if name != "" {
-				lifecycleActions[fileID+"."+name] = true
+				lifecycleActions[fileID+".transitions."+name] = true
 			}
 			collectRequires(item)
 		}

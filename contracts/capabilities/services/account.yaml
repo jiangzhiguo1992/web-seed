@@ -370,7 +370,7 @@ services:
       - id: set_account_status
         kind: query
         summary: "调用 data.queries.account.set_account_status"
-        lifecycles: [ cap.lifecycles.account.activate, cap.lifecycles.account.reactivate ]
+        lifecycles: [ cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate ]
         input:
           - { name: id, value: params.id, description: "待激活账号 ID" }
           - { name: status, value: step.target_status.status, description: "目标状态：激活" }
@@ -465,7 +465,7 @@ services:
       - id: set_account_status
         kind: query
         summary: "调用 data.queries.account.set_account_status"
-        lifecycles: [ cap.lifecycles.account.suspend ]
+        lifecycles: [ cap.lifecycles.account.transitions.suspend ]
         input:
           - { name: id, value: params.id, description: "待封禁账号 ID" }
           - { name: status, value: step.target_status.status, description: "目标状态：封禁" }

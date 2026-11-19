@@ -573,6 +573,11 @@ func TestRenderLifecycle(t *testing.T) {
 	if len(values) != 1 || values[0] != "active" || states["initial"] != "active" || len(final) != 1 || final[0] != "active" {
 		t.Fatalf("states = %#v", states)
 	}
+	create, _ := doc["create"].(map[string]any)
+	services, _ := create["services"].([]any)
+	if len(services) != 1 || services[0] != "cap.services.invoice.create" {
+		t.Fatalf("create = %#v", create)
+	}
 }
 
 func TestServiceInterfaceName(t *testing.T) {

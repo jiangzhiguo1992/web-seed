@@ -156,6 +156,9 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 		}
 	}
 	enumValues := c.enumValues[statusEnum]
+	if statusEnum != "" && c.enumIDs != nil && !c.enumIDs[statusEnum] {
+		c.rulef("lifecycle-subject", "%s: subject enum %s does not exist", rel, statusEnum)
+	}
 
 	states, _ := asMap(doc["states"])
 	stateList := stringList(states["values"])
@@ -280,7 +283,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 	for _, raw := range asList(doc["transitions"]) {
 		item, _ := asMap(raw)
 		name, _ := item["name"].(string)
-		actionID := fileID + "." + name
+		actionID := fileID + ".transitions." + name
 		if transitionNames[name] {
 			c.rulef("lifecycle-exhaustive", "%s: duplicate transition %s", rel, name)
 		}

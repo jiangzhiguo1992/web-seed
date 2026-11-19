@@ -99,7 +99,7 @@ func (c *Checker) pageLifecycleIndex() (map[string]bool, map[string]bool, map[st
 		for _, raw := range asList(doc["transitions"]) {
 			item, _ := asMap(raw)
 			if name, _ := item["name"].(string); name != "" {
-				actions[id+"."+name] = true
+				actions[id+".transitions."+name] = true
 			}
 		}
 	}
