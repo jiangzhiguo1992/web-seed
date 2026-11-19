@@ -103,6 +103,7 @@ entries:
   - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：签发、刷新、吊销与校验", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.events.token, path: capabilities/events/token.yaml, summary: "令牌异步任务：过期标记与清理", consumers: [worker], enforcement: generated+tested, stability: draft }
+  - { id: cap.events.verification, path: capabilities/events/verification.yaml, summary: "验证体异步任务：过期与超限清理", consumers: [worker], enforcement: generated+tested, stability: draft }
 
   # ---------- lifecycles / rules / events ----------
   - id: cap.lifecycles.account

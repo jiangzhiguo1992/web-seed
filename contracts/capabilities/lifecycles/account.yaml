@@ -26,14 +26,17 @@ transitions:
     description: "激活账号"
     from: [pending]
     to: active
-    implemented_by: [ cap.services.account.activate.set_account_status ]
+    implemented_by:
+      - cap.services.account.activate.set_account_status
   - name: suspend
     description: "封禁账号"
     from: [active]
     to: suspended
-    implemented_by: [ cap.services.account.suspend.set_account_status ]
+    implemented_by:
+      - cap.services.account.suspend.set_account_status
   - name: reactivate
     description: "解封"
     from: [suspended]
     to: active
-    implemented_by: [ cap.services.account.activate.set_account_status ]
+    implemented_by:
+      - cap.services.account.activate.set_account_status

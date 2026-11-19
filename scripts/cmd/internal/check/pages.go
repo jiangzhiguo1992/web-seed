@@ -8,8 +8,6 @@ package check
 import (
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 func (c *Checker) checkFeaturePages() {
@@ -28,7 +26,7 @@ func (c *Checker) checkFeaturePages() {
 		}
 		rel := relPath(c.root, file)
 		c.validateDoc(doc, schema.Fields, rel)
-		c.checkPageTopLevelOrder(rel, schema.Fields)
+		c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		c.checkTargetFileName(schema, filepath.Base(file), rel)
 		c.checkPageViewStates(rel, doc)
 		stem := strings.TrimSuffix(filepath.Base(file), ".yaml")
@@ -44,30 +42,6 @@ func (c *Checker) checkFeaturePages() {
 		}
 		lifecycleID := pageLifecycleID(doc)
 		c.checkPageNode(rel, doc, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs)
-	}
-}
-
-// checkPageTopLevelOrder 只校验顶层键顺序；页面 actions/fields 的嵌套键顺序仍由 authoring 约定维护。
-func (c *Checker) checkPageTopLevelOrder(rel string, fields []Field) {
-	node, err := loadYAMLNode(filepath.Join(c.root, rel))
-	if err != nil || node == nil || node.Kind != yaml.MappingNode {
-		return
-	}
-	pos := make(map[string]int, len(fields))
-	for i, f := range fields {
-		pos[f.Name] = i
-	}
-	last, lastKey := -1, ""
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		key := node.Content[i].Value
-		idx, ok := pos[key]
-		if !ok {
-			continue
-		}
-		if idx < last {
-			c.rulef("schema.field-order", "%s: field %q must come before %q (top-level)", rel, key, lastKey)
-		}
-		last, lastKey = idx, key
 	}
 }
 
@@ -241,6 +215,10 @@ func (c *Checker) checkPageNode(rel string, node any, lifecycleID string, lifecy
 			case "capability":
 				if s, ok := child.(string); ok && s != "" && serviceIDs != nil && !serviceIDs[s] {
 					c.rulef("schema.ref", "%s: unknown capability %s", rel, s)
+				}
+			case "permission":
+				if s, ok := child.(string); ok && s != "" && !c.permissionExists(s) {
+					c.rulef("schema.ref", "%s: unknown permission %s", rel, s)
 				}
 			case "enum":
 				if s, ok := child.(string); ok && strings.HasPrefix(s, "cap.lifecycles.") {

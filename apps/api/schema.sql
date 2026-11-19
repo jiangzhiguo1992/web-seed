@@ -144,4 +144,6 @@ CREATE TABLE `verification_body` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='验证体（一次性验证凭证与消息快照）';
 CREATE INDEX `idx_verification_auth_purpose` ON `verification_body` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `auth_type`, `auth_id`, `purpose`, `created_at`);
 CREATE INDEX `idx_verification_account_id` ON `verification_body` (`account_id`);
+CREATE INDEX `idx_verification_expire_at` ON `verification_body` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `expire_at`);
+CREATE INDEX `idx_verification_status_attempt` ON `verification_body` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `status`, `attempt_count`);
 

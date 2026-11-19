@@ -35,6 +35,10 @@ routes:
 entries:
   - { id: feature.routes, path: features/routes.yaml }
 `)
+	writeCapFile(t, root, "contracts/platform/security/permissions.yaml", `id: platform.security.permissions
+permissions:
+  - { code: account_read }
+`)
 	valid := `schema_version: 1
 id: feature.pages.x
 summary: "x"
@@ -55,6 +59,7 @@ view_states:
 actions:
   delete:
     capability: cap.services.x.delete
+    permission: platform.security.permissions.account_read
     available_when: { transition: cap.lifecycles.x.destroy, state_not: [deleted] }
 transition_ui:
   source: cap.lifecycles.x.transitions
@@ -77,6 +82,7 @@ transition_ui:
 		{"unknown transition", strings.Replace(valid, "cap.lifecycles.x.destroy", "cap.lifecycles.x.missing", 1), "unknown lifecycle action"},
 		{"unknown state", strings.Replace(valid, "state_not: [deleted]", "state_not: [missing]", 1), "unknown state missing"},
 		{"unknown capability", strings.Replace(valid, "capability: cap.services.x.create", "capability: cap.services.x.missing", 1), "unknown capability"},
+		{"unknown permission", strings.Replace(valid, "platform.security.permissions.account_read", "platform.security.permissions.missing", 1), "unknown permission"},
 		{"unknown route", strings.Replace(valid, "route: feature.routes.x", "route: feature.routes.missing", 1), "unknown route"},
 		{"missing forbidden state", strings.Replace(valid, "  forbidden: { when: \"false\" }\n", "", 1), "view_states missing forbidden"},
 		{"page mismatch", strings.Replace(valid, "page: x", "page: y", 1), `page "y" must be "x"`},

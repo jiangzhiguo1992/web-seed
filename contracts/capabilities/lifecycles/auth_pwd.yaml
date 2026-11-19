@@ -29,11 +29,13 @@ transitions:
     to: disabled
     requires:
       - { lifecycle: cap.lifecycles.account, states: [pending, active] }
-    implemented_by: [ cap.services.auth.bind_password.disable_pwd_status ]
+    implemented_by:
+      - cap.services.auth.bind_password.disable_pwd_status
   - name: enable
     description: "启用密码认证"
     from: [disabled]
     to: verified
     requires:
       - { lifecycle: cap.lifecycles.account, states: [pending, active] }
-    implemented_by: [ cap.services.auth.bind_password.enable_pwd_status ]
+    implemented_by:
+      - cap.services.auth.bind_password.enable_pwd_status

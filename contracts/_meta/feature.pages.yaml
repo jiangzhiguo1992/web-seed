@@ -99,8 +99,8 @@ fields:
       - { name: minLength, type: integer, required: false, description: "最小长度" }
       - { name: maxLength, type: integer, required: false, description: "最大长度" }
       - { name: label, type: string, required: false, description: "展示名" }
-      - { name: render, type: string, required: false, description: "渲染方式" }
       - { name: enum, type: string, required: false, description: "枚举来源；引用由 pages.go 校验" }
+      - { name: render, type: string, required: false, description: "渲染方式" }
       - { name: autocomplete, type: string, required: false, description: "浏览器自动填充提示" }
       - { name: secret, type: boolean, required: false, description: "是否敏感输入" }
 

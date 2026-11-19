@@ -31,18 +31,24 @@ transitions:
     to: verified
     requires:
       - { lifecycle: cap.lifecycles.account, states: [pending, active] }
-    implemented_by: [ cap.services.verification.verify.apply_email_verified, cap.services.verification.verify.apply_phone_verified ]
+    implemented_by:
+      - cap.services.verification.verify.apply_email_verified
+      - cap.services.verification.verify.apply_phone_verified
   - name: disable
     description: "停用手机/邮箱认证"
     from: [verified]
     to: disabled
     requires:
       - { lifecycle: cap.lifecycles.account, states: [pending, active] }
-    implemented_by: [ cap.services.auth.bind_email.disable_email_status, cap.services.auth.bind_phone.disable_phone_status ]
+    implemented_by:
+      - cap.services.auth.bind_email.disable_email_status
+      - cap.services.auth.bind_phone.disable_phone_status
   - name: enable
     description: "启用手机/邮箱认证"
     from: [disabled]
     to: verified
     requires:
       - { lifecycle: cap.lifecycles.account, states: [pending, active] }
-    implemented_by: [ cap.services.auth.bind_email.enable_email_status, cap.services.auth.bind_phone.enable_phone_status ]
+    implemented_by:
+      - cap.services.auth.bind_email.enable_email_status
+      - cap.services.auth.bind_phone.enable_phone_status

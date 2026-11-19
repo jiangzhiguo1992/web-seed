@@ -1,0 +1,19 @@
+# 验证体异步任务：过期与尝试超限的批量清理。
+
+id: cap.events.verification
+summary: "验证体异步任务"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "cleanup 只改 status，不删除行；保留期清理由独立策略负责"
+  - "不要用 cleanup 代替 verify 的错误返回；cleanup 只处理滞留的终态"
+
+jobs:
+  - id: cap.events.verification.cleanup
+    name: cleanup
+    summary: "把过期或尝试超限的验证体置为终态"
+    service: cap.services.verification.cleanup
+    trigger: { type: cron, schedule: "*/15 * * * *" }
+    retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
+    concurrency: { key: verification_cleanup, ttl: 15m }

@@ -50,24 +50,24 @@ actions:
   activate:
     capability: cap.services.account.activate
     permission: platform.security.permissions.account_write
+    available_when: { transitions: [cap.lifecycles.account.activate, cap.lifecycles.account.reactivate] }
     ui: "row-action"
     label: "激活"
-    available_when: { transitions: [cap.lifecycles.account.activate, cap.lifecycles.account.reactivate] }
   suspend:
     capability: cap.services.account.suspend
     permission: platform.security.permissions.account_write
+    available_when: { transition: cap.lifecycles.account.suspend }
     ui: "row-action"
     label: "封禁"
     confirm: true
-    available_when: { transition: cap.lifecycles.account.suspend }
   delete:
     capability: cap.services.account.delete
     permission: platform.security.permissions.account_delete
+    available_when: { transition: cap.lifecycles.account.destroy }
     ui: "row-action"
     label: "删除"
     confirm: true
     danger: true
-    available_when: { transition: cap.lifecycles.account.destroy }
 
 fields:
   - name: number

@@ -3,7 +3,6 @@ package check
 
 import (
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -704,23 +703,6 @@ func (c *Checker) entityFieldType(entityID, name string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func (c *Checker) permissionExists(id string) bool {
-	if c.permissionSet == nil {
-		c.permissionSet = map[string]bool{}
-		doc, err := loadYAML(filepath.Join(c.root, "contracts/platform/security/permissions.yaml"))
-		if err == nil {
-			for _, raw := range asList(doc["permissions"]) {
-				if m, ok := asMap(raw); ok {
-					if code, _ := m["code"].(string); code != "" {
-						c.permissionSet["platform.security.permissions."+code] = true
-					}
-				}
-			}
-		}
-	}
-	return c.permissionSet[id]
 }
 
 func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) {

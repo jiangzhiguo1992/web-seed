@@ -36,7 +36,7 @@ rules:
     implemented_by: [ cap.services.verification.verify ]
     given: "verification_body.attempt_count >= auth_policy.verification.max_attempts"
     when: "校验验证码"
-    then: "拒绝，返回 AUTH_VERIFICATION_ATTEMPTS_EXCEEDED；不在 verify 事务内写 revoked，由 revoke_by_auth 或清理任务置 revoked"
+    then: "拒绝，返回 AUTH_VERIFICATION_ATTEMPTS_EXCEEDED；不在 verify 事务内写 revoked，由 cleanup 或 revoke_by_auth 置 revoked"
   - id: feature.rules.auth.verification_auth_binding
     kind: policy
     summary: "验证体的 account_id 必须与 auth_id 所属账号一致"
@@ -102,11 +102,11 @@ rules:
     then: "返回 ACCOUNT_ALREADY_DELETED"
   - id: feature.rules.auth.auth_token_requires_active_account
     kind: policy
-    summary: "已删除或封禁账号不可签发、刷新或使用令牌"
+    summary: "非 active 账号不可签发、刷新或使用令牌"
     severity: error
     on_violation: platform.errors.AUTH_TOKEN_INVALID
     implemented_by: [ cap.services.token.issue, cap.services.token.refresh, cap.services.token.verify ]
-    given: "account.status = deleted 或 account.status = suspended"
+    given: "account.status != active（pending / suspended / deleted）"
     when: "签发、刷新或校验 access token"
     then: "拒绝，返回 AUTH_TOKEN_INVALID，不暴露账号状态"
   - id: feature.rules.auth.verification_purpose_status

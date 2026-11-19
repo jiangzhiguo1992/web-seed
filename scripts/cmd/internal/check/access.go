@@ -9,6 +9,23 @@ type accessPolicy struct {
 	rateLimited bool
 }
 
+func (c *Checker) permissionExists(id string) bool {
+	if c.permissionSet == nil {
+		c.permissionSet = map[string]bool{}
+		doc, err := loadYAML(filepath.Join(c.root, "contracts/platform/security/permissions.yaml"))
+		if err == nil {
+			for _, raw := range asList(doc["permissions"]) {
+				if m, ok := asMap(raw); ok {
+					if code, _ := m["code"].(string); code != "" {
+						c.permissionSet["platform.security.permissions."+code] = true
+					}
+				}
+			}
+		}
+	}
+	return c.permissionSet[id]
+}
+
 func (c *Checker) checkAccess(serviceIDs map[string]bool) {
 	path := filepath.Join(c.root, "contracts/platform/security/access.yaml")
 	doc, err := loadYAML(path)
