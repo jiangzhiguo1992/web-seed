@@ -91,7 +91,7 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 			"tx_mode": "none",
 			"params":  []any{},
 			"returns": []any{
-				map[string]any{"name": "account", "type": "any"},
+				map[string]any{"name": "account", "type": "any", "value": "step.create.account"},
 			},
 			"steps": []any{
 				map[string]any{
@@ -101,6 +101,7 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 					"rules":   []any{},
 					"errors":  []any{"platform.errors.COMMON_INTERNAL"},
 					"output":  output,
+					"goto":    "$end",
 				},
 			},
 		}
@@ -112,7 +113,7 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 
 	c.errs = nil
 	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-output]") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown logic output account") {
 		t.Fatalf("missing return not reported: %v", c.errs)
 	}
 }
@@ -175,7 +176,7 @@ services:
     visibility: public
     tx_mode: read_only
     steps:
-      - {id: call, kind: service, summary: "x", services: [{service: cap.services.b.get}]}
+      - {id: call, kind: service, summary: "x", goto: "$end", service: {ref: cap.services.b.get}}
 `)
 	writeCapFile(t, root, "contracts/capabilities/services/b.yaml", `id: cap.services.b
 summary: "b"
@@ -189,7 +190,7 @@ services:
     visibility: public
     tx_mode: read_only
     steps:
-      - {id: call, kind: service, summary: "x", services: [{service: cap.services.a.get}]}
+      - {id: call, kind: service, summary: "x", goto: "$end", service: {ref: cap.services.a.get}}
 `)
 
 	c := &Checker{root: root}
@@ -443,6 +444,7 @@ stability: draft
 do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
+states: [pending, active, deleted]
 initial: pending
 final: deleted
 create:
@@ -451,7 +453,6 @@ destroy:
   steps: [cap.services.x.delete.soft_delete]
   from: [pending, active]
   to: deleted
-states: [pending, active, deleted]
 transitions:
   - name: activate
     description: "a"
@@ -555,6 +556,7 @@ stability: draft
 do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
+states: [pending, active, deleted]
 initial: pending
 final: deleted
 create:
@@ -563,7 +565,6 @@ destroy:
   steps: [cap.services.x.delete.soft_delete]
   from: [pending, active]
   to: deleted
-states: [pending, active, deleted]
 transitions:
   - name: activate
     description: "a"
@@ -648,6 +649,7 @@ stability: draft
 do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
+states: [pending, active, deleted]
 initial: pending
 final: deleted
 create:
@@ -656,7 +658,6 @@ destroy:
   steps: [cap.services.x.delete.soft_delete]
   from: [pending, active]
   to: deleted
-states: [pending, active, deleted]
 transitions:
   - name: activate
     description: "a"
@@ -1219,7 +1220,7 @@ func TestQueryErrorPropagation(t *testing.T) {
 	t.Run("query step inherits query errors", func(t *testing.T) {
 		doc := base(map[string]any{
 			"id": "run", "kind": "query", "summary": "x",
-			"query": map[string]any{"query": "data.queries.x.q"},
+			"query": map[string]any{"ref": "data.queries.x.q"},
 		})
 		if errs := check(t, doc); len(errs) != 0 {
 			t.Fatalf("valid query error reported: %v", errs)
@@ -1229,7 +1230,7 @@ func TestQueryErrorPropagation(t *testing.T) {
 	t.Run("query step may add local errors", func(t *testing.T) {
 		doc := base(map[string]any{
 			"id": "run", "kind": "query", "summary": "x",
-			"query":  map[string]any{"query": "data.queries.x.q"},
+			"query":  map[string]any{"ref": "data.queries.x.q"},
 			"errors": []any{"platform.errors.B"},
 		})
 		want(t, check(t, doc), "does not declare query error platform.errors.A")

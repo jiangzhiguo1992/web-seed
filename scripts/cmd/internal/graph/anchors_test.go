@@ -44,7 +44,7 @@ services:
         lifecycles: [cap.lifecycles.x.create]
       - id: emit_created
         kind: events
-        events: [cap.events.x.created]
+        events: [{ref: cap.events.x.created}]
   - name: activate
     steps:
       - id: transition
@@ -53,7 +53,7 @@ services:
         lifecycles: [cap.lifecycles.x.activate]
       - id: emit_activated
         kind: events
-        events: [cap.events.x.activated]
+        events: [{ref: cap.events.x.activated}]
   - name: delete
     steps:
       - id: soft_delete

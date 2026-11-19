@@ -754,6 +754,17 @@ func tokenizeWhen(s string) ([]whenToken, error) {
 				return nil, fmt.Errorf("invalid string %s", raw)
 			}
 			toks = append(toks, whenToken{kind: whenString, text: v})
+		case c == '\'':
+			start := i
+			i++
+			for i < len(s) && s[i] != '\'' {
+				i++
+			}
+			if i >= len(s) {
+				return nil, fmt.Errorf("unterminated string")
+			}
+			i++
+			toks = append(toks, whenToken{kind: whenString, text: s[start+1 : i-1]})
 		case c == '-' || (c >= '0' && c <= '9'):
 			start := i
 			if c == '-' {

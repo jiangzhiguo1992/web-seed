@@ -11,15 +11,15 @@ do_not:
 
 subjects:
   - { entity: data.entities.account, field: status }
+states: [pending, active, suspended, deleted]
 initial: pending
 final: deleted
 create:
-  steps: [ cap.services.account.create.create ]
+  steps: [ cap.services.account.create.create_account ]
 destroy:
-  steps: [ cap.services.account.delete.soft_delete ]
+  steps: [ cap.services.account.delete.soft_delete_account ]
   from: [pending, active]
   to: deleted
-states: [pending, active, suspended, deleted]
 transitions:
   - name: activate
     description: "激活账号"
@@ -27,21 +27,21 @@ transitions:
     to: active
     guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    implemented_by: [ cap.services.account.activate.apply ]
+    implemented_by: [ cap.services.account.activate.set_account_status ]
   - name: suspend
     description: "封禁账号"
     from: [active]
     to: suspended
     guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    implemented_by: [ cap.services.account.suspend.apply ]
+    implemented_by: [ cap.services.account.suspend.set_account_status ]
   - name: reactivate
     description: "解封"
     from: [suspended]
     to: active
     guard: true
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-    implemented_by: [ cap.services.account.activate.apply ]
+    implemented_by: [ cap.services.account.activate.set_account_status ]
 forbidden_examples:
   - { from: deleted, transition: activate, reason: "已删除不可激活" }
   - { from: pending, transition: suspend, reason: "待激活账号不可直接封禁" }

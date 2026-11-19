@@ -8,7 +8,7 @@ import (
 )
 
 // checkServiceParamExpr 校验 input 值：params.* 必须存在于 service params，
-// step.<id>.* 必须存在于前序步骤输出（不要求写入 depends_on）。
+// step.<id>.* 必须存在于前序步骤输出。
 func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex, allIndex map[string]int, reach []map[int]bool, stepOutputs []map[string]returnType, steps []any, rel, stepID string) {
 	expr, ok := v.(string)
 	if !ok || strings.TrimSpace(expr) == "" {
@@ -50,34 +50,28 @@ func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex, al
 }
 
 // buildStepReach 按 goto/when 边构建步骤图，返回每个 step 可达的后续 step 集合。
-// 有自身 goto 的 step 不再落到顺序下一步；无自身 goto 时保留顺序边（when 的默认分支也走顺序下一步）。
+// 控制流完全由显式 goto 声明，不存在隐式顺序边。
 func buildStepReach(steps []any, allIndex map[string]int) []map[int]bool {
 	n := len(steps)
 	adj := make([][]int, n)
 	for i, raw := range steps {
 		step, _ := asMap(raw)
-		kind, _ := step["kind"].(string)
-		selfGoto := false
-		if target, _ := step["goto"].(string); target != "" {
-			selfGoto = true
-			if target != "$end" {
-				if idx, ok := allIndex[target]; ok && idx > i {
-					adj[i] = append(adj[i], idx)
-				}
+		addEdge := func(target string) {
+			if target == "" || target == "$end" {
+				return
+			}
+			if idx, ok := allIndex[target]; ok && idx > i {
+				adj[i] = append(adj[i], idx)
 			}
 		}
-		if kind == "when" {
+		target, _ := step["goto"].(string)
+		addEdge(target)
+		if kind, _ := step["kind"].(string); kind == "when" {
 			for _, rawWhen := range asList(step["when"]) {
 				wm, _ := asMap(rawWhen)
-				if target, _ := wm["goto"].(string); target != "" && target != "$end" {
-					if idx, ok := allIndex[target]; ok && idx > i {
-						adj[i] = append(adj[i], idx)
-					}
-				}
+				branch, _ := wm["goto"].(string)
+				addEdge(branch)
 			}
-		}
-		if !selfGoto && i+1 < n {
-			adj[i] = append(adj[i], i+1)
 		}
 	}
 	reach := make([]map[int]bool, n)
@@ -162,6 +156,42 @@ func (c *Checker) inputValueType(value string, tc stepTypeContext) (string, erro
 	default:
 		return "", fmt.Errorf("value must be params.<path> or step.<id>.<path>")
 	}
+}
+
+// inputValueNullable 解析 input 值根字段的 nullable；嵌套字段返回 known=false。
+func (c *Checker) inputValueNullable(value string, tc stepTypeContext) (nullable bool, known bool) {
+	switch {
+	case strings.HasPrefix(value, "params."):
+		path, ok := splitInputField(value)
+		if !ok || strings.Contains(path, ".") || strings.Contains(path, "[") {
+			return false, false
+		}
+		for _, raw := range asList(tc.doc["params"]) {
+			pm, _ := asMap(raw)
+			if name, _ := pm["name"].(string); name != path {
+				continue
+			}
+			typ, _ := pm["type"].(string)
+			n, _ := pm["nullable"].(bool)
+			return n || strings.HasPrefix(strings.TrimSpace(typ), "*"), true
+		}
+		return false, false
+	case strings.HasPrefix(value, "step."):
+		ref, path, ok := splitStepField(value)
+		if !ok || strings.Contains(path, ".") || strings.Contains(path, "[") {
+			return false, false
+		}
+		idx, ok := tc.stepIndex[ref]
+		if !ok {
+			return false, false
+		}
+		rt, ok := tc.stepOutputs[idx][path]
+		if !ok {
+			return false, false
+		}
+		return rt.nullable || strings.HasPrefix(strings.TrimSpace(rt.typ), "*"), true
+	}
+	return false, false
 }
 
 // parseTypeShape 拆掉指针与单层 List<>；指针只表达可空，不参与赋值兼容判断。

@@ -87,7 +87,7 @@ func (c *Checker) stepOutputPathType(step map[string]any, output map[string]retu
 		if !ok {
 			return "", fmt.Errorf("unknown service return %s", root.name)
 		}
-		ref, _ := so["service"].(string)
+		ref, _ := so["ref"].(string)
 		typ = c.methodReturns[ref][root.name].typ
 		if typ == "" {
 			return "", fmt.Errorf("unknown service return %s", root.name)
@@ -97,7 +97,7 @@ func (c *Checker) stepOutputPathType(step map[string]any, output map[string]retu
 		if !ok {
 			return "", fmt.Errorf("unknown query return %s", root.name)
 		}
-		qid, _ := qo["query"].(string)
+		qid, _ := qo["ref"].(string)
 		typ = c.queryReturnTypes[qid][root.name].typ
 		if typ == "" {
 			return "", fmt.Errorf("unknown query return %s", root.name)

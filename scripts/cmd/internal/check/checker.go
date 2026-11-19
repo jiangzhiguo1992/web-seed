@@ -68,6 +68,7 @@ type Checker struct {
 	ruleErrors        map[string]string
 	ruleOwners        map[string][]string
 	queryReturnTypes  map[string]map[string]returnType
+	eventPayloads     map[string]map[string]eventField
 	accessBindings    map[string]accessPolicy
 	inlineSeq         int
 	nodeKinds         map[string]contractspec.SchemaKind
@@ -234,7 +235,7 @@ var proseScalarFields = map[string]bool{
 	"generates": true, "handling": true, "id_policy": true, "instead": true,
 	"label": true, "message": true, "naming": true, "note": true,
 	"on_failure": true, "on_success": true, "ordering": true, "rationale": true,
-	"rate_limit_hint": true, "reason": true, "route_label": true, "rule": true,
+	"rate_limit_hint": true, "reason": true, "route_label": true,
 	"semantics": true, "scope": true, "storage": true, "success": true,
 	"summary": true, "text": true, "title": true, "ui": true,
 	"when": true, "why": true,

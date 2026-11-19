@@ -676,14 +676,14 @@ type serviceItemScaffold struct {
 }
 
 type stepScaffold struct {
-	ID        string            `yaml:"id"`
-	Kind      string            `yaml:"kind"`
-	Summary   string            `yaml:"summary"`
-	DependsOn []string          `yaml:"depends_on,omitempty"`
-	Input     []inputScaffold   `yaml:"input,omitempty"`
-	Output    []outputScaffold  `yaml:"output,omitempty"`
-	Errors    []string          `yaml:"errors,omitempty"`
-	Rules     []ruleRefScaffold `yaml:"rules"`
+	ID      string            `yaml:"id"`
+	Kind    string            `yaml:"kind"`
+	Summary string            `yaml:"summary"`
+	Input   []inputScaffold   `yaml:"input,omitempty"`
+	Output  []outputScaffold  `yaml:"output,omitempty"`
+	Errors  []string          `yaml:"errors,omitempty"`
+	Rules   []ruleRefScaffold `yaml:"rules"`
+	Goto    string            `yaml:"goto"`
 }
 
 type ruleRefScaffold struct {
@@ -705,6 +705,7 @@ type outputScaffold struct {
 type methodArgScaffold struct {
 	Name     string `yaml:"name"`
 	Type     string `yaml:"type"`
+	Value    string `yaml:"value,omitempty"`
 	Nullable bool   `yaml:"nullable,omitempty"`
 	Default  any    `yaml:"default,omitempty"`
 }
@@ -811,7 +812,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 		}
 		if steps, ok := FindField(f.ItemFields, "steps"); ok {
 			if err := requireSupported(steps.ItemFields, map[string]bool{
-				"id": true, "kind": true, "summary": true, "depends_on": true,
+				"id": true, "kind": true, "summary": true,
 				"input": true, "output": true, "errors": true,
 				"events": true, "rules": true, "lifecycles": true,
 				"goto": true, "when": true, "query": true, "service": true,
@@ -829,11 +830,14 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 				}
 			}
 		}
-		for _, arg := range []string{"params", "returns"} {
-			if f, ok := FindField(f.ItemFields, arg); ok {
-				if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "type": true, "nullable": true, "default": true}, "cap.services."+arg); err != nil {
-					return nil, err
-				}
+		if f, ok := FindField(f.ItemFields, "params"); ok {
+			if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "type": true, "nullable": true, "default": true}, "cap.services.params"); err != nil {
+				return nil, err
+			}
+		}
+		if f, ok := FindField(f.ItemFields, "returns"); ok {
+			if err := requireSupported(f.ItemFields, map[string]bool{"name": true, "type": true, "value": true, "nullable": true}, "cap.services.returns"); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -864,7 +868,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 			Summary:    "TODO: 服务说明",
 			Visibility: "public",
 			Params:     []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: "GetInput"}},
-			Returns:    []methodArgScaffold{{Name: "value", Type: "any"}, {Name: "err", Type: "error"}},
+			Returns:    []methodArgScaffold{{Name: "value", Type: "any", Value: "step.load.value"}, {Name: "err", Type: "error"}},
 			TxMode:     "read_only",
 			Steps: []stepScaffold{
 				{
@@ -875,6 +879,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 					Output:  []outputScaffold{{Name: "value", Type: "any", Description: "TODO: 产出说明"}},
 					Errors:  []string{"platform.errors.COMMON_INTERNAL"},
 					Rules:   []ruleRefScaffold{},
+					Goto:    "$end",
 				},
 			},
 		}},

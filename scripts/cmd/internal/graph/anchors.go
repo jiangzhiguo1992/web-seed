@@ -134,8 +134,11 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 					}
 				case "events":
 					for _, rawEvent := range asList(step["events"]) {
-						eventID, _ := rawEvent.(string)
-						a.addEvent(eventID, serviceID)
+						ev, _ := asMap(rawEvent)
+						eventID, _ := ev["ref"].(string)
+						if eventID != "" {
+							a.addEvent(eventID, serviceID)
+						}
 					}
 				}
 			}

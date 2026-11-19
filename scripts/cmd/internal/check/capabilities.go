@@ -72,6 +72,48 @@ func stepServiceItems(step map[string]any) []any {
 	return append(items, asList(step["services"])...)
 }
 
+// eventField 是事件 payload 字段的静态类型与必填性。
+type eventField struct {
+	typ      string
+	required bool
+}
+
+// eventPayloadFields 把 topic payload 的 object.properties 解析为字段表。
+func eventPayloadFields(raw any) map[string]eventField {
+	out := map[string]eventField{}
+	node, ok := asMap(raw)
+	if !ok {
+		return out
+	}
+	for _, rawProp := range asList(node["properties"]) {
+		prop, _ := asMap(rawProp)
+		name, _ := prop["name"].(string)
+		if name == "" {
+			continue
+		}
+		required, _ := prop["required"].(bool)
+		out[name] = eventField{typ: payloadPropertyType(prop["schema"]), required: required}
+	}
+	return out
+}
+
+// payloadPropertyType 取属性 schema 的静态类型；object/array 内联值域不参与类型断言。
+func payloadPropertyType(raw any) string {
+	node, ok := asMap(raw)
+	if !ok {
+		return ""
+	}
+	if ref, _ := node["ref"].(string); ref != "" {
+		return ref
+	}
+	typ, _ := node["type"].(string)
+	switch typ {
+	case "object", "array", "":
+		return ""
+	}
+	return typ
+}
+
 func (c *Checker) checkCapabilities() {
 	serviceSchema, err := c.loadSchemaByType("cap.services")
 	if err != nil {
@@ -208,7 +250,7 @@ func (c *Checker) checkCapabilities() {
 				if kind == "query" && step["errors"] == nil {
 					for _, rawQ := range stepQueryItems(step) {
 						qo, _ := asMap(rawQ)
-						qid, _ := qo["query"].(string)
+						qid, _ := qo["ref"].(string)
 						if q, ok := c.queries[qid]; ok {
 							for _, code := range q.Errors {
 								errs[code] = true
@@ -242,13 +284,13 @@ func (c *Checker) checkCapabilities() {
 				step, _ := asMap(rawStep)
 				for _, rawS := range stepServiceItems(step) {
 					so, _ := asMap(rawS)
-					if ref, _ := so["service"].(string); ref != "" {
+					if ref, _ := so["ref"].(string); ref != "" {
 						serviceEdges[id] = append(serviceEdges[id], ref)
 					}
 				}
 				for _, rawQ := range stepQueryItems(step) {
 					qo, _ := asMap(rawQ)
-					qid, _ := qo["query"].(string)
+					qid, _ := qo["ref"].(string)
 					if qid == "" {
 						continue
 					}
@@ -351,6 +393,7 @@ func (c *Checker) checkCapabilities() {
 	c.ruleErrors = ruleErrors
 	c.ruleOwners = ruleOwners
 	eventIDs := map[string]bool{}
+	c.eventPayloads = map[string]map[string]eventField{}
 	for _, file := range glob(c.root, filepath.Join(eventSchema.Targets.Dir, eventSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -366,6 +409,7 @@ func (c *Checker) checkCapabilities() {
 				c.rulef("event-structure", "%s: duplicate event id %s", relPath(c.root, file), id)
 			}
 			eventIDs[id] = true
+			c.eventPayloads[id] = eventPayloadFields(item["payload"])
 		}
 	}
 	lifecycleActions := map[string]lifecycleAction{}

@@ -58,7 +58,7 @@ func (c *Checker) checkCapabilityWrites(tableIDs map[string]string) {
 				var qids []string
 				for _, rawQ := range stepQueryItems(step) {
 					qo, _ := asMap(rawQ)
-					if qid, _ := qo["query"].(string); qid != "" {
+					if qid, _ := qo["ref"].(string); qid != "" {
 						qids = append(qids, qid)
 					}
 				}

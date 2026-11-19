@@ -770,7 +770,7 @@ func (c *Checker) checkQueryUsedBy() {
 				var qids []string
 				for _, rawQ := range stepQueryItems(step) {
 					qo, _ := asMap(rawQ)
-					qid, _ := qo["query"].(string)
+					qid, _ := qo["ref"].(string)
 					if qid != "" {
 						qids = append(qids, qid)
 					}

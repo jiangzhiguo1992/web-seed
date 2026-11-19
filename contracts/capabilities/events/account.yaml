@@ -18,7 +18,7 @@ topics:
       properties:
         - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
         - { name: number, schema: { type: account_number }, required: true, description: "账号编号" }
-        - { name: status, schema: { ref: data.enums.account_created_status }, required: true, description: "账号创建后的状态" }
+        - { name: status, schema: { ref: data.enums.account_status }, required: true, description: "账号创建后的状态" }
         - { name: created_at, schema: { type: timestamp }, required: true, description: "创建时间" }
     summary: "账号创建"
     emitted_by: [ cap.services.account.create ]
