@@ -168,7 +168,8 @@ services:
           - { name: max_attempts, type: integer, description: "最大连续失败次数" }
           - { name: lockout, type: integer, description: "锁定时长（秒）" }
         errors: [ ]
-        rules: [ ]
+        rules:
+          - { rule: "feature.rules.auth.login_lockout" }
       - id: lock_until
         kind: logic
         summary: "按连续失败次数与锁定策略计算锁定截止时间"

@@ -97,7 +97,7 @@ service 项必须声明：
 | kind         | 必填                                                                    | 说明                                                                                                                                                              |
 |--------------|-------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `query`      | `query`（单值）                                                          | 调用本模块 `data.queries.*`；`query.input` 的 key 必须是查询参数名，必填参数必须全部出现，不写 `ctx`（生成器注入）；`step.errors` 缺省取该 query 错误的并集；不接受 `output`，其他 step 用 `step.<id>.<returns 字段>` 引用其返回值 |
-| `service`    | `service`（单值）                                                        | 调用其他（或本模块）service；`service.input[].name` 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`；不接受 `output`，target 有非 err 返回字段时必须用 `service.returns` 映射列出，后续用 `step.<id>.<name>` 引用 |
+| `service`    | `service`（单值）                                                        | 调用其他（或本模块）service；`service.input[].name` 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`；不接受 `output`，target 的返回字段用 `step.<id>.<returns 字段>` 按需引用，不强制全部消费 |
 | `logic`      | `output` + `errors` + `rules`（可为空列表）；可选 `input` | 手写判断与数据变换；`rules` 是业务规则依据，必须声明字段；不直接调 query、service 或发事件 |
 | `events`     | `events`（至少一项）                                                     | 纯事件发射；只允许 `id` / `kind` / `summary` / `depends_on` / `errors` / `lifecycles` / `goto` / `events`；一个 step 是一组事件发射 |
 | `when`       | `when`；可选 `rules` / `output`                                          | 条件分支；每项是 `{input, equals|in, goto}`，条件名先按本步 `input`、再按本步 `output` 解析；`output` 是可参与分支判断的显式产出 |
@@ -126,8 +126,8 @@ service 项必须声明：
   （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；`step.<id>` 还必须通过 goto/when 边从被引用步骤可达，
   不能引用不可达分支；`logic` / `when` 的每个显式
   `output` 必须被后续 `input` 引用、被自身 `when` 条件引用，或与 `returns` 业务字段同名；`query` 的返回值用
-  `step.<id>.<returns 字段>` 引用，不能声明 `output`；`service` 的 target 返回字段必须先在 `service.returns` 中映射为本地名，
-  再用 `step.<id>.<本地名>` 引用；映射字段必须被后续 `input` 消费；`returns` 的每个业务字段必须有同名、类型一致且
+  `step.<id>.<returns 字段>` 引用，不能声明 `output`；`service` 的 target 返回字段同样用 `step.<id>.<returns 字段>` 按需引用；
+  `returns` 的每个业务字段必须有同名、类型一致且
   `nullable` 一致的产出（`*T` 视为可空；`err` 不参与）；service 的每个非 `ctx` 参数必须被至少一个 `input` 引用。
 - `params[].type` 只允许基础类型、`data.enums.*`、`data.entities.*`、本地 schema 或 `_types` 类型族；指针与 `List<>` 各最多一层。
 - 控制流由 `when` / `goto` 显式声明；`goto` 只允许前向，循环仍不支持；错误流转由实现决定；契约不声明 `on_error` / `max_iterations`。

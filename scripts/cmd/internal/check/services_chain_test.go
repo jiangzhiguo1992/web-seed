@@ -70,10 +70,7 @@ func TestServiceCallInputRequiredAndExact(t *testing.T) {
 		returns:        map[string]returnType{"value": {typ: "string"}},
 	}
 	base := func(input map[string]any) map[string]any {
-		item := map[string]any{
-			"service": "cap.services.x.target",
-			"returns": []any{map[string]any{"name": "value", "from": "value", "description": "x"}},
-		}
+		item := map[string]any{"service": "cap.services.x.target"}
 		if input != nil {
 			items := make([]any, 0, len(input))
 			for name, value := range input {
@@ -796,12 +793,12 @@ func TestServiceQueryOutputRejected(t *testing.T) {
 	if got := run(nil, []any{use("step.q.value")}); strings.Contains(got, "service-chain") {
 		t.Fatalf("query return reference reported: %s", got)
 	}
-	if got := run(nil, []any{use("step.q.missing")}); !strings.Contains(got, "unknown output") {
+	if got := run(nil, []any{use("step.q.missing")}); !strings.Contains(got, "unknown query return") {
 		t.Fatalf("unknown query return not reported: %s", got)
 	}
 }
 
-func TestServiceServiceReturnConsumed(t *testing.T) {
+func TestServiceServiceReturnReference(t *testing.T) {
 	target := serviceMeta{module: "x", visibility: "public", txMode: "none", returns: map[string]returnType{"value": {typ: "string"}}}
 	run := func(steps []any) string {
 		c := &Checker{methodReturns: map[string]map[string]returnType{
@@ -817,20 +814,22 @@ func TestServiceServiceReturnConsumed(t *testing.T) {
 			map[string]serviceMeta{"cap.services.x.target": target}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
 		return strings.Join(c.errs, "\n")
 	}
-	call := map[string]any{"id": "call", "kind": "service", "summary": "x", "service": map[string]any{
-		"service": "cap.services.x.target",
-		"returns": []any{map[string]any{"name": "value", "from": "value", "description": "x"}},
-	}}
-	use := map[string]any{
-		"id": "use", "kind": "logic", "summary": "x",
-		"input":  []any{map[string]any{"name": "v", "value": "step.call.value", "description": "x"}},
-		"output": []any{}, "errors": []any{}, "rules": []any{},
+	call := map[string]any{"id": "call", "kind": "service", "summary": "x", "service": map[string]any{"service": "cap.services.x.target"}}
+	use := func(value string) map[string]any {
+		return map[string]any{
+			"id": "use", "kind": "logic", "summary": "x",
+			"input":  []any{map[string]any{"name": "v", "value": value, "description": "x"}},
+			"output": []any{}, "errors": []any{}, "rules": []any{},
+		}
 	}
-	if got := run([]any{call}); !strings.Contains(got, "service return value is not consumed") {
-		t.Fatalf("unconsumed service return not reported: %s", got)
+	if got := run([]any{call}); strings.Contains(got, "service return") {
+		t.Fatalf("unconsumed service return reported: %s", got)
 	}
-	if got := run([]any{call, use}); strings.Contains(got, "service return value is not consumed") {
-		t.Fatalf("consumed service return reported: %s", got)
+	if got := run([]any{call, use("step.call.value")}); strings.Contains(got, "unknown service return") {
+		t.Fatalf("known service return reported: %s", got)
+	}
+	if got := run([]any{call, use("step.call.missing")}); !strings.Contains(got, "unknown service return") {
+		t.Fatalf("unknown service return not reported: %s", got)
 	}
 }
 

@@ -708,31 +708,6 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 					for name, rt := range target.returns {
 						produced[name] = append(produced[name], rt)
 					}
-					seenRet := map[string]bool{}
-					mappedFrom := map[string]bool{}
-					for _, rawRet := range asList(so["returns"]) {
-						rm, _ := asMap(rawRet)
-						name, _ := rm["name"].(string)
-						from, _ := rm["from"].(string)
-						if name == "" || from == "" {
-							c.rulef("service-steps-kind", "%s: step %s service %s returns item requires name and from", rel, stepID, ref)
-							continue
-						}
-						if seenRet[name] {
-							c.rulef("service-structure", "%s: step %s service %s duplicate return %s", rel, stepID, ref, name)
-						}
-						seenRet[name] = true
-						if _, ok := target.returns[from]; !ok {
-							c.rulef("service-ref", "%s: step %s service %s unknown return %s", rel, stepID, ref, from)
-							continue
-						}
-						mappedFrom[from] = true
-					}
-					for from := range target.returns {
-						if !mappedFrom[from] {
-							c.rulef("service-chain", "%s: step %s service %s return %s is not declared in returns", rel, stepID, ref, from)
-						}
-					}
 				}
 			}
 		case "logic":
@@ -923,30 +898,18 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		}
 		if !matched {
 			if nullableMismatch {
-				c.rulef("service-output", "%s: return %s nullability (nullable=%t) does not match producing types %v", rel, rn, rnullable, types)
+				c.rulef("service-output-nullable", "%s: return %s nullability (nullable=%t) does not match producing types %v", rel, rn, rnullable, types)
 			} else {
-				c.rulef("service-output", "%s: return %s type %s does not match producing types %v", rel, rn, rtyp, types)
+				c.rulef("service-output-type", "%s: return %s type %s does not match producing types %v", rel, rn, rtyp, types)
 			}
 		}
 	}
 
 	// 显式 output 必须被后续 step 的 input 消费，或作为 returns 的业务字段；when 的 output 还可以被自身 when 条件引用。
-	// kind=service 的隐式 returns 同样必须被消费或与 returns 同名。
 	for i, raw := range steps {
 		step, _ := asMap(raw)
 		stepID, _ := step["id"].(string)
 		kind, _ := step["kind"].(string)
-		if kind == "service" {
-			so, _ := asMap(step["service"])
-			for _, rawRet := range asList(so["returns"]) {
-				rm, _ := asMap(rawRet)
-				name, _ := rm["name"].(string)
-				if name != "" && !consumed[stepID+"."+name] {
-					c.rulef("service-chain", "%s: step %s service return %s is not consumed by a later input", rel, stepID, name)
-				}
-			}
-			continue
-		}
 		if kind != "logic" && kind != "when" {
 			continue
 		}
@@ -2213,35 +2176,32 @@ func (c *Checker) stepOutputPathType(step map[string]any, output map[string]retu
 	case "service":
 		so, ok := asMap(step["service"])
 		if !ok {
-			return "", fmt.Errorf("unknown output %s", root.name)
+			return "", fmt.Errorf("unknown service return %s", root.name)
 		}
 		ref, _ := so["service"].(string)
-		for _, rawRet := range asList(so["returns"]) {
-			rm, _ := asMap(rawRet)
-			name, _ := rm["name"].(string)
-			from, _ := rm["from"].(string)
-			if name == root.name {
-				typ = c.methodReturns[ref][from].typ
-				break
-			}
-		}
+		typ = c.methodReturns[ref][root.name].typ
 		if typ == "" {
-			return "", fmt.Errorf("unknown output %s", root.name)
+			return "", fmt.Errorf("unknown service return %s", root.name)
 		}
 	case "query":
 		qo, ok := asMap(step["query"])
 		if !ok {
-			return "", fmt.Errorf("unknown output %s", root.name)
+			return "", fmt.Errorf("unknown query return %s", root.name)
 		}
 		qid, _ := qo["query"].(string)
 		typ = c.queryReturnTypes[qid][root.name].typ
 		if typ == "" {
-			return "", fmt.Errorf("unknown output %s", root.name)
+			return "", fmt.Errorf("unknown query return %s", root.name)
 		}
-	case "logic", "when":
+	case "logic":
 		typ = output[root.name].typ
 		if typ == "" {
-			return "", fmt.Errorf("unknown output %s", root.name)
+			return "", fmt.Errorf("unknown logic output %s", root.name)
+		}
+	case "when":
+		typ = output[root.name].typ
+		if typ == "" {
+			return "", fmt.Errorf("unknown when output %s", root.name)
 		}
 	default:
 		return "", fmt.Errorf("unknown step kind %q", kind)
