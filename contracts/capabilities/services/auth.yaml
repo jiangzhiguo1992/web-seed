@@ -63,7 +63,7 @@ services:
   - name: login
     summary: "登录：校验认证绑定，签发令牌"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: LoginInput }
@@ -71,7 +71,6 @@ services:
       - { name: session, type: AuthSession }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: split_identifier
         kind: logic
         summary: "把登录标识拆成邮箱用户名与域名"
@@ -157,12 +156,11 @@ services:
         events:
           - cap.events.account.login_succeeded
           - cap.events.account.login_failed
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: bind_password
     summary: "创建、修改或启停密码认证绑定"
     visibility: public
-    transaction: none
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: BindPasswordInput }
@@ -214,10 +212,6 @@ services:
               - { name: username, value: params.input.username, description: "用户名" }
               - { name: password_hash, value: step.hash_password.password_hash, description: "密码哈希" }
         lifecycle: [ cap.lifecycles.auth_pwd.create ]
-        state:
-          write:
-            status: verified
-            queries: [ data.queries.auth.create_auth_pwd ]
       - id: update_bind
         kind: logic
         summary: "修改密码哈希；不改变认证状态"
@@ -245,10 +239,6 @@ services:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
         lifecycle: [ cap.lifecycles.auth_pwd.enable ]
-        state:
-          write:
-            status: verified
-            queries: [ data.queries.auth.set_auth_pwd_status ]
       - id: disable_bind
         kind: transition
         summary: "停用密码绑定"
@@ -263,15 +253,11 @@ services:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
         lifecycle: [ cap.lifecycles.auth_pwd.disable ]
-        state:
-          write:
-            status: disabled
-            queries: [ data.queries.auth.set_auth_pwd_status ]
 
   - name: bind_phone
     summary: "创建或启停手机号认证绑定"
     visibility: public
-    transaction: none
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: BindPhoneInput }
@@ -322,10 +308,6 @@ services:
               - { name: number, value: params.input.number, description: "手机号" }
               - { name: operator, value: step.request_operator.operator, description: "操作者标识" }
         lifecycle: [ cap.lifecycles.auth_contact.create ]
-        state:
-          write:
-            status: unverified
-            queries: [ data.queries.auth.create_auth_phone ]
       - id: enable_bind
         kind: transition
         summary: "启用手机号绑定"
@@ -340,10 +322,6 @@ services:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
         lifecycle: [ cap.lifecycles.auth_contact.enable ]
-        state:
-          write:
-            status: verified
-            queries: [ data.queries.auth.set_auth_phone_status ]
       - id: disable_bind
         kind: transition
         summary: "停用手机号绑定"
@@ -358,15 +336,11 @@ services:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
         lifecycle: [ cap.lifecycles.auth_contact.disable ]
-        state:
-          write:
-            status: disabled
-            queries: [ data.queries.auth.set_auth_phone_status ]
 
   - name: bind_email
     summary: "创建或启停邮箱认证绑定"
     visibility: public
-    transaction: none
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: BindEmailInput }
@@ -422,10 +396,6 @@ services:
               - { name: entity, value: step.email_parts.entity, description: "域名主体" }
               - { name: tld, value: step.email_parts.tld, description: "顶级域" }
         lifecycle: [ cap.lifecycles.auth_contact.create ]
-        state:
-          write:
-            status: unverified
-            queries: [ data.queries.auth.create_auth_email ]
       - id: enable_bind
         kind: transition
         summary: "启用邮箱绑定"
@@ -440,10 +410,6 @@ services:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
         lifecycle: [ cap.lifecycles.auth_contact.enable ]
-        state:
-          write:
-            status: verified
-            queries: [ data.queries.auth.set_auth_email_status ]
       - id: disable_bind
         kind: transition
         summary: "停用邮箱绑定"
@@ -458,15 +424,11 @@ services:
               - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
               - { name: status, value: step.bind_status.status, description: "绑定状态码" }
         lifecycle: [ cap.lifecycles.auth_contact.disable ]
-        state:
-          write:
-            status: disabled
-            queries: [ data.queries.auth.set_auth_email_status ]
 
   - name: revoke_all_for_account
     summary: "软删账号的认证绑定，并编排令牌吊销与验证体作废"
     visibility: public
-    transaction: none
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: integer }

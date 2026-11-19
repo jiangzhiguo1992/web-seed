@@ -666,13 +666,13 @@ type servicePropertyScaffold struct {
 }
 
 type serviceItemScaffold struct {
-	Name        string              `yaml:"name"`
-	Summary     string              `yaml:"summary"`
-	Visibility  string              `yaml:"visibility"`
-	Transaction string              `yaml:"transaction"`
-	Params      []methodArgScaffold `yaml:"params"`
-	Returns     []methodArgScaffold `yaml:"returns"`
-	Steps       []stepScaffold      `yaml:"steps"`
+	Name       string              `yaml:"name"`
+	Summary    string              `yaml:"summary"`
+	Visibility string              `yaml:"visibility"`
+	TxMode     string              `yaml:"tx_mode"`
+	Params     []methodArgScaffold `yaml:"params"`
+	Returns    []methodArgScaffold `yaml:"returns"`
+	Steps      []stepScaffold      `yaml:"steps"`
 }
 
 type stepScaffold struct {
@@ -806,7 +806,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 	if f, ok := FindField(s.Fields, "services"); ok {
 		if err := requireSupported(f.ItemFields, map[string]bool{
 			"name": true, "summary": true, "visibility": true, "params": true,
-			"returns": true, "transaction": true, "steps": true,
+			"returns": true, "tx_mode": true, "steps": true,
 		}, "cap.services.services"); err != nil {
 			return nil, err
 		}
@@ -861,14 +861,13 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 			},
 		},
 		Services: []serviceItemScaffold{{
-			Name:        "get",
-			Summary:     "TODO: 服务说明",
-			Visibility:  "public",
-			Params:      []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: "GetInput"}},
-			Returns:     []methodArgScaffold{{Name: "value", Type: "any"}, {Name: "err", Type: "error"}},
-			Transaction: "read_only",
+			Name:       "get",
+			Summary:    "TODO: 服务说明",
+			Visibility: "public",
+			Params:     []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: "GetInput"}},
+			Returns:    []methodArgScaffold{{Name: "value", Type: "any"}, {Name: "err", Type: "error"}},
+			TxMode:     "read_only",
 			Steps: []stepScaffold{
-				{ID: "begin", Kind: "tx_begin", Summary: "开启只读事务"},
 				{
 					ID:      "load",
 					Kind:    "logic",
@@ -877,7 +876,6 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 					Output:  []outputScaffold{{Name: "value", Type: "any", Description: "TODO: 产出说明"}},
 					Errors:  []string{"platform.errors.COMMON_INTERNAL"},
 				},
-				{ID: "commit", Kind: "tx_commit", Summary: "提交只读事务"},
 			},
 		}},
 	}

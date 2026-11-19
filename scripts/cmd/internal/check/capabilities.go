@@ -40,7 +40,7 @@ type lifecycleAction struct {
 type serviceMeta struct {
 	module         string
 	visibility     string
-	transaction    string
+	txMode         string
 	params         map[string]bool
 	requiredParams map[string]bool
 	paramTypes     map[string]bool
@@ -57,12 +57,11 @@ var allowedOperationExtensions = map[string]bool{
 }
 
 var stepKindFields = map[string][]string{
-	"query":      {"queries", "output"},
+	"query":      {"queries", "output", "lifecycle"},
 	"service":    {"services"},
-	"logic":      {"input", "when", "output", "queries", "events", "rules"},
-	"transition": {"input", "when", "output", "queries", "events", "rules"},
-	"tx_begin":   {},
-	"tx_commit":  {},
+	"logic":      {"input", "when", "output", "queries", "events", "rules", "lifecycle"},
+	"transition": {"input", "when", "output", "queries", "events", "rules", "lifecycle"},
+	"events":     {"events"},
 }
 
 func (c *Checker) checkCapabilities() {
@@ -211,7 +210,7 @@ func (c *Checker) checkCapabilities() {
 					}
 				}
 			}
-			transaction, _ := item["transaction"].(string)
+			txMode, _ := item["tx_mode"].(string)
 			returns := map[string]returnType{}
 			for _, rawReturn := range asList(item["returns"]) {
 				rm, _ := asMap(rawReturn)
@@ -223,7 +222,7 @@ func (c *Checker) checkCapabilities() {
 				}
 			}
 			c.methodReturns[id] = returns
-			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, transaction: transaction, params: params, requiredParams: requiredParams, paramTypes: paramTypes, paramDecls: paramDecls, typeSchemas: typeSchemas, errors: errs, returns: returns}
+			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, txMode: txMode, params: params, requiredParams: requiredParams, paramTypes: paramTypes, paramDecls: paramDecls, typeSchemas: typeSchemas, errors: errs, returns: returns}
 			stepQueries := map[string]bool{}
 			for _, rawStep := range asList(item["steps"]) {
 				step, _ := asMap(rawStep)
@@ -547,7 +546,6 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		c.rulef("service-structure", "%s: service requires steps", rel)
 		return
 	}
-	c.checkTransactionSteps(doc, steps, rel)
 	stepOutputs := make([]map[string]returnType, len(steps))
 	stepIndex := map[string]int{}
 	tc := stepTypeContext{doc: doc, stepIndex: stepIndex, steps: steps, stepOutputs: stepOutputs}
@@ -563,7 +561,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			stepIndex[stepID] = i
 		}
 		kind, _ := step["kind"].(string)
-		transaction, _ := doc["transaction"].(string)
+		txMode, _ := doc["tx_mode"].(string)
 		if s, _ := step["summary"].(string); strings.TrimSpace(s) == "" {
 			c.rulef("schema.non-empty", "%s: step %s summary must not be empty", rel, stepID)
 		}
@@ -583,7 +581,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		checkInputValues(input)
 		c.checkStepWhen(step, input, kind, tc, rel, stepID)
 		allowed := map[string]bool{
-			"id": true, "kind": true, "summary": true, "depends_on": true, "errors": true, "lifecycle": true, "state": true,
+			"id": true, "kind": true, "summary": true, "depends_on": true, "errors": true,
 		}
 		for _, field := range stepKindFields[kind] {
 			allowed[field] = true
@@ -625,8 +623,8 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				for code := range q.errorSet() {
 					queryErrors[code] = true
 				}
-				if transaction == "read_only" && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) {
-					c.rulef("service-transaction", "%s: step %s calls write query %s under transaction=read_only", rel, stepID, qid)
+				if txMode == "read_only" && (len(q.Writes) > 0 || queryReturnsAffectedRows(q)) {
+					c.rulef("service-transaction", "%s: step %s calls write query %s under tx_mode=read_only", rel, stepID, qid)
 				}
 				for name, rt := range c.queryReturnTypes[qid] {
 					produced[name] = append(produced[name], rt)
@@ -658,11 +656,11 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				if target.module != module && target.visibility != "public" {
 					c.rulef("service-visibility", "%s: step %s cannot call internal %s from another module", rel, stepID, ref)
 				}
-				if transaction != "none" && target.transaction == "required" {
-					c.rulef("service-transaction", "%s: step %s transaction=%s must not call transaction=required service %s (nested transaction)", rel, stepID, transaction, ref)
+				if txMode != "none" && target.txMode == "required" {
+					c.rulef("service-transaction", "%s: step %s tx_mode=%s must not call tx_mode=required service %s (nested transaction)", rel, stepID, txMode, ref)
 				}
-				if transaction == "read_only" && c.serviceWrites[ref] {
-					c.rulef("service-transaction", "%s: step %s transaction=read_only cannot call service %s that writes tables", rel, stepID, ref)
+				if txMode == "read_only" && c.serviceWrites[ref] {
+					c.rulef("service-transaction", "%s: step %s tx_mode=read_only cannot call service %s that writes tables", rel, stepID, ref)
 				}
 				sInput := map[string]any{}
 				if rawIn, ok := so["input"]; ok && rawIn != nil {
@@ -701,10 +699,13 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
 		case "transition":
 			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
-		case "tx_begin", "tx_commit":
-			// 事务边界只允许 id/kind/summary，由 checkTransactionSteps 统一校验。
+		case "events":
+			if len(asList(step["events"])) == 0 {
+				c.rulef("service-steps-kind", "%s: step %s kind=events requires events", rel, stepID)
+			}
+			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
 		default:
-			c.rulef("service-structure", "%s: step %s kind must be query/service/logic/transition/tx_begin/tx_commit", rel, stepID)
+			c.rulef("service-structure", "%s: step %s kind must be query/service/logic/transition/events", rel, stepID)
 		}
 
 		lifecycles := asList(step["lifecycle"])
@@ -738,91 +739,53 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			c.rulef("service-steps-kind", "%s: step %s kind=transition requires lifecycle", rel, stepID)
 		}
 
-		stepQueries := map[string]bool{}
-		for _, rawQ := range asList(step["queries"]) {
-			qo, _ := asMap(rawQ)
-			if qid, _ := qo["query"].(string); qid != "" {
-				stepQueries[qid] = true
+		// 有目标状态的 lifecycle 动作，要求本步至少一个查询同时写 subject 主表并绑定状态列；
+		// 目标状态以 lifecycle 为唯一事实源，step 不再重复声明 state。
+		for _, rawL := range lifecycles {
+			actionID, _ := rawL.(string)
+			action, ok := lifecycleActions[actionID]
+			if !ok {
+				continue
 			}
-		}
-		stateDef, _ := asMap(step["state"])
-		var write map[string]any
-		if stateDef != nil {
-			write, _ = asMap(stateDef["write"])
-		}
-		if write == nil && len(lifecycles) > 0 {
-			for _, rawL := range lifecycles {
-				actionID, _ := rawL.(string)
-				action := lifecycleActions[actionID]
-				want := action.initial
-				if action.kind != "create" {
-					want = action.to
-				}
-				if want != "" {
-					c.rulef("lifecycle-steps", "%s: step %s lifecycle action %s requires state.write", rel, stepID, actionID)
-				}
+			want := action.initial
+			if action.kind != "create" {
+				want = action.to
 			}
-		}
-		if write != nil {
-			if len(lifecycles) == 0 {
-				c.rulef("lifecycle-steps", "%s: step %s state.write requires lifecycle", rel, stepID)
+			if want == "" {
+				continue
 			}
-			status, _ := write["status"].(string)
-			writeQueries := stringList(write["queries"])
-			if len(writeQueries) == 0 {
-				c.rulef("lifecycle-steps", "%s: step %s state.write requires queries", rel, stepID)
-			}
-			subjectTables := map[string]bool{}
-			statusCols := map[string]bool{}
-			for _, rawL := range lifecycles {
-				actionID, _ := rawL.(string)
-				action := lifecycleActions[actionID]
-				want := action.initial
-				if action.kind != "create" {
-					want = action.to
-				}
-				if want != "" && status != want {
-					c.rulef("lifecycle-steps", "%s: step %s state.write.status %q must be %q for %s", rel, stepID, status, want, actionID)
-				}
-				for _, subj := range action.subjects {
-					if subj.Table != "" {
-						subjectTables[subj.Table] = true
-					}
-					if subj.ColumnRef != "" {
-						statusCols[subj.ColumnRef] = true
-					}
-				}
-			}
-			for _, qid := range writeQueries {
-				if !stepQueries[qid] {
-					c.rulef("lifecycle-steps", "%s: step %s state.write query %s is not in step queries", rel, stepID, qid)
-					continue
-				}
+			satisfied := false
+			for _, rawQ := range asList(step["queries"]) {
+				qo, _ := asMap(rawQ)
+				qid, _ := qo["query"].(string)
 				q, ok := c.queries[qid]
 				if !ok {
-					c.rulef("lifecycle-steps", "%s: step %s state.write unknown query %s", rel, stepID, qid)
 					continue
 				}
-				writesSubject := false
-				for _, table := range q.Writes {
-					if subjectTables[table] {
-						writesSubject = true
-						break
+				writesSubject, bound := false, false
+				for _, subj := range action.subjects {
+					if subj.Table != "" {
+						for _, table := range q.Writes {
+							if table == subj.Table {
+								writesSubject = true
+							}
+						}
+					}
+					if subj.ColumnRef != "" {
+						for _, p := range q.Params {
+							if p.Column == subj.ColumnRef {
+								bound = true
+							}
+						}
 					}
 				}
-				if !writesSubject {
-					c.rulef("lifecycle-steps", "%s: step %s state.write query %s does not write a subject table", rel, stepID, qid)
+				if writesSubject && bound {
+					satisfied = true
+					break
 				}
-				bound := false
-				for _, p := range q.Params {
-					if p.Column != "" && statusCols[p.Column] {
-						bound = true
-						break
-					}
-				}
-				if !bound {
-					c.rulef("lifecycle-steps", "%s: step %s state.write query %s has no parameter bound to a subject status column", rel, stepID, qid)
-				}
+			}
+			if !satisfied {
+				c.rulef("lifecycle-steps", "%s: step %s lifecycle action %s requires a query writing a subject table with a status column parameter", rel, stepID, actionID)
 			}
 		}
 
@@ -1141,53 +1104,6 @@ func (c *Checker) checkWhenValue(typ string, value any, rel, stepID, name string
 		if _, ok := value.(string); !ok {
 			c.rulef("service-when", "%s: step %s when input %s expects string, got %T", rel, stepID, name, value)
 		}
-	}
-}
-
-// checkTransactionSteps 校验事务边界的显式步骤：
-// required/read_only 必须首步 tx_begin、末步 tx_commit，且各只有一个；none 不得出现。
-func (c *Checker) checkTransactionSteps(doc map[string]any, steps []any, rel string) {
-	transaction, _ := doc["transaction"].(string)
-	beginCount, commitCount := 0, 0
-	beginAt, commitAt := -1, -1
-	for i, raw := range steps {
-		step, _ := asMap(raw)
-		kind, _ := step["kind"].(string)
-		stepID, _ := step["id"].(string)
-		switch kind {
-		case "tx_begin":
-			beginCount++
-			beginAt = i
-		case "tx_commit":
-			commitCount++
-			commitAt = i
-		default:
-			continue
-		}
-		for field := range step {
-			if field != "id" && field != "kind" && field != "summary" {
-				c.rulef("service-transaction-steps", "%s: step %s kind=%s does not allow field %s", rel, stepID, kind, field)
-			}
-		}
-	}
-	if transaction == "none" {
-		if beginCount > 0 || commitCount > 0 {
-			c.rulef("service-transaction-steps", "%s: transaction=none must not declare tx_begin or tx_commit", rel)
-		}
-		return
-	}
-	if beginCount != 1 || commitCount != 1 {
-		c.rulef("service-transaction-steps", "%s: transaction=%s requires exactly one tx_begin and one tx_commit", rel, transaction)
-		return
-	}
-	if beginAt != 0 {
-		c.rulef("service-transaction-steps", "%s: tx_begin must be the first step", rel)
-	}
-	if commitAt != len(steps)-1 {
-		c.rulef("service-transaction-steps", "%s: tx_commit must be the last step", rel)
-	}
-	if commitAt < beginAt {
-		c.rulef("service-transaction-steps", "%s: tx_commit must come after tx_begin", rel)
 	}
 }
 

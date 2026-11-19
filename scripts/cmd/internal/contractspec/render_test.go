@@ -463,19 +463,14 @@ func TestRenderService(t *testing.T) {
 		t.Fatalf("services = %#v", services)
 	}
 	m, _ := services[0].(map[string]any)
-	if m["name"] != "get" || m["visibility"] != "public" || m["transaction"] != "read_only" {
+	if m["name"] != "get" || m["visibility"] != "public" || m["tx_mode"] != "read_only" {
 		t.Fatalf("service = %#v", m)
 	}
 	steps, _ := m["steps"].([]any)
-	if len(steps) != 3 {
+	if len(steps) != 1 {
 		t.Fatalf("steps = %#v", steps)
 	}
-	begin, _ := steps[0].(map[string]any)
-	step, _ := steps[1].(map[string]any)
-	commit, _ := steps[2].(map[string]any)
-	if begin["kind"] != "tx_begin" || commit["kind"] != "tx_commit" {
-		t.Fatalf("transaction bracket missing: %#v", steps)
-	}
+	step, _ := steps[0].(map[string]any)
 	if step["kind"] != "logic" {
 		t.Fatalf("step = %#v", step)
 	}

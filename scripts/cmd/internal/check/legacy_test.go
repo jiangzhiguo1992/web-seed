@@ -88,7 +88,7 @@ func (c *Checker) checkFlowItem(doc map[string]any, rel, id, module string, meth
 	}
 	doc2 := map[string]any{
 		"summary":        doc["summary"],
-		"transaction":    doc["transaction"],
+		"tx_mode":        doc["tx_mode"],
 		"params":         doc["params"],
 		"steps":          steps,
 		"max_iterations": doc["max_iterations"],

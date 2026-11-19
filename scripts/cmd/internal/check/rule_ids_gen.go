@@ -156,7 +156,6 @@ var knownRuleIDs = map[string]bool{
 	"service-steps-kind":          true,
 	"service-structure":           true,
 	"service-transaction":         true,
-	"service-transaction-steps":   true,
 	"service-visibility":          true,
 	"service-when":                true,
 	"storage-archive":             true,

@@ -44,7 +44,7 @@ services:
   - name: send
     summary: "发送短信/邮件验证码"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: SendVerificationInput }
@@ -52,7 +52,6 @@ services:
       - { name: verification, type: VerificationSent }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: resolve_auth_id
         kind: logic
         summary: "按 auth_type 与目标解析认证绑定 ID"
@@ -168,12 +167,11 @@ services:
           - "feature.rules.auth.verification_register_account"
           - "feature.rules.auth.verification_auth_binding"
           - "feature.rules.auth.verification_purpose_status"
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: verify
     summary: "校验并消费验证码，记录每次校验动作"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: VerifyCodeInput }
@@ -181,7 +179,6 @@ services:
       - { name: result, type: VerificationResult }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: resolve_auth_id
         kind: logic
         summary: "按 auth_type 与目标解析认证绑定 ID"
@@ -347,10 +344,6 @@ services:
               - { name: id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
               - { name: status, value: step.status_verified.status, description: "目标状态：已认证" }
         lifecycle: [ cap.lifecycles.auth_contact.verify ]
-        state:
-          write:
-            status: verified
-            queries: [ data.queries.auth.set_auth_phone_status ]
       - id: apply_email_verified
         kind: transition
         summary: "验证成功且 auth_type=email 时把邮箱绑定置为 verified"
@@ -371,16 +364,11 @@ services:
               - { name: id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
               - { name: status, value: step.status_verified.status, description: "目标状态：已认证" }
         lifecycle: [ cap.lifecycles.auth_contact.verify ]
-        state:
-          write:
-            status: verified
-            queries: [ data.queries.auth.set_auth_email_status ]
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: revoke_by_auth
     summary: "换绑/解绑/停用认证绑定时作废对应未消费验证体"
     visibility: public
-    transaction: none
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
       - { name: auth_type, type: data.enums.auth_type }
@@ -420,7 +408,7 @@ services:
   - name: revoke_by_account
     summary: "作废账号的全部未消费验证体"
     visibility: public
-    transaction: none
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: integer }

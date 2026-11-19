@@ -36,7 +36,7 @@ services:
   - name: get
     summary: "按 ID 获取账号"
     visibility: public
-    transaction: read_only
+    tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer }
@@ -44,7 +44,6 @@ services:
       - { name: account, type: data.entities.account }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启只读事务" }
       - id: load
         kind: logic
         summary: "按 ID 读取账号并校验可见性"
@@ -59,12 +58,11 @@ services:
               - { name: id, value: params.id, description: "待读取的账号 ID" }
         rules:
           - "feature.rules.account.self_only"
-      - { id: commit, kind: tx_commit, summary: "提交只读事务" }
 
   - name: list
     summary: "列出账号（游标分页）"
     visibility: public
-    transaction: read_only
+    tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
       - { name: filter, type: ListAccountsFilter }
@@ -72,7 +70,6 @@ services:
       - { name: page, type: AccountPage }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启只读事务" }
       - id: query
         kind: logic
         summary: "按过滤条件游标分页查询账号"
@@ -86,12 +83,11 @@ services:
               - { name: status, value: params.filter.status, description: "账号状态筛选" }
               - { name: offset, value: params.filter.offset, description: "分页偏移" }
               - { name: limit, value: params.filter.limit, description: "分页上限" }
-      - { id: commit, kind: tx_commit, summary: "提交只读事务" }
 
   - name: create
     summary: "创建账号"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: CreateAccountInput }
@@ -99,7 +95,6 @@ services:
       - { name: account, type: data.entities.account }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: new_id
         kind: logic
         summary: "生成新账号 ID"
@@ -141,16 +136,11 @@ services:
           - "feature.rules.account.number_unique"
           - "feature.rules.account.nickname_length"
         lifecycle: [ cap.lifecycles.account.create ]
-        state:
-          write:
-            status: pending
-            queries: [ data.queries.account.create_account ]
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: update
     summary: "更新账号资料"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer }
@@ -159,7 +149,6 @@ services:
       - { name: account, type: data.entities.account }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: update
         kind: logic
         summary: "校验可见性与软删状态后更新资料"
@@ -182,19 +171,17 @@ services:
           - "feature.rules.account.nickname_length"
           - "feature.rules.account.self_only"
           - "feature.rules.account.deleted_cannot_modify"
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: delete
     summary: "软删账号，并清理认证绑定、验证体与令牌"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer }
     returns:
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: load
         kind: query
         summary: "读取待删除账号"
@@ -244,16 +231,11 @@ services:
           - "feature.rules.account.delete_revokes_auth"
           - "feature.rules.account.deleted_status_consistent"
         lifecycle: [ cap.lifecycles.account.destroy ]
-        state:
-          write:
-            status: deleted
-            queries: [ data.queries.account.soft_delete_account ]
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: activate
     summary: "激活或解封账号"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer }
@@ -261,7 +243,6 @@ services:
       - { name: account, type: data.entities.account }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: target_status
         kind: logic
         summary: "按生命周期动作确定激活目标状态"
@@ -287,16 +268,11 @@ services:
               - { name: status, value: step.target_status.status, description: "目标状态：激活" }
         events: [ cap.events.account.activated, cap.events.account.reactivated ]
         lifecycle: [ cap.lifecycles.account.activate, cap.lifecycles.account.reactivate ]
-        state:
-          write:
-            status: active
-            queries: [ data.queries.account.set_account_status ]
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: suspend
     summary: "封禁账号"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer }
@@ -305,7 +281,6 @@ services:
       - { name: account, type: data.entities.account }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: target_status
         kind: logic
         summary: "按生命周期动作确定封禁目标状态"
@@ -333,8 +308,3 @@ services:
               - { name: status, value: step.target_status.status, description: "目标状态：封禁" }
         events: [ cap.events.account.suspended ]
         lifecycle: [ cap.lifecycles.account.suspend ]
-        state:
-          write:
-            status: suspended
-            queries: [ data.queries.account.set_account_status ]
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }

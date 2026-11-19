@@ -20,7 +20,7 @@ services:
   - name: issue
     summary: "为账号签发 access + refresh 令牌对"
     visibility: public
-    transaction: none
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: integer }
@@ -79,7 +79,7 @@ services:
   - name: refresh
     summary: "用刷新令牌换取新令牌对"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: refresh_token, type: string }
@@ -87,7 +87,6 @@ services:
       - { name: tokens, type: TokenPair }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: hash_old
         kind: logic
         summary: "计算旧刷新令牌的哈希"
@@ -163,19 +162,17 @@ services:
               - { name: refresh_token_hash, value: step.hash_old.refresh_token_hash, description: "待作废的旧刷新令牌哈希" }
               - { name: revoked_at, value: step.now.revoked_at, description: "旧令牌作废时间" }
               - { name: revoke_reason, value: step.reason.revoke_reason, description: "旧令牌作废原因：rotated" }
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: logout
     summary: "吊销刷新令牌"
     visibility: public
-    transaction: required
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: refresh_token, type: string }
     returns:
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启写事务" }
       - id: hash
         kind: logic
         summary: "计算待吊销刷新令牌的哈希"
@@ -211,12 +208,11 @@ services:
               - { name: refresh_token_hash, value: step.hash.refresh_token_hash, description: "待吊销的刷新令牌哈希" }
               - { name: revoked_at, value: step.now.revoked_at, description: "吊销时间" }
               - { name: revoke_reason, value: step.reason.revoke_reason, description: "吊销原因：logout" }
-      - { id: commit, kind: tx_commit, summary: "提交写事务" }
 
   - name: revoke_by_account
     summary: "吊销账号的全部令牌"
     visibility: public
-    transaction: none
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: integer }
@@ -251,7 +247,7 @@ services:
   - name: verify
     summary: "校验访问令牌并返回账号"
     visibility: public
-    transaction: read_only
+    tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
       - { name: access_token, type: string }
@@ -259,7 +255,6 @@ services:
       - { name: account, type: data.entities.account }
       - { name: err, type: error }
     steps:
-      - { id: begin, kind: tx_begin, summary: "开启只读事务" }
       - id: hash
         kind: logic
         summary: "计算待校验访问令牌的哈希"
@@ -290,12 +285,11 @@ services:
           - query: data.queries.account.get_account
             input:
               - { name: id, value: step.load_token.row.account_id, description: "令牌归属账号 ID" }
-      - { id: commit, kind: tx_commit, summary: "提交只读事务" }
 
   - name: purge_expired
     summary: "清理已过期令牌"
     visibility: internal
-    transaction: none
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
     returns:

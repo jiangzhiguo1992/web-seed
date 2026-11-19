@@ -85,9 +85,9 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 	c := &Checker{errCodeSet: map[string]bool{"COMMON_INTERNAL": true}}
 	doc := func(output []any) map[string]any {
 		return map[string]any{
-			"summary":     "x",
-			"transaction": "none",
-			"params":      []any{},
+			"summary": "x",
+			"tx_mode": "none",
+			"params":  []any{},
 			"returns": []any{
 				map[string]any{"name": "account", "type": "any"},
 			},
@@ -169,7 +169,7 @@ services:
   - name: get
     summary: "a"
     visibility: public
-    transaction: read_only
+    tx_mode: read_only
     steps:
       - {id: call, kind: service, summary: "x", services: [{service: cap.services.b.get}]}
 `)
@@ -183,7 +183,7 @@ services:
   - name: get
     summary: "b"
     visibility: public
-    transaction: read_only
+    tx_mode: read_only
     steps:
       - {id: call, kind: service, summary: "x", services: [{service: cap.services.a.get}]}
 `)
@@ -1038,7 +1038,7 @@ services:
   - name: get
     summary: "x"
     visibility: public
-    transaction: read_only
+    tx_mode: read_only
     params:
       - {name: id, type: integer}
     returns:
@@ -1201,13 +1201,9 @@ func TestQueryErrorPropagation(t *testing.T) {
 	}
 	base := func(step map[string]any) map[string]any {
 		return map[string]any{
-			"summary":     "x",
-			"transaction": "required",
-			"steps": []any{
-				map[string]any{"id": "tx_begin", "kind": "tx_begin", "summary": "x"},
-				step,
-				map[string]any{"id": "tx_commit", "kind": "tx_commit", "summary": "x"},
-			},
+			"summary": "x",
+			"tx_mode": "required",
+			"steps":   []any{step},
 		}
 	}
 	check := func(t *testing.T, doc map[string]any) []string {
@@ -1291,7 +1287,7 @@ services:
       - {name: err, type: error}
       - {name: value, type: string}
     errors: []
-    transaction: read_only
+    tx_mode: read_only
     steps:
       - {id: load, kind: logic, summary: "x", errors: [], output: []}
 `)
@@ -1338,7 +1334,7 @@ services:
       - {name: err, type: error}
       - {name: value, type: string}
     errors: []
-    transaction: read_only
+    tx_mode: read_only
     steps:
       - {id: load, kind: logic, summary: "x", errors: [], output: []}
 `)

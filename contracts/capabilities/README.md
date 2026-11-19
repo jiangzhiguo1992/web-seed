@@ -22,7 +22,7 @@
 - **lifecycle = 一个实体的创建、状态转换与销毁**，每个动作（create/destroy/transition）锚到具体 service step。
 - **event = 异步事实**，由 service step 的 `events` 发布到 topic，由 job 的 `trigger.topic` 订阅。
 - **job = 异步任务**，引用一个同步 service 作为 handler，声明 `trigger`（cron/topic）/retry/concurrency。
-- **step = 服务实现路径上的一步**，六类：query / service / logic / transition / tx_begin / tx_commit；其中 `transition` 执行生命周期动作，`tx_*` 是事务边界，二者不是一回事。
+- **step = 服务实现路径上的一步**，五类：query / service / logic / transition / events；其中 `transition` 执行生命周期动作，`events` 是纯事件发射步骤。
 - **rule 在 features**，被 service 的 `kind: logic` / `kind: transition` step 引用；**lifecycle 在 capabilities**。
 - **protocol = service 到传输协议的绑定**，只写协议差异。
 
@@ -36,7 +36,7 @@ protocols ──x-service──> services ──steps──> data.queries
      │                     ├──kind=service──> services（跨模块）
      │                     ├──rules─────────> features.rules
      │                     ├──lifecycle────> lifecycles
-     │                     └──event─────────> events
+     │                     └──events─────────> events
      ├──不引用 queries      └──kind=query────> 本模块 data.queries
 
 lifecycles ──step──> services
@@ -52,7 +52,7 @@ events/jobs ──trigger.topic──> events/topics
 | service → rule       | `services/*.yaml` 的 steps         | `kind: logic/transition` + `rules`     |
 | service → lifecycle  | `services/*.yaml` 的 steps         | `lifecycle`（create/destroy/transition） |
 | lifecycle → service  | `lifecycles/*.yaml` 的 actions     | `step` / `implemented_by`（生成）      |
-| service → event      | `services/*.yaml` 的 steps         | `kind: logic/transition` + `events`    |
+| service → event      | `services/*.yaml` 的 steps         | `kind: logic/transition/events` + `events` |
 | event/job → service  | `events/*.yaml` 的 jobs            | `service`                              |
 | event/job → topic    | `events/*.yaml` 的 jobs            | `trigger.topic`                        |
 | feature → service    | `features/**`                      | `capability: cap.services.*`           |
@@ -89,7 +89,7 @@ service 项必须声明：
 - `name` / `summary` / `visibility`（`public` 跨模块可见，`internal` 仅本模块可见）
 - `params` / `returns`；最后一项必须是 `{name: err, type: error}`，不能省略；无业务返回值也必须写 `err`；`params[].default` 只在
   `nullable: true` 时允许，调用方省略时取该值
-- `transaction`（`required` / `read_only` / `none`）
+- `tx_mode`（`required` / `read_only` / `none`）
 - `steps`（至少一步）
 
 ### 3.1 steps
@@ -98,13 +98,12 @@ service 项必须声明：
 |--------------|-------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `query`      | `queries`                                                               | 调用本模块 `data.queries.*`；`queries[].input` 的 key 必须是查询参数名，必填参数必须全部出现，不写 `ctx`（生成器注入）；`step.errors` 缺省取所有 query 错误的并集 |
 | `service`    | `services`                                                              | 调用其他（或本模块）service；`services[].input[].name` 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`                                            |
-| `logic`      | `output` + `errors`；可选 `input` / `when` / `queries` / `rules` / `events` | 手写实现；`queries` 是 `{query, input}` 对象列表；`input` 声明本步读取的入参与用途；`when` 声明静态跳过条件                                                         |
+| `logic`      | `output` + `errors`；可选 `input` / `when` / `queries` / `rules` / `events` / `lifecycle` | 手写实现；`queries` 是 `{query, input}` 对象列表；`input` 声明本步读取的入参与用途；`when` 声明静态跳过条件                                                         |
 | `transition` | `lifecycle`（只能引用 destroy/transition）；可选 `input` / `when` / `output` / `queries` / `rules` / `events` | 执行生命周期动作；create 只能由 `logic`/`query` step 实现                                                                                                          |
-| `tx_begin`   | —                                                                       | 事务开始；只允许 `id` / `kind` / `summary`，`transaction≠none` 时必须是首步                                                                                       |
-| `tx_commit`  | —                                                                       | 事务提交；只允许 `id` / `kind` / `summary`，`transaction≠none` 时必须是末步，关闭不得遗漏                                                                          |
+| `events`     | `events`                                                                | 纯事件发射；只允许 `id` / `kind` / `summary` / `depends_on` / `errors` / `events`                                                                                  |
 
-字段按 kind 取交集：`id` / `kind` / `summary` 恒有；`lifecycle` 是公共反向引用；`input` / `when` 仅 `logic` / `transition`；`output` 仅 `query` / `logic` /
-`transition`；`errors` 仅 `query` / `service` / `logic` / `transition`；`depends_on` 除 tx 步骤外可选（按模板顺序书写）。
+字段按 kind 取交集：`id` / `kind` / `summary` / `depends_on` / `errors` 恒有；`lifecycle` 只允许 `query` / `logic` / `transition`；`input` / `when` 仅 `logic` / `transition`；`output` 仅 `query` / `logic` /
+`transition`；`events` 允许 `logic` / `transition` / `events`；`events` kind 不接受 `input` / `output` / `queries` / `rules` / `lifecycle` / `when`。
 
 - `input` 是 `{name, value, description}` 列表；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式；
   `description` 说明这项输入的业务含义；静态分支用 `when`。
@@ -118,8 +117,8 @@ service 项必须声明：
   拥有，service 与 step 不重复声明。
 - `step.errors` 只列该步骤实际返回的领域错误：`kind: query` 缺省取所有 queries 的并集；`kind: service` 必须是目标 service
   错误并集的子集；`logic/transition` 必须覆盖其 `queries` 与 `rules.on_violation` 的 `errors`。
-- 生命周期 step 还必须声明 `state.write`：`status` 必须等于动作的 `to`（create 用 `initial`）；`queries` 必须是本步
-  `queries` 的子集，且写 subject 主表、存在参数绑定该维度的状态列；create/transition/有 `to` 的 destroy 必须声明。
+- 生命周期 step 不重复声明状态：有 `to`（create 用 `initial`）的动作，本步 `queries` 中至少有一个查询同时写该动作的
+  subject 主表、且存在参数绑定该维度的状态列；目标状态以 lifecycle 为唯一事实源。
 - 数据链是硬约束：`input` 的值只能是 `params.<path>` 或 `step.<id>.<path>`，且值的静态类型必须与目标参数类型兼容
   （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；`logic/transition` 的每个显式
   `output` 必须被后续 `input`/`queries[].input` 引用，或与 `returns` 业务字段同名；`returns` 的每个业务字段必须有同名、类型一致且
@@ -129,9 +128,8 @@ service 项必须声明：
 
 ### 3.2 事务与写归属
 
-- `transaction` 是 service 级事务边界，并且必须用显式步骤声明：`required` / `read_only` 时首步是 `tx_begin`、末步是
-  `tx_commit`，各且只有一个；`none` 不得出现两者。生成器据此包裹方法体，提交步骤不得遗漏。
-- `transaction≠none` 的 service 不得调用 `transaction=required` 的 service（避免嵌套事务）；跨事务调用目标必须是
+- `tx_mode` 是 service 级事务模式：`required` 写事务、`read_only` 只读事务、`none` 无事务；生成器据此包裹方法体。
+- `tx_mode≠none` 的 service 不得调用 `tx_mode=required` 的 service（避免嵌套事务）；跨事务调用目标必须是
   `none`（或由调用方持有事务时的显式约定）。
 - `read_only` 不得直接调用写表或返回 `affected_rows` 的 query，也不得经 `kind: service` 间接调用会写表的 service
   （写能力沿调用图传递）；写操作必须声明 `required` 或 `none`。
@@ -151,9 +149,9 @@ service 项必须声明：
 - service 的 `kind: logic` step 用 `rules: [feature.rules.*]` 引用业务规则；
 - 任意 step 用 `lifecycle: [cap.lifecycles.*.*]` 回引生命周期动作（create/destroy/transition）；
 - `cap.lifecycles` 的 `create.steps` / `destroy.steps` / `transitions[].implemented_by` 由 `make gen-graph` 写回；
-- 每个生命周期动作的 step 必须声明 `state.write`（status + queries）；create 的 status 等于 `initial`，transition/destroy 等于 `to`；
-  queries 必须写 subject 主表且参数绑定该维度的状态列；
-- 事件只由 service step 的 `events` 声明，lifecycle 不写 `side_effects`；
+- 每个生命周期动作的 step 不再声明 `state.write`；有 `to`（create 用 `initial`）时，本步 `queries` 必须至少有一个查询
+  同时写该动作的 subject 主表、且参数绑定该维度的状态列；
+- 事件只由 service step 的 `events` 声明（`kind: logic` / `transition` / `events`），lifecycle 不写 `side_effects`；
 - `feature.rules` 的 `implemented_by` 仍指向 service 项。
 
 capabilities 不承载 `rules/` 目录；features 不承载 `states/` 目录。
