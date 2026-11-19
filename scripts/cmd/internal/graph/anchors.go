@@ -124,10 +124,13 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 					a.addLifecycleStep(actionID, fullStepID)
 				}
 				switch kind, _ := step["kind"].(string); kind {
-				case "logic":
+				case "logic", "when":
 					for _, rawRule := range asList(step["rules"]) {
-						ruleID, _ := rawRule.(string)
-						a.addRule(ruleID, serviceID)
+						rm, _ := rawRule.(map[string]any)
+						ruleID, _ := rm["rule"].(string)
+						if ruleID != "" {
+							a.addRule(ruleID, serviceID)
+						}
 					}
 				case "events":
 					for _, rawEvent := range asList(step["events"]) {

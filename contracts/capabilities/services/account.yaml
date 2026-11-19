@@ -60,7 +60,7 @@ services:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.COMMON_FORBIDDEN
         rules:
-          - "feature.rules.account.self_only"
+          - { rule: "feature.rules.account.self_only" }
 
   - name: list
     summary: "列出账号（游标分页）"
@@ -82,13 +82,18 @@ services:
             - { name: status, value: params.filter.status, description: "账号状态筛选" }
             - { name: offset, value: params.filter.offset, description: "分页偏移" }
             - { name: limit, value: params.filter.limit, description: "分页上限" }
-      - id: query
+      - id: paginate
         kind: logic
-        summary: "按过滤条件游标分页查询账号"
+        summary: "把账号列表包装成分页结果"
+        input:
+          - { name: accounts, value: step.list_accounts.accounts, description: "查询到的账号列表" }
+          - { name: offset, value: params.filter.offset, description: "分页偏移" }
+          - { name: limit, value: params.filter.limit, description: "分页上限" }
         output:
           - { name: page, type: AccountPage, description: "账号分页结果" }
         errors:
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
   - name: create
     summary: "创建账号"
     visibility: public
@@ -106,12 +111,14 @@ services:
         output:
           - { name: id, type: integer, description: "新账号 ID" }
         errors: [ ]
+        rules: [ ]
       - id: status_pending
         kind: logic
         summary: "确定创建后的初始状态 pending"
         output:
           - { name: status, type: data.enums.account_status, description: "初始状态 pending" }
         errors: [ ]
+        rules: [ ]
       - id: exists_account_number
         kind: query
         summary: "调用 data.queries.account.exists_account_number"
@@ -144,9 +151,9 @@ services:
           - platform.errors.ACCOUNT_NICKNAME_INVALID
           - platform.errors.COMMON_FORBIDDEN
         rules:
-          - "feature.rules.account.number_format"
-          - "feature.rules.account.number_unique"
-          - "feature.rules.account.nickname_length"
+          - { rule: "feature.rules.account.number_format" }
+          - { rule: "feature.rules.account.number_unique" }
+          - { rule: "feature.rules.account.nickname_length" }
       - id: emit_created
         kind: events
         summary: "发出账号创建事件"
@@ -190,9 +197,9 @@ services:
           - platform.errors.ACCOUNT_NICKNAME_INVALID
           - platform.errors.COMMON_FORBIDDEN
         rules:
-          - "feature.rules.account.nickname_length"
-          - "feature.rules.account.self_only"
-          - "feature.rules.account.deleted_cannot_modify"
+          - { rule: "feature.rules.account.nickname_length" }
+          - { rule: "feature.rules.account.self_only" }
+          - { rule: "feature.rules.account.deleted_cannot_modify" }
 
   - name: delete
     summary: "软删账号，并清理认证绑定、验证体与令牌"
@@ -230,6 +237,7 @@ services:
         output:
           - { name: status, type: data.enums.account_status, description: "目标状态 deleted" }
         errors: [ ]
+        rules: [ ]
       - id: soft_delete_account
         kind: query
         summary: "调用 data.queries.account.soft_delete_account"
@@ -252,9 +260,9 @@ services:
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
           - platform.errors.COMMON_INTERNAL
         rules:
-          - "feature.rules.account.deleted_cannot_modify"
-          - "feature.rules.account.delete_revokes_auth"
-          - "feature.rules.account.deleted_status_consistent"
+          - { rule: "feature.rules.account.deleted_cannot_modify" }
+          - { rule: "feature.rules.account.delete_revokes_auth" }
+          - { rule: "feature.rules.account.deleted_status_consistent" }
       - id: emit_deleted
         kind: events
         summary: "发出账号删除事件"
@@ -277,6 +285,7 @@ services:
         output:
           - { name: status, type: data.enums.account_status, description: "目标状态" }
         errors: [ ]
+        rules: [ ]
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
@@ -302,6 +311,7 @@ services:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+        rules: [ ]
       - id: emit_activated
         kind: events
         summary: "发出账号激活或解封事件"
@@ -325,6 +335,7 @@ services:
         output:
           - { name: status, type: data.enums.account_status, description: "目标状态" }
         errors: [ ]
+        rules: [ ]
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
@@ -352,6 +363,7 @@ services:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+        rules: [ ]
       - id: emit_suspended
         kind: events
         summary: "发出账号封禁事件"

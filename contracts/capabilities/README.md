@@ -49,7 +49,7 @@ events/jobs ──trigger.topic──> events/topics
 | protocol → service   | `protocols/<protocol>/*.yaml`      | `x-service`                            |
 | service → query      | `services/*.yaml` 的 steps         | `kind: query` + `query`                |
 | service → service    | `services/*.yaml` 的 steps         | `kind: service` + `service`            |
-| service → rule       | `services/*.yaml` 的 steps         | `kind: logic` + `rules`                |
+| service → rule       | `services/*.yaml` 的 steps         | `kind: logic/when` + `rules[{rule}]`   |
 | service → lifecycle  | `services/*.yaml` 的 steps         | `lifecycles`（任何 kind 均可带）        |
 | lifecycle → service  | `lifecycles/*.yaml` 的 actions     | `step` / `implemented_by`（生成）      |
 | service → event      | `services/*.yaml` 的 steps         | `kind: events` + `events`              |
@@ -96,22 +96,22 @@ service 项必须声明：
 
 | kind         | 必填                                                                    | 说明                                                                                                                                                              |
 |--------------|-------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `query`      | `query`（单值）                                                          | 调用本模块 `data.queries.*`；`query.input` 的 key 必须是查询参数名，必填参数必须全部出现，不写 `ctx`（生成器注入）；`step.errors` 缺省取该 query 错误的并集     |
-| `service`    | `service`（单值）                                                        | 调用其他（或本模块）service；`service.input[].name` 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`                                              |
-| `logic`      | `output` + `errors`；可选 `input` / `rules` | 手写判断与数据变换；`rules` 是业务规则依据；不直接调 query、service 或发事件 |
+| `query`      | `query`（单值）                                                          | 调用本模块 `data.queries.*`；`query.input` 的 key 必须是查询参数名，必填参数必须全部出现，不写 `ctx`（生成器注入）；`step.errors` 缺省取该 query 错误的并集；不接受 `output`，其他 step 用 `step.<id>.<returns 字段>` 引用其返回值 |
+| `service`    | `service`（单值）                                                        | 调用其他（或本模块）service；`service.input[].name` 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`；不接受 `output`，target 有非 err 返回字段时必须用 `service.returns` 映射列出，后续用 `step.<id>.<name>` 引用 |
+| `logic`      | `output` + `errors` + `rules`（可为空列表）；可选 `input` | 手写判断与数据变换；`rules` 是业务规则依据，必须声明字段；不直接调 query、service 或发事件 |
 | `events`     | `events`（至少一项）                                                     | 纯事件发射；只允许 `id` / `kind` / `summary` / `depends_on` / `errors` / `lifecycles` / `goto` / `events`；一个 step 是一组事件发射 |
-| `when`       | `when`                                                                  | 条件分支；每项是 `{input, equals|in, goto}`，按列表顺序匹配，第一个满足的分支跳转                                                                                 |
+| `when`       | `when`；可选 `rules` / `output`                                          | 条件分支；每项是 `{input, equals|in, goto}`，条件名先按本步 `input`、再按本步 `output` 解析；`output` 是可参与分支判断的显式产出 |
 
-字段按 kind 取交集：`id` / `kind` / `summary` / `depends_on` / `errors` / `lifecycles` / `goto` 恒有；`input` 仅 `logic` / `when`；`output` 仅 `query` / `logic`；`query` 仅 `query`；`service` 仅 `service`；`events` 仅 `events`；`rules` 仅 `logic`；`when` 仅 `when`。
+字段按 kind 取交集：`id` / `kind` / `summary` / `depends_on` / `errors` / `lifecycles` / `goto` 恒有；`input` 仅 `logic` / `when`；`output` 仅 `logic` / `when`；`query` 仅 `query`；`service` 仅 `service`；`events` 仅 `events`；`rules` 仅 `logic` / `when`；`when` 仅 `when`。
 
 一一对应：`kind: query` → `query`、`kind: service` → `service`、`kind: events` → `events`、`kind: logic` → `rules`、`kind: when` → `when`。出现哪个业务字段，kind 就必须是对应的那一种；logic 不能携带 `query` / `service` / `events`，query / service / events 也不能携带 `rules`。`input` / `output` / `errors` 是数据流与公共字段，不参与一一对应。
 
 - `input` 是 `{name, value, description}` 列表；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式；
   `description` 说明这项输入的业务含义。
 - `lifecycles` 是状态流转标记，可列多个 lifecycle 动作，任何 kind 都可带；它只表示本步包含这些状态流转，不限制本步只做状态流转；位置固定在 `depends_on` 之后。
-- `goto` 是本步结束后的无条件跳转，必须指向本 service 的后续 step；`kind: when` 的 `goto` 是所有分支都不匹配时的默认跳转。前向限制保证控制流无环。
-- `when` 只用于 `kind: when`：每项 `{input, equals|in, goto}`，`equals` 与 `in` 二选一；同一 `input` 可以出现在多个分支；按列表顺序匹配，第一个满足的分支跳转，都不满足时走本步 `goto` 或顺序下一步。
-- 计算值必须先落成前序 `kind: logic` step 的 `output`，再以 `step.<id>.<path>` 引用；`expr:` 软区已移除。
+- `goto` 是本步结束后的无条件跳转，必须指向本 service 的后续 step，或 `$end` 表示直接结束 service；`kind: when` 的 `goto` 是所有分支都不匹配时的默认跳转。前向限制保证控制流无环，`$end` 用于替代无业务动作的分支终点 step。
+- `when` 只用于 `kind: when`：每项 `{input, equals|in, goto}`，`equals` 与 `in` 二选一；条件名先按本步 `input` 解析，再按本步 `output` 解析；同一条件名可以出现在多个分支；按列表顺序匹配，第一个满足的分支跳转，都不满足时走本步 `goto` 或顺序下一步。至少一个分支或默认路径必须继续到后续 step，不能全部 `$end`。
+- 计算值必须先落成前序 `kind: logic` 或 `kind: when` 的 `output`，再以 `step.<id>.<path>` 引用；`expr:` 软区已移除。
 - `depends_on` 是可选顺序提示；`input` / `query.input` / `service.input` 引用 `step.<id>` 只要求该步骤在前序，不要求写入 `depends_on`。
 - `query` 是 `kind: query` 的单值 `{query, input}`；logic 不直接调 query，查询一律独立成 step。
 - `service` 是 `kind: service` 的单值 `{service, input}`；logic 不直接调 service，service 调用一律独立成 step。
@@ -119,11 +119,15 @@ service 项必须声明：
 - 入口策略错误（权限→`COMMON_FORBIDDEN`、限流→`COMMON_RATE_LIMITED`、审计→`COMMON_AUDIT_FAILED`）只由 `access.yaml`
   拥有，service 与 step 不重复声明。
 - `step.errors` 只列该步骤实际返回的领域错误：`kind: query` 缺省取该 query 的错误集，声明时必须覆盖；`kind: service` 取目标 service
-  的错误集；`logic` 必须覆盖 `rules.on_violation` 的 `errors`。
+  的错误集；`logic` / `when` 必须覆盖 `rules[].rule` 对应规则的 `on_violation` 错误。
+- `rules` 是对象列表：每项 `{ rule: feature.rules.* }`，按引用检查存在性，不允许字符串简写。
 - `lifecycles` 只是标记：它表示本步包含这些状态流转，不限制本步的 kind，也不要求本步自己写状态列；目标状态以 lifecycle 为唯一事实源。
 - 数据链是硬约束：`input` 的值只能是 `params.<path>` 或 `step.<id>.<path>`，且值的静态类型必须与目标参数类型兼容
-  （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；`logic` 的每个显式
-  `output` 必须被后续 `input` 引用，或与 `returns` 业务字段同名；`returns` 的每个业务字段必须有同名、类型一致且
+  （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；`step.<id>` 还必须通过 goto/when 边从被引用步骤可达，
+  不能引用不可达分支；`logic` / `when` 的每个显式
+  `output` 必须被后续 `input` 引用、被自身 `when` 条件引用，或与 `returns` 业务字段同名；`query` 的返回值用
+  `step.<id>.<returns 字段>` 引用，不能声明 `output`；`service` 的 target 返回字段必须先在 `service.returns` 中映射为本地名，
+  再用 `step.<id>.<本地名>` 引用；映射字段必须被后续 `input` 消费；`returns` 的每个业务字段必须有同名、类型一致且
   `nullable` 一致的产出（`*T` 视为可空；`err` 不参与）；service 的每个非 `ctx` 参数必须被至少一个 `input` 引用。
 - `params[].type` 只允许基础类型、`data.enums.*`、`data.entities.*`、本地 schema 或 `_types` 类型族；指针与 `List<>` 各最多一层。
 - 控制流由 `when` / `goto` 显式声明；`goto` 只允许前向，循环仍不支持；错误流转由实现决定；契约不声明 `on_error` / `max_iterations`。
@@ -148,7 +152,7 @@ service 项必须声明：
 
 - 一个 lifecycle = 一个状态维度：`subjects` 写 `{entity, field}`，同一实体的多个状态字段拆成多份契约，同一 `(entity, field)` 只能被一份契约声明；
 - `transitions[].requires` 声明跨维度前置状态（`{lifecycle, state}`，AND 语义）；目标维度不存在或不在该状态时必须返回该转换的 `on_violation`；
-- service 的 `kind: logic` step 用 `rules: [feature.rules.*]` 引用业务规则；
+- service 的 `kind: logic` / `kind: when` step 用 `rules: [{ rule: feature.rules.* }]` 引用业务规则；
 - 任意 step 用 `lifecycles: [cap.lifecycles.*.*]` 回引生命周期动作（create/destroy/transition）；`lifecycles` 不限制 step 的 kind，一个 step 可列多个动作；
 - `cap.lifecycles` 的 `create.steps` / `destroy.steps` / `transitions[].implemented_by` 由 `make gen-graph` 写回；
 - 每个生命周期动作的 step 不再声明 `state.write`；`lifecycles` 只是标记，不限制 step kind，也不要求本步写状态列；

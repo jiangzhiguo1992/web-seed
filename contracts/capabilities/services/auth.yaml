@@ -80,6 +80,7 @@ services:
           - { name: username, type: string, description: "邮箱本地部分；非邮箱登录时为空" }
           - { name: domain, type: string, description: "邮箱域名；非邮箱登录时为空" }
         errors: [ ]
+        rules: [ ]
       - id: load_branch
         kind: when
         summary: "按 auth_type 选择密码、手机或邮箱绑定查询"
@@ -130,8 +131,10 @@ services:
           - { name: account_id, type: integer, description: "命中的账号 ID" }
           - { name: auth_id, type: integer, description: "命中的认证绑定 ID" }
           - { name: auth_pwd_id, type: integer, description: "密码绑定 ID" }
+          - { name: failed_login_count, type: integer, description: "密码绑定当前的连续失败次数；非密码认证时为 0" }
         errors:
           - platform.errors.AUTH_INVALID_CREDENTIALS
+        rules: [ ]
       - id: load_account
         kind: query
         summary: "加载登录账号"
@@ -157,13 +160,27 @@ services:
           - platform.errors.ACCOUNT_SUSPENDED
           - platform.errors.COMMON_FORBIDDEN
         rules:
-          - "feature.rules.auth.auth_login_requires_verified"
+          - { rule: "feature.rules.auth.auth_login_requires_verified" }
+      - id: load_policy
+        kind: logic
+        summary: "读取登录锁定策略"
+        output:
+          - { name: max_attempts, type: integer, description: "最大连续失败次数" }
+          - { name: lockout, type: integer, description: "锁定时长（秒）" }
+        errors: [ ]
+        rules: [ ]
       - id: lock_until
         kind: logic
-        summary: "计算失败锁定的截止时间"
+        summary: "按连续失败次数与锁定策略计算锁定截止时间"
+        input:
+          - { name: failed_login_count, value: step.load.failed_login_count, description: "当前连续失败次数" }
+          - { name: max_attempts, value: step.load_policy.max_attempts, description: "最大连续失败次数" }
+          - { name: lockout, value: step.load_policy.lockout, description: "锁定时长（秒）" }
         output:
           - { name: lock_until, type: timestamp, description: "锁定截止时间" }
         errors: [ ]
+        rules:
+          - { rule: "feature.rules.auth.login_lockout" }
       - id: record_branch
         kind: when
         summary: "按登录结果选择成功或失败记录"
@@ -175,7 +192,7 @@ services:
       - id: record_auth_pwd_login_success
         kind: query
         summary: "调用 data.queries.auth.record_auth_pwd_login_success"
-        goto: record
+        goto: emit_login
         query:
           query: data.queries.auth.record_auth_pwd_login_success
           input:
@@ -183,20 +200,12 @@ services:
       - id: record_auth_pwd_login_failure
         kind: query
         summary: "调用 data.queries.auth.record_auth_pwd_login_failure"
-        goto: record
+        goto: emit_login
         query:
           query: data.queries.auth.record_auth_pwd_login_failure
           input:
             - { name: id, value: step.check.auth_pwd_id, description: "认证绑定 ID" }
             - { name: lock_until, value: step.lock_until.lock_until, description: "锁定截止时间" }
-      - id: record
-        kind: logic
-        summary: "记录登录结果；按 success 选择成功或失败记录"
-        input:
-          - { name: success, value: step.check.success, description: "根据 success 选择成功/失败记录" }
-          - { name: auth_pwd_id, value: step.check.auth_pwd_id, description: "写登录记录时使用的密码绑定 ID" }
-        output: [ ]
-        errors: [ ]
       - id: emit_login
         kind: events
         summary: "发出登录成功或失败事件"
@@ -225,14 +234,7 @@ services:
         output:
           - { name: binding_id, type: integer, description: "目标密码绑定 ID" }
         errors: [ ]
-      - id: bind_status
-        kind: logic
-        summary: "把 action 映射为认证绑定状态"
-        input:
-          - { name: action, value: params.input.action, description: "绑定动作" }
-        output:
-          - { name: status, type: data.enums.auth_status, description: "目标绑定状态" }
-        errors: [ ]
+        rules: [ ]
       - id: hash_password
         kind: logic
         summary: "对明文密码做哈希"
@@ -241,6 +243,21 @@ services:
         output:
           - { name: password_hash, type: string, description: "密码哈希" }
         errors: [ ]
+        rules: [ ]
+      - id: bind_status
+        kind: when
+        summary: "把 action 映射为认证绑定状态"
+        input:
+          - { name: action, value: params.input.action, description: "绑定动作" }
+        output:
+          - { name: status, type: data.enums.auth_status, description: "目标绑定状态" }
+        errors: [ ]
+        when:
+          - { input: action, equals: create, goto: create_auth_pwd }
+          - { input: action, equals: update, goto: update_auth_pwd_hash }
+          - { input: action, equals: enable, goto: enable_pwd_status }
+          - { input: action, equals: disable, goto: disable_pwd_status }
+        rules: [ ]
       - id: create_auth_pwd
         kind: query
         summary: "调用 data.queries.auth.create_auth_pwd"
@@ -256,12 +273,14 @@ services:
         kind: logic
         summary: "创建密码绑定；创建即 verified"
         lifecycles: [ cap.lifecycles.auth_pwd.create ]
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_USERNAME_TAKEN
           - platform.errors.AUTH_INVALID_CREDENTIALS
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
       - id: update_auth_pwd_hash
         kind: query
         summary: "调用 data.queries.auth.update_auth_pwd_hash"
@@ -273,11 +292,13 @@ services:
       - id: update_bind
         kind: logic
         summary: "修改密码哈希；不改变认证状态"
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_INVALID_CREDENTIALS
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
       - id: enable_pwd_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_pwd_status"
@@ -290,11 +311,13 @@ services:
         kind: logic
         summary: "启用密码绑定"
         lifecycles: [ cap.lifecycles.auth_pwd.enable ]
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_INVALID_CREDENTIALS
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
       - id: disable_pwd_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_pwd_status"
@@ -307,11 +330,13 @@ services:
         kind: logic
         summary: "停用密码绑定"
         lifecycles: [ cap.lifecycles.auth_pwd.disable ]
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_INVALID_CREDENTIALS
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
   - name: bind_phone
     summary: "创建或启停手机号认证绑定"
     visibility: public
@@ -333,20 +358,27 @@ services:
         output:
           - { name: binding_id, type: integer, description: "目标手机绑定 ID" }
         errors: [ ]
-      - id: bind_status
-        kind: logic
-        summary: "把 action 映射为认证绑定状态"
-        input:
-          - { name: action, value: params.input.action, description: "绑定动作" }
-        output:
-          - { name: status, type: data.enums.auth_status, description: "目标绑定状态" }
-        errors: [ ]
+        rules: [ ]
       - id: request_operator
         kind: logic
         summary: "读取当前操作者标识"
         output:
           - { name: operator, type: string, description: "操作者标识" }
         errors: [ ]
+        rules: [ ]
+      - id: bind_status
+        kind: when
+        summary: "把 action 映射为认证绑定状态"
+        input:
+          - { name: action, value: params.input.action, description: "绑定动作" }
+        output:
+          - { name: status, type: data.enums.auth_status, description: "目标绑定状态" }
+        errors: [ ]
+        when:
+          - { input: action, equals: create, goto: create_auth_phone }
+          - { input: action, equals: enable, goto: enable_phone_status }
+          - { input: action, equals: disable, goto: disable_phone_status }
+        rules: [ ]
       - id: create_auth_phone
         kind: query
         summary: "调用 data.queries.auth.create_auth_phone"
@@ -363,12 +395,14 @@ services:
         kind: logic
         summary: "创建手机号绑定；创建后为 unverified"
         lifecycles: [ cap.lifecycles.auth_contact.create ]
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_PHONE_TAKEN
           - platform.errors.AUTH_PHONE_INVALID
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
       - id: enable_phone_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_phone_status"
@@ -381,11 +415,13 @@ services:
         kind: logic
         summary: "启用手机号绑定"
         lifecycles: [ cap.lifecycles.auth_contact.enable ]
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_PHONE_INVALID
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
       - id: disable_phone_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_phone_status"
@@ -398,11 +434,13 @@ services:
         kind: logic
         summary: "停用手机号绑定"
         lifecycles: [ cap.lifecycles.auth_contact.disable ]
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_PHONE_INVALID
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
   - name: bind_email
     summary: "创建或启停邮箱认证绑定"
     visibility: public
@@ -425,14 +463,7 @@ services:
         output:
           - { name: binding_id, type: integer, description: "目标邮箱绑定 ID" }
         errors: [ ]
-      - id: bind_status
-        kind: logic
-        summary: "把 action 映射为认证绑定状态"
-        input:
-          - { name: action, value: params.input.action, description: "绑定动作" }
-        output:
-          - { name: status, type: data.enums.auth_status, description: "目标绑定状态" }
-        errors: [ ]
+        rules: [ ]
       - id: email_parts
         kind: logic
         summary: "把邮箱域名拆成域名主体与顶级域"
@@ -442,6 +473,20 @@ services:
           - { name: entity, type: string, description: "域名主体" }
           - { name: tld, type: string, description: "顶级域" }
         errors: [ ]
+        rules: [ ]
+      - id: bind_status
+        kind: when
+        summary: "把 action 映射为认证绑定状态"
+        input:
+          - { name: action, value: params.input.action, description: "绑定动作" }
+        output:
+          - { name: status, type: data.enums.auth_status, description: "目标绑定状态" }
+        errors: [ ]
+        when:
+          - { input: action, equals: create, goto: create_auth_email }
+          - { input: action, equals: enable, goto: enable_email_status }
+          - { input: action, equals: disable, goto: disable_email_status }
+        rules: [ ]
       - id: create_auth_email
         kind: query
         summary: "调用 data.queries.auth.create_auth_email"
@@ -459,12 +504,14 @@ services:
         kind: logic
         summary: "创建邮箱绑定；创建后为 unverified"
         lifecycles: [ cap.lifecycles.auth_contact.create ]
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_EMAIL_TAKEN
           - platform.errors.AUTH_EMAIL_INVALID
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
       - id: enable_email_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_email_status"
@@ -477,11 +524,13 @@ services:
         kind: logic
         summary: "启用邮箱绑定"
         lifecycles: [ cap.lifecycles.auth_contact.enable ]
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_EMAIL_INVALID
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
       - id: disable_email_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_email_status"
@@ -494,11 +543,13 @@ services:
         kind: logic
         summary: "停用邮箱绑定"
         lifecycles: [ cap.lifecycles.auth_contact.disable ]
+        goto: $end
         output:
           - { name: binding, type: AuthBinding, description: "认证绑定" }
         errors:
           - platform.errors.AUTH_EMAIL_INVALID
           - platform.errors.COMMON_FORBIDDEN
+        rules: [ ]
   - name: revoke_all_for_account
     summary: "软删账号的认证绑定，并编排令牌吊销与验证体作废"
     visibility: public
@@ -537,6 +588,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
+        rules: [ ]
       - id: revoke_tokens
         kind: service
         summary: "吊销账号全部令牌"

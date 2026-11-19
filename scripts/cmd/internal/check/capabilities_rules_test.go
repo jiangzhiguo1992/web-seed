@@ -62,20 +62,22 @@ func TestServiceParamExpr(t *testing.T) {
 			}},
 		},
 	}
-	c.checkServiceParamExpr("params.id", doc, stepIndex, stepOutputs, steps, "f", "s")
-	c.checkServiceParamExpr("step.load.account.id", doc, stepIndex, stepOutputs, steps, "f", "s")
+	allIndex := stepIndex
+	reach := buildStepReach(steps, allIndex)
+	c.checkServiceParamExpr("params.id", doc, stepIndex, allIndex, reach, stepOutputs, steps, "f", "s")
+	c.checkServiceParamExpr("step.load.account.id", doc, stepIndex, allIndex, reach, stepOutputs, steps, "f", "s")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid params reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceParamExpr("params.missing", doc, stepIndex, stepOutputs, steps, "f", "s")
+	c.checkServiceParamExpr("params.missing", doc, stepIndex, allIndex, reach, stepOutputs, steps, "f", "s")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-params]") {
 		t.Fatalf("unknown input not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceParamExpr("step.load.missing", doc, stepIndex, stepOutputs, steps, "f", "s")
+	c.checkServiceParamExpr("step.load.missing", doc, stepIndex, allIndex, reach, stepOutputs, steps, "f", "s")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-params]") {
 		t.Fatalf("unknown step field not reported: %v", c.errs)
 	}
@@ -96,6 +98,7 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 					"id":      "create",
 					"kind":    "logic",
 					"summary": "x",
+					"rules":   []any{},
 					"errors":  []any{"platform.errors.COMMON_INTERNAL"},
 					"output":  output,
 				},
@@ -1064,7 +1067,7 @@ func TestLogicRulesValidated(t *testing.T) {
 		"steps": []any{map[string]any{
 			"id": "t", "kind": "logic", "summary": "x",
 			"lifecycles": []any{"cap.lifecycles.x.t"},
-			"rules":      []any{"feature.rules.x.missing"},
+			"rules":      []any{map[string]any{"rule": "feature.rules.x.missing"}},
 			"output":     []any{},
 			"errors":     []any{},
 		}},

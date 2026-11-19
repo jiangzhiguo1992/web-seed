@@ -57,11 +57,11 @@ var allowedOperationExtensions = map[string]bool{
 }
 
 var stepKindFields = map[string][]string{
-	"query":   {"query", "output"},
+	"query":   {"query"},
 	"service": {"service"},
 	"logic":   {"input", "output", "rules"},
 	"events":  {"events"},
-	"when":    {"input", "when"},
+	"when":    {"input", "output", "rules", "when"},
 }
 
 // stepQueryItems 返回 step 声明的 query 项；仅 kind=query 使用单值 query。
@@ -576,6 +576,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		}
 	}
 	tc := stepTypeContext{doc: doc, stepIndex: stepIndex, steps: steps, stepOutputs: stepOutputs}
+	reach := buildStepReach(steps, allIndex)
 	produced := map[string][]returnType{}
 	consumed := map[string]bool{}
 	usedParams := map[string]bool{}
@@ -595,7 +596,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		input := c.parseInputMap(step["input"], rel, stepID, "step")
 		checkInputValues := func(refs map[string]any) {
 			for _, rawExpr := range refs {
-				c.checkServiceParamExpr(rawExpr, doc, stepIndex, stepOutputs, steps, rel, stepID)
+				c.checkServiceParamExpr(rawExpr, doc, stepIndex, allIndex, reach, stepOutputs, steps, rel, stepID)
 				expr, _ := rawExpr.(string)
 				if root, ok := inputExprRoot(expr); ok {
 					usedParams[root] = true
@@ -707,6 +708,31 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 					for name, rt := range target.returns {
 						produced[name] = append(produced[name], rt)
 					}
+					seenRet := map[string]bool{}
+					mappedFrom := map[string]bool{}
+					for _, rawRet := range asList(so["returns"]) {
+						rm, _ := asMap(rawRet)
+						name, _ := rm["name"].(string)
+						from, _ := rm["from"].(string)
+						if name == "" || from == "" {
+							c.rulef("service-steps-kind", "%s: step %s service %s returns item requires name and from", rel, stepID, ref)
+							continue
+						}
+						if seenRet[name] {
+							c.rulef("service-structure", "%s: step %s service %s duplicate return %s", rel, stepID, ref, name)
+						}
+						seenRet[name] = true
+						if _, ok := target.returns[from]; !ok {
+							c.rulef("service-ref", "%s: step %s service %s unknown return %s", rel, stepID, ref, from)
+							continue
+						}
+						mappedFrom[from] = true
+					}
+					for from := range target.returns {
+						if !mappedFrom[from] {
+							c.rulef("service-chain", "%s: step %s service %s return %s is not declared in returns", rel, stepID, ref, from)
+						}
+					}
 				}
 			}
 		case "logic":
@@ -716,28 +742,43 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			if step["errors"] == nil {
 				c.rulef("service-steps-kind", "%s: step %s kind=logic requires errors", rel, stepID)
 			}
+			if step["rules"] == nil {
+				c.rulef("service-steps-kind", "%s: step %s kind=logic requires rules (may be empty)", rel, stepID)
+			}
 			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
 		case "events":
 			evs := asList(step["events"])
 			if len(evs) == 0 {
 				c.rulef("service-steps-kind", "%s: step %s kind=events requires events", rel, stepID)
 			}
+			seen := map[string]bool{}
 			for _, raw := range evs {
-				if ev, _ := raw.(string); ev == "" || !eventIDs[ev] {
+				ev, _ := raw.(string)
+				if ev == "" || !eventIDs[ev] {
 					c.rulef("service-ref", "%s: step %s unknown event %s", rel, stepID, ev)
 				}
+				if seen[ev] {
+					c.rulef("service-structure", "%s: step %s duplicate event %s", rel, stepID, ev)
+				}
+				seen[ev] = true
 			}
 		case "when":
 			if len(asList(step["when"])) == 0 {
 				c.rulef("service-steps-kind", "%s: step %s kind=when requires when", rel, stepID)
 			}
+			c.checkLogicRefs(step, rel, stepID, ruleIDs, eventIDs)
 		default:
 			c.rulef("service-structure", "%s: step %s kind must be query/service/logic/events/when", rel, stepID)
 		}
 
 		lifecycles := asList(step["lifecycles"])
+		seenLc := map[string]bool{}
 		for _, rawL := range lifecycles {
 			actionID, _ := rawL.(string)
+			if seenLc[actionID] {
+				c.rulef("service-structure", "%s: step %s duplicate lifecycle action %s", rel, stepID, actionID)
+			}
+			seenLc[actionID] = true
 			if _, ok := lifecycleActions[actionID]; !ok {
 				c.rulef("service-ref", "%s: step %s unknown lifecycle action %s", rel, stepID, actionID)
 			}
@@ -766,8 +807,13 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			produced[name] = append(produced[name], rt)
 		}
 
+		seenDeps := map[string]bool{}
 		for _, rawDep := range asList(step["depends_on"]) {
 			depID, _ := rawDep.(string)
+			if seenDeps[depID] {
+				c.rulef("service-structure", "%s: step %s duplicate depends_on %s", rel, stepID, depID)
+			}
+			seenDeps[depID] = true
 			if idx, ok := stepIndex[depID]; !ok || idx >= i {
 				c.rulef("service-structure", "%s: step %s depends_on %s must reference an earlier step", rel, stepID, depID)
 			}
@@ -817,9 +863,10 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 				stepErrors[code] = true
 			}
 		}
-		if kind == "logic" {
+		if kind == "logic" || kind == "when" {
 			for _, rawRule := range asList(step["rules"]) {
-				rid, _ := rawRule.(string)
+				rm, _ := asMap(rawRule)
+				rid, _ := rm["rule"].(string)
 				code := c.ruleErrors[rid]
 				if code == "" {
 					continue
@@ -883,16 +930,37 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		}
 	}
 
-	// 显式 output 必须被后续 step 的 input 消费，或作为 returns 的业务字段。
+	// 显式 output 必须被后续 step 的 input 消费，或作为 returns 的业务字段；when 的 output 还可以被自身 when 条件引用。
+	// kind=service 的隐式 returns 同样必须被消费或与 returns 同名。
 	for i, raw := range steps {
 		step, _ := asMap(raw)
 		stepID, _ := step["id"].(string)
 		kind, _ := step["kind"].(string)
-		if kind != "logic" {
+		if kind == "service" {
+			so, _ := asMap(step["service"])
+			for _, rawRet := range asList(so["returns"]) {
+				rm, _ := asMap(rawRet)
+				name, _ := rm["name"].(string)
+				if name != "" && !consumed[stepID+"."+name] {
+					c.rulef("service-chain", "%s: step %s service return %s is not consumed by a later input", rel, stepID, name)
+				}
+			}
 			continue
 		}
+		if kind != "logic" && kind != "when" {
+			continue
+		}
+		selfRefs := map[string]bool{}
+		if kind == "when" {
+			for _, rawWhen := range asList(step["when"]) {
+				wm, _ := asMap(rawWhen)
+				if ref, _ := wm["input"].(string); ref != "" {
+					selfRefs[ref] = true
+				}
+			}
+		}
 		for name := range stepOutputs[i] {
-			if returns[name] || consumed[stepID+"."+name] {
+			if returns[name] || consumed[stepID+"."+name] || selfRefs[name] {
 				continue
 			}
 			c.rulef("service-chain", "%s: step %s output %s is not consumed and is not a service return", rel, stepID, name)
@@ -944,6 +1012,9 @@ func (c *Checker) parseInputMap(v any, rel, stepID, where string) map[string]any
 
 // checkGoto 校验跳转目标是同 service 内更靠后的 step（前向，无环）。
 func (c *Checker) checkGoto(rel, stepID, target string, allIndex map[string]int, pos int) {
+	if target == "$end" {
+		return
+	}
 	t, ok := allIndex[target]
 	if !ok {
 		c.rulef("service-goto", "%s: step %s goto unknown step %s", rel, stepID, target)
@@ -978,11 +1049,31 @@ func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind 
 			inputTypes[name] = typ
 		}
 	}
+	outputTypes := map[string]string{}
+	for _, rawOut := range asList(step["output"]) {
+		om, _ := asMap(rawOut)
+		name, _ := om["name"].(string)
+		typ, _ := om["type"].(string)
+		if name != "" && typ != "" {
+			outputTypes[name] = typ
+		}
+	}
+	hasContinue := false
+	if target, _ := step["goto"].(string); target != "" {
+		if target != "$end" {
+			hasContinue = true
+		}
+	} else if pos+1 < len(allIndex) {
+		hasContinue = true
+	}
 	for _, rawWhen := range whens {
 		wm, _ := asMap(rawWhen)
 		if wm == nil {
 			c.rulef("service-when", "%s: step %s when item must be an object", rel, stepID)
 			continue
+		}
+		if target, _ := wm["goto"].(string); target != "" && target != "$end" {
+			hasContinue = true
 		}
 		for field := range wm {
 			if field != "input" && field != "equals" && field != "in" && field != "goto" {
@@ -994,8 +1085,10 @@ func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind 
 			c.rulef("service-when", "%s: step %s when item requires input", rel, stepID)
 			continue
 		}
-		if _, ok := input[name]; !ok {
-			c.rulef("service-when", "%s: step %s when input %s is not declared by step input", rel, stepID, name)
+		_, inInput := input[name]
+		outType, inOutput := outputTypes[name]
+		if !inInput && !inOutput {
+			c.rulef("service-when", "%s: step %s when input %s is not declared by step input or output", rel, stepID, name)
 			continue
 		}
 		if target, _ := wm["goto"].(string); target == "" {
@@ -1010,6 +1103,9 @@ func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind 
 			continue
 		}
 		typ, ok := inputTypes[name]
+		if !ok && inOutput {
+			typ, ok = outType, true
+		}
 		if !ok {
 			continue
 		}
@@ -1031,6 +1127,9 @@ func (c *Checker) checkStepWhen(step map[string]any, input map[string]any, kind 
 			seenValues[key] = true
 			c.checkWhenValue(typ, value, rel, stepID, name)
 		}
+	}
+	if !hasContinue {
+		c.rulef("service-when", "%s: step %s when must have at least one branch that continues to a later step", rel, stepID)
 	}
 }
 
@@ -1103,8 +1202,22 @@ func (c *Checker) checkStepQueryErrors(step map[string]any, rel, stepID string) 
 }
 
 func (c *Checker) checkLogicRefs(step map[string]any, rel, stepID string, ruleIDs, eventIDs map[string]bool) {
+	seen := map[string]bool{}
 	for _, rawRule := range asList(step["rules"]) {
-		rid, _ := rawRule.(string)
+		rm, _ := asMap(rawRule)
+		if rm == nil {
+			c.rulef("service-structure", "%s: step %s rules item must be an object", rel, stepID)
+			continue
+		}
+		rid, _ := rm["rule"].(string)
+		if rid == "" {
+			c.rulef("service-structure", "%s: step %s rules item requires rule", rel, stepID)
+			continue
+		}
+		if seen[rid] {
+			c.rulef("service-structure", "%s: step %s duplicate rule %s", rel, stepID, rid)
+		}
+		seen[rid] = true
 		if !ruleIDs[rid] {
 			c.rulef("service-ref", "%s: step %s unknown rule %s", rel, stepID, rid)
 		}
@@ -2098,34 +2211,34 @@ func (c *Checker) stepOutputPathType(step map[string]any, output map[string]retu
 	var typ string
 	switch kind {
 	case "service":
-		if out, ok := output[root.name]; ok && out.typ != "" {
-			typ = out.typ
-		} else {
-			if so, ok := asMap(step["service"]); ok {
-				ref, _ := so["service"].(string)
-				if t := c.methodReturns[ref][root.name].typ; t != "" {
-					typ = t
-				}
+		so, ok := asMap(step["service"])
+		if !ok {
+			return "", fmt.Errorf("unknown output %s", root.name)
+		}
+		ref, _ := so["service"].(string)
+		for _, rawRet := range asList(so["returns"]) {
+			rm, _ := asMap(rawRet)
+			name, _ := rm["name"].(string)
+			from, _ := rm["from"].(string)
+			if name == root.name {
+				typ = c.methodReturns[ref][from].typ
+				break
 			}
 		}
 		if typ == "" {
 			return "", fmt.Errorf("unknown output %s", root.name)
 		}
 	case "query":
-		if out, ok := output[root.name]; ok && out.typ != "" {
-			typ = out.typ
-		} else {
-			if qo, ok := asMap(step["query"]); ok {
-				qid, _ := qo["query"].(string)
-				if t := c.queryReturnTypes[qid][root.name].typ; t != "" {
-					typ = t
-				}
-			}
+		qo, ok := asMap(step["query"])
+		if !ok {
+			return "", fmt.Errorf("unknown output %s", root.name)
 		}
+		qid, _ := qo["query"].(string)
+		typ = c.queryReturnTypes[qid][root.name].typ
 		if typ == "" {
 			return "", fmt.Errorf("unknown output %s", root.name)
 		}
-	case "logic":
+	case "logic", "when":
 		typ = output[root.name].typ
 		if typ == "" {
 			return "", fmt.Errorf("unknown output %s", root.name)
@@ -2886,7 +2999,7 @@ func collectRefs(v any, fn func(string)) {
 
 // checkServiceParamExpr 校验 input 值：params.* 必须存在于 service params，
 // step.<id>.* 必须存在于前序步骤输出（不要求写入 depends_on）。
-func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex map[string]int, stepOutputs []map[string]returnType, steps []any, rel, stepID string) {
+func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex, allIndex map[string]int, reach []map[int]bool, stepOutputs []map[string]returnType, steps []any, rel, stepID string) {
 	expr, ok := v.(string)
 	if !ok || strings.TrimSpace(expr) == "" {
 		c.rulef("service-params", "%s: step %s input value must be a non-empty expression", rel, stepID)
@@ -2908,8 +3021,13 @@ func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex map
 			c.rulef("service-params", "%s: step %s input references step %s that is not an earlier step", rel, stepID, ref)
 			return
 		}
-		if cur, ok := stepIndex[stepID]; ok && idx >= cur {
+		cur, hasCur := allIndex[stepID]
+		if hasCur && idx >= cur {
 			c.rulef("service-params", "%s: step %s input references step %s that is not an earlier step", rel, stepID, ref)
+			return
+		}
+		if hasCur && idx < len(reach) && !reach[idx][cur] {
+			c.rulef("service-chain", "%s: step %s input references step %s that is not reachable via goto", rel, stepID, ref)
 			return
 		}
 		target, _ := asMap(steps[idx])
@@ -2919,6 +3037,56 @@ func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex map
 	default:
 		c.rulef("service-params", "%s: step %s input value %q must be params.<path> or step.<id>.<path> (inline expressions are not allowed; declare a logic step and reference its output)", rel, stepID, expr)
 	}
+}
+
+// buildStepReach 按 goto/when 边构建步骤图，返回每个 step 可达的后续 step 集合。
+// 有自身 goto 的 step 不再落到顺序下一步；无自身 goto 时保留顺序边（when 的默认分支也走顺序下一步）。
+func buildStepReach(steps []any, allIndex map[string]int) []map[int]bool {
+	n := len(steps)
+	adj := make([][]int, n)
+	for i, raw := range steps {
+		step, _ := asMap(raw)
+		kind, _ := step["kind"].(string)
+		selfGoto := false
+		if target, _ := step["goto"].(string); target != "" {
+			selfGoto = true
+			if target != "$end" {
+				if idx, ok := allIndex[target]; ok && idx > i {
+					adj[i] = append(adj[i], idx)
+				}
+			}
+		}
+		if kind == "when" {
+			for _, rawWhen := range asList(step["when"]) {
+				wm, _ := asMap(rawWhen)
+				if target, _ := wm["goto"].(string); target != "" && target != "$end" {
+					if idx, ok := allIndex[target]; ok && idx > i {
+						adj[i] = append(adj[i], idx)
+					}
+				}
+			}
+		}
+		if !selfGoto && i+1 < n {
+			adj[i] = append(adj[i], i+1)
+		}
+	}
+	reach := make([]map[int]bool, n)
+	for i := 0; i < n; i++ {
+		seen := map[int]bool{}
+		queue := []int{i}
+		for len(queue) > 0 {
+			cur := queue[0]
+			queue = queue[1:]
+			for _, next := range adj[cur] {
+				if !seen[next] {
+					seen[next] = true
+					queue = append(queue, next)
+				}
+			}
+		}
+		reach[i] = seen
+	}
+	return reach
 }
 
 // inputExprRoot 返回 input.<root> 的根参数名。

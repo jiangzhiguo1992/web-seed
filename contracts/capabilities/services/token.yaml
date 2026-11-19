@@ -42,6 +42,7 @@ services:
         output:
           - { name: tokens, type: TokenPair, description: "新签发的令牌对" }
         errors: [ ]
+        rules: [ ]
       - id: hash_tokens
         kind: logic
         summary: "计算访问令牌与刷新令牌的哈希"
@@ -52,12 +53,14 @@ services:
           - { name: access_token_hash, type: string, description: "访问令牌哈希" }
           - { name: refresh_token_hash, type: string, description: "刷新令牌哈希" }
         errors: [ ]
+        rules: [ ]
       - id: new_id
         kind: logic
         summary: "生成新令牌 ID"
         output:
           - { name: id, type: integer, description: "新令牌 ID" }
         errors: [ ]
+        rules: [ ]
       - id: create_token
         kind: query
         summary: "调用 data.queries.token.create_token"
@@ -78,6 +81,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
+        rules: [ ]
   - name: refresh
     summary: "用刷新令牌换取新令牌对"
     visibility: public
@@ -97,6 +101,7 @@ services:
         output:
           - { name: refresh_token_hash, type: string, description: "旧刷新令牌哈希" }
         errors: [ ]
+        rules: [ ]
       - id: load_old
         kind: query
         summary: "按刷新令牌读取旧令牌"
@@ -110,6 +115,7 @@ services:
         output:
           - { name: tokens, type: TokenPair, description: "换新后的令牌对" }
         errors: [ ]
+        rules: [ ]
       - id: hash_new
         kind: logic
         summary: "计算新访问令牌与新刷新令牌的哈希"
@@ -120,24 +126,28 @@ services:
           - { name: access_token_hash, type: string, description: "新访问令牌哈希" }
           - { name: refresh_token_hash, type: string, description: "新刷新令牌哈希" }
         errors: [ ]
+        rules: [ ]
       - id: new_id
         kind: logic
         summary: "生成新令牌 ID"
         output:
           - { name: id, type: integer, description: "新令牌 ID" }
         errors: [ ]
+        rules: [ ]
       - id: now
         kind: logic
         summary: "取当前时间作为旧令牌作废时间"
         output:
           - { name: revoked_at, type: timestamp, description: "旧令牌作废时间" }
         errors: [ ]
+        rules: [ ]
       - id: reason
         kind: logic
         summary: "构造令牌作废原因：rotated"
         output:
           - { name: revoke_reason, type: data.enums.token_revoke_reason, description: "作废原因：正常轮换" }
         errors: [ ]
+        rules: [ ]
       - id: create_token
         kind: query
         summary: "调用 data.queries.token.create_token"
@@ -171,6 +181,7 @@ services:
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
           - platform.errors.AUTH_TOKEN_EXPIRED
+        rules: [ ]
   - name: logout
     summary: "吊销刷新令牌"
     visibility: public
@@ -189,18 +200,21 @@ services:
         output:
           - { name: refresh_token_hash, type: string, description: "待吊销的刷新令牌哈希" }
         errors: [ ]
+        rules: [ ]
       - id: now
         kind: logic
         summary: "取当前时间作为吊销时间"
         output:
           - { name: revoked_at, type: timestamp, description: "吊销时间" }
         errors: [ ]
+        rules: [ ]
       - id: reason
         kind: logic
         summary: "构造令牌吊销原因：logout"
         output:
           - { name: revoke_reason, type: data.enums.token_revoke_reason, description: "吊销原因：登出" }
         errors: [ ]
+        rules: [ ]
       - id: get_token_by_refresh
         kind: query
         summary: "调用 data.queries.token.get_token_by_refresh"
@@ -223,6 +237,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
+        rules: [ ]
   - name: revoke_by_account
     summary: "吊销账号的全部令牌"
     visibility: public
@@ -239,12 +254,14 @@ services:
         output:
           - { name: revoked_at, type: timestamp, description: "吊销时间" }
         errors: [ ]
+        rules: [ ]
       - id: reason
         kind: logic
         summary: "构造令牌吊销原因：account_revoked"
         output:
           - { name: revoke_reason, type: data.enums.token_revoke_reason, description: "吊销原因：账号注销" }
         errors: [ ]
+        rules: [ ]
       - id: revoke_tokens_by_account
         kind: query
         summary: "调用 data.queries.token.revoke_tokens_by_account"
@@ -260,6 +277,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
+        rules: [ ]
   - name: verify
     summary: "校验访问令牌并返回账号"
     visibility: public
@@ -279,6 +297,7 @@ services:
         output:
           - { name: access_token_hash, type: string, description: "待校验的访问令牌哈希" }
         errors: [ ]
+        rules: [ ]
       - id: load_token
         kind: query
         summary: "按访问令牌读取令牌"
@@ -304,6 +323,7 @@ services:
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
           - platform.errors.AUTH_TOKEN_EXPIRED
+        rules: [ ]
   - name: purge_expired
     summary: "清理已过期令牌"
     visibility: internal
@@ -320,6 +340,7 @@ services:
         output:
           - { name: limit, type: integer, description: "单批删除上限" }
         errors: [ ]
+        rules: [ ]
       - id: delete_expired_tokens
         kind: query
         summary: "调用 data.queries.token.delete_expired_tokens"
@@ -334,3 +355,4 @@ services:
           - { name: affected_rows, type: integer, description: "影响行数" }
         errors:
           - platform.errors.COMMON_INTERNAL
+        rules: [ ]

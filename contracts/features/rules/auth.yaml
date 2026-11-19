@@ -151,3 +151,12 @@ rules:
     assert: "(status == consumed) == (consumed_at != nil)"
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
     implemented_by: [ cap.services.verification.verify ]
+  - id: feature.rules.auth.login_lockout
+    kind: policy
+    summary: "连续登录失败达到阈值后锁定一段时间"
+    severity: error
+    on_violation: platform.errors.AUTH_LOCKED
+    implemented_by: [ cap.services.auth.login ]
+    given: "auth_pwd.failed_login_count >= auth_policy.password.max_attempts"
+    when: "校验登录凭据"
+    then: "拒绝，返回 AUTH_LOCKED，并写入 auth_pwd.locked_until = now + auth_policy.password.lockout"

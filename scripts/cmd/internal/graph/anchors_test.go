@@ -40,7 +40,7 @@ services:
     steps:
       - id: create
         kind: logic
-        rules: [feature.rules.x.r1]
+        rules: [ { rule: feature.rules.x.r1 } ]
         lifecycles: [cap.lifecycles.x.create]
       - id: emit_created
         kind: events
@@ -49,7 +49,7 @@ services:
     steps:
       - id: transition
         kind: logic
-        rules: [feature.rules.x.r1]
+        rules: [ { rule: feature.rules.x.r1 } ]
         lifecycles: [cap.lifecycles.x.activate]
       - id: emit_activated
         kind: events
