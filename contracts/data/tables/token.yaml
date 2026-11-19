@@ -31,11 +31,6 @@ columns:
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
-  - name: device_id
-    type: device_id
-    nullable: true
-    comment: "设备标识；多端登录时区分设备"
-
   - name: user_id
     type: integer
     nullable: true
@@ -43,6 +38,11 @@ columns:
       - { column: data.tables.account.col.user_id, source: true }
       - { column: data.tables.token.col.user_id, source: false }
     comment: "关联用户 ID"
+
+  - name: device_id
+    type: device_id
+    nullable: true
+    comment: "设备标识；多端登录时区分设备"
 
   - name: access_token_hash
     type: string

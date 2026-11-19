@@ -32,13 +32,13 @@ fields:
     description: "关联账号"
     source: { column: data.tables.token.col.account_id }
 
-  - name: DeviceID
-    description: "设备标识；多端登录时区分设备"
-    source: { column: data.tables.token.col.device_id }
-
   - name: UserID
     description: "关联用户 ID"
     source: { column: data.tables.token.col.user_id }
+
+  - name: DeviceID
+    description: "设备标识；多端登录时区分设备"
+    source: { column: data.tables.token.col.device_id }
 
   - name: accessTokenHash
     description: "访问令牌哈希"

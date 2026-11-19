@@ -18,8 +18,8 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.token.col.id }
       - { name: account_id, type: integer, column: data.tables.token.col.account_id }
-      - { name: device_id, type: text, column: data.tables.token.col.device_id, nullable: true }
       - { name: user_id, type: integer, column: data.tables.token.col.user_id, nullable: true }
+      - { name: device_id, type: text, column: data.tables.token.col.device_id, nullable: true }
       - { name: access_token_hash, type: text, column: data.tables.token.col.access_token_hash }
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
       - { name: access_expire_at, type: timestamp, column: data.tables.token.col.access_expire_at }
