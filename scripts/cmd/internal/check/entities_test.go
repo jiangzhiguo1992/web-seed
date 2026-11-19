@@ -39,6 +39,7 @@ func relationField(name, targetEntity, fromTable, fromCol, toTable, toCol, load 
 		JoinToRef: toTable + ".col." + toCol, JoinToTable: toTable, JoinToColumn: toCol,
 		Lazy: load == "lazy", HasLazy: true, Description: name,
 	}
+	f.TargetID = targetEntity
 	if target, ok := entityRef(targetEntity); ok {
 		f.TargetID = target
 	}
@@ -108,7 +109,7 @@ func TestEntityFieldProjectionRules(t *testing.T) {
 	e = newEntity()
 	e.Fields[1].Type = "*string"
 	c.checkEntityFields(e)
-	if !strings.Contains(entityErrs(c), "pointer type") {
+	if got := entityErrs(c); !strings.Contains(got, "pointer type") || !strings.Contains(got, "[entity-field-type]") {
 		t.Fatalf("pointer/nullable mismatch not reported: %v", c.errs)
 	}
 
@@ -601,7 +602,7 @@ func TestEntityValidationUsedBy(t *testing.T) {
 		"used_by": []any{"cap.services.x.missing"},
 	}}
 	c.checkEntityValidation(e)
-	if !strings.Contains(entityErrs(c), "unknown service") {
+	if got := entityErrs(c); !strings.Contains(got, "unknown service") || !strings.Contains(got, "[entity-validation-used-by]") {
 		t.Fatalf("unknown validation consumer not reported: %v", c.errs)
 	}
 
@@ -953,7 +954,7 @@ func TestQueryReturnsShape(t *testing.T) {
 	c = &Checker{}
 	q.Returns = []queryReturn{{Name: "total", Kind: "scalar", Type: "integer"}, {Name: "total", Kind: "scalar", Type: "integer"}}
 	c.checkQueryReturns(q)
-	if !strings.Contains(entityErrs(c), "duplicate return name") {
+	if got := entityErrs(c); !strings.Contains(got, "duplicate return name") || !strings.Contains(got, "[query-returns]") {
 		t.Fatalf("duplicate return name not reported: %v", c.errs)
 	}
 
@@ -1264,7 +1265,7 @@ func TestUndeclaredWriteQueryRejected(t *testing.T) {
 		},
 	}
 	c.checkCapabilityWrites(map[string]string{})
-	if !strings.Contains(entityErrs(c), "not referenced by any service step") {
+	if got := entityErrs(c); !strings.Contains(got, "not referenced by any service step") || !strings.Contains(got, "[owner-write]") {
 		t.Fatalf("undeclared write table query not reported: %v", c.errs)
 	}
 }
@@ -1286,7 +1287,7 @@ func TestQueryTableShape(t *testing.T) {
 	c.errs = nil
 	q = &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.base"}}
 	c.checkQueryTable(q)
-	if !strings.Contains(entityErrs(c), "tables references data.tables.base") {
+	if got := entityErrs(c); !strings.Contains(got, "tables references data.tables.base") || !strings.Contains(got, "[query-table-shape]") {
 		t.Fatalf("base target not reported: %v", c.errs)
 	}
 
@@ -1347,7 +1348,7 @@ func TestQueryClauseShape(t *testing.T) {
 	q.Returns[0].List = true
 	c.errs = nil
 	c.checkQueryShape(q)
-	if !strings.Contains(entityErrs(c), "affected_rows must not be a list") {
+	if got := entityErrs(c); !strings.Contains(got, "affected_rows must not be a list") || !strings.Contains(got, "[query-shape]") {
 		t.Fatalf("list affected_rows not reported: %v", c.errs)
 	}
 
@@ -1391,7 +1392,7 @@ func TestSecretFieldMustBeUnexported(t *testing.T) {
 func TestEntityName(t *testing.T) {
 	c := &Checker{}
 	c.checkEntityName(&entityInfo{Rel: "x.yaml"})
-	if !strings.Contains(entityErrs(c), "name is required") {
+	if got := entityErrs(c); !strings.Contains(got, "name is required") || !strings.Contains(got, "[entity-name]") {
 		t.Fatalf("missing entity name not reported: %v", c.errs)
 	}
 	c.errs = nil
@@ -1429,7 +1430,7 @@ func TestEntityTypeReusesTableFamilies(t *testing.T) {
 		}(),
 	}}
 	c.checkEntityFields(e)
-	if !strings.Contains(entityErrs(c), "unknown entity type uuid") {
+	if got := entityErrs(c); !strings.Contains(got, "unknown entity type uuid") || !strings.Contains(got, "[entity-field-type]") {
 		t.Fatalf("non-table-family type not reported: %v", c.errs)
 	}
 }
@@ -1455,6 +1456,9 @@ func TestEntityFieldMetadata(t *testing.T) {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in:\n%s", want, errs)
 		}
+	}
+	if !strings.Contains(errs, "[entity-field-json-name]") || !strings.Contains(errs, "[entity-field-name]") {
+		t.Fatalf("field name/json_name rules missing: %v", c.errs)
 	}
 	if strings.Contains(errs, "Status") {
 		t.Fatalf("enum example reported: %v", c.errs)

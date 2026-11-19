@@ -103,6 +103,6 @@ fields:
 rules:
   - { id: event-structure, text: "topic name 在文件内唯一；topic.id 必须为 cap.events.<name> 且全局唯一；version >= 1；payload 必须是 _schemas.yaml 允许的值域节点；emitted_by 必须指向存在的 cap.services.*，consumers 必须指向存在的 job 项", implemented_by: [ event-structure ] }
   - { id: event-file-shape, text: "topics 与 jobs 至少一个非空；topics 非空时 delivery 必填；topic.id 与 job.id 共享 cap.events.* ID 空间，不得重名", implemented_by: [ event-file-shape ] }
-  - { id: async-service, text: "job.service 必须存在且与 events 文件的 owner_module 同模块；被 job 引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service, http-binding ] }
+  - { id: async-service, text: "job.service 必须存在且与 events 文件的 owner_module 同模块；被 job 引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service ] }
   - { id: async-trigger, text: "type=cron 必须有 schedule 且不得写 topic；type=topic 必须有存在的 topic 且不得写 schedule", implemented_by: [ async-trigger ] }
   - { id: async-structure, text: "job name 在文件内唯一；job.id 必须等于 <file-id>.<name> 且全局唯一；不得重复声明同一 (trigger.type, service)", implemented_by: [ async-structure ] }

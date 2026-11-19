@@ -81,11 +81,6 @@ func toFloat(v any) (float64, bool) {
 	return 0, false
 }
 
-func hasNonEmptyString(m map[string]any, key string) bool {
-	s, ok := m[key].(string)
-	return ok && strings.TrimSpace(s) != ""
-}
-
 // tableColumnTypeRe 是表列类型引用的硬约束：只允许 data.tables.<t>.col.<c>。
 var tableColumnTypeRe = regexp.MustCompile(`^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$`)
 

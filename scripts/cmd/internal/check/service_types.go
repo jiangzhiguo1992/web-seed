@@ -712,7 +712,7 @@ func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) 
 	}
 	base, ok := parseServiceType(typ)
 	if !ok {
-		c.rulef("service-ref", "%s: malformed type %s (only T, *T and one-level List<T> are allowed)", where, typ)
+		c.rulef("service-param-type", "%s: malformed type %s (only T, *T and one-level List<T> are allowed)", where, typ)
 		return
 	}
 	switch {
@@ -727,10 +727,10 @@ func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) 
 		}
 		return
 	case strings.HasPrefix(base, "data.tables."):
-		c.rulef("service-ref", "%s: data.tables.* is not a method type; use data.entities.*", where)
+		c.rulef("service-param-type", "%s: data.tables.* is not a method type; use data.entities.*", where)
 		return
 	case strings.HasPrefix(base, "data."):
-		c.rulef("service-ref", "%s: unknown type %s (only data.enums.* and data.entities.* are allowed)", where, base)
+		c.rulef("service-param-type", "%s: unknown type %s (only data.enums.* and data.entities.* are allowed)", where, base)
 		return
 	}
 	if isBuiltinType(base) {

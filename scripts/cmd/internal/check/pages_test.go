@@ -39,9 +39,9 @@ entries:
 permissions:
   - { code: account_read }
 `)
-	valid := `schema_version: 1
-id: feature.pages.x
+	valid := `id: feature.pages.x
 summary: "x"
+schema_version: 1
 stability: draft
 do_not: []
 page: x
@@ -61,6 +61,16 @@ actions:
     capability: cap.services.x.delete
     permission: platform.security.permissions.account_read
     available_when: { transition: cap.lifecycles.x.destroy, state_not: [deleted] }
+fields:
+  - name: q
+    type: string
+    minLength: 1
+    maxLength: 10
+pagination:
+  style: "offset"
+  param: "offset"
+  limit_default: 20
+  limit_max: 100
 transition_ui:
   source: cap.lifecycles.x.transitions
   rule: "rule"
@@ -78,21 +88,27 @@ transition_ui:
 		name string
 		body string
 		want string
+		rule string
 	}{
-		{"unknown transition", strings.Replace(valid, "cap.lifecycles.x.destroy", "cap.lifecycles.x.missing", 1), "unknown lifecycle action"},
-		{"unknown state", strings.Replace(valid, "state_not: [deleted]", "state_not: [missing]", 1), "unknown state missing"},
-		{"unknown capability", strings.Replace(valid, "capability: cap.services.x.create", "capability: cap.services.x.missing", 1), "unknown capability"},
-		{"unknown permission", strings.Replace(valid, "platform.security.permissions.account_read", "platform.security.permissions.missing", 1), "unknown permission"},
-		{"unknown route", strings.Replace(valid, "route: feature.routes.x", "route: feature.routes.missing", 1), "unknown route"},
-		{"missing forbidden state", strings.Replace(valid, "  forbidden: { when: \"false\" }\n", "", 1), "view_states missing forbidden"},
-		{"page mismatch", strings.Replace(valid, "page: x", "page: y", 1), `page "y" must be "x"`},
-		{"id mismatch", strings.Replace(valid, "id: feature.pages.x", "id: feature.pages.y", 1), `id "feature.pages.y" must be "feature.pages.x"`},
-		{"top-level order", strings.Replace(valid, "id: feature.pages.x\nsummary: \"x\"", "summary: \"x\"\nid: feature.pages.x", 1), "must come before"},
+		{"unknown transition", strings.Replace(valid, "cap.lifecycles.x.destroy", "cap.lifecycles.x.missing", 1), "unknown lifecycle action", "page-refs"},
+		{"unknown state", strings.Replace(valid, "state_not: [deleted]", "state_not: [missing]", 1), "unknown state missing", "page-refs"},
+		{"unknown capability", strings.Replace(valid, "capability: cap.services.x.create", "capability: cap.services.x.missing", 1), "unknown capability", "page-refs"},
+		{"unknown permission", strings.Replace(valid, "platform.security.permissions.account_read", "platform.security.permissions.missing", 1), "unknown permission", "page-refs"},
+		{"unknown route", strings.Replace(valid, "route: feature.routes.x", "route: feature.routes.missing", 1), "unknown route", "page-refs"},
+		{"missing forbidden state", strings.Replace(valid, "  forbidden: { when: \"false\" }\n", "", 1), "view_states missing forbidden", "page-structure"},
+		{"page mismatch", strings.Replace(valid, "page: x", "page: y", 1), `page "y" must be "x"`, "page-structure"},
+		{"id mismatch", strings.Replace(valid, "id: feature.pages.x", "id: feature.pages.y", 1), `id "feature.pages.y" must be "feature.pages.x"`, "page-structure"},
+		{"top-level order", strings.Replace(valid, "id: feature.pages.x\nsummary: \"x\"", "summary: \"x\"\nid: feature.pages.x", 1), "must come before", "schema.field-order"},
+		{"limits", strings.Replace(strings.Replace(valid, "limit_default: 20", "limit_default: 200", 1), "minLength: 1", "minLength: 20", 1), "must be <=", "page-limits"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := check(tc.body); !strings.Contains(got, tc.want) {
+			got := check(tc.body)
+			if !strings.Contains(got, tc.want) {
 				t.Fatalf("want %q, got %q", tc.want, got)
+			}
+			if !strings.Contains(got, "["+tc.rule+"]") {
+				t.Fatalf("want rule [%s], got %q", tc.rule, got)
 			}
 		})
 	}

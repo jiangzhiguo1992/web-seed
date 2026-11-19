@@ -72,11 +72,11 @@ func TestTypeExpressionPatterns(t *testing.T) {
 			typ:  "data.entities",
 			path: []string{"fields", "type"},
 			accept: []string{
-				"string", "timestamp", "data.enums.account_status",
+				"string", "*timestamp", "data.enums.account_status",
 				"data.entities.token", "List<data.entities.token>",
 			},
 			reject: []string{
-				"*timestamp", "data.tables.account", "List<data.enums.account_status>",
+				"data.tables.account", "List<data.enums.account_status>",
 				"@inline/1", "data.enums.AccountStatus",
 			},
 		},

@@ -1,8 +1,8 @@
 # 登录页。认证用例已在 cap.services.auth 落地。
 
-schema_version: 1
 id: feature.pages.login
 summary: "登录页"
+schema_version: 1
 stability: draft
 do_not:
   - "不要把 token 存进 localStorage"

@@ -10,6 +10,7 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 	files := glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
 	topicIDs := map[string]bool{}
 	jobIDs := map[string]bool{}
+	bound := map[string]bool{}
 	for _, file := range files {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -102,7 +103,6 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 		}
 
 		jobNames := map[string]bool{}
-		bound := map[string]bool{}
 		for _, raw := range jobs {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)

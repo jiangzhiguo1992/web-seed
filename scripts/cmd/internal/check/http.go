@@ -34,7 +34,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		c.checkTargetFileName(schema, filepath.Base(rel), rel)
 		c.checkStability(doc, rel)
 		if want := schema.Targets.FileID(filepath.Base(rel)); doc["id"] != want {
-			c.rulef("http-binding", "%s: id %q must be %q", rel, doc["id"], want)
+			c.rulef("http-file", "%s: id %q must be %q", rel, doc["id"], want)
 		}
 		components, _ := asMap(doc["components"])
 		headers, _ := asMap(components["headers"])
@@ -132,20 +132,20 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			continue
 		}
 		rel := relPath(c.root, file)
+		fileID, _ := doc["id"].(string)
 		components, _ := asMap(doc["components"])
 		schemas, _ := asMap(components["schemas"])
 		defaultErrors := map[string]bool{}
 		for _, raw := range asList(doc["default_error_responses"]) {
 			n, ok := toInt(raw)
 			if !ok || n < 100 || n > 599 {
-				c.rulef("http-binding", "%s: default_error_responses must contain HTTP status codes 100-599, got %v", rel, raw)
-				continue
+				continue // 范围/类型由 _meta 的 min/max 与 integer 报出
 			}
 			name, ok := openapispec.DefaultResponseName(n)
 			if !ok {
-				c.rulef("http-binding", "%s: default status %d has no components.responses mapping", rel, n)
+				c.rulef("http-default-errors", "%s: default status %d has no components.responses mapping", rel, n)
 			} else if !httpResponses[name] {
-				c.rulef("http-binding", "%s: default status %d requires components.responses.%s", rel, n, name)
+				c.rulef("http-default-errors", "%s: default status %d requires components.responses.%s", rel, n, name)
 			}
 			defaultErrors[fmt.Sprint(raw)] = true
 		}
@@ -157,43 +157,52 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if !ok {
 					continue
 				}
+				for i, rawParam := range asList(op["parameters"]) {
+					param, _ := asMap(rawParam)
+					if s, ok := asMap(param["schema"]); ok {
+						c.checkClosedObjects(s, rel, fmt.Sprintf("%s %s parameters[%d]", method, path, i))
+					}
+				}
 				for key := range op {
 					if !strings.HasPrefix(key, "x-") || key == "x-flow" {
 						continue
 					}
 					if !allowedOperationExtensions[key] {
-						c.rulef("http-binding", "%s %s %s: unknown operation extension %s", rel, method, path, key)
+						c.rulef("http-operation", "%s %s %s: unknown operation extension %s", rel, method, path, key)
 					}
 				}
 				if prev, exists := operations[path+"\x00"+method]; exists {
-					c.rulef("http-binding", "%s %s %s: duplicate operation (%s)", rel, method, path, prev)
+					c.rulef("http-operation", "%s %s %s: duplicate operation (%s)", rel, method, path, prev)
 				} else {
 					operations[path+"\x00"+method] = rel
 				}
 				opID, _ := op["operationId"].(string)
 				if opID == "" {
-					c.rulef("http-binding", "%s %s %s: operationId required", rel, method, path)
+					c.rulef("http-operation", "%s %s %s: operationId required", rel, method, path)
 				} else if prev, exists := operationIDs[opID]; exists {
-					c.rulef("http-binding", "%s %s %s: duplicate operationId %s (also in %s)", rel, method, path, opID, prev)
+					c.rulef("http-operation", "%s %s %s: duplicate operationId %s (also in %s)", rel, method, path, opID, prev)
 				} else {
 					operationIDs[opID] = rel
 				}
 				contractID, _ := op["x-contract-id"].(string)
 				switch {
 				case contractID == "":
-					c.rulef("http-binding", "%s %s %s: x-contract-id required", rel, method, path)
+					c.rulef("http-operation", "%s %s %s: x-contract-id required", rel, method, path)
 				case !match(`^cap\.protocols\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$`, contractID):
-					c.rulef("http-binding", "%s %s %s: x-contract-id %q must match cap.protocols.http.<file>.<operation>", rel, method, path, contractID)
+					c.rulef("http-operation", "%s %s %s: x-contract-id %q must match cap.protocols.http.<file>.<operation>", rel, method, path, contractID)
 				default:
 					if prev, exists := contractIDs[contractID]; exists {
-						c.rulef("http-binding", "%s %s %s: duplicate x-contract-id %s (also in %s)", rel, method, path, contractID, prev)
+						c.rulef("http-operation", "%s %s %s: duplicate x-contract-id %s (also in %s)", rel, method, path, contractID, prev)
 					} else {
 						contractIDs[contractID] = rel
+					}
+					if fileID != "" && !strings.HasPrefix(contractID, fileID+".") {
+						c.rulef("http-operation", "%s %s %s: x-contract-id %s must start with %s.", rel, method, path, contractID, fileID)
 					}
 				}
 				if raw, ok := op["x-timeout-ms"]; ok {
 					if n, ok := toInt(raw); !ok || n <= 0 {
-						c.rulef("http-binding", "%s %s %s: x-timeout-ms must be a positive integer", rel, method, path)
+						c.rulef("http-operation", "%s %s %s: x-timeout-ms must be a positive integer", rel, method, path)
 					}
 				}
 				effectiveDefaults := defaultErrors
@@ -201,15 +210,15 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					effectiveDefaults = map[string]bool{}
 					for _, item := range asList(raw) {
 						n, ok := toInt(item)
-						if !ok {
-							c.rulef("http-binding", "%s %s %s: x-default-errors must contain HTTP status codes", rel, method, path)
+						if !ok || n < 100 || n > 599 {
+							c.rulef("http-default-errors", "%s %s %s: x-default-errors must contain HTTP status codes 100-599, got %v", rel, method, path, item)
 							continue
 						}
 						name, ok := openapispec.DefaultResponseName(n)
 						if !ok {
-							c.rulef("http-binding", "%s %s %s: x-default-errors status %d has no components.responses mapping", rel, method, path, n)
+							c.rulef("http-default-errors", "%s %s %s: x-default-errors status %d has no components.responses mapping", rel, method, path, n)
 						} else if !httpResponses[name] {
-							c.rulef("http-binding", "%s %s %s: x-default-errors status %d requires components.responses.%s", rel, method, path, n, name)
+							c.rulef("http-default-errors", "%s %s %s: x-default-errors status %d requires components.responses.%s", rel, method, path, n, name)
 						}
 						effectiveDefaults[fmt.Sprint(n)] = true
 					}
@@ -217,7 +226,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				responses, _ := asMap(op["responses"])
 				for status, rawResp := range responses {
 					if effectiveDefaults[status] {
-						c.rulef("http-binding", "%s %s %s: status %s is injected by default errors; do not repeat it", rel, method, path, status)
+						c.rulef("http-default-errors", "%s %s %s: status %s is injected by default errors; do not repeat it", rel, method, path, status)
 					}
 					resp, _ := asMap(rawResp)
 					if content, ok := asMap(resp["content"]); ok {
@@ -258,7 +267,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					}
 				}
 				if op["x-flow"] != nil {
-					c.rulef("http-binding", "%s %s %s: x-flow removed; use x-service", rel, method, path)
+					c.rulef("http-operation", "%s %s %s: x-flow removed; use x-service", rel, method, path)
 				}
 				collectRefs(op, func(ref string) {
 					if strings.HasPrefix(ref, "#/components/schemas/") {
@@ -270,16 +279,16 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				})
 				serviceRef, _ := op["x-service"].(string)
 				if serviceRef == "" {
-					c.rulef("http-binding", "%s %s %s: x-service required", rel, method, path)
+					c.rulef("http-operation", "%s %s %s: x-service required", rel, method, path)
 					continue
 				}
 				target, ok := serviceMeta[serviceRef]
 				if !ok {
-					c.rulef("http-binding", "%s %s %s: unknown service %s", rel, method, path, serviceRef)
+					c.rulef("http-operation", "%s %s %s: unknown service %s", rel, method, path, serviceRef)
 					continue
 				}
 				if jobServices[serviceRef] {
-					c.rulef("http-binding", "%s %s %s: service %s is used by a cap.events job and cannot be bound to http", rel, method, path, serviceRef)
+					c.rulef("async-service", "%s %s %s: service %s is used by a cap.events job and cannot be bound to http", rel, method, path, serviceRef)
 					continue
 				}
 				if target.visibility != "public" {
@@ -295,21 +304,23 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 								name := strings.TrimPrefix(ref, "#/components/schemas/")
 								comp, hasComp := asMap(schemas[name])
 								xt, _ := comp["x-service-type"].(string)
-								key := name
-								if xt != "" {
-									key = xt
+								if !hasComp {
+									c.rulef("http-components", "%s %s %s: requestBody $ref %s points to a missing component", rel, method, path, name)
+									continue
 								}
-								if !target.paramTypes[key] {
+								if xt == "" {
+									c.rulef("http-service-type", "%s %s %s: requestBody $ref %s is not a param of %s", rel, method, path, name, serviceRef)
+									continue
+								}
+								if !target.paramTypes[xt] {
 									c.rulef("http-service-type", "%s %s %s: requestBody $ref %s is not a param of %s", rel, method, path, name, serviceRef)
 								}
-								if hasComp && xt != "" {
-									fileRef := serviceRef
-									if i := strings.LastIndex(serviceRef, "."); i > 0 {
-										fileRef = serviceRef[:i]
-									}
-									if !strings.HasPrefix(xt, fileRef+".schemas.") {
-										c.rulef("http-service-type", "%s %s %s: requestBody $ref %s points at %s, not %s.schemas.*", rel, method, path, name, xt, fileRef)
-									}
+								fileRef := serviceRef
+								if i := strings.LastIndex(serviceRef, "."); i > 0 {
+									fileRef = serviceRef[:i]
+								}
+								if !strings.HasPrefix(xt, fileRef+".schemas.") {
+									c.rulef("http-service-type", "%s %s %s: requestBody $ref %s points at %s, not %s.schemas.*", rel, method, path, name, xt, fileRef)
 								}
 							}
 						}
@@ -326,7 +337,8 @@ func (c *Checker) checkClosedObjects(v any, rel, where string) {
 	if !ok {
 		return
 	}
-	if typ, _ := m["type"].(string); typ == "object" {
+	typ, _ := m["type"].(string)
+	if typ == "object" || (typ == "" && m["properties"] != nil) {
 		if ap, ok := m["additionalProperties"]; !ok || ap != false {
 			c.rulef("http-components", "%s: %s must set additionalProperties: false", rel, where)
 		}
@@ -342,7 +354,7 @@ func (c *Checker) checkClosedObjects(v any, rel, where string) {
 	if ap, ok := asMap(m["additionalProperties"]); ok {
 		c.checkClosedObjects(ap, rel, where+".additionalProperties")
 	}
-	for _, key := range []string{"allOf", "oneOf", "anyOf"} {
+	for _, key := range []string{"allOf", "oneOf", "anyOf", "prefixItems"} {
 		for i, raw := range asList(m[key]) {
 			c.checkClosedObjects(raw, rel, fmt.Sprintf("%s.%s[%d]", where, key, i))
 		}

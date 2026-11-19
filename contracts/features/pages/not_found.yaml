@@ -1,8 +1,8 @@
 # 404 页。通用页面，无数据源。
 
-schema_version: 1
 id: feature.pages.not_found
 summary: "404 页"
+schema_version: 1
 stability: stable
 do_not:
   - "不要展示原始路径（可能含敏感参数）"

@@ -53,7 +53,7 @@ playbook 未覆盖的任务：**先写 playbook，再动手**。这是硬规则�
 |---|---|---|
 | `docs/guides/architecture.md` | 架构、生成链、实施进度、一致性机制 | 每次任务开始 |
 | `contracts/index.yaml` | 契约地图（摘要级） | 定位契约时 |
-| `contracts/_meta/README.md` | 契约字段规范：`data.tables` / `data.enums`、`contract-new` / `contract-check` | 写 / 改契约前 |
+| `contracts/_meta/README.md` | 契约字段规范总入口：全部契约类型、`contract-new` / `contract-check` | 写 / 改契约前 |
 | `contracts/_meta/<type>.yaml` | 该类型每个字段的语义、生成行为、AI 易错点 | 写 / 改该类型契约前 |
 | `contracts/README.md` | 契约元规则：ID、分层、拆分、演进；2.1 是组 README 索引 | 改契约前 |
 | `contracts/data/README.md` | 数据模型：五类契约、分层理由、边界判据 | 加表 / 写查询前 |

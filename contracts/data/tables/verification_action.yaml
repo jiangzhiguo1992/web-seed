@@ -6,11 +6,9 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "verification_action 是追加日志；不要更新或软删历史动作"
   - "verification_action.account_id 是有意快照；不要复制 auth_id/auth_type"
   - "verification_action.input_hash 必须用 HMAC-SHA256，不能用裸哈希"
-  - "verification_action 不建数据库外键；verification_id 可因验证体清理而悬空"
-  - "验证体清理后动作仍保留用于风控与审计，不要按 verification_id 级联删除"
+  - "verification_action.verification_id 可因验证体清理而悬空；不要按 verification_id 级联删除"
 
 table:
   name: verification_action

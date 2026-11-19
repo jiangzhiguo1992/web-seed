@@ -309,17 +309,8 @@ func (c *Checker) loadSchemaByType(typ string) (*Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := validatePatterns(s.Fields); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if err := validateFieldTypes(s.Fields); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if err := validateFieldMarkers(s.Fields); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if err := validateMetaFields(s.Fields, "fields"); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+	if err := validateSchemaMeta(s, path); err != nil {
+		return nil, err
 	}
 	return s, nil
 }
@@ -329,19 +320,27 @@ func loadSchema(path string) (*Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := validatePatterns(s.Fields); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if err := validateFieldTypes(s.Fields); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if err := validateFieldMarkers(s.Fields); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if err := validateMetaFields(s.Fields, "fields"); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+	if err := validateSchemaMeta(s, path); err != nil {
+		return nil, err
 	}
 	return s, nil
+}
+
+// validateSchemaMeta 校验 _meta 字段规范自身，避免拼写/类型错误把硬约束降级为无效文本。
+func validateSchemaMeta(s *Schema, path string) error {
+	if err := validatePatterns(s.Fields); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if err := validateFieldTypes(s.Fields); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if err := validateFieldMarkers(s.Fields); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if err := validateMetaFields(s.Fields, "fields"); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	return nil
 }
 
 func loadYAML(path string) (map[string]any, error) {

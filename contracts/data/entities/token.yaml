@@ -7,7 +7,6 @@ schema_version: 1
 stability: draft
 do_not:
   - "token 实体不要写 JWT 签发或校验逻辑"
-  - "token 原文只在签发响应返回一次"
 
 model:
   name: token

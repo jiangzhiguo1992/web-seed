@@ -1,8 +1,8 @@
 # 账号详情页。四态与可用动作由生命周期决定。
 
-schema_version: 1
 id: feature.pages.account_detail
 summary: "账号详情页"
+schema_version: 1
 stability: stable
 do_not:
   - "不要在前端判断状态合法性，使用 cap.lifecycles.account 的动作表"

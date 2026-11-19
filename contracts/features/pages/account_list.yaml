@@ -1,8 +1,8 @@
 # 账号列表页。四态必须齐全，数据源必须引用 capability。
 
-schema_version: 1
 id: feature.pages.account_list
 summary: "账号列表页"
+schema_version: 1
 stability: stable
 do_not:
   - "状态筛选的取值必须来自 cap.lifecycles.account.states.values，不要硬编码"

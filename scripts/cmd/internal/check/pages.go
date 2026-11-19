@@ -16,6 +16,8 @@ func (c *Checker) checkFeaturePages() {
 		c.rulef("schema.load", "load feature.pages schema: %v", err)
 		return
 	}
+	c.checkTargets(schema)
+	c.checkRules(schema)
 	lifecycleIDs, lifecycleActions, lifecycleStates := c.pageLifecycleIndex()
 	serviceIDs := c.pageServiceIndex()
 	routeIDs := c.pageRouteIndex()
@@ -28,17 +30,19 @@ func (c *Checker) checkFeaturePages() {
 		c.validateDoc(doc, schema.Fields, rel)
 		c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		c.checkTargetFileName(schema, filepath.Base(file), rel)
+		c.checkStability(doc, rel)
 		c.checkPageViewStates(rel, doc)
+		c.checkPageLimits(rel, doc)
 		stem := strings.TrimSuffix(filepath.Base(file), ".yaml")
 		id, _ := doc["id"].(string)
 		if want := schema.Targets.FileID(filepath.Base(file)); id != want {
-			c.rulef("schema.ref", "%s: id %q must be %q", rel, id, want)
+			c.rulef("page-structure", "%s: id %q must be %q", rel, id, want)
 		}
 		if page, _ := doc["page"].(string); page != stem {
-			c.rulef("schema.ref", "%s: page %q must be %q", rel, page, stem)
+			c.rulef("page-structure", "%s: page %q must be %q", rel, page, stem)
 		}
 		if route, _ := doc["route"].(string); route != "" && routeIDs != nil && !routeIDs[route] {
-			c.rulef("schema.ref", "%s: unknown route %s", rel, route)
+			c.rulef("page-refs", "%s: unknown route %s", rel, route)
 		}
 		lifecycleID := pageLifecycleID(doc)
 		c.checkPageNode(rel, doc, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs)
@@ -53,12 +57,31 @@ func (c *Checker) checkPageViewStates(rel string, doc map[string]any) {
 	}
 	for _, key := range []string{"loading", "error", "forbidden"} {
 		if _, ok := states[key]; !ok {
-			c.rulef("schema.required", "%s: view_states missing %s", rel, key)
+			c.rulef("page-structure", "%s: view_states missing %s", rel, key)
 		}
 	}
 	if _, ok := states["empty"]; !ok {
 		if _, ok := states["idle"]; !ok {
-			c.rulef("schema.required", "%s: view_states requires empty or idle", rel)
+			c.rulef("page-structure", "%s: view_states requires empty or idle", rel)
+		}
+	}
+}
+
+// checkPageLimits 校验页面数值边界的顺序关系。
+func (c *Checker) checkPageLimits(rel string, doc map[string]any) {
+	if p, ok := asMap(doc["pagination"]); ok {
+		if def, ok := toInt(p["limit_default"]); ok {
+			if max, ok := toInt(p["limit_max"]); ok && def > max {
+				c.rulef("page-limits", "%s: pagination.limit_default %d must be <= limit_max %d", rel, def, max)
+			}
+		}
+	}
+	for i, raw := range asList(doc["fields"]) {
+		f, _ := asMap(raw)
+		if min, ok := toInt(f["minLength"]); ok {
+			if max, ok := toInt(f["maxLength"]); ok && min > max {
+				c.rulef("page-limits", "%s: fields[%d].minLength %d must be <= maxLength %d", rel, i, min, max)
+			}
 		}
 	}
 }
@@ -214,15 +237,20 @@ func (c *Checker) checkPageNode(rel string, node any, lifecycleID string, lifecy
 			switch key {
 			case "capability":
 				if s, ok := child.(string); ok && s != "" && serviceIDs != nil && !serviceIDs[s] {
-					c.rulef("schema.ref", "%s: unknown capability %s", rel, s)
+					c.rulef("page-refs", "%s: unknown capability %s", rel, s)
 				}
 			case "permission":
 				if s, ok := child.(string); ok && s != "" && !c.permissionExists(s) {
-					c.rulef("schema.ref", "%s: unknown permission %s", rel, s)
+					c.rulef("page-refs", "%s: unknown permission %s", rel, s)
 				}
 			case "enum":
-				if s, ok := child.(string); ok && strings.HasPrefix(s, "cap.lifecycles.") {
-					c.checkLifecycleStatesRef(rel, s, lifecycleIDs)
+				if s, ok := child.(string); ok {
+					switch {
+					case strings.HasPrefix(s, "cap.lifecycles."):
+						c.checkLifecycleStatesRef(rel, s, lifecycleIDs)
+					case strings.HasPrefix(s, "data.enums.") && !c.enumIDs[s]:
+						c.rulef("page-refs", "%s: unknown enum %s", rel, s)
+					}
 				}
 			case "transition":
 				if s, ok := child.(string); ok && strings.HasPrefix(s, "cap.lifecycles.") {
@@ -241,18 +269,18 @@ func (c *Checker) checkPageNode(rel string, node any, lifecycleID string, lifecy
 						continue
 					}
 					if lifecycleID == "" {
-						c.rulef("schema.ref", "%s: state_not %s has no lifecycle context", rel, s)
+						c.rulef("page-refs", "%s: state_not %s has no lifecycle context", rel, s)
 						continue
 					}
 					if !lifecycleStates[lifecycleID][s] {
-						c.rulef("schema.ref", "%s: unknown state %s of %s", rel, s, lifecycleID)
+						c.rulef("page-refs", "%s: unknown state %s of %s", rel, s, lifecycleID)
 					}
 				}
 			case "source":
 				if s, ok := child.(string); ok && strings.HasPrefix(s, "cap.lifecycles.") {
 					parts := strings.Split(s, ".")
 					if len(parts) != 4 || parts[3] != "transitions" || !lifecycleIDs[strings.Join(parts[:3], ".")] {
-						c.rulef("schema.ref", "%s: invalid lifecycle source %s", rel, s)
+						c.rulef("page-refs", "%s: invalid lifecycle source %s", rel, s)
 					}
 				}
 			}
@@ -269,7 +297,7 @@ func (c *Checker) checkLifecycleStatesRef(rel, ref string, lifecycleIDs map[stri
 	parts := strings.Split(ref, ".")
 	lifecycleID := strings.Join(parts[:3], ".")
 	if !lifecycleIDs[lifecycleID] {
-		c.rulef("schema.ref", "%s: unknown lifecycle %s", rel, lifecycleID)
+		c.rulef("page-refs", "%s: unknown lifecycle %s", rel, lifecycleID)
 		return
 	}
 	switch {
@@ -277,12 +305,12 @@ func (c *Checker) checkLifecycleStatesRef(rel, ref string, lifecycleIDs map[stri
 	case len(parts) == 4 && parts[3] == "states":
 	case len(parts) == 5 && parts[3] == "states" && parts[4] == "values":
 	default:
-		c.rulef("schema.ref", "%s: invalid lifecycle states reference %s", rel, ref)
+		c.rulef("page-refs", "%s: invalid lifecycle states reference %s", rel, ref)
 	}
 }
 
 func (c *Checker) checkLifecycleActionRef(rel, ref string, lifecycleActions map[string]bool) {
 	if !lifecycleActions[ref] {
-		c.rulef("schema.ref", "%s: unknown lifecycle action %s", rel, ref)
+		c.rulef("page-refs", "%s: unknown lifecycle action %s", rel, ref)
 	}
 }

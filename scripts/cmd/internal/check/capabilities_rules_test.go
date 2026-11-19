@@ -72,14 +72,20 @@ func TestServiceParamExpr(t *testing.T) {
 
 	c.errs = nil
 	c.checkServiceParamExpr("params.missing", doc, stepIndex, allIndex, reach, stepOutputs, steps, "f", "s")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-params]") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-input-ref]") {
 		t.Fatalf("unknown input not reported: %v", c.errs)
 	}
 
 	c.errs = nil
 	c.checkServiceParamExpr("step.load.missing", doc, stepIndex, allIndex, reach, stepOutputs, steps, "f", "s")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-params]") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-input-ref]") {
 		t.Fatalf("unknown step field not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkServiceParamExpr("step.after.x", doc, stepIndex, allIndex, reach, stepOutputs, steps, "f", "s")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-input-order]") {
+		t.Fatalf("later step reference not reported: %v", c.errs)
 	}
 }
 
@@ -358,7 +364,6 @@ rules:
   - id: feature.rules.x.r1
     kind: policy
     summary: "x"
-    severity: error
     on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [cap.services.x.create]
 `
@@ -383,7 +388,6 @@ rules:
   - id: feature.rules.x.r2
     kind: constraint
     summary: "x"
-    severity: error
     on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [cap.services.x.create]
 `)
@@ -407,7 +411,6 @@ rules:
   - id: feature.rules.x.r3
     kind: policy
     summary: "x"
-    severity: error
     on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [cap.services.missing.create]
 `)
@@ -511,7 +514,6 @@ components:
     X:
       x-service-type: cap.services.x.schemas.X
       type: object
-      additionalProperties: false
       properties:
         id: { type: string }
 `)
@@ -526,7 +528,8 @@ components:
 			},
 		},
 	}, map[string]bool{"cap.services.x.schemas.X": true}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-service-type]") {
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, "[http-service-type]") || !strings.Contains(got, "[http-components]") {
 		t.Fatalf("component field mismatch not reported: %v", c.errs)
 	}
 }
@@ -760,7 +763,7 @@ func TestCheckWhenLiteralInteger(t *testing.T) {
 	}
 	c.errs = nil
 	c.checkWhenLiteral("integer", float64(1.5), "rel", "step", "field")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-when]") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-when-types]") {
 		t.Fatalf("non-integral float literal not reported: %v", c.errs)
 	}
 }
@@ -823,7 +826,7 @@ func TestLifecycleEnumCoverage(t *testing.T) {
 		map[string]map[string]bool{"data.enums.x": {"a": true}},
 		map[string]map[string]bool{"data.enums.x": {"cap.lifecycles.x": true}},
 	)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "value b is not declared") {
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "value b is not declared") || !strings.Contains(got, "[lifecycle-enum-coverage]") {
 		t.Fatalf("missing enum value not reported: %v", c.errs)
 	}
 
@@ -1074,7 +1077,7 @@ paths:
       x-service: cap.services.x.get
       responses:
         "200": { description: OK }
-default_error_responses: [418]
+default_error_responses: [418, 503]
 `)
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -1086,6 +1089,10 @@ default_error_responses: [418]
 		`id "cap.http.x" must be "cap.protocols.http.x"`,
 		"duplicate x-contract-id",
 		"default status 418 has no components.responses mapping",
+		"[http-file]",
+		"[http-operation]",
+		"[http-default-errors]",
+		"[http-retry-after]",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
@@ -1197,6 +1204,8 @@ paths:
 	for _, want := range []string{
 		"unknown operation extension x-typo",
 		"status 423 is injected by default errors",
+		"[http-operation]",
+		"[http-default-errors]",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
@@ -1898,5 +1907,115 @@ func TestSchemaPropertyRequiresSchemaAndDescription(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q: %v", want, c.errs)
 		}
+	}
+}
+
+func TestServiceStepRuleIDs(t *testing.T) {
+	baseStep := func(kind string) map[string]any {
+		return map[string]any{
+			"id": "s", "kind": kind, "summary": "x",
+			"input": []any{}, "output": []any{}, "errors": []any{},
+			"rules": []any{}, "goto": "$end",
+		}
+	}
+	cases := []struct {
+		name string
+		step map[string]any
+		want string
+	}{
+		{"target", baseStep("query"), "service-step-target"},
+		{"shape", func() map[string]any { s := baseStep("logic"); delete(s, "rules"); return s }(), "service-step-shape"},
+		{"fields", func() map[string]any { s := baseStep("logic"); s["query"] = "data.queries.x.q"; return s }(), "service-step-fields"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Checker{errCodeSet: map[string]bool{}, permissionSet: map[string]bool{}}
+			doc := map[string]any{
+				"name": "get", "summary": "x", "visibility": "public", "tx_mode": "read_only",
+				"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
+				"returns": []any{map[string]any{"name": "err", "type": "error"}},
+				"steps":   []any{tc.step},
+			}
+			c.checkServiceItem(doc, "contracts/capabilities/services/x.yaml", "cap.services.x.get", "x",
+				map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+			got := strings.Join(c.errs, "\n")
+			if !strings.Contains(got, "["+tc.want+"]") {
+				t.Fatalf("want [%s], got:\n%s", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestServiceInputRuleIDs(t *testing.T) {
+	tc := stepTypeContext{doc: map[string]any{"params": []any{
+		map[string]any{"name": "id", "type": "integer"},
+		map[string]any{"name": "maybe", "type": "integer", "nullable": true},
+	}}}
+	q := &queryInfo{
+		ID: "data.queries.x.q", File: "x",
+		Params: []queryParam{
+			{Name: "ctx", Type: "context.Context"},
+			{Name: "id", Type: "integer"},
+			{Name: "maybe", Type: "integer", Nullable: true},
+		},
+	}
+	cases := []struct {
+		name  string
+		q     *queryInfo
+		input map[string]any
+		want  string
+	}{
+		{"name", q, map[string]any{"id": "params.id", "extra": "params.id"}, "service-input-name"},
+		{"nullable", q, map[string]any{"id": "params.maybe"}, "service-input-nullable"},
+		{"required", q, map[string]any{}, "service-input-required"},
+		{"type", &queryInfo{ID: "data.queries.x.q", File: "x", Params: []queryParam{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "string"}}}, map[string]any{"id": "params.id"}, "service-input-type"},
+		{"default", nil, nil, "service-param-default"},
+	}
+	for _, tcCase := range cases {
+		t.Run(tcCase.name, func(t *testing.T) {
+			c := &Checker{errCodeSet: map[string]bool{}, permissionSet: map[string]bool{}}
+			if tcCase.name == "default" {
+				c.checkServiceParamDefault(map[string]any{"name": "id", "type": "integer", "default": 1}, "x", "get")
+			} else {
+				c.checkQueryInput(tcCase.input, tcCase.q, tcCase.q.ID, "x", "s", tc)
+			}
+			got := strings.Join(c.errs, "\n")
+			if !strings.Contains(got, "["+tcCase.want+"]") {
+				t.Fatalf("want [%s], got:\n%s", tcCase.want, got)
+			}
+		})
+	}
+}
+
+func TestHTTPServiceReturnMissing(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+paths:
+  /x:
+    get:
+      operationId: getX
+      x-contract-id: cap.protocols.http.x.get
+      x-service: cap.services.x.get
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                x-service-return: data.entities.missing
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {visibility: "public", returns: map[string]returnType{}},
+	}, map[string]bool{}, map[string]bool{})
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "[http-service-return]") {
+		t.Fatalf("missing service return not reported: %v", c.errs)
 	}
 }

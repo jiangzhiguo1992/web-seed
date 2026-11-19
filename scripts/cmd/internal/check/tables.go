@@ -620,22 +620,15 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.rulef("schema.unique-names", "%s: indexes[%d]: duplicate index %q", rel, i, name)
 		}
 		c.checkIndexUsedBy(m, want, rel, i, name)
-		hasCols := len(asList(m["columns"])) > 0
-		hasExpr := hasNonEmptyString(m, "expression")
-		if hasCols == hasExpr {
-			c.rulef("index-definition", "%s: indexes[%d] (%s): exactly one of columns/expression is required", rel, i, name)
-		}
-		if hasCols {
-			where := fmt.Sprintf("%s: indexes[%d] (%s)", rel, i, name)
-			for _, x := range asList(m["columns"]) {
-				col, ok := x.(string)
-				if !ok {
-					c.rulef("schema.type", "%s: column name must be string", where)
-					continue
-				}
-				if !allCols[col] {
-					c.rulef("index-definition", "%s: unknown column %q", where, col)
-				}
+		where := fmt.Sprintf("%s: indexes[%d] (%s)", rel, i, name)
+		for _, x := range asList(m["columns"]) {
+			col, ok := x.(string)
+			if !ok {
+				c.rulef("schema.type", "%s: column name must be string", where)
+				continue
+			}
+			if !allCols[col] {
+				c.rulef("index-definition", "%s: unknown column %q", where, col)
 			}
 		}
 		unique, _ := m["unique"].(bool)
@@ -673,19 +666,14 @@ func (c *Checker) checkConstraintUsedBy(m map[string]any, tableID, rel string, i
 	}
 }
 
-// checkIndexUsedBy 校验索引的 used_by：至少一个查询项，且查询存在并引用当前表。
-// 这是“防空索引”的最低可执行约束；不是数据库查询计划器，不判断索引是否真被命中。
+// checkIndexUsedBy 校验索引的 used_by：每个查询项存在且引用当前表。
+// 非空由 schema.required/min_items 保证；这里只做引用对账。
 func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int, name string) {
 	raw, present := m["used_by"]
 	if !present || raw == nil {
 		return // 缺失由 schema.required 报出
 	}
-	usedBy := asList(raw)
-	if len(usedBy) == 0 {
-		c.rulef("index-used-by", "%s: indexes[%d] (%s): used_by must list at least one query item", rel, i, name)
-		return
-	}
-	for _, raw := range usedBy {
+	for _, raw := range asList(raw) {
 		qid, ok := raw.(string)
 		if !ok || qid == "" || !strings.HasPrefix(qid, "data.queries.") {
 			c.rulef("index-used-by-ref", "%s: indexes[%d] (%s): used_by must be data.queries.* item IDs, got %v", rel, i, name, raw)
@@ -846,6 +834,9 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 			}
 			if strings.TrimSpace(def.Description) == "" {
 				c.rulef("schema.types", "types.type_families.%s.params.%s: description must not be empty", name, pname)
+			}
+			if _, ok := contractspec.SchemaParamTargets[pname]; !ok {
+				c.rulef("schema.types", "types.type_families.%s: param %s has no consumer target", name, pname)
 			}
 			if def.Pattern != "" {
 				if _, err := regexp.Compile(def.Pattern); err != nil {

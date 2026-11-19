@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var enumCheckCompareRe = regexp.MustCompile(`(?i)\b([a-z_][a-z0-9_]*)\s*(=|<>|!=|in)\s*(\([^()]*\)|\d+)`)
+var enumCheckCompareRe = regexp.MustCompile(`(?i)\b([a-z_][a-z0-9_]*)\s*(not\s+in|in|=|<>|!=)\s*(\([^()]*\)|\d+)`)
 var enumCheckIntRe = regexp.MustCompile(`\d+`)
 
 // checkEnumCodeLiterals 检查每张表 CHECK 中枚举列的整数码。

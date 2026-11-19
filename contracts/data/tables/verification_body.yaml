@@ -6,7 +6,7 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "verification_body.auth_id 必须与 auth_type 指向同一种绑定（phone→auth_phone、email→auth_email），不建数据库外键"
+  - "verification_body.auth_id 必须与 auth_type 指向同一种绑定（phone→auth_phone、email→auth_email）"
   - "verification_body.code_hash 只存哈希，不存验证码原文；content 若含原文必须按 secret 管理"
   - "verification_body.content 默认存脱敏正文；仅审计必要时写原文"
   - "verification_body.auth_type 只允许 phone/email；pwd 不是可发送验证消息的渠道"

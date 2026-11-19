@@ -4,8 +4,8 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
-        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-check contract-new contract-check contract-graph contract-impact contract-compat db-verify \
-        gen-rule-ids check-rule-ids dev api-dev web-dev compose-up compose-down doctor derive check-docs
+        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-check contract-new contract-check contract-graph contract-impact contract-compat db-verify \
+        gen-rule-ids check-rule-ids gen-check-core test-rules dev api-dev web-dev compose-up compose-down doctor derive check-docs
 
 help: ## 显示可用目标
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -23,8 +23,11 @@ test: test-api test-tools ## 运行测试（API + 契约工具）
 test-api: ## Go 测试
 	cd $(APP_API) && go test ./...
 
-test-tools: ## 契约工具测试
-	cd scripts/cmd && go test ./...
+test-tools: ## 契约工具测试（含 feature.rules policy 断言）
+	cd scripts/cmd && go test -tags rules ./...
+
+test-rules: ## feature.rules policy 行为断言（骨架）
+	cd scripts/cmd && go test -tags rules ./internal/check -run TestPolicy
 
 test-race: ## Go 竞态测试
 	cd $(APP_API) && go test -race ./...
@@ -57,6 +60,10 @@ gen-openapi-check: ## 校验 OpenAPI spec 是否最新
 	cd scripts/cmd && go run ./gen_openapi -root "$(CURDIR)" -check
 
 gen-check: ## 校验全部生成物最新
+	$(MAKE) gen-check-core
+	$(MAKE) gen-rule-tests-check
+
+gen-check-core: ## 校验除规则测试映射外的生成物
 	$(MAKE) gen-graph-check
 	$(MAKE) gen-errors-check
 	$(MAKE) gen-db-check
@@ -80,6 +87,12 @@ gen-errors: ## platform/errors/*.yaml → docs/contracts/generated/errors.md
 gen-errors-check: ## 校验 errors.md 是否最新（CI）
 	cd scripts/cmd && go run ./gen_errors -root "$(CURDIR)" -check
 
+gen-rule-tests: ## 规则 → 测试映射（docs/contracts/generated/rule-tests.md）
+	cd scripts/cmd && go run ./gen_rule_tests -root "$(CURDIR)"
+
+gen-rule-tests-check: ## 校验规则测试映射是否最新（CI）
+	cd scripts/cmd && go run ./gen_rule_tests -root "$(CURDIR)" -check -max-zero 0
+
 contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|cap.events|cap.protocols.http）
 	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" service="$(service)" path="$(path)" http_method="$(http_method)" ./scripts/contract/scaffold.sh
 
@@ -89,7 +102,7 @@ contract-check: ## 校验契约结构、引用与 used_by（全部类型）
 gen-rule-ids: ## 从 checker 的 rulef(...) 生成 rule_ids_gen.go
 	cd scripts/cmd && go run ./gen_rule_ids
 
-check-rule-ids: ## 校验 rule_ids_gen.go 是否最新
+check-rule-ids: ## 校验 rule_ids_gen.go 是否最新（AST 扫描，独立于 contract-check）
 	cd scripts/cmd && go run ./gen_rule_ids -check
 
 contract-graph: ## 锚点图校验：重复/悬空/越层/循环/孤儿（P2）

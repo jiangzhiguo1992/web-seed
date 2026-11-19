@@ -85,7 +85,7 @@ fields:
           - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
           - { name: type, type: string, required: true, pattern: '^(\*?(data\.enums\.[a-z][a-z0-9_]*|context\.Context|[A-Za-z][A-Za-z0-9_]*)|List<(data\.enums\.[a-z][a-z0-9_]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "类型族键、受支持的 SQL 别名、data.enums.* 或 context.Context；List<T> 表示数组" }
           - { name: column, type: string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "绑定列；数组参数绑定元素列" }
-          - { name: expr, type: string, soft: true, required: false, description: "soft zone：参数表达式；与 column 互斥；checker 不校验语义" }
+          - { name: expr, type: string, soft: true, required: false, description: "soft zone：参数表达式；与 column 互斥" }
           - { name: nullable, type: boolean, required: false, default: false, description: "是否可空" }
           - { name: default, type: any, required: false, description: "null 时的默认值" }
           - { name: description, type: string, required: false, description: "参数说明" }
@@ -113,7 +113,7 @@ fields:
         item_fields:
           - { name: index, type: string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "索引 ID：data.tables.<t>.pk 或 indexes[].name" }
           - { name: columns, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "查询使用的索引列，必须等于索引列的最左前缀且顺序一致" }
-      - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "调用本 query 的 service 项；gen-graph 生成" }
+      - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "gen-graph 生成；禁止手改" }
 
 rules:
   - { id: query-key-order, text: "查询契约字段顺序必须与 _meta/data.queries.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ query-key-order ] }
@@ -123,13 +123,15 @@ rules:
   - { id: query-params, text: "params 第一项必须是 ctx context.Context，ctx 不得绑定 column/expr/default/nullable；params 的 name 不得重复；未绑定 column 时 type 必须映射到类型族（含别名）或 data.enums.*；column/expr 互斥且 expr 非空；default 只在 nullable:true 时允许；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器", implemented_by: [ query-params ] }
   - { id: query-param-column, text: "params[].column 必须属于查询的 tables；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型；data.enums.* 按 integer 列校验）；ctx 不参与列绑定", implemented_by: [ query-param-column ] }
   - { id: query-pagination, text: "offset/limit 是保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；offset 默认 0，limit 默认必须为正数；list 返回必须同时声明两者", implemented_by: [ query-pagination ] }
-  - { id: query-returns, text: "returns 非空；最后一项必须是 {name: err, kind: error} 且只能出现一次；name 必须唯一；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的实体必须存在且主表在 tables 中，且不得写 columns；kind=columns 必须有 columns；scalar.type 必须是受支持的类型族、其别名或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
+  - { id: query-returns, text: "最后一项必须是 {name: err, kind: error} 且只能出现一次；name 必须唯一；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的实体必须存在且主表在 tables 中，且不得写 columns；kind=columns 必须有 columns；scalar.type 必须是受支持的类型族、其别名或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
   - { id: query-return-columns, text: "kind=columns 的 columns（data.tables.<t>.col.<c>）必须是查询表上的列", implemented_by: [ query-return-columns ] }
-  - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回或绑定为参数；kind=columns 的 secret 只有同模块可显式列出；entity 默认投影排除 secret，computed secret 不参与列裁剪、跨模块一律拒绝", implemented_by: [ query-sensitive-columns ] }
+  - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回或绑定为参数；kind=columns 的 secret 只有同模块可显式列出；entity 默认投影由生成器排除 secret，computed secret 跨模块一律拒绝", implemented_by: [ query-sensitive-columns ] }
   - { id: query-errors, text: "errors 必须是存在的 platform.errors.*；[] 表示无领域错误", implemented_by: [ query-errors ] }
   - { id: query-index-ref, text: "index_ref 每项必须指向查询表的 PK 或 indexes[].name；columns 非空、去重且必须等于该索引列的最左前缀（顺序一致，PK 列为 id）；显式索引必须在 index.used_by 中列出该查询；单表查询至少一个 index_ref", implemented_by: [ query-index-ref ] }
   - { id: query-index-used-by, text: "index.used_by 的每个查询必须在 index_ref 中引用该索引", implemented_by: [ query-index-used-by ] }
-  - { id: query-cache-ref, text: "query.caches 每项必须是 storage.caches 已登记的逻辑缓存（data.tables.<t>.cache.<k>[+<k>]，同表同键跨引擎视为同一逻辑缓存），且 cache_of 在 query.tables 中；读查询的每个缓存键列必须出现在 params[].column 或同表 index_ref[].columns 中；读查询由 params 绑定全部缓存键时必须声明该缓存；写查询必须列出每个被写表的全部逻辑缓存（写同步项不要求键出现在 params/index_ref）", implemented_by: [ query-cache-ref ] }
+  - { id: query-cache-ref, text: "query.caches 每项必须是 storage.caches 已登记的逻辑缓存（data.tables.<t>.cache.<k>[+<k>]），且 cache_of 在 query.tables 中", implemented_by: [ query-cache-ref ] }
+  - { id: query-cache-keys, text: "读查询的每个缓存键列必须出现在 params[].column 或同表 index_ref[].columns 中；由 params 绑定全部缓存键时必须声明该缓存", implemented_by: [ query-cache-keys ] }
+  - { id: query-cache-write, text: "写查询必须列出每个被写表的全部逻辑缓存（写同步项不要求键出现在 params/index_ref）", implemented_by: [ query-cache-write ] }
   - { id: query-archive-ref, text: "query.archive 每项是 {archive, age_by}：archive 必须是 storage 中 promotable:true 的归档（data.tables.<t>.archive），源表在 query.tables 中；age_by 必须与 storage 归档条目的 age_by 一致", implemented_by: [ query-archive-ref ] }
   - { id: query-archive-used-by, text: "每个 promotable 归档必须至少被一个查询的 archive 引用", implemented_by: [ query-archive-used-by ] }
   - { id: query-used-by, text: "query.used_by 必须等于 service steps 中引用本 query 的 service 项集合，由 gen-graph 写入，禁止手改", implemented_by: [ query-used-by ] }

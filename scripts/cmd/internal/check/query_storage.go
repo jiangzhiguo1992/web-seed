@@ -45,14 +45,14 @@ func (c *Checker) checkQueryStorageRefs() {
 			sources := c.cacheKeySources(q, entry.table)
 			for _, col := range entry.key {
 				if !sources[col] {
-					c.rulef("query-cache-ref", "%s: cache %s key column %s must appear in params[].column or index_ref[].columns of %s", where, ref, col, entry.table)
+					c.rulef("query-cache-keys", "%s: cache %s key column %s must appear in params[].column or index_ref[].columns of %s", where, ref, col, entry.table)
 				}
 			}
 		}
 		for _, table := range q.Writes {
 			for _, ref := range cacheRefs {
 				if c.cacheEntries[ref].table == table && !containsString(q.Caches, ref) {
-					c.rulef("query-cache-ref", "%s: write to %s must list cache %s", where, table, ref)
+					c.rulef("query-cache-write", "%s: write to %s must list cache %s", where, table, ref)
 				}
 			}
 		}
@@ -62,7 +62,7 @@ func (c *Checker) checkQueryStorageRefs() {
 				continue
 			}
 			if c.cacheKeysBound(q, entry) && !containsString(q.Caches, ref) {
-				c.rulef("query-cache-ref", "%s: cache %s key is fully bound by params but the query does not declare it", where, ref)
+				c.rulef("query-cache-keys", "%s: cache %s key is fully bound by params but the query does not declare it", where, ref)
 			}
 		}
 		for _, ref := range q.Archive {

@@ -229,7 +229,7 @@ func (c *Checker) checkStorageCaches(doc map[string]any, entries map[string]*sto
 			}
 			for _, key := range sortedAnyKeys(entry) {
 				if !storageCacheFields[key] {
-					c.rulef("storage-entry-fields", "%s: field %q is not allowed for cache entries", where, key)
+					c.rulef("storage-cache-fields", "%s: field %q is not allowed for cache entries", where, key)
 				}
 			}
 			id, _ := entry["cache_of"].(string)
@@ -301,7 +301,7 @@ func (c *Checker) checkStorageCaches(doc map[string]any, entries map[string]*sto
 				continue
 			}
 			if storageUnitMinutes(retention.unit, retention.ttl) > storageUnitMinutes(authority.retention.unit, authority.retention.ttl) {
-				c.rulef("storage-retention", "%s: cache_ttl must not exceed %s ttl", where, id)
+				c.rulef("storage-ttl-bound", "%s: cache_ttl must not exceed %s ttl", where, id)
 			}
 		}
 	}
@@ -335,20 +335,20 @@ func (c *Checker) checkStorageDoc(doc map[string]any, rel string) {
 	c.checkStability(doc, rel)
 	raw, ok := doc["supported_engines"]
 	if !ok {
-		c.rulef("storage-doc", "%s: supported_engines is required", rel)
+		c.rulef("storage-engines", "%s: supported_engines is required", rel)
 		return
 	}
 	list, ok := asList2(raw)
 	if !ok {
-		c.rulef("storage-doc", "%s: supported_engines must be a list", rel)
+		c.rulef("storage-engines", "%s: supported_engines must be a list", rel)
 		return
 	}
 	if len(list) == 0 {
-		c.rulef("storage-doc", "%s: supported_engines must not be empty", rel)
+		c.rulef("storage-engines", "%s: supported_engines must not be empty", rel)
 	}
 	for i, v := range list {
 		if s, _ := v.(string); s == "" {
-			c.rulef("storage-doc", "%s: supported_engines[%d] must be a non-empty string", rel, i)
+			c.rulef("storage-engines", "%s: supported_engines[%d] must be a non-empty string", rel, i)
 		}
 	}
 	raw, ok = doc["not_supported_topologies"]
@@ -357,16 +357,16 @@ func (c *Checker) checkStorageDoc(doc map[string]any, rel string) {
 	}
 	list, ok = asList2(raw)
 	if !ok {
-		c.rulef("storage-doc", "%s: not_supported_topologies must be a list", rel)
+		c.rulef("storage-engines", "%s: not_supported_topologies must be a list", rel)
 		return
 	}
 	if len(list) == 0 {
-		c.rulef("storage-doc", "%s: not_supported_topologies must not be empty when present", rel)
+		c.rulef("storage-engines", "%s: not_supported_topologies must not be empty when present", rel)
 		return
 	}
 	for i, v := range list {
 		if s, _ := v.(string); s == "" {
-			c.rulef("storage-doc", "%s: not_supported_topologies[%d] must be a non-empty string", rel, i)
+			c.rulef("storage-engines", "%s: not_supported_topologies[%d] must be a non-empty string", rel, i)
 		}
 	}
 }
@@ -384,6 +384,7 @@ func (c *Checker) parseStorageRetention(entry map[string]any, where string, cach
 	enabled, ok := raw.(bool)
 	if !ok {
 		c.rulef("storage-retention", "%s: retention must be a boolean", where)
+		c.rejectRetentionFields(entry, where, cache)
 		return nil
 	}
 	if !enabled {
@@ -397,12 +398,12 @@ func (c *Checker) parseStorageRetention(entry map[string]any, where string, cach
 	if cache {
 		rawTTL, ok := entry["cache_ttl"]
 		if !ok {
-			c.rulef("storage-retention", "%s: cache_ttl is required when retention is true", where)
+			c.rulef("storage-duration", "%s: cache_ttl is required when retention is true", where)
 			return nil
 		}
 		ttl, ok := toInt(rawTTL)
 		if !ok || ttl < 1 {
-			c.rulef("storage-retention", "%s: cache_ttl must be an integer >= 1", where)
+			c.rulef("storage-duration", "%s: cache_ttl must be an integer >= 1", where)
 			return nil
 		}
 		return &storageRetention{unit: unit, ttl: ttl}
@@ -415,11 +416,11 @@ func (c *Checker) parseStorageRetention(entry map[string]any, where string, cach
 		}
 		hasDuration = true
 		if n, ok := toInt(rawTime); !ok || n < 1 {
-			c.rulef("storage-retention", "%s: %s must be an integer >= 1", where, key)
+			c.rulef("storage-duration", "%s: %s must be an integer >= 1", where, key)
 		}
 	}
 	if !hasDuration {
-		c.rulef("storage-retention", "%s: retention requires at least one of pending/soft_delete/hard_delete/ttl", where)
+		c.rulef("storage-duration", "%s: retention requires at least one of pending/soft_delete/hard_delete/ttl", where)
 	}
 	ttl, _ := toInt(entry["ttl"])
 	return &storageRetention{unit: unit, ttl: ttl}
@@ -442,16 +443,16 @@ func (c *Checker) rejectRetentionFields(entry map[string]any, where string, cach
 func (c *Checker) retentionUnit(entry map[string]any, where string) string {
 	rawUnit, ok := entry["unit"]
 	if !ok {
-		c.rulef("storage-retention", "%s: unit is required when retention is true", where)
+		c.rulef("storage-duration", "%s: unit is required when retention is true", where)
 		return ""
 	}
 	unit, ok := rawUnit.(string)
 	if !ok {
-		c.rulef("storage-retention", "%s: unit must be a string", where)
+		c.rulef("storage-duration", "%s: unit must be a string", where)
 		return ""
 	}
 	if unit != "minutes" && unit != "hours" && unit != "days" {
-		c.rulef("storage-retention", "%s: unit must be minutes/hours/days, got %q", where, unit)
+		c.rulef("storage-duration", "%s: unit must be minutes/hours/days, got %q", where, unit)
 		return ""
 	}
 	return unit
@@ -513,19 +514,19 @@ func (c *Checker) checkStoragePartition(id string, raw any, where string) {
 func (c *Checker) parseStorageArchive(engine string, rawArchiveOf any, entry map[string]any, where string) *storageArchiveEntry {
 	archiveOf, _ := rawArchiveOf.(string)
 	if archiveOf == "" {
-		c.rulef("storage-archive", "%s: archive_of must be a non-empty table ID", where)
+		c.rulef("storage-archive-source", "%s: archive_of must be a non-empty table ID", where)
 		return nil
 	}
 	for _, key := range sortedAnyKeys(entry) {
 		if !storageArchiveFields[key] {
-			c.rulef("storage-entry-fields", "%s: field %q is not allowed for archive entries", where, key)
+			c.rulef("storage-archive-fields", "%s: field %q is not allowed for archive entries", where, key)
 		}
 	}
 	promotable := false
 	if rawPromotable, ok := entry["promotable"]; !ok {
-		c.rulef("storage-archive", "%s: promotable is required", where)
+		c.rulef("storage-archive-source", "%s: promotable is required", where)
 	} else if p, ok := rawPromotable.(bool); !ok {
-		c.rulef("storage-archive", "%s: promotable must be a boolean", where)
+		c.rulef("storage-archive-source", "%s: promotable must be a boolean", where)
 	} else {
 		promotable = p
 	}
@@ -535,41 +536,41 @@ func (c *Checker) parseStorageArchive(engine string, rawArchiveOf any, entry map
 		case "skip", "overwrite", "error":
 			onConflict = v
 		default:
-			c.rulef("storage-archive", "%s: on_conflict must be skip/overwrite/error", where)
+			c.rulef("storage-archive-source", "%s: on_conflict must be skip/overwrite/error", where)
 		}
 	}
 	if promotable {
 		if _, ok := entry["on_conflict"]; !ok {
-			c.rulef("storage-archive", "%s: promotable archive requires on_conflict", where)
+			c.rulef("storage-archive-source", "%s: promotable archive requires on_conflict", where)
 		}
 	} else if _, ok := entry["on_conflict"]; ok {
-		c.rulef("storage-archive", "%s: on_conflict is only allowed when promotable is true", where)
+		c.rulef("storage-archive-source", "%s: on_conflict is only allowed when promotable is true", where)
 	}
 	name, _ := entry["table"].(string)
 	if name == "" {
-		c.rulef("storage-archive", "%s: table is required", where)
+		c.rulef("storage-archive-source", "%s: table is required", where)
 		return nil
 	}
 	if !storageNameRe.MatchString(name) {
-		c.rulef("storage-archive", "%s: archive table %q must be snake_case", where, name)
+		c.rulef("storage-archive-source", "%s: archive table %q must be snake_case", where, name)
 	}
 	c.parseStorageRetention(entry, where, false)
 	ageBy, _ := entry["age_by"].(string)
 	if ageBy != "created_at" && ageBy != "updated_at" {
-		c.rulef("storage-archive", "%s: age_by must be created_at or updated_at, got %q", where, ageBy)
+		c.rulef("storage-archive-source", "%s: age_by must be created_at or updated_at, got %q", where, ageBy)
 	}
 	afterUnit, _ := entry["after_unit"].(string)
 	if afterUnit != "minutes" && afterUnit != "hours" && afterUnit != "days" {
-		c.rulef("storage-archive", "%s: after_unit must be minutes/hours/days, got %q", where, afterUnit)
+		c.rulef("storage-archive-source", "%s: after_unit must be minutes/hours/days, got %q", where, afterUnit)
 	}
 	rawAfter, ok := entry["after"]
 	if !ok {
-		c.rulef("storage-archive", "%s: after is required", where)
+		c.rulef("storage-archive-source", "%s: after is required", where)
 		return nil
 	}
 	after, ok := toInt(rawAfter)
 	if !ok || after < 1 {
-		c.rulef("storage-archive", "%s: after must be an integer >= 1", where)
+		c.rulef("storage-archive-source", "%s: after must be an integer >= 1", where)
 		return nil
 	}
 	return &storageArchiveEntry{engine: engine, name: name, source: archiveOf, promotable: promotable, onConflict: onConflict, ageBy: ageBy, unit: afterUnit, after: after, where: where}
@@ -590,24 +591,24 @@ func (c *Checker) checkStorageArchives(archives []storageArchiveEntry, registere
 	}
 	for _, a := range archives {
 		if _, ok := registered[a.source]; !ok {
-			c.rulef("storage-archive", "%s: archive_of %s is not a registered authority table", a.where, a.source)
+			c.rulef("storage-archive-ref", "%s: archive_of %s is not a registered authority table", a.where, a.source)
 			continue
 		}
 		if prev, ok := sources[a.source]; ok {
-			c.rulef("storage-archive", "%s: %s already has archive %s", a.where, a.source, prev)
+			c.rulef("storage-archive-ref", "%s: %s already has archive %s", a.where, a.source, prev)
 			continue
 		}
 		sources[a.source] = a.name
 		if prev, ok := names[a.name]; ok {
-			c.rulef("storage-archive", "%s: archive table %s already declared by %s", a.where, a.name, prev)
+			c.rulef("storage-archive-ref", "%s: archive table %s already declared by %s", a.where, a.name, prev)
 			continue
 		}
 		names[a.name] = a.where
 		if prev, ok := physical[a.name]; ok {
-			c.rulef("storage-archive", "%s: archive table %s conflicts with physical table %s", a.where, a.name, prev)
+			c.rulef("storage-archive-ref", "%s: archive table %s conflicts with physical table %s", a.where, a.name, prev)
 		}
 		if _, ok := c.tableColumns[a.source][a.ageBy]; !ok {
-			c.rulef("storage-archive", "%s: age_by column %s not found on %s", a.where, a.ageBy, a.source)
+			c.rulef("storage-archive-ref", "%s: age_by column %s not found on %s", a.where, a.ageBy, a.source)
 		}
 		if c.archiveEntries == nil {
 			c.archiveEntries = map[string]storageArchiveEntry{}

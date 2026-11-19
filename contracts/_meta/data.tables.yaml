@@ -75,7 +75,7 @@ fields:
         pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
         generated: true
         write: forbidden
-        description: "引用本表列的源列；gen-graph 生成"
+        description: "gen-graph 生成；禁止手改"
       - name: queries
         type: list<string>
         required: true
@@ -84,7 +84,7 @@ fields:
         pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$'
         generated: true
         write: forbidden
-        description: "使用本表的 query 项；gen-graph 生成"
+        description: "gen-graph 生成；禁止手改"
 
   - name: columns
     type: list<object>
@@ -132,10 +132,10 @@ fields:
     description: "索引"
     item_fields:
       - { name: name, type: string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名" }
-      - { name: columns, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "索引列；必须非空；纯表达式索引不受支持" }
-      - { name: expression, type: string, soft: true, required: false, description: "soft zone：附加表达式键；必须与 columns 同时使用；纯表达式索引不受支持" }
+      - { name: columns, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "索引列；非空" }
+      - { name: expression, type: string, soft: true, required: false, description: "soft zone：附加表达式键；纯表达式索引不受支持" }
       - { name: unique, type: boolean, required: false, description: "是否唯一" }
-      - { name: live_only, type: boolean, required: false, default: false, description: "仅唯一索引可设为 true；设为 true 时只约束未软删行" }
+      - { name: live_only, type: boolean, required: false, default: false, description: "仅唯一索引；true 时只约束未软删行" }
       - { name: comment, type: string, required: true, description: "索引用途" }
       - { name: used_by, type: list<string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "使用该索引的 query 项 ID" }
 
@@ -157,24 +157,29 @@ rules:
   - { id: index-live-only, text: "live_only 只有 unique 索引可设为 true；设为 true 时要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
   - { id: constraint-fields, text: "on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
   - { id: constraint-used-by, text: "constraints[].used_by 必须是非空去重的 data.queries.* 写查询 ID，且查询写本表", implemented_by: [ constraint-used-by ] }
-  - { id: enum-code-literal, text: "表 CHECK 引用枚举列时，整数码必须存在于对应 data.enums 的 code 集合", implemented_by: [ enum-code-literal ] }
+  - { id: enum-code-literal, text: "表 CHECK 以 = / <> / != / IN / NOT IN 引用枚举列时，字面量必须是该枚举的 code；范围比较不校验", implemented_by: [ enum-code-literal ] }
   - { id: storage-registry, text: "storage.tables 每个引擎条目是 list<object>：table 必填、同引擎内不重复、覆盖每张物理表且只引用已存在的表；每张表只能出现在一个权威引擎下；基类不是物理表；caches 条目是 list<object>，cache_of 必须引用已登记的权威表", implemented_by: [ storage-registry ] }
-  - { id: storage-entry-fields, text: "普通条目：mysql/postgres 只允许 table/description/retention/unit/pending/soft_delete/hard_delete/ttl/partition，mongodb 只允许 table/description/retention/unit/pending/soft_delete/hard_delete/ttl；归档条目只允许 archive_of/promotable/on_conflict/table/retention/unit/pending/soft_delete/hard_delete/ttl/age_by/after_unit/after；caches 条目只允许 cache_of/key/retention/unit/cache_ttl", implemented_by: [ storage-entry-fields ] }
-  - { id: storage-entry-description, text: "tables 条目必须二选一：普通条目写 description（必须等于对应 data.tables 契约的 summary），归档条目写 archive_of；archive_of 与 description 互斥，不得同时出现", implemented_by: [ storage-entry-description, storage-entry-fields ] }
-  - { id: storage-cache-key, text: "caches 条目的 key 必须是非空、去重的列名列表；列名写成 account_id、col.account_id 或完整列引用均可，表由 cache_of 确定；每列必须属于该表（含继承列）；同一缓存引擎内 (cache_of,key) 必须唯一，key 顺序参与唯一性，允许同一表按不同 key 建多条缓存；跨引擎的同 (cache_of,key) 视为同一逻辑缓存，query.caches 按表+key 引用", implemented_by: [ storage-cache-key ] }
+  - { id: storage-entry-fields, text: "普通条目：mysql/postgres 只允许 table/description/retention/unit/pending/soft_delete/hard_delete/ttl/partition；mongodb 只允许 table/description/retention/unit/pending/soft_delete/hard_delete/ttl", implemented_by: [ storage-entry-fields ] }
+  - { id: storage-cache-fields, text: "caches 条目只允许 cache_of/key/retention/unit/cache_ttl", implemented_by: [ storage-cache-fields ] }
+  - { id: storage-archive-fields, text: "归档条目只允许 archive_of/promotable/on_conflict/table/retention/unit/pending/soft_delete/hard_delete/ttl/age_by/after_unit/after", implemented_by: [ storage-archive-fields ] }
+  - { id: storage-entry-description, text: "tables 条目二选一：普通条目写 description（等于对应 data.tables 的 summary），归档条目写 archive_of；两者互斥", implemented_by: [ storage-entry-description ] }
+  - { id: storage-cache-key, text: "caches 的 key 是非空去重列名列表（account_id / col.account_id / 完整列引用），表由 cache_of 确定，每列必须属于该表（含继承列）；同一引擎内 (cache_of,key) 唯一，key 顺序参与比较；跨引擎同 (cache_of,key) 视为同一逻辑缓存", implemented_by: [ storage-cache-key ] }
   - { id: storage-cache-used-by, text: "storage.caches 的每个逻辑缓存必须至少被一个查询的 caches 有效引用（cache_of 在 query.tables 中）；未被引用或只有无效引用的缓存必须删除", implemented_by: [ storage-cache-used-by ] }
   - { id: storage-engine, text: "storage.tables 的键必须在 supported_engines 中，且每个 supported_engine 都必须有对应条目列表", implemented_by: [ storage-engine ] }
-  - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/supported_engines/tables/caches/not_supported_topologies；supported_engines 必填且必须是非空字符串列表，not_supported_topologies 若存在必须是非空字符串列表", implemented_by: [ storage-doc ] }
-  - { id: storage-retention, text: "retention 是布尔开关；true 时表条目必须写 unit 和至少一个 pending/soft_delete/hard_delete/ttl，cache 条目必须写 unit/cache_ttl；false 或省略时禁止 unit 与任何时长字段；unit 只能是 minutes/hours/days；各时长必须 >= 1；cache_ttl 不得超过权威表条目的 ttl（若声明）", implemented_by: [ storage-retention ] }
+  - { id: storage-doc, text: "storage.yaml 顶层只允许 schema_version/id/summary/stability/do_not/supported_engines/tables/caches/not_supported_topologies", implemented_by: [ storage-doc ] }
+  - { id: storage-engines, text: "supported_engines 必填且必须是非空字符串列表；not_supported_topologies 若存在必须是非空字符串列表", implemented_by: [ storage-engines ] }
+  - { id: storage-retention, text: "retention 是布尔开关；cache 条目必须写 retention:true；未开启（false/省略/非布尔）时禁止 unit 与任何时长字段", implemented_by: [ storage-retention ] }
+  - { id: storage-duration, text: "retention:true 时表条目必须写 unit 和至少一个 pending/soft_delete/hard_delete/ttl，cache 条目必须写 unit/cache_ttl；unit 只能是 minutes/hours/days；各时长必须 >= 1", implemented_by: [ storage-duration ] }
+  - { id: storage-ttl-bound, text: "cache_ttl 不得超过权威表条目的 ttl（若声明）", implemented_by: [ storage-ttl-bound ] }
   - { id: storage-partition, text: "partition 只允许 strategy/columns/interval；strategy 只能是 range/list/hash；columns 非空且必须存在；range 必须有 interval，其他策略不得有", implemented_by: [ storage-partition ] }
-  - { id: storage-archive, text: "归档条目必须写 archive_of/promotable/table/age_by/after_unit/after；archive_of 必须是已登记的权威表且一表只能有一条归档；promotable 是必填布尔，表示归档数据能否回迁热表（true 时必须被至少一个查询的 archive 引用，且必须写 on_conflict；false 时禁止 on_conflict）；on_conflict 只能是 skip/overwrite/error：skip=热表已有同唯一键时放弃回迁并返回热表行（归档行保留），overwrite=用归档行覆盖热表行并返回归档行，error=回迁失败返回冲突错误；table 是归档物理表名（snake_case），不得与物理表或其他归档表重名；age_by 只能是 created_at/updated_at 且必须是源表列；after_unit 只能是 minutes/hours/days；after >= 1", implemented_by: [ storage-archive ] }
+  - { id: storage-archive-source, text: "归档条目必须写 archive_of/promotable/table/age_by/after_unit/after；promotable 是布尔；on_conflict 只能是 skip/overwrite/error，promotable:true 时必须写，false 时禁止；table 必须是 snake_case；age_by 只能是 created_at/updated_at；after_unit 只能是 minutes/hours/days；after >= 1", implemented_by: [ storage-archive-source ] }
+  - { id: storage-archive-ref, text: "archive_of 必须是已登记的权威表且一表只能有一条归档；归档表名不得与物理表或其他归档表重名；age_by 必须是源表列", implemented_by: [ storage-archive-ref ] }
   - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
   - { id: table-referenced-by, text: "table.referenced_by 由 gen-graph 生成，禁止手改；必须等于所有指向本表列的 references 源列集合；每项必须是存在的列引用且其 references.column 指向本表", implemented_by: [ table-referenced-by ] }
-  - { id: owner-write, text: "只有 owner_module 相同的 cap.services 可以写表；查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 service step 的 query 中；写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service，不允许一个 query 写多模块表", implemented_by: [ owner-write ] }
+  - { id: owner-write, text: "查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 service step 的 query 中", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
-  - { id: index-definition, text: "索引必须写非空 columns；expression 只能作为 columns 之外的附加表达式键（纯表达式索引不受支持）；名称前缀匹配类型", implemented_by: [ index-definition ] }
-  - { id: index-used-by, text: "每条索引的 used_by 不得为空，至少引用一个查询项 ID", implemented_by: [ index-used-by ] }
+  - { id: index-definition, text: "索引列必须是本表存在的列；unique 索引名用 uq_ 前缀，非唯一索引名用 idx_ 前缀", implemented_by: [ index-definition ] }
   - { id: index-used-by-ref, text: "index.used_by 必须指向存在的 data.queries.* 项，且该查询的 tables 必须包含当前表", implemented_by: [ index-used-by-ref ] }
   - { id: index-name-unique, text: "索引名同一 schema 内必须全局唯一", implemented_by: [ index-name-unique ] }
   - { id: redundant-group, text: "columns[].redundancy 每组必须恰好一个 source 且包含声明列自身；组内每列必须声明完全相同的列表；同一列不得跨组；列表不得重复列；基类列不得声明 redundancy", implemented_by: [ redundant-group ] }

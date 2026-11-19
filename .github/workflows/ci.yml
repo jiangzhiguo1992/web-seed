@@ -73,6 +73,14 @@ jobs:
           go-version-file: scripts/cmd/go.mod
       - run: make check-rule-ids
       - run: make contract-check
-      - run: make gen-check
-      - run: make gen-db-check
-      - run: make gen-errors-check
+      - run: make gen-check-core
+
+  rule-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: scripts/cmd/go.mod
+      - run: make gen-rule-tests-check
+      - run: make test-rules

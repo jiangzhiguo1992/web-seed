@@ -295,7 +295,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			}
 			outgoing[s] = true
 			if finalSet[s] {
-				c.rulef("lifecycle-exhaustive", "%s: final state %s must not be a transition source", rel, s)
+				c.rulef("lifecycle-structure", "%s: final state %s must not be a transition source", rel, s)
 			}
 		}
 		to, _ := item["to"].(string)
@@ -303,7 +303,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			c.rulef("lifecycle-structure", "%s: transition %s unknown to state %s", rel, name, to)
 		}
 		if hasDestroy && len(finalSet) == 1 && finalSet[to] {
-			c.rulef("lifecycle-exhaustive", "%s: transition %s must not target final %s; use destroy", rel, name, to)
+			c.rulef("lifecycle-structure", "%s: transition %s must not target final %s; use destroy", rel, name, to)
 		}
 		checkRequires(actionID, item)
 		impl := stringList(item["implemented_by"])

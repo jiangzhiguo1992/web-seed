@@ -74,10 +74,10 @@ func TestReferencesTargetMustBeUnique(t *testing.T) {
 		"references": map[string]any{"column": "data.tables.a.col.code", "on_delete": "set_null"},
 	}, []any{"data.tables.b.col.a_code"})
 	c.checkReferences(referenceTestTables())
-	if !strings.Contains(entityErrs(c), "target column data.tables.a.col.code must be a primary key or globally unique single-column index") {
+	if got := entityErrs(c); !strings.Contains(got, "target column data.tables.a.col.code must be a primary key or globally unique single-column index") || !strings.Contains(got, "[reference-target]") {
 		t.Fatalf("non-unique target not reported: %v", c.errs)
 	}
-	if !strings.Contains(entityErrs(c), "set_null requires nullable source column data.tables.b.col.a_code") {
+	if got := entityErrs(c); !strings.Contains(got, "set_null requires nullable source column data.tables.b.col.a_code") || !strings.Contains(got, "[reference-on-delete]") {
 		t.Fatalf("set_null on non-null source not reported: %v", c.errs)
 	}
 }
@@ -159,7 +159,7 @@ func TestReferencesRequireEntityJoin(t *testing.T) {
 		"references": map[string]any{"column": "data.tables.a.col.id", "on_delete": "cascade"},
 	}, []any{"data.tables.b.col.a_id"})
 	c.checkReferences(referenceTestTables())
-	if !strings.Contains(entityErrs(c), "no entity relation join covers data.tables.b.col.a_id -> data.tables.a.col.id") {
+	if got := entityErrs(c); !strings.Contains(got, "no entity relation join covers data.tables.b.col.a_id -> data.tables.a.col.id") || !strings.Contains(got, "[reference-join]") {
 		t.Fatalf("orphan references not reported: %v", c.errs)
 	}
 }

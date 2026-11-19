@@ -58,6 +58,12 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 					c.rulef("rule-structure", "%s: constraint %s field %s must be scalar", rel, id, field)
 				}
 				fieldInfo = f
+				if fieldInfo == nil {
+					// 基类列不来自具体实体字段，仍需给出类型族以校验 op/value。
+					if family := baseColumnFamily(field); family != "" {
+						fieldInfo = &entityFieldInfo{Type: family}
+					}
+				}
 			}
 			if field == "" || item["op"] == nil || item["value"] == nil {
 				c.rulef("rule-structure", "%s: constraint %s requires field/op/value", rel, id)
@@ -145,6 +151,17 @@ func (c *Checker) checkRuleValue(rel, id string, f *entityFieldInfo, opValue, va
 			fail("%s requires a numeric or time field", op)
 		}
 	}
+}
+
+// baseColumnFamily 返回基类列的类型族；用于 constraint 未解析到具体实体字段时的 op/value 校验。
+func baseColumnFamily(name string) string {
+	switch name {
+	case "id", "status":
+		return "integer"
+	case "created_at", "updated_at", "deleted_at":
+		return "timestamp"
+	}
+	return ""
 }
 
 func (c *Checker) entityFieldFamily(f *entityFieldInfo) string {

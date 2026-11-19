@@ -12,6 +12,7 @@ do_not:
   - "数据库表达不了的复杂校验写在 validation，不要搬到 tables"
   - "sensitivity: secret 字段禁止出现在 DTO、日志、事件"
   - "不要引用 feature.rules./cap.lifecycles./cap.events"
+  - "追加日志实体不提供更新或删除方法"
 
 fields:
   - name: ID

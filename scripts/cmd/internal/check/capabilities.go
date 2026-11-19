@@ -162,12 +162,12 @@ func (c *Checker) checkCapabilities() {
 		types, _ := asMap(doc["schemas"])
 		for name, raw := range types {
 			if prev, ok := bareTypeOwners[name]; ok && prev != rel {
-				c.rulef("service-structure", "%s: schema name %s already defined in %s; OpenAPI component names are global", rel, name, prev)
+				c.rulef("service-schema", "%s: schema name %s already defined in %s; OpenAPI component names are global", rel, name, prev)
 			}
 			bareTypeOwners[name] = rel
 			id := fileID + ".schemas." + name
 			if prev, ok := typeOwners[id]; ok && prev != rel {
-				c.rulef("service-structure", "%s: type %s already defined in %s", rel, id, prev)
+				c.rulef("service-schema", "%s: type %s already defined in %s", rel, id, prev)
 			}
 			typeOwners[id] = rel
 			typeNames[id] = true
@@ -420,9 +420,7 @@ func (c *Checker) checkCapabilities() {
 			if id == "" {
 				continue
 			}
-			if eventIDs[id] {
-				c.rulef("event-structure", "%s: duplicate event id %s", relPath(c.root, file), id)
-			}
+			// 重复 ID 由 checkEventsDoc 的全局索引统一报出。
 			eventIDs[id] = true
 			c.eventPayloads[id] = eventPayloadFields(item["payload"])
 		}

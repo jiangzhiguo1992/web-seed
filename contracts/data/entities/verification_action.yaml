@@ -6,7 +6,6 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "verification_action 是追加日志；不要提供更新或删除历史的业务方法"
   - "verification_action.inputHash 禁止进入日志、事件或普通响应"
   - "verification_action 不复制 auth_id/auth_type；account_id 是有意快照"
 

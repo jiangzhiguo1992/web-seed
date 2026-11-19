@@ -84,7 +84,6 @@ type Rule struct {
 type Targets struct {
 	Dir    string `yaml:"dir"`
 	Glob   string `yaml:"glob"`
-	File   string `yaml:"file"`
 	ID     string `yaml:"id"`
 	Naming string `yaml:"naming"`
 }

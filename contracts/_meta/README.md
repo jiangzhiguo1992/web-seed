@@ -1,79 +1,52 @@
 # 契约字段规范（_meta）
 
-> 本目录是 **契约的单一源**：字段树、值域、字段含义、跨字段规则与校验入口。
-> 它不是业务契约，不登记在 `contracts/index.yaml`，也不进入 `generated/`。
-> `contracts/generated/` 只放 **机器生成物**（如 `openapi/admin.yaml`）；人读视图在 `docs/contracts/generated/`。
+> 本目录是**契约的单一源**：字段树、值域、类型级规则与校验入口。
+> 不是业务契约：不登记 `contracts/index.yaml`，不进入 `generated/`。
+> `contracts/generated/` 只放机器生成物；人读生成视图在 `docs/contracts/generated/`。
 
 ---
 
 ## 1. 目录
 
-```
-contracts/_meta/
-├── README.md             # 本文件：AI 入口
-├── _types.yaml           # 共享值类型：类型族 + 自定义类型（不绑定存储引擎）
-├── _schemas.yaml         # 共享受限 schema：services.schemas 与 events.payload
-├── data.tables.yaml      # data.tables 的字段树 + 值域 + 说明
-├── data.enums.yaml       # data.enums 的字段树 + 值域 + 说明
-├── data.entities.yaml    # data.entities 的字段树 + 值域 + 说明
-├── data.queries.yaml     # data.queries 的字段树 + 值域 + 说明
-├── cap.services.yaml       # cap.services 的 targets + 字段树（服务 + steps）
-├── feature.rules.yaml      # feature.rules 的 targets + 字段树（业务规则）
-├── cap.lifecycles.yaml     # cap.lifecycles 的 targets + 字段树（生命周期）
-├── cap.events.yaml         # cap.events 的 targets + 字段树（topics + jobs）
-├── feature.pages.yaml      # feature.pages 的 targets + 字段树（页面）
-└── cap.protocols.http.yaml # cap.protocols.http 的 targets + 字段树（HTTP 绑定）
+| 文件 | 职责 |
+|---|---|
+| `_types.yaml` | 共享值类型：`type_families`（类型族 + 参数）与 `custom_types`（family + 固定参数） |
+| `_schemas.yaml` | `cap.services.schemas` 与 `cap.events.payload` 共用的受限 schema DSL |
+| `data.tables.yaml` | 表、列、约束、索引；`storage.yaml` 的引擎级事实也由本文件的 `storage-*` 规则校验 |
+| `data.enums.yaml` | 跨前后端枚举集合 |
+| `data.entities.yaml` | 读模型字段树与关系 |
+| `data.queries.yaml` | 查询接口（入参/结果/表/索引/缓存/归档），不写 SQL |
+| `cap.services.yaml` | 服务与 steps（数据流、分支、事务） |
+| `cap.events.yaml` | 异步 topic 与 job |
+| `cap.lifecycles.yaml` | 实体状态机 |
+| `cap.protocols.http.yaml` | OpenAPI 3.1 HTTP 绑定 |
+| `feature.pages.yaml` | 页面契约 |
+| `feature.rules.yaml` | 可执行业务规则；所有规则都是 error，违反即阻止提交 |
 
-scripts/contract/
-├── scaffold.sh           # make contract-new
-└── validate.sh           # make contract-check
+`scripts/contract/scaffold.sh`（`make contract-new`）与 `scripts/contract/validate.sh`
+（`make contract-check`）是薄适配器；`scripts/cmd/` 是独立 Go module，schema 解析与校验都在那里。
 
-scripts/cmd/
-├── go.mod                # 契约工具独立 Go module
-├── internal/contractspec/ # schema 解析 + 骨架渲染
-├── internal/check/       # 契约校验实现（tables / enums / entities / queries / refs）
-├── internal/graph/       # used_by 入边计算与写回
-├── contract_new/
-├── contract_check/
-└── gen_graph/
-```
+**没有 `schema/`、没有 `templates/`。** 字段规范只在 `_meta/<type>.yaml`；`contract-new` 从字段树渲染最小骨架，不维护第二份模板。
 
-### 1.1 为什么有 `_types.yaml`
+### 1.1 `_types.yaml`
 
-值类型是 `data.tables` / `data.entities` / `data.queries` / `cap.services` / `cap.events`
-共用的词汇（string/integer/timestamp/...）。把它挂在 `data.tables.yaml` 会让实体、查询和 schema 间接依赖表规范，也无法独立演进。
+值类型是 tables / entities / queries / services / events 共用的词汇：
 
-- `_types.yaml` 顶层放 `type_families`（类型族键、`description`、`params`）与 `custom_types`（自定义值类型：family + 固定参数）；
-- 自定义类型同时供表列与 schema 标量使用，约束只在一个地方定义；
+- `type_families` 定义族与参数（`min_len`/`max_len`/`pattern`/`bits`/`precision`/...）；
+- `custom_types` 固定某个族的参数，供表列与 schema 标量复用；
 - `columns[].type` 允许类型族、自定义类型或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`；
-- checker 对 `_types.yaml` 使用 `KnownFields` 严格解析，缺少文件、type_families 为空、自定义类型参数非法都会直接失败。
+- 新增族参数必须登记 `SchemaParamTargets`（消费方：openapi/storage/runtime），checker 会拒绝无消费方的参数。
 
-### 1.2 为什么有 `_schemas.yaml`
+### 1.2 `_schemas.yaml`
 
-`cap.services.schemas` 与 `cap.events.topics[].payload` 使用同一套受限 schema DSL，分两层：
+schema 节点只描述值域：`object`（`type: object` + `properties`）、`array`（`type: array` + `items`）、
+`scalar`（`type` 指向 `_types` 的族或自定义类型）、`ref`（entity / enum / 全限定本地 schema）。
 
-- **schema 节点只描述值域**：`object`（`type: object` + `properties`）、`array`（`type: array` + `items`）、`scalar`（`type` 指向
-  `_types` 的 family 或自定义类型）、`ref`（指向 entity / enum / 全限定本地 schema）。`cap.events` 的 jobs 只引用 service/topic；
-  `cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份 DSL。
-- **property 条目只描述槽位**：`name` + `schema` + `required` / `nullable` / `read_only` / `write_only` / `default` /
-  `description`，只允许出现在 `object.properties[]`。
-
-三个正交轴：`required` 管键是否必须出现，`nullable` 管值是否可为 null，`read_only` / `write_only` 管方向。三者默认都是
-false，省略不写。槽位键出现在节点位置即报 `schema.slot-position`，因此 `read_only` 不会被误读为“这个类型只读”，`array.items`
-也不可能有方向。
-
-`_schemas.yaml` 用项目自己的 `Field` 语言描述自身：`kinds.<kind>.keys` 是该种节点允许的键，
-`kinds.object.keys.properties.item_fields` 是属性条目允许的键；节点种类就是 `kinds` 的键集，不维护第二份 `one_of` 清单。判别键（
-`type` / `ref`）与结构键（`properties` / `items`）必须标记 `required: true`，`properties` 只属于 `object`，元规范错误在加载期暴露。
-`types: [object, array, scalar, ref]` 声明某个位置允许的节点种类，校验器按列表检查；`list<object>` 由通用校验器递归。
-`kinds.<kind>.keys` 与 `item_fields` 都能声明 `required` / `const` / `min` / `pattern`，校验器不再为 schema DSL
-维护硬编码特例。节点由 `ref` 或 `type` 判定：`type: object` 用 `properties`（property 条目列表），`type: array` 用 `items`；其他
-`type` 是标量；`ref` 是引用。`gen_openapi` 把 property 聚合成 OpenAPI 的 `properties` map 与 `required`
-数组；标量约束不在这里定义，family 与自定义类型都来自 `_meta/_types.yaml`。`cap.services` 的 `schemas` 类型是
-`map<schema>`，`cap.events.payload` 是 `schema`。
-
-**没有 `schema/`、没有 `templates/`。**
-字段说明和值域在同一个文件、同一个字段节点里；`contract-new` 只生成最小骨架，字段规范以本目录为准，不维护第二份字段清单。
+- `object.properties[]` 是槽位条目：`name` + `schema` + `required`/`nullable`/`read_only`/`write_only`/`default`/`description`；
+- 三个正交轴：`required` 管键是否存在，`nullable` 管值是否可为 null，`read_only`/`write_only` 管方向；
+- 槽位键出现在节点位置报 `schema.slot-position`；
+- `_schemas.yaml` 用 `kinds.<kind>.keys` 描述自身；判别键与结构键必须 `required: true`；
+- `cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份 DSL。
 
 ---
 
@@ -81,265 +54,91 @@ false，省略不写。槽位键出现在节点位置即报 `schema.slot-positio
 
 ```text
 1. 读 contracts/index.yaml（定位要改的契约）
-2. 读 contracts/_meta/<type>.yaml（字段含义、值域、生成行为、易错点）
-3. 新建：make contract-new type=data.tables name=note module=notes
+2. 读 contracts/_meta/<type>.yaml（字段含义、值域、规则）
+3. 新建：make contract-new type=<type> name=<name> ...
 4. 改 YAML（只改契约，不写生成物）
-5. make gen-graph（写回 `table.queries` / `model.queries` / `query.used_by` / 规则与生命周期锚点）
+5. make gen-graph（写回生成字段）
 6. make contract-check
 7. make gen
 8. git diff --exit-code
 ```
 
-**`make gen` 是“契约 → 产物”的投影，不是“生成契约”。**
-新建契约用 `make contract-new`；`make gen` 必须在契约写完之后跑。
+`make gen` 是“契约 → 产物”的投影，不是“生成契约”。新建契约用 `make contract-new`。
 
 ---
 
 ## 3. 命令
 
-| 命令                                                                                                    | 作用                                                                                                                     | 何时跑                      |
-|---------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------|-----------------------------|
-| `make contract-new type=data.tables name=note module=notes summary="备注表"`                            | 按 `_meta/data.tables.yaml` 生成最小表骨架；`column_type=decimal` 可指定第一列类型并带出扩展字段                         | 新建表前                    |
-| `make contract-new type=data.enums name=note_status module=notes`                                      | 按 `_meta/data.enums.yaml` 打印枚举项片段（目标文件 `contracts/data/enums/notes.yaml`）                                  | 新增枚举时                  |
-| `make contract-new type=data.entities name=note table=note`                                             | 按 `_meta/data.entities.yaml` 生成单表读模型骨架；owner_module 从目标表读取（目标表必须已存在）                          | 新建实体时                  |
-| `make contract-new type=data.queries name=note module=notes table=note`                                 | 按 `_meta/data.queries.yaml` 生成 `SELECT EXISTS` 最小查询骨架（目标表必须已存在）                                       | 新建查询集时                |
-| `make contract-new type=cap.services name=invoice module=invoice`                                       | 按 `_meta/cap.services.yaml` 生成服务文件骨架（一个 service + 一条 logic step；interface 名由 owner_module + file 派生） | 新建服务契约前              |
-| `make contract-new type=feature.rules name=invoice module=invoice`                                      | 生成 feature.rules 骨架（一个 policy）                                                                                   | 新建规则集前                |
-| `make contract-new type=cap.lifecycles name=invoice module=invoice`                                     | 生成 cap.lifecycles 骨架（单状态 + states 对象）                                                                      | 新建生命周期前              |
-| `make contract-new type=cap.events name=invoice module=invoice`                                         | 生成 cap.events 骨架（一个 created topic）                                                            | 新建异步层前                |
-| `make contract-new type=cap.protocols.http name=invoice service=cap.services.invoice.get path=/invoice` | 生成单 operation HTTP 骨架；`-service` 必填                                                                              | 新建 HTTP 绑定前            |
-| `make gen-graph`                                                                                        | 按引用计算并写回 `table.queries` / `model.queries` / `query.used_by` / 锚点                                              | 改完表/实体/查询/service 后 |
-| `make gen-graph-check`                                                                                  | 只校验上述反向索引是否最新（CI）                                                                                         | CI                          |
-| `make contract-check`                                                                                   | 结构 / ID / 约束 / 索引 / 反向索引 / owner / entity 投影 / query 参数与返回 / service steps                              | 每次改完契约                |
-| `make gen`                                                                                              | 生成 DDL / OpenAPI spec / 反向索引 / 错误文档                                                                            | `contract-check` 通过后     |
-| `make gen-openapi` / `gen-db` / `gen-graph` / `gen-errors`                                              | 单独投影                                                                                                                 | 按需                        |
+| 命令 | 作用 |
+|---|---|
+| `make contract-new type=<type> name=<name> [module=...] [table=...] [service=...]` | 按 `_meta/<type>.yaml` 渲染最小骨架；`feature.pages` 无骨架，需手写 |
+| `make gen-graph` | 写回 `table.queries` / `model.queries` / `query.used_by` / 规则与生命周期锚点 |
+| `make gen-graph-check` | 只校验生成字段是否最新 |
+| `make contract-check` | 结构 / ID / 约束 / 索引 / 引用 / owner / 数据流 / 类型级规则 |
+| `make gen` | 生成 DDL / OpenAPI / 错误文档 |
+| `make gen-check` | 校验全部生成物最新 |
+| `make gen-rule-ids` | 从 checker 的 `rulef("...")` 重新生成 `rule_ids_gen.go` |
+| `make gen-rule-tests` | 生成 `docs/contracts/generated/rule-tests.md`（规则 → `implemented_by` → 测试直接引用数） |
+| `make test-rules` | 运行 `feature.rules` 的 policy 行为断言骨架（`go test -tags rules`） |
 
-`contract-check` 已接入 `lefthook` 的 pre-commit（`contracts/**/*.yaml`）。
-
-`contract-new` 支持 `data.tables` / `data.enums` / `data.entities` / `data.queries` / `cap.services` /
-`cap.lifecycles` / `feature.rules` / `cap.events` / `cap.protocols.http`；类型族与自定义类型来自 `_meta/_types.yaml`
-。cap.* 生成最小骨架（一个 service + logic step、一个生命周期、一个 topic + job、一个规则、一个 operation），不生成
-`types`/`paths` 的深层内容。entity/query 骨架要求目标表契约已存在，entity 默认生成 lowerCamel 的 internal `model.name`，需要
-public 时改成 PascalCase；query 默认生成 `returns: boolean` / `index_ref: [{index: <表>.pk, columns: [id]}]` 的接口骨架，不伪造 SQL。`contract-new`
-生成最小合法骨架：required 字段、必要的 params/index_ref，以及含 required/default 的类型族扩展字段；`storage` 条目内的
-`retention/partition`、`columns.sensitivity` 等可选字段不强行展开，避免生成无意义默认值。状态列由 `_base` 继承，不在骨架中生成。生成后仍需跑
-`contract-check` 完成硬约束校验。`feature.rules` 的 `implemented_by` 由 `gen-graph` 生成且不得为空：先把规则引用到 service
-step，再跑 `make gen-graph`。`data.enums` 片段用 `code: -1` 与 TODO 描述占位，`contract-check` 会拒绝，直到替换为真实值。
+`contract-check` 已接入 `lefthook` pre-commit（`contracts/**/*.yaml`）与 CI。
 
 ---
 
-## 4. 当前试点范围
+## 4. 校验机制
 
-`contract-check` 当前覆盖：
-
-- `_meta/<type>.yaml` 字段规范按 `KnownFields` 严格解析：未知字段（如 `requred`）直接失败，不再静默忽略
-- `_meta/_types.yaml` 的 `type_families` / `custom_types` 由 tables/entities/queries/schemas 共用；文件缺失、type_families
-  为空、族/参数定义非法都会直接失败（`schema.types`）
-- 模板字段顺序是唯一顺序源：tables/entities/queries/enums 实例的顶层与嵌套对象（含 `fields` / `item_fields`）都按
-  `_meta/<type>.yaml` 的字段顺序校验；新增字段只改模板
-- 没有 `_meta` 模板的契约（`data.storage`、features/platform 的部分类型）暂不做字段顺序校验；需要覆盖时先补该类型的 `_meta`
-  模板
-- `data.tables/*.yaml`
-    - `targets.dir/glob` 决定扫描路径；`targets.id/naming` 由 checker 校验（ID 模板、snake_case）
-    - `columns[].type` 允许类型族、自定义类型或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`
-    - 必填字段、类型、枚举、`const`、`pattern`、`allowed`、`unique`
-    - `id` 按 `targets.id` 模板生成；基类 `_base.yaml` 的路径/ID 写死在 checker，不参与模板
-    - 物理表 `table.extends` 是父表列表：可指向 `data.tables.base` 或任意已存在的表；多父同名列只有来源相同（钻石继承）才允许；链不得成环且必须到达基类；不得重复任何继承列
-    - 基类 `id` 的 `primary_key` 列不得可空；物理表不得声明 `primary_key`，主键统一由基类提供
-    - `default` / `default_sql` 互斥；`default` 的 YAML 类型、长度、范围与列类型族兼容
-    - 列 / 约束 / 索引重名；`do_not` 每条必须含本表具体标识
-- `data.tables.base`（`contracts/data/tables/_base.yaml`，单例）
-    - 路径/ID 由 checker 写死识别；YAML 无 `kind`/`targets` 特殊配置
-    - 基类必须且只能是 5 列：`id` integer（bits: 64）主键、`status` integer 非空且非主键、三个时间列 timestamp（`created_at`/
-      `updated_at` 非空、`deleted_at` 可空）
-    - `do_not` 直接写在 `_base.yaml`；基类 `do_not` 允许类型级通用规则，物理表 `do_not` 必须含本表标识
-    - 规则 `base-file`、`base-columns` 在 `_meta/data.tables.yaml` 的 `rules` 中声明
-    - `constraints` 是 CHECK 列表：必须写非空 `expr`、`on_violation` 与 `used_by`（写本表的 query）；没有 `type`；`gen-db` 生成
-      `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors` 映射；唯一性统一由 `indexes[].unique`
-      表达，跨表一致性由应用/业务规则保证
-    - `live_only` 只有唯一索引可设为 `true`，决定唯一性作用域：`true` 只约束未软删行（要求 nullable `deleted_at`），`false`/省略约束全表（含软删行）；非唯一索引不使用该字段，需要 live 行前导时把 `deleted_at` 显式写进 `indexes[].columns` 并同步 `index_ref`
-    - `indexes` 的 `comment`、`columns`（必填非空）与可选 `expression` 附加键、命名前缀、列引用；`used_by` 至少一个查询项、查询引用当前表
-    - `summary` 与 `columns[].comment` 会进入 DDL COMMENT：`summary` <= 2048 字符、列 `comment` <= 1024 字符（MySQL 上限，按
-      rune 计数）
-    - `columns[].redundancy` 直接列出同组全部列引用（`column` + `source`）；组内各列声明必须完全一致，`type`/`nullable` 一致
-    - `columns[].references` 是逻辑外键：目标列必须是主键或全局唯一单列索引列，两端类型族一致；`set_null` 要求源列可空；与
-      entity 关系字段的 `source.join` 按列对双向对账（不看 from/to 方向）
-    - `table.referenced_by` 是反向索引，由 `make gen-graph` 生成、禁止手改：必须等于所有指向本表列的 `references`
-      源列集合；每项必须是存在的列引用且其 `references.column` 指向本表
-    - `data/queries/*.yaml` 的 `index_ref`：每项是 `{index, columns}`；`index` 指向 `data.tables.<t>.pk` 或
-      `indexes[].name`，`columns` 非空且必须是该索引列的最左前缀（顺序一致；PK 列为 `id`）；纯表达式索引不可被引用；显式索引必须在
-      `used_by` 中列出该 query
-    - `data/queries/*.yaml` 的 `caches`：引用 storage 的逻辑缓存（`data.tables.<t>.cache.<k>[+<k>]`，同表同 key 跨引擎视为同
-      一缓存）；读表为读穿透，每个键列必须出现在 `params[].column` 或同表 `index_ref[].columns` 中，且 params 绑定全部键时必须声明该缓存；
-      写查询必须列出被写表的全部逻辑缓存（写同步项不要求键出现在 params/index_ref）
-    - `data/queries/*.yaml` 的 `archive`：每项是 `{archive, age_by}`；`archive` 必须是 `promotable: true` 的归档
-      （`data.tables.<t>.archive`），源表必须在 `query.tables` 中；`age_by` 必须与 storage 归档条目的 `age_by` 一致，回迁时更新该列
-    - `data/storage.yaml` 的 `tables.<engine>`：普通条目是 `list<object>`，`table` 与 `description` 必填（`description`
-      必须等于表契约的 `summary`）并覆盖每张物理表且无孤儿；`retention` 是布尔开关，开启时 `unit` 与 `pending`/
-      `soft_delete`/`hard_delete`/`ttl` 与 `retention` 同级，`partition` 内聚在条目里，顶层不再有这些映射；`partition` 只允许
-      mysql/postgres；归档条目用 `archive_of` 指向已登记的权威表，`promotable` 必填并决定能否回迁（true 时必须被某个查询的
-      `archive` 引用且必须写 `on_conflict: skip|overwrite|error`：skip 返回热表行并保留归档行，overwrite 用归档行覆盖热表行，error 返回冲突错误；false 时禁止），`after_unit`/`after` 是独立的触发阈值，`table`
-      是归档物理表名，归档表不建 `data.tables` 契约、实体或查询；`caches` 也是条目列表，必须写 `retention` 且只允许
-      `cache_ttl`，不得超过权威表 `ttl`
-    - `table.entities` 显式记录映射本表的实体，checker 校验；`table.queries` 只记生成的 `queries`
-    - `owner_module` 与 capabilities 写表归属一致（只有 `cap.services` 可写）；跨模块读通过 `kind: service` 调用，
-      `read_only_tables` 已移除
-    - service steps 的 `queries[].query` 引用的查询项必须存在；每个写查询必须被某个 service step 引用，且写表归属一致；
-      `kind: query` 不得跨模块写；query 的 `errors` 必须是存在的 `platform.errors.*`，且被引用它的 step 覆盖；
-      step.input 的 key 必须是目标参数名（query/service）或 payload 字段名（events），必填项必须全部出现；`input.value` 只能是
-      `params.<path>` 或 `step.<id>.<path>`，引用 `step.<id>` 只要求在前序；每一步必须显式声明 `goto`（`$end` 表示结束）；所有 step 必须展示 input/output（无内容写 `[ ]`，events/when 的 output 必须为空）；业务返回项必须写 `value`；when 分支是 `{input, expr, goto}`，input 引用本步 input；query/service 的 step.input/output 分别按目标 params/returns 校验；query/service 是单值字符串 ID；events 可声明多个事件，step.input 按所有事件 payload 的并集校验；service 不声明 `errors`；
-      service/query 的 `returns` 最后一项必须是 err（query 用 `kind: error`）
-    - 索引名同一 schema 内必须全局唯一
-    - contracts 下文本字段（`description` / `comment` / `summary` / `do_not` 等）必须使用双引号（`contract-check` 校验）
-    - 所有契约的顶层 `fields` 必须竖排（block style），嵌套 `item_fields` 不限制（`schema.fields-style`）；
-      `table.extends/entities`、`model.extends/tables/included_by` 必须竖排（`schema.list-style`）
-    - 具体契约的 `do_not` 不得与组 README / `_base` 的指导重复（`schema.do-not-duplicate`）
-    - `do_not` 只写脚本无法判定且非纯风格的业务/架构约束；字段形状、枚举、默认值、引用存在性等已由 `rules` / schema 强制，不重复
-    - `rules` 只允许出现在 `_meta`；`features/rules/*`、`platform/architecture/go_arch.yaml`、
-      `platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不属于类型规则清单。具体契约的 `do_not` 只写实例级；
-      `_meta` 下不得出现 `do_not`（`schema.meta-placement`）
-    - `rules` 的 `id`/`text` 非空、`id` 唯一；`implemented_by` 必须包含规则自身 ID，且每个值都指向 checker 实际输出的
-      `[rule-id]`（`schema.rules`）
-    - checker 输出的非 `schema.*` 错误 ID 必须由某个类型的 `rules` 声明，反向防止“有实现没规则”
-    - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；`make contract-check` 校验它是否最新
-    - `_meta/*.yaml` 以 `type` 作为类型 registry；checker/contract-new 按 type 查找，不再写死 meta 路径
-    - 错误统一带 `[rule-id]` 前缀：类型规则用 `_meta/<type>.yaml` 的 `rules`，通用结构/格式用 `schema.*`（含
-      `schema.targets`）
-- `data/enums/<module>.yaml`
-    - 文件 ID 为 `data.enums.<module>`；item 不写 id，item ID 由 `name` 派生为 `data.enums.<name>`，跨文件全局唯一；值唯一、`code` 唯一且为 int32（0..2147483647）
-    - `name` / `go_type` / `ts_type` 在全部枚举文件中唯一；类型名冲突会让 Go/TS 产物互相覆盖
-    - `summary` 非空；`owner_module` 必填；`stability: stable` 不得含 TODO/FIXME
-    - 任意契约（entity / capability / feature 等）的 `type: data.enums.*` 必须存在；表列仍禁止引用枚举
-    - `used_by` 是 entity 与具体 capability 使用点的并集（`cap.services.*.<item>` / `cap.events.*.<topic|job>` /
-      `cap.protocols.http.<file>.<operation>`），必须与 entity 字段和 capability 引用完全一致、不得为空、逐项竖排；不列物理表或 feature
-    - `do_not` 每条必须含集合 ID `data.enums`、枚举 name 或 go_type/ts_type；通用规则放组 README
-- `data.entities.base`（`contracts/data/entities/_base.yaml`，单例）
-    - 路径/ID 由 checker 写死识别；5 个字段固定为 `ID` / `Status` / `CreatedAt` / `UpdatedAt` / `DeletedAt`
-    - `ID` / `Status` integer、`CreatedAt` / `UpdatedAt` timestamp、`DeletedAt` 可空 timestamp；类型从 `tables/_base.yaml`
-      继承，不在 `entities/_base.yaml` 重写；每个基类字段必须写 `source`/`description`
-    - `do_not` 直接写在 `_base.yaml`，承载 `data.entities` 类型级通用规则；具体实体 `do_not` 必须含本实体标识
-- `data/entities/*.yaml`
-    - 结构按 `_meta/data.entities.yaml`；`model.extends` 必须是 `[data.entities.base]`；具体实体不得重声明基类字段，
-      `Status` 可用 `data.enums.*` 特化
-    - `model.tables` 必填、非空、去重；`model.tables[0]` 是主表；每张物理表至少一个 entity 映射
-    - `owner_module` 必填且必须等于主表 `model.tables[0]` 的 `owner_module`
-    - 字段二选一：标量字段（`source.column/computed/soft`）或关系字段（`type` + `source.join.from/to/lazy`）；两套键不得混用
-    - 标量字段必须显式 `description`/`source`；存在 `source.column` 时必须属于本实体表，同一列不得被两个字段引用，多表合成每张表至少被一个字段引用
-    - `source` 四选一：`column`（物理列）、`computed`（计算/聚合）、`soft`（外部传入或无法脚本化的来源说明）、`join`（关系连接）；
-      `computed` 必须显式 `type`、指针（`nullable: true` 或 `*T`）且不得引用 `@param`；`soft` 必须显式 `type`
-    - `json_name` 省略时取 snake_case (name)；标量字段的 `type`/`sensitivity` 可省略并按来源列派生（`soft` 除外）；关系字段的
-      `type` 是目标 entity；显式标量 `type` 的 `*` 必须与列 `nullable` 一致
-    - `source.join` 必填 `from`/`to`/`lazy`；`from` 属于当前 entity 的表，`to` 属于目标 entity 映射的表，两列类型族必须一致
-    - 实体 `model.name` 是 Go 类型名：首字母大写 public，小写 internal；`model` 内字段顺序以 `_meta/data.entities.yaml` 的
-      `model.fields` 为准；不得重名
-    - `ID` 是所有实体的唯一主键：来自主表 `id` 列、非指针、唯一主键
-    - 字段 `name` 是 Go 字段名：首字母大写导出，小写不导出；`sensitivity: secret` 字段必须小写开头；`json_name` 省略时取
-      snake_case (name)，同实体唯一
-    - 关系字段的 type entity / `source.join.to` 所属表 / `source.join.from`/`to` 类型一致性；基数由两端唯一性推断；
-      `lazy: false` 必须有索引且不得成环
-    - 实体级 `validation[].name` 必须 snake_case 且实体内唯一，ID 派生为 `<entity-id>.<name>`；`expr` 非空、`on_violation`
-      必须存在；`used_by` 必须是消费本实体主表的 `cap.services.*` 项且不得为空
-    - `model.included_by` 由 `make gen-graph` 生成、禁止手改，checker 校验与关系字段入边一致；`model.queries` 由
-      `make gen-graph` 生成，必须与 returns 本实体的 query 完全一致且不得为空
-- `data/queries/*.yaml`
-    - 结构按 `_meta/data.queries.yaml`；item 不写 id，name=PascalCase 且全局唯一，必须写 `description`；项 ID 由
-      `<文件 id>.<snake_case(name)>` 派生
-    - `tables` 是查询读写的表；每项 `{table, write}`，`write: true` 表示写该表；必须存在、不是 `data.tables.base`
-      、不得重复；第一项为主表；可以多表；实例必须竖排
-    - `offset` / `limit` 是保留分页参数名：出现时必须 type=integer、nullable:true、default 必填；`offset` 默认 0，`limit`
-      默认值按查询决定且必须为正数；list 返回必须同时声明两者
-    - `params` 只声明接口入参；name 唯一、type 非空；未绑定 `column` 时 type 必须映射到类型族或 `data.enums.*`；`column`
-      绑定列后类型族必须与列一致（`data.enums.*` 按 integer 列）；`expr` 与 `column` 互斥；`default` 只在 `nullable: true`
-      时允许，checker 校验可判定的标量/数组外层，枚举值与数组元素交给生成器
-    - `params` 第一项必须是 `ctx context.Context`；`returns` 是 list<object>：最后一项必须是 `{name: err, kind: error}`
-      ；每项用 `kind` 区分 `scalar` / `affected_rows` / `entity` / `columns` / `error`；kind 专属字段必须出现，互斥字段不得出现；
-      `entity` 只写 entity、不能写 columns；`columns` 用于没有对应 entity 的投影且必须写 columns；secret 只有同模块可显式列出
-    - 同一 query 的多项 `list` 必须一致；`affected_rows` 必须是唯一返回项且不得为列表
-    - `columns` 只用于 `kind: columns`；每项必须是查询表上的 `data.tables.<t>.col.<c>`
-    - 单表 query 至少一个 `index_ref`；`columns` 必须是索引列的最左前缀；显式索引必须与 `used_by` 双向一致；缓存与归档引用分别与
-      storage 双向一致（见 `[query-cache-ref]` / `[storage-cache-used-by]` / `[query-archive-*]`）
-    - `sensitivity: secret` 列只有同模块可显式返回；`pii` 可返回
-    - 写查询必须在某个 method 的 `queries` 中声明；查询必须有至少一个 `write: true` 的表；checker 校验存在、每个写表归属；flow
-      不得直接引用 `data.queries.*`
-- 实体/查询/能力对表的引用存在
-- `index.yaml` 的 path 存在、path 与 id 一致、id/path 不重复；entities/queries 文件必须登记
-
-**尚未机器化**（写在 `_meta` 的 `description` / `rules`，靠 review）：
-
-- 命名品味、业务语义、跨模块读归属是否最小化
-- 其余契约类型规范（http/services/...）
-- 按需生成的 graph 越层/循环/孤儿
-- `generated/` diff
-
-这些会在后续批次补；不要因为它们未机器化就跳过 `_meta` 的规则。
+- `_meta/<type>.yaml` 由 `KnownFields` 严格解析：拼错字段（如 `requred`）直接失败。
+- 实例结构由 `fields` / `item_fields` 的 `required` / `type` / `enum` / `pattern` / `unique` /
+  `unique_key` / `min` / `max` / `min_items` / `const` / `types` / `key_pattern` 校验；`soft` 标记不解析的 soft zone。
+- 字段顺序以模板为准（`checkFieldOrder`）；新增字段只改 `_meta` 模板。
+- `contracts/**/*.yaml` 的文本字段必须双引号（`schema.quote`）；同一 mapping 不得重复键。
+- 类型级 `rules` 的每条必须有 `implemented_by`，包含自身 ID，且每个 ID 都是 checker 实际输出的
+  `[rule-id]`；反向检查所有非 `schema.*` 输出都必须被某条规则声明。
+- `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；独立二进制也带完整映射。
+- `docs/contracts/generated/rule-tests.md` 由 `make gen-rule-tests` 生成，`refs` 为 0 表示该规则只有实现、没有测试直接断言；`make gen-check` 会阻止映射表过期，并按 `-max-zero` 阈值阻止新增未覆盖规则。
+- `feature.rules` 的 policy 规则在 `scripts/cmd/internal/check/rules_policy_test.go`（`make test-rules`）自动登记，并校验 `implemented_by`/`on_violation`/`given`/`when`/`then`；业务行为断言由实现层补充。
+- `rules` 只允许出现在 `_meta`（`features/rules` 等领域规则集除外）；`do_not` 只允许出现在具体契约。
+- `generated: true` 字段必须同时 `write: forbidden`；由 `make gen-graph` 写入，checker 对账。
 
 ---
 
 ## 5. 字段节点怎么读
 
-字段节点的硬/软分类、`required`、`default`、`stability` 等通用语义见本节；
-类型族在 `_types.yaml`，`data.tables.yaml` 只保留表契约特有的字段规范。
-
-| 键                                                                                                                | 用途                                                                                                                                                                                                                                            |
-|-------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `description`                                                                                                     | 字段的准确含义                                                                                                                                                                                                                                  |
-| `required` / `type` / `types` / `enum` / `allowed` / `pattern` / `key_pattern` / `soft` / `const` / `unique` / `min` / `max` / `min_items` | 结构约束；`types` 是 schema 节点种类列表（与 `type` 互斥）；`key_pattern` 约束 map 键；`soft` 标记无结构/语义校验的 soft zone（允许 `any`/`string`，字符串表达式只校验存在性）；`min_items` 只约束 list；`map<string>` / `map<object>` 是通用 schema 类型（键 → 字符串 / 对象映射）                                                                                                        |
-| `examples`                                                                                                        | 列参数/骨架的示例值；实体字段不再支持                                                                                                                                                                                                           |
-| `schema` / `map<schema>`                                                                                          | schema 值域节点 / 类型名到节点的映射；`ref` 或 `type` 选节点种类，`kinds.<kind>.keys` 是结构约束，标量约束引用 `_types`                                                                                                                         |
-| `list<object>` / `map<object>` + `item_fields`                                                                     | 对象列表 / 键到对象的映射；条目键由 `item_fields` 定义（`name` + `schema` + 方向/存在性/可空/默认值/说明）                                                                                                                                       |
-| `type_families` / `custom_types`                                                                                  | `_types.yaml` 顶层：`type_families` 是类型族映射，`custom_types` 是自定义类型（family + 固定参数）；参数可带 `required`、`min`、`max`、`enum`、`default`、`description`；`min`/`max` 的 `type` 使用所属族名，不使用抽象 number                  |
-| `columns[].type`                                                                                                  | 类型族键、自定义类型，或硬编码的 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`                                                                                                                                                           |
-| `targets`                                                                                                         | `dir`/`glob` 扫描路径；`file` 是单文件契约的固定路径；`id` 是 ID 模板（`<file>` → 文件 stem；单例契约直接写固定 ID）；`naming` 是文件名规则（`snake_case`）；基类固定 `_base.yaml`，不在此声明                                                  |
-| `columns[].redundancy`                                                                                            | 同组冗余列引用列表；`source: true` 标记权威列，每组恰好一个，组内各列声明完全一致                                                                                                                                                               |
-| `columns[].references`                                                                                            | 逻辑外键：`column` 指向目标表主键/全局唯一单列，`on_delete` 是硬删动作（`cascade`/`restrict`/`set_null`/`no_action`）；必须与 entity 关系字段的 `source.join` 双向一致                                                                          |
-| `table.referenced_by`                                                                                             | `make gen-graph` 生成的反向索引：指向本表列的源列引用；与 `columns[].references` 双向一致，禁止手改                                                                                                                                             |
-| `indexes[].comment`                                                                                               | 索引必须写非空用途说明；生成 `COMMENT ON INDEX`                                                                                                                                                                                                 |
-| `indexes[].used_by`                                                                                               | 使用该索引的 query item ID 列表；至少一个，防空索引                                                                                                                                                                                             |
-| `queries[].index_ref`                                                                                             | query 使用的索引与列前缀：`{index, columns}`；`columns` 非空且必须是索引列的最左前缀；纯表达式索引不可引用；与 `indexes[].used_by` 双向一致                                                                                                      |
-| `queries[].caches`                                                                                                | query 使用的逻辑缓存：`data.tables.<t>.cache.<k>[+<k>]`；读表为读穿透（键列必须出现在 params.column 或同表 index_ref.columns，params 绑定全部键时必须声明），写表为写后同步（写查询必须列全；写同步项不校验键来源）                                |
-| `queries[].archive`                                                                                               | query 允许穿透的归档：`{archive, age_by}`；`archive` 只允许 `promotable: true` 的归档，`age_by` 必须与 storage 一致并在回迁时更新；主表未命中时查归档并回迁                                                                                       |
-| `data/storage.yaml` 的 `tables.<engine>`                                                                          | 按 engine 分组的普通表条目（`table`/`description`/扁平 `retention`/`partition`）与归档条目（`archive_of`/`promotable`/`on_conflict`/`table`/`description`/`age_by`/`after_unit`/`after`）；`caches` 为非权威副本及扁平 `retention`/`cache_ttl`，每个逻辑缓存必须被至少一个查询的 `caches` 有效引用；表契约不再承载这些物理事实 |
-| `generated` / `write`                                                                                             | 生成物标记；`write: forbidden` 表示禁止手改                                                                                                                                                                                                     |
-| `rules`                                                                                                           | 本类型的专有规则；每条必须写 `implemented_by`（含规则自身 ID，指向 checker 实际输出的 `[rule-id]`）；通用结构规则由 checker 代码强制                                                                                                            |
+| 键 | 用途 |
+|---|---|
+| `description` | 字段的准确含义；软区标记也写在这里 |
+| `required` / `type` / `types` / `enum` / `allowed` / `pattern` / `key_pattern` / `const` / `unique` / `unique_key` / `min` / `max` / `min_items` | 结构约束；`types` 是 schema 节点种类列表（与 `type` 互斥）；`key_pattern` 约束 map 键；`min_items` 只约束 list |
+| `soft` | 无结构/语义校验的 soft zone（只允许 `any`/`string`） |
+| `examples` | 骨架示例值；实体字段不支持 |
+| `fields` / `item_fields` | 嵌套对象 / 对象列表的字段树 |
+| `targets` | `dir`/`glob` 扫描路径；`id` 是 ID 模板（`<file>` → 文件 stem）；`naming` 是文件名规则；基类固定 `_base.yaml`，不在此声明 |
+| `generated` / `write` | 生成物标记；`write: forbidden` 表示禁止手改 |
+| `rules` | 本类型的专有规则；每条必须有 `implemented_by` |
 
 **先读 `description` 和 `rules`，不要只按字段名猜。**
 
-通用结构规则（`schema.id-from-file`、`schema.contract-id-unique`、`schema.unique-names`、`schema.duplicate-key`）由 checker
-代码强制，不再维护独立的 YAML 清单。实例的 `enforcement` / `consumers` 以 `index.yaml` 为准。类型级 `do_not` 已移到组
-README 或 `<type>/_base.yaml`，`_meta` 下禁止出现 `do_not`。
+`enforcement` / `consumers` 以 `contracts/index.yaml` 为准；类型级 `do_not` 放在组 README 或 `<type>/_base.yaml`。
 
 ### 5.1 `stability` 流转
 
-| 状态         | 含义              | 进入条件                                        |
-|--------------|-------------------|-------------------------------------------------|
-| `draft`      | 正在编写          | 默认状态；允许 TODO/FIXME                       |
-| `stable`     | 评审通过、无 TODO | 替换所有 TODO/FIXME，`make contract-check` 通过 |
-| `deprecated` | 已废弃            | 停止新增引用，准备移除                          |
+| 状态 | 含义 | 进入条件 |
+|---|---|---|
+| `draft` | 正在编写 | 默认状态；允许 TODO/FIXME |
+| `stable` | 评审通过、无 TODO | 替换所有 TODO/FIXME，`make contract-check` 通过 |
+| `deprecated` | 已废弃 | 停止新增引用，准备移除 |
 
-状态可双向流转：`stable → draft` 表示重新修改；`deprecated → stable` 表示恢复。
-但 `stable` 的进入与退出只能由 **用户手动修改**；`contract-new` 等生成器只产出 `draft`，AI 不得自动把文件改为 `stable`
-，也不得擅自把 `stable` 降级。`contract-check` 只能校验状态自洽（`stable` 不得含 `TODO` / `FIXME`），不能识别修改者，最终由 PR
-评审把关。
-
-状态的 **判断**仍由 PR 评审负责；`contract-check` 只负责当前状态自洽。
+`stable` 的进入与退出只能由**用户手动修改**（`contract-new` 只产出 `draft`）；`contract-check` 只能校验
+`stable` 不含 TODO/FIXME，不能识别修改者。
 
 ---
 
 ## 6. 不要做的事
 
-- 不要重建 `contracts/_meta/schema/` 或 `contracts/_meta/templates/`。
-- 不要在 `_meta` 之外再手写一份字段模板；需要样板时用 `make contract-new`。
-- 不要把 `_meta` 或脚本放进 `contracts/generated/`。
-- 不要手写生成的反向索引（`table.referenced_by` / `model.included_by` / `table.queries` / `model.queries` /
-  `query.used_by` / `feature.rules.implemented_by` / `cap.lifecycles` 的 step 锚点 / `cap.events` 的
-  `emitted_by`、`consumers`）；它们由 `make gen-graph` 写入，`contract-check` 校验。
+- 不要重建 `contracts/_meta/schema/` 或 `templates/`；不要在 `_meta` 之外手写第二份字段模板。
+- 不要手写生成字段（`table.referenced_by` / `table.queries` / `model.included_by` / `model.queries` /
+  `query.used_by` / `feature.rules.implemented_by` / 生命周期锚点 / `emitted_by` / `consumers`）。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
-- 不要把硬约束只写进 `rules` 而不写 `implemented_by`；`contract-check` 会校验 `implemented_by` 必须包含规则自身 ID、每个
-  ID 都有实际输出，并反向检查所有非 `schema.*` 输出都已被规则声明；但不会判断检查逻辑本身是否正确（后者靠测试）。
-- 不要在本文件之外再写一份通用字段语义；类型文件只写类型特有内容。
-- 不要把 `type_families` / `custom_types` 写回 `data.tables.yaml`；类型族与自定义类型只放在 `_types.yaml`。
-- 不要在 checker 里解析 `CHECK expr` 的 SQL 语义；checker 只校验非空，语义属于生成器/数据库验证的软区。
-- 不要在 `_meta` 下写 `do_not`；不要在具体契约写顶层 `rules`（`features/rules` 与 `platform` 的领域规则集除外）。
-  `contract-check` 的 `schema.meta-placement` 会拦住。
-- 不要在 `contracts/_meta/` 里写业务实例；它只描述类型。
-- 不要为单个表/页面各写一份规范；按类型一份。
+- 不要把硬约束只写进 `rules` 而不写 `implemented_by`。
+- 不要在 checker 里解析 `CHECK expr` 的 SQL 语义；只校验可判定的字面量。
+- 不要在 `_meta` 下写 `do_not`；不要在具体契约写顶层 `rules`。
+- 不要在 `contracts/_meta/` 里写业务实例；按类型一份规范。

@@ -9,7 +9,7 @@ targets: [opencode, claude, cursor]
 > 适用：任何对 `contracts/` 的改动。
 > 不适用：只改文档、只改实现（后者本身违规，见文末）。
 >
-> 状态：P2 生成器待落地；`make contract-check` 试点可用（data.tables / data.enums / used_by）。
+> 状态：`make contract-check` 覆盖全部契约类型；`make gen` 已接入 DDL / OpenAPI / 错误文档。
 
 ---
 
@@ -65,7 +65,7 @@ make contract-impact id=<被修改的 ID>
 
 | 要改什么 | 改哪里 |
 |---|---|
-| 接口 | `contracts/capabilities/http/<module>.yaml` |
+| 接口 | `contracts/capabilities/protocols/http/<module>.yaml` |
 | 应用包含哪些接口 | `contracts/project.yaml` 的 `apps` 段 |
 | 定时任务 / 消费者 | `contracts/capabilities/events/<module>.yaml` 的 `jobs` |
 | 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
@@ -119,10 +119,9 @@ make gen
 按需单独执行：
 
 ```bash
-make gen-openapi   # capabilities/http/* + apps/* → generated/openapi/<app>.yaml
+make gen-openapi   # capabilities/protocols/http/* + apps/* → generated/openapi/<app>.yaml
 make gen-db        # data/tables/* → schema.sql + migrations
 make gen-graph     # 结构化依赖 → used_by；graph/lineage 按需生成
-make gen-client    # 合并 spec → apps/web/packages/api-client/src/generated
 ```
 
 > 生成物入库。**禁止手改** `contracts/generated/`、`apps/api/internal/generated/`、`apps/api/migrations/`。
@@ -148,16 +147,14 @@ make gen-client    # 合并 spec → apps/web/packages/api-client/src/generated
 
 ```bash
 make contract-check          # 结构 / ID / 约束 / 索引 / used_by
-make contract-graph          # 重复 ID / 悬空 / 越层 / 循环 / 孤儿
 make gen && git diff --exit-code   # 生成物是否同步
 make test-api                # 路由集合比对 + 响应 schema 校验
 make test-web                # client 覆盖断言 + 页面四态
-make contract-compat         # oasdiff：破坏性变更检测
 ```
 
 任一失败都不允许提交。
 
-> P4 之前，`test-api` 只跑现有单测（路由比对与响应校验尚未落地）；P5 之前 `contract-compat` / `db-verify` 为占位。命令会明确提示未实现，不会静默通过。
+> `contract-graph` / `contract-impact` / `contract-compat` 尚未实现，命令会明确失败；当前闸门是 `contract-check` 与 `gen-check`。
 
 ---
 
@@ -199,7 +196,6 @@ PR 描述模板已包含上述清单。
 - [ ] `make gen` 幂等（连续两次无 diff）
 - [ ] `make gen-check` 通过
 - [ ] `make contract-check` 通过
-- [ ] `make contract-graph` 通过
 - [ ] 编译通过（Go + TS）
 - [ ] 测试通过（含路由比对、响应 schema）
 - [ ] 破坏性变更已升版本或走弃用流程

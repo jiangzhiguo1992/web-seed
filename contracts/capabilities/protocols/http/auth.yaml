@@ -5,7 +5,6 @@ schema_version: 1
 stability: draft
 do_not:
   - "不要把 password_hash 或 token 写入日志、事件"
-  - "token 只允许出现在 /auth/login 与 /auth/refresh 的响应"
 
 base_path: /v1
 default_error_responses: [ 400, 401, 403, 422, 423, 429, 500, 503 ]

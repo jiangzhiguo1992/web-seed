@@ -12,28 +12,28 @@ import (
 func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex, allIndex map[string]int, reach []map[int]bool, stepOutputs []map[string]returnType, steps []any, rel, stepID string) {
 	expr, ok := v.(string)
 	if !ok || strings.TrimSpace(expr) == "" {
-		c.rulef("service-params", "%s: step %s input value must be a non-empty expression", rel, stepID)
+		c.rulef("service-input-format", "%s: step %s input value must be a non-empty expression", rel, stepID)
 		return
 	}
 	switch {
 	case strings.HasPrefix(expr, "params."):
 		if err := c.checkInputPath(doc, expr); err != nil {
-			c.rulef("service-params", "%s: step %s input references %s: %v", rel, stepID, expr, err)
+			c.rulef("service-input-ref", "%s: step %s input references %s: %v", rel, stepID, expr, err)
 		}
 	case strings.HasPrefix(expr, "step."):
 		ref, path, ok := splitStepField(expr)
 		if !ok {
-			c.rulef("service-params", "%s: step %s input %q is not a valid step reference", rel, stepID, expr)
+			c.rulef("service-input-format", "%s: step %s input %q is not a valid step reference", rel, stepID, expr)
 			return
 		}
 		idx, exists := stepIndex[ref]
 		if !exists {
-			c.rulef("service-params", "%s: step %s input references step %s that is not an earlier step", rel, stepID, ref)
+			c.rulef("service-input-order", "%s: step %s input references step %s that is not an earlier step", rel, stepID, ref)
 			return
 		}
 		cur, hasCur := allIndex[stepID]
 		if hasCur && idx >= cur {
-			c.rulef("service-params", "%s: step %s input references step %s that is not an earlier step", rel, stepID, ref)
+			c.rulef("service-input-order", "%s: step %s input references step %s that is not an earlier step", rel, stepID, ref)
 			return
 		}
 		if hasCur && idx < len(reach) && !reach[idx][cur] {
@@ -42,10 +42,10 @@ func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex, al
 		}
 		target, _ := asMap(steps[idx])
 		if err := c.checkStepOutputPath(target, stepOutputs[idx], path, whenFormula{}, ref); err != nil {
-			c.rulef("service-params", "%s: step %s input references %s: %v", rel, stepID, expr, err)
+			c.rulef("service-input-ref", "%s: step %s input references %s: %v", rel, stepID, expr, err)
 		}
 	default:
-		c.rulef("service-params", "%s: step %s input value %q must be params.<path> or step.<id>.<path> (inline expressions are not allowed; declare a logic step and reference its output)", rel, stepID, expr)
+		c.rulef("service-input-format", "%s: step %s input value %q must be params.<path> or step.<id>.<path> (inline expressions are not allowed; declare a logic step and reference its output)", rel, stepID, expr)
 	}
 }
 
@@ -534,11 +534,11 @@ func (c *Checker) checkQueryInput(input map[string]any, q *queryInfo, qid, rel, 
 	}
 	for name, raw := range input {
 		if name == "ctx" {
-			c.rulef("service-params", "%s: step %s query %s must not pass ctx", rel, stepID, qid)
+			c.rulef("service-input-name", "%s: step %s query %s must not pass ctx", rel, stepID, qid)
 			continue
 		}
 		if !params[name] {
-			c.rulef("service-params", "%s: step %s query %s has no param %s", rel, stepID, qid, name)
+			c.rulef("service-input-name", "%s: step %s query %s has no param %s", rel, stepID, qid, name)
 			continue
 		}
 		value, _ := raw.(string)
@@ -548,15 +548,15 @@ func (c *Checker) checkQueryInput(input map[string]any, q *queryInfo, qid, rel, 
 		}
 		p := byName[name]
 		if p.Type != "" && !c.serviceTypesCompatible(src, p.Type) {
-			c.rulef("service-params", "%s: step %s query %s input %s type %s is not compatible with %s", rel, stepID, qid, name, src, p.Type)
+			c.rulef("service-input-type", "%s: step %s query %s input %s type %s is not compatible with %s", rel, stepID, qid, name, src, p.Type)
 		}
 		if nullable, known := c.inputValueNullable(value, tc); known && nullable && !p.Nullable {
-			c.rulef("service-params", "%s: step %s query %s input %s source is nullable but target param is not", rel, stepID, qid, name)
+			c.rulef("service-input-nullable", "%s: step %s query %s input %s source is nullable but target param is not", rel, stepID, qid, name)
 		}
 	}
 	for name := range required {
 		if _, ok := input[name]; !ok {
-			c.rulef("service-params", "%s: step %s query %s missing required param %s", rel, stepID, qid, name)
+			c.rulef("service-input-required", "%s: step %s query %s missing required param %s", rel, stepID, qid, name)
 		}
 	}
 }
@@ -570,16 +570,16 @@ func (c *Checker) checkServiceParamDefault(pm map[string]any, rel, svcName strin
 	name, _ := pm["name"].(string)
 	where := fmt.Sprintf("%s.%s: param %s", rel, svcName, name)
 	if name == "ctx" {
-		c.rulef("service-params", "%s: ctx must not declare default", where)
+		c.rulef("service-param-default", "%s: ctx must not declare default", where)
 		return
 	}
 	if nullable, _ := pm["nullable"].(bool); !nullable {
-		c.rulef("service-params", "%s: default requires nullable:true (omitted means use default)", where)
+		c.rulef("service-param-default", "%s: default requires nullable:true (omitted means use default)", where)
 	}
 	typ, _ := pm["type"].(string)
 	base := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(typ), "*"))
 	for _, msg := range c.paramDefaultErrors(base, def, where) {
-		c.rulef("service-params", "%s", msg)
+		c.rulef("service-param-default", "%s", msg)
 	}
 }
 
@@ -587,11 +587,11 @@ func (c *Checker) checkServiceParamDefault(pm map[string]any, rel, svcName strin
 func (c *Checker) checkServiceInput(input map[string]any, target serviceMeta, ref, rel, stepID string, tc stepTypeContext) {
 	for name, raw := range input {
 		if name == "ctx" {
-			c.rulef("service-params", "%s: step %s service %s must not pass ctx", rel, stepID, ref)
+			c.rulef("service-input-name", "%s: step %s service %s must not pass ctx", rel, stepID, ref)
 			continue
 		}
 		if !target.params[name] {
-			c.rulef("service-params", "%s: step %s service %s has no param %s", rel, stepID, ref, name)
+			c.rulef("service-input-name", "%s: step %s service %s has no param %s", rel, stepID, ref, name)
 			continue
 		}
 		value, _ := raw.(string)
@@ -600,17 +600,17 @@ func (c *Checker) checkServiceInput(input map[string]any, target serviceMeta, re
 			continue
 		}
 		if dst := target.paramDecls[name]; dst != "" && !c.serviceTypesCompatible(src, dst) {
-			c.rulef("service-params", "%s: step %s service %s input %s type %s is not compatible with %s", rel, stepID, ref, name, src, dst)
+			c.rulef("service-input-type", "%s: step %s service %s input %s type %s is not compatible with %s", rel, stepID, ref, name, src, dst)
 		}
 		if target.paramNullable != nil {
 			if nullable, known := c.inputValueNullable(value, tc); known && nullable && !target.paramNullable[name] {
-				c.rulef("service-params", "%s: step %s service %s input %s source is nullable but target param is not", rel, stepID, ref, name)
+				c.rulef("service-input-nullable", "%s: step %s service %s input %s source is nullable but target param is not", rel, stepID, ref, name)
 			}
 		}
 	}
 	for name := range target.requiredParams {
 		if _, ok := input[name]; !ok {
-			c.rulef("service-params", "%s: step %s service %s missing required param %s", rel, stepID, ref, name)
+			c.rulef("service-input-required", "%s: step %s service %s missing required param %s", rel, stepID, ref, name)
 		}
 	}
 }

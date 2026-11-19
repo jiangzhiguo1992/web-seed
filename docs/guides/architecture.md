@@ -25,7 +25,7 @@
 |---|---|---|---|
 | P0 | 技术验证（Spike） | 5 项假设全部有实测结论 | `[x]` 见 0.4 |
 | P1 | 仓库骨架 | `make help`/`build`/`lint`/`doctor` 全通过 | `[x]` |
-| P2 | 契约生成链 | `make gen` 幂等、CI diff 通过 | `[~]` 契约层 + `_meta` 校验试点已落盘，生成器待实现 |
+| P2 | 契约生成链 | `make gen` 幂等、CI diff 通过 | `[~]` 契约校验与 DDL/OpenAPI 生成已落地；sqlc/TS 投影待 P4 |
 | P3 | 后端地基 | platform 六件套可用 | `[ ]` |
 | P4 | 最小纵切 | account 全链路跑通（DB→API→页面） | `[ ]` |
 | P5 | 一致性闸门 | 七道闸门全部生效 | `[~]` 闸门 1–3 原型已验证 |
@@ -100,7 +100,7 @@
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
 - [x] `data/tables/*.yaml` → `schema.sql` + `migrations/0001_baseline.sql`（增量 diff 仍 P5）
 - [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/token/auth_* 拆分（契约已落盘）
-- [x] 契约元规范试点：`_meta/{data.tables,data.enums}` + `make contract-new` + `make contract-check`（结构 / ID / 约束 / 索引 / used_by / owner 写归属）
+- [x] 契约元规范：`_meta/<type>.yaml` 覆盖全部契约类型 + `make contract-new` + `make contract-check`（结构 / ID / 约束 / 索引 / 引用 / 数据流 / 类型级规则）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
 - [ ] `data/enums/<module>.yaml` → Go 常量 + TS union + entity 整数映射
 - [ ] `platform/errors/*.yaml` + `platform/security/permissions.yaml` → 两端常量
@@ -632,7 +632,7 @@ description: 新增 API 端点的完整流程
 | 6 | 禁止手改 `generated/`（文件头 + lint + 重新生成 diff） | AI 直接改生成物而非改契约 | CI | 低 | 100% |
 | 7 | 禁止绕过 client 直连（`no-restricted-imports` 禁 `fetch`/`axios`） | 前端自造请求，逃逸类型检查 | 编译 | 低 | 100% |
 
-> `make contract-check`（结构 / ID / 约束 / 索引 / used_by / owner 写归属 / index 路径）是闸门 0 的前置试点，已接入 pre-commit 与 CI；完整图校验仍以闸门 0 `make contract-graph` 为准。
+> `make contract-check`（结构 / ID / 约束 / 索引 / 引用 / 数据流 / 类型级规则）是闸门 0 的前置校验，已接入 pre-commit 与 CI；`make contract-graph` 尚未实现。
 
 **闸门 2 是性价比最高的一道**：一个测试函数即可覆盖"新增端点没写契约"和"契约加了端点没实现"两个方向。实现要点：
 

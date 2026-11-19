@@ -33,11 +33,19 @@ func TestQueryCacheRefs(t *testing.T) {
 		t.Fatalf("valid read-through cache reported: %v", c.errs)
 	}
 
+	badRefQ := *readQ
+	badRefQ.Caches = []string{"data.tables.x.cache.missing"}
+	c = newQueryStorageChecker(&badRefQ, caches, nil)
+	c.checkQueryStorageRefs()
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "is not declared in storage.caches") || !strings.Contains(got, "[query-cache-ref]") {
+		t.Fatalf("undeclared cache ref not reported: %v", c.errs)
+	}
+
 	unboundQ := *readQ
 	unboundQ.Params = nil
 	c = newQueryStorageChecker(&unboundQ, caches, nil)
 	c.checkQueryStorageRefs()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "must appear in params[].column or index_ref[].columns") {
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "must appear in params[].column or index_ref[].columns") || !strings.Contains(got, "[query-cache-keys]") {
 		t.Fatalf("cache key without column source not reported: %v", c.errs)
 	}
 
@@ -53,7 +61,7 @@ func TestQueryCacheRefs(t *testing.T) {
 	undeclaredQ.Caches = nil
 	c = newQueryStorageChecker(&undeclaredQ, caches, nil)
 	c.checkQueryStorageRefs()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "fully bound by params but the query does not declare it") {
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "fully bound by params but the query does not declare it") || !strings.Contains(got, "[query-cache-keys]") {
 		t.Fatalf("read query with fully bound cache key must declare the cache: %v", c.errs)
 	}
 
@@ -63,7 +71,7 @@ func TestQueryCacheRefs(t *testing.T) {
 	}
 	c = newQueryStorageChecker(writeQ, caches, nil)
 	c.checkQueryStorageRefs()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "must list cache "+cacheRef) {
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "must list cache "+cacheRef) || !strings.Contains(got, "[query-cache-write]") {
 		t.Fatalf("write cache completeness not reported: %v", c.errs)
 	}
 

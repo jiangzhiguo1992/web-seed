@@ -607,6 +607,9 @@ tables:
 		"tables.postgres[2]: duplicates data.tables.z",
 		"table data.tables.w is registered under both mysql and postgres",
 		"tables.mongodb is not a supported engine",
+		"[storage-registry]",
+		"[storage-engine]",
+		"[storage-entry-description]",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in:\n%s", want, errs)
@@ -635,6 +638,10 @@ func TestStorageCacheEntries(t *testing.T) {
 		"data.tables.unknown is not a registered authority table",
 		`field "size_class" is not allowed for cache entries`,
 		"key data.tables.x.col.missing is not a column of data.tables.x",
+		"[storage-cache-key]",
+		"[storage-registry]",
+		"[storage-cache-fields]",
+		"[storage-retention]",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in:\n%s", want, errs)
@@ -663,6 +670,7 @@ func TestStorageDocShape(t *testing.T) {
 		"unknown top-level field \"retention\"",
 		"unknown top-level field \"partition\"",
 		"supported_engines[1] must be a non-empty string",
+		"[storage-doc]",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in:\n%s", want, errs)
@@ -672,7 +680,7 @@ func TestStorageDocShape(t *testing.T) {
 	c.errs = nil
 	doc["supported_engines"] = "postgres"
 	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "supported_engines must be a list") {
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "supported_engines must be a list") || !strings.Contains(got, "[storage-engines]") {
 		t.Fatalf("non-list supported_engines not reported: %v", c.errs)
 	}
 
@@ -680,7 +688,7 @@ func TestStorageDocShape(t *testing.T) {
 	doc["supported_engines"] = []any{"postgres"}
 	doc["not_supported_topologies"] = "sharding"
 	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported_topologies must be a list") {
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "not_supported_topologies must be a list") || !strings.Contains(got, "[storage-engines]") {
 		t.Fatalf("non-list not_supported_topologies not reported: %v", c.errs)
 	}
 
@@ -702,13 +710,13 @@ func TestStorageDocShape(t *testing.T) {
 func TestStorageDocRequiresSupportedEngines(t *testing.T) {
 	c := &Checker{}
 	c.checkStorageDoc(map[string]any{"tables": map[string]any{}}, "contracts/data/storage.yaml")
-	if !strings.Contains(entityErrs(c), "supported_engines is required") {
+	if got := entityErrs(c); !strings.Contains(got, "supported_engines is required") || !strings.Contains(got, "[storage-engines]") {
 		t.Fatalf("missing supported_engines not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
 	c.checkStorageDoc(map[string]any{"supported_engines": []any{}}, "contracts/data/storage.yaml")
-	if !strings.Contains(entityErrs(c), "supported_engines must not be empty") {
+	if got := entityErrs(c); !strings.Contains(got, "supported_engines must not be empty") || !strings.Contains(got, "[storage-engines]") {
 		t.Fatalf("empty supported_engines not reported: %v", c.errs)
 	}
 }
@@ -716,7 +724,7 @@ func TestStorageDocRequiresSupportedEngines(t *testing.T) {
 func TestStorageRetentionFlatFields(t *testing.T) {
 	c := &Checker{}
 	c.parseStorageRetention(map[string]any{"retention": true, "pending": 7}, "w", false)
-	if !strings.Contains(entityErrs(c), "unit is required when retention is true") {
+	if got := entityErrs(c); !strings.Contains(got, "unit is required when retention is true") || !strings.Contains(got, "[storage-duration]") {
 		t.Fatalf("missing unit not reported: %v", c.errs)
 	}
 
@@ -798,7 +806,7 @@ func TestStoragePartitionRangeInterval(t *testing.T) {
 		"data.tables.x": {"created_at": {typ: "timestamp"}},
 	}}
 	c.checkStoragePartition("data.tables.x", map[string]any{"strategy": "range", "columns": []any{"created_at"}}, "storage tables.mysql[0]")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "partition.interval is required for range") {
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "partition.interval is required for range") || !strings.Contains(got, "[storage-partition]") {
 		t.Fatalf("range partition without interval not reported: %v", c.errs)
 	}
 }
@@ -821,7 +829,7 @@ func TestStorageArchiveEntryShape(t *testing.T) {
 		"archive_of": "data.tables.src", "promotable": true, "table": "src_archive",
 		"age_by": "created_at", "after_unit": "days", "after": 90,
 	}, "storage tables.postgres[0]")
-	if !strings.Contains(entityErrs(c), "promotable archive requires on_conflict") {
+	if got := entityErrs(c); !strings.Contains(got, "promotable archive requires on_conflict") || !strings.Contains(got, "[storage-archive-source]") {
 		t.Fatalf("missing on_conflict not reported: %v", c.errs)
 	}
 
@@ -911,7 +919,7 @@ func TestStorageArchiveEntriesRejectUnknownSource(t *testing.T) {
 	a := validArchiveEntry()
 	a.source = "data.tables.missing"
 	c.checkStorageArchives([]storageArchiveEntry{a}, registered, tableIDs)
-	if !strings.Contains(entityErrs(c), "archive_of data.tables.missing is not a registered authority table") {
+	if got := entityErrs(c); !strings.Contains(got, "archive_of data.tables.missing is not a registered authority table") || !strings.Contains(got, "[storage-archive-ref]") {
 		t.Fatalf("unknown source not reported: %v", c.errs)
 	}
 }
@@ -2584,12 +2592,6 @@ func TestIndexUsedBy(t *testing.T) {
 		t.Fatalf("valid index used_by reported: %v", c.errs)
 	}
 
-	c = &Checker{}
-	c.checkTableRules(base([]any{}), "contracts/data/tables/x.yaml", schema)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[index-used-by]") {
-		t.Fatalf("empty index used_by not reported: %v", c.errs)
-	}
-
 	c = &Checker{queryIDs: map[string]string{}, queryTables: map[string]map[string]bool{}}
 	c.checkTableRules(base([]any{"data.queries.missing.q"}), "contracts/data/tables/x.yaml", schema)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown query") {
@@ -2648,7 +2650,7 @@ func TestRedundancyValidation(t *testing.T) {
 			"data.tables.b": {"x": {typ: "integer"}},
 		})
 		c.checkRedundancy(tables)
-		if !strings.Contains(strings.Join(c.errs, "\n"), "type/nullable") {
+		if !strings.Contains(strings.Join(c.errs, "\n"), "type/nullable") || !strings.Contains(strings.Join(c.errs, "\n"), "[redundant-ref]") {
 			t.Fatalf("type mismatch not reported: %v", c.errs)
 		}
 	})
@@ -2666,7 +2668,7 @@ func TestRedundancyValidation(t *testing.T) {
 		})
 		c.checkRedundancy(tables)
 		errs := strings.Join(c.errs, "\n")
-		if !strings.Contains(errs, "is not a table column") {
+		if !strings.Contains(errs, "is not a table column") || !strings.Contains(errs, "[redundant-ref]") {
 			t.Fatalf("missing column not reported: %v", c.errs)
 		}
 		if strings.Contains(errs, "does not declare") {
@@ -2708,6 +2710,7 @@ func TestRedundancyValidation(t *testing.T) {
 		for _, want := range []string{
 			"exactly one source",
 			"include the declaring column itself",
+			"[redundant-group]",
 		} {
 			if !strings.Contains(errs, want) {
 				t.Fatalf("missing %q in redundancy errors: %v", want, c.errs)

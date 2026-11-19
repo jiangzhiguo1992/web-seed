@@ -1,4 +1,4 @@
-# feature.rules：可执行业务规则，按业务主体组织。
+# feature.rules：可执行业务规则，按业务主体组织；所有规则都是 error，违反即阻止提交。
 
 id: meta.feature.rules
 type: feature.rules
@@ -55,14 +55,13 @@ fields:
       - { name: id, type: string, required: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "规则 ID" }
       - { name: kind, type: string, required: true, enum: [ constraint, invariant, policy ], description: "constraint=字段级校验；invariant=断言；policy=人工实现" }
       - { name: summary, type: string, required: true, description: "一句话说明" }
-      - { name: severity, type: string, required: true, enum: [ error, warning ], description: "违反级别" }
       - { name: entity, type: string, required: false, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "constraint 的实体；field 必须是该实体字段" }
       - { name: field, type: string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "constraint 的字段名（json_name）" }
       - { name: op, type: string, required: false, enum: [ eq, ne, gt, ge, lt, le, in, not_in, pattern, min_len, max_len, required, not_null ], description: "constraint 的比较操作" }
       - { name: value, type: any, required: false, description: "constraint 的期望值；按 op 校验" }
       - { name: assert, type: string, soft: true, required: false, description: "soft zone：invariant 的断言表达式；checker 不解析" }
       - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "违反时返回的错误码" }
-      - { name: implemented_by, type: list<string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该规则的服务项" }
+      - { name: implemented_by, type: list<string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "gen-graph 生成；禁止手改" }
       - { name: given, type: string, soft: true, required: false, description: "soft zone：policy 前置条件（人工依据，不校验）" }
       - { name: when, type: string, soft: true, required: false, description: "soft zone：policy 触发场景（人工依据，不校验）" }
       - { name: then, type: string, soft: true, required: false, description: "soft zone：policy 期望结果（人工依据，不校验）" }

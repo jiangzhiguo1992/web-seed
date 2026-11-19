@@ -318,7 +318,7 @@ table:
 
 - 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名必须显式声明；本仓库统一单数
 - `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 只能用户手动设置/降级，生成器只产出 `draft`；`stable` 前必须替换 TODO 并跑 `make contract-check`
-- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` / `data.storage` 按完整 ID 匹配 `_meta/<type>.yaml`；`data.tables.base` / `data.entities.base` 由 checker 固定识别），文件无需声明 `type`
+- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` 等按完整 ID 匹配 `_meta/<type>.yaml`；`data.storage` 是单文件、无模板，由 `storage-*` 规则校验；`data.tables.base` / `data.entities.base` 由 checker 固定识别），实例文件无需声明 `type`
 - 生效元数据 = `_meta/<type>.yaml` + 继承的 `_base` 字段 + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移
 - **不写 `refs`**：依赖关系由图校验器从 `ref` / `capability` / `use` / `emits` / `column` / `target` 等结构化字段自动推导
@@ -362,7 +362,7 @@ table:
 | **类型级（可执行）** | `_meta/<type>.yaml` 的 `rules` | "所有表必须写 table.queries" | 机器校验 |
 | **类型级（指导）** | `<group>/README.md` 或 `<type>/_base.yaml` 的 `do_not` | "所有表不要手写 migrations" | 一处定义，全类继承 |
 | **组级** | `<group>/README.md` | "features 不引用 data"、"实体在 data 层" | 手写，稳定 |
-| **实例级** | 契约正文 `do_not` | "account.status 使用 integer；枚举只在 entity"、"游标分页要有 tiebreaker" | 就近，每个文件 1–3 条 |
+| **实例级** | 契约正文 `do_not` | "account.status 使用 integer；枚举只在 entity"、"游标分页要有 tiebreaker" | 就近，只写本文件特有约束 |
 | **全局** | `index.yaml` 的 `global_notes` | "错误响应由生成器注入" | 跨文件坑，极少 |
 
 例外：`features/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不是类型规则清单；除此以外具体契约禁止顶层 `rules`；嵌套的数据属性可以叫 `rules`，不视为契约规则。

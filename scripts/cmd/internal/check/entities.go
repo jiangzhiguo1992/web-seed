@@ -937,7 +937,7 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			c.rulef("entity-relation-arity", "%s: List<data.entities.*> requires one_to_many cardinality, got %s", where, card)
 		}
 		if r.HasLazy && !r.Lazy {
-			if r.Type == e.ID {
+			if r.TargetID == e.ID {
 				c.rulef("entity-relation-eager-cycle", "%s: self relation must be lazy", where)
 			}
 			if !c.hasIndex(r.JoinToTable, r.JoinToColumn) {
@@ -1076,8 +1076,9 @@ func (c *Checker) checkEagerCycles() {
 	for id, e := range c.entities {
 		for _, r := range e.Fields {
 			// 自引用由 checkEntityRelations 报“self relation must be lazy”，这里只查多节点环。
-			if r.IsRelation && r.HasLazy && !r.Lazy && r.Type != "" && r.Type != id {
-				adj[id] = append(adj[id], r.Type)
+			// TargetID 已剥离 List<>，否则一对多 eager 关系不会进入邻接表。
+			if r.IsRelation && r.HasLazy && !r.Lazy && r.TargetID != "" && r.TargetID != id {
+				adj[id] = append(adj[id], r.TargetID)
 			}
 		}
 	}

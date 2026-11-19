@@ -1,8 +1,8 @@
 # 新建账号页。账号创建不包含认证信息；认证由 auth 模块单独创建。
 
-schema_version: 1
 id: feature.pages.account_create
 summary: "新建账号页"
+schema_version: 1
 stability: draft
 do_not:
   - "不要在本页收集密码/手机号/邮箱；认证信息由 auth 模块单独创建"
