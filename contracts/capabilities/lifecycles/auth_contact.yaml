@@ -16,9 +16,9 @@ subjects:
 states: [unverified, verified, disabled]
 initial: unverified
 create:
-  steps: [ cap.services.auth.bind_email.create_auth_email, cap.services.auth.bind_phone.create_auth_phone ]
+  steps: [ cap.services.auth.bind_email.create_auth_email, cap.services.auth.bind_email.replace_create, cap.services.auth.bind_phone.create_auth_phone, cap.services.auth.bind_phone.replace_create ]
 destroy:
-  steps: [ cap.services.auth.revoke_all_for_account.soft_delete_auth_email_by_account, cap.services.auth.revoke_all_for_account.soft_delete_auth_phone_by_account ]
+  steps: [ cap.services.auth.bind_email.replace_soft_delete, cap.services.auth.bind_phone.replace_soft_delete, cap.services.auth.revoke_all_for_account.soft_delete_auth_email_by_account, cap.services.auth.revoke_all_for_account.soft_delete_auth_phone_by_account ]
   from: [unverified, verified, disabled]
 transitions:
   - name: verify

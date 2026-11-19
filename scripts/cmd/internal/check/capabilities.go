@@ -35,6 +35,7 @@ type serviceMeta struct {
 	requiredParams map[string]bool
 	paramTypes     map[string]bool
 	paramDecls     map[string]string
+	paramNullable  map[string]bool
 	typeSchemas    map[string]map[string]any
 	errors         map[string]bool
 	returns        map[string]returnType
@@ -76,6 +77,7 @@ func stepServiceItems(step map[string]any) []any {
 type eventField struct {
 	typ      string
 	required bool
+	nullable bool
 }
 
 // eventPayloadFields 把 topic payload 的 object.properties 解析为字段表。
@@ -92,7 +94,8 @@ func eventPayloadFields(raw any) map[string]eventField {
 			continue
 		}
 		required, _ := prop["required"].(bool)
-		out[name] = eventField{typ: payloadPropertyType(prop["schema"]), required: required}
+		nullable, _ := prop["nullable"].(bool)
+		out[name] = eventField{typ: payloadPropertyType(prop["schema"]), required: required, nullable: nullable}
 	}
 	return out
 }
@@ -209,6 +212,7 @@ func (c *Checker) checkCapabilities() {
 			requiredParams := map[string]bool{}
 			paramTypes := map[string]bool{}
 			paramDecls := map[string]string{}
+			paramNullable := map[string]bool{}
 			typeSchemas := map[string]map[string]any{}
 			if types, ok := asMap(doc["schemas"]); ok {
 				for name, raw := range types {
@@ -229,6 +233,8 @@ func (c *Checker) checkCapabilities() {
 						}
 					}
 				}
+				nullable, _ := pm["nullable"].(bool)
+				paramNullable[pn] = nullable
 				pt, _ := pm["type"].(string)
 				if pt != "" {
 					paramDecls[pn] = pt
@@ -278,7 +284,7 @@ func (c *Checker) checkCapabilities() {
 				}
 			}
 			c.methodReturns[id] = returns
-			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, txMode: txMode, params: params, requiredParams: requiredParams, paramTypes: paramTypes, paramDecls: paramDecls, typeSchemas: typeSchemas, errors: errs, returns: returns}
+			serviceMetaByID[id] = serviceMeta{module: module, visibility: visibility, txMode: txMode, params: params, requiredParams: requiredParams, paramTypes: paramTypes, paramDecls: paramDecls, paramNullable: paramNullable, typeSchemas: typeSchemas, errors: errs, returns: returns}
 			stepQueries := map[string]bool{}
 			for _, rawStep := range asList(item["steps"]) {
 				step, _ := asMap(rawStep)

@@ -79,7 +79,7 @@ topics:
         - { name: user_agent, schema: { type: string }, description: "客户端 User-Agent" }
         - { name: login_at, schema: { type: timestamp }, required: true, description: "登录时间" }
     summary: "登录成功"
-    emitted_by: [ cap.services.auth.login ]
+    emitted_by: [ cap.services.auth.record_login_success ]
     consumers: []
   - id: cap.events.account.login_failed
     name: account.login_failed
@@ -91,5 +91,5 @@ topics:
         - { name: reason, schema: { ref: data.enums.login_failed_reason }, required: true, description: "失败或停用原因" }
         - { name: failed_at, schema: { type: timestamp }, required: true, description: "登录失败时间" }
     summary: "登录失败"
-    emitted_by: [ cap.services.auth.login ]
+    emitted_by: [ cap.services.auth.login, cap.services.auth.record_login_failure ]
     consumers: []

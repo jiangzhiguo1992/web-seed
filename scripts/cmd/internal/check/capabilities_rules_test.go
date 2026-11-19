@@ -113,7 +113,7 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 
 	c.errs = nil
 	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown logic output account") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown step output account") {
 		t.Fatalf("missing return not reported: %v", c.errs)
 	}
 }

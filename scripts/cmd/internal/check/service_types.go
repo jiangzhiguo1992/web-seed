@@ -79,41 +79,9 @@ func (c *Checker) stepOutputPathType(step map[string]any, output map[string]retu
 		return "", err
 	}
 	root := segs[0]
-	kind, _ := step["kind"].(string)
-	var typ string
-	switch kind {
-	case "service":
-		so, ok := asMap(step["service"])
-		if !ok {
-			return "", fmt.Errorf("unknown service return %s", root.name)
-		}
-		ref, _ := so["ref"].(string)
-		typ = c.methodReturns[ref][root.name].typ
-		if typ == "" {
-			return "", fmt.Errorf("unknown service return %s", root.name)
-		}
-	case "query":
-		qo, ok := asMap(step["query"])
-		if !ok {
-			return "", fmt.Errorf("unknown query return %s", root.name)
-		}
-		qid, _ := qo["ref"].(string)
-		typ = c.queryReturnTypes[qid][root.name].typ
-		if typ == "" {
-			return "", fmt.Errorf("unknown query return %s", root.name)
-		}
-	case "logic":
-		typ = output[root.name].typ
-		if typ == "" {
-			return "", fmt.Errorf("unknown logic output %s", root.name)
-		}
-	case "when":
-		typ = output[root.name].typ
-		if typ == "" {
-			return "", fmt.Errorf("unknown when output %s", root.name)
-		}
-	default:
-		return "", fmt.Errorf("unknown step kind %q", kind)
+	typ := output[root.name].typ
+	if typ == "" {
+		return "", fmt.Errorf("unknown step output %s", root.name)
 	}
 	if root.hasIndex {
 		typ, err = indexWhenType(typ)

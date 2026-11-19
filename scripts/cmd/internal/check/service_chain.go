@@ -49,15 +49,19 @@ func (c *Checker) checkServiceParamExpr(v any, doc map[string]any, stepIndex, al
 	}
 }
 
-// buildStepReach 按 goto/when 边构建步骤图，返回每个 step 可达的后续 step 集合。
+// buildStepEdges 按 goto/when 边构建步骤图；$end 记为虚拟出口的前驱。
 // 控制流完全由显式 goto 声明，不存在隐式顺序边。
-func buildStepReach(steps []any, allIndex map[string]int) []map[int]bool {
+func buildStepEdges(steps []any, allIndex map[string]int) (adj [][]int, exitPreds []int) {
 	n := len(steps)
-	adj := make([][]int, n)
+	adj = make([][]int, n)
 	for i, raw := range steps {
 		step, _ := asMap(raw)
 		addEdge := func(target string) {
-			if target == "" || target == "$end" {
+			if target == "" {
+				return
+			}
+			if target == "$end" {
+				exitPreds = append(exitPreds, i)
 				return
 			}
 			if idx, ok := allIndex[target]; ok && idx > i {
@@ -74,6 +78,13 @@ func buildStepReach(steps []any, allIndex map[string]int) []map[int]bool {
 			}
 		}
 	}
+	return adj, exitPreds
+}
+
+// buildStepReach 返回每个 step 可达的后续 step 集合。
+func buildStepReach(steps []any, allIndex map[string]int) []map[int]bool {
+	adj, _ := buildStepEdges(steps, allIndex)
+	n := len(steps)
 	reach := make([]map[int]bool, n)
 	for i := 0; i < n; i++ {
 		seen := map[int]bool{}
@@ -91,6 +102,168 @@ func buildStepReach(steps []any, allIndex map[string]int) []map[int]bool {
 		reach[i] = seen
 	}
 	return reach
+}
+
+// computeDominators 计算步骤图的必经点集合；exit = n 是虚拟出口。
+// 不可达节点保持全 true，调用方先用 reach 过滤。
+func computeDominators(n int, adj [][]int, exitPreds []int) []map[int]bool {
+	total := n + 1
+	preds := make([][]int, total)
+	for i, nexts := range adj {
+		for _, j := range nexts {
+			preds[j] = append(preds[j], i)
+		}
+	}
+	preds[n] = append(preds[n], exitPreds...)
+	dom := make([]map[int]bool, total)
+	for i := range dom {
+		dom[i] = map[int]bool{}
+		for j := 0; j < total; j++ {
+			dom[i][j] = true
+		}
+	}
+	dom[0] = map[int]bool{0: true}
+	for changed := true; changed; {
+		changed = false
+		for v := 1; v < total; v++ {
+			if len(preds[v]) == 0 {
+				continue
+			}
+			inter := map[int]bool{}
+			for k := range dom[preds[v][0]] {
+				inter[k] = true
+			}
+			for _, p := range preds[v][1:] {
+				for k := range inter {
+					if !dom[p][k] {
+						delete(inter, k)
+					}
+				}
+			}
+			inter[v] = true
+			if !sameIntSet(inter, dom[v]) {
+				dom[v] = inter
+				changed = true
+			}
+		}
+	}
+	return dom
+}
+
+func sameIntSet(a, b map[int]bool) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k := range a {
+		if !b[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// reachableAvoiding 判断 target 是否能从 start 到达且不经过 blocked 中任何节点。
+func reachableAvoiding(adj [][]int, start, target int, blocked []int) bool {
+	if start == target {
+		return true
+	}
+	block := map[int]bool{}
+	for _, b := range blocked {
+		block[b] = true
+	}
+	seen := map[int]bool{start: true}
+	queue := []int{start}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, next := range adj[cur] {
+			if block[next] || seen[next] {
+				continue
+			}
+			if next == target {
+				return true
+			}
+			seen[next] = true
+			queue = append(queue, next)
+		}
+	}
+	return false
+}
+
+// checkServiceMerge 校验分支汇聚：引用的前序 step 要么必然执行，要么构成互斥且完备的切面。
+// returns.value 只要求来源能到达 service 终点，不要求支配所有出口：错误路径允许返回零值，
+// 例如 (session, err) 在认证失败时 session 为空。
+func (c *Checker) checkServiceMerge(rel string, steps []any, allIndex map[string]int, reach []map[int]bool, stepRefs []map[string]bool, exitRefs map[string]bool) {
+	n := len(steps)
+	stepID := func(i int) string {
+		step, _ := asMap(steps[i])
+		id, _ := step["id"].(string)
+		return id
+	}
+	adj, exitPreds := buildStepEdges(steps, allIndex)
+	dom := computeDominators(n, adj, exitPreds)
+	for i := 0; i < n; i++ {
+		if i > 0 && !reach[0][i] {
+			continue // 不可达由 service-goto 报
+		}
+		var unsafe []int
+		for ref := range stepRefs[i] {
+			idx, ok := allIndex[ref]
+			if !ok || idx >= i {
+				continue // 前序/存在性由 service-params 报
+			}
+			if !reach[0][idx] {
+				continue // 不可达由 service-goto 报
+			}
+			if !dom[i][idx] {
+				unsafe = append(unsafe, idx)
+			}
+		}
+		if len(unsafe) == 0 {
+			continue
+		}
+		sort.Ints(unsafe)
+		conflict := false
+		for a := 0; a < len(unsafe) && !conflict; a++ {
+			for b := a + 1; b < len(unsafe); b++ {
+				if reach[unsafe[a]][unsafe[b]] || reach[unsafe[b]][unsafe[a]] {
+					c.rulef("service-merge", "%s: step %s references %s and %s, but both can execute on the same path", rel, stepID(i), stepID(unsafe[a]), stepID(unsafe[b]))
+					conflict = true
+					break
+				}
+			}
+		}
+		if conflict {
+			continue
+		}
+		if reachableAvoiding(adj, 0, i, unsafe) {
+			names := make([]string, 0, len(unsafe))
+			for _, idx := range unsafe {
+				names = append(names, stepID(idx))
+			}
+			c.rulef("service-merge", "%s: step %s references %v but some path reaches it without executing any of them", rel, stepID(i), names)
+		}
+	}
+	exitSet := map[int]bool{}
+	for _, p := range exitPreds {
+		exitSet[p] = true
+	}
+	for ref := range exitRefs {
+		idx, ok := allIndex[ref]
+		if !ok {
+			continue
+		}
+		reachesExit := exitSet[idx]
+		for p := range exitSet {
+			if reachesExit {
+				break
+			}
+			reachesExit = reach[idx][p]
+		}
+		if !reachesExit {
+			c.rulef("service-merge", "%s: return source step %s cannot reach service end", rel, stepID(idx))
+		}
+	}
 }
 
 // inputExprRoot 返回 input.<root> 的根参数名。
@@ -158,43 +331,106 @@ func (c *Checker) inputValueType(value string, tc stepTypeContext) (string, erro
 	}
 }
 
-// inputValueNullable 解析 input 值根字段的 nullable；嵌套字段返回 known=false。
+// inputValueNullable 解析 input 值的 nullable；params/step 的嵌套字段按 schema 递归。
 func (c *Checker) inputValueNullable(value string, tc stepTypeContext) (nullable bool, known bool) {
 	switch {
 	case strings.HasPrefix(value, "params."):
 		path, ok := splitInputField(value)
-		if !ok || strings.Contains(path, ".") || strings.Contains(path, "[") {
+		if !ok {
 			return false, false
 		}
+		segs, err := parseWhenPath(path)
+		if err != nil || len(segs) == 0 {
+			return false, false
+		}
+		root := segs[0].name
 		for _, raw := range asList(tc.doc["params"]) {
 			pm, _ := asMap(raw)
-			if name, _ := pm["name"].(string); name != path {
+			if name, _ := pm["name"].(string); name != root {
 				continue
 			}
 			typ, _ := pm["type"].(string)
 			n, _ := pm["nullable"].(bool)
-			return n || strings.HasPrefix(strings.TrimSpace(typ), "*"), true
+			return c.walkNullableType(typ, n || strings.HasPrefix(strings.TrimSpace(typ), "*"), segs[1:])
 		}
 		return false, false
 	case strings.HasPrefix(value, "step."):
 		ref, path, ok := splitStepField(value)
-		if !ok || strings.Contains(path, ".") || strings.Contains(path, "[") {
+		if !ok {
 			return false, false
 		}
 		idx, ok := tc.stepIndex[ref]
 		if !ok {
 			return false, false
 		}
-		rt, ok := tc.stepOutputs[idx][path]
+		segs, err := parseWhenPath(path)
+		if err != nil || len(segs) == 0 {
+			return false, false
+		}
+		rt, ok := tc.stepOutputs[idx][segs[0].name]
 		if !ok {
 			return false, false
 		}
-		return rt.nullable || strings.HasPrefix(strings.TrimSpace(rt.typ), "*"), true
+		return c.walkNullableType(rt.typ, rt.nullable || strings.HasPrefix(strings.TrimSpace(rt.typ), "*"), segs[1:])
 	}
 	return false, false
 }
 
-// parseTypeShape 拆掉指针与单层 List<>；指针只表达可空，不参与赋值兼容判断。
+// walkNullableType 沿嵌套字段解析 nullable；列表元素或不可解析字段返回 known=false。
+func (c *Checker) walkNullableType(typ string, curNullable bool, segs []whenPathSegment) (bool, bool) {
+	for _, seg := range segs {
+		base := strings.TrimPrefix(strings.TrimSpace(typ), "*")
+		if strings.HasPrefix(base, "List<") {
+			return false, false
+		}
+		nullable, ok := c.resolveTypeFieldNullable(base, seg.name)
+		if !ok {
+			return false, false
+		}
+		curNullable = nullable
+		next, ok := c.resolveTypeField(base, seg.name, whenFormula{}, "", "")
+		if !ok {
+			return false, false
+		}
+		typ = next
+		if seg.hasIndex {
+			return false, false
+		}
+	}
+	return curNullable, true
+}
+
+// resolveTypeFieldNullable 返回 entity/local schema 字段的 nullable；未知类型不判定。
+func (c *Checker) resolveTypeFieldNullable(typ, name string) (bool, bool) {
+	if resolved, ok := resolveTypeRef(typ); ok {
+		typ = resolved
+	}
+	typ = strings.TrimPrefix(strings.TrimSpace(typ), "*")
+	if entity := c.entities[typ]; entity != nil {
+		if f := findEntityField(entity, name); f != nil {
+			return strings.HasPrefix(strings.TrimSpace(f.Type), "*"), true
+		}
+		for i := range entity.Fields {
+			if entity.Fields[i].JSONName == name {
+				return strings.HasPrefix(strings.TrimSpace(entity.Fields[i].Type), "*"), true
+			}
+		}
+		return false, false
+	}
+	if schema := c.methodTypeDefs[typ]; schema != nil {
+		for _, raw := range asList(schema["properties"]) {
+			prop, _ := asMap(raw)
+			if pn, _ := prop["name"].(string); pn != name {
+				continue
+			}
+			nullable, _ := prop["nullable"].(bool)
+			return nullable, true
+		}
+	}
+	return false, false
+}
+
+// parseTypeShape 拆掉指针与单层 List<>// parseTypeShape 拆掉指针与单层 List<>；指针只表达可空，不参与赋值兼容判断。
 func parseTypeShape(typ string) (typeShape, bool) {
 	base := strings.TrimSpace(typ)
 	for strings.HasPrefix(base, "*") {
@@ -314,6 +550,9 @@ func (c *Checker) checkQueryInput(input map[string]any, q *queryInfo, qid, rel, 
 		if p.Type != "" && !c.serviceTypesCompatible(src, p.Type) {
 			c.rulef("service-params", "%s: step %s query %s input %s type %s is not compatible with %s", rel, stepID, qid, name, src, p.Type)
 		}
+		if nullable, known := c.inputValueNullable(value, tc); known && nullable && !p.Nullable {
+			c.rulef("service-params", "%s: step %s query %s input %s source is nullable but target param is not", rel, stepID, qid, name)
+		}
 	}
 	for name := range required {
 		if _, ok := input[name]; !ok {
@@ -362,6 +601,11 @@ func (c *Checker) checkServiceInput(input map[string]any, target serviceMeta, re
 		}
 		if dst := target.paramDecls[name]; dst != "" && !c.serviceTypesCompatible(src, dst) {
 			c.rulef("service-params", "%s: step %s service %s input %s type %s is not compatible with %s", rel, stepID, ref, name, src, dst)
+		}
+		if target.paramNullable != nil {
+			if nullable, known := c.inputValueNullable(value, tc); known && nullable && !target.paramNullable[name] {
+				c.rulef("service-params", "%s: step %s service %s input %s source is nullable but target param is not", rel, stepID, ref, name)
+			}
 		}
 	}
 	for name := range target.requiredParams {

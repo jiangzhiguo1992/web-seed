@@ -96,25 +96,25 @@ service 项必须声明：
 
 | kind         | 必填                                                                    | 说明                                                                                                                                                              |
 |--------------|-------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `query`      | `query.ref`（单值）                                                      | 调用本模块 `data.queries.*`；`query.input` 的 key 必须是查询参数名，必填参数必须全部出现，不写 `ctx`（生成器注入）；`step.errors` 缺省取该 query 错误的并集；不接受 `output`，其他 step 用 `step.<id>.<returns 字段>` 引用其返回值 |
-| `service`    | `service.ref`（单值）                                                    | 调用其他（或本模块）service；`service.input[].name` 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`；不接受 `output`，target 的返回字段用 `step.<id>.<returns 字段>` 按需引用，不强制全部消费 |
-| `logic`      | `output` + `errors` + `rules`（可为空列表）；可选 `input` | 手写判断与数据变换；`rules` 是业务规则依据，必须声明字段；不直接调 query、service 或发事件 |
-| `events`     | `events`（至少一项，每项 `{ref, input}`）                                | 纯事件发射；`events[].input` 的 key 必须是 topic payload 字段名，必填 payload 字段必须全部出现；不接受 `output`；logic 不直接发事件 |
-| `when`       | `when`；可选 `rules` / `output`                                          | 条件分支；每项是 `{expr, goto}`，`expr` 只能引用本步 `input.<name>[.<field>]`；按列表顺序匹配，第一个为真的分支生效 |
+| `query`      | `query`（inline `{ref}`）                                                | 调用本模块 `data.queries.*`；`step.input` 的 name 必须是查询参数名，必填参数必须全部出现，不写 `ctx`（生成器注入）；`step.output` 必须是查询 returns 的子集，name/type/nullable 严格一致；`step.errors` 缺省取该 query 错误的并集 |
+| `service`    | `service`（inline `{ref}`）                                              | 调用其他（或本模块）service；`step.input` 的 name 必须是目标参数名，必填参数必须全部出现；跨模块目标必须 `public`；`step.output` 必须是目标 returns 的子集，name/type/nullable 严格一致 |
+| `logic`      | `input` + `output` + `errors` + `rules`（均可为空列表） | 手写判断与数据变换；`rules` 是业务规则依据，必须声明字段；不直接调 query、service 或发事件 |
+| `events`     | `events`（恰好一项 `{ref}`）                                             | 纯事件发射；`step.input` 的 name 必须是该 topic payload 字段名，必填 payload 字段必须全部出现；`output` 必须为空列表；logic 不直接发事件 |
+| `when`       | `input` + `output: [ ]` + `when`；可选 `rules`                          | 条件分支；每项是 `{input, expr, goto}`：`input` 必须是本步 input 中声明的名字，`expr` 只能引用本步 `input.<name>[.<field>]` 且必须引用该主体；按列表顺序匹配，第一个为真的分支生效 |
 
-字段按 kind 取交集：`id` / `kind` / `summary` / `errors` / `lifecycles` / `goto` 恒有；`input` 仅 `logic` / `when`（query/service/events 的入参写在各自的 `query.input` / `service.input` / `events[].input`）；`output` 仅 `logic` / `when`；`query` 仅 `query`；`service` 仅 `service`；`events` 仅 `events`；`rules` 仅 `logic` / `when`；`when` 仅 `when`。
+字段按 kind 取交集：`id` / `kind` / `summary` / `input` / `output` / `errors` / `lifecycles` / `goto` 恒有；`input` / `output` 所有 kind 都必须展示（无内容写空列表），`events` / `when` 的 `output` 必须为空；`query` 仅 `query`；`service` 仅 `service`；`events` 仅 `events`；`rules` 仅 `logic` / `when`；`when` 仅 `when`。
 
 一一对应：`kind: query` → `query`、`kind: service` → `service`、`kind: events` → `events`、`kind: logic` → `rules`、`kind: when` → `when`。出现哪个业务字段，kind 就必须是对应的那一种；logic 不能携带 `query` / `service` / `events`，query / service / events 也不能携带 `rules`。`input` / `output` / `errors` / `goto` 是数据流与公共字段，不参与一一对应。
 
 - `goto` 必填：它是本步结束后的唯一跳转目标，必须指向本 service 的后续 step，或 `$end` 表示直接结束 service；`kind: when` 的 `goto` 是所有分支都不匹配时的默认跳转。控制流没有隐式顺序，前向限制保证无环；首步必须能经 goto/when 分支到达所有 step。
-- `input` 是 `{name, value, description}` 列表；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式；
-  `description` 说明这项输入的业务含义。
+- `input` 是 `{name, value, description}` 列表，所有 step 必填（无输入写 `[ ]`）；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式。query/service 时 `name` 是目标参数名；events 时是 payload 字段名；logic/when 时是本步读取名。
+- `output` 是 `{name, type, description, nullable}` 列表，所有 step 必填（无产出写 `[ ]`）；`events` / `when` 只能为空。query/service 时 `name` 必须是目标 returns 字段，`type/nullable` 必须与目标严格一致；logic 时是自身产出。消费者只能引用已声明的 output，不能直接穿透到目标 returns。
 - `lifecycles` 是状态流转标记，可列多个 lifecycle 动作，任何 kind 都可带；它只表示本步包含这些状态流转，不限制本步只做状态流转；位置固定在 `summary` 之后。
-- `when` 只用于 `kind: when`：每项 `{expr, goto}`；`expr` 是受限布尔表达式，只允许引用本步 `input.<name>[.<field>]`、字面量与 `== != > >= < <= && || !` 和括号；字面量类型必须与字段静态类型兼容（boolean 用 `true`/`false`，integer 用整数，string 用字符串，`data.enums.*` 用枚举名）。按列表顺序匹配，第一个为真的分支跳转，都不满足时走本步 `goto`。
-- 计算值必须先落成前序 `kind: logic` 或 `kind: when` 的 `output`，再以 `step.<id>.<path>` 引用；`expr:` 软区已移除。
-- `query` 是 `kind: query` 的单值 `{ref, input}`；logic 不直接调 query，查询一律独立成 step。
-- `service` 是 `kind: service` 的单值 `{ref, input}`；logic 不直接调 service，service 调用一律独立成 step。
-- `events` 是 `kind: events` 的 `{ref, input}` 列表；每个 topic 独立映射 payload；logic 不直接发事件。
+- `when` 只用于 `kind: when`：每项 `{input, expr, goto}`；`input` 必须是本步 input 中声明的名字，`expr` 是受限布尔表达式，只能引用本步 `input.<name>[.<field>]`、字面量与 `== != > >= < <= && || !` 和括号，且必须引用 `input` 指定的主体；字面量类型必须与字段静态类型兼容（boolean 用 `true`/`false`，integer 用整数，string 用字符串，`data.enums.*` 用枚举名）。按列表顺序匹配，第一个为真的分支跳转，都不满足时走本步 `goto`。
+- 计算值必须先落成前序 `kind: logic` 的 `output`，再以 `step.<id>.<path>` 引用；`expr:` 软区已移除。
+- `query` 是 `kind: query` 的单值 inline 对象，只允许 `ref`，实例写作 `query: { ref: data.queries.<file>.<name> }`；logic 不直接调 query，查询一律独立成 step。
+- `service` 是 `kind: service` 的单值 inline 对象，只允许 `ref`，实例写作 `service: { ref: cap.services.<file>.<name> }`；logic 不直接调 service，service 调用一律独立成 step。
+- `events` 是 `kind: events` 的单值列表 `[{ref}]`；一个 step 只发一个事件，payload 由本步 input 映射；logic 不直接发事件。
 - 入口策略错误（权限→`COMMON_FORBIDDEN`、限流→`COMMON_RATE_LIMITED`、审计→`COMMON_AUDIT_FAILED`）只由 `access.yaml`
   拥有，service 与 step 不重复声明。
 - `step.errors` 只列该步骤实际返回的领域错误：`kind: query` 缺省取该 query 的错误集，声明时必须覆盖；`kind: service` 取目标 service
@@ -122,12 +122,10 @@ service 项必须声明：
 - `rules` 是对象列表：每项 `{ rule: feature.rules.* }`，rule 值是结构 ID，不加引号；按引用检查存在性，不允许字符串简写。
 - `lifecycles` 只是标记：它表示本步包含这些状态流转，不限制本步的 kind，也不要求本步自己写状态列；目标状态以 lifecycle 为唯一事实源。
 - 数据链是硬约束：`input` 的值只能是 `params.<path>` 或 `step.<id>.<path>`，且值的静态类型必须与目标参数类型兼容
-  （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；`step.<id>` 还必须通过 goto/when 边从被引用步骤可达，
-  不能引用不可达分支；`logic` / `when` 的每个显式
-  `output` 必须被后续 `input` 引用或被 `returns.value` 引用；`query` 的返回值用
-  `step.<id>.<returns 字段>` 引用，不能声明 `output`；`service` 的 target 返回字段同样用 `step.<id>.<returns 字段>` 按需引用；
-  `returns` 的每个业务字段必须写 `value`（`params.<path>` 或 `step.<id>.<path>`），类型一致且 nullable 一致
-  （`*T` 视为可空；嵌套字段跳过 nullable 断言；`err` 不写 `value`）；service 的每个非 `ctx` 参数必须被至少一个 `input` 引用。
+  （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；可空的源不得赋给非 null 目标（query/service/events input 的源若 nullable，目标参数/payload 字段必须 nullable）；`step.<id>` 还必须通过 goto/when 边从被引用步骤可达，
+  不能引用不可达分支；query/service 的 output 必须与目标 returns 对齐，每个显式 `output`（`events` / `when` 为空）必须被后续 `input` 引用或被 `returns.value` 引用；`returns` 的每个业务字段必须写 `value`（`params.<path>` 或 `step.<id>.<path>`），类型一致且 nullable 严格一致
+  （`*T` 与嵌套字段的 nullable 都参与；`err` 不写 `value`）；service 的每个非 `ctx` 参数必须被至少一个 `input` 引用。
+- 分支汇聚是硬约束：step input 引用的前序 step 必须在所有到达该 step 的路径上都已执行；若无法保证，同一 step 引用的未保证生产者必须两两互斥且构成完备切面（每条路径恰好经过一个）；`returns.value` 的来源必须能到达 service 终点。
 - `params[].type` 只允许基础类型、`data.enums.*`、`data.entities.*`、全限定本地 schema（`cap.services.<file>.schemas.<Type>`）或 `_types` 类型族；指针与 `List<>` 各最多一层。
 - 控制流由 `when` / `goto` 显式声明；`goto` 只允许前向，循环仍不支持；错误流转由实现决定；契约不声明 `on_error` / `max_iterations`。
 

@@ -48,10 +48,11 @@ services:
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
-        query:
-          ref: data.queries.account.get_account
-          input:
-            - { name: id, value: params.id, description: "待读取的账号 ID" }
+        input:
+          - { name: id, value: params.id, description: "待读取的账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: { ref: data.queries.account.get_account }
         goto: load
       - id: load
         kind: logic
@@ -80,12 +81,13 @@ services:
       - id: list_accounts
         kind: query
         summary: "调用 data.queries.account.list_accounts"
-        query:
-          ref: data.queries.account.list_accounts
-          input:
-            - { name: status, value: params.filter.status, description: "账号状态筛选" }
-            - { name: offset, value: params.filter.offset, description: "分页偏移" }
-            - { name: limit, value: params.filter.limit, description: "分页上限" }
+        input:
+          - { name: status, value: params.filter.status, description: "账号状态筛选" }
+          - { name: offset, value: params.filter.offset, description: "分页偏移" }
+          - { name: limit, value: params.filter.limit, description: "分页上限" }
+        output:
+          - { name: accounts, type: List<data.entities.account>, description: "query 返回的 accounts" }
+        query: { ref: data.queries.account.list_accounts }
         goto: paginate
       - id: paginate
         kind: logic
@@ -114,6 +116,7 @@ services:
       - id: new_id
         kind: logic
         summary: "生成新账号 ID"
+        input: [ ]
         output:
           - { name: id, type: integer, description: "新账号 ID" }
         errors: [ ]
@@ -122,6 +125,7 @@ services:
       - id: status_pending
         kind: logic
         summary: "确定创建后的初始状态 pending"
+        input: [ ]
         output:
           - { name: status, type: data.enums.account_status, description: "初始状态 pending" }
         errors: [ ]
@@ -144,10 +148,11 @@ services:
       - id: exists_account_number
         kind: query
         summary: "调用 data.queries.account.exists_account_number"
-        query:
-          ref: data.queries.account.exists_account_number
-          input:
-            - { name: number, value: params.input.number, description: "待创建账号的编号" }
+        input:
+          - { name: number, value: params.input.number, description: "待创建账号的编号" }
+        output:
+          - { name: exists, type: boolean, description: "query 返回的 exists" }
+        query: { ref: data.queries.account.exists_account_number }
         goto: check_unique
       - id: check_unique
         kind: logic
@@ -164,25 +169,27 @@ services:
         kind: query
         summary: "调用 data.queries.account.create_account"
         lifecycles: [ cap.lifecycles.account.create ]
-        query:
-          ref: data.queries.account.create_account
-          input:
-            - { name: id, value: step.new_id.id, description: "新账号 ID" }
-            - { name: number, value: params.input.number, description: "账号编号" }
-            - { name: nickname, value: params.input.nickname, description: "账号昵称" }
-            - { name: user_id, value: params.input.user_id, description: "关联用户 ID" }
-            - { name: status, value: step.status_pending.status, description: "初始状态 pending" }
+        input:
+          - { name: id, value: step.new_id.id, description: "新账号 ID" }
+          - { name: number, value: params.input.number, description: "账号编号" }
+          - { name: nickname, value: params.input.nickname, description: "账号昵称" }
+          - { name: user_id, value: params.input.user_id, description: "关联用户 ID" }
+          - { name: status, value: step.status_pending.status, description: "初始状态 pending" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: { ref: data.queries.account.create_account }
         goto: emit_created
       - id: emit_created
         kind: events
         summary: "发出账号创建事件"
+        input:
+          - { name: id, value: step.create_account.account.id, description: "账号 ID" }
+          - { name: number, value: step.create_account.account.number, description: "账号编号" }
+          - { name: status, value: step.create_account.account.status, description: "账号创建后的状态" }
+          - { name: created_at, value: step.create_account.account.created_at, description: "创建时间" }
+        output: [ ]
         events:
           - ref: cap.events.account.created
-            input:
-              - { name: id, value: step.create_account.account.id, description: "账号 ID" }
-              - { name: number, value: step.create_account.account.number, description: "账号编号" }
-              - { name: status, value: step.create_account.account.status, description: "账号创建后的状态" }
-              - { name: created_at, value: step.create_account.account.created_at, description: "创建时间" }
         goto: $end
 
   - name: update
@@ -200,10 +207,11 @@ services:
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
-        query:
-          ref: data.queries.account.get_account
-          input:
-            - { name: id, value: params.id, description: "账号 ID" }
+        input:
+          - { name: id, value: params.id, description: "账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: { ref: data.queries.account.get_account }
         goto: validate
       - id: validate
         kind: logic
@@ -225,11 +233,12 @@ services:
       - id: update_account
         kind: query
         summary: "调用 data.queries.account.update_account"
-        query:
-          ref: data.queries.account.update_account
-          input:
-            - { name: id, value: params.id, description: "待更新账号 ID" }
-            - { name: nickname, value: params.input.nickname, description: "新昵称" }
+        input:
+          - { name: id, value: params.id, description: "待更新账号 ID" }
+          - { name: nickname, value: params.input.nickname, description: "新昵称" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: { ref: data.queries.account.update_account }
         goto: $end
 
   - name: delete
@@ -245,10 +254,11 @@ services:
       - id: get_account
         kind: query
         summary: "读取待删除账号"
-        query:
-          ref: data.queries.account.get_account
-          input:
-            - { name: id, value: params.id, description: "待删除账号 ID" }
+        input:
+          - { name: id, value: params.id, description: "待删除账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: { ref: data.queries.account.get_account }
         goto: check
       - id: check
         kind: logic
@@ -269,16 +279,17 @@ services:
       - id: revoke_auth
         kind: service
         summary: "软删认证绑定并吊销令牌、作废验证体"
+        input:
+          - { name: account_id, value: params.id, description: "被注销账号 ID" }
+        output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
-        service:
-          ref: cap.services.auth.revoke_all_for_account
-          input:
-            - { name: account_id, value: params.id, description: "被注销账号 ID" }
+        service: { ref: cap.services.auth.revoke_all_for_account }
         goto: now
       - id: now
         kind: logic
         summary: "取当前时间作为软删时间"
+        input: [ ]
         output:
           - { name: deleted_at, type: timestamp, description: "软删时间" }
         errors: [ ]
@@ -287,6 +298,7 @@ services:
       - id: status_deleted
         kind: logic
         summary: "确定软删后的目标状态 deleted"
+        input: [ ]
         output:
           - { name: status, type: data.enums.account_status, description: "目标状态 deleted" }
         errors: [ ]
@@ -296,20 +308,21 @@ services:
         kind: query
         summary: "调用 data.queries.account.soft_delete_account"
         lifecycles: [ cap.lifecycles.account.destroy ]
-        query:
-          ref: data.queries.account.soft_delete_account
-          input:
-            - { name: id, value: params.id, description: "待软删账号 ID" }
-            - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
+        input:
+          - { name: id, value: params.id, description: "待软删账号 ID" }
+          - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
+        output: [ ]
+        query: { ref: data.queries.account.soft_delete_account }
         goto: emit_deleted
       - id: emit_deleted
         kind: events
         summary: "发出账号删除事件"
+        input:
+          - { name: id, value: params.id, description: "账号 ID" }
+          - { name: deleted_at, value: step.now.deleted_at, description: "软删时间" }
+        output: [ ]
         events:
           - ref: cap.events.account.deleted
-            input:
-              - { name: id, value: params.id, description: "账号 ID" }
-              - { name: deleted_at, value: step.now.deleted_at, description: "软删时间" }
         goto: $end
 
   - name: activate
@@ -326,10 +339,11 @@ services:
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
-        query:
-          ref: data.queries.account.get_account
-          input:
-            - { name: id, value: params.id, description: "账号 ID" }
+        input:
+          - { name: id, value: params.id, description: "账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: { ref: data.queries.account.get_account }
         goto: check
       - id: check
         kind: logic
@@ -346,6 +360,7 @@ services:
       - id: target_status
         kind: logic
         summary: "确定激活后的目标状态 active"
+        input: [ ]
         output:
           - { name: status, type: data.enums.account_status, description: "目标状态 active" }
         errors: [ ]
@@ -355,15 +370,17 @@ services:
         kind: query
         summary: "调用 data.queries.account.set_account_status"
         lifecycles: [ cap.lifecycles.account.activate, cap.lifecycles.account.reactivate ]
-        query:
-          ref: data.queries.account.set_account_status
-          input:
-            - { name: id, value: params.id, description: "待激活账号 ID" }
-            - { name: status, value: step.target_status.status, description: "目标状态：激活" }
+        input:
+          - { name: id, value: params.id, description: "待激活账号 ID" }
+          - { name: status, value: step.target_status.status, description: "目标状态：激活" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: { ref: data.queries.account.set_account_status }
         goto: now
       - id: now
         kind: logic
         summary: "取当前时间作为激活时间"
+        input: [ ]
         output:
           - { name: activated_at, type: timestamp, description: "激活时间" }
         errors: [ ]
@@ -374,27 +391,31 @@ services:
         summary: "按原状态选择激活或解封事件"
         input:
           - { name: status, value: step.get_account.account.status, description: "操作前的账号状态" }
+        output: [ ]
         when:
-          - expr: "input.status == 'suspended'"
+          - input: status
+            expr: "input.status == 'suspended'"
             goto: emit_reactivated
         goto: emit_activated
       - id: emit_activated
         kind: events
         summary: "发出账号激活事件"
+        input:
+          - { name: id, value: params.id, description: "账号 ID" }
+          - { name: activated_at, value: step.now.activated_at, description: "激活时间" }
+        output: [ ]
         events:
           - ref: cap.events.account.activated
-            input:
-              - { name: id, value: params.id, description: "账号 ID" }
-              - { name: activated_at, value: step.now.activated_at, description: "激活时间" }
         goto: $end
       - id: emit_reactivated
         kind: events
         summary: "发出账号解封事件"
+        input:
+          - { name: id, value: params.id, description: "账号 ID" }
+          - { name: reactivated_at, value: step.now.activated_at, description: "解封时间" }
+        output: [ ]
         events:
           - ref: cap.events.account.reactivated
-            input:
-              - { name: id, value: params.id, description: "账号 ID" }
-              - { name: reactivated_at, value: step.now.activated_at, description: "解封时间" }
         goto: $end
 
   - name: suspend
@@ -412,10 +433,11 @@ services:
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
-        query:
-          ref: data.queries.account.get_account
-          input:
-            - { name: id, value: params.id, description: "账号 ID" }
+        input:
+          - { name: id, value: params.id, description: "账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: { ref: data.queries.account.get_account }
         goto: check
       - id: check
         kind: logic
@@ -432,6 +454,7 @@ services:
       - id: target_status
         kind: logic
         summary: "确定封禁后的目标状态 suspended"
+        input: [ ]
         output:
           - { name: status, type: data.enums.account_status, description: "目标状态 suspended" }
         errors: [ ]
@@ -441,15 +464,17 @@ services:
         kind: query
         summary: "调用 data.queries.account.set_account_status"
         lifecycles: [ cap.lifecycles.account.suspend ]
-        query:
-          ref: data.queries.account.set_account_status
-          input:
-            - { name: id, value: params.id, description: "待封禁账号 ID" }
-            - { name: status, value: step.target_status.status, description: "目标状态：封禁" }
+        input:
+          - { name: id, value: params.id, description: "待封禁账号 ID" }
+          - { name: status, value: step.target_status.status, description: "目标状态：封禁" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: { ref: data.queries.account.set_account_status }
         goto: now
       - id: now
         kind: logic
         summary: "取当前时间作为封禁时间"
+        input: [ ]
         output:
           - { name: suspended_at, type: timestamp, description: "封禁时间" }
         errors: [ ]
@@ -458,10 +483,11 @@ services:
       - id: emit_suspended
         kind: events
         summary: "发出账号封禁事件"
+        input:
+          - { name: id, value: params.id, description: "账号 ID" }
+          - { name: reason, value: params.reason, description: "封禁原因" }
+          - { name: suspended_at, value: step.now.suspended_at, description: "封禁时间" }
+        output: [ ]
         events:
           - ref: cap.events.account.suspended
-            input:
-              - { name: id, value: params.id, description: "账号 ID" }
-              - { name: reason, value: params.reason, description: "封禁原因" }
-              - { name: suspended_at, value: step.now.suspended_at, description: "封禁时间" }
         goto: $end

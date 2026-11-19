@@ -90,14 +90,14 @@ fields:
         description: "步骤清单；每一步显式声明 goto，控制流无隐式顺序"
         item_fields:
           - { name: id, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID" }
-          - { name: kind, type: string, required: true, enum: [ when, logic, query, service, events ], description: "步骤类型：query=查询、service=服务、logic=手写、events=事件、when=分支" }
+          - { name: kind, type: string, required: true, enum: [ query, service, when, logic, events ], description: "步骤类型：query=查询、service=服务、logic=手写、events=事件、when=分支" }
           - { name: summary, type: string, required: true, description: "一句话说明" }
           - { name: lifecycles, type: list<string>, required: false, unique: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "状态流转标记；不限制 kind" }
 
           - name: input
             type: list<object>
-            required: false
-            description: "本步读取的入参"
+            required: true
+            description: "本步读取的输入"
             item_fields:
               - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输入名" }
               - { name: value, type: string, required: true, description: "来源：params.<path> 或 step.<id>.<path>" }
@@ -105,8 +105,8 @@ fields:
 
           - name: output
             type: list<object>
-            required: false
-            description: "显式产出；仅 logic/when"
+            required: true
+            description: "本步暴露的产出"
             item_fields:
               - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
               - { name: type, type: string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "输出类型：基础类型、data.enums.*、data.entities.*、全限定本地 schema cap.services.<file>.schemas.<Type>、_types 类型族，可带单层 * 或 List<>" }
@@ -114,6 +114,8 @@ fields:
               - { name: nullable, type: boolean, required: false, description: "是否可空" }
 
           - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误" }
+          - { name: query, type: map<string>, required: false, description: "目标查询；仅 kind=query；实例写作 query: { ref: data.queries.<file>.<name> }" }
+          - { name: service, type: map<string>, required: false, description: "目标服务；仅 kind=service；实例写作 service: { ref: cap.services.<file>.<name> }" }
 
           - name: when
             type: list<object>
@@ -121,7 +123,8 @@ fields:
             min_items: 1
             description: "条件分支；按列表顺序匹配，expr 首次为真的分支生效"
             item_fields:
-              - { name: expr, type: string, required: true, description: "布尔表达式；只允许引用 input.<name>[.<field>]、字面量与 == != > >= < <= && || !" }
+              - { name: input, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "条件主体" }
+              - { name: expr, type: string, required: true, description: "布尔表达式；只能引用本步 input.<name>[.<field>]、字面量与 == != > >= < <= && || !" }
               - { name: goto, type: string, required: true, pattern: '^(\$end|[a-z][a-z0-9_]*)$', description: "条件成立时的跳转目标；$end 直接结束" }
 
           - name: rules
@@ -132,36 +135,6 @@ fields:
             item_fields:
               - { name: rule, type: string, required: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "业务规则 ID" }
 
-          - name: query
-            type: object
-            required: false
-            description: "目标查询；仅 kind=query"
-            fields:
-              - { name: ref, type: string, required: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标查询 ID" }
-              - name: input
-                type: list<object>
-                required: false
-                description: "查询参数映射"
-                item_fields:
-                  - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "查询参数名" }
-                  - { name: value, type: string, required: true, description: "来源：params.<path> 或 step.<id>.<path>；禁止内联表达式" }
-                  - { name: description, type: string, required: true, description: "这项参数的业务含义" }
-
-          - name: service
-            type: object
-            required: false
-            description: "目标服务；仅 kind=service"
-            fields:
-              - { name: ref, type: string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标服务项 ID" }
-              - name: input
-                type: list<object>
-                required: false
-                description: "调用入参"
-                item_fields:
-                  - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标参数名" }
-                  - { name: value, type: string, required: true, description: "来源：params.<path> 或 step.<id>.<path>；禁止内联表达式" }
-                  - { name: description, type: string, required: true, description: "这项入参的业务含义" }
-
           - name: events
             type: list<object>
             required: false
@@ -170,14 +143,6 @@ fields:
             description: "发射的事件；仅 kind=events；每项独立映射 payload"
             item_fields:
               - { name: ref, type: string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标事件 topic ID" }
-              - name: input
-                type: list<object>
-                required: false
-                description: "payload 字段映射"
-                item_fields:
-                  - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "payload 字段名" }
-                  - { name: value, type: string, required: true, description: "来源：params.<path> 或 step.<id>.<path>；禁止内联表达式" }
-                  - { name: description, type: string, required: true, description: "这个 payload 字段的业务含义" }
 
           - { name: goto, type: string, required: true, pattern: '^(\$end|[a-z][a-z0-9_]*)$', description: "本步结束后的唯一跳转目标；$end 结束 service；只能指向后续 step，保证控制流无环" }
 
@@ -188,11 +153,12 @@ rules:
   - { id: service-owner-write, text: "query.ref 的写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service", implemented_by: [ service-owner-write ] }
   - { id: service-errors, text: "step.errors 必须是存在的 platform.errors.*；kind=query 未声明时取该 query 的错误集，声明时必须覆盖；kind=service 未声明时取目标 service 的错误集，声明时必须是其子集；logic 的 rules[].rule 对应规则的 on_violation 错误必须出现在 service 错误集；service 项不再声明 errors", implemented_by: [ service-errors ] }
   - { id: service-visibility, text: "cap.protocols.http.x-service 只能指向 visibility=public 且未被 `cap.events` job 引用的 service；跨模块 kind=service 只能指向 visibility=public 的目标；internal 目标只能被同模块引用", implemented_by: [ service-visibility ] }
-  - { id: service-steps-kind, text: "kind=query 必须有 query 且不允许 output；kind=service 必须有 service 且不允许 output；kind=events 必须有 events[].input 按 payload 校验；kind=logic 必须有 rules（可为空列表）与 output+errors；kind=when 必须有 when，可选 rules/output；五类 kind 与专属字段一一对应：query→query、service→service、events→events、logic→rules、when→when；lifecycles 是任意 kind 都可带的标记；每个 kind 只允许公共字段、数据流字段与自身专属字段", implemented_by: [ service-steps-kind ] }
-  - { id: service-when, text: "when 只允许 kind=when；每项必须有非空布尔 expr，只允许引用本步 input.<name>[.<field>]、字面量与 == != > >= < <= && || !；引用的 input 名必须声明且嵌套字段必须可按静态类型解析；字面量类型必须与字段静态类型兼容（boolean 用 true/false，integer 用整数，string 用字符串，data.enums.* 用枚举名）；按列表顺序匹配，第一个为真的分支生效；都不满足时走本步 goto", implemented_by: [ service-when ] }
+  - { id: service-steps-kind, text: "所有 step 必须展示 input 与 output（可为空列表）；kind=query 必须有 query 且 input 按目标 params、output 按目标 returns 校验；kind=service 同理；kind=events 必须有且仅有一个 events[].ref，input 按 payload 校验，output 必须为空；kind=logic 必须有 rules（可为空列表）与 output+errors；kind=when 必须有 when，可选 rules，output 必须为空；五类 kind 与专属字段一一对应：query→query、service→service、events→events、logic→rules、when→when；query/service 是单值对象且只允许 ref；lifecycles 是任意 kind 都可带的标记；每个 kind 只允许公共字段、数据流字段与自身专属字段", implemented_by: [ service-steps-kind ] }
+  - { id: service-when, text: "when 只允许 kind=when；每项必须有 input 与 expr：input 是本步 input 中声明的条件主体，expr 只能引用本步 input.<name>[.<field>]、字面量与 == != > >= < <= && || !；每个分支的 input 必须是本步 input 中声明的名字且必须被该分支 expr 引用，本步每个 input 必须至少被一个分支引用；引用的嵌套字段必须可按静态类型解析；字面量类型必须与字段静态类型兼容（boolean 用 true/false，integer 用整数，string 用字符串，data.enums.* 用枚举名）；按列表顺序匹配，第一个为真的分支生效；都不满足时走本步 goto", implemented_by: [ service-when ] }
   - { id: service-goto, text: "goto 必填；除 $end 外只能指向本 service 内更靠后的 step，保证控制流无环；$end 表示直接结束 service；第一个 step 必须能经 goto 到达所有 step，不得有不可达 step", implemented_by: [ service-goto ] }
   - { id: service-cycle, text: "kind=service 调用图必须无环", implemented_by: [ service-cycle ] }
-  - { id: service-params, text: "input.value 必须是 params.<path> 或 step.<id>.<path>，禁止 expr 内联表达式（计算值必须落成前序 logic step 的 output）；值的静态类型必须与目标参数类型兼容（指针/List 与目标结构一致，类型族归一后比较，枚举按 integer 列）；params 字段必须存在且嵌套字段按 param 类型解析；params.default 只在 nullable:true 时允许，可判定时类型必须匹配；params 的 type 只允许基础类型、data.enums.*、data.entities.*、本地 schema 或 _types 类型族，指针与 List<> 各最多一层；step 字段必须存在于前序步骤输出；query.input、service.input、events.input 的 name 必须是目标参数/payload 字段名且不得多余，必填参数（ctx 除外）必须全部出现", implemented_by: [ service-params ] }
-  - { id: service-output, text: "returns 每个业务字段必须写 value（params.<path> 或前序 step.<id>.<path>），err 不得写 value；value 的类型必须与 returns 声明一致（指针与 List<> 归一化后比较），nullable 一致（*T 视为可空；嵌套字段跳过 nullable 断言）；source 为 step 时，对应 logic/when output 视为已消费", implemented_by: [ service-output, service-output-type, service-output-nullable ] }
-  - { id: service-chain, text: "logic/when 的每个显式 output 必须被后续 step 的 input 引用或被 returns.value 引用；service 的每个非 ctx 参数必须被至少一个 step 的 input 值引用；kind=service 的返回字段按需用 step.<id>.<字段> 引用，不强制全部消费；每个 step.<id> 引用必须通过 goto 可达，不能引用不可达分支的步骤", implemented_by: [ service-chain ] }
+  - { id: service-params, text: "input.value 必须是 params.<path> 或 step.<id>.<path>，禁止 expr 内联表达式（计算值必须落成前序 logic step 的 output）；值的静态类型必须与目标参数类型兼容（指针/List 与目标结构一致，类型族归一后比较，枚举按 integer 列）；可空的源不得赋给非 null 目标（query/service/events input 的源若 nullable，目标参数/payload 字段必须 nullable）；params 字段必须存在且嵌套字段按 param 类型解析；params.default 只在 nullable:true 时允许，可判定时类型必须匹配；params 的 type 只允许基础类型、data.enums.*、data.entities.*、本地 schema 或 _types 类型族，指针与 List<> 各最多一层；step 字段必须存在于前序步骤输出；query/service 的 input name 必须是目标参数名且不得多余，events 的 input name 必须是 payload 字段名且不得多余；query/service 必填参数（ctx 除外）与 events 必填 payload 字段必须全部出现", implemented_by: [ service-params ] }
+  - { id: service-output, text: "query/service 的 output 必须是目标 returns 的子集，name 必须存在且 type/nullable 严格一致；logic 的 output 是自身产出；returns 每个业务字段必须写 value（params.<path> 或前序 step.<id>.<path>），err 不得写 value；value 的类型必须与 returns 声明一致（指针与 List<> 归一化后比较），nullable 必须严格一致（*T 与嵌套字段的 nullable 都参与）；source 为 step 时，对应 output 视为已消费", implemented_by: [ service-output, service-output-type, service-output-nullable ] }
+  - { id: service-chain, text: "每个显式 output（events 除外）必须被后续 step 的 input 引用或被 returns.value 引用；service 的每个非 ctx 参数必须被至少一个 step 的 input 值引用；kind=service 的目标 returns 不要求全部声明为 output；一旦声明，output 必须被消费；每个 step.<id> 引用必须通过 goto 可达，不能引用不可达分支的步骤", implemented_by: [ service-chain ] }
+  - { id: service-merge, text: "step input / returns.value 引用的前序 step 必须在所有到达消费点的路径上都已执行；若无法保证，同一消费点引用的未保证生产者必须两两互斥（互不可达），且所有到达消费点的路径必须恰好经过其中之一；returns.value 只能引用必然执行的前序 step；违反时报 service-merge", implemented_by: [ service-merge ] }
   - { id: service-transaction, text: "tx_mode=read_only 的 service 不得直接写表，也不得经 kind=service 间接调用会写表的 service；写操作必须声明 tx_mode=required 或 none；tx_mode≠none 的 service 不得调用 tx_mode=required 的 service（避免嵌套事务）", implemented_by: [ service-transaction ] }

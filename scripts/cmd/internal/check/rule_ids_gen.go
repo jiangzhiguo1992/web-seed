@@ -149,6 +149,7 @@ var knownRuleIDs = map[string]bool{
 	"service-errors":              true,
 	"service-goto":                true,
 	"service-id":                  true,
+	"service-merge":               true,
 	"service-output":              true,
 	"service-output-nullable":     true,
 	"service-output-type":         true,
