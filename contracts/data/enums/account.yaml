@@ -111,11 +111,12 @@ enums:
       - { value: revoked, code: 4, description: "已作废，终态" }
       - { value: failed, code: 5, description: "发送失败，终态" }
     used_by:
-      - data.entities.verification_body
+      - cap.services.verification.cleanup
       - cap.services.verification.revoke_by_account
       - cap.services.verification.revoke_by_auth
       - cap.services.verification.send
       - cap.services.verification.verify
+      - data.entities.verification_body
 
   # TODO:GG
   - name: verification_purpose

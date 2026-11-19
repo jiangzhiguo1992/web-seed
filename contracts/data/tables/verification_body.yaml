@@ -25,11 +25,13 @@ table:
   queries:
     - data.queries.verification.consume_verification
     - data.queries.verification.create_verification
+    - data.queries.verification.expire_stale_verifications
     - data.queries.verification.get_latest_verification
     - data.queries.verification.increment_verification_attempt
     - data.queries.verification.mark_verification_sent
     - data.queries.verification.revoke_active_verifications_by_account
     - data.queries.verification.revoke_active_verifications_by_auth
+    - data.queries.verification.revoke_exhausted_verifications
     - data.queries.verification.set_verification_status
 
 columns:
@@ -112,6 +114,8 @@ constraints:
       - data.queries.verification.mark_verification_sent
       - data.queries.verification.consume_verification
       - data.queries.verification.increment_verification_attempt
+      - data.queries.verification.expire_stale_verifications
+      - data.queries.verification.revoke_exhausted_verifications
       - data.queries.verification.set_verification_status
       - data.queries.verification.revoke_active_verifications_by_auth
       - data.queries.verification.revoke_active_verifications_by_account
@@ -155,3 +159,17 @@ indexes:
     comment: "账号软删时作废该账号未消费的验证体"
     used_by:
       - data.queries.verification.revoke_active_verifications_by_account
+
+  - name: idx_verification_expire_at
+    columns: [ expire_at ]
+    live_only: true
+    comment: "清理过期验证体"
+    used_by:
+      - data.queries.verification.expire_stale_verifications
+
+  - name: idx_verification_status_attempt
+    columns: [ status, attempt_count ]
+    live_only: true
+    comment: "作废尝试次数超限的验证体"
+    used_by:
+      - data.queries.verification.revoke_exhausted_verifications

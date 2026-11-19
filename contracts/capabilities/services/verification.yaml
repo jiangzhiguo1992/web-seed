@@ -5,10 +5,12 @@ schema_version: 1
 stability: draft
 do_not:
   - "send / verify 不要返回 code_hash / content / target 原文；只返回 masked_target"
-  - "verify 写 verification_action 必须与业务结果同事务，失败不得留下不一致记录"
+  - "verify 的成功/不匹配在同一事务写 verification_action；失败尝试由 record_failure 独立事务写入"
   - "换绑、解绑或停用认证绑定必须调用 revoke_by_auth"
   - "send / verify 必须先读取 account 并校验 status ∈ (pending, active)"
   - "send 使用 tx_mode=none：create/mark_sent/mark_failed 各自提交；发送失败必须保留 failed，不能因整体回滚丢失"
+  - "send 的 create 与 mark_sent 非原子；mark_sent 失败会留下 pending，由 verification cleanup 按 expire_at 清理"
+  - "record_failure 是独立事务；审计写入失败不得覆盖 verify 的原始错误码，由监控告警"
   - "send 步骤不要直接返回错误；发送失败必须输出 delivered=false，由 mark_failed 落 failed"
 
 schemas:
@@ -652,6 +654,86 @@ services:
           - { name: input_hash, value: params.input_hash, description: "用户输入的哈希" }
         output: [ ]
         query: data.queries.verification.create_verification_action
+        goto: $end
+
+  - name: cleanup
+    summary: "批量把过期或尝试超限的验证体置为终态"
+    visibility: internal
+    tx_mode: none
+    params:
+      - { name: ctx, type: context.Context }
+    returns:
+      - { name: expired_rows, type: integer, value: step.expire_stale.affected_rows }
+      - { name: revoked_rows, type: integer, value: step.revoke_exhausted.affected_rows }
+      - { name: err, type: error }
+    steps:
+      - id: now
+        kind: logic
+        summary: "取当前时间"
+        input: [ ]
+        output:
+          - { name: now, type: timestamp, description: "当前时间" }
+        errors: [ ]
+        rules: [ ]
+        goto: max_attempts
+      - id: max_attempts
+        kind: logic
+        summary: "取验证码尝试次数上限"
+        input: [ ]
+        output:
+          - { name: max_attempts, type: integer, description: "尝试次数上限" }
+        errors: [ ]
+        rules: [ ]
+        goto: status_expired
+      - id: status_expired
+        kind: logic
+        summary: "构造验证体目标状态：已过期"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.verification_status, description: "目标状态：已过期" }
+        errors: [ ]
+        rules: [ ]
+        goto: status_revoked
+      - id: status_revoked
+        kind: logic
+        summary: "构造验证体目标状态：已作废"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.verification_status, description: "目标状态：已作废" }
+        errors: [ ]
+        rules: [ ]
+        goto: batch_limit
+      - id: batch_limit
+        kind: logic
+        summary: "取单批更新上限"
+        input: [ ]
+        output:
+          - { name: limit, type: integer, description: "单批更新上限" }
+        errors: [ ]
+        rules: [ ]
+        goto: expire_stale
+      - id: expire_stale
+        kind: query
+        summary: "调用 data.queries.verification.expire_stale_verifications"
+        input:
+          - { name: now, value: step.now.now, description: "当前时间" }
+          - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
+          - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
+        output:
+          - { name: affected_rows, type: integer, description: "query 返回的 affected_rows" }
+        query: data.queries.verification.expire_stale_verifications
+        goto: revoke_exhausted
+      - id: revoke_exhausted
+        kind: query
+        summary: "调用 data.queries.verification.revoke_exhausted_verifications"
+        lifecycles: [ cap.lifecycles.verification.revoke ]
+        input:
+          - { name: max_attempts, value: step.max_attempts.max_attempts, description: "尝试次数上限" }
+          - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }
+          - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
+        output:
+          - { name: affected_rows, type: integer, description: "query 返回的 affected_rows" }
+        query: data.queries.verification.revoke_exhausted_verifications
         goto: $end
 
   - name: revoke_by_auth

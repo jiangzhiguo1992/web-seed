@@ -120,6 +120,40 @@ queries:
     used_by:
       - cap.services.verification.send
 
+  - name: ExpireStaleVerifications
+    description: "把超过 expire_at 的 pending/sent 验证体置为 expired"
+    tables:
+      - { table: data.tables.verification_body, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: now, type: timestamp }
+      - { name: status, type: data.enums.verification_status }
+      - { name: limit, type: integer, nullable: true, default: 100 }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref: [ data.tables.verification_body.idx_verification_expire_at ]
+    used_by:
+      - cap.services.verification.cleanup
+
+  - name: RevokeExhaustedVerifications
+    description: "把尝试次数达到上限的 sent 验证体置为 revoked"
+    tables:
+      - { table: data.tables.verification_body, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: max_attempts, type: integer }
+      - { name: status, type: data.enums.verification_status }
+      - { name: limit, type: integer, nullable: true, default: 100 }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref: [ data.tables.verification_body.idx_verification_status_attempt ]
+    used_by:
+      - cap.services.verification.cleanup
+
   - name: RevokeActiveVerificationsByAuth
     description: "按认证目标作废活跃验证体"
     tables:
