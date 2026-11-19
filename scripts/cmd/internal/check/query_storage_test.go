@@ -37,8 +37,24 @@ func TestQueryCacheRefs(t *testing.T) {
 	unboundQ.Params = nil
 	c = newQueryStorageChecker(&unboundQ, caches, nil)
 	c.checkQueryStorageRefs()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "is not bound by params") {
-		t.Fatalf("unbound cache key not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must appear in params[].column or index_ref[].columns") {
+		t.Fatalf("cache key without column source not reported: %v", c.errs)
+	}
+
+	indexOnlyQ := unboundQ
+	indexOnlyQ.IndexRef = []queryIndexRef{{Index: "data.tables.x.idx_x_code", Columns: []string{"code"}}}
+	c = newQueryStorageChecker(&indexOnlyQ, caches, nil)
+	c.checkQueryStorageRefs()
+	if len(c.errs) != 0 {
+		t.Fatalf("index_ref column as cache key source must be allowed: %v", c.errs)
+	}
+
+	undeclaredQ := *readQ
+	undeclaredQ.Caches = nil
+	c = newQueryStorageChecker(&undeclaredQ, caches, nil)
+	c.checkQueryStorageRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "fully bound by params but the query does not declare it") {
+		t.Fatalf("read query with fully bound cache key must declare the cache: %v", c.errs)
 	}
 
 	writeQ := &queryInfo{
@@ -49,6 +65,14 @@ func TestQueryCacheRefs(t *testing.T) {
 	c.checkQueryStorageRefs()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "must list cache "+cacheRef) {
 		t.Fatalf("write cache completeness not reported: %v", c.errs)
+	}
+
+	writeWithCacheQ := *writeQ
+	writeWithCacheQ.Caches = []string{cacheRef}
+	c = newQueryStorageChecker(&writeWithCacheQ, caches, nil)
+	c.checkQueryStorageRefs()
+	if len(c.errs) != 0 {
+		t.Fatalf("write sync cache must not require key in params/index_ref: %v", c.errs)
 	}
 
 	unknownQ := *readQ
@@ -66,6 +90,9 @@ func TestQueryCacheRefs(t *testing.T) {
 	c.checkQueryStorageRefs()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "which is not in query tables") {
 		t.Fatalf("foreign cache table not reported: %v", c.errs)
+	}
+	if !strings.Contains(strings.Join(c.errs, "\n"), "is not referenced by any query") {
+		t.Fatalf("invalid cache ref must not count as a valid reference: %v", c.errs)
 	}
 
 	noRefQ := *readQ

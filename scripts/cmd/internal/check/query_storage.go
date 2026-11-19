@@ -9,10 +9,11 @@ import (
 
 // checkQueryStorageRefs 校验：
 //   - 缓存引用必须是已登记的逻辑缓存，且表在 query.tables 中；
-//   - 只读使用要求缓存键列全部由 params[].column 绑定；
-//   - 写查询必须列出每个被写表的全部逻辑缓存；
+//   - 读查询的每个缓存键列必须出现在 params[].column 或同表 index_ref[].columns 中；
+//   - 读查询由 params 绑定全部缓存键时必须声明该缓存；
+//   - 写查询必须列出每个被写表的全部逻辑缓存（写同步项不要求键出现在 params/index_ref）；
 //   - 归档引用必须是 promotable 归档，且源表在 query.tables 中；
-//   - 反向：每个逻辑缓存、每个 promotable 归档至少被一个查询引用。
+//   - 反向：每个逻辑缓存、每个 promotable 归档至少被一个查询有效引用。
 func (c *Checker) checkQueryStorageRefs() {
 	usedCaches := map[string]bool{}
 	usedArchives := map[string]bool{}
@@ -28,7 +29,6 @@ func (c *Checker) checkQueryStorageRefs() {
 			written[table] = true
 		}
 		for _, ref := range q.Caches {
-			usedCaches[ref] = true
 			entry, ok := c.cacheEntries[ref]
 			if !ok {
 				c.rulef("query-cache-ref", "%s: cache %s is not declared in storage.caches", where, ref)
@@ -38,19 +38,14 @@ func (c *Checker) checkQueryStorageRefs() {
 				c.rulef("query-cache-ref", "%s: cache %s covers table %s which is not in query tables", where, ref, entry.table)
 				continue
 			}
+			usedCaches[ref] = true
 			if written[entry.table] {
-				continue // 写查询只要求列全（见下方完整性校验），不要求键绑定
+				continue // 写同步项没有 key 查找语义
 			}
-			bound := map[string]bool{}
-			for _, p := range q.Params {
-				table, col, ok := splitColumnRef(p.Column)
-				if ok && table == entry.table {
-					bound[col] = true
-				}
-			}
+			sources := c.cacheKeySources(q, entry.table)
 			for _, col := range entry.key {
-				if !bound[col] {
-					c.rulef("query-cache-ref", "%s: cache %s key column %s is not bound by params", where, ref, col)
+				if !sources[col] {
+					c.rulef("query-cache-ref", "%s: cache %s key column %s must appear in params[].column or index_ref[].columns of %s", where, ref, col, entry.table)
 				}
 			}
 		}
@@ -59,6 +54,15 @@ func (c *Checker) checkQueryStorageRefs() {
 				if c.cacheEntries[ref].table == table && !containsString(q.Caches, ref) {
 					c.rulef("query-cache-ref", "%s: write to %s must list cache %s", where, table, ref)
 				}
+			}
+		}
+		for _, ref := range cacheRefs {
+			entry := c.cacheEntries[ref]
+			if !q.tableSet()[entry.table] || written[entry.table] {
+				continue
+			}
+			if c.cacheKeysBound(q, entry) && !containsString(q.Caches, ref) {
+				c.rulef("query-cache-ref", "%s: cache %s key is fully bound by params but the query does not declare it", where, ref)
 			}
 		}
 		for _, ref := range q.Archive {
@@ -77,8 +81,11 @@ func (c *Checker) checkQueryStorageRefs() {
 			}
 			if !q.tableSet()[source] {
 				c.rulef("query-archive-ref", "%s: archive source %s is not in query tables", where, source)
+				continue
 			}
-			usedArchives[source] = true
+			if entry.promotable {
+				usedArchives[source] = true
+			}
 		}
 	}
 	for _, ref := range cacheRefs {
@@ -96,6 +103,47 @@ func (c *Checker) checkQueryStorageRefs() {
 			c.rulef("query-archive-used-by", "archive %s.archive is promotable but no query references it", source)
 		}
 	}
+}
+
+// cacheKeySources 返回读查询可用于缓存键的列：params[].column 与同表 index_ref[].columns。
+func (c *Checker) cacheKeySources(q *queryInfo, table string) map[string]bool {
+	out := map[string]bool{}
+	for _, p := range q.Params {
+		t, col, ok := splitColumnRef(p.Column)
+		if ok && t == table {
+			out[col] = true
+		}
+	}
+	for _, ref := range q.IndexRef {
+		t, _, ok := splitIndexRef(ref.Index)
+		if !ok || t != table {
+			continue
+		}
+		for _, col := range ref.Columns {
+			out[col] = true
+		}
+	}
+	return out
+}
+
+// cacheKeysBound 判断缓存键是否全部由 params[].column 绑定。
+func (c *Checker) cacheKeysBound(q *queryInfo, entry storageCacheEntry) bool {
+	if len(entry.key) == 0 {
+		return false
+	}
+	bound := map[string]bool{}
+	for _, p := range q.Params {
+		t, col, ok := splitColumnRef(p.Column)
+		if ok && t == entry.table {
+			bound[col] = true
+		}
+	}
+	for _, col := range entry.key {
+		if !bound[col] {
+			return false
+		}
+	}
+	return true
 }
 
 // sortedCacheRefs 返回排序后的逻辑缓存引用，保证错误输出稳定。

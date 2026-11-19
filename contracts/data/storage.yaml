@@ -23,14 +23,12 @@ tables:
     - { table: data.tables.verification_body, description: "验证体（一次性验证凭证与消息快照）", retention: true, unit: minutes, ttl: 10 }
     - { table: data.tables.verification_action, description: "验证动作（校验请求记录）" }
   postgres:
-    - { table: verification_action_archive, archive_of: data.tables.verification_action, promotable: false, age_by: created_at, after_unit: days, after: 90 }
+    - { table: verification_body_archive, archive_of: data.tables.verification_body, promotable: false, age_by: created_at, after_unit: days, after: 10 }
+    - { table: verification_action_archive, archive_of: data.tables.verification_action, promotable: false, age_by: created_at, after_unit: days, after: 10 }
+    - { table: token_archive, archive_of: data.tables.token, promotable: true, age_by: updated_at, after_unit: days, after: 180 }
   mongodb: [ ]
 
 caches:
   redis:
     - { cache_of: data.tables.token, key: [ col.access_token_hash ], retention: true, unit: days, cache_ttl: 30 }
-    - { cache_of: data.tables.token, key: [ col.account_id ], retention: true, unit: days, cache_ttl: 30 }
-    - { cache_of: data.tables.token, key: [ col.user_id ], retention: true, unit: days, cache_ttl: 30 }
-    - { cache_of: data.tables.token, key: [ col.device_id ], retention: true, unit: days, cache_ttl: 30 }
     - { cache_of: data.tables.account, key: [ col.id ], retention: true, unit: minutes, cache_ttl: 30 }
-    - { cache_of: data.tables.verification_body, key: [ col.account_id ], retention: true, unit: minutes, cache_ttl: 10 }

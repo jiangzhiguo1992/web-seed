@@ -16,9 +16,6 @@ queries:
       - { table: data.tables.token, write: true }
     caches:
       - data.tables.token.cache.access_token_hash
-      - data.tables.token.cache.account_id
-      - data.tables.token.cache.user_id
-      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.token.col.id }
@@ -44,6 +41,8 @@ queries:
     description: "按刷新令牌哈希读取令牌"
     tables:
       - { table: data.tables.token }
+    archive:
+      - data.tables.token.archive
     params:
       - { name: ctx, type: context.Context }
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
@@ -61,6 +60,8 @@ queries:
     description: "按访问令牌哈希读取令牌"
     tables:
       - { table: data.tables.token }
+    archive:
+      - data.tables.token.archive
     caches:
       - data.tables.token.cache.access_token_hash
     params:
@@ -81,9 +82,6 @@ queries:
       - { table: data.tables.token, write: true }
     caches:
       - data.tables.token.cache.access_token_hash
-      - data.tables.token.cache.account_id
-      - data.tables.token.cache.user_id
-      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: refresh_token_hash, type: text, column: data.tables.token.col.refresh_token_hash }
@@ -107,9 +105,6 @@ queries:
       - { table: data.tables.token, write: true }
     caches:
       - data.tables.token.cache.access_token_hash
-      - data.tables.token.cache.account_id
-      - data.tables.token.cache.user_id
-      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: integer, column: data.tables.token.col.account_id }
@@ -130,9 +125,6 @@ queries:
       - { table: data.tables.token, write: true }
     caches:
       - data.tables.token.cache.access_token_hash
-      - data.tables.token.cache.account_id
-      - data.tables.token.cache.user_id
-      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: now, type: timestamp }
@@ -153,9 +145,6 @@ queries:
       - { table: data.tables.token, write: true }
     caches:
       - data.tables.token.cache.access_token_hash
-      - data.tables.token.cache.account_id
-      - data.tables.token.cache.user_id
-      - data.tables.token.cache.device_id
     params:
       - { name: ctx, type: context.Context }
       - { name: limit, type: integer, nullable: true, default: 100 }
@@ -167,4 +156,3 @@ queries:
       - { index: data.tables.token.idx_token_refresh_expire_at, columns: [ refresh_expire_at ] }
     used_by:
       - cap.services.token.purge_expired
-

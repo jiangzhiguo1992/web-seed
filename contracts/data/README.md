@@ -169,7 +169,7 @@ columns:
 
 ### 4.4 保留策略是选择，不是枚举
 
-`storage.tables.<engine>[].retention` 是布尔开关，开启后 `unit` 与 `pending` / `soft_delete` / `hard_delete` / `ttl` 是同级字段，不是四选一：`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只在确实存在对应清理策略时才写；主数据与认证绑定默认不写。**这是选择判据，`[评审]`。** 值域与约束由 `[强制: storage-retention]` 校验；缓存副本必须写 `cache_of`（源表）与 `key`（列名列表，可写 `account_id` / `col.account_id` / 完整列引用；同一表可按不同 key 建多条缓存，`key` 顺序参与 `(cache_of,key)` 唯一性）以及 `caches.<engine>[].retention: true`，只允许 `unit` / `cache_ttl`，且不得超过权威表条目的 `ttl`。归档用独立条目表达：`archive_of` 指向已登记的权威表，`promotable` 必填并决定能否回迁热表（能回迁的必须被查询的 `archive` 引用，且查询里的 `archive` 只能指向能回迁的归档），`table` 是归档物理表名，`age_by` 是 `created_at` / `updated_at`，`after` 是按该列计算的数据年龄阈值。归档表只封存源表的原始行，不建 `data.tables` 契约、实体或查询；同一张表只能有一条归档，由 `[强制: storage-archive]` 校验。
+`storage.tables.<engine>[].retention` 是布尔开关，开启后 `unit` 与 `pending` / `soft_delete` / `hard_delete` / `ttl` 是同级字段，不是四选一：`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只在确实存在对应清理策略时才写；主数据与认证绑定默认不写。**这是选择判据，`[评审]`。** 值域与约束由 `[强制: storage-retention]` 校验；缓存副本必须写 `cache_of`（源表）与 `key`（列名列表，可写 `account_id` / `col.account_id` / 完整列引用；同一表可按不同 key 建多条缓存，`key` 顺序参与 `(cache_of,key)` 唯一性）以及 `caches.<engine>[].retention: true`，只允许 `unit` / `cache_ttl`，且不得超过权威表条目的 `ttl`。每个缓存必须被至少一个查询的 `caches` 有效引用，未引用的缓存必须删除；读查询的每个缓存键列必须出现在 `params[].column` 或同表 `index_ref[].columns` 中。归档用独立条目表达：`archive_of` 指向已登记的权威表，`promotable` 必填并决定能否回迁热表（能回迁的必须被查询的 `archive` 引用，且查询里的 `archive` 只能指向能回迁的归档），`table` 是归档物理表名，`age_by` 是 `created_at` / `updated_at`，`after` 是按该列计算的数据年龄阈值。归档表只封存源表的原始行，不建 `data.tables` 契约、实体或查询；同一张表只能有一条归档，由 `[强制: storage-archive]` 校验。
 
 ---
 

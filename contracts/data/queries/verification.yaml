@@ -15,8 +15,6 @@ queries:
     description: "创建验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
-    caches:
-      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -41,8 +39,6 @@ queries:
     description: "标记验证体已发送"
     tables:
       - { table: data.tables.verification_body, write: true }
-    caches:
-      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -80,8 +76,6 @@ queries:
     description: "消费验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
-    caches:
-      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -101,8 +95,6 @@ queries:
     description: "递增验证失败次数并更新状态"
     tables:
       - { table: data.tables.verification_body, write: true }
-    caches:
-      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -121,8 +113,6 @@ queries:
     description: "按 ID 设置验证体终态（如 failed）"
     tables:
       - { table: data.tables.verification_body, write: true }
-    caches:
-      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.verification_body.col.id }
@@ -140,8 +130,6 @@ queries:
     description: "把超过 expire_at 的 pending/sent 验证体置为 expired"
     tables:
       - { table: data.tables.verification_body, write: true }
-    caches:
-      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: now, type: timestamp }
@@ -160,8 +148,6 @@ queries:
     description: "把尝试次数达到上限的 sent 验证体置为 revoked"
     tables:
       - { table: data.tables.verification_body, write: true }
-    caches:
-      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: max_attempts, type: integer }
@@ -180,8 +166,6 @@ queries:
     description: "按认证目标作废活跃验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
-    caches:
-      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
@@ -202,8 +186,6 @@ queries:
     description: "按账号作废活跃验证体"
     tables:
       - { table: data.tables.verification_body, write: true }
-    caches:
-      - data.tables.verification_body.cache.account_id
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: integer, column: data.tables.verification_body.col.account_id }
