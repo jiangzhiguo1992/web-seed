@@ -86,7 +86,7 @@ queries:
       - cap.services.account.create
 
   - name: UpdateAccount
-    description: "更新账号昵称"
+    description: "更新账号昵称并返回更新后的实体"
     tables:
       - { table: data.tables.account, write: true }
     params:
@@ -94,7 +94,7 @@ queries:
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: nickname, type: text, column: data.tables.account.col.nickname }
     returns:
-      - { name: affected_rows, kind: affected_rows }
+      - { name: account, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
     errors: [ ]
     index_ref: [ data.tables.account.pk ]
@@ -102,7 +102,7 @@ queries:
       - cap.services.account.update
 
   - name: SetAccountStatus
-    description: "设置账号状态；用于激活与封禁"
+    description: "设置账号状态并返回更新后的实体；用于激活与封禁"
     tables:
       - { table: data.tables.account, write: true }
     params:
@@ -110,7 +110,7 @@ queries:
       - { name: id, type: integer, column: data.tables.account.col.id }
       - { name: status, type: integer, column: data.tables.account.col.status }
     returns:
-      - { name: affected_rows, kind: affected_rows }
+      - { name: account, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION

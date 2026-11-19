@@ -55,6 +55,14 @@ fields:
       - { name: entity, type: string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "状态所属实体" }
       - { name: field, type: string, required: true, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "实体上的状态字段（json_name）" }
 
+  - name: states
+    type: list<string>
+    required: true
+    min_items: 1
+    unique: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "可达状态子集"
+
   - name: initial
     type: string
     required: true
@@ -82,14 +90,6 @@ fields:
       - { name: steps, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁实体的 service step ID" }
       - { name: from, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许销毁的源状态" }
       - { name: to, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "销毁后的状态" }
-
-  - name: states
-    type: list<string>
-    required: true
-    min_items: 1
-    unique: true
-    pattern: '^[a-z][a-z0-9_]*$'
-    description: "可达状态子集"
 
   - name: transitions
     type: list<object>

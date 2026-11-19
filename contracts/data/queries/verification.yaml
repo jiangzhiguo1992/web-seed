@@ -67,7 +67,6 @@ queries:
     errors: [ ]
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
-      - cap.services.verification.send
       - cap.services.verification.verify
 
   - name: ConsumeVerification
@@ -113,7 +112,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
       - { name: auth_id, type: integer, column: data.tables.verification_body.col.auth_id }
-      - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
+      - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose, nullable: true }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -122,6 +121,7 @@ queries:
     index_ref: [ data.tables.verification_body.idx_verification_auth_purpose ]
     used_by:
       - cap.services.verification.revoke_by_auth
+      - cap.services.verification.send
 
   - name: RevokeActiveVerificationsByAccount
     description: "按账号作废活跃验证体"

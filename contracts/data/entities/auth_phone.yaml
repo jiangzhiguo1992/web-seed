@@ -18,6 +18,7 @@ model:
     - data.entities.account
   queries:
     - data.queries.auth.create_auth_phone
+    - data.queries.auth.get_auth_phone_by_id
     - data.queries.auth.get_auth_phone_by_number
 
 fields:

@@ -25,6 +25,8 @@ model:
     - data.queries.account.create_account
     - data.queries.account.get_account
     - data.queries.account.list_accounts
+    - data.queries.account.set_account_status
+    - data.queries.account.update_account
 
 fields:
   - name: Status

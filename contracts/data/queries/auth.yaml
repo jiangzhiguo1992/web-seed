@@ -176,6 +176,51 @@ queries:
     used_by:
       - cap.services.auth.bind_email
 
+  - name: GetAuthPwdById
+    description: "按 ID 读取密码认证记录"
+    tables:
+      - { table: data.tables.auth_pwd }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: integer, column: data.tables.auth_pwd.col.id }
+    returns:
+      - { name: row, kind: entity, entity: data.entities.auth_pwd }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref: [ data.tables.auth_pwd.pk ]
+    used_by:
+      - cap.services.auth.bind_password
+
+  - name: GetAuthPhoneById
+    description: "按 ID 读取手机号认证记录"
+    tables:
+      - { table: data.tables.auth_phone }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: integer, column: data.tables.auth_phone.col.id }
+    returns:
+      - { name: row, kind: entity, entity: data.entities.auth_phone }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref: [ data.tables.auth_phone.pk ]
+    used_by:
+      - cap.services.auth.bind_phone
+
+  - name: GetAuthEmailById
+    description: "按 ID 读取邮箱认证记录"
+    tables:
+      - { table: data.tables.auth_email }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: integer, column: data.tables.auth_email.col.id }
+    returns:
+      - { name: row, kind: entity, entity: data.entities.auth_email }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref: [ data.tables.auth_email.pk ]
+    used_by:
+      - cap.services.auth.bind_email
+
   - name: SoftDeleteAuthPwdByAccount
     description: "按账号软删全部密码认证记录"
     tables:
