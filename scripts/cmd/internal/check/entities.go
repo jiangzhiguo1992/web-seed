@@ -410,9 +410,6 @@ func (c *Checker) checkEntities(schema *Schema) {
 		c.checkTargetFileName(schema, filepath.Base(ed.rel), ed.rel)
 		c.validateDoc(ed.doc, schema.Fields, ed.rel)
 		c.checkStability(ed.doc, ed.rel)
-		if s, ok := ed.doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
-			c.rulef("schema.non-empty", "%s: summary must not be empty", ed.rel)
-		}
 		id, _ := ed.doc["id"].(string)
 		want := schema.Targets.FileID(filepath.Base(ed.rel))
 		if want != "" && id != "" && id != want {
@@ -555,9 +552,6 @@ func (c *Checker) checkEntityBase(schema *Schema) {
 	c.checkFieldOrder(baseEntityPath, schema.Fields, orderRules{top: "entity-key-order", nested: "entity-key-order", model: "entity-model-order"})
 	c.validateDoc(c.entityBaseDoc, filterFields(schema.Fields, allowed), baseEntityPath)
 	c.checkStability(c.entityBaseDoc, baseEntityPath)
-	if s, ok := c.entityBaseDoc["summary"].(string); ok && strings.TrimSpace(s) == "" {
-		c.rulef("schema.non-empty", "%s: summary must not be empty", baseEntityPath)
-	}
 	if id, ok := c.entityBaseDoc["id"].(string); ok && id != baseEntityID {
 		c.rulef("entity-base-file", "%s: id must be %s, got %s", baseEntityPath, baseEntityID, id)
 	}
@@ -601,9 +595,6 @@ func (c *Checker) checkEntityBase(schema *Schema) {
 		}
 		if f.SourceColumnRef != ref || f.SourceComputed != "" {
 			c.rulef("entity-base-shape", "%s: source must be %s", where, ref)
-		}
-		if strings.TrimSpace(f.Description) == "" {
-			c.rulef("entity-base-shape", "%s: description must not be empty", where)
 		}
 	}
 	if count != len(entityBaseShape) {
@@ -658,9 +649,6 @@ func (c *Checker) checkEntityFields(e *entityInfo) {
 		where := fmt.Sprintf("%s: fields.%s", e.Rel, f.Name)
 		if f.BaseRedeclared {
 			c.rulef("entity-no-base-fields", "%s: redeclares base field; only status may specialize to data.enums.*", where)
-		}
-		if f.HasDescription && strings.TrimSpace(f.Description) == "" {
-			c.rulef("entity-field-description", "%s: description must not be empty", where)
 		}
 		if f.IsRelation {
 			c.checkRelationFieldShape(f, where)
@@ -1039,11 +1027,6 @@ func (c *Checker) checkEntityValidation(e *entityInfo) {
 			c.rulef("schema.unique-names", "%s: duplicate validation name %s", e.Rel, name)
 		}
 		seen[name] = true
-		if expr, present := m["expr"]; present {
-			if s, _ := expr.(string); strings.TrimSpace(s) == "" {
-				c.rulef("entity-validation", "%s: expr must not be empty", where)
-			}
-		}
 		if code, _ := m["on_violation"].(string); code != "" {
 			if errs := c.errorCodes(); len(errs) > 0 && !errs[strings.TrimPrefix(code, "platform.errors.")] {
 				c.rulef("entity-validation", "%s: unknown error code %s", where, code)
@@ -1154,50 +1137,6 @@ func (c *Checker) checkEntityUsedBy() {
 		}
 		if !sameSet(gotQueries, wantQueries) {
 			c.rulef("entity-used-by", "%s: model.queries must be %v, got %v", e.Rel, sortedKeys(wantQueries), sortedKeys(gotQueries))
-		}
-	}
-}
-
-// entityCapabilityUsages 扫描 capability 中 type/x-entity/returns 的实体引用。
-func (c *Checker) entityCapabilityUsages() map[string]map[string]bool {
-	usages := map[string]map[string]bool{}
-	for _, f := range walkYAML(c.root, "contracts/capabilities") {
-		doc, err := loadYAML(f)
-		if err != nil {
-			continue
-		}
-		capabilityID, _ := doc["id"].(string)
-		if capabilityID == "" {
-			continue
-		}
-		c.collectEntityRefs(doc, func(entityID string) {
-			if usages[entityID] == nil {
-				usages[entityID] = map[string]bool{}
-			}
-			usages[entityID][capabilityID] = true
-		})
-	}
-	return usages
-}
-
-// collectEntityRefs 收集结构化键中的 data.entities.* 引用；不扫描 do_not 等散文。
-func (c *Checker) collectEntityRefs(v any, fn func(string)) {
-	if m, ok := asMap(v); ok {
-		for k, child := range m {
-			if k == "type" || k == "x-entity" || k == "returns" {
-				if s, ok := child.(string); ok {
-					if id, ok := entityRef(s); ok {
-						fn(id)
-					}
-				}
-			}
-			c.collectEntityRefs(child, fn)
-		}
-		return
-	}
-	if list, ok := asList2(v); ok {
-		for _, item := range list {
-			c.collectEntityRefs(item, fn)
 		}
 	}
 }

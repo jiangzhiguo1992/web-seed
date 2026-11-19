@@ -123,6 +123,9 @@ func loadEngineTables(root, engine string) (map[string]bool, error) {
 		if _, isArchive := entry["archive_of"]; isArchive {
 			continue
 		}
+		if entry["partition"] != nil {
+			return nil, fmt.Errorf("contracts/data/storage.yaml: tables.%s entry %v declares partition; gen_db does not render partitions (keep it as ops config or implement DDL rendering)", engine, entry["table"])
+		}
 		if id, _ := entry["table"].(string); id != "" {
 			out[id] = true
 		}

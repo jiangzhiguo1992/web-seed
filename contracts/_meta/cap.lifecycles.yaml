@@ -1,6 +1,4 @@
-# cap.lifecycles：业务实体的状态维度生命周期：创建、状态转换与销毁。
-# 一个契约 = 一个状态维度（实体 + 状态字段）；同一实体的多个状态字段拆成多个契约。
-# 每条边都锚到具体 service step；跨维度前提写在 transitions[].requires。
+# cap.lifecycles：一个契约 = 一个状态维度（实体 + 状态字段）；每条边锚到 service step。
 
 id: meta.cap.lifecycles
 type: cap.lifecycles
@@ -27,7 +25,7 @@ fields:
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "生命周期归属模块；必须等于每个 subject 实体的 owner_module"
+    description: "归属模块"
 
   - name: schema_version
     type: integer
@@ -52,38 +50,38 @@ fields:
     type: list<object>
     required: true
     min_items: 1
-    description: "状态维度：实体 + 状态字段；同一状态机的同构实体可共享一份契约；同一 (entity, field) 只能被一个契约声明"
+    description: "状态维度：实体 + 状态字段"
     item_fields:
       - { name: entity, type: string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "状态所属实体" }
-      - { name: field, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "实体上的状态字段名（snake_case，即 json_name）；必须是 data.enums.* 类型的标量列字段" }
+      - { name: field, type: string, required: true, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "实体上的状态字段（json_name）" }
 
   - name: initial
     type: string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "该维度的初始状态；创建步骤必须把实体落在该状态"
+    description: "初始状态"
 
   - name: final
     type: string
     required: false
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "该维度的最终状态；没有终态时省略"
+    description: "最终状态；没有终态时省略"
 
   - name: create
     type: object
     required: false
-    description: "创建动作；steps 由 step.lifecycles 反向生成"
+    description: "创建动作"
     fields:
       - { name: steps, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "创建实体的 service step ID" }
 
   - name: destroy
     type: object
     required: false
-    description: "销毁动作；steps 由 step.lifecycles 反向生成"
+    description: "销毁动作"
     fields:
       - { name: steps, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "销毁实体的 service step ID" }
       - { name: from, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许销毁的源状态" }
-      - { name: to, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "销毁后的状态；有 final 时必须等于 final" }
+      - { name: to, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "销毁后的状态" }
 
   - name: states
     type: list<string>
@@ -91,7 +89,7 @@ fields:
     min_items: 1
     unique: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "该维度启用的状态子集；状态值直接来自 subjects[].field 的枚举源，本契约只声明可达子集，不重复状态说明"
+    description: "可达状态子集"
 
   - name: transitions
     type: list<object>
@@ -106,22 +104,22 @@ fields:
       - name: guard
         type: any
         required: true
-        description: "守卫：true 表示无额外条件；{ rule: feature.rules.* } 表示结构化规则；规则违反时用该规则的 on_violation，本动作的 on_violation 只用于 from 非法或 requires 不满足"
+        description: "守卫：true 或 { rule: feature.rules.* }"
       - name: requires
         type: list<object>
         required: false
         min_items: 1
-        description: "跨维度前置状态：列表内全部满足（AND）才允许执行本转换；目标维度不存在或不在该状态时必须返回 on_violation"
+        description: "跨维度前置状态；全部满足才允许"
         item_fields:
-          - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属的生命周期契约；不能是本契约" }
-          - { name: state, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "前置状态；必须是目标生命周期已声明的状态" }
-      - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "非法转换错误码；from 非法或 requires 不满足时返回" }
-      - { name: implemented_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 service step ID；由 step.lifecycles 生成" }
+          - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期；不能是自身" }
+          - { name: state, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "前置状态" }
+      - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "非法转换错误码" }
+      - { name: implemented_by, type: list<string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 service step；gen-graph 生成" }
 
   - name: forbidden_examples
     type: list<object>
     required: false
-    description: "非法转换示例；用于生成负向测试"
+    description: "非法转换示例"
     item_fields:
       - { name: from, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "源状态" }
       - { name: transition, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "转换名" }
@@ -132,7 +130,7 @@ fields:
     required: false
     unique: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "幂等转换；重复执行同一动作不得报非法转换"
+    description: "幂等转换"
 
 rules:
   - { id: lifecycle-structure, text: "states 名唯一；initial/final 必须是已声明状态；transitions 的 from/to 必须是已声明状态；guard 只能是 true 或 { rule: feature.rules.* }；on_violation 必须存在且为存在的 platform.errors.*；forbidden_examples 的 from/transition 必须存在且该 from 确实不在 transition.from 中；destroy.from/to 必须是已声明状态，有 final 时 destroy.to 必须等于 final", implemented_by: [ lifecycle-structure ] }

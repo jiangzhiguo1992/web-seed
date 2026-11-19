@@ -136,30 +136,31 @@ type_families:
 custom_types: {}
 `)
 	writeCapFile(t, root, "contracts/_meta/_schemas.yaml", string(mustRead(t, filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_schemas.yaml"))))
-	writeCapFile(t, root, "contracts/_meta/cap.services.yaml", `type: cap.services
+	writeCapFile(t, root, "contracts/_meta/cap.services.yaml", `id: meta.cap.services
+type: cap.services
 targets:
   dir: contracts/capabilities/services
   glob: "*.yaml"
   id: "cap.services.<file>"
 fields:
-  - {name: id, type: string}
-  - {name: summary, type: string}
-  - {name: owner_module, type: string}
-  - {name: schema_version, type: integer}
-  - {name: stability, type: string}
-  - {name: do_not, type: list<string>}
-  - {name: interface, type: any}
-  - {name: persistence, type: any}
-  - {name: services, type: any}
+  - {name: id, type: string, description: "id"}
+  - {name: summary, type: string, description: "summary"}
+  - {name: owner_module, type: string, description: "owner"}
+  - {name: schema_version, type: integer, description: "version"}
+  - {name: stability, type: string, description: "stability"}
+  - {name: do_not, type: list<string>, description: "do_not"}
+  - {name: interface, type: any, description: "interface"}
+  - {name: persistence, type: any, description: "persistence"}
+  - {name: services, type: any, description: "services"}
 `)
 	for _, typ := range []string{"feature.rules", "cap.lifecycles", "cap.events", "cap.protocols.http"} {
-		writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", "type: "+typ+`
+		writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", "id: meta."+typ+"\ntype: "+typ+`
 targets:
   dir: contracts/features/unused
   glob: "*.yaml"
   id: "`+typ+`.<file>"
 fields:
-  - {name: id, type: string}
+  - {name: id, type: string, description: "id"}
 `)
 	}
 	writeCapFile(t, root, "contracts/capabilities/services/a.yaml", `id: cap.services.a

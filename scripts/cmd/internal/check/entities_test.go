@@ -150,15 +150,6 @@ func TestEntityFieldProjectionRules(t *testing.T) {
 		t.Fatalf("sensitivity relaxation not reported: %v", c.errs)
 	}
 
-	c = newChecker()
-	e = newEntity()
-	e.Fields[1].Description = ""
-	e.Fields[1].HasDescription = true
-	c.checkEntityFields(e)
-	if !strings.Contains(entityErrs(c), "[entity-field-description]") {
-		t.Fatalf("missing description not reported: %v", c.errs)
-	}
-
 }
 
 func TestEntityComputedField(t *testing.T) {
@@ -558,11 +549,8 @@ func TestEntityScalarRequiresExplicitMetadata(t *testing.T) {
 		Fields: []entityFieldInfo{{Name: "Missing", Type: "string", HasType: true, HasDescription: true}},
 	}
 	c.checkEntityFields(e)
-	errs := entityErrs(c)
-	for _, want := range []string{"[entity-field-description]", "[entity-field-source]"} {
-		if !strings.Contains(errs, want) {
-			t.Fatalf("missing %s in %v", want, c.errs)
-		}
+	if !strings.Contains(entityErrs(c), "[entity-field-source]") {
+		t.Fatalf("missing [entity-field-source] in %v", c.errs)
 	}
 }
 
@@ -1264,51 +1252,6 @@ func TestEntityFieldDefaults(t *testing.T) {
 	}
 	if e.Fields[2].Type != "*timestamp" || e.Fields[2].JSONName != "deleted_at" || e.Fields[2].Description != "" {
 		t.Fatalf("nullable defaults not applied: %#v", e.Fields[2])
-	}
-}
-
-func TestWriteQueries(t *testing.T) {
-	q := &queryInfo{ID: "data.queries.x.create", Targets: []string{"data.tables.x"}, Writes: []string{"data.tables.x"}}
-	c := &Checker{
-		tableOwners: map[string]string{"data.tables.x": "x"},
-		queries:     map[string]*queryInfo{q.ID: q},
-	}
-	doc := func(module string) map[string]any {
-		return map[string]any{
-			"owner_module": module,
-			"interface": map[string]any{"methods": []any{
-				map[string]any{"name": "Create", "queries": []any{q.ID}},
-			}},
-			"persistence": map[string]any{"tables": []any{"data.tables.x"}},
-		}
-	}
-	tables := map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"}
-	c.checkMethodPersistence(doc("x"), "cap.yaml", tables)
-	if len(c.errs) != 0 {
-		t.Fatalf("valid write query reported: %v", c.errs)
-	}
-
-	c.errs = nil
-	c.checkMethodPersistence(doc("other"), "cap.yaml", tables)
-	if !strings.Contains(entityErrs(c), "cannot write") {
-		t.Fatalf("cross-module write not reported: %v", c.errs)
-	}
-
-	c.errs = nil
-	q.Writes = nil
-	q.Returns = []queryReturn{{Kind: "affected_rows"}}
-	c.checkMethodPersistence(doc("x"), "cap.yaml", tables)
-	if !strings.Contains(entityErrs(c), "returns affected_rows without a write table") {
-		t.Fatalf("write query without write table not reported: %v", c.errs)
-	}
-
-	c.errs = nil
-	q.Writes = []string{"data.tables.x", "data.tables.y"}
-	q.Returns = nil
-	c.tableOwners["data.tables.y"] = "x"
-	c.checkMethodPersistence(doc("x"), "cap.yaml", map[string]string{"data.tables.x": "contracts/data/tables/x.yaml", "data.tables.y": "contracts/data/tables/y.yaml"})
-	if len(c.errs) != 0 {
-		t.Fatalf("multi-table write reported: %v", c.errs)
 	}
 }
 

@@ -313,6 +313,9 @@ func (c *Checker) loadSchemaByType(typ string) (*Schema, error) {
 	if err := validateFieldMarkers(s.Fields); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := validateMetaFields(s.Fields, "fields"); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 	return s, nil
 }
 
@@ -328,6 +331,9 @@ func loadSchema(path string) (*Schema, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if err := validateFieldMarkers(s.Fields); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if err := validateMetaFields(s.Fields, "fields"); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	return s, nil

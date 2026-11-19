@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -242,6 +243,9 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	vt := ValueTypes{TypeFamilies: t.TypeFamilies, CustomTypes: t.CustomTypes}
+	if t.ID != "meta.types" {
+		return nil, fmt.Errorf("%s: id must be meta.types, got %q", path, t.ID)
+	}
 	if len(vt.TypeFamilies) == 0 {
 		return nil, fmt.Errorf("%s: type_families must not be empty", path)
 	}
@@ -272,6 +276,9 @@ func LoadSharedSchemas(dir string) (*SharedSchemas, error) {
 	var sh SharedSchemas
 	if err := dec.Decode(&sh); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if sh.ID != "meta.schemas" {
+		return nil, fmt.Errorf("%s: id must be meta.schemas, got %q", path, sh.ID)
 	}
 	if len(sh.Kinds) == 0 {
 		return nil, fmt.Errorf("%s: kinds must not be empty", path)
@@ -385,6 +392,11 @@ func validateSchemaKeys(path, where string, keys []Field, keyTypes map[string]bo
 		} else if key.Type == "" {
 			return fmt.Errorf("%s: %s key %s must declare type or types", path, where, key.Name)
 		}
+		if key.Pattern != "" {
+			if _, err := regexp.Compile(key.Pattern); err != nil {
+				return fmt.Errorf("%s: %s key %s has invalid pattern %q: %w", path, where, key.Name, key.Pattern, err)
+			}
+		}
 		if key.UniqueKey != "" && key.Type != "list<object>" {
 			return fmt.Errorf("%s: %s key %s: unique_key requires list<object>", path, where, key.Name)
 		}
@@ -426,6 +438,9 @@ func LoadSchema(path string) (*Schema, error) {
 	}
 	if s.Type == "" || len(s.Fields) == 0 {
 		return nil, fmt.Errorf("%s: empty schema (type/fields)", path)
+	}
+	if s.ID != "meta."+s.Type {
+		return nil, fmt.Errorf("%s: id must be meta.%s, got %q", path, s.Type, s.ID)
 	}
 	injectFamilyParams(&s)
 	return &s, nil

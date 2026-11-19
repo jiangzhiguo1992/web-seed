@@ -1,12 +1,30 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
+
+func TestLoadEngineTablesRejectsPartition(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "contracts/data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `tables:
+  mysql:
+    - { table: data.tables.x, description: "x", partition: { strategy: hash, columns: [id] } }
+`
+	if err := os.WriteFile(filepath.Join(root, "contracts/data/storage.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadEngineTables(root, "mysql"); err == nil || !strings.Contains(err.Error(), "partition") {
+		t.Fatalf("partition not rejected: %v", err)
+	}
+}
 
 func TestColumnSQL(t *testing.T) {
 	cases := []struct {

@@ -282,7 +282,7 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 	}
 	top := map[string]bool{
 		"id": true, "summary": true, "owner_module": true, "schema_version": true,
-		"stability": true, "do_not": true, "model": true, "fields": true, "used_by": true,
+		"stability": true, "do_not": true, "model": true, "fields": true,
 	}
 	if err := requireSupported(s.Fields, top, "data.entities"); err != nil {
 		return nil, err
@@ -676,14 +676,18 @@ type serviceItemScaffold struct {
 }
 
 type stepScaffold struct {
-	ID        string           `yaml:"id"`
-	Kind      string           `yaml:"kind"`
-	Summary   string           `yaml:"summary"`
-	DependsOn []string         `yaml:"depends_on,omitempty"`
-	Input     []inputScaffold  `yaml:"input,omitempty"`
-	Output    []outputScaffold `yaml:"output,omitempty"`
-	Errors    []string         `yaml:"errors,omitempty"`
-	Queries   []queryScaffold  `yaml:"queries,omitempty"`
+	ID        string            `yaml:"id"`
+	Kind      string            `yaml:"kind"`
+	Summary   string            `yaml:"summary"`
+	DependsOn []string          `yaml:"depends_on,omitempty"`
+	Input     []inputScaffold   `yaml:"input,omitempty"`
+	Output    []outputScaffold  `yaml:"output,omitempty"`
+	Errors    []string          `yaml:"errors,omitempty"`
+	Rules     []ruleRefScaffold `yaml:"rules"`
+}
+
+type ruleRefScaffold struct {
+	Rule string `yaml:"rule"`
 }
 
 type inputScaffold struct {
@@ -696,11 +700,6 @@ type outputScaffold struct {
 	Name        string `yaml:"name"`
 	Type        string `yaml:"type"`
 	Description string `yaml:"description"`
-}
-
-type queryScaffold struct {
-	Query string         `yaml:"query"`
-	Input map[string]any `yaml:"input,omitempty"`
 }
 
 type methodArgScaffold struct {
@@ -814,9 +813,8 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 			if err := requireSupported(steps.ItemFields, map[string]bool{
 				"id": true, "kind": true, "summary": true, "depends_on": true,
 				"input": true, "output": true, "errors": true,
-				"services": true, "queries": true, "events": true,
-				"rules": true, "lifecycles": true,
-				"goto": true, "when": true, "query": true,
+				"events": true, "rules": true, "lifecycles": true,
+				"goto": true, "when": true, "query": true, "service": true,
 			}, "cap.services.steps"); err != nil {
 				return nil, err
 			}
@@ -876,6 +874,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 					Input:   []inputScaffold{{Name: "input", Value: "params.input", Description: "TODO: 入参用途"}},
 					Output:  []outputScaffold{{Name: "value", Type: "any", Description: "TODO: 产出说明"}},
 					Errors:  []string{"platform.errors.COMMON_INTERNAL"},
+					Rules:   []ruleRefScaffold{},
 				},
 			},
 		}},

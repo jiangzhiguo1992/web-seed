@@ -4,6 +4,7 @@ package check
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 func validatePatterns(fields []Field) error {
@@ -77,6 +78,34 @@ func validateFieldTypes(fields []Field) error {
 
 // validateFieldMarkers 校验 generated/write 成对出现：
 // 生成字段必须标记为不可手写，write 只允许 forbidden。
+// validateMetaFields 校验字段规范自身：同层 name 唯一且非空，description 非空。
+// Unordered 是运行时注入的类型族参数，不在 _meta 中手写。
+func validateMetaFields(fields []Field, where string) error {
+	seen := map[string]bool{}
+	for _, f := range fields {
+		if f.Unordered {
+			continue
+		}
+		if strings.TrimSpace(f.Name) == "" {
+			return fmt.Errorf("%s: field name must not be empty", where)
+		}
+		if seen[f.Name] {
+			return fmt.Errorf("%s: duplicate field %q", where, f.Name)
+		}
+		seen[f.Name] = true
+		if strings.TrimSpace(f.Description) == "" {
+			return fmt.Errorf("%s.%s: description must not be empty", where, f.Name)
+		}
+		if err := validateMetaFields(f.Fields, where+"."+f.Name+".fields"); err != nil {
+			return err
+		}
+		if err := validateMetaFields(f.ItemFields, where+"."+f.Name+".item_fields"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func validateFieldMarkers(fields []Field) error {
 	for _, f := range fields {
 		if f.Write != "" && f.Write != "forbidden" {
@@ -147,6 +176,10 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			c.rulef("schema.type", "%s: must be string", path)
 			return
 		}
+		if f.Required && strings.TrimSpace(s) == "" {
+			c.rulef("schema.non-empty", "%s: must not be empty", path)
+			return
+		}
 		c.checkScalar(s, f, path)
 	case "integer":
 		n, ok := toInt(v)
@@ -195,6 +228,10 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			s, ok := item.(string)
 			if !ok {
 				c.rulef("schema.type", "%s[%d]: must be string", path, i)
+				continue
+			}
+			if strings.TrimSpace(s) == "" {
+				c.rulef("schema.non-empty", "%s[%d]: must not be empty", path, i)
 				continue
 			}
 			if f.Unique && seen[s] {

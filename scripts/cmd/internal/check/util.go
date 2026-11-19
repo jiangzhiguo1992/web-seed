@@ -117,19 +117,6 @@ func snakeCase(s string) string {
 	return contractspec.SnakeCase(s)
 }
 
-func tableRefs(m map[string]any) []string {
-	var out []string
-	if t, ok := m["table"].(string); ok && t != "" {
-		out = append(out, t)
-	}
-	for _, x := range asList(m["tables"]) {
-		if s, ok := x.(string); ok && s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 func stringSet(list []any) map[string]bool {
 	out := map[string]bool{}
 	for _, x := range list {

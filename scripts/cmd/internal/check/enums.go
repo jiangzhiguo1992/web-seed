@@ -14,7 +14,7 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 	c.enumCodes = map[string]map[int]bool{}
 	files := c.enumFiles(schema)
 	if len(files) == 0 {
-		c.rulef("schema.targets", "%s: targets.dir/glob or targets.file must not be empty", schema.ID)
+		c.rulef("schema.targets", "%s: targets.dir/glob must not be empty", schema.ID)
 		return map[string]map[string]bool{}
 	}
 	usages := c.enumUsages()
@@ -31,10 +31,8 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		}
 		c.validateDoc(doc, schema.Fields, rel)
 		c.checkFieldOrder(rel, schema.Fields, orderRules{top: "enum-key-order", nested: "enum-key-order"})
+		c.checkTargetFileName(schema, filepath.Base(path), rel)
 		c.checkStability(doc, rel)
-		if s, ok := doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
-			c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
-		}
 		fileID := schema.Targets.FileID(filepath.Base(path))
 		if id, ok := doc["id"].(string); ok && id != fileID {
 			c.rulef("enum-id", "%s: id must be %s", rel, fileID)

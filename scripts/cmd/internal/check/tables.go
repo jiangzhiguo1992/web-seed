@@ -465,9 +465,6 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 	fields := filterFields(schema.Fields, allowed)
 	c.validateDoc(doc, fields, rel)
 	c.checkStability(doc, rel)
-	if s, ok := doc["summary"].(string); ok && s == "" {
-		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
-	}
 	if id, ok := doc["id"].(string); ok && id != baseContractID {
 		c.rulef("base-file", "%s: base table id must be %s, got %s", rel, baseContractID, id)
 	}
@@ -532,9 +529,6 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema) {
 	c.checkTableTextLengths(doc, rel)
 	id, _ := doc["id"].(string)
-	if s, ok := doc["summary"].(string); ok && s == "" {
-		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
-	}
 	c.checkStability(doc, rel)
 	want := schema.Targets.FileID(filepath.Base(rel))
 	if want == "" {
@@ -545,14 +539,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	// table.extends 的值域由 fields.table.fields.extends.pattern + unique 保证；
 	// 这里只补字段树无法表达的空列表约束，避免同一错误重复报两次。
 	table, _ := asMap(doc["table"])
-	if table != nil {
-		if n, ok := table["name"].(string); ok && n == "" {
-			c.rulef("schema.non-empty", "%s: table.name must not be empty", rel)
-		}
-	}
-	if summary, _ := doc["summary"].(string); summary == "" {
-		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
-	}
 	if table != nil {
 		if list, isList := table["extends"].([]any); isList && len(list) == 0 {
 			c.rulef("base-only", "%s: table.extends must not be empty", rel)
@@ -612,9 +598,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		} else {
 			c.rulef("schema.unique-names", "%s: constraints[%d]: duplicate constraint %q", rel, i, name)
 		}
-		if !hasNonEmptyString(m, "expr") {
-			c.rulef("constraint-fields", "%s: constraints[%d] (%s): expr must not be empty", rel, i, name)
-		}
 		if code, _ := m["on_violation"].(string); code != "" {
 			if errs := c.errorCodes(); len(errs) > 0 && !errs[strings.TrimPrefix(code, "platform.errors.")] {
 				c.rulef("constraint-fields", "%s: constraints[%d] (%s): unknown error code %s", rel, i, name, code)
@@ -637,9 +620,6 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.rulef("schema.unique-names", "%s: indexes[%d]: duplicate index %q", rel, i, name)
 		}
 		c.checkIndexUsedBy(m, want, rel, i, name)
-		if _, ok := m["comment"]; ok && !hasNonEmptyString(m, "comment") {
-			c.rulef("index-comment", "%s: indexes[%d] (%s): comment must not be empty", rel, i, name)
-		}
 		hasCols := len(asList(m["columns"])) > 0
 		hasExpr := hasNonEmptyString(m, "expression")
 		if hasCols == hasExpr {
@@ -847,9 +827,6 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 	}
 	for _, name := range familyNames(schema.ValueTypes) {
 		fam := schema.ValueTypes.TypeFamilies[name]
-		if strings.TrimSpace(name) == "" || strings.TrimSpace(fam.Description) == "" {
-			c.rulef("schema.types", "types.type_families.%s: name and description must not be empty", name)
-		}
 		paramNames := make([]string, 0, len(fam.Params))
 		for pname := range fam.Params {
 			paramNames = append(paramNames, pname)
@@ -863,10 +840,16 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 			if err := validateFieldTypes([]Field{{Name: pname, Type: def.Type}}); err != nil {
 				c.rulef("schema.types", "types.type_families.%s.params.%s: %v", name, pname, err)
 			}
+			if strings.TrimSpace(def.Description) == "" {
+				c.rulef("schema.types", "types.type_families.%s.params.%s: description must not be empty", name, pname)
+			}
 			if def.Pattern != "" {
 				if _, err := regexp.Compile(def.Pattern); err != nil {
 					c.rulef("schema.types", "types.type_families.%s.params.%s: invalid pattern: %v", name, pname, err)
 				}
+			}
+			if def.Default != nil {
+				c.validateValue(def.Default, def, fmt.Sprintf("types.type_families.%s.params.%s.default", name, pname))
 			}
 		}
 	}
@@ -877,20 +860,9 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 	sort.Strings(customTypeNames)
 	for _, name := range customTypeNames {
 		customType := schema.ValueTypes.CustomTypes[name]
-		fam, ok := schema.ValueTypes.TypeFamilies[customType.Family]
-		if !ok {
-			c.rulef("schema.types", "types.custom_types.%s: unknown family %s", name, customType.Family)
-			continue
-		}
-		if strings.TrimSpace(customType.Description) == "" {
-			c.rulef("schema.types", "types.custom_types.%s: description must not be empty", name)
-		}
 		for pname := range customType.Params {
 			if pname == "default" {
 				continue
-			}
-			if _, ok := fam.Params[pname]; !ok {
-				c.rulef("schema.types", "types.custom_types.%s: param %s not allowed by family %s", name, pname, customType.Family)
 			}
 			if _, ok := contractspec.SchemaParamTargets[pname]; !ok {
 				c.rulef("schema.types", "types.custom_types.%s: param %s has no consumer target", name, pname)

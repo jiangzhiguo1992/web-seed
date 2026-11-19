@@ -194,9 +194,6 @@ func (c *Checker) checkQueries(schema *Schema) {
 		c.checkTargetFileName(schema, filepath.Base(qd.rel), qd.rel)
 		c.validateDoc(qd.doc, schema.Fields, qd.rel)
 		c.checkStability(qd.doc, qd.rel)
-		if s, ok := qd.doc["summary"].(string); ok && strings.TrimSpace(s) == "" {
-			c.rulef("schema.non-empty", "%s: summary must not be empty", qd.rel)
-		}
 		if _, present := qd.doc["queries"]; present && len(asList(qd.doc["queries"])) == 0 {
 			c.rulef("schema.non-empty", "%s: queries must not be empty", qd.rel)
 		}
@@ -408,9 +405,7 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 			}
 			continue
 		}
-		if strings.TrimSpace(p.Type) == "" {
-			c.rulef("query-params", "%s: type must not be empty", pw)
-		} else if p.Column == "" {
+		if p.Type != "" && p.Column == "" {
 			if _, _, _, ok := paramLogicalType(p.Type); !ok {
 				c.rulef("query-params", "%s: type %q cannot map to a type family or data.enums.*", pw, p.Type)
 			}
@@ -589,9 +584,7 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 	var hasList bool
 	for i, r := range q.Returns {
 		rw := fmt.Sprintf("%s returns[%d]", where, i)
-		if r.Name == "" {
-			c.rulef("query-returns", "%s: name must not be empty", rw)
-		} else if names[r.Name] {
+		if r.Name != "" && names[r.Name] {
 			c.rulef("query-returns", "%s: duplicate return name %s", rw, r.Name)
 		}
 		names[r.Name] = true

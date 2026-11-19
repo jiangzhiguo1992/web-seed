@@ -47,7 +47,7 @@ features ✗ data.tables / data.queries（禁止直接引用表或查询）
 
 **feature.rules**
 
-- `constraint` 必须有 `field` / `op` / `value`；`invariant` 必须有 `assert`；`policy` 必须有 `implemented_by`
+- `constraint` 必须有 `entity` / `field` / `op` / `value`，且 `entity` 必须存在、`field` 必须是该实体的非关系字段或基类列；`invariant` 必须有 `assert`；`policy` 必须有 `implemented_by`
 - `implemented_by` 只能指向 `cap.services.*`
 - `on_violation` 必须是存在的 `platform.errors.*`
 - 不要写散文式规则；不能结构化的用 `policy` + `given/when/then`

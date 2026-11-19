@@ -1,5 +1,4 @@
-# feature.rules 类型规范：可执行的业务规则，按业务主体组织。
-# constraint = 字段级可生成校验；invariant = 可生成断言/测试；policy = 需要人工实现，必须测试。
+# feature.rules：可执行业务规则，按业务主体组织。
 
 id: meta.feature.rules
 type: feature.rules
@@ -51,22 +50,23 @@ fields:
     type: list<object>
     required: true
     min_items: 1
-    description: "规则项；item ID 由显式 id 给出"
+    description: "规则项"
     item_fields:
       - { name: id, type: string, required: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "规则 ID" }
       - { name: kind, type: string, required: true, enum: [ constraint, invariant, policy ], description: "constraint=字段级校验；invariant=断言；policy=人工实现" }
       - { name: summary, type: string, required: true, description: "一句话说明" }
       - { name: severity, type: string, required: true, enum: [ error, warning ], description: "违反级别" }
-      - { name: field, type: string, required: false, pattern: '^[a-z][a-z0-9_]*$', description: "constraint 的字段名" }
+      - { name: entity, type: string, required: false, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "constraint 的实体；field 必须是该实体字段" }
+      - { name: field, type: string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "constraint 的字段名（json_name）" }
       - { name: op, type: string, required: false, enum: [ eq, ne, gt, ge, lt, le, in, not_in, pattern, min_len, max_len, required, not_null ], description: "constraint 的比较操作" }
       - { name: value, type: any, required: false, description: "constraint 的期望值" }
       - { name: assert, type: string, required: false, description: "invariant 的断言表达式" }
       - { name: on_violation, type: string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "违反时返回的错误码" }
-      - { name: implemented_by, type: list<string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该规则的服务项；不得为空" }
-      - { name: given, type: string, required: false, description: "policy 的前置条件（人工实现依据，不做机器校验）" }
-      - { name: when, type: string, required: false, description: "policy 的触发场景（人工实现依据，不做机器校验）" }
-      - { name: then, type: string, required: false, description: "policy 的期望结果（人工实现依据，不做机器校验）" }
+      - { name: implemented_by, type: list<string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该规则的服务项" }
+      - { name: given, type: string, required: false, description: "policy 前置条件（人工依据，不校验）" }
+      - { name: when, type: string, required: false, description: "policy 触发场景（人工依据，不校验）" }
+      - { name: then, type: string, required: false, description: "policy 期望结果（人工依据，不校验）" }
 
 rules:
-  - { id: rule-structure, text: "kind=constraint 必须有 field/op/value；kind=invariant 必须有 assert；on_violation 必须存在；implemented_by 不得为空且必须指向存在的 cap.services.*", implemented_by: [ rule-structure ] }
+  - { id: rule-structure, text: "kind=constraint 必须有 entity/field/op/value 且不得有 assert/given/when/then；entity 必须是存在的 data.entities.*，field 必须是该实体的非关系字段或基类列；kind=invariant 必须有 assert 且不得有 entity/field/op/value/given/when/then；kind=policy 不得有 entity/field/op/value/assert；on_violation 必须存在；implemented_by 不得为空且必须指向存在的 cap.services.*", implemented_by: [ rule-structure ] }
   - { id: rule-id-unique, text: "规则 ID 全局唯一，且必须以文件 ID 为前缀", implemented_by: [ rule-id-unique ] }

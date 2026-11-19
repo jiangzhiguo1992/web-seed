@@ -417,11 +417,20 @@ func TestPhysicalPrimaryKeyRejected(t *testing.T) {
 }
 
 func TestTableRulesConstraintRequiresExpr(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["constraints"] = []any{map[string]any{"name": "ck_x_code"}}
-	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if !strings.Contains(strings.Join(c.errs, "\n"), "expr must not be empty") {
+	c.validateDoc(doc, schema.Fields, "contracts/data/tables/x.yaml")
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "missing required field \"expr\"") {
 		t.Fatalf("check without expr not reported: %v", c.errs)
 	}
 }
@@ -982,23 +991,6 @@ writes:
 	c.checkCapabilityWrites(map[string]string{"data.tables.x": "contracts/data/tables/x.yaml"})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "only cap.services may declare persistence/writes") {
 		t.Fatalf("http top-level writes not rejected: %v", c.errs)
-	}
-}
-
-func TestPersistenceOwnership(t *testing.T) {
-	c := &Checker{tableOwners: map[string]string{
-		"data.tables.account":  "account",
-		"data.tables.auth_pwd": "auth",
-	}}
-	doc := map[string]any{
-		"owner_module": "auth",
-		"persistence": map[string]any{
-			"tables": []any{"data.tables.account", "data.tables.auth_pwd"},
-		},
-	}
-	c.checkMethodPersistence(doc, "contracts/capabilities/methods/auth.yaml", map[string]string{"data.tables.account": "contracts/data/tables/account.yaml", "data.tables.auth_pwd": "contracts/data/tables/auth_pwd.yaml"})
-	if !strings.Contains(strings.Join(c.errs, "\n"), `cannot write data.tables.account`) {
-		t.Fatalf("cross-module write not reported: %v", c.errs)
 	}
 }
 

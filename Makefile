@@ -83,7 +83,7 @@ gen-errors-check: ## 校验 errors.md 是否最新（CI）
 contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|cap.events|cap.protocols.http）
 	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" service="$(service)" path="$(path)" http_method="$(http_method)" ./scripts/contract/scaffold.sh
 
-contract-check: ## 校验契约结构与 used_by（data.tables/enums/entities/queries）
+contract-check: ## 校验契约结构、引用与 used_by（全部类型）
 	@./scripts/contract/validate.sh
 
 gen-rule-ids: ## 从 checker 的 rulef(...) 生成 rule_ids_gen.go

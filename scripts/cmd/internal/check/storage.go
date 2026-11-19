@@ -1,6 +1,7 @@
 // storage.go 校验 data/storage.yaml 的存储拓扑：
 // tables 按引擎分组；普通条目内聚 description/retention/partition，归档条目用 archive_of；
 // caches 记录非权威副本及其缓存保留；引擎版本、连接池、部署拓扑等运行时配置不在契约内。
+// gen_db 只消费 tables.<engine> 的权威表列表，不生成 retention/partition/caches 配置。
 package check
 
 import (
