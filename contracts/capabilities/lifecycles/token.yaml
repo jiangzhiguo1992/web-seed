@@ -1,0 +1,33 @@
+# 令牌生命周期：签发 active；吊销 revoked；过期 expired 由 expire 服务写入。
+
+id: cap.lifecycles.token
+summary: "令牌生命周期"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "expired 由 cap.services.token.expire 批量写入；读取方仍应检查过期时间"
+  - "purge_expired 物理删除令牌，不属于状态转换"
+  - "不要用 revoked 表示自然过期"
+
+subjects:
+  - { entity: data.entities.token, field: status }
+states:
+  values: [active, revoked, expired]
+  initial: active
+  final: [revoked, expired]
+create:
+  requires:
+    - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+  services: [ cap.services.token.issue, cap.services.token.refresh ]
+transitions:
+  - name: revoke
+    description: "主动吊销令牌"
+    from: [active]
+    to: revoked
+    implemented_by: [ cap.services.token.logout.revoke_token, cap.services.token.refresh.revoke_token, cap.services.token.revoke_by_account.revoke_tokens_by_account ]
+  - name: expire
+    description: "把超过 refresh_expire_at 的活跃令牌置为 expired"
+    from: [active]
+    to: expired
+    implemented_by: [ cap.services.token.expire.expire_tokens ]

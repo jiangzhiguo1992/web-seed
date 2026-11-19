@@ -12,7 +12,7 @@
 | 目录                                 | 回答的问题                         | 真相源内容                                           | 产物                                   |
 |--------------------------------------|------------------------------------|------------------------------------------------------|----------------------------------------|
 | `services/<module>.yaml`             | 模块能提供哪些可调用单元、如何实现 | services[]、steps、input/output 数据链、事务、写归属 | Go interface、usecase 骨架、写归属校验 |
-| `lifecycles/<dimension>.yaml`        | 实体的某个状态字段如何创建、流转与销毁 | subjects[{entity,field}]、initial/final、create/destroy、transitions | 生命周期常量、转换表、非法动作测试     |
+| `lifecycles/<dimension>.yaml`        | 实体的某个状态机如何创建、流转与销毁 | subjects[{entity,field}]、states(values/initial/final/derived)、create/destroy、transitions | 生命周期常量、转换表、非法动作测试     |
 | `events/<module>.yaml`               | 哪些异步主题与任务、如何触发与重试 | topics[]（payload/发布/订阅）、jobs[]（trigger/retry） | 事件常量、payload 类型、worker 注册表  |
 | `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露           | path、method、status、header、schema 引用            | server 类型、client、合并 spec         |
 
@@ -147,13 +147,17 @@ service 项必须声明：
 `rules` 仍属于功能规格，放在 `contracts/features/rules/`；`lifecycles` 属于能力层，放在
 `contracts/capabilities/lifecycles/`：
 
-- 一个 lifecycle = 一个状态维度：`subjects` 写 `{entity, field}`，同一实体的多个状态字段拆成多份契约，同一 `(entity, field)` 只能被一份契约声明；
-- `transitions[].requires` 声明跨维度前置状态（`{lifecycle, state}`，AND 语义）；目标维度不存在或不在该状态时必须返回该转换的 `on_violation`；
+- 一个 lifecycle = 一个状态机：`subjects` 列出共享该状态机的全部 `{entity, field}`，必须同枚举、同 `owner_module`；同一 `(entity, field)` 只能被一份契约声明；
+- `states` 是对象：`values` 是状态集合，`initial` 是初始状态，`final` 是终态集合，`derived` 是由时间/外部事实派生的终态子集；`derived` 必须是 `final` 子集，且不要求经 transition 可达；
+- `final` 是列表：单终态（如 account 的 `[deleted]`）与多终态（如 token 的 `[revoked, expired]`）用同一形状表达；`destroy` 存在时 `final` 最多一个；
+- `destroy` 可从任意非 final 状态销毁，不写 `from` / `to`；`final` 恰好一个时 destroy 进入该终态，`final` 为空时只软删实体，多终态 lifecycle 不使用 destroy；
+- 幂等转换：把当前状态也写进 `from`（自环），不要单独维护幂等列表；
+- `create` / `destroy` 写 `services`（由 `make gen-graph` 从 step.lifecycles 反推）与 `events`（必须由对应 service 的 step 发出）；`transitions[].implemented_by` 仍由 gen-graph 写回；
+- `transitions[].requires` 声明跨维度前置状态：`{lifecycle, states: [...]}`，处于任一状态即可，列表内 AND；requires 图不得有环；实现该转换的 service 必须自行校验；
 - service 的 `kind: logic` / `kind: when` step 用 `rules: [{ rule: feature.rules.* }]` 引用业务规则；
 - 任意 step 用 `lifecycles: [cap.lifecycles.*.*]` 回引生命周期动作（create/destroy/transition）；`lifecycles` 不限制 step 的 kind，一个 step 可列多个动作；
-- `cap.lifecycles` 的 `create.steps` / `destroy.steps` / `transitions[].implemented_by` 由 `make gen-graph` 写回；
 - 每个生命周期动作的 step 不再声明 `state.write`；`lifecycles` 只是标记，不限制 step kind，也不要求本步写状态列；
-- 事件只由 service step 的 `events` 声明（`kind: events`），lifecycle 不写 `side_effects`；
+- 事件只由 service step 的 `events` 声明（`kind: events`）；lifecycle 的 `create.events` / `destroy.events` 是对应动作的事件投影，必须能回指到 service step；
 - `feature.rules` 的 `implemented_by` 仍指向 service 项。
 
 capabilities 不承载 `rules/` 目录；features 不承载 `states/` 目录。

@@ -1,0 +1,166 @@
+# feature.pages：页面契约。data/view_states/actions 是 map<object>，逐项校验槽位形状；
+# lifecycle / service / route 引用由 pages.go 校验。
+
+id: meta.feature.pages
+type: feature.pages
+title: "页面契约"
+targets:
+  dir: "contracts/features/pages"
+  glob: "*.yaml"
+  id: "feature.pages.<file>"
+  naming: "snake_case"
+
+fields:
+  - name: schema_version
+    type: integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: id
+    type: string
+    required: true
+    pattern: '^feature\.pages\.[a-z][a-z0-9_]*$'
+    description: "契约 ID"
+
+  - name: summary
+    type: string
+    required: true
+    description: "一句话说明"
+
+  - name: stability
+    type: string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: list<string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: page
+    type: string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "页面名；必须等于文件 stem"
+
+  - name: route
+    type: string
+    required: false
+    description: "路由 ID；无路由时为 null"
+
+  - name: data
+    type: map<object>
+    required: false
+    description: "数据源映射"
+    item_fields:
+      - { name: capability, type: string, required: true, description: "数据源 service ID" }
+      - { name: params, type: any, required: false, description: "参数映射" }
+      - { name: cache, type: any, required: false, description: "缓存策略" }
+
+  - name: view_states
+    type: map<object>
+    required: true
+    description: "页面状态映射；至少包含 loading/(empty 或 idle)/error/forbidden"
+    item_fields:
+      - { name: when, type: string, required: true, description: "状态条件表达式" }
+      - { name: ui, type: string, required: false, description: "UI 变体" }
+      - { name: show, type: string, required: false, description: "展示字段" }
+      - { name: note, type: string, required: false, description: "状态说明" }
+      - { name: action, type: string, required: false, description: "状态动作名" }
+      - { name: retry, type: boolean, required: false, description: "是否可重试" }
+
+  - name: actions
+    type: map<object>
+    required: false
+    description: "动作映射"
+    item_fields:
+      - { name: capability, type: string, required: false, description: "调用的 service ID" }
+      - { name: permission, type: string, required: false, description: "权限 ID" }
+      - { name: available_when, type: any, required: false, description: "可用条件；lifecycle 引用由 pages.go 校验" }
+      - { name: ui, type: string, required: false, description: "UI 变体" }
+      - { name: label, type: string, required: false, description: "按钮文案" }
+      - { name: confirm, type: boolean, required: false, description: "是否二次确认" }
+      - { name: danger, type: boolean, required: false, description: "是否危险动作" }
+      - { name: on_success, type: string, required: false, description: "成功后的导航/动作" }
+
+  - name: fields
+    type: list<object>
+    required: false
+    description: "表单或展示字段"
+    item_fields:
+      - { name: name, type: string, required: true, description: "字段名" }
+      - { name: type, type: string, required: false, description: "输入类型" }
+      - { name: required, type: boolean, required: false, description: "是否必填" }
+      - { name: optional, type: boolean, required: false, description: "是否可选" }
+      - { name: minLength, type: integer, required: false, description: "最小长度" }
+      - { name: maxLength, type: integer, required: false, description: "最大长度" }
+      - { name: label, type: string, required: false, description: "展示名" }
+      - { name: render, type: string, required: false, description: "渲染方式" }
+      - { name: enum, type: string, required: false, description: "枚举来源；引用由 pages.go 校验" }
+      - { name: autocomplete, type: string, required: false, description: "浏览器自动填充提示" }
+      - { name: secret, type: boolean, required: false, description: "是否敏感输入" }
+
+  - name: filters
+    type: list<object>
+    required: false
+    description: "筛选器"
+    item_fields:
+      - { name: name, type: string, required: true, description: "筛选项名" }
+      - { name: enum, type: string, required: false, description: "枚举来源" }
+      - { name: multiple, type: boolean, required: false, description: "是否多选" }
+      - { name: label, type: string, required: false, description: "展示名" }
+
+  - name: pagination
+    type: object
+    required: false
+    description: "分页配置"
+    fields:
+      - { name: style, type: string, required: true, description: "分页风格" }
+      - { name: param, type: string, required: true, description: "分页参数名" }
+      - { name: limit_default, type: integer, required: false, description: "默认页大小" }
+      - { name: limit_max, type: integer, required: false, description: "最大页大小" }
+
+  - name: empty_copy
+    type: object
+    required: false
+    description: "空态文案"
+    fields:
+      - { name: title, type: string, required: true, description: "空态标题" }
+      - { name: description, type: string, required: true, description: "空态描述" }
+      - { name: action_label, type: string, required: false, description: "空态动作文案" }
+
+  - name: analytics
+    type: object
+    required: false
+    description: "埋点"
+    fields:
+      - { name: page_view, type: string, required: true, description: "页面浏览事件" }
+      - { name: actions, type: map<string>, required: false, description: "动作事件映射" }
+
+  - name: security
+    type: object
+    required: false
+    description: "安全提示"
+    fields:
+      - { name: rate_limit_hint, type: string, required: false, description: "限流提示" }
+      - { name: error_copy_uniform, type: string, required: false, description: "统一错误提示" }
+
+  - name: transition_ui
+    type: object
+    required: false
+    description: "状态按钮渲染"
+    fields:
+      - { name: source, type: string, required: true, description: "lifecycle transitions 引用" }
+      - { name: rule, type: string, required: true, description: "渲染规则" }
+
+  - name: copy
+    type: object
+    required: false
+    description: "静态文案"
+    fields:
+      - { name: title, type: string, required: true, description: "标题" }
+      - { name: description, type: string, required: true, description: "描述" }

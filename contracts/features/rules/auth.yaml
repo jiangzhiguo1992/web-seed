@@ -8,6 +8,7 @@ stability: draft
 do_not:
   - "验证体规则只引用 data.entities.verification_body / verification_action，不引用物理表/查询"
   - "不要在 handler 里手写验证码消费、重发或动作写入逻辑"
+  - "账号状态规则与 lifecycle requires 必须由 service step 真正执行，不能只声明"
 rules:
   - id: feature.rules.auth.verification_one_time
     kind: policy
@@ -26,7 +27,7 @@ rules:
     implemented_by: [ cap.services.verification.verify ]
     given: "verification_body.expire_at <= now()"
     when: "校验验证码"
-    then: "拒绝，返回 AUTH_VERIFICATION_EXPIRED，并将记录置为 expired"
+    then: "拒绝，返回 AUTH_VERIFICATION_EXPIRED；expired 由 expire_at 派生，不在 verify 事务内写状态"
   - id: feature.rules.auth.verification_attempts
     kind: policy
     summary: "失败次数达到上限后作废验证码"
@@ -35,7 +36,7 @@ rules:
     implemented_by: [ cap.services.verification.verify ]
     given: "verification_body.attempt_count >= auth_policy.verification.max_attempts"
     when: "校验验证码"
-    then: "拒绝，返回 AUTH_VERIFICATION_ATTEMPTS_EXCEEDED，并将记录置为 revoked"
+    then: "拒绝，返回 AUTH_VERIFICATION_ATTEMPTS_EXCEEDED；不在 verify 事务内写 revoked，由 revoke_by_auth 或清理任务置 revoked"
   - id: feature.rules.auth.verification_auth_binding
     kind: policy
     summary: "验证体的 account_id 必须与 auth_id 所属账号一致"
@@ -54,6 +55,60 @@ rules:
     given: "auth_pwd.status != verified，或 auth_phone/auth_email.status != verified 或 status=disabled"
     when: "登录"
     then: "返回 AUTH_INVALID_CREDENTIALS，不区分未认证/停用/不存在"
+  - id: feature.rules.auth.auth_login_rejects_pending_account
+    kind: policy
+    summary: "待激活账号不可登录"
+    severity: error
+    on_violation: platform.errors.AUTH_INVALID_CREDENTIALS
+    implemented_by: [ cap.services.auth.login ]
+    given: "account.status = pending"
+    when: "登录"
+    then: "返回 AUTH_INVALID_CREDENTIALS，不暴露账号待激活状态"
+  - id: feature.rules.auth.auth_login_rejects_suspended_account
+    kind: policy
+    summary: "封禁账号不可登录"
+    severity: error
+    on_violation: platform.errors.ACCOUNT_SUSPENDED
+    implemented_by: [ cap.services.auth.login ]
+    given: "account.status = suspended"
+    when: "登录"
+    then: "返回 ACCOUNT_SUSPENDED；页面 forbidden 态已按该错误码处理"
+  - id: feature.rules.auth.auth_login_rejects_deleted_account
+    kind: policy
+    summary: "已删除账号不可登录"
+    severity: error
+    on_violation: platform.errors.AUTH_INVALID_CREDENTIALS
+    implemented_by: [ cap.services.auth.login ]
+    given: "account.status = deleted 或 account 不存在"
+    when: "登录"
+    then: "返回 AUTH_INVALID_CREDENTIALS，不暴露账号是否存在或已删除"
+  - id: feature.rules.auth.auth_binding_rejects_suspended_account
+    kind: policy
+    summary: "封禁账号不可变更认证绑定"
+    severity: error
+    on_violation: platform.errors.ACCOUNT_SUSPENDED
+    implemented_by: [ cap.services.auth.bind_email, cap.services.auth.bind_password, cap.services.auth.bind_phone ]
+    given: "account.status = suspended"
+    when: "创建、换绑、启用或停用认证绑定"
+    then: "返回 ACCOUNT_SUSPENDED"
+  - id: feature.rules.auth.auth_binding_rejects_deleted_account
+    kind: policy
+    summary: "已删除账号不可变更认证绑定"
+    severity: error
+    on_violation: platform.errors.ACCOUNT_ALREADY_DELETED
+    implemented_by: [ cap.services.auth.bind_email, cap.services.auth.bind_password, cap.services.auth.bind_phone ]
+    given: "account.status = deleted"
+    when: "创建、换绑、启用或停用认证绑定"
+    then: "返回 ACCOUNT_ALREADY_DELETED"
+  - id: feature.rules.auth.auth_token_requires_active_account
+    kind: policy
+    summary: "已删除或封禁账号不可签发、刷新或使用令牌"
+    severity: error
+    on_violation: platform.errors.AUTH_TOKEN_INVALID
+    implemented_by: [ cap.services.token.issue, cap.services.token.refresh, cap.services.token.verify ]
+    given: "account.status = deleted 或 account.status = suspended"
+    when: "签发、刷新或校验 access token"
+    then: "拒绝，返回 AUTH_TOKEN_INVALID，不暴露账号状态"
   - id: feature.rules.auth.verification_purpose_status
     kind: policy
     summary: "登录/重置/解绑/注销要求认证记录已验证；注册/绑定/换绑允许未认证"
@@ -101,13 +156,13 @@ rules:
     then: "返回统一的验证码错误，不暴露账号或绑定是否存在"
   - id: feature.rules.auth.verification_account_active
     kind: policy
-    summary: "验证体必须绑定未删除账号"
+    summary: "验证体必须绑定未删除且未封禁账号"
     severity: error
     on_violation: platform.errors.AUTH_VERIFICATION_INVALID
     implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
-    given: "account_id 不存在、已软删或 status=deleted"
+    given: "account_id 不存在、已软删、status=deleted 或 status=suspended"
     when: "发送或校验验证码"
-    then: "拒绝，不创建验证体、不写动作；返回统一验证错误，不区分账号不存在/已删除；注册必须先创建 pending account"
+    then: "拒绝，不创建验证体、不写动作；返回统一验证错误，不区分账号不存在/已删除/已封禁；注册必须先创建 pending account"
   - id: feature.rules.auth.verification_register_account
     kind: policy
     summary: "注册验证必须携带 pending account ID"
@@ -132,9 +187,9 @@ rules:
     severity: error
     on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [ cap.services.verification.verify ]
-    given: "VerifyCode 发生状态变更"
-    when: "事务提交"
-    then: "同一事务写入 verification_action，含 account_id 快照；result 与实际结果一致"
+    given: "VerifyCode 产生 success/mismatch/expired/attempts_exceeded/invalid 结果"
+    when: "记录校验动作"
+    then: "成功/不匹配在 verify 事务内写入；过期/超限/非法由 cap.services.verification.record_failure 独立事务写入；含 account_id 快照，result 与实际结果一致"
   - id: feature.rules.auth.verification_action_append_only
     kind: policy
     summary: "验证动作只追加，不更新"

@@ -152,6 +152,7 @@ func (c *Checker) run() {
 	c.checkRules(entitySchema)
 	c.checkRules(querySchema)
 	c.checkCapabilities()
+	c.checkFeaturePages()
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues)
 	c.checkCapabilityWrites(tableIDs)

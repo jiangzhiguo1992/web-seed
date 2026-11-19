@@ -7,6 +7,7 @@ do_not:
   - "auth.login 不直接写 token 表；通过 cap.services.token.issue 签发"
   - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
   - "登录失败计数必须先于错误返回写入；login 不使用整体事务"
+  - "bind_email / bind_phone / bind_password 必须先读取 account 并校验 status ∈ (pending, active)"
 
 schemas:
   LoginInput:
@@ -185,6 +186,9 @@ services:
         errors: [ ]
         rules:
           - { rule: feature.rules.auth.auth_login_requires_verified }
+          - { rule: feature.rules.auth.auth_login_rejects_pending_account }
+          - { rule: feature.rules.auth.auth_login_rejects_suspended_account }
+          - { rule: feature.rules.auth.auth_login_rejects_deleted_account }
           - { rule: feature.rules.auth.login_lockout }
         goto: now
       - id: now
@@ -332,6 +336,28 @@ services:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
       - { name: err, type: error }
     steps:
+      - id: load_account
+        kind: query
+        summary: "读取认证绑定所属账号"
+        input:
+          - { name: id, value: params.input.account_id, description: "账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: data.queries.account.get_account
+        goto: check_account
+      - id: check_account
+        kind: logic
+        summary: "校验账号可变更认证绑定"
+        input:
+          - { name: account, value: step.load_account.account, description: "认证绑定所属账号" }
+        output: [ ]
+        errors:
+          - platform.errors.ACCOUNT_SUSPENDED
+          - platform.errors.ACCOUNT_ALREADY_DELETED
+        rules:
+          - { rule: feature.rules.auth.auth_binding_rejects_suspended_account }
+          - { rule: feature.rules.auth.auth_binding_rejects_deleted_account }
+        goto: resolve
       - id: resolve
         kind: logic
         summary: "按 action 定位目标密码绑定：create 生成新 ID，其余使用现有绑定"
@@ -505,6 +531,28 @@ services:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
       - { name: err, type: error }
     steps:
+      - id: load_account
+        kind: query
+        summary: "读取认证绑定所属账号"
+        input:
+          - { name: id, value: params.input.account_id, description: "账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: data.queries.account.get_account
+        goto: check_account
+      - id: check_account
+        kind: logic
+        summary: "校验账号可变更认证绑定"
+        input:
+          - { name: account, value: step.load_account.account, description: "认证绑定所属账号" }
+        output: [ ]
+        errors:
+          - platform.errors.ACCOUNT_SUSPENDED
+          - platform.errors.ACCOUNT_ALREADY_DELETED
+        rules:
+          - { rule: feature.rules.auth.auth_binding_rejects_suspended_account }
+          - { rule: feature.rules.auth.auth_binding_rejects_deleted_account }
+        goto: resolve
       - id: resolve
         kind: logic
         summary: "按 action 定位现有手机绑定；create/replace 的新 ID 由 new_id 生成"
@@ -745,6 +793,28 @@ services:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
       - { name: err, type: error }
     steps:
+      - id: load_account
+        kind: query
+        summary: "读取认证绑定所属账号"
+        input:
+          - { name: id, value: params.input.account_id, description: "账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: data.queries.account.get_account
+        goto: check_account
+      - id: check_account
+        kind: logic
+        summary: "校验账号可变更认证绑定"
+        input:
+          - { name: account, value: step.load_account.account, description: "认证绑定所属账号" }
+        output: [ ]
+        errors:
+          - platform.errors.ACCOUNT_SUSPENDED
+          - platform.errors.ACCOUNT_ALREADY_DELETED
+        rules:
+          - { rule: feature.rules.auth.auth_binding_rejects_suspended_account }
+          - { rule: feature.rules.auth.auth_binding_rejects_deleted_account }
+        goto: resolve
       - id: resolve
         kind: logic
         summary: "按 action 定位现有邮箱绑定；create/replace 的新 ID 由 new_id 生成"

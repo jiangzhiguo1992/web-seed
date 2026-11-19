@@ -93,7 +93,7 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 	}
 }
 
-func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, lifecycleActions map[string]lifecycleAction, typeNames map[string]bool) {
+func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, lifecycleActions map[string]bool, typeNames map[string]bool) {
 	steps := asList(doc["steps"])
 	if len(steps) == 0 {
 		c.rulef("service-structure", "%s: service requires steps", rel)

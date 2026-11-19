@@ -1,0 +1,51 @@
+# 验证体生命周期：创建 pending；发送 sent；校验成功 consumed；过期 expired；作废 revoked；发送失败 failed。
+
+id: cap.lifecycles.verification
+summary: "验证体生命周期"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "failed 只表示发送失败；发送失败必须把验证体置为 failed"
+  - "invalid 是 verification_result，不是 verification_status；不要写入验证体状态"
+  - "验证码不匹配只递增 attempt_count，状态保持 sent；attempts_exceeded 不在 verify 事务内写 revoked"
+  - "expired 由 expire_at 派生，不要求 status 列已写；读取方必须检查 expire_at"
+
+subjects:
+  - { entity: data.entities.verification_body, field: status }
+states:
+  values: [pending, sent, consumed, expired, revoked, failed]
+  initial: pending
+  final: [consumed, expired, revoked, failed]
+  derived: [expired]
+create:
+  requires:
+    - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+  services: [ cap.services.verification.send ]
+transitions:
+  - name: send
+    description: "验证体创建后标记为已发送"
+    from: [pending]
+    to: sent
+    requires:
+      - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+    implemented_by: [ cap.services.verification.send.mark_sent ]
+  - name: consume
+    description: "验证码校验成功后消费"
+    from: [sent]
+    to: consumed
+    requires:
+      - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+    implemented_by: [ cap.services.verification.verify.consume ]
+  - name: revoke
+    description: "重发、换绑或停用时作废"
+    from: [pending, sent]
+    to: revoked
+    implemented_by: [ cap.services.verification.revoke_by_account.revoke_active_verifications_by_account, cap.services.verification.revoke_by_auth.revoke_active_verifications_by_auth, cap.services.verification.send.revoke_old ]
+  - name: fail
+    description: "验证码发送失败"
+    from: [sent]
+    to: failed
+    requires:
+      - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+    implemented_by: [ cap.services.verification.send.mark_failed ]

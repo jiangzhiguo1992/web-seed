@@ -110,7 +110,7 @@ CREATE TABLE `verification_action` (
   `device_id` VARCHAR(128) COMMENT '客户端设备标识；与 LoginInput.device_id 对齐',
   `location` VARCHAR(128) COMMENT 'IP 派生的粗粒度地点（国家/省/市）；不存精确坐标',
   `input_hash` VARCHAR(128) NOT NULL COMMENT '提交内容的 HMAC-SHA256；不存原文',
-  CONSTRAINT `ck_verification_action_result` CHECK (result IN (1, 2, 3, 4)),
+  CONSTRAINT `ck_verification_action_result` CHECK (result IN (1, 2, 3, 4, 5)),
   CONSTRAINT `ck_verification_action_input` CHECK (input_hash IS NOT NULL),
   CONSTRAINT `ck_verification_action_status` CHECK (status = 0),
   CONSTRAINT `ck_verification_action_no_soft_delete` CHECK (deleted_at IS NULL),

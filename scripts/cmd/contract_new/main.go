@@ -129,7 +129,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; add subjects/states/initial/final/create/destroy/transitions; step refs are maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
+		writeOut(*out, b, "next: replace TODO; fill subjects/states/create/destroy/transitions; step refs are maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
 
 	case "cap.events":
 		b, err := contractspec.RenderEvents(schema, *name, *module, *summary)

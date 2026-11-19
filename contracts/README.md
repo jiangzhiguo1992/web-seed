@@ -92,7 +92,7 @@ contracts/
 │
 ├── capabilities/             # ② 能力层：services + lifecycles + events（topics/jobs）+ protocols
 │   ├── services/<module>.yaml #   服务：services + schemas（interface 名由 owner_module + file 派生）
-│   ├── lifecycles/<dimension>.yaml # 状态维度生命周期：subjects(entity+field)、create/destroy/transitions，锚到 service step
+│   ├── lifecycles/<dimension>.yaml # 状态机生命周期：subjects(entity+field)、states、create/destroy/transitions，锚到 service step
 │   ├── events/<module>.yaml   #   异步主题与任务：topics + jobs
 │   └── protocols/
 │       └── http/<module>.yaml #   HTTP 绑定：只写协议差异，x-service 指回 service
@@ -218,7 +218,7 @@ capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，�
 
 capabilities 内部允许 `services → lifecycles/rules/events`：`kind: logic/transition` 的 `rules`、step 的 `lifecycle`、`kind: logic/transition` 的 `events`。这是同组内的业务依据，不是跨层引用。
 
-`lifecycles` / `rules` 允许引用 `data.entities.*` 作为业务主体（生命周期的 `subjects[].entity`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。生命周期必须同时写 `subjects[].field`：一个契约只描述一个状态维度，同一实体的多个状态字段拆成多份契约。`business.*` 已全部移除。
+`lifecycles` / `rules` 允许引用 `data.entities.*` 作为业务主体（生命周期的 `subjects[].entity`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。生命周期必须同时写 `subjects[].field`：一个契约描述一个状态机，`subjects[]` 可列出共享该状态机的多个实体状态字段（同枚举、同 `owner_module`）；同一 `(entity, field)` 只能被一份契约声明。`business.*` 已全部移除。
 
 ### 3.3 图校验（⬜ P2）
 
@@ -333,7 +333,7 @@ table:
 | `capabilities/events/*` | 一模块一文件 | 120 |
 | `capabilities/events/*` | 一业务主体一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
-| `capabilities/lifecycles/*` | 一个状态维度一文件 | 150 |
+| `capabilities/lifecycles/*` | 一个状态机一文件 | 150 |
 | `features/rules/*` | 一规则集一文件 | 120 |
 | `features/pages/*` | 一页面一文件 | 150 |
 | `platform/**` | 一关注点一文件 | 150 |

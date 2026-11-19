@@ -17,6 +17,7 @@ var domainFiles = map[string]string{
 	"service_types.go": "services",
 	"http.go":          "http",
 	"lifecycles.go":    "lifecycles",
+	"pages.go":         "pages",
 	"events.go":        "events",
 	"rules.go":         "rules",
 }

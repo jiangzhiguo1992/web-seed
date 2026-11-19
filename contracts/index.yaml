@@ -102,7 +102,7 @@ entries:
   - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证会话服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：签发、刷新、吊销与校验", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.events.token, path: capabilities/events/token.yaml, summary: "令牌异步任务：过期清理", consumers: [worker], enforcement: generated+tested, stability: draft }
+  - { id: cap.events.token, path: capabilities/events/token.yaml, summary: "令牌异步任务：过期标记与清理", consumers: [worker], enforcement: generated+tested, stability: draft }
 
   # ---------- lifecycles / rules / events ----------
   - id: cap.lifecycles.account
@@ -117,6 +117,8 @@ entries:
       - "把 suspended 与 deleted 混用"
   - { id: cap.lifecycles.auth_pwd, path: capabilities/lifecycles/auth_pwd.yaml, summary: "密码认证绑定生命周期", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.lifecycles.auth_contact, path: capabilities/lifecycles/auth_contact.yaml, summary: "手机/邮箱认证绑定生命周期", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.lifecycles.token, path: capabilities/lifecycles/token.yaml, summary: "令牌生命周期", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.lifecycles.verification, path: capabilities/lifecycles/verification.yaml, summary: "验证体生命周期", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: feature.rules.account, path: features/rules/account.yaml, summary: "账号业务规则集", consumers: [api], enforcement: tested, stability: stable }
   - { id: feature.rules.auth, path: features/rules/auth.yaml, summary: "认证业务规则集（验证体）", consumers: [api], enforcement: tested, stability: draft }
   - { id: cap.events.account, path: capabilities/events/account.yaml, summary: "账号领域事件", consumers: [api, worker], enforcement: generated+tested, stability: stable }

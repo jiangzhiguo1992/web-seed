@@ -72,22 +72,19 @@ rules:
 	writeFixture(t, root, "contracts/capabilities/lifecycles/x.yaml", `id: cap.lifecycles.x
 subjects:
   - { entity: data.entities.x, field: status }
-initial: pending
-final: deleted
+states:
+  values: [pending, active, deleted]
+  initial: pending
+  final: [deleted]
 create:
-  steps: []
+  services: []
 destroy:
-  steps: []
-  from: [pending]
-  to: deleted
-states: [pending, active, deleted]
+  services: []
 transitions:
   - name: activate
     description: "a"
     from: [pending]
     to: active
-    guard: true
-    on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: []
 `)
 	writeFixture(t, root, "contracts/capabilities/events/x.yaml", `id: cap.events.x
@@ -148,8 +145,8 @@ jobs:
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"steps: [ cap.services.x.create.create ]",
-		"steps: [ cap.services.x.delete.soft_delete ]",
+		"services: [ cap.services.x.create ]",
+		"services: [ cap.services.x.delete ]",
 		"implemented_by: [ cap.services.x.activate.transition ]",
 	} {
 		if !strings.Contains(string(lifecycle), want) {
@@ -210,24 +207,21 @@ services:
 	writeFixture(t, root, "contracts/capabilities/lifecycles/x.yaml", `id: cap.lifecycles.x
 subjects:
   - { entity: data.entities.x, field: status }
-initial: pending
-final: deleted
+states:
+  values: [pending, active, deleted]
+  initial: pending
+  final: [deleted]
 create:
-  steps:
+  services:
     - cap.services.x.create.old
 destroy:
-  steps:
+  services:
     - cap.services.x.delete.old
-  from: [pending]
-  to: deleted
-states: [pending, active, deleted]
 transitions:
   - name: activate
     description: "a"
     from: [pending]
     to: active
-    guard: true
-    on_violation: platform.errors.COMMON_INTERNAL
     implemented_by:
       - cap.services.x.activate.old
 `)
@@ -259,8 +253,8 @@ transitions:
 	}
 	text := string(lifecycle)
 	for _, want := range []string{
-		"steps: [ cap.services.x.create.create ]",
-		"steps: [ cap.services.x.delete.soft_delete ]",
+		"services: [ cap.services.x.create ]",
+		"services: [ cap.services.x.delete ]",
 		"implemented_by: [ cap.services.x.activate.transition ]",
 	} {
 		if !strings.Contains(text, want) {

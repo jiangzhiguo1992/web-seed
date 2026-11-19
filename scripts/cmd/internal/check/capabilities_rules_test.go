@@ -106,13 +106,13 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 			},
 		}
 	}
-	c.checkServiceItem(doc([]any{map[string]any{"name": "account", "type": "any"}}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
+	c.checkServiceItem(doc([]any{map[string]any{"name": "account", "type": "any"}}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("covered output reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
+	c.checkServiceItem(doc([]any{}), "f", "cap.services.x.create", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown step output account") {
 		t.Fatalf("missing return not reported: %v", c.errs)
 	}
@@ -444,22 +444,19 @@ stability: draft
 do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
-states: [pending, active, deleted]
-initial: pending
-final: deleted
+states:
+  values: [pending, active, deleted]
+  initial: pending
+  final: [deleted]
 create:
-  steps: [cap.services.x.create.create]
+  services: [cap.services.x.create]
 destroy:
-  steps: [cap.services.x.delete.soft_delete]
-  from: [pending, active]
-  to: deleted
+  services: [cap.services.x.delete]
 transitions:
   - name: activate
     description: "a"
     from: [pending]
     to: active
-    guard: true
-    on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [cap.services.x.activate.transition]
 `
 	writeCapFile(t, root, rel, valid)
@@ -473,7 +470,7 @@ transitions:
 		enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true, "deleted": true}},
 		entities:   map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status"}}}},
 	}
-	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{})
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, map[string]map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid lifecycle reported: %v", c.errs)
 	}
@@ -484,7 +481,7 @@ transitions:
 		t.Fatal(err)
 	}
 	c.errs = nil
-	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{})
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, map[string]map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[lifecycle-structure]") {
 		t.Fatalf("unknown initial state not reported: %v", c.errs)
 	}
@@ -556,22 +553,19 @@ stability: draft
 do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
-states: [pending, active, deleted]
-initial: pending
-final: deleted
+states:
+  values: [pending, active, deleted]
+  initial: pending
+  final: [deleted]
 create:
-  steps: [cap.services.x.create.create]
+  services: [cap.services.x.create]
 destroy:
-  steps: [cap.services.x.delete.soft_delete]
-  from: [pending, active]
-  to: deleted
+  services: [cap.services.x.delete]
 transitions:
   - name: activate
     description: "a"
     from: [pending]
     to: active
-    guard: true
-    on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [cap.services.x.activate.transition]
 `
 	cases := []struct {
@@ -585,23 +579,28 @@ transitions:
 			want: "[lifecycle-exhaustive]",
 		},
 		{
-			name: "unknown guard rule",
-			body: strings.Replace(valid, "guard: true", "guard: { rule: feature.rules.missing }", 1),
-			want: "[lifecycle-structure]",
+			name: "unreachable final",
+			body: strings.Replace(valid, "destroy:\n  services: [cap.services.x.delete]\n", "", 1),
+			want: "[lifecycle-exhaustive]",
 		},
 		{
 			name: "unknown implemented_by step",
 			body: strings.Replace(valid, "implemented_by: [cap.services.x.activate.transition]", "implemented_by: [cap.services.missing.activate]", 1),
-			want: "[lifecycle-steps]",
+			want: "[lifecycle-anchors]",
 		},
 		{
-			name: "missing create step back-reference",
-			body: strings.Replace(valid, "steps: [cap.services.x.create.create]", "steps: [cap.services.x.create.other]", 1),
-			want: "[lifecycle-steps]",
+			name: "missing create service back-reference",
+			body: strings.Replace(valid, "services: [cap.services.x.create]", "services: [cap.services.x.other]", 1),
+			want: "[lifecycle-anchors]",
+		},
+		{
+			name: "unknown create event",
+			body: strings.Replace(valid, "services: [cap.services.x.create]", "services: [cap.services.x.create]\n  events: [cap.events.x.created]", 1),
+			want: "[lifecycle-anchors]",
 		},
 		{
 			name: "state not in status enum",
-			body: strings.Replace(valid, "states: [pending, active, deleted]", "states: [pending, broken, deleted]", 1),
+			body: strings.Replace(valid, "values: [pending, active, deleted]", "values: [pending, broken, deleted]", 1),
 			want: "[lifecycle-subject]",
 		},
 		{
@@ -623,7 +622,7 @@ transitions:
 				enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true, "deleted": true}},
 				entities:   map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status"}}}},
 			}
-			c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{})
+			c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, map[string]map[string]bool{})
 			if !strings.Contains(strings.Join(c.errs, "\n"), tc.want) {
 				t.Fatalf("want %s, got %v", tc.want, c.errs)
 			}
@@ -649,23 +648,15 @@ stability: draft
 do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
-states: [pending, active, deleted]
-initial: pending
-final: deleted
-create:
-  steps: [cap.services.x.create.create]
-destroy:
-  steps: [cap.services.x.delete.soft_delete]
-  from: [pending, active]
-  to: deleted
+states:
+  values: [pending, active]
+  initial: pending
 transitions:
   - name: activate
     description: "a"
     from: [pending]
     to: active
-    guard: true
-    requires: [ { lifecycle: cap.lifecycles.y, state: active } ]
-    on_violation: platform.errors.COMMON_INTERNAL
+    requires: [ { lifecycle: cap.lifecycles.y, states: [active] } ]
     implemented_by: [cap.services.x.activate.transition]
 `
 	check := func(body string) string {
@@ -677,12 +668,12 @@ transitions:
 		c := &Checker{
 			root:       root,
 			errCodeSet: map[string]bool{"COMMON_INTERNAL": true},
-			enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true, "deleted": true}},
+			enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true}},
 			entities: map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{
 				Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status",
 			}}}},
 		}
-		c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, lifecycleStates, map[string]bool{})
+		c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, lifecycleStates)
 		return strings.Join(c.errs, "\n")
 	}
 
@@ -692,16 +683,148 @@ transitions:
 	if got := check(strings.Replace(valid, "cap.lifecycles.y", "cap.lifecycles.missing", 1)); !strings.Contains(got, "[lifecycle-requires]") {
 		t.Fatalf("unknown requires lifecycle not reported: %s", got)
 	}
-	if got := check(strings.Replace(valid, "state: active", "state: missing", 1)); !strings.Contains(got, "[lifecycle-requires]") {
+	if got := check(strings.Replace(valid, "states: [active]", "states: [missing]", 1)); !strings.Contains(got, "[lifecycle-requires]") {
 		t.Fatalf("unknown requires state not reported: %s", got)
 	}
 	if got := check(strings.Replace(valid, "cap.lifecycles.y", "cap.lifecycles.x", 1)); !strings.Contains(got, "requires itself") {
 		t.Fatalf("self requires not reported: %s", got)
 	}
-	repeat := strings.Replace(valid, "requires: [ { lifecycle: cap.lifecycles.y, state: active } ]",
-		"requires: [ { lifecycle: cap.lifecycles.y, state: active }, { lifecycle: cap.lifecycles.y, state: active } ]", 1)
+	repeat := strings.Replace(valid, "requires: [ { lifecycle: cap.lifecycles.y, states: [active] } ]",
+		"requires: [ { lifecycle: cap.lifecycles.y, states: [active] }, { lifecycle: cap.lifecycles.y, states: [active] } ]", 1)
 	if got := check(repeat); !strings.Contains(got, "repeats lifecycle") {
 		t.Fatalf("repeated requires lifecycle not reported: %s", got)
+	}
+}
+
+func TestCheckLifecycleEventAnchor(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.lifecycles")
+	rel := "contracts/capabilities/lifecycles/x.yaml"
+	stepIDs := map[string]bool{"cap.services.x.create.create": true}
+	actionSteps := map[string][]string{"cap.lifecycles.x.create": {"cap.services.x.create.create"}}
+	body := `id: cap.lifecycles.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+subjects:
+  - { entity: data.entities.x, field: status }
+states:
+  values: [active]
+  initial: active
+  final: [active]
+create:
+  services: [cap.services.x.create]
+  events: [cap.events.x.created]
+`
+	writeCapFile(t, root, rel, body)
+	doc, err := loadYAML(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	newChecker := func() *Checker {
+		return &Checker{
+			root:       root,
+			errCodeSet: map[string]bool{},
+			enumValues: map[string]map[string]bool{"data.enums.x_status": {"active": true}},
+			entities: map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{
+				Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status",
+			}}}},
+		}
+	}
+	c := newChecker()
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps,
+		map[string]map[string]bool{"cap.services.x.create": {}},
+		map[string]bool{"cap.events.x.created": true},
+		map[string]map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "is not emitted by services") {
+		t.Fatalf("unemitted event not reported: %v", c.errs)
+	}
+
+	c = newChecker()
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps,
+		map[string]map[string]bool{"cap.services.x.create": {"cap.events.x.created": true}},
+		map[string]bool{"cap.events.x.created": true},
+		map[string]map[string]bool{})
+	if len(c.errs) != 0 {
+		t.Fatalf("emitted event reported: %v", c.errs)
+	}
+}
+
+func TestCheckLifecycleDerivedStates(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.lifecycles")
+	rel := "contracts/capabilities/lifecycles/x.yaml"
+	stepIDs := map[string]bool{"cap.services.x.activate.transition": true}
+	actionSteps := map[string][]string{"cap.lifecycles.x.revoke": {"cap.services.x.activate.transition"}}
+	valid := `id: cap.lifecycles.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+subjects:
+  - { entity: data.entities.x, field: status }
+states:
+  values: [active, revoked, expired]
+  initial: active
+  final: [revoked, expired]
+  derived: [expired]
+transitions:
+  - name: revoke
+    description: "a"
+    from: [active]
+    to: revoked
+    implemented_by: [cap.services.x.activate.transition]
+`
+	check := func(body string) string {
+		writeCapFile(t, root, rel, body)
+		doc, err := loadYAML(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := &Checker{
+			root:       root,
+			enumValues: map[string]map[string]bool{"data.enums.x_status": {"active": true, "revoked": true, "expired": true}},
+			entities: map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{
+				Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status",
+			}}}},
+		}
+		c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, map[string]map[string]bool{})
+		return strings.Join(c.errs, "\n")
+	}
+	if got := check(valid); got != "" {
+		t.Fatalf("valid derived lifecycle reported: %s", got)
+	}
+	if got := check(strings.Replace(valid, "derived: [expired]", "derived: [active]", 1)); !strings.Contains(got, "must be a final state") {
+		t.Fatalf("derived outside final not reported: %s", got)
+	}
+	if got := check(strings.Replace(valid, "to: revoked", "to: expired", 1)); !strings.Contains(got, "must not target derived state") {
+		t.Fatalf("derived transition target not reported: %s", got)
+	}
+	if got := check(strings.Replace(valid, "from: [active]", "from: [revoked]", 1)); !strings.Contains(got, "must not be a transition source") {
+		t.Fatalf("final transition source not reported: %s", got)
+	}
+	multiFinal := strings.Replace(valid, "transitions:", "destroy:\n  services: [cap.services.x.delete]\ntransitions:", 1)
+	if got := check(multiFinal); !strings.Contains(got, "destroy requires at most one final") {
+		t.Fatalf("multi-final destroy not reported: %s", got)
+	}
+}
+
+func TestLifecycleRequiresCycle(t *testing.T) {
+	c := &Checker{}
+	c.checkLifecycleRequiresCycles(map[string][]string{
+		"cap.lifecycles.a": {"cap.lifecycles.b"},
+		"cap.lifecycles.b": {"cap.lifecycles.a"},
+		"cap.lifecycles.c": {"cap.lifecycles.d"},
+	})
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, "[lifecycle-requires]") || !strings.Contains(got, "cap.lifecycles.a -> cap.lifecycles.b -> cap.lifecycles.a") {
+		t.Fatalf("cycle not reported: %v", c.errs)
+	}
+	if strings.Contains(got, "cap.lifecycles.c") {
+		t.Fatalf("acyclic edge reported: %v", c.errs)
 	}
 }
 
@@ -719,9 +842,9 @@ stability: draft
 do_not: []
 subjects:
   - { entity: data.entities.account, field: status }
-initial: active
-final: active
-states: [active]
+states:
+  values: [active]
+  initial: active
 `
 	}
 	writeCapFile(t, root, "contracts/capabilities/lifecycles/a.yaml", body("cap.lifecycles.a", "a"))
@@ -1076,7 +1199,7 @@ func TestLogicRulesValidated(t *testing.T) {
 	}
 	c.checkServiceItem(doc, "contracts/capabilities/services/x.yaml", "cap.services.x.get", "x",
 		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{},
-		map[string]lifecycleAction{"cap.lifecycles.x.t": {kind: "transition"}}, map[string]bool{})
+		map[string]bool{"cap.lifecycles.x.t": true}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown rule feature.rules.x.missing") {
 		t.Fatalf("logic rule not validated: %v", c.errs)
 	}
@@ -1207,7 +1330,7 @@ func TestQueryErrorPropagation(t *testing.T) {
 			errCodeSet: map[string]bool{"A": true, "B": true},
 			queries:    map[string]*queryInfo{"data.queries.x.q": query},
 		}
-		c.checkServiceItem(doc, "f", "cap.services.x.run", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]lifecycleAction{}, map[string]bool{})
+		c.checkServiceItem(doc, "f", "cap.services.x.run", "x", map[string]serviceMeta{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 		return c.errs
 	}
 	want := func(t *testing.T, errs []string, text string) {

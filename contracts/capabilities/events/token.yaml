@@ -5,8 +5,16 @@ schema_version: 1
 stability: draft
 do_not:
   - "purge_expired 只清理过期令牌，不得顺带吊销有效令牌"
+  - "expire_tokens 只改 status，不删除行；删除由 purge_expired 负责"
 
 jobs:
+  - id: cap.events.token.expire_tokens
+    name: expire_tokens
+    summary: "把超过 refresh_expire_at 的活跃令牌置为 expired"
+    service: cap.services.token.expire
+    trigger: { type: cron, schedule: "0 * * * *" }
+    retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
+    concurrency: { key: token_expire, ttl: 1h }
   - id: cap.events.token.purge_expired
     name: purge_expired
     summary: "清理已过期令牌"

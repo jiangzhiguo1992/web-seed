@@ -1,6 +1,6 @@
 // anchors.go 从 service steps 反向生成 rules/lifecycles/events 的实现锚点。
 //
-// 生成物：feature.rules.rules[].implemented_by、cap.lifecycles 的 create.step/destroy.step/
+// 生成物：feature.rules.rules[].implemented_by、cap.lifecycles 的 create.services/destroy.services/
 // transitions[].implemented_by、cap.events.topics[].emitted_by / consumers。
 // checker 负责结构，gen-graph 负责一致性。
 package graph
@@ -22,9 +22,10 @@ type lifecycleFileAction struct {
 
 // Anchors 保存 service step 对 rules / lifecycles / events 的反向索引。
 type Anchors struct {
-	Rules          map[string][]string
-	LifecycleSteps map[string][]string
-	Events         map[string][]string
+	Rules             map[string][]string
+	LifecycleSteps    map[string][]string
+	LifecycleServices map[string][]string
+	Events            map[string][]string
 
 	EventConsumers map[string][]string
 
@@ -35,13 +36,14 @@ type Anchors struct {
 
 func newAnchors() *Anchors {
 	return &Anchors{
-		Rules:          map[string][]string{},
-		LifecycleSteps: map[string][]string{},
-		Events:         map[string][]string{},
-		EventConsumers: map[string][]string{},
-		RuleFiles:      map[string][]string{},
-		LifecycleFiles: map[string][]lifecycleFileAction{},
-		EventFiles:     map[string][]string{},
+		Rules:             map[string][]string{},
+		LifecycleSteps:    map[string][]string{},
+		LifecycleServices: map[string][]string{},
+		Events:            map[string][]string{},
+		EventConsumers:    map[string][]string{},
+		RuleFiles:         map[string][]string{},
+		LifecycleFiles:    map[string][]lifecycleFileAction{},
+		EventFiles:        map[string][]string{},
 	}
 }
 
@@ -53,10 +55,19 @@ func (a *Anchors) addRule(ruleID, serviceID string) {
 }
 
 func (a *Anchors) addLifecycleStep(actionID, stepID string) {
-	if actionID == "" || stepID == "" || contains(a.LifecycleSteps[actionID], stepID) {
+	if actionID == "" || stepID == "" {
 		return
 	}
-	a.LifecycleSteps[actionID] = append(a.LifecycleSteps[actionID], stepID)
+	if !contains(a.LifecycleSteps[actionID], stepID) {
+		a.LifecycleSteps[actionID] = append(a.LifecycleSteps[actionID], stepID)
+	}
+	serviceID := stepID
+	if i := strings.LastIndex(stepID, "."); i > 0 {
+		serviceID = stepID[:i]
+	}
+	if !contains(a.LifecycleServices[actionID], serviceID) {
+		a.LifecycleServices[actionID] = append(a.LifecycleServices[actionID], serviceID)
+	}
 }
 
 func (a *Anchors) addEvent(eventID, serviceID string) {
@@ -149,6 +160,9 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 	}
 	for id := range a.LifecycleSteps {
 		a.LifecycleSteps[id] = uniqueSorted(a.LifecycleSteps[id])
+	}
+	for id := range a.LifecycleServices {
+		a.LifecycleServices[id] = uniqueSorted(a.LifecycleServices[id])
 	}
 	for id := range a.Events {
 		a.Events[id] = uniqueSorted(a.Events[id])
@@ -267,8 +281,8 @@ func (a *Anchors) Write(root string) ([]string, error) {
 				}
 				continue
 			}
-			steps := a.LifecycleSteps[item.id]
-			ok, err := syncNestedField(filepath.Join(root, file), item.kind, "steps", renderFlowList(steps))
+			steps := a.LifecycleServices[item.id]
+			ok, err := syncNestedField(filepath.Join(root, file), item.kind, "services", renderFlowList(steps))
 			if err != nil {
 				return changed, err
 			}
@@ -342,11 +356,11 @@ func (a *Anchors) Check(root string) ([]string, error) {
 			obj, _ := asMap(doc[item.kind])
 			got := []string{}
 			if obj != nil {
-				got = stringList(obj["steps"])
+				got = stringList(obj["services"])
 			}
-			want := a.LifecycleSteps[item.id]
+			want := a.LifecycleServices[item.id]
 			if !sameSet(got, want) {
-				drift = append(drift, fmt.Sprintf("%s: %s.steps must be %v, got %v", file, item.id, want, got))
+				drift = append(drift, fmt.Sprintf("%s: %s.services must be %v, got %v", file, item.id, want, got))
 			}
 		}
 	}

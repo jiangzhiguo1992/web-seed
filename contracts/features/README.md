@@ -44,6 +44,7 @@ features ✗ data.tables / data.queries（禁止直接引用表或查询）
 - `view_states` 四态（loading/empty/error/forbidden）缺一不可；禁止再用 `states` 命名 UI 状态
 - 禁止引用 `data.*`
 - `available_when` 只允许结构化引用：`{ transition: cap.lifecycles.* }` / `{ transitions: [...] }` / `{ state_not: [...] }`；禁止字符串表达式
+- `feature.pages` 的结构由 `_meta/feature.pages.yaml` 校验；`enum` / `transition(s)` / `state_not` / `transition_ui.source` / `capability` / `route` 由 `pages.go` 做跨契约引用校验
 
 **feature.rules**
 
@@ -55,16 +56,17 @@ features ✗ data.tables / data.queries（禁止直接引用表或查询）
 **生命周期**
 
 - `cap.lifecycles.*` 承载 create/destroy/transitions；不要在 features 下再建生命周期。
-- 一个契约只描述一个状态维度：`subjects[]` 写 `{entity, field}`；同一实体的多个状态字段拆成多份契约。
-- 必须穷举：每个非 final 状态有出边，final 无出边；每条边锚到具体 `cap.services.<file>.<service>.<step>`。
-- `guard` 只能是 `true` 或 `{ rule: feature.rules.* }`；跨维度前提写 `requires: [{lifecycle, state}]`；事件由 service step 的 `events` 声明，lifecycle 不写 `side_effects`。
+- 一个契约 = 一个状态机：`subjects[]` 列出共享该状态机的 `{entity, field}`；同一 `(entity, field)` 只能被一份契约声明。
+- `states` 写 `values` / `initial` / `final` / `derived`；`final` 是终态列表，`derived` 是时间/外部事实派生的终态子集；非 derived 且非 final 的状态必须从 initial 可达，每条边锚到具体 `cap.services.<file>.<service>.<step>`。
+- `destroy` 可销毁任意非 final 状态；`final` 最多一个时 destroy 进入该终态，`final` 为空时只软删实体；幂等转换用 `from` 自环表达。
+- 跨维度前提写 `requires: [{lifecycle, states: [...]}]`（create/destroy/transitions 均可）；事件由 service step 的 `events` 声明。
 
 ## 3. 页面契约必须声明的 `view_states` 四态
 
 | 状态 | 必填条件 |
 |---|---|
 | `loading` | 首次加载或刷新中 |
-| `empty` | 请求成功但无数据 |
+| `empty` / `idle` | 请求成功但无数据；表单页用 `idle` 表示初始可编辑态 |
 | `error` | 请求失败，展示 `Problem.detail` |
 | `forbidden` | 无权限时的表现 |
 

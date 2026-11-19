@@ -556,8 +556,8 @@ func TestRenderLifecycle(t *testing.T) {
 	if doc["id"] != "cap.lifecycles.invoice" {
 		t.Fatalf("id = %v", doc["id"])
 	}
-	if doc["initial"] != "active" || doc["final"] != "active" {
-		t.Fatalf("initial/final = %v/%v", doc["initial"], doc["final"])
+	if doc["initial"] != nil || doc["final"] != nil {
+		t.Fatalf("initial/final must be nested under states: %#v", doc)
 	}
 	subjects, _ := doc["subjects"].([]any)
 	if len(subjects) != 1 {
@@ -567,8 +567,10 @@ func TestRenderLifecycle(t *testing.T) {
 	if subject["entity"] != "data.entities.invoice" || subject["field"] != "status" {
 		t.Fatalf("subjects = %#v", subjects)
 	}
-	states, _ := doc["states"].([]any)
-	if len(states) != 1 {
+	states, _ := doc["states"].(map[string]any)
+	values, _ := states["values"].([]any)
+	final, _ := states["final"].([]any)
+	if len(values) != 1 || values[0] != "active" || states["initial"] != "active" || len(final) != 1 || final[0] != "active" {
 		t.Fatalf("states = %#v", states)
 	}
 }

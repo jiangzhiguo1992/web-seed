@@ -737,9 +737,13 @@ type lifecycleFileScaffold struct {
 	Stability     string                     `yaml:"stability"`
 	DoNot         []string                   `yaml:"do_not"`
 	Subjects      []lifecycleSubjectScaffold `yaml:"subjects"`
-	Initial       string                     `yaml:"initial"`
-	Final         string                     `yaml:"final"`
-	States        []string                   `yaml:"states"`
+	States        lifecycleStatesScaffold    `yaml:"states"`
+}
+
+type lifecycleStatesScaffold struct {
+	Values  []string `yaml:"values"`
+	Initial string   `yaml:"initial"`
+	Final   []string `yaml:"final,omitempty"`
 }
 
 type lifecycleSubjectScaffold struct {
@@ -941,14 +945,18 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 	}
 	if err := requireSupported(s.Fields, map[string]bool{
 		"id": true, "summary": true, "owner_module": true, "schema_version": true,
-		"stability": true, "do_not": true, "subjects": true, "initial": true, "final": true,
-		"create": true, "destroy": true, "states": true, "transitions": true,
-		"forbidden_examples": true, "idempotent_transitions": true,
+		"stability": true, "do_not": true, "subjects": true, "states": true,
+		"create": true, "destroy": true, "transitions": true,
 	}, "cap.lifecycles"); err != nil {
 		return nil, err
 	}
 	if f, ok := FindField(s.Fields, "subjects"); ok {
 		if err := requireSupported(f.ItemFields, map[string]bool{"entity": true, "field": true}, "cap.lifecycles.subjects"); err != nil {
+			return nil, err
+		}
+	}
+	if f, ok := FindField(s.Fields, "states"); ok {
+		if err := requireSupported(f.Fields, map[string]bool{"values": true, "initial": true, "final": true, "derived": true}, "cap.lifecycles.states"); err != nil {
 			return nil, err
 		}
 	}
@@ -964,9 +972,11 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
 		Subjects:      []lifecycleSubjectScaffold{{Entity: "data.entities." + name, Field: "status"}},
-		Initial:       "active",
-		Final:         "active",
-		States:        []string{"active"},
+		States: lifecycleStatesScaffold{
+			Values:  []string{"active"},
+			Initial: "active",
+			Final:   []string{"active"},
+		},
 	}
 	b, err := marshal2(doc)
 	if err != nil {

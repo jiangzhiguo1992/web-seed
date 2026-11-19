@@ -7,6 +7,9 @@ do_not:
   - "send / verify 不要返回 code_hash / content / target 原文；只返回 masked_target"
   - "verify 写 verification_action 必须与业务结果同事务，失败不得留下不一致记录"
   - "换绑、解绑或停用认证绑定必须调用 revoke_by_auth"
+  - "send / verify 必须先读取 account 并校验 status ∈ (pending, active)"
+  - "send 使用 tx_mode=none：create/mark_sent/mark_failed 各自提交；发送失败必须保留 failed，不能因整体回滚丢失"
+  - "send 步骤不要直接返回错误；发送失败必须输出 delivered=false，由 mark_failed 落 failed"
 
 schemas:
   SendVerificationInput:
@@ -44,7 +47,7 @@ services:
   - name: send
     summary: "发送短信/邮件验证码"
     visibility: public
-    tx_mode: required
+    tx_mode: none
     params:
       - { name: ctx, type: context.Context }
       - { name: input, type: cap.services.verification.schemas.SendVerificationInput }
@@ -71,11 +74,30 @@ services:
         rules:
           - { rule: feature.rules.auth.verification_target_normalization }
           - { rule: feature.rules.auth.verification_no_enumeration }
-          - { rule: feature.rules.auth.verification_account_active }
           - { rule: feature.rules.auth.verification_register_account }
           - { rule: feature.rules.auth.verification_auth_binding }
           - { rule: feature.rules.auth.verification_purpose_status }
           - { rule: feature.rules.auth.verification_resend }
+        goto: load_account
+      - id: load_account
+        kind: query
+        summary: "读取验证目标账号"
+        input:
+          - { name: id, value: step.resolve_auth_id.account_id, description: "验证目标账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: data.queries.account.get_account
+        goto: check_account
+      - id: check_account
+        kind: logic
+        summary: "校验账号未删除且未封禁"
+        input:
+          - { name: account, value: step.load_account.account, description: "验证目标账号" }
+        output: [ ]
+        errors:
+          - platform.errors.AUTH_VERIFICATION_INVALID
+        rules:
+          - { rule: feature.rules.auth.verification_account_active }
         goto: gen_code
       - id: gen_code
         kind: logic
@@ -157,6 +179,7 @@ services:
       - id: revoke_old
         kind: query
         summary: "重发前作废同一认证目标与用途的旧验证体"
+        lifecycles: [ cap.lifecycles.verification.revoke ]
         input:
           - { name: auth_type, value: params.input.auth_type, description: "认证类型" }
           - { name: auth_id, value: step.resolve_auth_id.auth_id, description: "认证绑定 ID" }
@@ -168,6 +191,7 @@ services:
       - id: create
         kind: query
         summary: "创建验证体"
+        lifecycles: [ cap.lifecycles.verification.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新验证体 ID" }
           - { name: account_id, value: step.resolve_auth_id.account_id, description: "验证目标账号 ID" }
@@ -184,6 +208,7 @@ services:
       - id: mark_sent
         kind: query
         summary: "标记验证体已发送"
+        lifecycles: [ cap.lifecycles.verification.send ]
         input:
           - { name: id, value: step.create.row.id, description: "待标记的验证体 ID" }
           - { name: sent_at, value: step.now.sent_at, description: "发送时间" }
@@ -193,13 +218,52 @@ services:
         goto: send
       - id: send
         kind: logic
-        summary: "下发验证码并组装发送结果"
+        summary: "下发验证码并返回发送是否成功"
         input:
           - { name: id, value: step.create.row.id, description: "验证记录 ID" }
           - { name: target, value: params.input.target, description: "验证码接收目标，用于脱敏" }
           - { name: expire_at, value: step.expire_at.expire_at, description: "验证码过期时间" }
         output:
           - { name: verification, type: cap.services.verification.schemas.VerificationSent, description: "发送后的验证体" }
+          - { name: delivered, type: boolean, description: "发送是否成功" }
+        errors: [ ]
+        rules: [ ]
+        goto: send_result
+      - id: send_result
+        kind: when
+        summary: "发送失败时落 failed 终态"
+        input:
+          - { name: delivered, value: step.send.delivered, description: "发送是否成功" }
+        output: [ ]
+        when:
+          - input: delivered
+            expr: "input.delivered == false"
+            goto: status_failed
+        goto: $end
+      - id: status_failed
+        kind: logic
+        summary: "构造验证体目标状态：发送失败"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.verification_status, description: "目标状态：发送失败" }
+        errors: [ ]
+        rules: [ ]
+        goto: mark_failed
+      - id: mark_failed
+        kind: query
+        summary: "发送失败时把验证体置为 failed"
+        lifecycles: [ cap.lifecycles.verification.fail ]
+        input:
+          - { name: id, value: step.create.row.id, description: "待标记的验证体 ID" }
+          - { name: status, value: step.status_failed.status, description: "目标状态：发送失败" }
+        output: [ ]
+        query: data.queries.verification.set_verification_status
+        goto: deny_send_failed
+      - id: deny_send_failed
+        kind: logic
+        summary: "发送失败，返回内部错误"
+        input: [ ]
+        output: [ ]
         errors:
           - platform.errors.COMMON_INTERNAL
         rules: [ ]
@@ -228,6 +292,26 @@ services:
           - { name: account_id, type: integer, description: "解析后的验证目标账号 ID" }
         errors: [ ]
         rules: [ ]
+        goto: load_account
+      - id: load_account
+        kind: query
+        summary: "读取验证目标账号"
+        input:
+          - { name: id, value: step.resolve_auth_id.account_id, description: "验证目标账号 ID" }
+        output:
+          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+        query: data.queries.account.get_account
+        goto: check_account
+      - id: check_account
+        kind: logic
+        summary: "校验账号未删除且未封禁"
+        input:
+          - { name: account, value: step.load_account.account, description: "验证目标账号" }
+        output: [ ]
+        errors:
+          - platform.errors.AUTH_VERIFICATION_INVALID
+        rules:
+          - { rule: feature.rules.auth.verification_account_active }
         goto: load_verification
       - id: load_verification
         kind: query
@@ -258,13 +342,13 @@ services:
           - { name: status, type: data.enums.verification_status, description: "目标状态：已消费" }
         errors: [ ]
         rules: [ ]
-        goto: status_failed
-      - id: status_failed
+        goto: status_sent
+      - id: status_sent
         kind: logic
-        summary: "构造验证体目标状态：失败"
+        summary: "构造验证体目标状态：已发送"
         input: [ ]
         output:
-          - { name: status, type: data.enums.verification_status, description: "目标状态：失败" }
+          - { name: status, type: data.enums.verification_status, description: "目标状态：已发送" }
         errors: [ ]
         rules: [ ]
         goto: next_attempt
@@ -317,18 +401,13 @@ services:
         goto: check
       - id: check
         kind: logic
-        summary: "校验验证码、有效期与尝试次数；不匹配返回 verified=false，过期/次数超限返回错误"
+        summary: "校验验证码、有效期与尝试次数，输出 success/mismatch/expired/attempts_exceeded/invalid"
         input:
           - { name: code, value: params.input.code, description: "用户输入的验证码" }
           - { name: verification, value: step.load_verification.row, description: "待校验的验证体行" }
         output:
-          - { name: verified, type: boolean, description: "验证码是否匹配" }
-        errors:
-          - platform.errors.AUTH_VERIFICATION_INVALID
-          - platform.errors.AUTH_VERIFICATION_EXPIRED
-          - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
-          - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
-          - platform.errors.COMMON_INTERNAL
+          - { name: outcome, type: data.enums.verification_result, description: "本次校验结果" }
+        errors: [ ]
         rules:
           - { rule: feature.rules.auth.verification_one_time }
           - { rule: feature.rules.auth.verification_expiry }
@@ -336,51 +415,96 @@ services:
           - { rule: feature.rules.auth.verification_auth_binding }
           - { rule: feature.rules.auth.verification_purpose_status }
           - { rule: feature.rules.auth.verification_no_enumeration }
-          - { rule: feature.rules.auth.verification_account_active }
           - { rule: feature.rules.auth.verification_register_account }
           - { rule: feature.rules.auth.verification_success_sets_verified }
           - { rule: feature.rules.auth.verification_action_recorded }
           - { rule: feature.rules.auth.verification_action_append_only }
           - { rule: feature.rules.auth.verification_consumed_consistent }
-        goto: outcome
-      - id: outcome
-        kind: logic
-        summary: "把匹配结果映射为验证动作结果"
+        goto: record_branch
+      - id: record_branch
+        kind: when
+        summary: "按验证结果选择审计路径"
         input:
-          - { name: verified, value: step.check.verified, description: "验证码是否匹配" }
-        output:
-          - { name: outcome, type: data.enums.verification_result, description: "本次校验结果" }
-        errors: [ ]
-        rules: [ ]
-        goto: log_action
+          - { name: outcome, value: step.check.outcome, description: "本次校验结果" }
+        output: [ ]
+        when:
+          - input: outcome
+            expr: "input.outcome == 'success'"
+            goto: log_action
+          - input: outcome
+            expr: "input.outcome == 'mismatch'"
+            goto: log_action
+          - input: outcome
+            expr: "input.outcome == 'expired'"
+            goto: record_failure
+          - input: outcome
+            expr: "input.outcome == 'attempts_exceeded'"
+            goto: record_failure
+          - input: outcome
+            expr: "input.outcome == 'invalid'"
+            goto: record_failure
+        goto: record_failure
       - id: log_action
         kind: query
         summary: "追加验证动作日志"
         input:
           - { name: verification_id, value: step.load_verification.row.id, description: "本次校验的验证体 ID" }
           - { name: account_id, value: step.resolve_auth_id.account_id, description: "校验动作所属账号 ID" }
-          - { name: result, value: step.outcome.outcome, description: "本次校验结果" }
+          - { name: result, value: step.check.outcome, description: "本次校验结果" }
           - { name: request_ip, value: step.request_ip.request_ip, description: "请求 IP" }
           - { name: device_id, value: step.device_id.device_id, description: "请求设备标识" }
           - { name: location, value: step.location.location, description: "请求位置" }
           - { name: input_hash, value: step.input_hash.input_hash, description: "用户输入的哈希" }
         output: [ ]
         query: data.queries.verification.create_verification_action
-        goto: record_branch
-      - id: record_branch
+        goto: record_after_log
+      - id: record_after_log
         kind: when
-        summary: "按验证结果选择消费或递增失败次数"
+        summary: "按结果选择消费或递增"
         input:
-          - { name: verified, value: step.check.verified, description: "验证码是否匹配" }
+          - { name: outcome, value: step.check.outcome, description: "本次校验结果" }
         output: [ ]
         when:
-          - input: verified
-            expr: "input.verified == true"
+          - input: outcome
+            expr: "input.outcome == 'success'"
             goto: consume
-        goto: increment
+          - input: outcome
+            expr: "input.outcome == 'mismatch'"
+            goto: increment
+        goto: deny_invalid
+      - id: record_failure
+        kind: service
+        summary: "独立事务记录失败校验动作"
+        input:
+          - { name: verification_id, value: step.load_verification.row.id, description: "本次校验的验证体 ID" }
+          - { name: account_id, value: step.resolve_auth_id.account_id, description: "校验动作所属账号 ID" }
+          - { name: result, value: step.check.outcome, description: "本次校验结果" }
+          - { name: request_ip, value: step.request_ip.request_ip, description: "请求 IP" }
+          - { name: device_id, value: step.device_id.device_id, description: "请求设备标识" }
+          - { name: location, value: step.location.location, description: "请求位置" }
+          - { name: input_hash, value: step.input_hash.input_hash, description: "用户输入的哈希" }
+        output: [ ]
+        errors: [ ]
+        service: cap.services.verification.record_failure
+        goto: deny_branch
+      - id: deny_branch
+        kind: when
+        summary: "按失败结果选择错误"
+        input:
+          - { name: outcome, value: step.check.outcome, description: "本次校验结果" }
+        output: [ ]
+        when:
+          - input: outcome
+            expr: "input.outcome == 'expired'"
+            goto: deny_expired
+          - input: outcome
+            expr: "input.outcome == 'attempts_exceeded'"
+            goto: deny_attempts
+        goto: deny_invalid
       - id: consume
         kind: query
         summary: "验证成功时一次性消费验证码"
+        lifecycles: [ cap.lifecycles.verification.consume ]
         input:
           - { name: id, value: step.load_verification.row.id, description: "待消费的验证体 ID" }
           - { name: consumed_at, value: step.now.consumed_at, description: "消费时间" }
@@ -390,23 +514,51 @@ services:
         goto: record_done
       - id: increment
         kind: query
-        summary: "验证失败时递增失败次数并更新状态"
+        summary: "验证码不匹配时递增失败次数，状态保持 sent"
         input:
           - { name: id, value: step.load_verification.row.id, description: "校验失败的验证体 ID" }
           - { name: attempt_count, value: step.next_attempt.attempt_count, description: "递增后的尝试次数" }
-          - { name: status, value: step.status_failed.status, description: "目标状态：失败" }
+          - { name: status, value: step.status_sent.status, description: "目标状态：已发送" }
         output: [ ]
         query: data.queries.verification.increment_verification_attempt
         goto: record_done
+      - id: deny_expired
+        kind: logic
+        summary: "验证码已过期，返回过期错误"
+        input: [ ]
+        output: [ ]
+        errors:
+          - platform.errors.AUTH_VERIFICATION_EXPIRED
+        rules: [ ]
+        goto: $end
+      - id: deny_attempts
+        kind: logic
+        summary: "尝试次数超限，返回超限错误"
+        input: [ ]
+        output: [ ]
+        errors:
+          - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+        rules: [ ]
+        goto: $end
+      - id: deny_invalid
+        kind: logic
+        summary: "验证体状态非法，返回统一验证错误"
+        input: [ ]
+        output: [ ]
+        errors:
+          - platform.errors.AUTH_VERIFICATION_INVALID
+        rules: [ ]
+        goto: $end
       - id: record_done
         kind: logic
-        summary: "汇总本次校验结果"
+        summary: "汇总校验结果"
         input:
-          - { name: verified, value: step.check.verified, description: "验证码是否匹配" }
+          - { name: outcome, value: step.check.outcome, description: "本次校验结果" }
           - { name: verification_id, value: step.load_verification.row.id, description: "验证记录 ID" }
-          - { name: now, value: step.now.consumed_at, description: "当前时间；仅 verified=true 时写入 consumed_at" }
+          - { name: now, value: step.now.consumed_at, description: "消费时间" }
         output:
           - { name: result, type: cap.services.verification.schemas.VerificationResult, description: "校验结果" }
+          - { name: verified, type: boolean, description: "是否验证通过" }
         errors: [ ]
         rules: [ ]
         goto: status_verified
@@ -421,9 +573,9 @@ services:
         goto: require_verified
       - id: require_verified
         kind: when
-        summary: "验证码不匹配时跳过绑定状态写入"
+        summary: "验证码不匹配时跳过认证绑定写入"
         input:
-          - { name: verified, value: step.check.verified, description: "验证码是否匹配" }
+          - { name: verified, value: step.record_done.verified, description: "是否验证通过" }
         output: [ ]
         when:
           - input: verified
@@ -471,6 +623,37 @@ services:
         query: data.queries.auth.set_auth_email_status
         goto: $end
 
+  - name: record_failure
+    summary: "独立事务记录失败校验动作"
+    visibility: internal
+    tx_mode: none
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: verification_id, type: integer }
+      - { name: account_id, type: integer }
+      - { name: result, type: data.enums.verification_result }
+      - { name: request_ip, type: string, nullable: true }
+      - { name: device_id, type: string, nullable: true }
+      - { name: location, type: string, nullable: true }
+      - { name: input_hash, type: string }
+    returns:
+      - { name: err, type: error }
+    steps:
+      - id: log
+        kind: query
+        summary: "追加失败校验动作"
+        input:
+          - { name: verification_id, value: params.verification_id, description: "验证体 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
+          - { name: result, value: params.result, description: "失败结果" }
+          - { name: request_ip, value: params.request_ip, description: "请求 IP" }
+          - { name: device_id, value: params.device_id, description: "请求设备标识" }
+          - { name: location, value: params.location, description: "请求位置" }
+          - { name: input_hash, value: params.input_hash, description: "用户输入的哈希" }
+        output: [ ]
+        query: data.queries.verification.create_verification_action
+        goto: $end
+
   - name: revoke_by_auth
     summary: "换绑/解绑/停用认证绑定时作废对应未消费验证体"
     visibility: public
@@ -516,6 +699,7 @@ services:
       - id: revoke_active_verifications_by_auth
         kind: query
         summary: "调用 data.queries.verification.revoke_active_verifications_by_auth"
+        lifecycles: [ cap.lifecycles.verification.revoke ]
         input:
           - { name: auth_type, value: params.auth_type, description: "要作废的认证类型" }
           - { name: auth_id, value: params.auth_id, description: "要作废的认证绑定 ID" }
@@ -547,6 +731,7 @@ services:
       - id: revoke_active_verifications_by_account
         kind: query
         summary: "调用 data.queries.verification.revoke_active_verifications_by_account"
+        lifecycles: [ cap.lifecycles.verification.revoke ]
         input:
           - { name: account_id, value: params.account_id, description: "要作废验证体的账号 ID" }
           - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }

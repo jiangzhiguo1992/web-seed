@@ -65,7 +65,7 @@ fields:
   - name: user_id
     render: code
   - name: status
-    enum: cap.lifecycles.account.states
+    enum: cap.lifecycles.account.states.values
     render: badge
   - name: created_at
     render: relative_time

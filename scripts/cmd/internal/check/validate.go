@@ -33,7 +33,7 @@ var schemaFieldTypes = map[string]bool{
 	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
 	"boolean": true, "any": true, "object": true,
 	"list<string>": true, "list<integer>": true, "list<object>": true, "list<list<string>>": true, "list<any>": true,
-	"map<string>": true, "map": true,
+	"map<string>": true, "map<object>": true, "map": true,
 }
 
 // validateFieldTypes 校验 _meta 自身的 type 词汇；避免把列类型族的
@@ -67,6 +67,9 @@ func validateFieldTypes(fields []Field) error {
 		}
 		if f.UniqueKey != "" && f.Type != "list<object>" {
 			return fmt.Errorf("field %s: unique_key requires list<object>", f.Name)
+		}
+		if f.Type == "map<object>" && len(f.ItemFields) == 0 {
+			return fmt.Errorf("field %s: map<object> requires item_fields", f.Name)
 		}
 		if f.KeyPattern != "" && f.Type != "map" {
 			return fmt.Errorf("field %s: key_pattern requires map", f.Name)
@@ -346,6 +349,24 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 			if _, ok := item.(string); !ok {
 				c.rulef("schema.type", "%s.%s: must be string", path, k)
 			}
+		}
+	case "map<object>":
+		m, ok := asMap(v)
+		if !ok {
+			c.rulef("schema.type", "%s: must be map", path)
+			return
+		}
+		for k, item := range m {
+			if k == "" {
+				c.rulef("schema.non-empty", "%s: map key must not be empty", path)
+				continue
+			}
+			im, ok := asMap(item)
+			if !ok {
+				c.rulef("schema.type", "%s.%s: must be object", path, k)
+				continue
+			}
+			c.validateDoc(im, f.ItemFields, path+"."+k)
 		}
 	default:
 		c.rulef("schema.type", "%s: unknown schema type %q", path, f.Type)

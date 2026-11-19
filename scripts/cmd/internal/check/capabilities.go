@@ -20,13 +20,6 @@ type lifecycleSubject struct {
 	Enum      string
 }
 
-type lifecycleAction struct {
-	kind     string
-	to       string
-	initial  string
-	subjects []lifecycleSubject
-}
-
 type serviceMeta struct {
 	module         string
 	visibility     string
@@ -192,6 +185,7 @@ func (c *Checker) checkCapabilities() {
 	serviceItemIDs := map[string]bool{}
 	stepIDs := map[string]bool{}
 	stepLifecycle := map[string][]string{}
+	serviceEvents := map[string]map[string]bool{}
 	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -325,6 +319,17 @@ func (c *Checker) checkCapabilities() {
 						stepLifecycle[stepID] = append(stepLifecycle[stepID], action)
 					}
 				}
+				for _, rawE := range asList(step["events"]) {
+					em, _ := asMap(rawE)
+					ref, _ := em["ref"].(string)
+					if ref == "" {
+						continue
+					}
+					if serviceEvents[id] == nil {
+						serviceEvents[id] = map[string]bool{}
+					}
+					serviceEvents[id][ref] = true
+				}
 			}
 		}
 	}
@@ -422,8 +427,9 @@ func (c *Checker) checkCapabilities() {
 			c.eventPayloads[id] = eventPayloadFields(item["payload"])
 		}
 	}
-	lifecycleActions := map[string]lifecycleAction{}
+	lifecycleActions := map[string]bool{}
 	lifecycleStates := map[string]map[string]bool{}
+	requiresGraph := map[string][]string{}
 	dimensions := map[string]string{}
 	enumStates := map[string]map[string]bool{}
 	enumOwners := map[string]map[string]bool{}
@@ -436,7 +442,8 @@ func (c *Checker) checkCapabilities() {
 		fileID, _ := doc["id"].(string)
 		subjects := c.lifecycleSubjects(doc["subjects"])
 		states := map[string]bool{}
-		for _, rawState := range asList(doc["states"]) {
+		statesObj, _ := asMap(doc["states"])
+		for _, rawState := range asList(statesObj["values"]) {
 			if name, _ := rawState.(string); name != "" {
 				states[name] = true
 			}
@@ -464,25 +471,39 @@ func (c *Checker) checkCapabilities() {
 				enumOwners[subj.Enum][fileID] = true
 			}
 		}
-		initial, _ := doc["initial"].(string)
 		if _, ok := asMap(doc["create"]); ok {
-			lifecycleActions[fileID+".create"] = lifecycleAction{kind: "create", initial: initial, subjects: subjects}
+			lifecycleActions[fileID+".create"] = true
+		}
+		if _, ok := asMap(doc["destroy"]); ok {
+			lifecycleActions[fileID+".destroy"] = true
+		}
+		collectRequires := func(item map[string]any) {
+			for _, rawReq := range asList(item["requires"]) {
+				rm, _ := asMap(rawReq)
+				ref, _ := rm["lifecycle"].(string)
+				if ref != "" && ref != fileID {
+					requiresGraph[fileID] = append(requiresGraph[fileID], ref)
+				}
+			}
+		}
+		if create, ok := asMap(doc["create"]); ok {
+			collectRequires(create)
 		}
 		if destroy, ok := asMap(doc["destroy"]); ok {
-			to, _ := destroy["to"].(string)
-			lifecycleActions[fileID+".destroy"] = lifecycleAction{kind: "destroy", to: to, subjects: subjects}
+			collectRequires(destroy)
 		}
 		for _, raw := range asList(doc["transitions"]) {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
 			if name != "" {
-				to, _ := item["to"].(string)
-				lifecycleActions[fileID+"."+name] = lifecycleAction{kind: "transition", to: to, subjects: subjects}
+				lifecycleActions[fileID+"."+name] = true
 			}
+			collectRequires(item)
 		}
 	}
 
 	c.checkLifecycleEnumCoverage(enumStates, enumOwners)
+	c.checkLifecycleRequiresCycles(requiresGraph)
 
 	// pass 3：按 kind 回查 step 引用。
 	for _, file := range serviceFiles {
@@ -523,7 +544,7 @@ func (c *Checker) checkCapabilities() {
 		if err != nil {
 			continue
 		}
-		c.checkLifecycleDoc(doc, relPath(c.root, file), lifecycleSchema, stepIDs, actionSteps, lifecycleStates, ruleIDs)
+		c.checkLifecycleDoc(doc, relPath(c.root, file), lifecycleSchema, stepIDs, actionSteps, serviceEvents, eventIDs, lifecycleStates)
 	}
 	jobServices := c.checkEventsDoc(eventSchema, serviceMetaByID, serviceItemIDs)
 	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, jobServices)

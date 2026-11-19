@@ -129,9 +129,10 @@ func TestSoftZonesMarked(t *testing.T) {
 	if !ok {
 		t.Fatal("cap.lifecycles.transitions missing")
 	}
-	guard, ok := contractspec.FindField(transitions.ItemFields, "guard")
-	if !ok || !guard.Soft {
-		t.Fatalf("cap.lifecycles.transitions.guard must be marked soft")
+	for _, soft := range []string{"guard", "on_violation"} {
+		if _, ok := contractspec.FindField(transitions.ItemFields, soft); ok {
+			t.Fatalf("cap.lifecycles.transitions.%s must not exist", soft)
+		}
 	}
 	entitySchema, _, err := contractspec.LoadSchemaByType(root, "data.entities")
 	if err != nil {
