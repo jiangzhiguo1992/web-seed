@@ -74,6 +74,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
+      - { name: status, type: integer, column: data.tables.account.col.status }
       - { name: own_type, type: data.enums.own_type, column: data.tables.account.col.own_type }
       - { name: own_id, type: integer, column: data.tables.account.col.own_id }
       - { name: number, type: text, column: data.tables.account.col.number }
@@ -105,7 +106,7 @@ queries:
       - cap.services.account.update
 
   - name: SetAccountStatus
-    description: "设置账号状态；用于激活、封禁与软删"
+    description: "设置账号状态；用于激活与封禁"
     tables:
       - { table: data.tables.account, write: true }
     params:
@@ -123,12 +124,13 @@ queries:
       - cap.services.account.suspend
 
   - name: SoftDeleteAccount
-    description: "软删账号并同步 deleted_at"
+    description: "软删账号并同步 status 与 deleted_at"
     tables:
       - { table: data.tables.account, write: true }
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: integer, column: data.tables.account.col.id }
+      - { name: status, type: integer, column: data.tables.account.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }

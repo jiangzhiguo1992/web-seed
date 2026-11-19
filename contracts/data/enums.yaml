@@ -60,6 +60,7 @@ enums:
       - data.entities.auth_phone
       - data.entities.auth_pwd
       - cap.services.auth
+      - cap.services.verification
 
   - name: token_status
     description: "令牌状态"
