@@ -70,7 +70,7 @@ indexes:
       - data.queries.account.create_account
 
   - name: idx_account_created_at_id
-    columns: [ created_at, id ]
+    columns: [ deleted_at, created_at, id ]
     comment: "列表游标分页"
     used_by:
       - data.queries.account.list_accounts

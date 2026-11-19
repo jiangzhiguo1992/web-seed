@@ -134,13 +134,13 @@ indexes:
       - data.queries.token.create_token
 
   - name: idx_token_account_status
-    columns: [ account_id, status ]
+    columns: [ deleted_at, account_id, status ]
     comment: "按账号与状态列出/吊销令牌"
     used_by:
       - data.queries.token.revoke_tokens_by_account
 
   - name: idx_token_refresh_expire_at
-    columns: [ refresh_expire_at ]
+    columns: [ deleted_at, refresh_expire_at ]
     comment: "过期令牌清理"
     used_by:
       - data.queries.token.delete_expired_tokens

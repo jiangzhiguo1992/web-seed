@@ -68,7 +68,7 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - { index: data.tables.verification_body.idx_verification_auth_purpose, columns: [ auth_type, auth_id, purpose, created_at ] }
+      - { index: data.tables.verification_body.idx_verification_auth_purpose, columns: [ deleted_at, auth_type, auth_id, purpose, created_at ] }
     used_by:
       - cap.services.verification.verify
 
@@ -140,7 +140,7 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - { index: data.tables.verification_body.idx_verification_expire_at, columns: [ expire_at ] }
+      - { index: data.tables.verification_body.idx_verification_expire_at, columns: [ deleted_at, expire_at ] }
     used_by:
       - cap.services.verification.cleanup
 
@@ -158,7 +158,7 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - { index: data.tables.verification_body.idx_verification_status_attempt, columns: [ status, attempt_count ] }
+      - { index: data.tables.verification_body.idx_verification_status_attempt, columns: [ deleted_at, status, attempt_count ] }
     used_by:
       - cap.services.verification.cleanup
 
@@ -177,7 +177,7 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - { index: data.tables.verification_body.idx_verification_auth_purpose, columns: [ auth_type, auth_id, purpose ] }
+      - { index: data.tables.verification_body.idx_verification_auth_purpose, columns: [ deleted_at, auth_type, auth_id, purpose ] }
     used_by:
       - cap.services.verification.revoke_by_auth
       - cap.services.verification.send

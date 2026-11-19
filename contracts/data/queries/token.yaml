@@ -115,7 +115,7 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - { index: data.tables.token.idx_token_account_status, columns: [ account_id, status ] }
+      - { index: data.tables.token.idx_token_account_status, columns: [ deleted_at, account_id, status ] }
     used_by:
       - cap.services.token.revoke_by_account
 
@@ -135,7 +135,7 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - { index: data.tables.token.idx_token_refresh_expire_at, columns: [ refresh_expire_at ] }
+      - { index: data.tables.token.idx_token_refresh_expire_at, columns: [ deleted_at, refresh_expire_at ] }
     used_by:
       - cap.services.token.expire
 
@@ -153,6 +153,6 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - { index: data.tables.token.idx_token_refresh_expire_at, columns: [ refresh_expire_at ] }
+      - { index: data.tables.token.idx_token_refresh_expire_at, columns: [ deleted_at, refresh_expire_at ] }
     used_by:
       - cap.services.token.purge_expired

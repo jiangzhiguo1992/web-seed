@@ -146,7 +146,7 @@ constraints:
 
 indexes:
   - name: idx_verification_auth_purpose
-    columns: [ auth_type, auth_id, purpose, created_at ]
+    columns: [ deleted_at, auth_type, auth_id, purpose, created_at ]
     comment: "按认证绑定与用途查最新验证码、重发作废"
     used_by:
       - data.queries.verification.get_latest_verification
@@ -159,13 +159,13 @@ indexes:
       - data.queries.verification.revoke_active_verifications_by_account
 
   - name: idx_verification_expire_at
-    columns: [ expire_at ]
+    columns: [ deleted_at, expire_at ]
     comment: "清理过期验证体"
     used_by:
       - data.queries.verification.expire_stale_verifications
 
   - name: idx_verification_status_attempt
-    columns: [ status, attempt_count ]
+    columns: [ deleted_at, status, attempt_count ]
     comment: "作废尝试次数超限的验证体"
     used_by:
       - data.queries.verification.revoke_exhausted_verifications

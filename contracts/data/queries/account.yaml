@@ -71,7 +71,7 @@ queries:
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
-      - { index: data.tables.account.idx_account_created_at_id, columns: [ created_at, id ] }
+      - { index: data.tables.account.idx_account_created_at_id, columns: [ deleted_at, created_at, id ] }
     used_by:
       - cap.services.account.list
 
