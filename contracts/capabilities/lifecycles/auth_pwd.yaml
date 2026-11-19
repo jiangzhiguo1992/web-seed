@@ -11,29 +11,29 @@ do_not:
 
 subjects:
   - { entity: data.entities.auth_pwd, field: status }
-states: [verified, disabled]
-initial: verified
+states:
+  values: [verified, disabled]
+  initial: verified
 create:
-  steps: [ cap.services.auth.bind_password.create_auth_pwd ]
+  requires:
+    - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+  services: [ cap.services.auth.bind_password ]
 destroy:
-  steps: [ cap.services.auth.revoke_all_for_account.soft_delete_auth_pwd_by_account ]
-  from: [verified, disabled]
+  requires:
+    - { lifecycle: cap.lifecycles.account, states: [pending, active, suspended] }
+  services: [ cap.services.auth.revoke_all_for_account ]
 transitions:
   - name: disable
     description: "停用密码认证"
     from: [verified]
     to: disabled
-    guard: true
-    on_violation: platform.errors.COMMON_INTERNAL
+    requires:
+      - { lifecycle: cap.lifecycles.account, states: [pending, active] }
     implemented_by: [ cap.services.auth.bind_password.disable_pwd_status ]
   - name: enable
     description: "启用密码认证"
     from: [disabled]
     to: verified
-    guard: true
-    on_violation: platform.errors.COMMON_INTERNAL
+    requires:
+      - { lifecycle: cap.lifecycles.account, states: [pending, active] }
     implemented_by: [ cap.services.auth.bind_password.enable_pwd_status ]
-forbidden_examples:
-  - { from: disabled, transition: disable, reason: "已停用不可重复停用" }
-  - { from: verified, transition: enable, reason: "已认证不可重复启用" }
-idempotent_transitions: []
