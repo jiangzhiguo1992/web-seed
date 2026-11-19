@@ -525,7 +525,7 @@ self:     doctor（模板自身健康）
 | 0007 | 薄校验优先，生成器上限 6 个 |
 | 0008 | SPA 而非 SSR（记录 SEO 代价） |
 | 0009 | 模板默认 admin 端；user 端派生时按需新增 |
-| 0010 | 生命周期按状态机建模：一个契约 = 一组共享同枚举的 `{entity, field}`；`states` 对象声明 values/initial/final/derived（final 为终态列表，derived 为时间/错误路径派生终态）；跨维度前提用 `requires: [{lifecycle, states}]`；create/destroy 锚到 service 并投影 events |
+| 0010 | 生命周期按状态机建模：一个契约 = 一组共享同枚举的 `{entity, field}`；`states` 对象声明 values/initial/final；每个 state 必须可达，跨维度前提用 `requires: [{lifecycle, states}]`；create/destroy 锚到 service 并投影 events |
 
 ---
 

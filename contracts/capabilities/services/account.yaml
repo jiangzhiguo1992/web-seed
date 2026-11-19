@@ -355,7 +355,8 @@ services:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-        rules: [ ]
+        rules:
+          - { rule: feature.rules.account.activate_requires_pending_or_suspended }
         goto: target_status
       - id: target_status
         kind: logic
@@ -449,7 +450,8 @@ services:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-        rules: [ ]
+        rules:
+          - { rule: feature.rules.account.suspend_requires_active }
         goto: target_status
       - id: target_status
         kind: logic

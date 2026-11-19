@@ -63,11 +63,10 @@ fields:
       - { name: values, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "状态取值集合；必须是 subject 状态枚举的值" }
       - { name: initial, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "初始状态" }
       - { name: final, type: list<string>, required: false, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "终态集合；省略表示没有终态" }
-      - { name: derived, type: list<string>, required: false, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "由时间或外部事实派生的终态；必须是 final 子集，不要求经 transition 可达" }
 
   - name: create
     type: object
-    required: false
+    required: true
     description: "创建动作"
     fields:
       - name: requires

@@ -147,7 +147,7 @@ jobs:
 	for _, want := range []string{
 		"services: [ cap.services.x.create ]",
 		"services: [ cap.services.x.delete ]",
-		"implemented_by: [ cap.services.x.activate.transition ]",
+		"implemented_by:\n      - cap.services.x.activate.transition",
 	} {
 		if !strings.Contains(string(lifecycle), want) {
 			t.Fatalf("lifecycle missing %q:\n%s", want, lifecycle)
@@ -255,7 +255,7 @@ transitions:
 	for _, want := range []string{
 		"services: [ cap.services.x.create ]",
 		"services: [ cap.services.x.delete ]",
-		"implemented_by: [ cap.services.x.activate.transition ]",
+		"implemented_by:\n      - cap.services.x.activate.transition",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("lifecycle missing %q:\n%s", want, text)

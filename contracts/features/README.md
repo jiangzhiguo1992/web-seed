@@ -57,7 +57,7 @@ features ✗ data.tables / data.queries（禁止直接引用表或查询）
 
 - `cap.lifecycles.*` 承载 create/destroy/transitions；不要在 features 下再建生命周期。
 - 一个契约 = 一个状态机：`subjects[]` 列出共享该状态机的 `{entity, field}`；同一 `(entity, field)` 只能被一份契约声明。
-- `states` 写 `values` / `initial` / `final` / `derived`；`final` 是终态列表，`derived` 是时间/外部事实派生的终态子集；非 derived 且非 final 的状态必须从 initial 可达，每条边锚到具体 `cap.services.<file>.<service>.<step>`。
+- `states` 写 `values` / `initial` / `final`；`final` 是终态列表，每个 state 必须从 initial 可达，每条边锚到具体 `cap.services.<file>.<service>.<step>`。
 - `destroy` 可销毁任意非 final 状态；`final` 最多一个时 destroy 进入该终态，`final` 为空时只软删实体；幂等转换用 `from` 自环表达。
 - 跨维度前提写 `requires: [{lifecycle, states: [...]}]`（create/destroy/transitions 均可）；事件由 service step 的 `events` 声明。
 

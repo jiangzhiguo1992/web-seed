@@ -690,7 +690,13 @@ func (c *Checker) checkWhenLiteral(typ string, value any, rel, stepID, name stri
 			c.rulef("service-when", "%s: step %s when field %s expects boolean, got %T", rel, stepID, name, value)
 		}
 	case "integer":
-		if _, ok := value.(int); !ok {
+		switch v := value.(type) {
+		case int, int64, uint64:
+		case float64:
+			if v != float64(int64(v)) {
+				c.rulef("service-when", "%s: step %s when field %s expects integer, got %T", rel, stepID, name, value)
+			}
+		default:
 			c.rulef("service-when", "%s: step %s when field %s expects integer, got %T", rel, stepID, name, value)
 		}
 	case "string":

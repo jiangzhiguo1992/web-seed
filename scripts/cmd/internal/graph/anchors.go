@@ -272,7 +272,7 @@ func (a *Anchors) Write(root string) ([]string, error) {
 	for _, file := range sortedLifecycleFileKeys(a.LifecycleFiles) {
 		for _, item := range a.LifecycleFiles[file] {
 			if item.kind == "transition" {
-				ok, err := syncItemField(filepath.Join(root, file), "transitions", "name", item.name, "implemented_by", a.LifecycleSteps[item.id])
+				ok, err := syncItemFieldBlock(filepath.Join(root, file), "transitions", "name", item.name, "implemented_by", a.LifecycleSteps[item.id])
 				if err != nil {
 					return changed, err
 				}
@@ -551,6 +551,100 @@ func syncItemField(path, listKey, itemKey, itemValue, field string, values []str
 		return false, nil
 	}
 	return true, os.WriteFile(path, []byte(out), 0o644)
+}
+
+// syncItemFieldBlock 在 listKey 列表中找到 itemKey=itemValue 的块，
+// 以块风格替换或插入字段（每项一行），用于 transitions[].implemented_by。
+func syncItemFieldBlock(path, listKey, itemKey, itemValue, field string, values []string) (bool, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	text := strings.TrimSuffix(string(b), "\n")
+	lines := strings.Split(text, "\n")
+	listStart := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == listKey+":" {
+			listStart = i
+			break
+		}
+	}
+	if listStart < 0 {
+		return false, fmt.Errorf("%s: list %s not found", path, listKey)
+	}
+	itemStart := -1
+	for i := listStart + 1; i < len(lines); i++ {
+		trim := strings.TrimPrefix(lines[i], "  - ")
+		if strings.HasPrefix(trim, itemKey+": ") && strings.TrimSpace(strings.TrimPrefix(trim, itemKey+": ")) == itemValue {
+			itemStart = i
+			break
+		}
+		if strings.TrimSpace(lines[i]) != "" && !strings.HasPrefix(lines[i], " ") {
+			break
+		}
+	}
+	if itemStart < 0 {
+		return false, fmt.Errorf("%s: item %s=%s not found", path, itemKey, itemValue)
+	}
+	itemEnd := len(lines)
+	for i := itemStart + 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "  - ") || (strings.TrimSpace(lines[i]) != "" && !strings.HasPrefix(lines[i], " ")) {
+			itemEnd = i
+			break
+		}
+	}
+	rendered := []string{"    " + field + ":"}
+	if len(values) == 0 {
+		rendered = []string{"    " + field + ": []"}
+	} else {
+		for _, value := range values {
+			rendered = append(rendered, "      - "+value)
+		}
+	}
+	fieldLine := -1
+	for i := itemStart + 1; i < itemEnd; i++ {
+		if strings.HasPrefix(lines[i], "    "+field+":") {
+			fieldLine = i
+			break
+		}
+	}
+	if fieldLine >= 0 {
+		j := fieldLine + 1
+		for j < itemEnd {
+			if strings.TrimSpace(lines[j]) == "" {
+				j++
+				continue
+			}
+			indent := len(lines[j]) - len(strings.TrimLeft(lines[j], " "))
+			if indent <= 4 {
+				break
+			}
+			j++
+		}
+		if sameLines(lines[fieldLine:j], rendered) {
+			return false, nil
+		}
+		lines = append(lines[:fieldLine], append(rendered, lines[j:]...)...)
+	} else {
+		lines = append(lines[:itemEnd], append(rendered, lines[itemEnd:]...)...)
+	}
+	out := strings.Join(lines, "\n") + "\n"
+	if out == string(b) {
+		return false, nil
+	}
+	return true, os.WriteFile(path, []byte(out), 0o644)
+}
+
+func sameLines(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func renderFlowList(values []string) string {

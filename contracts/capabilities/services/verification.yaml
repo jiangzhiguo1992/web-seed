@@ -215,9 +215,30 @@ services:
           - { name: id, value: step.create.row.id, description: "待标记的验证体 ID" }
           - { name: sent_at, value: step.now.sent_at, description: "发送时间" }
           - { name: status, value: step.status_sent.status, description: "目标状态：已发送" }
-        output: [ ]
+        output:
+          - { name: affected_rows, type: integer, description: "query 返回的 affected_rows" }
         query: data.queries.verification.mark_verification_sent
-        goto: send
+        goto: mark_sent_result
+      - id: mark_sent_result
+        kind: when
+        summary: "标记成功才继续发送"
+        input:
+          - { name: affected_rows, value: step.mark_sent.affected_rows, description: "标记影响行数" }
+        output: [ ]
+        when:
+          - input: affected_rows
+            expr: "input.affected_rows == 1"
+            goto: send
+        goto: deny_stale
+      - id: deny_stale
+        kind: logic
+        summary: "验证体不在待发送状态，返回统一验证错误"
+        input: [ ]
+        output: [ ]
+        errors:
+          - platform.errors.AUTH_VERIFICATION_INVALID
+        rules: [ ]
+        goto: $end
       - id: send
         kind: logic
         summary: "下发验证码并返回发送是否成功"
@@ -715,6 +736,7 @@ services:
       - id: expire_stale
         kind: query
         summary: "调用 data.queries.verification.expire_stale_verifications"
+        lifecycles: [ cap.lifecycles.verification.expire ]
         input:
           - { name: now, value: step.now.now, description: "当前时间" }
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }

@@ -12,7 +12,7 @@
 | 目录                                 | 回答的问题                         | 真相源内容                                           | 产物                                   |
 |--------------------------------------|------------------------------------|------------------------------------------------------|----------------------------------------|
 | `services/<module>.yaml`             | 模块能提供哪些可调用单元、如何实现 | services[]、steps、input/output 数据链、事务、写归属 | Go interface、usecase 骨架、写归属校验 |
-| `lifecycles/<dimension>.yaml`        | 实体的某个状态机如何创建、流转与销毁 | subjects[{entity,field}]、states(values/initial/final/derived)、create/destroy、transitions | 生命周期常量、转换表、非法动作测试     |
+| `lifecycles/<dimension>.yaml`        | 实体的某个状态机如何创建、流转与销毁 | subjects[{entity,field}]、states(values/initial/final)、create/destroy、transitions | 生命周期常量、转换表、非法动作测试     |
 | `events/<module>.yaml`               | 哪些异步主题与任务、如何触发与重试 | topics[]（payload/发布/订阅）、jobs[]（trigger/retry） | 事件常量、payload 类型、worker 注册表  |
 | `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露           | path、method、status、header、schema 引用            | server 类型、client、合并 spec         |
 
@@ -148,7 +148,7 @@ service 项必须声明：
 `contracts/capabilities/lifecycles/`：
 
 - 一个 lifecycle = 一个状态机：`subjects` 列出共享该状态机的全部 `{entity, field}`，必须同枚举、同 `owner_module`；同一 `(entity, field)` 只能被一份契约声明；
-- `states` 是对象：`values` 是状态集合，`initial` 是初始状态，`final` 是终态集合，`derived` 是由时间/外部事实派生的终态子集；`derived` 必须是 `final` 子集，且不要求经 transition 可达；
+- `states` 是对象：`values` 是状态集合，`initial` 是初始状态，`final` 是终态集合；每个 state 必须从 initial 可达；
 - `final` 是列表：单终态（如 account 的 `[deleted]`）与多终态（如 token 的 `[revoked, expired]`）用同一形状表达；`destroy` 存在时 `final` 最多一个；
 - `destroy` 可从任意非 final 状态销毁，不写 `from` / `to`；`final` 恰好一个时 destroy 进入该终态，`final` 为空时只软删实体，多终态 lifecycle 不使用 destroy；
 - 幂等转换：把当前状态也写进 `from`（自环），不要单独维护幂等列表；

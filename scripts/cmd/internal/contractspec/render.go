@@ -956,7 +956,7 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 		}
 	}
 	if f, ok := FindField(s.Fields, "states"); ok {
-		if err := requireSupported(f.Fields, map[string]bool{"values": true, "initial": true, "final": true, "derived": true}, "cap.lifecycles.states"); err != nil {
+		if err := requireSupported(f.Fields, map[string]bool{"values": true, "initial": true, "final": true}, "cap.lifecycles.states"); err != nil {
 			return nil, err
 		}
 	}

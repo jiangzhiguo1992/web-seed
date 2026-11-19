@@ -181,20 +181,6 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 		}
 		finalSet[name] = true
 	}
-	derivedSet := map[string]bool{}
-	for _, name := range stringList(states["derived"]) {
-		if !stateNames[name] {
-			c.rulef("lifecycle-structure", "%s: derived %s is not a declared state", rel, name)
-			continue
-		}
-		if !finalSet[name] {
-			c.rulef("lifecycle-structure", "%s: derived %s must be a final state", rel, name)
-		}
-		derivedSet[name] = true
-	}
-	if derivedSet[initial] {
-		c.rulef("lifecycle-structure", "%s: initial %s must not be derived", rel, initial)
-	}
 	_, hasDestroy := asMap(doc["destroy"])
 	if hasDestroy && len(finalSet) > 1 {
 		c.rulef("lifecycle-structure", "%s: destroy requires at most one final state", rel)
@@ -313,9 +299,6 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 		if !stateNames[to] {
 			c.rulef("lifecycle-structure", "%s: transition %s unknown to state %s", rel, name, to)
 		}
-		if derivedSet[to] {
-			c.rulef("lifecycle-structure", "%s: transition %s must not target derived state %s", rel, name, to)
-		}
 		if hasDestroy && len(finalSet) == 1 && finalSet[to] {
 			c.rulef("lifecycle-exhaustive", "%s: transition %s must not target final %s; use destroy", rel, name, to)
 		}
@@ -340,7 +323,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 		}
 	}
 
-	// 可达性：derived 终态不要求经边可达；有 destroy 且唯一 final 时，destroy 进入该 final。
+	// 可达性：从 initial 沿 transition 边；有 destroy 且唯一 final 时，destroy 进入该 final。
 	if stateNames[initial] {
 		reachable := map[string]bool{initial: true}
 		for changed := true; changed; {
@@ -372,9 +355,6 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			}
 		}
 		for _, state := range stateList {
-			if derivedSet[state] {
-				continue
-			}
 			if !reachable[state] {
 				c.rulef("lifecycle-exhaustive", "%s: state %s is not reachable from initial %s", rel, state, initial)
 			}

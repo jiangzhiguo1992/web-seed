@@ -752,63 +752,16 @@ create:
 	}
 }
 
-func TestCheckLifecycleDerivedStates(t *testing.T) {
-	root := t.TempDir()
-	schema := copyMeta(t, root, "cap.lifecycles")
-	rel := "contracts/capabilities/lifecycles/x.yaml"
-	stepIDs := map[string]bool{"cap.services.x.activate.transition": true}
-	actionSteps := map[string][]string{"cap.lifecycles.x.revoke": {"cap.services.x.activate.transition"}}
-	valid := `id: cap.lifecycles.x
-summary: "x"
-owner_module: x
-schema_version: 1
-stability: draft
-do_not: []
-subjects:
-  - { entity: data.entities.x, field: status }
-states:
-  values: [active, revoked, expired]
-  initial: active
-  final: [revoked, expired]
-  derived: [expired]
-transitions:
-  - name: revoke
-    description: "a"
-    from: [active]
-    to: revoked
-    implemented_by: [cap.services.x.activate.transition]
-`
-	check := func(body string) string {
-		writeCapFile(t, root, rel, body)
-		doc, err := loadYAML(filepath.Join(root, rel))
-		if err != nil {
-			t.Fatal(err)
-		}
-		c := &Checker{
-			root:       root,
-			enumValues: map[string]map[string]bool{"data.enums.x_status": {"active": true, "revoked": true, "expired": true}},
-			entities: map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{
-				Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status",
-			}}}},
-		}
-		c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, map[string]map[string]bool{})
-		return strings.Join(c.errs, "\n")
+func TestCheckWhenLiteralInteger(t *testing.T) {
+	c := &Checker{}
+	c.checkWhenLiteral("integer", float64(1), "rel", "step", "field")
+	if len(c.errs) != 0 {
+		t.Fatalf("integral float literal reported: %v", c.errs)
 	}
-	if got := check(valid); got != "" {
-		t.Fatalf("valid derived lifecycle reported: %s", got)
-	}
-	if got := check(strings.Replace(valid, "derived: [expired]", "derived: [active]", 1)); !strings.Contains(got, "must be a final state") {
-		t.Fatalf("derived outside final not reported: %s", got)
-	}
-	if got := check(strings.Replace(valid, "to: revoked", "to: expired", 1)); !strings.Contains(got, "must not target derived state") {
-		t.Fatalf("derived transition target not reported: %s", got)
-	}
-	if got := check(strings.Replace(valid, "from: [active]", "from: [revoked]", 1)); !strings.Contains(got, "must not be a transition source") {
-		t.Fatalf("final transition source not reported: %s", got)
-	}
-	multiFinal := strings.Replace(valid, "transitions:", "destroy:\n  services: [cap.services.x.delete]\ntransitions:", 1)
-	if got := check(multiFinal); !strings.Contains(got, "destroy requires at most one final") {
-		t.Fatalf("multi-final destroy not reported: %s", got)
+	c.errs = nil
+	c.checkWhenLiteral("integer", float64(1.5), "rel", "step", "field")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-when]") {
+		t.Fatalf("non-integral float literal not reported: %v", c.errs)
 	}
 }
 

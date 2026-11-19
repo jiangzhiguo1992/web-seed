@@ -71,3 +71,21 @@ rules:
     assert: "(status == deleted) == (deleted_at != nil)"
     on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by: [ cap.services.account.delete ]
+  - id: feature.rules.account.activate_requires_pending_or_suspended
+    kind: policy
+    summary: "只有 pending 或 suspended 账号可以激活"
+    severity: error
+    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    implemented_by: [ cap.services.account.activate ]
+    given: "account.status not in (pending, suspended)"
+    when: "激活账号"
+    then: "拒绝，返回 ACCOUNT_ILLEGAL_TRANSITION"
+  - id: feature.rules.account.suspend_requires_active
+    kind: policy
+    summary: "只有 active 账号可以封禁"
+    severity: error
+    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    implemented_by: [ cap.services.account.suspend ]
+    given: "account.status != active"
+    when: "封禁账号"
+    then: "拒绝，返回 ACCOUNT_ILLEGAL_TRANSITION"

@@ -17,7 +17,6 @@ states:
   values: [pending, sent, consumed, expired, revoked, failed]
   initial: pending
   final: [consumed, expired, revoked, failed]
-  derived: [expired]
 create:
   requires:
     - { lifecycle: cap.lifecycles.account, states: [pending, active] }
@@ -39,6 +38,12 @@ transitions:
       - { lifecycle: cap.lifecycles.account, states: [pending, active] }
     implemented_by:
       - cap.services.verification.verify.consume
+  - name: expire
+    description: "超过 expire_at 的 pending/sent 验证体由 cleanup 置为 expired"
+    from: [pending, sent]
+    to: expired
+    implemented_by:
+      - cap.services.verification.cleanup.expire_stale
   - name: revoke
     description: "重发、换绑、停用或清理时作废"
     from: [pending, sent]
