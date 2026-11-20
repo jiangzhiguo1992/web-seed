@@ -16,10 +16,10 @@ topics:
     payload:
       type: object
       properties:
-        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
-        - { name: number, schema: { type: account_number }, required: true, description: "账号编号" }
+        - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
+        - { name: number, schema: { type: _types.account_number }, required: true, description: "账号编号" }
         - { name: status, schema: { ref: data.enums.account_status }, required: true, description: "账号创建后的状态" }
-        - { name: created_at, schema: { type: timestamp }, required: true, description: "创建时间" }
+        - { name: created_at, schema: { type: _types.timestamp }, required: true, description: "创建时间" }
     summary: "账号创建"
     emitted_by: [ cap.services.account.create ]
     consumers: []
@@ -29,8 +29,8 @@ topics:
     payload:
       type: object
       properties:
-        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
-        - { name: activated_at, schema: { type: timestamp }, required: true, description: "账号激活时间" }
+        - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
+        - { name: activated_at, schema: { type: _types.timestamp }, required: true, description: "账号激活时间" }
     summary: "账号激活或解封"
     emitted_by: [ cap.services.account.activate ]
     consumers: []
@@ -40,9 +40,9 @@ topics:
     payload:
       type: object
       properties:
-        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
-        - { name: reason, schema: { type: string }, required: true, description: "失败或停用原因" }
-        - { name: suspended_at, schema: { type: timestamp }, required: true, description: "账号停用时间" }
+        - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
+        - { name: reason, schema: { type: _types.string }, required: true, description: "失败或停用原因" }
+        - { name: suspended_at, schema: { type: _types.timestamp }, required: true, description: "账号停用时间" }
     summary: "账号封禁"
     emitted_by: [ cap.services.account.suspend ]
     consumers: []
@@ -52,8 +52,8 @@ topics:
     payload:
       type: object
       properties:
-        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
-        - { name: reactivated_at, schema: { type: timestamp }, required: true, description: "账号重新激活时间" }
+        - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
+        - { name: reactivated_at, schema: { type: _types.timestamp }, required: true, description: "账号重新激活时间" }
     summary: "账号解封"
     emitted_by: [ cap.services.account.activate ]
     consumers: []
@@ -63,8 +63,8 @@ topics:
     payload:
       type: object
       properties:
-        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
-        - { name: deleted_at, schema: { type: timestamp }, required: true, description: "软删时间" }
+        - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
+        - { name: deleted_at, schema: { type: _types.timestamp }, required: true, description: "软删时间" }
     summary: "账号软删"
     emitted_by: [ cap.services.account.delete ]
     consumers: []
@@ -74,10 +74,10 @@ topics:
     payload:
       type: object
       properties:
-        - { name: id, schema: { type: integer }, required: true, description: "唯一标识" }
-        - { name: ip, schema: { type: string }, description: "客户端 IP" }
-        - { name: user_agent, schema: { type: string }, description: "客户端 User-Agent" }
-        - { name: login_at, schema: { type: timestamp }, required: true, description: "登录时间" }
+        - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
+        - { name: ip, schema: { type: _types.string }, description: "客户端 IP" }
+        - { name: user_agent, schema: { type: _types.string }, description: "客户端 User-Agent" }
+        - { name: login_at, schema: { type: _types.timestamp }, required: true, description: "登录时间" }
     summary: "登录成功"
     emitted_by: [ cap.services.auth.record_login_success ]
     consumers: []
@@ -87,9 +87,9 @@ topics:
     payload:
       type: object
       properties:
-        - { name: account_id, schema: { type: integer }, nullable: true, description: "账号 ID；未知账号为 null" }
+        - { name: account_id, schema: { type: _types.integer }, nullable: true, description: "账号 ID；未知账号为 null" }
         - { name: reason, schema: { ref: data.enums.login_failed_reason }, required: true, description: "失败或停用原因" }
-        - { name: failed_at, schema: { type: timestamp }, required: true, description: "登录失败时间" }
+        - { name: failed_at, schema: { type: _types.timestamp }, required: true, description: "登录失败时间" }
     summary: "登录失败"
     emitted_by: [ cap.services.auth.login, cap.services.auth.record_login_failure ]
     consumers: []

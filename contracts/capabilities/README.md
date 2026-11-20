@@ -77,8 +77,7 @@ events/jobs ──trigger.topic──> events/topics
 
 文件级字段：
 
-- `schemas`（可选；本地 schema，键是 Go 类型名，引用时必须写 `cap.services.<file>.schemas.<Name>`；值是值域节点，`object.properties[]` 的条目按 `_meta/_schemas.yaml` 的 `property.keys`
-  校验，标量约束引用 `_types`，可跨文件引用）
+- `schemas`（可选；本地 schema，键是 Go 类型名，引用时必须写 `cap.services.<file>.schemas.<Name>`；值是值域节点，`object.properties[]` 的条目按 `_meta/_types.yaml` 的 `schemas.object` 校验，标量约束引用 `_types`，可跨文件引用）
 
 入口权限、审计与限流在 `contracts/platform/security/access.yaml` 绑定，不在 service 项声明。query 的 `errors` 在
 `data/queries/*.yaml` 的查询项上声明；它只列 query 自身的领域错误，输入校验、权限与 DB 引擎错误不在 query 内枚举，

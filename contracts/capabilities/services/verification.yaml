@@ -18,33 +18,33 @@ schemas:
     type: object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
-      - { name: account_id, schema: { type: integer }, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
-      - { name: target, schema: { type: verification_target }, required: true, description: "验证码接收目标" }
+      - { name: account_id, schema: { type: _types.integer }, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
+      - { name: target, schema: { type: _types.verification_target }, required: true, description: "验证码接收目标" }
       - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
     validation:
       - { rule: "input.purpose != \"register\" || input.account_id != null", message: "注册验证必须携带 pending account ID" }
   VerificationSent:
     type: object
     properties:
-      - { name: id, schema: { type: integer }, required: true, description: "验证记录 ID" }
-      - { name: masked_target, schema: { type: string }, required: true, description: "脱敏后的接收目标" }
-      - { name: expire_at, schema: { type: timestamp }, required: true, description: "过期时间" }
+      - { name: id, schema: { type: _types.integer }, required: true, description: "验证记录 ID" }
+      - { name: masked_target, schema: { type: _types.string }, required: true, description: "脱敏后的接收目标" }
+      - { name: expire_at, schema: { type: _types.timestamp }, required: true, description: "过期时间" }
   VerifyCodeInput:
     type: object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
-      - { name: account_id, schema: { type: integer }, nullable: true, description: "注册时必传；其他用途可省略" }
-      - { name: target, schema: { type: verification_target }, required: true, description: "验证码接收目标" }
+      - { name: account_id, schema: { type: _types.integer }, nullable: true, description: "注册时必传；其他用途可省略" }
+      - { name: target, schema: { type: _types.verification_target }, required: true, description: "验证码接收目标" }
       - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
-      - { name: code, schema: { type: verification_code }, required: true, description: "验证码" }
+      - { name: code, schema: { type: _types.verification_code }, required: true, description: "验证码" }
     validation:
       - { rule: "input.purpose != \"register\" || input.account_id != null", message: "注册验证必须携带 pending account ID" }
   VerificationResult:
     type: object
     properties:
-      - { name: verified, schema: { type: boolean }, required: true, description: "是否验证通过" }
-      - { name: verification_id, schema: { type: integer }, required: true, description: "验证记录 ID" }
-      - { name: consumed_at, schema: { type: timestamp }, nullable: true, description: "验证码消费时间；未消费为 null" }
+      - { name: verified, schema: { type: _types.boolean }, required: true, description: "是否验证通过" }
+      - { name: verification_id, schema: { type: _types.integer }, required: true, description: "验证记录 ID" }
+      - { name: consumed_at, schema: { type: _types.timestamp }, nullable: true, description: "验证码消费时间；未消费为 null" }
 services:
   - name: send
     summary: "发送短信/邮件验证码"

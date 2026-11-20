@@ -11,11 +11,11 @@ schemas:
   TokenPair:
     type: object
     properties:
-      - { name: access_token, schema: { type: string }, required: true, read_only: true, description: "访问令牌" }
-      - { name: refresh_token, schema: { type: string }, required: true, read_only: true, description: "刷新令牌" }
-      - { name: access_expire_at, schema: { type: timestamp }, required: true, description: "访问令牌过期时间" }
-      - { name: refresh_expire_at, schema: { type: timestamp }, required: true, description: "刷新令牌过期时间" }
-      - { name: token_type, schema: { type: token_type }, description: "令牌类型；固定 Bearer" }
+      - { name: access_token, schema: { type: _types.string }, required: true, read_only: true, description: "访问令牌" }
+      - { name: refresh_token, schema: { type: _types.string }, required: true, read_only: true, description: "刷新令牌" }
+      - { name: access_expire_at, schema: { type: _types.timestamp }, required: true, description: "访问令牌过期时间" }
+      - { name: refresh_expire_at, schema: { type: _types.timestamp }, required: true, description: "刷新令牌过期时间" }
+      - { name: token_type, schema: { type: _types.token_type }, description: "令牌类型；固定 Bearer" }
 services:
   - name: issue
     summary: "为账号签发 access + refresh 令牌对"
