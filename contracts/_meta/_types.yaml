@@ -1,5 +1,4 @@
-# 统一类型注册表：basic_types / structures / schemas。
-# 所有模板字段的 type 值都必须以 _types. 开头并在这里或 data/types.yaml 找到。
+# 类型元层：类型族、容器、schema 节点；项目自定义类型在 contracts/data/types.yaml。
 
 id: meta.types
 title: "统一类型注册表"
@@ -8,119 +7,146 @@ basic_types:
   string:
     description: "字符序列"
     params:
-      min_len: { type: integer, required: false, min: 0, description: "最小长度" }
-      max_len: { type: integer, required: false, min: 1, description: "最大长度" }
-      fixed: { type: boolean, required: false, default: false, description: "定长" }
-      pattern: { type: string, required: false, description: "写入前校验正则" }
-      normalize: { type: string, required: false, enum: [ lower, upper ], description: "写入前归一" }
+      min_len: { type: _types.integer, required: false, min: 0, description: "最小长度" }
+      max_len: { type: _types.integer, required: false, min: 1, description: "最大长度" }
+      fixed: { type: _types.boolean, required: false, default: false, description: "定长" }
+      pattern: { type: _types.string, required: false, description: "写入前校验正则" }
+      normalize: { type: _types.string, required: false, enum: [ lower, upper ], description: "写入前归一" }
   boolean:
     description: "布尔值"
     params: { }
   integer:
     description: "整数"
     params:
-      bits: { type: integer, required: false, enum: [ 8, 16, 32, 64 ], default: 64, description: "位宽" }
-      unsigned: { type: boolean, required: false, default: false, description: "无符号" }
-      min: { type: integer, required: false, description: "下限" }
-      max: { type: integer, required: false, description: "上限" }
+      bits: { type: _types.integer, required: false, enum: [ 8, 16, 32, 64 ], default: 64, description: "位宽" }
+      unsigned: { type: _types.boolean, required: false, default: false, description: "无符号" }
+      min: { type: _types.integer, required: false, description: "下限" }
+      max: { type: _types.integer, required: false, description: "上限" }
   float:
     description: "浮点数"
     params:
-      bits: { type: integer, required: false, enum: [ 32, 64 ], default: 64, description: "位宽" }
-      min: { type: float, required: false, description: "下限" }
-      max: { type: float, required: false, description: "上限" }
+      bits: { type: _types.integer, required: false, enum: [ 32, 64 ], default: 64, description: "位宽" }
+      min: { type: _types.float, required: false, description: "下限" }
+      max: { type: _types.float, required: false, description: "上限" }
   decimal:
     description: "精确小数"
     params:
-      precision: { type: integer, required: true, min: 1, examples: [ 19 ], description: "总位数" }
-      scale: { type: integer, required: false, default: 0, min: 0, description: "小数位数" }
-      min: { type: decimal, required: false, description: "下限" }
-      max: { type: decimal, required: false, description: "上限" }
+      precision: { type: _types.integer, required: true, min: 1, examples: [ 19 ], description: "总位数" }
+      scale: { type: _types.integer, required: false, default: 0, min: 0, description: "小数位数" }
+      min: { type: _types.decimal, required: false, description: "下限" }
+      max: { type: _types.decimal, required: false, description: "上限" }
   datetime:
     description: "日期/时间"
     params:
-      mode: { type: string, required: false, enum: [ date, time, datetime ], default: datetime, description: "模式" }
-      timezone: { type: boolean, required: false, default: false, description: "带时区" }
+      mode: { type: _types.string, required: false, enum: [ date, time, datetime ], default: datetime, description: "模式" }
+      timezone: { type: _types.boolean, required: false, default: false, description: "带时区" }
   timestamp:
     description: "绝对时间点"
     params:
-      timezone: { type: boolean, required: false, default: true, description: "带时区" }
-      fractional_seconds: { type: integer, required: false, default: 6, min: 0, max: 9, description: "小数秒精度" }
+      timezone: { type: _types.boolean, required: false, default: true, description: "带时区" }
+      fractional_seconds: { type: _types.integer, required: false, default: 6, min: 0, max: 9, description: "小数秒精度" }
   json:
     description: "JSON 文档"
     params:
-      binary: { type: boolean, required: false, default: false, description: "使用二进制 JSON 存储（引擎映射）" }
+      binary: { type: _types.boolean, required: false, default: false, description: "使用二进制 JSON 存储（引擎映射）" }
   bytes:
     description: "二进制"
     params:
-      min_len: { type: integer, required: false, min: 0, description: "最小长度" }
-      max_len: { type: integer, required: false, min: 1, description: "最大长度" }
-      fixed: { type: boolean, required: false, default: false, description: "定长" }
+      min_len: { type: _types.integer, required: false, min: 0, description: "最小长度" }
+      max_len: { type: _types.integer, required: false, min: 1, description: "最大长度" }
+      fixed: { type: _types.boolean, required: false, default: false, description: "定长" }
   any:
-    description: "任意值；仅用于 soft zone"
+    description: "任意值；用于无法静态建模的字段"
 
 structures:
   list:
-    description: "有序列表；元素类型写在 <...>"
+    description: "有序、可重复、变长列表"
+    fields:
+      - { name: item, type: "*", required: true, description: "元素" }
+    params:
+      min_len: { type: _types.integer, required: false, min: 0, description: "最小长度" }
+      max_len: { type: _types.integer, required: false, min: 1, description: "最大长度" }
+  set:
+    description: "无序、去重集合"
+    fields:
+      - { name: item, type: "*", required: true, description: "元素" }
+    params:
+      min_len: { type: _types.integer, required: false, min: 0, description: "最小长度" }
+      max_len: { type: _types.integer, required: false, min: 1, description: "最大长度" }
+  array:
+    description: "定长有序数组；元素类型固定"
+    fields:
+      - { name: item, type: "*", required: true, description: "元素" }
+    params:
+      len: { type: _types.integer, required: true, min: 1, description: "数组长度" }
   map:
-    description: "键值映射；键固定为 string，值类型写在 <...> 或 types"
-  struct:
+    description: "键值映射；键固定为 string 或 integer"
+    fields:
+      - { name: key, type: "*", required: true, enum: [ string, integer ], description: "键；string 或 integer" }
+      - { name: value, type: "*", required: true, description: "值；任意 _types 类型" }
+    params:
+      min_len: { type: _types.integer, required: false, min: 0, description: "最小键数" }
+      max_len: { type: _types.integer, required: false, min: 1, description: "最大键数" }
+      key_patterns: { type: _types.list<_types.string>, required: false, description: "string key 的正则列表；全部匹配" }
+  object:
     description: "固定键对象；字段由 fields/item_fields 定义"
+    params:
+      additional_properties: { type: _types.boolean, required: false, default: false, description: "是否允许额外键" }
 
 schemas:
-  struct:
-    description: "业务对象节点；properties 是属性条目列表"
+  object:
+    description: "对象节点；properties 是属性条目"
     keys:
       - name: type
-        type: string
+        type: _types.string
         required: true
-        const: struct
-        description: "固定为 struct"
+        const: object
+        description: "固定为 object"
       - name: properties
-        type: list<struct>
+        type: _types.list<_types.object>
         required: true
         unique_key: name
         description: "对象属性条目"
         item_fields:
           - name: name
-            type: string
+            type: _types.string
             required: true
             pattern: '^[a-z][a-z0-9_]*$'
             description: "属性名"
           - name: schema
-            types: [ scalar, struct, array, ref ]
+            types: [ scalar, object, array, ref ]
             required: true
             description: "属性值域"
           - name: required
-            type: boolean
+            type: _types.boolean
             description: "键是否必须出现"
           - name: nullable
-            type: boolean
+            type: _types.boolean
             description: "值是否可为 null"
           - name: default
-            type: any
+            type: _types.any
             description: "缺省值；仅槽位层"
           - name: read_only
-            type: boolean
+            type: _types.boolean
             description: "仅响应输出"
           - name: write_only
-            type: boolean
+            type: _types.boolean
             description: "仅请求输入"
           - name: description
-            type: string
+            type: _types.string
             required: true
             description: "属性说明"
       - name: validation
-        type: list<struct>
+        type: _types.list<_types.object>
         required: false
         description: "对象级校验规则"
         item_fields:
           - name: rule
-            type: string
+            type: _types.string
             required: true
             description: "受限布尔表达式；字段用 input.<属性名>，操作符 == != > >= < <= && || !"
           - name: message
-            type: string
+            type: _types.string
             required: true
             description: "违反规则时的错误文案"
 
@@ -128,33 +154,33 @@ schemas:
     description: "数组节点；items 是元素值域"
     keys:
       - name: type
-        type: string
+        type: _types.string
         required: true
         const: array
         description: "固定为 array"
       - name: items
-        types: [ struct, array, scalar, ref ]
+        types: [ object, array, scalar, ref ]
         required: true
         description: "数组元素值域"
       - name: min_items
-        type: integer
+        type: _types.integer
         min: 0
         description: "数组最小长度"
       - name: max_items
-        type: integer
+        type: _types.integer
         min: 0
         description: "数组最大长度"
       - name: validation
-        type: list<struct>
+        type: _types.list<_types.object>
         required: false
         description: "数组级校验规则"
         item_fields:
           - name: rule
-            type: string
+            type: _types.string
             required: true
             description: "受限布尔表达式；引用 value"
           - name: message
-            type: string
+            type: _types.string
             required: true
             description: "违反规则时的错误文案"
 
@@ -162,21 +188,21 @@ schemas:
     description: "标量节点；type 指向 _types 的 basic_types 或 data/types.yaml"
     keys:
       - name: type
-        type: string
+        type: _types.string
         required: true
         pattern: '^_types\.[a-z][a-z0-9_]*$'
         description: "值类型引用 _types.<name>"
       - name: validation
-        type: list<struct>
+        type: _types.list<_types.object>
         required: false
         description: "标量级校验规则"
         item_fields:
           - name: rule
-            type: string
+            type: _types.string
             required: true
             description: "受限布尔表达式；引用 value"
           - name: message
-            type: string
+            type: _types.string
             required: true
             description: "违反规则时的错误文案"
 
@@ -184,21 +210,21 @@ schemas:
     description: "引用节点；ref 指向 entity、enum 或全限定本地 schema"
     keys:
       - name: ref
-        type: string
+        type: _types.string
         required: true
         pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*)$'
         description: "全限定引用：data.entities.* / data.enums.* / cap.services.<file>.schemas.<Type>"
       - name: validation
-        type: list<struct>
+        type: _types.list<_types.object>
         required: false
         description: "引用级校验规则"
         item_fields:
           - name: rule
-            type: string
+            type: _types.string
             required: true
             description: "受限布尔表达式；引用 value 或 value.<path>"
           - name: message
-            type: string
+            type: _types.string
             required: true
             description: "违反规则时的错误文案"
 
