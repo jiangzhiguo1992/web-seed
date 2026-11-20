@@ -103,7 +103,7 @@ fields:
     description: "表单或展示字段"
     item_fields:
       - { name: name, type: _types.string, required: true, description: "字段名" }
-      - { name: type, type: _types.string, required: false, enum: [ text, string, integer, email, password, number, tel, url, date, datetime-local, time, search, textarea, select, checkbox, radio, hidden ], description: "输入/展示类型" }
+      - { name: widget, type: _types.string, required: false, enum: [ text, string, integer, email, password, number, tel, url, date, datetime-local, time, search, textarea, select, checkbox, radio, hidden ], description: "输入/展示控件类型" }
       - { name: required, type: _types.boolean, required: false, description: "是否必填" }
       - { name: optional, type: _types.boolean, required: false, description: "是否可选" }
       - { name: minLength, type: _types.integer, required: false, min: 0, description: "最小长度" }

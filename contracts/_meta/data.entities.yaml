@@ -63,7 +63,7 @@ fields:
     description: "业务字段与关系字段"
     item_fields:
       - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名" }
-      - { name: type, type: _types.string, required: false, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|[a-z][a-z0-9_]*)|List<data\.entities\.[a-z][a-z0-9_]*>)$', description: "标量：类型族/自定义类型或 data.enums.*，可带 *；关系：data.entities.*（List 表示一对多）" }
+      - { name: type, type: _types.string, required: false, pattern: '^(\*?(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*)|_types\.list<data\.entities\.[a-z][a-z0-9_]*>)$', description: "标量：_types.<name> 或 data.enums.*，可带 *；关系：data.entities.*（_types.list<...> 表示一对多）" }
       - { name: nullable, type: _types.boolean, required: false, default: false, description: "是否为指针" }
       - { name: json_name, type: _types.string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "JSON 字段名" }
       - { name: description, type: _types.string, required: true, description: "字段语义；不从列 comment 继承" }
@@ -112,7 +112,7 @@ rules:
   - { id: entity-id, text: "ID 是所有实体的唯一主键：必须来自主表 id 列、非指针，且是唯一主键", implemented_by: [ entity-id ] }
   - { id: entity-field-variant, text: "字段二选一：标量字段必须有 source（column/computed/soft 三选一），不得写 source.join；关系字段必须有 type 和 source.join（from/to/lazy 必填），source 不得为空对象，且不得写 sensitivity", implemented_by: [ entity-field-variant ] }
   - { id: entity-field-source, text: "source 四选一：column 指向本实体表的列；computed 非空、指针类型、不引用 @params；soft 非空且必须显式 type；join 只用于关系字段且必须写 from/to/lazy", implemented_by: [ entity-field-source ] }
-  - { id: entity-field-type, text: "来源列字段的 type 可省略，省略时按列类型+nullable 派生；computed/soft 必填；nullable 显式指针且必须与来源列 nullable 一致；* 前缀为兼容写法，与 nullable 互斥；枚举只能映射 integer 列；禁止列表类型和 data.tables.* 行类型", implemented_by: [ entity-field-type ] }
+  - { id: entity-field-type, text: "来源列字段的 type 可省略，省略时按列类型+nullable 派生为 _types.*；computed/soft 必填；nullable 显式指针且必须与来源列 nullable 一致；* 前缀为兼容写法，与 nullable 互斥；枚举只能映射 integer 列；禁止列表字段和 data.tables.* 行类型", implemented_by: [ entity-field-type ] }
   - { id: entity-field-column, text: "source.column 必须存在且属于本实体的表；同一列不得被两个字段引用；多表合成的每张表至少被一个字段引用", implemented_by: [ entity-field-column ] }
   - { id: entity-field-sensitive, text: "sensitivity 省略时继承来源列，computed/soft 省略时默认 public；显式值不得低于来源列；secret 字段名必须小写开头", implemented_by: [ entity-field-sensitive ] }
   - { id: entity-field-json-name, text: "json_name 可省略，默认取 snake_case(name)；同一实体内 JSON 名必须唯一", implemented_by: [ entity-field-json-name ] }
@@ -126,5 +126,5 @@ rules:
   - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
   - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入", implemented_by: [ entity-used-by ] }
   - { id: entity-included-by, text: "model.included_by 必须等于关系字段 type 指向本实体的 entity 集合，由 gen-graph 写入；每个 entity 必须存在且确实指向本实体", implemented_by: [ entity-included-by ] }
-  - { id: entity-relation-arity, text: "关系基数必须与类型形状一致：one_to_many 用 List<data.entities.*>，one_to_one/many_to_one 用单个 data.entities.*", implemented_by: [ entity-relation-arity ] }
+  - { id: entity-relation-arity, text: "关系基数必须与类型形状一致：one_to_many 用 _types.list<data.entities.*>，one_to_one/many_to_one 用单个 data.entities.*", implemented_by: [ entity-relation-arity ] }
   - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

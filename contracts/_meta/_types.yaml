@@ -183,6 +183,46 @@ schemas:
             required: true
             description: "违反规则时的错误文案"
 
+  map:
+    description: "映射节点；键固定为 string（JSON 对象键），values 是值域；integer key 用 _types.map 结构，不进入 schema 节点"
+    keys:
+      - name: type
+        type: _types.string
+        required: true
+        const: map
+        description: "固定为 map"
+      - name: values
+        types: [ _types.schema ]
+        required: true
+        description: "映射值域；键固定为 string"
+      - name: min_items
+        type: _types.integer
+        min: 0
+        description: "映射最小键数"
+      - name: max_items
+        type: _types.integer
+        min: 0
+        description: "映射最大键数"
+      - name: key_patterns
+        type: _types.list<_types.string>
+        required: false
+        min_items: 1
+        unique: true
+        description: "string key 的正则列表；全部匹配"
+      - name: validation
+        type: _types.list<_types.object>
+        required: false
+        description: "映射级校验规则"
+        item_fields:
+          - name: rule
+            type: _types.string
+            required: true
+            description: "受限布尔表达式；引用 value"
+          - name: message
+            type: _types.string
+            required: true
+            description: "违反规则时的错误文案"
+
   scalar:
     description: "标量节点；type 指向 _types 的 basic_types 或 data/types.yaml"
     keys:

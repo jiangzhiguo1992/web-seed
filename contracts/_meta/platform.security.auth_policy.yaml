@@ -52,7 +52,7 @@ fields:
         required: true
         description: "访问令牌"
         fields:
-          - { name: type, type: _types.string, required: true, enum: [ jwt ], description: "令牌类型" }
+          - { name: format, type: _types.string, required: true, enum: [ jwt ], description: "令牌格式" }
           - { name: algorithm, type: _types.string, required: true, enum: [ HS256, RS256, ES256 ], description: "签名算法" }
           - { name: ttl, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
           - { name: claims_required, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims" }
@@ -64,7 +64,7 @@ fields:
         required: true
         description: "刷新令牌"
         fields:
-          - { name: type, type: _types.string, required: true, enum: [ opaque ], description: "令牌类型" }
+          - { name: format, type: _types.string, required: true, enum: [ opaque ], description: "令牌格式" }
           - { name: ttl, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
           - { name: rotation, type: _types.boolean, required: true, description: "是否轮换" }
           - { name: reuse_detection, type: _types.boolean, required: true, description: "是否检测复用" }

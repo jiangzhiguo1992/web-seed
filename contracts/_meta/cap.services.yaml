@@ -70,7 +70,7 @@ fields:
         description: "入参"
         item_fields:
           - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: _types.string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "基础类型、data.enums.*/entities.*、本地 schema 或类型族；可带一层 * 或 List<>" }
+          - { name: type, type: _types.string, required: true, pattern: '^(\*?(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.list<(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "_types.* 或 data.*/cap.services 本地 schema；可带一层 * 或 _types.list<>" }
           - { name: nullable, type: _types.boolean, required: false, description: "是否可空；调用方可省略" }
           - { name: default, type: _types.any, required: false, description: "缺省值" }
 
@@ -80,7 +80,7 @@ fields:
         description: "返回值"
         item_fields:
           - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名" }
-          - { name: type, type: _types.string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "基础类型、data.enums.*/entities.*、本地 schema 或类型族；可带一层 * 或 List<>" }
+          - { name: type, type: _types.string, required: true, pattern: '^(\*?(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.list<(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "_types.* 或 data.*/cap.services 本地 schema；可带一层 * 或 _types.list<>" }
           - { name: value, type: _types.string, required: false, pattern: '^(params|step)\.[a-z][a-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*|\[[0-9]+\])*$', description: "业务返回值的来源：params.<path> 或 step.<id>.<path>；err 不写 value" }
           - { name: nullable, type: _types.boolean, required: false, description: "是否可空" }
 
@@ -110,7 +110,7 @@ fields:
             description: "本步暴露的产出"
             item_fields:
               - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
-              - { name: type, type: _types.string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "基础类型、data.enums.*/entities.*、本地 schema 或类型族；可带一层 * 或 List<>" }
+              - { name: type, type: _types.string, required: true, pattern: '^(\*?(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.list<(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "_types.* 或 data.*/cap.services 本地 schema；可带一层 * 或 _types.list<>" }
               - { name: description, type: _types.string, required: true, description: "这项产出的业务含义" }
               - { name: nullable, type: _types.boolean, required: false, description: "是否可空" }
 
@@ -168,7 +168,7 @@ rules:
   - { id: service-input-ref, text: "引用的 params/step 字段必须存在且可按静态类型解析", implemented_by: [ service-input-ref ] }
   - { id: service-input-order, text: "step.<id> 引用必须位于当前 step 之前，且通过 goto 可达", implemented_by: [ service-input-order ] }
   - { id: service-input-type, text: "input 值的静态类型必须与目标参数/payload 字段兼容（指针/List 结构与目标一致，类型族归一后比较，枚举按 integer）", implemented_by: [ service-input-type ] }
-  - { id: service-param-type, text: "params/returns/schemas 的 type 语法：只允许基础类型、data.enums.*、data.entities.*、本地 schema 或 _types 类型族；指针与 List<> 各最多一层；data.tables.* 禁止", implemented_by: [ service-param-type ] }
+  - { id: service-param-type, text: "params/returns/schemas 的 type 语法：只允许 _types.*、data.enums.*、data.entities.*、cap.services.*.schemas.*、context.Context、error、time.*；指针与 _types.list<> 各最多一层；data.tables.* 禁止", implemented_by: [ service-param-type ] }
   - { id: service-input-nullable, text: "可空的源不得赋给非 null 目标", implemented_by: [ service-input-nullable ] }
   - { id: service-input-name, text: "query/service 的 input name 必须是目标参数名且不得多余；events 的 input name 必须是 payload 字段名且不得多余；query/service 不得传 ctx", implemented_by: [ service-input-name ] }
   - { id: service-input-required, text: "query/service 必填参数（ctx 除外）与 events 必填 payload 字段必须全部出现", implemented_by: [ service-input-required ] }
