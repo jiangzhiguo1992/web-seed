@@ -41,6 +41,7 @@ func testNodeKinds() map[string]contractspec.SchemaKind {
 	return map[string]contractspec.SchemaKind{
 		"object": {Keys: []contractspec.Field{{Name: "type"}, {Name: "properties"}}},
 		"array":  {Keys: []contractspec.Field{{Name: "type"}, {Name: "items"}}},
+		"map":    {Keys: []contractspec.Field{{Name: "type"}, {Name: "values"}}},
 		"scalar": {Keys: []contractspec.Field{{Name: "type"}}},
 		"ref":    {Keys: []contractspec.Field{{Name: "ref"}}},
 	}
@@ -102,6 +103,76 @@ enums: []
 	for _, want := range []string{"openapi: 3.1.0", "getX", "x-service", "properties", "id:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("generated spec missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestBuildEventPayloads(t *testing.T) {
+	root := t.TempDir()
+	writeTypes(t, root)
+	writeFixture(t, root, "contracts/project.yaml", `project:
+  name: test
+  version: "1"
+apps:
+  api:
+    kind: api
+    includes: []
+    generated:
+      spec: generated/openapi/x.yaml
+`)
+	for _, dir := range []string{
+		"contracts/capabilities/protocols/http",
+		"contracts/capabilities/services",
+		"contracts/data/enums",
+		"contracts/data/entities",
+	} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFixture(t, root, "contracts/capabilities/events/x.yaml", `id: cap.events.x
+topics:
+  - id: cap.events.x.created
+    name: x.created
+    version: 1
+    summary: "created"
+    payload:
+      type: object
+      properties:
+        - { name: id, schema: { type: integer }, required: true, description: "id" }
+        - { name: account, schema: { ref: data.entities.account }, required: true, description: "account" }
+        - name: attributes
+          schema:
+            type: map
+            values: { type: string }
+            min_items: 1
+            max_items: 5
+            key_patterns: [ '^[a-z][a-z0-9_]*$' ]
+          description: "attrs"
+`)
+	writeFixture(t, root, "contracts/data/entities/account.yaml", `id: data.entities.account
+fields:
+  - { name: id, json_name: id, type: _types.integer, description: "id" }
+`)
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(files["generated/openapi/x.yaml"])
+	for _, want := range []string{
+		"EventXCreated",
+		"x-event-id: cap.events.x.created",
+		"x-event-version: 1",
+		"additionalProperties:",
+		"minProperties: 1",
+		"maxProperties: 5",
+		"propertyNames:",
+		"pattern: ^[a-z][a-z0-9_]*$",
+		"Account:",
+		"$ref: '#/components/schemas/Account'",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("event payload missing %q:\n%s", want, out)
 		}
 	}
 }
@@ -271,5 +342,15 @@ func TestRenderSchemaAnnotations(t *testing.T) {
 	item := asMap(out["items"])
 	if item["type"] != "string" {
 		t.Fatalf("array items lost: %#v", item)
+	}
+
+	m := map[string]any{"type": "map", "values": map[string]any{"type": "string"}}
+	out, err = renderSchemaNode(m, nil, nil, map[string]bool{}, testNodeKinds())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ap := asMap(out["additionalProperties"])
+	if out["type"] != "object" || ap["type"] != "string" {
+		t.Fatalf("map values lost: %#v", out)
 	}
 }

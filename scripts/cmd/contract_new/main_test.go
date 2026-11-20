@@ -256,9 +256,9 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: integer }
+      - { name: id, type: _types.integer }
     returns:
-      - { name: exists, type: boolean, value: step.load.exists }
+      - { name: exists, type: _types.boolean, value: step.load.exists }
       - { name: err, type: error }
     steps:
       - id: load
@@ -267,7 +267,7 @@ services:
         input:
           - { name: id, value: params.id, description: "主键" }
         output:
-          - { name: exists, type: boolean, description: "是否存在" }
+          - { name: exists, type: _types.boolean, description: "是否存在" }
         errors: []
         query: data.queries.scaffold.exists_scaffold
         goto: note
@@ -307,6 +307,32 @@ services:
 
 	if errs := check.Run(tmp); len(errs) != 0 {
 		t.Fatalf("check.Run failed:\n%s", strings.Join(errs, "\n"))
+	}
+}
+
+// TestTypeVocabularyCrossFileCheckRun 验证完整 check.Run 下两个文件引用同一缺失类型都会报错，不跨文件去重。
+func TestTypeVocabularyCrossFileCheckRun(t *testing.T) {
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir()
+	copyContracts(t, filepath.Join(root, "contracts"), filepath.Join(tmp, "contracts"))
+	dir := filepath.Join(tmp, "contracts/platform/analytics")
+	for _, name := range []string{"zz_probe_a.yaml", "zz_probe_b.yaml"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("probe:\n  type: string\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	errs := check.Run(tmp)
+	var hits []string
+	for _, e := range errs {
+		if strings.Contains(e, "[schema.type-vocabulary]") && strings.Contains(e, "zz_probe_") {
+			hits = append(hits, e)
+		}
+	}
+	if len(hits) != 2 {
+		t.Fatalf("want 2 cross-file vocabulary errors, got %d:\n%s", len(hits), strings.Join(errs, "\n"))
 	}
 }
 

@@ -121,6 +121,7 @@ func parseTypeExpr(raw string, vt ValueTypes) (typeExpr, error) {
 	merged := ValueTypes{
 		TypeFamilies: map[string]contractspec.ValueTypeFamily{},
 		Structures:   map[string]contractspec.Structure{},
+		CustomTypes:  map[string]contractspec.CustomValueType{},
 	}
 	for k, v := range def.TypeFamilies {
 		merged.TypeFamilies[k] = v
@@ -133,6 +134,9 @@ func parseTypeExpr(raw string, vt ValueTypes) (typeExpr, error) {
 	}
 	for k, v := range vt.Structures {
 		merged.Structures[k] = v
+	}
+	for k, v := range vt.CustomTypes {
+		merged.CustomTypes[k] = v
 	}
 	return parseTypeExprDepth(raw, merged, 0)
 }

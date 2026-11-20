@@ -101,7 +101,7 @@ func (c *Checker) lifecycleSubjects(raw any) []lifecycleSubject {
 }
 
 // findEntityFieldByJSONName 按 json_name（snake_case）查实体字段。
-func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Schema, stepIDs map[string]bool, actionSteps map[string][]string, serviceEvents map[string]map[string]bool, eventIDs map[string]bool, lifecycleStates map[string]map[string]bool) {
+func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Schema, stepIDs map[string]bool, actionSteps map[string][]string, lifecycleStates map[string]map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{})
 	c.checkTargetFileName(schema, filepath.Base(rel), rel)
@@ -202,39 +202,21 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			c.rulef("lifecycle-anchors", "%s: %s step %s must declare lifecycles %s", rel, actionID, step, actionID)
 		}
 	}
-	checkServices := func(actionID string, action map[string]any) []string {
-		services := stringList(action["services"])
-		if len(services) == 0 {
-			c.rulef("lifecycle-anchors", "%s: %s requires services", rel, actionID)
+	checkImplementedBy := func(actionID string, action map[string]any) {
+		steps := stringList(action["implemented_by"])
+		if len(steps) == 0 {
+			c.rulef("lifecycle-anchors", "%s: %s requires implemented_by", rel, actionID)
 		}
 		got := map[string]bool{}
-		for _, service := range services {
-			got[service] = true
+		for _, step := range steps {
+			got[step] = true
 		}
 		wantSet := map[string]bool{}
 		for _, step := range actionSteps[actionID] {
-			wantSet[stepServiceID(step)] = true
+			wantSet[step] = true
 		}
 		if !sameSet(got, wantSet) {
-			c.rulef("lifecycle-anchors", "%s: %s services %v must match step.lifecycles %v", rel, actionID, services, sortedKeys(wantSet))
-		}
-		return services
-	}
-	checkActionEvents := func(actionID string, action map[string]any, services []string) {
-		emitted := map[string]bool{}
-		for _, service := range services {
-			for event := range serviceEvents[service] {
-				emitted[event] = true
-			}
-		}
-		for _, event := range stringList(action["events"]) {
-			if !eventIDs[event] {
-				c.rulef("lifecycle-anchors", "%s: %s unknown event %s", rel, actionID, event)
-				continue
-			}
-			if !emitted[event] {
-				c.rulef("lifecycle-anchors", "%s: %s event %s is not emitted by services %v", rel, actionID, event, services)
-			}
+			c.rulef("lifecycle-anchors", "%s: %s implemented_by %v must match step.lifecycles %v", rel, actionID, steps, sortedKeys(wantSet))
 		}
 	}
 	checkRequires := func(actionID string, item map[string]any) {
@@ -268,13 +250,11 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 	}
 
 	if create, hasCreate := asMap(doc["create"]); hasCreate {
-		services := checkServices(fileID+".create", create)
-		checkActionEvents(fileID+".create", create, services)
+		checkImplementedBy(fileID+".create", create)
 		checkRequires(fileID+".create", create)
 	}
 	if destroy, ok := asMap(doc["destroy"]); ok {
-		services := checkServices(fileID+".destroy", destroy)
-		checkActionEvents(fileID+".destroy", destroy, services)
+		checkImplementedBy(fileID+".destroy", destroy)
 		checkRequires(fileID+".destroy", destroy)
 	}
 
@@ -372,12 +352,4 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			c.rulef("lifecycle-exhaustive", "%s: non-final state %s has no outgoing transition", rel, state)
 		}
 	}
-}
-
-// stepServiceID 从 cap.services.<file>.<service>.<step> 去掉 step 段。
-func stepServiceID(stepID string) string {
-	if i := strings.LastIndex(stepID, "."); i > 0 {
-		return stepID[:i]
-	}
-	return stepID
 }

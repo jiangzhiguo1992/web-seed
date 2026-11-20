@@ -23,8 +23,8 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: integer }
-      - { name: device_id, type: string, nullable: true }
+      - { name: account_id, type: _types.integer }
+      - { name: device_id, type: _types.string, nullable: true }
     returns:
       - { name: tokens, type: cap.services.token.schemas.TokenPair, value: step.issue_tokens.tokens }
       - { name: err, type: error }
@@ -65,8 +65,8 @@ services:
           - { name: access_token, value: step.issue_tokens.tokens.access_token, description: "新访问令牌" }
           - { name: refresh_token, value: step.issue_tokens.tokens.refresh_token, description: "新刷新令牌" }
         output:
-          - { name: access_token_hash, type: string, description: "访问令牌哈希" }
-          - { name: refresh_token_hash, type: string, description: "刷新令牌哈希" }
+          - { name: access_token_hash, type: _types.string, description: "访问令牌哈希" }
+          - { name: refresh_token_hash, type: _types.string, description: "刷新令牌哈希" }
         errors: [ ]
         rules: [ ]
         goto: new_id
@@ -75,7 +75,7 @@ services:
         summary: "生成新令牌 ID"
         input: [ ]
         output:
-          - { name: id, type: integer, description: "新令牌 ID" }
+          - { name: id, type: _types.integer, description: "新令牌 ID" }
         errors: [ ]
         rules: [ ]
         goto: create_token
@@ -94,6 +94,27 @@ services:
           - { name: refresh_expire_at, value: step.issue_tokens.tokens.refresh_expire_at, description: "刷新令牌过期时间" }
         output: [ ]
         query: data.queries.token.create_token
+        goto: now
+      - id: now
+        kind: logic
+        summary: "取当前时间作为签发时间"
+        input: [ ]
+        output:
+          - { name: issued_at, type: _types.timestamp, description: "签发时间" }
+        errors: [ ]
+        rules: [ ]
+        goto: emit_issued
+      - id: emit_issued
+        kind: events
+        summary: "发出令牌签发事件"
+        input:
+          - { name: token_id, value: step.new_id.id, description: "令牌 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
+          - { name: account, value: step.load_account.account, description: "账号实体" }
+          - { name: issued_at, value: step.now.issued_at, description: "签发时间" }
+        output: [ ]
+        events:
+          - ref: cap.events.token.issued
         goto: $end
   - name: refresh
     summary: "用刷新令牌换取新令牌对"
@@ -101,7 +122,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: refresh_token, type: string }
+      - { name: refresh_token, type: _types.string }
     returns:
       - { name: tokens, type: cap.services.token.schemas.TokenPair, value: step.issue_tokens.tokens }
       - { name: err, type: error }
@@ -112,7 +133,7 @@ services:
         input:
           - { name: refresh_token, value: params.refresh_token, description: "待换新的刷新令牌" }
         output:
-          - { name: refresh_token_hash, type: string, description: "旧刷新令牌哈希" }
+          - { name: refresh_token_hash, type: _types.string, description: "旧刷新令牌哈希" }
         errors: [ ]
         rules: [ ]
         goto: load_old
@@ -173,8 +194,8 @@ services:
           - { name: access_token, value: step.issue_tokens.tokens.access_token, description: "新访问令牌" }
           - { name: refresh_token, value: step.issue_tokens.tokens.refresh_token, description: "新刷新令牌" }
         output:
-          - { name: access_token_hash, type: string, description: "新访问令牌哈希" }
-          - { name: refresh_token_hash, type: string, description: "新刷新令牌哈希" }
+          - { name: access_token_hash, type: _types.string, description: "新访问令牌哈希" }
+          - { name: refresh_token_hash, type: _types.string, description: "新刷新令牌哈希" }
         errors: [ ]
         rules: [ ]
         goto: new_id
@@ -183,7 +204,7 @@ services:
         summary: "生成新令牌 ID"
         input: [ ]
         output:
-          - { name: id, type: integer, description: "新令牌 ID" }
+          - { name: id, type: _types.integer, description: "新令牌 ID" }
         errors: [ ]
         rules: [ ]
         goto: now
@@ -192,7 +213,7 @@ services:
         summary: "取当前时间作为旧令牌作废时间"
         input: [ ]
         output:
-          - { name: revoked_at, type: timestamp, description: "旧令牌作废时间" }
+          - { name: revoked_at, type: _types.timestamp, description: "旧令牌作废时间" }
         errors: [ ]
         rules: [ ]
         goto: reason
@@ -239,7 +260,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: refresh_token, type: string }
+      - { name: refresh_token, type: _types.string }
     returns:
       - { name: err, type: error }
     steps:
@@ -249,7 +270,7 @@ services:
         input:
           - { name: refresh_token, value: params.refresh_token, description: "要吊销的刷新令牌" }
         output:
-          - { name: refresh_token_hash, type: string, description: "待吊销的刷新令牌哈希" }
+          - { name: refresh_token_hash, type: _types.string, description: "待吊销的刷新令牌哈希" }
         errors: [ ]
         rules: [ ]
         goto: now
@@ -258,7 +279,7 @@ services:
         summary: "取当前时间作为吊销时间"
         input: [ ]
         output:
-          - { name: revoked_at, type: timestamp, description: "吊销时间" }
+          - { name: revoked_at, type: _types.timestamp, description: "吊销时间" }
         errors: [ ]
         rules: [ ]
         goto: reason
@@ -307,7 +328,7 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: integer }
+      - { name: account_id, type: _types.integer }
     returns:
       - { name: err, type: error }
     steps:
@@ -316,7 +337,7 @@ services:
         summary: "取当前时间作为吊销时间"
         input: [ ]
         output:
-          - { name: revoked_at, type: timestamp, description: "吊销时间" }
+          - { name: revoked_at, type: _types.timestamp, description: "吊销时间" }
         errors: [ ]
         rules: [ ]
         goto: reason
@@ -349,7 +370,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: affected_rows, type: integer, value: step.expire_tokens.affected_rows }
+      - { name: affected_rows, type: _types.integer, value: step.expire_tokens.affected_rows }
       - { name: err, type: error }
     steps:
       - id: now
@@ -357,7 +378,7 @@ services:
         summary: "取当前时间"
         input: [ ]
         output:
-          - { name: now, type: timestamp, description: "当前时间" }
+          - { name: now, type: _types.timestamp, description: "当前时间" }
         errors: [ ]
         rules: [ ]
         goto: status_expired
@@ -375,7 +396,7 @@ services:
         summary: "取单批更新上限"
         input: [ ]
         output:
-          - { name: limit, type: integer, description: "单批更新上限" }
+          - { name: limit, type: _types.integer, description: "单批更新上限" }
         errors: [ ]
         rules: [ ]
         goto: expire_tokens
@@ -388,7 +409,7 @@ services:
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
         errors: [ ]
         query: data.queries.token.expire_tokens
         goto: $end
@@ -399,7 +420,7 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: access_token, type: string }
+      - { name: access_token, type: _types.string }
     returns:
       - { name: account, type: data.entities.account, value: step.verify.account }
       - { name: err, type: error }
@@ -410,7 +431,7 @@ services:
         input:
           - { name: access_token, value: params.access_token, description: "待校验的访问令牌" }
         output:
-          - { name: access_token_hash, type: string, description: "待校验的访问令牌哈希" }
+          - { name: access_token_hash, type: _types.string, description: "待校验的访问令牌哈希" }
         errors: [ ]
         rules: [ ]
         goto: load_token
@@ -454,7 +475,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: affected_rows, type: integer, value: step.delete_expired_tokens.affected_rows }
+      - { name: affected_rows, type: _types.integer, value: step.delete_expired_tokens.affected_rows }
       - { name: err, type: error }
     steps:
       - id: batch_limit
@@ -462,7 +483,7 @@ services:
         summary: "取单批删除上限"
         input: [ ]
         output:
-          - { name: limit, type: integer, description: "单批删除上限" }
+          - { name: limit, type: _types.integer, description: "单批删除上限" }
         errors: [ ]
         rules: [ ]
         goto: delete_expired_tokens
@@ -472,8 +493,31 @@ services:
         input:
           - { name: limit, value: step.batch_limit.limit, description: "单批删除上限" }
         output:
-          - { name: affected_rows, type: integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
         errors:
           - platform.errors.COMMON_INTERNAL
         query: data.queries.token.delete_expired_tokens
+        goto: $end
+  - name: record_issued
+    summary: "消费 token.issued，记录签发审计"
+    visibility: internal
+    tx_mode: none
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: token_id, type: _types.integer }
+      - { name: account_id, type: _types.integer }
+      - { name: issued_at, type: _types.timestamp }
+    returns:
+      - { name: err, type: error }
+    steps:
+      - id: log
+        kind: logic
+        summary: "记录令牌签发审计"
+        input:
+          - { name: token_id, value: params.token_id, description: "令牌 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
+          - { name: issued_at, value: params.issued_at, description: "签发时间" }
+        output: [ ]
+        errors: [ ]
+        rules: [ ]
         goto: $end

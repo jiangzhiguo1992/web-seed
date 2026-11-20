@@ -283,7 +283,7 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 	if target, ok := entityRef(f.Type); ok {
 		f.IsRelation = true
 		f.TargetID = target
-		f.IsList = strings.HasPrefix(strings.TrimSpace(f.Type), "List<")
+		f.IsList = strings.HasPrefix(normalizeContractType(f.Type), "List<")
 	}
 	return f
 }
@@ -367,10 +367,11 @@ func (c *Checker) applyEntityFieldDefaults(e *entityInfo) {
 			continue
 		}
 		if !f.HasType {
-			typ := strings.TrimPrefix(meta.typ, "_types.")
+			typ := normalizeContractType(meta.typ)
 			if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
 				typ = customType.Family
 			}
+			typ = "_types." + typ
 			if meta.nullable && !f.HasNullable {
 				typ = "*" + typ
 			}
@@ -688,7 +689,7 @@ func (c *Checker) checkRelationFieldShape(f entityFieldInfo, where string) {
 		return
 	}
 	if _, ok := entityRef(f.Type); !ok || strings.Contains(f.Type, "*") {
-		c.rulef("entity-relation-type", "%s: relation type must be data.entities.* or List<data.entities.*>, got %s", where, f.Type)
+		c.rulef("entity-relation-type", "%s: relation type must be data.entities.* or _types.list<data.entities.*>, got %s", where, f.Type)
 	}
 }
 
@@ -720,6 +721,7 @@ func (c *Checker) checkScalarField(e *entityInfo, f entityFieldInfo, where strin
 		return
 	}
 	base, star := splitPointer(f.Type)
+	base = normalizeContractType(base)
 	if f.HasNullable && star {
 		c.rulef("entity-field-type", "%s: use nullable:true or * prefix, not both", where)
 	}
@@ -931,10 +933,10 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			continue
 		}
 		if card == "one_to_many" && !r.IsList {
-			c.rulef("entity-relation-arity", "%s: one_to_many relation must use List<data.entities.*>, got %s", where, r.Type)
+			c.rulef("entity-relation-arity", "%s: one_to_many relation must use _types.list<data.entities.*>, got %s", where, r.Type)
 		}
 		if card != "one_to_many" && r.IsList {
-			c.rulef("entity-relation-arity", "%s: List<data.entities.*> requires one_to_many cardinality, got %s", where, card)
+			c.rulef("entity-relation-arity", "%s: _types.list<data.entities.*> requires one_to_many cardinality, got %s", where, card)
 		}
 		if r.HasLazy && !r.Lazy {
 			if r.TargetID == e.ID {
@@ -1144,10 +1146,11 @@ func (c *Checker) checkEntityUsedBy() {
 }
 
 func entityRef(s string) (string, bool) {
-	s = strings.TrimPrefix(strings.TrimSpace(s), "*")
+	s = normalizeContractType(s)
 	if strings.HasPrefix(s, "List<") && strings.HasSuffix(s, ">") {
 		s = strings.TrimSuffix(strings.TrimPrefix(s, "List<"), ">")
 	}
+	s = strings.TrimPrefix(strings.TrimSpace(s), "*")
 	if strings.HasPrefix(s, "data.entities.") {
 		return s, true
 	}

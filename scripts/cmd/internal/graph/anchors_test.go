@@ -77,9 +77,9 @@ states:
   initial: pending
   final: [deleted]
 create:
-  services: []
+  implemented_by: []
 destroy:
-  services: []
+  implemented_by: []
 transitions:
   - name: activate
     description: "a"
@@ -99,7 +99,7 @@ jobs:
   - id: cap.events.x.consume_activated
     name: consume_activated
     service: cap.services.x.consume
-    trigger: {type: topic, topic: cap.events.x.activated}
+    trigger: {kind: topic, topic: cap.events.x.activated}
 `)
 
 	target, err := resolveTarget(root, "cap.services")
@@ -145,8 +145,8 @@ jobs:
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"services:\n    - cap.services.x.create",
-		"services:\n    - cap.services.x.delete",
+		"implemented_by:\n    - cap.services.x.create.create",
+		"implemented_by:\n    - cap.services.x.delete.soft_delete",
 		"implemented_by:\n      - cap.services.x.activate.transition",
 	} {
 		if !strings.Contains(string(lifecycle), want) {
@@ -212,10 +212,10 @@ states:
   initial: pending
   final: [deleted]
 create:
-  services:
+  implemented_by:
     - cap.services.x.create.old
 destroy:
-  services:
+  implemented_by:
     - cap.services.x.delete.old
 transitions:
   - name: activate
@@ -253,8 +253,8 @@ transitions:
 	}
 	text := string(lifecycle)
 	for _, want := range []string{
-		"services:\n    - cap.services.x.create",
-		"services:\n    - cap.services.x.delete",
+		"implemented_by:\n    - cap.services.x.create.create",
+		"implemented_by:\n    - cap.services.x.delete.soft_delete",
 		"implemented_by:\n      - cap.services.x.activate.transition",
 	} {
 		if !strings.Contains(text, want) {

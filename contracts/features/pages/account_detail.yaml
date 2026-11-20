@@ -15,7 +15,7 @@ data:
   detail:
     capability: cap.services.account.get
     params:
-      id: { from: route.params.id, type: integer, required: true }
+      id: { from: route.params.id, type: _types.integer, required: true }
     cache:
       stale_time: 10s
 

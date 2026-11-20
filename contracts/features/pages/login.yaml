@@ -16,10 +16,10 @@ data:
   submit:
     capability: cap.services.auth.login
     params:
-      auth_type: { from: form.auth_type, type: string, enum: [pwd, phone, email], default: pwd }
-      identifier: { from: form.identifier, type: string, required: true }
-      password: { from: form.password, type: string, required: true, secret: true }
-      device_id: { from: device.id, type: string }
+      auth_type: { from: form.auth_type, type: _types.string, enum: [pwd, phone, email], default: pwd }
+      identifier: { from: form.identifier, type: _types.string, required: true }
+      password: { from: form.password, type: _types.string, required: true, secret: true }
+      device_id: { from: device.id, type: _types.string }
 
 view_states:
   idle:
@@ -46,12 +46,12 @@ actions:
 
 fields:
   - name: identifier
-    type: string
+    widget: string
     required: true
     maxLength: 254
     autocomplete: username
   - name: password
-    type: string
+    widget: string
     required: true
     minLength: 12
     autocomplete: current-password

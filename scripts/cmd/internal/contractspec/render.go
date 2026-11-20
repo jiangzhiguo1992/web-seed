@@ -414,8 +414,8 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 			Name:        "Exists" + pascal(name),
 			Description: "TODO: 查询语义",
 			Tables:      []queryTableScaffold{{Table: tableID}},
-			Params:      []queryParamScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "integer", Column: tableID + ".col.id"}},
-			Returns:     []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "boolean"}, {Name: "err", Kind: "error"}},
+			Params:      []queryParamScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "_types.integer", Column: tableID + ".col.id"}},
+			Returns:     []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "_types.boolean"}, {Name: "err", Kind: "error"}},
 			Errors:      []string{},
 			IndexRef:    []queryIndexRefScaffold{{Index: tableID + ".pk", Columns: []string{"id"}}},
 			UsedBy:      []string{},
@@ -773,8 +773,7 @@ type lifecycleFileScaffold struct {
 }
 
 type lifecycleActionScaffold struct {
-	Services []string `yaml:"services"`
-	Events   []string `yaml:"events,omitempty"`
+	ImplementedBy []string `yaml:"implemented_by"`
 }
 
 type lifecycleStatesScaffold struct {
@@ -908,8 +907,8 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 			Name:       "get",
 			Summary:    "TODO: 服务说明",
 			Visibility: "public",
-			Params:     []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: "GetInput"}},
-			Returns:    []methodArgScaffold{{Name: "value", Type: "any", Value: "step.load.value"}, {Name: "err", Type: "error"}},
+			Params:     []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: fileID + ".schemas.GetInput"}},
+			Returns:    []methodArgScaffold{{Name: "value", Type: "_types.any", Value: "step.load.value"}, {Name: "err", Type: "error"}},
 			TxMode:     "read_only",
 			Steps: []stepScaffold{
 				{
@@ -917,7 +916,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 					Kind:    "logic",
 					Summary: "TODO: 实现步骤",
 					Input:   []inputScaffold{{Name: "input", Value: "params.input", Description: "TODO: 入参用途"}},
-					Output:  []outputScaffold{{Name: "value", Type: "any", Description: "TODO: 产出说明"}},
+					Output:  []outputScaffold{{Name: "value", Type: "_types.any", Description: "TODO: 产出说明"}},
 					Errors:  []string{"platform.errors.COMMON_INTERNAL"},
 					Rules:   []ruleRefScaffold{},
 					Goto:    "$end",
@@ -1014,7 +1013,7 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 			Final:   []string{"active"},
 		},
 		Create: lifecycleActionScaffold{
-			Services: []string{"cap.services." + name + ".create"},
+			ImplementedBy: []string{"cap.services." + name + ".create.create"},
 		},
 	}
 	b, err := marshal2(doc)

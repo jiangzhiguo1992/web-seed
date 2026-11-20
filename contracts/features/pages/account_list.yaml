@@ -16,8 +16,8 @@ data:
     capability: cap.services.account.list
     params:
       status: { from: query.status, enum: cap.lifecycles.account.states.values, optional: true }
-      offset: { from: query.offset, type: integer, default: 0 }
-      limit: { from: query.limit, type: integer, default: 20 }
+      offset: { from: query.offset, type: _types.integer, default: 0 }
+      limit: { from: query.limit, type: _types.integer, default: 20 }
     cache:
       stale_time: 30s
       refetch_on_focus: false

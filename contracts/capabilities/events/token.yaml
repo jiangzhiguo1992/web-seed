@@ -8,18 +8,41 @@ do_not:
   - "expire_tokens 只改 status，不删除行；删除由 purge_expired 负责"
   - "expire_tokens 每小时先标记 expired，purge_expired 3:30 再物理删除，避免未标记就被删"
 
+delivery: at_least_once
+
+topics:
+  - id: cap.events.token.issued
+    name: token.issued
+    version: 1
+    payload:
+      type: object
+      properties:
+        - { name: token_id, schema: { type: _types.integer }, required: true, description: "令牌 ID" }
+        - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
+        - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
+        - { name: issued_at, schema: { type: _types.timestamp }, required: true, description: "签发时间" }
+    summary: "令牌签发"
+    emitted_by: [ cap.services.token.issue ]
+    consumers: [ cap.events.token.record_issued ]
 jobs:
+  - id: cap.events.token.record_issued
+    name: record_issued
+    summary: "消费 token.issued，记录签发审计"
+    service: cap.services.token.record_issued
+    trigger: { kind: topic, topic: cap.events.token.issued }
+    retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
+    concurrency: { key: token_record_issued, ttl: 1m }
   - id: cap.events.token.expire_tokens
     name: expire_tokens
     summary: "把超过 refresh_expire_at 的活跃令牌置为 expired"
     service: cap.services.token.expire
-    trigger: { type: cron, schedule: "0 * * * *" }
+    trigger: { kind: cron, schedule: "0 * * * *" }
     retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
     concurrency: { key: token_expire, ttl: 1h }
   - id: cap.events.token.purge_expired
     name: purge_expired
     summary: "清理已过期令牌"
     service: cap.services.token.purge_expired
-    trigger: { type: cron, schedule: "30 3 * * *" }
+    trigger: { kind: cron, schedule: "30 3 * * *" }
     retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
     concurrency: { key: token_purge, ttl: 1h }

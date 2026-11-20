@@ -111,6 +111,7 @@ func (c *Checker) stepOutputPathType(step map[string]any, output map[string]retu
 }
 
 func indexWhenType(typ string) (string, error) {
+	typ = normalizeContractType(typ)
 	typ = strings.TrimPrefix(typ, "*")
 	if !strings.HasPrefix(typ, "List<") || !strings.HasSuffix(typ, ">") {
 		return "", fmt.Errorf("%s is not a list", typ)
@@ -659,7 +660,7 @@ func (c *Checker) schemaTypeName(schema map[string]any) (string, bool) {
 		return c.inlineType(schema)
 	}
 	if typ, _ := schema["type"].(string); typ != "" {
-		return typ, true
+		return normalizeContractType(typ), true
 	}
 	return "", false
 }
@@ -734,7 +735,7 @@ func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) 
 		return
 	}
 	switch base {
-	case "object", "array", "scalar", "ref":
+	case "object", "array", "map", "scalar", "ref":
 		return
 	}
 	if isBuiltinType(base) {
@@ -754,6 +755,7 @@ func parseServiceType(typ string) (string, bool) {
 	if base == "" {
 		return "", false
 	}
+	base = normalizeContractType(base)
 	if strings.HasPrefix(base, "*") {
 		base = strings.TrimSpace(strings.TrimPrefix(base, "*"))
 		if base == "" || strings.HasPrefix(base, "*") {

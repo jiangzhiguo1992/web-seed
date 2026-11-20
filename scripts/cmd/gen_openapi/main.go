@@ -112,6 +112,14 @@ func build(root string) (map[string][]byte, error) {
 		return nil, err
 	}
 	out := map[string][]byte{}
+	knownTypes := map[string]bool{}
+	for name := range typeIdx {
+		knownTypes[name] = true
+	}
+	eventIdx, err := loadEventPayloads(root, customTypeIdx, enumIdx, knownTypes)
+	if err != nil {
+		return nil, err
+	}
 	for appName, app := range pj.Apps {
 		if app.Kind != "api" || app.Generated.Spec == "" {
 			continue
@@ -161,6 +169,41 @@ func build(root string) (map[string][]byte, error) {
 			mergeMap(components, asMap(doc["components"]))
 		}
 		expandSchemas(components, typeIdx, enumIdx, entityIdx)
+		schemas := asMap(components["schemas"])
+		if schemas == nil {
+			schemas = map[string]any{}
+			components["schemas"] = schemas
+		}
+		for name, schema := range eventIdx {
+			if _, exists := schemas[name]; exists {
+				return nil, fmt.Errorf("app %s: event component %s collides with an existing schema", appName, name)
+			}
+			schemas[name] = schema
+		}
+		eventRefs := map[string]bool{}
+		for _, schema := range eventIdx {
+			collectSchemaRefs(schema, eventRefs)
+		}
+		for ref := range eventRefs {
+			if _, exists := schemas[ref]; exists {
+				continue
+			}
+			if def := typeIdx[ref]; def != nil {
+				schemas[ref] = def
+				continue
+			}
+			found := false
+			for name, def := range entityIdx {
+				if pascal(name) == ref {
+					schemas[ref] = def
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("app %s: event schema references unknown component %s", appName, ref)
+			}
+		}
 		if serverURL != "" {
 			spec["servers"] = []any{map[string]any{"url": serverURL}}
 		}
@@ -276,6 +319,16 @@ func asList(v any) []any {
 	return nil
 }
 
+func stringList(v any) []string {
+	var out []string
+	for _, item := range asList(v) {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func toInt(v any) (int, bool) {
 	switch n := v.(type) {
 	case int:
@@ -379,6 +432,63 @@ func loadServiceTypes(root string, customTypes map[string]contractspec.CustomVal
 	return out, nil
 }
 
+// loadEventPayloads 把 cap.events topics 的 payload 投影成 OpenAPI components。
+// 组件名：Event<File><TopicName>，并带 x-event-id/name/version 供消费端生成。
+func loadEventPayloads(root string, customTypes map[string]contractspec.CustomValueType, enums map[string][]any, known map[string]bool) (map[string]map[string]any, error) {
+	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts/_meta"))
+	if err != nil {
+		return nil, err
+	}
+	kinds := shared.Schemas
+	dir := filepath.Join(root, "contracts/capabilities/events")
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return map[string]map[string]any{}, nil
+	}
+	files, err := globYAML(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]map[string]any{}
+	for _, file := range files {
+		doc, err := loadYAML(file)
+		if err != nil {
+			return nil, err
+		}
+		stem := strings.TrimSuffix(filepath.Base(file), filepath.Ext(file))
+		for _, raw := range asList(doc["topics"]) {
+			topic := asMap(raw)
+			if topic == nil {
+				continue
+			}
+			name, _ := topic["name"].(string)
+			payload := asMap(topic["payload"])
+			if name == "" || payload == nil {
+				continue
+			}
+			component := "Event" + pascal(stem) + pascal(lastSegment(name))
+			if _, exists := out[component]; exists {
+				return nil, fmt.Errorf("duplicate event component %s", component)
+			}
+			schema, err := renderSchemaNode(payload, customTypes, enums, known, kinds)
+			if err != nil {
+				return nil, fmt.Errorf("event %s: %w", name, err)
+			}
+			if id, _ := topic["id"].(string); id != "" {
+				schema["x-event-id"] = id
+			}
+			schema["x-event-name"] = name
+			if v, ok := topic["version"]; ok {
+				schema["x-event-version"] = v
+			}
+			if summary, _ := topic["summary"].(string); summary != "" {
+				schema["description"] = summary
+			}
+			out[component] = schema
+		}
+	}
+	return out, nil
+}
+
 func renderSchemaNode(node map[string]any, customTypes map[string]contractspec.CustomValueType, enums map[string][]any, known map[string]bool, kinds map[string]contractspec.SchemaKind) (map[string]any, error) {
 	kind, ok := contractspec.SchemaNodeKind(node, kinds)
 	if !ok {
@@ -426,6 +536,28 @@ func renderSchemaNode(node map[string]any, customTypes map[string]contractspec.C
 		}
 		if v, ok := toInt(node["max_items"]); ok {
 			out["maxItems"] = v
+		}
+		return out, nil
+	case "map":
+		values, err := renderSchemaNode(asMap(node["values"]), customTypes, enums, known, kinds)
+		if err != nil {
+			return nil, fmt.Errorf("values: %w", err)
+		}
+		out := map[string]any{"type": "object", "additionalProperties": values}
+		if v, ok := toInt(node["min_items"]); ok {
+			out["minProperties"] = v
+		}
+		if v, ok := toInt(node["max_items"]); ok {
+			out["maxProperties"] = v
+		}
+		if patterns := stringList(node["key_patterns"]); len(patterns) == 1 {
+			out["propertyNames"] = map[string]any{"pattern": patterns[0]}
+		} else if len(patterns) > 1 {
+			all := make([]any, 0, len(patterns))
+			for _, pattern := range patterns {
+				all = append(all, map[string]any{"pattern": pattern})
+			}
+			out["propertyNames"] = map[string]any{"allOf": all}
 		}
 		return out, nil
 	case "scalar":
@@ -571,6 +703,33 @@ func loadEntities(root string, enums map[string][]any) (map[string]map[string]an
 	return out, nil
 }
 
+// collectSchemaRefs 收集 event schema 内的 component 引用，补齐事件依赖。
+func collectSchemaRefs(schema map[string]any, refs map[string]bool) {
+	if ref, _ := schema["$ref"].(string); ref != "" {
+		refs[strings.TrimPrefix(ref, "#/components/schemas/")] = true
+	}
+	if props := asMap(schema["properties"]); props != nil {
+		for _, raw := range props {
+			if child := asMap(raw); child != nil {
+				collectSchemaRefs(child, refs)
+			}
+		}
+	}
+	if items := asMap(schema["items"]); items != nil {
+		collectSchemaRefs(items, refs)
+	}
+	if ap := asMap(schema["additionalProperties"]); ap != nil {
+		collectSchemaRefs(ap, refs)
+	}
+	for _, key := range []string{"allOf", "oneOf", "anyOf"} {
+		for _, raw := range asList(schema[key]) {
+			if child := asMap(raw); child != nil {
+				collectSchemaRefs(child, refs)
+			}
+		}
+	}
+}
+
 func expandSchemas(components map[string]any, types map[string]map[string]any, enums map[string][]any, entities map[string]map[string]any) {
 	schemas := asMap(components["schemas"])
 	known := map[string]bool{}
@@ -673,10 +832,15 @@ func entitySchema(fields []any, enums map[string][]any) map[string]any {
 }
 
 func typeSchema(typ string, enums map[string][]any) map[string]any {
-	typ = strings.TrimPrefix(typ, "*")
+	typ = strings.TrimPrefix(strings.TrimSpace(typ), "*")
+	if strings.HasPrefix(typ, "_types.list<") && strings.HasSuffix(typ, ">") {
+		inner := strings.TrimSuffix(strings.TrimPrefix(typ, "_types.list<"), ">")
+		return map[string]any{"type": "array", "items": typeSchema(inner, enums)}
+	}
 	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
 		return map[string]any{"type": "array", "items": typeSchema(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"), enums)}
 	}
+	typ = strings.TrimPrefix(typ, "_types.")
 	switch typ {
 	case "string":
 		return map[string]any{"type": "string"}

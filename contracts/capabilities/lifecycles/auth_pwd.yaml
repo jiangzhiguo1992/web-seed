@@ -17,13 +17,13 @@ states:
 create:
   requires:
     - { lifecycle: cap.lifecycles.account, states: [pending, active] }
-  services:
-    - cap.services.auth.bind_password
+  implemented_by:
+    - cap.services.auth.bind_password.create_auth_pwd
 destroy:
   requires:
     - { lifecycle: cap.lifecycles.account, states: [pending, active, suspended] }
-  services:
-    - cap.services.auth.revoke_all_for_account
+  implemented_by:
+    - cap.services.auth.revoke_all_for_account.soft_delete_auth_pwd_by_account
 transitions:
   - name: disable
     description: "停用密码认证"

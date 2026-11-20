@@ -1245,13 +1245,13 @@ func TestEntityFieldDefaults(t *testing.T) {
 		{Name: "DeletedAt", SourceColumnRef: "data.tables.x.col.deleted_at", ColumnTable: "data.tables.x", Column: "deleted_at"},
 	}}
 	c.applyEntityFieldDefaults(e)
-	if e.Fields[0].JSONName != "id" || e.Fields[0].Type != "string" || e.Fields[0].Description != "" {
+	if e.Fields[0].JSONName != "id" || e.Fields[0].Type != "_types.string" || e.Fields[0].Description != "" {
 		t.Fatalf("only mechanical defaults should apply: %#v", e.Fields[0])
 	}
-	if e.Fields[1].Sensitivity != sensitivityPII || e.Fields[1].Type != "string" || e.Fields[1].JSONName != "nickname" || e.Fields[1].Description != "" {
+	if e.Fields[1].Sensitivity != sensitivityPII || e.Fields[1].Type != "_types.string" || e.Fields[1].JSONName != "nickname" || e.Fields[1].Description != "" {
 		t.Fatalf("sensitivity/type defaults not applied: %#v", e.Fields[1])
 	}
-	if e.Fields[2].Type != "*timestamp" || e.Fields[2].JSONName != "deleted_at" || e.Fields[2].Description != "" {
+	if e.Fields[2].Type != "*_types.timestamp" || e.Fields[2].JSONName != "deleted_at" || e.Fields[2].Description != "" {
 		t.Fatalf("nullable defaults not applied: %#v", e.Fields[2])
 	}
 }

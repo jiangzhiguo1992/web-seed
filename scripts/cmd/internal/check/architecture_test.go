@@ -31,7 +31,7 @@ var sharedFiles = map[string]bool{
 	"rule_ids.go": true, "rule_ids_gen.go": true, "scaffold.go": true, "schema.go": true,
 	"platform.go":    true,
 	"sensitivity.go": true, "storage.go": true, "tables.go": true,
-	"targets.go": true, "util.go": true, "validate.go": true, "when.go": true,
+	"targets.go": true, "typevocab.go": true, "util.go": true, "validate.go": true, "when.go": true,
 }
 
 // TestCheckerFilesAreClassified 防止新增 checker 文件绕过领域归属。

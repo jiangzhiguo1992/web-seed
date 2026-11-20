@@ -30,7 +30,7 @@ func TestLoadSchemaByType(t *testing.T) {
 id: meta.data.tables
 type: data.tables
 fields:
-  - { name: id, type: string }
+  - { name: id, type: _types.string }
 `)
 	s, path, err := LoadSchemaByType(root, "data.tables")
 	if err != nil {
@@ -50,7 +50,7 @@ func TestLoadSchemaByTypeRequiresSharedTypes(t *testing.T) {
 id: meta.data.tables
 type: data.tables
 fields:
-  - { name: id, type: string }
+  - { name: id, type: _types.string }
 `)
 	if _, _, err := LoadSchemaByType(root, "data.tables"); err == nil {
 		t.Fatal("missing _types.yaml must fail for data.tables")
@@ -59,8 +59,8 @@ fields:
 
 func TestLoadSchemaByTypeDuplicate(t *testing.T) {
 	root := t.TempDir()
-	writeMeta(t, root, "a.yaml", "id: meta.a\ntype: data.tables\nfields:\n  - { name: id, type: string }\n")
-	writeMeta(t, root, "b.yaml", "id: meta.b\ntype: data.tables\nfields:\n  - { name: id, type: string }\n")
+	writeMeta(t, root, "a.yaml", "id: meta.a\ntype: data.tables\nfields:\n  - { name: id, type: _types.string }\n")
+	writeMeta(t, root, "b.yaml", "id: meta.b\ntype: data.tables\nfields:\n  - { name: id, type: _types.string }\n")
 	if _, _, err := LoadSchemaByType(root, "data.tables"); err == nil {
 		t.Fatal("duplicate meta type must fail")
 	}
@@ -73,7 +73,7 @@ func TestLoadSchemaRejectsUnknownField(t *testing.T) {
 id: meta.data.tables
 type: data.tables
 fields:
-  - { name: id, type: string, requred: true }
+  - { name: id, type: _types.string, requred: true }
 `
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func TestLoadSharedTypesSchemas(t *testing.T) {
 		t.Fatalf("empty struct item_fields: %v", err)
 	}
 
-	body = strings.Replace(string(shared), "\nparam_targets:\n", "\n  bogus:\n    description: \"x\"\n    keys:\n      - { name: type, type: string, required: true }\n\nparam_targets:\n", 1)
+	body = strings.Replace(string(shared), "\nparam_targets:\n", "\n  bogus:\n    description: \"x\"\n    keys:\n      - { name: type, type: _types.string, required: true }\n\nparam_targets:\n", 1)
 	writeMeta(t, root, "_types.yaml", body)
 	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown schema bogus") {
 		t.Fatalf("unknown schema kind: %v", err)

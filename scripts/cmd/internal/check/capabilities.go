@@ -185,7 +185,6 @@ func (c *Checker) checkCapabilities() {
 	serviceItemIDs := map[string]bool{}
 	stepIDs := map[string]bool{}
 	stepLifecycle := map[string][]string{}
-	serviceEvents := map[string]map[string]bool{}
 	for _, file := range serviceFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -237,7 +236,7 @@ func (c *Checker) checkCapabilities() {
 				if pt != "" {
 					paramDecls[pn] = pt
 				}
-				pt = strings.TrimPrefix(pt, "*")
+				pt = normalizeContractType(pt)
 				if strings.HasPrefix(pt, "List<") && strings.HasSuffix(pt, ">") {
 					pt = strings.TrimSuffix(strings.TrimPrefix(pt, "List<"), ">")
 				}
@@ -318,17 +317,6 @@ func (c *Checker) checkCapabilities() {
 					if action != "" {
 						stepLifecycle[stepID] = append(stepLifecycle[stepID], action)
 					}
-				}
-				for _, rawE := range asList(step["events"]) {
-					em, _ := asMap(rawE)
-					ref, _ := em["ref"].(string)
-					if ref == "" {
-						continue
-					}
-					if serviceEvents[id] == nil {
-						serviceEvents[id] = map[string]bool{}
-					}
-					serviceEvents[id][ref] = true
 				}
 			}
 		}
@@ -542,7 +530,7 @@ func (c *Checker) checkCapabilities() {
 		if err != nil {
 			continue
 		}
-		c.checkLifecycleDoc(doc, relPath(c.root, file), lifecycleSchema, stepIDs, actionSteps, serviceEvents, eventIDs, lifecycleStates)
+		c.checkLifecycleDoc(doc, relPath(c.root, file), lifecycleSchema, stepIDs, actionSteps, lifecycleStates)
 	}
 	jobServices := c.checkEventsDoc(eventSchema, serviceMetaByID, serviceItemIDs)
 	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, jobServices)

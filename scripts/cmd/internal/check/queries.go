@@ -392,8 +392,8 @@ func (c *Checker) checkQueryPagination(q *queryInfo) {
 }
 
 func (c *Checker) checkPaginationParam(name string, p queryParam, where string) {
-	if p.Type != "integer" {
-		c.rulef("query-pagination", "%s: %s must have type integer", where, name)
+	if normalizeContractType(p.Type) != "integer" {
+		c.rulef("query-pagination", "%s: %s must have type _types.integer", where, name)
 	}
 	if !p.Nullable {
 		c.rulef("query-pagination", "%s: %s must set nullable:true", where, name)
@@ -555,10 +555,10 @@ func (c *Checker) checkQueryParamColumns(q *queryInfo) {
 // paramLogicalType 把参数类型映射到列类型族；数组类型返回元素类型族。
 // data.enums.* 持久化为 integer，因此按 integer 列绑定。
 func paramLogicalType(typ string) (family string, array, enum, ok bool) {
-	base := strings.TrimSpace(typ)
+	base := normalizeContractType(typ)
 	if strings.HasPrefix(base, "List<") && strings.HasSuffix(base, ">") {
 		array = true
-		base = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(base, "List<"), ">"))
+		base = normalizeContractType(strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(base, "List<"), ">")))
 	}
 	if strings.HasPrefix(base, "data.enums.") {
 		return "integer", array, true, true
@@ -569,7 +569,7 @@ func paramLogicalType(typ string) (family string, array, enum, ok bool) {
 
 // paramFamily 把非数组参数/标量返回类型映射到 type_families 类型族。
 func paramFamily(typ string) (family string, ok bool) {
-	base := strings.ToLower(strings.TrimSpace(typ))
+	base := strings.ToLower(normalizeContractType(typ))
 	switch base {
 	case "string", "text", "varchar", "character varying", "char", "bpchar":
 		return "string", true
@@ -692,7 +692,7 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 }
 
 func (c *Checker) scalarReturnType(typ string) bool {
-	base := strings.TrimPrefix(strings.TrimSpace(typ), "*")
+	base := normalizeContractType(typ)
 	if strings.HasPrefix(base, "data.enums.") {
 		return true // 枚举存在性由 checkEnumRefs 全仓校验
 	}

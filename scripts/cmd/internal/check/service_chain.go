@@ -286,6 +286,8 @@ func inputExprRoot(expr string) (string, bool) {
 
 // sameServiceType 比较返回类型，忽略指针与 List<> 包装差异。
 func sameServiceType(a, b string) bool {
+	a = normalizeContractType(a)
+	b = normalizeContractType(b)
 	a = strings.TrimPrefix(strings.TrimSpace(a), "*")
 	b = strings.TrimPrefix(strings.TrimSpace(b), "*")
 	if a == b {
@@ -432,7 +434,7 @@ func (c *Checker) resolveTypeFieldNullable(typ, name string) (bool, bool) {
 
 // parseTypeShape 拆掉指针与单层 List<>// parseTypeShape 拆掉指针与单层 List<>；指针只表达可空，不参与赋值兼容判断。
 func parseTypeShape(typ string) (typeShape, bool) {
-	base := strings.TrimSpace(typ)
+	base := normalizeContractType(typ)
 	for strings.HasPrefix(base, "*") {
 		base = strings.TrimSpace(strings.TrimPrefix(base, "*"))
 	}

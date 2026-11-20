@@ -173,6 +173,7 @@ func (c *Checker) run() {
 	c.checkQueryUsedBy()
 	c.checkIndex(tableIDs, enumSchema, entitySchema, querySchema)
 	c.checkReferences(tableIDs)
+	c.checkTypeVocabulary()
 }
 
 // checkContractProseQuotes 强制 contracts 下文本字段使用双引号，

@@ -26,6 +26,22 @@ func inList(list []any, s string) bool {
 	return false
 }
 
+// normalizeContractType 把契约写法 _types.list<T> / _types.<name> 归一为
+// checker 内部的 List<T> / <name>；指针前缀保留。用于 Go/SQL 类型槽位，
+// schema 节点与列类型不走这里。
+func normalizeContractType(s string) string {
+	s = strings.TrimSpace(s)
+	ptr := ""
+	if strings.HasPrefix(s, "*") {
+		ptr, s = "*", strings.TrimSpace(strings.TrimPrefix(s, "*"))
+	}
+	if strings.HasPrefix(s, "_types.list<") && strings.HasSuffix(s, ">") {
+		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "_types.list<"), ">"))
+		return ptr + "List<" + normalizeContractType(inner) + ">"
+	}
+	return ptr + strings.TrimPrefix(s, "_types.")
+}
+
 func asMap(v any) (map[string]any, bool) {
 	switch m := v.(type) {
 	case map[string]any:

@@ -129,10 +129,10 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 				}
 			}
 			trigger, _ := asMap(item["trigger"])
-			triggerType := ""
+			triggerKind := ""
 			if trigger != nil {
-				triggerType, _ = trigger["type"].(string)
-				switch triggerType {
+				triggerKind, _ = trigger["kind"].(string)
+				switch triggerKind {
 				case "cron":
 					if v, _ := trigger["schedule"].(string); strings.TrimSpace(v) == "" {
 						c.rulef("async-trigger", "%s.%s: trigger.schedule required for cron", rel, name)
@@ -152,10 +152,10 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 					}
 				}
 			}
-			if triggerType != "" && svc != "" {
-				key := triggerType + "\x00" + svc
+			if triggerKind != "" && svc != "" {
+				key := triggerKind + "\x00" + svc
 				if bound[key] {
-					c.rulef("async-structure", "%s.%s: duplicate (trigger, service) %s/%s", rel, name, triggerType, svc)
+					c.rulef("async-structure", "%s.%s: duplicate (trigger, service) %s/%s", rel, name, triggerKind, svc)
 				}
 				bound[key] = true
 			}

@@ -11,7 +11,7 @@ token:
   storage: "hash"
   hash_algorithm: sha256
   access:
-    type: jwt
+    format: jwt
     algorithm: HS256
     ttl: 15m
     claims_required: [sub, aud, exp, iat, jti]
@@ -19,7 +19,7 @@ token:
     pii_in_token: false
     storage: "hash"              # 仅存哈希用于吊销/审计；校验优先验签
   refresh:
-    type: opaque
+    format: opaque
     ttl: 30d
     rotation: true               # 每次刷新换新 token，旧的作废
     reuse_detection: true        # 复用旧 token 即吊销全部会话

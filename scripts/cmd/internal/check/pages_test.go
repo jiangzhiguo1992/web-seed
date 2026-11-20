@@ -16,9 +16,9 @@ states:
   initial: active
   final: [deleted]
 create:
-  services: [cap.services.x.create]
+  implemented_by: [cap.services.x.create.step]
 destroy:
-  services: [cap.services.x.delete]
+  implemented_by: [cap.services.x.delete.step]
 transitions:
   - { name: activate, description: "a", from: [active], to: deleted, implemented_by: [cap.services.x.create.step] }
 `)
@@ -63,7 +63,7 @@ actions:
     available_when: { transition: cap.lifecycles.x.destroy, state_not: [deleted] }
 fields:
   - name: q
-    type: string
+    widget: string
     minLength: 1
     maxLength: 10
 pagination:

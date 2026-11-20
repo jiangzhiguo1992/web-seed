@@ -138,6 +138,8 @@ components:
 
     AuthSession:
       x-service-type: cap.services.auth.schemas.AuthSession
+    AuthAttributes:
+      x-service-type: cap.services.auth.schemas.AuthAttributes
 
     VerificationPurpose:
       x-enum: data.enums.verification_purpose

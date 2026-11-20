@@ -629,7 +629,7 @@ func (c *Checker) whenInputFieldType(path string, input map[string]any, tc stepT
 	}
 	prefix := "input." + name
 	for _, seg := range segs[1:] {
-		base := strings.TrimPrefix(strings.TrimSpace(typ), "*")
+		base := normalizeContractType(typ)
 		if strings.HasPrefix(base, "List<") {
 			return "", fmt.Errorf("input %s is a list; index it before .%s", prefix, seg)
 		}

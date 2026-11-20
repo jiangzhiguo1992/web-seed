@@ -66,8 +66,8 @@ services:
           - { name: target, value: params.input.target, description: "验证码接收目标" }
           - { name: purpose, value: params.input.purpose, description: "验证码用途" }
         output:
-          - { name: auth_id, type: integer, description: "验证目标认证绑定 ID" }
-          - { name: account_id, type: integer, description: "解析后的验证目标账号 ID" }
+          - { name: auth_id, type: _types.integer, description: "验证目标认证绑定 ID" }
+          - { name: account_id, type: _types.integer, description: "解析后的验证目标账号 ID" }
         errors:
           - platform.errors.AUTH_VERIFICATION_INVALID
           - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
@@ -106,7 +106,7 @@ services:
         summary: "生成验证码原文"
         input: [ ]
         output:
-          - { name: code, type: string, description: "验证码原文；仅在本服务的步骤间传递" }
+          - { name: code, type: _types.string, description: "验证码原文；仅在本服务的步骤间传递" }
         errors: [ ]
         rules: [ ]
         goto: hash_code
@@ -116,7 +116,7 @@ services:
         input:
           - { name: code, value: step.gen_code.code, description: "验证码原文" }
         output:
-          - { name: code_hash, type: string, description: "验证码哈希" }
+          - { name: code_hash, type: _types.string, description: "验证码哈希" }
         errors: [ ]
         rules: [ ]
         goto: render_content
@@ -129,7 +129,7 @@ services:
           - { name: target, value: params.input.target, description: "验证码接收目标" }
           - { name: purpose, value: params.input.purpose, description: "验证码用途" }
         output:
-          - { name: content, type: string, description: "下发给用户的验证内容" }
+          - { name: content, type: _types.string, description: "下发给用户的验证内容" }
         errors: [ ]
         rules: [ ]
         goto: new_id
@@ -138,7 +138,7 @@ services:
         summary: "生成新验证体 ID"
         input: [ ]
         output:
-          - { name: id, type: integer, description: "新验证体 ID" }
+          - { name: id, type: _types.integer, description: "新验证体 ID" }
         errors: [ ]
         rules: [ ]
         goto: expire_at
@@ -147,7 +147,7 @@ services:
         summary: "计算验证码过期时间"
         input: [ ]
         output:
-          - { name: expire_at, type: timestamp, description: "验证码过期时间" }
+          - { name: expire_at, type: _types.timestamp, description: "验证码过期时间" }
         errors: [ ]
         rules: [ ]
         goto: now
@@ -156,7 +156,7 @@ services:
         summary: "取当前时间作为发送时间"
         input: [ ]
         output:
-          - { name: sent_at, type: timestamp, description: "发送时间" }
+          - { name: sent_at, type: _types.timestamp, description: "发送时间" }
         errors: [ ]
         rules: [ ]
         goto: status_sent
@@ -216,7 +216,7 @@ services:
           - { name: sent_at, value: step.now.sent_at, description: "发送时间" }
           - { name: status, value: step.status_sent.status, description: "目标状态：已发送" }
         output:
-          - { name: affected_rows, type: integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
         query: data.queries.verification.mark_verification_sent
         goto: mark_sent_result
       - id: mark_sent_result
@@ -248,7 +248,7 @@ services:
           - { name: expire_at, value: step.expire_at.expire_at, description: "验证码过期时间" }
         output:
           - { name: verification, type: cap.services.verification.schemas.VerificationSent, description: "发送后的验证体" }
-          - { name: delivered, type: boolean, description: "发送是否成功" }
+          - { name: delivered, type: _types.boolean, description: "发送是否成功" }
         errors: [ ]
         rules: [ ]
         goto: send_result
@@ -311,8 +311,8 @@ services:
           - { name: account_id, value: params.input.account_id, description: "验证目标账号 ID" }
           - { name: target, value: params.input.target, description: "验证码接收目标" }
         output:
-          - { name: auth_id, type: integer, description: "验证目标认证绑定 ID" }
-          - { name: account_id, type: integer, description: "解析后的验证目标账号 ID" }
+          - { name: auth_id, type: _types.integer, description: "验证目标认证绑定 ID" }
+          - { name: account_id, type: _types.integer, description: "解析后的验证目标账号 ID" }
         errors: [ ]
         rules: [ ]
         goto: load_account
@@ -353,7 +353,7 @@ services:
         summary: "取当前时间作为消费时间"
         input: [ ]
         output:
-          - { name: consumed_at, type: timestamp, description: "消费时间" }
+          - { name: consumed_at, type: _types.timestamp, description: "消费时间" }
         errors: [ ]
         rules: [ ]
         goto: status_consumed
@@ -381,7 +381,7 @@ services:
         input:
           - { name: attempt_count, value: step.load_verification.row.attempt_count, description: "当前尝试次数" }
         output:
-          - { name: attempt_count, type: integer, description: "递增后的尝试次数" }
+          - { name: attempt_count, type: _types.integer, description: "递增后的尝试次数" }
         errors: [ ]
         rules: [ ]
         goto: request_ip
@@ -390,7 +390,7 @@ services:
         summary: "读取请求 IP"
         input: [ ]
         output:
-          - { name: request_ip, type: string, description: "请求 IP" }
+          - { name: request_ip, type: _types.string, description: "请求 IP" }
         errors: [ ]
         rules: [ ]
         goto: device_id
@@ -399,7 +399,7 @@ services:
         summary: "读取请求设备标识"
         input: [ ]
         output:
-          - { name: device_id, type: string, description: "请求设备标识" }
+          - { name: device_id, type: _types.string, description: "请求设备标识" }
         errors: [ ]
         rules: [ ]
         goto: location
@@ -408,7 +408,7 @@ services:
         summary: "读取请求位置"
         input: [ ]
         output:
-          - { name: location, type: string, description: "请求位置" }
+          - { name: location, type: _types.string, description: "请求位置" }
         errors: [ ]
         rules: [ ]
         goto: input_hash
@@ -418,7 +418,7 @@ services:
         input:
           - { name: code, value: params.input.code, description: "用户输入的验证码" }
         output:
-          - { name: input_hash, type: string, description: "用户输入的哈希" }
+          - { name: input_hash, type: _types.string, description: "用户输入的哈希" }
         errors: [ ]
         rules: [ ]
         goto: check
@@ -581,7 +581,7 @@ services:
           - { name: now, value: step.now.consumed_at, description: "消费时间" }
         output:
           - { name: result, type: cap.services.verification.schemas.VerificationResult, description: "校验结果" }
-          - { name: verified, type: boolean, description: "是否验证通过" }
+          - { name: verified, type: _types.boolean, description: "是否验证通过" }
         errors: [ ]
         rules: [ ]
         goto: status_verified
@@ -652,13 +652,13 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: verification_id, type: integer }
-      - { name: account_id, type: integer }
+      - { name: verification_id, type: _types.integer }
+      - { name: account_id, type: _types.integer }
       - { name: result, type: data.enums.verification_result }
-      - { name: request_ip, type: string, nullable: true }
-      - { name: device_id, type: string, nullable: true }
-      - { name: location, type: string, nullable: true }
-      - { name: input_hash, type: string }
+      - { name: request_ip, type: _types.string, nullable: true }
+      - { name: device_id, type: _types.string, nullable: true }
+      - { name: location, type: _types.string, nullable: true }
+      - { name: input_hash, type: _types.string }
     returns:
       - { name: err, type: error }
     steps:
@@ -684,8 +684,8 @@ services:
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: expired_rows, type: integer, value: step.expire_stale.affected_rows }
-      - { name: revoked_rows, type: integer, value: step.revoke_exhausted.affected_rows }
+      - { name: expired_rows, type: _types.integer, value: step.expire_stale.affected_rows }
+      - { name: revoked_rows, type: _types.integer, value: step.revoke_exhausted.affected_rows }
       - { name: err, type: error }
     steps:
       - id: now
@@ -693,7 +693,7 @@ services:
         summary: "取当前时间"
         input: [ ]
         output:
-          - { name: now, type: timestamp, description: "当前时间" }
+          - { name: now, type: _types.timestamp, description: "当前时间" }
         errors: [ ]
         rules: [ ]
         goto: max_attempts
@@ -702,7 +702,7 @@ services:
         summary: "取验证码尝试次数上限"
         input: [ ]
         output:
-          - { name: max_attempts, type: integer, description: "尝试次数上限" }
+          - { name: max_attempts, type: _types.integer, description: "尝试次数上限" }
         errors: [ ]
         rules: [ ]
         goto: status_expired
@@ -729,7 +729,7 @@ services:
         summary: "取单批更新上限"
         input: [ ]
         output:
-          - { name: limit, type: integer, description: "单批更新上限" }
+          - { name: limit, type: _types.integer, description: "单批更新上限" }
         errors: [ ]
         rules: [ ]
         goto: expire_stale
@@ -742,7 +742,7 @@ services:
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
         query: data.queries.verification.expire_stale_verifications
         goto: revoke_exhausted
       - id: revoke_exhausted
@@ -754,7 +754,7 @@ services:
           - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
         query: data.queries.verification.revoke_exhausted_verifications
         goto: $end
 
@@ -765,7 +765,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
       - { name: auth_type, type: data.enums.auth_type }
-      - { name: auth_id, type: integer }
+      - { name: auth_id, type: _types.integer }
     returns:
       - { name: err, type: error }
     steps:
@@ -819,7 +819,7 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: integer }
+      - { name: account_id, type: _types.integer }
     returns:
       - { name: err, type: error }
     steps:

@@ -53,18 +53,19 @@ func TestTypeExpressionPatterns(t *testing.T) {
 			typ:  "cap.services",
 			path: []string{"services", "params", "type"},
 			accept: []string{
-				"string", "*string", "List<string>",
-				"data.enums.account_status", "List<data.enums.account_status>",
+				"_types.string", "*_types.string", "_types.list<_types.string>",
+				"data.enums.account_status", "_types.list<data.enums.account_status>",
 				"data.entities.account", "*data.entities.account",
 				"cap.services.account.schemas.AccountPage",
 				"*cap.services.account.schemas.AccountPage",
-				"List<cap.services.account.schemas.AccountPage>",
-				"context.Context", "time.Duration", "List<time.Duration>",
+				"_types.list<cap.services.account.schemas.AccountPage>",
+				"context.Context", "time.Duration", "_types.list<time.Duration>",
 			},
 			reject: []string{
-				"data.tables.account", "@inline/1", "*List<string>", "List<*string>",
-				"List<List<string>>", "**string", "List<string",
-				"cap.services.account.schemas.bad-name", "data.enums.AccountStatus",
+				"string", "List<string>", "data.tables.account", "@inline/1",
+				"*List<string>", "List<*string>", "List<List<string>>", "**string",
+				"List<string", "cap.services.account.schemas.bad-name",
+				"data.enums.AccountStatus",
 			},
 		},
 		{
@@ -72,12 +73,13 @@ func TestTypeExpressionPatterns(t *testing.T) {
 			typ:  "data.entities",
 			path: []string{"fields", "type"},
 			accept: []string{
-				"string", "*timestamp", "data.enums.account_status",
-				"data.entities.token", "List<data.entities.token>",
+				"_types.string", "*_types.timestamp", "data.enums.account_status",
+				"data.entities.token", "_types.list<data.entities.token>",
 			},
 			reject: []string{
-				"data.tables.account", "List<data.enums.account_status>",
-				"@inline/1", "data.enums.AccountStatus",
+				"string", "List<data.entities.token>", "data.tables.account",
+				"_types.list<data.enums.account_status>", "@inline/1",
+				"data.enums.AccountStatus",
 			},
 		},
 		{
@@ -85,15 +87,18 @@ func TestTypeExpressionPatterns(t *testing.T) {
 			typ:  "data.queries",
 			path: []string{"queries", "params", "type"},
 			accept: []string{
-				"string", "*string", "List<string>", "data.enums.account_status",
-				"List<data.enums.account_status>", "context.Context", "bigint",
+				"_types.string", "*_types.string", "_types.list<_types.string>",
+				"data.enums.account_status",
+				"_types.list<data.enums.account_status>", "context.Context",
 			},
 			reject: []string{
-				"data.tables.account", "List<data.entities.account>", "@inline/1",
+				"string", "bigint", "List<string>", "data.tables.account",
+				"List<data.entities.account>", "@inline/1",
 				"*List<string>", "List<*string>",
 			},
 		},
 	}
+
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			field := typeField(t, root, tc.typ, tc.path...)

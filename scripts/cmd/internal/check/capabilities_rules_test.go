@@ -149,15 +149,15 @@ targets:
   glob: "*.yaml"
   id: "cap.services.<file>"
 fields:
-  - {name: id, type: string, description: "id"}
-  - {name: summary, type: string, description: "summary"}
-  - {name: owner_module, type: string, description: "owner"}
-  - {name: schema_version, type: integer, description: "version"}
-  - {name: stability, type: string, description: "stability"}
-  - {name: do_not, type: list<string>, description: "do_not"}
-  - {name: interface, type: any, description: "interface"}
-  - {name: persistence, type: any, description: "persistence"}
-  - {name: services, type: any, description: "services"}
+  - {name: id, type: _types.string, description: "id"}
+  - {name: summary, type: _types.string, description: "summary"}
+  - {name: owner_module, type: _types.string, description: "owner"}
+  - {name: schema_version, type: _types.integer, description: "version"}
+  - {name: stability, type: _types.string, description: "stability"}
+  - {name: do_not, type: _types.list<_types.string>, description: "do_not"}
+  - {name: interface, type: _types.any, description: "interface"}
+  - {name: persistence, type: _types.any, description: "persistence"}
+  - {name: services, type: _types.any, description: "services"}
 `)
 	for _, typ := range []string{"feature.rules", "cap.lifecycles", "cap.events", "cap.protocols.http"} {
 		writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", "id: meta."+typ+"\ntype: "+typ+`
@@ -166,7 +166,7 @@ targets:
   glob: "*.yaml"
   id: "`+typ+`.<file>"
 fields:
-  - {name: id, type: string, description: "id"}
+  - {name: id, type: _types.string, description: "id"}
 `)
 	}
 	writeCapFile(t, root, "contracts/capabilities/services/a.yaml", `id: cap.services.a
@@ -304,7 +304,7 @@ paths:
               type: object
               additionalProperties: false
               properties:
-                id: { type: integer }
+                id: { type: _types.integer }
 components:
   schemas: {}
 `)
@@ -451,9 +451,9 @@ states:
   initial: pending
   final: [deleted]
 create:
-  services: [cap.services.x.create]
+  implemented_by: [cap.services.x.create.create]
 destroy:
-  services: [cap.services.x.delete]
+  implemented_by: [cap.services.x.delete.soft_delete]
 transitions:
   - name: activate
     description: "a"
@@ -472,7 +472,7 @@ transitions:
 		enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true, "deleted": true}},
 		entities:   map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status"}}}},
 	}
-	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, map[string]map[string]bool{})
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid lifecycle reported: %v", c.errs)
 	}
@@ -483,7 +483,7 @@ transitions:
 		t.Fatal(err)
 	}
 	c.errs = nil
-	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, map[string]map[string]bool{})
+	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[lifecycle-structure]") {
 		t.Fatalf("unknown initial state not reported: %v", c.errs)
 	}
@@ -514,7 +514,7 @@ components:
       x-service-type: cap.services.x.schemas.X
       type: object
       properties:
-        id: { type: string }
+        id: { type: _types.string }
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -560,9 +560,9 @@ states:
   initial: pending
   final: [deleted]
 create:
-  services: [cap.services.x.create]
+  implemented_by: [cap.services.x.create.create]
 destroy:
-  services: [cap.services.x.delete]
+  implemented_by: [cap.services.x.delete.soft_delete]
 transitions:
   - name: activate
     description: "a"
@@ -582,7 +582,7 @@ transitions:
 		},
 		{
 			name: "unreachable final",
-			body: strings.Replace(valid, "destroy:\n  services: [cap.services.x.delete]\n", "", 1),
+			body: strings.Replace(valid, "destroy:\n  implemented_by: [cap.services.x.delete.soft_delete]\n", "", 1),
 			want: "[lifecycle-exhaustive]",
 		},
 		{
@@ -591,13 +591,8 @@ transitions:
 			want: "[lifecycle-anchors]",
 		},
 		{
-			name: "missing create service back-reference",
-			body: strings.Replace(valid, "services: [cap.services.x.create]", "services: [cap.services.x.other]", 1),
-			want: "[lifecycle-anchors]",
-		},
-		{
-			name: "unknown create event",
-			body: strings.Replace(valid, "services: [cap.services.x.create]", "services: [cap.services.x.create]\n  events: [cap.events.x.created]", 1),
+			name: "missing create step back-reference",
+			body: strings.Replace(valid, "implemented_by: [cap.services.x.create.create]", "implemented_by: [cap.services.x.other.create]", 1),
 			want: "[lifecycle-anchors]",
 		},
 		{
@@ -624,7 +619,7 @@ transitions:
 				enumValues: map[string]map[string]bool{"data.enums.x_status": {"pending": true, "active": true, "deleted": true}},
 				entities:   map[string]*entityInfo{"data.entities.x": {OwnerModule: "x", Primary: "data.tables.x", Fields: []entityFieldInfo{{Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status"}}}},
 			}
-			c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, map[string]map[string]bool{})
+			c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{})
 			if !strings.Contains(strings.Join(c.errs, "\n"), tc.want) {
 				t.Fatalf("want %s, got %v", tc.want, c.errs)
 			}
@@ -675,7 +670,7 @@ transitions:
 				Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status",
 			}}}},
 		}
-		c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{}, map[string]bool{}, lifecycleStates)
+		c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, lifecycleStates)
 		return strings.Join(c.errs, "\n")
 	}
 
@@ -698,7 +693,7 @@ transitions:
 	}
 }
 
-func TestCheckLifecycleEventAnchor(t *testing.T) {
+func TestCheckLifecycleImplementedByAnchor(t *testing.T) {
 	root := t.TempDir()
 	schema := copyMeta(t, root, "cap.lifecycles")
 	rel := "contracts/capabilities/lifecycles/x.yaml"
@@ -717,16 +712,15 @@ states:
   initial: active
   final: [active]
 create:
-  services: [cap.services.x.create]
-  events: [cap.events.x.created]
+  implemented_by: [cap.services.x.create.create]
 `
-	writeCapFile(t, root, rel, body)
-	doc, err := loadYAML(filepath.Join(root, rel))
-	if err != nil {
-		t.Fatal(err)
-	}
-	newChecker := func() *Checker {
-		return &Checker{
+	check := func(body string) string {
+		writeCapFile(t, root, rel, body)
+		doc, err := loadYAML(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := &Checker{
 			root:       root,
 			errCodeSet: map[string]bool{},
 			enumValues: map[string]map[string]bool{"data.enums.x_status": {"active": true}},
@@ -734,23 +728,15 @@ create:
 				Name: "Status", JSONName: "status", Type: "data.enums.x_status", SourceColumnRef: "data.tables.x.col.status",
 			}}}},
 		}
+		c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps, map[string]map[string]bool{})
+		return strings.Join(c.errs, "\n")
 	}
-	c := newChecker()
-	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps,
-		map[string]map[string]bool{"cap.services.x.create": {}},
-		map[string]bool{"cap.events.x.created": true},
-		map[string]map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "is not emitted by services") {
-		t.Fatalf("unemitted event not reported: %v", c.errs)
+	if got := check(body); got != "" {
+		t.Fatalf("valid implemented_by reported: %s", got)
 	}
-
-	c = newChecker()
-	c.checkLifecycleDoc(doc, rel, schema, stepIDs, actionSteps,
-		map[string]map[string]bool{"cap.services.x.create": {"cap.events.x.created": true}},
-		map[string]bool{"cap.events.x.created": true},
-		map[string]map[string]bool{})
-	if len(c.errs) != 0 {
-		t.Fatalf("emitted event reported: %v", c.errs)
+	wrong := strings.Replace(body, "cap.services.x.create.create", "cap.services.x.create.other", 1)
+	if got := check(wrong); !strings.Contains(got, "[lifecycle-anchors]") {
+		t.Fatalf("unknown implemented_by step not reported: %s", got)
 	}
 }
 
@@ -906,7 +892,7 @@ jobs:
     name: consume
     summary: "x"
     service: cap.services.x.get
-    trigger: {type: topic, topic: cap.events.x.created}
+    trigger: {kind: topic, topic: cap.events.x.created}
     retry: {max_attempts: 3, backoff: exponential, dead_letter: true}
     concurrency: {key: x_consume, ttl: 1h}
 `
@@ -1016,7 +1002,7 @@ jobs:
     name: created
     summary: "x"
     service: cap.services.x.get
-    trigger: { type: cron, schedule: "0 3 * * *" }
+    trigger: { kind: cron, schedule: "0 3 * * *" }
 `)
 	c.errs = nil
 	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
@@ -1116,10 +1102,10 @@ services:
     visibility: public
     tx_mode: read_only
     params:
-      - {name: id, type: integer}
+      - {name: id, type: _types.integer}
     returns:
       - {name: err, type: error}
-      - {name: value, type: string}
+      - {name: value, type: _types.string}
     steps:
       - id: load
         kind: logic
@@ -1342,7 +1328,7 @@ schemas:
             - { name: id, schema: { type: _types.integer }, description: "id" }
             - name: typo
               schema:
-                type: string
+                type: _types.string
                 bogus: 1
               description: "typo"
         description: "nested"
@@ -1355,7 +1341,7 @@ services:
       - {name: input, type: XInput}
     returns:
       - {name: err, type: error}
-      - {name: value, type: string}
+      - {name: value, type: _types.string}
     errors: []
     tx_mode: read_only
     steps:
@@ -1402,7 +1388,7 @@ services:
       - {name: input, type: XInput}
     returns:
       - {name: err, type: error}
-      - {name: value, type: string}
+      - {name: value, type: _types.string}
     errors: []
     tx_mode: read_only
     steps:

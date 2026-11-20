@@ -709,7 +709,7 @@ topics: []
 jobs:
   - id: cap.events.job
     name: job
-    trigger: { type: cron, cron: "* * * * *" }
+    trigger: { kind: cron, cron: "* * * * *" }
 `
 		if err := os.WriteFile(filepath.Join(dir, name+".yaml"), []byte(body), 0o644); err != nil {
 			t.Fatal(err)

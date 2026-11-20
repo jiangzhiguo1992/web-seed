@@ -27,7 +27,7 @@
 | cap.services | service-signature | service-signature | 1 |
 | cap.services | service-unique | service-unique | 1 |
 | cap.services | service-schema | service-schema | 1 |
-| cap.services | service-ref | service-ref | 3 |
+| cap.services | service-ref | service-ref | 4 |
 | cap.services | service-owner-write | service-owner-write | 1 |
 | cap.services | service-errors | service-errors | 1 |
 | cap.services | service-visibility | service-visibility | 1 |

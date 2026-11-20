@@ -462,7 +462,8 @@ func (c *Checker) collectEnumRefs(v any, fn func(string)) {
 
 // enumTypeRef 提取 type 中的枚举 ID，兼容 *T 与 List<T>。
 func enumTypeRef(typ string) (string, bool) {
-	typ = strings.TrimPrefix(strings.TrimSpace(typ), "*")
+	typ = normalizeContractType(typ)
+	typ = strings.TrimPrefix(typ, "*")
 	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
 		typ = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"))
 		typ = strings.TrimPrefix(typ, "*")

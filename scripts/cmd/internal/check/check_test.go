@@ -2209,11 +2209,11 @@ func TestExtendsChainInheritsColumns(t *testing.T) {
 summary: "base"
 stability: "stable"
 columns:
-  - { name: id, type: string, primary_key: true, nullable: false }
-  - { name: status, type: integer, nullable: false }
-  - { name: created_at, type: timestamp, nullable: false }
-  - { name: updated_at, type: timestamp, nullable: false }
-  - { name: deleted_at, type: timestamp, nullable: true }
+  - { name: id, type: _types.string, primary_key: true, nullable: false }
+  - { name: status, type: _types.integer, nullable: false }
+  - { name: created_at, type: _types.timestamp, nullable: false }
+  - { name: updated_at, type: _types.timestamp, nullable: false }
+  - { name: deleted_at, type: _types.timestamp, nullable: true }
 rules:
   - { id: base-file, text: "x", implemented_by: [base-file] }
   - { id: base-columns, text: "x", implemented_by: [base-columns] }
@@ -2222,19 +2222,19 @@ rules:
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: string, nullable: false }
+   - { name: code, type: _types.string, nullable: false }
 `)
 	write("child.yaml", `id: data.tables.child
 table:
   extends: [ data.tables.parent ]
 columns:
-   - { name: code, type: string, nullable: false }
+   - { name: code, type: _types.string, nullable: false }
 `)
 	write("grandchild.yaml", `id: data.tables.grandchild
 table:
   extends: [ data.tables.child ]
 columns:
-   - { name: extra, type: string, nullable: false }
+   - { name: extra, type: _types.string, nullable: false }
 `)
 	c := &Checker{root: root}
 	_, cols := c.checkTables(&Schema{Targets: testTargets()})
@@ -2257,19 +2257,19 @@ func TestExtendsMultipleParents(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: string, nullable: false }
+   - { name: code, type: _types.string, nullable: false }
 `)
 	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: name, type: string, nullable: false }
+   - { name: name, type: _types.string, nullable: false }
 `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
 table:
   extends: [ data.tables.left, data.tables.right ]
 columns:
-   - { name: extra, type: string, nullable: false }
+   - { name: extra, type: _types.string, nullable: false }
 `)
 	c := &Checker{root: root}
 	_, cols := c.checkTables(&Schema{Targets: testTargets()})
@@ -2288,13 +2288,13 @@ func TestExtendsConflict(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: string, nullable: false }
+   - { name: code, type: _types.string, nullable: false }
 `)
 	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: string, nullable: false }
+   - { name: code, type: _types.string, nullable: false }
 `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
 table:
@@ -2315,7 +2315,7 @@ func TestExtendsDiamond(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: string, nullable: false }
+   - { name: code, type: _types.string, nullable: false }
 `)
 	writeTableFixture(t, root, "left.yaml", `id: data.tables.left
 table:
@@ -2369,19 +2369,19 @@ func TestExtendsCycle(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: gcol, type: string, nullable: false }
+   - { name: gcol, type: _types.string, nullable: false }
 `)
 	write("a.yaml", `id: data.tables.a
 table:
   extends: [ data.tables.b, data.tables.g ]
 columns:
-   - { name: acol, type: string, nullable: false }
+   - { name: acol, type: _types.string, nullable: false }
 `)
 	write("b.yaml", `id: data.tables.b
 table:
   extends: [ data.tables.a ]
 columns:
-   - { name: bcol, type: string, nullable: false }
+   - { name: bcol, type: _types.string, nullable: false }
 `)
 	write("c.yaml", `id: data.tables.c
 table:
@@ -2432,13 +2432,13 @@ func TestExtendsCycleRedeclare(t *testing.T) {
 table:
   extends: [ data.tables.b ]
 columns:
-   - { name: x, type: string, nullable: false }
+   - { name: x, type: _types.string, nullable: false }
 `)
 	writeTableFixture(t, root, "b.yaml", `id: data.tables.b
 table:
   extends: [ data.tables.a ]
 columns:
-   - { name: x, type: string, nullable: false }
+   - { name: x, type: _types.string, nullable: false }
 `)
 	c := &Checker{root: root}
 	c.checkTables(&Schema{Targets: testTargets()})
@@ -2471,7 +2471,7 @@ func TestDoNotSpecificityUsesInheritedColumns(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: string, nullable: false }
+   - { name: code, type: _types.string, nullable: false }
 `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
 table:

@@ -190,11 +190,11 @@ func TestRenderQuery(t *testing.T) {
 		t.Fatalf("query ctx param not scaffolded: %#v", q["params"])
 	}
 	param, _ := params[1].(map[string]any)
-	if param["type"] != "integer" || param["column"] != "data.tables.account.col.id" {
+	if param["type"] != "_types.integer" || param["column"] != "data.tables.account.col.id" {
 		t.Fatalf("query id param must bind the integer primary key: %#v", param)
 	}
 	ret, _ := returns[0].(map[string]any)
-	if ret["kind"] != "scalar" || ret["type"] != "boolean" {
+	if ret["kind"] != "scalar" || ret["type"] != "_types.boolean" {
 		t.Fatalf("query return shape not scaffolded: %#v", ret)
 	}
 	targets, _ := q["tables"].([]any)
@@ -621,8 +621,8 @@ func TestRenderLifecycle(t *testing.T) {
 		t.Fatalf("states = %#v", states)
 	}
 	create, _ := doc["create"].(map[string]any)
-	services, _ := create["services"].([]any)
-	if len(services) != 1 || services[0] != "cap.services.invoice.create" {
+	implemented, _ := create["implemented_by"].([]any)
+	if len(implemented) != 1 || implemented[0] != "cap.services.invoice.create.create" {
 		t.Fatalf("create = %#v", create)
 	}
 }

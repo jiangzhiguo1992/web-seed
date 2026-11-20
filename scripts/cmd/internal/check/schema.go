@@ -8,6 +8,7 @@ package check
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -60,6 +61,8 @@ func (c *Checker) validateSchemaNodeWith(v any, path string, allowed []string) {
 		c.validateObjectNode(m, path)
 	case "array":
 		c.validateArrayNode(m, path)
+	case "map":
+		c.validateMapNode(m, path)
 	case "scalar":
 		c.validateScalarNode(m, path)
 	case "ref":
@@ -97,7 +100,7 @@ func (c *Checker) validateObjectNode(m map[string]any, path string) {
 }
 
 // validateNodeRules 校验节点级 validation：rule 可解析，字段引用符合 kind。
-// object 引用 input.<属性名>；scalar/array 引用 value；ref 引用 value 或 value.<path>。
+// object 引用 input.<属性名>；scalar/array/map 引用 value；ref 引用 value 或 value.<path>。
 func (c *Checker) validateNodeRules(m map[string]any, kind, path string, names map[string]bool) {
 	raw, ok := m["validation"]
 	if !ok {
@@ -225,8 +228,11 @@ func (c *Checker) resolveRefValuePath(m map[string]any, rest, where string) *ent
 		if i == len(segs)-1 {
 			return f
 		}
-		typ := strings.TrimPrefix(strings.TrimPrefix(f.Type, "*"), "List<")
-		typ = strings.TrimSuffix(typ, ">")
+		typ := normalizeContractType(f.Type)
+		typ = strings.TrimPrefix(typ, "*")
+		if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
+			typ = strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">")
+		}
 		next := c.entities[typ]
 		if next == nil {
 			c.rulef("schema.validation", "%s.rule: %s is not an entity; cannot traverse", where, seg)
@@ -297,6 +303,12 @@ func (c *Checker) validateArrayNode(m map[string]any, path string) {
 	if _, present := m["items"]; !present {
 		c.rulef("schema.required", "%s: array node requires items", path)
 	}
+	c.checkNodeSeqBounds(m, path)
+	c.validateNodeRules(m, "array", path, nil)
+}
+
+// checkNodeSeqBounds 校验 schema 节点 min_items/max_items 的取值与关系，array/map 共用。
+func (c *Checker) checkNodeSeqBounds(m map[string]any, path string) {
 	min, hasMin := toInt(m["min_items"])
 	max, hasMax := toInt(m["max_items"])
 	if hasMin && min < 0 {
@@ -308,7 +320,20 @@ func (c *Checker) validateArrayNode(m map[string]any, path string) {
 	if hasMin && hasMax && min > max {
 		c.rulef("schema.range", "%s: min_items must be <= max_items", path)
 	}
-	c.validateNodeRules(m, "array", path, nil)
+}
+
+// validateMapNode 校验映射节点：键固定 string，values 必填；min/max 约束键数，key_patterns 约束键名，validation 校验映射级规则。
+func (c *Checker) validateMapNode(m map[string]any, path string) {
+	if _, present := m["values"]; !present {
+		c.rulef("schema.required", "%s: map node requires values", path)
+	}
+	c.checkNodeSeqBounds(m, path)
+	for i, pattern := range stringList(m["key_patterns"]) {
+		if _, err := regexp.Compile(pattern); err != nil {
+			c.rulef("schema.pattern", "%s.key_patterns[%d]: %v", path, i, err)
+		}
+	}
+	c.validateNodeRules(m, "map", path, nil)
 }
 
 func (c *Checker) validateScalarNode(m map[string]any, path string) {
@@ -317,7 +342,7 @@ func (c *Checker) validateScalarNode(m map[string]any, path string) {
 		c.rulef("schema.non-empty", "%s.type: must not be empty", path)
 		return
 	}
-	if typ == "object" || typ == "array" {
+	if typ == "object" || typ == "array" || typ == "map" {
 		c.rulef("schema.type", "%s.type: %s must use its kind structure", path, typ)
 		return
 	}
@@ -397,7 +422,7 @@ func schemaKindAllowed(kind string, kinds map[string]contractspec.SchemaKind) bo
 		return len(kinds) > 0
 	}
 	switch kind {
-	case "object", "array", "scalar", "ref":
+	case "object", "array", "map", "scalar", "ref":
 		return true
 	}
 	return false

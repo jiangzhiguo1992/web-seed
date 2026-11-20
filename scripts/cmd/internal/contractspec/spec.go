@@ -78,6 +78,8 @@ func SchemaNodeKind(node map[string]any, kinds map[string]SchemaKind) (string, b
 		return "object", kinds["object"].Keys != nil
 	case "array":
 		return "array", kinds["array"].Keys != nil
+	case "map":
+		return "map", kinds["map"].Keys != nil
 	default:
 		return "scalar", kinds["scalar"].Keys != nil
 	}
@@ -353,6 +355,7 @@ func LoadCustomTypes(root string, families map[string]ValueTypeFamily) (*CustomT
 var schemaNodeRequiredKeys = map[string][]string{
 	"object": {"type", "properties"},
 	"array":  {"type", "items"},
+	"map":    {"type", "values"},
 	"scalar": {"type"},
 	"ref":    {"ref"},
 }
@@ -443,7 +446,7 @@ func validateSchemas(path string, schemas map[string]SchemaKind) error {
 	}
 	for name := range schemas {
 		if _, ok := schemaNodeRequiredKeys[name]; !ok {
-			return fmt.Errorf("%s: unknown schema %s (SchemaNodeKind supports struct/array/scalar/ref)", path, name)
+			return fmt.Errorf("%s: unknown schema %s (SchemaNodeKind supports object/array/map/scalar/ref)", path, name)
 		}
 	}
 	keyTypes := map[string]bool{"": true, "_types.string": true, "_types.boolean": true, "_types.integer": true, "_types.any": true, "_types.map": true, "_types.list<_types.object>": true, "_types.list<_types.string>": true}
@@ -597,8 +600,31 @@ func LoadSchema(path string) (*Schema, error) {
 	if s.ID != "meta."+s.Type {
 		return nil, fmt.Errorf("%s: id must be meta.%s, got %q", path, s.Type, s.ID)
 	}
+	if err := validateMetaFieldTypes(s.Fields); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 	injectFamilyParams(&s)
 	return &s, nil
+}
+
+// validateMetaFieldTypes 要求 _meta 字段规范的 type 统一写 _types.* 或 "*"。
+// Unordered 是运行时注入的类型族参数，不参与检查。
+func validateMetaFieldTypes(fields []Field) error {
+	for _, f := range fields {
+		if f.Unordered {
+			continue
+		}
+		if f.Type != "" && f.Type != "*" && !strings.HasPrefix(f.Type, "_types.") {
+			return fmt.Errorf("field %s: meta type must be _types.* or \"*\", got %q", f.Name, f.Type)
+		}
+		if err := validateMetaFieldTypes(f.Fields); err != nil {
+			return err
+		}
+		if err := validateMetaFieldTypes(f.ItemFields); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // injectFamilyParams 把所有类型族的扩展字段名加入 columns.item_fields。

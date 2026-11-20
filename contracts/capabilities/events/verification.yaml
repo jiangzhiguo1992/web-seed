@@ -14,6 +14,6 @@ jobs:
     name: cleanup
     summary: "把过期或尝试超限的验证体置为终态"
     service: cap.services.verification.cleanup
-    trigger: { type: cron, schedule: "*/15 * * * *" }
+    trigger: { kind: cron, schedule: "*/15 * * * *" }
     retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
     concurrency: { key: verification_cleanup, ttl: 15m }

@@ -22,10 +22,9 @@ type lifecycleFileAction struct {
 
 // Anchors 保存 service step 对 rules / lifecycles / events 的反向索引。
 type Anchors struct {
-	Rules             map[string][]string
-	LifecycleSteps    map[string][]string
-	LifecycleServices map[string][]string
-	Events            map[string][]string
+	Rules          map[string][]string
+	LifecycleSteps map[string][]string
+	Events         map[string][]string
 
 	EventConsumers map[string][]string
 
@@ -36,14 +35,13 @@ type Anchors struct {
 
 func newAnchors() *Anchors {
 	return &Anchors{
-		Rules:             map[string][]string{},
-		LifecycleSteps:    map[string][]string{},
-		LifecycleServices: map[string][]string{},
-		Events:            map[string][]string{},
-		EventConsumers:    map[string][]string{},
-		RuleFiles:         map[string][]string{},
-		LifecycleFiles:    map[string][]lifecycleFileAction{},
-		EventFiles:        map[string][]string{},
+		Rules:          map[string][]string{},
+		LifecycleSteps: map[string][]string{},
+		Events:         map[string][]string{},
+		EventConsumers: map[string][]string{},
+		RuleFiles:      map[string][]string{},
+		LifecycleFiles: map[string][]lifecycleFileAction{},
+		EventFiles:     map[string][]string{},
 	}
 }
 
@@ -60,13 +58,6 @@ func (a *Anchors) addLifecycleStep(actionID, stepID string) {
 	}
 	if !contains(a.LifecycleSteps[actionID], stepID) {
 		a.LifecycleSteps[actionID] = append(a.LifecycleSteps[actionID], stepID)
-	}
-	serviceID := stepID
-	if i := strings.LastIndex(stepID, "."); i > 0 {
-		serviceID = stepID[:i]
-	}
-	if !contains(a.LifecycleServices[actionID], serviceID) {
-		a.LifecycleServices[actionID] = append(a.LifecycleServices[actionID], serviceID)
 	}
 }
 
@@ -160,9 +151,6 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 	}
 	for id := range a.LifecycleSteps {
 		a.LifecycleSteps[id] = uniqueSorted(a.LifecycleSteps[id])
-	}
-	for id := range a.LifecycleServices {
-		a.LifecycleServices[id] = uniqueSorted(a.LifecycleServices[id])
 	}
 	for id := range a.Events {
 		a.Events[id] = uniqueSorted(a.Events[id])
@@ -281,8 +269,7 @@ func (a *Anchors) Write(root string) ([]string, error) {
 				}
 				continue
 			}
-			steps := a.LifecycleServices[item.id]
-			ok, err := syncNestedField(filepath.Join(root, file), item.kind, "services", steps)
+			ok, err := syncNestedField(filepath.Join(root, file), item.kind, "implemented_by", a.LifecycleSteps[item.id])
 			if err != nil {
 				return changed, err
 			}
@@ -356,11 +343,11 @@ func (a *Anchors) Check(root string) ([]string, error) {
 			obj, _ := asMap(doc[item.kind])
 			got := []string{}
 			if obj != nil {
-				got = stringList(obj["services"])
+				got = stringList(obj["implemented_by"])
 			}
-			want := a.LifecycleServices[item.id]
+			want := a.LifecycleSteps[item.id]
 			if !sameSet(got, want) {
-				drift = append(drift, fmt.Sprintf("%s: %s.services must be %v, got %v", file, item.id, want, got))
+				drift = append(drift, fmt.Sprintf("%s: %s.implemented_by must be %v, got %v", file, item.id, want, got))
 			}
 		}
 	}

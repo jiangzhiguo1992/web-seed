@@ -171,18 +171,41 @@ components:
         - deleted
       type: string
       x-enum: data.enums.account_status
+    AuthAttributes:
+      additionalProperties: false
+      properties:
+        auth_type:
+          description: 本次登录使用的认证类型
+          enum:
+            - pwd
+            - phone
+            - email
+          type: string
+        device_id:
+          description: 登录设备标识
+          maxLength: 128
+          nullable: true
+          type: string
+      required:
+        - auth_type
+      type: object
+      x-service-type: cap.services.auth.schemas.AuthAttributes
     AuthSession:
       additionalProperties: false
       properties:
         account:
           $ref: '#/components/schemas/Account'
           description: 账号实体
+        attributes:
+          $ref: '#/components/schemas/AuthAttributes'
+          description: 会话属性
         tokens:
           $ref: '#/components/schemas/TokenPair'
           description: 令牌对
       required:
         - account
         - tokens
+        - attributes
       type: object
       x-service-type: cap.services.auth.schemas.AuthSession
     CreateAccountInput:
@@ -208,6 +231,202 @@ components:
         - nickname
       type: object
       x-service-type: cap.services.account.schemas.CreateAccountInput
+    EventAccountActivated:
+      additionalProperties: false
+      description: 账号激活或解封
+      properties:
+        activated_at:
+          description: 账号激活时间
+          format: date-time
+          type: string
+        id:
+          description: 唯一标识
+          type: integer
+      required:
+        - id
+        - activated_at
+      type: object
+      x-event-id: cap.events.account.activated
+      x-event-name: account.activated
+      x-event-version: 1
+    EventAccountCreated:
+      additionalProperties: false
+      description: 账号创建
+      properties:
+        created_at:
+          description: 创建时间
+          format: date-time
+          type: string
+        id:
+          description: 唯一标识
+          type: integer
+        number:
+          description: 账号编号
+          maxLength: 64
+          minLength: 4
+          pattern: ^[A-Za-z0-9_-]+$
+          type: string
+        status:
+          description: 账号创建后的状态
+          enum:
+            - pending
+            - active
+            - suspended
+            - deleted
+          type: string
+      required:
+        - id
+        - number
+        - status
+        - created_at
+      type: object
+      x-event-id: cap.events.account.created
+      x-event-name: account.created
+      x-event-version: 1
+    EventAccountDeleted:
+      additionalProperties: false
+      description: 账号软删
+      properties:
+        deleted_at:
+          description: 软删时间
+          format: date-time
+          type: string
+        id:
+          description: 唯一标识
+          type: integer
+      required:
+        - id
+        - deleted_at
+      type: object
+      x-event-id: cap.events.account.deleted
+      x-event-name: account.deleted
+      x-event-version: 1
+    EventAccountLoginFailed:
+      additionalProperties: false
+      description: 登录失败
+      properties:
+        account_id:
+          description: 账号 ID；未知账号为 null
+          nullable: true
+          type: integer
+        failed_at:
+          description: 登录失败时间
+          format: date-time
+          type: string
+        reason:
+          description: 失败或停用原因
+          enum:
+            - bad_password
+            - locked
+            - suspended
+            - not_found
+          type: string
+      required:
+        - reason
+        - failed_at
+      type: object
+      x-event-id: cap.events.account.login_failed
+      x-event-name: account.login_failed
+      x-event-version: 1
+    EventAccountLoginSucceeded:
+      additionalProperties: false
+      description: 登录成功
+      properties:
+        attributes:
+          additionalProperties:
+            type: string
+          description: 登录上下文扩展属性；键值均为字符串
+          maxProperties: 10
+          minProperties: 1
+          propertyNames:
+            pattern: ^[a-z][a-z0-9_]*$
+          type: object
+        id:
+          description: 唯一标识
+          type: integer
+        ip:
+          description: 客户端 IP
+          type: string
+        login_at:
+          description: 登录时间
+          format: date-time
+          type: string
+        user_agent:
+          description: 客户端 User-Agent
+          type: string
+      required:
+        - id
+        - login_at
+      type: object
+      x-event-id: cap.events.account.login_succeeded
+      x-event-name: account.login_succeeded
+      x-event-version: 1
+    EventAccountReactivated:
+      additionalProperties: false
+      description: 账号解封
+      properties:
+        id:
+          description: 唯一标识
+          type: integer
+        reactivated_at:
+          description: 账号重新激活时间
+          format: date-time
+          type: string
+      required:
+        - id
+        - reactivated_at
+      type: object
+      x-event-id: cap.events.account.reactivated
+      x-event-name: account.reactivated
+      x-event-version: 1
+    EventAccountSuspended:
+      additionalProperties: false
+      description: 账号封禁
+      properties:
+        id:
+          description: 唯一标识
+          type: integer
+        reason:
+          description: 失败或停用原因
+          type: string
+        suspended_at:
+          description: 账号停用时间
+          format: date-time
+          type: string
+      required:
+        - id
+        - reason
+        - suspended_at
+      type: object
+      x-event-id: cap.events.account.suspended
+      x-event-name: account.suspended
+      x-event-version: 1
+    EventTokenIssued:
+      additionalProperties: false
+      description: 令牌签发
+      properties:
+        account:
+          $ref: '#/components/schemas/Account'
+          description: 账号实体
+        account_id:
+          description: 账号 ID
+          type: integer
+        issued_at:
+          description: 签发时间
+          format: date-time
+          type: string
+        token_id:
+          description: 令牌 ID
+          type: integer
+      required:
+        - token_id
+        - account_id
+        - account
+        - issued_at
+      type: object
+      x-event-id: cap.events.token.issued
+      x-event-name: token.issued
+      x-event-version: 1
     LoginInput:
       additionalProperties: false
       properties:

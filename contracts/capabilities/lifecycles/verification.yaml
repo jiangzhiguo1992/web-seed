@@ -20,8 +20,8 @@ states:
 create:
   requires:
     - { lifecycle: cap.lifecycles.account, states: [pending, active] }
-  services:
-    - cap.services.verification.send
+  implemented_by:
+    - cap.services.verification.send.create
 transitions:
   - name: send
     description: "验证体创建后标记为已发送"

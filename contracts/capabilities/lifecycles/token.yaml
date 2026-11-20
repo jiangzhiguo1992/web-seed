@@ -19,9 +19,9 @@ states:
 create:
   requires:
     - { lifecycle: cap.lifecycles.account, states: [active] }
-  services:
-    - cap.services.token.issue
-    - cap.services.token.refresh
+  implemented_by:
+    - cap.services.token.issue.create_token
+    - cap.services.token.refresh.create_token
 transitions:
   - name: revoke
     description: "主动吊销令牌"
