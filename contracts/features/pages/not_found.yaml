@@ -3,7 +3,7 @@
 id: feature.pages.not_found
 summary: "404 页"
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "不要展示原始路径（可能含敏感参数）"
 

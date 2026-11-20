@@ -4,7 +4,7 @@ id: feature.rules.account
 summary: "账号业务规则集"
 owner_module: account
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "account 只关心业务主体；密码/手机/邮箱/令牌规则在 feature.rules.auth"
   - "不要在 handler/service 里手写编号格式或归属校验"

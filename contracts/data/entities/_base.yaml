@@ -3,7 +3,7 @@
 id: data.entities.base
 summary: "实体字段基类"
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "data.entities.base 不是实体：不生成类型、不落表、不建关系"
   - "实体是读模型：字段必须能投影回物理列或声明 computed，不写业务行为"

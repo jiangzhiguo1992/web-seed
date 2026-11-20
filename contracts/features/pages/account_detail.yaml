@@ -3,7 +3,7 @@
 id: feature.pages.account_detail
 summary: "账号详情页"
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "不要在前端判断状态合法性，使用 cap.lifecycles.account 的动作表"
   - "认证信息只能通过认证接口获取，不要在本页拼装"

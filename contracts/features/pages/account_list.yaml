@@ -3,7 +3,7 @@
 id: feature.pages.account_list
 summary: "账号列表页"
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "状态筛选的取值必须来自 cap.lifecycles.account.states.values，不要硬编码"
   - "forbidden 态依赖 platform.security.permissions.account_read，不可省略"
