@@ -376,21 +376,26 @@ func (c *Checker) validateSchemaKeyValues(m map[string]any, path string, keys []
 	}
 }
 
-// allowsSchemaKind 报告 kind 是否在允许列表内；空列表表示不限。
+// allowsSchemaKind 报告 kind 是否在允许列表内；空列表表示不限，
+// _types.schema 表示任意已声明的节点种类。
 func allowsSchemaKind(allowed []string, kind string) bool {
 	if len(allowed) == 0 {
 		return true
 	}
 	for _, k := range allowed {
-		if k == kind {
+		if k == kind || k == contractspec.SchemaAlias {
 			return true
 		}
 	}
 	return false
 }
 
-// schemaKindAllowed 报告名称是否是 SchemaNodeKind 支持的节点种类。
-func schemaKindAllowed(kind string) bool {
+// schemaKindAllowed 报告名称是否是 SchemaNodeKind 支持的节点种类；
+// _types.schema 代表 schemas 下声明的全部种类。
+func schemaKindAllowed(kind string, kinds map[string]contractspec.SchemaKind) bool {
+	if kind == contractspec.SchemaAlias {
+		return len(kinds) > 0
+	}
 	switch kind {
 	case "object", "array", "scalar", "ref":
 		return true

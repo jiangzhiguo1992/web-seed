@@ -155,7 +155,7 @@ func TestLoadSharedTypesStructures(t *testing.T) {
 	}
 
 	idx = strings.Index(string(shared), "\nstructures:")
-	tail = strings.Replace(string(shared)[idx:], "max_len:", "len:", 1)
+	tail = strings.Replace(string(shared)[idx:], "max_items:", "len:", 1)
 	writeMeta(t, root, "_types.yaml", string(shared)[:idx]+tail)
 	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "does not allow param len") {
 		t.Fatalf("invalid list param: %v", err)

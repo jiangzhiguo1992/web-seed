@@ -60,10 +60,15 @@ func containsObject(expr typeExpr) bool {
 	return false
 }
 
-// lengthBoundBase 报告 min_len/max_len 对哪些容器/标量有效。
+// lengthBoundBase 报告 min_len/max_len 对哪些标量有效：只约束字符串长度。
 func lengthBoundBase(base string) bool {
+	return base == "string"
+}
+
+// itemBoundBase 报告 min_items/max_items 对哪些容器有效：集合元素数。
+func itemBoundBase(base string) bool {
 	switch base {
-	case "string", "list", "set", "map":
+	case "list", "set", "map":
 		return true
 	}
 	return false
@@ -235,12 +240,14 @@ func validateFieldTypes(fields []Field, vt ValueTypes, bootstrap bool) error {
 			if f.Type != "" && typ != "map" {
 				return fmt.Errorf("field %s: type and types are mutually exclusive", f.Name)
 			}
-			if f.Const != nil || len(f.Enum) > 0 || len(f.Allowed) > 0 || f.Pattern != "" || f.Min != nil || f.Max != nil || f.MinItems != nil || f.Unique {
-				return fmt.Errorf("field %s: types only accepts required/description/default", f.Name)
+			if f.Const != nil || len(f.Enum) > 0 || len(f.Allowed) > 0 || f.Pattern != "" || f.Min != nil || f.Max != nil ||
+				f.MinItems != nil || f.MaxItems != nil || f.MinLen != nil || f.MaxLen != nil || f.Len != nil ||
+				f.Unique || f.UniqueKey != "" || f.Soft {
+				return fmt.Errorf("field %s: types only accepts required/description/default/key_patterns", f.Name)
 			}
 			seen := map[string]bool{}
 			for _, kind := range f.Types {
-				if !schemaKindAllowed(kind) {
+				if !schemaKindAllowed(kind, vt.Schemas) {
 					return fmt.Errorf("field %s: unknown schema kind %q", f.Name, kind)
 				}
 				if seen[kind] {
@@ -267,8 +274,8 @@ func validateFieldTypes(fields []Field, vt ValueTypes, bootstrap bool) error {
 					if n, ok := toInt(f.Len); !ok || n < 1 {
 						return fmt.Errorf("field %s: len must be a positive integer", f.Name)
 					}
-					if f.MinLen != nil || f.MaxLen != nil {
-						return fmt.Errorf("field %s: array uses len, not min_len/max_len", f.Name)
+					if f.MinLen != nil || f.MaxLen != nil || f.MinItems != nil || f.MaxItems != nil {
+						return fmt.Errorf("field %s: array uses len, not min_len/max_len/min_items/max_items", f.Name)
 					}
 				case "set":
 					if strings.HasPrefix(normalizeTypeExpr(f.Type), "set<object>") && f.UniqueKey == "" {
@@ -286,13 +293,23 @@ func validateFieldTypes(fields []Field, vt ValueTypes, bootstrap bool) error {
 					return fmt.Errorf("field %s: len is only allowed for array", f.Name)
 				}
 				if (f.MinLen != nil || f.MaxLen != nil) && !lengthBoundBase(expr.Base) {
-					return fmt.Errorf("field %s: min_len/max_len are only allowed for string/list/set/map", f.Name)
+					return fmt.Errorf("field %s: min_len/max_len are only allowed for string", f.Name)
 				}
-				if f.MinItems != nil && expr.Base != "list" && expr.Base != "set" {
-					return fmt.Errorf("field %s: min_items is only allowed for list/set", f.Name)
+				if (f.MinItems != nil || f.MaxItems != nil) && !itemBoundBase(expr.Base) {
+					return fmt.Errorf("field %s: min_items/max_items are only allowed for list/set/map", f.Name)
 				}
 				if n, ok := toInt(f.MinItems); f.MinItems != nil && (!ok || n < 0) {
 					return fmt.Errorf("field %s: min_items must be a non-negative integer", f.Name)
+				}
+				if n, ok := toInt(f.MaxItems); f.MaxItems != nil && (!ok || n < 0) {
+					return fmt.Errorf("field %s: max_items must be a non-negative integer", f.Name)
+				}
+				if f.MinItems != nil && f.MaxItems != nil {
+					minN, ok1 := toInt(f.MinItems)
+					maxN, ok2 := toInt(f.MaxItems)
+					if ok1 && ok2 && minN > maxN {
+						return fmt.Errorf("field %s: min_items must not exceed max_items", f.Name)
+					}
 				}
 				if (f.Min != nil || f.Max != nil) && !numericLeaf(expr) {
 					return fmt.Errorf("field %s: min/max are only allowed for numeric types", f.Name)
@@ -346,6 +363,9 @@ func validateFieldTypes(fields []Field, vt ValueTypes, bootstrap bool) error {
 					}
 				}
 			}
+		}
+		if f.Default != nil && len(f.Enum) > 0 && !inList(f.Enum, fmt.Sprint(f.Default)) {
+			return fmt.Errorf("field %s: default %v not in enum %v", f.Name, f.Default, f.Enum)
 		}
 		if f.UniqueKey != "" {
 			if typ != "list<object>" && typ != "set<object>" {
@@ -639,16 +659,7 @@ func (c *Checker) checkMapBounds(m map[string]any, f Field, path string) {
 	if f.Generated {
 		return
 	}
-	if f.MinLen != nil {
-		if n, ok := toInt(f.MinLen); ok && len(m) < n {
-			c.rulef("schema.len", "%s: size %d must be >= %d", path, len(m), n)
-		}
-	}
-	if f.MaxLen != nil {
-		if n, ok := toInt(f.MaxLen); ok && len(m) > n {
-			c.rulef("schema.len", "%s: size %d must be <= %d", path, len(m), n)
-		}
-	}
+	c.checkItemBounds(len(m), f, path)
 }
 
 func (c *Checker) checkSeqBounds(l []any, f Field, path string, isSet, isArray bool) {
@@ -665,26 +676,20 @@ func (c *Checker) checkSeqBounds(l []any, f Field, path string, isSet, isArray b
 		}
 		return
 	}
-	if f.MinLen != nil {
-		if n, ok := toInt(f.MinLen); ok && len(l) < n {
-			c.rulef("schema.len", "%s: length %d must be >= %d", path, len(l), n)
-		}
-	}
-	if f.MaxLen != nil {
-		if n, ok := toInt(f.MaxLen); ok && len(l) > n {
-			c.rulef("schema.len", "%s: length %d must be <= %d", path, len(l), n)
-		}
-	}
-	c.checkMinItems(l, f, path)
+	c.checkItemBounds(len(l), f, path)
 }
 
-// checkMinItems 校验 list 的最小长度；min_items 只约束列表，不约束字符串。
-func (c *Checker) checkMinItems(l []any, f Field, path string) {
-	if f.Generated || f.MinItems == nil {
-		return
+// checkItemBounds 校验集合元素数：min_items/max_items 只约束 list/set/map。
+func (c *Checker) checkItemBounds(n int, f Field, path string) {
+	if f.MinItems != nil {
+		if min, ok := toInt(f.MinItems); ok && n < min {
+			c.rulef("schema.range", "%s: %d items < min_items %d", path, n, min)
+		}
 	}
-	if n, ok := toInt(f.MinItems); ok && len(l) < n {
-		c.rulef("schema.range", "%s: %d items < min_items %d", path, len(l), n)
+	if f.MaxItems != nil {
+		if max, ok := toInt(f.MaxItems); ok && n > max {
+			c.rulef("schema.range", "%s: %d items > max_items %d", path, n, max)
+		}
 	}
 }
 

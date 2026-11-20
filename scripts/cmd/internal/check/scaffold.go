@@ -63,6 +63,7 @@ func relaxGeneratedFields(fields []Field) []Field {
 		if f.Generated {
 			out[i].Required = false
 			out[i].MinItems = nil
+			out[i].MaxItems = nil
 		}
 		out[i].Fields = relaxGeneratedFields(f.Fields)
 		out[i].ItemFields = relaxGeneratedFields(f.ItemFields)

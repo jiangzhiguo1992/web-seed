@@ -3,6 +3,8 @@ package check
 import (
 	"strings"
 	"testing"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func TestGeneratedFieldMarkers(t *testing.T) {
@@ -55,5 +57,39 @@ func TestLengthKeysRequireLengthType(t *testing.T) {
 	}
 	if err := validateFieldTypes([]Field{{Name: "n", Type: "_types.integer", Pattern: "^x$"}}, ValueTypes{}, false); err == nil {
 		t.Fatal("pattern on integer must be rejected")
+	}
+}
+
+func TestSchemaAliasType(t *testing.T) {
+	vt := testValueTypes()
+	vt.Schemas = map[string]contractspec.SchemaKind{"object": {}, "array": {}, "scalar": {}, "ref": {}}
+	if err := validateFieldTypes([]Field{{Name: "x", Types: []string{contractspec.SchemaAlias}}}, vt, false); err != nil {
+		t.Fatalf("schema alias rejected: %v", err)
+	}
+	if err := validateFieldTypes([]Field{{Name: "x", Types: []string{"bogus"}}}, vt, false); err == nil {
+		t.Fatal("unknown schema kind must be rejected")
+	}
+}
+
+func TestTypesRejectsDeadBounds(t *testing.T) {
+	for _, f := range []Field{
+		{Name: "x", Types: []string{"object"}, MinLen: 1},
+		{Name: "x", Types: []string{"object"}, MaxItems: 1},
+		{Name: "x", Types: []string{"object"}, Len: 1},
+	} {
+		if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "types only accepts") {
+			t.Fatalf("dead bound on types field must be rejected: %+v", f)
+		}
+	}
+}
+
+func TestDefaultMustBeEnumValue(t *testing.T) {
+	f := Field{Name: "x", Type: "_types.string", Enum: []any{"stable", "draft"}, Default: "draf"}
+	if err := validateFieldTypes([]Field{f}, ValueTypes{}, false); err == nil || !strings.Contains(err.Error(), "not in enum") {
+		t.Fatalf("default outside enum must be rejected: %v", err)
+	}
+	f.Default = "draft"
+	if err := validateFieldTypes([]Field{f}, ValueTypes{}, false); err != nil {
+		t.Fatalf("default inside enum rejected: %v", err)
 	}
 }

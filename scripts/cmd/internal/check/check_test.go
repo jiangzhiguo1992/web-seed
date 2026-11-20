@@ -723,7 +723,7 @@ func TestStorageDocShape(t *testing.T) {
 	}
 
 	doc["not_supported_topologies"] = []any{}
-	if got := validate(); !strings.Contains(got, "must be >= 1") || !strings.Contains(got, "[schema.len]") {
+	if got := validate(); !strings.Contains(got, "0 items < min_items 1") || !strings.Contains(got, "[schema.range]") {
 		t.Fatalf("empty not_supported_topologies list not reported: %s", got)
 	}
 }
@@ -738,7 +738,7 @@ func TestStorageDocRequiresSupportedEngines(t *testing.T) {
 
 	c = &Checker{valueTypes: schema.ValueTypes}
 	c.validateDoc(map[string]any{"tables": map[string]any{}, "supported_engines": []any{}}, schema.Fields, "contracts/data/storage.yaml")
-	if got := entityErrs(c); !strings.Contains(got, "must be >= 1") || !strings.Contains(got, "[schema.len]") {
+	if got := entityErrs(c); !strings.Contains(got, "0 items < min_items 1") || !strings.Contains(got, "[schema.range]") {
 		t.Fatalf("empty supported_engines not reported: %v", c.errs)
 	}
 }
@@ -1929,8 +1929,8 @@ func TestEnumUsedByShape(t *testing.T) {
 	}
 	c := &Checker{}
 	c.validateValue([]any{}, usedBy, "enums[].used_by")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.len]") {
-		t.Fatalf("empty used_by must fail min_len: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.range]") {
+		t.Fatalf("empty used_by must fail min_items: %v", c.errs)
 	}
 	c.errs = nil
 	c.validateValue([]any{"bad.prefix"}, usedBy, "enums[].used_by")
@@ -3281,7 +3281,7 @@ func TestRedundancySchema(t *testing.T) {
 		value any
 		want  string
 	}{
-		{"single member", []any{map[string]any{"column": "data.tables.a.col.x", "source": true}}, "[schema.len]"},
+		{"single member", []any{map[string]any{"column": "data.tables.a.col.x", "source": true}}, "[schema.range]"},
 		{"legacy group id", "account_own_type", "[schema.type]"},
 		{"bad column ref", []any{map[string]any{"column": "token.own_type", "source": true}}, "[schema.pattern]"},
 		{"bad source type", []any{map[string]any{"column": "data.tables.a.col.x", "source": "yes"}}, "[schema.type]"},
@@ -3774,16 +3774,30 @@ func TestValidateMapIntegerKeyPatterns(t *testing.T) {
 }
 
 func TestValidateMinLenExceedsMaxLen(t *testing.T) {
-	f := Field{Name: "x", Type: "_types.list<_types.string>", MinLen: 3, MaxLen: 2}
+	f := Field{Name: "x", Type: "_types.string", MinLen: 3, MaxLen: 2}
 	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "min_len must not exceed max_len") {
 		t.Fatalf("min_len > max_len must fail: %v", err)
 	}
 }
 
 func TestValidateMaxLenZero(t *testing.T) {
-	f := Field{Name: "x", Type: "_types.list<_types.string>", MaxLen: 0}
+	f := Field{Name: "x", Type: "_types.string", MaxLen: 0}
 	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "max_len must be a positive integer") {
 		t.Fatalf("max_len 0 must fail: %v", err)
+	}
+}
+
+func TestValidateMinItemsExceedsMaxItems(t *testing.T) {
+	f := Field{Name: "x", Type: "_types.list<_types.string>", MinItems: 3, MaxItems: 2}
+	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "min_items must not exceed max_items") {
+		t.Fatalf("min_items > max_items must fail: %v", err)
+	}
+}
+
+func TestValidateCollectionBoundsOnString(t *testing.T) {
+	f := Field{Name: "x", Type: "_types.string", MinItems: 1}
+	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "only allowed for list/set/map") {
+		t.Fatalf("min_items on string must fail: %v", err)
 	}
 }
 
@@ -3791,7 +3805,7 @@ func TestValidateBooleanUniqueKey(t *testing.T) {
 	f := Field{
 		Name:       "x",
 		Type:       "_types.set<_types.object>",
-		MinLen:     1,
+		MinItems:   1,
 		UniqueKey:  "flag",
 		ItemFields: []Field{{Name: "flag", Type: "_types.boolean", Required: true}},
 	}

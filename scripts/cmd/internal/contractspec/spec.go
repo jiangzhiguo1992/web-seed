@@ -57,6 +57,10 @@ type CustomTypesDoc struct {
 
 const customTypesRel = "contracts/data/types.yaml"
 
+// SchemaAlias 在字段规范的 types 列表中代表 schemas 下声明的全部节点种类。
+// 使用它可避免在每处 schema 槽位重复枚举 object/array/scalar/ref。
+const SchemaAlias = "_types.schema"
+
 // SchemaNodeKind 返回 schema 节点的种类：ref 优先，其次由 type 的 struct/array/其他值决定。
 func SchemaNodeKind(node map[string]any, kinds map[string]SchemaKind) (string, bool) {
 	_, hasRef := node["ref"]
@@ -149,14 +153,17 @@ type Field struct {
 	Enum     []any    `yaml:"enum"`
 	Allowed  []any    `yaml:"allowed"`
 	// Soft 标记无结构校验的 soft zone；当前只允许 type: any。
-	Soft     bool   `yaml:"soft"`
-	Min      any    `yaml:"min"`
-	Max      any    `yaml:"max"`
-	MinItems any    `yaml:"min_items"`
-	MinLen   any    `yaml:"min_len"`
-	MaxLen   any    `yaml:"max_len"`
-	Len      any    `yaml:"len"`
-	Pattern  string `yaml:"pattern"`
+	Soft bool `yaml:"soft"`
+	Min  any  `yaml:"min"`
+	Max  any  `yaml:"max"`
+	// MinItems/MaxItems 约束集合元素数：list/set/map。
+	MinItems any `yaml:"min_items"`
+	MaxItems any `yaml:"max_items"`
+	// MinLen/MaxLen 约束字符串长度。
+	MinLen  any    `yaml:"min_len"`
+	MaxLen  any    `yaml:"max_len"`
+	Len     any    `yaml:"len"`
+	Pattern string `yaml:"pattern"`
 	// KeyPatterns 是 map 键的正则列表；string key 时任一匹配即可。
 	KeyPatterns []string `yaml:"key_patterns"`
 	Description string   `yaml:"description"`
@@ -358,11 +365,11 @@ func validateStructures(path string, structures map[string]Structure, families m
 	}
 	known := map[string]bool{"list": true, "set": true, "array": true, "map": true, "object": true}
 	allowedParams := map[string]map[string]bool{
-		"list":   {"min_len": true, "max_len": true},
-		"set":    {"min_len": true, "max_len": true},
+		"list":   {"min_items": true, "max_items": true},
+		"set":    {"min_items": true, "max_items": true},
 		"array":  {"len": true},
-		"map":    {"min_len": true, "max_len": true, "key_patterns": true},
-		"object": {"additional_properties": true},
+		"map":    {"min_items": true, "max_items": true, "key_patterns": true},
+		"object": {},
 	}
 	for name, st := range structures {
 		if !known[name] {
@@ -507,11 +514,20 @@ func validateSchemaKeys(path, where string, keys []Field, keyTypes map[string]bo
 			if key.Type != "" && key.Type != "map" {
 				return fmt.Errorf("%s: %s key %s: type and types are mutually exclusive", path, where, key.Name)
 			}
-			if key.Const != nil || len(key.Enum) > 0 || len(key.Allowed) > 0 || key.Pattern != "" || key.Min != nil || key.Max != nil || key.MinItems != nil || key.Unique {
-				return fmt.Errorf("%s: %s key %s: types only accepts required/description/default", path, where, key.Name)
+			if key.Const != nil || len(key.Enum) > 0 || len(key.Allowed) > 0 || key.Pattern != "" || key.Min != nil || key.Max != nil ||
+				key.MinItems != nil || key.MaxItems != nil || key.MinLen != nil || key.MaxLen != nil || key.Len != nil ||
+				key.Unique || key.UniqueKey != "" || key.Soft {
+				return fmt.Errorf("%s: %s key %s: types only accepts required/description/default/key_patterns", path, where, key.Name)
 			}
 			kindSeen := map[string]bool{}
 			for _, kind := range key.Types {
+				if kind == SchemaAlias {
+					if kindSeen[kind] {
+						return fmt.Errorf("%s: %s key %s has duplicate schema kind %q", path, where, key.Name, kind)
+					}
+					kindSeen[kind] = true
+					continue
+				}
 				if _, ok := schemaNodeRequiredKeys[kind]; !ok {
 					return fmt.Errorf("%s: %s key %s has unknown schema kind %q", path, where, key.Name, kind)
 				}
@@ -537,6 +553,9 @@ func validateSchemaKeys(path, where string, keys []Field, keyTypes map[string]bo
 		}
 		if len(key.Types) > 1 && key.Default != nil {
 			return fmt.Errorf("%s: %s key %s: types with multiple kinds must not declare default", path, where, key.Name)
+		}
+		if key.Default != nil && len(key.Enum) > 0 && !enumHas(key.Enum, fmt.Sprint(key.Default)) {
+			return fmt.Errorf("%s: %s key %s: default %v not in enum %v", path, where, key.Name, key.Default, key.Enum)
 		}
 		if strings.TrimSpace(key.Description) == "" {
 			return fmt.Errorf("%s: %s key %s missing description", path, where, key.Name)

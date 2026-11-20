@@ -1262,12 +1262,12 @@ func renderFieldValue(f Field, index int, vt ValueTypes) (any, error) {
 				n = v
 			}
 		} else {
-			if v, ok := fieldInt(f.MinLen); ok {
+			if v, ok := fieldInt(f.MinItems); ok {
 				n = v
-			} else if v, ok := fieldInt(f.MaxLen); ok && v == 0 {
+			} else if v, ok := fieldInt(f.MaxItems); ok && v == 0 {
 				n = 0
 			}
-			if v, ok := fieldInt(f.MaxLen); ok && n > v {
+			if v, ok := fieldInt(f.MaxItems); ok && n > v {
 				n = v
 			}
 			if n < 0 {

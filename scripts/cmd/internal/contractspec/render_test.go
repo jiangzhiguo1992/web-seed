@@ -743,7 +743,7 @@ func TestRenderFieldValueArrayLen(t *testing.T) {
 }
 
 func TestRenderFieldValueListMinLen(t *testing.T) {
-	v, err := RenderFieldValue(Field{Type: "_types.list<_types.string>", MinLen: 2})
+	v, err := RenderFieldValue(Field{Type: "_types.list<_types.string>", MinItems: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -754,7 +754,7 @@ func TestRenderFieldValueListMinLen(t *testing.T) {
 }
 
 func TestRenderFieldValueListMinMax(t *testing.T) {
-	v, err := RenderFieldValue(Field{Type: "_types.list<_types.string>", MinLen: 2, MaxLen: 5})
+	v, err := RenderFieldValue(Field{Type: "_types.list<_types.string>", MinItems: 2, MaxItems: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -765,7 +765,7 @@ func TestRenderFieldValueListMinMax(t *testing.T) {
 }
 
 func TestRenderFieldValueSetDedup(t *testing.T) {
-	v, err := RenderFieldValue(Field{Type: "_types.set<_types.string>", MinLen: 2})
+	v, err := RenderFieldValue(Field{Type: "_types.set<_types.string>", MinItems: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -778,7 +778,7 @@ func TestRenderFieldValueSetDedup(t *testing.T) {
 func TestRenderFieldValueSetObjectDedup(t *testing.T) {
 	v, err := RenderFieldValue(Field{
 		Type:       "_types.set<_types.object>",
-		MinLen:     2,
+		MinItems:   2,
 		UniqueKey:  "name",
 		ItemFields: []Field{{Name: "name", Type: "_types.string", Required: true}},
 	})
@@ -799,7 +799,7 @@ func TestRenderFieldValueSetObjectDedup(t *testing.T) {
 func TestRenderFieldValueSetObjectIntegerKey(t *testing.T) {
 	v, err := RenderFieldValue(Field{
 		Type:       "_types.set<_types.object>",
-		MinLen:     2,
+		MinItems:   2,
 		UniqueKey:  "id",
 		ItemFields: []Field{{Name: "id", Type: "_types.integer", Required: true}},
 	})
@@ -820,7 +820,7 @@ func TestRenderFieldValueSetObjectIntegerKey(t *testing.T) {
 func TestRenderFieldValueCustomIntegerKey(t *testing.T) {
 	v, err := RenderFieldValueWithTypes(Field{
 		Type:       "_types.set<_types.object>",
-		MinLen:     2,
+		MinItems:   2,
 		UniqueKey:  "id",
 		ItemFields: []Field{{Name: "id", Type: "_types.page_limit", Required: true}},
 	}, ValueTypes{
@@ -845,7 +845,7 @@ func TestRenderFieldValueCustomIntegerKey(t *testing.T) {
 func TestRenderFieldValueCustomDateKey(t *testing.T) {
 	v, err := RenderFieldValueWithTypes(Field{
 		Type:       "_types.set<_types.object>",
-		MinLen:     2,
+		MinItems:   2,
 		UniqueKey:  "at",
 		ItemFields: []Field{{Name: "at", Type: "_types.date_only", Required: true}},
 	}, ValueTypes{
