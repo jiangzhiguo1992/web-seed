@@ -2,7 +2,7 @@
 
 id: project
 schema_version: 1
-stability: stable
+stability: draft
 
 project:
   name: web-seed

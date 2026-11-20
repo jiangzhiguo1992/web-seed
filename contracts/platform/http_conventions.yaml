@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.http_conventions
 summary: "HTTP 信封与状态码约定"
-stability: stable
+stability: draft
 
 response:
   success: "直接返回资源或集合，不额外包 code/message 信封"

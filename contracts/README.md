@@ -92,10 +92,10 @@ contracts/
 │   ├── storage.yaml          #   单例：引擎归属 / 条目化的保留 / 归档 / 多 key 缓存
 │   └── types.yaml            #   单例：项目级值类型词汇（family + 固定参数）
 │
-├── capabilities/             # ② 能力层：services + lifecycles + events（topics/jobs）+ protocols
+├── capabilities/             # ② 能力层：services + lifecycles + events（topics/subscribe、crons、dispatches）+ protocols
 │   ├── services/<module>.yaml #   服务：services + schemas（interface 名由 owner_module + file 派生）
 │   ├── lifecycles/<dimension>.yaml # 状态机生命周期：subjects(entity+field)、states、create/destroy/transitions，锚到 service step
-│   ├── events/<module>.yaml   #   异步主题与任务：topics + jobs
+│   ├── events/<module>.yaml   #   异步主题与任务：topics（publish/subscribe）+ crons + dispatches
 │   └── protocols/
 │       └── http/<module>.yaml #   HTTP 绑定：只写协议差异，x-service 指回 service
 │
@@ -197,8 +197,8 @@ feature ──> capabilities ──> data
 | capabilities/services → capabilities/lifecycles | service steps | `lifecycle`（create/destroy/transition） |
 | capabilities/lifecycles → capabilities/services | lifecycle action | `step` / `implemented_by`（由 step.lifecycle 生成） |
 | capabilities/services → capabilities/events | service steps | `kind: logic/transition` + `events` |
-| capabilities/events → capabilities/services | job | `service` |
-| capabilities/events → capabilities/events | job | `trigger.topic` |
+| capabilities/events → capabilities/services | subscribe/crons/dispatches | `service` |
+| capabilities/events → capabilities/events | topic 嵌套 | `subscribe` |
 | capabilities/services → data | service 契约 | `steps[].queries[].query` / query `errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` / `caches` / `archive` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `source.join.from/to` |
@@ -213,7 +213,7 @@ capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，�
 | 不要写 | 改写为 |
 |---|---|
 | `returns: data.tables.account.row` | `returns: data.entities.account` |
-| `emits: cap.events.*` | 由 `cap.events.*.emitted_by` 声明；service 的 `kind: logic/transition` step 用 `events` 引用 |
+| `emits: cap.events.*` | 由 `cap.events.*.publish.emitted_by` 声明；service 的 `kind: events` step 用 `events` 引用 topic 或 dispatch |
 | `x-preconditions: feature.rules.*` | 由 `feature.rules.*.implemented_by` 声明；service 的 `kind: logic/transition` step 引用规则 |
 
 理由：service 是规则的实现，**实现不反向声明"我实现了谁"**——那由 `implemented_by` / `emitted_by` 锚点。两处都写必然漂移。

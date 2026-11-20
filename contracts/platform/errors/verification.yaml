@@ -1,7 +1,7 @@
 id: platform.errors.verification
 summary: "验证码错误码"
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "验证码错误不要暴露验证码内容或目标原文"
 errors:

@@ -1,7 +1,7 @@
 id: platform.errors.auth
 summary: "认证错误码（凭据与绑定）"
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "认证错误码不要暴露账号是否存在"
 errors:

@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.observability.metrics
 summary: "指标名与标签"
-stability: stable
+stability: draft
 
 naming:
   pattern: "<subsystem>_<name>_<unit>"

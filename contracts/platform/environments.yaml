@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.environments
 summary: "环境清单与差异"
-stability: stable
+stability: draft
 
 environments:
   - name: dev

@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.architecture.go_arch
 summary: "Go 分层约束"
-stability: stable
+stability: draft
 
 layers:
   - name: cmd

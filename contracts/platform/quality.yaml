@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.quality
 summary: "测试策略与门槛"
-stability: stable
+stability: draft
 
 coverage:
   api: { line: 70, packages: [internal/modules, internal/platform] }

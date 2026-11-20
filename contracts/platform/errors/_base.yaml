@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.errors.base
 summary: "错误码全局约定"
-stability: stable
+stability: draft
 do_not:
   - "错误码只增不改；改变含义必须新建 code"
 

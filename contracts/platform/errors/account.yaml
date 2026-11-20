@@ -1,7 +1,7 @@
 id: platform.errors.account
 summary: "账号错误码"
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "账号错误与认证错误分开，不要把认证失败塞进 ACCOUNT_*"
 errors:

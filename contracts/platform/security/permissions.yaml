@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.security.permissions
 summary: "权限点"
-stability: stable
+stability: draft
 do_not:
   - "权限点只增不改；删除必须走弃用流程"
   - "资源级权限不要只靠权限点，必须在 features/rules 声明"

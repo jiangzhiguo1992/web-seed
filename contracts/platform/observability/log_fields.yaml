@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.observability.log_fields
 summary: "日志字段与 PII 规则"
-stability: stable
+stability: draft
 
 format: json
 timestamp: RFC3339Nano

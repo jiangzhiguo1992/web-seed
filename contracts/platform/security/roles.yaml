@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.security.roles
 summary: "角色与权限映射"
-stability: stable
+stability: draft
 do_not: []
 
 roles:

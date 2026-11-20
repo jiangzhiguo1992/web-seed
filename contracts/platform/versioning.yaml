@@ -3,7 +3,7 @@
 schema_version: 1
 id: platform.versioning
 summary: "版本与兼容策略"
-stability: stable
+stability: draft
 
 api:
   scheme: url_major             # /v1 /v2
