@@ -9,6 +9,7 @@ do_not:
   - "Redis 只作为 caches 中的非权威副本；权威表数据只能落在 supported_engines 中的引擎"
   - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
   - "不要给归档表建 data.tables 契约、实体或独立查询；能否回迁只在归档条目的 promotable 声明，冲突策略写在 on_conflict，回迁入口写在源表查询的 archive"
+  - "cache prefix 必须含项目命名空间；派生项目必须替换 web-seed 前缀，避免多项目共用一个 Redis 时 key 冲突"
 
 supported_engines: [ mysql, postgres, mongodb ]
 not_supported_topologies: [ sharding, multi-primary, cross-region, outbox ]
@@ -30,5 +31,5 @@ tables:
 
 caches:
   redis:
-    - { cache_of: data.tables.token, key: [ col.access_token_hash ], retention: true, unit: days, cache_ttl: 30 }
-    - { cache_of: data.tables.account, key: [ col.id ], retention: true, unit: minutes, cache_ttl: 30 }
+    - { prefix: "web-seed:token", key: [ col.access_token_hash ], cache_of: data.tables.token, retention: true, unit: days, cache_ttl: 30 }
+    - { prefix: "web-seed:account", key: [ col.id ], cache_of: data.tables.account, retention: true, unit: minutes, cache_ttl: 30 }
