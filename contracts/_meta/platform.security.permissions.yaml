@@ -1,0 +1,78 @@
+# 权限点唯一来源；权限点只增不改。
+
+id: meta.platform.security.permissions
+type: platform.security.permissions
+title: "权限点"
+targets:
+  dir: "contracts/platform/security"
+  glob: "permissions.yaml"
+  id: "platform.security.permissions"
+
+fields:
+  - name: schema_version
+    type: _types.integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: id
+    type: _types.string
+    required: true
+    const: platform.security.permissions
+    description: "契约 ID"
+
+  - name: summary
+    type: _types.string
+    required: true
+    description: "一句话说明"
+
+  - name: stability
+    type: _types.string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    description: "稳定度"
+
+  - name: do_not
+    type: _types.set<_types.string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: naming
+    type: _types.object
+    required: true
+    description: "命名约定"
+    fields:
+      - { name: pattern, type: _types.string, required: true, description: "权限码模板" }
+      - { name: actions, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, enum: [ read, write, delete, manage ], description: "允许的动作" }
+
+  - name: permissions
+    type: _types.list<_types.object>
+    required: true
+    min_len: 1
+    unique_key: code
+    description: "权限点列表"
+    item_fields:
+      - { name: code, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "权限码；引用写作 platform.security.permissions.<code>" }
+      - { name: resource, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "资源名" }
+      - { name: action, type: _types.string, required: true, enum: [ read, write, delete, manage ], description: "动作" }
+      - { name: description, type: _types.string, required: true, description: "权限用途" }
+
+  - name: boundaries
+    type: _types.object
+    required: true
+    description: "权限边界说明"
+    fields:
+      - name: resource_level
+        type: _types.object
+        required: true
+        description: "资源级权限说明"
+        fields:
+          - { name: example, type: _types.string, required: true, description: "资源级规则示例" }
+      - name: wildcard
+        type: _types.object
+        required: true
+        description: "通配权限说明"
+        fields:
+          - { name: allowed_for, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^platform\.security\.roles\.[a-z][a-z0-9_]*$', description: "允许使用 * 的角色" }
+          - { name: note, type: _types.string, required: true, description: "通配使用说明" }

@@ -1,4 +1,4 @@
-# feature.pages：页面契约；结构化引用（capability/permission/lifecycle/enum/route）由 pages.go 校验，UI/文案字段是软区。
+# 页面契约；结构性引用由 checker 校验，UI/文案是软区。
 
 id: meta.feature.pages
 type: feature.pages
@@ -11,160 +11,170 @@ targets:
 
 fields:
   - name: id
-    type: string
+    type: _types.string
     required: true
     pattern: '^feature\.pages\.[a-z][a-z0-9_]*$'
     description: "契约 ID"
 
   - name: summary
-    type: string
+    type: _types.string
     required: true
     description: "一句话说明"
 
   - name: schema_version
-    type: integer
+    type: _types.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: stability
-    type: string
+    type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
-    default: draft
     description: "稳定度"
 
   - name: do_not
-    type: list<string>
+    type: _types.set<_types.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: page
-    type: string
+    type: _types.string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
-    description: "页面名；必须等于文件 stem"
+    description: "页面名"
 
   - name: route
-    type: string
+    type: _types.string
     required: false
+    pattern: '^feature\.routes\.[a-z][a-z0-9_]*$'
     description: "路由 ID；无路由时为 null"
 
   - name: data
-    type: map<object>
+    type: _types.map<_types.object>
     required: false
+    key_patterns: [ '^[a-z][a-z0-9_]*$' ]
     description: "数据源映射"
     item_fields:
-      - { name: capability, type: string, required: true, description: "数据源 service ID" }
-      - { name: params, type: any, required: false, description: "soft zone：参数映射" }
-      - { name: cache, type: any, required: false, description: "soft zone：缓存策略" }
+      - { name: capability, type: _types.string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "数据源 service ID" }
+      - { name: params, type: _types.any, soft: true, required: false, description: "参数映射" }
+      - { name: cache, type: _types.any, soft: true, required: false, description: "缓存策略" }
 
   - name: view_states
-    type: map<object>
+    type: _types.map<_types.object>
     required: true
-    description: "页面状态映射；至少包含 loading/(empty 或 idle)/error/forbidden"
+    key_patterns: [ '^[a-z][a-z0-9_]*$' ]
+    description: "页面状态映射"
     item_fields:
-      - { name: when, type: string, required: true, description: "soft zone：状态条件表达式" }
-      - { name: ui, type: string, required: false, description: "soft zone：UI 变体" }
-      - { name: show, type: string, required: false, description: "soft zone：展示字段" }
-      - { name: note, type: string, required: false, description: "soft zone：状态说明" }
-      - { name: action, type: string, required: false, description: "soft zone：状态动作名" }
-      - { name: retry, type: boolean, required: false, description: "soft zone：是否可重试" }
+      - { name: when, type: _types.string, required: true, description: "状态条件表达式" }
+      - { name: ui, type: _types.string, required: false, description: "UI 变体" }
+      - { name: show, type: _types.string, required: false, description: "展示字段" }
+      - { name: note, type: _types.string, required: false, description: "状态说明" }
+      - { name: action, type: _types.string, required: false, description: "状态动作名" }
+      - { name: retry, type: _types.boolean, required: false, description: "是否可重试" }
 
   - name: actions
-    type: map<object>
+    type: _types.map<_types.object>
     required: false
+    key_patterns: [ '^[a-z][a-z0-9_]*$' ]
     description: "动作映射"
     item_fields:
-      - { name: capability, type: string, required: false, description: "调用的 service ID" }
-      - { name: permission, type: string, required: false, description: "权限 ID" }
-      - { name: available_when, type: any, required: false, description: "soft zone：可用条件表达式；不做脚本校验" }
-      - { name: ui, type: string, required: false, description: "soft zone：UI 变体" }
-      - { name: label, type: string, required: false, description: "soft zone：按钮文案" }
-      - { name: confirm, type: boolean, required: false, description: "soft zone：是否二次确认" }
-      - { name: danger, type: boolean, required: false, description: "soft zone：是否危险动作" }
-      - { name: on_success, type: string, required: false, description: "soft zone：成功后的导航/动作" }
+      - { name: capability, type: _types.string, required: false, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "调用的 service ID" }
+      - { name: permission, type: _types.string, required: false, pattern: '^platform\.security\.permissions\.[a-z][a-z0-9_]*$', description: "权限 ID" }
+      - name: available_when
+        type: _types.object
+        required: false
+        description: "可用条件"
+        fields:
+          - { name: transition, type: _types.string, required: false, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "单个 lifecycle 动作引用" }
+          - { name: transitions, type: _types.list<_types.string>, required: false, unique: true, min_len: 1, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "多个 lifecycle 动作引用" }
+          - { name: state_not, type: _types.list<_types.string>, required: false, unique: true, min_len: 1, pattern: '^[a-z][a-z0-9_]*$', description: "排除的状态" }
+      - { name: ui, type: _types.string, required: false, description: "UI 变体" }
+      - { name: label, type: _types.string, required: false, description: "按钮文案" }
+      - { name: confirm, type: _types.boolean, required: false, description: "是否二次确认" }
+      - { name: danger, type: _types.boolean, required: false, description: "是否危险动作" }
+      - { name: on_success, type: _types.string, required: false, description: "成功后的导航/动作" }
 
   - name: fields
-    type: list<object>
+    type: _types.list<_types.object>
     required: false
     description: "表单或展示字段"
     item_fields:
-      - { name: name, type: string, required: true, description: "字段名" }
-      - { name: type, type: string, required: false, enum: [ text, string, integer, email, password, number, tel, url, date, datetime-local, time, search, textarea, select, checkbox, radio, hidden ], description: "soft zone：输入/展示类型" }
-      - { name: required, type: boolean, required: false, description: "soft zone：是否必填" }
-      - { name: optional, type: boolean, required: false, description: "soft zone：是否可选" }
-      - { name: minLength, type: integer, required: false, min: 0, description: "soft zone：最小长度" }
-      - { name: maxLength, type: integer, required: false, min: 0, description: "soft zone：最大长度" }
-      - { name: label, type: string, required: false, description: "soft zone：展示名" }
-      - { name: enum, type: string, required: false, description: "枚举来源；data.enums.* 与 cap.lifecycles.* 引用由 pages.go 校验" }
-      - { name: render, type: string, required: false, enum: [ text, badge, code, heading, relative_time, link, date, boolean ], description: "soft zone：渲染方式" }
-      - { name: autocomplete, type: string, required: false, enum: [ username, current-password, new-password, email, tel, one-time-code, name, given-name, family-name, organization, street-address, postal-code, country, url, off ], description: "soft zone：浏览器自动填充提示" }
-      - { name: secret, type: boolean, required: false, description: "soft zone：是否敏感输入" }
+      - { name: name, type: _types.string, required: true, description: "字段名" }
+      - { name: type, type: _types.string, required: false, enum: [ text, string, integer, email, password, number, tel, url, date, datetime-local, time, search, textarea, select, checkbox, radio, hidden ], description: "输入/展示类型" }
+      - { name: required, type: _types.boolean, required: false, description: "是否必填" }
+      - { name: optional, type: _types.boolean, required: false, description: "是否可选" }
+      - { name: minLength, type: _types.integer, required: false, min: 0, description: "最小长度" }
+      - { name: maxLength, type: _types.integer, required: false, min: 0, description: "最大长度" }
+      - { name: label, type: _types.string, required: false, description: "展示名" }
+      - { name: enum, type: _types.string, required: false, pattern: '^(data\.enums\.[a-z][a-z0-9_]*|cap\.lifecycles\.[a-z][a-z0-9_]*(\.states(\.values)?)?)$', description: "枚举来源" }
+      - { name: render, type: _types.string, required: false, enum: [ text, badge, code, heading, relative_time, link, date, boolean ], description: "渲染方式" }
+      - { name: autocomplete, type: _types.string, required: false, enum: [ username, current-password, new-password, email, tel, one-time-code, name, given-name, family-name, organization, street-address, postal-code, country, url, off ], description: "浏览器自动填充提示" }
+      - { name: secret, type: _types.boolean, required: false, description: "是否敏感输入" }
 
   - name: filters
-    type: list<object>
+    type: _types.list<_types.object>
     required: false
     description: "筛选器"
     item_fields:
-      - { name: name, type: string, required: true, description: "筛选项名" }
-      - { name: enum, type: string, required: false, description: "枚举来源" }
-      - { name: multiple, type: boolean, required: false, description: "soft zone：是否多选" }
-      - { name: label, type: string, required: false, description: "soft zone：展示名" }
+      - { name: name, type: _types.string, required: true, description: "筛选项名" }
+      - { name: enum, type: _types.string, required: false, pattern: '^(data\.enums\.[a-z][a-z0-9_]*|cap\.lifecycles\.[a-z][a-z0-9_]*(\.states(\.values)?)?)$', description: "枚举来源" }
+      - { name: multiple, type: _types.boolean, required: false, description: "是否多选" }
+      - { name: label, type: _types.string, required: false, description: "展示名" }
 
   - name: pagination
-    type: object
+    type: _types.object
     required: false
     description: "分页配置"
     fields:
-      - { name: style, type: string, required: true, description: "soft zone：分页风格" }
-      - { name: param, type: string, required: true, description: "soft zone：分页参数名" }
-      - { name: limit_default, type: integer, required: false, min: 1, description: "soft zone：默认页大小" }
-      - { name: limit_max, type: integer, required: false, min: 1, description: "soft zone：最大页大小" }
+      - { name: style, type: _types.string, required: true, description: "分页风格" }
+      - { name: param, type: _types.string, required: true, description: "分页参数名" }
+      - { name: limit_default, type: _types.integer, required: false, min: 1, description: "默认页大小" }
+      - { name: limit_max, type: _types.integer, required: false, min: 1, description: "最大页大小" }
 
   - name: empty_copy
-    type: object
+    type: _types.object
     required: false
     description: "空态文案"
     fields:
-      - { name: title, type: string, required: true, description: "soft zone：空态标题" }
-      - { name: description, type: string, required: true, description: "soft zone：空态描述" }
-      - { name: action_label, type: string, required: false, description: "soft zone：空态动作文案" }
+      - { name: title, type: _types.string, required: true, description: "空态标题" }
+      - { name: description, type: _types.string, required: true, description: "空态描述" }
+      - { name: action_label, type: _types.string, required: false, description: "空态动作文案" }
 
   - name: analytics
-    type: object
+    type: _types.object
     required: false
     description: "埋点"
     fields:
-      - { name: page_view, type: string, required: true, description: "soft zone：页面浏览事件" }
-      - { name: actions, type: map<string>, required: false, description: "soft zone：动作事件映射" }
+      - { name: page_view, type: _types.string, required: true, description: "页面浏览事件" }
+      - { name: actions, type: _types.map<_types.string>, required: false, description: "动作事件映射" }
 
   - name: security
-    type: object
+    type: _types.object
     required: false
     description: "安全提示"
     fields:
-      - { name: rate_limit_hint, type: string, required: false, description: "soft zone：限流提示" }
-      - { name: error_copy_uniform, type: string, required: false, description: "soft zone：统一错误提示" }
+      - { name: rate_limit_hint, type: _types.string, required: false, description: "限流提示" }
+      - { name: error_copy_uniform, type: _types.string, required: false, description: "统一错误提示" }
 
   - name: transition_ui
-    type: object
+    type: _types.object
     required: false
     description: "状态按钮渲染"
     fields:
-      - { name: source, type: string, required: true, description: "lifecycle transitions 引用；pages.go 校验 lifecycle 存在" }
-      - { name: rule, type: string, required: true, description: "soft zone：渲染规则" }
+      - { name: source, type: _types.string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.transitions$', description: "lifecycle transitions 引用" }
+      - { name: rule, type: _types.string, required: true, description: "渲染规则" }
 
   - name: copy
-    type: object
+    type: _types.object
     required: false
     description: "静态文案"
     fields:
-      - { name: title, type: string, required: true, description: "soft zone：标题" }
-      - { name: description, type: string, required: true, description: "soft zone：描述" }
+      - { name: title, type: _types.string, required: true, description: "标题" }
+      - { name: description, type: _types.string, required: true, description: "描述" }
 
 rules:
   - { id: page-structure, text: "id 必须由 targets 派生；page 必须等于文件 stem；view_states 必须包含 loading、error、forbidden，以及 empty 或 idle 之一", implemented_by: [ page-structure ] }
   - { id: page-limits, text: "pagination.limit_default <= limit_max；fields.minLength <= maxLength", implemented_by: [ page-limits ] }
-  - { id: page-refs, text: "route/capability/permission/enum/transition/transitions/state_not/transition_ui.source 的引用必须存在；lifecycle 引用必须指向已存在的 cap.lifecycles.* 且段位合法", implemented_by: [ page-refs ] }
+  - { id: page-refs, text: "route/capability/permission/enum 与 available_when 内的 transition/transitions/state_not 引用必须存在；transition_ui.source 必须是已存在的 cap.lifecycles.*.transitions", implemented_by: [ page-refs ] }

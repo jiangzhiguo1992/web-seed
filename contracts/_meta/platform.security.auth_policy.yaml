@@ -1,0 +1,161 @@
+# 认证与会话策略；影响 token、cookie、CSRF 与密码校验。
+
+id: meta.platform.security.auth_policy
+type: platform.security.auth_policy
+title: "认证与会话策略"
+targets:
+  dir: "contracts/platform/security"
+  glob: "auth_policy.yaml"
+  id: "platform.security.auth_policy"
+
+fields:
+  - name: schema_version
+    type: _types.integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: id
+    type: _types.string
+    required: true
+    const: platform.security.auth_policy
+    description: "契约 ID"
+
+  - name: summary
+    type: _types.string
+    required: true
+    description: "一句话说明"
+
+  - name: stability
+    type: _types.string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    description: "稳定度"
+
+  - name: do_not
+    type: _types.set<_types.string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: token
+    type: _types.object
+    required: true
+    description: "令牌策略"
+    fields:
+      - { name: persistence, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "令牌持久化表" }
+      - { name: storage, type: _types.string, required: true, enum: [ hash ], description: "令牌存储形态" }
+      - { name: hash_algorithm, type: _types.string, required: true, enum: [ sha256 ], description: "令牌哈希算法" }
+      - name: access
+        type: _types.object
+        required: true
+        description: "访问令牌"
+        fields:
+          - { name: type, type: _types.string, required: true, enum: [ jwt ], description: "令牌类型" }
+          - { name: algorithm, type: _types.string, required: true, enum: [ HS256, RS256, ES256 ], description: "签名算法" }
+          - { name: ttl, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
+          - { name: claims_required, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims" }
+          - { name: audience, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, description: "允许的 audience" }
+          - { name: pii_in_token, type: _types.boolean, required: true, description: "是否允许 PII 进入 token" }
+          - { name: storage, type: _types.string, required: true, enum: [ hash ], description: "存储形态" }
+      - name: refresh
+        type: _types.object
+        required: true
+        description: "刷新令牌"
+        fields:
+          - { name: type, type: _types.string, required: true, enum: [ opaque ], description: "令牌类型" }
+          - { name: ttl, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
+          - { name: rotation, type: _types.boolean, required: true, description: "是否轮换" }
+          - { name: reuse_detection, type: _types.boolean, required: true, description: "是否检测复用" }
+          - { name: storage, type: _types.string, required: true, enum: [ hash ], description: "存储形态" }
+          - { name: table, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "持久化表" }
+          - name: cookie
+            type: _types.object
+            required: true
+            description: "刷新令牌 cookie"
+            fields:
+              - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "cookie 名" }
+              - { name: same_site, type: _types.string, required: true, enum: [ Lax, Strict, None ], description: "SameSite" }
+              - { name: secure, type: _types.string, required: true, description: "secure 来源" }
+              - { name: path, type: _types.string, required: true, pattern: '^/[A-Za-z0-9_./-]*$', description: "cookie 路径" }
+              - { name: http_only, type: _types.boolean, required: true, description: "是否 HttpOnly" }
+
+  - name: session
+    type: _types.object
+    required: true
+    description: "会话策略"
+    fields:
+      - { name: max_concurrent, type: _types.integer, required: true, min: 1, description: "最大并发会话数" }
+      - { name: idle_timeout, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "空闲超时" }
+      - { name: absolute_timeout, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "绝对超时" }
+      - { name: revoke_on_password_change, type: _types.boolean, required: true, description: "改密后吊销" }
+      - { name: revoke_on_phone_change, type: _types.boolean, required: true, description: "换绑手机后吊销" }
+      - { name: revoke_on_email_change, type: _types.boolean, required: true, description: "换绑邮箱后吊销" }
+      - { name: store, type: _types.string, required: true, enum: [ database ], description: "会话存储" }
+
+  - name: csrf
+    type: _types.object
+    required: true
+    description: "CSRF 策略"
+    fields:
+      - { name: strategy, type: _types.string, required: true, enum: [ double_submit_cookie ], description: "CSRF 策略" }
+      - { name: applies_to, type: _types.string, required: true, enum: [ cookie_based_endpoints ], description: "适用范围" }
+      - { name: header, type: _types.string, required: true, description: "CSRF header 名" }
+      - { name: exempt, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^[A-Z]+$', description: "豁免的 HTTP 方法" }
+
+  - name: password
+    type: _types.object
+    required: true
+    description: "密码策略"
+    fields:
+      - { name: algorithm, type: _types.string, required: true, enum: [ argon2id ], description: "密码哈希算法" }
+      - { name: hash_field, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "密码哈希列" }
+      - { name: min_length, type: _types.integer, required: true, min: 1, description: "最小长度" }
+      - { name: require_mixed_case, type: _types.boolean, required: true, description: "是否要求大小写混合" }
+      - { name: max_attempts, type: _types.integer, required: true, min: 1, description: "最大失败次数" }
+      - { name: lockout, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁定时长" }
+      - { name: breach_check, type: _types.boolean, required: true, description: "是否检查泄露库" }
+
+  - name: verification
+    type: _types.object
+    required: true
+    description: "验证码策略"
+    fields:
+      - { name: table, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "验证体表" }
+      - name: code
+        type: _types.object
+        required: true
+        description: "验证码形态"
+        fields:
+          - { name: length, type: _types.integer, required: true, min: 1, description: "验证码长度" }
+          - { name: charset, type: _types.string, required: true, enum: [ digits, alphanumeric ], description: "字符集" }
+          - { name: storage, type: _types.string, required: true, enum: [ hash ], description: "存储形态" }
+          - { name: hash_algorithm, type: _types.string, required: true, enum: [ hmac-sha256, sha256 ], description: "哈希算法" }
+          - { name: secret_env, type: _types.string, required: true, pattern: '^[A-Z][A-Z0-9_]*$', description: "密钥环境变量名" }
+      - { name: ttl, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
+      - { name: max_attempts, type: _types.integer, required: true, min: 1, description: "最大尝试次数" }
+      - name: target_normalization
+        type: _types.object
+        required: true
+        description: "目标归一化"
+        fields:
+          - { name: phone, type: _types.string, required: true, enum: [ e164 ], description: "手机号归一化" }
+          - { name: email, type: _types.string, required: true, enum: [ lowercase ], description: "邮箱归一化" }
+
+  - name: mfa
+    type: _types.object
+    required: true
+    description: "MFA 策略"
+    fields:
+      - { name: required_for_roles, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^[a-z][a-z0-9_]*$', description: "强制 MFA 的角色码" }
+      - { name: methods, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, enum: [ totp ], description: "MFA 方法" }
+      - { name: recovery_codes, type: _types.integer, required: true, min: 0, description: "恢复码数量" }
+
+  - name: authorization
+    type: _types.object
+    required: true
+    description: "授权模型"
+    fields:
+      - { name: model, type: _types.string, required: true, description: "授权模型" }
+      - { name: note, type: _types.string, required: true, description: "模型说明" }
+      - { name: deny_by_default, type: _types.boolean, required: true, description: "是否默认拒绝" }

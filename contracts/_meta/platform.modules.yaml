@@ -1,0 +1,49 @@
+# 模块注册表；owner_module 的唯一来源。
+
+id: meta.platform.modules
+type: platform.modules
+title: "模块注册表"
+targets:
+  dir: "contracts/platform"
+  glob: "modules.yaml"
+  id: "platform.modules"
+
+fields:
+  - name: id
+    type: _types.string
+    required: true
+    const: platform.modules
+    description: "契约 ID"
+
+  - name: summary
+    type: _types.string
+    required: true
+    description: "一句话说明"
+
+  - name: schema_version
+    type: _types.integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: stability
+    type: _types.string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    description: "稳定度"
+
+  - name: do_not
+    type: _types.set<_types.string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: modules
+    type: _types.list<_types.object>
+    required: true
+    min_len: 1
+    unique_key: name
+    description: "模块清单"
+    item_fields:
+      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "模块名；等于 owner_module" }
+      - { name: summary, type: _types.string, required: true, description: "一句话说明" }
