@@ -28,19 +28,19 @@ table:
 
 columns:
   - name: account_id
-    type: integer
+    type: _types.integer
     nullable: false
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
   - name: username
-    type: auth_username
+    type: _types.auth_username
     nullable: false
     sensitivity: pii
     comment: "登录名；小写归一且唯一"
 
   - name: password_hash
-    type: string
+    type: _types.string
     nullable: false
     min_len: 20
     max_len: 255
@@ -48,14 +48,14 @@ columns:
     comment: "argon2id 口令哈希；新密码写入此列"
 
   - name: failed_login_count
-    type: integer
+    type: _types.integer
     nullable: false
     default: 0
     min: 0
     comment: "连续失败次数；成功登录后归零"
 
   - name: locked_until
-    type: timestamp
+    type: _types.timestamp
     nullable: true
     comment: "锁定截止时间；为空表示未锁定"
 
