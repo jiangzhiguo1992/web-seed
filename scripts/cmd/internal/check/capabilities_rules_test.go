@@ -140,9 +140,8 @@ func TestCheckCapabilitiesServiceCycle(t *testing.T) {
 	writeCapFile(t, root, "contracts/_meta/_types.yaml", `id: meta.types
 type_families:
   string: { description: "string", params: {} }
-custom_types: {}
 `)
-	writeCapFile(t, root, "contracts/_meta/_schemas.yaml", string(mustRead(t, filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_schemas.yaml"))))
+	writeCapFile(t, root, "contracts/_meta/_types.yaml", string(mustRead(t, filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))))
 	writeCapFile(t, root, "contracts/_meta/cap.services.yaml", `id: meta.cap.services
 type: cap.services
 targets:
@@ -337,7 +336,7 @@ func copyMeta(t *testing.T, root, typ string) *Schema {
 		t.Fatal(err)
 	}
 	writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", string(b))
-	for _, name := range []string{"_schemas.yaml", "_types.yaml"} {
+	for _, name := range []string{"_types.yaml"} {
 		if shared, err := os.ReadFile(filepath.Join(filepath.Dir(file), "..", "..", "..", "..", "contracts", "_meta", name)); err == nil {
 			writeCapFile(t, root, "contracts/_meta/"+name, string(shared))
 		}
@@ -524,7 +523,7 @@ components:
 			visibility: "public",
 			paramTypes: map[string]bool{},
 			typeSchemas: map[string]map[string]any{
-				"cap.services.x.schemas.X": {"properties": map[string]any{"id": map[string]any{"type": "integer"}}},
+				"cap.services.x.schemas.X": {"properties": map[string]any{"id": map[string]any{"type": "_types.integer"}}},
 			},
 		},
 	}, map[string]bool{"cap.services.x.schemas.X": true}, map[string]bool{})
@@ -898,7 +897,7 @@ topics:
     payload:
       type: object
       properties:
-        - { name: id, schema: { type: integer }, required: true, description: "id" }
+        - { name: id, schema: { type: _types.integer }, required: true, description: "id" }
     summary: "x"
     emitted_by: []
     consumers: [cap.events.x.consume]
@@ -965,7 +964,7 @@ topics:
   - id: cap.events.x.created
     name: x.created
     version: 1
-    payload: { type: integer }
+    payload: { type: _types.integer }
     summary: "x"
     emitted_by: []
     consumers: []
@@ -1008,7 +1007,7 @@ topics:
   - id: cap.events.x.created
     name: x.created
     version: 1
-    payload: { type: integer }
+    payload: { type: _types.integer }
     summary: "x"
     emitted_by: []
     consumers: []
@@ -1340,7 +1339,7 @@ schemas:
         schema:
           type: object
           properties:
-            - { name: id, schema: { type: integer }, description: "id" }
+            - { name: id, schema: { type: _types.integer }, description: "id" }
             - name: typo
               schema:
                 type: string
@@ -1393,7 +1392,7 @@ schemas:
         schema:
           type: object
           properties:
-            - { name: id, schema: { type: integer }, description: "id" }
+            - { name: id, schema: { type: _types.integer }, description: "id" }
 services:
   - name: get
     summary: "x"
@@ -1465,7 +1464,7 @@ func TestSchemaPropertyDefault(t *testing.T) {
 		"properties": []any{
 			map[string]any{"name": "ok_enum", "schema": map[string]any{"ref": "data.enums.mode"}, "default": "a", "description": "ok"},
 			map[string]any{"name": "bad_enum", "schema": map[string]any{"ref": "data.enums.mode"}, "default": "z", "description": "bad"},
-			map[string]any{"name": "bad_int", "schema": map[string]any{"type": "integer"}, "default": "x", "description": "bad"},
+			map[string]any{"name": "bad_int", "schema": map[string]any{"type": "_types.integer"}, "default": "x", "description": "bad"},
 		},
 	}, "x")
 	got := strings.Join(c.errs, "\n")
@@ -1543,7 +1542,7 @@ func TestSchemaTypesConstraint(t *testing.T) {
 	c.validateSchemaNode(map[string]any{
 		"type": "object",
 		"properties": []any{
-			map[string]any{"name": "ok", "schema": map[string]any{"type": "string"}, "description": "ok"},
+			map[string]any{"name": "ok", "schema": map[string]any{"type": "_types.string"}, "description": "ok"},
 			map[string]any{"name": "bad", "schema": map[string]any{"type": "object", "properties": []any{}}, "description": "bad"},
 		},
 	}, "x")
@@ -1573,10 +1572,10 @@ func TestValidateFieldTypesSchemaKinds(t *testing.T) {
 		{"types with pattern", Field{Name: "x", Types: []string{"scalar"}, Pattern: "^a$"}, false},
 		{"types multi with default", Field{Name: "x", Types: []string{"scalar", "object"}, Default: 1}, false},
 		{"unique_key on non list", Field{Name: "x", Type: "string", UniqueKey: "name"}, false},
-		{"unique_key on list", Field{Name: "x", Type: "list<object>", UniqueKey: "name"}, true},
+		{"unique_key on list", Field{Name: "x", Type: "list<object>", UniqueKey: "name", ItemFields: []Field{{Name: "name"}}}, true},
 	}
 	for _, tc := range cases {
-		err := validateFieldTypes([]Field{tc.field})
+		err := validateFieldTypes([]Field{tc.field}, testValueTypes(), false)
 		if tc.valid && err != nil {
 			t.Fatalf("%s: unexpected error: %v", tc.name, err)
 		}
@@ -1609,8 +1608,8 @@ func TestObjectValidation(t *testing.T) {
 	c.validateSchemaNode(map[string]any{
 		"type": "object",
 		"properties": []any{
-			map[string]any{"name": "status", "schema": map[string]any{"type": "string"}, "description": "状态"},
-			map[string]any{"name": "own_type", "schema": map[string]any{"type": "string"}, "description": "归属"},
+			map[string]any{"name": "status", "schema": map[string]any{"type": "_types.string"}, "description": "状态"},
+			map[string]any{"name": "own_type", "schema": map[string]any{"type": "_types.string"}, "description": "归属"},
 		},
 		"validation": []any{
 			map[string]any{"rule": "input.status != null || input.own_type != null", "message": "至少一个条件"},
@@ -1669,16 +1668,16 @@ func TestNodeValidationKinds(t *testing.T) {
 			TypeFamilies: map[string]contractspec.ValueTypeFamily{"string": {Description: "string"}},
 		},
 	}
-	c.validateSchemaNode(map[string]any{"type": "string", "validation": []any{
+	c.validateSchemaNode(map[string]any{"type": "_types.string", "validation": []any{
 		map[string]any{"rule": "value != null", "message": "ok"},
 	}}, "scalar_ok")
-	c.validateSchemaNode(map[string]any{"type": "string", "validation": []any{
+	c.validateSchemaNode(map[string]any{"type": "_types.string", "validation": []any{
 		map[string]any{"rule": "value.x != null", "message": "bad"},
 	}}, "scalar_bad")
 	c.validateSchemaNode(map[string]any{"ref": "X", "validation": []any{
 		map[string]any{"rule": "value.status != null", "message": "ok"},
 	}}, "ref_ok")
-	c.validateSchemaNode(map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "validation": []any{
+	c.validateSchemaNode(map[string]any{"type": "array", "items": map[string]any{"type": "_types.string"}, "validation": []any{
 		map[string]any{"rule": "value.x != null", "message": "bad"},
 	}}, "array_bad")
 	got := strings.Join(c.errs, "\n")
@@ -1836,7 +1835,7 @@ func TestSchemaFieldSpecs(t *testing.T) {
 		"properties": []any{
 			map[string]any{
 				"name":        "id",
-				"schema":      map[string]any{"type": "string"},
+				"schema":      map[string]any{"type": "_types.string"},
 				"nullable":    "yes",
 				"description": "id",
 				"read_only":   true,
@@ -1844,18 +1843,18 @@ func TestSchemaFieldSpecs(t *testing.T) {
 			},
 			map[string]any{
 				"name":        "id",
-				"schema":      map[string]any{"type": "string"},
+				"schema":      map[string]any{"type": "_types.string"},
 				"description": "duplicate",
 			},
 			map[string]any{
 				"name":        "ok",
-				"schema":      map[string]any{"type": "string"},
+				"schema":      map[string]any{"type": "_types.string"},
 				"description": "missing schema field",
 				"required":    "yes",
 			},
 			map[string]any{
 				"name":        "ro_default",
-				"schema":      map[string]any{"type": "string"},
+				"schema":      map[string]any{"type": "_types.string"},
 				"description": "read_only with default",
 				"read_only":   true,
 				"default":     "x",
@@ -1867,7 +1866,7 @@ func TestSchemaFieldSpecs(t *testing.T) {
 	for _, want := range []string{
 		"x.properties[0].nullable: must be boolean",
 		"read_only and write_only cannot both be true",
-		`x.properties[1]: duplicate name "id"`,
+		`x.properties[1]: duplicate "id"`,
 		"x.properties[2].required: must be boolean",
 		`x: "read_only" is a property key and must not appear on a schema node`,
 		"x.properties[3]: read_only must not declare default",

@@ -43,6 +43,7 @@ features ✗ data.tables / data.queries（禁止直接引用表或查询）
 - 不要手写 URL，必须引用 capability
 - `view_states` 四态（loading/empty/error/forbidden）缺一不可；禁止再用 `states` 命名 UI 状态
 - 禁止引用 `data.*`
+- 页面不得展示 secret 字段（密码、手机号、邮箱、令牌原文）
 - `available_when` 只允许结构化引用：`{ transition: cap.lifecycles.<lifecycle>.{create|destroy|transitions.<name>} }` / `{ transitions: [...] }` / `{ state_not: [...] }`；禁止字符串表达式
 - `feature.pages` 的结构由 `_meta/feature.pages.yaml` 校验；`enum` / `transition(s)` / `state_not` / `transition_ui.source` / `capability` / `route` 由 `pages.go` 做跨契约引用校验
 

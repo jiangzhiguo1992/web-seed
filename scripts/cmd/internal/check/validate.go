@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func validatePatterns(fields []Field) error {
@@ -14,9 +17,9 @@ func validatePatterns(fields []Field) error {
 				return fmt.Errorf("field %s: invalid pattern %q: %w", f.Name, f.Pattern, err)
 			}
 		}
-		if f.KeyPattern != "" {
-			if _, err := regexp.Compile(f.KeyPattern); err != nil {
-				return fmt.Errorf("field %s: invalid key_pattern %q: %w", f.Name, f.KeyPattern, err)
+		for _, pat := range f.KeyPatterns {
+			if _, err := regexp.Compile(pat); err != nil {
+				return fmt.Errorf("field %s: invalid key_patterns %q: %w", f.Name, pat, err)
 			}
 		}
 		if err := validatePatterns(f.Fields); err != nil {
@@ -33,16 +36,203 @@ var schemaFieldTypes = map[string]bool{
 	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
 	"boolean": true, "any": true, "object": true,
 	"list<string>": true, "list<integer>": true, "list<object>": true, "list<list<string>>": true, "list<any>": true,
-	"map<string>": true, "map<object>": true, "map": true,
+	"map<string>": true, "map<object>": true, "map<list<object>>": true, "map": true,
 }
 
 // validateFieldTypes 校验 _meta 自身的 type 词汇；避免把列类型族的
 // float/decimal 误写进 schema 的 Field.type 后，只在某列使用时才暴露。
 // types 是 schema 节点种类列表，与单值 type 互斥。
-func validateFieldTypes(fields []Field) error {
+// typeExpr 是解析后的类型表达式：Base 是类型名，Args 是泛型参数。
+type typeExpr struct {
+	Base string
+	Args []typeExpr
+}
+
+func containsObject(expr typeExpr) bool {
+	if expr.Base == "object" {
+		return true
+	}
+	for _, arg := range expr.Args {
+		if containsObject(arg) {
+			return true
+		}
+	}
+	return false
+}
+
+// lengthBoundBase 报告 min_len/max_len 对哪些容器/标量有效。
+func lengthBoundBase(base string) bool {
+	switch base {
+	case "string", "list", "set", "map":
+		return true
+	}
+	return false
+}
+
+// numericLeaf 报告约束最终落在数值叶子上：list/set/array 看元素，map 看 value。
+func numericLeaf(expr typeExpr) bool {
+	switch expr.Base {
+	case "integer", "number", "float", "decimal":
+		return true
+	case "list", "set", "array", "map":
+		if len(expr.Args) > 0 {
+			return numericLeaf(expr.Args[len(expr.Args)-1])
+		}
+	}
+	return false
+}
+
+// stringLeaf 报告约束最终落在字符串叶子上：list/set/array 看元素，map 看 value。
+func stringLeaf(expr typeExpr) bool {
+	switch expr.Base {
+	case "string":
+		return true
+	case "list", "set", "array", "map":
+		if len(expr.Args) > 0 {
+			return stringLeaf(expr.Args[len(expr.Args)-1])
+		}
+	}
+	return false
+}
+
+// parseTypeExpr 解析 Field.type：_types. 前缀可选，list<T>/map<T> 递归解析。
+// base 必须命中 basic_types 或 structures；struct 不接受泛型参数。
+const maxTypeDepth = 8
+
+func defaultValueTypes() ValueTypes {
+	fams := map[string]contractspec.ValueTypeFamily{}
+	for _, name := range []string{"string", "boolean", "integer", "float", "decimal", "number", "datetime", "timestamp", "json", "bytes", "any"} {
+		fams[name] = contractspec.ValueTypeFamily{}
+	}
+	structs := map[string]contractspec.Structure{}
+	for _, name := range []string{"list", "set", "array", "map", "object"} {
+		structs[name] = contractspec.Structure{}
+	}
+	return ValueTypes{TypeFamilies: fams, Structures: structs}
+}
+
+func parseTypeExpr(raw string, vt ValueTypes) (typeExpr, error) {
+	def := defaultValueTypes()
+	merged := ValueTypes{
+		TypeFamilies: map[string]contractspec.ValueTypeFamily{},
+		Structures:   map[string]contractspec.Structure{},
+	}
+	for k, v := range def.TypeFamilies {
+		merged.TypeFamilies[k] = v
+	}
+	for k, v := range vt.TypeFamilies {
+		merged.TypeFamilies[k] = v
+	}
+	for k, v := range def.Structures {
+		merged.Structures[k] = v
+	}
+	for k, v := range vt.Structures {
+		merged.Structures[k] = v
+	}
+	return parseTypeExprDepth(raw, merged, 0)
+}
+
+func parseTypeExprDepth(raw string, vt ValueTypes, depth int) (typeExpr, error) {
+	if depth > maxTypeDepth {
+		return typeExpr{}, fmt.Errorf("type nesting exceeds %d levels", maxTypeDepth)
+	}
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return typeExpr{}, fmt.Errorf("empty type")
+	}
+	s = strings.TrimPrefix(s, "_types.")
+	if i := strings.Index(s, "<"); i >= 0 {
+		if !strings.HasSuffix(s, ">") {
+			return typeExpr{}, fmt.Errorf("malformed type %q", raw)
+		}
+		base := s[:i]
+		if _, ok := vt.Structures[base]; !ok {
+			return typeExpr{}, fmt.Errorf("unknown structure %q", base)
+		}
+		if base == "object" {
+			return typeExpr{}, fmt.Errorf("object must not take type arguments")
+		}
+		args, err := splitTypeArgs(s[i+1:len(s)-1], vt, depth+1)
+		if err != nil {
+			return typeExpr{}, err
+		}
+		if base == "map" {
+			if len(args) == 1 {
+				args = append([]typeExpr{{Base: "string"}}, args...)
+			}
+			if len(args) != 2 {
+				return typeExpr{}, fmt.Errorf("map requires one value type or key,value types")
+			}
+			if args[0].Base != "string" && args[0].Base != "integer" {
+				return typeExpr{}, fmt.Errorf("map key must be string or integer, got %q", args[0].Base)
+			}
+			return typeExpr{Base: base, Args: args}, nil
+		}
+		if len(args) != 1 {
+			return typeExpr{}, fmt.Errorf("%s requires exactly one type argument", base)
+		}
+		return typeExpr{Base: base, Args: args}, nil
+	}
+	if _, ok := vt.TypeFamilies[s]; ok {
+		return typeExpr{Base: s}, nil
+	}
+	if _, ok := vt.CustomTypes[s]; ok {
+		return typeExpr{Base: s}, nil
+	}
+	if _, ok := vt.Structures[s]; ok {
+		if s == "list" || s == "map" {
+			return typeExpr{}, fmt.Errorf("%s requires a type argument", s)
+		}
+		return typeExpr{Base: s}, nil
+	}
+	return typeExpr{}, fmt.Errorf("unknown type %q", raw)
+}
+
+func splitTypeArgs(inner string, vt ValueTypes, depth int) ([]typeExpr, error) {
+	var out []typeExpr
+	bracket, start := 0, 0
+	for i, r := range inner {
+		switch r {
+		case '<':
+			bracket++
+		case '>':
+			bracket--
+		case ',':
+			if bracket == 0 {
+				part := strings.TrimSpace(inner[start:i])
+				if part == "" {
+					return nil, fmt.Errorf("empty type argument")
+				}
+				arg, err := parseTypeExprDepth(part, vt, depth)
+				if err != nil {
+					return nil, err
+				}
+				out = append(out, arg)
+				start = i + 1
+			}
+		}
+	}
+	part := strings.TrimSpace(inner[start:])
+	if part == "" {
+		return nil, fmt.Errorf("empty type argument")
+	}
+	arg, err := parseTypeExprDepth(part, vt, depth)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, arg), nil
+}
+
+// normalizeTypeExpr 去掉 _types. 前缀，供 validateValue 的既有分支匹配。
+func normalizeTypeExpr(s string) string {
+	return strings.ReplaceAll(s, "_types.", "")
+}
+
+func validateFieldTypes(fields []Field, vt ValueTypes, bootstrap bool) error {
 	for _, f := range fields {
+		typ := normalizeTypeExpr(f.Type)
 		if len(f.Types) > 0 {
-			if f.Type != "" && f.Type != "map" {
+			if f.Type != "" && typ != "map" {
 				return fmt.Errorf("field %s: type and types are mutually exclusive", f.Name)
 			}
 			if f.Const != nil || len(f.Enum) > 0 || len(f.Allowed) > 0 || f.Pattern != "" || f.Min != nil || f.Max != nil || f.MinItems != nil || f.Unique {
@@ -60,30 +250,134 @@ func validateFieldTypes(fields []Field) error {
 			}
 		} else if f.Types != nil {
 			return fmt.Errorf("field %s: types must not be empty", f.Name)
-		} else if f.Type == "map" {
+		} else if typ == "map" {
 			return fmt.Errorf("field %s: map requires types", f.Name)
-		} else if !schemaFieldTypes[f.Type] {
-			return fmt.Errorf("field %s: unknown schema type %q", f.Name, f.Type)
+		} else if f.Type != "" {
+			expr, err := parseTypeExpr(f.Type, vt)
+			if err != nil {
+				if !bootstrap || !schemaFieldTypes[typ] {
+					return fmt.Errorf("field %s: %w", f.Name, err)
+				}
+			} else {
+				switch expr.Base {
+				case "array":
+					if f.Len == nil {
+						return fmt.Errorf("field %s: array requires len", f.Name)
+					}
+					if n, ok := toInt(f.Len); !ok || n < 1 {
+						return fmt.Errorf("field %s: len must be a positive integer", f.Name)
+					}
+					if f.MinLen != nil || f.MaxLen != nil {
+						return fmt.Errorf("field %s: array uses len, not min_len/max_len", f.Name)
+					}
+				case "set":
+					if strings.HasPrefix(normalizeTypeExpr(f.Type), "set<object>") && f.UniqueKey == "" {
+						return fmt.Errorf("field %s: set<object> requires unique_key", f.Name)
+					}
+					if strings.HasPrefix(normalizeTypeExpr(f.Type), "set<object>") && f.UniqueKey != "" {
+						for _, child := range f.ItemFields {
+							if child.Name == f.UniqueKey && normalizeTypeExpr(child.Type) == "boolean" {
+								return fmt.Errorf("field %s: boolean unique_key is not allowed", f.Name)
+							}
+						}
+					}
+				}
+				if f.Len != nil && expr.Base != "array" {
+					return fmt.Errorf("field %s: len is only allowed for array", f.Name)
+				}
+				if (f.MinLen != nil || f.MaxLen != nil) && !lengthBoundBase(expr.Base) {
+					return fmt.Errorf("field %s: min_len/max_len are only allowed for string/list/set/map", f.Name)
+				}
+				if f.MinItems != nil && expr.Base != "list" && expr.Base != "set" {
+					return fmt.Errorf("field %s: min_items is only allowed for list/set", f.Name)
+				}
+				if n, ok := toInt(f.MinItems); f.MinItems != nil && (!ok || n < 0) {
+					return fmt.Errorf("field %s: min_items must be a non-negative integer", f.Name)
+				}
+				if (f.Min != nil || f.Max != nil) && !numericLeaf(expr) {
+					return fmt.Errorf("field %s: min/max are only allowed for numeric types", f.Name)
+				}
+				if f.Pattern != "" && !stringLeaf(expr) {
+					return fmt.Errorf("field %s: pattern is only allowed for string types", f.Name)
+				}
+				if f.Min != nil {
+					if _, ok := toFloat(f.Min); !ok {
+						return fmt.Errorf("field %s: min must be a number", f.Name)
+					}
+				}
+				if f.Max != nil {
+					if _, ok := toFloat(f.Max); !ok {
+						return fmt.Errorf("field %s: max must be a number", f.Name)
+					}
+				}
+				if f.Min != nil && f.Max != nil {
+					minN, ok1 := toFloat(f.Min)
+					maxN, ok2 := toFloat(f.Max)
+					if ok1 && ok2 && minN > maxN {
+						return fmt.Errorf("field %s: min must not exceed max", f.Name)
+					}
+				}
+				if len(expr.Args) == 1 && (expr.Base == "list" || expr.Base == "set" || expr.Base == "array") {
+					if containsObject(expr.Args[0]) && len(f.ItemFields) == 0 {
+						return fmt.Errorf("field %s: %s requires item_fields for object elements", f.Name, expr.Base)
+					}
+					if !containsObject(expr.Args[0]) && len(f.ItemFields) > 0 {
+						return fmt.Errorf("field %s: item_fields only allowed when element is object", f.Name)
+					}
+				}
+				if expr.Base == "map" && len(expr.Args) == 2 && expr.Args[0].Base == "integer" && len(f.KeyPatterns) > 0 {
+					return fmt.Errorf("field %s: key_patterns only allowed for string map keys", f.Name)
+				}
+				if f.MinLen != nil {
+					if n, ok := toInt(f.MinLen); !ok || n < 0 {
+						return fmt.Errorf("field %s: min_len must be a non-negative integer", f.Name)
+					}
+				}
+				if f.MaxLen != nil {
+					if n, ok := toInt(f.MaxLen); !ok || n < 1 {
+						return fmt.Errorf("field %s: max_len must be a positive integer", f.Name)
+					}
+				}
+				if f.MinLen != nil && f.MaxLen != nil {
+					minN, ok1 := toInt(f.MinLen)
+					maxN, ok2 := toInt(f.MaxLen)
+					if ok1 && ok2 && minN > maxN {
+						return fmt.Errorf("field %s: min_len must not exceed max_len", f.Name)
+					}
+				}
+			}
 		}
-		if f.UniqueKey != "" && f.Type != "list<object>" {
-			return fmt.Errorf("field %s: unique_key requires list<object>", f.Name)
+		if f.UniqueKey != "" {
+			if typ != "list<object>" && typ != "set<object>" {
+				return fmt.Errorf("field %s: unique_key requires list<object> or set<object>", f.Name)
+			}
+			found := false
+			for _, child := range f.ItemFields {
+				if child.Name == f.UniqueKey {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("field %s: unique_key %s not found in item_fields", f.Name, f.UniqueKey)
+			}
 		}
-		if f.Type == "map<object>" && len(f.ItemFields) == 0 {
-			return fmt.Errorf("field %s: map<object> requires item_fields", f.Name)
+		if (typ == "map<object>" || typ == "map<list<object>>" || typ == "list<map<object>>") && len(f.ItemFields) == 0 {
+			return fmt.Errorf("field %s: %s requires item_fields", f.Name, f.Type)
 		}
-		if f.KeyPattern != "" && f.Type != "map" {
-			return fmt.Errorf("field %s: key_pattern requires map", f.Name)
+		if len(f.KeyPatterns) > 0 && !strings.Contains(typ, "map") {
+			return fmt.Errorf("field %s: key_patterns requires map", f.Name)
 		}
-		if f.Soft && f.Type != "any" && f.Type != "string" {
+		if f.Soft && typ != "any" && typ != "string" {
 			return fmt.Errorf("field %s: soft requires type: any or string", f.Name)
 		}
 		if len(f.Types) > 1 && f.Default != nil {
 			return fmt.Errorf("field %s: types with multiple kinds must not declare default", f.Name)
 		}
-		if err := validateFieldTypes(f.Fields); err != nil {
+		if err := validateFieldTypes(f.Fields, vt, bootstrap); err != nil {
 			return err
 		}
-		if err := validateFieldTypes(f.ItemFields); err != nil {
+		if err := validateFieldTypes(f.ItemFields, vt, bootstrap); err != nil {
 			return err
 		}
 	}
@@ -165,7 +459,7 @@ func (c *Checker) validateDoc(doc map[string]any, fields []Field, path string) {
 
 func (c *Checker) validateValue(v any, f Field, path string) {
 	if len(f.Types) > 0 {
-		if f.Type == "map" {
+		if normalizeTypeExpr(f.Type) == "map" {
 			m, ok := asMap(v)
 			if !ok {
 				c.rulef("schema.type", "%s: must be map", path)
@@ -176,8 +470,8 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 					c.rulef("schema.non-empty", "%s: map key must not be empty", path)
 					continue
 				}
-				if f.KeyPattern != "" && !match(f.KeyPattern, k) {
-					c.rulef("schema.pattern", "%s.%s: map key %q does not match %s", path, k, k, f.KeyPattern)
+				if !matchKeyPatterns(k, f.KeyPatterns) {
+					c.rulef("schema.pattern", "%s.%s: map key %q does not match %s", path, k, k, strings.Join(f.KeyPatterns, " | "))
 				}
 				c.validateSchemaNodeWith(item, path+"."+k, f.Types)
 			}
@@ -186,7 +480,25 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 		c.validateSchemaNodeWith(v, path, f.Types)
 		return
 	}
-	switch f.Type {
+	expr, err := parseTypeExpr(f.Type, c.valueTypes)
+	if err != nil {
+		c.rulef("schema.type", "%s: %v", path, err)
+		return
+	}
+	c.validateExpr(v, f, expr, path)
+}
+
+func matchKeyPatterns(k string, patterns []string) bool {
+	for _, pat := range patterns {
+		if !match(pat, k) {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Checker) validateExpr(v any, f Field, expr typeExpr, path string) {
+	switch expr.Base {
 	case "string":
 		s, ok := v.(string)
 		if !ok {
@@ -227,155 +539,148 @@ func (c *Checker) validateValue(v any, f Field, path string) {
 	case "any":
 		c.checkConst(v, f, path)
 	case "object":
-		m, ok := asMap(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be object", path)
-			return
-		}
-		c.validateDoc(m, f.Fields, path)
-	case "list<string>":
-		l, ok := asList2(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be list", path)
-			return
-		}
-		c.checkMinItems(l, f, path)
-		seen := map[string]bool{}
-		for i, item := range l {
-			s, ok := item.(string)
-			if !ok {
-				c.rulef("schema.type", "%s[%d]: must be string", path, i)
-				continue
-			}
-			if strings.TrimSpace(s) == "" {
-				c.rulef("schema.non-empty", "%s[%d]: must not be empty", path, i)
-				continue
-			}
-			if f.Unique && seen[s] {
-				c.rulef("schema.unique", "%s[%d]: duplicate %q", path, i, s)
-			}
-			seen[s] = true
-			if len(f.Allowed) > 0 && !inList(f.Allowed, s) {
-				c.rulef("schema.enum", "%s[%d]: %q not allowed (allowed: %v)", path, i, s, f.Allowed)
-			}
-			if f.Pattern != "" && !match(f.Pattern, s) {
-				c.rulef("schema.pattern", "%s[%d]: %q does not match %s", path, i, s, f.Pattern)
-			}
-		}
-	case "list<integer>":
-		l, ok := asList2(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be list", path)
-			return
-		}
-		c.checkMinItems(l, f, path)
-		seenInt := map[int]bool{}
-		for i, item := range l {
-			n, ok := toInt(item)
-			if !ok {
-				c.rulef("schema.type", "%s[%d]: must be integer", path, i)
-				continue
-			}
-			if f.Unique && seenInt[n] {
-				c.rulef("schema.unique", "%s[%d]: duplicate %d", path, i, n)
-			}
-			seenInt[n] = true
-			c.checkIntRange(n, f, path)
-		}
-	case "list<object>":
-		l, ok := asList2(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be list", path)
-			return
-		}
-		c.checkMinItems(l, f, path)
-		seenKeys := map[string]bool{}
-		for i, item := range l {
-			m, ok := asMap(item)
-			if !ok {
-				c.rulef("schema.type", "%s[%d]: must be object", path, i)
-				continue
-			}
-			if f.UniqueKey != "" {
-				if key, _ := m[f.UniqueKey].(string); key != "" {
-					if seenKeys[key] {
-						c.rulef("schema.unique", "%s[%d]: duplicate %s %q", path, i, f.UniqueKey, key)
-					}
-					seenKeys[key] = true
-				}
-			}
-			c.validateDoc(m, f.ItemFields, fmt.Sprintf("%s[%d]", path, i))
-		}
-	case "list<any>":
-		l, ok := asList2(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be list", path)
-			return
-		}
-		c.checkMinItems(l, f, path)
-	case "list<list<string>>":
-		l, ok := asList2(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be list", path)
-			return
-		}
-		c.checkMinItems(l, f, path)
-		for i, item := range l {
-			inner, ok := asList2(item)
-			if !ok {
-				c.rulef("schema.type", "%s[%d]: must be list", path, i)
-				continue
-			}
-			if len(inner) == 0 {
-				c.rulef("schema.non-empty", "%s[%d]: must not be empty", path, i)
-			}
-			for j, raw := range inner {
-				if _, ok := raw.(string); !ok {
-					c.rulef("schema.type", "%s[%d][%d]: must be string", path, i, j)
-				}
-			}
-		}
-	case "map<string>":
-		m, ok := asMap(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be map", path)
-			return
-		}
-		for k, item := range m {
-			if k == "" {
-				c.rulef("schema.non-empty", "%s: map key must not be empty", path)
-				continue
-			}
-			if _, ok := item.(string); !ok {
-				c.rulef("schema.type", "%s.%s: must be string", path, k)
-			}
-		}
-	case "map<object>":
-		m, ok := asMap(v)
-		if !ok {
-			c.rulef("schema.type", "%s: must be map", path)
-			return
-		}
-		for k, item := range m {
-			if k == "" {
-				c.rulef("schema.non-empty", "%s: map key must not be empty", path)
-				continue
-			}
-			im, ok := asMap(item)
-			if !ok {
-				c.rulef("schema.type", "%s.%s: must be object", path, k)
-				continue
-			}
-			c.validateDoc(im, f.ItemFields, path+"."+k)
-		}
+		c.validateObject(v, f, path)
+	case "list", "set", "array":
+		c.validateSequence(v, f, expr, path)
+	case "map":
+		c.validateMap(v, f, expr, path)
 	default:
-		c.rulef("schema.type", "%s: unknown schema type %q", path, f.Type)
+		c.rulef("schema.type", "%s: unsupported type %q", path, expr.Base)
 	}
+}
+
+func (c *Checker) validateObject(v any, f Field, path string) {
+	m, ok := asMap(v)
+	if !ok {
+		c.rulef("schema.type", "%s: must be object", path)
+		return
+	}
+	fields := f.Fields
+	if len(fields) == 0 {
+		fields = f.ItemFields
+	}
+	c.validateDoc(m, fields, path)
+}
+
+func (c *Checker) validateSequence(v any, f Field, expr typeExpr, path string) {
+	l, ok := asList2(v)
+	if !ok {
+		c.rulef("schema.type", "%s: must be list", path)
+		return
+	}
+	c.checkSeqBounds(l, f, path, expr.Base == "set", expr.Base == "array")
+	if len(expr.Args) != 1 {
+		c.rulef("schema.type", "%s: %s requires one element type", path, expr.Base)
+		return
+	}
+	seen := map[string]bool{}
+	for i, item := range l {
+		elemPath := fmt.Sprintf("%s[%d]", path, i)
+		if expr.Base == "set" || f.Unique || f.UniqueKey != "" {
+			if key, ok := sequenceKey(item, f); ok {
+				if seen[key] {
+					c.rulef("schema.unique", "%s[%d]: duplicate %q", path, i, key)
+				}
+				seen[key] = true
+			}
+		}
+		c.validateExpr(item, f, expr.Args[0], elemPath)
+	}
+}
+
+func sequenceKey(item any, f Field) (string, bool) {
+	if m, ok := asMap(item); ok {
+		if f.UniqueKey == "" {
+			return "", false
+		}
+		v, _ := m[f.UniqueKey].(string)
+		return v, v != ""
+	}
+	return fmt.Sprint(item), true
+}
+
+func (c *Checker) validateMap(v any, f Field, expr typeExpr, path string) {
+	m, ok := asMap(v)
+	if !ok {
+		c.rulef("schema.type", "%s: must be map", path)
+		return
+	}
+	c.checkMapBounds(m, f, path)
+	if len(expr.Args) != 2 {
+		c.rulef("schema.type", "%s: map requires key and value types", path)
+		return
+	}
+	keyExpr, valExpr := expr.Args[0], expr.Args[1]
+	for k, item := range m {
+		if k == "" {
+			c.rulef("schema.non-empty", "%s: map key must not be empty", path)
+			continue
+		}
+		switch keyExpr.Base {
+		case "string":
+			if !matchKeyPatterns(k, f.KeyPatterns) {
+				c.rulef("schema.pattern", "%s.%s: map key %q does not match %s", path, k, k, strings.Join(f.KeyPatterns, " | "))
+			}
+		case "integer":
+			n, ok := toInt(k)
+			if !ok {
+				c.rulef("schema.type", "%s.%s: map key must be integer", path, k)
+				continue
+			}
+			c.checkIntRange(n, f, path+"."+k)
+		default:
+			c.rulef("schema.type", "%s: unsupported map key type %q", path, keyExpr.Base)
+		}
+		c.validateExpr(item, f, valExpr, path+"."+k)
+	}
+}
+
+func (c *Checker) checkMapBounds(m map[string]any, f Field, path string) {
+	if f.Generated {
+		return
+	}
+	if f.MinLen != nil {
+		if n, ok := toInt(f.MinLen); ok && len(m) < n {
+			c.rulef("schema.len", "%s: size %d must be >= %d", path, len(m), n)
+		}
+	}
+	if f.MaxLen != nil {
+		if n, ok := toInt(f.MaxLen); ok && len(m) > n {
+			c.rulef("schema.len", "%s: size %d must be <= %d", path, len(m), n)
+		}
+	}
+}
+
+func (c *Checker) checkSeqBounds(l []any, f Field, path string, isSet, isArray bool) {
+	if f.Generated {
+		return
+	}
+	if isArray {
+		if f.Len == nil {
+			c.rulef("schema.len", "%s: array requires len", path)
+			return
+		}
+		if n, ok := toInt(f.Len); ok && len(l) != n {
+			c.rulef("schema.len", "%s: length %d must equal %d", path, len(l), n)
+		}
+		return
+	}
+	if f.MinLen != nil {
+		if n, ok := toInt(f.MinLen); ok && len(l) < n {
+			c.rulef("schema.len", "%s: length %d must be >= %d", path, len(l), n)
+		}
+	}
+	if f.MaxLen != nil {
+		if n, ok := toInt(f.MaxLen); ok && len(l) > n {
+			c.rulef("schema.len", "%s: length %d must be <= %d", path, len(l), n)
+		}
+	}
+	c.checkMinItems(l, f, path)
 }
 
 // checkMinItems 校验 list 的最小长度；min_items 只约束列表，不约束字符串。
 func (c *Checker) checkMinItems(l []any, f Field, path string) {
-	if f.MinItems == nil {
+	if f.Generated || f.MinItems == nil {
 		return
 	}
 	if n, ok := toInt(f.MinItems); ok && len(l) < n {
@@ -389,6 +694,15 @@ func (c *Checker) checkScalar(s string, f Field, path string) {
 	}
 	if len(f.Allowed) > 0 && !inList(f.Allowed, s) {
 		c.rulef("schema.enum", "%s: %q not allowed (allowed: %v)", path, s, f.Allowed)
+	}
+	if f.MinLen != nil || f.MaxLen != nil {
+		n := utf8.RuneCountInString(s)
+		if min, ok := toInt(f.MinLen); ok && n < min {
+			c.rulef("schema.len", "%s: length %d must be >= %d", path, n, min)
+		}
+		if max, ok := toInt(f.MaxLen); ok && n > max {
+			c.rulef("schema.len", "%s: length %d must be <= %d", path, n, max)
+		}
 	}
 	if f.Pattern != "" && !match(f.Pattern, s) {
 		c.rulef("schema.pattern", "%s: %q does not match %s", path, s, f.Pattern)

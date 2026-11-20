@@ -100,6 +100,7 @@ func (c *Checker) run() {
 	c.checkDoNotDuplicates()
 	c.checkModules()
 	c.checkErrorFiles()
+	c.checkPlatformContracts()
 	tableSchema, err := c.loadSchemaByType("data.tables")
 	if err != nil {
 		c.rulef("schema.load", "load tables schema: %v", err)
@@ -120,9 +121,14 @@ func (c *Checker) run() {
 		c.rulef("schema.load", "load queries schema: %v", err)
 		return
 	}
+	storageSchema, err := c.loadSchemaByType("data.storage")
+	if err != nil {
+		c.rulef("schema.load", "load storage schema: %v", err)
+		return
+	}
 
-	c.checkSharedTypes(tableSchema)
 	c.valueTypes = tableSchema.ValueTypes
+	c.checkSharedTypes(tableSchema)
 	c.tableTargets = tableSchema.Targets
 	c.entityTargets = entitySchema.Targets
 	c.queryTargets = querySchema.Targets
@@ -137,7 +143,7 @@ func (c *Checker) run() {
 	tableIDs, cols := c.checkTables(tableSchema)
 	c.loadTableColumns(tableIDs)
 	c.checkIndexLiveOnly(tableIDs)
-	c.checkStorage(tableIDs)
+	c.checkStorage(tableIDs, storageSchema)
 	c.loadEntities(entitySchema)
 	c.checkRedundancy(tableIDs)
 	c.loadTableIndexes(tableIDs)
@@ -153,6 +159,7 @@ func (c *Checker) run() {
 	c.checkRules(enumSchema)
 	c.checkRules(entitySchema)
 	c.checkRules(querySchema)
+	c.checkRules(storageSchema)
 	c.checkCapabilities()
 	c.checkFeaturePages()
 	c.checkUndeclaredRuleIDs()
@@ -331,7 +338,7 @@ func validateSchemaMeta(s *Schema, path string) error {
 	if err := validatePatterns(s.Fields); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	if err := validateFieldTypes(s.Fields); err != nil {
+	if err := validateFieldTypes(s.Fields, s.ValueTypes, false); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	if err := validateFieldMarkers(s.Fields); err != nil {

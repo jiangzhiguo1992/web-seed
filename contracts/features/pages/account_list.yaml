@@ -7,7 +7,6 @@ stability: stable
 do_not:
   - "状态筛选的取值必须来自 cap.lifecycles.account.states.values，不要硬编码"
   - "forbidden 态依赖 platform.security.permissions.account_read，不可省略"
-  - "不要展示密码、手机号、邮箱、令牌"
 
 page: account_list
 route: feature.routes.account_list

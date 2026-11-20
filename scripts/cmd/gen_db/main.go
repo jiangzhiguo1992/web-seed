@@ -123,9 +123,6 @@ func loadEngineTables(root, engine string) (map[string]bool, error) {
 		if _, isArchive := entry["archive_of"]; isArchive {
 			continue
 		}
-		if entry["partition"] != nil {
-			return nil, fmt.Errorf("contracts/data/storage.yaml: tables.%s entry %v declares partition; gen_db does not render partitions (keep it as ops config or implement DDL rendering)", engine, entry["table"])
-		}
 		if id, _ := entry["table"].(string); id != "" {
 			out[id] = true
 		}
@@ -349,6 +346,7 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 		if c.Name == "" || c.Type == "" {
 			return nil, fmt.Errorf("column name/type required")
 		}
+		c.Type = strings.TrimPrefix(c.Type, "_types.")
 		if nt, ok := customTypes[c.Type]; ok {
 			c.Type = nt.Family
 			applyCustomParams(&c, nt.Params)

@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ValidateScaffold 校验骨架的结构、字段顺序与文件名。
+// ValidateScaffold 校验骨架的结构、字段顺序、文件名与文本字段的双引号。
 // root 是仓库根；typ 是契约类型；doc 是 contract-new 的输出。
 func ValidateScaffold(root, typ string, doc []byte, fileName string) []string {
 	c := &Checker{root: root}
@@ -46,6 +46,11 @@ func ValidateScaffold(root, typ string, doc []byte, fileName string) []string {
 	}
 	c.checkFieldOrder(rel, relaxed.Fields, orderRules{})
 	c.checkTargetFileName(&relaxed, fileName, rel)
+	var node yaml.Node
+	if err := yaml.Unmarshal(doc, &node); err != nil {
+		return append(c.errs, "scaffold: "+err.Error())
+	}
+	c.checkProseQuotes(&node, rel)
 	return c.errs
 }
 

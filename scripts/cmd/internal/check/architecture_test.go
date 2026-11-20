@@ -29,6 +29,7 @@ var sharedFiles = map[string]bool{
 	"placement.go": true, "queries.go": true, "query_indexes.go": true, "query_storage.go": true,
 	"redundancy.go": true, "references.go": true, "refs.go": true,
 	"rule_ids.go": true, "rule_ids_gen.go": true, "scaffold.go": true, "schema.go": true,
+	"platform.go":    true,
 	"sensitivity.go": true, "storage.go": true, "tables.go": true,
 	"targets.go": true, "util.go": true, "validate.go": true, "when.go": true,
 }

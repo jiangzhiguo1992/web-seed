@@ -332,15 +332,19 @@ func loadCustomTypes(root string) (map[string]contractspec.CustomValueType, erro
 	if err != nil {
 		return nil, err
 	}
-	return t.CustomTypes, nil
-}
-
-func loadServiceTypes(root string, customTypes map[string]contractspec.CustomValueType, enums map[string][]any) (map[string]map[string]any, error) {
-	shared, err := contractspec.LoadSharedSchemas(filepath.Join(root, "contracts/_meta"))
+	doc, err := contractspec.LoadCustomTypes(root, t.TypeFamilies)
 	if err != nil {
 		return nil, err
 	}
-	kinds := shared.Kinds
+	return doc.CustomTypes, nil
+}
+
+func loadServiceTypes(root string, customTypes map[string]contractspec.CustomValueType, enums map[string][]any) (map[string]map[string]any, error) {
+	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts/_meta"))
+	if err != nil {
+		return nil, err
+	}
+	kinds := shared.Schemas
 	raw := map[string]map[string]any{}
 	files, err := globYAML(filepath.Join(root, "contracts/capabilities/services"))
 	if err != nil {
@@ -469,6 +473,7 @@ func applyPropertyAnnotations(prop, out map[string]any) {
 }
 
 func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueType) map[string]any {
+	typ = strings.TrimPrefix(typ, "_types.")
 	family := typ
 	var params map[string]any
 	if nt, ok := customTypes[typ]; ok {

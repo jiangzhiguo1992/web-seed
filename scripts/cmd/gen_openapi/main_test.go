@@ -22,16 +22,18 @@ func writeFixture(t *testing.T, root, rel, body string) {
 
 func writeTypes(t *testing.T, root string) {
 	t.Helper()
-	writeFixture(t, root, "contracts/_meta/_types.yaml", `id: meta.types
-type_families:
-  string: { description: "string", params: {} }
+	writeFixture(t, root, "contracts/data/types.yaml", `id: data.types
+summary: "test"
+schema_version: 1
+stability: draft
+do_not: ["test"]
 custom_types: {}
 `)
-	shared, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "_meta", "_schemas.yaml"))
+	shared, err := os.ReadFile(filepath.Join("..", "..", "..", "contracts", "_meta", "_types.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFixture(t, root, "contracts/_meta/_schemas.yaml", string(shared))
+	writeFixture(t, root, "contracts/_meta/_types.yaml", string(shared))
 
 }
 

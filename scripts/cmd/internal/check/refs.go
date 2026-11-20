@@ -3,10 +3,64 @@
 package check
 
 import (
+	"fmt"
 	"os"
+	pathpkg "path"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+var (
+	indexIDRe          = regexp.MustCompile(`^[a-z][a-z0-9_.-]*$`)
+	indexConsumerRe    = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*([-/.][A-Za-z][A-Za-z0-9_]*)*$`)
+	indexEnforcement   = map[string]bool{"generated": true, "generated+tested": true, "tested": true, "review-only": true}
+	indexEntryKeys     = map[string]bool{"id": true, "path": true, "summary": true, "consumers": true, "enforcement": true, "stability": true, "common_mistakes": true}
+	indexTopLevelKeys  = map[string]bool{"schema_version": true, "read_order": true, "groups": true, "entries": true, "global_notes": true, "orphan_whitelist": true}
+	indexStabilityEnum = map[string]bool{"stable": true, "draft": true, "deprecated": true}
+)
+
+// validIndexPath 要求 index path 是相对 contracts/ 的干净路径，禁止绝对路径、目录逃逸与跨平台分隔符。
+func validIndexPath(p string) bool {
+	if p == "" || strings.TrimSpace(p) != p || strings.HasPrefix(p, "/") || strings.ContainsAny(p, "\\:") {
+		return false
+	}
+	clean := pathpkg.Clean(p)
+	return clean == p && clean != "." && clean != ".." && !strings.HasPrefix(clean, "../")
+}
+
+// checkStringList 校验非空字符串列表；required 为 true 时缺失也报错。
+func (c *Checker) checkStringList(raw any, rel, where string, required bool) {
+	if raw == nil {
+		if required {
+			c.rulef("schema.required", "%s: %s is required", rel, where)
+		}
+		return
+	}
+	list, ok := asList2(raw)
+	if !ok {
+		c.rulef("schema.type", "%s: %s must be a list", rel, where)
+		return
+	}
+	if len(list) == 0 {
+		if required {
+			c.rulef("schema.len", "%s: %s must not be empty", rel, where)
+		}
+		return
+	}
+	seen := map[string]bool{}
+	for i, v := range list {
+		s, _ := v.(string)
+		if strings.TrimSpace(s) == "" {
+			c.rulef("schema.type", "%s: %s[%d] must be a non-empty string", rel, where, i)
+			continue
+		}
+		if seen[s] {
+			c.rulef("schema.unique", "%s: %s has duplicate value %q", rel, where, s)
+		}
+		seen[s] = true
+	}
+}
 
 func checkColumnRef(c *Checker, ref string, tableIDs map[string]string, cols map[string]map[string]bool, where string) {
 	if ref == "" {
@@ -151,6 +205,34 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 		c.rulef("schema.load", "%s: %v", rel, err)
 		return
 	}
+	for key := range doc {
+		if !indexTopLevelKeys[key] {
+			c.rulef("schema.unknown-field", "%s: unknown top-level field %q", rel, key)
+		}
+	}
+	if v, ok := toInt(doc["schema_version"]); !ok || v != 1 {
+		c.rulef("schema.const", "%s: schema_version must be 1", rel)
+	}
+	c.checkStringList(doc["read_order"], rel, "read_order", false)
+	c.checkStringList(doc["global_notes"], rel, "global_notes", false)
+	c.checkStringList(doc["orphan_whitelist"], rel, "orphan_whitelist", false)
+	groups, _ := asMap(doc["groups"])
+	for name, raw := range groups {
+		group, _ := asMap(raw)
+		if group == nil {
+			c.rulef("schema.type", "%s: groups.%s must be an object", rel, name)
+			continue
+		}
+		for key := range group {
+			if key != "description" && key != "layers" {
+				c.rulef("schema.unknown-field", "%s: groups.%s has unknown field %q", rel, name, key)
+			}
+		}
+		if desc, _ := group["description"].(string); strings.TrimSpace(desc) == "" {
+			c.rulef("schema.required", "%s: groups.%s.description is required", rel, name)
+		}
+		c.checkStringList(group["layers"], rel, "groups."+name+".layers", true)
+	}
 	byPath := map[string]string{}
 	byID := map[string]string{}
 	rawEntries := asList(doc["entries"])
@@ -163,15 +245,56 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 			c.rulef("schema.type", "%s: entries[%d] must be an object", rel, i)
 			continue
 		}
+		where := fmt.Sprintf("entries[%d]", i)
+		for key := range m {
+			if !indexEntryKeys[key] {
+				c.rulef("schema.unknown-field", "%s: %s has unknown field %q", rel, where, key)
+			}
+		}
 		id, _ := m["id"].(string)
 		p, _ := m["path"].(string)
 		if id == "" {
-			c.rulef("schema.required", "%s: entries[%d]: missing id", rel, i)
+			c.rulef("schema.required", "%s: %s: missing id", rel, where)
 			continue
+		}
+		where = id
+		if !indexIDRe.MatchString(id) {
+			c.rulef("schema.pattern", "%s: %s id must match ^[a-z][a-z0-9_.-]*$", rel, where)
 		}
 		if p == "" {
 			c.rulef("schema.required", "%s: %s: missing path", rel, id)
 			continue
+		}
+		if !validIndexPath(p) {
+			c.rulef("schema.pattern", "%s: %s path must be a clean relative path, got %q", rel, id, p)
+			continue
+		}
+		if summary, _ := m["summary"].(string); strings.TrimSpace(summary) == "" {
+			c.rulef("schema.required", "%s: %s: missing summary", rel, id)
+		}
+		c.checkStringList(m["consumers"], rel, id+".consumers", true)
+		for _, raw := range asList(m["consumers"]) {
+			consumer, _ := raw.(string)
+			if consumer != "" && !indexConsumerRe.MatchString(consumer) {
+				c.rulef("schema.pattern", "%s: %s consumer %q must match ^[A-Za-z][A-Za-z0-9_]*([-/.][A-Za-z][A-Za-z0-9_]*)*$", rel, id, consumer)
+			}
+		}
+		if raw, ok := m["common_mistakes"]; ok {
+			c.checkStringList(raw, rel, id+".common_mistakes", true)
+		}
+		rawEnforcement, hasEnforcement := m["enforcement"]
+		enforcement, enforcementOK := rawEnforcement.(string)
+		if !hasEnforcement {
+			c.rulef("schema.required", "%s: %s: missing enforcement", rel, id)
+		} else if !enforcementOK || !indexEnforcement[enforcement] {
+			c.rulef("schema.enum", "%s: %s enforcement must be generated/generated+tested/tested/review-only, got %v", rel, id, rawEnforcement)
+		}
+		rawStability, hasStability := m["stability"]
+		stability, stabilityOK := rawStability.(string)
+		if !hasStability {
+			c.rulef("schema.required", "%s: %s: missing stability", rel, id)
+		} else if !stabilityOK || !indexStabilityEnum[stability] {
+			c.rulef("schema.enum", "%s: %s stability must be stable/draft/deprecated, got %v", rel, id, rawStability)
 		}
 		if prev, ok := byID[id]; ok {
 			c.rulef("schema.unique", "%s: duplicate id %s (%s / %s)", rel, id, prev, p)
@@ -184,18 +307,20 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 		if strings.HasPrefix(p, "generated/") {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(c.root, "contracts", p)); err != nil {
+		info, err := os.Stat(filepath.Join(c.root, "contracts", p))
+		if err != nil {
 			c.rulef("schema.ref", "%s: %s path missing %s", rel, id, p)
 			continue
 		}
+		if info.IsDir() {
+			c.rulef("schema.ref", "%s: %s path must be a file, got directory %s", rel, id, p)
+			continue
+		}
 		// index 的 stability 是投影，必须与契约文件自身一致；文件未声明时跳过。
-		if raw, present := m["stability"]; present {
-			want, ok := raw.(string)
-			if !ok || (want != "stable" && want != "draft" && want != "deprecated") {
-				c.rulef("schema.index-stability", "%s: %s stability must be stable/draft/deprecated, got %v", rel, id, raw)
-			} else if doc, err := loadYAML(filepath.Join(c.root, "contracts", p)); err == nil {
-				if got, _ := doc["stability"].(string); got != "" && got != want {
-					c.rulef("schema.index-stability", "%s: %s stability %q must match %s (%q)", rel, id, want, p, got)
+		if stability != "" && indexStabilityEnum[stability] {
+			if doc, err := loadYAML(filepath.Join(c.root, "contracts", p)); err == nil {
+				if got, _ := doc["stability"].(string); got != "" && got != stability {
+					c.rulef("schema.index-stability", "%s: %s stability %q must match %s (%q)", rel, id, stability, p, got)
 				}
 			}
 		}

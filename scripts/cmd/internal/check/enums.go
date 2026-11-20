@@ -173,8 +173,8 @@ func (c *Checker) checkEnumSchema(schema *Schema) {
 		}
 	}
 	if usedBy, ok := contractspec.FindField(enums.ItemFields, "used_by"); ok {
-		if usedBy.Type != "list<string>" || usedBy.MinItems == nil {
-			c.rulef("schema.meta", "%s: enums.used_by must be list<string> with min_items", schema.ID)
+		if normalizeTypeExpr(usedBy.Type) != "set<string>" || (usedBy.MinLen == nil && usedBy.MinItems == nil) {
+			c.rulef("schema.meta", "%s: enums.used_by must be set<string> with min_len", schema.ID)
 		}
 	}
 	values, ok := contractspec.FindField(enums.ItemFields, "values")

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -190,14 +191,15 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	}
 	const baseTableID = "data.tables.base"
 	columnName := firstExample(columnField.ItemFields, "name", "name")
-	columnType := defaultString(columnField.ItemFields, "type", "string")
+	columnType := defaultString(columnField.ItemFields, "type", "_types.string")
 	if columnTypeOverride != "" {
-		_, familyOK := s.ValueTypes.TypeFamilies[columnTypeOverride]
-		_, customOK := s.ValueTypes.CustomTypes[columnTypeOverride]
+		name := strings.TrimPrefix(columnTypeOverride, "_types.")
+		_, familyOK := s.ValueTypes.TypeFamilies[name]
+		_, customOK := s.ValueTypes.CustomTypes[name]
 		if !familyOK && !customOK {
 			return nil, fmt.Errorf("RenderTable: unknown column type %q (not a family or custom type)", columnTypeOverride)
 		}
-		columnType = columnTypeOverride
+		columnType = "_types." + name
 	}
 	columnParams, err := scaffoldFamilyParams(s, columnType)
 	if err != nil {
@@ -428,6 +430,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 }
 
 func scaffoldFamilyParams(s *Schema, columnType string) (map[string]any, error) {
+	columnType = strings.TrimPrefix(columnType, "_types.")
 	if _, custom := s.ValueTypes.CustomTypes[columnType]; custom {
 		return nil, nil
 	}
@@ -608,9 +611,30 @@ var scaffoldProseKeys = map[string]bool{
 	"comment": true, "description": true, "note": true,
 	"summary": true, "text": true, "title": true,
 	"semantics": true, "caution": true, "generates": true,
+	"when": true,
 }
 
-var scaffoldProseListKeys = map[string]bool{"do_not": true}
+var scaffoldProseListKeys = map[string]bool{"common_mistakes": true, "do_not": true}
+
+// ScaffoldProseKeys 返回 contract-new 会强制双引号的字段名，供 checker 侧做漂移检查。
+func ScaffoldProseKeys() []string {
+	keys := make([]string, 0, len(scaffoldProseKeys))
+	for key := range scaffoldProseKeys {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// ScaffoldProseListKeys 返回 contract-new 会强制列表项双引号的字段名。
+func ScaffoldProseListKeys() []string {
+	keys := make([]string, 0, len(scaffoldProseListKeys))
+	for key := range scaffoldProseListKeys {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
 
 // quoteScaffoldProse 让 contract-new 产物满足 contract-check 的双引号规则。
 func quoteScaffoldProse(n *yaml.Node) {
@@ -874,7 +898,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 				Type: "object",
 				Properties: []servicePropertyScaffold{{
 					Name:        "id",
-					Schema:      serviceSchemaScaffold{Type: "integer"},
+					Schema:      serviceSchemaScaffold{Type: "_types.integer"},
 					Required:    true,
 					Description: "TODO: 字段说明",
 				}},
@@ -1043,7 +1067,7 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 				Type: "object",
 				Properties: []servicePropertyScaffold{{
 					Name:        "id",
-					Schema:      serviceSchemaScaffold{Type: "integer"},
+					Schema:      serviceSchemaScaffold{Type: "_types.integer"},
 					Required:    true,
 					Description: "TODO: id 说明",
 				}},
@@ -1113,4 +1137,221 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		return nil, err
 	}
 	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
+}
+
+type pageFileScaffold struct {
+	ID            string                 `yaml:"id"`
+	Summary       string                 `yaml:"summary"`
+	SchemaVersion int                    `yaml:"schema_version"`
+	Stability     string                 `yaml:"stability"`
+	DoNot         []string               `yaml:"do_not"`
+	Page          string                 `yaml:"page"`
+	Route         any                    `yaml:"route"`
+	ViewStates    pageViewStatesScaffold `yaml:"view_states"`
+}
+
+type pageViewStatesScaffold struct {
+	Loading   pageStateScaffold `yaml:"loading"`
+	Empty     pageStateScaffold `yaml:"empty"`
+	Error     pageStateScaffold `yaml:"error"`
+	Forbidden pageStateScaffold `yaml:"forbidden"`
+}
+
+type pageStateScaffold struct {
+	When string `yaml:"when"`
+	Note string `yaml:"note,omitempty"`
+}
+
+// RenderPage 生成 feature.pages 的最小合法骨架：四态齐全，route 留空待绑定。
+func RenderPage(s *Schema, name, summary string) ([]byte, error) {
+	if s == nil || s.Type != "feature.pages" {
+		return nil, fmt.Errorf("RenderPage: want feature.pages schema")
+	}
+	if !validName(name) {
+		return nil, fmt.Errorf("RenderPage: invalid name")
+	}
+	if strings.TrimSpace(summary) == "" {
+		return nil, fmt.Errorf("RenderPage: summary must not be empty")
+	}
+	if err := requireSupported(s.Fields, map[string]bool{
+		"id": true, "summary": true, "schema_version": true, "stability": true,
+		"do_not": true, "page": true, "route": true, "data": true,
+		"view_states": true, "actions": true,
+	}, "feature.pages"); err != nil {
+		return nil, err
+	}
+	if f, ok := FindField(s.Fields, "view_states"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{
+			"when": true, "ui": true, "show": true, "note": true, "action": true, "retry": true,
+		}, "feature.pages.view_states"); err != nil {
+			return nil, err
+		}
+	}
+	fileID := s.Targets.FileID(name + ".yaml")
+	if fileID == "" {
+		return nil, fmt.Errorf("RenderPage: cannot derive id from targets.id")
+	}
+	doc := pageFileScaffold{
+		SchemaVersion: intConst(s.Fields, "schema_version", 1),
+		ID:            fileID,
+		Summary:       summary,
+		Stability:     scaffoldStability,
+		DoNot:         []string{"TODO: 实例级负向约束"},
+		Page:          name,
+		Route:         nil,
+		ViewStates: pageViewStatesScaffold{
+			Loading:   pageStateScaffold{When: "loading"},
+			Empty:     pageStateScaffold{When: "items.length == 0"},
+			Error:     pageStateScaffold{When: "error != null"},
+			Forbidden: pageStateScaffold{When: "forbidden"},
+		},
+	}
+	b, err := marshal2(doc)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
+}
+
+// RenderFieldValue 按 Field.type 渲染最小骨架，供 contract-new 的通用字段使用。
+// list<map<object>> 的 item_fields 描述 map value 的字段。
+func RenderFieldValue(f Field) (any, error) {
+	return RenderFieldValueWithTypes(f, ValueTypes{})
+}
+
+func RenderFieldValueWithTypes(f Field, vt ValueTypes) (any, error) {
+	return renderFieldValue(f, 0, vt)
+}
+
+func renderFieldValue(f Field, index int, vt ValueTypes) (any, error) {
+	typ := strings.ReplaceAll(f.Type, "_types.", "")
+	switch {
+	case typ == "object":
+		fields := f.Fields
+		if len(fields) == 0 {
+			fields = f.ItemFields
+		}
+		out := map[string]any{}
+		for _, child := range fields {
+			if f.UniqueKey != "" && child.Name == f.UniqueKey {
+				out[child.Name] = uniqueKeyValue(child.Type, index, vt)
+				continue
+			}
+			v, err := renderFieldValue(child, index, vt)
+			if err != nil {
+				return nil, err
+			}
+			out[child.Name] = v
+		}
+		return out, nil
+	case (strings.HasPrefix(typ, "list<") || strings.HasPrefix(typ, "set<") || strings.HasPrefix(typ, "array<")) && strings.HasSuffix(typ, ">"):
+		var inner string
+		isSet := strings.HasPrefix(typ, "set<")
+		switch {
+		case strings.HasPrefix(typ, "list<"):
+			inner = typ[len("list<") : len(typ)-1]
+		case isSet:
+			inner = typ[len("set<") : len(typ)-1]
+		default:
+			inner = typ[len("array<") : len(typ)-1]
+		}
+		child := Field{Type: inner, ItemFields: f.ItemFields, Fields: f.Fields, KeyPatterns: f.KeyPatterns, UniqueKey: f.UniqueKey}
+		n := 1
+		if strings.HasPrefix(typ, "array<") {
+			if v, ok := fieldInt(f.Len); ok && v > 0 {
+				n = v
+			}
+		} else {
+			if v, ok := fieldInt(f.MinLen); ok {
+				n = v
+			} else if v, ok := fieldInt(f.MaxLen); ok && v == 0 {
+				n = 0
+			}
+			if v, ok := fieldInt(f.MaxLen); ok && n > v {
+				n = v
+			}
+			if n < 0 {
+				n = 0
+			}
+		}
+		out := make([]any, 0, n)
+		for i := 0; i < n; i++ {
+			idx := i + 1
+			v, err := renderFieldValue(child, idx, vt)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, v)
+		}
+		return out, nil
+	case strings.HasPrefix(typ, "map<") && strings.HasSuffix(typ, ">"):
+		inner := typ[len("map<") : len(typ)-1]
+		if i := strings.Index(inner, ","); i >= 0 {
+			inner = strings.TrimSpace(inner[i+1:])
+		}
+		child := Field{Type: inner, ItemFields: f.ItemFields, Fields: f.Fields, KeyPatterns: f.KeyPatterns}
+		v, err := renderFieldValue(child, index, vt)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"key": v}, nil
+	case typ == "string", typ == "timestamp", typ == "datetime", typ == "json", typ == "bytes":
+		if index > 0 {
+			return fmt.Sprintf("item_%d", index), nil
+		}
+		return "", nil
+	case typ == "integer":
+		return index, nil
+	case typ == "float", typ == "decimal":
+		return float64(index), nil
+	case typ == "boolean":
+		return false, nil
+	case typ == "any":
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("RenderFieldValue: unsupported type %q", f.Type)
+	}
+}
+
+func fieldInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	}
+	return 0, false
+}
+
+func uniqueKeyValue(typ string, index int, vt ValueTypes) any {
+	original := strings.ReplaceAll(typ, "_types.", "")
+	t := original
+	if ct, ok := vt.CustomTypes[t]; ok {
+		t = ct.Family
+	}
+	switch t {
+	case "integer", "number", "float", "decimal":
+		return index
+	case "boolean":
+		return index%2 == 1
+	case "timestamp", "datetime":
+		mode := "datetime"
+		if ct, ok := vt.CustomTypes[original]; ok {
+			if m, ok := ct.Params["mode"].(string); ok {
+				mode = m
+			}
+		}
+		switch mode {
+		case "date":
+			return fmt.Sprintf("2024-01-%02d", index)
+		case "time":
+			return fmt.Sprintf("%02d:00:00", index)
+		default:
+			return fmt.Sprintf("2024-01-01T00:00:%02dZ", index)
+		}
+	default:
+		return fmt.Sprintf("item_%d", index)
+	}
 }

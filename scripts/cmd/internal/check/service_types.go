@@ -733,6 +733,10 @@ func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) 
 		c.rulef("service-param-type", "%s: unknown type %s (only data.enums.* and data.entities.* are allowed)", where, base)
 		return
 	}
+	switch base {
+	case "object", "array", "scalar", "ref":
+		return
+	}
 	if isBuiltinType(base) {
 		return
 	}

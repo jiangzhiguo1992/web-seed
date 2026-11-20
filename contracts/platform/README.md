@@ -25,6 +25,8 @@
 | `security/roles.yaml` | 角色 → 权限映射 | generated+tested |
 | `security/auth_policy.yaml` | 会话、token、MFA 策略 | tested |
 
+字段规范在 `contracts/_meta/platform.*.yaml`：`platform.modules`、`platform.security.permissions`、`platform.security.roles`、`platform.security.auth_policy` 的结构与字段顺序由 `contract-check` 校验；`security/access.yaml` 与 `errors/*.yaml` 继续由 `access.go` / `errors.go` 的专门检查校验。
+
 ## 2. 硬规则
 
 1. **错误码按域集中定义**，代码里禁止裸字符串；文案 key 由错误码派生。

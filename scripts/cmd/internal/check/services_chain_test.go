@@ -398,6 +398,15 @@ func TestServiceInputTypeCompatibility(t *testing.T) {
 		}
 	}
 
+	// 列表不能隐式收窄为标量。
+	c.errs = nil
+	c.checkQueryInput(map[string]any{
+		"id": "params.ids", "name": "params.name", "ids": "params.ids", "status": "params.status", "state": "params.state",
+	}, q, q.ID, "f", "s", tc)
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "input id type List<integer> is not compatible with integer") {
+		t.Fatalf("list-to-scalar not reported: %s", got)
+	}
+
 	// 自定义类型经类型族比较：page_limit（integer 族）可赋给 integer。
 	c.errs = nil
 	c.checkQueryInput(map[string]any{

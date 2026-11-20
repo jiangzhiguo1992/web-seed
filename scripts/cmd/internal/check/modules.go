@@ -16,39 +16,15 @@ func (c *Checker) checkModules() moduleSet {
 		c.rulef("schema.load", "%s: %v", relPath(c.root, path), err)
 		return nil
 	}
-	rel := relPath(c.root, path)
-	if s, _ := doc["id"].(string); s != "platform.modules" {
-		c.rulef("schema.required", "%s: id must be platform.modules", rel)
-	}
-	if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
-		c.rulef("schema.required", "%s: summary must not be empty", rel)
-	}
-	if _, ok := doc["schema_version"]; !ok {
-		c.rulef("schema.required", "%s: missing required field schema_version", rel)
-	}
-	if s, _ := doc["stability"].(string); s == "" {
-		c.rulef("schema.required", "%s: missing required field stability", rel)
-	}
-	if _, ok := doc["do_not"]; !ok {
-		c.rulef("schema.required", "%s: missing required field do_not", rel)
-	}
 	modules := moduleSet{}
-	rawModules := asList(doc["modules"])
-	if len(rawModules) == 0 {
-		c.rulef("schema.required", "%s: modules must not be empty", rel)
-	}
-	for _, raw := range rawModules {
+	for _, raw := range asList(doc["modules"]) {
 		item, _ := asMap(raw)
-		name, _ := item["name"].(string)
-		if !match(`^[a-z][a-z0-9_]*$`, name) {
-			c.rulef("schema.pattern", "%s: module name %q must be snake_case", rel, name)
-			continue
+		if name, _ := item["name"].(string); name != "" {
+			modules[name] = true
 		}
-		if modules[name] {
-			c.rulef("schema.unique", "%s: duplicate module %s", rel, name)
-			continue
-		}
-		modules[name] = true
+	}
+	if len(modules) == 0 {
+		return modules
 	}
 	for _, file := range walkYAML(c.root, "contracts") {
 		frel := relPath(c.root, file)

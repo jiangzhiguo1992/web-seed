@@ -367,7 +367,7 @@ func (c *Checker) applyEntityFieldDefaults(e *entityInfo) {
 			continue
 		}
 		if !f.HasType {
-			typ := meta.typ
+			typ := strings.TrimPrefix(meta.typ, "_types.")
 			if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
 				typ = customType.Family
 			}
@@ -833,7 +833,7 @@ var goKeywords = map[string]bool{
 	"default": true, "defer": true, "else": true, "fallthrough": true, "for": true,
 	"func": true, "go": true, "goto": true, "if": true, "import": true,
 	"interface": true, "map": true, "package": true, "range": true, "return": true,
-	"select": true, "struct": true, "switch": true, "type": true, "var": true,
+	"select": true, "object": true, "switch": true, "type": true, "var": true,
 }
 
 // isGoIdent 判断是否是仅含字母数字、且以字母开头的 Go 标识符。
@@ -980,6 +980,7 @@ func (c *Checker) columnUnique(table, col string) bool {
 
 // resolvedColumnType 把列引用链解析为实际类型族；非引用/断链/成环时原样返回。
 func (c *Checker) resolvedColumnType(typ string) string {
+	typ = strings.TrimPrefix(typ, "_types.")
 	if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
 		return customType.Family
 	}
@@ -1040,7 +1041,7 @@ func (c *Checker) checkEntityValidation(e *entityInfo) {
 func (c *Checker) checkEntityValidationUsedBy(e *entityInfo, m map[string]any, where string) {
 	raw, present := m["used_by"]
 	if !present || raw == nil {
-		return // 缺失/空列表由 schema.required 与 min_items 报出
+		return // 缺失/空列表由 schema.required 与 min_len 报出
 	}
 	for _, x := range asList(raw) {
 		sid, ok := x.(string)

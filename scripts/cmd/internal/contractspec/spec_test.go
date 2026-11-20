@@ -21,12 +21,11 @@ func writeMeta(t *testing.T, root, name, body string) {
 func TestLoadSchemaByType(t *testing.T) {
 	root := t.TempDir()
 	writeMeta(t, root, "_helpers.yaml", "id: meta._helpers\n")
-	writeMeta(t, root, "_types.yaml", `
-id: meta.types
-type_families:
-  string:
-    description: "string"
-`)
+	shared, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeMeta(t, root, "_types.yaml", string(shared))
 	writeMeta(t, root, "data.tables.yaml", `
 id: meta.data.tables
 type: data.tables
@@ -84,175 +83,81 @@ fields:
 	}
 }
 
-func TestLoadSharedSchemasRequiresDescription(t *testing.T) {
+func TestLoadSharedTypesSchemas(t *testing.T) {
 	root := t.TempDir()
-	writeMeta(t, root, "_schemas.yaml", `id: meta.schemas
-title: "schema"
-kinds:
-  object:
-    keys:
-      - { name: type, type: string, required: true, description: "类型" }
-      - name: properties
-        type: list<object>
-        required: true
-        description: "属性"
-        item_fields:
-          - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
-  array:
-    description: "数组"
-    keys:
-      - { name: type, type: string, required: true, description: "类型" }
-      - { name: items, types: [object, array, scalar, ref], required: true, description: "元素" }
-  scalar:
-    description: "标量"
-    keys:
-      - { name: type, type: string, required: true, description: "类型" }
-  ref:
-    description: "引用"
-    keys:
-      - { name: ref, type: string, required: true, description: "引用" }
-`)
-	if _, err := LoadSharedSchemas(filepath.Join(root, "contracts/_meta")); err == nil {
-		t.Fatal("missing kind description must fail")
-	}
-}
-
-func TestLoadSharedSchemasKindKeys(t *testing.T) {
-	base := `id: meta.schemas
-title: "schema"
-kinds:
-  object:
-    description: "对象"
-    keys:
-      - { name: type, type: string, required: true, description: "类型" }
-      - name: properties
-        type: list<object>
-        required: true
-        description: "属性"
-        item_fields:
-          - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
-  array:
-    description: "数组"
-    keys:
-      - { name: type, type: string, required: true, description: "类型" }
-      - { name: items, types: [object, array, scalar, ref], required: true, description: "元素" }
-  scalar:
-    description: "标量"
-    keys:
-      - { name: type, type: string, required: true, description: "类型" }
-  ref:
-    description: "引用"
-    keys:
-      - { name: ref, type: string, required: true, description: "引用" }
-`
-	cases := []struct{ name, patch, want string }{
-		{
-			"missing properties key",
-			strings.Replace(base, `      - name: properties
-        type: list<object>
-        required: true
-        description: "属性"
-        item_fields:
-          - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
-`, "", 1),
-			"must define properties",
-		},
-		{
-			"discriminator not required",
-			strings.Replace(base,
-				"      - { name: type, type: string, required: true, description: \"类型\" }\n      - name: properties",
-				"      - { name: type, type: string, description: \"类型\" }\n      - name: properties", 1),
-			"key type must be required",
-		},
-		{
-			"properties missing item_fields",
-			strings.Replace(base, `        item_fields:
-          - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
-`, "", 1),
-			"must define item_fields",
-		},
-		{
-			"array defines properties",
-			strings.Replace(base, "      - { name: items, types: [object, array, scalar, ref], required: true, description: \"元素\" }\n",
-				"      - { name: items, types: [object, array, scalar, ref], required: true, description: \"元素\" }\n      - { name: properties, type: list<object>, description: \"非法\" }\n", 1),
-			"must not define properties",
-		},
-		{
-			"empty types",
-			strings.Replace(base,
-				"- { name: items, types: [object, array, scalar, ref], required: true, description: \"元素\" }",
-				"- { name: items, types: [], required: true, description: \"元素\" }", 1),
-			"types must not be empty",
-		},
-		{
-			"duplicate kind",
-			strings.Replace(base,
-				"- { name: items, types: [object, array, scalar, ref], required: true, description: \"元素\" }",
-				"- { name: items, types: [scalar, scalar], required: true, description: \"元素\" }", 1),
-			"duplicate schema kind",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			writeMeta(t, root, "_schemas.yaml", tc.patch)
-			_, err := LoadSharedSchemas(filepath.Join(root, "contracts/_meta"))
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("want %q, got %v", tc.want, err)
-			}
-		})
-	}
-}
-
-func TestLoadSharedSchemasFields(t *testing.T) {
-	root := t.TempDir()
-	writeMeta(t, root, "_schemas.yaml", `id: meta.schemas
-title: "schema"
-kinds:
-  object:
-    description: "对象"
-    keys:
-      - { name: type, type: string, required: true, description: "类型" }
-      - name: properties
-        type: list<object>
-        required: true
-        description: "属性"
-        item_fields:
-          - { name: name, type: string, required: true, description: "名" }
-          - { name: schema, types: [object, array, scalar, ref], required: true, description: "值域" }
-          - { name: required, type: boolean, description: "必填" }
-  array:
-    description: "数组"
-    keys:
-      - { name: type, type: string, required: true, description: "类型" }
-      - { name: items, types: [object, array, scalar, ref], required: true, description: "元素" }
-  scalar:
-    description: "标量"
-    keys:
-      - { name: type, type: string, required: true, description: "类型" }
-  ref:
-    description: "引用"
-    keys:
-      - { name: ref, type: string, required: true, description: "引用" }
-`)
-	sh, err := LoadSharedSchemas(filepath.Join(root, "contracts/_meta"))
+	shared, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	names := map[string]bool{}
-	for _, key := range sh.Kinds["object"].Keys {
-		names[key.Name] = true
+	writeMeta(t, root, "_types.yaml", string(shared))
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err != nil {
+		t.Fatalf("valid _types.yaml rejected: %v", err)
 	}
-	for _, want := range []string{"type", "properties"} {
-		if !names[want] {
-			t.Fatalf("missing key spec %s: %#v", want, sh.Kinds["object"].Keys)
+
+	body := strings.Replace(string(shared), "\n  scalar:\n", "\n  scalar_x:\n", 1)
+	writeMeta(t, root, "_types.yaml", body)
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "schemas must define scalar") {
+		t.Fatalf("missing scalar schema: %v", err)
+	}
+
+	body = string(shared)
+	lines := strings.Split(body, "\n")
+	kept := make([]string, 0, len(lines))
+	inItemFields := false
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "item_fields:" && !inItemFields {
+			inItemFields = true
+			continue
 		}
+		if inItemFields {
+			if strings.HasPrefix(line, "          ") {
+				continue
+			}
+			inItemFields = false
+		}
+		kept = append(kept, line)
 	}
-	if props, ok := findSchemaKey(sh.Kinds["object"].Keys, "properties"); !ok || len(props.ItemFields) != 3 {
-		t.Fatalf("object properties item_fields not loaded: %#v", props)
+	body = strings.Join(kept, "\n")
+	writeMeta(t, root, "_types.yaml", body)
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "properties must define item_fields") {
+		t.Fatalf("empty struct item_fields: %v", err)
+	}
+
+	body = strings.Replace(string(shared), "\nparam_targets:\n", "\n  bogus:\n    description: \"x\"\n    keys:\n      - { name: type, type: string, required: true }\n\nparam_targets:\n", 1)
+	writeMeta(t, root, "_types.yaml", body)
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown schema bogus") {
+		t.Fatalf("unknown schema kind: %v", err)
+	}
+}
+
+func TestLoadSharedTypesStructures(t *testing.T) {
+	root := t.TempDir()
+	shared, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeMeta(t, root, "_types.yaml", string(shared))
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err != nil {
+		t.Fatalf("valid _types.yaml rejected: %v", err)
+	}
+
+	body := strings.Replace(string(shared), "\n  list:\n", "\n  bag:\n", 1)
+	writeMeta(t, root, "_types.yaml", body)
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown structure bag") {
+		t.Fatalf("unknown structure: %v", err)
+	}
+
+	idx := strings.Index(string(shared), "\nstructures:")
+	tail := strings.Replace(string(shared)[idx:], "type: _types.integer", "type: _types.bogus", 1)
+	writeMeta(t, root, "_types.yaml", string(shared)[:idx]+tail)
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown type") {
+		t.Fatalf("unknown structure param type: %v", err)
+	}
+
+	idx = strings.Index(string(shared), "\nstructures:")
+	tail = strings.Replace(string(shared)[idx:], "max_len:", "len:", 1)
+	writeMeta(t, root, "_types.yaml", string(shared)[:idx]+tail)
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "does not allow param len") {
+		t.Fatalf("invalid list param: %v", err)
 	}
 }

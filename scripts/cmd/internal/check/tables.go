@@ -487,7 +487,7 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 			typ, _ := m["type"].(string)
 			pk, _ := m["primary_key"].(bool)
 			nullable, _ := m["nullable"].(bool)
-			if typ != shape.typ {
+			if strings.TrimPrefix(typ, "_types.") != shape.typ {
 				c.rulef("base-columns", "%s: base column %q must be %s, got %q", rel, n, shape.typ, typ)
 			}
 			if pk != shape.primary {
@@ -582,7 +582,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if t, _ := m["type"].(string); !isColumnType(t, schema.ValueTypes) {
 			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (type_families/custom_types %v or data.tables.<t>.col.<c>)", rel, i, name, t, valueTypeNames(schema.ValueTypes))
 		} else {
-			c.checkFamilyParams(m, t, rel, i, name, schema)
+			c.checkFamilyParams(m, strings.TrimPrefix(t, "_types."), rel, i, name, schema)
 		}
 	}
 	constraintNames := map[string]bool{}
@@ -647,7 +647,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 func (c *Checker) checkConstraintUsedBy(m map[string]any, tableID, rel string, i int, name string) {
 	raw, present := m["used_by"]
 	if !present || raw == nil {
-		return // 缺失/空列表由 schema.required 与 min_items 报出
+		return // 缺失/空列表由 schema.required 与 min_len 报出
 	}
 	for _, x := range asList(raw) {
 		qid, ok := x.(string)
@@ -667,7 +667,7 @@ func (c *Checker) checkConstraintUsedBy(m map[string]any, tableID, rel string, i
 }
 
 // checkIndexUsedBy 校验索引的 used_by：每个查询项存在且引用当前表。
-// 非空由 schema.required/min_items 保证；这里只做引用对账。
+// 非空由 schema.required/min_len 保证；这里只做引用对账。
 func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int, name string) {
 	raw, present := m["used_by"]
 	if !present || raw == nil {
@@ -810,8 +810,9 @@ func commonColumnFields(schema *Schema) map[string]bool {
 	return out
 }
 
-// checkSharedTypes 校验 _meta/_types.yaml 的类型族定义本身：
-// 未使用的族也必须可解析，避免拼错 type 后只在某列使用时才暴露。
+// checkSharedTypes 校验类型族与项目自定义类型：族在 _meta/_types.yaml，
+// 自定义类型在 contracts/data/types.yaml；未使用的族也必须可解析，
+// 避免拼错 type 后只在某列使用时才暴露。
 func (c *Checker) checkSharedTypes(schema *Schema) {
 	if len(schema.ValueTypes.TypeFamilies) == 0 {
 		c.rulef("schema.types", "types: type_families must not be empty")
@@ -829,13 +830,14 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 			if strings.TrimSpace(pname) == "" {
 				c.rulef("schema.types", "types.type_families.%s: param name must not be empty", name)
 			}
-			if err := validateFieldTypes([]Field{{Name: pname, Type: def.Type}}); err != nil {
+			def.Name = pname
+			if err := validateFieldTypes([]Field{def}, c.valueTypes, true); err != nil {
 				c.rulef("schema.types", "types.type_families.%s.params.%s: %v", name, pname, err)
 			}
 			if strings.TrimSpace(def.Description) == "" {
 				c.rulef("schema.types", "types.type_families.%s.params.%s: description must not be empty", name, pname)
 			}
-			if _, ok := contractspec.SchemaParamTargets[pname]; !ok {
+			if _, ok := schema.ValueTypes.ParamTargets[pname]; !ok {
 				c.rulef("schema.types", "types.type_families.%s: param %s has no consumer target", name, pname)
 			}
 			if def.Pattern != "" {
@@ -859,11 +861,11 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 			if pname == "default" {
 				continue
 			}
-			if _, ok := contractspec.SchemaParamTargets[pname]; !ok {
-				c.rulef("schema.types", "types.custom_types.%s: param %s has no consumer target", name, pname)
+			if _, ok := schema.ValueTypes.ParamTargets[pname]; !ok {
+				c.rulef("schema.types", "data.types.custom_types.%s: param %s has no consumer target", name, pname)
 			}
 		}
-		c.checkFamilyParams(customType.Params, customType.Family, "types.custom_types."+name, 0, name, schema)
+		c.checkFamilyParams(customType.Params, customType.Family, "data.types.custom_types."+name, 0, name, schema)
 	}
 }
 

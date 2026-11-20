@@ -96,8 +96,7 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, lifecycleActions map[string]bool, typeNames map[string]bool) {
 	steps := asList(doc["steps"])
 	if len(steps) == 0 {
-		c.rulef("service-steps", "%s: service requires steps", rel)
-		return
+		return // 空列表由 schema.min_len 报出
 	}
 	stepOutputs := make([]map[string]returnType, len(steps))
 	stepIndex := map[string]int{}
@@ -445,7 +444,7 @@ func (c *Checker) checkStepEvents(step map[string]any, input map[string]any, rel
 		return
 	}
 	if len(items) == 0 {
-		return // 空列表由 schema.min_items 报出
+		return // 空列表由 schema.min_len 报出
 	}
 	refs := make([]string, 0, len(items))
 	seen := map[string]bool{}

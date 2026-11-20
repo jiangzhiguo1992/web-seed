@@ -83,6 +83,9 @@ func TestScaffoldPassesStructureCheck(t *testing.T) {
 		{"feature.rules", "scaffold_note.yaml", func(s *contractspec.Schema) ([]byte, error) {
 			return contractspec.RenderRule(s, "scaffold_note", "account", "备注规则")
 		}},
+		{"feature.pages", "scaffold_note.yaml", func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderPage(s, "scaffold_note", "备注页面")
+		}},
 		{"cap.events", "scaffold_note.yaml", func(s *contractspec.Schema) ([]byte, error) {
 			return contractspec.RenderEvents(s, "scaffold_note", "account", "备注事件")
 		}},
@@ -289,7 +292,7 @@ services:
 		t.Fatal(err)
 	}
 	indexText := string(indexBytes)
-	indexText = strings.Replace(indexText, "\nglobal_notes:", "\n  - { id: data.queries.scaffold, path: data/queries/scaffold.yaml }\n  - { id: feature.rules.scaffold, path: features/rules/scaffold.yaml }\n  - { id: cap.services.scaffold, path: capabilities/services/scaffold.yaml }\nglobal_notes:", 1)
+	indexText = strings.Replace(indexText, "\nglobal_notes:", "\n  - { id: data.queries.scaffold, path: data/queries/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: feature.rules.scaffold, path: features/rules/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: cap.services.scaffold, path: capabilities/services/scaffold.yaml, summary: \"x\", consumers: [api], enforcement: tested, stability: draft }\nglobal_notes:", 1)
 	if err := os.WriteFile(indexPath, []byte(indexText), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -304,5 +307,43 @@ services:
 
 	if errs := check.Run(tmp); len(errs) != 0 {
 		t.Fatalf("check.Run failed:\n%s", strings.Join(errs, "\n"))
+	}
+}
+
+// TestFeaturePageScaffoldCheck 端到端验证 feature.pages 骨架 + index 登记能通过完整 checker。
+func TestFeaturePageScaffoldCheck(t *testing.T) {
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir()
+	copyContracts(t, filepath.Join(root, "contracts"), filepath.Join(tmp, "contracts"))
+
+	schema, _, err := contractspec.LoadSchemaByType(root, "feature.pages")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := contractspec.RenderPage(schema, "smoke_page", "临时页面")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pagePath := filepath.Join(tmp, "contracts/features/pages/smoke_page.yaml")
+	if err := os.WriteFile(pagePath, page, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	indexPath := filepath.Join(tmp, "contracts/index.yaml")
+	indexBytes, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry := "  - { id: feature.pages.smoke_page, path: features/pages/smoke_page.yaml, summary: \"临时页面\", consumers: [web/admin], enforcement: review-only, stability: draft }\n"
+	indexText := strings.Replace(string(indexBytes), "\n  # ---------- platform ----------", "\n"+entry+"\n  # ---------- platform ----------", 1)
+	if err := os.WriteFile(indexPath, []byte(indexText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if errs := check.Run(tmp); len(errs) != 0 {
+		t.Fatalf("feature.pages scaffold check failed:\n%s", strings.Join(errs, "\n"))
 	}
 }

@@ -6,7 +6,6 @@ schema_version: 1
 stability: stable
 do_not:
   - "不要在前端判断状态合法性，使用 cap.lifecycles.account 的动作表"
-  - "不要在页面展示密码、手机号、邮箱、令牌"
   - "认证信息只能通过认证接口获取，不要在本页拼装"
 
 page: account_detail

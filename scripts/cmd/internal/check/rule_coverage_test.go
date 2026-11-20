@@ -347,14 +347,6 @@ func TestServiceStructuralRules(t *testing.T) {
 		}
 	}
 
-	t.Run("service-steps", func(t *testing.T) {
-		c := &Checker{}
-		got := runServiceItem(t, base(), c)
-		if !strings.Contains(got, "service requires steps") || !strings.Contains(got, "[service-steps]") {
-			t.Fatalf("missing service-steps: %s", got)
-		}
-	})
-
 	t.Run("service-signature", func(t *testing.T) {
 		root, err := filepath.Abs("../../../..")
 		if err != nil {
@@ -592,7 +584,7 @@ tables:
 	c := &Checker{root: root, baseID: "data.tables.base", tableDocs: map[string]map[string]any{
 		"data.tables.x": {"summary": "x", "columns": []any{}},
 	}}
-	c.checkStorage(map[string]string{"data.tables.x": "x.yaml"})
+	c.checkStorage(map[string]string{"data.tables.x": "x.yaml"}, nil)
 	mustContainRule(t, c.errs, "storage-entry-fields")
 }
 
@@ -612,7 +604,7 @@ tables:
 	c := &Checker{root: root, baseID: "data.tables.base", tableDocs: map[string]map[string]any{
 		"data.tables.x": {"summary": "x", "columns": []any{}},
 	}}
-	c.checkStorage(map[string]string{"data.tables.x": "x.yaml"})
+	c.checkStorage(map[string]string{"data.tables.x": "x.yaml"}, nil)
 	mustContainRule(t, c.errs, "storage-archive-fields")
 }
 
@@ -635,11 +627,21 @@ func TestStorageTTLBoundRule(t *testing.T) {
 	}
 	c.checkStorageCaches(map[string]any{"caches": map[string]any{"redis": []any{
 		map[string]any{
+			"prefix":   "x",
 			"cache_of": "data.tables.x", "key": []any{"col.id"},
 			"retention": true, "unit": "minutes", "cache_ttl": 60,
 		},
 	}}}, entries, "contracts/data/storage.yaml")
 	mustContainRule(t, c.errs, "storage-ttl-bound")
+}
+
+func TestStorageCachePrefixRule(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"id": {typ: "integer"}}}}
+	entries := map[string]*storageEntry{"data.tables.x": {table: "data.tables.x", engine: "mysql"}}
+	c.checkStorageCaches(map[string]any{"caches": map[string]any{"redis": []any{
+		map[string]any{"cache_of": "data.tables.x", "key": []any{"id"}, "retention": true, "unit": "days", "cache_ttl": 30},
+	}}}, entries, "w")
+	mustContainRule(t, c.errs, "storage-cache-prefix")
 }
 
 func TestEnumRules(t *testing.T) {

@@ -84,7 +84,11 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 		if code, _ := item["on_violation"].(string); code != "" && !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
 			c.rulef("rule-structure", "%s: rule %s unknown on_violation %s", rel, id, code)
 		}
-		for _, rawSvc := range asList(item["implemented_by"]) {
+		implemented := asList(item["implemented_by"])
+		if len(implemented) == 0 {
+			c.rulef("rule-structure", "%s: rule %s implemented_by must not be empty", rel, id)
+		}
+		for _, rawSvc := range implemented {
 			svc, _ := rawSvc.(string)
 			if !serviceIDs[svc] {
 				c.rulef("rule-structure", "%s: rule %s unknown service %s", rel, id, svc)

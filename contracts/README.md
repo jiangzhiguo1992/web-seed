@@ -31,7 +31,7 @@
 | 实现由契约生成 | 类型、常量、路由、生命周期、DDL 均从本目录产出 |
 | 生成物不可手改 | `**/generated/` 与 `apps/api/migrations/` 是产物；手改会被 CI 拦截 |
 | 需求变更先改契约 | 禁止"先写代码后补契约" |
-| 契约不丢信息 | SQL 特性用结构化字段表达（`storage.tables.<engine>[].partition`、归档条目、`columns` + `indexes[].expression` 混合表达式索引），禁止塞回原生 DDL |
+| 契约不丢信息 | SQL 特性用结构化字段表达（归档条目、`columns` + `indexes[].expression` 混合表达式索引），禁止塞回原生 DDL |
 
 ### 1.2 契约的判定标准
 
@@ -76,8 +76,9 @@ contracts/
 ├── index.yaml                # 契约地图：所有条目的 ID / 路径 / 消费者 / 强度
 ├── _meta/                    # 契约元规范（非业务契约，不登记 index）
 │   ├── README.md             #   AI 入口：写前读什么、写后跑什么
-│   ├── _types.yaml           #   共享值类型：类型族 + 自定义类型
+│   ├── _types.yaml           #   共享类型族（值域参数）
 │   ├── data.tables.yaml      #   物理表字段树 + 值域 + 规则（单一源）
+│   ├── data.storage.yaml     #   存储拓扑字段树 + storage-* 规则
 │   ├── data.entities.yaml    #   实体字段树 + 值域 + 规则
 │   ├── data.queries.yaml     #   查询字段树 + 值域 + 规则
 │   └── data.enums.yaml       #   枚举字段树 + 值域 + 规则
@@ -88,7 +89,8 @@ contracts/
 │   ├── entities/<file>.yaml  #   业务读模型（_base.yaml 为基类）
 │   ├── queries/<scope>.yaml  #   读写形状：入参/返回/索引引用，不含 SQL
 │   ├── enums/<module>.yaml   #   跨端枚举：按 owner_module 拆分，integer code ↔ 名称
-│   └── storage.yaml          #   单例：引擎归属 / 条目化的保留 / 分区 / 归档 / 多 key 缓存
+│   ├── storage.yaml          #   单例：引擎归属 / 条目化的保留 / 归档 / 多 key 缓存
+│   └── types.yaml            #   单例：项目级值类型词汇（family + 固定参数）
 │
 ├── capabilities/             # ② 能力层：services + lifecycles + events（topics/jobs）+ protocols
 │   ├── services/<module>.yaml #   服务：services + schemas（interface 名由 owner_module + file 派生）
@@ -293,6 +295,8 @@ cap.lifecycles.account ─subjects(status)→ data.entities.account ─table→ 
 
 `_meta/` 是契约字段规范与脚本入口，不登记 `index.yaml`；`generated/` 只放产物，也不登记为业务契约。
 
+每个 entry 必填 `id` / `path` / `summary` / `consumers` / `enforcement` / `stability`：`path` 是相对 `contracts/` 的干净路径（禁止绝对路径、`..`、冒号与首尾空白），`consumers` 是非空去重标签列表（允许大小写；段内允许 `_`，段间允许 `-` / `/` / `.`，如 `api`、`web/admin`、`Web/Admin`），`enforcement` 只能是 generated / generated+tested / tested / review-only，`stability` 只能是 stable / draft / deprecated；顶层 `schema_version` 必须为 1；未知键与非法值由 `contract-check` 报 `schema.*`。
+
 ### 4.1 文件结构（按职责分层）
 
 | 层 | 位置 | 内容 |
@@ -490,7 +494,7 @@ data/storage.yaml ──> 按引擎分组的表条目 + 表级物理事实
 | 目标引擎 | MySQL 8.0.16+；`live_only` 仅唯一索引可设为 true，用 functional unique index 表达（`deleted_at IS NULL` 表达式键），不是 PostgreSQL partial index；非唯一索引需要 live 前导时显式写 `deleted_at` 列 |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验（⬜ P5） | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
-| 结构化 DDL | 分区用 `storage.tables.<engine>[].partition`，归档用 `archive_of` 条目（`promotable` 标明能否回迁，能回迁时必须写 `on_conflict`），混合表达式索引用 `columns` + `indexes[].expression`（纯表达式索引不支持）；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
+| 结构化 DDL | 归档用 `archive_of` 条目（`promotable` 标明能否回迁，能回迁时必须写 `on_conflict`），混合表达式索引用 `columns` + `indexes[].expression`（纯表达式索引不支持）；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |
 
 ### 6.1 迁移禁止操作
 

@@ -1,7 +1,7 @@
 // storage.go 校验 data/storage.yaml 的存储拓扑：
-// tables 按引擎分组；普通条目内聚 description/retention/partition，归档条目用 archive_of；
+// tables 按引擎分组；普通条目内聚 description/retention/ttl，归档条目用 archive_of；
 // caches 记录非权威副本及其缓存保留；引擎版本、连接池、部署拓扑等运行时配置不在契约内。
-// gen_db 只消费 tables.<engine> 的权威表列表，不生成 retention/partition/caches 配置。
+// gen_db 只消费 tables.<engine> 的权威表列表，不生成 retention/caches 配置。
 package check
 
 import (
@@ -10,24 +10,22 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 var storageNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
-// storageEngineFields 是各权威引擎允许的条目字段（storage-entry-fields）。
-// 新引擎必须先在这里登记字段集，避免不同引擎的物理事实被混写。
-var storageEngineFields = map[string]map[string]bool{
-	"mysql":    storageFieldSet("table", "description", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "partition"),
-	"postgres": storageFieldSet("table", "description", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "partition"),
-	"mongodb":  storageFieldSet("table", "description", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl"),
-}
+// storageEntryFields 是普通表条目的字段集（storage-entry-fields）。
+// 当前各引擎没有字段差异；出现差异时再按引擎拆分。
+var storageEntryFields = storageFieldSet("table", "description", "retention", "unit", "ttl")
 
 // storageArchiveFields 是归档条目的字段集：archive_of 指向原表，promotable 决定能否回迁，
 // on_conflict 是回迁冲突策略，table 是归档物理表名。
-var storageArchiveFields = storageFieldSet("archive_of", "promotable", "on_conflict", "table", "retention", "unit", "pending", "soft_delete", "hard_delete", "ttl", "age_by", "after_unit", "after")
+var storageArchiveFields = storageFieldSet("archive_of", "promotable", "on_conflict", "table", "retention", "unit", "ttl", "age_by", "after_unit", "after")
 
 // storageCacheFields 是非权威副本条目的字段集。
-var storageCacheFields = storageFieldSet("cache_of", "key", "retention", "unit", "cache_ttl")
+var storageCacheFields = storageFieldSet("cache_of", "key", "prefix", "retention", "unit", "cache_ttl")
 
 // storageEntry 是一张权威表在 storage.yaml 中的登记。
 type storageEntry struct {
@@ -88,8 +86,11 @@ func storageFieldSet(names ...string) map[string]bool {
 	return out
 }
 
-func (c *Checker) checkStorage(tableIDs map[string]string) {
+func (c *Checker) checkStorage(tableIDs map[string]string, schema *Schema) {
 	rel := "contracts/data/storage.yaml"
+	if schema != nil && schema.Targets.Dir != "" && schema.Targets.Glob != "" {
+		rel = filepath.Join(schema.Targets.Dir, schema.Targets.Glob)
+	}
 	c.cacheEntries = map[string]storageCacheEntry{}
 	c.archiveEntries = map[string]storageArchiveEntry{}
 	doc, err := loadYAML(filepath.Join(c.root, rel))
@@ -97,7 +98,12 @@ func (c *Checker) checkStorage(tableIDs map[string]string) {
 		c.rulef("storage-registry", "%s: %v", rel, err)
 		return
 	}
-	c.checkStorageDoc(doc, rel)
+	if schema != nil {
+		c.validateDoc(doc, schema.Fields, rel)
+		c.checkFieldOrder(rel, schema.Fields, orderRules{})
+		c.checkStorageFieldSubset(schema)
+	}
+	c.checkStability(doc, rel)
 
 	rawTables, ok := asMap(doc["tables"])
 	if !ok {
@@ -115,7 +121,6 @@ func (c *Checker) checkStorage(tableIDs map[string]string) {
 			c.rulef("storage-engine", "%s: tables.%s is required for supported engine", rel, engine)
 		}
 	}
-
 	entries, archives := c.checkStorageTables(rawTables, tableIDs, rel)
 	c.checkStorageArchives(archives, entries, tableIDs)
 	c.checkStorageCaches(doc, entries, rel)
@@ -130,11 +135,6 @@ func (c *Checker) checkStorageTables(rawTables map[string]any, tableIDs map[stri
 		if !ok {
 			c.rulef("storage-registry", "%s: tables.%s must be a list of table entries", rel, engine)
 			continue
-		}
-		fields := storageEngineFields[engine]
-		if fields == nil {
-			c.rulef("storage-entry-fields", "%s: tables.%s has no entry field spec", rel, engine)
-			fields = storageFieldSet("table")
 		}
 		seen := map[string]bool{}
 		for i, raw := range list {
@@ -151,7 +151,7 @@ func (c *Checker) checkStorageTables(rawTables map[string]any, tableIDs map[stri
 				continue
 			}
 			for _, key := range sortedAnyKeys(entry) {
-				if !fields[key] {
+				if !storageEntryFields[key] {
 					c.rulef("storage-entry-fields", "%s: field %q is not allowed for engine %s", where, key, engine)
 				}
 			}
@@ -185,9 +185,6 @@ func (c *Checker) checkStorageTables(rawTables map[string]any, tableIDs map[stri
 				c.rulef("storage-entry-description", "%s: description %q must equal summary %q", where, desc, summary)
 			}
 			e.retention = c.parseStorageRetention(entry, where, false)
-			if rawPartition, ok := entry["partition"]; ok {
-				c.checkStoragePartition(id, rawPartition, where)
-			}
 			registered[id] = e
 		}
 	}
@@ -220,6 +217,7 @@ func (c *Checker) checkStorageCaches(doc map[string]any, entries map[string]*sto
 			continue
 		}
 		seen := map[string]bool{}
+		seenPrefix := map[string]bool{}
 		for i, rawEntry := range list {
 			where := fmt.Sprintf("%s: caches.%s[%d]", rel, engine, i)
 			entry, ok := asMap(rawEntry)
@@ -231,6 +229,16 @@ func (c *Checker) checkStorageCaches(doc map[string]any, entries map[string]*sto
 				if !storageCacheFields[key] {
 					c.rulef("storage-cache-fields", "%s: field %q is not allowed for cache entries", where, key)
 				}
+			}
+			prefix, _ := entry["prefix"].(string)
+			if prefix == "" {
+				c.rulef("storage-cache-prefix", "%s: prefix is required", where)
+			} else if !match(`^[a-z][a-z0-9_:-]*$`, prefix) {
+				c.rulef("storage-cache-prefix", "%s: prefix %q must match ^[a-z][a-z0-9_:-]*$", where, prefix)
+			} else if seenPrefix[prefix] {
+				c.rulef("storage-cache-prefix", "%s: prefix %q duplicates within engine %s", where, prefix, engine)
+			} else {
+				seenPrefix[prefix] = true
 			}
 			id, _ := entry["cache_of"].(string)
 			if id == "" {
@@ -307,68 +315,42 @@ func (c *Checker) checkStorageCaches(doc map[string]any, entries map[string]*sto
 	}
 }
 
-// checkStorageDoc 校验 storage.yaml 顶层键与 engine 允许列表，避免拼写错误静默通过。
-func (c *Checker) checkStorageDoc(doc map[string]any, rel string) {
-	allowed := map[string]bool{
-		"schema_version": true, "id": true, "summary": true, "stability": true, "do_not": true,
-		"supported_engines": true, "tables": true, "caches": true,
-		"not_supported_topologies": true,
+// checkStorageFieldSubset 防止 Go 的精确字段集与模板声明的条目键集漂移。
+func (c *Checker) checkStorageFieldSubset(schema *Schema) {
+	tables, ok := contractspec.FindField(schema.Fields, "tables")
+	if !ok {
+		c.rulef("schema.types", "data.storage: fields.tables is missing")
+		return
 	}
-	for _, k := range sortedAnyKeys(doc) {
-		if !allowed[k] {
-			c.rulef("storage-doc", "%s: unknown top-level field %q", rel, k)
+	tableKeys := fieldNameSet(tables.ItemFields)
+	for name := range storageEntryFields {
+		if !tableKeys[name] {
+			c.rulef("schema.types", "data.storage: entry field %q is missing from _meta/data.storage.yaml", name)
 		}
 	}
-	if id, ok := doc["id"].(string); !ok {
-		c.rulef("schema.required", "%s: missing required field \"id\"", rel)
-	} else if id != "data.storage" {
-		c.rulef("schema.const", "%s: id must be data.storage, got %q", rel, id)
-	}
-	if _, ok := doc["summary"]; !ok {
-		c.rulef("schema.required", "%s: missing required field \"summary\"", rel)
-	} else if summary, _ := doc["summary"].(string); strings.TrimSpace(summary) == "" {
-		c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
-	}
-	if _, ok := doc["do_not"]; !ok {
-		c.rulef("schema.required", "%s: missing required field \"do_not\"", rel)
-	}
-	c.checkStability(doc, rel)
-	raw, ok := doc["supported_engines"]
-	if !ok {
-		c.rulef("storage-engines", "%s: supported_engines is required", rel)
-		return
-	}
-	list, ok := asList2(raw)
-	if !ok {
-		c.rulef("storage-engines", "%s: supported_engines must be a list", rel)
-		return
-	}
-	if len(list) == 0 {
-		c.rulef("storage-engines", "%s: supported_engines must not be empty", rel)
-	}
-	for i, v := range list {
-		if s, _ := v.(string); s == "" {
-			c.rulef("storage-engines", "%s: supported_engines[%d] must be a non-empty string", rel, i)
+	for name := range storageArchiveFields {
+		if !tableKeys[name] {
+			c.rulef("schema.types", "data.storage: archive field %q is missing from _meta/data.storage.yaml", name)
 		}
 	}
-	raw, ok = doc["not_supported_topologies"]
+	caches, ok := contractspec.FindField(schema.Fields, "caches")
 	if !ok {
 		return
 	}
-	list, ok = asList2(raw)
-	if !ok {
-		c.rulef("storage-engines", "%s: not_supported_topologies must be a list", rel)
-		return
-	}
-	if len(list) == 0 {
-		c.rulef("storage-engines", "%s: not_supported_topologies must not be empty when present", rel)
-		return
-	}
-	for i, v := range list {
-		if s, _ := v.(string); s == "" {
-			c.rulef("storage-engines", "%s: not_supported_topologies[%d] must be a non-empty string", rel, i)
+	cacheKeys := fieldNameSet(caches.ItemFields)
+	for name := range storageCacheFields {
+		if !cacheKeys[name] {
+			c.rulef("schema.types", "data.storage: cache field %q is missing from _meta/data.storage.yaml", name)
 		}
 	}
+}
+
+func fieldNameSet(fields []Field) map[string]bool {
+	out := make(map[string]bool, len(fields))
+	for _, f := range fields {
+		out[f.Name] = true
+	}
+	return out
 }
 
 // parseStorageRetention 解析扁平 retention：retention 是开关，unit 与时长是同级字段。
@@ -408,27 +390,21 @@ func (c *Checker) parseStorageRetention(entry map[string]any, where string, cach
 		}
 		return &storageRetention{unit: unit, ttl: ttl}
 	}
-	hasDuration := false
-	for _, key := range []string{"pending", "soft_delete", "hard_delete", "ttl"} {
-		rawTime, ok := entry[key]
-		if !ok {
-			continue
-		}
-		hasDuration = true
-		if n, ok := toInt(rawTime); !ok || n < 1 {
-			c.rulef("storage-duration", "%s: %s must be an integer >= 1", where, key)
-		}
+	rawTTL, ok := entry["ttl"]
+	if !ok {
+		c.rulef("storage-duration", "%s: retention requires ttl", where)
+		return &storageRetention{unit: unit}
 	}
-	if !hasDuration {
-		c.rulef("storage-duration", "%s: retention requires at least one of pending/soft_delete/hard_delete/ttl", where)
+	ttl, ok := toInt(rawTTL)
+	if !ok || ttl < 1 {
+		c.rulef("storage-duration", "%s: ttl must be an integer >= 1", where)
 	}
-	ttl, _ := toInt(entry["ttl"])
 	return &storageRetention{unit: unit, ttl: ttl}
 }
 
 // rejectRetentionFields 拒绝 retention 未开启时出现的保留字段。
 func (c *Checker) rejectRetentionFields(entry map[string]any, where string, cache bool) {
-	keys := []string{"unit", "pending", "soft_delete", "hard_delete", "ttl"}
+	keys := []string{"unit", "ttl"}
 	if cache {
 		keys = []string{"unit", "cache_ttl"}
 	}
@@ -456,58 +432,6 @@ func (c *Checker) retentionUnit(entry map[string]any, where string) string {
 		return ""
 	}
 	return unit
-}
-
-// checkStoragePartition 校验表条目的分区策略。
-func (c *Checker) checkStoragePartition(id string, raw any, where string) {
-	p, ok := asMap(raw)
-	if !ok {
-		c.rulef("storage-partition", "%s: partition must be an object", where)
-		return
-	}
-	allowed := storageFieldSet("strategy", "columns", "interval")
-	for k := range p {
-		if !allowed[k] {
-			c.rulef("storage-partition", "%s: partition unknown field %q", where, k)
-		}
-	}
-	strategy, _ := p["strategy"].(string)
-	switch strategy {
-	case "range", "list", "hash":
-	default:
-		c.rulef("storage-partition", "%s: partition.strategy must be range/list/hash", where)
-	}
-	cols := asList(p["columns"])
-	if len(cols) == 0 {
-		c.rulef("storage-partition", "%s: partition.columns must not be empty", where)
-	}
-	for _, rawCol := range cols {
-		col, ok := rawCol.(string)
-		if !ok || col == "" {
-			c.rulef("storage-partition", "%s: partition.columns must be strings", where)
-			continue
-		}
-		if set := c.tableColumns[id]; set != nil {
-			if _, ok := set[col]; !ok {
-				c.rulef("storage-partition", "%s: partition column %q not found", where, col)
-			}
-		}
-	}
-	interval := ""
-	if rawInterval, ok := p["interval"]; ok {
-		s, ok := rawInterval.(string)
-		if !ok {
-			c.rulef("storage-partition", "%s: partition.interval must be a string", where)
-		} else {
-			interval = s
-		}
-	}
-	if strategy == "range" && interval == "" {
-		c.rulef("storage-partition", "%s: partition.interval is required for range", where)
-	}
-	if strategy != "range" && interval != "" {
-		c.rulef("storage-partition", "%s: partition.interval is only allowed for range", where)
-	}
 }
 
 // parseStorageArchive 解析归档条目：archive_of 指向原表，table 是归档物理表名。

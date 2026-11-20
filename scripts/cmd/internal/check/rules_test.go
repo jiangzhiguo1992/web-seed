@@ -161,13 +161,13 @@ func TestSoftZonesMarked(t *testing.T) {
 }
 
 func TestSoftFieldTypes(t *testing.T) {
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "string", Soft: true}}); err != nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "string", Soft: true}}, testValueTypes(), false); err != nil {
 		t.Fatalf("soft string field rejected: %v", err)
 	}
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "any", Soft: true}}); err != nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "any", Soft: true}}, testValueTypes(), false); err != nil {
 		t.Fatalf("soft any field rejected: %v", err)
 	}
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "integer", Soft: true}}); err == nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "integer", Soft: true}}, testValueTypes(), false); err == nil {
 		t.Fatal("soft on integer field must fail")
 	}
 }

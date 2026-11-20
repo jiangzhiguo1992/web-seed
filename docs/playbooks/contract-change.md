@@ -69,7 +69,7 @@ make contract-impact id=<被修改的 ID>
 | 应用包含哪些接口 | `contracts/project.yaml` 的 `apps` 段 |
 | 定时任务 / 消费者 | `contracts/capabilities/events/<module>.yaml` 的 `jobs` |
 | 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
-| 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables.<engine>` 普通条目（`description` / `retention` / `partition`）；归档用 `archive_of` 条目并用 `promotable` 标明能否回迁（能回迁时必须写 `on_conflict`） |
+| 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables.<engine>` 普通条目（`description` / `retention`）；归档用 `archive_of` 条目并用 `promotable` 标明能否回迁（能回迁时必须写 `on_conflict`） |
 | 查询 | `contracts/data/queries/<scope>.yaml` |
 | 枚举 | `contracts/data/enums/<module>.yaml` |
 | 实体 / 生命周期 / 规则 / 流程 | `contracts/capabilities/{services,lifecycles,events}/**` + `contracts/features/rules/**` |
@@ -92,11 +92,12 @@ make contract-impact id=<被修改的 ID>
 make contract-new type=data.tables name=note module=notes summary="备注表"
 make contract-new type=data.tables name=account_balance module=account summary="账户余额" column_type=decimal
 make contract-new type=data.enums name=note_status module=notes
+make contract-new type=feature.pages name=note_list summary="备注列表页"
 ```
 
-`column_type` 可选；指定后第一列使用该类型族，并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
+`column_type` 可选；指定后第一列使用该类型族（生成 `_types.<name>`），并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
 
-生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables.<engine>` 列表下登记条目**（`description` 必须等于表 `summary`，`retention` / `partition` 按需写在条目内；归档另写 `archive_of` 条目并声明 `promotable`，不建表契约；能回迁的归档必须被某个查询的 `archive` 引用并写 `on_conflict`，查询侧的 `age_by` 必须与 storage 一致），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体；`table.referenced_by` 由 `make gen-graph` 维护，不要手改。新实体在 `model.included_by` 列出包含它的实体，两处由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`；类型族：`contracts/_meta/_types.yaml`。
+生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables.<engine>` 列表下登记条目**（`description` 必须等于表 `summary`，`retention` 按需写在条目内；归档另写 `archive_of` 条目并声明 `promotable`，不建表契约；能回迁的归档必须被某个查询的 `archive` 引用并写 `on_conflict`，查询侧的 `age_by` 必须与 storage 一致），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体；`table.referenced_by` 由 `make gen-graph` 维护，不要手改。新实体在 `model.included_by` 列出包含它的实体，两处由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`；storage 条目：`contracts/_meta/data.storage.yaml`；类型族：`contracts/_meta/_types.yaml`；项目自定义类型：`contracts/data/types.yaml`。
 
 ### 3.2 校验
 

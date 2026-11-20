@@ -305,7 +305,7 @@ func (c *Checker) checkQueryDoNot(qd queryDoc) {
 func (c *Checker) checkQueryShape(q *queryInfo) {
 	where := fmt.Sprintf("%s: query %s", q.File, q.ID)
 	if len(q.Returns) == 0 {
-		return // 缺失由 schema.required 报出，空列表由 min_items 报出
+		return // 缺失由 schema.required 报出，空列表由 min_len 报出
 	}
 	nonErr := make([]queryReturn, 0, len(q.Returns))
 	for _, r := range q.Returns {

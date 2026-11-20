@@ -7,6 +7,7 @@
 //	go run ./contract_new -root ../.. -type data.enums  -name note_status -module notes
 //	go run ./contract_new -root ../.. -type data.entities -name note -table note -summary "备注实体"
 //	go run ./contract_new -root ../.. -type data.queries -name note -module notes -table note -summary "备注查询"
+//	go run ./contract_new -root ../.. -type feature.pages -name note_list -summary "备注列表页"
 package main
 
 import (
@@ -21,7 +22,7 @@ import (
 
 func main() {
 	root := flag.String("root", "../..", "repo root")
-	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | cap.lifecycles | feature.rules | cap.events | cap.protocols.http")
+	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | cap.lifecycles | feature.rules | feature.pages | cap.events | cap.protocols.http")
 	name := flag.String("name", "", "snake_case name")
 	module := flag.String("module", "", "owner_module / query module (default: name)")
 	table := flag.String("table", "", "table stem (default: name)")
@@ -34,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	if *typ == "" || *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|cap.events|cap.protocols.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
+		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|feature.pages|cap.events|cap.protocols.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
 		os.Exit(2)
 	}
 	if *module == "" {
@@ -56,7 +57,7 @@ func main() {
 		fail(err)
 	}
 	switch *typ {
-	case "data.tables", "data.entities", "data.queries", "cap.services", "cap.lifecycles", "feature.rules", "cap.events", "cap.protocols.http":
+	case "data.tables", "data.entities", "data.queries", "cap.services", "cap.lifecycles", "feature.rules", "feature.pages", "cap.events", "cap.protocols.http":
 		if *out == "auto" {
 			if schema.Targets.Dir == "" {
 				fail(fmt.Errorf("targets.dir is empty"))
@@ -123,6 +124,13 @@ func main() {
 			fail(err)
 		}
 		writeOut(*out, b, "next: replace TODO; choose constraint/invariant/policy; reference the rule from a service step then run make gen-graph; implemented_by must be non-empty; register in contracts/index.yaml; make contract-check")
+
+	case "feature.pages":
+		b, err := contractspec.RenderPage(schema, *name, *summary)
+		if err != nil {
+			fail(err)
+		}
+		writeOut(*out, b, "next: replace TODO; set route to feature.routes.<name> after adding the route, or keep null; add data/actions/fields; register in contracts/index.yaml; make contract-check")
 
 	case "cap.lifecycles":
 		b, err := contractspec.RenderLifecycle(schema, *name, *module, *summary)

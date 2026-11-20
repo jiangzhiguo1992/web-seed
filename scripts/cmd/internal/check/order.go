@@ -65,21 +65,45 @@ func (c *Checker) checkNodeOrder(n *yaml.Node, fields []Field, rel, path string,
 		}
 		value := n.Content[i+1]
 		childPath := joinPath(path, key)
+		typ := normalizeTypeExpr(f.Type)
 		switch {
-		case value.Kind == yaml.MappingNode && len(f.Types) > 0 && f.Type != "map":
+		case value.Kind == yaml.MappingNode && len(f.Types) > 0 && typ != "map":
 			c.checkSchemaNodeOrder(value, rel, childPath, rules)
-		case value.Kind == yaml.MappingNode && f.Type == "map" && len(f.Types) > 0:
+		case value.Kind == yaml.MappingNode && typ == "map" && len(f.Types) > 0:
 			for j := 0; j+1 < len(value.Content); j += 2 {
 				c.checkSchemaNodeOrder(value.Content[j+1], rel, childPath+"."+value.Content[j].Value, rules)
 			}
-		case value.Kind == yaml.MappingNode && f.Type == "map<object>":
+		case value.Kind == yaml.MappingNode && typ == "map<object>":
 			for j := 0; j+1 < len(value.Content); j += 2 {
 				if item := value.Content[j+1]; item.Kind == yaml.MappingNode {
 					c.checkNodeOrder(item, f.ItemFields, rel, childPath+"."+value.Content[j].Value, rules)
 				}
 			}
+		case value.Kind == yaml.MappingNode && typ == "map<list<object>>":
+			for j := 0; j+1 < len(value.Content); j += 2 {
+				list := value.Content[j+1]
+				if list.Kind != yaml.SequenceNode {
+					continue
+				}
+				for _, item := range list.Content {
+					if item.Kind == yaml.MappingNode {
+						c.checkNodeOrder(item, f.ItemFields, rel, childPath+"."+value.Content[j].Value+"[]", rules)
+					}
+				}
+			}
 		case value.Kind == yaml.MappingNode && len(f.Fields) > 0:
 			c.checkNodeOrder(value, f.Fields, rel, childPath, rules)
+		case value.Kind == yaml.SequenceNode && typ == "list<map<object>>":
+			for _, item := range value.Content {
+				if item.Kind != yaml.MappingNode {
+					continue
+				}
+				for j := 0; j+1 < len(item.Content); j += 2 {
+					if v := item.Content[j+1]; v.Kind == yaml.MappingNode {
+						c.checkNodeOrder(v, f.ItemFields, rel, childPath+"[]."+item.Content[j].Value, rules)
+					}
+				}
+			}
 		case value.Kind == yaml.SequenceNode && len(f.ItemFields) > 0:
 			for _, item := range value.Content {
 				if item.Kind == yaml.MappingNode {
@@ -90,8 +114,8 @@ func (c *Checker) checkNodeOrder(n *yaml.Node, fields []Field, rel, path string,
 	}
 }
 
-// checkSchemaNodeOrder 按 _schemas.kinds 的 allowed 顺序校验 schema 节点自身的键顺序；
-// object.properties 是 property 条目列表，条目顺序按 _schemas.property.keys 校验。
+// checkSchemaNodeOrder 按 _types.yaml schemas.<kind>.keys 的顺序校验 schema 节点自身的键顺序；
+// object.properties 是 property 条目列表，条目顺序按 properties 的 item_fields 校验。
 func (c *Checker) checkSchemaNodeOrder(n *yaml.Node, rel, path string, rules orderRules) {
 	if n == nil || n.Kind != yaml.MappingNode {
 		return
@@ -135,7 +159,7 @@ func (c *Checker) checkSchemaNodeOrder(n *yaml.Node, rel, path string, rules ord
 	}
 }
 
-// checkPropertyOrder 按 _schemas.property.keys 的顺序校验属性条目，并递归其 schema 子树。
+// checkPropertyOrder 按 properties.item_fields 的顺序校验属性条目，并递归其 schema 子树。
 func (c *Checker) checkPropertyOrder(n *yaml.Node, rel, path string, rules orderRules) {
 	if n == nil || n.Kind != yaml.MappingNode {
 		return

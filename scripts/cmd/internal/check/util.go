@@ -85,13 +85,20 @@ func toFloat(v any) (float64, bool) {
 var tableColumnTypeRe = regexp.MustCompile(`^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$`)
 
 func isColumnType(t string, ct ValueTypes) bool {
-	if _, ok := ct.TypeFamilies[t]; ok {
+	if isTableColumnType(t) {
 		return true
 	}
-	if _, ok := ct.CustomTypes[t]; ok {
+	name := strings.TrimPrefix(t, "_types.")
+	if name == t {
+		return false
+	}
+	if _, ok := ct.TypeFamilies[name]; ok {
 		return true
 	}
-	return isTableColumnType(t)
+	if _, ok := ct.CustomTypes[name]; ok {
+		return true
+	}
+	return false
 }
 
 func isTableColumnType(t string) bool {

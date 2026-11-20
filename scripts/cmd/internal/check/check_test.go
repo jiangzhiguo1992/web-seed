@@ -1,6 +1,7 @@
 package check
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,18 +30,19 @@ func TestIsColumnType(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{"string", true},
+		{"_types.string", true},
+		{"string", false},
 		{"uuid", false},
 		{"varchar", false},
-		{"timestamp", true},
-		{"datetime", true},
-		{"decimal", true},
-		{"float", true},
+		{"_types.timestamp", true},
+		{"_types.datetime", true},
+		{"_types.decimal", true},
+		{"_types.float", true},
 		{"date", false},
 		{"time", false},
 		{"text", false},
 		{"timestamptz", false},
-		{"integer", true},
+		{"_types.integer", true},
 		{"int", false},
 		{"int32", false},
 		{"double", false},
@@ -58,14 +60,21 @@ func TestIsColumnType(t *testing.T) {
 	}
 }
 
+func testValueTypes() ValueTypes {
+	return ValueTypes{
+		TypeFamilies: map[string]ValueTypeFamily{"string": {}, "integer": {}, "boolean": {}, "any": {}, "float": {}, "decimal": {}},
+		Structures:   map[string]contractspec.Structure{"object": {}, "list": {}, "set": {}, "array": {}, "map": {}},
+	}
+}
+
 func TestValidateFieldTypes(t *testing.T) {
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "uuid"}}); err == nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "uuid"}}, testValueTypes(), false); err == nil {
 		t.Fatal("expected invalid schema type to fail")
 	}
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "float"}}); err != nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "float"}}, testValueTypes(), false); err != nil {
 		t.Fatalf("float schema type reported: %v", err)
 	}
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "decimal"}}); err != nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "decimal"}}, testValueTypes(), false); err != nil {
 		t.Fatalf("decimal schema type reported: %v", err)
 	}
 }
@@ -385,7 +394,7 @@ func minimalTableDoc() map[string]any {
 		"owner_module": "x",
 		"table":        map[string]any{"name": "x", "extends": []any{"data.tables.base"}},
 		"columns": []any{
-			map[string]any{"name": "code", "type": "string"},
+			map[string]any{"name": "code", "type": "_types.string"},
 		},
 	}
 }
@@ -579,14 +588,14 @@ func TestStorageRegistryAndEngine(t *testing.T) {
 	body := `supported_engines: [postgres, mysql]
 tables:
   postgres:
-    - table: data.tables.x
-    - table: data.tables.z
-    - table: data.tables.z
-    - table: data.tables.base
-    - table: data.tables.unknown
-    - table: data.tables.w
+    - { table: data.tables.x }
+    - { table: data.tables.z }
+    - { table: data.tables.z }
+    - { table: data.tables.base }
+    - { table: data.tables.unknown }
+    - { table: data.tables.w }
   mysql:
-    - table: data.tables.w
+    - { table: data.tables.w }
   mongodb: []
 `
 	if err := os.WriteFile(filepath.Join(dir, "storage.yaml"), []byte(body), 0o644); err != nil {
@@ -598,7 +607,7 @@ tables:
 		"data.tables.y": "y.yaml",
 		"data.tables.z": "z.yaml",
 		"data.tables.w": "w.yaml",
-	})
+	}, nil)
 	errs := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"physical table data.tables.y is not registered",
@@ -626,10 +635,10 @@ func TestStorageCacheEntries(t *testing.T) {
 	}}
 	c.checkStorageCaches(map[string]any{
 		"caches": map[string]any{"redis": []any{
-			map[string]any{"cache_of": "data.tables.x", "key": []any{"col.account_id"}},
-			map[string]any{"cache_of": "data.tables.unknown", "key": []any{"data.tables.unknown.col.account_id"}},
-			map[string]any{"cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "size_class": "small"},
-			map[string]any{"cache_of": "data.tables.x", "key": []any{"data.tables.x.col.missing"}},
+			map[string]any{"prefix": "x:a", "cache_of": "data.tables.x", "key": []any{"col.account_id"}},
+			map[string]any{"prefix": "x:b", "cache_of": "data.tables.unknown", "key": []any{"data.tables.unknown.col.account_id"}},
+			map[string]any{"prefix": "x:c", "cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "size_class": "small"},
+			map[string]any{"prefix": "x:d", "cache_of": "data.tables.x", "key": []any{"data.tables.x.col.missing"}},
 		}},
 	}, entries, "contracts/data/storage.yaml")
 	errs := strings.Join(c.errs, "\n")
@@ -649,8 +658,23 @@ func TestStorageCacheEntries(t *testing.T) {
 	}
 }
 
+func storageSchemaForTest(t *testing.T) *contractspec.Schema {
+	t.Helper()
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, _, err := contractspec.LoadSchemaByType(root, "data.storage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return schema
+}
+
 func TestStorageDocShape(t *testing.T) {
-	c := &Checker{}
+	schema := storageSchemaForTest(t)
+	c := &Checker{valueTypes: schema.ValueTypes}
+	rel := "contracts/data/storage.yaml"
 	doc := map[string]any{
 		"default_engine":    "postgres",
 		"supported_engines": []any{"postgres", 1},
@@ -660,78 +684,76 @@ func TestStorageDocShape(t *testing.T) {
 		"retention":         map[string]any{},
 		"partition":         map[string]any{},
 	}
-	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	errs := strings.Join(c.errs, "\n")
+	validate := func() string {
+		c.errs = nil
+		c.validateDoc(doc, schema.Fields, rel)
+		return strings.Join(c.errs, "\n")
+	}
+	errs := validate()
 	for _, want := range []string{
-		"unknown top-level field \"deploymnet\"",
-		"unknown top-level field \"default_engine\"",
-		"unknown top-level field \"engines\"",
-		"unknown top-level field \"size_class\"",
-		"unknown top-level field \"retention\"",
-		"unknown top-level field \"partition\"",
-		"supported_engines[1] must be a non-empty string",
-		"[storage-doc]",
+		"unknown field \"deploymnet\"",
+		"unknown field \"default_engine\"",
+		"unknown field \"engines\"",
+		"unknown field \"size_class\"",
+		"unknown field \"retention\"",
+		"unknown field \"partition\"",
+		"must be string",
+		"[schema.unknown-field]",
+		"[schema.type]",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in:\n%s", want, errs)
 		}
 	}
 
-	c.errs = nil
 	doc["supported_engines"] = "postgres"
-	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "supported_engines must be a list") || !strings.Contains(got, "[storage-engines]") {
-		t.Fatalf("non-list supported_engines not reported: %v", c.errs)
+	if got := validate(); !strings.Contains(got, "must be list") || !strings.Contains(got, "[schema.type]") {
+		t.Fatalf("non-list supported_engines not reported: %s", got)
 	}
 
-	c.errs = nil
 	doc["supported_engines"] = []any{"postgres"}
 	doc["not_supported_topologies"] = "sharding"
-	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "not_supported_topologies must be a list") || !strings.Contains(got, "[storage-engines]") {
-		t.Fatalf("non-list not_supported_topologies not reported: %v", c.errs)
+	if got := validate(); !strings.Contains(got, "must be list") || !strings.Contains(got, "[schema.type]") {
+		t.Fatalf("non-list not_supported_topologies not reported: %s", got)
 	}
 
-	c.errs = nil
 	doc["not_supported_topologies"] = []any{"sharding", ""}
-	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported_topologies[1] must be a non-empty string") {
-		t.Fatalf("empty not_supported_topologies item not reported: %v", c.errs)
+	if got := validate(); !strings.Contains(got, "does not match") || !strings.Contains(got, "[schema.pattern]") {
+		t.Fatalf("empty not_supported_topologies item not reported: %s", got)
 	}
 
-	c.errs = nil
 	doc["not_supported_topologies"] = []any{}
-	c.checkStorageDoc(doc, "contracts/data/storage.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "not_supported_topologies must not be empty when present") {
-		t.Fatalf("empty not_supported_topologies list not reported: %v", c.errs)
+	if got := validate(); !strings.Contains(got, "must be >= 1") || !strings.Contains(got, "[schema.len]") {
+		t.Fatalf("empty not_supported_topologies list not reported: %s", got)
 	}
 }
 
 func TestStorageDocRequiresSupportedEngines(t *testing.T) {
-	c := &Checker{}
-	c.checkStorageDoc(map[string]any{"tables": map[string]any{}}, "contracts/data/storage.yaml")
-	if got := entityErrs(c); !strings.Contains(got, "supported_engines is required") || !strings.Contains(got, "[storage-engines]") {
+	schema := storageSchemaForTest(t)
+	c := &Checker{valueTypes: schema.ValueTypes}
+	c.validateDoc(map[string]any{"tables": map[string]any{}}, schema.Fields, "contracts/data/storage.yaml")
+	if got := entityErrs(c); !strings.Contains(got, "missing required field \"supported_engines\"") || !strings.Contains(got, "[schema.required]") {
 		t.Fatalf("missing supported_engines not reported: %v", c.errs)
 	}
 
-	c = &Checker{}
-	c.checkStorageDoc(map[string]any{"supported_engines": []any{}}, "contracts/data/storage.yaml")
-	if got := entityErrs(c); !strings.Contains(got, "supported_engines must not be empty") || !strings.Contains(got, "[storage-engines]") {
+	c = &Checker{valueTypes: schema.ValueTypes}
+	c.validateDoc(map[string]any{"tables": map[string]any{}, "supported_engines": []any{}}, schema.Fields, "contracts/data/storage.yaml")
+	if got := entityErrs(c); !strings.Contains(got, "must be >= 1") || !strings.Contains(got, "[schema.len]") {
 		t.Fatalf("empty supported_engines not reported: %v", c.errs)
 	}
 }
 
 func TestStorageRetentionFlatFields(t *testing.T) {
 	c := &Checker{}
-	c.parseStorageRetention(map[string]any{"retention": true, "pending": 7}, "w", false)
+	c.parseStorageRetention(map[string]any{"retention": true, "ttl": 7}, "w", false)
 	if got := entityErrs(c); !strings.Contains(got, "unit is required when retention is true") || !strings.Contains(got, "[storage-duration]") {
 		t.Fatalf("missing unit not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
 	c.parseStorageRetention(map[string]any{"retention": true, "unit": "days"}, "w", false)
-	if !strings.Contains(entityErrs(c), "requires at least one of pending/soft_delete/hard_delete/ttl") {
-		t.Fatalf("missing duration not reported: %v", c.errs)
+	if !strings.Contains(entityErrs(c), "retention requires ttl") {
+		t.Fatalf("missing ttl not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
@@ -759,7 +781,7 @@ func TestStorageCacheRetentionFlatFields(t *testing.T) {
 
 	c := &Checker{tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"account_id": {typ: "integer"}}}}
 	c.checkStorageCaches(map[string]any{"caches": map[string]any{"redis": []any{
-		map[string]any{"cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "retention": true, "unit": "days", "cache_ttl": 60},
+		map[string]any{"prefix": "x", "cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "retention": true, "unit": "days", "cache_ttl": 60},
 	}}}, map[string]*storageEntry{"data.tables.x": authority}, "w")
 	if !strings.Contains(entityErrs(c), "cache_ttl must not exceed data.tables.x ttl") {
 		t.Fatalf("cache_ttl > ttl not reported: %v", c.errs)
@@ -767,7 +789,7 @@ func TestStorageCacheRetentionFlatFields(t *testing.T) {
 
 	c = &Checker{tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"account_id": {typ: "integer"}}}}
 	c.checkStorageCaches(map[string]any{"caches": map[string]any{"redis": []any{
-		map[string]any{"cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "retention": true, "unit": "hours", "cache_ttl": 720},
+		map[string]any{"prefix": "x", "cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "retention": true, "unit": "hours", "cache_ttl": 720},
 	}}}, map[string]*storageEntry{"data.tables.x": authority}, "w")
 	if len(c.errs) != 0 {
 		t.Fatalf("cache_ttl equal to ttl reported: %v", c.errs)
@@ -775,7 +797,7 @@ func TestStorageCacheRetentionFlatFields(t *testing.T) {
 
 	c = &Checker{tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"account_id": {typ: "integer"}}}}
 	c.checkStorageCaches(map[string]any{"caches": map[string]any{"redis": []any{
-		map[string]any{"cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "retention": true, "unit": "days"},
+		map[string]any{"prefix": "x", "cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "retention": true, "unit": "days"},
 	}}}, map[string]*storageEntry{"data.tables.x": authority}, "w")
 	if !strings.Contains(entityErrs(c), "cache_ttl is required") {
 		t.Fatalf("missing cache_ttl not reported: %v", c.errs)
@@ -783,31 +805,11 @@ func TestStorageCacheRetentionFlatFields(t *testing.T) {
 
 	c = &Checker{tableColumns: map[string]map[string]columnMeta{"data.tables.x": {"account_id": {typ: "integer"}}}}
 	c.checkStorageCaches(map[string]any{"caches": map[string]any{"redis": []any{
-		map[string]any{"cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "retention": false, "unit": "days", "cache_ttl": 30},
+		map[string]any{"prefix": "x", "cache_of": "data.tables.x", "key": []any{"data.tables.x.col.account_id"}, "retention": false, "unit": "days", "cache_ttl": 30},
 	}}}, map[string]*storageEntry{"data.tables.x": authority}, "w")
 	errs := entityErrs(c)
 	if !strings.Contains(errs, "retention must be true for cache entries") || !strings.Contains(errs, "cache_ttl is only allowed when retention is true") {
 		t.Fatalf("disabled cache retention not reported: %v", c.errs)
-	}
-}
-
-func TestStoragePartitionIntervalType(t *testing.T) {
-	c := &Checker{tableColumns: map[string]map[string]columnMeta{
-		"data.tables.x": {"created_at": {typ: "timestamp"}},
-	}}
-	c.checkStoragePartition("data.tables.x", map[string]any{"strategy": "range", "columns": []any{"created_at"}, "interval": 5}, "storage tables.mysql[0]")
-	if !strings.Contains(entityErrs(c), "partition.interval must be a string") {
-		t.Fatalf("non-string partition interval not reported: %v", c.errs)
-	}
-}
-
-func TestStoragePartitionRangeInterval(t *testing.T) {
-	c := &Checker{tableColumns: map[string]map[string]columnMeta{
-		"data.tables.x": {"created_at": {typ: "timestamp"}},
-	}}
-	c.checkStoragePartition("data.tables.x", map[string]any{"strategy": "range", "columns": []any{"created_at"}}, "storage tables.mysql[0]")
-	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "partition.interval is required for range") || !strings.Contains(got, "[storage-partition]") {
-		t.Fatalf("range partition without interval not reported: %v", c.errs)
 	}
 }
 
@@ -1149,7 +1151,7 @@ func TestIndexStabilityMatchesContract(t *testing.T) {
 	write("contracts/index.yaml", `
 schema_version: 1
 entries:
-  - { id: data.tables.x, path: data/tables/x.yaml, stability: stable }
+  - { id: data.tables.x, path: data/tables/x.yaml, summary: "x", consumers: [tools], enforcement: tested, stability: stable }
 `)
 	write("contracts/data/tables/x.yaml", `
 id: data.tables.x
@@ -1165,11 +1167,250 @@ stability: draft
 	write("contracts/index.yaml", `
 schema_version: 1
 entries:
-  - { id: data.tables.x, path: data/tables/x.yaml, stability: 1 }
+  - { id: data.tables.x, path: data/tables/x.yaml, summary: "x", consumers: [tools], enforcement: tested, stability: 1 }
 `)
 	c.checkIndex(map[string]string{}, &Schema{}, &Schema{}, &Schema{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "stability must be stable/draft/deprecated") {
 		t.Fatalf("invalid index stability not reported: %v", c.errs)
+	}
+}
+
+type scaffoldRenderCase struct {
+	typ     string
+	fullDoc bool
+	render  func(*contractspec.Schema) ([]byte, error)
+}
+
+func scaffoldRenderCases() []scaffoldRenderCase {
+	return []scaffoldRenderCase{
+		{"data.tables", true, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderTable(s, "smoke", "smoke", "x")
+		}},
+		{"data.enums", false, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderEnumItem(s, "smoke", "smoke")
+		}},
+		{"data.entities", true, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderEntity(s, "smoke", "data.tables.account", "account", "x")
+		}},
+		{"data.queries", true, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderQuery(s, "smoke", "smoke", "data.tables.account", "x")
+		}},
+		{"cap.services", true, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderService(s, "smoke", "smoke", "x")
+		}},
+		{"cap.lifecycles", true, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderLifecycle(s, "smoke", "smoke", "x")
+		}},
+		{"feature.rules", true, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderRule(s, "smoke", "smoke", "x")
+		}},
+		{"feature.pages", true, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderPage(s, "smoke", "x")
+		}},
+		{"cap.events", true, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderEvents(s, "smoke", "smoke", "x")
+		}},
+		{"cap.protocols.http", true, func(s *contractspec.Schema) ([]byte, error) {
+			return contractspec.RenderHTTP(s, "smoke", "smoke", "x", "cap.services.smoke.get", "/smoke", "get")
+		}},
+	}
+}
+
+func TestIndexAcceptsAllContractTypes(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := scaffoldRenderCases()
+	entries := make([]string, 0, len(cases))
+	for _, tc := range cases {
+		schema, _, err := contractspec.LoadSchemaByType(root, tc.typ)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.typ, err)
+		}
+		b, err := tc.render(schema)
+		if err != nil {
+			t.Fatalf("%s render: %v", tc.typ, err)
+		}
+		id := schema.Targets.FileID("smoke.yaml")
+		if id == "" {
+			t.Fatalf("%s: cannot derive id from targets.id", tc.typ)
+		}
+		if tc.fullDoc {
+			var doc map[string]any
+			if err := yaml.Unmarshal(b, &doc); err != nil {
+				t.Fatalf("%s: %v", tc.typ, err)
+			}
+			if got, _ := doc["id"].(string); got != id {
+				t.Fatalf("%s: rendered id %q, want %q", tc.typ, got, id)
+			}
+		} else if !strings.Contains(string(b), "data/enums/smoke.yaml") {
+			t.Fatalf("%s: enum item target missing:\n%s", tc.typ, b)
+		}
+		entries = append(entries, fmt.Sprintf(
+			"  - { id: %s, path: generated/%s.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n",
+			id, strings.ReplaceAll(tc.typ, ".", "_"),
+		))
+	}
+	dir := t.TempDir()
+	p := filepath.Join(dir, "contracts/index.yaml")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "schema_version: 1\nentries:\n" + strings.Join(entries, "")
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: dir}
+	c.checkIndex(map[string]string{}, &Schema{}, &Schema{}, &Schema{})
+	if len(c.errs) != 0 {
+		t.Fatalf("all contract types index reported: %v", c.errs)
+	}
+}
+
+func TestIndexEntryShape(t *testing.T) {
+	root := t.TempDir()
+	write := func(body string) {
+		p := filepath.Join(root, "contracts/index.yaml")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := func(body string) string {
+		write(body)
+		c := &Checker{root: root}
+		c.checkIndex(map[string]string{}, &Schema{}, &Schema{}, &Schema{})
+		return strings.Join(c.errs, "\n")
+	}
+
+	bad := check(`
+schema_version: 2
+unknown: true
+read_order: nope
+groups:
+  data:
+    description: ""
+    layers: []
+entries:
+  - { id: Bad-ID, path: generated/x.yaml, enforcment: tested }
+  - id: data.tables.x
+    path: generated/x.yaml
+    summary: ""
+    consumers: [tools, tools, ""]
+    enforcement: sometimes
+    stability: forever
+    common_mistakes: [""]
+`)
+	for _, want := range []string{
+		"schema_version must be 1",
+		"unknown top-level field \"unknown\"",
+		"read_order must be a list",
+		"groups.data.description is required",
+		"groups.data.layers must not be empty",
+		"entries[0] has unknown field \"enforcment\"",
+		"Bad-ID: missing summary",
+		"Bad-ID.consumers is required",
+		"Bad-ID: missing enforcement",
+		"Bad-ID: missing stability",
+		"id must match",
+		"must be a non-empty string",
+		"has duplicate value",
+		"enforcement must be",
+		"stability must be",
+	} {
+		if !strings.Contains(bad, want) {
+			t.Fatalf("missing %q in:\n%s", want, bad)
+		}
+	}
+
+	good := check(`
+schema_version: 1
+read_order: [docs/index.md]
+groups:
+  data: { description: "x", layers: [tables] }
+entries:
+  - { id: data.tables.x, path: generated/x.yaml, summary: "x", consumers: [tools], enforcement: tested, stability: stable, common_mistakes: ["x"] }
+`)
+	if strings.TrimSpace(good) != "" {
+		t.Fatalf("valid index reported: %s", good)
+	}
+
+	// 未来条目：不带 common_mistakes、review-only、deprecated、下划线 ID、根白名单。
+	future := check(`
+schema_version: 1
+global_notes: ["x"]
+orphan_whitelist: [project]
+entries:
+  - { id: data.tables.verification_body, path: generated/x.yaml, summary: "x", consumers: [web/admin], enforcement: review-only, stability: deprecated }
+`)
+	if strings.TrimSpace(future) != "" {
+		t.Fatalf("future index entry reported: %s", future)
+	}
+}
+
+func TestIndexPathAndConsumers(t *testing.T) {
+	root := t.TempDir()
+	write := func(body string) {
+		p := filepath.Join(root, "contracts/index.yaml")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	check := func(body string) string {
+		write(body)
+		c := &Checker{root: root}
+		c.checkIndex(map[string]string{}, &Schema{}, &Schema{}, &Schema{})
+		return strings.Join(c.errs, "\n")
+	}
+
+	bad := check(`
+schema_version: 1
+entries:
+  - { id: data.tables.escape, path: ../escape.yaml, summary: "x", consumers: [web/user], enforcement: tested, stability: draft }
+  - { id: data.tables.absolute, path: /tmp/x.yaml, summary: "x", consumers: [web/user], enforcement: tested, stability: draft }
+  - { id: data.tables.dupsep, path: data//x.yaml, summary: "x", consumers: [web/user], enforcement: tested, stability: draft }
+  - { id: data.tables.space, path: "generated/x.yaml ", summary: "x", consumers: [web/user], enforcement: tested, stability: draft }
+  - { id: data.tables.colon, path: "generated/x:y.yaml", summary: "x", consumers: [web/user], enforcement: tested, stability: draft }
+  - { id: data.tables.users, path: generated/x.yaml, summary: "x", consumers: ["Web Admin"], enforcement: tested, stability: draft }
+`)
+	for _, want := range []string{
+		"path must be a clean relative path, got \"../escape.yaml\"",
+		"path must be a clean relative path, got \"/tmp/x.yaml\"",
+		"path must be a clean relative path, got \"data//x.yaml\"",
+		"path must be a clean relative path, got \"generated/x.yaml \"",
+		"path must be a clean relative path, got \"generated/x:y.yaml\"",
+		`consumer "Web Admin" must match`,
+	} {
+		if !strings.Contains(bad, want) {
+			t.Fatalf("missing %q in:\n%s", want, bad)
+		}
+	}
+
+	good := check(`
+schema_version: 1
+entries:
+  - { id: data.tables.verification_body, path: generated/openapi/admin.yaml, summary: "x", consumers: [web/user, api, worker, data-platform, web_admin, web.admin, Web/Admin, API], enforcement: review-only, stability: deprecated }
+`)
+	if strings.TrimSpace(good) != "" {
+		t.Fatalf("valid path/consumer reported: %s", good)
+	}
+
+	if err := os.MkdirAll(filepath.Join(root, "contracts/data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dirBad := check(`
+schema_version: 1
+entries:
+  - { id: data.tables.dir, path: data, summary: "x", consumers: [tools], enforcement: tested, stability: draft }
+`)
+	if !strings.Contains(dirBad, "path must be a file") {
+		t.Fatalf("directory path not reported: %s", dirBad)
 	}
 }
 
@@ -1416,8 +1657,9 @@ enums:
     used_by:
       - data.entities.note
 `)
-	writeCapFile(t, root, "contracts/index.yaml", `entries:
-  - { id: data.enums.notes, path: data/enums/notes.yaml }
+	writeCapFile(t, root, "contracts/index.yaml", `schema_version: 1
+entries:
+  - { id: data.enums.notes, path: data/enums/notes.yaml, summary: "备注域枚举", consumers: [api], enforcement: tested, stability: draft }
 `)
 	c := &Checker{
 		root: root,
@@ -1687,8 +1929,8 @@ func TestEnumUsedByShape(t *testing.T) {
 	}
 	c := &Checker{}
 	c.validateValue([]any{}, usedBy, "enums[].used_by")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.range]") {
-		t.Fatalf("empty used_by must fail min_items: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.len]") {
+		t.Fatalf("empty used_by must fail min_len: %v", c.errs)
 	}
 	c.errs = nil
 	c.validateValue([]any{"bad.prefix"}, usedBy, "enums[].used_by")
@@ -2320,6 +2562,102 @@ func TestValidateEnum(t *testing.T) {
 	}
 }
 
+func TestScaffoldGeneratedProseCovered(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{}
+	for _, key := range contractspec.ScaffoldProseKeys() {
+		allowed[key] = true
+	}
+	allowedList := map[string]bool{}
+	for _, key := range contractspec.ScaffoldProseListKeys() {
+		allowedList[key] = true
+	}
+	seen := map[string]bool{}
+	seenList := map[string]bool{}
+	observed := map[string]bool{}
+	observedList := map[string]bool{}
+	for _, tc := range scaffoldRenderCases() {
+		schema, _, err := contractspec.LoadSchemaByType(root, tc.typ)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.typ, err)
+		}
+		b, err := tc.render(schema)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.typ, err)
+		}
+		var node yaml.Node
+		if err := yaml.Unmarshal(b, &node); err != nil {
+			t.Fatalf("%s: %v", tc.typ, err)
+		}
+		var walk func(*yaml.Node)
+		walk = func(n *yaml.Node) {
+			switch n.Kind {
+			case yaml.DocumentNode, yaml.SequenceNode:
+				for _, child := range n.Content {
+					walk(child)
+				}
+			case yaml.MappingNode:
+				for i := 0; i+1 < len(n.Content); i += 2 {
+					k, v := n.Content[i], n.Content[i+1]
+					if proseScalarFields[k.Value] && v.Kind == yaml.ScalarNode {
+						observed[k.Value] = true
+						if !allowed[k.Value] && !seen[k.Value] {
+							seen[k.Value] = true
+							t.Errorf("%s: generated prose field %q is missing from ScaffoldProseKeys", tc.typ, k.Value)
+						}
+					}
+					if proseListFields[k.Value] && v.Kind == yaml.SequenceNode {
+						for _, item := range v.Content {
+							if item.Kind == yaml.ScalarNode {
+								observedList[k.Value] = true
+								if !allowedList[k.Value] && !seenList[k.Value] {
+									seenList[k.Value] = true
+									t.Errorf("%s: generated prose list field %q is missing from ScaffoldProseListKeys", tc.typ, k.Value)
+								}
+								break
+							}
+						}
+					}
+					walk(v)
+				}
+			}
+		}
+		walk(&node)
+	}
+	for _, key := range []string{"summary", "description", "when"} {
+		if !observed[key] {
+			t.Errorf("expected scaffold output to cover prose field %q", key)
+		}
+	}
+	if !observedList["do_not"] {
+		t.Error("expected scaffold output to cover prose list field \"do_not\"")
+	}
+}
+
+func TestScaffoldProseKeysKnownToChecker(t *testing.T) {
+	// 这里只查正向漂移；scaffold 产出字段漏加引号由 TestScaffoldPassesStructureCheck 的实际输出捕获。
+	for _, key := range contractspec.ScaffoldProseKeys() {
+		if !proseScalarFields[key] {
+			t.Errorf("scaffold prose key %q is not in checker proseScalarFields", key)
+		}
+	}
+	foundCommonMistakes := false
+	for _, key := range contractspec.ScaffoldProseListKeys() {
+		if !proseListFields[key] {
+			t.Errorf("scaffold prose list key %q is not in checker proseListFields", key)
+		}
+		if key == "common_mistakes" {
+			foundCommonMistakes = true
+		}
+	}
+	if !foundCommonMistakes {
+		t.Error("ScaffoldProseListKeys must include common_mistakes")
+	}
+}
+
 func TestProseQuoteCheckDetectsList(t *testing.T) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte("do_not:\n  - plain\n"), &doc); err != nil {
@@ -2404,7 +2742,7 @@ func TestDefaultRules(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["columns"] = append(doc["columns"].([]any), map[string]any{
-		"name": "bad", "type": "string", "default": 1,
+		"name": "bad", "type": "_types.string", "default": 1,
 	})
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[default-type]") {
@@ -2414,7 +2752,7 @@ func TestDefaultRules(t *testing.T) {
 	c = &Checker{}
 	doc = minimalTableDoc()
 	doc["columns"] = append(doc["columns"].([]any), map[string]any{
-		"name": "both", "type": "string", "default": "x", "default_sql": "now()",
+		"name": "both", "type": "_types.string", "default": "x", "default_sql": "now()",
 	})
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[default-vs-default-sql]") {
@@ -2426,7 +2764,7 @@ func TestUniqueColumnNames(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["columns"] = append(doc["columns"].([]any), map[string]any{
-		"name": "code", "type": "string",
+		"name": "code", "type": "_types.string",
 	})
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unique-names]") {
@@ -2926,15 +3264,15 @@ func TestRedundancySchema(t *testing.T) {
 	if !ok {
 		t.Fatal("columns.redundancy field missing in meta")
 	}
-	if redundancy.Type != "list<object>" {
-		t.Fatalf("redundancy type = %q, want list<object>", redundancy.Type)
+	if redundancy.Type != "_types.list<_types.object>" {
+		t.Fatalf("redundancy type = %q, want _types.list<_types.object>", redundancy.Type)
 	}
 	column, ok := contractspec.FindField(redundancy.ItemFields, "column")
-	if !ok || column.Type != "string" || column.Pattern == "" || !column.Required {
+	if !ok || column.Type != "_types.string" || column.Pattern == "" || !column.Required {
 		t.Fatalf("redundancy.column shape = %#v", column)
 	}
 	source, ok := contractspec.FindField(redundancy.ItemFields, "source")
-	if !ok || source.Type != "boolean" || !source.Required {
+	if !ok || source.Type != "_types.boolean" || !source.Required {
 		t.Fatalf("redundancy.source shape = %#v", source)
 	}
 
@@ -2943,7 +3281,7 @@ func TestRedundancySchema(t *testing.T) {
 		value any
 		want  string
 	}{
-		{"single member", []any{map[string]any{"column": "data.tables.a.col.x", "source": true}}, "[schema.range]"},
+		{"single member", []any{map[string]any{"column": "data.tables.a.col.x", "source": true}}, "[schema.len]"},
 		{"legacy group id", "account_own_type", "[schema.type]"},
 		{"bad column ref", []any{map[string]any{"column": "token.own_type", "source": true}}, "[schema.pattern]"},
 		{"bad source type", []any{map[string]any{"column": "data.tables.a.col.x", "source": "yes"}}, "[schema.type]"},
@@ -3306,7 +3644,7 @@ func TestTableTextLengthLimits(t *testing.T) {
 	doc := minimalTableDoc()
 	doc["summary"] = strings.Repeat("a", tableSummaryMaxRunes+1)
 	doc["columns"] = []any{map[string]any{
-		"name": "code", "type": "string", "comment": strings.Repeat("b", columnCommentMaxRunes+1),
+		"name": "code", "type": "_types.string", "comment": strings.Repeat("b", columnCommentMaxRunes+1),
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	errs := entityErrs(c)
@@ -3323,7 +3661,7 @@ func TestTableTextLengthLimits(t *testing.T) {
 	doc = minimalTableDoc()
 	doc["summary"] = strings.Repeat("a", tableSummaryMaxRunes)
 	doc["columns"] = []any{map[string]any{
-		"name": "code", "type": "string", "comment": strings.Repeat("b", columnCommentMaxRunes),
+		"name": "code", "type": "_types.string", "comment": strings.Repeat("b", columnCommentMaxRunes),
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if len(c.errs) != 0 {
@@ -3337,10 +3675,127 @@ func TestStorageCacheKeyOrderMatters(t *testing.T) {
 	}}
 	entries := map[string]*storageEntry{"data.tables.x": {table: "data.tables.x", engine: "mysql"}}
 	c.checkStorageCaches(map[string]any{"caches": map[string]any{"redis": []any{
-		map[string]any{"cache_of": "data.tables.x", "key": []any{"a", "b"}, "retention": true, "unit": "days", "cache_ttl": 30},
-		map[string]any{"cache_of": "data.tables.x", "key": []any{"b", "a"}, "retention": true, "unit": "days", "cache_ttl": 30},
+		map[string]any{"prefix": "x", "cache_of": "data.tables.x", "key": []any{"a", "b"}, "retention": true, "unit": "days", "cache_ttl": 30},
+		map[string]any{"prefix": "x:b", "cache_of": "data.tables.x", "key": []any{"b", "a"}, "retention": true, "unit": "days", "cache_ttl": 30},
 	}}}, entries, "w")
 	if len(c.errs) != 0 {
 		t.Fatalf("key order reported as duplicate: %v", c.errs)
+	}
+}
+
+func TestValidateListMapObject(t *testing.T) {
+	c := &Checker{}
+	f := Field{
+		Name: "x",
+		Type: "_types.list<_types.map<_types.object>>",
+		ItemFields: []Field{
+			{Name: "id", Type: "_types.string", Required: true},
+		},
+	}
+	c.validateValue([]any{map[string]any{"a": map[string]any{"id": "x"}}}, f, "x")
+	if len(c.errs) != 0 {
+		t.Fatalf("list<map<object>> rejected: %v", c.errs)
+	}
+	c.errs = nil
+	c.validateValue([]any{map[string]any{"a": map[string]any{}}}, f, "x")
+	if len(c.errs) == 0 {
+		t.Fatal("missing required map value field must fail")
+	}
+}
+
+func TestValidateSetObject(t *testing.T) {
+	vt := testValueTypes()
+	f := Field{Name: "x", Type: "_types.set<_types.object>"}
+	if err := validateFieldTypes([]Field{f}, vt, false); err == nil {
+		t.Fatal("set<object> without unique_key must fail")
+	}
+	f.UniqueKey = "name"
+	f.ItemFields = []Field{{Name: "name", Type: "_types.string"}}
+	if err := validateFieldTypes([]Field{f}, vt, false); err != nil {
+		t.Fatalf("set<object> with unique_key rejected: %v", err)
+	}
+	f.UniqueKey = "missing"
+	if err := validateFieldTypes([]Field{f}, vt, false); err == nil || !strings.Contains(err.Error(), "unique_key missing not found") {
+		t.Fatalf("missing unique_key field: %v", err)
+	}
+	c := &Checker{}
+	obj := Field{
+		Name:       "x",
+		Type:       "_types.set<_types.object>",
+		UniqueKey:  "name",
+		ItemFields: []Field{{Name: "name", Type: "_types.string", Required: true}},
+	}
+	c.validateValue([]any{
+		map[string]any{"name": "a"},
+		map[string]any{"name": "a"},
+	}, obj, "x")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "duplicate") {
+		t.Fatalf("set<object> duplicate not rejected: %v", c.errs)
+	}
+}
+
+func TestValidateArrayLen(t *testing.T) {
+	f := Field{Name: "x", Type: "_types.array<_types.string>", Len: 2}
+	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err != nil {
+		t.Fatalf("array with len rejected: %v", err)
+	}
+	c := &Checker{}
+	c.validateValue([]any{"a"}, f, "x")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "length 1 must equal 2") {
+		t.Fatalf("array len not enforced: %v", c.errs)
+	}
+	f.MinLen = 1
+	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "array uses len") {
+		t.Fatalf("array min_len not rejected: %v", err)
+	}
+}
+
+func TestValidateNestedSetObject(t *testing.T) {
+	f := Field{
+		Name:       "x",
+		Type:       "_types.list<_types.set<_types.object>>",
+		UniqueKey:  "name",
+		ItemFields: []Field{{Name: "name", Type: "_types.string", Required: true}},
+	}
+	c := &Checker{}
+	c.validateValue([]any{
+		[]any{map[string]any{"name": "a"}, map[string]any{"name": "a"}},
+	}, f, "x")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "duplicate") {
+		t.Fatalf("nested set<object> duplicate not rejected: %v", c.errs)
+	}
+}
+
+func TestValidateMapIntegerKeyPatterns(t *testing.T) {
+	f := Field{Name: "x", Type: "_types.map<_types.integer, _types.string>", KeyPatterns: []string{"^[0-9]+$"}}
+	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "key_patterns only allowed") {
+		t.Fatalf("integer key with key_patterns must fail: %v", err)
+	}
+}
+
+func TestValidateMinLenExceedsMaxLen(t *testing.T) {
+	f := Field{Name: "x", Type: "_types.list<_types.string>", MinLen: 3, MaxLen: 2}
+	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "min_len must not exceed max_len") {
+		t.Fatalf("min_len > max_len must fail: %v", err)
+	}
+}
+
+func TestValidateMaxLenZero(t *testing.T) {
+	f := Field{Name: "x", Type: "_types.list<_types.string>", MaxLen: 0}
+	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "max_len must be a positive integer") {
+		t.Fatalf("max_len 0 must fail: %v", err)
+	}
+}
+
+func TestValidateBooleanUniqueKey(t *testing.T) {
+	f := Field{
+		Name:       "x",
+		Type:       "_types.set<_types.object>",
+		MinLen:     1,
+		UniqueKey:  "flag",
+		ItemFields: []Field{{Name: "flag", Type: "_types.boolean", Required: true}},
+	}
+	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "boolean unique_key is not allowed") {
+		t.Fatalf("boolean unique_key must fail: %v", err)
 	}
 }

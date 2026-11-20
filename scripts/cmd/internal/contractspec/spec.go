@@ -26,26 +26,38 @@ type Schema struct {
 	Rules        []Rule  `yaml:"rules"`
 }
 
-// SharedTypes 是 _meta/_types.yaml 的严格解析结果：类型族由所有契约类型共享，
-// 不再挂靠在 data.tables 的字段规范里。
+// SharedTypes 是 _meta/_types.yaml 的严格解析结果：类型族是元层词汇，
+// 由所有契约类型共享；项目级自定义类型在 contracts/data/types.yaml。
 type SharedTypes struct {
 	ID           string                     `yaml:"id"`
 	Title        string                     `yaml:"title"`
-	TypeFamilies map[string]ValueTypeFamily `yaml:"type_families"`
-	CustomTypes  map[string]CustomValueType `yaml:"custom_types"`
+	TypeFamilies map[string]ValueTypeFamily `yaml:"basic_types"`
+	Structures   map[string]Structure       `yaml:"structures"`
+	Schemas      map[string]SchemaKind      `yaml:"schemas"`
+	ParamTargets map[string]string          `yaml:"param_targets"`
 }
 
-// SharedSchemas 是 _meta/_schemas.yaml 的严格解析结果：services.schemas 与
-// events.payload 共用的 schema 节点语法。
-// 两层语法：Kinds 描述值域节点，Property 描述 object.properties[] 的槽位条目。
-// 节点种类就是 Kinds 的键集，不维护第二份 one_of 清单。
-type SharedSchemas struct {
-	ID    string                `yaml:"id"`
-	Title string                `yaml:"title"`
-	Kinds map[string]SchemaKind `yaml:"kinds"`
+// Structure 是模板字段的数据结构声明：list/set/array/map/object。
+type Structure struct {
+	Description string           `yaml:"description"`
+	Fields      []Field          `yaml:"fields"`
+	Params      map[string]Field `yaml:"params"`
 }
 
-// SchemaNodeKind 返回 schema 节点的种类：ref 优先，其次由 type 的 object/array/其他值决定。
+// CustomTypesDoc 是 contracts/data/types.yaml 的严格解析结果。
+// 自定义类型是 data 层词汇，随项目开发增长，不放在 _meta。
+type CustomTypesDoc struct {
+	ID            string                     `yaml:"id"`
+	Summary       string                     `yaml:"summary"`
+	SchemaVersion int                        `yaml:"schema_version"`
+	Stability     string                     `yaml:"stability"`
+	DoNot         []string                   `yaml:"do_not"`
+	CustomTypes   map[string]CustomValueType `yaml:"custom_types"`
+}
+
+const customTypesRel = "contracts/data/types.yaml"
+
+// SchemaNodeKind 返回 schema 节点的种类：ref 优先，其次由 type 的 struct/array/其他值决定。
 func SchemaNodeKind(node map[string]any, kinds map[string]SchemaKind) (string, bool) {
 	_, hasRef := node["ref"]
 	typ, _ := node["type"].(string)
@@ -98,29 +110,19 @@ func (t Targets) FileID(file string) string {
 }
 
 type ValueTypes struct {
-	TypeFamilies map[string]ValueTypeFamily `yaml:"type_families"`
+	TypeFamilies map[string]ValueTypeFamily `yaml:"basic_types"`
 	CustomTypes  map[string]CustomValueType `yaml:"custom_types"`
+	Structures   map[string]Structure       `yaml:"structures"`
+	Schemas      map[string]SchemaKind      `yaml:"schemas"`
+	ParamTargets map[string]string          `yaml:"param_targets"`
 }
 
-// SchemaParamTargets 声明 family param 的消费方，避免新增参数后静默丢失：
-// openapi=生成到 OpenAPI，storage=仅存储层，runtime=业务运行时。
-var SchemaParamTargets = map[string]string{
-	"min_len":            "openapi",
-	"max_len":            "openapi",
-	"pattern":            "openapi",
-	"min":                "openapi",
-	"max":                "openapi",
-	"default":            "openapi",
-	"fixed":              "storage",
-	"normalize":          "runtime",
-	"bits":               "storage",
-	"unsigned":           "storage",
-	"precision":          "storage",
-	"scale":              "storage",
-	"mode":               "storage",
-	"timezone":           "storage",
-	"fractional_seconds": "storage",
-	"binary":             "storage",
+// ParamTargetKinds 是 param_targets 允许的消费方：openapi=生成到 OpenAPI，
+// storage=仅存储层，runtime=业务运行时。
+var ParamTargetKinds = map[string]bool{
+	"openapi": true,
+	"storage": true,
+	"runtime": true,
 }
 
 // CustomValueType 是自定义值类型：一个类型族加上固定参数，供表列与 schema 共享。
@@ -151,15 +153,18 @@ type Field struct {
 	Min      any    `yaml:"min"`
 	Max      any    `yaml:"max"`
 	MinItems any    `yaml:"min_items"`
+	MinLen   any    `yaml:"min_len"`
+	MaxLen   any    `yaml:"max_len"`
+	Len      any    `yaml:"len"`
 	Pattern  string `yaml:"pattern"`
-	// KeyPattern 是 map 键的正则；仅 type: map 时使用。
-	KeyPattern  string `yaml:"key_pattern"`
-	Description string `yaml:"description"`
-	Examples    []any  `yaml:"examples"`
-	Default     any    `yaml:"default"`
-	Generated   bool   `yaml:"generated"`
-	Write       string `yaml:"write"`
-	Unique      bool   `yaml:"unique"`
+	// KeyPatterns 是 map 键的正则列表；string key 时任一匹配即可。
+	KeyPatterns []string `yaml:"key_patterns"`
+	Description string   `yaml:"description"`
+	Examples    []any    `yaml:"examples"`
+	Default     any      `yaml:"default"`
+	Generated   bool     `yaml:"generated"`
+	Write       string   `yaml:"write"`
+	Unique      bool     `yaml:"unique"`
 	// UniqueKey 声明 list<object> 按哪个字段判重，例如 properties 用 name。
 	UniqueKey  string  `yaml:"unique_key"`
 	Fields     []Field `yaml:"fields"`
@@ -210,7 +215,14 @@ func LoadSchemaByType(root, typ string) (*Schema, string, error) {
 		return nil, "", fmt.Errorf("%s: missing %s (type_families is empty)", foundPath, filepath.Join(dir, "_types.yaml"))
 	}
 	if needsSharedSchemas(typ) && len(found.NodeKinds) == 0 {
-		return nil, "", fmt.Errorf("%s: missing %s (kinds is empty)", foundPath, filepath.Join(dir, "_schemas.yaml"))
+		return nil, "", fmt.Errorf("%s: missing schemas (kinds is empty) in %s", foundPath, filepath.Join(dir, "_types.yaml"))
+	}
+	if needsSharedTypes(typ) {
+		doc, err := LoadCustomTypes(root, found.ValueTypes.TypeFamilies)
+		if err != nil {
+			return nil, "", err
+		}
+		found.ValueTypes.CustomTypes = doc.CustomTypes
 	}
 	return found, foundPath, nil
 }
@@ -245,17 +257,88 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 	if err := dec.Decode(&t); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	vt := ValueTypes{TypeFamilies: t.TypeFamilies, CustomTypes: t.CustomTypes}
 	if t.ID != "meta.types" {
 		return nil, fmt.Errorf("%s: id must be meta.types, got %q", path, t.ID)
 	}
-	if len(vt.TypeFamilies) == 0 {
-		return nil, fmt.Errorf("%s: type_families must not be empty", path)
+	if len(t.TypeFamilies) == 0 {
+		return nil, fmt.Errorf("%s: basic_types must not be empty", path)
 	}
-	if err := validateValueTypes(path, vt); err != nil {
+	if len(t.Structures) == 0 {
+		return nil, fmt.Errorf("%s: structures must not be empty", path)
+	}
+	if err := validateTypeFamilies(path, t.TypeFamilies); err != nil {
+		return nil, err
+	}
+	if err := validateSchemas(path, t.Schemas); err != nil {
+		return nil, err
+	}
+	if err := validateStructures(path, t.Structures, t.TypeFamilies); err != nil {
+		return nil, err
+	}
+	if err := validateParamTargets(path, t.TypeFamilies, t.ParamTargets); err != nil {
 		return nil, err
 	}
 	return &t, nil
+}
+
+// validateParamTargets 校验 param_targets 的键必须是已声明参数，值必须是已知消费方。
+// "每个参数必须有消费方"由 checker 报 schema.types，保持错误分类不变。
+func validateParamTargets(path string, families map[string]ValueTypeFamily, targets map[string]string) error {
+	// default 是 custom_types 的通用参数，不属于任何 family 的 params。
+	known := map[string]bool{"default": true}
+	for _, fam := range families {
+		for name := range fam.Params {
+			known[name] = true
+		}
+	}
+	for name, target := range targets {
+		if !known[name] {
+			return fmt.Errorf("%s: param_targets.%s does not match any family param", path, name)
+		}
+		if !ParamTargetKinds[target] {
+			return fmt.Errorf("%s: param_targets.%s has invalid target %q (openapi/storage/runtime)", path, name, target)
+		}
+	}
+	return nil
+}
+
+// LoadCustomTypes 严格解析 contracts/data/types.yaml；文件缺失视为没有自定义类型。
+func LoadCustomTypes(root string, families map[string]ValueTypeFamily) (*CustomTypesDoc, error) {
+	path := filepath.Join(root, customTypesRel)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &CustomTypesDoc{ID: "data.types", CustomTypes: map[string]CustomValueType{}}, nil
+		}
+		return nil, err
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(b))
+	dec.KnownFields(true)
+	var doc CustomTypesDoc
+	if err := dec.Decode(&doc); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if doc.ID != "data.types" {
+		return nil, fmt.Errorf("%s: id must be data.types, got %q", path, doc.ID)
+	}
+	if doc.SchemaVersion != 1 {
+		return nil, fmt.Errorf("%s: schema_version must be 1", path)
+	}
+	if strings.TrimSpace(doc.Summary) == "" {
+		return nil, fmt.Errorf("%s: summary must not be empty", path)
+	}
+	if len(doc.DoNot) == 0 {
+		return nil, fmt.Errorf("%s: do_not must not be empty", path)
+	}
+	switch doc.Stability {
+	case "stable", "draft", "deprecated":
+	default:
+		return nil, fmt.Errorf("%s: stability must be stable/draft/deprecated, got %q", path, doc.Stability)
+	}
+	if err := validateCustomTypes(path, families, doc.CustomTypes); err != nil {
+		return nil, err
+	}
+	return &doc, nil
 }
 
 // schemaNodeRequiredKeys 是 SchemaNodeKind 硬编码的四种节点及其结构键。
@@ -267,76 +350,125 @@ var schemaNodeRequiredKeys = map[string][]string{
 	"ref":    {"ref"},
 }
 
-// LoadSharedSchemas 严格解析 `_meta/_schemas.yaml`；文件缺失时返回 os.ErrNotExist。
-func LoadSharedSchemas(dir string) (*SharedSchemas, error) {
-	path := filepath.Join(dir, "_schemas.yaml")
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
+// validateStructures 校验 _types.structures：key 必须是已知容器，
+// 每个 param 的 type 必须命中 basic_types，required 与 default 互斥。
+func validateStructures(path string, structures map[string]Structure, families map[string]ValueTypeFamily) error {
+	if len(structures) == 0 {
+		return fmt.Errorf("%s: structures must not be empty", path)
 	}
-	dec := yaml.NewDecoder(bytes.NewReader(b))
-	dec.KnownFields(true)
-	var sh SharedSchemas
-	if err := dec.Decode(&sh); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+	known := map[string]bool{"list": true, "set": true, "array": true, "map": true, "object": true}
+	allowedParams := map[string]map[string]bool{
+		"list":   {"min_len": true, "max_len": true},
+		"set":    {"min_len": true, "max_len": true},
+		"array":  {"len": true},
+		"map":    {"min_len": true, "max_len": true, "key_patterns": true},
+		"object": {"additional_properties": true},
 	}
-	if sh.ID != "meta.schemas" {
-		return nil, fmt.Errorf("%s: id must be meta.schemas, got %q", path, sh.ID)
+	for name, st := range structures {
+		if !known[name] {
+			return fmt.Errorf("%s: unknown structure %s (list/set/array/map/object)", path, name)
+		}
+		if strings.TrimSpace(st.Description) == "" {
+			return fmt.Errorf("%s: structure %s missing description", path, name)
+		}
+		switch name {
+		case "map":
+			for _, required := range []string{"key", "value"} {
+				f, ok := FindField(st.Fields, required)
+				if !ok || f.Type != "*" || !f.Required {
+					return fmt.Errorf("%s: structure map field %s must be type \"*\" and required", path, required)
+				}
+			}
+			key, _ := FindField(st.Fields, "key")
+			if len(key.Enum) != 2 || !enumHas(key.Enum, "string") || !enumHas(key.Enum, "integer") {
+				return fmt.Errorf("%s: structure map key enum must be [string, integer]", path)
+			}
+		case "list", "set", "array":
+			f, ok := FindField(st.Fields, "item")
+			if !ok || f.Type != "*" || !f.Required {
+				return fmt.Errorf("%s: structure %s field item must be type \"*\" and required", path, name)
+			}
+		}
+		for pname, p := range st.Params {
+			if strings.TrimSpace(pname) == "" {
+				return fmt.Errorf("%s: structure %s param name must not be empty", path, name)
+			}
+			if !allowedParams[name][pname] {
+				return fmt.Errorf("%s: structure %s does not allow param %s", path, name, pname)
+			}
+			if p.Name != "" && p.Name != pname {
+				return fmt.Errorf("%s: structure %s param %s has mismatched name %q", path, name, pname, p.Name)
+			}
+			t := strings.TrimPrefix(p.Type, "_types.")
+			if _, ok := families[t]; !ok {
+				if _, ok := structures[t]; !ok && !strings.Contains(t, "<") {
+					return fmt.Errorf("%s: structure %s param %s has unknown type %q", path, name, pname, p.Type)
+				}
+			}
+			if p.Required && p.Default != nil {
+				return fmt.Errorf("%s: structure %s param %s: required and default are mutually exclusive", path, name, pname)
+			}
+		}
 	}
-	if len(sh.Kinds) == 0 {
-		return nil, fmt.Errorf("%s: kinds must not be empty", path)
+	return nil
+}
+
+// validateSchemas 校验 _types.schemas：必须定义 struct/array/scalar/ref 四种节点，
+// 判别键必填，struct 的 properties 必须有 item_fields，其他节点不得定义 properties。
+func validateSchemas(path string, schemas map[string]SchemaKind) error {
+	if len(schemas) == 0 {
+		return fmt.Errorf("%s: schemas must not be empty", path)
 	}
-	// SchemaNodeKind 硬编码了四种节点；元规范不能单方面增减 kind。
 	for kind, required := range schemaNodeRequiredKeys {
-		spec, ok := sh.Kinds[kind]
+		spec, ok := schemas[kind]
 		if !ok {
-			return nil, fmt.Errorf("%s: kinds must define %s", path, kind)
+			return fmt.Errorf("%s: schemas must define %s", path, kind)
 		}
 		for _, name := range required {
 			key, ok := findSchemaKey(spec.Keys, name)
 			if !ok {
-				return nil, fmt.Errorf("%s: kind %s keys must define %s", path, kind, name)
+				return fmt.Errorf("%s: schema %s keys must define %s", path, kind, name)
 			}
 			if !key.Required {
-				return nil, fmt.Errorf("%s: kind %s key %s must be required", path, kind, name)
+				return fmt.Errorf("%s: schema %s key %s must be required", path, kind, name)
 			}
 		}
 	}
-	for name := range sh.Kinds {
+	for name := range schemas {
 		if _, ok := schemaNodeRequiredKeys[name]; !ok {
-			return nil, fmt.Errorf("%s: unknown kind %s (SchemaNodeKind supports object/array/scalar/ref)", path, name)
+			return fmt.Errorf("%s: unknown schema %s (SchemaNodeKind supports struct/array/scalar/ref)", path, name)
 		}
 	}
-	keyTypes := map[string]bool{"": true, "string": true, "boolean": true, "integer": true, "any": true, "map": true, "list<object>": true, "list<string>": true}
-	for name, kind := range sh.Kinds {
+	keyTypes := map[string]bool{"": true, "_types.string": true, "_types.boolean": true, "_types.integer": true, "_types.any": true, "_types.map": true, "_types.list<_types.object>": true, "_types.list<_types.string>": true}
+	for name, kind := range schemas {
 		if strings.TrimSpace(kind.Description) == "" {
-			return nil, fmt.Errorf("%s: kind %s missing description", path, name)
+			return fmt.Errorf("%s: schema %s missing description", path, name)
 		}
-		if err := validateSchemaKeys(path, "kind "+name, kind.Keys, keyTypes); err != nil {
-			return nil, err
+		if err := validateSchemaKeys(path, "schema "+name, kind.Keys, keyTypes); err != nil {
+			return err
 		}
 	}
-	object := sh.Kinds["object"]
-	propsKey, ok := findSchemaKey(object.Keys, "properties")
+	structKind := schemas["object"]
+	propsKey, ok := findSchemaKey(structKind.Keys, "properties")
 	if !ok || len(propsKey.ItemFields) == 0 {
-		return nil, fmt.Errorf("%s: kind object properties must define item_fields", path)
+		return fmt.Errorf("%s: schema struct properties must define item_fields", path)
 	}
-	if err := validateSchemaKeys(path, "kind object properties item_fields", propsKey.ItemFields, keyTypes); err != nil {
-		return nil, err
+	if err := validateSchemaKeys(path, "schema struct properties item_fields", propsKey.ItemFields, keyTypes); err != nil {
+		return err
 	}
-	for name, kind := range sh.Kinds {
+	for name, kind := range schemas {
 		if name != "object" {
 			if _, ok := findSchemaKey(kind.Keys, "properties"); ok {
-				return nil, fmt.Errorf("%s: kind %s must not define properties (only object has properties)", path, name)
+				return fmt.Errorf("%s: schema %s must not define properties (only struct has properties)", path, name)
 			}
 		}
 	}
-	return &sh, nil
+	return nil
 }
 
-// sharedObjectPropertyKeys 返回 object.properties 的条目键规范。
-func sharedObjectPropertyKeys(sh *SharedSchemas) []Field {
-	if obj, ok := sh.Kinds["object"]; ok {
+// sharedObjectPropertyKeys 返回 struct.properties 的条目键规范。
+func sharedObjectPropertyKeys(schemas map[string]SchemaKind) []Field {
+	if obj, ok := schemas["object"]; ok {
 		if key, ok := findSchemaKey(obj.Keys, "properties"); ok {
 			return key.ItemFields
 		}
@@ -400,7 +532,7 @@ func validateSchemaKeys(path, where string, keys []Field, keyTypes map[string]bo
 				return fmt.Errorf("%s: %s key %s has invalid pattern %q: %w", path, where, key.Name, key.Pattern, err)
 			}
 		}
-		if key.UniqueKey != "" && key.Type != "list<object>" {
+		if key.UniqueKey != "" && strings.ReplaceAll(key.Type, "_types.", "") != "list<object>" {
 			return fmt.Errorf("%s: %s key %s: unique_key requires list<object>", path, where, key.Name)
 		}
 		if len(key.Types) > 1 && key.Default != nil {
@@ -429,13 +561,14 @@ func LoadSchema(path string) (*Schema, error) {
 	// 类型族是项目级共享源；单文件加载时若同目录存在 _types.yaml 就注入，
 	// LoadSchemaByType 再对依赖类型族的契约类型强制要求它存在。
 	if t, err := LoadSharedTypes(filepath.Dir(path)); err == nil {
-		s.ValueTypes = ValueTypes{TypeFamilies: t.TypeFamilies, CustomTypes: t.CustomTypes}
-	} else if !os.IsNotExist(err) {
-		return nil, err
-	}
-	if sh, err := LoadSharedSchemas(filepath.Dir(path)); err == nil {
-		s.NodeKinds = sh.Kinds
-		s.PropertyKeys = sharedObjectPropertyKeys(sh)
+		s.ValueTypes = ValueTypes{
+			TypeFamilies: t.TypeFamilies,
+			Structures:   t.Structures,
+			Schemas:      t.Schemas,
+			ParamTargets: t.ParamTargets,
+		}
+		s.NodeKinds = t.Schemas
+		s.PropertyKeys = sharedObjectPropertyKeys(t.Schemas)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -478,20 +611,24 @@ func injectFamilyParams(s *Schema) {
 	}
 }
 
-func validateValueTypes(path string, vt ValueTypes) error {
-	for name, fam := range vt.TypeFamilies {
+func validateTypeFamilies(path string, families map[string]ValueTypeFamily) error {
+	for name, fam := range families {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(fam.Description) == "" {
 			return fmt.Errorf("%s: family %s must have a name and description", path, name)
 		}
 	}
-	for name, custom := range vt.CustomTypes {
+	return nil
+}
+
+func validateCustomTypes(path string, families map[string]ValueTypeFamily, customs map[string]CustomValueType) error {
+	for name, custom := range customs {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(custom.Description) == "" {
 			return fmt.Errorf("%s: custom type %s must have a name and description", path, name)
 		}
-		if _, ok := vt.TypeFamilies[name]; ok {
+		if _, ok := families[name]; ok {
 			return fmt.Errorf("%s: custom type %s collides with a family", path, name)
 		}
-		fam, ok := vt.TypeFamilies[custom.Family]
+		fam, ok := families[custom.Family]
 		if !ok {
 			return fmt.Errorf("%s: custom type %s uses unknown family %s", path, name, custom.Family)
 		}
@@ -521,4 +658,13 @@ func FindField(fields []Field, name string) (Field, bool) {
 		}
 	}
 	return Field{}, false
+}
+
+func enumHas(values []any, want string) bool {
+	for _, v := range values {
+		if s, ok := v.(string); ok && s == want {
+			return true
+		}
+	}
+	return false
 }

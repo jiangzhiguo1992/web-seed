@@ -5,7 +5,7 @@ APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
         gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-check contract-new contract-check contract-graph contract-impact contract-compat db-verify \
-        gen-rule-ids check-rule-ids gen-check-core test-rules dev api-dev web-dev compose-up compose-down doctor derive check-docs
+        gen-rule-ids check-rule-ids gen-check-core test-rules dev api-dev web-dev compose-up compose-down doctor derive check-docs check-index
 
 help: ## 显示可用目标
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -93,11 +93,14 @@ gen-rule-tests: ## 规则 → 测试映射（docs/contracts/generated/rule-tests
 gen-rule-tests-check: ## 校验规则测试映射是否最新（CI）
 	cd scripts/cmd && go run ./gen_rule_tests -root "$(CURDIR)" -check -max-zero 0
 
-contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|cap.events|cap.protocols.http）
+contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|feature.pages|cap.events|cap.protocols.http）
 	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" service="$(service)" path="$(path)" http_method="$(http_method)" ./scripts/contract/scaffold.sh
 
 contract-check: ## 校验契约结构、引用与 used_by（全部类型）
 	@./scripts/contract/validate.sh
+
+check-index: ## 校验 index 全类型登记及 renderer/targets ID 一致
+	cd scripts/cmd && go test ./internal/check -run '^TestIndexAcceptsAllContractTypes$$' -count=1
 
 gen-rule-ids: ## 从 checker 的 rulef(...) 生成 rule_ids_gen.go
 	cd scripts/cmd && go run ./gen_rule_ids

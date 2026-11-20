@@ -272,7 +272,7 @@ func TestRenderTableDecimalFamilyParams(t *testing.T) {
 	}
 	cols, _ := doc["columns"].([]any)
 	first, _ := cols[0].(map[string]any)
-	if first["type"] != "decimal" {
+	if first["type"] != "_types.decimal" {
 		t.Fatalf("column type not overridden: %#v", first)
 	}
 	if first["precision"] != 19 {
@@ -351,8 +351,8 @@ func TestRenderTableFallbacks(t *testing.T) {
 		t.Fatalf("want one column: %#v", doc["columns"])
 	}
 	first, _ := cols[0].(map[string]any)
-	if first["type"] != "string" {
-		t.Fatalf("column type fallback must be string: %#v", first)
+	if first["type"] != "_types.string" {
+		t.Fatalf("column type fallback must be _types.string: %#v", first)
 	}
 }
 
@@ -367,6 +367,9 @@ func TestScaffoldsNeverEmitStable(t *testing.T) {
 		}},
 		{"data.queries", func(s *Schema) ([]byte, error) {
 			return RenderQuery(s, "note", "notes", "data.tables.account", "备注查询")
+		}},
+		{"feature.pages", func(s *Schema) ([]byte, error) {
+			return RenderPage(s, "note_list", "备注列表页")
 		}},
 	}
 	for _, tc := range cases {
@@ -478,6 +481,45 @@ func TestRenderService(t *testing.T) {
 	step, _ := steps[0].(map[string]any)
 	if step["kind"] != "logic" {
 		t.Fatalf("step = %#v", step)
+	}
+}
+
+func TestRenderPage(t *testing.T) {
+	s := loadSchemaByType(t, "feature.pages")
+	b, err := RenderPage(s, "note_list", "备注列表页")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["id"] != "feature.pages.note_list" || doc["page"] != "note_list" {
+		t.Fatalf("id/page = %v/%v", doc["id"], doc["page"])
+	}
+	if v, ok := doc["route"]; !ok || v != nil {
+		t.Fatalf("route = %#v, want null", doc["route"])
+	}
+	if !strings.Contains(string(b), `when: "loading"`) {
+		t.Fatalf("when must be double-quoted:\n%s", b)
+	}
+	states, _ := doc["view_states"].(map[string]any)
+	for _, key := range []string{"loading", "empty", "error", "forbidden"} {
+		state, _ := states[key].(map[string]any)
+		if state["when"] == "" || state["when"] == nil {
+			t.Fatalf("view_states.%s.when missing: %#v", key, states[key])
+		}
+	}
+}
+
+func TestRenderEnumItemQuotesProse(t *testing.T) {
+	s := loadSchemaByType(t, "data.enums")
+	b, err := RenderEnumItem(s, "note_status", "notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `description: "TODO: 枚举用途"`) {
+		t.Fatalf("enum item prose must be double-quoted:\n%s", b)
 	}
 }
 
@@ -596,5 +638,231 @@ func TestServiceInterfaceName(t *testing.T) {
 		if got := ServiceInterfaceName(c.owner, c.file); got != c.want {
 			t.Fatalf("ServiceInterfaceName(%q, %q) = %q, want %q", c.owner, c.file, got, c.want)
 		}
+	}
+}
+
+func TestRenderFieldValueListMapStruct(t *testing.T) {
+	v, err := RenderFieldValue(Field{
+		Type: "_types.list<_types.map<_types.object>>",
+		ItemFields: []Field{
+			{Name: "id", Type: "_types.string"},
+			{Name: "count", Type: "_types.integer"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 1 {
+		t.Fatalf("want one-element list, got %#v", v)
+	}
+	m, ok := list[0].(map[string]any)
+	if !ok {
+		t.Fatalf("want map, got %#v", list[0])
+	}
+	obj, ok := m["key"].(map[string]any)
+	if !ok {
+		t.Fatalf("want map value object, got %#v", m["key"])
+	}
+	if obj["id"] != "item_1" || obj["count"] != 1 {
+		t.Fatalf("unexpected skeleton: %#v", obj)
+	}
+}
+
+func TestRenderFieldValueMapInteger(t *testing.T) {
+	v, err := RenderFieldValue(Field{
+		Type:       "_types.map<_types.integer, _types.object>",
+		ItemFields: []Field{{Name: "id", Type: "_types.string"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		t.Fatalf("want map, got %#v", v)
+	}
+	obj, ok := m["key"].(map[string]any)
+	if !ok || obj["id"] != "" {
+		t.Fatalf("unexpected map value skeleton: %#v", m)
+	}
+}
+
+func TestRenderFieldValueListMapInteger(t *testing.T) {
+	v, err := RenderFieldValue(Field{
+		Type:       "_types.list<_types.map<_types.integer, _types.object>>",
+		ItemFields: []Field{{Name: "id", Type: "_types.string"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 1 {
+		t.Fatalf("want one-element list, got %#v", v)
+	}
+	m, ok := list[0].(map[string]any)
+	if !ok {
+		t.Fatalf("want map, got %#v", list[0])
+	}
+	obj, ok := m["key"].(map[string]any)
+	if !ok || obj["id"] != "item_1" {
+		t.Fatalf("unexpected nested map skeleton: %#v", m)
+	}
+}
+
+func TestRenderFieldValueSet(t *testing.T) {
+	v, err := RenderFieldValue(Field{Type: "_types.set<_types.string>"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 1 || list[0] != "item_1" {
+		t.Fatalf("unexpected set skeleton: %#v", v)
+	}
+}
+
+func TestRenderFieldValueArray(t *testing.T) {
+	v, err := RenderFieldValue(Field{Type: "_types.array<_types.integer>"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 1 || list[0] != 1 {
+		t.Fatalf("unexpected array skeleton: %#v", v)
+	}
+}
+
+func TestRenderFieldValueArrayLen(t *testing.T) {
+	v, err := RenderFieldValue(Field{Type: "_types.array<_types.integer>", Len: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 3 {
+		t.Fatalf("want 3 elements, got %#v", v)
+	}
+}
+
+func TestRenderFieldValueListMinLen(t *testing.T) {
+	v, err := RenderFieldValue(Field{Type: "_types.list<_types.string>", MinLen: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 2 {
+		t.Fatalf("want 2 elements, got %#v", v)
+	}
+}
+
+func TestRenderFieldValueListMinMax(t *testing.T) {
+	v, err := RenderFieldValue(Field{Type: "_types.list<_types.string>", MinLen: 2, MaxLen: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 2 {
+		t.Fatalf("want 2 elements, got %#v", v)
+	}
+}
+
+func TestRenderFieldValueSetDedup(t *testing.T) {
+	v, err := RenderFieldValue(Field{Type: "_types.set<_types.string>", MinLen: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 2 || list[0] == list[1] {
+		t.Fatalf("set skeleton not deduped: %#v", v)
+	}
+}
+
+func TestRenderFieldValueSetObjectDedup(t *testing.T) {
+	v, err := RenderFieldValue(Field{
+		Type:       "_types.set<_types.object>",
+		MinLen:     2,
+		UniqueKey:  "name",
+		ItemFields: []Field{{Name: "name", Type: "_types.string", Required: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 2 {
+		t.Fatalf("want 2 elements, got %#v", v)
+	}
+	a, _ := list[0].(map[string]any)
+	b, _ := list[1].(map[string]any)
+	if a["name"] == b["name"] {
+		t.Fatalf("set<object> unique_key not deduped: %#v", v)
+	}
+}
+
+func TestRenderFieldValueSetObjectIntegerKey(t *testing.T) {
+	v, err := RenderFieldValue(Field{
+		Type:       "_types.set<_types.object>",
+		MinLen:     2,
+		UniqueKey:  "id",
+		ItemFields: []Field{{Name: "id", Type: "_types.integer", Required: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 2 {
+		t.Fatalf("want 2 elements, got %#v", v)
+	}
+	a, _ := list[0].(map[string]any)
+	b, _ := list[1].(map[string]any)
+	if a["id"] != 1 || b["id"] != 2 {
+		t.Fatalf("integer unique_key skeleton mismatch: %#v", v)
+	}
+}
+
+func TestRenderFieldValueCustomIntegerKey(t *testing.T) {
+	v, err := RenderFieldValueWithTypes(Field{
+		Type:       "_types.set<_types.object>",
+		MinLen:     2,
+		UniqueKey:  "id",
+		ItemFields: []Field{{Name: "id", Type: "_types.page_limit", Required: true}},
+	}, ValueTypes{
+		CustomTypes: map[string]CustomValueType{
+			"page_limit": {Family: "integer"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 2 {
+		t.Fatalf("want 2 elements, got %#v", v)
+	}
+	a, _ := list[0].(map[string]any)
+	b, _ := list[1].(map[string]any)
+	if a["id"] != 1 || b["id"] != 2 {
+		t.Fatalf("custom integer unique_key skeleton mismatch: %#v", v)
+	}
+}
+
+func TestRenderFieldValueCustomDateKey(t *testing.T) {
+	v, err := RenderFieldValueWithTypes(Field{
+		Type:       "_types.set<_types.object>",
+		MinLen:     2,
+		UniqueKey:  "at",
+		ItemFields: []Field{{Name: "at", Type: "_types.date_only", Required: true}},
+	}, ValueTypes{
+		CustomTypes: map[string]CustomValueType{
+			"date_only": {Family: "datetime", Params: map[string]any{"mode": "date"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 2 {
+		t.Fatalf("want 2 elements, got %#v", v)
+	}
+	a, _ := list[0].(map[string]any)
+	b, _ := list[1].(map[string]any)
+	if a["at"] != "2024-01-01" || b["at"] != "2024-01-02" {
+		t.Fatalf("date mode skeleton mismatch: %#v", v)
 	}
 }

@@ -321,6 +321,10 @@ func (c *Checker) validateScalarNode(m map[string]any, path string) {
 		c.rulef("schema.type", "%s.type: %s must use its kind structure", path, typ)
 		return
 	}
+	if !strings.HasPrefix(typ, "_types.") {
+		c.rulef("schema.type", "%s.type: must be a _types.<name> reference, got %q", path, typ)
+		return
+	}
 	if c.valueType(typ) == "" {
 		c.rulef("schema.type", "%s.type: unknown value type %q", path, typ)
 	}
@@ -461,10 +465,11 @@ func schemaLocalRefs(v any) []string {
 // valueType 返回标量类型对应的类型族；自定义类型解析到 family，
 // family 不存在时返回空，避免 schema 层把断链的 custom type 当成有效类型。
 func (c *Checker) valueType(typ string) string {
-	if _, ok := c.valueTypes.TypeFamilies[typ]; ok {
-		return typ
+	name := strings.TrimPrefix(typ, "_types.")
+	if _, ok := c.valueTypes.TypeFamilies[name]; ok {
+		return name
 	}
-	if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
+	if customType, ok := c.valueTypes.CustomTypes[name]; ok {
 		if _, ok := c.valueTypes.TypeFamilies[customType.Family]; ok {
 			return customType.Family
 		}

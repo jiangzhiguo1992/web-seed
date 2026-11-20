@@ -4,6 +4,7 @@ schema_version: 1
 id: platform.security.auth_policy
 summary: "会话与认证策略"
 stability: stable
+do_not: []
 
 token:
   persistence: data.tables.token

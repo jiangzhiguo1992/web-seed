@@ -11,7 +11,7 @@ func TestMapKeyPattern(t *testing.T) {
 	c := &Checker{nodeKinds: map[string]contractspec.SchemaKind{"scalar": {}}}
 	c.validateValue(map[string]any{
 		"bad-name": map[string]any{"type": "string"},
-	}, Field{Name: "schemas", Type: "map", Types: []string{"scalar"}, KeyPattern: `^[A-Za-z][A-Za-z0-9]*$`}, "schemas")
+	}, Field{Name: "schemas", Type: "map", Types: []string{"scalar"}, KeyPatterns: []string{`^[A-Za-z][A-Za-z0-9]*$`}}, "schemas")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.pattern]") {
 		t.Fatalf("invalid map key not reported: %v", c.errs)
 	}
