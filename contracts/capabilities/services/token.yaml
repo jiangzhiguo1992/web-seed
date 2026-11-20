@@ -482,7 +482,8 @@ services:
         rules:
           - { rule: feature.rules.auth.auth_token_requires_active_account }
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.auth.me
 
   - name: purge_expired
     summary: "清理已过期令牌"

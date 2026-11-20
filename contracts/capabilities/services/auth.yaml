@@ -529,7 +529,8 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.auth.bind_password
 
   - name: bind_phone
     summary: "创建、换绑或启停手机号认证绑定"
@@ -792,7 +793,8 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.auth.bind_phone
 
   - name: bind_email
     summary: "创建、换绑或启停邮箱认证绑定"
@@ -1064,7 +1066,8 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.auth.bind_email
 
   - name: record_login_success
     summary: "记录密码登录成功并发出成功事件"

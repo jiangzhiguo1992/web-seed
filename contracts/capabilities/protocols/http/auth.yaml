@@ -121,6 +121,87 @@ paths:
       responses:
         "204": { description: "已登出" }
 
+  /auth/bind/password:
+    post:
+      operationId: bindPassword
+      x-contract-id: cap.protocols.http.auth.bind_password
+      x-service: cap.services.auth.bind_password
+      summary: "创建、修改或启停密码认证绑定"
+      x-timeout-ms: 5000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BindPasswordInput" }
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthBinding"
+                x-service-return: cap.services.auth.schemas.AuthBinding
+
+  /auth/bind/phone:
+    post:
+      operationId: bindPhone
+      x-contract-id: cap.protocols.http.auth.bind_phone
+      x-service: cap.services.auth.bind_phone
+      summary: "创建、换绑或启停手机号认证绑定"
+      x-timeout-ms: 5000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BindPhoneInput" }
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthBinding"
+                x-service-return: cap.services.auth.schemas.AuthBinding
+
+  /auth/bind/email:
+    post:
+      operationId: bindEmail
+      x-contract-id: cap.protocols.http.auth.bind_email
+      x-service: cap.services.auth.bind_email
+      summary: "创建、换绑或启停邮箱认证绑定"
+      x-timeout-ms: 5000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BindEmailInput" }
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthBinding"
+                x-service-return: cap.services.auth.schemas.AuthBinding
+
+  /auth/me:
+    get:
+      operationId: currentAccount
+      x-contract-id: cap.protocols.http.auth.me
+      x-service: cap.services.token.verify
+      summary: "校验访问令牌并返回当前账号"
+      x-timeout-ms: 3000
+      parameters:
+        - { name: Authorization, in: header, required: true, schema: { type: string, minLength: 1 } }
+      responses:
+        "200":
+          description: "成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+                x-service-return: data.entities.account
+
 components:
   schemas:
     LoginInput:
@@ -149,3 +230,14 @@ components:
 
     VerificationResult:
       x-service-type: cap.services.verification.schemas.VerificationResult
+
+    BindPasswordInput:
+      x-service-type: cap.services.auth.schemas.BindPasswordInput
+    BindPhoneInput:
+      x-service-type: cap.services.auth.schemas.BindPhoneInput
+    BindEmailInput:
+      x-service-type: cap.services.auth.schemas.BindEmailInput
+    AuthBinding:
+      x-service-type: cap.services.auth.schemas.AuthBinding
+    Account:
+      x-entity: data.entities.account
