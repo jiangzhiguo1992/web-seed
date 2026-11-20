@@ -264,7 +264,7 @@ func (c *Checker) enumUsages() map[string]*enumUsage {
 				})
 			}
 		case strings.HasPrefix(d.id, "cap.events."):
-			for _, key := range []string{"topics", "jobs"} {
+			for _, key := range []string{"topics", "crons", "dispatches"} {
 				for _, rawItem := range asList(d.doc[key]) {
 					item, _ := asMap(rawItem)
 					owner, _ := item["id"].(string)

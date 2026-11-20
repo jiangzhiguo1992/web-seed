@@ -25,8 +25,7 @@ type Anchors struct {
 	Rules          map[string][]string
 	LifecycleSteps map[string][]string
 	Events         map[string][]string
-
-	EventConsumers map[string][]string
+	ServiceUsedBy  map[string][]string
 
 	RuleFiles      map[string][]string
 	LifecycleFiles map[string][]lifecycleFileAction
@@ -38,7 +37,7 @@ func newAnchors() *Anchors {
 		Rules:          map[string][]string{},
 		LifecycleSteps: map[string][]string{},
 		Events:         map[string][]string{},
-		EventConsumers: map[string][]string{},
+		ServiceUsedBy:  map[string][]string{},
 		RuleFiles:      map[string][]string{},
 		LifecycleFiles: map[string][]lifecycleFileAction{},
 		EventFiles:     map[string][]string{},
@@ -80,27 +79,6 @@ func contains(values []string, value string) bool {
 // computeAnchors 扫描 services 的 steps，并登记 rules/states/events 的文件归属。
 func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 	a := newAnchors()
-	if eventTarget, err := resolveTarget(root, "cap.events"); err == nil {
-		for _, f := range glob(root, filepath.Join(eventTarget.dir, eventTarget.glob)) {
-			doc, err := loadYAML(f)
-			if err != nil {
-				return nil, err
-			}
-			fileID, _ := doc["id"].(string)
-			for _, raw := range asList(doc["jobs"]) {
-				job, _ := asMap(raw)
-				name, _ := job["name"].(string)
-				if name == "" {
-					continue
-				}
-				if trigger, ok := asMap(job["trigger"]); ok {
-					if topic, _ := trigger["topic"].(string); topic != "" {
-						a.EventConsumers[topic] = append(a.EventConsumers[topic], fileID+"."+name)
-					}
-				}
-			}
-		}
-	}
 	for _, f := range glob(root, filepath.Join(serviceTarget.dir, serviceTarget.glob)) {
 		doc, err := loadYAML(f)
 		if err != nil {
@@ -142,6 +120,59 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 							a.addEvent(eventID, serviceID)
 						}
 					}
+				case "service":
+					if ref, _ := step["service"].(string); ref != "" {
+						a.ServiceUsedBy[ref] = append(a.ServiceUsedBy[ref], serviceID)
+					}
+				}
+			}
+		}
+	}
+	if protocolTarget, err := resolveTarget(root, "cap.protocols.http"); err == nil {
+		for _, f := range glob(root, filepath.Join(protocolTarget.dir, protocolTarget.glob)) {
+			doc, err := loadYAML(f)
+			if err != nil {
+				return nil, err
+			}
+			paths, _ := asMap(doc["paths"])
+			for _, rawOps := range paths {
+				ops, _ := asMap(rawOps)
+				for _, rawOp := range ops {
+					op, _ := asMap(rawOp)
+					svc, _ := op["x-service"].(string)
+					cid, _ := op["x-contract-id"].(string)
+					if svc != "" && cid != "" {
+						a.ServiceUsedBy[svc] = append(a.ServiceUsedBy[svc], cid)
+					}
+				}
+			}
+		}
+	}
+	if eventTarget, err := resolveTarget(root, "cap.events"); err == nil {
+		for _, f := range glob(root, filepath.Join(eventTarget.dir, eventTarget.glob)) {
+			doc, err := loadYAML(f)
+			if err != nil {
+				return nil, err
+			}
+			for _, raw := range asList(doc["topics"]) {
+				topic, _ := asMap(raw)
+				for _, rawSub := range asList(topic["subscribe"]) {
+					sub, _ := asMap(rawSub)
+					svc, _ := sub["service"].(string)
+					id, _ := sub["id"].(string)
+					if svc != "" && id != "" {
+						a.ServiceUsedBy[svc] = append(a.ServiceUsedBy[svc], id)
+					}
+				}
+			}
+			for _, key := range []string{"crons", "dispatches"} {
+				for _, raw := range asList(doc[key]) {
+					item, _ := asMap(raw)
+					svc, _ := item["service"].(string)
+					id, _ := item["id"].(string)
+					if svc != "" && id != "" {
+						a.ServiceUsedBy[svc] = append(a.ServiceUsedBy[svc], id)
+					}
 				}
 			}
 		}
@@ -155,8 +186,8 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 	for id := range a.Events {
 		a.Events[id] = uniqueSorted(a.Events[id])
 	}
-	for id := range a.EventConsumers {
-		a.EventConsumers[id] = uniqueSorted(a.EventConsumers[id])
+	for id := range a.ServiceUsedBy {
+		a.ServiceUsedBy[id] = uniqueSorted(a.ServiceUsedBy[id])
 	}
 
 	// 登记文件归属，供 Write 定位。
@@ -222,9 +253,6 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 			}
 		}
 	}
-	for id := range a.EventConsumers {
-		a.EventConsumers[id] = uniqueSorted(a.EventConsumers[id])
-	}
 	return a, nil
 }
 
@@ -280,19 +308,36 @@ func (a *Anchors) Write(root string) ([]string, error) {
 	}
 	for _, file := range sortedStringKeys(a.EventFiles) {
 		for _, id := range a.EventFiles[file] {
-			ok, err := syncItemField(filepath.Join(root, file), "topics", "id", id, "emitted_by", a.Events[id])
+			ok, err := syncItemNestedField(filepath.Join(root, file), "topics", "id", id, "publish", "emitted_by", a.Events[id])
 			if err != nil {
 				return changed, err
 			}
 			if ok {
 				changed = append(changed, file)
 			}
-			ok, err = syncItemField(filepath.Join(root, file), "topics", "id", id, "consumers", a.EventConsumers[id])
+		}
+	}
+	if serviceTarget, err := resolveTarget(root, "cap.services"); err == nil {
+		for _, f := range glob(root, filepath.Join(serviceTarget.dir, serviceTarget.glob)) {
+			doc, err := loadYAML(f)
 			if err != nil {
 				return changed, err
 			}
-			if ok {
-				changed = append(changed, file)
+			fileID, _ := doc["id"].(string)
+			relFile := rel(root, f)
+			for _, raw := range asList(doc["services"]) {
+				item, _ := asMap(raw)
+				name, _ := item["name"].(string)
+				if name == "" {
+					continue
+				}
+				ok, err := syncItemFieldBlock(filepath.Join(root, relFile), "services", "name", name, "used_by", a.ServiceUsedBy[fileID+"."+name])
+				if err != nil {
+					return changed, err
+				}
+				if ok {
+					changed = append(changed, relFile)
+				}
 			}
 		}
 	}
@@ -362,13 +407,35 @@ func (a *Anchors) Check(root string) ([]string, error) {
 			if id == "" {
 				continue
 			}
-			got := stringList(item["emitted_by"])
-			if !sameSet(got, a.Events[id]) {
-				drift = append(drift, fmt.Sprintf("%s: %s.emitted_by must be %v, got %v", file, id, a.Events[id], got))
+			publish, _ := asMap(item["publish"])
+			got := []string{}
+			if publish != nil {
+				got = stringList(publish["emitted_by"])
 			}
-			gotConsumers := stringList(item["consumers"])
-			if !sameSet(gotConsumers, a.EventConsumers[id]) {
-				drift = append(drift, fmt.Sprintf("%s: %s.consumers must be %v, got %v", file, id, a.EventConsumers[id], gotConsumers))
+			if !sameSet(got, a.Events[id]) {
+				drift = append(drift, fmt.Sprintf("%s: %s.publish.emitted_by must be %v, got %v", file, id, a.Events[id], got))
+			}
+		}
+	}
+	if serviceTarget, err := resolveTarget(root, "cap.services"); err == nil {
+		for _, f := range glob(root, filepath.Join(serviceTarget.dir, serviceTarget.glob)) {
+			doc, err := loadYAML(f)
+			if err != nil {
+				return nil, err
+			}
+			fileID, _ := doc["id"].(string)
+			relFile := rel(root, f)
+			for _, raw := range asList(doc["services"]) {
+				item, _ := asMap(raw)
+				name, _ := item["name"].(string)
+				if name == "" {
+					continue
+				}
+				got := stringList(item["used_by"])
+				want := a.ServiceUsedBy[fileID+"."+name]
+				if !sameSet(got, want) {
+					drift = append(drift, fmt.Sprintf("%s: %s.used_by must be %v, got %v", relFile, fileID+"."+name, want, got))
+				}
 			}
 		}
 	}
@@ -536,6 +603,108 @@ func syncItemField(path, listKey, itemKey, itemValue, field string, values []str
 			}
 		}
 		lines = append(lines[:insert], append([]string{rendered}, lines[insert:]...)...)
+	}
+	out := strings.Join(lines, "\n") + "\n"
+	if out == string(b) {
+		return false, nil
+	}
+	return true, os.WriteFile(path, []byte(out), 0o644)
+}
+
+// syncItemNestedField 在 listKey 列表中找到 itemKey=itemValue 的块，
+// 在其 parentKey 子对象内设置 field 行（flow list）。
+func syncItemNestedField(path, listKey, itemKey, itemValue, parentKey, field string, values []string) (bool, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	text := strings.TrimSuffix(string(b), "\n")
+	lines := strings.Split(text, "\n")
+	listStart := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == listKey+":" {
+			listStart = i
+			break
+		}
+	}
+	if listStart < 0 {
+		return false, fmt.Errorf("%s: list %s not found", path, listKey)
+	}
+	itemStart := -1
+	for i := listStart + 1; i < len(lines); i++ {
+		trim := strings.TrimPrefix(lines[i], "  - ")
+		if strings.HasPrefix(trim, itemKey+": ") && strings.TrimSpace(strings.TrimPrefix(trim, itemKey+": ")) == itemValue {
+			itemStart = i
+			break
+		}
+		if strings.TrimSpace(lines[i]) != "" && !strings.HasPrefix(lines[i], " ") {
+			break
+		}
+	}
+	if itemStart < 0 {
+		return false, fmt.Errorf("%s: item %s=%s not found", path, itemKey, itemValue)
+	}
+	itemEnd := len(lines)
+	for i := itemStart + 1; i < len(lines); i++ {
+		if strings.HasPrefix(lines[i], "  - ") || (strings.TrimSpace(lines[i]) != "" && !strings.HasPrefix(lines[i], " ")) {
+			itemEnd = i
+			break
+		}
+	}
+	parentStart := -1
+	for i := itemStart + 1; i < itemEnd; i++ {
+		if strings.HasPrefix(lines[i], "    "+parentKey+":") {
+			parentStart = i
+			break
+		}
+	}
+	if parentStart < 0 {
+		return false, fmt.Errorf("%s: %s.%s not found", path, itemKey, parentKey)
+	}
+	parentEnd := itemEnd
+	for i := parentStart + 1; i < itemEnd; i++ {
+		if strings.TrimSpace(lines[i]) == "" {
+			continue
+		}
+		indent := len(lines[i]) - len(strings.TrimLeft(lines[i], " "))
+		if indent <= 4 {
+			parentEnd = i
+			break
+		}
+	}
+	fieldLine := -1
+	for i := parentStart + 1; i < parentEnd; i++ {
+		if strings.HasPrefix(lines[i], "      "+field+":") {
+			fieldLine = i
+			break
+		}
+	}
+	rendered := []string{"      " + field + ": []"}
+	if len(values) > 0 {
+		rendered = []string{"      " + field + ":"}
+		for _, value := range values {
+			rendered = append(rendered, "        - "+value)
+		}
+	}
+	if fieldLine >= 0 {
+		j := fieldLine + 1
+		for j < parentEnd {
+			if strings.TrimSpace(lines[j]) == "" {
+				j++
+				continue
+			}
+			indent := len(lines[j]) - len(strings.TrimLeft(lines[j], " "))
+			if indent <= 6 {
+				break
+			}
+			j++
+		}
+		if sameLines(lines[fieldLine:j], rendered) {
+			return false, nil
+		}
+		lines = append(lines[:fieldLine], append(rendered, lines[j:]...)...)
+	} else {
+		lines = append(lines[:parentEnd], append(rendered, lines[parentEnd:]...)...)
 	}
 	out := strings.Join(lines, "\n") + "\n"
 	if out == string(b) {

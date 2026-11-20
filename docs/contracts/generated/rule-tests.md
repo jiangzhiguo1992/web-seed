@@ -6,8 +6,8 @@
 |---|---|---|---|
 | cap.events | event-structure | event-structure | 1 |
 | cap.events | event-file-shape | event-file-shape | 1 |
+| cap.events | event-orphan | event-orphan | 1 |
 | cap.events | async-service | async-service | 1 |
-| cap.events | async-trigger | async-trigger | 1 |
 | cap.events | async-structure | async-structure | 1 |
 | cap.lifecycles | lifecycle-structure | lifecycle-structure | 1 |
 | cap.lifecycles | lifecycle-exhaustive | lifecycle-exhaustive | 1 |
@@ -31,6 +31,7 @@
 | cap.services | service-owner-write | service-owner-write | 1 |
 | cap.services | service-errors | service-errors | 1 |
 | cap.services | service-visibility | service-visibility | 1 |
+| cap.services | service-used | service-used | 1 |
 | cap.services | service-step-fields | service-step-fields | 1 |
 | cap.services | service-step-target | service-step-target | 1 |
 | cap.services | service-step-shape | service-step-shape | 1 |

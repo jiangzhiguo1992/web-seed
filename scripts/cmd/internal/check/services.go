@@ -38,6 +38,7 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 		c.checkTypeRefs(types, typeNames, rel)
 	}
 	seen := map[string]bool{}
+	c.checkServiceUsed(rel, doc)
 	for _, raw := range asList(doc["services"]) {
 		item, _ := asMap(raw)
 		name, _ := item["name"].(string)
@@ -89,6 +90,20 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 				continue
 			}
 			c.checkTypeName(rm["type"], typeNames, rel+":"+name)
+		}
+	}
+}
+
+// checkServiceUsed 要求 stable 文件的 service 至少有一个使用点。
+func (c *Checker) checkServiceUsed(rel string, doc map[string]any) {
+	if stability, _ := doc["stability"].(string); stability != "stable" {
+		return
+	}
+	for _, raw := range asList(doc["services"]) {
+		item, _ := asMap(raw)
+		name, _ := item["name"].(string)
+		if rawUsed, ok := item["used_by"]; ok && len(asList(rawUsed)) == 0 {
+			c.rulef("service-used", "%s.%s: stable service has empty used_by", rel, name)
 		}
 	}
 }

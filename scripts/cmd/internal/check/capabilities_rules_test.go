@@ -835,16 +835,15 @@ owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
-delivery: at_least_once
 topics:
   - id: cap.events.x.created
     name: x.created
     version: 1
-    payload:
-      ref: data.entities.account
     summary: "x"
-    emitted_by: []
-    consumers: []
+    publish:
+      payload:
+        ref: data.entities.account
+      emitted_by: [cap.services.x.create]
 `
 	writeCapFile(t, root, rel, valid)
 	c := &Checker{
@@ -852,14 +851,14 @@ topics:
 		entities:       map[string]*entityInfo{"data.entities.account": {}},
 		methodTypeDefs: map[string]map[string]any{"AuthSession": {}},
 	}
-	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
+	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{"cap.services.x.create": true})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid ref reported: %v", c.errs)
 	}
 
 	writeCapFile(t, root, rel, strings.Replace(valid, "data.entities.account", "data.entities.missing", 1))
 	c.errs = nil
-	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
+	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{"cap.services.x.create": true})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-ref]") {
 		t.Fatalf("unknown ref not reported: %v", c.errs)
 	}
@@ -875,63 +874,145 @@ owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
-delivery: at_least_once
 topics:
   - id: cap.events.x.created
     name: x.created
     version: 1
-    payload:
-      type: _types.object
-      properties:
-        - { name: id, schema: { type: _types.integer }, required: true, description: "id" }
     summary: "x"
-    emitted_by: []
-    consumers: [cap.events.x.consume]
-jobs:
-  - id: cap.events.x.consume
-    name: consume
-    summary: "x"
-    service: cap.services.x.get
-    trigger: {kind: topic, topic: cap.events.x.created}
-    retry: {max_attempts: 3, backoff: exponential, dead_letter: true}
-    concurrency: {key: x_consume, ttl: 1h}
+    publish:
+      payload:
+        type: _types.object
+        properties:
+          - { name: id, schema: { type: _types.integer }, required: true, description: "id" }
+      emitted_by: [cap.services.x.emit]
+    subscribe:
+      - id: cap.events.x.consume
+        name: consume
+        summary: "x"
+        service: cap.services.x.get
+        retry: {max_attempts: 3, backoff: exponential, dead_letter: true}
+        concurrency: {key: x_consume, ttl: 1h}
 `
 	writeCapFile(t, root, rel, valid)
+	services := map[string]serviceMeta{
+		"cap.services.x.emit": {module: "x"},
+		"cap.services.x.get":  {module: "x"},
+	}
+	serviceIDs := map[string]bool{"cap.services.x.emit": true}
 	c := &Checker{root: root}
-	jobServices := c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	asyncServices := c.checkEventsDoc(schema, services, serviceIDs)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid events reported: %v", c.errs)
 	}
-	if !jobServices["cap.services.x.get"] {
-		t.Fatalf("job service not collected: %v", jobServices)
+	if !asyncServices["cap.services.x.get"] {
+		t.Fatalf("subscribe service not collected: %v", asyncServices)
 	}
 
 	writeCapFile(t, root, rel, strings.Replace(valid, "cap.services.x.get", "cap.services.y.get", 1))
 	c.errs = nil
-	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.y.get": {module: "y"}}, map[string]bool{})
+	yServices := map[string]serviceMeta{
+		"cap.services.x.emit": {module: "x"},
+		"cap.services.y.get":  {module: "y"},
+	}
+	c.checkEventsDoc(schema, yServices, serviceIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[async-service]") {
 		t.Fatalf("cross-module service not reported: %v", c.errs)
 	}
 
-	writeCapFile(t, root, rel, strings.Replace(valid, "topic: cap.events.x.created", "topic: cap.events.x.missing", 1))
+	writeCapFile(t, root, rel, strings.Replace(valid, "emitted_by: [cap.services.x.emit]", "emitted_by: [cap.services.x.missing]", 1))
 	c.errs = nil
-	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[async-trigger]") {
-		t.Fatalf("unknown topic not reported: %v", c.errs)
-	}
-
-	writeCapFile(t, root, rel, strings.Replace(valid, "consumers: [cap.events.x.consume]", "consumers: [cap.events.x.missing]", 1))
-	c.errs = nil
-	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-structure]") {
-		t.Fatalf("unknown consumer not reported: %v", c.errs)
-	}
-
-	writeCapFile(t, root, rel, strings.Replace(valid, "emitted_by: []", "emitted_by: [cap.services.x.missing]", 1))
-	c.errs = nil
-	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	c.checkEventsDoc(schema, services, serviceIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-structure]") {
 		t.Fatalf("unknown emitter not reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, strings.Replace(valid, "service: cap.services.x.get", "service: cap.services.x.missing", 1))
+	c.errs = nil
+	c.checkEventsDoc(schema, services, serviceIDs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[async-service]") {
+		t.Fatalf("unknown subscribe service not reported: %v", c.errs)
+	}
+}
+
+func TestServiceUsedRule(t *testing.T) {
+	c := &Checker{}
+	c.checkServiceUsed("x.yaml", map[string]any{
+		"stability": "stable",
+		"services": []any{
+			map[string]any{"name": "internal_empty", "used_by": []any{}},
+		},
+	})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-used]") {
+		t.Fatalf("stable empty used_by not reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkServiceUsed("x.yaml", map[string]any{
+		"stability": "draft",
+		"services": []any{
+			map[string]any{"name": "scaffold", "used_by": []any{}},
+		},
+	})
+	if strings.Contains(strings.Join(c.errs, "\n"), "[service-used]") {
+		t.Fatalf("draft empty used_by must not be reported: %v", c.errs)
+	}
+}
+
+func TestCheckEventsDispatch(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.events")
+	rel := "contracts/capabilities/events/x.yaml"
+	valid := `id: cap.events.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+dispatches:
+  - id: cap.events.x.send
+    name: send
+    summary: "x"
+    payload:
+      type: _types.object
+      properties:
+        - { name: order_id, schema: { type: _types.integer }, required: true, description: "id" }
+    service: cap.services.x.send
+    delay: 30m
+`
+	writeCapFile(t, root, rel, valid)
+	services := map[string]serviceMeta{"cap.services.x.send": {module: "x"}}
+	c := &Checker{root: root}
+	async := c.checkEventsDoc(schema, services, map[string]bool{})
+	if len(c.errs) != 0 {
+		t.Fatalf("valid dispatch reported: %v", c.errs)
+	}
+	if !async["cap.services.x.send"] {
+		t.Fatalf("dispatch service not collected: %v", async)
+	}
+
+	writeCapFile(t, root, rel, strings.Replace(valid, "cap.services.x.send", "cap.services.y.send", 1))
+	c.errs = nil
+	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.y.send": {module: "y"}}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[async-service]") {
+		t.Fatalf("cross-module dispatch service not reported: %v", c.errs)
+	}
+}
+
+func TestCheckStepEventsAcceptsDispatch(t *testing.T) {
+	c := &Checker{eventPayloads: map[string]map[string]eventField{
+		"cap.events.x.send": {"order_id": {typ: "_types.integer", required: true}},
+	}}
+	step := map[string]any{"events": []any{map[string]any{"ref": "cap.events.x.send"}}}
+	input := map[string]any{"order_id": "params.order_id"}
+	c.checkStepEvents(step, input, "x.yaml", "emit", map[string]bool{"cap.events.x.send": true}, stepTypeContext{})
+	if len(c.errs) != 0 {
+		t.Fatalf("dispatch ref rejected: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkStepEvents(step, input, "x.yaml", "emit", map[string]bool{}, stepTypeContext{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-ref]") {
+		t.Fatalf("unknown dispatch ref not reported: %v", c.errs)
 	}
 }
 
@@ -945,30 +1026,24 @@ owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
-delivery: at_least_once
 topics:
   - id: cap.events.x.created
     name: x.created
     version: 1
-    payload: { type: _types.integer }
     summary: "x"
-    emitted_by: []
-    consumers: []
+    publish:
+      payload: { type: _types.integer }
+      emitted_by: [cap.services.x.get]
 `
 	writeCapFile(t, root, rel, valid)
+	services := map[string]serviceMeta{"cap.services.x.get": {module: "x"}}
+	serviceIDs := map[string]bool{"cap.services.x.get": true}
 	c := &Checker{root: root}
-	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
+	c.checkEventsDoc(schema, services, serviceIDs)
 	if len(c.errs) != 0 {
 		t.Fatalf("valid file reported: %v", c.errs)
 	}
 
-	writeCapFile(t, root, rel, strings.Replace(valid, "delivery: at_least_once\n", "", 1))
-	c.errs = nil
-	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-file-shape]") {
-		t.Fatalf("missing delivery not reported: %v", c.errs)
-	}
-
 	writeCapFile(t, root, rel, `id: cap.events.x
 summary: "x"
 owner_module: x
@@ -977,9 +1052,9 @@ stability: draft
 do_not: []
 `)
 	c.errs = nil
-	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
+	c.checkEventsDoc(schema, services, serviceIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-file-shape]") {
-		t.Fatalf("empty topics/jobs not reported: %v", c.errs)
+		t.Fatalf("empty topics/crons/dispatches not reported: %v", c.errs)
 	}
 
 	writeCapFile(t, root, rel, `id: cap.events.x
@@ -988,26 +1063,46 @@ owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
-delivery: at_least_once
 topics:
   - id: cap.events.x.created
     name: x.created
     version: 1
-    payload: { type: _types.integer }
     summary: "x"
-    emitted_by: []
-    consumers: []
-jobs:
+    publish:
+      payload: { type: _types.integer }
+      emitted_by: [cap.services.x.get]
+crons:
   - id: cap.events.x.created
     name: created
     summary: "x"
     service: cap.services.x.get
-    trigger: { kind: cron, schedule: "0 3 * * *" }
+    schedule: "0 3 * * *"
 `)
 	c.errs = nil
-	c.checkEventsDoc(schema, map[string]serviceMeta{"cap.services.x.get": {module: "x"}}, map[string]bool{})
+	c.checkEventsDoc(schema, services, serviceIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-file-shape]") {
-		t.Fatalf("topic/job id collision not reported: %v", c.errs)
+		t.Fatalf("topic/cron id collision not reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, `id: cap.events.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+topics:
+  - id: cap.events.x.created
+    name: x.created
+    version: 1
+    summary: "x"
+    publish:
+      payload: { type: _types.integer }
+      emitted_by: []
+`)
+	c.errs = nil
+	c.checkEventsDoc(schema, services, serviceIDs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-orphan]") {
+		t.Fatalf("orphan topic not reported: %v", c.errs)
 	}
 }
 

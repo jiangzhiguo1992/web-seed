@@ -699,24 +699,32 @@ func TestAsyncStructureRule(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"a", "b"} {
-		body := `id: cap.events.` + name + `
+	body := `id: cap.events.a
 summary: "事件"
+owner_module: a
 schema_version: 1
 stability: draft
 do_not: []
-topics: []
-jobs:
-  - id: cap.events.job
+crons:
+  - id: cap.events.a.job
     name: job
-    trigger: { kind: cron, cron: "* * * * *" }
+    summary: "x"
+    service: cap.services.a.get
+    schedule: "* * * * *"
+  - id: cap.events.a.job2
+    name: job
+    summary: "x"
+    service: cap.services.a.other
+    schedule: "* * * * *"
 `
-		if err := os.WriteFile(filepath.Join(dir, name+".yaml"), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.WriteFile(filepath.Join(dir, "a.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	c := &Checker{root: tmp}
-	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{})
+	c.checkEventsDoc(schema, map[string]serviceMeta{
+		"cap.services.a.get":   {module: "a"},
+		"cap.services.a.other": {module: "a"},
+	}, map[string]bool{})
 	mustContainRule(t, c.errs, "async-structure")
 }
 

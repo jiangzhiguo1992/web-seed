@@ -1,4 +1,4 @@
-// events.go 校验 cap.events 的 topics 与 jobs。
+// events.go 校验 cap.events 的 topics（publish/subscribe）与 crons/dispatches。
 package check
 
 import (
@@ -8,42 +8,78 @@ import (
 
 func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceMeta, serviceIDs map[string]bool) map[string]bool {
 	files := glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
-	topicIDs := map[string]bool{}
-	jobIDs := map[string]bool{}
-	bound := map[string]bool{}
+
+	// pass 1：全局 ID 与 topic name 索引，topic/subscribe/cron/dispatch 共享 cap.events.* 空间。
+	kinds := map[string]string{}
+	topicOwner := map[string]string{}
+	index := func(rel, id, kind string) {
+		if id == "" {
+			return
+		}
+		if prev, ok := kinds[id]; ok {
+			c.rulef("event-file-shape", "%s: duplicate cap.events id %s (already declared as %s)", rel, id, prev)
+			return
+		}
+		kinds[id] = kind
+	}
 	for _, file := range files {
 		doc, err := loadYAML(file)
 		if err != nil {
 			continue
 		}
+		rel := relPath(c.root, file)
 		for _, raw := range asList(doc["topics"]) {
 			item, _ := asMap(raw)
-			if id, _ := item["id"].(string); id != "" {
-				if topicIDs[id] {
-					c.rulef("event-structure", "%s: duplicate topic id %s", relPath(c.root, file), id)
+			id, _ := item["id"].(string)
+			index(rel, id, "topic")
+			if name, _ := item["name"].(string); name != "" {
+				if prev, ok := topicOwner[name]; ok {
+					c.rulef("event-structure", "%s: duplicate topic name %s (already declared in %s)", rel, name, prev)
+				} else {
+					topicOwner[name] = rel
 				}
-				topicIDs[id] = true
+			}
+			for _, rawSub := range asList(item["subscribe"]) {
+				sub, _ := asMap(rawSub)
+				sid, _ := sub["id"].(string)
+				index(rel, sid, "subscribe")
 			}
 		}
-		for _, raw := range asList(doc["jobs"]) {
+		for _, raw := range asList(doc["crons"]) {
 			item, _ := asMap(raw)
 			id, _ := item["id"].(string)
-			if id == "" {
-				continue
-			}
-			if jobIDs[id] {
-				c.rulef("async-structure", "%s: duplicate job id %s", relPath(c.root, file), id)
-			}
-			jobIDs[id] = true
+			index(rel, id, "cron")
 		}
-	}
-	for id := range topicIDs {
-		if jobIDs[id] {
-			c.rulef("event-file-shape", "cap.events id %s is used by both a topic and a job", id)
+		for _, raw := range asList(doc["dispatches"]) {
+			item, _ := asMap(raw)
+			id, _ := item["id"].(string)
+			index(rel, id, "dispatch")
 		}
 	}
 
-	jobServices := map[string]bool{}
+	asyncServices := map[string]bool{}
+	bound := map[string]bool{}
+	bind := func(rel, slot, name, svc, module string) {
+		if svc == "" {
+			return
+		}
+		meta, ok := serviceMeta[svc]
+		if !ok {
+			c.rulef("async-service", "%s.%s: unknown service %s", rel, name, svc)
+			return
+		}
+		if meta.module != module {
+			c.rulef("async-service", "%s.%s: service %s belongs to module %s, not %s", rel, name, svc, meta.module, module)
+			return
+		}
+		key := slot + "\x00" + svc
+		if bound[key] {
+			c.rulef("async-structure", "%s.%s: duplicate %s binding for service %s", rel, name, slot, svc)
+		}
+		bound[key] = true
+		asyncServices[svc] = true
+	}
+
 	for _, file := range files {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -60,106 +96,99 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 		c.checkStability(doc, rel)
 		fileID, _ := doc["id"].(string)
 		if want := schema.Targets.FileID(filepath.Base(rel)); fileID != want {
-			c.rulef("event-structure", "%s: id %q must be %q", rel, fileID, want)
+			c.rulef("event-file-shape", "%s: id %q must be %q", rel, fileID, want)
 		}
 		module, _ := doc["owner_module"].(string)
 		subject := strings.TrimSuffix(filepath.Base(rel), ".yaml")
 		topics := asList(doc["topics"])
-		jobs := asList(doc["jobs"])
-		if len(topics) == 0 && len(jobs) == 0 {
-			c.rulef("event-file-shape", "%s: topics or jobs must not be empty", rel)
-		}
-		if len(topics) > 0 && doc["delivery"] == nil {
-			c.rulef("event-file-shape", "%s: delivery is required when topics are declared", rel)
+		crons := asList(doc["crons"])
+		dispatches := asList(doc["dispatches"])
+		if len(topics) == 0 && len(crons) == 0 && len(dispatches) == 0 {
+			c.rulef("event-file-shape", "%s: topics/crons/dispatches must not be empty", rel)
 		}
 
-		topicNames := map[string]bool{}
+		subNames := map[string]bool{}
 		for _, raw := range topics {
 			item, _ := asMap(raw)
 			id, _ := item["id"].(string)
 			name, _ := item["name"].(string)
-			if topicNames[name] {
-				c.rulef("event-structure", "%s: duplicate topic name %s", rel, name)
-			}
-			topicNames[name] = true
 			if name != "" && !strings.HasPrefix(name, subject+".") {
 				c.rulef("event-structure", "%s: topic name %s must start with %s.", rel, name, subject)
 			}
 			if id != "" && name != "" && id != "cap.events."+name {
 				c.rulef("event-structure", "%s: topic id %s must be cap.events.%s", rel, id, name)
 			}
-			for _, rawSvc := range asList(item["emitted_by"]) {
+			publish, _ := asMap(item["publish"])
+			emitters := []any(nil)
+			if publish != nil {
+				emitters = asList(publish["emitted_by"])
+			}
+			for _, rawSvc := range emitters {
 				svc, _ := rawSvc.(string)
 				if !serviceIDs[svc] {
-					c.rulef("event-structure", "%s: topic %s unknown service %s", rel, id, svc)
+					c.rulef("event-structure", "%s: topic %s unknown emitter %s", rel, id, svc)
 				}
 			}
-			for _, rawConsumer := range asList(item["consumers"]) {
-				consumer, _ := rawConsumer.(string)
-				if consumer != "" && !jobIDs[consumer] {
-					c.rulef("event-structure", "%s: topic %s unknown consumer %s", rel, id, consumer)
+			subs := asList(item["subscribe"])
+			if len(emitters) == 0 && len(subs) == 0 {
+				c.rulef("event-orphan", "%s: topic %s is neither published nor subscribed", rel, id)
+			}
+			for _, rawSub := range subs {
+				sub, _ := asMap(rawSub)
+				subID, _ := sub["id"].(string)
+				subName, _ := sub["name"].(string)
+				if subName == "" {
+					continue
 				}
+				if subNames[subName] {
+					c.rulef("async-structure", "%s: duplicate subscribe name %s", rel, subName)
+				}
+				subNames[subName] = true
+				if subID != "" && fileID != "" && subID != fileID+"."+subName {
+					c.rulef("async-structure", "%s.%s: subscribe id %q must be %s", rel, subName, subID, fileID+"."+subName)
+				}
+				svc, _ := sub["service"].(string)
+				bind(rel, "subscribe", subName, svc, module)
 			}
 		}
 
-		jobNames := map[string]bool{}
-		for _, raw := range jobs {
+		cronNames := map[string]bool{}
+		for _, raw := range crons {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
 			if name == "" {
 				continue
 			}
-			if jobNames[name] {
-				c.rulef("async-structure", "%s: duplicate job name %s", rel, name)
+			if cronNames[name] {
+				c.rulef("async-structure", "%s: duplicate cron name %s", rel, name)
 			}
-			jobNames[name] = true
+			cronNames[name] = true
 			id, _ := item["id"].(string)
 			if id != "" && fileID != "" && id != fileID+"."+name {
-				c.rulef("async-structure", "%s.%s: job id %q must be %s", rel, name, id, fileID+"."+name)
+				c.rulef("async-structure", "%s.%s: cron id %q must be %s", rel, name, id, fileID+"."+name)
 			}
 			svc, _ := item["service"].(string)
-			if svc != "" {
-				if meta, ok := serviceMeta[svc]; !ok {
-					c.rulef("async-service", "%s.%s: unknown service %s", rel, name, svc)
-				} else {
-					if meta.module != module {
-						c.rulef("async-service", "%s.%s: service %s belongs to module %s, not %s", rel, name, svc, meta.module, module)
-					}
-					jobServices[svc] = true
-				}
+			bind(rel, "cron", name, svc, module)
+		}
+
+		dispatchNames := map[string]bool{}
+		for _, raw := range dispatches {
+			item, _ := asMap(raw)
+			name, _ := item["name"].(string)
+			if name == "" {
+				continue
 			}
-			trigger, _ := asMap(item["trigger"])
-			triggerKind := ""
-			if trigger != nil {
-				triggerKind, _ = trigger["kind"].(string)
-				switch triggerKind {
-				case "cron":
-					if v, _ := trigger["schedule"].(string); strings.TrimSpace(v) == "" {
-						c.rulef("async-trigger", "%s.%s: trigger.schedule required for cron", rel, name)
-					}
-					if trigger["topic"] != nil {
-						c.rulef("async-trigger", "%s.%s: cron trigger must not declare topic", rel, name)
-					}
-				case "topic":
-					topic, _ := trigger["topic"].(string)
-					if topic == "" {
-						c.rulef("async-trigger", "%s.%s: trigger.topic required for topic", rel, name)
-					} else if !topicIDs[topic] {
-						c.rulef("async-trigger", "%s.%s: unknown topic %s", rel, name, topic)
-					}
-					if trigger["schedule"] != nil {
-						c.rulef("async-trigger", "%s.%s: topic trigger must not declare schedule", rel, name)
-					}
-				}
+			if dispatchNames[name] {
+				c.rulef("async-structure", "%s: duplicate dispatch name %s", rel, name)
 			}
-			if triggerKind != "" && svc != "" {
-				key := triggerKind + "\x00" + svc
-				if bound[key] {
-					c.rulef("async-structure", "%s.%s: duplicate (trigger, service) %s/%s", rel, name, triggerKind, svc)
-				}
-				bound[key] = true
+			dispatchNames[name] = true
+			id, _ := item["id"].(string)
+			if id != "" && fileID != "" && id != fileID+"."+name {
+				c.rulef("async-structure", "%s.%s: dispatch id %q must be %s", rel, name, id, fileID+"."+name)
 			}
+			svc, _ := item["service"].(string)
+			bind(rel, "dispatch", name, svc, module)
 		}
 	}
-	return jobServices
+	return asyncServices
 }

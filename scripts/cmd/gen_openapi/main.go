@@ -461,7 +461,8 @@ func loadEventPayloads(root string, customTypes map[string]contractspec.CustomVa
 				continue
 			}
 			name, _ := topic["name"].(string)
-			payload := asMap(topic["payload"])
+			publish := asMap(topic["publish"])
+			payload := asMap(publish["payload"])
 			if name == "" || payload == nil {
 				continue
 			}

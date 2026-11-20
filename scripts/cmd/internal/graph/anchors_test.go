@@ -90,16 +90,19 @@ transitions:
 	writeFixture(t, root, "contracts/capabilities/events/x.yaml", `id: cap.events.x
 topics:
   - id: cap.events.x.created
-    emitted_by: []
-    consumers: []
+    name: x.created
+    version: 1
+    summary: "x"
+    publish:
+      payload: { type: _types.integer }
+      emitted_by: []
   - id: cap.events.x.activated
-    emitted_by: []
-    consumers: [cap.events.x.consume_activated]
-jobs:
-  - id: cap.events.x.consume_activated
-    name: consume_activated
-    service: cap.services.x.consume
-    trigger: {kind: topic, topic: cap.events.x.activated}
+    name: x.activated
+    version: 1
+    summary: "x"
+    publish:
+      payload: { type: _types.integer }
+      emitted_by: []
 `)
 
 	target, err := resolveTarget(root, "cap.services")
@@ -158,16 +161,12 @@ jobs:
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"emitted_by: [ cap.services.x.create ]",
-		"emitted_by: [ cap.services.x.activate ]",
-		"consumers: [ cap.events.x.consume_activated ]",
+		"emitted_by:\n        - cap.services.x.create",
+		"emitted_by:\n        - cap.services.x.activate",
 	} {
 		if !strings.Contains(string(events), want) {
 			t.Fatalf("events missing %q:\n%s", want, events)
 		}
-	}
-	if strings.Contains(string(events), "audit") {
-		t.Fatalf("stale consumer not removed:\n%s", events)
 	}
 }
 

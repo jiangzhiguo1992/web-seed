@@ -411,6 +411,17 @@ func (c *Checker) checkCapabilities() {
 			}
 			// 重复 ID 由 checkEventsDoc 的全局索引统一报出。
 			eventIDs[id] = true
+			publish, _ := asMap(item["publish"])
+			c.eventPayloads[id] = eventPayloadFields(publish["payload"])
+		}
+		for _, raw := range asList(doc["dispatches"]) {
+			item, _ := asMap(raw)
+			id, _ := item["id"].(string)
+			if id == "" {
+				continue
+			}
+			// 重复 ID 由 checkEventsDoc 的全局索引统一报出。
+			eventIDs[id] = true
 			c.eventPayloads[id] = eventPayloadFields(item["payload"])
 		}
 	}

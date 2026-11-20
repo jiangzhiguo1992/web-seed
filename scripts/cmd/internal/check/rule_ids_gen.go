@@ -5,7 +5,6 @@ package check
 var knownRuleIDs = map[string]bool{
 	"async-service":               true,
 	"async-structure":             true,
-	"async-trigger":               true,
 	"base-columns":                true,
 	"base-file":                   true,
 	"base-only":                   true,
@@ -57,6 +56,7 @@ var knownRuleIDs = map[string]bool{
 	"enum-used-by":                true,
 	"enum-values-unique":          true,
 	"event-file-shape":            true,
+	"event-orphan":                true,
 	"event-structure":             true,
 	"extends-conflict":            true,
 	"extends-ref":                 true,
@@ -183,6 +183,7 @@ var knownRuleIDs = map[string]bool{
 	"service-step-target":         true,
 	"service-transaction":         true,
 	"service-unique":              true,
+	"service-used":                true,
 	"service-visibility":          true,
 	"service-when-refs":           true,
 	"service-when-shape":          true,

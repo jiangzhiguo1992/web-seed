@@ -136,19 +136,21 @@ topics:
     name: x.created
     version: 1
     summary: "created"
-    payload:
-      type: _types.object
-      properties:
-        - { name: id, schema: { type: integer }, required: true, description: "id" }
-        - { name: account, schema: { ref: data.entities.account }, required: true, description: "account" }
-        - name: attributes
-          schema:
-            type: _types.map
-            values: { type: string }
-            min_items: 1
-            max_items: 5
-            key_patterns: [ '^[a-z][a-z0-9_]*$' ]
-          description: "attrs"
+    publish:
+      payload:
+        type: _types.object
+        properties:
+          - { name: id, schema: { type: integer }, required: true, description: "id" }
+          - { name: account, schema: { ref: data.entities.account }, required: true, description: "account" }
+          - name: attributes
+            schema:
+              type: _types.map
+              values: { type: string }
+              min_items: 1
+              max_items: 5
+              key_patterns: [ '^[a-z][a-z0-9_]*$' ]
+            description: "attrs"
+      emitted_by: []
 `)
 	writeFixture(t, root, "contracts/data/entities/account.yaml", `id: data.entities.account
 fields:

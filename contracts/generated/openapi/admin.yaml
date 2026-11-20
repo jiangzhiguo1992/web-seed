@@ -190,6 +190,39 @@ components:
         - auth_type
       type: object
       x-service-type: cap.services.auth.schemas.AuthAttributes
+    AuthBinding:
+      additionalProperties: false
+      properties:
+        account_id:
+          description: 账号 ID
+          type: integer
+        auth_id:
+          description: 认证绑定 ID
+          type: integer
+        auth_type:
+          description: 认证类型
+          enum:
+            - pwd
+            - phone
+            - email
+          type: string
+        masked_target:
+          description: 脱敏后的接收目标
+          type: string
+        status:
+          description: 认证绑定状态
+          enum:
+            - unverified
+            - verified
+            - disabled
+          type: string
+      required:
+        - auth_type
+        - auth_id
+        - account_id
+        - status
+      type: object
+      x-service-type: cap.services.auth.schemas.AuthBinding
     AuthSession:
       additionalProperties: false
       properties:
@@ -208,6 +241,100 @@ components:
         - attributes
       type: object
       x-service-type: cap.services.auth.schemas.AuthSession
+    BindEmailInput:
+      additionalProperties: false
+      properties:
+        account_id:
+          description: 账号 ID
+          type: integer
+        action:
+          description: 认证绑定动作
+          enum:
+            - create
+            - enable
+            - disable
+            - replace
+          type: string
+        domain:
+          description: 邮箱域名
+          maxLength: 190
+          minLength: 1
+          nullable: true
+          type: string
+        username:
+          description: 用户名
+          maxLength: 64
+          minLength: 1
+          nullable: true
+          type: string
+      required:
+        - account_id
+        - action
+      type: object
+      x-service-type: cap.services.auth.schemas.BindEmailInput
+    BindPasswordInput:
+      additionalProperties: false
+      properties:
+        account_id:
+          description: 账号 ID
+          type: integer
+        action:
+          description: 认证绑定动作
+          enum:
+            - create
+            - update
+            - enable
+            - disable
+          type: string
+        password:
+          description: 密码；仅请求写入，不回显
+          nullable: true
+          type: string
+          writeOnly: true
+        username:
+          description: 用户名
+          maxLength: 254
+          minLength: 1
+          nullable: true
+          type: string
+      required:
+        - account_id
+        - action
+      type: object
+      x-service-type: cap.services.auth.schemas.BindPasswordInput
+    BindPhoneInput:
+      additionalProperties: false
+      properties:
+        account_id:
+          description: 账号 ID
+          type: integer
+        action:
+          description: 认证绑定动作
+          enum:
+            - create
+            - enable
+            - disable
+            - replace
+          type: string
+        code:
+          description: 手机号区号，例如 +86
+          maxLength: 8
+          minLength: 2
+          nullable: true
+          pattern: ^\+[0-9]{1,4}$
+          type: string
+        number:
+          description: 手机号；只允许数字
+          maxLength: 32
+          minLength: 1
+          nullable: true
+          pattern: ^[0-9]{1,32}$
+          type: string
+      required:
+        - account_id
+        - action
+      type: object
+      x-service-type: cap.services.auth.schemas.BindPhoneInput
     CreateAccountInput:
       additionalProperties: false
       properties:
@@ -1006,6 +1133,117 @@ paths:
       summary: 封禁账号
       x-contract-id: cap.protocols.http.account.suspend
       x-service: cap.services.account.suspend
+  /auth/bind/email:
+    post:
+      operationId: bindEmail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindEmailInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthBinding'
+                x-service-return: cap.services.auth.schemas.AuthBinding
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "422":
+          $ref: '#/components/responses/UnprocessableEntity'
+        "423":
+          $ref: '#/components/responses/Locked'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 创建、换绑或启停邮箱认证绑定
+      x-contract-id: cap.protocols.http.auth.bind_email
+      x-service: cap.services.auth.bind_email
+      x-timeout-ms: 5000
+  /auth/bind/password:
+    post:
+      operationId: bindPassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindPasswordInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthBinding'
+                x-service-return: cap.services.auth.schemas.AuthBinding
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "422":
+          $ref: '#/components/responses/UnprocessableEntity'
+        "423":
+          $ref: '#/components/responses/Locked'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 创建、修改或启停密码认证绑定
+      x-contract-id: cap.protocols.http.auth.bind_password
+      x-service: cap.services.auth.bind_password
+      x-timeout-ms: 5000
+  /auth/bind/phone:
+    post:
+      operationId: bindPhone
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BindPhoneInput'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthBinding'
+                x-service-return: cap.services.auth.schemas.AuthBinding
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "422":
+          $ref: '#/components/responses/UnprocessableEntity'
+        "423":
+          $ref: '#/components/responses/Locked'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 创建、换绑或启停手机号认证绑定
+      x-contract-id: cap.protocols.http.auth.bind_phone
+      x-service: cap.services.auth.bind_phone
+      x-timeout-ms: 5000
   /auth/login:
     post:
       operationId: login
@@ -1086,6 +1324,44 @@ paths:
       summary: 登出
       x-contract-id: cap.protocols.http.auth.logout
       x-service: cap.services.token.logout
+  /auth/me:
+    get:
+      operationId: currentAccount
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema:
+            minLength: 1
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+                x-service-return: data.entities.account
+          description: 成功
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "422":
+          $ref: '#/components/responses/UnprocessableEntity'
+        "423":
+          $ref: '#/components/responses/Locked'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+        "500":
+          $ref: '#/components/responses/Internal'
+        "503":
+          $ref: '#/components/responses/ServiceUnavailable'
+      summary: 校验访问令牌并返回当前账号
+      x-contract-id: cap.protocols.http.auth.me
+      x-service: cap.services.token.verify
+      x-timeout-ms: 3000
   /auth/refresh:
     post:
       operationId: refreshToken

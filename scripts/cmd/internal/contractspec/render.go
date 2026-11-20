@@ -794,18 +794,21 @@ type eventsFileScaffold struct {
 	SchemaVersion int                  `yaml:"schema_version"`
 	Stability     string               `yaml:"stability"`
 	DoNot         []string             `yaml:"do_not"`
-	Delivery      string               `yaml:"delivery,omitempty"`
 	Topics        []eventTopicScaffold `yaml:"topics,omitempty"`
 }
 
 type eventTopicScaffold struct {
-	ID        string               `yaml:"id"`
-	Name      string               `yaml:"name"`
-	Version   int                  `yaml:"version"`
+	ID      string               `yaml:"id"`
+	Name    string               `yaml:"name"`
+	Version int                  `yaml:"version"`
+	Summary string               `yaml:"summary"`
+	Publish eventPublishScaffold `yaml:"publish"`
+}
+
+type eventPublishScaffold struct {
 	Payload   eventPayloadScaffold `yaml:"payload"`
-	Summary   string               `yaml:"summary"`
+	Delivery  string               `yaml:"delivery,omitempty"`
 	EmittedBy []string             `yaml:"emitted_by"`
-	Consumers []string             `yaml:"consumers"`
 }
 
 type eventPayloadScaffold struct {
@@ -846,7 +849,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 	if f, ok := FindField(s.Fields, "services"); ok {
 		if err := requireSupported(f.ItemFields, map[string]bool{
 			"name": true, "summary": true, "visibility": true, "params": true,
-			"returns": true, "tx_mode": true, "steps": true,
+			"returns": true, "tx_mode": true, "steps": true, "used_by": true,
 		}, "cap.services.services"); err != nil {
 			return nil, err
 		}
@@ -1033,14 +1036,14 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 	}
 	if err := requireSupported(s.Fields, map[string]bool{
 		"id": true, "summary": true, "owner_module": true, "schema_version": true,
-		"stability": true, "do_not": true, "delivery": true, "topics": true,
+		"stability": true, "do_not": true, "topics": true, "crons": true, "dispatches": true,
 	}, "cap.events"); err != nil {
 		return nil, err
 	}
 	if f, ok := FindField(s.Fields, "topics"); ok {
 		if err := requireSupported(f.ItemFields, map[string]bool{
-			"id": true, "name": true, "version": true, "payload": true,
-			"summary": true, "emitted_by": true, "consumers": true,
+			"id": true, "name": true, "version": true, "summary": true,
+			"publish": true, "subscribe": true,
 		}, "cap.events.topics"); err != nil {
 			return nil, err
 		}
@@ -1057,23 +1060,24 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 		Stability:     scaffoldStability,
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
-		Delivery:      "at_least_once",
 		Topics: []eventTopicScaffold{{
 			ID:      topicID,
 			Name:    name + ".created",
 			Version: 1,
-			Payload: eventPayloadScaffold{
-				Type: "_types.object",
-				Properties: []servicePropertyScaffold{{
-					Name:        "id",
-					Schema:      serviceSchemaScaffold{Type: "_types.integer"},
-					Required:    true,
-					Description: "TODO: id 说明",
-				}},
+			Summary: "TODO: 主题说明",
+			Publish: eventPublishScaffold{
+				Payload: eventPayloadScaffold{
+					Type: "_types.object",
+					Properties: []servicePropertyScaffold{{
+						Name:        "id",
+						Schema:      serviceSchemaScaffold{Type: "_types.integer"},
+						Required:    true,
+						Description: "TODO: id 说明",
+					}},
+				},
+				Delivery:  "ack_after_process",
+				EmittedBy: []string{},
 			},
-			Summary:   "TODO: 主题说明",
-			EmittedBy: []string{},
-			Consumers: []string{},
 		}},
 	}
 	b, err := marshal2(doc)

@@ -277,12 +277,12 @@ topics:
     name: x.created
     version: 1
     summary: "x"
-    payload:
-      type: _types.object
-      properties:
-        - { name: status, schema: { ref: data.enums.x_status }, required: true, description: "status" }
-    emitted_by: []
-    consumers: []
+    publish:
+      payload:
+        type: _types.object
+        properties:
+          - { name: status, schema: { ref: data.enums.x_status }, required: true, description: "status" }
+      emitted_by: []
 `)
 	c := &Checker{root: root}
 	u := c.enumUsages()["data.enums.x_status"]
