@@ -47,7 +47,7 @@ fields:
     source: { column: data.tables.account.col.user_id }
 
   - name: Tokens
-    type: List<data.entities.token>
+    type: _types.list<data.entities.token>
     description: "账号的设备令牌列表"
     source:
       join:

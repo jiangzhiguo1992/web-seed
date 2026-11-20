@@ -18,7 +18,7 @@ queries:
       - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: integer, column: data.tables.account.col.id }
+      - { name: id, type: _types.integer, column: data.tables.account.col.id }
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
@@ -47,9 +47,9 @@ queries:
       - { table: data.tables.account }
     params:
       - { name: ctx, type: context.Context }
-      - { name: number, type: text, column: data.tables.account.col.number }
+      - { name: number, type: _types.string, column: data.tables.account.col.number }
     returns:
-      - { name: exists, kind: scalar, type: boolean }
+      - { name: exists, kind: scalar, type: _types.boolean }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -63,9 +63,9 @@ queries:
       - { table: data.tables.account }
     params:
       - { name: ctx, type: context.Context }
-      - { name: status, type: integer, column: data.tables.account.col.status, nullable: true }
-      - { name: offset, type: integer, nullable: true, default: 0 }
-      - { name: limit, type: integer, nullable: true, default: 20 }
+      - { name: status, type: _types.integer, column: data.tables.account.col.status, nullable: true }
+      - { name: offset, type: _types.integer, nullable: true, default: 0 }
+      - { name: limit, type: _types.integer, nullable: true, default: 20 }
     returns:
       - { name: accounts, list: true, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
@@ -83,11 +83,11 @@ queries:
       - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: integer, column: data.tables.account.col.id }
-      - { name: status, type: integer, column: data.tables.account.col.status }
-      - { name: number, type: text, column: data.tables.account.col.number }
-      - { name: nickname, type: text, column: data.tables.account.col.nickname }
-      - { name: user_id, type: integer, column: data.tables.account.col.user_id, nullable: true }
+      - { name: id, type: _types.integer, column: data.tables.account.col.id }
+      - { name: status, type: _types.integer, column: data.tables.account.col.status }
+      - { name: number, type: _types.string, column: data.tables.account.col.number }
+      - { name: nickname, type: _types.string, column: data.tables.account.col.nickname }
+      - { name: user_id, type: _types.integer, column: data.tables.account.col.user_id, nullable: true }
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
@@ -106,8 +106,8 @@ queries:
       - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: integer, column: data.tables.account.col.id }
-      - { name: nickname, type: text, column: data.tables.account.col.nickname }
+      - { name: id, type: _types.integer, column: data.tables.account.col.id }
+      - { name: nickname, type: _types.string, column: data.tables.account.col.nickname }
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
@@ -125,8 +125,8 @@ queries:
       - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: integer, column: data.tables.account.col.id }
-      - { name: status, type: integer, column: data.tables.account.col.status }
+      - { name: id, type: _types.integer, column: data.tables.account.col.id }
+      - { name: status, type: _types.integer, column: data.tables.account.col.status }
     returns:
       - { name: account, kind: entity, entity: data.entities.account }
       - { name: err, kind: error }
@@ -146,8 +146,8 @@ queries:
       - data.tables.account.cache.id
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: integer, column: data.tables.account.col.id }
-      - { name: status, type: integer, column: data.tables.account.col.status }
+      - { name: id, type: _types.integer, column: data.tables.account.col.id }
+      - { name: status, type: _types.integer, column: data.tables.account.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
