@@ -267,6 +267,16 @@ schemas:
             required: true
             description: "违反规则时的错误文案"
 
+# TODO:GG 暂时保留
+# 类型词汇审计的显式例外；例外之外出现裸 object/array/map 或未知 _types.* 一律失败。
+type_vocabulary:
+  exceptions:
+    - { path: contracts/_meta, kind: dir, reason: "契约元层：顶层 type 是契约类型，字段 type 由 _meta 校验" }
+    - { path: contracts/generated, kind: dir, reason: "生成产物：OpenAPI 使用 JSON Schema 外部词汇" }
+    - { path: contracts/capabilities/protocols/http, kind: dir, reason: "完整 OpenAPI 3.1：type: object/array 是外部词汇" }
+    - { path: contracts/index.yaml, kind: file, reason: "契约注册表：不含 schema 节点" }
+    - { path: contracts/project.yaml, kind: file, reason: "项目元数据：不含 schema 节点" }
+
 # 每个类型族参数的消费方：openapi=生成到 OpenAPI，storage=仅存储层，runtime=业务运行时。
 param_targets:
   min_len: openapi

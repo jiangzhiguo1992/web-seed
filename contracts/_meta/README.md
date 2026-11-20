@@ -89,6 +89,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 | `make gen-graph` | 写回 `table.queries` / `model.queries` / `query.used_by` / 规则与生命周期锚点 |
 | `make gen-graph-check` | 只校验生成字段是否最新 |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / 引用 / owner / 数据流 / 类型级规则 |
+| `make audit-types` | 审计全部契约 `type` 键：`_types.*` / 外部引用 / 显式例外，输出计数并以非零退出码报告裸类型 |
 | `make check-index` | 校验 index 全类型登记及 renderer/targets ID 一致 |
 | `make gen` | 生成 DDL / OpenAPI（HTTP + `cap.events` payload components）/ 错误文档 |
 | `make gen-check` | 校验全部生成物最新 |
@@ -96,7 +97,9 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 | `make gen-rule-tests` | 生成 `docs/contracts/generated/rule-tests.md`（规则 → `implemented_by` → 测试直接引用数） |
 | `make test-rules` | 运行 `feature.rules` 的 policy 行为断言骨架（`go test -tags rules`） |
 
-`contract-check` 已接入 `lefthook` pre-commit（`contracts/**/*.yaml`）与 CI。
+`contract-check` 已接入 `lefthook` pre-commit（`contracts/**/*.yaml`）与 CI；CI 额外运行 `make audit-types` 输出类型词汇报告。
+
+例外清单只允许出现在 `_meta/_types.yaml` 的 `type_vocabulary.exceptions`（`contracts/_meta`、`contracts/generated`、`contracts/capabilities/protocols/http`、`contracts/index.yaml`、`contracts/project.yaml`），每条必须写 `kind` 与 `reason`；新增例外必须同时补审计测试。
 
 ---
 
