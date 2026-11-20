@@ -1,7 +1,7 @@
 id: cap.protocols.http.shared
 summary: "HTTP 共享组件"
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "shared 只放跨模块复用组件，不放 operation 或模块专属 schema"
 

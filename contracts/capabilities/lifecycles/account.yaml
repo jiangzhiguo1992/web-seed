@@ -4,7 +4,7 @@ id: cap.lifecycles.account
 summary: "账号生命周期"
 owner_module: account
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "account 生命周期必须穷举所有合法转换，未列出即非法"
   - "封禁与软删不要混用：suspended 可恢复，deleted 不可"

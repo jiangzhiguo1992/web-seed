@@ -2,7 +2,7 @@ id: cap.protocols.http.account
 summary: "账号 HTTP 接口"
 owner_module: account
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
   - "枚举必须引用 data.enums.*；不要在此重复枚举值"
