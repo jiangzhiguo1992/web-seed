@@ -1,4 +1,4 @@
-# cap.services：一个文件 = 一个 Go interface（<Owner><File>Service）；services[] 是可调用单元。
+# 服务与 steps；一个文件 = 一个 Go interface。
 
 id: meta.cap.services
 type: cap.services
@@ -11,146 +11,145 @@ targets:
 
 fields:
   - name: id
-    type: string
+    type: _types.string
     required: true
     pattern: '^cap\.services\.[a-z][a-z0-9_]*$'
     description: "契约 ID"
 
   - name: summary
-    type: string
+    type: _types.string
     required: true
     description: "一句话说明"
 
   - name: owner_module
-    type: string
+    type: _types.string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
     description: "写归属模块"
 
   - name: schema_version
-    type: integer
+    type: _types.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: stability
-    type: string
+    type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
-    default: draft
     description: "稳定度"
 
   - name: do_not
-    type: list<string>
+    type: _types.set<_types.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: schemas
-    type: map
+    type: _types.map
     types: [ object, array, scalar, ref ]
     required: false
-    key_pattern: '^[A-Za-z][A-Za-z0-9]*$'
+    key_patterns: [ '^[A-Za-z][A-Za-z0-9]*$' ]
     description: "本地 schema；键是 Go 类型名，值是值域节点"
 
   - name: services
-    type: list<object>
+    type: _types.list<_types.object>
     required: true
+    min_len: 1
     description: "服务项"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "服务项名" }
-      - { name: summary, type: string, required: true, description: "一句话说明" }
-      - { name: visibility, type: string, required: true, enum: [ public, internal ], description: "可见性" }
-      - { name: tx_mode, type: string, required: true, enum: [ required, read_only, none ], description: "事务模式" }
+      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "服务项名" }
+      - { name: summary, type: _types.string, required: true, description: "一句话说明" }
+      - { name: visibility, type: _types.string, required: true, enum: [ public, internal ], description: "可见性" }
+      - { name: tx_mode, type: _types.string, required: true, enum: [ required, read_only, none ], description: "事务模式" }
 
       - name: params
-        type: list<object>
+        type: _types.list<_types.object>
         required: true
         description: "入参"
         item_fields:
-          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "基础类型、data.enums.*/entities.*、本地 schema 或类型族；可带一层 * 或 List<>" }
-          - { name: nullable, type: boolean, required: false, description: "是否可空；调用方可省略" }
-          - { name: default, type: any, required: false, description: "缺省值；仅 nullable:true 时允许" }
+          - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
+          - { name: type, type: _types.string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "基础类型、data.enums.*/entities.*、本地 schema 或类型族；可带一层 * 或 List<>" }
+          - { name: nullable, type: _types.boolean, required: false, description: "是否可空；调用方可省略" }
+          - { name: default, type: _types.any, required: false, description: "缺省值" }
 
       - name: returns
-        type: list<object>
+        type: _types.list<_types.object>
         required: true
         description: "返回值"
         item_fields:
-          - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名" }
-          - { name: type, type: string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "基础类型、data.enums.*/entities.*、本地 schema 或类型族；可带一层 * 或 List<>" }
-          - { name: value, type: string, required: false, pattern: '^(params|step)\.[a-z][a-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*|\[[0-9]+\])*$', description: "业务返回值的来源：params.<path> 或 step.<id>.<path>；err 不写 value" }
-          - { name: nullable, type: boolean, required: false, description: "是否可空" }
+          - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名" }
+          - { name: type, type: _types.string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "基础类型、data.enums.*/entities.*、本地 schema 或类型族；可带一层 * 或 List<>" }
+          - { name: value, type: _types.string, required: false, pattern: '^(params|step)\.[a-z][a-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*|\[[0-9]+\])*$', description: "业务返回值的来源：params.<path> 或 step.<id>.<path>；err 不写 value" }
+          - { name: nullable, type: _types.boolean, required: false, description: "是否可空" }
 
       - name: steps
-        type: list<object>
+        type: _types.list<_types.object>
         required: true
-        min_items: 1
-        description: "步骤清单；每一步显式声明 goto，控制流无隐式顺序"
+        min_len: 1
+        description: "步骤清单；每一步显式声明 goto"
         item_fields:
-          - { name: id, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID" }
-          - { name: kind, type: string, required: true, enum: [ query, service, when, logic, events ], description: "步骤类型：query=查询、service=服务、logic=手写、events=事件、when=分支" }
-          - { name: summary, type: string, required: true, description: "一句话说明" }
-          - { name: lifecycles, type: list<string>, required: false, unique: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "状态流转标记；create/destroy 直属，transition 用 transitions.<name>；不限制 kind" }
+          - { name: id, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID" }
+          - { name: kind, type: _types.string, required: true, enum: [ query, service, when, logic, events ], description: "步骤类型：query=查询、service=服务、logic=手写、events=事件、when=分支" }
+          - { name: summary, type: _types.string, required: true, description: "一句话说明" }
+          - { name: lifecycles, type: _types.set<_types.string>, required: false, unique: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "状态流转标记；create/destroy 直属，transition 用 transitions.<name>" }
 
           - name: input
-            type: list<object>
+            type: _types.list<_types.object>
             required: true
             description: "本步读取的输入"
             item_fields:
-              - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输入名" }
-              - { name: value, type: string, required: true, pattern: '^(params|step)\.[a-z][a-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*|\[[0-9]+\])*$', description: "来源：params.<path> 或 step.<id>.<path>" }
-              - { name: description, type: string, required: true, description: "这项输入的业务含义" }
+              - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输入名" }
+              - { name: value, type: _types.string, required: true, pattern: '^(params|step)\.[a-z][a-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*|\[[0-9]+\])*$', description: "来源：params.<path> 或 step.<id>.<path>" }
+              - { name: description, type: _types.string, required: true, description: "这项输入的业务含义" }
 
           - name: output
-            type: list<object>
+            type: _types.list<_types.object>
             required: true
             description: "本步暴露的产出"
             item_fields:
-              - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
-              - { name: type, type: string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "基础类型、data.enums.*/entities.*、本地 schema 或类型族；可带一层 * 或 List<>" }
-              - { name: description, type: string, required: true, description: "这项产出的业务含义" }
-              - { name: nullable, type: boolean, required: false, description: "是否可空" }
+              - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
+              - { name: type, type: _types.string, required: true, pattern: '^(\*?(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)|List<(data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "基础类型、data.enums.*/entities.*、本地 schema 或类型族；可带一层 * 或 List<>" }
+              - { name: description, type: _types.string, required: true, description: "这项产出的业务含义" }
+              - { name: nullable, type: _types.boolean, required: false, description: "是否可空" }
 
-          - { name: errors, type: list<string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误" }
-          - { name: query, type: string, required: false, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标查询 ID；仅 kind=query；参数由本步 input 按同名映射" }
-          - { name: service, type: string, required: false, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标服务项 ID；仅 kind=service；参数由本步 input 按同名映射" }
+          - { name: errors, type: _types.set<_types.string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误" }
+          - { name: query, type: _types.string, required: false, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标查询；参数由本步 input 按同名映射" }
+          - { name: service, type: _types.string, required: false, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标服务项；参数由本步 input 按同名映射" }
 
           - name: when
-            type: list<object>
+            type: _types.list<_types.object>
             required: false
-            min_items: 1
+            min_len: 1
             description: "条件分支；按列表顺序匹配，expr 首次为真的分支生效"
             item_fields:
-              - { name: input, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "条件主体" }
-              - { name: expr, type: string, required: true, description: "布尔表达式；只能引用本步 input.<name>[.<field>]、字面量与 == != > >= < <= && || !" }
-              - { name: goto, type: string, required: true, pattern: '^(\$end|[a-z][a-z0-9_]*)$', description: "条件成立时的跳转目标；$end 直接结束" }
+              - { name: input, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "条件主体" }
+              - { name: expr, type: _types.string, required: true, description: "布尔表达式；只能引用本步 input.<name>[.<field>]、字面量与 == != > >= < <= && || !" }
+              - { name: goto, type: _types.string, required: true, pattern: '^(\$end|[a-z][a-z0-9_]*)$', description: "条件成立时的跳转目标；$end 直接结束" }
 
           - name: rules
-            type: list<object>
+            type: _types.list<_types.object>
             required: false
             unique_key: rule
-            description: "业务规则依据；仅 logic/when"
+            description: "业务规则依据"
             item_fields:
-              - { name: rule, type: string, required: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "业务规则 ID" }
+              - { name: rule, type: _types.string, required: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "业务规则 ID" }
 
           - name: events
-            type: list<object>
+            type: _types.list<_types.object>
             required: false
-            min_items: 1
+            min_len: 1
             unique_key: ref
-            description: "发射的事件；仅 kind=events；input 按所有事件 payload 并集映射"
+            description: "发射的事件；input 按所有事件 payload 并集映射"
             item_fields:
-              - { name: ref, type: string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标事件 topic ID" }
+              - { name: ref, type: _types.string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标事件 topic ID" }
 
-          - { name: goto, type: string, required: true, pattern: '^(\$end|[a-z][a-z0-9_]*)$', description: "唯一跳转目标；$end 结束 service" }
+          - { name: goto, type: _types.string, required: true, pattern: '^(\$end|[a-z][a-z0-9_]*)$', description: "唯一跳转目标；$end 结束 service" }
 
 rules:
   - { id: service-id, text: "契约 ID 必须与 targets 派生一致，且全局唯一；service 项 ID 全局唯一", implemented_by: [ service-id ] }
   - { id: service-signature, text: "params[0] 必须是 ctx context.Context；params/returns name 唯一；returns 最后一项必须是 {name: err, type: error} 且只能出现一次；err 不得写 value", implemented_by: [ service-signature ] }
   - { id: service-unique, text: "service name、step.id、step 内 output/input/events/rules 项、step.lifecycles 的同一 action 均不得重复", implemented_by: [ service-unique ] }
-  - { id: service-steps, text: "service 至少有一个 step", implemented_by: [ service-steps ] }
   - { id: service-schema, text: "schemas 名必须是 Go 标识符且全局唯一；schema 类型名在所有 service 文件中全局唯一", implemented_by: [ service-schema ] }
   - { id: service-ref, text: "query / service / events[].ref / lifecycles / rules 引用必须存在；params/returns/schemas 中的 data.enums.* / data.entities.* / 本地类型必须存在（语法由 service-param-type 校验）；events[].ref 必须指向 cap.events topics", implemented_by: [ service-ref ] }
   - { id: service-owner-write, text: "query 的写表必须属于 service 文件的 owner_module；跨模块写必须走 kind=service", implemented_by: [ service-owner-write ] }
