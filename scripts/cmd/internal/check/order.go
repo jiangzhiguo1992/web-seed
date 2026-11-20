@@ -202,14 +202,18 @@ func schemaNodeKindFromYAML(n *yaml.Node, kinds map[string]SchemaKind) string {
 		return ""
 	}
 	kind := ""
-	switch {
-	case hasRef:
-		kind = "ref"
-	case typ == "object":
+	switch normalizeTypeExpr(typ) {
+	case "":
+		if hasRef {
+			kind = "ref"
+		}
+	case "object":
 		kind = "object"
-	case typ == "array":
+	case "array":
 		kind = "array"
-	case typ != "":
+	case "map":
+		kind = "map"
+	default:
 		kind = "scalar"
 	}
 	if kind == "" {

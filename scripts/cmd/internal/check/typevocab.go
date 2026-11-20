@@ -5,7 +5,7 @@
 //   - 已声明的外部引用：data.enums.* / data.entities.* / cap.services.*.schemas.* /
 //     data.tables.*.col.* / context.Context / error / time.*
 //
-// schema 节点的 type: object|array|map 是判别键，由 schema 节点校验负责；
+// schema 节点的 type: _types.object|_types.array|_types.map 是判别键，由 schema 节点校验负责；
 // cap.protocols.http 是完整 OpenAPI 3.1，使用外部词汇，不参与本规则。
 package check
 
@@ -95,6 +95,9 @@ func (c *Checker) checkTypeRef(v any, path string) {
 		c.checkTypeRef(inner, path+".item")
 		return
 	}
+	if s == "_types.object" || s == "_types.array" || s == "_types.map" {
+		return
+	}
 	if strings.HasPrefix(s, "_types.") {
 		if _, err := parseTypeExpr(s, c.valueTypes); err != nil {
 			c.typeVocabularyf(path, s, "%s: %v", path, err)
@@ -102,8 +105,6 @@ func (c *Checker) checkTypeRef(v any, path string) {
 		return
 	}
 	switch {
-	case s == "object", s == "array", s == "map":
-		return
 	case strings.HasPrefix(s, "data.enums."):
 		if c.enumIDs != nil && !c.enumIDs[s] {
 			c.typeVocabularyf(path, s, "%s: unknown enum %s", path, s)
@@ -154,13 +155,7 @@ func (c *Checker) scanTypeRefs(v any, path string) {
 	}
 }
 
-// isOpenAPIDoc 报告路径是否属于完整 OpenAPI 契约。
-func isOpenAPIDoc(path string) bool {
-	return strings.Contains(strings.ReplaceAll(path, "\\", "/"), "contracts/capabilities/protocols/http/")
-}
-
-// checkTypeVocabulary 扫描 contracts/ 下所有实例 YAML 的 type 键。
-// _meta、generated 与 OpenAPI 契约分别有自己的校验/外部词汇。
+// checkTypeVocabulary 扫描 contracts/ 下所有实例 YAML 的 type 键；例外见 _types.yaml type_vocabulary。
 func (c *Checker) checkTypeVocabulary() {
 	shared, err := contractspec.LoadSharedTypes(filepath.Join(c.root, "contracts", "_meta"))
 	if err != nil {
@@ -173,10 +168,11 @@ func (c *Checker) checkTypeVocabulary() {
 		return
 	}
 	c.valueTypes = ValueTypes{
-		TypeFamilies: shared.TypeFamilies,
-		Structures:   shared.Structures,
-		Schemas:      shared.Schemas,
-		CustomTypes:  custom.CustomTypes,
+		TypeFamilies:   shared.TypeFamilies,
+		Structures:     shared.Structures,
+		Schemas:        shared.Schemas,
+		CustomTypes:    custom.CustomTypes,
+		TypeVocabulary: shared.TypeVocabulary,
 	}
 	root := filepath.Join(c.root, "contracts")
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -184,11 +180,7 @@ func (c *Checker) checkTypeVocabulary() {
 			return nil
 		}
 		rel := relPath(c.root, path)
-		if strings.HasPrefix(rel, "contracts/_meta/") || strings.HasPrefix(rel, "contracts/generated/") || isOpenAPIDoc(rel) {
-			return nil
-		}
-		// index/project 是注册表与项目元数据，不是契约实例。
-		if rel == "contracts/index.yaml" || rel == "contracts/project.yaml" {
+		if typeVocabularyExempt(rel, c.valueTypes.TypeVocabulary.Exceptions) {
 			return nil
 		}
 		doc, err := loadYAML(path)
@@ -198,4 +190,19 @@ func (c *Checker) checkTypeVocabulary() {
 		c.scanTypeRefs(doc, rel)
 		return nil
 	})
+}
+
+// typeVocabularyExempt 判断契约路径是否命中显式例外清单。
+func typeVocabularyExempt(rel string, exceptions []contractspec.TypeVocabularyException) bool {
+	rel = filepath.ToSlash(rel)
+	for _, ex := range exceptions {
+		p := filepath.ToSlash(ex.Path)
+		if ex.Kind == "file" && rel == p {
+			return true
+		}
+		if ex.Kind == "dir" && (rel == p || strings.HasPrefix(rel, p+"/")) {
+			return true
+		}
+	}
+	return false
 }

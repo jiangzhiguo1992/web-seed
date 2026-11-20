@@ -14,7 +14,7 @@ topics:
     name: account.created
     version: 1
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
         - { name: number, schema: { type: _types.account_number }, required: true, description: "账号编号" }
@@ -27,7 +27,7 @@ topics:
     name: account.activated
     version: 1
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
         - { name: activated_at, schema: { type: _types.timestamp }, required: true, description: "账号激活时间" }
@@ -38,7 +38,7 @@ topics:
     name: account.suspended
     version: 1
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
         - { name: reason, schema: { type: _types.string }, required: true, description: "失败或停用原因" }
@@ -50,7 +50,7 @@ topics:
     name: account.reactivated
     version: 1
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
         - { name: reactivated_at, schema: { type: _types.timestamp }, required: true, description: "账号重新激活时间" }
@@ -61,7 +61,7 @@ topics:
     name: account.deleted
     version: 1
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
         - { name: deleted_at, schema: { type: _types.timestamp }, required: true, description: "软删时间" }
@@ -72,14 +72,14 @@ topics:
     name: account.login_succeeded
     version: 1
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
         - { name: ip, schema: { type: _types.string }, description: "客户端 IP" }
         - { name: user_agent, schema: { type: _types.string }, description: "客户端 User-Agent" }
         - name: attributes
           schema:
-            type: map
+            type: _types.map
             values: { type: _types.string }
             min_items: 1
             max_items: 10
@@ -93,7 +93,7 @@ topics:
     name: account.login_failed
     version: 1
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: account_id, schema: { type: _types.integer }, nullable: true, description: "账号 ID；未知账号为 null" }
         - { name: reason, schema: { ref: data.enums.login_failed_reason }, required: true, description: "失败或停用原因" }

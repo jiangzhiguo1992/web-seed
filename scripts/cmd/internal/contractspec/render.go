@@ -894,7 +894,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 		OwnerModule:   module,
 		Schemas: map[string]serviceSchemaScaffold{
 			"GetInput": {
-				Type: "object",
+				Type: "_types.object",
 				Properties: []servicePropertyScaffold{{
 					Name:        "id",
 					Schema:      serviceSchemaScaffold{Type: "_types.integer"},
@@ -1063,7 +1063,7 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 			Name:    name + ".created",
 			Version: 1,
 			Payload: eventPayloadScaffold{
-				Type: "object",
+				Type: "_types.object",
 				Properties: []servicePropertyScaffold{{
 					Name:        "id",
 					Schema:      serviceSchemaScaffold{Type: "_types.integer"},

@@ -223,7 +223,7 @@ stability: draft
 do_not: []
 schemas:
   Filter:
-    type: object
+    type: _types.object
     properties:
       - { name: status, schema: { ref: data.enums.x_status }, required: true, description: "status" }
 services:
@@ -278,7 +278,7 @@ topics:
     version: 1
     summary: "x"
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: status, schema: { ref: data.enums.x_status }, required: true, description: "status" }
     emitted_by: []

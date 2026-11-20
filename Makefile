@@ -5,7 +5,7 @@ APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
         gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-check contract-new contract-check contract-graph contract-impact contract-compat db-verify \
-        gen-rule-ids check-rule-ids gen-check-core test-rules dev api-dev web-dev compose-up compose-down doctor derive check-docs check-index
+        gen-rule-ids check-rule-ids gen-check-core test-rules audit-types dev api-dev web-dev compose-up compose-down doctor derive check-docs check-index
 
 help: ## 显示可用目标
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -98,6 +98,9 @@ contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.
 
 contract-check: ## 校验契约结构、引用与 used_by（全部类型）
 	@./scripts/contract/validate.sh
+
+audit-types: ## 审计契约 type 词汇（_types/外部引用/显式例外）
+	cd scripts/cmd && go run ./audit_types -root "$(CURDIR)"
 
 check-index: ## 校验 index 全类型登记及 renderer/targets ID 一致
 	cd scripts/cmd && go test ./internal/check -run '^TestIndexAcceptsAllContractTypes$$' -count=1

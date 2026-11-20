@@ -30,6 +30,7 @@ if [[ -n "$unformatted" ]]; then
 fi
 
 echo "== contracts =="
+make audit-types
 ./scripts/contract/validate.sh
 
 echo "== design tokens =="

@@ -15,7 +15,7 @@ topics:
     name: token.issued
     version: 1
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: token_id, schema: { type: _types.integer }, required: true, description: "令牌 ID" }
         - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }

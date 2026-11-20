@@ -15,7 +15,7 @@ do_not:
 
 schemas:
   SendVerificationInput:
-    type: object
+    type: _types.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
       - { name: account_id, schema: { type: _types.integer }, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
@@ -24,13 +24,13 @@ schemas:
     validation:
       - { rule: "input.purpose != \"register\" || input.account_id != null", message: "注册验证必须携带 pending account ID" }
   VerificationSent:
-    type: object
+    type: _types.object
     properties:
       - { name: id, schema: { type: _types.integer }, required: true, description: "验证记录 ID" }
       - { name: masked_target, schema: { type: _types.string }, required: true, description: "脱敏后的接收目标" }
       - { name: expire_at, schema: { type: _types.timestamp }, required: true, description: "过期时间" }
   VerifyCodeInput:
-    type: object
+    type: _types.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
       - { name: account_id, schema: { type: _types.integer }, nullable: true, description: "注册时必传；其他用途可省略" }
@@ -40,7 +40,7 @@ schemas:
     validation:
       - { rule: "input.purpose != \"register\" || input.account_id != null", message: "注册验证必须携带 pending account ID" }
   VerificationResult:
-    type: object
+    type: _types.object
     properties:
       - { name: verified, schema: { type: _types.boolean }, required: true, description: "是否验证通过" }
       - { name: verification_id, schema: { type: _types.integer }, required: true, description: "验证记录 ID" }

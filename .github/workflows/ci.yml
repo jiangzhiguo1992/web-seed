@@ -73,6 +73,7 @@ jobs:
           go-version-file: scripts/cmd/go.mod
           cache-dependency-path: scripts/cmd/go.sum
       - run: make check-rule-ids
+      - run: make audit-types
       - run: make contract-check
       - name: check index registration
         run: time make check-index

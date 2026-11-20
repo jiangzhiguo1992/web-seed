@@ -11,7 +11,7 @@ do_not:
 
 schemas:
   LoginInput:
-    type: object
+    type: _types.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
       - { name: identifier, schema: { type: _types.auth_identifier }, required: true, description: "登录标识" }
@@ -21,7 +21,7 @@ schemas:
     validation:
       - { rule: "input.auth_type != \"pwd\" || input.password != null", message: "密码认证必须提供密码" }
   BindPasswordInput:
-    type: object
+    type: _types.object
     properties:
       - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
       - { name: action, schema: { ref: data.enums.auth_password_action }, required: true, description: "认证绑定动作" }
@@ -30,7 +30,7 @@ schemas:
     validation:
       - { rule: "input.action != \"create\" && input.action != \"update\" || input.password != null", message: "创建或修改密码必须提供密码" }
   BindPhoneInput:
-    type: object
+    type: _types.object
     properties:
       - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
       - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
@@ -39,7 +39,7 @@ schemas:
     validation:
       - { rule: "input.action != \"create\" || input.number != null", message: "创建手机绑定必须提供手机号" }
   BindEmailInput:
-    type: object
+    type: _types.object
     properties:
       - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
       - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
@@ -48,7 +48,7 @@ schemas:
     validation:
       - { rule: "input.action != \"create\" || input.username != null && input.domain != null", message: "创建邮箱绑定必须提供用户名和域名" }
   AuthBinding:
-    type: object
+    type: _types.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
       - { name: auth_id, schema: { type: _types.integer }, required: true, description: "认证绑定 ID" }
@@ -56,13 +56,13 @@ schemas:
       - { name: status, schema: { ref: data.enums.auth_status }, required: true, description: "认证绑定状态" }
       - { name: masked_target, schema: { type: _types.string }, description: "脱敏后的接收目标" }
   AuthSession:
-    type: object
+    type: _types.object
     properties:
       - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
       - { name: tokens, schema: { ref: cap.services.token.schemas.TokenPair }, required: true, description: "令牌对" }
       - { name: attributes, schema: { ref: cap.services.auth.schemas.AuthAttributes }, required: true, description: "会话属性" }
   AuthAttributes:
-    type: object
+    type: _types.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "本次登录使用的认证类型" }
       - { name: device_id, schema: { type: _types.device_id }, nullable: true, description: "登录设备标识" }

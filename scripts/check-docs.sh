@@ -28,6 +28,17 @@ for p in "${required[@]}"; do
   fi
 done
 
+# 契约 schema 节点示例必须写 _types.object/_types.array/_types.map。
+if ! command -v grep >/dev/null 2>&1; then
+  echo "check-docs: grep required"
+  exit 1
+fi
+if hits=$(grep -rnE '(^|[[:space:]])type: (object|array|map)([[:space:]]|$)' docs/playbooks 2>/dev/null || true); [[ -n "$hits" ]]; then
+  echo "check-docs: playbook uses bare schema kind (use _types.object/_types.array/_types.map):"
+  echo "$hits"
+  missing=1
+fi
+
 # 校验 markdown 中的相对链接（忽略 http/https/mailto/锚点）
 while IFS= read -r md; do
   dir=$(dirname "$md")

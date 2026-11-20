@@ -514,7 +514,7 @@ func schemaFromAny(v any) (map[string]any, bool) {
 }
 
 func isArraySchema(schema map[string]any) bool {
-	if typ, _ := schema["type"].(string); typ == "array" {
+	if typ, _ := schema["type"].(string); normalizeTypeExpr(typ) == "array" {
 		return true
 	}
 	if _, ok := asList2(schema["prefixItems"]); ok {

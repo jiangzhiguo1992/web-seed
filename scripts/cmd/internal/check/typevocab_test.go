@@ -23,6 +23,20 @@ func TestTypeVocabulary(t *testing.T) {
 	if len(c.errs) != 0 {
 		t.Fatalf("_types.list<entity> rejected: %v", c.errs)
 	}
+	for _, typ := range []string{"object", "array", "map"} {
+		c.errs = nil
+		c.checkTypeRef(typ, "x")
+		if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.type-vocabulary]") {
+			t.Fatalf("bare schema kind %s not rejected: %v", typ, c.errs)
+		}
+	}
+	for _, typ := range []string{"_types.object", "_types.array", "_types.map"} {
+		c.errs = nil
+		c.checkTypeRef(typ, "x")
+		if len(c.errs) != 0 {
+			t.Fatalf("prefixed schema kind %s rejected: %v", typ, c.errs)
+		}
+	}
 }
 
 func TestTypeVocabularyWalksUnvalidatedFiles(t *testing.T) {
@@ -123,26 +137,56 @@ func TestTypeVocabularyCrossFileDuplicates(t *testing.T) {
 	}
 }
 
+func TestTypeVocabularyOpenAPIException(t *testing.T) {
+	root := t.TempDir()
+	copyMeta(t, root, "cap.services")
+	for _, item := range []struct{ path, body string }{
+		{"contracts/capabilities/protocols/http/x.yaml", "type: object\n"},
+		{"contracts/generated/x.yaml", "type: object\n"},
+		{"contracts/platform/analytics/y.yaml", "type: object\n"},
+	} {
+		dir := filepath.Dir(filepath.Join(root, item.path))
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, item.path), []byte(item.body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := &Checker{root: root}
+	c.checkTypeVocabulary()
+	joined := strings.Join(c.errs, "\n")
+	if strings.Contains(joined, "protocols/http") {
+		t.Fatalf("OpenAPI exception reported: %v", c.errs)
+	}
+	if strings.Contains(joined, "generated") {
+		t.Fatalf("generated exception reported: %v", c.errs)
+	}
+	if !strings.Contains(joined, "contracts/platform/analytics/y.yaml") {
+		t.Fatalf("non-exempt bare object not reported: %v", c.errs)
+	}
+}
+
 func TestSchemaMapNode(t *testing.T) {
 	root := t.TempDir()
 	schema := copyMeta(t, root, "cap.services")
 	c := &Checker{root: root, nodeKinds: schema.NodeKinds, propertyKeys: schema.PropertyKeys, valueTypes: schema.ValueTypes}
 	c.validateSchemaNode(map[string]any{
-		"type":   "map",
+		"type":   "_types.map",
 		"values": map[string]any{"type": "_types.string"},
 	}, "payload")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid map node rejected: %v", c.errs)
 	}
 	c.errs = nil
-	c.validateSchemaNode(map[string]any{"type": "map"}, "payload")
+	c.validateSchemaNode(map[string]any{"type": "_types.map"}, "payload")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "map node requires values") {
 		t.Fatalf("map node without values not rejected: %v", c.errs)
 	}
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":      "map",
+		"type":      "_types.map",
 		"values":    map[string]any{"type": "_types.string"},
 		"min_items": 2,
 		"max_items": 1,
@@ -153,7 +197,7 @@ func TestSchemaMapNode(t *testing.T) {
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":         "map",
+		"type":         "_types.map",
 		"values":       map[string]any{"type": "_types.string"},
 		"key_patterns": []any{"^[a-z]+$", "^[a-z0-9_]+$"},
 	}, "payload")
@@ -163,7 +207,7 @@ func TestSchemaMapNode(t *testing.T) {
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":         "map",
+		"type":         "_types.map",
 		"values":       map[string]any{"type": "_types.string"},
 		"key_patterns": []any{"[invalid"},
 	}, "payload")
@@ -173,7 +217,7 @@ func TestSchemaMapNode(t *testing.T) {
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":   "map",
+		"type":   "_types.map",
 		"values": map[string]any{"type": "_types.string"},
 		"validation": []any{
 			map[string]any{"rule": "value != null", "message": "必填"},
@@ -185,7 +229,7 @@ func TestSchemaMapNode(t *testing.T) {
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":   "map",
+		"type":   "_types.map",
 		"values": map[string]any{"type": "_types.string"},
 		"validation": []any{
 			map[string]any{"rule": "value.foo != null", "message": "x"},

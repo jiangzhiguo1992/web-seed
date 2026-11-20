@@ -9,7 +9,7 @@ do_not:
 
 schemas:
   TokenPair:
-    type: object
+    type: _types.object
     properties:
       - { name: access_token, schema: { type: _types.string }, required: true, read_only: true, description: "访问令牌" }
       - { name: refresh_token, schema: { type: _types.string }, required: true, read_only: true, description: "刷新令牌" }

@@ -29,12 +29,24 @@ type Schema struct {
 // SharedTypes 是 _meta/_types.yaml 的严格解析结果：类型族是元层词汇，
 // 由所有契约类型共享；项目级自定义类型在 contracts/data/types.yaml。
 type SharedTypes struct {
-	ID           string                     `yaml:"id"`
-	Title        string                     `yaml:"title"`
-	TypeFamilies map[string]ValueTypeFamily `yaml:"basic_types"`
-	Structures   map[string]Structure       `yaml:"structures"`
-	Schemas      map[string]SchemaKind      `yaml:"schemas"`
-	ParamTargets map[string]string          `yaml:"param_targets"`
+	ID             string                     `yaml:"id"`
+	Title          string                     `yaml:"title"`
+	TypeFamilies   map[string]ValueTypeFamily `yaml:"basic_types"`
+	Structures     map[string]Structure       `yaml:"structures"`
+	Schemas        map[string]SchemaKind      `yaml:"schemas"`
+	ParamTargets   map[string]string          `yaml:"param_targets"`
+	TypeVocabulary TypeVocabulary             `yaml:"type_vocabulary"`
+}
+
+// TypeVocabulary 声明类型词汇审计的显式例外；例外之外的裸类型一律报错。
+type TypeVocabulary struct {
+	Exceptions []TypeVocabularyException `yaml:"exceptions"`
+}
+
+type TypeVocabularyException struct {
+	Path   string `yaml:"path"`
+	Kind   string `yaml:"kind"`
+	Reason string `yaml:"reason"`
 }
 
 // Structure 是模板字段的数据结构声明：list/set/array/map/object。
@@ -58,7 +70,7 @@ type CustomTypesDoc struct {
 const customTypesRel = "contracts/data/types.yaml"
 
 // SchemaAlias 在字段规范的 types 列表中代表 schemas 下声明的全部节点种类。
-// 使用它可避免在每处 schema 槽位重复枚举 object/array/scalar/ref。
+// 使用它可避免在每处 schema 槽位重复枚举 object/array/map/scalar/ref。
 const SchemaAlias = "_types.schema"
 
 // SchemaNodeKind 返回 schema 节点的种类：ref 优先，其次由 type 的 struct/array/其他值决定。
@@ -71,7 +83,7 @@ func SchemaNodeKind(node map[string]any, kinds map[string]SchemaKind) (string, b
 	if hasRef {
 		return "ref", kinds["ref"].Keys != nil
 	}
-	switch typ {
+	switch strings.TrimPrefix(typ, "_types.") {
 	case "":
 		return "", false
 	case "object":
@@ -116,11 +128,12 @@ func (t Targets) FileID(file string) string {
 }
 
 type ValueTypes struct {
-	TypeFamilies map[string]ValueTypeFamily `yaml:"basic_types"`
-	CustomTypes  map[string]CustomValueType `yaml:"custom_types"`
-	Structures   map[string]Structure       `yaml:"structures"`
-	Schemas      map[string]SchemaKind      `yaml:"schemas"`
-	ParamTargets map[string]string          `yaml:"param_targets"`
+	TypeFamilies   map[string]ValueTypeFamily `yaml:"basic_types"`
+	CustomTypes    map[string]CustomValueType `yaml:"custom_types"`
+	Structures     map[string]Structure       `yaml:"structures"`
+	Schemas        map[string]SchemaKind      `yaml:"schemas"`
+	ParamTargets   map[string]string          `yaml:"param_targets"`
+	TypeVocabulary TypeVocabulary             `yaml:"type_vocabulary"`
 }
 
 // ParamTargetKinds 是 param_targets 允许的消费方：openapi=生成到 OpenAPI，
@@ -287,7 +300,35 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 	if err := validateParamTargets(path, t.TypeFamilies, t.ParamTargets); err != nil {
 		return nil, err
 	}
+	if err := validateTypeVocabulary(path, t.TypeVocabulary); err != nil {
+		return nil, err
+	}
 	return &t, nil
+}
+
+// validateTypeVocabulary 要求例外清单非空、路径相对、kind 合法且 reason 非空。
+func validateTypeVocabulary(path string, tv TypeVocabulary) error {
+	if len(tv.Exceptions) == 0 {
+		return fmt.Errorf("%s: type_vocabulary.exceptions must not be empty", path)
+	}
+	seen := map[string]bool{}
+	for i, ex := range tv.Exceptions {
+		if ex.Path == "" || filepath.IsAbs(ex.Path) || strings.Contains(ex.Path, "..") {
+			return fmt.Errorf("%s: type_vocabulary.exceptions[%d].path must be a relative path", path, i)
+		}
+		if ex.Kind != "dir" && ex.Kind != "file" {
+			return fmt.Errorf("%s: type_vocabulary.exceptions[%d].kind must be dir or file", path, i)
+		}
+		if strings.TrimSpace(ex.Reason) == "" {
+			return fmt.Errorf("%s: type_vocabulary.exceptions[%d].reason must not be empty", path, i)
+		}
+		key := ex.Kind + "\x00" + ex.Path
+		if seen[key] {
+			return fmt.Errorf("%s: type_vocabulary.exceptions[%d] duplicates %s %s", path, i, ex.Kind, ex.Path)
+		}
+		seen[key] = true
+	}
+	return nil
 }
 
 // validateParamTargets 校验 param_targets 的键必须是已声明参数，值必须是已知消费方。

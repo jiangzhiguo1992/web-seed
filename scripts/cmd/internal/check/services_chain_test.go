@@ -202,7 +202,7 @@ func TestServiceChainOutputAndParamUsage(t *testing.T) {
 func TestServiceNestedInputPath(t *testing.T) {
 	c := &Checker{methodTypeDefs: map[string]map[string]any{
 		"Filter": {
-			"type": "object",
+			"type": "_types.object",
 			"properties": []any{
 				map[string]any{"name": "status", "schema": map[string]any{"type": "integer"}},
 			},

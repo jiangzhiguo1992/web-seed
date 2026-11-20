@@ -79,7 +79,7 @@ components:
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   X:
-    type: object
+    type: _types.object
     properties:
       id:
         type: integer
@@ -137,13 +137,13 @@ topics:
     version: 1
     summary: "created"
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: id, schema: { type: integer }, required: true, description: "id" }
         - { name: account, schema: { ref: data.entities.account }, required: true, description: "account" }
         - name: attributes
           schema:
-            type: map
+            type: _types.map
             values: { type: string }
             min_items: 1
             max_items: 5
@@ -309,7 +309,7 @@ enums: []
 
 func TestRenderSchemaAnnotations(t *testing.T) {
 	obj := map[string]any{
-		"type": "object",
+		"type": "_types.object",
 		"properties": []any{
 			map[string]any{
 				"name":        "id",
@@ -334,7 +334,7 @@ func TestRenderSchemaAnnotations(t *testing.T) {
 		t.Fatalf("required aggregation lost: %#v", out)
 	}
 
-	list := map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+	list := map[string]any{"type": "_types.array", "items": map[string]any{"type": "string"}}
 	out, err = renderSchemaNode(list, nil, nil, map[string]bool{}, testNodeKinds())
 	if err != nil {
 		t.Fatal(err)
@@ -344,7 +344,7 @@ func TestRenderSchemaAnnotations(t *testing.T) {
 		t.Fatalf("array items lost: %#v", item)
 	}
 
-	m := map[string]any{"type": "map", "values": map[string]any{"type": "string"}}
+	m := map[string]any{"type": "_types.map", "values": map[string]any{"type": "string"}}
 	out, err = renderSchemaNode(m, nil, nil, map[string]bool{}, testNodeKinds())
 	if err != nil {
 		t.Fatal(err)

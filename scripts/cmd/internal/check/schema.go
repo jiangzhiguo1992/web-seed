@@ -1,6 +1,6 @@
 // schema.go 校验受限 schema DSL：两层语法。
 //
-// schema 节点（object / array / scalar / ref）只描述值域；
+// schema 节点（object / array / map / scalar / ref）只描述值域；
 // property 条目（name + schema + 槽位注解）只允许出现在 object.properties[]。
 // 槽位键出现在节点位置直接报 schema.slot-position，避免 read_only 等被误读为类型属性。
 // 标量约束只在 _meta/_types.yaml，这里不重复定义 minLength/minimum 等线格式键。
@@ -190,10 +190,13 @@ func (c *Checker) validatePropertyExtras(m map[string]any, path string) {
 						c.rulef("schema.default", "%s.default: %v is not a value of %s", path, def, ref)
 					}
 				}
-			} else if typ, _ := sm["type"].(string); typ != "" && typ != "object" && typ != "array" {
-				if family := c.valueType(typ); family != "" {
-					if ok, want := defaultMatchesType(def, family); !ok {
-						c.rulef("schema.default", "%s.default: must be %s for type %s", path, want, family)
+			} else if typ, _ := sm["type"].(string); typ != "" {
+				typ = normalizeTypeExpr(typ)
+				if typ != "object" && typ != "array" && typ != "map" {
+					if family := c.valueType(typ); family != "" {
+						if ok, want := defaultMatchesType(def, family); !ok {
+							c.rulef("schema.default", "%s.default: must be %s for type %s", path, want, family)
+						}
 					}
 				}
 			}
@@ -342,7 +345,8 @@ func (c *Checker) validateScalarNode(m map[string]any, path string) {
 		c.rulef("schema.non-empty", "%s.type: must not be empty", path)
 		return
 	}
-	if typ == "object" || typ == "array" || typ == "map" {
+	if typ == "object" || typ == "array" || typ == "map" ||
+		typ == "_types.object" || typ == "_types.array" || typ == "_types.map" {
 		c.rulef("schema.type", "%s.type: %s must use its kind structure", path, typ)
 		return
 	}

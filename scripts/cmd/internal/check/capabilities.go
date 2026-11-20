@@ -107,8 +107,9 @@ func payloadPropertyType(raw any) string {
 		return ref
 	}
 	typ, _ := node["type"].(string)
+	typ = normalizeTypeExpr(typ)
 	switch typ {
-	case "object", "array", "":
+	case "object", "array", "map", "":
 		return ""
 	}
 	return typ

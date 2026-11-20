@@ -23,7 +23,7 @@ var domainFiles = map[string]string{
 }
 
 var sharedFiles = map[string]bool{
-	"access.go": true, "capabilities.go": true, "checker.go": true,
+	"access.go": true, "audit.go": true, "capabilities.go": true, "checker.go": true,
 	"entities.go": true, "enum_codes.go": true, "enums.go": true,
 	"errors.go": true, "modules.go": true, "order.go": true,
 	"placement.go": true, "queries.go": true, "query_indexes.go": true, "query_storage.go": true,

@@ -10,25 +10,25 @@ do_not:
 
 schemas:
   ListAccountsFilter:
-    type: object
+    type: _types.object
     properties:
       - { name: status, schema: { ref: data.enums.account_status }, nullable: true, description: "账号状态过滤" }
       - { name: offset, schema: { type: _types.page_offset }, description: "分页偏移；默认 0" }
       - { name: limit, schema: { type: _types.page_limit }, description: "分页大小；默认 20" }
   CreateAccountInput:
-    type: object
+    type: _types.object
     properties:
       - { name: number, schema: { type: _types.account_number }, required: true, description: "账号编号" }
       - { name: nickname, schema: { type: _types.account_nickname }, required: true, description: "账号昵称" }
       - { name: user_id, schema: { type: _types.integer }, nullable: true, description: "关联用户 ID" }
   UpdateAccountInput:
-    type: object
+    type: _types.object
     properties:
       - { name: nickname, schema: { type: _types.account_nickname }, required: true, description: "账号昵称" }
   AccountPage:
-    type: object
+    type: _types.object
     properties:
-      - { name: items, schema: { type: array, items: { ref: data.entities.account } }, required: true, description: "分页项列表" }
+      - { name: items, schema: { type: _types.array, items: { ref: data.entities.account } }, required: true, description: "分页项列表" }
       - { name: offset, schema: { type: _types.page_offset }, required: true, description: "当前页偏移" }
       - { name: limit, schema: { type: _types.page_limit }, required: true, description: "当前页大小" }
       - { name: has_more, schema: { type: _types.boolean }, required: true, description: "是否还有下一页" }

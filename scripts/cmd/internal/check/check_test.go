@@ -1963,7 +1963,7 @@ func TestEnumCapabilityUsage(t *testing.T) {
 	capability := `id: cap.methods.x
 types:
   Filter:
-    type: object
+    type: _types.object
     properties:
       status: { type: data.enums.x_status }
 `
@@ -2048,7 +2048,7 @@ func TestEnumRefsScanAllContracts(t *testing.T) {
 id: cap.methods.x
 types:
   Input:
-    type: object
+    type: _types.object
     properties:
       status: { type: data.enums.missing_status }
 `

@@ -881,7 +881,7 @@ topics:
     name: x.created
     version: 1
     payload:
-      type: object
+      type: _types.object
       properties:
         - { name: id, schema: { type: _types.integer }, required: true, description: "id" }
     summary: "x"
@@ -1319,11 +1319,11 @@ stability: draft
 do_not: []
 schemas:
   XInput:
-    type: object
+    type: _types.object
     properties:
       - name: nested
         schema:
-          type: object
+          type: _types.object
           properties:
             - { name: id, schema: { type: _types.integer }, description: "id" }
             - name: typo
@@ -1371,12 +1371,12 @@ stability: draft
 do_not: []
 schemas:
   XInput:
-    type: object
+    type: _types.object
     properties:
       - name: nested
         description: "nested"
         schema:
-          type: object
+          type: _types.object
           properties:
             - { name: id, schema: { type: _types.integer }, description: "id" }
 services:
@@ -1446,7 +1446,7 @@ func TestSchemaPropertyDefault(t *testing.T) {
 		},
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "object",
+		"type": "_types.object",
 		"properties": []any{
 			map[string]any{"name": "ok_enum", "schema": map[string]any{"ref": "data.enums.mode"}, "default": "a", "description": "ok"},
 			map[string]any{"name": "bad_enum", "schema": map[string]any{"ref": "data.enums.mode"}, "default": "z", "description": "bad"},
@@ -1486,9 +1486,9 @@ func TestSchemaNestedValueIsValidated(t *testing.T) {
 		},
 		propertyKeys: propertyKeys,
 	}
-	c.validateSchemaNode(map[string]any{"type": "array", "items": 42}, "a")
+	c.validateSchemaNode(map[string]any{"type": "_types.array", "items": 42}, "a")
 	c.validateSchemaNode(map[string]any{
-		"type": "object",
+		"type": "_types.object",
 		"properties": []any{
 			map[string]any{"name": "x", "schema": 42, "description": "x"},
 		},
@@ -1526,10 +1526,10 @@ func TestSchemaTypesConstraint(t *testing.T) {
 		},
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "object",
+		"type": "_types.object",
 		"properties": []any{
 			map[string]any{"name": "ok", "schema": map[string]any{"type": "_types.string"}, "description": "ok"},
-			map[string]any{"name": "bad", "schema": map[string]any{"type": "object", "properties": []any{}}, "description": "bad"},
+			map[string]any{"name": "bad", "schema": map[string]any{"type": "_types.object", "properties": []any{}}, "description": "bad"},
 		},
 	}, "x")
 	got := strings.Join(c.errs, "\n")
@@ -1592,7 +1592,7 @@ func TestObjectValidation(t *testing.T) {
 		propertyKeys: propertyKeys,
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "object",
+		"type": "_types.object",
 		"properties": []any{
 			map[string]any{"name": "status", "schema": map[string]any{"type": "_types.string"}, "description": "状态"},
 			map[string]any{"name": "own_type", "schema": map[string]any{"type": "_types.string"}, "description": "归属"},
@@ -1649,7 +1649,7 @@ func TestNodeValidationKinds(t *testing.T) {
 			}},
 		},
 		propertyKeys:   propertyKeys,
-		methodTypeDefs: map[string]map[string]any{"X": {"type": "object"}},
+		methodTypeDefs: map[string]map[string]any{"X": {"type": "_types.object"}},
 		valueTypes: contractspec.ValueTypes{
 			TypeFamilies: map[string]contractspec.ValueTypeFamily{"string": {Description: "string"}},
 		},
@@ -1663,7 +1663,7 @@ func TestNodeValidationKinds(t *testing.T) {
 	c.validateSchemaNode(map[string]any{"ref": "X", "validation": []any{
 		map[string]any{"rule": "value.status != null", "message": "ok"},
 	}}, "ref_ok")
-	c.validateSchemaNode(map[string]any{"type": "array", "items": map[string]any{"type": "_types.string"}, "validation": []any{
+	c.validateSchemaNode(map[string]any{"type": "_types.array", "items": map[string]any{"type": "_types.string"}, "validation": []any{
 		map[string]any{"rule": "value.x != null", "message": "bad"},
 	}}, "array_bad")
 	got := strings.Join(c.errs, "\n")
@@ -1757,10 +1757,10 @@ func TestCustomTypeParamTarget(t *testing.T) {
 
 func TestSchemaCycle(t *testing.T) {
 	c := &Checker{methodTypeDefs: map[string]map[string]any{
-		"A": {"type": "object", "properties": []any{
+		"A": {"type": "_types.object", "properties": []any{
 			map[string]any{"name": "b", "schema": map[string]any{"ref": "B"}, "description": "b"},
 		}},
-		"B": {"type": "object", "properties": []any{
+		"B": {"type": "_types.object", "properties": []any{
 			map[string]any{"name": "a", "schema": map[string]any{"ref": "A"}, "description": "a"},
 		}},
 	}}
@@ -1817,7 +1817,7 @@ func TestSchemaFieldSpecs(t *testing.T) {
 		},
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "object",
+		"type": "_types.object",
 		"properties": []any{
 			map[string]any{
 				"name":        "id",
@@ -1879,7 +1879,7 @@ func TestSchemaPropertyRequiresSchemaAndDescription(t *testing.T) {
 		propertyKeys: propertyKeys,
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "object",
+		"type": "_types.object",
 		"properties": []any{
 			map[string]any{"name": "id"},
 		},
