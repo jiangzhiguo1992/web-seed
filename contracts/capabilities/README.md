@@ -13,16 +13,17 @@
 |--------------------------------------|------------------------------------|------------------------------------------------------|----------------------------------------|
 | `services/<module>.yaml`             | 模块能提供哪些可调用单元、如何实现 | services[]、steps、input/output 数据链、事务、写归属 | Go interface、usecase 骨架、写归属校验 |
 | `lifecycles/<dimension>.yaml`        | 实体的某个状态机如何创建、流转与销毁 | subjects[{entity,field}]、states(values/initial/final)、create/destroy、transitions | 生命周期常量、转换表、非法动作测试     |
-| `events/<module>.yaml`               | 哪些异步主题与任务、如何触发与重试 | topics[]（payload/发布/订阅）、jobs[]（trigger/retry） | 事件常量、payload 类型、worker 注册表  |
+| `events/<module>.yaml`               | 哪些异步主题与任务、如何触发与重试 | topics[]（publish.payload + subscribe）、crons[]（schedule/retry）、dispatches[]（payload/delay/retry） | 事件常量、payload 类型、worker 注册表  |
 | `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露           | path、method、status、header、schema 引用            | server 类型、client、合并 spec         |
 
 一句话区分：
 
 - **service = 一个可调用单元**，有明确的 params/returns（末位显式 `err`）和 steps；同步调用，不声明 trigger。
 - **lifecycle = 一个实体的创建、状态转换与销毁**，每个动作（create/destroy/transition）锚到具体 service step。
-- **event = 异步事实**，由 service step 的 `events` 发布到 topic，由 job 的 `trigger.topic` 订阅。
-- **job = 异步任务**，引用一个同步 service 作为 handler，声明 `trigger`（cron/topic）/retry/concurrency。
-- **step = 服务实现路径上的一步**，五类：query / service / logic / events / when；`events` 是纯事件发射步骤，`when` 是条件分支步骤。
+- **event = 异步事实**，由 service step 的 `events` 发布到 topic（`topics[].publish`），订阅者声明在同一 topic 的 `subscribe` 下。
+- **cron = 周期任务**，引用一个同步 service 作为 handler，声明 `schedule`/retry/concurrency。
+- **dispatch = 异步命令**，引用一个同步 service 作为唯一消费者，声明命令 `payload`/`delay`/retry/concurrency。
+- **step = 服务实现路径上的一步**，五类：query / service / logic / events / when；`events` 是纯事件或命令发射步骤，`when` 是条件分支步骤。
 - **rule 在 features**，被 service 的 `kind: logic` step 引用；**lifecycle 在 capabilities**。
 - **protocol = service 到传输协议的绑定**，只写协议差异。
 
@@ -40,8 +41,8 @@ protocols ──x-service──> services ──steps──> data.queries
      ├──不引用 queries      └──kind=query────> 本模块 data.queries
 
 lifecycles ──step──> services
-events/jobs ──service──> services
-events/jobs ──trigger.topic──> events/topics
+events/topics.subscribe ──service──> services
+events/crons|dispatches ──service──> services
 ```
 
 | 边                   | 写在哪                             | 字段                                   |
@@ -53,8 +54,8 @@ events/jobs ──trigger.topic──> events/topics
 | service → lifecycle  | `services/*.yaml` 的 steps         | `lifecycles`（任何 kind 均可带）        |
 | lifecycle → service  | `lifecycles/*.yaml` 的 actions     | `step` / `implemented_by`（生成）      |
 | service → event      | `services/*.yaml` 的 steps         | `kind: events` + `events`              |
-| event/job → service  | `events/*.yaml` 的 jobs            | `service`                              |
-| event/job → topic    | `events/*.yaml` 的 jobs            | `trigger.topic`                        |
+| 异步任务 → service  | `events/*.yaml` 的 subscribe/crons/dispatches | `service`                     |
+| 异步任务 → topic    | `events/*.yaml` 的 topic 嵌套关系 | `subscribe` 所在 topic                |
 | feature → service    | `features/**`                      | `capability: cap.services.*`           |
 | feature → rule/lifecycle | `features/**`                    | `feature.rules.*` / `cap.lifecycles.*` |
 
@@ -63,7 +64,7 @@ events/jobs ──trigger.topic──> events/topics
 - protocol 直接引用 `data.queries.*` 或 `feature.rules.*`（对外入口只能是 service）。
 - `kind: query` 引用其他模块的 query（跨模块必须走 `kind: service`）。
 - service 调用图成环。
-- job 引用被 protocol 绑定的 service（异步 handler 不对外暴露）。
+- 异步任务引用被 protocol 绑定的 service（异步 handler 不对外暴露）。
 - service 或 events 声明 `business.*`（business 层已移除）。
 - lifecycle 引用不存在的 service step，或 step 不回引 lifecycle 动作。
 
@@ -165,30 +166,42 @@ capabilities 不承载 `rules/` 目录；features 不承载 `states/` 目录。
 
 ## 5. events（异步层）
 
-`events/<module>.yaml` 同时承载两类异步定义，二者共享 `cap.events` ID 空间：
+`events/<module>.yaml` 按触发源分槽，四类定义共享 `cap.events` ID 空间：
 
-- `topics`：发布/订阅主题（事件），由 service step 的 `events` 发布，由 job 的 `trigger.topic` 订阅；
-- `jobs`：异步任务，引用一个同步 service 作为 handler，支持 `cron` / `topic` 触发。
+- `topics`：消息契约。`publish` 声明消息格式（`payload`）、投递语义（`delivery`）与发射者（`emitted_by`，生成）；
+  `subscribe` 声明消费该主题的异步任务（嵌套即绑定，不支持跨文件订阅）。
+- `crons`：周期任务，声明 `schedule`/retry/concurrency，引用一个同步 service 作为 handler。
+- `dispatches`：内部命令（队列），声明命令 `payload`/`delay`/retry/concurrency，引用一个同步 service 作为唯一消费者。
 
-文件级：`id` / `summary` / `owner_module` / `schema_version` / `stability` / `do_not` / `delivery`（仅 topics 非空时必填）/
-`topics` / `jobs`；`topics` 与 `jobs` 至少一个非空。
+文件级：`id` / `summary` / `owner_module` / `schema_version` / `stability` / `do_not` /
+`topics` / `crons` / `dispatches`；三者至少一个非空。
 
 topic 项：
 
-- `id` / `name` / `version` / `payload` / `summary` / `emitted_by` / `consumers`；
-- `payload` 是受限 schema 值域节点（object 的 properties 用 property 条目列表）；
-- `emitted_by` 指向发射它的 service 项，`consumers` 指向订阅它的 job 项，二者都由 `make gen-graph` 维护；
+- `id` / `name` / `version` / `summary` / `publish` / `subscribe`；
+- `publish.payload` 是受限 schema 值域节点（object 的 properties 用 property 条目列表）；
+- `publish.delivery` 是投递语义（`at_least_once` / `at_most_once` / `exactly_once`）；
+- `publish.emitted_by` 指向发射它的 service 项，由 `make gen-graph` 维护；
 - 发布由 service step 的 `events` 声明，不是 service 项。
 
-job 项：
+subscribe 项：
 
-- `id` / `name` / `summary` / `service` / `trigger` / `retry` / `concurrency`；
-- `service` 必须与文件 `owner_module` 同模块；被 job 引用的 service 不得再被 `cap.protocols.http` 绑定；
-- `trigger.type`：`cron`（必须 `schedule`）/ `topic`（必须存在的 `cap.events.*` 主题 ID）；
-- `retry`：`max_attempts` / `backoff`（`fixed` / `exponential`）/ `dead_letter`；
-- `concurrency`：`key` / `ttl`。
+- `id` / `name` / `summary` / `service` / `retry` / `concurrency`；
+- 嵌套在 topic 下，因此只能订阅本文件的 topic；
+- `service` 必须与文件 `owner_module` 同模块；被引用为异步 handler 的 service 不得再被 `cap.protocols.http` 绑定。
 
-> 本层是项目自持的异步机制，不直接对接 protocols；触发只有 `cron` / `topic` 两种。
+cron 项：
+
+- `id` / `name` / `summary` / `service` / `schedule` / `retry` / `concurrency`；
+- `schedule` 是调度规则字符串（soft）：可以是 cron 表达式，也可以是业务日历（如农历二月廿八、每月最后一个工作日），checker 不校验格式。
+
+dispatch 项：
+
+- `id` / `name` / `summary` / `payload` / `service` / `delay` / `retry` / `concurrency`；
+- `payload` 是命令参数值域；`service` 是唯一消费者；
+- service step 用 `kind: events` + `events[].ref: <topic-or-dispatch-id>` 投递命令；input 按 payload 字段同名映射。
+
+> 本层是项目自持的异步机制，不直接对接 protocols；触发只有 `cron` / `topic` / `dispatch` 三种。
 
 ---
 
@@ -210,7 +223,7 @@ HTTP 约束：
 - 错误响应统一引用 `protocols/http/shared.yaml` 的 `Problem`。
 - 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明；operation 需要更细粒度时用 `x-default-errors` 覆盖。
 - 503 必须通过 shared 的 `ServiceUnavailable` 返回 `Retry-After`。
-- 每个 operation 必须写 `x-contract-id` 与 `x-service`；`x-service` 只能指向 `public` 且未被 job 引用的同步 service。
+- 每个 operation 必须写 `x-contract-id` 与 `x-service`；`x-service` 只能指向 `public` 且未被异步任务引用的同步 service。
 
 ---
 
@@ -239,7 +252,7 @@ contracts/capabilities/
 方法/步骤项 ID：
 
 - service 项：`cap.services.<file>.<snake_case(name)>`
-- job 项：`cap.events.<file>.<snake_case(name)>`
+- 异步任务项：`cap.events.<file>.<snake_case(name)>`
 - rule 项：显式 `id`
 - lifecycle 动作：`cap.lifecycles.<file>.<create|destroy|name>`
 - topic 项：显式 `id`（`cap.events.<topic name>`）
@@ -250,7 +263,7 @@ contracts/capabilities/
 ## 8. 当前落地状态
 
 - `services/*.yaml` 已合并原 methods + flows；每个 service 项都有 steps。
-- `events/*.yaml` 同时承载 topics 与 jobs；`services` 不再声明 `trigger/retry/concurrency`。
+- `events/*.yaml` 按 triggers 分槽：topics（publish/subscribe）+ crons + dispatches；`services` 不再声明 `trigger/retry/concurrency`。
 - `capabilities/lifecycles/*` 承载生命周期；`features/rules/*` 承载业务规则；`capabilities/events/*` 承载异步主题与任务。
 - `protocols/http/*.yaml` 已全部使用 `x-service` 指向同步 service，response 用 `x-service-return` 绑定 returns。
 - `data.queries.*.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，不得为空。

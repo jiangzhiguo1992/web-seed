@@ -2,7 +2,7 @@ id: cap.services.account
 summary: "账号服务：查询、创建、更新、状态转换与软删编排"
 owner_module: account
 schema_version: 1
-stability: stable
+stability: draft
 do_not:
   - "返回 data.entities.account，不要返回表行"
   - "不要在 interface 里暴露 *sql.Tx 或 HTTP 类型"
@@ -66,6 +66,8 @@ services:
         rules:
           - { rule: feature.rules.account.self_only }
         goto: $end
+    used_by:
+      - cap.protocols.http.account.get
 
   - name: list
     summary: "列出账号（游标分页）"
@@ -101,6 +103,8 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
+    used_by:
+      - cap.protocols.http.account.list
 
   - name: create
     summary: "创建账号"
@@ -191,6 +195,8 @@ services:
         events:
           - ref: cap.events.account.created
         goto: $end
+    used_by:
+      - cap.protocols.http.account.create
 
   - name: update
     summary: "更新账号资料"
@@ -240,6 +246,8 @@ services:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
         query: data.queries.account.update_account
         goto: $end
+    used_by:
+      - cap.protocols.http.account.update
 
   - name: delete
     summary: "软删账号，并清理认证绑定、验证体与令牌"
@@ -324,6 +332,8 @@ services:
         events:
           - ref: cap.events.account.deleted
         goto: $end
+    used_by:
+      - cap.protocols.http.account.delete
 
   - name: activate
     summary: "激活或解封账号"
@@ -418,6 +428,8 @@ services:
         events:
           - ref: cap.events.account.reactivated
         goto: $end
+    used_by:
+      - cap.protocols.http.account.activate
 
   - name: suspend
     summary: "封禁账号"
@@ -493,3 +505,5 @@ services:
         events:
           - ref: cap.events.account.suspended
         goto: $end
+    used_by:
+      - cap.protocols.http.account.suspend

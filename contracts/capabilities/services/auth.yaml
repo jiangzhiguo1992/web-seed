@@ -332,6 +332,8 @@ services:
           - platform.errors.AUTH_INVALID_CREDENTIALS
         rules: [ ]
         goto: $end
+    used_by:
+      - cap.protocols.http.auth.login
 
   - name: bind_password
     summary: "创建、修改或启停密码认证绑定"
@@ -527,6 +529,7 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
+    used_by: []
 
   - name: bind_phone
     summary: "创建、换绑或启停手机号认证绑定"
@@ -789,6 +792,7 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
+    used_by: []
 
   - name: bind_email
     summary: "创建、换绑或启停邮箱认证绑定"
@@ -1060,6 +1064,7 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
+    used_by: []
 
   - name: record_login_success
     summary: "记录密码登录成功并发出成功事件"
@@ -1115,6 +1120,8 @@ services:
         events:
           - ref: cap.events.account.login_succeeded
         goto: $end
+    used_by:
+      - cap.services.auth.login
 
   - name: record_login_failure
     summary: "记录密码登录失败并发出失败事件"
@@ -1177,6 +1184,8 @@ services:
         events:
           - ref: cap.events.account.login_failed
         goto: $end
+    used_by:
+      - cap.services.auth.login
 
   - name: revoke_all_for_account
     summary: "软删账号的认证绑定，并编排令牌吊销与验证体作废"
@@ -1235,3 +1244,5 @@ services:
           - platform.errors.COMMON_INTERNAL
         service: cap.services.verification.revoke_by_account
         goto: $end
+    used_by:
+      - cap.services.account.delete

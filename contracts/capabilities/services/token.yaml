@@ -116,6 +116,9 @@ services:
         events:
           - ref: cap.events.token.issued
         goto: $end
+    used_by:
+      - cap.services.auth.login
+
   - name: refresh
     summary: "用刷新令牌换取新令牌对"
     visibility: public
@@ -254,6 +257,9 @@ services:
         output: [ ]
         query: data.queries.token.revoke_token
         goto: $end
+    used_by:
+      - cap.protocols.http.auth.refresh
+
   - name: logout
     summary: "吊销刷新令牌"
     visibility: public
@@ -322,6 +328,9 @@ services:
         output: [ ]
         query: data.queries.token.revoke_token
         goto: $end
+    used_by:
+      - cap.protocols.http.auth.logout
+
   - name: revoke_by_account
     summary: "吊销账号的全部令牌"
     visibility: public
@@ -363,6 +372,9 @@ services:
           - platform.errors.COMMON_INTERNAL
         query: data.queries.token.revoke_tokens_by_account
         goto: $end
+    used_by:
+      - cap.services.auth.revoke_all_for_account
+
   - name: expire
     summary: "把过期令牌置为 expired"
     visibility: internal
@@ -413,6 +425,8 @@ services:
         errors: [ ]
         query: data.queries.token.expire_tokens
         goto: $end
+    used_by:
+      - cap.events.token.expire_tokens
 
   - name: verify
     summary: "校验访问令牌并返回账号"
@@ -468,6 +482,8 @@ services:
         rules:
           - { rule: feature.rules.auth.auth_token_requires_active_account }
         goto: $end
+    used_by: []
+
   - name: purge_expired
     summary: "清理已过期令牌"
     visibility: internal
@@ -498,6 +514,9 @@ services:
           - platform.errors.COMMON_INTERNAL
         query: data.queries.token.delete_expired_tokens
         goto: $end
+    used_by:
+      - cap.events.token.purge_expired
+
   - name: record_issued
     summary: "消费 token.issued，记录签发审计"
     visibility: internal
@@ -521,3 +540,5 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
+    used_by:
+      - cap.events.token.record_issued
