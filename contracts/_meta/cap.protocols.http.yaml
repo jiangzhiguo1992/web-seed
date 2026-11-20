@@ -1,4 +1,4 @@
-# cap.protocols.http：service 的 HTTP 绑定；OpenAPI 由生成器展开。
+# service 的 HTTP 绑定（OpenAPI 3.1）。
 
 id: meta.cap.protocols.http
 type: cap.protocols.http
@@ -11,49 +11,48 @@ targets:
 
 fields:
   - name: id
-    type: string
+    type: _types.string
     required: true
     pattern: '^cap\.protocols\.http\.[a-z][a-z0-9_]*$'
     description: "契约 ID"
 
   - name: summary
-    type: string
+    type: _types.string
     required: true
     description: "一句话说明"
 
   - name: owner_module
-    type: string
+    type: _types.string
     required: false
     pattern: '^[a-z][a-z0-9_]*$'
     description: "所属模块；纯组件文件可省略"
 
   - name: schema_version
-    type: integer
+    type: _types.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: stability
-    type: string
+    type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
-    default: draft
     description: "稳定度"
 
   - name: do_not
-    type: list<string>
+    type: _types.set<_types.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: base_path
-    type: string
+    type: _types.string
     required: false
     pattern: '^/[A-Za-z0-9_\-]+(/[A-Za-z0-9_\-]+)*$'
     description: "URL 前缀"
 
   - name: default_error_responses
-    type: list<integer>
+    type: _types.list<_types.integer>
     required: false
     unique: true
     min: 100
@@ -61,15 +60,15 @@ fields:
     description: "默认注入的错误状态码"
 
   - name: paths
-    type: any
+    type: _types.any
     required: false
     description: "OpenAPI 3.1 path item"
 
   - name: components
-    type: any
+    type: _types.any
     soft: true
     required: false
-    description: "soft zone：OpenAPI components 深层结构由 gen_openapi/oapi-codegen 校验；contract-check 只校验 x-service-type/x-enum/x-entity/x-service-return 与 $ref"
+    description: "OpenAPI components；x-* 与 $ref 由 checker 校验，其余由生成器校验"
 
 rules:
   - { id: http-file, text: "文件 id 必须由 targets 派生", implemented_by: [ http-file ] }

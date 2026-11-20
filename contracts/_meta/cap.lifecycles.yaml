@@ -1,4 +1,4 @@
-# cap.lifecycles：一个契约 = 一个状态机；subjects 列出共享该状态机的实体状态字段。
+# 状态机；subjects 声明共享该状态机的实体字段。
 
 id: meta.cap.lifecycles
 type: cap.lifecycles
@@ -11,110 +11,109 @@ targets:
 
 fields:
   - name: id
-    type: string
+    type: _types.string
     required: true
     pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$'
     description: "契约 ID"
 
   - name: summary
-    type: string
+    type: _types.string
     required: true
     description: "一句话说明"
 
   - name: owner_module
-    type: string
+    type: _types.string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
     description: "归属模块"
 
   - name: schema_version
-    type: integer
+    type: _types.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: stability
-    type: string
+    type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
-    default: draft
     description: "稳定度"
 
   - name: do_not
-    type: list<string>
+    type: _types.set<_types.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: subjects
-    type: list<object>
+    type: _types.list<_types.object>
     required: true
-    min_items: 1
+    min_len: 1
     description: "共享同一状态机的实体状态字段"
     item_fields:
-      - { name: entity, type: string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "状态所属实体" }
-      - { name: field, type: string, required: true, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "实体上的状态字段（json_name）" }
+      - { name: entity, type: _types.string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "状态所属实体" }
+      - { name: field, type: _types.string, required: true, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "实体上的状态字段（json_name）" }
 
   - name: states
-    type: object
+    type: _types.object
     required: true
     description: "状态集合与边界"
     fields:
-      - { name: values, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "状态取值集合；必须是 subject 状态枚举的值" }
-      - { name: initial, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "初始状态" }
-      - { name: final, type: list<string>, required: false, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "终态集合；省略表示没有终态" }
+      - { name: values, type: _types.set<_types.string>, required: true, min_len: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "状态取值集合" }
+      - { name: initial, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "初始状态" }
+      - { name: final, type: _types.set<_types.string>, required: false, min_len: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "终态集合；省略表示没有终态" }
 
   - name: create
-    type: object
+    type: _types.object
     required: true
     description: "创建动作"
     fields:
       - name: requires
-        type: list<object>
+        type: _types.list<_types.object>
         required: false
-        min_items: 1
+        min_len: 1
         description: "创建前的跨维度状态前提；列表内全部满足（AND）"
         item_fields:
-          - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期；不能是自身" }
-          - { name: states, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合；目标维度处于其中任一状态即可" }
-      - { name: services, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "gen-graph 从 step.lifecycles 反推；events 不能单独构成 action" }
-      - { name: events, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "可选；必须由 services 中的 step 发出" }
+          - { name: lifecycle, type: _types.string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期" }
+          - { name: states, type: _types.set<_types.string>, required: true, min_len: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合" }
+      - { name: services, type: _types.set<_types.string>, required: true, min_len: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该动作的 service 项" }
+      - { name: events, type: _types.set<_types.string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "动作发出的事件" }
 
   - name: destroy
-    type: object
+    type: _types.object
     required: false
-    description: "销毁动作；可从任意非 final 状态销毁实体，声明 final 时同时进入 final"
+    description: "销毁动作；声明 final 时销毁进入终态"
     fields:
       - name: requires
-        type: list<object>
+        type: _types.list<_types.object>
         required: false
-        min_items: 1
+        min_len: 1
         description: "销毁前的跨维度状态前提；列表内全部满足（AND）"
         item_fields:
-          - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期；不能是自身" }
-          - { name: states, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合；目标维度处于其中任一状态即可" }
-      - { name: services, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "gen-graph 从 step.lifecycles 反推；events 不能单独构成 action" }
-      - { name: events, type: list<string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "可选；必须由 services 中的 step 发出" }
+          - { name: lifecycle, type: _types.string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期" }
+          - { name: states, type: _types.set<_types.string>, required: true, min_len: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合" }
+      - { name: services, type: _types.set<_types.string>, required: true, min_len: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该动作的 service 项" }
+      - { name: events, type: _types.set<_types.string>, required: false, unique: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "动作发出的事件" }
 
   - name: transitions
-    type: list<object>
+    type: _types.list<_types.object>
     required: false
-    min_items: 1
+    min_len: 1
     description: "状态转换；create/destroy 之外的合法转换"
     item_fields:
-      - { name: name, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "转换名" }
-      - { name: description, type: string, required: true, description: "转换说明" }
-      - { name: from, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "源状态" }
-      - { name: to, type: string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标状态" }
+      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "转换名" }
+      - { name: description, type: _types.string, required: true, description: "转换说明" }
+      - { name: from, type: _types.set<_types.string>, required: true, min_len: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "源状态" }
+      - { name: to, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标状态" }
       - name: requires
-        type: list<object>
+        type: _types.list<_types.object>
         required: false
-        min_items: 1
+        min_len: 1
         description: "跨维度前置状态；列表内全部满足（AND）"
         item_fields:
-          - { name: lifecycle, type: string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期；不能是自身" }
-          - { name: states, type: list<string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合；目标维度处于其中任一状态即可" }
-      - { name: implemented_by, type: list<string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "gen-graph 生成" }
+          - { name: lifecycle, type: _types.string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期" }
+          - { name: states, type: _types.set<_types.string>, required: true, min_len: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合" }
+      - { name: implemented_by, type: _types.set<_types.string>, required: true, min_len: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 step" }
 
 rules:
   - { id: lifecycle-structure, text: "states.values 名唯一；initial/final 必须是 values 中的状态；transitions 的 from/to 必须是 values；final 不得作为 transition 的 from；destroy 存在时 final 不得多于一个；destroy 与唯一 final 同时存在时 transition 不得指向该 final", implemented_by: [ lifecycle-structure ] }
