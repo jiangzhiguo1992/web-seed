@@ -47,8 +47,8 @@
 
 ### 1.2 `_types.yaml` 的 `schemas`
 
-schema 节点只描述值域：`object`（`type: object` + `properties`）、`array`（`type: array` + `items`）、
-`map`（`type: map` + `values`，键固定 string，另有 `min_items`/`max_items`/`key_patterns`/`validation`）、
+schema 节点只描述值域：`object`（`type: _types.object` + `properties`）、`array`（`type: _types.array` + `items`）、
+`map`（`type: _types.map` + `values`，键固定 string，另有 `min_items`/`max_items`/`key_patterns`/`validation`）、
 `scalar`（`type` 指向 `_types` 的族或自定义类型）、
 `ref`（entity / enum / 全限定本地 schema）。
 
@@ -108,7 +108,7 @@ schema 节点只描述值域：`object`（`type: object` + `properties`）、`ar
   `soft: true` 标记不做通用结构校验的 soft zone（领域规则仍可部分检查）。
 - 字段顺序以模板为准（`checkFieldOrder`）；新增字段只改 `_meta` 模板。
 - `contracts/**/*.yaml` 的文本字段必须双引号（`schema.quote`）；同一 mapping 不得重复键。
-- 所有契约实例的 `type` 值必须是 `_types.*` / `_types.list<...>` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）；`type: object|array|map` 只允许作为 schema 节点判别键。裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部实例 YAML；同一文件/路径已有更精确的领域错误时不重复报。
+- 所有契约实例的 `type` 值必须是 `_types.*` / `_types.list<...>` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）；`_types.object|_types.array|_types.map` 只允许作为 schema 节点判别键。裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部实例 YAML；同一文件/路径已有更精确的领域错误时不重复报。
 - 类型级 `rules` 的每条必须有 `implemented_by`，包含自身 ID，且每个 ID 都是 checker 实际输出的
   `[rule-id]`；反向检查所有非 `schema.*` 输出都必须被某条规则声明。
 - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；独立二进制也带完整映射。

@@ -99,8 +99,8 @@ schemas:
       - name: type
         type: _types.string
         required: true
-        const: object
-        description: "固定为 object"
+        const: _types.object
+        description: "固定为 _types.object"
       - name: properties
         type: _types.list<_types.object>
         required: true
@@ -155,8 +155,8 @@ schemas:
       - name: type
         type: _types.string
         required: true
-        const: array
-        description: "固定为 array"
+        const: _types.array
+        description: "固定为 _types.array"
       - name: items
         types: [ _types.schema ]
         required: true
@@ -189,8 +189,8 @@ schemas:
       - name: type
         type: _types.string
         required: true
-        const: map
-        description: "固定为 map"
+        const: _types.map
+        description: "固定为 _types.map"
       - name: values
         types: [ _types.schema ]
         required: true
