@@ -64,15 +64,15 @@ structures:
     fields:
       - { name: item, type: "*", required: true, description: "元素" }
     params:
-      min_len: { type: _types.integer, required: false, min: 0, description: "最小长度" }
-      max_len: { type: _types.integer, required: false, min: 1, description: "最大长度" }
+      min_items: { type: _types.integer, required: false, min: 0, description: "最小元素数" }
+      max_items: { type: _types.integer, required: false, min: 1, description: "最大元素数" }
   set:
     description: "无序、去重集合"
     fields:
       - { name: item, type: "*", required: true, description: "元素" }
     params:
-      min_len: { type: _types.integer, required: false, min: 0, description: "最小长度" }
-      max_len: { type: _types.integer, required: false, min: 1, description: "最大长度" }
+      min_items: { type: _types.integer, required: false, min: 0, description: "最小元素数" }
+      max_items: { type: _types.integer, required: false, min: 1, description: "最大元素数" }
   array:
     description: "定长有序数组；元素类型固定"
     fields:
@@ -85,13 +85,12 @@ structures:
       - { name: key, type: "*", required: true, enum: [ string, integer ], description: "键；string 或 integer" }
       - { name: value, type: "*", required: true, description: "值；任意 _types 类型" }
     params:
-      min_len: { type: _types.integer, required: false, min: 0, description: "最小键数" }
-      max_len: { type: _types.integer, required: false, min: 1, description: "最大键数" }
+      min_items: { type: _types.integer, required: false, min: 0, description: "最小键数" }
+      max_items: { type: _types.integer, required: false, min: 1, description: "最大键数" }
       key_patterns: { type: _types.list<_types.string>, required: false, description: "string key 的正则列表；全部匹配" }
   object:
     description: "固定键对象；字段由 fields/item_fields 定义"
-    params:
-      additional_properties: { type: _types.boolean, required: false, default: false, description: "是否允许额外键" }
+    params: { }
 
 schemas:
   object:
@@ -114,7 +113,7 @@ schemas:
             pattern: '^[a-z][a-z0-9_]*$'
             description: "属性名"
           - name: schema
-            types: [ scalar, object, array, ref ]
+            types: [ _types.schema ]
             required: true
             description: "属性值域"
           - name: required
@@ -159,7 +158,7 @@ schemas:
         const: array
         description: "固定为 array"
       - name: items
-        types: [ object, array, scalar, ref ]
+        types: [ _types.schema ]
         required: true
         description: "数组元素值域"
       - name: min_items

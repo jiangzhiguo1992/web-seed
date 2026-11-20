@@ -37,6 +37,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -47,7 +48,7 @@ fields:
 
   - name: schemas
     type: _types.map
-    types: [ object, array, scalar, ref ]
+    types: [ _types.schema ]
     required: false
     key_patterns: [ '^[A-Za-z][A-Za-z0-9]*$' ]
     description: "本地 schema；键是 Go 类型名，值是值域节点"
@@ -55,7 +56,7 @@ fields:
   - name: services
     type: _types.list<_types.object>
     required: true
-    min_len: 1
+    min_items: 1
     description: "服务项"
     item_fields:
       - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "服务项名" }
@@ -86,7 +87,7 @@ fields:
       - name: steps
         type: _types.list<_types.object>
         required: true
-        min_len: 1
+        min_items: 1
         description: "步骤清单；每一步显式声明 goto"
         item_fields:
           - { name: id, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID" }
@@ -120,7 +121,7 @@ fields:
           - name: when
             type: _types.list<_types.object>
             required: false
-            min_len: 1
+            min_items: 1
             description: "条件分支；按列表顺序匹配，expr 首次为真的分支生效"
             item_fields:
               - { name: input, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "条件主体" }
@@ -138,7 +139,7 @@ fields:
           - name: events
             type: _types.list<_types.object>
             required: false
-            min_len: 1
+            min_items: 1
             unique_key: ref
             description: "发射的事件；input 按所有事件 payload 并集映射"
             item_fields:

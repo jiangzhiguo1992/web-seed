@@ -30,6 +30,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -42,7 +43,7 @@ fields:
     type: _types.set<_types.string>
     required: true
     unique: true
-    min_len: 1
+    min_items: 1
     pattern: '^[a-z][a-z0-9_-]*$'
     description: "支持的权威存储引擎"
 
@@ -50,7 +51,7 @@ fields:
     type: _types.set<_types.string>
     required: false
     unique: true
-    min_len: 1
+    min_items: 1
     pattern: '^[a-z][a-z0-9_-]*$'
     description: "明确不支持的拓扑"
 
@@ -79,7 +80,7 @@ fields:
     description: "cache engine -> 缓存条目；key 是缓存引擎，value 是条目列表"
     item_fields:
       - { name: prefix, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_:-]*$', description: "Redis key 前缀；同一引擎内唯一" }
-      - { name: key, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, description: "缓存键列" }
+      - { name: key, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, description: "缓存键列" }
       - { name: cache_of, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "权威表 ID" }
       - { name: retention, type: _types.boolean, required: true, description: "缓存保留开关" }
       - { name: unit, type: _types.string, required: false, enum: [ minutes, hours, days ], description: "缓存保留单位" }

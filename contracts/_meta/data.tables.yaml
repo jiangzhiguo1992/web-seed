@@ -37,6 +37,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -100,7 +101,7 @@ fields:
       - name: redundancy
         type: _types.list<_types.object>
         required: false
-        min_len: 2
+        min_items: 2
         description: "同组冗余列"
         item_fields:
           - { name: column, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "同组列引用" }
@@ -122,7 +123,7 @@ fields:
       - { name: name, type: _types.string, required: true, pattern: '^ck_[a-z][a-z0-9_]*$', description: "约束名" }
       - { name: expr, type: _types.string, soft: true, required: true, description: "CHECK 表达式" }
       - { name: on_violation, type: _types.string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "违反约束时映射的错误码" }
-      - { name: used_by, type: _types.set<_types.string>, required: true, unique: true, min_len: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "依赖该约束的写查询 ID" }
+      - { name: used_by, type: _types.set<_types.string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "依赖该约束的写查询 ID" }
 
   - name: indexes
     type: _types.list<_types.object>
@@ -130,12 +131,12 @@ fields:
     description: "索引"
     item_fields:
       - { name: name, type: _types.string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名" }
-      - { name: columns, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^[a-z][a-z0-9_]*$', description: "索引列" }
+      - { name: columns, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "索引列" }
       - { name: expression, type: _types.string, soft: true, required: false, description: "附加表达式键；纯表达式索引不受支持" }
       - { name: unique, type: _types.boolean, required: false, description: "是否唯一" }
       - { name: live_only, type: _types.boolean, required: false, default: false, description: "只约束未软删行" }
       - { name: comment, type: _types.string, required: true, description: "索引用途" }
-      - { name: used_by, type: _types.set<_types.string>, required: true, unique: true, min_len: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "使用该索引的 query 项 ID" }
+      - { name: used_by, type: _types.set<_types.string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "使用该索引的 query 项 ID" }
 
 rules:
   - { id: table-key-order, text: "表契约字段顺序必须与 _meta/data.tables.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ table-key-order ] }

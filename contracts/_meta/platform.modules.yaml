@@ -30,6 +30,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -41,7 +42,7 @@ fields:
   - name: modules
     type: _types.list<_types.object>
     required: true
-    min_len: 1
+    min_items: 1
     unique_key: name
     description: "模块清单"
     item_fields:

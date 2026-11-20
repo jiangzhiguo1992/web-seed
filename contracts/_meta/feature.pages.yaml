@@ -31,6 +31,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -88,8 +89,8 @@ fields:
         description: "可用条件"
         fields:
           - { name: transition, type: _types.string, required: false, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "单个 lifecycle 动作引用" }
-          - { name: transitions, type: _types.list<_types.string>, required: false, unique: true, min_len: 1, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "多个 lifecycle 动作引用" }
-          - { name: state_not, type: _types.list<_types.string>, required: false, unique: true, min_len: 1, pattern: '^[a-z][a-z0-9_]*$', description: "排除的状态" }
+          - { name: transitions, type: _types.list<_types.string>, required: false, unique: true, min_items: 1, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "多个 lifecycle 动作引用" }
+          - { name: state_not, type: _types.list<_types.string>, required: false, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "排除的状态" }
       - { name: ui, type: _types.string, required: false, description: "UI 变体" }
       - { name: label, type: _types.string, required: false, description: "按钮文案" }
       - { name: confirm, type: _types.boolean, required: false, description: "是否二次确认" }

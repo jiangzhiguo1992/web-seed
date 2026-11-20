@@ -30,6 +30,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -41,7 +42,7 @@ fields:
   - name: roles
     type: _types.list<_types.object>
     required: true
-    min_len: 1
+    min_items: 1
     unique_key: code
     description: "角色列表"
     item_fields:
@@ -49,7 +50,7 @@ fields:
       - { name: name, type: _types.string, required: true, description: "展示名" }
       - { name: description, type: _types.string, required: true, description: "角色说明" }
       - { name: inherits, type: _types.list<_types.string>, required: true, unique: true, pattern: '^platform\.security\.roles\.[a-z][a-z0-9_]*$', description: "继承的角色 ID 列表" }
-      - { name: permissions, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^(\*|platform\.security\.permissions\.[a-z][a-z0-9_]*)$', description: "权限 ID 列表；* 表示全部" }
+      - { name: permissions, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^(\*|platform\.security\.permissions\.[a-z][a-z0-9_]*)$', description: "权限 ID 列表；* 表示全部" }
       - { name: mfa_required, type: _types.boolean, required: false, default: false, description: "是否强制 MFA" }
 
   - name: constraints

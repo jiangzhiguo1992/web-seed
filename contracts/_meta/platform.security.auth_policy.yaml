@@ -30,6 +30,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -54,8 +55,8 @@ fields:
           - { name: type, type: _types.string, required: true, enum: [ jwt ], description: "令牌类型" }
           - { name: algorithm, type: _types.string, required: true, enum: [ HS256, RS256, ES256 ], description: "签名算法" }
           - { name: ttl, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
-          - { name: claims_required, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims" }
-          - { name: audience, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, description: "允许的 audience" }
+          - { name: claims_required, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims" }
+          - { name: audience, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, description: "允许的 audience" }
           - { name: pii_in_token, type: _types.boolean, required: true, description: "是否允许 PII 进入 token" }
           - { name: storage, type: _types.string, required: true, enum: [ hash ], description: "存储形态" }
       - name: refresh
@@ -101,7 +102,7 @@ fields:
       - { name: strategy, type: _types.string, required: true, enum: [ double_submit_cookie ], description: "CSRF 策略" }
       - { name: applies_to, type: _types.string, required: true, enum: [ cookie_based_endpoints ], description: "适用范围" }
       - { name: header, type: _types.string, required: true, description: "CSRF header 名" }
-      - { name: exempt, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^[A-Z]+$', description: "豁免的 HTTP 方法" }
+      - { name: exempt, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[A-Z]+$', description: "豁免的 HTTP 方法" }
 
   - name: password
     type: _types.object
@@ -147,8 +148,8 @@ fields:
     required: true
     description: "MFA 策略"
     fields:
-      - { name: required_for_roles, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^[a-z][a-z0-9_]*$', description: "强制 MFA 的角色码" }
-      - { name: methods, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, enum: [ totp ], description: "MFA 方法" }
+      - { name: required_for_roles, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "强制 MFA 的角色码" }
+      - { name: methods, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, enum: [ totp ], description: "MFA 方法" }
       - { name: recovery_codes, type: _types.integer, required: true, min: 0, description: "恢复码数量" }
 
   - name: authorization

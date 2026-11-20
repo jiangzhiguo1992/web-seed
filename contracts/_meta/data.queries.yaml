@@ -37,6 +37,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -55,7 +56,7 @@ fields:
       - name: tables
         type: _types.list<_types.object>
         required: true
-        min_len: 1
+        min_items: 1
         description: "读写的表；第一项为主表"
         item_fields:
           - { name: table, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "表 ID" }
@@ -63,7 +64,7 @@ fields:
       - name: archive
         type: _types.list<_types.object>
         required: false
-        min_len: 1
+        min_items: 1
         unique_key: archive
         description: "允许穿透的 promotable 归档；主表未命中时读归档并回迁热表（存储层行为，不改变 tables[].write）"
         item_fields:
@@ -73,7 +74,7 @@ fields:
         type: _types.list<_types.string>
         required: false
         unique: true
-        min_len: 1
+        min_items: 1
         pattern: '^data\.tables\.[a-z][a-z0-9_]*\.cache\.[a-z][a-z0-9_]*(\+[a-z][a-z0-9_]*)*$'
         description: "缓存副本；读为读穿透，写为写后同步"
       - name: params
@@ -91,7 +92,7 @@ fields:
       - name: returns
         type: _types.list<_types.object>
         required: true
-        min_len: 1
+        min_items: 1
         description: "结果形状"
         item_fields:
           - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回字段名" }
@@ -99,19 +100,19 @@ fields:
           - { name: kind, type: _types.string, required: true, enum: [ affected_rows, scalar, entity, columns, error ], description: "返回项类型" }
           - { name: type, type: _types.string, required: false, pattern: '^(\*?(data\.enums\.[a-z][a-z0-9_]*|context\.Context|[A-Za-z][A-Za-z0-9_]*)|List<(data\.enums\.[a-z][a-z0-9_]*|[A-Za-z][A-Za-z0-9_]*)>)$', description: "标量类型" }
           - { name: entity, type: _types.string, required: false, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "kind=entity 的实体 ID" }
-          - { name: columns, type: _types.list<_types.string>, required: false, unique: true, min_len: 1, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "kind=columns 的投影列；没有对应 entity 时使用" }
+          - { name: columns, type: _types.list<_types.string>, required: false, unique: true, min_items: 1, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "kind=columns 的投影列；没有对应 entity 时使用" }
           - { name: nullable, type: _types.boolean, required: false, description: "结果是否可空" }
           - { name: description, type: _types.string, required: false, description: "返回字段说明" }
       - { name: errors, type: _types.set<_types.string>, required: true, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "领域错误；无则写 []；不含输入/基础设施错误" }
       - name: index_ref
         type: _types.list<_types.object>
         required: false
-        min_len: 1
+        min_items: 1
         unique_key: index
         description: "索引依赖；每项声明索引与实际使用的索引列前缀"
         item_fields:
           - { name: index, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "索引 ID：data.tables.<t>.pk 或 indexes[].name" }
-          - { name: columns, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^[a-z][a-z0-9_]*$', description: "查询使用的索引列，必须等于索引列的最左前缀且顺序一致" }
+          - { name: columns, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "查询使用的索引列，必须等于索引列的最左前缀且顺序一致" }
       - { name: used_by, type: _types.set<_types.string>, required: true, unique: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "引用本查询的 service 项" }
 
 rules:

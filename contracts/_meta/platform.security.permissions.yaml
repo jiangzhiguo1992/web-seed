@@ -30,6 +30,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -44,12 +45,12 @@ fields:
     description: "命名约定"
     fields:
       - { name: pattern, type: _types.string, required: true, description: "权限码模板" }
-      - { name: actions, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, enum: [ read, write, delete, manage ], description: "允许的动作" }
+      - { name: actions, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, enum: [ read, write, delete, manage ], description: "允许的动作" }
 
   - name: permissions
     type: _types.list<_types.object>
     required: true
-    min_len: 1
+    min_items: 1
     unique_key: code
     description: "权限点列表"
     item_fields:
@@ -74,5 +75,5 @@ fields:
         required: true
         description: "通配权限说明"
         fields:
-          - { name: allowed_for, type: _types.list<_types.string>, required: true, unique: true, min_len: 1, pattern: '^platform\.security\.roles\.[a-z][a-z0-9_]*$', description: "允许使用 * 的角色" }
+          - { name: allowed_for, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^platform\.security\.roles\.[a-z][a-z0-9_]*$', description: "允许使用 * 的角色" }
           - { name: note, type: _types.string, required: true, description: "通配使用说明" }

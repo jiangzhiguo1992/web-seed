@@ -37,6 +37,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -54,13 +55,13 @@ fields:
   - name: topics
     type: _types.list<_types.object>
     required: false
-    min_len: 1
+    min_items: 1
     description: "发布/订阅主题"
     item_fields:
       - { name: id, type: _types.string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "主题 ID" }
       - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "主题名，例如 account.created" }
       - { name: version, type: _types.integer, required: true, min: 1, description: "主题版本" }
-      - { name: payload, types: [ object, array, scalar, ref ], required: true, description: "payload 值域节点" }
+      - { name: payload, types: [ _types.schema ], required: true, description: "payload 值域节点" }
       - { name: summary, type: _types.string, required: true, description: "一句话说明" }
       - { name: emitted_by, type: _types.set<_types.string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "发射该主题的服务项" }
       - { name: consumers, type: _types.set<_types.string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "订阅该主题的 job" }
@@ -68,7 +69,7 @@ fields:
   - name: jobs
     type: _types.list<_types.object>
     required: false
-    min_len: 1
+    min_items: 1
     description: "异步任务项"
     item_fields:
       - { name: id, type: _types.string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "任务 ID" }

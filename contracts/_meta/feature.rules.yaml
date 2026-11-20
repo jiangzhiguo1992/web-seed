@@ -37,6 +37,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -48,7 +49,7 @@ fields:
   - name: rules
     type: _types.list<_types.object>
     required: true
-    min_len: 1
+    min_items: 1
     description: "规则项"
     item_fields:
       - { name: id, type: _types.string, required: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "规则 ID" }
@@ -60,7 +61,7 @@ fields:
       - { name: value, type: _types.any, required: false, description: "constraint 的期望值" }
       - { name: assert, type: _types.string, soft: true, required: false, description: "invariant 的断言表达式" }
       - { name: on_violation, type: _types.string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "违反时返回的错误码" }
-      - { name: implemented_by, type: _types.set<_types.string>, required: true, unique: true, min_len: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该规则的 service 项" }
+      - { name: implemented_by, type: _types.set<_types.string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该规则的 service 项" }
       - { name: given, type: _types.string, soft: true, required: false, description: "policy 前置条件" }
       - { name: when, type: _types.string, soft: true, required: false, description: "policy 触发场景" }
       - { name: then, type: _types.string, soft: true, required: false, description: "policy 期望结果" }

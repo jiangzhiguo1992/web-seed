@@ -37,6 +37,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -92,7 +93,7 @@ fields:
       - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "校验名" }
       - { name: expr, type: _types.string, soft: true, required: true, description: "布尔表达式文本" }
       - { name: on_violation, type: _types.string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "失败错误码" }
-      - { name: used_by, type: _types.set<_types.string>, required: true, unique: true, min_len: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "消费该不变量的 service 项 ID" }
+      - { name: used_by, type: _types.set<_types.string>, required: true, unique: true, min_items: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "消费该不变量的 service 项 ID" }
 
 rules:
   - { id: entity-base-file, text: "基类契约固定位于 contracts/data/entities/_base.yaml，ID 固定为 data.entities.base", implemented_by: [ entity-base-file ] }

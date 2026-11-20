@@ -37,6 +37,7 @@ fields:
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
+    default: draft
     description: "稳定度"
 
   - name: do_not
@@ -66,7 +67,7 @@ fields:
         type: _types.set<_types.string>
         required: true
         unique: true
-        min_len: 1
+        min_items: 1
         pattern: '^(data\.entities\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*|cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*|cap\.protocols\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)$'
         description: "使用该枚举的 entity / service 项 / event topic 或 job / http operation"
 
