@@ -373,6 +373,7 @@ services:
         query: data.queries.token.revoke_tokens_by_account
         goto: $end
     used_by:
+      - cap.events.token.revoke_account
       - cap.services.auth.revoke_all_for_account
 
   - name: expire

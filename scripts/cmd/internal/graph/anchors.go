@@ -761,6 +761,9 @@ func syncItemFieldBlock(path, listKey, itemKey, itemValue, field string, values 
 			rendered = append(rendered, "      - "+value)
 		}
 	}
+	if field == "used_by" {
+		rendered = append(rendered, "")
+	}
 	fieldLine := -1
 	for i := itemStart + 1; i < itemEnd; i++ {
 		if strings.HasPrefix(lines[i], "    "+field+":") {

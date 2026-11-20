@@ -13,6 +13,7 @@ topics:
     name: token.issued
     version: 1
     summary: "令牌签发"
+    idempotent: true
     publish:
       payload:
         type: _types.object
@@ -21,7 +22,6 @@ topics:
           - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
           - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
           - { name: issued_at, schema: { type: _types.timestamp }, required: true, description: "签发时间" }
-      delivery: ack_after_process
       emitted_by:
         - cap.services.token.issue
     subscribe:
@@ -38,6 +38,7 @@ crons:
     summary: "把超过 refresh_expire_at 的活跃令牌置为 expired"
     service: cap.services.token.expire
     schedule: "0 * * * *"
+    overlap: forbid
     retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
     concurrency: { key: token_expire, ttl: 1h }
   - id: cap.events.token.purge_expired
@@ -45,5 +46,19 @@ crons:
     summary: "清理已过期令牌"
     service: cap.services.token.purge_expired
     schedule: "30 3 * * *"
+    overlap: forbid
     retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
     concurrency: { key: token_purge, ttl: 1h }
+
+dispatches:
+  - id: cap.events.token.revoke_account
+    name: revoke_account
+    summary: "异步吊销账号的全部令牌"
+    payload:
+      type: _types.object
+      properties:
+        - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
+    service: cap.services.token.revoke_by_account
+    timeout: 1h
+    retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
+    concurrency: { key: token_revoke_account, ttl: 5m }

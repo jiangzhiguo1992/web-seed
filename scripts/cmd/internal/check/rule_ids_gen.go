@@ -55,6 +55,7 @@ var knownRuleIDs = map[string]bool{
 	"enum-type-unique":            true,
 	"enum-used-by":                true,
 	"enum-values-unique":          true,
+	"event-cron-schedule":         true,
 	"event-file-shape":            true,
 	"event-orphan":                true,
 	"event-structure":             true,

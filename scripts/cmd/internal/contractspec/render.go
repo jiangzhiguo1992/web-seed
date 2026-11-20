@@ -798,16 +798,16 @@ type eventsFileScaffold struct {
 }
 
 type eventTopicScaffold struct {
-	ID      string               `yaml:"id"`
-	Name    string               `yaml:"name"`
-	Version int                  `yaml:"version"`
-	Summary string               `yaml:"summary"`
-	Publish eventPublishScaffold `yaml:"publish"`
+	ID         string               `yaml:"id"`
+	Name       string               `yaml:"name"`
+	Version    int                  `yaml:"version"`
+	Summary    string               `yaml:"summary"`
+	Idempotent bool                 `yaml:"idempotent"`
+	Publish    eventPublishScaffold `yaml:"publish"`
 }
 
 type eventPublishScaffold struct {
 	Payload   eventPayloadScaffold `yaml:"payload"`
-	Delivery  string               `yaml:"delivery,omitempty"`
 	EmittedBy []string             `yaml:"emitted_by"`
 }
 
@@ -1043,7 +1043,7 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 	if f, ok := FindField(s.Fields, "topics"); ok {
 		if err := requireSupported(f.ItemFields, map[string]bool{
 			"id": true, "name": true, "version": true, "summary": true,
-			"publish": true, "subscribe": true,
+			"idempotent": true, "publish": true, "subscribe": true,
 		}, "cap.events.topics"); err != nil {
 			return nil, err
 		}
@@ -1061,10 +1061,11 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
 		Topics: []eventTopicScaffold{{
-			ID:      topicID,
-			Name:    name + ".created",
-			Version: 1,
-			Summary: "TODO: 主题说明",
+			ID:         topicID,
+			Name:       name + ".created",
+			Version:    1,
+			Summary:    "TODO: 主题说明",
+			Idempotent: false,
 			Publish: eventPublishScaffold{
 				Payload: eventPayloadScaffold{
 					Type: "_types.object",
@@ -1075,7 +1076,6 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 						Description: "TODO: id 说明",
 					}},
 				},
-				Delivery:  "ack_after_process",
 				EmittedBy: []string{},
 			},
 		}},

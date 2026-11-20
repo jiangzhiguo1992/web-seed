@@ -9,6 +9,7 @@
 | cap.events | event-orphan | event-orphan | 1 |
 | cap.events | async-service | async-service | 1 |
 | cap.events | async-structure | async-structure | 1 |
+| cap.events | event-cron-schedule | event-cron-schedule | 1 |
 | cap.lifecycles | lifecycle-structure | lifecycle-structure | 1 |
 | cap.lifecycles | lifecycle-exhaustive | lifecycle-exhaustive | 1 |
 | cap.lifecycles | lifecycle-subject | lifecycle-subject | 1 |

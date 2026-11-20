@@ -840,6 +840,7 @@ topics:
     name: x.created
     version: 1
     summary: "x"
+    idempotent: false
     publish:
       payload:
         ref: data.entities.account
@@ -879,6 +880,7 @@ topics:
     name: x.created
     version: 1
     summary: "x"
+    idempotent: false
     publish:
       payload:
         type: _types.object
@@ -1031,6 +1033,7 @@ topics:
     name: x.created
     version: 1
     summary: "x"
+    idempotent: false
     publish:
       payload: { type: _types.integer }
       emitted_by: [cap.services.x.get]
@@ -1068,6 +1071,7 @@ topics:
     name: x.created
     version: 1
     summary: "x"
+    idempotent: false
     publish:
       payload: { type: _types.integer }
       emitted_by: [cap.services.x.get]
@@ -1077,6 +1081,7 @@ crons:
     summary: "x"
     service: cap.services.x.get
     schedule: "0 3 * * *"
+    overlap: forbid
 `)
 	c.errs = nil
 	c.checkEventsDoc(schema, services, serviceIDs)
@@ -1095,6 +1100,7 @@ topics:
     name: x.created
     version: 1
     summary: "x"
+    idempotent: false
     publish:
       payload: { type: _types.integer }
       emitted_by: []
@@ -1103,6 +1109,42 @@ topics:
 	c.checkEventsDoc(schema, services, serviceIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-orphan]") {
 		t.Fatalf("orphan topic not reported: %v", c.errs)
+	}
+}
+
+func TestCheckEventsCronSchedule(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.events")
+	rel := "contracts/capabilities/events/x.yaml"
+	valid := `id: cap.events.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+crons:
+  - id: cap.events.x.cleanup
+    name: cleanup
+    summary: "x"
+    service: cap.services.x.get
+    schedule: "*/15 0-6 1,15 * 1-5"
+    overlap: forbid
+`
+	writeCapFile(t, root, rel, valid)
+	services := map[string]serviceMeta{"cap.services.x.get": {module: "x"}}
+	c := &Checker{root: root}
+	c.checkEventsDoc(schema, services, map[string]bool{})
+	if len(c.errs) != 0 {
+		t.Fatalf("valid cron reported: %v", c.errs)
+	}
+
+	for _, bad := range []string{"0 * * *", "60 * * * *", "0 24 * * *", "0 0 0 * *", "0 0 * 13 *", "0 0 * * 8", "*/0 * * * *"} {
+		writeCapFile(t, root, rel, strings.Replace(valid, `"*/15 0-6 1,15 * 1-5"`, `"`+bad+`"`, 1))
+		c.errs = nil
+		c.checkEventsDoc(schema, services, map[string]bool{})
+		if !strings.Contains(strings.Join(c.errs, "\n"), "[event-cron-schedule]") {
+			t.Fatalf("bad cron %q not reported: %v", bad, c.errs)
+		}
 	}
 }
 

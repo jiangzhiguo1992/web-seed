@@ -168,7 +168,7 @@ capabilities 不承载 `rules/` 目录；features 不承载 `states/` 目录。
 
 `events/<module>.yaml` 按触发源分槽，四类定义共享 `cap.events` ID 空间：
 
-- `topics`：消息契约。`publish` 声明消息格式（`payload`）、投递语义（`delivery`）与发射者（`emitted_by`，生成）；
+- `topics`：消息契约。`publish` 声明消息格式（`payload`）与发射者（`emitted_by`，生成）；
   `subscribe` 声明消费该主题的异步任务（嵌套即绑定，不支持跨文件订阅）。
 - `crons`：周期任务，声明 `schedule`/retry/concurrency，引用一个同步 service 作为 handler。
 - `dispatches`：内部命令（队列），声明命令 `payload`/`delay`/retry/concurrency，引用一个同步 service 作为唯一消费者。
@@ -178,9 +178,9 @@ capabilities 不承载 `rules/` 目录；features 不承载 `states/` 目录。
 
 topic 项：
 
-- `id` / `name` / `version` / `summary` / `publish` / `subscribe`；
+- `id` / `name` / `version` / `summary` / `idempotent` / `publish` / `subscribe`；
+- `idempotent` 表示消息是否可安全重复投递：`true` 时发布者可重试、消费者可重复处理而不产生副作用。
 - `publish.payload` 是受限 schema 值域节点（object 的 properties 用 property 条目列表）；
-- `publish.delivery` 是投递语义：`ack_after_process`（处理成功后确认，不丢可重，消费者必须幂等）/ `ack_on_delivery`（投递即确认，不重可丢）。
 - `publish.emitted_by` 指向发射它的 service 项，由 `make gen-graph` 维护；
 - 发布由 service step 的 `events` 声明，不是 service 项。
 
@@ -192,13 +192,15 @@ subscribe 项：
 
 cron 项：
 
-- `id` / `name` / `summary` / `service` / `schedule` / `retry` / `concurrency`；
-- `schedule` 是调度规则字符串（soft）：可以是 cron 表达式，也可以是业务日历（如农历二月廿八、每月最后一个工作日），checker 不校验格式。
+- `id` / `name` / `summary` / `service` / `schedule` / `overlap` / `retry` / `concurrency`；
+- `schedule` 必须是合法的 5 字段 cron（分 时 日 月 周）；
+- `overlap` 决定上一次未结束时是否启动下一次：`allow` 允许，`forbid` 跳过本次。
 
 dispatch 项：
 
-- `id` / `name` / `summary` / `payload` / `service` / `delay` / `retry` / `concurrency`；
+- `id` / `name` / `summary` / `payload` / `service` / `delay` / `timeout` / `retry` / `concurrency`；
 - `payload` 是命令参数值域；`service` 是唯一消费者；
+- `timeout` 是队列等待超时（入队后超过该时长未被消费则过期），不是执行超时。
 - service step 用 `kind: events` + `events[].ref: <topic-or-dispatch-id>` 投递命令；input 按 payload 字段同名映射。
 
 > 本层是项目自持的异步机制，不直接对接 protocols；触发只有 `cron` / `topic` / `dispatch` 三种。

@@ -3,6 +3,7 @@ package check
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -167,6 +168,9 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 			if id != "" && fileID != "" && id != fileID+"."+name {
 				c.rulef("async-structure", "%s.%s: cron id %q must be %s", rel, name, id, fileID+"."+name)
 			}
+			if schedule, _ := item["schedule"].(string); !validCron(schedule) {
+				c.rulef("event-cron-schedule", "%s.%s: invalid cron schedule %q", rel, name, schedule)
+			}
 			svc, _ := item["service"].(string)
 			bind(rel, "cron", name, svc, module)
 		}
@@ -191,4 +195,64 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 		}
 	}
 	return asyncServices
+}
+
+// validCron 校验 5 字段 cron：分 时 日 月 周。支持 *、*/n、a-b、a-b/n、a,b,c 与数字。
+func validCron(expr string) bool {
+	fields := strings.Fields(expr)
+	if len(fields) != 5 {
+		return false
+	}
+	ranges := [][2]int{{0, 59}, {0, 23}, {1, 31}, {1, 12}, {0, 7}}
+	for i, field := range fields {
+		if !validCronField(field, ranges[i][0], ranges[i][1]) {
+			return false
+		}
+	}
+	return true
+}
+
+func validCronField(field string, min, max int) bool {
+	if field == "" {
+		return false
+	}
+	for _, part := range strings.Split(field, ",") {
+		if part == "" {
+			return false
+		}
+		if part == "*" {
+			continue
+		}
+		if strings.HasPrefix(part, "*/") {
+			n, err := strconv.Atoi(strings.TrimPrefix(part, "*/"))
+			if err != nil || n <= 0 || n > max-min+1 {
+				return false
+			}
+			continue
+		}
+		base, step := part, ""
+		if idx := strings.Index(part, "/"); idx >= 0 {
+			base, step = part[:idx], part[idx+1:]
+		}
+		if step != "" {
+			n, err := strconv.Atoi(step)
+			if err != nil || n <= 0 {
+				return false
+			}
+		}
+		if strings.Contains(base, "-") {
+			se := strings.SplitN(base, "-", 2)
+			a, err1 := strconv.Atoi(se[0])
+			b, err2 := strconv.Atoi(se[1])
+			if err1 != nil || err2 != nil || a < min || b > max || a > b {
+				return false
+			}
+			continue
+		}
+		n, err := strconv.Atoi(base)
+		if err != nil || n < min || n > max {
+			return false
+		}
+	}
+	return true
 }

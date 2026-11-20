@@ -57,13 +57,13 @@ fields:
       - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "主题名，例如 account.created" }
       - { name: version, type: _types.integer, required: true, min: 1, description: "主题版本" }
       - { name: summary, type: _types.string, required: true, description: "一句话说明" }
+      - { name: idempotent, type: _types.boolean, required: true, description: "消息是否可安全重复投递：true 时发布者可重试，消费方可按 payload 的业务键去重；不代表消费者自动幂等" }
       - name: publish
         type: _types.object
         required: true
         description: "发布侧：消息格式与发射者"
         fields:
           - { name: payload, types: [ _types.schema ], required: true, description: "消息体；发布出参，也是订阅入参" }
-          - { name: delivery, type: _types.string, required: false, enum: [ ack_after_process, ack_on_delivery ], description: "ack_after_process：处理成功后确认，不丢可重，消费者必须幂等；ack_on_delivery：投递即确认，不重可丢" }
           - { name: emitted_by, type: _types.set<_types.string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "发射该主题的服务项" }
       - name: subscribe
         type: _types.list<_types.object>
@@ -101,7 +101,8 @@ fields:
       - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "任务名" }
       - { name: summary, type: _types.string, required: true, description: "一句话说明" }
       - { name: service, type: _types.string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "同步 handler service" }
-      - { name: schedule, type: _types.string, required: true, soft: true, description: "调度规则：cron 表达式或业务日历（如农历二月廿八、每月最后一个工作日）" }
+      - { name: schedule, type: _types.string, required: true, description: "5 字段 cron 表达式：分 时 日 月 周" }
+      - { name: overlap, type: _types.string, required: true, enum: [ allow, forbid ], description: "上一次未结束时是否允许启动下一次：allow=允许，forbid=跳过本次" }
       - name: retry
         type: _types.object
         required: false
@@ -130,6 +131,7 @@ fields:
       - { name: payload, types: [ _types.schema ], required: true, description: "命令参数值域" }
       - { name: service, type: _types.string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "唯一消费者 service" }
       - { name: delay, type: _types.string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "投递延迟" }
+      - { name: timeout, type: _types.string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "队列等待超时：入队后超过该时长未被消费则过期；不是执行超时" }
       - name: retry
         type: _types.object
         required: false
@@ -152,3 +154,4 @@ rules:
   - { id: event-orphan, text: "topic 必须被发布或被订阅：publish.emitted_by 非空或 subscribe 非空", implemented_by: [ event-orphan ] }
   - { id: async-service, text: "subscribe.service / cron.service / dispatch.service 必须存在且与 events 文件的 owner_module 同模块；被异步任务引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service ] }
   - { id: async-structure, text: "subscribe/cron/dispatch 的 name 在文件内唯一；id 必须等于 <file-id>.<name>；同一 service 在同一槽内不得重复绑定", implemented_by: [ async-structure ] }
+  - { id: event-cron-schedule, text: "cron 必须有合法的 5 字段表达式（分 时 日 月 周），支持 *、*/n、a-b、a-b/n、a,b,c 与数字，且各字段在取值范围内", implemented_by: [ event-cron-schedule ] }

@@ -12,6 +12,7 @@ topics:
     name: account.created
     version: 1
     summary: "账号创建"
+    idempotent: true
     publish:
       payload:
         type: _types.object
@@ -20,26 +21,26 @@ topics:
           - { name: number, schema: { type: _types.account_number }, required: true, description: "账号编号" }
           - { name: status, schema: { ref: data.enums.account_status }, required: true, description: "账号创建后的状态" }
           - { name: created_at, schema: { type: _types.timestamp }, required: true, description: "创建时间" }
-      delivery: ack_after_process
       emitted_by:
         - cap.services.account.create
   - id: cap.events.account.activated
     name: account.activated
     version: 1
     summary: "账号激活或解封"
+    idempotent: true
     publish:
       payload:
         type: _types.object
         properties:
           - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
           - { name: activated_at, schema: { type: _types.timestamp }, required: true, description: "账号激活时间" }
-      delivery: ack_after_process
       emitted_by:
         - cap.services.account.activate
   - id: cap.events.account.suspended
     name: account.suspended
     version: 1
     summary: "账号封禁"
+    idempotent: true
     publish:
       payload:
         type: _types.object
@@ -47,39 +48,39 @@ topics:
           - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
           - { name: reason, schema: { type: _types.string }, required: true, description: "失败或停用原因" }
           - { name: suspended_at, schema: { type: _types.timestamp }, required: true, description: "账号停用时间" }
-      delivery: ack_after_process
       emitted_by:
         - cap.services.account.suspend
   - id: cap.events.account.reactivated
     name: account.reactivated
     version: 1
     summary: "账号解封"
+    idempotent: true
     publish:
       payload:
         type: _types.object
         properties:
           - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
           - { name: reactivated_at, schema: { type: _types.timestamp }, required: true, description: "账号重新激活时间" }
-      delivery: ack_after_process
       emitted_by:
         - cap.services.account.activate
   - id: cap.events.account.deleted
     name: account.deleted
     version: 1
     summary: "账号软删"
+    idempotent: true
     publish:
       payload:
         type: _types.object
         properties:
           - { name: id, schema: { type: _types.integer }, required: true, description: "唯一标识" }
           - { name: deleted_at, schema: { type: _types.timestamp }, required: true, description: "软删时间" }
-      delivery: ack_after_process
       emitted_by:
         - cap.services.account.delete
   - id: cap.events.account.login_succeeded
     name: account.login_succeeded
     version: 1
     summary: "登录成功"
+    idempotent: false
     publish:
       payload:
         type: _types.object
@@ -96,13 +97,13 @@ topics:
               key_patterns: [ '^[a-z][a-z0-9_]*$' ]
             description: "登录上下文扩展属性；键值均为字符串"
           - { name: login_at, schema: { type: _types.timestamp }, required: true, description: "登录时间" }
-      delivery: ack_after_process
       emitted_by:
         - cap.services.auth.record_login_success
   - id: cap.events.account.login_failed
     name: account.login_failed
     version: 1
     summary: "登录失败"
+    idempotent: false
     publish:
       payload:
         type: _types.object
@@ -110,7 +111,6 @@ topics:
           - { name: account_id, schema: { type: _types.integer }, nullable: true, description: "账号 ID；未知账号为 null" }
           - { name: reason, schema: { ref: data.enums.login_failed_reason }, required: true, description: "失败或停用原因" }
           - { name: failed_at, schema: { type: _types.timestamp }, required: true, description: "登录失败时间" }
-      delivery: ack_after_process
       emitted_by:
         - cap.services.auth.login
         - cap.services.auth.record_login_failure
