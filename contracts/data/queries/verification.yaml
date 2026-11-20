@@ -6,7 +6,6 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "verification 组之外的普通业务查询不要引用本文件"
   - "verification 查询不要向非认证调用方返回 code_hash / content / input_hash"
   - "verification_action 只追加；不要提供更新或软删动作的查询"
 

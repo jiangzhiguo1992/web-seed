@@ -7,7 +7,6 @@ schema_version: 1
 stability: draft
 do_not:
   - "verification_action.inputHash 禁止进入日志、事件或普通响应"
-  - "verification_action 不复制 auth_id/auth_type；account_id 是有意快照"
 
 model:
   name: verificationAction

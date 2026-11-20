@@ -18,11 +18,11 @@ feature ──> capabilities ──> data
 
 - 被 `capabilities` 通过 `method.queries` 读取、通过写查询修改；被 `features.rules/states` 通过 `data.entities` 引用为业务主体。
 - **不负责**：业务不变量（`features/rules`）、写归属编排（`capabilities/services`）、部署与运行时（`platform`）。
-- 目录内只有五类契约。没有第六类；表达力不足时先扩展本层字段，不要新增平行概念。
+- 目录内只有五类**实例**契约，外加一份类型词汇表 `types.yaml`。没有第六类实例；表达力不足时先扩展本层字段，不要新增平行概念。
 
 ---
 
-## 2. 五类契约
+## 2. 五类实例契约与类型词汇
 
 | 契约 | 回答的问题 | 唯一职责 | 不是 |
 |---|---|---|---|
@@ -30,9 +30,10 @@ feature ──> capabilities ──> data
 | `entities/<entity>.yaml` | 业务怎么读它 | Go 读模型：字段语义、关系、跨字段校验 | 不是写模型 |
 | `queries/<scope>.yaml` | 能怎么读写 | 入参、返回、目标表、索引/缓存/归档引用 | 不是 SQL |
 | `enums/<module>.yaml` | 值是什么 | 跨端词汇：按 owner_module 拆分，integer `code` ↔ 名称 | 不是表约束 |
-| `storage.yaml` | 物理侧事实 | 引擎归属、扁平保留、分区、缓存、归档（含能否回迁） | 不是部署配置，也不是索引或视图 |
+| `storage.yaml` | 物理侧事实 | 引擎归属、扁平保留、缓存、归档（含能否回迁） | 不是部署配置，也不是索引或视图 |
+| `types.yaml` | 值类型叫什么 | 项目级标量约束：family + 固定参数 | 不是表结构，也不是枚举 |
 
-`storage.yaml` 是**固定文件**：文件名不随实例增长，只有一个契约 ID。`enums/` 按 `owner_module` 一文件一契约（文件 ID `data.enums.<module>`），文件内承载多个 `data.enums.<name>` 项；枚举项 ID 全局唯一。`tables/` / `entities/` / `queries/` / `enums/` 的实例清单以 `contracts/index.yaml` 为准，本文件不列举。
+`storage.yaml` 与 `types.yaml` 是**固定文件**：文件名不随实例增长，只有一个契约 ID。`enums/` 按 `owner_module` 一文件一契约（文件 ID `data.enums.<module>`），文件内承载多个 `data.enums.<name>` 项；枚举项 ID 全局唯一。`tables/` / `entities/` / `queries/` / `enums/` 的实例清单以 `contracts/index.yaml` 为准，本文件不列举。
 
 ### 2.1 关系
 
@@ -43,6 +44,7 @@ queries    ──(returns)─────────────>  entities
 entities   ──(source.column)───────>  tables
 entities   ──(type)────────────────>  enums
 storage    ──(table / cache_of / archive_of 条目)──>  tables
+tables / entities / queries ──(type)──>  types
 ```
 
 查询的 `tables` / `index_ref` 落到 `tables`，`caches` / `archive` 落到 `storage`（再由 `cache_of` / `archive_of` 落到 `tables`）；`entities` 是唯一中转层——`queries` 经由它返回业务数据，`enums` 则被它引用为字段类型。**`tables` 是物理结构的汇聚点。** 跨表冗余列关系直接写在 `tables` 的 `columns[].redundancy`，不引入新契约文件。
@@ -88,11 +90,11 @@ storage    ──(table / cache_of / archive_of 条目)──>  tables
 
 ### 3.5 storage 独立成单例
 
-**选择**：引擎归属、`retention`、`partition` 不写在单表里，而是内聚在 `storage.tables.<engine>` 的普通条目中；普通条目必须写 `description` 且等于表契约的 `summary`；归档用同位置的 `archive_of` 条目表达，`promotable` 标明该归档能否回迁热表。
-**理由**：这些是项目级物理事实，不是表的业务结构。放在单表里会让"换引擎"变成改 N 个文件；条目化让同一张表的存储事实只有一个落点，也让不同引擎的字段差异（`partition` 只属于关系库）可被脚本强制。
-**代价**：新增表要登记两处（`tables/` + `storage.tables.<engine>`），漏登记被 `[强制: storage-registry]` 拦住。存储类特性用结构化字段表达（条目内 `partition`、`archive_of`/`promotable`/`on_conflict` 归档条目、`columns` + `indexes[].expression` 混合表达式索引），不设 `ddl_ext` 逃生口。
+**选择**：引擎归属、`retention` 不写在单表里，而是内聚在 `storage.tables.<engine>` 的普通条目中；普通条目必须写 `description` 且等于表契约的 `summary`；归档用同位置的 `archive_of` 条目表达，`promotable` 标明该归档能否回迁热表。
+**理由**：这些是项目级物理事实，不是表的业务结构。放在单表里会让"换引擎"变成改 N 个文件；条目化让同一张表的存储事实只有一个落点，也让不同引擎的字段差异可被脚本强制。
+**代价**：新增表要登记两处（`tables/` + `storage.tables.<engine>`），漏登记被 `[强制: storage-registry]` 拦住。存储类特性用结构化字段表达（`archive_of`/`promotable`/`on_conflict` 归档条目、`columns` + `indexes[].expression` 混合表达式索引），不设 `ddl_ext` 逃生口。
 
-`retention` / `partition` / `caches` 是物理事实，不是 baseline DDL 的生成输入：`gen_db` 只消费 `tables.<engine>` 的权威表列表，生成列/约束/索引；清理、分区与缓存配置由部署层实现。声明 `partition` 时 `gen_db` 会显式失败，避免契约与 DDL 静默漂移。
+`retention` / `caches` 是物理事实，不是 baseline DDL 的生成输入：`gen_db` 只消费 `tables.<engine>` 的权威表列表，生成列/约束/索引；清理与缓存配置由部署层实现。
 
 ---
 
@@ -134,7 +136,7 @@ columns:
 # 子表列：account 被硬删时级联删除本行
 columns:
   - name: account_id
-    type: integer
+    type: _types.integer
     nullable: false
     references: { column: data.tables.account.col.id, on_delete: cascade }
 ```
@@ -169,7 +171,7 @@ columns:
 
 ### 4.4 保留策略是选择，不是枚举
 
-`storage.tables.<engine>[].retention` 是布尔开关，开启后 `unit` 与 `pending` / `soft_delete` / `hard_delete` / `ttl` 是同级字段，不是四选一：`pending` 用于未完成记录，`ttl` 用于过期凭证，`soft_delete` / `hard_delete` 只在确实存在对应清理策略时才写；主数据与认证绑定默认不写。**这是选择判据，`[评审]`。** 值域与约束由 `[强制: storage-retention]` 校验；缓存副本必须写 `cache_of`（源表）与 `key`（列名列表，可写 `account_id` / `col.account_id` / 完整列引用；同一表可按不同 key 建多条缓存，`key` 顺序参与 `(cache_of,key)` 唯一性）以及 `caches.<engine>[].retention: true`，只允许 `unit` / `cache_ttl`，且不得超过权威表条目的 `ttl`。每个缓存必须被至少一个查询的 `caches` 有效引用，未引用的缓存必须删除；读查询的每个缓存键列必须出现在 `params[].column` 或同表 `index_ref[].columns` 中。归档用独立条目表达：`archive_of` 指向已登记的权威表，`promotable` 必填并决定能否回迁热表（能回迁的必须被查询的 `archive` 引用，且查询里的 `archive` 只能指向能回迁的归档），能回迁时必须写 `on_conflict: skip|overwrite|error` 定义热表已有同唯一键行时的策略（skip 返回热表行并保留归档行，overwrite 用归档行覆盖热表行，error 返回冲突错误；不能回迁时禁止），`table` 是归档物理表名，`age_by` 是 `created_at` / `updated_at`，`after` 是按该列计算的数据年龄阈值。归档表只封存源表的原始行，不建 `data.tables` 契约、实体或查询；同一张表只能有一条归档，由 `[强制: storage-archive-source]` / `[强制: storage-archive-ref]` 校验。
+`storage.tables.<engine>[].retention` 是布尔开关，开启后 `unit` 与 `ttl` 是同级字段；`ttl` 是过期时长，只用于确实会过期清理的数据（如验证体），主数据与认证绑定默认不写。**这是选择判据，`[评审]`。** 值域与约束由 `[强制: storage-retention]` 校验；缓存副本必须写 `prefix`（Redis key 前缀，同一引擎内唯一）、`cache_of`（源表）与 `key`（列名列表，可写 `account_id` / `col.account_id` / 完整列引用；同一表可按不同 key 建多条缓存，`key` 顺序参与 `(cache_of,key)` 唯一性）以及 `caches.<engine>[].retention: true`，只允许 `unit` / `cache_ttl`，且不得超过权威表条目的 `ttl`。每个缓存必须被至少一个查询的 `caches` 有效引用，未引用的缓存必须删除；读查询的每个缓存键列必须出现在 `params[].column` 或同表 `index_ref[].columns` 中。归档用独立条目表达：`archive_of` 指向已登记的权威表，`promotable` 必填并决定能否回迁热表（能回迁的必须被查询的 `archive` 引用，且查询里的 `archive` 只能指向能回迁的归档），能回迁时必须写 `on_conflict: skip|overwrite|error` 定义热表已有同唯一键行时的策略（skip 返回热表行并保留归档行，overwrite 用归档行覆盖热表行，error 返回冲突错误；不能回迁时禁止），`table` 是归档物理表名，`age_by` 是 `created_at` / `updated_at`，`after` 是按该列计算的数据年龄阈值。归档表只封存源表的原始行，不建 `data.tables` 契约、实体或查询；同一张表只能有一条归档，由 `[强制: storage-archive-source]` / `[强制: storage-archive-ref]` 校验。
 
 ---
 
@@ -214,7 +216,7 @@ indexes:
     - { index: data.tables.account.idx_account_created_at_id, columns: [ created_at, id ] }
 ```
 
-返回值用 `kind` 区分：`scalar` / `affected_rows` / `entity` / `columns`；没有 `column` / `table`。`entity` 只写 entity、不能写 columns；`columns` 只在没有对应 entity 时使用，必须写列引用；`secret` 只有同模块可显式列出，跨模块禁止。`caches` / `archive` 引用 storage；`archive` 每项写 `{archive, age_by}`，`age_by` 必须与 storage 归档条目一致，回迁时更新该列，避免再次被判定为冷数据。
+返回值用 `kind` 区分：`scalar` / `affected_rows` / `entity` / `columns`；没有 `column` / `table`。`entity` 只写 entity、不能写 columns；`columns` 只在没有对应 entity 时使用，必须写列引用；`secret` 只有同模块可显式列出，跨模块禁止。`caches` / `archive` 引用 storage；`archive` 每项写 `{archive, age_by}`，`age_by` 必须与 storage 归档条目一致，回迁时更新该列，避免再次被判定为冷数据。每个 `queries/<scope>.yaml` 只承载本 scope 的查询；其他组的普通业务查询不要写进来或引用本文件。
 
 ### 5.3 实体：列来源 + 枚举映射 + 关系
 
@@ -258,7 +260,7 @@ indexes:
 
 ## 7. 当前闸门状态
 
-`make contract-check` 覆盖 data 层全部结构与引用校验（`data.tables` / `data.enums` / `data.entities` / `data.queries` / `storage`），并内嵌 `used_by` 新鲜度与 `rule-id` 同步检查。
+`make contract-check` 覆盖 data 层全部结构与引用校验（`data.tables` / `data.enums` / `data.entities` / `data.queries` / `storage` / `types`），并内嵌 `used_by` 新鲜度与 `rule-id` 同步检查。
 
 | 闸门 | 机制 | 状态 |
 |---|---|---|

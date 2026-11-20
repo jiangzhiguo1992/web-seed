@@ -6,7 +6,6 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "auth 之外的普通业务查询不要引用本文件"
   - "auth 查询不要向非认证调用方或跨模块返回 password_hash"
 
 queries:
