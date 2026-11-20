@@ -180,7 +180,7 @@ topic 项：
 
 - `id` / `name` / `version` / `summary` / `publish` / `subscribe`；
 - `publish.payload` 是受限 schema 值域节点（object 的 properties 用 property 条目列表）；
-- `publish.delivery` 是投递语义（`at_least_once` / `at_most_once` / `exactly_once`）；
+- `publish.delivery` 是投递语义：`ack_after_process`（处理成功后确认，不丢可重，消费者必须幂等）/ `ack_on_delivery`（投递即确认，不重可丢）。
 - `publish.emitted_by` 指向发射它的 service 项，由 `make gen-graph` 维护；
 - 发布由 service step 的 `events` 声明，不是 service 项。
 

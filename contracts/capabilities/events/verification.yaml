@@ -9,11 +9,11 @@ do_not:
   - "cleanup 只改 status，不删除行；保留期清理由独立策略负责"
   - "不要用 cleanup 代替 verify 的错误返回；cleanup 只处理滞留的终态"
 
-jobs:
+crons:
   - id: cap.events.verification.cleanup
     name: cleanup
     summary: "把过期或尝试超限的验证体置为终态"
     service: cap.services.verification.cleanup
-    trigger: { kind: cron, schedule: "*/15 * * * *" }
+    schedule: "*/15 * * * *"
     retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
     concurrency: { key: verification_cleanup, ttl: 15m }

@@ -17,7 +17,7 @@
 | `data.entities.yaml` | 读模型字段树与关系 |
 | `data.queries.yaml` | 查询接口（入参/结果/表/索引/缓存/归档），不写 SQL |
 | `cap.services.yaml` | 服务与 steps（数据流、分支、事务） |
-| `cap.events.yaml` | 异步 topic 与 job |
+| `cap.events.yaml` | 异步 topic（publish/subscribe）与 crons/dispatches |
 | `cap.lifecycles.yaml` | 实体状态机 |
 | `cap.protocols.http.yaml` | OpenAPI 3.1 HTTP 绑定 |
 | `feature.pages.yaml` | 页面契约 |
@@ -56,7 +56,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 - 三个正交轴：`required` 管键是否存在，`nullable` 管值是否可为 null，`read_only`/`write_only` 管方向；
 - 槽位键出现在节点位置报 `schema.slot-position`；
 - `_types.yaml` 用 `schemas.<kind>.keys` 描述自身；判别键与结构键必须 `required: true`；
-- `cap.events` 的 `topics[].payload` 投影为 `Event<File><Topic>` component，带 `x-event-id` / `x-event-name` / `x-event-version`；消费端直接从 OpenAPI 生成事件类型，不再手写。
+- `cap.events` 的 `topics[].publish.payload` 投影为 `Event<File><Topic>` component，带 `x-event-id` / `x-event-name` / `x-event-version`；消费端直接从 OpenAPI 生成事件类型，不再手写。
 - `cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份 DSL。
 - 槽位字段的值域可整体写 `types: [ _types.schema ]`，即允许 `schemas` 下声明的全部节点种类；不要重复枚举 kind。
 - `map` 节点的键固定为 string（JSON/OpenAPI 对象键没有其他类型），因此没有 `key` 字段；需要 integer key 的 Go/SQL 容器用 `_types.map<_types.integer, T>`（`structures.map`），不要写进 schema 节点。
@@ -156,7 +156,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 
 - 不要重建 `contracts/_meta/schema/` 或 `templates/`；不要在 `_meta` 之外手写第二份字段模板。
 - 不要手写生成字段（`table.referenced_by` / `table.queries` / `model.included_by` / `model.queries` /
-  `query.used_by` / `feature.rules.implemented_by` / 生命周期锚点 / `emitted_by` / `consumers`）。
+  `query.used_by` / `feature.rules.implemented_by` / 生命周期锚点 / `topics[].publish.emitted_by`）。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`。
 - 不要在 checker 里解析 `CHECK expr` 的 SQL 语义；只校验可判定的字面量。
