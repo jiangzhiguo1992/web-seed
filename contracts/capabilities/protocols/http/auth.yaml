@@ -5,7 +5,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "不要把 password_hash 或 token 写入日志、事件"
-  - "refresh_token 只写 HttpOnly cookie，不进入响应体"
+  - "JWT 只通过响应体和 Authorization header 传递；不使用 cookie 或服务端 session"
 
 mount:
   api_version: v1
@@ -21,24 +21,18 @@ paths:
       summary: "登录"
       used_by:
         - feature.pages.login
-      security: []
+      security: { BearerAuth: false }
       request:
-        headers:
-          X-Request-Id: RequestId
         body:
           content_type: application/json
           schema: cap.services.auth.schemas.LoginInput
-        mapping:
-          body: "params.input"
+          to: params.input
       response:
         200:
           description: "登录成功"
-          headers:
-            Set-Cookie: SetAuthCookies
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
-            schema: cap.services.auth.schemas.AuthSession
+            schema: cap.services.auth.schemas.AuthResult
         401:
           codes:
             - platform.errors.AUTH_INVALID_CREDENTIALS
@@ -58,21 +52,15 @@ paths:
       summary: "发送验证码"
       used_by:
         - feature.pages.login
-      security: []
+      security: { BearerAuth: false }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKey
         body:
           content_type: application/json
           schema: cap.services.verification.schemas.SendVerificationInput
-        mapping:
-          body: "params.input"
+          to: params.input
       response:
         202:
           description: "已受理"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: cap.services.verification.schemas.VerificationSent
@@ -91,21 +79,15 @@ paths:
       summary: "校验验证码"
       used_by:
         - feature.pages.login
-      security: []
+      security: { BearerAuth: false }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKey
         body:
           content_type: application/json
           schema: cap.services.verification.schemas.VerifyCodeInput
-        mapping:
-          body: "params.input"
+          to: params.input
       response:
         200:
           description: "校验成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: cap.services.verification.schemas.VerificationResult
@@ -122,28 +104,21 @@ paths:
       id: cap.protocols.http.auth.refresh
       name: refreshToken
       service: cap.services.token.refresh
-      summary: "刷新令牌"
+      summary: "刷新 JWT"
       used_by:
-        - feature.pages.session
-      security: []
+        - feature.pages.current_account
+      security: { BearerAuth: false }
       request:
-        headers:
-          X-Request-Id: RequestId
-          X-CSRF-Token: CSRFToken
-        cookies:
-          refresh_token: RefreshTokenCookie
-        mapping:
-          cookie:
-            refresh_token: params.refresh_token
+        body:
+          content_type: application/json
+          schema: cap.services.token.schemas.RefreshInput
+          to: params.input
       response:
         200:
           description: "成功"
-          headers:
-            Set-Cookie: SetAuthCookies
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
-            schema: cap.services.token.schemas.AccessToken
+            schema: cap.services.token.schemas.RefreshResult
         401:
           codes:
             - platform.errors.AUTH_TOKEN_EXPIRED
@@ -154,25 +129,18 @@ paths:
       id: cap.protocols.http.auth.logout
       name: logout
       service: cap.services.token.logout
-      summary: "登出"
+      summary: "吊销 refresh JWT"
       used_by:
-        - feature.pages.session
-      security: []
+        - feature.pages.current_account
+      security: { BearerAuth: false }
       request:
-        headers:
-          X-Request-Id: RequestId
-          X-CSRF-Token: CSRFToken
-        cookies:
-          refresh_token: RefreshTokenCookie
-        mapping:
-          cookie:
-            refresh_token: params.refresh_token
+        body:
+          content_type: application/json
+          schema: cap.services.token.schemas.RefreshInput
+          to: params.input
       response:
         204:
-          description: "已登出"
-          headers:
-            Set-Cookie: ClearAuthCookies
-            X-Request-Id: XRequestId
+          description: "已吊销"
         401:
           codes:
             - platform.errors.AUTH_TOKEN_INVALID
@@ -185,22 +153,15 @@ paths:
       summary: "创建、修改或启停密码认证绑定"
       used_by:
         - feature.pages.account_security
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKey
         body:
           content_type: application/json
           schema: cap.services.auth.schemas.BindPasswordInput
-        mapping:
-          body: "params.input"
+          to: params.input
       response:
         200:
           description: "成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: cap.services.auth.schemas.AuthBinding
@@ -227,22 +188,15 @@ paths:
       summary: "创建、换绑或启停手机号认证绑定"
       used_by:
         - feature.pages.account_security
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKey
         body:
           content_type: application/json
           schema: cap.services.auth.schemas.BindPhoneInput
-        mapping:
-          body: "params.input"
+          to: params.input
       response:
         200:
           description: "成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: cap.services.auth.schemas.AuthBinding
@@ -266,22 +220,15 @@ paths:
       summary: "创建、换绑或启停邮箱认证绑定"
       used_by:
         - feature.pages.account_security
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKey
         body:
           content_type: application/json
           schema: cap.services.auth.schemas.BindEmailInput
-        mapping:
-          body: "params.input"
+          to: params.input
       response:
         200:
           description: "成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: cap.services.auth.schemas.AuthBinding
@@ -304,21 +251,12 @@ paths:
       service: cap.services.token.verify
       summary: "校验访问令牌并返回当前账号"
       used_by:
-        - feature.pages.session
-      security:
-        - BearerAuth: []
-      request:
-        headers:
-          X-Request-Id: RequestId
-          Authorization: Authorization
-        mapping:
-          header:
-            Authorization: params.access_token
+        - feature.pages.current_account
+      security: { BearerAuth: true }
+      request: {}
       response:
         200:
           description: "成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: data.entities.account
@@ -326,22 +264,3 @@ paths:
           codes:
             - platform.errors.AUTH_TOKEN_EXPIRED
             - platform.errors.AUTH_TOKEN_INVALID
-
-shared:
-  headers:
-    SetAuthCookies:
-      description: "设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/<api_version>/auth，SameSite=Lax，Secure 按环境"
-      schema:
-        type: string
-    ClearAuthCookies:
-      description: "清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/<api_version>/auth"
-      schema:
-        type: string
-  parameters:
-    RefreshTokenCookie:
-      name: refresh_token
-      in: cookie
-      required: true
-      schema:
-        type: string
-        minLength: 1

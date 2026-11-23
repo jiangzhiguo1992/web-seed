@@ -21,25 +21,15 @@ paths:
       summary: "列出账号"
       used_by:
         - feature.pages.account_list
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
         query:
-          status: { schema: data.enums.account_status }
-          offset: { schema: _types.page_offset }
-          limit: { schema: _types.page_limit }
-        mapping:
-          query:
-            status: params.filter.status
-            offset: params.filter.offset
-            limit: params.filter.limit
+          - { name: status, schema: data.enums.account_status, required: false, description: "账号状态过滤", to: params.filter.status }
+          - { name: offset, schema: _types.page_offset, required: false, description: "分页偏移；默认 0", to: params.filter.offset }
+          - { name: limit, schema: _types.page_limit, required: false, description: "分页大小；默认 20", to: params.filter.limit }
       response:
         200:
           description: "成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: cap.services.account.schemas.AccountPage
@@ -51,22 +41,15 @@ paths:
       summary: "创建账号"
       used_by:
         - feature.pages.account_create
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKeyRequired
         body:
           content_type: application/json
           schema: cap.services.account.schemas.CreateAccountInput
-        mapping:
-          body: "params.input"
+          to: params.input
       response:
         201:
           description: "已创建"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: data.entities.account
@@ -87,21 +70,13 @@ paths:
       used_by:
         - feature.pages.account_detail
         - feature.pages.account_security
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
         path:
-          id: { schema: _types.integer }
-        mapping:
-          path:
-            id: params.id
+          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
       response:
         200:
           description: "成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: data.entities.account
@@ -116,26 +91,17 @@ paths:
       summary: "更新账号资料"
       used_by:
         - feature.pages.account_detail
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKey
         path:
-          id: { schema: _types.integer }
+          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
         body:
           content_type: application/json
           schema: cap.services.account.schemas.UpdateAccountInput
-        mapping:
-          path:
-            id: params.id
-          body: "params.input"
+          to: params.input
       response:
         200:
           description: "成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: data.entities.account
@@ -157,22 +123,13 @@ paths:
       used_by:
         - feature.pages.account_list
         - feature.pages.account_detail
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKey
         path:
-          id: { schema: _types.integer }
-        mapping:
-          path:
-            id: params.id
+          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
       response:
         204:
           description: "已删除"
-          headers:
-            X-Request-Id: XRequestId
         404:
           codes:
             - platform.errors.ACCOUNT_NOT_FOUND
@@ -190,22 +147,13 @@ paths:
       used_by:
         - feature.pages.account_list
         - feature.pages.account_detail
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKey
         path:
-          id: { schema: _types.integer }
-        mapping:
-          path:
-            id: params.id
+          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
       response:
         200:
           description: "成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: data.entities.account
@@ -226,26 +174,17 @@ paths:
       used_by:
         - feature.pages.account_list
         - feature.pages.account_detail
-      security:
-        - BearerAuth: []
+      security: { BearerAuth: true }
       request:
-        headers:
-          X-Request-Id: RequestId
-          Idempotency-Key: IdempotencyKey
         path:
-          id: { schema: _types.integer }
+          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
         body:
           content_type: application/json
           schema: cap.services.account.schemas.SuspendAccountInput
-        mapping:
-          path:
-            id: params.id
-          body: "params.input"
+          to: params.input
       response:
         200:
           description: "成功"
-          headers:
-            X-Request-Id: XRequestId
           body:
             content_type: application/json
             schema: data.entities.account

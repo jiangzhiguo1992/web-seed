@@ -67,7 +67,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 - 槽位键出现在节点位置报 `schema.slot-position`；
 - `_types.yaml` 用 `schemas.<kind>.keys` 描述自身；判别键与结构键必须 `required: true`；
 - `cap.events` 的 `topics[].publish.payload` 投影为 `Event<File><Topic>` component；生成物只保留标准 schema，不携带事件扩展键。
-- `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；平台级组件只在 `platform/http_conventions.components`，HTTP 文件没有私有组件。`request` 只写 path/query/body/mapping，`response` 只写 description/body/codes；`security` 是 `[{ scheme, scopes }]`，`mapping` 的 path/query/security 是 `[{ from|scheme, to }]` 列表，不接受自由 map。
+- `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；平台级组件只在 `platform/http_conventions.components`，HTTP 文件没有私有组件。`request` 只写 path/query/body，path/query 项和 body 用 `to` 指向 service 参数；`response` 只写 description/body/codes；`security` 是 `{ BearerAuth: bool }`，不再有 mapping。
 - `mount` 必须声明 `api_version` / `path` / `audience`：`api_version` 是 `v<数字>`，与 `mount.path`、`paths` key 一起由生成器派生 `servers: /<api_version>`；`paths` 必填且至少一个 operation。
 - `cap.protocols.http` 的文件级 `mount` 承载 `path` 与 `audience`：`path` 是公共资源前缀（`/account`）；audience 段在 `paths`（`/admin`），`audience` 来自 `platform/http_conventions.audiences`；operation 的 `used_by` 必须非空且精确等于页面引用，错误按 platform.errors 的 status 分组、`COMMON_*` 不在 operation 重复；平台基线状态（含 body/deprecated）由 `error_responses` 注入。
 - 槽位字段的值域可整体写 `types: [ _types.schema ]`，即允许 `schemas` 下声明的全部节点种类；不要重复枚举 kind。
@@ -123,7 +123,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
   `unique_key` / `min` / `max` / `min_items` / `min_len` / `max_len` / `len` / `const` / `types` / `key_patterns` 校验；
   `soft: true` 标记不做通用结构校验的 soft zone（领域规则仍可部分检查）。
 - 字段顺序以模板为准（`checkFieldOrder`）；新增字段只改 `_meta` 模板。
-- `contracts/**/*.yaml` 的文本字段必须双引号（`schema.quote`）；同一 mapping 不得重复键。
+- `contracts/**/*.yaml` 的文本字段必须双引号（`schema.quote`）；同一对象不得重复键。
 - 所有契约实例的 `type` 值必须是 `_types.*` / `_types.list<...>` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）；`_types.object|_types.array|_types.map` 只允许作为 schema 节点判别键。裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部实例 YAML；同一文件/路径已有更精确的领域错误时不重复报。
 - 类型级 `rules` 的每条必须有 `implemented_by`，包含自身 ID，且每个 ID 都是 checker 实际输出的
   `[rule-id]`；反向检查所有非 `schema.*` 输出都必须被某条规则声明。

@@ -215,10 +215,10 @@ dispatch 项：
 - status code / content-type / header
 - API 版本由文件级 `mount.api_version` 声明（`v<数字>`）；完整 path = `mount.path` + `paths` key，生成器按 app include 文件的版本派生 `servers: /<api_version>`。`mount.path` 只写公共资源前缀（如 `/account`），audience 段写在 `paths`（如 `/admin`）；`paths`、`mount.path` 都不写版本前缀
 - `project.yaml` 的 api app 只声明 `audience` / `timeout_ms` / `includes`，不再声明 `api_version`；同一 app 的 include 文件必须处于同一版本（checker 与生成器都拒绝混版本）
-- 每个 operation 用 `request` / `response` 两块：`request` 下只允许 `path` / `query` / `body` / `mapping`；`response` 是状态码 map，2xx 写 `description` / `body`，非 2xx 只写 `codes`
+- 每个 operation 用 `request` / `response` 两块：`request` 下只允许 `path` / `query` / `body`；`response` 是状态码 map，2xx 写 `description` / `body`，非 2xx 只写 `codes`
 - HTTP 契约不声明客户端链路头或幂等键；JWT 通过 `Authorization` security scheme 传递
-- `request.path` / `request.query` 是列表，每项必须写 `name` / `schema` / `description`（query 另有 `required`）；`schema` 只能是 `_types.*` 或 `data.enums.*`，不得写实体或匿名 object
-- `body` 用 `content_type` + `schema`；`content_type` 固定 `application/json`；`schema` 必须是具名类型 ID，不支持匿名 object
+- `request.path` / `request.query` 是列表，每项必须写 `name` / `schema` / `description` / `to`（query 另有 `required`）；`schema` 只能是 `_types.*` 或 `data.enums.*`，不得写实体或匿名 object
+- `body` 用 `content_type` + `schema` + `to`；`content_type` 固定 `application/json`；`schema` 必须是具名类型 ID，不支持匿名 object
 - `schema` 直接写类型 ID：`data.entities.*` / `data.enums.*` / `cap.services.*.schemas.*` / `_types.*`，不写 `#/components/...`
 - 平台级 header / parameter / response / securityScheme / schema 统一定义在 `platform/http_conventions.yaml` 的 `components`；HTTP 文件不再有文件私有组件，也没有 `protocols/http/shared.yaml`
 
@@ -229,11 +229,11 @@ HTTP 约束：
 - 响应 schema 由类型 ID 解析：优先 `cap.services.schemas`，也允许 `data.entities.*` / `data.enums.*`；object 默认封闭。
 - 每个 operation 必须有 `id` 与 `service`；`service` 只能指向 `public` 且未被异步任务引用的同步 service。
 - 每个文件必须有 `mount`：`api_version` / `path` / `audience`。`mount.path` 是资源前缀，`mount.audience` 是该文件全部 operation 的调用端列表。
-- 每个 operation 必须有 `security`（公开 operation 写空列表 `security: []`）；受保护 operation 写 `security: [ { scheme: BearerAuth, scopes: [] } ]`，`scheme` 只能取 `BearerAuth`，且必须来自 `platform/http_conventions.components.securitySchemes`。
+- 每个 operation 必须有 `security: { BearerAuth: bool }`；`true` 表示本次 API 必须携带 JWT access token，`false` 表示公开。
 - 每个 operation 必须有非空 `used_by`：模板属性 `min_items: 1` 保证非空，`http-consumer` 再校验它精确等于引用该 service 的 `feature.pages.*`；缺页面就补页面，不允许用豁免清单绕过。
 - `used_by` 在 `_meta/cap.protocols.http.yaml` 的 operation `item_fields` 上声明（required + min_items 1），不是只写在 `rules` 文本里。
 - 错误闭包由脚本递归计算：`query` 取 `query.errors` 与 `step.errors`；`service` 未声明 `step.errors` 时取目标 service 闭包，声明时只取声明集合；`logic`/`when` 取 `step.errors` 与 `rules[].rule` 的 `on_violation`；`events`/`transition` 取 `step.errors`；事件不贡献同步错误。`http-errors` 用该闭包校验每个 operation 的 `codes`。
-- 每个 operation 必须有 `request.mapping`（可为空对象）：`body` 写单个 `params.<service 参数>`；`path` / `query` 是 `[{ from, to }]` 列表，`from` 必须是已声明的 HTTP 参数；`security` 是 `[{ scheme, to }]` 列表，`scheme` 必须在 operation.security 中，且 `BearerAuth` 只能映射 `params.access_token`（字符串）或 `params.account_id`（整数）；service 必填非 ctx 参数必须全覆盖，HTTP 不得发明参数。`mapping` 只用于契约校验与后续 handler 生成，不写入 OpenAPI。
+- `request.path` / `request.query` 的每个参数和 `request.body` 都必须写 `to: params.<service 参数路径>`；`to` 只用于契约校验与后续 handler 生成，不写入 OpenAPI。service 必填非 ctx 参数必须全覆盖；`BearerAuth: true` 时 `account_id` / `access_token` 由认证中间件注入，HTTP 参数不得指向它们。
 - 幂等由 API 内部按业务语义决定，不使用客户端传入的幂等键。
 - JWT 认证：access/refresh 都是 JWT，登录与刷新只通过响应体返回，客户端用 `Authorization: Bearer` 携带 access token；没有 cookie、CSRF 或服务端 session。refresh/logout 请求体为 `RefreshInput`；token 表只存 JWT 哈希，用于吊销、refresh 轮换与审计。
 - 每个 operation 必须在 `response.<非2xx状态码>.codes` 下按状态分组列出该 service 的非 `COMMON_*` 错误；code 的错误 `status` 必须等于所在 response 的状态码，且必须与 service 错误集精确一致。`COMMON_*` 不在 operation 里重复。
@@ -247,7 +247,7 @@ HTTP 约束：
 
 | 头 | 位置 | 引用方式 |
 |---|---|---|
-| `Authorization` | 不写 header 槽位 | 由 `security: [{ scheme: BearerAuth }]` 表达；JWT access token |
+| `Authorization` | 不写 header 槽位 | 由 `security: { BearerAuth: true }` 表达；JWT access token |
 | `Retry-After` | 平台 `components.responses.TooManyRequests` / `ServiceUnavailable` | 不在 operation 里重复写 |
 | `Content-Type: application/json` | `request.body.content_type` / `response.<status>.body.content_type` | 固定字段，不写成 header |
 
