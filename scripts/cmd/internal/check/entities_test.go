@@ -310,12 +310,12 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 	newChecker := func(withIndex bool) *Checker {
 		indexes := map[string][]tableIndex{}
 		if withIndex {
-			indexes["data.tables.token"] = []tableIndex{{name: "idx_token_account", columns: []string{"account_id"}}}
+			indexes["data.tables.notes"] = []tableIndex{{name: "idx_notes_account", columns: []string{"account_id"}}}
 		}
 		return &Checker{
 			tableColumns: map[string]map[string]columnMeta{
 				"data.tables.account": {"id": {typ: "string", primaryKey: true}},
-				"data.tables.token":   {"id": {typ: "string", primaryKey: true}, "account_id": {typ: "string"}},
+				"data.tables.notes":   {"id": {typ: "string", primaryKey: true}, "account_id": {typ: "string"}},
 			},
 			tableIndexes: indexes,
 			entities: map[string]*entityInfo{
@@ -326,10 +326,10 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 						return f
 					}()},
 				},
-				"data.entities.token": {
-					ID: "data.entities.token", Rel: "token.yaml", Tables: []string{"data.tables.token"}, Primary: "data.tables.token",
+				"data.entities.notes": {
+					ID: "data.entities.notes", Rel: "notes.yaml", Tables: []string{"data.tables.notes"}, Primary: "data.tables.notes",
 					Fields: []entityFieldInfo{func() entityFieldInfo {
-						f := scalarField("ID", "string", "data.tables.token", "id")
+						f := scalarField("ID", "string", "data.tables.notes", "id")
 						return f
 					}()},
 				},
@@ -339,7 +339,7 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 
 	c := newChecker(true)
 	e := c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Tokens", "List<data.entities.token>", "data.tables.account", "id", "data.tables.token", "account_id", "eager"))
+	e.Fields = append(e.Fields, relationField("Notes", "List<data.entities.notes>", "data.tables.account", "id", "data.tables.notes", "account_id", "eager"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid eager relation reported: %v", c.errs)
@@ -347,7 +347,7 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 
 	c = newChecker(true)
 	e = c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Tokens", "data.entities.token", "data.tables.account", "id", "data.tables.token", "account_id", "eager"))
+	e.Fields = append(e.Fields, relationField("Notes", "data.entities.notes", "data.tables.account", "id", "data.tables.notes", "account_id", "eager"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-arity]") {
 		t.Fatalf("one_to_many single type not reported: %v", c.errs)
@@ -355,22 +355,22 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 
 	c = newChecker(false)
 	e = c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Tokens", "List<data.entities.token>", "data.tables.account", "id", "data.tables.token", "account_id", "eager"))
+	e.Fields = append(e.Fields, relationField("Notes", "List<data.entities.notes>", "data.tables.account", "id", "data.tables.notes", "account_id", "eager"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-eager-index]") {
 		t.Fatalf("missing eager index not reported: %v", c.errs)
 	}
 
 	c = newChecker(true)
-	e = c.entities["data.entities.token"]
-	e.Fields = append(e.Fields, relationField("Account", "data.entities.account", "data.tables.token", "account_id", "data.tables.account", "id", "lazy"))
+	e = c.entities["data.entities.notes"]
+	e.Fields = append(e.Fields, relationField("Account", "data.entities.account", "data.tables.notes", "account_id", "data.tables.account", "id", "lazy"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid many_to_one reported: %v", c.errs)
 	}
 	if got := c.relationCardinality(&entityFieldInfo{
-		JoinFromTable: "data.tables.token", JoinFromColumn: "account_id",
-		JoinToTable: "data.tables.token", JoinToColumn: "account_id",
+		JoinFromTable: "data.tables.notes", JoinFromColumn: "account_id",
+		JoinToTable: "data.tables.notes", JoinToColumn: "account_id",
 	}); got != "" {
 		t.Fatalf("non-unique both sides should be invalid, got %s", got)
 	}
@@ -380,7 +380,7 @@ func TestEntityRelationJoinColumnTypeMismatch(t *testing.T) {
 	c := &Checker{
 		tableColumns: map[string]map[string]columnMeta{
 			"data.tables.account": {"id": {typ: "string", primaryKey: true}},
-			"data.tables.token":   {"id": {typ: "string", primaryKey: true}, "account_id": {typ: "integer"}},
+			"data.tables.notes":   {"id": {typ: "string", primaryKey: true}, "account_id": {typ: "integer"}},
 		},
 		entities: map[string]*entityInfo{
 			"data.entities.account": {ID: "data.entities.account", Tables: []string{"data.tables.account"}, Primary: "data.tables.account",
@@ -388,15 +388,15 @@ func TestEntityRelationJoinColumnTypeMismatch(t *testing.T) {
 					f := scalarField("ID", "string", "data.tables.account", "id")
 					return f
 				}()}},
-			"data.entities.token": {ID: "data.entities.token", Tables: []string{"data.tables.token"}, Primary: "data.tables.token",
+			"data.entities.notes": {ID: "data.entities.notes", Tables: []string{"data.tables.notes"}, Primary: "data.tables.notes",
 				Fields: []entityFieldInfo{func() entityFieldInfo {
-					f := scalarField("ID", "string", "data.tables.token", "id")
+					f := scalarField("ID", "string", "data.tables.notes", "id")
 					return f
 				}()}},
 		},
 	}
 	e := c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Tokens", "data.entities.token", "data.tables.account", "id", "data.tables.token", "account_id", "lazy"))
+	e.Fields = append(e.Fields, relationField("Notes", "data.entities.notes", "data.tables.account", "id", "data.tables.notes", "account_id", "lazy"))
 	c.checkEntityRelations(e, map[string]map[string]bool{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-via]") || !strings.Contains(entityErrs(c), "does not match") {
 		t.Fatalf("join column type mismatch not reported: %v", c.errs)
@@ -405,9 +405,9 @@ func TestEntityRelationJoinColumnTypeMismatch(t *testing.T) {
 
 func TestEntityRelationRejectsEmptySource(t *testing.T) {
 	f := parseEntityField(map[string]any{
-		"name":        "Tokens",
-		"type":        "data.entities.token",
-		"description": "tokens",
+		"name":        "Notes",
+		"type":        "data.entities.notes",
+		"description": "notes",
 		"source":      map[string]any{},
 	})
 	if f == nil || !f.HasSource || !f.IsRelation {
@@ -422,12 +422,12 @@ func TestEntityRelationRejectsEmptySource(t *testing.T) {
 
 func TestEntityRelationJoinRequiresLazy(t *testing.T) {
 	f := parseEntityField(map[string]any{
-		"name":        "Tokens",
-		"type":        "data.entities.token",
-		"description": "tokens",
+		"name":        "Notes",
+		"type":        "data.entities.notes",
+		"description": "notes",
 		"source": map[string]any{"join": map[string]any{
 			"from": "data.tables.account.col.id",
-			"to":   "data.tables.token.col.account_id",
+			"to":   "data.tables.notes.col.account_id",
 		}},
 	})
 	c := &Checker{}
@@ -440,15 +440,15 @@ func TestEntityRelationJoinRequiresLazy(t *testing.T) {
 
 func TestEntityRelationJoinRequiresFromTo(t *testing.T) {
 	cases := map[string]map[string]any{
-		"missing from": {"to": "data.tables.token.col.account_id", "lazy": true},
+		"missing from": {"to": "data.tables.notes.col.account_id", "lazy": true},
 		"missing to":   {"from": "data.tables.account.col.id", "lazy": true},
 		"empty join":   {},
 	}
 	for name, join := range cases {
 		f := parseEntityField(map[string]any{
-			"name":        "Tokens",
-			"type":        "data.entities.token",
-			"description": "tokens",
+			"name":        "Notes",
+			"type":        "data.entities.notes",
+			"description": "notes",
 			"source":      map[string]any{"join": join},
 		})
 		c := &Checker{}
@@ -461,14 +461,14 @@ func TestEntityRelationJoinRequiresFromTo(t *testing.T) {
 
 func TestEntityRelationRejectsMixedSource(t *testing.T) {
 	f := parseEntityField(map[string]any{
-		"name":        "Tokens",
-		"type":        "data.entities.token",
-		"description": "tokens",
+		"name":        "Notes",
+		"type":        "data.entities.notes",
+		"description": "notes",
 		"source": map[string]any{
 			"column": "data.tables.account.col.id",
 			"join": map[string]any{
 				"from": "data.tables.account.col.id",
-				"to":   "data.tables.token.col.account_id",
+				"to":   "data.tables.notes.col.account_id",
 				"lazy": true,
 			},
 		},
@@ -500,7 +500,7 @@ func TestEntityRelationRejectsNullable(t *testing.T) {
 		"nullable":    true,
 		"description": "account",
 		"source": map[string]any{"join": map[string]any{
-			"from": "data.tables.token.col.account_id",
+			"from": "data.tables.notes.col.account_id",
 			"to":   "data.tables.account.col.id",
 			"lazy": true,
 		}},
@@ -870,7 +870,6 @@ func TestSecretEntityProjectionBoundary(t *testing.T) {
 	c.run()
 	c.errs = nil
 	for _, id := range []string{
-		"data.entities.token",
 		"data.entities.auth_pwd",
 		"data.entities.verification_body",
 		"data.entities.verification_action",

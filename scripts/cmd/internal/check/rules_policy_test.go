@@ -58,7 +58,6 @@ var policyExpectations = map[string]policyExpectation{
 	"feature.rules.account.delete_revokes_auth": {
 		tables: map[string][]string{
 			"data.tables.verification_body": {"status"},
-			"data.tables.token":             {"status"},
 		},
 	},
 	"feature.rules.account.activate_requires_pending_or_suspended": {
@@ -114,7 +113,6 @@ var policyExpectations = map[string]policyExpectation{
 	},
 	"feature.rules.auth.auth_token_requires_active_account": {
 		tables: map[string][]string{
-			"data.tables.token":   {"status"},
 			"data.tables.account": {"status"},
 		},
 		enums: map[string][]string{"data.enums.account_status": {"active"}},
@@ -514,8 +512,6 @@ var anchorAliases = map[string][]string{
 	"data.tables.verification_body.account_id":        {"account_id", "账号"},
 	"data.tables.verification_body.auth_id":           {"auth_id", "认证"},
 	"data.tables.verification_body.purpose":           {"purpose", "用途"},
-	"data.tables.token":                               {"令牌", "token"},
-	"data.tables.token.status":                        {"状态", "status"},
 	"data.tables.auth_phone":                          {"auth_phone", "手机", "phone"},
 	"data.tables.auth_phone.account_id":               {"account_id", "账号"},
 	"data.tables.auth_phone.status":                   {"状态", "status"},

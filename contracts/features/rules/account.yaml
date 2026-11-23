@@ -51,7 +51,7 @@ rules:
     then: "拒绝，返回 ACCOUNT_ALREADY_DELETED"
   - id: feature.rules.account.delete_revokes_auth
     kind: policy
-    summary: "软删账号必须同时软删认证绑定、作废未消费验证体并吊销全部令牌"
+    summary: "软删账号必须同时软删认证绑定并作废未消费验证体；已签发 JWT 由账号状态校验失效"
     on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [ cap.services.account.delete ]
     given: "account.delete 只更新 account.status/deleted_at"

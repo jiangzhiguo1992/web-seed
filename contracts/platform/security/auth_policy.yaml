@@ -1,60 +1,40 @@
-# 认证与会话策略。影响 cookie、CSRF、token 生命周期。
+# JWT 认证策略：access/refresh 都是 JWT；token 表存哈希，用于校验吊销、轮换与审计；不使用 cookie/session。
 
 schema_version: 1
 id: platform.security.auth_policy
-summary: "会话与认证策略"
+summary: "JWT 令牌认证策略"
 stability: draft
-do_not: []
+do_not:
+  - "不要使用 cookie 或服务端 session；JWT 只通过响应体和 Authorization header 传递"
+  - "不要把密码、邮箱、手机号等 PII 写进 JWT"
+  - "token 表只存 JWT 哈希与吊销/轮换元数据，不存 JWT 原文"
 
 token:
   persistence: data.tables.token
   storage: "hash"
   hash_algorithm: sha256
+  issuer: web-seed
   access:
     format: jwt
     algorithm: HS256
     ttl: 15m
-    claims_required: [sub, aud, exp, iat, jti]
+    claims_required: [iss, sub, aud, exp, iat, jti]
     audience: [admin, user]
     pii_in_token: false
-    storage: "hash"              # 仅存哈希用于吊销/审计；校验优先验签
   refresh:
-    format: opaque
+    format: jwt
+    algorithm: HS256
     ttl: 30d
-    rotation: true               # 每次刷新换新 token，旧的作废
-    reuse_detection: true        # 复用旧 token 即吊销全部会话
+    claims_required: [iss, sub, aud, exp, iat, jti]
+    audience: [admin, user]
+    pii_in_token: false
+    rotation: true
+    reuse_detection: true
     storage: "hash"
     table: data.tables.token
-    cookie:
-      name: refresh_token
-      same_site: Lax
-      secure: platform.environments（security.cookie_secure）
-      path: /<api_version>/auth
-      http_only: true
-
-session:
-  max_concurrent: 5
-  idle_timeout: 7d
-  absolute_timeout: 30d
-  revoke_on_password_change: true
-  revoke_on_phone_change: true
-  revoke_on_email_change: true
-  store: database
-
-csrf:
-  strategy: double_submit_cookie
-  applies_to: cookie_based_endpoints
-  header: X-CSRF-Token
-  cookie:
-    name: csrf_token
-    http_only: false
-    same_site: Lax
-    path: /<api_version>/auth
-  exempt: [GET, HEAD, OPTIONS]
-  exempt_paths:
-    - /<api_version>/auth/login
-    - /<api_version>/auth/verification/send
-    - /<api_version>/auth/verification/verify
+  revocation:
+    strategy: server
+    note: "JWT 验签后仍查 token 表 revoked_at；登出、refresh 轮换、账号删除、改密/换绑都会吊销记录；access JWT 的撤销即时生效"
 
 password:
   algorithm: argon2id

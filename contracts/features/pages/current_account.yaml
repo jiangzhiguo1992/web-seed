@@ -1,0 +1,54 @@
+# 当前账号页。刷新会签发新 JWT；登出会吊销 refresh JWT。
+
+id: feature.pages.current_account
+summary: "当前账号页"
+schema_version: 1
+stability: draft
+do_not:
+  - "认证状态只能通过 cap.services.token.verify 获取，不要解析 JWT"
+  - "access JWT 只存内存，不写 localStorage/sessionStorage/cookie"
+  - "refresh JWT 只由 auth 层存储（browser localStorage / mobile Keychain），不进入页面组件状态或 URL"
+
+page: current_account
+route: feature.routes.current_account
+
+data:
+  current:
+    capability: cap.services.token.verify
+
+view_states:
+  loading:
+    when: "query.isPending"
+    ui: "skeleton-detail"
+  empty:
+    when: "false"
+    note: "认证页无空态"
+  error:
+    when: "query.isError"
+    ui: "error-panel"
+    show: "problem.detail"
+  forbidden:
+    when: "problem.code == 'COMMON_UNAUTHORIZED'"
+    ui: "login-redirect"
+
+actions:
+  refresh:
+    capability: cap.services.token.refresh
+    params:
+      input: { from: auth.refresh_token, type: cap.services.token.schemas.RefreshInput, required: true }
+    ui: "secondary-button"
+    label: "刷新 JWT"
+  logout:
+    capability: cap.services.token.logout
+    params:
+      input: { from: auth.refresh_token, type: cap.services.token.schemas.RefreshInput, required: true }
+    ui: "danger-button"
+    label: "退出登录"
+    confirm: true
+
+fields:
+  - name: number
+    render: code
+  - name: status
+    enum: cap.lifecycles.account.states.values
+    render: badge

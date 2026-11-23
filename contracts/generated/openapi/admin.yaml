@@ -1,15 +1,7 @@
 components:
   headers:
-    ClearAuthCookies:
-      description: 清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/<api_version>/auth
-      schema:
-        type: string
     RetryAfter:
       description: 建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误
-      schema:
-        type: string
-    SetAuthCookies:
-      description: 设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/<api_version>/auth，SameSite=Lax，Secure 按环境
       schema:
         type: string
     XRequestId:
@@ -18,20 +10,6 @@ components:
         maxLength: 64
         type: string
   parameters:
-    Authorization:
-      in: header
-      name: Authorization
-      required: true
-      schema:
-        minLength: 1
-        type: string
-    CSRFToken:
-      in: header
-      name: X-CSRF-Token
-      required: true
-      schema:
-        minLength: 1
-        type: string
     IdempotencyKey:
       in: header
       name: Idempotency-Key
@@ -47,13 +25,6 @@ components:
       schema:
         maxLength: 64
         minLength: 8
-        type: string
-    RefreshTokenCookie:
-      in: cookie
-      name: refresh_token
-      required: true
-      schema:
-        minLength: 1
         type: string
     RequestId:
       in: header
@@ -292,21 +263,6 @@ components:
         - suspended
         - deleted
       type: string
-    ApiAccessTokenResponse:
-      additionalProperties: false
-      properties:
-        code:
-          const: 0
-          type: integer
-        data:
-          $ref: '#/components/schemas/AccessToken'
-        message:
-          type: string
-      required:
-        - code
-        - message
-        - data
-      type: object
     ApiAccountPageResponse:
       additionalProperties: false
       properties:
@@ -352,14 +308,14 @@ components:
         - message
         - data
       type: object
-    ApiAuthSessionResponse:
+    ApiAuthResultResponse:
       additionalProperties: false
       properties:
         code:
           const: 0
           type: integer
         data:
-          $ref: '#/components/schemas/AuthSession'
+          $ref: '#/components/schemas/AuthResult'
         message:
           type: string
       required:
@@ -376,6 +332,21 @@ components:
           type: integer
         data:
           type: "null"
+        message:
+          type: string
+      required:
+        - code
+        - message
+        - data
+      type: object
+    ApiRefreshResultResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/RefreshResult'
         message:
           type: string
       required:
@@ -463,7 +434,7 @@ components:
         - account_id
         - status
       type: object
-    AuthSession:
+    AuthResult:
       additionalProperties: false
       properties:
         account:
@@ -471,7 +442,10 @@ components:
           description: 账号实体
         attributes:
           $ref: '#/components/schemas/AuthAttributes'
-          description: 会话属性
+          description: 登录结果属性
+        refresh:
+          $ref: '#/components/schemas/RefreshToken'
+          description: 刷新 JWT
         tokens:
           $ref: '#/components/schemas/AccessToken'
           description: 访问令牌
@@ -479,13 +453,11 @@ components:
         - account
         - tokens
         - attributes
+        - refresh
       type: object
     BindEmailInput:
       additionalProperties: false
       properties:
-        account_id:
-          description: 账号 ID
-          type: integer
         action:
           description: 认证绑定动作
           enum:
@@ -507,15 +479,11 @@ components:
           nullable: true
           type: string
       required:
-        - account_id
         - action
       type: object
     BindPasswordInput:
       additionalProperties: false
       properties:
-        account_id:
-          description: 账号 ID
-          type: integer
         action:
           description: 认证绑定动作
           enum:
@@ -536,15 +504,11 @@ components:
           nullable: true
           type: string
       required:
-        - account_id
         - action
       type: object
     BindPhoneInput:
       additionalProperties: false
       properties:
-        account_id:
-          description: 账号 ID
-          type: integer
         action:
           description: 认证绑定动作
           enum:
@@ -568,7 +532,6 @@ components:
           pattern: ^[0-9]{1,32}$
           type: string
       required:
-        - account_id
         - action
       type: object
     CreateAccountInput:
@@ -801,6 +764,44 @@ components:
         - auth_type
         - identifier
       type: object
+    RefreshInput:
+      additionalProperties: false
+      properties:
+        refresh_token:
+          description: 刷新 JWT
+          type: string
+          writeOnly: true
+      required:
+        - refresh_token
+      type: object
+    RefreshResult:
+      additionalProperties: false
+      properties:
+        access:
+          $ref: '#/components/schemas/AccessToken'
+          description: 新的访问令牌
+        refresh:
+          $ref: '#/components/schemas/RefreshToken'
+          description: 新的刷新令牌
+      required:
+        - access
+        - refresh
+      type: object
+    RefreshToken:
+      additionalProperties: false
+      properties:
+        refresh_expire_at:
+          description: 刷新令牌过期时间
+          format: date-time
+          type: string
+        refresh_token:
+          description: 刷新 JWT
+          readOnly: true
+          type: string
+      required:
+        - refresh_token
+        - refresh_expire_at
+      type: object
     SendVerificationInput:
       additionalProperties: false
       properties:
@@ -955,7 +956,23 @@ paths:
     get:
       operationId: listAccounts
       parameters:
-        - in: query
+        - $ref: '#/components/parameters/RequestId'
+        - description: 账号状态过滤
+          in: query
+          name: status
+          required: false
+          schema:
+            $ref: '#/components/schemas/AccountStatus'
+        - description: 分页偏移；默认 0
+          in: query
+          name: offset
+          required: false
+          schema:
+            default: 0
+            minimum: 0
+            type: integer
+        - description: 分页大小；默认 20
+          in: query
           name: limit
           required: false
           schema:
@@ -963,19 +980,6 @@ paths:
             maximum: 100
             minimum: 1
             type: integer
-        - in: query
-          name: offset
-          required: false
-          schema:
-            default: 0
-            minimum: 0
-            type: integer
-        - in: query
-          name: status
-          required: false
-          schema:
-            $ref: '#/components/schemas/AccountStatus'
-        - $ref: '#/components/parameters/RequestId'
       responses:
         200:
           content:
@@ -1026,8 +1030,8 @@ paths:
     post:
       operationId: createAccount
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyRequired'
         - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
       requestBody:
         content:
           application/json:
@@ -1107,13 +1111,15 @@ paths:
     delete:
       operationId: deleteAccount
       parameters:
-        - in: path
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - description: 账号 ID
+          in: path
           name: id
           required: true
           schema:
+            minimum: 1
             type: integer
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/RequestId'
       responses:
         204:
           description: 已删除
@@ -1172,12 +1178,14 @@ paths:
     get:
       operationId: getAccount
       parameters:
-        - in: path
+        - $ref: '#/components/parameters/RequestId'
+        - description: 账号 ID
+          in: path
           name: id
           required: true
           schema:
+            minimum: 1
             type: integer
-        - $ref: '#/components/parameters/RequestId'
       responses:
         200:
           content:
@@ -1233,13 +1241,15 @@ paths:
     patch:
       operationId: updateAccount
       parameters:
-        - in: path
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - description: 账号 ID
+          in: path
           name: id
           required: true
           schema:
+            minimum: 1
             type: integer
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1322,13 +1332,15 @@ paths:
     post:
       operationId: activateAccount
       parameters:
-        - in: path
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - description: 账号 ID
+          in: path
           name: id
           required: true
           schema:
+            minimum: 1
             type: integer
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/RequestId'
       responses:
         200:
           content:
@@ -1392,13 +1404,15 @@ paths:
     post:
       operationId: suspendAccount
       parameters:
-        - in: path
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - description: 账号 ID
+          in: path
           name: id
           required: true
           schema:
+            minimum: 1
             type: integer
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1478,8 +1492,8 @@ paths:
     post:
       operationId: bindEmail
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
@@ -1563,8 +1577,8 @@ paths:
     post:
       operationId: bindPassword
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
@@ -1650,8 +1664,8 @@ paths:
     post:
       operationId: bindPhone
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
@@ -1747,11 +1761,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiAuthSessionResponse'
+                $ref: '#/components/schemas/ApiAuthResultResponse'
           description: 登录成功
           headers:
-            Set-Cookie:
-              $ref: '#/components/headers/SetAuthCookies'
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
         400:
@@ -1811,15 +1823,17 @@ paths:
     post:
       operationId: logout
       parameters:
-        - $ref: '#/components/parameters/CSRFToken'
         - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/RefreshTokenCookie'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshInput'
+        required: true
       responses:
         204:
-          description: 已登出
+          description: 已吊销
           headers:
-            Set-Cookie:
-              $ref: '#/components/headers/ClearAuthCookies'
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
         400:
@@ -1832,6 +1846,16 @@ paths:
           x-error-codes:
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -1852,12 +1876,11 @@ paths:
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
       security: []
-      summary: 登出
+      summary: 吊销 refresh JWT
   /auth/me:
     get:
       operationId: currentAccount
       parameters:
-        - $ref: '#/components/parameters/Authorization'
         - $ref: '#/components/parameters/RequestId'
       responses:
         200:
@@ -1914,19 +1937,21 @@ paths:
     post:
       operationId: refreshToken
       parameters:
-        - $ref: '#/components/parameters/CSRFToken'
         - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/RefreshTokenCookie'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshInput'
+        required: true
       responses:
         200:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApiAccessTokenResponse'
+                $ref: '#/components/schemas/ApiRefreshResultResponse'
           description: 成功
           headers:
-            Set-Cookie:
-              $ref: '#/components/headers/SetAuthCookies'
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
         400:
@@ -1941,6 +1966,16 @@ paths:
               code: AUTH_TOKEN_EXPIRED
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -1961,13 +1996,13 @@ paths:
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
       security: []
-      summary: 刷新令牌
+      summary: 刷新 JWT
   /auth/verification/send:
     post:
       operationId: sendVerification
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
@@ -2035,8 +2070,8 @@ paths:
     post:
       operationId: verifyCode
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:

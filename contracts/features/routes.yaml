@@ -70,15 +70,15 @@ routes:
       title: "登录"
       public: true
 
-  - id: feature.routes.session
-    path: /session
-    name: session
-    page: feature.pages.session
+  - id: feature.routes.current_account
+    path: /me
+    name: current-account
+    page: feature.pages.current_account
     layout: default
     permission: null
     menu: null
     meta:
-      title: "当前会话"
+      title: "当前账号"
 
 redirects:
   - { from: /, to: /account }

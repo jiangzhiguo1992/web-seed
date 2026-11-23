@@ -317,8 +317,7 @@ paths:
         service: "cap.services.x.create"
       request:
         headers:
-          RequestId:
-            $ref: "#/components/parameters/RequestId"
+          X-Request-Id: RequestId
         body:
           content_type: "application/json"
           schema:
@@ -331,27 +330,13 @@ paths:
                 type: "integer"
           required: true
         mapping:
-          body:
-            id: "params.id"
+          body: params.input
       response:
         "204":
           description: "OK"
           headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-shared:
-  parameters:
-    RequestId:
-      name: "X-Request-Id"
-      in: "header"
-      required: false
-      schema:
-        type: "string"
-  headers:
-    XRequestId:
-      schema:
-        type: "string"
-  schemas: {}`)
+            X-Request-Id: XRequestId
+`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -688,19 +673,23 @@ paths:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
       request:
+        headers:
+          X-Request-Id: RequestId
         query:
-          id:
-            schema:
-              type: "integer"
+          - name: id
+            schema: { type: integer }
             required: false
+            description: "id"
         mapping:
           query:
-            id: "params.missing"
+            - from: id
+              to: params.missing
       response:
         "204":
           description: "OK"
-shared:
-  schemas: {}`)
+          headers:
+            X-Request-Id: XRequestId
+`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -828,34 +817,21 @@ paths:
     get:
       name: "getX"
       security:
-        - "UnknownAuth": []
+        - scheme: UnknownAuth
+          scopes: []
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
       request:
         headers:
-          RequestId:
-            $ref: "#/components/parameters/RequestId"
+          X-Request-Id: RequestId
         mapping: {}
       response:
         "204":
           description: "OK"
           headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-shared:
-  parameters:
-    RequestId:
-      name: "X-Request-Id"
-      in: "header"
-      required: false
-      schema:
-        type: "string"
-  headers:
-    XRequestId:
-      schema:
-        type: "string"
-  schemas: {}`)
+            X-Request-Id: XRequestId
+`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -863,6 +839,85 @@ shared:
 	}, map[string]bool{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-security]") {
 		t.Fatalf("unknown security scheme not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPSecurityMapping(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+summary: "x"
+schema_version: 1
+stability: "draft"
+do_not: []
+paths:
+  /x:
+    post:
+      name: "postX"
+      contract:
+        id: "cap.protocols.http.x.post"
+        service: "cap.services.x.post"
+      security:
+        - scheme: BearerAuth
+          scopes: []
+      request:
+        headers:
+          X-Request-Id: RequestId
+        mapping:
+          security:
+            - scheme: BearerAuth
+              to: params.refresh_token
+      response:
+        "204":
+          description: "OK"
+          headers:
+            X-Request-Id: XRequestId
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.post": {
+			visibility:     "public",
+			requiredParams: map[string]bool{"refresh_token": true},
+			paramDecls:     map[string]string{"refresh_token": "_types.string"},
+		},
+	}, map[string]bool{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "BearerAuth must map to params.access_token or params.account_id") {
+		t.Fatalf("security mapping not checked: %v", c.errs)
+	}
+}
+
+func TestHTTPPathParams(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+summary: "x"
+schema_version: 1
+stability: "draft"
+do_not: []
+paths:
+  /x/{id}:
+    get:
+      name: "getX"
+      contract:
+        id: "cap.protocols.http.x.get"
+        service: "cap.services.x.get"
+      request:
+        headers:
+          X-Request-Id: RequestId
+        mapping: {}
+      response:
+        "204":
+          description: "OK"
+          headers:
+            X-Request-Id: XRequestId
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {visibility: "public"},
+	}, map[string]bool{}, map[string]bool{})
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, "[http-path-params]") || !strings.Contains(got, "{id}") {
+		t.Fatalf("path placeholder mismatch not reported: %v", c.errs)
 	}
 }
 
@@ -877,26 +932,25 @@ paths:
   /x:
     get:
       name: "getX"
+      security: []
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
       request:
         headers:
-          Idempotency-Key: IdempotencyKey
-          Idempotency-Key-Required: IdempotencyKeyRequired
+          X-Request-Id: RequestId
         mapping: {}
       response:
         "204":
           description: "OK"
-shared:
-  schemas: {}`)
+`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.get": {visibility: "public"},
 	}, map[string]bool{}, map[string]bool{})
-	if got := strings.Count(strings.Join(c.errs, "\n"), "[http-headers]"); got < 3 {
-		t.Fatalf("want request, response and duplicate idempotency header errors, got %d: %v", got, c.errs)
+	if got := strings.Count(strings.Join(c.errs, "\n"), "[http-headers]"); got != 1 {
+		t.Fatalf("want missing response header error, got %d: %v", got, c.errs)
 	}
 }
 
@@ -1217,7 +1271,7 @@ topics:
 	c := &Checker{
 		root:           root,
 		entities:       map[string]*entityInfo{"data.entities.account": {}},
-		methodTypeDefs: map[string]map[string]any{"AuthSession": {}},
+		methodTypeDefs: map[string]map[string]any{"AuthResult": {}},
 	}
 	c.checkEventsDoc(schema, map[string]serviceMeta{}, map[string]bool{"cap.services.x.create": true})
 	if len(c.errs) != 0 {

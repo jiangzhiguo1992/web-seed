@@ -99,7 +99,7 @@
 - [ ] 合并 spec → Go server 类型（`oapi-codegen strict-server`）
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
 - [x] `data/tables/*.yaml` → `schema.sql` + `migrations/0001_baseline.sql`（增量 diff 仍 P5）
-- [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/token/auth_* 拆分（契约已落盘）
+- [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/auth_* 拆分（契约已落盘）
 - [x] 契约元规范：`_meta/<type>.yaml` 覆盖全部契约类型 + `make contract-new` + `make contract-check`（结构 / ID / 约束 / 索引 / 引用 / 数据流 / 类型级规则）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
 - [ ] `data/enums/<module>.yaml` → Go 常量 + TS union + entity 整数映射
@@ -145,7 +145,7 @@
 
 #### P6 可选模块（默认非自动生成）
 
-- [ ] `auth`：注册/登录/刷新/登出/会话吊销（audience = admin，未来按需扩展）
+- [ ] `auth`：登录、JWT 签发/刷新/校验、refresh 吊销（audience = admin，未来按需扩展）
 - [ ] `rbac`：角色/权限点 + `usePermission()`
 - [ ] `audit`：who/what/when/before/after
 - [ ] `user`：资料与偏好（与 auth 分离；模板默认不装，派生按需）
@@ -350,7 +350,7 @@ internal/platform/             与业务无关的基础设施
 apps:
   admin:
     kind: api
-    includes: [cap.protocols.http.shared, cap.protocols.http.account]
+    includes: [cap.protocols.http.auth, cap.protocols.http.account]
     generated: { spec: generated/openapi/admin.yaml }
 ```
 
@@ -361,7 +361,7 @@ apps:
 
 | 问题 | 影响 | 倾向 |
 |---|---|---|
-| 未来新增 user 端时登录态是否共享 | Cookie 域策略、CSRF 方案 | 默认不共享（不同域，各自登录） |
+| 未来新增 user 端时登录态是否共享 | JWT issuer/audience 策略 | 默认不共享（各 app 独立签发） |
 | 新增端是否与 admin 共库 | 迁移归属、只读账号 | 默认共库，模块自治表 |
 | SPA 的 SEO 取舍 | 是否留 Nuxt 迁移路径 | 默认 SPA，ADR 记录代价 |
 
@@ -392,7 +392,9 @@ apps:
 
 - HTTP 层统一信封：成功 `{code: 0, message: "ok", data: <resource>}`，错误 `{code: <biz_code>, message, data: null}`；HTTP status 保留 4xx/5xx
 - `code` 取 `platform/errors/` 的整数 `biz_code`；成功码固定 0
-- 浏览器 refresh token 只写 HttpOnly cookie（Path=/<api_version>/auth）；cookie 端点必须校验 `X-CSRF-Token`；写接口用 `Idempotency-Key`
+- 认证使用 JWT：access/refresh 都通过响应体下发，客户端用 `Authorization: Bearer` 携带 access token；没有 cookie、CSRF 或服务端 session；token 表只存 JWT 哈希用于吊销/轮换/审计；写接口用 `Idempotency-Key`
+- 浏览器 JWT 存储：access JWT 只放内存；refresh JWT 放 `localStorage["web-seed.auth.refresh"]`（无 HttpOnly cookie 后的明确取舍，靠 CSP 降低 XSS）；登出时清空两者
+- 移动端 JWT 存储：refresh JWT 放 Keychain/Keystore；access JWT 只放内存
 - 不返回的 error 必须记录（含栈 + 上下文）
 
 ### 5.3 事务边界

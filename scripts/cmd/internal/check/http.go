@@ -159,7 +159,7 @@ func (c *Checker) checkProjectApps() {
 	}
 }
 
-// checkHTTPComponents 校验平台组件或文件 shared 组件的外层结构；
+// checkHTTPComponents 校验平台 HTTP 组件的外层结构；
 // schemas 在平台侧是普通 OpenAPI 对象，在文件侧必须是单一 source 溯源。
 func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isPlatform bool) {
 	if components == nil {
@@ -186,8 +186,8 @@ func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isP
 			if v, _ := scheme["name"].(string); strings.TrimSpace(v) == "" {
 				c.rulef("http-shared", "%s: components.securitySchemes.%s.name required for apiKey", rel, name)
 			}
-			if v, _ := scheme["in"].(string); v != "header" && v != "query" && v != "cookie" {
-				c.rulef("http-shared", "%s: components.securitySchemes.%s.in must be header/query/cookie", rel, name)
+			if v, _ := scheme["in"].(string); v != "header" && v != "query" {
+				c.rulef("http-shared", "%s: components.securitySchemes.%s.in must be header/query", rel, name)
 			}
 		case "oauth2":
 			flows := asMapValue(scheme["flows"])
@@ -277,8 +277,8 @@ func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isP
 			c.rulef("http-shared", "%s: components.parameters.%s.name required", rel, name)
 		}
 		in, _ := parameter["in"].(string)
-		if in != "path" && in != "query" && in != "header" && in != "cookie" {
-			c.rulef("http-shared", "%s: components.parameters.%s.in must be path/query/header/cookie", rel, name)
+		if in != "path" && in != "query" && in != "header" {
+			c.rulef("http-shared", "%s: components.parameters.%s.in must be path/query/header", rel, name)
 		}
 		if parameter["schema"] == nil {
 			c.rulef("http-shared", "%s: components.parameters.%s.schema required", rel, name)
@@ -407,7 +407,6 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			c.validateDoc(doc, schema.Fields, rel)
 			c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		}
-		c.checkHTTPComponents(asMapValue(doc["shared"]), rel, false)
 		mount := openapispec.CollectHTTPMount(doc)
 		rawPaths, _ := asMap(doc["paths"])
 		for path := range rawPaths {
@@ -583,6 +582,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if !ok {
 					continue
 				}
+				c.checkHTTPPathParams(rel, method, path, op)
 				for i, rawParam := range asList(op["parameters"]) {
 					param, _ := asMap(rawParam)
 					if s, ok := asMap(param["schema"]); ok {
@@ -907,9 +907,12 @@ func (c *Checker) checkHTTPOperationHeaders(rel, method, path string, op map[str
 			if len(requirement) > 0 {
 				securityDeclared = true
 			}
-			for name := range requirement {
+			for name, scopes := range requirement {
 				if !schemes[name] {
 					c.rulef("http-security", "%s %s %s: unknown security scheme %s", rel, method, path, name)
+				}
+				if len(asList(scopes)) > 0 {
+					c.rulef("http-security", "%s %s %s: security scheme %s scopes must be empty", rel, method, path, name)
 				}
 			}
 		}
@@ -923,11 +926,8 @@ func (c *Checker) checkHTTPOperationHeaders(rel, method, path string, op map[str
 	if refs["#/components/parameters/IdempotencyKey"] && refs["#/components/parameters/IdempotencyKeyRequired"] {
 		c.rulef("http-headers", "%s %s %s: declare only one of IdempotencyKey/IdempotencyKeyRequired", rel, method, path)
 	}
-	params, _ := asMap(op["x-service-params"])
-	if params != nil {
-		if _, ok := asMap(params["cookie"]); ok && !refs["#/components/parameters/CSRFToken"] {
-			c.rulef("http-headers", "%s %s %s: cookie-based operation must declare X-CSRF-Token ($ref CSRFToken)", rel, method, path)
-		}
+	if (method == "get" || method == "head") && (refs["#/components/parameters/IdempotencyKey"] || refs["#/components/parameters/IdempotencyKeyRequired"]) {
+		c.rulef("http-headers", "%s %s %s: GET/HEAD must not declare Idempotency-Key", rel, method, path)
 	}
 }
 
@@ -1139,7 +1139,50 @@ func (c *Checker) checkHTTPMount(rel string, mount openapispec.HTTPMount, audien
 
 // platformHeaders 是 HTTP 层平台头，不映射到 service 参数。
 var platformHeaders = map[string]bool{
-	"X-Request-Id": true, "Idempotency-Key": true, "X-CSRF-Token": true,
+	"X-Request-Id": true, "Idempotency-Key": true,
+}
+
+// checkHTTPPathParams 校验路径占位符与 request.path 声明一一对应。
+func (c *Checker) checkHTTPPathParams(rel, method, path string, op map[string]any) {
+	placeholders := map[string]bool{}
+	for i := 0; i < len(path); i++ {
+		if path[i] != '{' {
+			continue
+		}
+		end := strings.IndexByte(path[i:], '}')
+		if end < 0 {
+			c.rulef("http-path-params", "%s %s %s: unclosed path placeholder", rel, method, path)
+			return
+		}
+		name := path[i+1 : i+end]
+		if !match(`^[a-z][a-z0-9_]*$`, name) {
+			c.rulef("http-path-params", "%s %s %s: path placeholder {%s} must match [a-z][a-z0-9_]*", rel, method, path, name)
+		}
+		placeholders[name] = true
+		i += end
+	}
+	declared := map[string]bool{}
+	for _, raw := range asList(op["parameters"]) {
+		param, _ := asMap(raw)
+		if in, _ := param["in"].(string); in != "path" {
+			continue
+		}
+		name, _ := param["name"].(string)
+		declared[name] = true
+		if required, ok := param["required"].(bool); !ok || !required {
+			c.rulef("http-path-params", "%s %s %s: path parameter %s must be required", rel, method, path, name)
+		}
+	}
+	for name := range declared {
+		if !placeholders[name] {
+			c.rulef("http-path-params", "%s %s %s: path parameter %s is not present in the path template", rel, method, path, name)
+		}
+	}
+	for name := range placeholders {
+		if !declared[name] {
+			c.rulef("http-path-params", "%s %s %s: path placeholder {%s} has no request.path declaration", rel, method, path, name)
+		}
+	}
 }
 
 // checkHTTPRequest 校验请求体与 HTTP 参数都来自 x-service 的 params，且覆盖全部必填参数。
@@ -1151,18 +1194,26 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 	}
 	for key := range params {
 		switch key {
-		case "body", "path", "query", "header", "cookie":
+		case "body", "path", "query", "security":
 		default:
 			c.rulef("http-service-params", "%s %s %s: unknown x-service-params key %s", rel, method, path, key)
 		}
 	}
 	rb, hasRB := asMap(op["requestBody"])
+	if hasRB && (method == "get" || method == "head") {
+		c.rulef("http-shape", "%s %s %s: GET/HEAD must not declare a request body", rel, method, path)
+	}
 	var bodySchema map[string]any
 	if hasRB {
 		content, _ := asMap(rb["content"])
 		media, _ := asMap(content["application/json"])
 		bodySchema, _ = asMap(media["schema"])
 		c.checkClosedObjects(bodySchema, rel, method+" "+path+" requestBody")
+		switch family := c.httpSchemaFamily(bodySchema, schemas); {
+		case family == "object", strings.HasPrefix(family, "schema:"), strings.HasPrefix(family, "entity:"):
+		default:
+			c.rulef("http-service-type", "%s %s %s: requestBody must be an object schema, got %s", rel, method, path, family)
+		}
 	}
 	body, hasBody := params["body"]
 	if hasBody && !hasRB {
@@ -1228,48 +1279,105 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 		if in == "header" && platformHeaders[name] {
 			continue
 		}
-		if in == "path" || in == "query" || in == "header" || in == "cookie" {
+		if in == "path" || in == "query" {
 			httpParams[in+"\x00"+name] = param
-		}
-		if in == "header" {
-			rawMap, _ := asMap(raw)
-			if _, ok := rawMap["$ref"]; !ok {
-				c.rulef("http-service-params", "%s %s %s: header %s must be a $ref to components.parameters", rel, method, path, name)
-			}
 		}
 	}
 	mapped := map[string]bool{}
-	for _, location := range []string{"path", "query", "header", "cookie"} {
-		rawMap, ok := asMap(params[location])
-		if !ok {
-			continue
-		}
-		for httpName, rawServicePath := range rawMap {
-			servicePath, ok := serviceParamPath(rawServicePath)
-			if !ok {
-				c.rulef("http-service-params", "%s %s %s: %s.%s must map to params.<service parameter path>, got %v", rel, method, path, location, httpName, rawServicePath)
+	for _, location := range []string{"path", "query"} {
+		for _, raw := range asList(params[location]) {
+			entry, _ := asMap(raw)
+			from, _ := entry["from"].(string)
+			to, _ := entry["to"].(string)
+			if from == "" {
+				c.rulef("http-service-params", "%s %s %s: mapping.%s.from required", rel, method, path, location)
 				continue
 			}
-			param, ok := httpParams[location+"\x00"+httpName]
+			param, ok := httpParams[location+"\x00"+from]
 			if !ok {
-				c.rulef("http-service-params", "%s %s %s: %s parameter %s is not declared in parameters", rel, method, path, location, httpName)
+				c.rulef("http-service-params", "%s %s %s: %s parameter %s is not declared in request.%s", rel, method, path, location, from, location)
 				continue
 			}
-			mapped[location+"\x00"+httpName] = true
+			mapped[location+"\x00"+from] = true
+			servicePath, ok := serviceParamPath(to)
+			if !ok {
+				c.rulef("http-service-params", "%s %s %s: mapping.%s.%s must map to params.<service parameter path>, got %v", rel, method, path, location, from, to)
+				continue
+			}
 			covered[strings.Split(servicePath, ".")[0]] = true
 			decl, ok := c.serviceParamType(target, servicePath)
 			if !ok {
-				c.rulef("http-service-params", "%s %s %s: %s.%s maps to unknown service field params.%s", rel, method, path, location, httpName, servicePath)
+				c.rulef("http-service-params", "%s %s %s: mapping.%s.%s maps to unknown service field params.%s", rel, method, path, location, from, servicePath)
 				continue
 			}
 			schema, _ := asMap(param["schema"])
 			if schema == nil {
-				c.rulef("http-service-params", "%s %s %s: %s parameter %s requires a schema", rel, method, path, location, httpName)
+				c.rulef("http-service-params", "%s %s %s: %s parameter %s requires a schema", rel, method, path, location, from)
 				continue
 			}
-			if !familiesCompatible(c.httpSchemaFamily(schema, schemas), c.httpServiceFamily(decl)) {
-				c.rulef("http-service-params", "%s %s %s: %s parameter %s type differs from service field params.%s (%s)", rel, method, path, location, httpName, servicePath, decl)
+			httpFamily := c.httpSchemaFamily(schema, schemas)
+			if strings.HasPrefix(httpFamily, "object") || strings.HasPrefix(httpFamily, "schema:") || strings.HasPrefix(httpFamily, "entity:") {
+				c.rulef("http-service-params", "%s %s %s: %s parameter %s must be scalar or enum, got %s", rel, method, path, location, from, httpFamily)
+				continue
 			}
+			if location == "path" && httpFamily == "array" {
+				c.rulef("http-service-params", "%s %s %s: path parameter %s must be scalar or enum, got array", rel, method, path, from)
+				continue
+			}
+			if !familiesCompatible(httpFamily, c.httpServiceFamily(decl)) {
+				c.rulef("http-service-params", "%s %s %s: %s parameter %s type differs from service field params.%s (%s)", rel, method, path, location, from, servicePath, decl)
+			}
+		}
+	}
+	securityMapped := map[string]bool{}
+	for _, raw := range asList(params["security"]) {
+		entry, _ := asMap(raw)
+		scheme, _ := entry["scheme"].(string)
+		to, _ := entry["to"].(string)
+		if scheme == "" {
+			c.rulef("http-service-params", "%s %s %s: mapping.security.scheme required", rel, method, path)
+			continue
+		}
+		if securityMapped[scheme] {
+			c.rulef("http-service-params", "%s %s %s: mapping.security.%s declared twice", rel, method, path, scheme)
+			continue
+		}
+		securityMapped[scheme] = true
+		if !securityDeclares(op, scheme) {
+			c.rulef("http-service-params", "%s %s %s: mapping.security.%s is not declared in operation.security", rel, method, path, scheme)
+		}
+		servicePath, ok := serviceParamPath(to)
+		if !ok {
+			c.rulef("http-service-params", "%s %s %s: mapping.security.%s must map to params.<service parameter path>, got %v", rel, method, path, scheme, to)
+			continue
+		}
+		covered[strings.Split(servicePath, ".")[0]] = true
+		decl, ok := c.serviceParamType(target, servicePath)
+		if !ok {
+			c.rulef("http-service-params", "%s %s %s: mapping.security.%s maps to unknown service field params.%s", rel, method, path, scheme, servicePath)
+			continue
+		}
+		last := servicePath
+		if i := strings.LastIndex(servicePath, "."); i >= 0 {
+			last = servicePath[i+1:]
+		}
+		var want string
+		switch scheme {
+		case "BearerAuth":
+			switch last {
+			case "access_token":
+				want = "string"
+			case "account_id":
+				want = "integer"
+			default:
+				c.rulef("http-security", "%s %s %s: BearerAuth must map to params.access_token or params.account_id, got params.%s", rel, method, path, servicePath)
+				continue
+			}
+		default:
+			continue
+		}
+		if !familiesCompatible(want, c.httpServiceFamily(decl)) {
+			c.rulef("http-service-params", "%s %s %s: mapping.security.%s type differs from service field params.%s (%s)", rel, method, path, scheme, servicePath, decl)
 		}
 	}
 	for key := range httpParams {
@@ -1282,6 +1390,17 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			c.rulef("http-service-params", "%s %s %s: required service parameter %s is not covered", rel, method, path, name)
 		}
 	}
+}
+
+// securityDeclares 判断 operation.security 是否声明了某个 scheme。
+func securityDeclares(op map[string]any, scheme string) bool {
+	for _, item := range asList(op["security"]) {
+		requirement, _ := asMap(item)
+		if _, ok := requirement[scheme]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // serviceParamPath 解析 request.mapping 的 params.<name>[.<field>] 表达式。

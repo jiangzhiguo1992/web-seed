@@ -23,7 +23,7 @@
 | `analytics/events.yaml` | 埋点事件、属性、PII | tested（analytics-refs） |
 | `security/permissions.yaml` | 权限点 | generated+tested |
 | `security/roles.yaml` | 角色 → 权限映射 | generated+tested |
-| `security/auth_policy.yaml` | 会话、token、MFA 策略 | tested |
+| `security/auth_policy.yaml` | JWT、MFA 策略 | tested |
 
 字段规范在 `contracts/_meta/platform.*.yaml`：`platform.modules`、`platform.security.permissions`、`platform.security.roles`、`platform.security.auth_policy` 的结构与字段顺序由 `contract-check` 校验；`security/access.yaml` 与 `errors/*.yaml` 继续由 `access.go` / `errors.go` 的专门检查校验。
 
@@ -58,6 +58,6 @@
 
 `index.yaml` 的 `enforcement` 必须与实际校验一致。当前：
 
-- `tested`：`platform.environments`（schema + environment-shape）、`platform.versioning`（schema + versioning-refs）、`platform.quality`（schema + quality-refs）、`platform.analytics.events`（schema + analytics-refs）、`platform.observability.log_fields`（schema + log-field-refs）、`platform.observability.metrics`（schema + metric-shape）、`platform.architecture.go_arch`（schema + architecture-refs）、`platform.security.access`（schema + access-coverage）、`platform.security.roles`（schema + role-inheritance/role-permissions）、`platform.security.auth_policy`（schema）、`platform.security.permissions`（schema + refs）、`feature.routes`（schema + route-structure/route-redirect）。
+- `tested`：`platform.environments`（schema + environment-shape）、`platform.versioning`（schema + versioning-refs）、`platform.quality`（schema + quality-refs）、`platform.analytics.events`（schema + analytics-refs）、`platform.observability.log_fields`（schema + log-field-refs）、`platform.observability.metrics`（schema + metric-shape）、`platform.architecture.go_arch`（schema + architecture-refs）、`platform.security.access`（schema + access-coverage）、`platform.security.roles`（schema + role-inheritance/role-permissions）、`platform.security.auth_policy`（schema + auth-policy-jwt/audience/password）、`platform.security.permissions`（schema + refs）、`feature.routes`（schema + route-structure/route-redirect）。
 - `generated`：`platform.http_conventions`（gen_openapi）、`platform.design.tokens`（web design-tokens 构建读取）。
 - `review-only`：无。JSON 契约已接结构校验；`gen-env.sh` 的生成能力仍未实现，但 schema 本身已测试。

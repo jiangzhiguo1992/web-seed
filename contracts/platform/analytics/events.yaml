@@ -37,10 +37,10 @@ events:
     page: feature.pages.login
     properties: []
 
-  - name: page.session_viewed
+  - name: page.current_account_viewed
     description: "会话页曝光"
     trigger: mount
-    page: feature.pages.session
+    page: feature.pages.current_account
     properties: []
 
   - name: page.account_security_viewed

@@ -22,6 +22,7 @@
 | cap.protocols.http | http-shape | http-shape | 1 |
 | cap.protocols.http | http-version | http-version | 1 |
 | cap.protocols.http | http-mount | http-mount | 1 |
+| cap.protocols.http | http-path-params | http-path-params | 1 |
 | cap.protocols.http | http-operation | http-operation | 1 |
 | cap.protocols.http | http-default-errors | http-default-errors | 1 |
 | cap.protocols.http | http-audience | http-audience | 1 |
@@ -195,7 +196,7 @@
 | platform.observability.metrics | metric-shape | metric-shape | 1 |
 | platform.quality | quality-refs | quality-refs | 1 |
 | platform.security.access | access-coverage | access-coverage | 1 |
-| platform.security.auth_policy | auth-policy-paths | auth-policy-paths | 1 |
+| platform.security.auth_policy | auth-policy-jwt | auth-policy-jwt | 1 |
 | platform.security.auth_policy | auth-policy-audience | auth-policy-audience | 1 |
 | platform.security.auth_policy | auth-policy-password | auth-policy-password | 1 |
 | platform.security.roles | role-inheritance | role-inheritance | 1 |

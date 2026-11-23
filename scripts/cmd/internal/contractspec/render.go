@@ -1119,7 +1119,7 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 	if strings.TrimSpace(summary) == "" {
 		return nil, fmt.Errorf("RenderHTTP: summary must not be empty")
 	}
-	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "mount": true, "paths": true, "shared": true}, "cap.protocols.http"); err != nil {
+	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "mount": true, "paths": true}, "cap.protocols.http"); err != nil {
 		return nil, err
 	}
 	if !strings.HasPrefix(service, "cap.services.") {

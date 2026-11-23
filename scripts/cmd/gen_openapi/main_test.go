@@ -155,11 +155,9 @@ paths:
       response:
         "200":
           description: "OK"
-shared:
-  schemas:
-    X:
-      source:
-        service_type: "cap.services.x.schemas.X"`)
+          body:
+            content_type: application/json
+            schema: cap.services.x.schemas.X`)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   X:
@@ -429,7 +427,8 @@ paths:
       id: "cap.protocols.http.a.get"
       service: "cap.services.x.get"
       security:
-        - BearerAuth: []
+        - scheme: BearerAuth
+          scopes: []
       request: {}
       response:
         "200":
@@ -541,7 +540,8 @@ paths:
       summary: "a"
       used_by: [feature.pages.x]
       security:
-        - BearerAuth: []
+        - scheme: BearerAuth
+          scopes: []
       request:
         headers: { X-Request-Id: RequestId }
         mapping: {}

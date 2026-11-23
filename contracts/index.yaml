@@ -80,8 +80,8 @@ entries:
   - { id: data.entities.verification_body, path: data/entities/verification_body.yaml, summary: "验证体数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.verification_action, path: data/entities/verification_action.yaml, summary: "验证动作数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.queries.account, path: data/queries/account.yaml, summary: "账号查询集", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.queries.auth, path: data/queries/auth.yaml, summary: "认证查询集（密码/手机/邮箱）", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.queries.token, path: data/queries/token.yaml, summary: "令牌查询集", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.queries.auth, path: data/queries/auth.yaml, summary: "认证查询集（密码/手机/邮箱）", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.queries.verification, path: data/queries/verification.yaml, summary: "验证查询集（验证体与验证动作）", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.enums.account, path: data/enums/account.yaml, summary: "账号域跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated, stability: draft }
 
@@ -97,10 +97,10 @@ entries:
       - "逐接口写 400/429/500/503 等平台基线状态（由 error_responses 注入）"
       - "响应 schema 缺少 additionalProperties: false"
       - "忘记 service 绑定到 cap.services"
-  - { id: cap.protocols.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/登出/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: cap.protocols.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号服务：查询、创建、更新、状态转换与软删编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证会话服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：签发、刷新、吊销与校验", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：JWT 签发、刷新与校验", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.events.token, path: capabilities/events/token.yaml, summary: "令牌异步任务：过期标记与清理", consumers: [worker], enforcement: generated+tested, stability: draft }
   - { id: cap.events.verification, path: capabilities/events/verification.yaml, summary: "验证体异步任务：过期与超限清理", consumers: [worker], enforcement: generated+tested, stability: draft }
@@ -139,7 +139,7 @@ entries:
   - { id: feature.pages.account_detail, path: features/pages/account_detail.yaml, summary: "账号详情页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.pages.account_create, path: features/pages/account_create.yaml, summary: "新建账号页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.pages.account_security, path: features/pages/account_security.yaml, summary: "账号认证安全页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
-  - { id: feature.pages.session, path: features/pages/session.yaml, summary: "当前会话页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
+  - { id: feature.pages.current_account, path: features/pages/current_account.yaml, summary: "当前账号页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: scenario.http.account, path: scenarios/http/account.yaml, summary: "账号 HTTP 验收场景", consumers: [api, tools], enforcement: tested, stability: draft }
   - { id: feature.pages.login, path: features/pages/login.yaml, summary: "登录页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.pages.not_found, path: features/pages/not_found.yaml, summary: "404 页", consumers: [web/admin], enforcement: generated, stability: draft }
@@ -167,7 +167,7 @@ entries:
   - { id: platform.security.access, path: platform/security/access.yaml, summary: "入口访问策略（权限与审计）", consumers: [api, worker], enforcement: tested, stability: draft }
   - { id: platform.security.permissions, path: platform/security/permissions.yaml, summary: "权限点", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.security.roles, path: platform/security/roles.yaml, summary: "角色与权限映射", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: platform.security.auth_policy, path: platform/security/auth_policy.yaml, summary: "会话与认证策略", consumers: [api, web/admin], enforcement: tested, stability: draft }
+  - { id: platform.security.auth_policy, path: platform/security/auth_policy.yaml, summary: "JWT 令牌认证策略", consumers: [api, web/admin], enforcement: tested, stability: draft }
 
   # ---------- generated（产物索引，非契约正文） ----------
   - { id: generated.openapi, path: generated/openapi/admin.yaml, summary: "管理端 v1 OpenAPI spec（代码生成输入）", consumers: [api, tools], enforcement: generated, stability: draft }

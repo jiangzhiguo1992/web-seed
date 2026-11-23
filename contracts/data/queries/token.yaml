@@ -56,7 +56,7 @@ queries:
       - cap.services.token.refresh
 
   - name: GetTokenByAccess
-    description: "按访问令牌哈希读取令牌"
+    description: "按访问 JWT 哈希读取令牌记录"
     tables:
       - { table: data.tables.token }
     archive:

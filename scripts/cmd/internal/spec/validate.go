@@ -287,9 +287,9 @@ func validateParameter(param map[string]any, where string) error {
 	}
 	location, _ := param["in"].(string)
 	switch location {
-	case "path", "query", "header", "cookie":
+	case "path", "query", "header":
 	default:
-		return fmt.Errorf("%s: in must be path/query/header/cookie", where)
+		return fmt.Errorf("%s: in must be path/query/header", where)
 	}
 	if location == "path" {
 		if required, _ := param["required"].(bool); !required {

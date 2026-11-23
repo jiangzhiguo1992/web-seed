@@ -19,7 +19,7 @@ func TestTypeVocabulary(t *testing.T) {
 		t.Fatalf("_types reference rejected: %v", c.errs)
 	}
 	c.errs = nil
-	c.checkTypeRef("_types.list<data.entities.token>", "x")
+	c.checkTypeRef("_types.list<data.entities.account>", "x")
 	if len(c.errs) != 0 {
 		t.Fatalf("_types.list<entity> rejected: %v", c.errs)
 	}

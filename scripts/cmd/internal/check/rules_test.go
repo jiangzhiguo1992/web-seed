@@ -74,10 +74,10 @@ func TestTypeExpressionPatterns(t *testing.T) {
 			path: []string{"fields", "type"},
 			accept: []string{
 				"_types.string", "*_types.timestamp", "data.enums.account_status",
-				"data.entities.token", "_types.list<data.entities.token>",
+				"data.entities.account", "_types.list<data.entities.account>",
 			},
 			reject: []string{
-				"string", "List<data.entities.token>", "data.tables.account",
+				"string", "List<data.entities.account>", "data.tables.account",
 				"_types.list<data.enums.account_status>", "@inline/1",
 				"data.enums.AccountStatus",
 			},
@@ -250,13 +250,12 @@ paths:
       service: cap.services.x.get
       request:
         query:
-          status: data.enums.x_status
+          - name: status
+            schema: data.enums.x_status
+            required: false
+            description: "status"
       response:
         "204": { description: OK }
-shared:
-  schemas:
-    Status:
-      source: { enum: data.enums.x_status }
 `)
 	writeCapFile(t, root, "contracts/capabilities/events/x.yaml", `id: cap.events.x
 summary: "x"

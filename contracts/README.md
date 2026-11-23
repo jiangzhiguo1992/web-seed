@@ -150,7 +150,7 @@ contracts/
 | 组 | 示例 |
 |---|---|
 | data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_account_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
-| capabilities | `cap.services.account.get`、`cap.lifecycles.account`、`cap.events.token.purge_expired`、`feature.rules.account.number_format`、`cap.events.account.created`、`cap.protocols.http.account.create` |
+| capabilities | `cap.services.account.get`、`cap.lifecycles.account`、`cap.events.verification.purge_expired`、`feature.rules.account.number_format`、`cap.events.account.created`、`cap.protocols.http.account.create` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
 | platform | `platform.errors.ACCOUNT_NOT_FOUND`、`platform.security.permissions.account_read`、`platform.security.roles.admin`、`platform.analytics.events.page.account_list_viewed` |
 

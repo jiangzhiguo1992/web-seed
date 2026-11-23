@@ -16,6 +16,14 @@ func httpDoc(operation map[string]any) map[string]any {
 			"service": "cap.services.x.post",
 		}
 	}
+	if operation["security"] == nil {
+		operation["security"] = []any{}
+	}
+	if request := asMap(operation["request"]); request != nil {
+		if request["headers"] == nil {
+			request["headers"] = map[string]any{"X-Request-Id": "RequestId"}
+		}
+	}
 	return map[string]any{
 		"mount": map[string]any{"api_version": "v1", "path": "/", "audience": []any{"admin"}},
 		"paths": map[string]any{
@@ -38,11 +46,10 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request": map[string]any{
 			"headers": map[string]any{
-				"X-Request-Id": map[string]any{"$ref": "#/components/parameters/RequestId"},
-				"X-CSRF-Token": map[string]any{"schema": map[string]any{"type": "string"}},
+				"X-Request-Id": "RequestId",
 			},
-			"query": map[string]any{
-				"limit": map[string]any{"schema": map[string]any{"type": "integer"}, "required": false},
+			"query": []any{
+				map[string]any{"name": "limit", "schema": "_types.integer", "required": false, "description": "size"},
 			},
 			"body": map[string]any{
 				"content_type": "application/json",
@@ -70,8 +77,8 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 		t.Fatalf("request/response must be removed: %v", op)
 	}
 	params := asList(op["parameters"])
-	if len(params) != 3 {
-		t.Fatalf("want 3 parameters, got %d: %v", len(params), params)
+	if len(params) != 2 {
+		t.Fatalf("want 2 parameters, got %d: %v", len(params), params)
 	}
 	kinds := map[string]bool{}
 	refFound := false
@@ -88,7 +95,7 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 	if !refFound {
 		t.Fatalf("missing RequestId parameter ref: %v", params)
 	}
-	for _, want := range []string{"header X-CSRF-Token", "query limit"} {
+	for _, want := range []string{"query limit"} {
 		if !kinds[want] {
 			t.Fatalf("missing parameter %s: %v", want, params)
 		}
@@ -103,11 +110,15 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 	}
 }
 
-func TestNormalizeHTTPDocumentCookies(t *testing.T) {
+func TestNormalizeHTTPDocumentSecurity(t *testing.T) {
 	doc := httpDoc(map[string]any{
+		"security": []any{map[string]any{"scheme": "BearerAuth", "scopes": []any{}}},
 		"request": map[string]any{
-			"cookies": map[string]any{
-				"refresh_token": map[string]any{"$ref": "#/components/parameters/RefreshTokenCookie"},
+			"headers": map[string]any{
+				"X-Request-Id": "RequestId",
+			},
+			"mapping": map[string]any{
+				"security": []any{map[string]any{"scheme": "BearerAuth", "to": "params.access_token"}},
 			},
 		},
 		"response": map[string]any{"204": map[string]any{"description": "ok"}},
@@ -115,9 +126,29 @@ func TestNormalizeHTTPDocumentCookies(t *testing.T) {
 	if err := NormalizeHTTPDocument(doc, testResolve, false); err != nil {
 		t.Fatal(err)
 	}
-	param := asMap(asList(asMap(asMap(asMap(doc["paths"])["/x"])["post"])["parameters"])[0])
-	if param["$ref"] != "#/components/parameters/RefreshTokenCookie" {
-		t.Fatalf("cookie parameter not normalized: %v", param)
+	op := asMap(asMap(asMap(doc["paths"])["/x"])["post"])
+	security := asList(op["security"])
+	if len(security) != 1 || asMap(security[0])["BearerAuth"] == nil {
+		t.Fatalf("security not normalized: %v", security)
+	}
+	params := asMap(op["x-service-params"])
+	if asList(params["security"]) == nil {
+		t.Fatalf("security mapping not preserved: %v", params)
+	}
+}
+
+func TestNormalizeHTTPDocumentRejectsUnknownHeaderSlot(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request": map[string]any{
+			"headers": map[string]any{
+				"Authorization": "Authorization",
+			},
+		},
+		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+	})
+	err := NormalizeHTTPDocument(doc, testResolve, false)
+	if err == nil || !strings.Contains(err.Error(), "unknown request header slot") {
+		t.Fatalf("unknown header slot not rejected: %v", err)
 	}
 }
 
@@ -209,7 +240,7 @@ func TestCollectHTTPOperationMeta(t *testing.T) {
 func TestNormalizeHTTPDocumentRejectsComponents(t *testing.T) {
 	doc := map[string]any{"components": map[string]any{}}
 	err := NormalizeHTTPDocument(doc, nil, true)
-	if err == nil || !strings.Contains(err.Error(), "shared") {
+	if err == nil || !strings.Contains(err.Error(), "components") {
 		t.Fatalf("components not rejected: %v", err)
 	}
 }

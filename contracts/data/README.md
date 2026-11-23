@@ -119,17 +119,6 @@ tables / entities / queries ──(type)──>  types
 - **索引必须有查询**：`indexes[].used_by` 至少一个 `data.queries.*` 项，且该查询的 `tables` 包含本表（`[强制: index-used-by]`、`[强制: index-used-by-ref]`）。唯一索引也要写——插入与唯一性校验同样是使用方。没有查询的索引直接删除，不要写假 ID。
 - **冗余必须成组声明**：`columns[].redundancy` 直接列出同组全部列引用（`[强制: redundant-group]`、`[强制: redundant-ref]`）。`source: true` 标记权威列，每组恰好一个；组内每列声明完全相同的列表，`copy` 的 `type` / `nullable` 必须与 source 一致。成员只接受物理表自行声明的列，继承列与基类列不参与。
 
-```yaml
-# tables/account.yaml 与 tables/token.yaml 的 user_id 列写同一份列表
-columns:
-  - name: user_id
-    redundancy:
-      - column: data.tables.account.col.user_id
-        source: true
-      - column: data.tables.token.col.user_id
-        source: false
-```
-
 - **引用必须声明为逻辑外键**：`columns[].references` 只指向目标表主键或全局唯一（`live_only: false`）单列索引列，两端类型族一致（`[强制: reference-target]`）；`on_delete` 表达**硬删**动作（`cascade` / `restrict` / `set_null` / `no_action`），软删不写在这里（`[强制: reference-on-delete]`）。每条 references 必须与 entity 关系字段的 `source.join` 列对双向一致（`[强制: reference-join]`）：实体声明了关系，表侧就必须给出删除策略；表侧写了逻辑外键，实体就必须有对应关系。
 
 ```yaml
@@ -226,13 +215,13 @@ indexes:
   description: "账号状态"
   source: { column: data.tables.account.col.status }
 
-- name: Tokens
-  type: data.entities.token
-  description: "账号的设备令牌"
+- name: AuthPwd
+  type: data.entities.auth_pwd
+  description: "账号的密码认证记录"
   source:
     join:
       from: data.tables.account.col.id
-      to: data.tables.token.col.account_id
+      to: data.tables.auth_pwd.col.account_id
       lazy: true
 ```
 

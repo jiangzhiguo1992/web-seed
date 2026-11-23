@@ -250,17 +250,17 @@ fields:
 `)
 	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
 `)
-	writeCapFile(t, root, "contracts/platform/security/auth_policy.yaml", `csrf:
-  exempt_paths: [/v1/auth/missing]
-token: { access: { audience: [ghost] } }
+	writeCapFile(t, root, "contracts/platform/security/auth_policy.yaml", `token:
+  issuer: ""
+  access: { format: opaque, audience: [ghost], pii_in_token: true, claims_required: [] }
+  refresh: { format: opaque, pii_in_token: true, claims_required: [] }
+  revocation: { strategy: server, note: "x" }
 password: { min_length: 12 }
 `)
-	c := &Checker{root: root, httpOps: map[string]httpOpInfo{
-		"cap.protocols.http.auth.login": {Path: "/auth/login"},
-	}}
+	c := &Checker{root: root}
 	c.checkAuthPolicy()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"[auth-policy-paths]", "[auth-policy-audience]", "[auth-policy-password]"} {
+	for _, want := range []string{"[auth-policy-jwt]", "[auth-policy-audience]", "[auth-policy-password]"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}

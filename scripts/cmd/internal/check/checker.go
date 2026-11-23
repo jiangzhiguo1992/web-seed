@@ -262,7 +262,7 @@ func yamlKeyID(n *yaml.Node) (string, bool) {
 }
 
 var proseScalarFields = map[string]bool{
-	"action": true, "body": true, "caution": true, "comment": true,
+	"action": true, "caution": true, "comment": true,
 	"consistency": true, "description": true, "display_name": true,
 	"error": true, "error_copy_uniform": true, "explanation": true,
 	"generates": true, "handling": true, "id_policy": true, "instead": true,

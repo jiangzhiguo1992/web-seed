@@ -89,7 +89,6 @@ fields:
 never_log:
   - password
   - token
-  - cookie
   - authorization
   - secret
   - email
@@ -104,10 +103,9 @@ never_log:
   - "*_title"         # 任何 pii: true 的标题字段
   - "*_body"          # 用户正文内容；has_body 这类布尔字段必须改名
   - "*_hash"          # 密码/令牌/验证码哈希
-  - "*_token"         # access_token/refresh_token/csrf_token 等
+  - "*_token"         # access_token/refresh_token 等
   - "*_password"      # old_password/new_password 等
   - "*_secret"        # client_secret 等
-  - "*_cookie"        # session_cookie 等
   - "*_authorization" # proxy_authorization 等
   - "*_email"         # contact_email/primary_email 等
   - "*_phone"         # contact_phone/primary_phone 等

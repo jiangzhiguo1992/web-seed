@@ -1,7 +1,7 @@
 # ADR 0001：HTTP 契约的边界与验收模型
 
 - 状态：已采纳（mount、错误模型、audience、consumer、多 app、模板封闭化、错误闭包、覆盖率报告已实现；acceptance runner 待实现）
-- 修订：文末「2026-11-23 决策修订」取代本文关于版本归属、`shared.yaml`、`_types.any` 与 `request.idempotency` 的旧结论。
+- 修订：文末「2026-11-23 决策修订」与「2026-11-23 JWT 认证决策」取代本文关于版本归属、`shared.yaml`、`_types.any`、`request.idempotency` 以及 cookie/session 认证的旧结论。
 - 日期：2026-11-23
 - 关联：`contracts/capabilities/protocols/http/*.yaml`、`contracts/platform/http_conventions.yaml`、`contracts/_meta/cap.protocols.http.yaml`、`contracts/_meta/scenario.http.yaml`
 
@@ -83,7 +83,7 @@ paths:
 
 不再使用 `unbound_operations` 豁免清单。每个 operation 的 `used_by` 必须非空，且精确等于引用其 service 的 `feature.pages.*` 集合（页面 `data.*.capability` 与 `actions.*.capability` 反查）。缺页面就补页面：
 
-- `auth.refresh` / `logout` / `me` → 新增 `feature.pages.session`（数据 `token.verify`，动作 `refresh`/`logout`）。
+- `auth.refresh` / `me` / `logout` → 新增 `feature.pages.current_account`（数据 `token.verify`，动作 `refresh` / `logout`）。
 - `auth.verification_send` / `verify` → 补到 `feature.pages.login` 的 `send_code`/`verify_code` 动作与验证码字段。
 - `auth.bind_password` / `bind_phone` / `bind_email` → 新增 `feature.pages.account_security`（数据 `account.get`，动作三个 bind）。
 - `account.get` 同时被 `account_detail` 与 `account_security` 引用。
@@ -167,7 +167,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 这次改为**封闭结构**：
 
 - `paths` 是 `map<path, object>`，对象只允许 `get/post/put/patch/delete/head/options`；每个 method 复用同一个 operation 节点（YAML anchor 只是写法，结构是固定的）。
-- operation 节点固定为 `id/name/service/summary/used_by/security/request/response`；`request` 固定为 `headers/path/query/cookies/body/mapping/idempotency`；`response` 的 key 固定为三位状态码。
+- operation 节点固定为 `id/name/service/summary/used_by/security/request/response`；`request` 固定为 `headers/path/query/body/mapping`；`response` 的 key 固定为三位状态码。
 - `used_by` 的非空由字段属性 `required: true` + `min_items: 1` 保证；`http-consumer` 只保留“精确集合”这一条脚本规则。
 - 删除 `components` 源字段；`shared` 是唯一源，normalizer 拒绝任何源文件里的 `components`。生成的 OpenAPI `components` 是产物，不是契约。
 - `make contract-new` 的 `RenderHTTP` 同步改为新形状；否则脚手架会继续生成旧结构，这是“AI 漂移”的另一个入口。
@@ -225,7 +225,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 ### 本轮边界
 
-- `page-params` 校验“页面声明的参数”是否属于 service 参数/对象字段及类型族；不强制 service 的每个必填参数都出现在页面 params，因为 cookie/path/route 上下文由 HTTP 层提供。它防的是拼写/类型漂移，不是完整性。
+- `page-params` 校验“页面声明的参数”是否属于 service 参数/对象字段及类型族；不强制 service 的每个必填参数都出现在页面 params，因为 JWT/path/route 上下文由 HTTP 层提供。它防的是拼写/类型漂移，不是完整性。
 - `page-action-target` 只允许 `navigate` / `close_and_redirect` 到 `feature.routes.*`；`close()` 等未来函数需要先扩语法，不能在页面里自由写。
 - `access-coverage` 只覆盖被 HTTP 暴露的 service；内部 service、异步 job 不走该规则。
 - `role-inheritance` 校验环/深度/未知权限；`role-permissions` 只允许 admin 使用 `*`，不展开继承后的有效权限集。
@@ -240,20 +240,35 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 - `log-field-refs` 校验字段名与 `required_for` 枚举、`never_log` 条目格式/重复，并反查 `data/tables/*.yaml` 中 `sensitivity: pii|secret` 的列是否被 `never_log` 覆盖；不校验日志调用点是否真的使用这些字段。`never_log` 的 `*_body` 曾把 analytics 的 `has_body` 误判为正文，已将属性改名为 `has_payload`；同类布尔字段（如未来的 `has_token`）会命中 `*_token`，命名时必须避开敏感后缀。`TestNeverLogPatterns` 固定了当前 glob 语义：`*_token` 命中 `access_token` 但不命中 `token_type`，`*_email` 命中 `contact_email` 但不命中 `email_verified`。
 - `metric-shape` 只校验指标名唯一、kind、forbidden labels；不强制 counter/histogram 的命名后缀。
 - `architecture-refs` 校验层/模块引用；不生成或执行 go-arch-lint / dependency-cruiser。
-- `auth-policy-paths` 只校验 CSRF 豁免路径能匹配 HTTP path；不校验 method/audience。
+- `auth-policy-jwt` 只校验 JWT 字段（format/issuer/claims/audience/pii/revocation）与策略一致；不执行签名或验签。
 - `auth-policy-password` 只校验页面 `password.minLength`；不校验服务端哈希算法或复杂度规则。
 - `config.env` 用 JSON Schema 编译，并校验 `required` 含 APP_ENV/HTTP_ADDR、`additionalProperties: false`、APP_ENV/LOG_LEVEL 枚举与默认值、secret 字段为 string；不校验运行时真实值。
 - `web_deps` 校验层名唯一、`rules.from` 唯一、`mayDependOn`/`forbid` 不重叠、`generates` 非空；不执行 dependency-cruiser，不校验 `from.path`/`to.path` 正则。
 
 ## 2026-11-23 决策修订
 
-后续实现推翻并取代了本文四处旧结论：
+后续实现推翻并取代了本文多项旧结论：
 
 1. **版本归属**：`mount.api_version`（必填，`v<数字>`）成为唯一版本源；生成器按 app 内 include 文件的版本派生 `servers: /<api_version>`，`mount.path` 与 `paths` 不写版本。`project.yaml` 的 `app.api_version` 已删除；同一 app 混版本会被 checker/generator 拒绝。在没有 v2 mount 的情况下，`admin_v2` app 与生成物一并移除，待 v2 契约重做后再加回。
-2. **共享组件**：删除 `protocols/http/shared.yaml`。平台级 securityScheme / schema / parameter / header / response 移入 `platform/http_conventions.yaml` 的 `components`，由 `gen_openapi` 注入每个 api app；只有文件私有响应头/参数保留在文件的 `shared`，并由 normalizer 合入 `components`。
-3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`security` 是 `list<map<string, list<string>>>`；请求/响应头与 cookie 只能引用组件名；path/query 参数是带 `schema` 的固定对象；body schema 必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝；文件 `shared` 只允许 `headers`，header schema 固定为 string。
+2. **共享组件**：删除 `protocols/http/shared.yaml`，HTTP 文件也不再保留 `shared`。平台级 securityScheme / schema / parameter / header / response 全部在 `platform/http_conventions.yaml` 的 `components`，由 `gen_openapi` 注入每个 api app；HTTP 文件只引用组件名，不再定义文件私有组件。
+3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`security` 是 `[{ scheme, scopes }]`，`scheme` 枚举为 `BearerAuth`；`mapping.path/query` 是 `[{ from, to }]`，`mapping.security` 是 `[{ scheme, to }]`；path/query 参数是带 `name` / `schema` / `description` 的对象列表；body schema 必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
 4. **幂等字段删除**：`request.idempotency` / `x-idempotency` 已删除。`Idempotency-Key` 的组件选择（`IdempotencyKey` vs `IdempotencyKeyRequired`）本身已完整表达可选/必填语义，独立枚举只会制造第二份状态。
+5. **请求/响应头固定槽位**：`request.headers` 只允许 `X-Request-Id` / `Idempotency-Key`，值由 `const`/`enum` 限定为平台组件名；`response.headers` 只允许 `X-Request-Id`。`Authorization` 不写成 header 参数，由 `BearerAuth` security scheme 表达。
+6. **安全凭据显式映射**：`request.mapping.security` 把 security scheme 映射到 service 参数。`BearerAuth` 只能映射 `params.access_token`（string）或 `params.account_id`（integer）。绑定类 service 的 `account_id` 从请求体移到 service 参数，由 BearerAuth 映射，避免“token 校验了但业务信任 body 里的账号 ID”。
+7. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发，不使用 cookie/session。
 
 同时 `request.mapping` 的值统一改为 `params.<service 参数路径>`（如 `params.input`、`params.filter.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
 
 验证：`make contract-check`、`make gen`、`make gen-rule-ids`、`make test-tools` 通过；OpenAPI `servers` 带 `/<mount.api_version>`，平台组件出现在每个 spec 的 `components`。
+
+
+## 2026-11-23 JWT 认证决策
+
+认证机制从 cookies + session 改为 JWT，并保留你设计的 token 表作为 JWT 哈希与吊销/轮换记录。以下结论取代本文件所有 cookie/session 相关内容：
+
+1. **令牌形态**：access 与 refresh 都是 JWT；`platform.security.auth_policy.token.access/refresh.format` 固定 `jwt`，`issuer` 必须声明，`claims_required` 固定包含 `iss/sub/aud/exp/iat/jti`，`pii_in_token` 固定 false。token 表只存 JWT 哈希与吊销/轮换元数据，不存原文。
+2. **传输方式**：登录与刷新只通过响应体返回 JWT；客户端用 `Authorization: Bearer` 携带 access JWT。删除 `RefreshCookieAuth`、`RefreshTokenAuth`、`X-CSRF-Token`、`Set-Cookie`、`cookie_secure`、`csrf`、`session` 以及相关平台组件。
+3. **token 表保留**：`data.tables.token`、`data.entities.token`、`data.queries.token`、`cap.lifecycles.token`、`cap.events.token` 全部保留；JWT 哈希用于吊销、refresh rotation/reuse detection 与审计。
+4. **端点变化**：`POST /auth/login` 返回 `AuthResult`（含必填 `refresh`）；`POST /auth/refresh` 是公开 operation，请求体 `RefreshInput`，响应 `RefreshResult`；`POST /auth/logout` 保留，请求体 `RefreshInput`，吊销 refresh JWT 记录；access JWT 通过 token 表 revoked_at 立即失效。
+5. **失效边界**：`token.revocation.strategy` 固定 `server`。`token.verify` 验签后读取 token 表校验 revoked_at/expiry，因此登出、refresh 轮换、账号删除、改密/换绑手机或邮箱都会吊销 token 表记录，access JWT 即时失效。
+6. **账号删除**：`account.delete` 软删认证绑定、作废验证体并调用 `token.revoke_by_account` 吊销 token 表记录；access JWT 随之立即失效。

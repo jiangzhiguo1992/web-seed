@@ -133,9 +133,10 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 		return err
 	}
 	if doc["components"] != nil {
-		return fmt.Errorf("components is not a source field; declare shared")
+		return fmt.Errorf("components is not a source field; platform components live in platform/http_conventions.yaml")
 	}
 	if shared := asMap(doc["shared"]); shared != nil {
+		// 兼容旧夹具；_meta 已移除 shared，真实契约会在 schema 校验阶段拒绝。
 		doc["components"] = shared
 		delete(doc, "shared")
 	}
@@ -333,6 +334,10 @@ func normalizeOperationMetadata(op map[string]any, where string, strict bool) er
 	delete(op, "id")
 	delete(op, "service")
 
+	if err := normalizeOperationSecurity(op, where); err != nil {
+		return err
+	}
+
 	request := asMap(op["request"])
 	if mapping, ok := request["mapping"]; ok {
 		op["x-service-params"] = mapping
@@ -340,6 +345,39 @@ func normalizeOperationMetadata(op map[string]any, where string, strict bool) er
 	}
 	delete(op, "audience")
 	delete(op, "used_by")
+	return nil
+}
+
+// normalizeOperationSecurity 把源契约的 [{scheme, scopes}] 转成 OpenAPI 的 [{scheme: scopes}]。
+func normalizeOperationSecurity(op map[string]any, where string) error {
+	raw, ok := op["security"]
+	if !ok {
+		// 缺失由 _meta 的 required 校验；normalizer 只做结构转换。
+		op["security"] = []any{}
+		return nil
+	}
+	out := []any{}
+	seen := map[string]bool{}
+	for i, item := range asList(raw) {
+		requirement := asMap(item)
+		if requirement == nil {
+			return fmt.Errorf("%s: security[%d] must be an object", where, i)
+		}
+		scheme, _ := requirement["scheme"].(string)
+		if scheme == "" {
+			return fmt.Errorf("%s: security[%d].scheme required", where, i)
+		}
+		if seen[scheme] {
+			return fmt.Errorf("%s: security scheme %s declared twice", where, scheme)
+		}
+		seen[scheme] = true
+		scopes := asList(requirement["scopes"])
+		if scopes == nil {
+			scopes = []any{}
+		}
+		out = append(out, map[string]any{scheme: scopes})
+	}
+	op["security"] = out
 	return nil
 }
 
@@ -432,27 +470,30 @@ func normalizeHTTPComponents(doc map[string]any, strict bool) (map[string]string
 func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, map[string]any, error) {
 	for key := range request {
 		switch key {
-		case "path", "query", "headers", "cookies", "body":
+		case "path", "query", "headers", "body":
 		default:
 			return nil, nil, fmt.Errorf("%s: unknown request key %s", where, key)
 		}
 	}
 	parameters := []any{}
+	headers, err := normalizeHeaders(request["headers"], where)
+	if err != nil {
+		return nil, nil, err
+	}
+	parameters = append(parameters, headers...)
 	for _, section := range []struct {
 		name string
 		in   string
 	}{
 		{"path", "path"},
 		{"query", "query"},
-		{"headers", "header"},
-		{"cookies", "cookie"},
 	} {
-		raw := asMap(request[section.name])
-		if raw == nil {
+		raw := asList(request[section.name])
+		if len(raw) == 0 {
 			continue
 		}
-		for _, name := range sortedKeys(raw) {
-			param, err := normalizeParameter(name, section.in, raw[name], where, resolve, componentByID, strict)
+		for i, item := range raw {
+			param, err := normalizeListedParameter(item, section.in, where, i, resolve, componentByID, strict)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -466,29 +507,46 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 	return parameters, body, nil
 }
 
-func normalizeParameter(name, in string, raw any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {
-	if ref, ok := raw.(string); ok && ref != "" {
-		if in == "header" || in == "cookie" {
-			return map[string]any{"$ref": "#/components/parameters/" + ref}, nil
-		}
-		schema, err := normalizeHTTPSchema(ref, resolve, componentByID, strict)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %s parameter %s: %w", where, in, name, err)
-		}
-		return map[string]any{"name": name, "in": in, "required": in == "path", "schema": schema}, nil
+// normalizeHeaders 把固定 header 槽位转成 OpenAPI parameter $ref。
+// 槽位与组件名的对应关系由 _meta/cap.protocols.http.yaml 的 const/enum 约束。
+func normalizeHeaders(raw any, where string) ([]any, error) {
+	headers := asMap(raw)
+	if headers == nil {
+		return nil, nil
 	}
+	order := []string{"X-Request-Id", "Idempotency-Key"}
+	out := []any{}
+	for _, key := range order {
+		value, ok := headers[key]
+		if !ok {
+			continue
+		}
+		ref, _ := value.(string)
+		if ref == "" {
+			return nil, fmt.Errorf("%s: header %s must reference a component name", where, key)
+		}
+		out = append(out, map[string]any{"$ref": "#/components/parameters/" + ref})
+	}
+	for key := range headers {
+		switch key {
+		case "X-Request-Id", "Idempotency-Key":
+		default:
+			return nil, fmt.Errorf("%s: unknown request header slot %s", where, key)
+		}
+	}
+	return out, nil
+}
+
+func normalizeListedParameter(raw any, in, where string, index int, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {
 	param := asMap(raw)
 	if param == nil {
-		return nil, fmt.Errorf("%s: %s parameter %s must be an object or type ref", where, in, name)
+		return nil, fmt.Errorf("%s: %s[%d] must be an object", where, in, index)
 	}
-	if ref, _ := param["$ref"].(string); ref != "" {
-		return map[string]any{"$ref": ref}, nil
+	name, _ := param["name"].(string)
+	if name == "" {
+		return nil, fmt.Errorf("%s: %s[%d].name required", where, in, index)
 	}
-	schemaRaw, ok := param["schema"]
-	if !ok {
-		return nil, fmt.Errorf("%s: %s parameter %s requires schema", where, in, name)
-	}
-	schema, err := normalizeHTTPSchema(schemaRaw, resolve, componentByID, strict)
+	schema, err := normalizeHTTPSchema(param["schema"], resolve, componentByID, strict)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %s parameter %s: %w", where, in, name, err)
 	}
