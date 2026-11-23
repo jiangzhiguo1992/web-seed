@@ -122,9 +122,8 @@ func TestSoftZonesMarked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	components, ok := contractspec.FindField(httpSchema.Fields, "components")
-	if !ok || !components.Soft {
-		t.Fatalf("cap.protocols.http.components must be marked soft")
+	if _, ok := contractspec.FindField(httpSchema.Fields, "components"); ok {
+		t.Fatalf("cap.protocols.http.components must be removed; use shared")
 	}
 	lifecycleSchema, _, err := contractspec.LoadSchemaByType(root, "cap.lifecycles")
 	if err != nil {
@@ -254,7 +253,7 @@ paths:
           status: data.enums.x_status
       response:
         "204": { description: OK }
-components:
+shared:
   schemas:
     Status:
       source: { enum: data.enums.x_status }

@@ -816,15 +816,20 @@ type eventPayloadScaffold struct {
 	Properties []servicePropertyScaffold `yaml:"properties"`
 }
 
+type httpMountScaffold struct {
+	Path     string   `yaml:"path"`
+	Audience []string `yaml:"audience"`
+}
+
 type httpFileScaffold struct {
-	ID                    string         `yaml:"id"`
-	Summary               string         `yaml:"summary"`
-	OwnerModule           string         `yaml:"owner_module"`
-	SchemaVersion         int            `yaml:"schema_version"`
-	Stability             string         `yaml:"stability"`
-	DoNot                 []string       `yaml:"do_not"`
-	DefaultErrorResponses []int          `yaml:"default_error_responses,omitempty"`
-	Paths                 map[string]any `yaml:"paths"`
+	ID            string            `yaml:"id"`
+	Summary       string            `yaml:"summary"`
+	OwnerModule   string            `yaml:"owner_module"`
+	SchemaVersion int               `yaml:"schema_version"`
+	Stability     string            `yaml:"stability"`
+	DoNot         []string          `yaml:"do_not"`
+	Mount         httpMountScaffold `yaml:"mount"`
+	Paths         map[string]any    `yaml:"paths"`
 }
 
 // RenderService 生成 cap.services 的最小合法骨架。
@@ -1097,7 +1102,7 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 	if strings.TrimSpace(summary) == "" {
 		return nil, fmt.Errorf("RenderHTTP: summary must not be empty")
 	}
-	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "default_error_responses": true, "paths": true, "components": true}, "cap.protocols.http"); err != nil {
+	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "mount": true, "paths": true, "shared": true}, "cap.protocols.http"); err != nil {
 		return nil, err
 	}
 	if !strings.HasPrefix(service, "cap.services.") {
@@ -1119,6 +1124,7 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		"name":    httpMethod + pascal(name),
 		"service": service,
 		"summary": summary,
+		"used_by": []string{"feature.pages." + name},
 		"request": map[string]any{
 			"headers": map[string]any{
 				"X-Request-Id": "RequestId",
@@ -1134,7 +1140,6 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 				},
 			},
 		},
-		"errors": []any{},
 	}
 	doc := httpFileScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
@@ -1143,6 +1148,7 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		Stability:     scaffoldStability,
 		DoNot:         []string{},
 		OwnerModule:   module,
+		Mount:         httpMountScaffold{Path: "/", Audience: []string{"admin"}},
 		Paths:         map[string]any{path: map[string]any{httpMethod: op}},
 	}
 	b, err := marshal2(doc)

@@ -25,6 +25,8 @@ type httpInfo struct {
 	Service    string
 	Statuses   []int
 	Codes      []string
+	CodeStatus map[string]int
+	CodeBiz    map[string]int
 	Secured    bool
 	HasBody    bool
 	Deprecated bool
@@ -33,14 +35,20 @@ type httpInfo struct {
 func main() {
 	root := flag.String("root", "../..", "repo root")
 	check := flag.Bool("check", false, "only verify manifest is up to date")
+	strict := flag.Bool("strict", false, "fail when an operation/status/code has no scenario")
 	flag.Parse()
 	abs, err := filepath.Abs(*root)
 	if err != nil {
 		fail(err)
 	}
-	manifest, err := build(abs)
+	manifest, coverage, err := build(abs)
 	if err != nil {
 		fail(err)
+	}
+	if *strict {
+		if gaps := coverageGaps(coverage); len(gaps) > 0 {
+			fail(fmt.Errorf("scenario coverage gaps:\n%s", strings.Join(gaps, "\n")))
+		}
 	}
 	target := filepath.Join(abs, "contracts/generated/scenarios/manifest.yaml")
 	if *check {
@@ -63,31 +71,46 @@ func main() {
 	fmt.Println("generated", target)
 }
 
-func build(root string) ([]byte, error) {
+type scenarioEntry struct {
+	ID        string         `yaml:"id"`
+	Operation string         `yaml:"operation"`
+	HTTP      httpManifest   `yaml:"http"`
+	Scenario  map[string]any `yaml:"scenario"`
+}
+
+func build(root string) ([]byte, []coverageEntry, error) {
 	ops, err := loadHTTPOps(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	policy, err := loadPolicy(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	biz, err := loadErrorBizCodes(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	for code, status := range biz.status {
+		for id, info := range ops {
+			if !containsString(info.Codes, code) {
+				continue
+			}
+			info.CodeStatus[code] = status
+			info.CodeBiz[code] = biz.code[code]
+			ops[id] = info
+		}
 	}
 	files, err := filepath.Glob(filepath.Join(root, "contracts/scenarios/http/*.yaml"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	sort.Strings(files)
-	type entry struct {
-		ID        string         `yaml:"id"`
-		Operation string         `yaml:"operation"`
-		HTTP      httpManifest   `yaml:"http"`
-		Scenario  map[string]any `yaml:"scenario"`
-	}
-	out := []entry{}
+	out := []scenarioEntry{}
 	for _, file := range files {
 		doc, err := loadYAML(file)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		fileID, _ := doc["id"].(string)
 		for _, raw := range asList(doc["scenarios"]) {
@@ -95,10 +118,10 @@ func build(root string) ([]byte, error) {
 			opID, _ := scenario["operation"].(string)
 			info, ok := ops[opID]
 			if !ok {
-				return nil, fmt.Errorf("%s: unknown operation %s", file, opID)
+				return nil, nil, fmt.Errorf("%s: unknown operation %s", file, opID)
 			}
 			name, _ := scenario["name"].(string)
-			out = append(out, entry{
+			out = append(out, scenarioEntry{
 				ID:        fileID + "." + name,
 				Operation: opID,
 				HTTP: httpManifest{
@@ -113,12 +136,167 @@ func build(root string) ([]byte, error) {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	coverage := buildCoverage(ops, out)
 	manifest := map[string]any{
 		"schema_version": 1,
 		"generated_from": "contracts/scenarios/http",
 		"scenarios":      out,
+		"coverage":       coverage,
 	}
-	return marshal(manifest)
+	b, err := marshal(manifest)
+	return b, coverage, err
+}
+
+func coverageGaps(coverage []coverageEntry) []string {
+	var gaps []string
+	for _, entry := range coverage {
+		if entry.Scenarios == 0 {
+			gaps = append(gaps, fmt.Sprintf("%s: no scenario", entry.Operation))
+			continue
+		}
+		for _, status := range entry.MissingStatuses {
+			gaps = append(gaps, fmt.Sprintf("%s: no 2xx scenario for %d", entry.Operation, status))
+		}
+		for _, code := range entry.Codes {
+			if !code.Covered {
+				gaps = append(gaps, fmt.Sprintf("%s: no scenario for %s (%d)", entry.Operation, code.Code, code.Status))
+			}
+		}
+	}
+	return gaps
+}
+
+type codeCoverage struct {
+	Code    string `yaml:"code"`
+	Status  int    `yaml:"status"`
+	Covered bool   `yaml:"covered"`
+}
+
+type coverageEntry struct {
+	Operation       string         `yaml:"operation"`
+	Method          string         `yaml:"method"`
+	Path            string         `yaml:"path"`
+	Service         string         `yaml:"service"`
+	Scenarios       int            `yaml:"scenarios"`
+	SuccessStatuses []int          `yaml:"success_statuses"`
+	CoveredStatuses []int          `yaml:"covered_statuses"`
+	MissingStatuses []int          `yaml:"missing_statuses"`
+	Codes           []codeCoverage `yaml:"codes"`
+}
+
+func buildCoverage(ops map[string]httpInfo, scenarios []scenarioEntry) []coverageEntry {
+	type opCoverage struct {
+		count    int
+		statuses map[int]bool
+		bizCodes map[int]bool
+	}
+	byOp := map[string]*opCoverage{}
+	for _, sc := range scenarios {
+		cov := byOp[sc.Operation]
+		if cov == nil {
+			cov = &opCoverage{statuses: map[int]bool{}, bizCodes: map[int]bool{}}
+			byOp[sc.Operation] = cov
+		}
+		cov.count++
+		then := asMap(sc.Scenario["then"])
+		response := asMap(then["response"])
+		if status, ok := intValue(response["status"]); ok {
+			cov.statuses[status] = true
+		}
+		if body := asMap(response["body"]); body != nil {
+			if code, ok := intValue(body["code"]); ok {
+				cov.bizCodes[code] = true
+			}
+		}
+	}
+	ids := make([]string, 0, len(ops))
+	for id := range ops {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	out := make([]coverageEntry, 0, len(ids))
+	for _, id := range ids {
+		info := ops[id]
+		cov := byOp[id]
+		entry := coverageEntry{Operation: id, Method: info.Method, Path: info.Path, Service: info.Service}
+		if cov != nil {
+			entry.Scenarios = cov.count
+		}
+		for _, status := range info.Statuses {
+			if status >= 200 && status < 300 {
+				entry.SuccessStatuses = append(entry.SuccessStatuses, status)
+				if cov != nil && cov.statuses[status] {
+					entry.CoveredStatuses = append(entry.CoveredStatuses, status)
+				} else {
+					entry.MissingStatuses = append(entry.MissingStatuses, status)
+				}
+			}
+		}
+		for _, code := range info.Codes {
+			item := codeCoverage{Code: code, Status: info.CodeStatus[code]}
+			if cov != nil && cov.statuses[item.Status] && cov.bizCodes[info.CodeBiz[code]] {
+				item.Covered = true
+			}
+			entry.Codes = append(entry.Codes, item)
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func intValue(v any) (int, bool) {
+	switch value := v.(type) {
+	case int:
+		return value, true
+	case int64:
+		return int(value), true
+	}
+	return 0, false
+}
+
+type errorBizCodes struct {
+	code   map[string]int
+	status map[string]int
+}
+
+func loadErrorBizCodes(root string) (errorBizCodes, error) {
+	out := errorBizCodes{code: map[string]int{}, status: map[string]int{}}
+	files, err := filepath.Glob(filepath.Join(root, "contracts/platform/errors/*.yaml"))
+	if err != nil {
+		return out, err
+	}
+	for _, file := range files {
+		if filepath.Base(file) == "_base.yaml" {
+			continue
+		}
+		doc, err := loadYAML(file)
+		if err != nil {
+			return out, err
+		}
+		for _, raw := range asList(doc["errors"]) {
+			item := asMap(raw)
+			code, _ := item["code"].(string)
+			if code == "" {
+				continue
+			}
+			if biz, ok := intValue(item["biz_code"]); ok {
+				out.code[code] = biz
+			}
+			if status, ok := intValue(item["status"]); ok {
+				out.status[code] = status
+			}
+		}
+	}
+	return out, nil
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 type scenarioPolicy struct {
@@ -209,7 +387,7 @@ func loadHTTPOps(root string) (map[string]httpInfo, error) {
 				if id == "" || service == "" {
 					continue
 				}
-				info := httpInfo{Method: method, Path: path, Service: service}
+				info := httpInfo{Method: method, Path: path, Service: service, CodeStatus: map[string]int{}, CodeBiz: map[string]int{}}
 				info.Secured = len(asList(op["security"])) > 0
 				info.HasBody = op["requestBody"] != nil
 				stability, _ := doc["stability"].(string)
@@ -220,9 +398,12 @@ func loadHTTPOps(root string) (map[string]httpInfo, error) {
 						info.Statuses = append(info.Statuses, n)
 					}
 					resp := asMap(rawResp)
-					for _, code := range asList(resp["x-error-codes"]) {
-						if value, ok := code.(string); ok {
-							info.Codes = append(info.Codes, strings.TrimPrefix(value, "platform.errors."))
+					for _, raw := range asList(resp["x-error-codes"]) {
+						code, _ := raw.(string)
+						short := strings.TrimPrefix(code, "platform.errors.")
+						if short != "" {
+							info.Codes = append(info.Codes, short)
+							info.CodeStatus[short] = n
 						}
 					}
 				}

@@ -57,7 +57,7 @@ func (c *Checker) checkScenarioItem(where string, sc map[string]any, roles map[s
 	}
 	for _, raw := range asList(actor["permissions"]) {
 		permission, _ := raw.(string)
-		if permission != "" && !c.permissionSet[permission] {
+		if permission != "" && !c.permissionExists(permission) {
 			c.rulef("scenario-refs", "%s: unknown permission %s", where, permission)
 		}
 	}

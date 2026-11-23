@@ -152,7 +152,7 @@ paths:
       response:
         "200":
           description: "OK"
-components:
+shared:
   schemas:
     X:
       source:
@@ -232,7 +232,7 @@ paths:
             - platform.errors.X
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-components:
+shared:
   responses:
     Conflict: { description: "409" }
 `)
@@ -372,7 +372,7 @@ paths:
           description: "OK"
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-components:
+shared:
   responses:
     Conflict: { description: "409" }
 `)
@@ -396,7 +396,7 @@ paths:
           description: "OK"
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-components:
+shared:
   responses:
     BadRequest: { description: "400" }
     Unauthorized: { description: "401" }
@@ -473,7 +473,7 @@ paths:
             - platform.errors.ACCOUNT_NUMBER_TAKEN
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-components:
+shared:
   responses:
     Conflict: { description: "409" }
 `)
@@ -516,7 +516,7 @@ apps:
     api_version: v1
     audience: admin
     timeout_ms: 5000
-    includes: [cap.protocols.http.a]
+    includes: [cap.protocols.http.a, cap.protocols.http.b]
     generated:
       spec: generated/openapi/admin.yaml
 `)
@@ -534,11 +534,16 @@ paths:
       response:
         "204":
           description: "OK"
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/b.yaml", `id: "cap.protocols.http.b"
+mount:
+  path: /
+  audience: [user]
+paths:
   /user:
     get:
       name: "userOnly"
-      id: "cap.protocols.http.a.user"
-      audience: [user]
+      id: "cap.protocols.http.b.user"
       service: "cap.services.x.get"
       request: {}
       response:

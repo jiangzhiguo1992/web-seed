@@ -31,8 +31,7 @@ var statusRe = func(s string) bool {
 // HTTPOperationMeta 是源契约里不属于 OpenAPI 的 operation 元数据。
 // audience 与 used_by 在 NormalizeHTTPDocument 之前读取，normalizer 会删除源字段。
 type HTTPOperationMeta struct {
-	Audience []string
-	UsedBy   []string
+	UsedBy []string
 }
 
 // CollectHTTPOperationMeta 读取每个 operation 的 audience/used_by，键是契约 ID。
@@ -54,11 +53,6 @@ func CollectHTTPOperationMeta(doc map[string]any) map[string]HTTPOperationMeta {
 				continue
 			}
 			meta := HTTPOperationMeta{}
-			for _, raw := range asList(op["audience"]) {
-				if value, ok := raw.(string); ok {
-					meta.Audience = append(meta.Audience, value)
-				}
-			}
 			for _, raw := range asList(op["used_by"]) {
 				if value, ok := raw.(string); ok {
 					meta.UsedBy = append(meta.UsedBy, value)
@@ -131,10 +125,10 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 	if err := applyHTTPMount(doc); err != nil {
 		return err
 	}
+	if doc["components"] != nil {
+		return fmt.Errorf("components is not a source field; declare shared")
+	}
 	if shared := asMap(doc["shared"]); shared != nil {
-		if doc["components"] != nil {
-			return fmt.Errorf("shared and components cannot coexist")
-		}
 		doc["components"] = shared
 		delete(doc, "shared")
 	}

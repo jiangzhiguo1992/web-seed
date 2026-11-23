@@ -234,7 +234,7 @@ paths:
       response:
         "204":
           description: "OK"
-components:
+shared:
   schemas:
     WrongInput:
       source:
@@ -280,7 +280,7 @@ paths:
       response:
         "204":
           description: "OK"
-components:
+shared:
   schemas:
     WrongInput:
       source:
@@ -340,7 +340,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
-components:
+shared:
   parameters:
     RequestId:
       name: "X-Request-Id"
@@ -558,7 +558,7 @@ schema_version: 1
 stability: "draft"
 do_not: []
 paths: {}
-components:
+shared:
   schemas:
     X:
       source:
@@ -664,7 +664,7 @@ paths:
       response:
         "204":
           description: "OK"
-components:
+shared:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -702,7 +702,7 @@ paths:
       response:
         "204":
           description: "OK"
-components:
+shared:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -736,7 +736,7 @@ paths:
         "500":
           codes:
             - "platform.errors.COMMON_INTERNAL"
-components:
+shared:
   schemas: {}`)
 	writeCapFile(t, root, "contracts/platform/errors/common.yaml", `id: platform.errors.common
 errors:
@@ -774,7 +774,7 @@ paths:
       responses:
         "204":
           description: "OK"
-components:
+shared:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -849,7 +849,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
-components:
+shared:
   parameters:
     RequestId:
       name: "X-Request-Id"
@@ -897,7 +897,7 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
-components:
+shared:
   parameters:
     RequestId:
       name: "X-Request-Id"
@@ -940,7 +940,7 @@ paths:
       response:
         "204":
           description: "OK"
-components:
+shared:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -1586,7 +1586,7 @@ paths:
       response:
         "200":
           description: "ok"
-components:
+shared:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -1636,10 +1636,8 @@ default_error_responses:
 	}, map[string]bool{}, map[string]bool{})
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
-		`missing required field "do_not"`,
 		`id "cap.http.x" must be "cap.protocols.http.x"`,
 		"duplicate x-contract-id",
-		`unknown field "default_error_responses"`,
 		"[http-file]",
 		"[http-operation]",
 	} {
@@ -2604,7 +2602,7 @@ summary: "x"
 schema_version: 1
 stability: draft
 do_not: []
-components:
+shared:
   responses:
     BadRequest: { description: "400" }
     ServiceUnavailable: { description: "503" }
@@ -2654,16 +2652,6 @@ paths:
       request: {}
       response:
         "204": { description: "OK" }
-  /other:
-    get:
-      name: getOther
-      id: cap.protocols.http.x.other
-      service: cap.services.x.get
-      used_by: [feature.pages.x]
-      audience: [user]
-      request: {}
-      response:
-        "204": { description: "OK" }
 `)
 	c := &Checker{root: root, strictHTTP: true}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -2674,11 +2662,9 @@ paths:
 	}, map[string]bool{}, map[string]bool{})
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
-		"audience user is not declared",
 		"operation cap.protocols.http.x.orphan must have at least one page in used_by",
 		"missing used_by feature.pages.x",
 		"service cap.services.x.page_only is referenced by pages but has no http operation",
-		"[http-audience]",
 		"[http-consumer]",
 		"[http-default-errors]",
 		"[http-retry-after]",
@@ -2695,10 +2681,105 @@ func TestHTTPMountOrder(t *testing.T) {
 	c.checkHTTPMount("x.yaml", openapispec.HTTPMount{Path: "/admin/account", Audience: []string{"admin"}}, audiences, true)
 	c.checkHTTPMount("x.yaml", openapispec.HTTPMount{Path: "/v1/account", Audience: []string{"admin"}}, audiences, true)
 	got := strings.Join(c.errs, "\n")
-	if !strings.Contains(got, "[http-mount]") || !strings.Contains(got, "must be resource-first") {
+	if !strings.Contains(got, "[http-mount]") || !strings.Contains(got, "must be the common resource prefix") {
 		t.Fatalf("audience-first mount not reported: %v", c.errs)
 	}
 	if !strings.Contains(got, "[http-version]") {
 		t.Fatalf("versioned mount not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPAudienceValue(t *testing.T) {
+	c := &Checker{}
+	c.checkHTTPAudience("x.yaml", "get", "/x", "cap.protocols.http.x.get", []string{"user"}, map[string]bool{"admin": true})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-audience]") {
+		t.Fatalf("unknown audience not reported: %v", c.errs)
+	}
+}
+
+func TestServiceErrorClosure(t *testing.T) {
+	root := t.TempDir()
+	rel := "contracts/capabilities/services/x.yaml"
+	writeCapFile(t, root, rel, `id: cap.services.x
+services:
+  - name: child
+    steps:
+      - { id: a, kind: logic, errors: [platform.errors.CHILD], rules: [] }
+      - { id: b, kind: logic, errors: [], rules: [{ rule: feature.rules.x.rule }] }
+  - name: parent_inherit
+    steps:
+      - { id: c, kind: service, service: cap.services.x.child }
+  - name: parent_subset
+    steps:
+      - { id: d, kind: service, service: cap.services.x.child, errors: [platform.errors.OWN] }
+  - name: parent_query
+    steps:
+      - { id: e, kind: query, query: data.queries.x.get, errors: [platform.errors.OWN] }
+`)
+	queries := map[string]*queryInfo{
+		"data.queries.x.get": {Errors: []string{"platform.errors.QUERY"}},
+	}
+	got := computeServiceErrorClosure(
+		[]string{filepath.Join(root, rel)},
+		queries,
+		map[string]string{"feature.rules.x.rule": "platform.errors.RULE"},
+	)
+	check := func(service string, want ...string) {
+		t.Helper()
+		gotSet := got["cap.services.x."+service]
+		if len(gotSet) != len(want) {
+			t.Fatalf("%s errors = %v, want %v", service, gotSet, want)
+		}
+		for _, code := range want {
+			if !gotSet[code] {
+				t.Fatalf("%s missing %s: %v", service, code, gotSet)
+			}
+		}
+	}
+	check("child", "platform.errors.CHILD", "platform.errors.RULE")
+	check("parent_inherit", "platform.errors.CHILD", "platform.errors.RULE")
+	check("parent_subset", "platform.errors.OWN")
+	check("parent_query", "platform.errors.QUERY", "platform.errors.OWN")
+}
+
+func TestHTTPRequiredBody(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+mount: { path: /, audience: [admin] }
+paths:
+  /x:
+    post:
+      id: cap.protocols.http.x.create
+      name: createX
+      service: cap.services.x.create
+      summary: "x"
+      used_by: [feature.pages.x]
+      request:
+        body:
+          content_type: application/json
+          schema: cap.services.x.schemas.Input
+          required: false
+        mapping:
+          body: input
+        idempotency: none
+      response:
+        "204": { description: "OK" }
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.create": {
+			visibility:     "public",
+			requiredParams: map[string]bool{"input": true},
+			paramDecls:     map[string]string{"input": "cap.services.x.schemas.Input"},
+			paramTypes:     map[string]bool{"cap.services.x.schemas.Input": true},
+		},
+	}, map[string]bool{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "requestBody must be required") {
+		t.Fatalf("optional body for required service param not reported: %v", c.errs)
 	}
 }

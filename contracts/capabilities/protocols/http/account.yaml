@@ -8,11 +8,11 @@ do_not:
   - "枚举必须引用 data.enums.*；不要在此重复枚举值"
 
 mount:
-  path: /account/admin
+  path: /account
   audience: [admin]
 
 paths:
-  /:
+  /admin:
     get:
       id: cap.protocols.http.account.list
       name: listAccounts
@@ -80,7 +80,7 @@ paths:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
             - platform.errors.ACCOUNT_NUMBER_INVALID
 
-  /{id}:
+  /admin/{id}:
     get:
       id: cap.protocols.http.account.get
       name: getAccount
@@ -186,7 +186,7 @@ paths:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
-  /{id}/activate:
+  /admin/{id}/activate:
     post:
       id: cap.protocols.http.account.activate
       name: activateAccount
@@ -223,7 +223,7 @@ paths:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
-  /{id}/suspend:
+  /admin/{id}/suspend:
     post:
       id: cap.protocols.http.account.suspend
       name: suspendAccount

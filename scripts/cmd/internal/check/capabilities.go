@@ -397,6 +397,12 @@ func (c *Checker) checkCapabilities() {
 	}
 	c.ruleErrors = ruleErrors
 	c.ruleOwners = ruleOwners
+	c.serviceErrorClosure = computeServiceErrorClosure(serviceFiles, c.queries, ruleErrors)
+	for id, errs := range c.serviceErrorClosure {
+		meta := serviceMetaByID[id]
+		meta.errors = errs
+		serviceMetaByID[id] = meta
+	}
 	eventIDs := map[string]bool{}
 	c.eventPayloads = map[string]map[string]eventField{}
 	for _, file := range glob(c.root, filepath.Join(eventSchema.Targets.Dir, eventSchema.Targets.Glob)) {
@@ -547,4 +553,112 @@ func (c *Checker) checkCapabilities() {
 	}
 	jobServices := c.checkEventsDoc(eventSchema, serviceMetaByID, serviceItemIDs)
 	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, jobServices)
+}
+
+// computeServiceErrorClosure 递归计算每个 service 可能返回的完整错误集。
+// 规则：query 取 query.errors；service 未声明 step.errors 时取目标闭包，
+// 声明时只取声明集合；logic/when 取 step.errors 与 rules[].rule 的 on_violation；
+// 其他 step 取 step.errors。事件不贡献同步错误。
+func computeServiceErrorClosure(serviceFiles []string, queries map[string]*queryInfo, ruleErrors map[string]string) map[string]map[string]bool {
+	type sources struct {
+		direct   map[string]bool
+		children map[string]bool
+	}
+	byService := map[string]*sources{}
+	for _, file := range serviceFiles {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		fileID, _ := doc["id"].(string)
+		for _, raw := range asList(doc["services"]) {
+			item, _ := asMap(raw)
+			name, _ := item["name"].(string)
+			if name == "" {
+				continue
+			}
+			id := fileID + "." + name
+			src := &sources{direct: map[string]bool{}, children: map[string]bool{}}
+			for _, rawStep := range asList(item["steps"]) {
+				step, _ := asMap(rawStep)
+				kind, _ := step["kind"].(string)
+				switch kind {
+				case "query":
+					for _, rawQ := range stepQueryItems(step) {
+						qo, _ := asMap(rawQ)
+						qid, _ := qo["ref"].(string)
+						if q, ok := queries[qid]; ok {
+							for _, code := range q.Errors {
+								src.direct[code] = true
+							}
+						}
+					}
+					for _, rawErr := range asList(step["errors"]) {
+						if code, _ := rawErr.(string); code != "" {
+							src.direct[code] = true
+						}
+					}
+				case "service":
+					if step["errors"] != nil {
+						for _, rawErr := range asList(step["errors"]) {
+							if code, _ := rawErr.(string); code != "" {
+								src.direct[code] = true
+							}
+						}
+						continue
+					}
+					for _, rawS := range stepServiceItems(step) {
+						so, _ := asMap(rawS)
+						if ref, _ := so["ref"].(string); ref != "" {
+							src.children[ref] = true
+						}
+					}
+				default:
+					for _, rawErr := range asList(step["errors"]) {
+						if code, _ := rawErr.(string); code != "" {
+							src.direct[code] = true
+						}
+					}
+				}
+				if kind == "logic" || kind == "when" {
+					for _, rawRule := range asList(step["rules"]) {
+						rm, _ := asMap(rawRule)
+						rid, _ := rm["rule"].(string)
+						if code := ruleErrors[rid]; code != "" {
+							src.direct[code] = true
+						}
+					}
+				}
+			}
+			byService[id] = src
+		}
+	}
+	out := map[string]map[string]bool{}
+	var walk func(string, map[string]bool) map[string]bool
+	walk = func(id string, stack map[string]bool) map[string]bool {
+		if cached, ok := out[id]; ok {
+			return cached
+		}
+		src := byService[id]
+		if src == nil || stack[id] {
+			return map[string]bool{}
+		}
+		stack[id] = true
+		errs := map[string]bool{}
+		for code := range src.direct {
+			errs[code] = true
+		}
+		for child := range src.children {
+			for code := range walk(child, stack) {
+				errs[code] = true
+			}
+		}
+		delete(stack, id)
+		out[id] = errs
+		return errs
+	}
+	for id := range byService {
+		walk(id, map[string]bool{})
+	}
+	return out
 }

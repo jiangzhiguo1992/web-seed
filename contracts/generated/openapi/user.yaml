@@ -904,6 +904,8 @@ paths:
           x-error-codes:
             - biz_code: 3007
               code: AUTH_EMAIL_INVALID
+            - biz_code: 4004
+              code: AUTH_VERIFICATION_TARGET_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -958,6 +960,11 @@ paths:
           $ref: '#/components/responses/PayloadTooLarge'
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+        422:
+          $ref: '#/components/responses/UnprocessableEntity'
+          x-error-codes:
+            - biz_code: 4004
+              code: AUTH_VERIFICATION_TARGET_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1014,6 +1021,8 @@ paths:
           x-error-codes:
             - biz_code: 3006
               code: AUTH_PHONE_INVALID
+            - biz_code: 4004
+              code: AUTH_VERIFICATION_TARGET_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1053,6 +1062,8 @@ paths:
           x-error-codes:
             - biz_code: 3001
               code: AUTH_INVALID_CREDENTIALS
+            - biz_code: 5001
+              code: AUTH_TOKEN_INVALID
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:

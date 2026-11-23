@@ -95,7 +95,6 @@ func build(root string) (map[string][]byte, error) {
 		return nil, err
 	}
 	byID := map[string]map[string]any{}
-	opMetaByID := map[string]map[string]openapispec.HTTPOperationMeta{}
 	fileAudienceByID := map[string][]string{}
 	fileStabilityByID := map[string]string{}
 	for _, file := range httpFiles {
@@ -105,7 +104,6 @@ func build(root string) (map[string][]byte, error) {
 		}
 		id, _ := doc["id"].(string)
 		if id != "" {
-			opMetaByID[id] = openapispec.CollectHTTPOperationMeta(doc)
 			fileAudienceByID[id] = openapispec.CollectHTTPMount(doc).Audience
 			fileStabilityByID[id], _ = doc["stability"].(string)
 			if err := openapispec.NormalizeHTTPDocument(doc, httpTypeResolver(customTypeIdx), false); err != nil {
@@ -190,13 +188,7 @@ func build(root string) (map[string][]byte, error) {
 						outItem[method] = rawOp
 						continue
 					}
-					contractID, _ := op["x-contract-id"].(string)
-					meta := opMetaByID[include][contractID]
-					audience := meta.Audience
-					if len(audience) == 0 {
-						audience = fileAudienceByID[include]
-					}
-					if !containsString(audience, app.Audience) {
+					if !containsString(fileAudienceByID[include], app.Audience) {
 						continue
 					}
 					op["x-timeout-ms"] = app.TimeoutMS

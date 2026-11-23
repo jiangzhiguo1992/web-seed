@@ -403,6 +403,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		rel := relPath(c.root, file)
 		if c.strictHTTP {
 			c.validateDoc(doc, schema.Fields, rel)
+			c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		}
 		c.checkHTTPShared(doc, rel)
 		mount := openapispec.CollectHTTPMount(doc)
@@ -410,16 +411,14 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		if c.strictHTTP {
 			c.checkHTTPMount(rel, mount, audiences, len(rawPaths) > 0)
 		}
-		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP); err != nil {
-			c.rulef("http-shape", "%s: %v", rel, err)
-			continue
-		}
-		c.validateDoc(doc, schema.Fields, rel)
-		c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		c.checkTargetFileName(schema, filepath.Base(rel), rel)
 		c.checkStability(doc, rel)
 		if want := schema.Targets.FileID(filepath.Base(rel)); doc["id"] != want {
 			c.rulef("http-file", "%s: id %q must be %q", rel, doc["id"], want)
+		}
+		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP); err != nil {
+			c.rulef("http-shape", "%s: %v", rel, err)
+			continue
 		}
 		fileID, _ := doc["id"].(string)
 		if seenAudience[fileID] == nil {
@@ -631,20 +630,17 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					}
 				}
 				meta := opMeta[contractID]
-				effectiveAudience := meta.Audience
-				if len(effectiveAudience) == 0 {
-					effectiveAudience = fileAudience
-				}
 				if c.strictHTTP {
-					c.checkHTTPAudience(rel, method, path, contractID, effectiveAudience, audiences)
-					for _, audience := range effectiveAudience {
+					c.checkHTTPAudience(rel, method, path, contractID, fileAudience, audiences)
+					for _, audience := range fileAudience {
 						if seenAudience[fileID] != nil {
 							seenAudience[fileID][audience] = true
 						}
 					}
 				}
 				responses, _ := asMap(op["responses"])
-				info := httpOpInfo{Path: path, Method: method, Service: op["x-service"].(string), Statuses: map[int]bool{}, Codes: map[string]bool{}}
+				serviceID, _ := op["x-service"].(string)
+				info := httpOpInfo{Path: path, Method: method, Service: serviceID, Statuses: map[int]bool{}, Codes: map[string]bool{}}
 				for status, rawResp := range responses {
 					if n, err := strconv.Atoi(status); err == nil {
 						info.Statuses[n] = true
@@ -1106,9 +1102,11 @@ func (c *Checker) checkHTTPMount(rel string, mount openapispec.HTTPMount, audien
 	if match(`^/v[0-9]+(/|$)`, mount.Path) {
 		c.rulef("http-version", "%s: mount.path %s must not carry a version prefix; use app.api_version", rel, mount.Path)
 	}
-	segments := strings.Split(strings.TrimPrefix(mount.Path, "/"), "/")
-	if len(segments) > 0 && audiences[segments[0]] {
-		c.rulef("http-mount", "%s: mount.path %s must be resource-first; use /<resource>/%s", rel, mount.Path, segments[0])
+	for _, segment := range strings.Split(strings.TrimPrefix(mount.Path, "/"), "/") {
+		if audiences[segment] {
+			c.rulef("http-mount", "%s: mount.path %s must be the common resource prefix; put audience segment %s in paths, not mount", rel, mount.Path, segment)
+			break
+		}
 	}
 	if len(mount.Audience) == 0 {
 		c.rulef("http-audience", "%s: mount.audience must not be empty", rel)
@@ -1154,6 +1152,13 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 	}
 	if !hasBody && hasRB {
 		c.rulef("http-service-type", "%s %s %s: requestBody declared but x-service-params.body is missing", rel, method, path)
+	}
+	if hasBody && hasRB {
+		if name, ok := body.(string); ok && target.requiredParams[name] {
+			if required, _ := rb["required"].(bool); !required {
+				c.rulef("http-service-params", "%s %s %s: requestBody must be required because service parameter %s is required", rel, method, path, name)
+			}
+		}
 	}
 	covered := map[string]bool{}
 	if hasBody {

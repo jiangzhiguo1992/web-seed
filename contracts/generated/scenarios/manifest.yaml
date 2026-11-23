@@ -1,3 +1,321 @@
+coverage:
+  - operation: cap.protocols.http.account.activate
+    method: post
+    path: /account/admin/{id}/activate
+    service: cap.services.account.activate
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ACCOUNT_ALREADY_DELETED
+        status: 409
+        covered: false
+      - code: ACCOUNT_ILLEGAL_TRANSITION
+        status: 409
+        covered: false
+      - code: ACCOUNT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.account.create
+    method: post
+    path: /account/admin
+    service: cap.services.account.create
+    scenarios: 1
+    success_statuses:
+      - 201
+    covered_statuses:
+      - 201
+    missing_statuses: []
+    codes:
+      - code: ACCOUNT_NICKNAME_INVALID
+        status: 422
+        covered: false
+      - code: ACCOUNT_NUMBER_INVALID
+        status: 422
+        covered: false
+      - code: ACCOUNT_NUMBER_TAKEN
+        status: 409
+        covered: false
+  - operation: cap.protocols.http.account.delete
+    method: delete
+    path: /account/admin/{id}
+    service: cap.services.account.delete
+    scenarios: 0
+    success_statuses:
+      - 204
+    covered_statuses: []
+    missing_statuses:
+      - 204
+    codes:
+      - code: ACCOUNT_ALREADY_DELETED
+        status: 409
+        covered: false
+      - code: ACCOUNT_ILLEGAL_TRANSITION
+        status: 409
+        covered: false
+      - code: ACCOUNT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.account.get
+    method: get
+    path: /account/admin/{id}
+    service: cap.services.account.get
+    scenarios: 1
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ACCOUNT_NOT_FOUND
+        status: 404
+        covered: true
+  - operation: cap.protocols.http.account.list
+    method: get
+    path: /account/admin
+    service: cap.services.account.list
+    scenarios: 1
+    success_statuses:
+      - 200
+    covered_statuses:
+      - 200
+    missing_statuses: []
+    codes: []
+  - operation: cap.protocols.http.account.suspend
+    method: post
+    path: /account/admin/{id}/suspend
+    service: cap.services.account.suspend
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ACCOUNT_ALREADY_DELETED
+        status: 409
+        covered: false
+      - code: ACCOUNT_ILLEGAL_TRANSITION
+        status: 409
+        covered: false
+      - code: ACCOUNT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.account.update
+    method: patch
+    path: /account/admin/{id}
+    service: cap.services.account.update
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ACCOUNT_ALREADY_DELETED
+        status: 409
+        covered: false
+      - code: ACCOUNT_NICKNAME_INVALID
+        status: 422
+        covered: false
+      - code: ACCOUNT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.auth.bind_email
+    method: post
+    path: /auth/bind/email
+    service: cap.services.auth.bind_email
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ACCOUNT_ALREADY_DELETED
+        status: 409
+        covered: false
+      - code: ACCOUNT_SUSPENDED
+        status: 403
+        covered: false
+      - code: AUTH_EMAIL_INVALID
+        status: 422
+        covered: false
+      - code: AUTH_EMAIL_TAKEN
+        status: 409
+        covered: false
+      - code: AUTH_VERIFICATION_TARGET_INVALID
+        status: 422
+        covered: false
+  - operation: cap.protocols.http.auth.bind_password
+    method: post
+    path: /auth/bind/password
+    service: cap.services.auth.bind_password
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ACCOUNT_ALREADY_DELETED
+        status: 409
+        covered: false
+      - code: ACCOUNT_SUSPENDED
+        status: 403
+        covered: false
+      - code: AUTH_INVALID_CREDENTIALS
+        status: 401
+        covered: false
+      - code: AUTH_USERNAME_TAKEN
+        status: 409
+        covered: false
+      - code: AUTH_VERIFICATION_TARGET_INVALID
+        status: 422
+        covered: false
+  - operation: cap.protocols.http.auth.bind_phone
+    method: post
+    path: /auth/bind/phone
+    service: cap.services.auth.bind_phone
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ACCOUNT_ALREADY_DELETED
+        status: 409
+        covered: false
+      - code: ACCOUNT_SUSPENDED
+        status: 403
+        covered: false
+      - code: AUTH_PHONE_INVALID
+        status: 422
+        covered: false
+      - code: AUTH_PHONE_TAKEN
+        status: 409
+        covered: false
+      - code: AUTH_VERIFICATION_TARGET_INVALID
+        status: 422
+        covered: false
+  - operation: cap.protocols.http.auth.login
+    method: post
+    path: /auth/login
+    service: cap.services.auth.login
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ACCOUNT_SUSPENDED
+        status: 403
+        covered: false
+      - code: AUTH_INVALID_CREDENTIALS
+        status: 401
+        covered: false
+      - code: AUTH_LOCKED
+        status: 423
+        covered: false
+      - code: AUTH_TOKEN_INVALID
+        status: 401
+        covered: false
+  - operation: cap.protocols.http.auth.logout
+    method: post
+    path: /auth/logout
+    service: cap.services.token.logout
+    scenarios: 0
+    success_statuses:
+      - 204
+    covered_statuses: []
+    missing_statuses:
+      - 204
+    codes:
+      - code: AUTH_TOKEN_INVALID
+        status: 401
+        covered: false
+  - operation: cap.protocols.http.auth.me
+    method: get
+    path: /auth/me
+    service: cap.services.token.verify
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: AUTH_TOKEN_EXPIRED
+        status: 401
+        covered: false
+      - code: AUTH_TOKEN_INVALID
+        status: 401
+        covered: false
+  - operation: cap.protocols.http.auth.refresh
+    method: post
+    path: /auth/refresh
+    service: cap.services.token.refresh
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: AUTH_TOKEN_EXPIRED
+        status: 401
+        covered: false
+      - code: AUTH_TOKEN_INVALID
+        status: 401
+        covered: false
+  - operation: cap.protocols.http.auth.verification_send
+    method: post
+    path: /auth/verification/send
+    service: cap.services.verification.send
+    scenarios: 0
+    success_statuses:
+      - 202
+    covered_statuses: []
+    missing_statuses:
+      - 202
+    codes:
+      - code: AUTH_EMAIL_INVALID
+        status: 422
+        covered: false
+      - code: AUTH_PHONE_INVALID
+        status: 422
+        covered: false
+      - code: AUTH_VERIFICATION_INVALID
+        status: 422
+        covered: false
+      - code: AUTH_VERIFICATION_TARGET_INVALID
+        status: 422
+        covered: false
+  - operation: cap.protocols.http.auth.verification_verify
+    method: post
+    path: /auth/verification/verify
+    service: cap.services.verification.verify
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+        status: 423
+        covered: false
+      - code: AUTH_VERIFICATION_EXPIRED
+        status: 422
+        covered: false
+      - code: AUTH_VERIFICATION_INVALID
+        status: 422
+        covered: false
 generated_from: contracts/scenarios/http
 scenarios:
   - id: scenario.http.account.create_success

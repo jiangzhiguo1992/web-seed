@@ -69,6 +69,7 @@ type Checker struct {
 	methodTypeDefs      map[string]map[string]any
 	serviceQueries      map[string]map[string]bool
 	serviceQueryClosure map[string]map[string]bool
+	serviceErrorClosure map[string]map[string]bool
 	serviceWrites       map[string]bool
 	httpOps             map[string]httpOpInfo
 	ruleErrors          map[string]string

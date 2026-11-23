@@ -559,11 +559,19 @@ func TestRenderHTTP(t *testing.T) {
 	if doc["id"] != "cap.protocols.http.invoice" {
 		t.Fatalf("id = %v", doc["id"])
 	}
+	mount, _ := doc["mount"].(map[string]any)
+	if mount["path"] != "/" {
+		t.Fatalf("mount = %#v", mount)
+	}
 	paths, _ := doc["paths"].(map[string]any)
 	path, _ := paths["/invoice"].(map[string]any)
 	op, _ := path["get"].(map[string]any)
 	if op["name"] != "getInvoice" || op["id"] != "cap.protocols.http.invoice.get" || op["service"] != "cap.services.invoice.get" {
 		t.Fatalf("operation = %#v", op)
+	}
+	usedBy, _ := op["used_by"].([]any)
+	if len(usedBy) != 1 || usedBy[0] != "feature.pages.invoice" {
+		t.Fatalf("used_by = %#v", op["used_by"])
 	}
 }
 

@@ -213,7 +213,7 @@ dispatch 项：
 
 - path / method / `name` / `id` / `service`；`name` 生成 OpenAPI operationId，`id` 仅用于契约追踪，不写入生成 OpenAPI
 - status code / content-type / header
-- API 版本只在 `project.yaml` 的 `app.api_version` 声明；文件级 `mount.path` 只写资源前缀（如 `/account/admin`），生成器再拼 `/<app.api_version>`；版本不出现在 HTTP 文件与 paths
+- API 版本只在 `project.yaml` 的 `app.api_version` 声明；文件级 `mount.path` 只写公共资源前缀（如 `/account`），audience 段写在 `paths`（如 `/admin`），生成器再拼 `/<app.api_version>`；版本不出现在 HTTP 文件与 paths
 - 超时只在 `project.yaml` 的 `app.timeout_ms` 统一配置，HTTP 文件不写 timeout
 - v2 是新的 API surface：在 `project.yaml` 新增 app（`api_version: v2`），未变模块可复用原文件，变更模块新建 `<module>_v2.yaml` 并只 include 到 v2 app；同一 app 不允许混版本
 - 每个 operation 用 `request` / `response` 两块：`request` 下分 `path` / `query` / `headers` / `cookies` / `body`；`response` 是状态码 map，2xx 写 `description` / `headers` / `body`，非 2xx 只写 `codes`
@@ -227,8 +227,10 @@ HTTP 约束：
 
 - 响应 schema 由类型 ID 解析：优先 `cap.services.schemas`，也允许 `data.entities.*` / `data.enums.*`；object 默认封闭。
 - 每个 operation 必须有 `id` 与 `service`；`service` 只能指向 `public` 且未被异步任务引用的同步 service。
-- 每个有 `paths` 的文件必须有 `mount`：`mount.path` 是资源前缀，`mount.audience` 是调用端列表；operation 可覆盖 audience。`mount.path` 必须资源在前、端在后（`/account/admin`，不是 `/admin/account`），值来自 `platform/http_conventions.yaml` 的 `audiences`。
-- 每个 operation 必须有非空 `used_by`：精确列出引用该 service 的 `feature.pages.*`；缺页面就补页面，不允许用豁免清单绕过。
+- 每个有 `paths` 的文件必须有 `mount`：`mount.path` 是资源前缀，`mount.audience` 是调用端列表；operation 可覆盖 audience。`mount.path` 只写公共资源前缀（`/account`）；audience 段在 `paths`（`/admin`），不得写进 `mount.path`，值来自 `platform/http_conventions.yaml` 的 `audiences`。
+- 每个 operation 必须有非空 `used_by`：模板属性 `min_items: 1` 保证非空，`http-consumer` 再校验它精确等于引用该 service 的 `feature.pages.*`；缺页面就补页面，不允许用豁免清单绕过。
+- `used_by` 在 `_meta/cap.protocols.http.yaml` 的 operation `item_fields` 上声明（required + min_items 1），不是只写在 `rules` 文本里。
+- 错误闭包由脚本递归计算：`query` 取 `query.errors` 与 `step.errors`；`service` 未声明 `step.errors` 时取目标 service 闭包，声明时只取声明集合；`logic`/`when` 取 `step.errors` 与 `rules[].rule` 的 `on_violation`；`events`/`transition` 取 `step.errors`；事件不贡献同步错误。`http-errors` 用该闭包校验每个 operation 的 `codes`。
 - 每个 operation 必须有 `request.mapping`（可为空对象）：`body` / `path` / `query` / `header` / `cookie` 映射到 service 参数；service 必填非 ctx 参数必须全覆盖，HTTP 不得发明参数。`mapping` 只用于契约校验与后续 handler 生成，不写入 OpenAPI。
 - 每个 operation 必须有 `request.idempotency`：`none` / `optional` / `required`；`optional` 引用 `IdempotencyKey`，`required` 引用 `IdempotencyKeyRequired`，`none` 不得声明。
 - 每个 operation 必须在 `request.headers` 声明 `X-Request-Id: RequestId`；每个 `response.<status>.headers.X-Request-Id: XRequestId` 必须声明。

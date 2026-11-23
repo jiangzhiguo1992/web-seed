@@ -1,6 +1,6 @@
 # ADR 0001：HTTP 契约的边界与验收模型
 
-- 状态：已采纳（mount、错误模型、audience、consumer、多 app 已实现；验收场景类型/checker/生成清单已实现，runner 待实现）
+- 状态：已采纳（mount、错误模型、audience、consumer、多 app、模板封闭化、错误闭包、覆盖率报告已实现；acceptance runner 待实现）
 - 日期：2026-11-23
 - 关联：`contracts/capabilities/protocols/http/*.yaml`、`contracts/platform/http_conventions.yaml`、`contracts/_meta/cap.protocols.http.yaml`、`contracts/_meta/scenario.http.yaml`
 
@@ -14,18 +14,19 @@
 
 ```yaml
 mount:
-  path: /account/admin
+  path: /account
   audience: [admin]
 paths:
-  /: ...
-  /{id}: ...
+  /admin: ...
+  /admin/{id}: ...
 ```
 
-- `mount.path` 是资源前缀，`paths` 的 key 是相对路径；生成 OpenAPI 时拼接为完整 path。
-- URL 层级强制“资源在前、端在后”：`/account/admin` 合法，`/admin/account` 由 `http-mount` 拒绝。当前账号管理端因此挂在 `/account/admin`。
+- `mount.path` 是公共资源前缀，`paths` 的 key 是相对路径；生成 OpenAPI 时拼接为完整 path。
+- audience 段属于 `paths`，不属于 `mount`：`mount: /account` + `paths: /admin` 生成 `/account/admin`；`mount.path` 出现 audience 段会被 `http-mount` 拒绝。
 - `mount.audience` 是文件级默认调用端；operation 可覆盖。值必须在 `platform/http_conventions.audiences` 中。
 - **版本仍只在 `project.yaml` 的 `app.api_version`**。`mount.path` 不写 `/v1`；生成器输出 `servers: [{url: /v1}]`。版本是 app 级事实，同一文件可被 v1/v2 app 复用；写进文件会迫使同一 app 的所有 include 再做版本一致性校验。
-- `shared.yaml` 没有 `paths`，因此没有 `mount`。
+- `shared.yaml` 没有 `paths`，因此没有 `mount`；它只提供 `shared` 组件。
+- 模板不再有 `components` 源字段：`shared` 是唯一源，生成时规范化为 OpenAPI `components`。
 
 另外修掉了真正的版本泄漏：`auth_policy.yaml`、`shared.yaml`、`http_conventions.yaml` 里硬编码的 `/v1/auth` 改为 `<app.api_version>/auth`，`_meta/platform.security.auth_policy.yaml` 的 path pattern 允许占位符。
 
@@ -53,6 +54,20 @@ paths:
 - 410/413/415 已补齐 `platform.errors`（`COMMON_GONE`/`COMMON_PAYLOAD_TOO_LARGE`/`COMMON_UNSUPPORTED_MEDIA_TYPE`）与 `shared.responses`。
 
 结果：`listAccounts` 不再声称 404/409/422；`login` 公开、无 401/403 基线，但保留自身 401/403/423 业务码。
+
+## 决策 2.1：错误闭包由脚本递归计算
+
+`service` 不再声明 `errors`；每个 service 的完整错误集由脚本 `computeServiceErrorClosure` 递归计算：
+
+| step kind | 取哪些字段 |
+|---|---|
+| `query` | `query.errors` + `step.errors` |
+| `service` | 未声明 `step.errors`：目标 service 的闭包；声明：只取声明集合（必须是目标子集） |
+| `logic` / `when` | `step.errors` + `rules[].rule` 对应 `feature.rules` 的 `on_violation` |
+| `events` / 其他 step | `step.errors` |
+| 异步事件 | 不贡献同步错误 |
+
+递归有环保护；`http-errors` 用闭包校验每个 operation 的 `codes`，`COMMON_*` 不进入业务 codes。闭包实现与单元测试在 `scripts/cmd/internal/check/capabilities.go` / `capabilities_rules_test.go`，不依赖 AI 手工枚举。
 
 ## 决策 3：audience 是生成过滤器，不是标签
 
@@ -138,3 +153,55 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 - 实现 `apps/api` 的 handler/DB 后，落地读 `contracts/generated/scenarios/manifest.yaml` 的 runner：真实 PG、独立 schema、整库 before/after 快照 diff、注入 clock/ID。
 - 为其余 13 个 operation 补场景与错误码场景；checker 增加全 operation/错误码/分支覆盖率。
 - 评估 502/504：属于网关层，当前不进入 per-op 基线；413/415 已由 `body` 基线覆盖，410 由 `deprecated` 基线覆盖。
+
+## 设计复盘：为什么会出现 `paths: any`
+
+根因不是“模板写少了”，而是契约建模方向错了：早期把 `cap.protocols.http` 当成“OpenAPI + 几个 x-* 注解”，于是 `paths` 直接透传 OpenAPI。透传的代价是：
+
+1. **结构不可判定**：脚本只能看到 `map[string]any`，无法知道 `paths.<p>.<method>` 下应该有哪些字段，只能靠 `http-shape` 事后遍历并报“未知字段”。AI 看到 `any` 也会认为“这里可以自由发挥”，于是漂移是设计的结果，不是执行失误。
+2. **语义藏在 x-***：`name/id/service/used_by` 被塞进 `x-contract-id`/`x-service`，normalizer 再拆出来。源文件看起来像 OpenAPI，实际语义靠隐式约定；AI 读源文件时看不到硬约束。
+3. **`used_by` 只写在 rules 文本里**：字段本身是 `set<string>`，没有 `required`/`min_items`，空列表在结构校验阶段合法，只能靠 `http-consumer` 事后报错。规则文本不是可执行约束。
+4. **`components` 是迁移逃生口**：它让源文件可以直接写 OpenAPI components，和 `shared` 形成两个源；normalizer 还要处理“二者不能共存”。有逃生口，AI 就会走。
+
+这次改为**封闭结构**：
+
+- `paths` 是 `map<path, object>`，对象只允许 `get/post/put/patch/delete/head/options`；每个 method 复用同一个 operation 节点（YAML anchor 只是写法，结构是固定的）。
+- operation 节点固定为 `id/name/service/summary/used_by/security/request/response`；`request` 固定为 `headers/path/query/cookies/body/mapping/idempotency`；`response` 的 key 固定为三位状态码。
+- `used_by` 的非空由字段属性 `required: true` + `min_items: 1` 保证；`http-consumer` 只保留“精确集合”这一条脚本规则。
+- 删除 `components` 源字段；`shared` 是唯一源，normalizer 拒绝任何源文件里的 `components`。生成的 OpenAPI `components` 是产物，不是契约。
+- `make contract-new` 的 `RenderHTTP` 同步改为新形状；否则脚手架会继续生成旧结构，这是“AI 漂移”的另一个入口。
+
+仍然保留的 `_types.any` 只有两处，且都是**多态叶子**：
+
+- `request.body.schema` / `response.body.schema`：可以是类型 ID 字符串，也可以是匿名 object；`http-service-type` / `http-service-return` 负责语义。
+- `shared.*`：OpenAPI 组件片段；`http-components` / `http-shared` 负责逐项校验。
+
+这两处不是“懒得定义”，而是 YAML 类型系统没有 union；如果强行拆成两个字段，会让 AI 在两种写法之间选择，反而增加漂移。边界写在这里，而不是藏在模板里。
+
+## 硬约束矩阵
+
+| 约束 | 载体 | 脚本 |
+|---|---|---|
+| 文件 ID / 文件名 | `_meta` targets + pattern | `http-file` |
+| 文件级 prefix / audience | `mount` 字段 | `http-mount` / `http-audience` |
+| 版本只在 app | `project.yaml` + `http-version` | `http-version` |
+| operation 结构 | `paths` 固定 method + operation 字段 | `validateDoc` / `http-shape` |
+| `used_by` 非空 | 字段 `required` + `min_items` | 结构校验 |
+| `used_by` 精确集合 | 页面引用反查 | `http-consumer` |
+| 错误码聚合 | service 错误闭包 | `service-errors` + `http-errors` |
+| 入参/出参映射 | `request.mapping` + 类型 ID | `http-service-params` / `http-service-type` / `http-service-return` |
+| 基线错误 | `platform/http_conventions.error_responses` | `http-default-errors` |
+| 共享组件 | `shared` | `http-components` / `http-shared` |
+
+## 脚本不做什么
+
+- 不解析事件订阅者来推导同步错误：事件是异步的，不贡献 HTTP 同步错误；`kind: events` 的 `step.errors` 仍然显式声明。
+- 不解析实体校验/数据库约束来推导错误：这些必须由 query/service 的 `step.errors` 显式声明；否则脚本只能猜测，违反“确定性”。
+- 不检查 `$ref` 类型内部的字段级 nullable/optional：那是被引用类型自己的契约；HTTP 层只校验“类型 ID 一致”。
+- 不把 `mapping` 写入 OpenAPI：它是契约校验用的绑定，不是运行时协议。
+- `COMMON_*` 只能落在平台基线状态（400/401/403/429/500/503，以及按条件注入的 413/415/410）；404/409 等非基线状态必须使用领域错误（如 `ACCOUNT_NOT_FOUND`），否则 operation 没有合法位置声明该错误。
+- 不在没有实现 runner 时伪造场景执行：场景覆盖率目前是 `gen_scenarios -strict` 的硬命令，未补齐会失败；默认 `make gen-check` 只校验清单最新，不掩盖缺口。
+
+## 当前覆盖率现状
+
+`contracts/generated/scenarios/manifest.yaml` 的 `coverage` 段由 `make gen-scenarios` 生成，列出每个 operation 的 `scenarios`、`success_statuses`、`missing_statuses`、每个错误码的 `covered`。当前只有 account 的 3 个场景，`go run ./gen_scenarios -strict` 会列出 13 个 operation 无场景，以及 create 等已覆盖 operation 的错误码缺口；这是真实信号，不是脚本失败。补齐场景的前提是先有 acceptance runner（真实 PG、整库 diff），否则只会得到“结构合法但语义空洞”的假覆盖。

@@ -41,6 +41,7 @@ paths:
         401:
           codes:
             - platform.errors.AUTH_INVALID_CREDENTIALS
+            - platform.errors.AUTH_TOKEN_INVALID
         403:
           codes:
             - platform.errors.ACCOUNT_SUSPENDED
@@ -213,6 +214,9 @@ paths:
           codes:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.AUTH_USERNAME_TAKEN
+        422:
+          codes:
+            - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
 
   /bind/phone:
     post:
@@ -252,6 +256,7 @@ paths:
         422:
           codes:
             - platform.errors.AUTH_PHONE_INVALID
+            - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
 
   /bind/email:
     post:
@@ -291,6 +296,7 @@ paths:
         422:
           codes:
             - platform.errors.AUTH_EMAIL_INVALID
+            - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
 
   /me:
     get:

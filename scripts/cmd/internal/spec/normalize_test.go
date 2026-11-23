@@ -193,19 +193,23 @@ func TestCollectHTTPOperationMeta(t *testing.T) {
 		"paths": map[string]any{
 			"/x": map[string]any{
 				"get": map[string]any{
-					"id":       "cap.protocols.http.x.get",
-					"audience": []any{"user"},
-					"used_by":  []any{"feature.pages.x"},
+					"id":      "cap.protocols.http.x.get",
+					"used_by": []any{"feature.pages.x"},
 				},
 			},
 		},
 	}
 	meta := CollectHTTPOperationMeta(doc)
 	got := meta["cap.protocols.http.x.get"]
-	if len(got.Audience) != 1 || got.Audience[0] != "user" {
-		t.Fatalf("audience not collected: %v", got)
-	}
 	if len(got.UsedBy) != 1 || got.UsedBy[0] != "feature.pages.x" {
 		t.Fatalf("used_by not collected: %v", got)
+	}
+}
+
+func TestNormalizeHTTPDocumentRejectsComponents(t *testing.T) {
+	doc := map[string]any{"components": map[string]any{}}
+	err := NormalizeHTTPDocument(doc, nil, true)
+	if err == nil || !strings.Contains(err.Error(), "shared") {
+		t.Fatalf("components not rejected: %v", err)
 	}
 }
