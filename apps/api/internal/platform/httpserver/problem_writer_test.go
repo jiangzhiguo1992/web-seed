@@ -62,6 +62,20 @@ func TestProblemWriterMiddlewareInjects(t *testing.T) {
 	}
 }
 
+func TestProblemWriterLogsRequestID(t *testing.T) {
+	log, buf := testLogger()
+	handler := serverRequestID(WithProblemWriter(log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ProblemWriterFrom(r.Context()).Write(w, Problem{Status: http.StatusServiceUnavailable, RetryAfter: "soon"})
+	})))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if !strings.Contains(buf.String(), "request_id=") {
+		t.Fatalf("log missing request_id: %s", buf.String())
+	}
+}
+
 func TestProblemWriterFromMissing(t *testing.T) {
 	rec := httptest.NewRecorder()
 	ProblemWriterFrom(t.Context()).Write(rec, Problem{Status: http.StatusInternalServerError})
