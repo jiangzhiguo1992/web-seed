@@ -127,7 +127,7 @@ contract-impact: ## 影响面分析：make contract-impact id=<id>（P2）
 	@echo "contract-impact: 尚未实现（P2）"
 	@exit 1
 
-contract-compat: ## oasdiff v1→v2 兼容检测
+contract-compat: ## oasdiff 兼容检测（存在 v2 spec 时对比 v1）
 	./scripts/contract/compat.sh
 
 contract-compat-baseline: ## oasdiff 与 origin/main 对比（一次性迁移/发布前手动跑）

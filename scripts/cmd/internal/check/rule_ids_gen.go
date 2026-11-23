@@ -81,7 +81,6 @@ var knownRuleIDs = map[string]bool{
 	"http-errors":                 true,
 	"http-file":                   true,
 	"http-headers":                true,
-	"http-idempotency":            true,
 	"http-mount":                  true,
 	"http-operation":              true,
 	"http-retry-after":            true,

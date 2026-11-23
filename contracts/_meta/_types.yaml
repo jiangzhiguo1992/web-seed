@@ -274,6 +274,7 @@ type_vocabulary:
     - { path: contracts/_meta, kind: dir, reason: "契约元层：顶层 type 是契约类型，字段 type 由 _meta 校验" }
     - { path: contracts/generated, kind: dir, reason: "生成产物：OpenAPI 使用 JSON Schema 外部词汇" }
     - { path: contracts/capabilities/protocols/http, kind: dir, reason: "完整 OpenAPI 3.1：type: object/array 是外部词汇" }
+    - { path: contracts/platform/http_conventions.yaml, kind: file, reason: "平台 HTTP 组件：components 直接使用 OpenAPI 3.1 JSON Schema 词汇" }
     - { path: contracts/index.yaml, kind: file, reason: "契约注册表：不含 schema 节点" }
     - { path: contracts/project.yaml, kind: file, reason: "项目元数据：不含 schema 节点" }
 

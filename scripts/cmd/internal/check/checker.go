@@ -108,7 +108,7 @@ func (c *Checker) run() {
 	c.checkDoNotDuplicates()
 	c.checkModules()
 	c.checkErrorFiles()
-	c.checkProjectAPIVersion()
+	c.checkProjectApps()
 	c.checkPlatformContracts()
 	c.checkRoles()
 	tableSchema, err := c.loadSchemaByType("data.tables")

@@ -32,11 +32,9 @@ apps:
   admin:
     kind: api
     description: "管理端 API"
-    api_version: v1
     audience: admin
     timeout_ms: 5000
     includes:
-      - cap.protocols.http.shared
       - cap.protocols.http.account
       - cap.protocols.http.auth
     generated:
@@ -44,27 +42,12 @@ apps:
       server: apps/api/internal/generated/openapi
       client: apps/web/packages/api-client/src/generated
 
-  admin_v2:
-    kind: api
-    description: "管理端 API v2"
-    api_version: v2
-    audience: admin
-    timeout_ms: 5000
-    includes:
-      - cap.protocols.http.shared
-      - cap.protocols.http.account
-      - cap.protocols.http.auth
-    generated:
-      spec: generated/openapi/admin_v2.yaml
-
   user:
     kind: api
     description: "用户端 API"
-    api_version: v1
     audience: user
     timeout_ms: 5000
     includes:
-      - cap.protocols.http.shared
       - cap.protocols.http.auth
     generated:
       spec: generated/openapi/user.yaml

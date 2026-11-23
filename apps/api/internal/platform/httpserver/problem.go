@@ -10,8 +10,9 @@ import (
 
 // Problem 是 RFC 9457 错误响应的最小实现。
 //
-// 字段与 contracts/capabilities/http/shared.yaml 的 Problem 保持一致；
-// code 为业务错误码，映射表见 contracts/platform/errors/。
+// 契约错误信封以 contracts/platform/http_conventions.yaml 的
+// components.schemas.ApiErrorResponse 为准；本类型只保留 RFC 9457 兼容字段。
+// 业务错误码映射表见 contracts/platform/errors/。
 type Problem struct {
 	Type   string  `json:"type"`
 	Title  string  `json:"title"`

@@ -29,7 +29,6 @@
 | cap.protocols.http | http-components | http-components | 1 |
 | cap.protocols.http | http-shared | http-shared | 1 |
 | cap.protocols.http | http-security | http-security | 1 |
-| cap.protocols.http | http-idempotency | http-idempotency | 1 |
 | cap.protocols.http | http-headers | http-headers | 1 |
 | cap.protocols.http | http-retry-after | http-retry-after | 1 |
 | cap.protocols.http | http-service-type | http-service-type | 1 |

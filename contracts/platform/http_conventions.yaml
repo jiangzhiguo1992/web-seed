@@ -1,8 +1,8 @@
-# HTTP 信封、分页、header、状态码约定。只写规则，不写 schema。
+# HTTP 信封、分页、header、状态码与平台组件约定。只写规则与平台级组件，不写 operation。
 
 schema_version: 1
 id: platform.http_conventions
-summary: "HTTP 信封与状态码约定"
+summary: "HTTP 信封、状态码与平台组件约定"
 stability: draft
 
 response:
@@ -32,27 +32,20 @@ headers:
   request:
     - { name: X-Request-Id, required: false, note: "客户端可传，服务端校验或生成；每个 operation 必须声明" }
     - { name: Accept-Language, required: false, note: "用于错误文案" }
-    - { name: Idempotency-Key, required: false, note: "request.idempotency=optional/required 时必须声明；required 用 IdempotencyKeyRequired" }
+    - { name: Idempotency-Key, required: false, note: "需要幂等语义的写操作声明；required 使用 IdempotencyKeyRequired" }
     - { name: X-CSRF-Token, required: false, note: "cookie 端点必须声明；double submit cookie" }
   response:
     - { name: X-Request-Id, required: true, note: "必须回传，便于关联日志；每个 response 必须声明" }
-    - { name: Set-Cookie, required: false, note: "登录/刷新设置 refresh_token HttpOnly cookie + csrf_token 可读 cookie；登出清除；Path=/<app.api_version>/auth" }
-    - { name: Retry-After, required: false, note: "429/503 时返回非负整数秒或 HTTP-date；COMMON_RATE_LIMITED / COMMON_LOOP_EXHAUSTED 使用；非法值不发送并返回参数错误" }
+    - { name: Set-Cookie, required: false, note: "登录/刷新设置 refresh_token HttpOnly cookie + csrf_token 可读 cookie；登出清除；Path=/<api_version>/auth" }
+    - { name: Retry-After, required: false, note: "429/503 时返回非负整数秒或 HTTP-date；COMMON_RATE_LIMITED / COMMON_LOOP_EXHAUSTED 使用；非法值不发送" }
     - { name: RateLimit-Limit, required: false }
     - { name: RateLimit-Remaining, required: false }
     - { name: RateLimit-Reset, required: false }
     - { name: Deprecation, required: false }
     - { name: Sunset, required: false }
 
-idempotency:
-  header: Idempotency-Key
-  values: [ none, optional, required ]
-  rule: "每个 operation 必须声明 request.idempotency；optional 用 IdempotencyKey，required 用 IdempotencyKeyRequired"
-
 security:
-  scheme: BearerAuth
-  kind: http_bearer_jwt
-  cookie_refresh: "refresh_token 只写 HttpOnly cookie；Path=/<app.api_version>/auth；cookie 端点必须 X-CSRF-Token"
+  cookie_refresh: "refresh_token 只写 HttpOnly cookie；Path=/<api_version>/auth；cookie 端点必须 X-CSRF-Token"
 
 status_codes:
   success: [200, 201, 202, 204]
@@ -97,3 +90,201 @@ cors:
   allowed_origins_source: platform.environments
   allow_credentials: true
   max_age_seconds: 600
+
+# 平台级 HTTP 组件：直接使用 OpenAPI 3.1 components 形状，由 gen_openapi 注入每个 api app。
+# 只有跨模块复用的组件放这里；文件私有响应头放该文件自己的 shared.headers。
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ApiErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - "code"
+        - "message"
+        - "data"
+      properties:
+        code:
+          type: integer
+          minimum: 1000
+          maximum: 9999
+        message:
+          type: string
+        data:
+          type: "null"
+  parameters:
+    Authorization:
+      name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 64
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 64
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+  headers:
+    RetryAfter:
+      description: "建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误"
+      schema:
+        type: string
+    XRequestId:
+      description: "请求链路 ID；服务端必须回传"
+      schema:
+        type: string
+        maxLength: 64
+  responses:
+    BadRequest:
+      description: "请求非法"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Unauthorized:
+      description: "未认证"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Forbidden:
+      description: "无权限"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    NotFound:
+      description: "资源不存在"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Gone:
+      description: "端点已移除"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    PayloadTooLarge:
+      description: "请求体超过上限"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    UnsupportedMediaType:
+      description: "不支持的 Content-Type"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Conflict:
+      description: "状态冲突"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    UnprocessableEntity:
+      description: "语义校验失败"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Locked:
+      description: "认证锁定中，可稍后重试"
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    TooManyRequests:
+      description: "触发限流"
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    ServiceUnavailable:
+      description: "服务暂不可用或循环预算耗尽，可稍后重试"
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Internal:
+      description: "服务端错误"
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'

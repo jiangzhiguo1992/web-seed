@@ -12,7 +12,7 @@
 | `environments.yaml` | 环境清单、域名、差异项、密钥来源 | tested |
 | `versioning.yaml` | API 版本、契约版本、弃用窗口 | tested（`make contract-compat`） |
 | `errors/` | 错误码按域拆分；`_base.yaml` 全局约定，`data_access.yaml` 基础设施基线 | generated+tested |
-| `http_conventions.yaml` | 信封、分页、header、状态码映射 | generated |
+| `http_conventions.yaml` | 信封、分页、header、状态码映射与平台 HTTP 组件 | generated |
 | `quality.yaml` | 覆盖率门槛、必测路径、禁止项 | tested（quality-refs） |
 | `config/env.json` | 环境变量 schema | tested（JSON Schema + 环境枚举） |
 | `architecture/go_arch.yaml` | Go 分层与模块边界 | tested（architecture-refs） |

@@ -111,7 +111,7 @@ contracts/
 │   ├── environments.yaml     #   环境清单与差异
 │   ├── versioning.yaml       #   版本与兼容策略
 │   ├── errors/               #   错误码按域拆分（_base / common / account / auth ...）
-│   ├── http_conventions.yaml #   信封、分页、header、状态码
+│   ├── http_conventions.yaml #   信封、分页、header、状态码、平台组件
 │   ├── quality.yaml          #   测试策略与门槛
 │   ├── config/env.json  architecture/{go_arch.yaml,web_deps.json}
 │   ├── design/tokens.json      observability/{log_fields,metrics}.yaml
@@ -421,7 +421,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 
 | 产物 | 来源 | 用途 |
 |---|---|---|
-| `openapi/admin.yaml` | `capabilities/protocols/http/*.yaml` + `shared.yaml` 合并 | oapi-codegen / Swagger / `gen-client` 的输入 |
+| `openapi/admin.yaml` | `capabilities/protocols/http/*.yaml` + `platform/http_conventions.yaml` 合并 | oapi-codegen / Swagger / `gen-client` 的输入 |
 
 `db` 产物（`schema.sql`、`migrations/*.sql`）输出到 `apps/api/`，不在本目录。
 

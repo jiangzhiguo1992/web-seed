@@ -73,7 +73,7 @@
 
 | # | 假设 | 风险 | 验证时机 |
 |---|---|---|---|
-| A1 | ~~oapi-codegen 跨文件 `$ref`~~ | 已规避：生成前先合并 `shared.yaml` + 模块文件为单 spec | 已验证策略 |
+| A1 | ~~oapi-codegen 跨文件 `$ref`~~ | 已规避：生成前先合并平台 `components` + 模块文件为单 spec | 已验证策略 |
 | A2 | 合并后的 spec 能被 oapi-codegen 与 openapi-typescript 同时消费 | 任一工具不兼容则需调整合并粒度 | P2 |
 | A3 | Tailwind `@source` 在被 `@import` 的包内 CSS 中仍生效 | 不生效则退回 app 内写相对路径 | P1 前端骨架 |
 | A4 | pnpm `-r build` 严格按拓扑先构建 tokens/ui | 否则 app 构建拿不到 theme.css | P1 |
@@ -95,7 +95,7 @@
 
 #### P2 契约生成链
 
-- [x] `capabilities/protocols/http/*.yaml` + `shared.yaml` → 合并为 `generated/openapi/admin.yaml`
+- [x] `capabilities/protocols/http/*.yaml` + `platform/http_conventions.components` → 合并为 `generated/openapi/admin.yaml`
 - [ ] 合并 spec → Go server 类型（`oapi-codegen strict-server`）
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
 - [x] `data/tables/*.yaml` → `schema.sql` + `migrations/0001_baseline.sql`（增量 diff 仍 P5）
@@ -224,7 +224,7 @@
 ```
 data/tables/*.yaml ──> gen-db ──> schema.sql + migrations/*.sql
 
-capabilities/protocols/http/*.yaml + shared.yaml ──> gen-openapi ──> generated/openapi/admin.yaml
+capabilities/protocols/http/*.yaml + platform/http_conventions.components ──> gen-openapi ──> generated/openapi/admin.yaml
 
 platform/errors/*.yaml ──> gen-errors ──> docs/contracts/generated/errors.md
 
@@ -392,7 +392,7 @@ apps:
 
 - HTTP 层统一信封：成功 `{code: 0, message: "ok", data: <resource>}`，错误 `{code: <biz_code>, message, data: null}`；HTTP status 保留 4xx/5xx
 - `code` 取 `platform/errors/` 的整数 `biz_code`；成功码固定 0
-- 浏览器 refresh token 只写 HttpOnly cookie（Path=/<app.api_version>/auth）；cookie 端点必须校验 `X-CSRF-Token`；写接口用 `Idempotency-Key`
+- 浏览器 refresh token 只写 HttpOnly cookie（Path=/<api_version>/auth）；cookie 端点必须校验 `X-CSRF-Token`；写接口用 `Idempotency-Key`
 - 不返回的 error 必须记录（含栈 + 上下文）
 
 ### 5.3 事务边界

@@ -8,6 +8,7 @@ do_not:
   - "枚举必须引用 data.enums.*；不要在此重复枚举值"
 
 mount:
+  api_version: v1
   path: /account
   audience: [admin]
 
@@ -31,10 +32,9 @@ paths:
           limit: { schema: _types.page_limit }
         mapping:
           query:
-            status: filter.status
-            offset: filter.offset
-            limit: filter.limit
-        idempotency: none
+            status: params.filter.status
+            offset: params.filter.offset
+            limit: params.filter.limit
       response:
         200:
           description: "成功"
@@ -61,8 +61,7 @@ paths:
           content_type: application/json
           schema: cap.services.account.schemas.CreateAccountInput
         mapping:
-          body: "input"
-        idempotency: required
+          body: "params.input"
       response:
         201:
           description: "已创建"
@@ -97,8 +96,7 @@ paths:
           id: { schema: _types.integer }
         mapping:
           path:
-            id: id
-        idempotency: none
+            id: params.id
       response:
         200:
           description: "成功"
@@ -131,9 +129,8 @@ paths:
           schema: cap.services.account.schemas.UpdateAccountInput
         mapping:
           path:
-            id: id
-          body: "input"
-        idempotency: optional
+            id: params.id
+          body: "params.input"
       response:
         200:
           description: "成功"
@@ -170,8 +167,7 @@ paths:
           id: { schema: _types.integer }
         mapping:
           path:
-            id: id
-        idempotency: optional
+            id: params.id
       response:
         204:
           description: "已删除"
@@ -204,8 +200,7 @@ paths:
           id: { schema: _types.integer }
         mapping:
           path:
-            id: id
-        idempotency: optional
+            id: params.id
       response:
         200:
           description: "成功"
@@ -241,18 +236,11 @@ paths:
           id: { schema: _types.integer }
         body:
           content_type: application/json
-          schema:
-            type: _types.object
-            properties:
-              reason: { type: _types.string, min_len: 1, max_len: 200 }
-            required:
-              - reason
+          schema: cap.services.account.schemas.SuspendAccountInput
         mapping:
           path:
-            id: id
-          body:
-            reason: "reason"
-        idempotency: optional
+            id: params.id
+          body: "params.input"
       response:
         200:
           description: "成功"

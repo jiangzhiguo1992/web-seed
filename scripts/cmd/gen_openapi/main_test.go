@@ -141,6 +141,7 @@ apps:
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
 mount:
+  api_version: v1
   path: /
   audience: [admin]
 paths:
@@ -189,33 +190,37 @@ enums: []
 	}
 }
 
-func TestBuildVersionedAppsShareFiles(t *testing.T) {
+func TestBuildAppsShareFiles(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
-	writeHTTPPolicy(t, root, "[]", "[]")
+	writeFixture(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+error_responses: { always: [], secured: [] }
+components:
+  responses:
+    Conflict: { description: "409" }
+`)
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
 apps:
   v1:
     kind: api
-    api_version: v1
     audience: admin
     timeout_ms: 5000
-    includes: [cap.protocols.http.x, cap.protocols.http.shared]
+    includes: [cap.protocols.http.x]
     generated:
       spec: generated/openapi/v1.yaml
   v2:
     kind: api
-    api_version: v2
     audience: admin
     timeout_ms: 5000
-    includes: [cap.protocols.http.x, cap.protocols.http.shared]
+    includes: [cap.protocols.http.x]
     generated:
       spec: generated/openapi/v2.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
 mount:
+  api_version: v1
   path: /
   audience: [admin]
 paths:
@@ -233,11 +238,6 @@ paths:
           codes:
             - platform.errors.X
 `)
-	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-shared:
-  responses:
-    Conflict: { description: "409" }
-`)
 	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
 errors:
   - { code: X, biz_code: 9001, status: 409 }
@@ -251,10 +251,13 @@ errors:
 	if err != nil {
 		t.Fatal(err)
 	}
-	for version, key := range map[string]string{"v1": "generated/openapi/v1.yaml", "v2": "generated/openapi/v2.yaml"} {
+	for _, key := range []string{"generated/openapi/v1.yaml", "generated/openapi/v2.yaml"} {
 		out := string(files[key])
-		if !strings.Contains(out, "url: /"+version) {
-			t.Fatalf("%s missing server /%s:\n%s", key, version, out)
+		if !strings.Contains(out, "/x:") {
+			t.Fatalf("%s missing mounted path /x:\n%s", key, out)
+		}
+		if !strings.Contains(out, "url: /v1") {
+			t.Fatalf("%s missing mount-derived server /v1:\n%s", key, out)
 		}
 		if !strings.Contains(out, "getX") {
 			t.Fatalf("%s missing shared operation:\n%s", key, out)
@@ -339,25 +342,84 @@ fields:
 	}
 }
 
-func TestBuildInjectsPlatformBaseline(t *testing.T) {
+func TestBuildRejectsMixedMountVersions(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
-	writeHTTPPolicy(t, root, "[400, 429, 500, 503]", "[401, 403]")
+	writeHTTPPolicy(t, root, "[]", "[]")
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
 apps:
   api:
     kind: api
-    api_version: v1
     audience: admin
     timeout_ms: 5000
-    includes: [cap.protocols.http.a, cap.protocols.http.b, cap.protocols.http.shared]
+    includes: [cap.protocols.http.a, cap.protocols.http.b]
+    generated:
+      spec: generated/openapi/x.yaml
+`)
+	for _, item := range []struct{ name, version string }{{"a", "v1"}, {"b", "v2"}} {
+		writeFixture(t, root, "contracts/capabilities/protocols/http/"+item.name+`.yaml`, `id: "cap.protocols.http.`+item.name+`"
+mount:
+  api_version: `+item.version+`
+  path: /
+  audience: [admin]
+paths:
+  /`+item.name+`:
+    get:
+      name: "get`+strings.ToUpper(item.name)+`"
+      id: "cap.protocols.http.`+item.name+`.get"
+      service: "cap.services.x.get"
+      security: []
+      request: {}
+      response:
+        "204": { description: "OK" }
+`)
+	}
+	for _, dir := range []string{"contracts/capabilities/services", "contracts/data/enums", "contracts/data/entities"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := build(root)
+	if err == nil || !strings.Contains(err.Error(), "includes mix mount.api_version") {
+		t.Fatalf("mixed mount versions not rejected: %v", err)
+	}
+}
+
+func TestBuildInjectsPlatformBaseline(t *testing.T) {
+	root := t.TempDir()
+	writeTypes(t, root)
+	writeFixture(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+error_responses:
+  always: [400, 429, 500, 503]
+  secured: [401, 403]
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer }
+  responses:
+    BadRequest: { description: "400" }
+    Unauthorized: { description: "401" }
+    Forbidden: { description: "403" }
+    TooManyRequests: { description: "429" }
+    Internal: { description: "500" }
+    ServiceUnavailable: { description: "503" }
+`)
+	writeFixture(t, root, "contracts/project.yaml", `project:
+  name: test
+  version: "1"
+apps:
+  api:
+    kind: api
+    audience: admin
+    timeout_ms: 5000
+    includes: [cap.protocols.http.a, cap.protocols.http.b]
     generated:
       spec: generated/openapi/x.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
 mount:
+  api_version: v1
   path: /
   audience: [admin]
 paths:
@@ -373,17 +435,13 @@ paths:
         "200":
           description: "OK"
 `)
-	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-shared:
-  responses:
-    Conflict: { description: "409" }
-`)
 	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
 errors:
   - { code: X, biz_code: 9001, status: 409 }
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/b.yaml", `id: "cap.protocols.http.b"
 mount:
+  api_version: v1
   path: /
   audience: [admin]
 paths:
@@ -396,18 +454,6 @@ paths:
       response:
         "200":
           description: "OK"
-`)
-	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-shared:
-  securitySchemes:
-    BearerAuth: { type: http, scheme: bearer }
-  responses:
-    BadRequest: { description: "400" }
-    Unauthorized: { description: "401" }
-    Forbidden: { description: "403" }
-    TooManyRequests: { description: "429" }
-    Internal: { description: "500" }
-    ServiceUnavailable: { description: "503" }
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas: {}
@@ -441,25 +487,134 @@ enums: []
 	}
 }
 
-func TestBuildEmitsErrorCodes(t *testing.T) {
+func TestBuildInjectsPlatformComponents(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
-	writeHTTPPolicy(t, root, "[]", "[]")
+	writeFixture(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+error_responses:
+  always: [409]
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer }
+  schemas:
+    ApiErrorResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        code: { type: integer }
+  parameters:
+    RequestId: { name: X-Request-Id, in: header, required: false, schema: { type: string } }
+  headers:
+    XRequestId: { schema: { type: string } }
+  responses:
+    Conflict:
+      description: "409"
+      headers:
+        X-Request-Id: { $ref: "#/components/headers/XRequestId" }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiErrorResponse" }
+`)
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
 apps:
   api:
     kind: api
-    api_version: v1
     audience: admin
     timeout_ms: 5000
-    includes: [cap.protocols.http.a, cap.protocols.http.shared]
+    includes: [cap.protocols.http.a]
     generated:
       spec: generated/openapi/x.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
 mount:
+  api_version: v1
+  path: /
+  audience: [admin]
+paths:
+  /a:
+    get:
+      name: getA
+      id: cap.protocols.http.a.get
+      service: cap.services.x.get
+      summary: "a"
+      used_by: [feature.pages.x]
+      security:
+        - BearerAuth: []
+      request:
+        headers: { X-Request-Id: RequestId }
+        mapping: {}
+      response:
+        "200":
+          description: "OK"
+          headers: { X-Request-Id: XRequestId }
+          body:
+            content_type: application/json
+            schema: cap.services.x.schemas.X
+        "409":
+          codes: [platform.errors.X]
+`)
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+schemas:
+  X:
+    type: _types.object
+    properties:
+      - { name: id, schema: { type: _types.integer }, required: true, description: "id" }
+services: []
+`)
+	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
+errors:
+  - { code: X, biz_code: 9001, status: 409 }
+`)
+	for _, dir := range []string{"contracts/data/enums", "contracts/data/entities"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(files["generated/openapi/x.yaml"])
+	for _, want := range []string{
+		"/a:",
+		"BearerAuth:",
+		"ApiErrorResponse:",
+		"Conflict:",
+		"$ref: '#/components/parameters/RequestId'",
+		"url: /v1",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("generated spec missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestBuildEmitsErrorCodes(t *testing.T) {
+	root := t.TempDir()
+	writeTypes(t, root)
+	writeFixture(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+error_responses: { always: [], secured: [] }
+components:
+  responses:
+    Conflict: { description: "409" }
+`)
+	writeFixture(t, root, "contracts/project.yaml", `project:
+  name: test
+  version: "1"
+apps:
+  api:
+    kind: api
+    audience: admin
+    timeout_ms: 5000
+    includes: [cap.protocols.http.a]
+    generated:
+      spec: generated/openapi/x.yaml
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
+mount:
+  api_version: v1
   path: /
   audience: [admin]
 paths:
@@ -475,11 +630,6 @@ paths:
         "409":
           codes:
             - platform.errors.ACCOUNT_NUMBER_TAKEN
-`)
-	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-shared:
-  responses:
-    Conflict: { description: "409" }
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas: {}
@@ -526,6 +676,7 @@ apps:
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
 mount:
+  api_version: v1
   path: /
   audience: [admin]
 paths:
@@ -541,6 +692,7 @@ paths:
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/b.yaml", `id: "cap.protocols.http.b"
 mount:
+  api_version: v1
   path: /
   audience: [user]
 paths:

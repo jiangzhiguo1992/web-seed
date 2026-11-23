@@ -17,7 +17,7 @@ func httpDoc(operation map[string]any) map[string]any {
 		}
 	}
 	return map[string]any{
-		"mount": map[string]any{"path": "/", "audience": []any{"admin"}},
+		"mount": map[string]any{"api_version": "v1", "path": "/", "audience": []any{"admin"}},
 		"paths": map[string]any{
 			"/x": map[string]any{"post": operation},
 		},
@@ -189,7 +189,7 @@ func TestNormalizeHTTPDocumentRejectsEmptyCodes(t *testing.T) {
 
 func TestCollectHTTPOperationMeta(t *testing.T) {
 	doc := map[string]any{
-		"mount": map[string]any{"path": "/", "audience": []any{"admin"}},
+		"mount": map[string]any{"api_version": "v1", "path": "/", "audience": []any{"admin"}},
 		"paths": map[string]any{
 			"/x": map[string]any{
 				"get": map[string]any{

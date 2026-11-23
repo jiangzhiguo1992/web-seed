@@ -86,7 +86,6 @@ entries:
   - { id: data.enums.account, path: data/enums/account.yaml, summary: "账号域跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated, stability: draft }
 
   # ---------- capabilities ----------
-  - { id: cap.protocols.http.shared, path: capabilities/protocols/http/shared.yaml, summary: "HTTP 共享组件", consumers: [api, web/admin], enforcement: generated, stability: draft }
   - id: cap.protocols.http.account
     path: capabilities/protocols/http/account.yaml
     summary: "账号 HTTP 接口"
@@ -155,7 +154,7 @@ entries:
   - { id: platform.errors.verification, path: platform/errors/verification.yaml, summary: "验证码错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.errors.token, path: platform/errors/token.yaml, summary: "令牌错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.errors.data_access, path: platform/errors/data_access.yaml, summary: "数据访问基础设施错误基线", consumers: [api, tools], enforcement: tested, stability: draft }
-  - { id: platform.http_conventions, path: platform/http_conventions.yaml, summary: "信封、分页、header、状态码", consumers: [api, web/admin], enforcement: generated, stability: draft }
+  - { id: platform.http_conventions, path: platform/http_conventions.yaml, summary: "信封、分页、header、状态码与平台 HTTP 组件", consumers: [api, web/admin], enforcement: generated, stability: draft }
   - { id: platform.quality, path: platform/quality.yaml, summary: "测试策略与门槛", consumers: [tools], enforcement: tested, stability: draft }
   - { id: platform.config.env, path: platform/config/env.json, summary: "环境变量 schema", consumers: [api, web/admin, ops], enforcement: tested, stability: draft }
   - { id: platform.architecture.go_arch, path: platform/architecture/go_arch.yaml, summary: "Go 分层约束", consumers: [tools], enforcement: tested, stability: draft }
@@ -172,7 +171,6 @@ entries:
 
   # ---------- generated（产物索引，非契约正文） ----------
   - { id: generated.openapi, path: generated/openapi/admin.yaml, summary: "管理端 v1 OpenAPI spec（代码生成输入）", consumers: [api, tools], enforcement: generated, stability: draft }
-  - { id: generated.openapi.admin_v2, path: generated/openapi/admin_v2.yaml, summary: "管理端 v2 OpenAPI spec", consumers: [api, tools], enforcement: generated, stability: draft }
   - { id: generated.openapi.user, path: generated/openapi/user.yaml, summary: "用户端 v1 OpenAPI spec", consumers: [api, tools], enforcement: generated, stability: draft }
   - { id: generated.scenarios, path: generated/scenarios/manifest.yaml, summary: "HTTP 验收场景清单", consumers: [api, tools], enforcement: generated, stability: draft }
 

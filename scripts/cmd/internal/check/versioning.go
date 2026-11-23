@@ -14,18 +14,19 @@ func (c *Checker) checkVersioning() {
 	}
 	rel := relPath(c.root, path)
 	versions := map[string]bool{}
-	if project, err := loadYAML(filepath.Join(c.root, "contracts/project.yaml")); err == nil {
-		apps, _ := asMap(project["apps"])
-		for _, raw := range apps {
-			app, _ := asMap(raw)
-			if version, _ := app["api_version"].(string); version != "" {
-				versions[version] = true
-			}
+	for _, file := range glob(c.root, "contracts/capabilities/protocols/http/*.yaml") {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		mount, _ := asMap(doc["mount"])
+		if version, _ := mount["api_version"].(string); version != "" {
+			versions[version] = true
 		}
 	}
 	api, _ := asMap(doc["api"])
 	if current, _ := api["current"].(string); current != "" && !versions[current] {
-		c.rulef("versioning-refs", "%s: api.current %s is not a declared app api_version", rel, current)
+		c.rulef("versioning-refs", "%s: api.current %s is not declared by any HTTP mount.api_version", rel, current)
 	}
 	detection, _ := asMap(doc["detection"])
 	command, _ := detection["command"].(string)
@@ -62,7 +63,7 @@ func (c *Checker) checkVersioning() {
 		for _, rawScope := range asList(item["scope"]) {
 			scope, _ := rawScope.(string)
 			if scope != "" && !versions[scope] {
-				c.rulef("versioning-refs", "%s: accepted breaking change %s scope %s is not an app api_version", rel, id, scope)
+				c.rulef("versioning-refs", "%s: accepted breaking change %s scope %s is not an HTTP mount.api_version", rel, id, scope)
 			}
 		}
 	}

@@ -18,7 +18,7 @@ func (c *Checker) checkAuthPolicy() {
 	rel := relPath(c.root, path)
 	paths := map[string]bool{}
 	for _, op := range c.httpOps {
-		paths[op.Path] = true
+		paths[policyPathSuffix(op.Path)] = true
 	}
 	csrf, _ := asMap(doc["csrf"])
 	for _, raw := range asList(csrf["exempt_paths"]) {
@@ -65,10 +65,12 @@ func (c *Checker) checkAuthPolicy() {
 	}
 }
 
-// policyPathSuffix 把 /<app.api_version>/auth/login 或 /v1/auth/login 归一为 /auth/login。
+// policyPathSuffix 把 /<api_version>/auth/login、/<app.api_version>/auth/login 或 /v1/auth/login 归一为 /auth/login。
 func policyPathSuffix(value string) string {
-	if strings.HasPrefix(value, "/<app.api_version>") {
-		return strings.TrimPrefix(value, "/<app.api_version>")
+	for _, prefix := range []string{"/<api_version>", "/<app.api_version>"} {
+		if strings.HasPrefix(value, prefix) {
+			return strings.TrimPrefix(value, prefix)
+		}
 	}
 	parts := strings.Split(strings.TrimPrefix(value, "/"), "/")
 	if len(parts) > 1 && apiVersionSegmentRe.MatchString(parts[0]) {

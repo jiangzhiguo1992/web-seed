@@ -1,6 +1,7 @@
 # ADR 0001：HTTP 契约的边界与验收模型
 
 - 状态：已采纳（mount、错误模型、audience、consumer、多 app、模板封闭化、错误闭包、覆盖率报告已实现；acceptance runner 待实现）
+- 修订：文末「2026-11-23 决策修订」取代本文关于版本归属、`shared.yaml`、`_types.any` 与 `request.idempotency` 的旧结论。
 - 日期：2026-11-23
 - 关联：`contracts/capabilities/protocols/http/*.yaml`、`contracts/platform/http_conventions.yaml`、`contracts/_meta/cap.protocols.http.yaml`、`contracts/_meta/scenario.http.yaml`
 
@@ -243,3 +244,16 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 - `auth-policy-password` 只校验页面 `password.minLength`；不校验服务端哈希算法或复杂度规则。
 - `config.env` 用 JSON Schema 编译，并校验 `required` 含 APP_ENV/HTTP_ADDR、`additionalProperties: false`、APP_ENV/LOG_LEVEL 枚举与默认值、secret 字段为 string；不校验运行时真实值。
 - `web_deps` 校验层名唯一、`rules.from` 唯一、`mayDependOn`/`forbid` 不重叠、`generates` 非空；不执行 dependency-cruiser，不校验 `from.path`/`to.path` 正则。
+
+## 2026-11-23 决策修订
+
+后续实现推翻并取代了本文四处旧结论：
+
+1. **版本归属**：`mount.api_version`（必填，`v<数字>`）成为唯一版本源；生成器按 app 内 include 文件的版本派生 `servers: /<api_version>`，`mount.path` 与 `paths` 不写版本。`project.yaml` 的 `app.api_version` 已删除；同一 app 混版本会被 checker/generator 拒绝。在没有 v2 mount 的情况下，`admin_v2` app 与生成物一并移除，待 v2 契约重做后再加回。
+2. **共享组件**：删除 `protocols/http/shared.yaml`。平台级 securityScheme / schema / parameter / header / response 移入 `platform/http_conventions.yaml` 的 `components`，由 `gen_openapi` 注入每个 api app；只有文件私有响应头/参数保留在文件的 `shared`，并由 normalizer 合入 `components`。
+3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`security` 是 `list<map<string, list<string>>>`；请求/响应头与 cookie 只能引用组件名；path/query 参数是带 `schema` 的固定对象；body schema 必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝；文件 `shared` 只允许 `headers`，header schema 固定为 string。
+4. **幂等字段删除**：`request.idempotency` / `x-idempotency` 已删除。`Idempotency-Key` 的组件选择（`IdempotencyKey` vs `IdempotencyKeyRequired`）本身已完整表达可选/必填语义，独立枚举只会制造第二份状态。
+
+同时 `request.mapping` 的值统一改为 `params.<service 参数路径>`（如 `params.input`、`params.filter.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
+
+验证：`make contract-check`、`make gen`、`make gen-rule-ids`、`make test-tools` 通过；OpenAPI `servers` 带 `/<mount.api_version>`，平台组件出现在每个 spec 的 `components`。

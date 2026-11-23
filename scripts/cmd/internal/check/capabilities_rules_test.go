@@ -128,7 +128,7 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 func writeCapFile(t *testing.T, root, rel, body string) {
 	t.Helper()
 	if strings.Contains(body, "\npaths:") && !strings.Contains(body, "\nmount:") {
-		body = strings.Replace(body, "\npaths:", "\nmount:\n  path: /\n  audience: [admin]\n\npaths:", 1)
+		body = strings.Replace(body, "\npaths:", "\nmount:\n  api_version: v1\n  path: /\n  audience: [admin]\n\npaths:", 1)
 	}
 	p := filepath.Join(root, rel)
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
@@ -230,7 +230,7 @@ paths:
             $ref: "#/components/schemas/WrongInput"
           required: true
         mapping:
-          body: "input"
+          body: "params.input"
       response:
         "204":
           description: "OK"
@@ -276,7 +276,7 @@ paths:
             $ref: "#/components/schemas/WrongInput"
           required: true
         mapping:
-          body: "input"
+          body: "params.input"
       response:
         "204":
           description: "OK"
@@ -301,7 +301,7 @@ shared:
 	}
 }
 
-func TestHTTPRequestBodyTypeInlineSkipped(t *testing.T) {
+func TestHTTPRequestBodyAnonymousRejected(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
 summary: "x"
@@ -332,8 +332,7 @@ paths:
           required: true
         mapping:
           body:
-            id: "id"
-        idempotency: "none"
+            id: "params.id"
       response:
         "204":
           description: "OK"
@@ -363,8 +362,8 @@ shared:
 			paramDecls:     map[string]string{"id": "_types.integer"},
 		},
 	}, map[string]bool{}, map[string]bool{})
-	if len(c.errs) != 0 {
-		t.Fatalf("anonymous requestBody reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-service-type]") {
+		t.Fatalf("anonymous requestBody not reported: %v", c.errs)
 	}
 }
 
@@ -589,37 +588,35 @@ shared:
 
 func TestHTTPSharedValidation(t *testing.T) {
 	c := &Checker{}
-	c.checkHTTPShared(map[string]any{
-		"shared": map[string]any{
-			"securitySchemes": map[string]any{
-				"BadHTTP": map[string]any{"type": "http"},
-				"BadKey":  map[string]any{"type": "apiKey", "in": "path"},
-				"BadOAuth": map[string]any{
-					"type":  "oauth2",
-					"flows": map[string]any{"authorizationCode": map[string]any{}},
-				},
-			},
-			"responses": map[string]any{
-				"NoDescription": map[string]any{},
-				"NoSchema": map[string]any{
-					"description": "x",
-					"content":     map[string]any{"application/json": map[string]any{}},
-				},
-			},
-			"parameters": map[string]any{
-				"BadParam": map[string]any{"name": "id", "in": "path"},
-			},
-			"headers": map[string]any{
-				"BadHeader": map[string]any{},
-			},
-			"schemas": map[string]any{
-				"NoSource": map[string]any{"type": "object"},
-				"Both": map[string]any{
-					"source": map[string]any{"enum": "data.enums.x", "entity": "data.entities.x"},
-				},
+	c.checkHTTPComponents(map[string]any{
+		"securitySchemes": map[string]any{
+			"BadHTTP": map[string]any{"type": "http"},
+			"BadKey":  map[string]any{"type": "apiKey", "in": "path"},
+			"BadOAuth": map[string]any{
+				"type":  "oauth2",
+				"flows": map[string]any{"authorizationCode": map[string]any{}},
 			},
 		},
-	}, "x.yaml")
+		"responses": map[string]any{
+			"NoDescription": map[string]any{},
+			"NoSchema": map[string]any{
+				"description": "x",
+				"content":     map[string]any{"application/json": map[string]any{}},
+			},
+		},
+		"parameters": map[string]any{
+			"BadParam": map[string]any{"name": "id", "in": "path"},
+		},
+		"headers": map[string]any{
+			"BadHeader": map[string]any{},
+		},
+		"schemas": map[string]any{
+			"NoSource": map[string]any{"type": "object"},
+			"Both": map[string]any{
+				"source": map[string]any{"enum": "data.enums.x", "entity": "data.entities.x"},
+			},
+		},
+	}, "x.yaml", false)
 	got := strings.Join(c.errs, "\n")
 	if !strings.Contains(got, "[http-shared]") {
 		t.Fatalf("shared errors not tagged: %v", c.errs)
@@ -698,7 +695,7 @@ paths:
             required: false
         mapping:
           query:
-            id: "missing"
+            id: "params.missing"
       response:
         "204":
           description: "OK"
@@ -786,35 +783,33 @@ shared:
 	}
 }
 
-func TestProjectAPIVersion(t *testing.T) {
+func TestProjectApps(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]`)
 	writeCapFile(t, root, "contracts/project.yaml", `apps:
   good:
     kind: api
-    api_version: v1
     audience: admin
     timeout_ms: 5000
     generated: { spec: generated/openapi/good.yaml }
-  missing:
+  missing_audience:
     kind: api
     timeout_ms: 5000
     generated: { spec: generated/openapi/missing.yaml }
-  invalid:
+  invalid_timeout:
     kind: api
-    api_version: "1"
     audience: admin
-    timeout_ms: 5000
+    timeout_ms: 0
     generated: { spec: generated/openapi/invalid.yaml }
   web:
     kind: web
     generated: { spec: ignored }
 `)
 	c := &Checker{root: root}
-	c.checkProjectAPIVersion()
+	c.checkProjectApps()
 	got := strings.Join(c.errs, "\n")
-	if !strings.Contains(got, "app missing requires api_version") || !strings.Contains(got, "app invalid api_version") {
-		t.Fatalf("project api_version not reported: %v", c.errs)
+	if !strings.Contains(got, "app missing_audience requires audience") || !strings.Contains(got, "app invalid_timeout timeout_ms must be a positive integer") {
+		t.Fatalf("project app errors not reported: %v", c.errs)
 	}
 	if strings.Contains(got, "app good") || strings.Contains(got, "app web") {
 		t.Fatalf("valid/web app reported: %v", c.errs)
@@ -842,7 +837,6 @@ paths:
           RequestId:
             $ref: "#/components/parameters/RequestId"
         mapping: {}
-        idempotency: "none"
       response:
         "204":
           description: "OK"
@@ -872,54 +866,6 @@ shared:
 	}
 }
 
-func TestHTTPIdempotency(t *testing.T) {
-	root := t.TempDir()
-	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
-summary: "x"
-schema_version: 1
-stability: "draft"
-do_not: []
-paths:
-  /x:
-    post:
-      name: "createX"
-      contract:
-        id: "cap.protocols.http.x.create"
-        service: "cap.services.x.create"
-      request:
-        headers:
-          RequestId:
-            $ref: "#/components/parameters/RequestId"
-        mapping: {}
-      response:
-        "204":
-          description: "OK"
-          headers:
-            X-Request-Id:
-              $ref: "#/components/headers/XRequestId"
-shared:
-  parameters:
-    RequestId:
-      name: "X-Request-Id"
-      in: "header"
-      required: false
-      schema:
-        type: "string"
-  headers:
-    XRequestId:
-      schema:
-        type: "string"
-  schemas: {}`)
-	schema := copyMeta(t, root, "cap.protocols.http")
-	c := &Checker{root: root}
-	c.checkHTTPBindings(schema, map[string]serviceMeta{
-		"cap.services.x.create": {visibility: "public"},
-	}, map[string]bool{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-idempotency]") {
-		t.Fatalf("missing x-idempotency not reported: %v", c.errs)
-	}
-}
-
 func TestHTTPHeaders(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
@@ -935,8 +881,10 @@ paths:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
       request:
+        headers:
+          Idempotency-Key: IdempotencyKey
+          Idempotency-Key-Required: IdempotencyKeyRequired
         mapping: {}
-        idempotency: "none"
       response:
         "204":
           description: "OK"
@@ -947,8 +895,8 @@ shared:
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.get": {visibility: "public"},
 	}, map[string]bool{}, map[string]bool{})
-	if got := strings.Count(strings.Join(c.errs, "\n"), "[http-headers]"); got < 2 {
-		t.Fatalf("want request and response header errors, got %d: %v", got, c.errs)
+	if got := strings.Count(strings.Join(c.errs, "\n"), "[http-headers]"); got < 3 {
+		t.Fatalf("want request, response and duplicate idempotency header errors, got %d: %v", got, c.errs)
 	}
 }
 
@@ -2582,7 +2530,17 @@ func TestHTTPAudienceAndConsumer(t *testing.T) {
 	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
 error_responses:
   always: [400, 409, 503]
-  secured: [401]
+components:
+  headers:
+    XRequestId: { schema: { type: string } }
+    RetryAfter: { schema: { type: string } }
+  parameters:
+    RequestId: { name: X-Request-Id, in: header, required: false, schema: { type: string } }
+  responses:
+    ServiceUnavailable:
+      description: "503"
+      headers:
+        X-Request-Id: { $ref: "#/components/headers/XRequestId" }
 `)
 	writeCapFile(t, root, "contracts/project.yaml", `apps:
   admin:
@@ -2597,61 +2555,76 @@ data:
   page_only:
     capability: cap.services.x.page_only
 `)
-	writeCapFile(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-summary: "x"
-schema_version: 1
-stability: draft
-do_not: []
-shared:
-  responses:
-    BadRequest: { description: "400" }
-    ServiceUnavailable: { description: "503" }
-`)
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
 schema_version: 1
 stability: draft
 do_not: []
 mount:
+  api_version: v1
   path: /
   audience: [admin]
 paths:
   /ok:
     get:
       name: getOk
+      summary: "x"
       id: cap.protocols.http.x.ok
       service: cap.services.x.get
       used_by: [feature.pages.x]
-      request: {}
+      security: []
+      request:
+        headers: { X-Request-Id: RequestId }
+        mapping: {}
       response:
-        "204": { description: "OK" }
+        "204":
+          description: "OK"
+          headers: { X-Request-Id: XRequestId }
   /open:
     get:
       name: getOpen
+      summary: "x"
       id: cap.protocols.http.x.open
       service: cap.services.x.open
       used_by: []
-      request: {}
+      security: []
+      request:
+        headers: { X-Request-Id: RequestId }
+        mapping: {}
       response:
-        "204": { description: "OK" }
+        "204":
+          description: "OK"
+          headers: { X-Request-Id: XRequestId }
   /orphan:
     get:
       name: getOrphan
+      summary: "x"
       id: cap.protocols.http.x.orphan
       service: cap.services.x.orphan
       used_by: []
-      request: {}
+      security: []
+      request:
+        headers: { X-Request-Id: RequestId }
+        mapping: {}
       response:
-        "204": { description: "OK" }
+        "204":
+          description: "OK"
+          headers: { X-Request-Id: XRequestId }
   /missing:
     get:
       name: getMissing
+      summary: "x"
       id: cap.protocols.http.x.missing
       service: cap.services.x.get
       used_by: []
-      request: {}
+      security: []
+      request:
+        headers: { X-Request-Id: RequestId }
+        mapping: {}
       response:
-        "204": { description: "OK" }
+        "204":
+          description: "OK"
+          headers: { X-Request-Id: XRequestId }
 `)
 	c := &Checker{root: root, strictHTTP: true}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -2678,8 +2651,8 @@ paths:
 func TestHTTPMountOrder(t *testing.T) {
 	c := &Checker{}
 	audiences := map[string]bool{"admin": true}
-	c.checkHTTPMount("x.yaml", openapispec.HTTPMount{Path: "/admin/account", Audience: []string{"admin"}}, audiences, true)
-	c.checkHTTPMount("x.yaml", openapispec.HTTPMount{Path: "/v1/account", Audience: []string{"admin"}}, audiences, true)
+	c.checkHTTPMount("x.yaml", openapispec.HTTPMount{APIVersion: "v1", Path: "/admin/account", Audience: []string{"admin"}}, audiences)
+	c.checkHTTPMount("x.yaml", openapispec.HTTPMount{APIVersion: "v1", Path: "/v1/account", Audience: []string{"admin"}}, audiences)
 	got := strings.Join(c.errs, "\n")
 	if !strings.Contains(got, "[http-mount]") || !strings.Contains(got, "must be the common resource prefix") {
 		t.Fatalf("audience-first mount not reported: %v", c.errs)
@@ -2749,7 +2722,7 @@ summary: "x"
 schema_version: 1
 stability: draft
 do_not: []
-mount: { path: /, audience: [admin] }
+mount: { api_version: v1, path: /, audience: [admin] }
 paths:
   /x:
     post:
@@ -2764,8 +2737,7 @@ paths:
           schema: cap.services.x.schemas.Input
           required: false
         mapping:
-          body: input
-        idempotency: none
+          body: "params.input"
       response:
         "204": { description: "OK" }
 `)
@@ -2791,7 +2763,7 @@ summary: "x"
 schema_version: 1
 stability: draft
 do_not: []
-mount: { path: /x, audience: [admin] }
+mount: { api_version: v1, path: /x, audience: [admin] }
 paths:
   /a:
     get:
@@ -2800,7 +2772,7 @@ paths:
       service: cap.services.x.get
       summary: "a"
       used_by: [feature.pages.x]
-      request: { mapping: {}, idempotency: none }
+      request: { mapping: {} }
       response:
         "204": { description: OK, headers: { X-Request-Id: XRequestId } }
   /b:
@@ -2810,7 +2782,7 @@ paths:
       service: cap.services.x.get
       summary: "b"
       used_by: [feature.pages.x]
-      request: { mapping: {}, idempotency: none }
+      request: { mapping: {} }
       response:
         "204": { description: OK, headers: { X-Request-Id: XRequestId } }
 `)

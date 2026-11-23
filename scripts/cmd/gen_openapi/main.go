@@ -19,20 +19,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var apiVersionRe = regexp.MustCompile(`^v[0-9]+$`)
-
 type project struct {
 	Project struct {
 		Name    string `yaml:"name"`
 		Version string `yaml:"version"`
 	} `yaml:"project"`
 	Apps map[string]struct {
-		Kind       string   `yaml:"kind"`
-		APIVersion string   `yaml:"api_version"`
-		Audience   string   `yaml:"audience"`
-		TimeoutMS  int      `yaml:"timeout_ms"`
-		Includes   []string `yaml:"includes"`
-		Generated  struct {
+		Kind      string   `yaml:"kind"`
+		Audience  string   `yaml:"audience"`
+		TimeoutMS int      `yaml:"timeout_ms"`
+		Includes  []string `yaml:"includes"`
+		Generated struct {
 			Spec   string `yaml:"spec"`
 			Server string `yaml:"server"`
 		} `yaml:"generated"`
@@ -98,6 +95,7 @@ func build(root string) (map[string][]byte, error) {
 	}
 	byID := map[string]map[string]any{}
 	fileAudienceByID := map[string][]string{}
+	fileVersionByID := map[string]string{}
 	fileStabilityByID := map[string]string{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
@@ -106,7 +104,9 @@ func build(root string) (map[string][]byte, error) {
 		}
 		id, _ := doc["id"].(string)
 		if id != "" {
-			fileAudienceByID[id] = openapispec.CollectHTTPMount(doc).Audience
+			mount := openapispec.CollectHTTPMount(doc)
+			fileAudienceByID[id] = mount.Audience
+			fileVersionByID[id] = mount.APIVersion
 			fileStabilityByID[id], _ = doc["stability"].(string)
 			if err := openapispec.NormalizeHTTPDocument(doc, httpTypeResolver(customTypeIdx), false); err != nil {
 				return nil, fmt.Errorf("%s: %w", file, err)
@@ -162,12 +162,6 @@ func build(root string) (map[string][]byte, error) {
 		}
 		paths := spec["paths"].(map[string]any)
 		components := spec["components"].(map[string]any)
-		if app.APIVersion == "" {
-			return nil, fmt.Errorf("app %s: api_version required for api apps", appName)
-		}
-		if !apiVersionRe.MatchString(app.APIVersion) {
-			return nil, fmt.Errorf("app %s: api_version %q must match v<digits>", appName, app.APIVersion)
-		}
 		if app.Audience == "" {
 			return nil, fmt.Errorf("app %s: audience required for api apps", appName)
 		}
@@ -177,7 +171,27 @@ func build(root string) (map[string][]byte, error) {
 		if app.TimeoutMS <= 0 {
 			return nil, fmt.Errorf("app %s: timeout_ms must be a positive integer", appName)
 		}
-		serverURL := "/" + app.APIVersion
+		appVersion := ""
+		for _, include := range app.Includes {
+			version := fileVersionByID[include]
+			if version == "" {
+				return nil, fmt.Errorf("app %s: include %s must declare mount.api_version", appName, include)
+			}
+			if appVersion == "" {
+				appVersion = version
+				continue
+			}
+			if appVersion != version {
+				return nil, fmt.Errorf("app %s: includes mix mount.api_version %s and %s", appName, appVersion, version)
+			}
+		}
+		if appVersion == "" && len(app.Includes) > 0 {
+			return nil, fmt.Errorf("app %s: includes no HTTP file with mount.api_version", appName)
+		}
+		if appVersion != "" {
+			spec["servers"] = []any{map[string]any{"url": "/" + appVersion}}
+		}
+		mergeMap(components, copyDoc(policy.Components))
 		deprecatedOps := map[string]bool{}
 		for _, include := range app.Includes {
 			doc := copyDoc(byID[include])
@@ -249,9 +263,6 @@ func build(root string) (map[string][]byte, error) {
 			if !found {
 				return nil, fmt.Errorf("app %s: event schema references unknown component %s", appName, ref)
 			}
-		}
-		if serverURL != "" {
-			spec["servers"] = []any{map[string]any{"url": serverURL}}
 		}
 		responses := asMap(asMap(components["responses"]))
 		for _, path := range sortedKeys(paths) {

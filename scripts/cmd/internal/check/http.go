@@ -15,7 +15,7 @@ import (
 var allowedOperationExtensions = map[string]bool{
 	"x-contract-id": true, "x-service": true,
 	"x-timeout-ms":     true,
-	"x-service-params": true, "x-idempotency": true,
+	"x-service-params": true,
 }
 
 // httpOpInfo 是 scenario 校验所需的 operation 摘要。
@@ -126,8 +126,9 @@ func containsInt(list []int, value int) bool {
 	return false
 }
 
-// checkProjectAPIVersion 校验 project.yaml 的 api app 都显式声明 v<数字> 版本。
-func (c *Checker) checkProjectAPIVersion() {
+// checkProjectApps 校验 project.yaml 的 api app 声明了合法的 audience 与 timeout_ms。
+// API 版本由每个 HTTP 文件的 mount.api_version 声明。
+func (c *Checker) checkProjectApps() {
 	doc, err := loadYAML(filepath.Join(c.root, "contracts/project.yaml"))
 	if err != nil {
 		c.rulef("schema.load", "contracts/project.yaml: %v", err)
@@ -142,14 +143,6 @@ func (c *Checker) checkProjectAPIVersion() {
 		generated, _ := asMap(app["generated"])
 		if spec, _ := generated["spec"].(string); spec == "" {
 			continue
-		}
-		version, _ := app["api_version"].(string)
-		if version == "" {
-			c.rulef("http-version", "contracts/project.yaml: app %s requires api_version", name)
-			continue
-		}
-		if !match(`^v[0-9]+$`, version) {
-			c.rulef("http-version", "contracts/project.yaml: app %s api_version %q must match v<digits>", name, version)
 		}
 		timeout, ok := toInt(app["timeout_ms"])
 		if !ok || timeout <= 0 {
@@ -166,153 +159,162 @@ func (c *Checker) checkProjectAPIVersion() {
 	}
 }
 
-// checkHTTPShared 校验源契约 shared.securitySchemes 与 shared.responses 的外层结构；
-// 具体 OpenAPI 值域仍由生成器和 http-components 处理。
-func (c *Checker) checkHTTPShared(doc map[string]any, rel string) {
-	shared := asMapValue(doc["shared"])
-	if shared == nil {
+// checkHTTPComponents 校验平台组件或文件 shared 组件的外层结构；
+// schemas 在平台侧是普通 OpenAPI 对象，在文件侧必须是单一 source 溯源。
+func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isPlatform bool) {
+	if components == nil {
 		return
 	}
-	schemes := asMapValue(shared["securitySchemes"])
+	schemes := asMapValue(components["securitySchemes"])
 	for name, raw := range schemes {
 		scheme := asMapValue(raw)
 		if scheme == nil {
-			c.rulef("http-shared", "%s: shared.securitySchemes.%s must be an object", rel, name)
+			c.rulef("http-shared", "%s: components.securitySchemes.%s must be an object", rel, name)
 			continue
 		}
 		typ, _ := scheme["type"].(string)
 		if typ == "" {
-			c.rulef("http-shared", "%s: shared.securitySchemes.%s.type required", rel, name)
+			c.rulef("http-shared", "%s: components.securitySchemes.%s.type required", rel, name)
 			continue
 		}
 		switch typ {
 		case "http":
 			if v, _ := scheme["scheme"].(string); strings.TrimSpace(v) == "" {
-				c.rulef("http-shared", "%s: shared.securitySchemes.%s.scheme required for http", rel, name)
+				c.rulef("http-shared", "%s: components.securitySchemes.%s.scheme required for http", rel, name)
 			}
 		case "apiKey":
 			if v, _ := scheme["name"].(string); strings.TrimSpace(v) == "" {
-				c.rulef("http-shared", "%s: shared.securitySchemes.%s.name required for apiKey", rel, name)
+				c.rulef("http-shared", "%s: components.securitySchemes.%s.name required for apiKey", rel, name)
 			}
 			if v, _ := scheme["in"].(string); v != "header" && v != "query" && v != "cookie" {
-				c.rulef("http-shared", "%s: shared.securitySchemes.%s.in must be header/query/cookie", rel, name)
+				c.rulef("http-shared", "%s: components.securitySchemes.%s.in must be header/query/cookie", rel, name)
 			}
 		case "oauth2":
 			flows := asMapValue(scheme["flows"])
 			if flows == nil {
-				c.rulef("http-shared", "%s: shared.securitySchemes.%s.flows required for oauth2", rel, name)
+				c.rulef("http-shared", "%s: components.securitySchemes.%s.flows required for oauth2", rel, name)
 				continue
 			}
 			for flowName, rawFlow := range flows {
 				flow := asMapValue(rawFlow)
 				if flow == nil {
-					c.rulef("http-shared", "%s: shared.securitySchemes.%s.flows.%s must be an object", rel, name, flowName)
+					c.rulef("http-shared", "%s: components.securitySchemes.%s.flows.%s must be an object", rel, name, flowName)
 					continue
 				}
 				switch flowName {
 				case "implicit":
 					if v, _ := flow["authorizationUrl"].(string); strings.TrimSpace(v) == "" {
-						c.rulef("http-shared", "%s: shared.securitySchemes.%s.flows.%s.authorizationUrl required", rel, name, flowName)
+						c.rulef("http-shared", "%s: components.securitySchemes.%s.flows.%s.authorizationUrl required", rel, name, flowName)
 					}
 				case "password", "clientCredentials":
 					if v, _ := flow["tokenUrl"].(string); strings.TrimSpace(v) == "" {
-						c.rulef("http-shared", "%s: shared.securitySchemes.%s.flows.%s.tokenUrl required", rel, name, flowName)
+						c.rulef("http-shared", "%s: components.securitySchemes.%s.flows.%s.tokenUrl required", rel, name, flowName)
 					}
 				case "authorizationCode":
 					if v, _ := flow["authorizationUrl"].(string); strings.TrimSpace(v) == "" {
-						c.rulef("http-shared", "%s: shared.securitySchemes.%s.flows.%s.authorizationUrl required", rel, name, flowName)
+						c.rulef("http-shared", "%s: components.securitySchemes.%s.flows.%s.authorizationUrl required", rel, name, flowName)
 					}
 					if v, _ := flow["tokenUrl"].(string); strings.TrimSpace(v) == "" {
-						c.rulef("http-shared", "%s: shared.securitySchemes.%s.flows.%s.tokenUrl required", rel, name, flowName)
+						c.rulef("http-shared", "%s: components.securitySchemes.%s.flows.%s.tokenUrl required", rel, name, flowName)
 					}
 				default:
-					c.rulef("http-shared", "%s: shared.securitySchemes.%s.flows.%s is not an oauth2 flow", rel, name, flowName)
+					c.rulef("http-shared", "%s: components.securitySchemes.%s.flows.%s is not an oauth2 flow", rel, name, flowName)
 				}
 				if flow["scopes"] == nil {
-					c.rulef("http-shared", "%s: shared.securitySchemes.%s.flows.%s.scopes required", rel, name, flowName)
+					c.rulef("http-shared", "%s: components.securitySchemes.%s.flows.%s.scopes required", rel, name, flowName)
 				}
 			}
 		case "openIdConnect":
 			if v, _ := scheme["openIdConnectUrl"].(string); strings.TrimSpace(v) == "" {
-				c.rulef("http-shared", "%s: shared.securitySchemes.%s.openIdConnectUrl required", rel, name)
+				c.rulef("http-shared", "%s: components.securitySchemes.%s.openIdConnectUrl required", rel, name)
 			}
 		case "mutualTLS":
 		default:
-			c.rulef("http-shared", "%s: shared.securitySchemes.%s.type %q is not supported", rel, name, typ)
+			c.rulef("http-shared", "%s: components.securitySchemes.%s.type %q is not supported", rel, name, typ)
 		}
 	}
-	responses := asMapValue(shared["responses"])
+	responses := asMapValue(components["responses"])
 	for name, raw := range responses {
 		response := asMapValue(raw)
 		if response == nil {
-			c.rulef("http-shared", "%s: shared.responses.%s must be an object", rel, name)
+			c.rulef("http-shared", "%s: components.responses.%s must be an object", rel, name)
 			continue
 		}
 		if v, _ := response["description"].(string); strings.TrimSpace(v) == "" {
-			c.rulef("http-shared", "%s: shared.responses.%s.description required", rel, name)
+			c.rulef("http-shared", "%s: components.responses.%s.description required", rel, name)
 		}
 		for header, rawHeader := range asMapValue(response["headers"]) {
 			switch value := rawHeader.(type) {
 			case string:
 				if strings.TrimSpace(value) == "" {
-					c.rulef("http-shared", "%s: shared.responses.%s.headers.%s must not be empty", rel, name, header)
+					c.rulef("http-shared", "%s: components.responses.%s.headers.%s must not be empty", rel, name, header)
 				}
 			case map[string]any:
+				if _, isRef := value["$ref"]; isRef {
+					continue
+				}
 				if value["schema"] == nil {
-					c.rulef("http-shared", "%s: shared.responses.%s.headers.%s.schema required", rel, name, header)
+					c.rulef("http-shared", "%s: components.responses.%s.headers.%s.schema required", rel, name, header)
 				}
 			default:
-				c.rulef("http-shared", "%s: shared.responses.%s.headers.%s must be a name or object", rel, name, header)
+				c.rulef("http-shared", "%s: components.responses.%s.headers.%s must be a name or object", rel, name, header)
 			}
 		}
 		for contentType, rawMedia := range asMapValue(response["content"]) {
 			media := asMapValue(rawMedia)
 			if media == nil || media["schema"] == nil {
-				c.rulef("http-shared", "%s: shared.responses.%s.content.%s.schema required", rel, name, contentType)
+				c.rulef("http-shared", "%s: components.responses.%s.content.%s.schema required", rel, name, contentType)
 			}
 		}
 	}
-	for name, raw := range asMapValue(shared["parameters"]) {
+	for name, raw := range asMapValue(components["parameters"]) {
 		parameter := asMapValue(raw)
 		if parameter == nil {
-			c.rulef("http-shared", "%s: shared.parameters.%s must be an object", rel, name)
+			c.rulef("http-shared", "%s: components.parameters.%s must be an object", rel, name)
 			continue
 		}
 		if v, _ := parameter["name"].(string); strings.TrimSpace(v) == "" {
-			c.rulef("http-shared", "%s: shared.parameters.%s.name required", rel, name)
+			c.rulef("http-shared", "%s: components.parameters.%s.name required", rel, name)
 		}
 		in, _ := parameter["in"].(string)
 		if in != "path" && in != "query" && in != "header" && in != "cookie" {
-			c.rulef("http-shared", "%s: shared.parameters.%s.in must be path/query/header/cookie", rel, name)
+			c.rulef("http-shared", "%s: components.parameters.%s.in must be path/query/header/cookie", rel, name)
 		}
 		if parameter["schema"] == nil {
-			c.rulef("http-shared", "%s: shared.parameters.%s.schema required", rel, name)
+			c.rulef("http-shared", "%s: components.parameters.%s.schema required", rel, name)
 		}
 		if in == "path" {
 			if required, _ := parameter["required"].(bool); !required {
-				c.rulef("http-shared", "%s: shared.parameters.%s.required must be true for path", rel, name)
+				c.rulef("http-shared", "%s: components.parameters.%s.required must be true for path", rel, name)
 			}
 		}
 	}
-	for name, raw := range asMapValue(shared["headers"]) {
+	for name, raw := range asMapValue(components["headers"]) {
 		header := asMapValue(raw)
 		if header == nil {
-			c.rulef("http-shared", "%s: shared.headers.%s must be an object", rel, name)
+			c.rulef("http-shared", "%s: components.headers.%s must be an object", rel, name)
 			continue
 		}
 		if header["schema"] == nil {
-			c.rulef("http-shared", "%s: shared.headers.%s.schema required", rel, name)
+			c.rulef("http-shared", "%s: components.headers.%s.schema required", rel, name)
 		}
 	}
-	for name, raw := range asMapValue(shared["schemas"]) {
+	for name, raw := range asMapValue(components["schemas"]) {
 		schema := asMapValue(raw)
 		if schema == nil {
-			c.rulef("http-shared", "%s: shared.schemas.%s must be an object", rel, name)
+			c.rulef("http-shared", "%s: components.schemas.%s must be an object", rel, name)
+			continue
+		}
+		if isPlatform {
+			if typ, _ := schema["type"].(string); typ != "object" {
+				c.rulef("http-shared", "%s: components.schemas.%s must be type object", rel, name)
+			}
+			c.checkClosedObjects(schema, rel, "components.schemas."+name)
 			continue
 		}
 		source := asMapValue(schema["source"])
 		if source == nil {
-			c.rulef("http-shared", "%s: shared.schemas.%s.source required", rel, name)
+			c.rulef("http-shared", "%s: components.schemas.%s.source required", rel, name)
 			continue
 		}
 		count := 0
@@ -320,24 +322,24 @@ func (c *Checker) checkHTTPShared(doc map[string]any, rel string) {
 			switch key {
 			case "service_type", "enum", "entity":
 				if v, _ := value.(string); strings.TrimSpace(v) == "" {
-					c.rulef("http-shared", "%s: shared.schemas.%s.source.%s must not be empty", rel, name, key)
+					c.rulef("http-shared", "%s: components.schemas.%s.source.%s must not be empty", rel, name, key)
 				}
 				count++
 			case "platform":
 				if v, _ := value.(bool); !v {
-					c.rulef("http-shared", "%s: shared.schemas.%s.source.platform must be true", rel, name)
+					c.rulef("http-shared", "%s: components.schemas.%s.source.platform must be true", rel, name)
 				}
 				count++
 			default:
-				c.rulef("http-shared", "%s: shared.schemas.%s.source.%s is not a source key", rel, name, key)
+				c.rulef("http-shared", "%s: components.schemas.%s.source.%s is not a source key", rel, name, key)
 			}
 		}
 		if count != 1 {
-			c.rulef("http-shared", "%s: shared.schemas.%s.source must declare exactly one source key", rel, name)
+			c.rulef("http-shared", "%s: components.schemas.%s.source must declare exactly one source key", rel, name)
 		}
 		if schema["properties"] != nil {
 			if platform, _ := source["platform"].(bool); !platform {
-				c.rulef("http-shared", "%s: shared.schemas.%s.properties only allowed for platform schemas", rel, name)
+				c.rulef("http-shared", "%s: components.schemas.%s.properties only allowed for platform schemas", rel, name)
 			}
 		}
 	}
@@ -364,10 +366,36 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	if policyErr != nil && c.strictHTTP {
 		c.rulef("schema.load", "contracts/platform/http_conventions.yaml: %v", policyErr)
 	}
+	platformComponents := asMapValue(policy.Components)
+	if platformComponents != nil {
+		c.checkHTTPComponents(platformComponents, "contracts/platform/http_conventions.yaml", true)
+		for name := range asMapValue(platformComponents["schemas"]) {
+			httpSchemas[name] = true
+		}
+		for name := range asMapValue(platformComponents["headers"]) {
+			httpHeaders[name] = true
+		}
+		for name, raw := range asMapValue(platformComponents["parameters"]) {
+			httpParameters[name] = true
+			if def, ok := asMap(raw); ok {
+				httpParameterDefs[name] = def
+			}
+		}
+		for name := range asMapValue(platformComponents["securitySchemes"]) {
+			httpSecuritySchemes[name] = true
+		}
+		for name, raw := range asMapValue(platformComponents["responses"]) {
+			httpResponses[name] = true
+			if def, ok := asMap(raw); ok {
+				httpResponseDefs[name] = def
+			}
+		}
+	}
 	audiences := validAudiences(policy)
 	apiApps := c.loadAPIApps()
 	pagesByService := c.pageServices()
 	seenAudience := map[string]map[string]bool{}
+	httpVersions := map[string]string{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -379,11 +407,16 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			c.validateDoc(doc, schema.Fields, rel)
 			c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		}
-		c.checkHTTPShared(doc, rel)
+		c.checkHTTPComponents(asMapValue(doc["shared"]), rel, false)
 		mount := openapispec.CollectHTTPMount(doc)
 		rawPaths, _ := asMap(doc["paths"])
+		for path := range rawPaths {
+			if match(`^/v[0-9]+(/|$)`, path) {
+				c.rulef("http-version", "%s: path %s must not carry a version prefix; use mount.api_version", rel, path)
+			}
+		}
 		if c.strictHTTP {
-			c.checkHTTPMount(rel, mount, audiences, len(rawPaths) > 0)
+			c.checkHTTPMount(rel, mount, audiences)
 		}
 		c.checkTargetFileName(schema, filepath.Base(rel), rel)
 		c.checkStability(doc, rel)
@@ -395,6 +428,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			continue
 		}
 		fileID, _ := doc["id"].(string)
+		httpVersions[fileID] = mount.APIVersion
 		if seenAudience[fileID] == nil {
 			seenAudience[fileID] = map[string]bool{}
 		}
@@ -419,13 +453,6 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			httpResponses[name] = true
 			if def, ok := asMap(raw); ok {
 				httpResponseDefs[name] = def
-			}
-		}
-		if rawPaths, ok := asMap(doc["paths"]); ok && len(rawPaths) > 0 {
-			for path := range rawPaths {
-				if match(`^/v[0-9]+(/|$)`, path) {
-					c.rulef("http-version", "%s: path %s must not carry a version prefix; use app.api_version", rel, path)
-				}
 			}
 		}
 		schemas, _ := asMap(components["schemas"])
@@ -706,7 +733,17 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	}
 	if c.strictHTTP {
 		for appName, app := range apiApps {
+			appVersion := ""
 			for include := range app.Includes {
+				version := httpVersions[include]
+				switch {
+				case version == "":
+					c.rulef("http-version", "project.yaml: app %s includes %s without mount.api_version", appName, include)
+				case appVersion == "":
+					appVersion = version
+				case appVersion != version:
+					c.rulef("http-version", "project.yaml: app %s includes mixed mount.api_version %s and %s", appName, appVersion, version)
+				}
 				seen, ok := seenAudience[include]
 				if !ok || len(seen) == 0 {
 					continue
@@ -880,32 +917,11 @@ func (c *Checker) checkHTTPOperationHeaders(rel, method, path string, op map[str
 	if len(c.accessBindings[serviceRef].permissions) > 0 && !securityDeclared {
 		c.rulef("http-security", "%s %s %s: service %s has permissions and requires security", rel, method, path, serviceRef)
 	}
-	raw, ok := op["x-idempotency"]
-	if !ok {
-		c.rulef("http-idempotency", "%s %s %s: x-idempotency required (none/optional/required)", rel, method, path)
-		return
-	}
-	mode, _ := raw.(string)
-	switch mode {
-	case "none", "optional", "required":
-	default:
-		c.rulef("http-idempotency", "%s %s %s: x-idempotency must be none/optional/required, got %v", rel, method, path, raw)
-		return
-	}
-	hasOptional := refs["#/components/parameters/IdempotencyKey"]
-	hasRequired := refs["#/components/parameters/IdempotencyKeyRequired"]
-	switch {
-	case mode == "none" && (hasOptional || hasRequired):
-		c.rulef("http-idempotency", "%s %s %s: x-idempotency=none must not declare Idempotency-Key", rel, method, path)
-	case mode == "optional" && !hasOptional:
-		c.rulef("http-idempotency", "%s %s %s: x-idempotency=optional requires IdempotencyKey", rel, method, path)
-	case mode == "required" && !hasRequired:
-		c.rulef("http-idempotency", "%s %s %s: x-idempotency=required requires IdempotencyKeyRequired", rel, method, path)
-	case mode != "required" && hasRequired:
-		c.rulef("http-idempotency", "%s %s %s: IdempotencyKeyRequired only allowed with x-idempotency=required", rel, method, path)
-	}
 	if !refs["#/components/parameters/RequestId"] {
 		c.rulef("http-headers", "%s %s %s: X-Request-Id request header ($ref RequestId) is required", rel, method, path)
+	}
+	if refs["#/components/parameters/IdempotencyKey"] && refs["#/components/parameters/IdempotencyKeyRequired"] {
+		c.rulef("http-headers", "%s %s %s: declare only one of IdempotencyKey/IdempotencyKeyRequired", rel, method, path)
 	}
 	params, _ := asMap(op["x-service-params"])
 	if params != nil {
@@ -1103,29 +1119,16 @@ func (c *Checker) checkHTTPConsumer(rel, method, path, contractID, service strin
 	}
 }
 
-// checkHTTPMount 校验文件级挂载：资源在前、端在后，且不写版本。
-func (c *Checker) checkHTTPMount(rel string, mount openapispec.HTTPMount, audiences map[string]bool, hasPaths bool) {
-	if mount.Path == "" {
-		if hasPaths {
-			c.rulef("http-mount", "%s: mount block required when paths is non-empty", rel)
-		}
-		return
-	}
-	if !strings.HasPrefix(mount.Path, "/") {
-		c.rulef("http-mount", "%s: mount.path %s must start with /", rel, mount.Path)
-		return
-	}
+// checkHTTPMount 校验文件级挂载的语义：版本前缀、资源前缀与调用端。
+func (c *Checker) checkHTTPMount(rel string, mount openapispec.HTTPMount, audiences map[string]bool) {
 	if match(`^/v[0-9]+(/|$)`, mount.Path) {
-		c.rulef("http-version", "%s: mount.path %s must not carry a version prefix; use app.api_version", rel, mount.Path)
+		c.rulef("http-version", "%s: mount.path %s must not carry a version prefix; use mount.api_version", rel, mount.Path)
 	}
 	for _, segment := range strings.Split(strings.TrimPrefix(mount.Path, "/"), "/") {
 		if audiences[segment] {
 			c.rulef("http-mount", "%s: mount.path %s must be the common resource prefix; put audience segment %s in paths, not mount", rel, mount.Path, segment)
 			break
 		}
-	}
-	if len(mount.Audience) == 0 {
-		c.rulef("http-audience", "%s: mount.audience must not be empty", rel)
 	}
 	for _, audience := range mount.Audience {
 		if !audiences[audience] {
@@ -1154,11 +1157,10 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 		}
 	}
 	rb, hasRB := asMap(op["requestBody"])
-	var media map[string]any
 	var bodySchema map[string]any
 	if hasRB {
 		content, _ := asMap(rb["content"])
-		media, _ = asMap(content["application/json"])
+		media, _ := asMap(content["application/json"])
 		bodySchema, _ = asMap(media["schema"])
 		c.checkClosedObjects(bodySchema, rel, method+" "+path+" requestBody")
 	}
@@ -1169,76 +1171,37 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 	if !hasBody && hasRB {
 		c.rulef("http-service-type", "%s %s %s: requestBody declared but x-service-params.body is missing", rel, method, path)
 	}
-	if hasBody && hasRB {
-		if name, ok := body.(string); ok && target.requiredParams[name] {
-			if required, _ := rb["required"].(bool); !required {
-				c.rulef("http-service-params", "%s %s %s: requestBody must be required because service parameter %s is required", rel, method, path, name)
-			}
-		}
-	}
 	covered := map[string]bool{}
 	if hasBody {
-		switch b := body.(type) {
-		case string:
-			decl, exists := target.paramDecls[b]
-			if !exists {
-				c.rulef("http-service-type", "%s %s %s: body maps to unknown service parameter %s", rel, method, path, b)
-				break
-			}
-			covered[b] = true
-			ref, _ := bodySchema["$ref"].(string)
-			if !strings.HasPrefix(ref, "#/components/schemas/") {
-				c.rulef("http-service-type", "%s %s %s: body for %s must be a $ref to its service schema", rel, method, path, b)
-				break
-			}
-			name := strings.TrimPrefix(ref, "#/components/schemas/")
-			comp, ok := asMap(schemas[name])
-			if !ok {
-				c.rulef("http-components", "%s %s %s: requestBody $ref %s points to a missing component", rel, method, path, name)
-				break
-			}
-			kind, typeID := httpComponentSource(comp)
-			if kind == "" || kind == "platform" {
-				c.rulef("http-service-type", "%s %s %s: requestBody component %s must be source.service_type/source.enum/source.entity", rel, method, path, name)
-				break
-			}
-			if typeID != decl {
-				c.rulef("http-service-type", "%s %s %s: requestBody type %s is not the type of %s (%s)", rel, method, path, typeID, b, decl)
-			}
-		case map[string]any:
-			props, _ := asMap(bodySchema["properties"])
-			if props == nil {
-				c.rulef("http-service-type", "%s %s %s: anonymous body must declare object properties", rel, method, path)
-				break
-			}
-			for field, rawParam := range b {
-				paramName, _ := rawParam.(string)
-				if paramName == "" {
-					c.rulef("http-service-type", "%s %s %s: body field %s must map to a service parameter", rel, method, path, field)
-					continue
+		paramPath, ok := serviceParamPath(body)
+		if !ok {
+			c.rulef("http-service-type", "%s %s %s: x-service-params.body must be params.<service parameter path>, got %v", rel, method, path, body)
+		} else if hasRB {
+			decl, exists := target.paramDecls[paramPath]
+			if !exists || strings.Contains(paramPath, ".") {
+				c.rulef("http-service-type", "%s %s %s: body maps to unknown service parameter %s", rel, method, path, paramPath)
+			} else {
+				covered[paramPath] = true
+				if target.requiredParams[paramPath] {
+					if required, _ := rb["required"].(bool); !required {
+						c.rulef("http-service-params", "%s %s %s: requestBody must be required because service parameter %s is required", rel, method, path, paramPath)
+					}
 				}
-				decl, exists := target.paramDecls[paramName]
-				if !exists {
-					c.rulef("http-service-type", "%s %s %s: body field %s maps to unknown service parameter %s", rel, method, path, field, paramName)
-					continue
-				}
-				covered[paramName] = true
-				prop, ok := asMap(props[field])
-				if !ok {
-					c.rulef("http-service-type", "%s %s %s: body field %s is not declared in the request schema", rel, method, path, field)
-					continue
-				}
-				if !familiesCompatible(c.httpSchemaFamily(prop, schemas), c.httpServiceFamily(decl)) {
-					c.rulef("http-service-type", "%s %s %s: body field %s type differs from service parameter %s (%s)", rel, method, path, field, paramName, decl)
+				ref, _ := bodySchema["$ref"].(string)
+				if !strings.HasPrefix(ref, "#/components/schemas/") {
+					c.rulef("http-service-type", "%s %s %s: body for %s must be a $ref to its service schema", rel, method, path, paramPath)
+				} else {
+					name := strings.TrimPrefix(ref, "#/components/schemas/")
+					comp, ok := asMap(schemas[name])
+					if !ok {
+						c.rulef("http-components", "%s %s %s: requestBody $ref %s points to a missing component", rel, method, path, name)
+					} else if kind, typeID := httpComponentSource(comp); kind == "" || kind == "platform" {
+						c.rulef("http-service-type", "%s %s %s: requestBody component %s must be source.service_type/source.enum/source.entity", rel, method, path, name)
+					} else if typeID != decl {
+						c.rulef("http-service-type", "%s %s %s: requestBody type %s is not the type of %s (%s)", rel, method, path, typeID, paramPath, decl)
+					}
 				}
 			}
-			for field := range props {
-				if _, ok := b[field]; !ok {
-					c.rulef("http-service-type", "%s %s %s: request body field %s has no x-service-params.body mapping", rel, method, path, field)
-				}
-			}
-		default:
-			c.rulef("http-service-type", "%s %s %s: x-service-params.body must be a parameter name or a field map", rel, method, path)
 		}
 	}
 
@@ -1282,9 +1245,9 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			continue
 		}
 		for httpName, rawServicePath := range rawMap {
-			servicePath, _ := rawServicePath.(string)
-			if servicePath == "" {
-				c.rulef("http-service-params", "%s %s %s: %s.%s must map to a service parameter path", rel, method, path, location, httpName)
+			servicePath, ok := serviceParamPath(rawServicePath)
+			if !ok {
+				c.rulef("http-service-params", "%s %s %s: %s.%s must map to params.<service parameter path>, got %v", rel, method, path, location, httpName, rawServicePath)
 				continue
 			}
 			param, ok := httpParams[location+"\x00"+httpName]
@@ -1296,7 +1259,7 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			covered[strings.Split(servicePath, ".")[0]] = true
 			decl, ok := c.serviceParamType(target, servicePath)
 			if !ok {
-				c.rulef("http-service-params", "%s %s %s: %s.%s maps to unknown service field %s", rel, method, path, location, httpName, servicePath)
+				c.rulef("http-service-params", "%s %s %s: %s.%s maps to unknown service field params.%s", rel, method, path, location, httpName, servicePath)
 				continue
 			}
 			schema, _ := asMap(param["schema"])
@@ -1305,7 +1268,7 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 				continue
 			}
 			if !familiesCompatible(c.httpSchemaFamily(schema, schemas), c.httpServiceFamily(decl)) {
-				c.rulef("http-service-params", "%s %s %s: %s parameter %s type differs from service field %s (%s)", rel, method, path, location, httpName, servicePath, decl)
+				c.rulef("http-service-params", "%s %s %s: %s parameter %s type differs from service field params.%s (%s)", rel, method, path, location, httpName, servicePath, decl)
 			}
 		}
 	}
@@ -1319,6 +1282,19 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			c.rulef("http-service-params", "%s %s %s: required service parameter %s is not covered", rel, method, path, name)
 		}
 	}
+}
+
+// serviceParamPath 解析 request.mapping 的 params.<name>[.<field>] 表达式。
+func serviceParamPath(raw any) (string, bool) {
+	value, _ := raw.(string)
+	path := strings.TrimPrefix(value, "params.")
+	if path == value || path == "" {
+		return "", false
+	}
+	if !match(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$`, path) {
+		return "", false
+	}
+	return path, true
 }
 
 // serviceParamType 解析 service 参数路径（param 或 param.field）的静态类型。

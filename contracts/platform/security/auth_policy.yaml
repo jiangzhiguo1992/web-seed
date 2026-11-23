@@ -29,7 +29,7 @@ token:
       name: refresh_token
       same_site: Lax
       secure: platform.environments（security.cookie_secure）
-      path: /<app.api_version>/auth
+      path: /<api_version>/auth
       http_only: true
 
 session:
@@ -49,12 +49,12 @@ csrf:
     name: csrf_token
     http_only: false
     same_site: Lax
-    path: /<app.api_version>/auth
+    path: /<api_version>/auth
   exempt: [GET, HEAD, OPTIONS]
   exempt_paths:
-    - /<app.api_version>/auth/login
-    - /<app.api_version>/auth/verification/send
-    - /<app.api_version>/auth/verification/verify
+    - /<api_version>/auth/login
+    - /<api_version>/auth/verification/send
+    - /<api_version>/auth/verification/verify
 
 password:
   algorithm: argon2id

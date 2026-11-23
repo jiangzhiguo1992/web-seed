@@ -5,7 +5,7 @@ id: platform.versioning
 summary: "版本与兼容策略"
 stability: draft
 do_not:
-  - "API 版本只在 project.yaml 的 app 上声明；本文件只写策略"
+  - "API 版本只在 HTTP 文件的 mount.api_version 声明；本文件只写策略"
 
 api:
   scheme: url_major             # /v1 /v2
@@ -57,7 +57,7 @@ detection:
   tool: oasdiff
   baseline: origin/main
   fail_on: [breaking]
-  note: "CI 只跑 v1→v2；baseline 对比在一次性迁移/发布前手动执行"
+  note: "v2 需要独立的 mount.api_version: v2 文件；当前未提供 v2 契约，兼容检测只做 baseline 对比"
 
 client_requirements:
   - "必须忽略未知响应字段"

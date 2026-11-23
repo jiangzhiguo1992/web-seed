@@ -64,10 +64,11 @@ func CollectHTTPOperationMeta(doc map[string]any) map[string]HTTPOperationMeta {
 	return out
 }
 
-// HTTPMount 是文件级挂载：base path 与调用端。
+// HTTPMount 是文件级挂载：API 版本、base path 与调用端。
 type HTTPMount struct {
-	Path     string
-	Audience []string
+	APIVersion string
+	Path       string
+	Audience   []string
 }
 
 // CollectHTTPMount 在 NormalizeHTTPDocument 之前读取 mount。
@@ -77,6 +78,7 @@ func CollectHTTPMount(doc map[string]any) HTTPMount {
 		return HTTPMount{}
 	}
 	out := HTTPMount{}
+	out.APIVersion, _ = mount["api_version"].(string)
 	out.Path, _ = mount["path"].(string)
 	for _, raw := range asList(mount["audience"]) {
 		if value, ok := raw.(string); ok {
@@ -87,6 +89,7 @@ func CollectHTTPMount(doc map[string]any) HTTPMount {
 }
 
 // applyHTTPMount 把 paths 的相对 key 拼接到 mount.path，并删除 mount 源块。
+// mount.api_version 不进入 path；生成器据此派生 OpenAPI servers URL。
 func applyHTTPMount(doc map[string]any) error {
 	paths := asMap(doc["paths"])
 	if len(paths) == 0 {
@@ -95,6 +98,10 @@ func applyHTTPMount(doc map[string]any) error {
 	mount := asMap(doc["mount"])
 	if mount == nil {
 		return fmt.Errorf("mount block required when paths is non-empty")
+	}
+	version, _ := mount["api_version"].(string)
+	if version == "" {
+		return fmt.Errorf("mount.api_version required")
 	}
 	base, _ := mount["path"].(string)
 	if base == "" || !strings.HasPrefix(base, "/") {
@@ -190,7 +197,7 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 	return nil
 }
 
-// normalizeOperationMetadata 把 name/id/service/request.mapping/request.idempotency/errors
+// normalizeOperationMetadata 把 name/id/service/request.mapping/errors
 // 转成生成物需要的 operationId 与 x-* 扩展，并删掉源字段。
 // ensureDirectComponents 为 operation 里的直接类型引用补出 components.schemas
 // 溯源声明，使账号/鉴权文件不需要再写 components 别名。
@@ -330,10 +337,6 @@ func normalizeOperationMetadata(op map[string]any, where string, strict bool) er
 	if mapping, ok := request["mapping"]; ok {
 		op["x-service-params"] = mapping
 		delete(request, "mapping")
-	}
-	if idempotency, ok := request["idempotency"]; ok {
-		op["x-idempotency"] = idempotency
-		delete(request, "idempotency")
 	}
 	delete(op, "audience")
 	delete(op, "used_by")

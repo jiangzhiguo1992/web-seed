@@ -8,6 +8,7 @@ do_not:
   - "refresh_token 只写 HttpOnly cookie，不进入响应体"
 
 mount:
+  api_version: v1
   path: /auth
   audience: [admin, user]
 
@@ -20,6 +21,7 @@ paths:
       summary: "登录"
       used_by:
         - feature.pages.login
+      security: []
       request:
         headers:
           X-Request-Id: RequestId
@@ -27,8 +29,7 @@ paths:
           content_type: application/json
           schema: cap.services.auth.schemas.LoginInput
         mapping:
-          body: "input"
-        idempotency: none
+          body: "params.input"
       response:
         200:
           description: "登录成功"
@@ -57,6 +58,7 @@ paths:
       summary: "发送验证码"
       used_by:
         - feature.pages.login
+      security: []
       request:
         headers:
           X-Request-Id: RequestId
@@ -65,8 +67,7 @@ paths:
           content_type: application/json
           schema: cap.services.verification.schemas.SendVerificationInput
         mapping:
-          body: "input"
-        idempotency: optional
+          body: "params.input"
       response:
         202:
           description: "已受理"
@@ -90,6 +91,7 @@ paths:
       summary: "校验验证码"
       used_by:
         - feature.pages.login
+      security: []
       request:
         headers:
           X-Request-Id: RequestId
@@ -98,8 +100,7 @@ paths:
           content_type: application/json
           schema: cap.services.verification.schemas.VerifyCodeInput
         mapping:
-          body: "input"
-        idempotency: optional
+          body: "params.input"
       response:
         200:
           description: "校验成功"
@@ -124,6 +125,7 @@ paths:
       summary: "刷新令牌"
       used_by:
         - feature.pages.session
+      security: []
       request:
         headers:
           X-Request-Id: RequestId
@@ -132,8 +134,7 @@ paths:
           refresh_token: RefreshTokenCookie
         mapping:
           cookie:
-            refresh_token: refresh_token
-        idempotency: none
+            refresh_token: params.refresh_token
       response:
         200:
           description: "成功"
@@ -156,6 +157,7 @@ paths:
       summary: "登出"
       used_by:
         - feature.pages.session
+      security: []
       request:
         headers:
           X-Request-Id: RequestId
@@ -164,8 +166,7 @@ paths:
           refresh_token: RefreshTokenCookie
         mapping:
           cookie:
-            refresh_token: refresh_token
-        idempotency: none
+            refresh_token: params.refresh_token
       response:
         204:
           description: "已登出"
@@ -194,8 +195,7 @@ paths:
           content_type: application/json
           schema: cap.services.auth.schemas.BindPasswordInput
         mapping:
-          body: "input"
-        idempotency: optional
+          body: "params.input"
       response:
         200:
           description: "成功"
@@ -237,8 +237,7 @@ paths:
           content_type: application/json
           schema: cap.services.auth.schemas.BindPhoneInput
         mapping:
-          body: "input"
-        idempotency: optional
+          body: "params.input"
       response:
         200:
           description: "成功"
@@ -277,8 +276,7 @@ paths:
           content_type: application/json
           schema: cap.services.auth.schemas.BindEmailInput
         mapping:
-          body: "input"
-        idempotency: optional
+          body: "params.input"
       response:
         200:
           description: "成功"
@@ -315,8 +313,7 @@ paths:
           Authorization: Authorization
         mapping:
           header:
-            Authorization: access_token
-        idempotency: none
+            Authorization: params.access_token
       response:
         200:
           description: "成功"
@@ -329,3 +326,22 @@ paths:
           codes:
             - platform.errors.AUTH_TOKEN_EXPIRED
             - platform.errors.AUTH_TOKEN_INVALID
+
+shared:
+  headers:
+    SetAuthCookies:
+      description: "设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/<api_version>/auth，SameSite=Lax，Secure 按环境"
+      schema:
+        type: string
+    ClearAuthCookies:
+      description: "清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/<api_version>/auth"
+      schema:
+        type: string
+  parameters:
+    RefreshTokenCookie:
+      name: refresh_token
+      in: cookie
+      required: true
+      schema:
+        type: string
+        minLength: 1

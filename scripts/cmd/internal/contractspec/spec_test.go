@@ -136,11 +136,12 @@ func TestSharedTypeVocabularyExceptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]string{
-		"contracts/_meta":                       "dir",
-		"contracts/generated":                   "dir",
-		"contracts/capabilities/protocols/http": "dir",
-		"contracts/index.yaml":                  "file",
-		"contracts/project.yaml":                "file",
+		"contracts/_meta":                          "dir",
+		"contracts/generated":                      "dir",
+		"contracts/capabilities/protocols/http":    "dir",
+		"contracts/platform/http_conventions.yaml": "file",
+		"contracts/index.yaml":                     "file",
+		"contracts/project.yaml":                   "file",
 	}
 	if len(shared.TypeVocabulary.Exceptions) != len(want) {
 		t.Fatalf("exceptions = %#v", shared.TypeVocabulary.Exceptions)

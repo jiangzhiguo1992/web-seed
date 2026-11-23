@@ -560,7 +560,7 @@ func TestRenderHTTP(t *testing.T) {
 		t.Fatalf("id = %v", doc["id"])
 	}
 	mount, _ := doc["mount"].(map[string]any)
-	if mount["path"] != "/" {
+	if mount["api_version"] != "v1" || mount["path"] != "/" {
 		t.Fatalf("mount = %#v", mount)
 	}
 	paths, _ := doc["paths"].(map[string]any)
@@ -569,9 +569,22 @@ func TestRenderHTTP(t *testing.T) {
 	if op["name"] != "getInvoice" || op["id"] != "cap.protocols.http.invoice.get" || op["service"] != "cap.services.invoice.get" {
 		t.Fatalf("operation = %#v", op)
 	}
+	security, ok := op["security"].([]any)
+	if !ok || len(security) != 0 {
+		t.Fatalf("security = %#v", op["security"])
+	}
 	usedBy, _ := op["used_by"].([]any)
 	if len(usedBy) != 1 || usedBy[0] != "feature.pages.invoice" {
 		t.Fatalf("used_by = %#v", op["used_by"])
+	}
+	opText := string(b)[strings.Index(string(b), "get:"):]
+	order := []string{"id:", "name:", "service:", "summary:", "used_by:", "security:", "request:", "response:"}
+	for i := 1; i < len(order); i++ {
+		prev := strings.Index(opText, order[i-1])
+		next := strings.Index(opText, order[i])
+		if prev < 0 || next < 0 || prev > next {
+			t.Fatalf("operation key order broken at %s:\n%s", order[i], b)
+		}
 	}
 }
 

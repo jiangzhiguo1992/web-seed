@@ -25,6 +25,10 @@ schemas:
     type: _types.object
     properties:
       - { name: nickname, schema: { type: _types.account_nickname }, required: true, description: "账号昵称" }
+  SuspendAccountInput:
+    type: _types.object
+    properties:
+      - { name: reason, schema: { type: _types.account_suspend_reason }, required: true, description: "封禁原因" }
   AccountPage:
     type: _types.object
     properties:
@@ -438,7 +442,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.integer }
-      - { name: reason, type: _types.string }
+      - { name: input, type: cap.services.account.schemas.SuspendAccountInput }
     returns:
       - { name: account, type: data.entities.account, value: step.set_account_status.account }
       - { name: err, type: error }
@@ -499,7 +503,7 @@ services:
         summary: "发出账号封禁事件"
         input:
           - { name: id, value: params.id, description: "账号 ID" }
-          - { name: reason, value: params.reason, description: "封禁原因" }
+          - { name: reason, value: params.input.reason, description: "封禁原因" }
           - { name: suspended_at, value: step.now.suspended_at, description: "封禁时间" }
         output: [ ]
         events:

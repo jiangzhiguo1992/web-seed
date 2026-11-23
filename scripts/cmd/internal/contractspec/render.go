@@ -817,8 +817,25 @@ type eventPayloadScaffold struct {
 }
 
 type httpMountScaffold struct {
-	Path     string   `yaml:"path"`
-	Audience []string `yaml:"audience"`
+	APIVersion string   `yaml:"api_version"`
+	Path       string   `yaml:"path"`
+	Audience   []string `yaml:"audience"`
+}
+
+type httpResponseScaffold struct {
+	Description string         `yaml:"description"`
+	Headers     map[string]any `yaml:"headers"`
+}
+
+type httpOperationScaffold struct {
+	ID       string                          `yaml:"id"`
+	Name     string                          `yaml:"name"`
+	Service  string                          `yaml:"service"`
+	Summary  string                          `yaml:"summary"`
+	UsedBy   []string                        `yaml:"used_by"`
+	Security []any                           `yaml:"security"`
+	Request  map[string]any                  `yaml:"request"`
+	Response map[string]httpResponseScaffold `yaml:"response"`
 }
 
 type httpFileScaffold struct {
@@ -1119,23 +1136,23 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 	if fileID == "" {
 		return nil, fmt.Errorf("RenderHTTP: cannot derive id from targets.id")
 	}
-	op := map[string]any{
-		"id":      fileID + "." + httpMethod,
-		"name":    httpMethod + pascal(name),
-		"service": service,
-		"summary": summary,
-		"used_by": []string{"feature.pages." + name},
-		"request": map[string]any{
+	op := httpOperationScaffold{
+		ID:       fileID + "." + httpMethod,
+		Name:     httpMethod + pascal(name),
+		Service:  service,
+		Summary:  summary,
+		UsedBy:   []string{"feature.pages." + name},
+		Security: []any{},
+		Request: map[string]any{
 			"headers": map[string]any{
 				"X-Request-Id": "RequestId",
 			},
-			"mapping":     map[string]any{},
-			"idempotency": "none",
+			"mapping": map[string]any{},
 		},
-		"response": map[string]any{
-			"204": map[string]any{
-				"description": "OK",
-				"headers": map[string]any{
+		Response: map[string]httpResponseScaffold{
+			"204": {
+				Description: "OK",
+				Headers: map[string]any{
 					"X-Request-Id": "XRequestId",
 				},
 			},
@@ -1148,7 +1165,7 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		Stability:     scaffoldStability,
 		DoNot:         []string{},
 		OwnerModule:   module,
-		Mount:         httpMountScaffold{Path: "/", Audience: []string{"admin"}},
+		Mount:         httpMountScaffold{APIVersion: "v1", Path: "/", Audience: []string{"admin"}},
 		Paths:         map[string]any{path: map[string]any{httpMethod: op}},
 	}
 	b, err := marshal2(doc)

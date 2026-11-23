@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 契约兼容性：对比 origin/main 的生成 OpenAPI 与当前生成物，并检查 v2 不破坏 v1。
+# 契约兼容性：对比 origin/main 的生成 OpenAPI 与当前生成物；存在 v2 时检查 v2 不破坏 v1。
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 

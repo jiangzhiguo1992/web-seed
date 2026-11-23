@@ -1,7 +1,7 @@
 components:
   headers:
     ClearAuthCookies:
-      description: 清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/<app.api_version>/auth
+      description: 清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/<api_version>/auth
       schema:
         type: string
     RetryAfter:
@@ -9,7 +9,7 @@ components:
       schema:
         type: string
     SetAuthCookies:
-      description: 设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/<app.api_version>/auth，SameSite=Lax，Secure 按环境
+      description: 设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/<api_version>/auth，SameSite=Lax，Secure 按环境
       schema:
         type: string
     XRequestId:
@@ -375,7 +375,7 @@ components:
           minimum: 1000
           type: integer
         data:
-          type: null
+          type: "null"
         message:
           type: string
       required:
@@ -838,6 +838,17 @@ components:
         - auth_type
         - target
         - purpose
+      type: object
+    SuspendAccountInput:
+      additionalProperties: false
+      properties:
+        reason:
+          description: 封禁原因
+          maxLength: 200
+          minLength: 1
+          type: string
+      required:
+        - reason
       type: object
     UpdateAccountInput:
       additionalProperties: false
@@ -1392,15 +1403,7 @@ paths:
         content:
           application/json:
             schema:
-              additionalProperties: false
-              properties:
-                reason:
-                  maxLength: 200
-                  minLength: 1
-                  type: string
-              required:
-                - reason
-              type: object
+              $ref: '#/components/schemas/SuspendAccountInput'
         required: true
       responses:
         200:
@@ -1802,6 +1805,7 @@ paths:
               code: COMMON_LOOP_EXHAUSTED
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+      security: []
       summary: 登录
   /auth/logout:
     post:
@@ -1847,6 +1851,7 @@ paths:
               code: COMMON_LOOP_EXHAUSTED
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+      security: []
       summary: 登出
   /auth/me:
     get:
@@ -1955,6 +1960,7 @@ paths:
               code: COMMON_LOOP_EXHAUSTED
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+      security: []
       summary: 刷新令牌
   /auth/verification/send:
     post:
@@ -2023,6 +2029,7 @@ paths:
               code: COMMON_LOOP_EXHAUSTED
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+      security: []
       summary: 发送验证码
   /auth/verification/verify:
     post:
@@ -2092,6 +2099,7 @@ paths:
               code: COMMON_LOOP_EXHAUSTED
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+      security: []
       summary: 校验验证码
 servers:
   - url: /v1

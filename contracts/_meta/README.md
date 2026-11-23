@@ -67,7 +67,8 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 - 槽位键出现在节点位置报 `schema.slot-position`；
 - `_types.yaml` 用 `schemas.<kind>.keys` 描述自身；判别键与结构键必须 `required: true`；
 - `cap.events` 的 `topics[].publish.payload` 投影为 `Event<File><Topic>` component；生成物只保留标准 schema，不携带事件扩展键。
-- `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；只有 `shared.yaml` 的 `shared` 块承载跨模块组件，`shared.schemas` 只允许 `source` 溯源块（`service_type` / `enum` / `entity` / `platform`），命名对象必须来自 service/entity/enum，不得在 HTTP 层复制业务字段；生成 OpenAPI 时由脚本把 `shared` 转成 `components`。
+- `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；平台级组件在 `platform/http_conventions.components`，文件私有响应头/参数在 `shared.headers` / `shared.parameters`；生成 OpenAPI 时由脚本把 `shared` 与平台 `components` 合并成 `components`。
+- `mount` 必须声明 `api_version` / `path` / `audience`：`api_version` 是 `v<数字>`，与 `mount.path`、`paths` key 一起由生成器派生 `servers: /<api_version>`；`paths` 必填且至少一个 operation。
 - `cap.protocols.http` 的文件级 `mount` 承载 `path` 与 `audience`：`path` 是公共资源前缀（`/account`）；audience 段在 `paths`（`/admin`），`audience` 来自 `platform/http_conventions.audiences`；operation 的 `used_by` 必须非空且精确等于页面引用，错误按 platform.errors 的 status 分组、`COMMON_*` 不在 operation 重复；平台基线状态（含 body/deprecated）由 `error_responses` 注入。
 - 槽位字段的值域可整体写 `types: [ _types.schema ]`，即允许 `schemas` 下声明的全部节点种类；不要重复枚举 kind。
 - `map` 节点的键固定为 string（JSON/OpenAPI 对象键没有其他类型），因此没有 `key` 字段；需要 integer key 的 Go/SQL 容器用 `_types.map<_types.integer, T>`（`structures.map`），不要写进 schema 节点。

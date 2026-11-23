@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// HTTPPolicy 是平台 HTTP 基线：调用端与按条件注入的错误状态。
+// HTTPPolicy 是平台 HTTP 基线：调用端、按条件注入的错误状态与平台组件。
 type HTTPPolicy struct {
 	Audiences        []string
 	Always           []int
@@ -20,6 +20,7 @@ type HTTPPolicy struct {
 	SuccessCodes     []int
 	ClientErrorCodes []int
 	ServerErrorCodes []int
+	Components       map[string]any
 }
 
 // LoadHTTPPolicy 读取 contracts/platform/http_conventions.yaml。
@@ -42,6 +43,7 @@ func LoadHTTPPolicy(root string) (HTTPPolicy, error) {
 			ClientError []int `yaml:"client_error"`
 			ServerError []int `yaml:"server_error"`
 		} `yaml:"status_codes"`
+		Components map[string]any `yaml:"components"`
 	}
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		return HTTPPolicy{}, fmt.Errorf("%s: %w", path, err)
@@ -55,6 +57,7 @@ func LoadHTTPPolicy(root string) (HTTPPolicy, error) {
 		SuccessCodes:     doc.StatusCodes.Success,
 		ClientErrorCodes: doc.StatusCodes.ClientError,
 		ServerErrorCodes: doc.StatusCodes.ServerError,
+		Components:       doc.Components,
 	}, nil
 }
 

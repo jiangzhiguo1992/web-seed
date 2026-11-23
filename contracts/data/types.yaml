@@ -23,6 +23,12 @@ custom_types:
     params:
       min_len: 1
       max_len: 100
+  account_suspend_reason:
+    family: string
+    description: "账号封禁原因"
+    params:
+      min_len: 1
+      max_len: 200
   auth_identifier:
     family: string
     description: "登录标识：用户名、邮箱或手机号"
