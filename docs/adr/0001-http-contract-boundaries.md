@@ -250,12 +250,13 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 1. **版本归属**：`mount.api_version`（必填，`v<数字>`）成为唯一版本源；生成器按 app 内 include 文件的版本派生 `servers: /<api_version>`，`mount.path` 与 `paths` 不写版本。`project.yaml` 的 `app.api_version` 已删除；同一 app 混版本会被 checker/generator 拒绝。在没有 v2 mount 的情况下，`admin_v2` app 与生成物一并移除，待 v2 契约重做后再加回。
 2. **共享组件**：删除 `protocols/http/shared.yaml`，HTTP 文件也不再保留 `shared`。平台级 securityScheme / schema / parameter / header / response 全部在 `platform/http_conventions.yaml` 的 `components`，由 `gen_openapi` 注入每个 api app；HTTP 文件只引用组件名，不再定义文件私有组件。
-3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`security` 是 `{ BearerAuth: bool }`；path/query 参数是带 `name` / `schema` / `description` / `to` 的对象列表，body 带 `to`；body schema 必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
+3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`request` / `response` 都有独立 `headers`；path/query 参数是带 `name` / `schema` / `description` / `to` 的对象列表；body 用 `kind` 区分 json/form/multipart/text/binary；body schema 必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
 4. **客户端幂等键删除**：幂等键 header、OpenAPI components 与场景字段全部删除；幂等由 API 内部按业务语义决定，不由客户端传入的 header 控制。
-5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。`request.headers` / `response.headers` 固定槽位移除；`Authorization` 由 `security.BearerAuth` 表达。
-6. **安全凭据注入**：`security.BearerAuth: true` 时，认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
-7. **账号 ID 类型**：删除 `_types.account_id`，HTTP path 与认证注入的 `account_id` 改用 `_types.positive_integer`（`min: 1`）；普通 service/query 的账号 ID 仍是 `_types.integer`。
-8. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发，不使用 cookie/session。
+5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。HTTP 契约的 `request.headers` / `response.headers` 保留为独立字段，`Authorization` 通过 header 的 `auth: BearerAuth` 表达。
+6. **安全凭据注入**：`request.headers` 中的 `Authorization` 使用 `auth: BearerAuth`；认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
+7. **契约优先 HTTP 模型**：`request.headers` / `response.headers` 独立于 body；`Content-Type`、`Accept`、`Connection`、`Authorization` 等都在 headers 中声明；`body.kind` 支持 json/form/multipart/text/binary；response 支持按状态声明 headers 与 body。生成器再把这些映射为 OpenAPI security/content/headers，契约阶段不以 OpenAPI 的字段形状为约束。
+8. **账号 ID 类型**：删除 `_types.account_id`，HTTP path 与认证注入的 `account_id` 改用 `_types.positive_integer`（`min: 1`）；普通 service/query 的账号 ID 仍是 `_types.integer`。
+9. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发，不使用 cookie/session。
 
 同时参数级 `to` 的值统一写 `params.<service 参数路径>`（如 `params.input`、`params.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
 

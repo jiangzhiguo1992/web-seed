@@ -99,6 +99,60 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 	}
 }
 
+func TestNormalizeHTTPDocumentHeaders(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request": map[string]any{
+			"headers": []any{
+				map[string]any{"name": "Authorization", "auth": "BearerAuth", "required": true, "description": "token"},
+				map[string]any{"name": "Content-Type", "value": "application/json", "required": true, "description": "body"},
+				map[string]any{"name": "Accept", "value": "application/json", "required": false, "description": "accept"},
+			},
+			"body": map[string]any{"kind": "json", "schema": "_types.string", "to": "params.input"},
+		},
+		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+	})
+	if err := NormalizeHTTPDocument(doc, testResolve, false); err != nil {
+		t.Fatal(err)
+	}
+	op := asMap(asMap(asMap(doc["paths"])["/x"])["post"])
+	if got := asList(op["security"]); len(got) != 1 || asMap(got[0])["BearerAuth"] == nil {
+		t.Fatalf("security not derived from Authorization: %v", op["security"])
+	}
+	params := asList(op["parameters"])
+	if len(params) != 1 || asMap(params[0])["name"] != "Accept" {
+		t.Fatalf("non-special headers not normalized: %v", params)
+	}
+}
+
+func TestNormalizeHTTPDocumentFormBody(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request": map[string]any{
+			"headers": []any{
+				map[string]any{"name": "Content-Type", "value": "application/x-www-form-urlencoded", "required": true, "description": "body"},
+			},
+			"body": map[string]any{
+				"kind": "form",
+				"fields": []any{
+					map[string]any{"name": "username", "schema": "_types.string", "required": true, "description": "name", "to": "params.input.username"},
+				},
+			},
+		},
+		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+	})
+	if err := NormalizeHTTPDocument(doc, testResolve, false); err != nil {
+		t.Fatal(err)
+	}
+	op := asMap(asMap(asMap(doc["paths"])["/x"])["post"])
+	body := asMap(op["requestBody"])
+	if body == nil || asMap(asMap(body["content"])["application/x-www-form-urlencoded"]) == nil {
+		t.Fatalf("form body not normalized: %v", op["requestBody"])
+	}
+	params := asMap(op["x-service-params"])
+	if got := asList(params["form"]); len(got) != 1 || asMap(got[0])["to"] != "params.input.username" {
+		t.Fatalf("form target not preserved: %v", params)
+	}
+}
+
 func TestNormalizeHTTPDocumentSecurity(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"security": map[string]any{"BearerAuth": true},

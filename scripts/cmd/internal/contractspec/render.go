@@ -832,7 +832,6 @@ type httpOperationScaffold struct {
 	Service  string                          `yaml:"service"`
 	Summary  string                          `yaml:"summary"`
 	UsedBy   []string                        `yaml:"used_by"`
-	Security map[string]any                  `yaml:"security"`
 	Request  map[string]any                  `yaml:"request"`
 	Response map[string]httpResponseScaffold `yaml:"response"`
 }
@@ -1136,13 +1135,12 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		return nil, fmt.Errorf("RenderHTTP: cannot derive id from targets.id")
 	}
 	op := httpOperationScaffold{
-		ID:       fileID + "." + httpMethod,
-		Name:     httpMethod + pascal(name),
-		Service:  service,
-		Summary:  summary,
-		UsedBy:   []string{"feature.pages." + name},
-		Security: map[string]any{"BearerAuth": false},
-		Request:  map[string]any{},
+		ID:      fileID + "." + httpMethod,
+		Name:    httpMethod + pascal(name),
+		Service: service,
+		Summary: summary,
+		UsedBy:  []string{"feature.pages." + name},
+		Request: map[string]any{},
 		Response: map[string]httpResponseScaffold{
 			"204": {
 				Description: "OK",

@@ -727,6 +727,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				}
 				c.checkHTTPErrors(rel, method, path, op, target, responses, policy, fileStability == "deprecated")
 				c.checkHTTPOperationSecurity(rel, method, path, op, httpSecuritySchemes, serviceRef)
+				c.checkHTTPHeaders(rel, method, path, op)
 				c.checkHTTPRequest(rel, method, path, op, target, schemas, httpParameters, httpParameterDefs)
 			}
 		}
@@ -1158,6 +1159,44 @@ func (c *Checker) checkHTTPPathParams(rel, method, path string, op map[string]an
 	}
 }
 
+// checkHTTPHeaders 校验归一化后的 header 参数与响应头没有重复或误写。
+func (c *Checker) checkHTTPHeaders(rel, method, path string, op map[string]any) {
+	seen := map[string]bool{}
+	for _, raw := range asList(op["parameters"]) {
+		param, _ := asMap(raw)
+		if param == nil {
+			continue
+		}
+		if in, _ := param["in"].(string); in != "header" {
+			continue
+		}
+		name, _ := param["name"].(string)
+		if name == "" {
+			c.rulef("http-headers", "%s %s %s: header parameter name required", rel, method, path)
+			continue
+		}
+		if seen[strings.ToLower(name)] {
+			c.rulef("http-headers", "%s %s %s: duplicate header %s", rel, method, path, name)
+		}
+		seen[strings.ToLower(name)] = true
+		if strings.EqualFold(name, "Content-Type") || strings.EqualFold(name, "Authorization") {
+			c.rulef("http-headers", "%s %s %s: %s must be represented as body media type or security, not a header parameter", rel, method, path, name)
+		}
+	}
+	responses, _ := asMap(op["responses"])
+	for status, raw := range responses {
+		resp, _ := asMap(raw)
+		if resp == nil {
+			continue
+		}
+		for name := range asMapValue(resp["headers"]) {
+			if strings.EqualFold(name, "Content-Type") {
+				c.rulef("http-headers", "%s %s %s: response %s Content-Type must be represented as body media type", rel, method, path, status)
+			}
+		}
+	}
+}
+
 // checkHTTPRequest 校验请求体与 HTTP 参数都来自 x-service 的 params，且覆盖全部必填参数。
 func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, target serviceMeta, schemas map[string]any, httpParameters map[string]bool, httpParameterDefs map[string]map[string]any) {
 	params, ok := asMap(op["x-service-params"])
@@ -1167,7 +1206,7 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 	}
 	for key := range params {
 		switch key {
-		case "body", "path", "query":
+		case "body", "form", "path", "query":
 		default:
 			c.rulef("http-service-params", "%s %s %s: unknown x-service-params key %s", rel, method, path, key)
 		}
@@ -1190,11 +1229,18 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 		}
 	}
 	body, hasBody := params["body"]
+	form, hasForm := params["form"]
+	if hasBody && hasForm {
+		c.rulef("http-service-params", "%s %s %s: x-service-params.body and form are mutually exclusive", rel, method, path)
+	}
 	if hasBody && !hasRB {
 		c.rulef("http-service-type", "%s %s %s: x-service-params.body declared but requestBody is missing", rel, method, path)
 	}
-	if !hasBody && hasRB {
-		c.rulef("http-service-type", "%s %s %s: requestBody declared but x-service-params.body is missing", rel, method, path)
+	if hasForm && !hasRB {
+		c.rulef("http-service-type", "%s %s %s: x-service-params.form declared but requestBody is missing", rel, method, path)
+	}
+	if !hasBody && !hasForm && hasRB {
+		c.rulef("http-service-type", "%s %s %s: requestBody declared but x-service-params.body/form is missing", rel, method, path)
 	}
 	covered := map[string]bool{}
 	if hasBody {
@@ -1229,6 +1275,31 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 						c.rulef("http-service-type", "%s %s %s: requestBody type %s is not the type of %s (%s)", rel, method, path, typeID, paramPath, decl)
 					}
 				}
+			}
+		}
+	}
+
+	if hasForm {
+		for _, raw := range asList(form) {
+			entry, _ := asMap(raw)
+			from, _ := entry["from"].(string)
+			to, _ := entry["to"].(string)
+			if from == "" || to == "" {
+				c.rulef("http-service-params", "%s %s %s: form field requires from/to", rel, method, path)
+				continue
+			}
+			servicePath, ok := serviceParamPath(to)
+			if !ok {
+				c.rulef("http-service-params", "%s %s %s: form field %s must map to params.<service parameter path>, got %v", rel, method, path, from, to)
+				continue
+			}
+			if isAuthInjectedParam(strings.Split(servicePath, ".")[0]) {
+				c.rulef("http-service-params", "%s %s %s: form field %s must not map to auth-injected service parameter %s", rel, method, path, from, servicePath)
+				continue
+			}
+			covered[strings.Split(servicePath, ".")[0]] = true
+			if _, ok := c.serviceParamType(target, servicePath); !ok {
+				c.rulef("http-service-params", "%s %s %s: form field %s maps to unknown service field params.%s", rel, method, path, from, servicePath)
 			}
 		}
 	}

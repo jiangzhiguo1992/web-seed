@@ -29,8 +29,21 @@ pagination:
     ordering: "必须稳定（有唯一 tiebreaker，如 id）"
 
 headers:
+  request:
+    - { name: Authorization, required: false, note: "request.headers 中用 auth: BearerAuth 标记；生成器映射为 OpenAPI security" }
+    - { name: Content-Type, required: false, note: "有 body 时必填；value 必须等于 body.kind 对应的媒体类型" }
+    - { name: Accept, required: false, note: "可选；声明期望的响应媒体类型" }
+    - { name: Connection, required: false, note: "hop-by-hop 连接控制；契约可声明，生成器可按传输层处理" }
+    - { name: Cookie, required: false, note: "当前 JWT 认证不使用 cookie；如未来使用，按普通 header 声明" }
   response:
+    - { name: Content-Type, required: false, note: "有 body 时必填；value 必须等于 body.kind 对应的媒体类型" }
+    - { name: Content-Length, required: false, note: "响应体长度；通常由传输层生成" }
+    - { name: Location, required: false, note: "201 或 3xx 的资源地址" }
+    - { name: Set-Cookie, required: false, note: "可重复；multiple: true" }
     - { name: Retry-After, required: false, note: "由平台 components.responses 的 429/503 声明，不在 operation 里重复" }
+    - { name: Cache-Control, required: false, note: "缓存策略" }
+    - { name: ETag, required: false, note: "实体标签" }
+    - { name: Last-Modified, required: false, note: "最后修改时间" }
     - { name: Deprecation, required: false, note: "弃用响应由 versioning 契约声明；不在 operation 里重复" }
     - { name: Sunset, required: false, note: "弃用响应由 versioning 契约声明；不在 operation 里重复" }
 
@@ -53,11 +66,13 @@ error_responses:
 
 audiences: [admin, user]
 
-content_types:
+body_types:
   json: application/json
-  error: "application/json"
-  upload: multipart/form-data
-  note: "application/json 在契约里由 request.body.content_type 与 response.<status>.body.content_type 表达；生成器写成 OpenAPI content.<content_type>，不在 parameters 里重复声明 Content-Type header"
+  form: application/x-www-form-urlencoded
+  multipart: multipart/form-data
+  text: "text/plain"
+  binary: application/octet-stream
+  note: "body.kind 决定媒体类型；Content-Type header 必须显式声明且 value 与之一致，生成器再写成 OpenAPI content.<content_type>"
 
 timeouts:
   server_read_header: 5s

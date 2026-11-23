@@ -215,43 +215,44 @@ dispatch 项：
 - status code / content-type / header
 - API 版本由文件级 `mount.api_version` 声明（`v<数字>`）；完整 path = `mount.path` + `paths` key，生成器按 app include 文件的版本派生 `servers: /<api_version>`。`mount.path` 只写公共资源前缀（如 `/account`），audience 段写在 `paths`（如 `/admin`）；`paths`、`mount.path` 都不写版本前缀
 - `project.yaml` 的 api app 只声明 `audience` / `timeout_ms` / `includes`，不再声明 `api_version`；同一 app 的 include 文件必须处于同一版本（checker 与生成器都拒绝混版本）
-- 每个 operation 用 `request` / `response` 两块：`request` 下只允许 `path` / `query` / `body`；`response` 是状态码 map，2xx 写 `description` / `body`，非 2xx 只写 `codes`
-- HTTP 契约不声明客户端链路头或幂等键；JWT 通过 `Authorization` security scheme 传递
-- `request.path` / `request.query` 是列表，每项必须写 `name` / `schema` / `description` / `to`（query 另有 `required`）；`schema` 只能是 `_types.*` 或 `data.enums.*`，不得写实体或匿名 object
-- `body` 用 `content_type` + `schema` + `to`；`content_type` 固定 `application/json`；`schema` 必须是具名类型 ID，不支持匿名 object
+- 每个 operation 用 `request` / `response` 两块；`request` 允许 `headers` / `path` / `query` / `body`；`response` 是状态码 map，2xx 写 `description` / `headers` / `body`，非 2xx 只写 `codes`
+- `request.headers` 与 `response.headers` 是独立的 header 列表，不放在 body 下；`Authorization` 用 `auth: BearerAuth` 标记，`Content-Type` 用 `value` 标记
+- 认证统一用 `Authorization` header：受保护 operation 写 `{ name: Authorization, required: true, auth: BearerAuth }`；公开 operation 不写
+- `request.path` / `request.query` 是列表，每项必须写 `name` / `schema` / `description` / `to`（query 另有 `required`）；`schema` 只能是 `_types.*` 或 `data.enums.*`
+- `body` 用 `kind` 区分编码：`json` / `form` / `multipart` / `text` / `binary`；`json/text/binary` 写 `schema` + `to`，`form/multipart` 写 `fields`，每个 field 写 `to`
+- 有 body 时必须声明 `Content-Type` header，且 value 必须等于 `body.kind` 对应的媒体类型；响应 body 同理
 - `schema` 直接写类型 ID：`data.entities.*` / `data.enums.*` / `cap.services.*.schemas.*` / `_types.*`，不写 `#/components/...`
-- 平台级 header / parameter / response / securityScheme / schema 统一定义在 `platform/http_conventions.yaml` 的 `components`；HTTP 文件不再有文件私有组件，也没有 `protocols/http/shared.yaml`
+- 平台级 header 语义、securityScheme、response、schema 统一定义在 `platform/http_conventions.yaml`；HTTP 文件不写私有 components
 
 **不要写**：权限、审计、限流（在 `platform/security/access.yaml`）、事务（在 service 项）。
 
 HTTP 约束：
 
-- 响应 schema 由类型 ID 解析：优先 `cap.services.schemas`，也允许 `data.entities.*` / `data.enums.*`；object 默认封闭。
+- 响应 schema 由类型 ID 解析；object 默认封闭。
 - 每个 operation 必须有 `id` 与 `service`；`service` 只能指向 `public` 且未被异步任务引用的同步 service。
-- 每个文件必须有 `mount`：`api_version` / `path` / `audience`。`mount.path` 是资源前缀，`mount.audience` 是该文件全部 operation 的调用端列表。
-- 每个 operation 必须有 `security: { BearerAuth: bool }`；`true` 表示本次 API 必须携带 JWT access token，`false` 表示公开。
-- 每个 operation 必须有非空 `used_by`：模板属性 `min_items: 1` 保证非空，`http-consumer` 再校验它精确等于引用该 service 的 `feature.pages.*`；缺页面就补页面，不允许用豁免清单绕过。
-- `used_by` 在 `_meta/cap.protocols.http.yaml` 的 operation `item_fields` 上声明（required + min_items 1），不是只写在 `rules` 文本里。
-- 错误闭包由脚本递归计算：`query` 取 `query.errors` 与 `step.errors`；`service` 未声明 `step.errors` 时取目标 service 闭包，声明时只取声明集合；`logic`/`when` 取 `step.errors` 与 `rules[].rule` 的 `on_violation`；`events`/`transition` 取 `step.errors`；事件不贡献同步错误。`http-errors` 用该闭包校验每个 operation 的 `codes`。
-- `request.path` / `request.query` 的每个参数和 `request.body` 都必须写 `to: params.<service 参数路径>`；`to` 只用于契约校验与后续 handler 生成，不写入 OpenAPI。service 必填非 ctx 参数必须全覆盖；`BearerAuth: true` 时 `account_id` / `access_token` 由认证中间件注入，HTTP 参数不得指向它们。
+- 每个文件必须有 `mount`：`api_version` / `path` / `audience`。
+- 每个 operation 必须有非空 `used_by`：`http-consumer` 校验它精确等于引用该 service 的 `feature.pages.*`。
+- 错误闭包由脚本递归计算；`http-errors` 用该闭包校验每个 operation 的 `codes`。
+- `request.path` / `request.query` 的每个参数、`body.to` 或 form/multipart 的 field `to` 都必须写 `params.<service 参数路径>`；`to` 只用于契约校验与 handler 生成，不写入 OpenAPI。
+- service 必填非 ctx 参数必须全覆盖；`Authorization` 存在时 `account_id` / `access_token` 由认证中间件注入，HTTP 参数不得指向它们。
 - 幂等由 API 内部按业务语义决定，不使用客户端传入的幂等键。
-- JWT 认证：access/refresh 都是 JWT，登录与刷新只通过响应体返回，客户端用 `Authorization: Bearer` 携带 access token；没有 cookie、CSRF 或服务端 session。refresh/logout 请求体为 `RefreshInput`；token 表只存 JWT 哈希，用于吊销、refresh 轮换与审计。
-- 每个 operation 必须在 `response.<非2xx状态码>.codes` 下按状态分组列出该 service 的非 `COMMON_*` 错误；code 的错误 `status` 必须等于所在 response 的状态码，且必须与 service 错误集精确一致。`COMMON_*` 不在 operation 里重复。
-- 成功响应统一信封 `{ code: 0, msg: "ok", data: <return> }`，由 `gen_openapi` 生成 `Api<Type>Response`；204 是唯一无信封的响应。
-- 错误响应统一引用 `platform/http_conventions.components.responses` 的 `ApiErrorResponse`：`{ code: <biz_code>, msg, data: null }`，HTTP status 保留 4xx/5xx。
-- 每个 `request.body` 与 2xx `response.<status>.body` 不写 `example`；验收场景源在 `contracts/scenarios/http/`，生成清单在 `contracts/generated/scenarios/manifest.yaml`（`make gen-scenarios`），实现侧 runner 只读清单。
-- 平台基线错误状态由 `platform/http_conventions.yaml` 的 `error_responses.always` / `secured` / `body` / `deprecated` 声明，生成器负责注入；operation 只写业务错误 codes，不再有文件级默认错误列表。
-- 429 与 503 必须通过 `platform/http_conventions.components.responses` 的 `TooManyRequests` / `ServiceUnavailable` 返回 `Retry-After`。
+- JWT 认证：access/refresh 都是 JWT，登录与刷新只通过响应体返回；客户端用 `Authorization: Bearer` 携带 access token。
+- 每个 operation 必须在 `response.<非2xx状态码>.codes` 下按状态分组列出该 service 的非 `COMMON_*` 错误。
+- 成功响应统一信封 `{ code: 0, msg: "ok", data: <return> }`；错误响应 `{ code: <biz_code>, msg, data: null }`。
+- 每个 `request.body` 与 2xx `response.<status>.body` 不写 `example`；验收场景源在 `contracts/scenarios/http/`。
+- 平台基线错误状态由 `platform/http_conventions.yaml` 的 `error_responses.always` / `secured` / `body` / `deprecated` 声明，生成器负责注入。
+- 429 与 503 必须通过平台 responses 返回 `Retry-After`。
 
 请求头/响应头定义位置：
 
-| 头 | 位置 | 引用方式 |
+| 内容 | 契约位置 | 生成策略 |
 |---|---|---|
-| `Authorization` | 不写 header 槽位 | 由 `security: { BearerAuth: true }` 表达；JWT access token |
-| `Retry-After` | 平台 `components.responses.TooManyRequests` / `ServiceUnavailable` | 不在 operation 里重复写 |
-| `Content-Type: application/json` | `request.body.content_type` / `response.<status>.body.content_type` | 固定字段，不写成 header |
+| `Authorization` | `request.headers[].auth: BearerAuth` | OpenAPI security，不生成普通 header parameter |
+| `Content-Type` | `request.headers` / `response.headers` 的 `value` | OpenAPI request/response media type |
+| `Accept` / `Connection` / 自定义 header | `request.headers` / `response.headers` 的 `schema` 或 `value` | OpenAPI header parameter |
+| `Location` / `Set-Cookie` / `Retry-After` | `response.headers` | OpenAPI response header |
 
-`application/json` 不是 `parameters` 里的 header；它是 `request.body.content_type` / `response.<status>.body.content_type`，生成器据此写出 `content.<content_type>`，`oapi-codegen` 再生成 Content-Type。
+`Content-Type` 在契约里就是 header；生成器把它映射成 OpenAPI `content.<value>`，不会重复生成普通 header parameter。
 
 ---
 

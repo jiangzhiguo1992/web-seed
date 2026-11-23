@@ -21,8 +21,10 @@ paths:
       summary: "列出账号"
       used_by:
         - feature.pages.account_list
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         query:
           - { name: status, schema: data.enums.account_status, required: false, description: "账号状态过滤", to: params.status }
           - { name: offset, schema: _types.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
@@ -30,8 +32,10 @@ paths:
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.account.schemas.AccountPage
 
     post:
@@ -41,17 +45,23 @@ paths:
       summary: "创建账号"
       used_by:
         - feature.pages.account_create
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.account.schemas.CreateAccountInput
           to: params.input
       response:
         201:
           description: "已创建"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
+            - { name: Location, required: false, schema: _types.string, description: "新账号资源地址" }
           body:
-            content_type: application/json
+            kind: json
             schema: data.entities.account
         409:
           codes:
@@ -70,15 +80,19 @@ paths:
       used_by:
         - feature.pages.account_detail
         - feature.pages.account_security
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
           - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: data.entities.account
         404:
           codes:
@@ -91,19 +105,24 @@ paths:
       summary: "更新账号资料"
       used_by:
         - feature.pages.account_detail
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         path:
           - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.account.schemas.UpdateAccountInput
           to: params.input
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: data.entities.account
         404:
           codes:
@@ -123,8 +142,10 @@ paths:
       used_by:
         - feature.pages.account_list
         - feature.pages.account_detail
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
           - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
       response:
@@ -147,15 +168,19 @@ paths:
       used_by:
         - feature.pages.account_list
         - feature.pages.account_detail
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
           - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: data.entities.account
         404:
           codes:
@@ -174,19 +199,24 @@ paths:
       used_by:
         - feature.pages.account_list
         - feature.pages.account_detail
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         path:
           - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.account.schemas.SuspendAccountInput
           to: params.input
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: data.entities.account
         404:
           codes:

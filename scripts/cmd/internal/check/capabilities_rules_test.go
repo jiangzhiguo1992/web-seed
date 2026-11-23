@@ -810,8 +810,9 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: "yes" }
-      request: {}
+      request:
+        headers:
+          - { name: Authorization, required: true, description: "token" }
       response:
         "204":
           description: "OK"
@@ -821,8 +822,8 @@ paths:
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.get": {visibility: "public"},
 	}, map[string]bool{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "security.BearerAuth must be a boolean") {
-		t.Fatalf("non-boolean security not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "Authorization header requires auth: BearerAuth") {
+		t.Fatalf("invalid Authorization header not reported: %v", c.errs)
 	}
 }
 
@@ -840,7 +841,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -872,8 +872,9 @@ paths:
       contract:
         id: "cap.protocols.http.x.post"
         service: "cap.services.x.post"
-      security: { BearerAuth: true }
-      request: {}
+      request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "token" }
       response:
         "204":
           description: "OK"
@@ -906,8 +907,9 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "token" }
         query:
           - { name: account_id, schema: { type: integer }, required: true, description: "account", to: params.account_id }
       response:
@@ -924,6 +926,26 @@ paths:
 	}, map[string]bool{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "must not map to auth-injected") {
 		t.Fatalf("HTTP auth param mapping not rejected: %v", c.errs)
+	}
+}
+
+func TestHTTPHeadersRule(t *testing.T) {
+	c := &Checker{}
+	op := map[string]any{
+		"parameters": []any{
+			map[string]any{"name": "X-Test", "in": "header"},
+			map[string]any{"name": "x-test", "in": "header"},
+		},
+		"responses": map[string]any{
+			"200": map[string]any{"headers": map[string]any{"Content-Type": map[string]any{}}},
+		},
+	}
+	c.checkHTTPHeaders("x.yaml", "get", "/x", op)
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{"[http-headers]", "duplicate header", "response 200 Content-Type"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %v", want, c.errs)
+		}
 	}
 }
 
@@ -2628,7 +2650,6 @@ paths:
       id: cap.protocols.http.x.ok
       service: cap.services.x.get
       used_by: [feature.pages.x]
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -2640,7 +2661,6 @@ paths:
       id: cap.protocols.http.x.open
       service: cap.services.x.open
       used_by: []
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -2652,7 +2672,6 @@ paths:
       id: cap.protocols.http.x.orphan
       service: cap.services.x.orphan
       used_by: []
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -2664,7 +2683,6 @@ paths:
       id: cap.protocols.http.x.missing
       service: cap.services.x.get
       used_by: []
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -2816,7 +2834,6 @@ paths:
       service: cap.services.x.get
       summary: "a"
       used_by: [feature.pages.x]
-      security: { BearerAuth: false }
       request: {}
       response:
         "204": { description: OK }
@@ -2827,7 +2844,6 @@ paths:
       service: cap.services.x.get
       summary: "b"
       used_by: [feature.pages.x]
-      security: { BearerAuth: false }
       request: {}
       response:
         "204": { description: OK }

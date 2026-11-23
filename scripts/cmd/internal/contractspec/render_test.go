@@ -569,16 +569,12 @@ func TestRenderHTTP(t *testing.T) {
 	if op["name"] != "getInvoice" || op["id"] != "cap.protocols.http.invoice.get" || op["service"] != "cap.services.invoice.get" {
 		t.Fatalf("operation = %#v", op)
 	}
-	security, ok := op["security"].(map[string]any)
-	if !ok || security["BearerAuth"] != false {
-		t.Fatalf("security = %#v", op["security"])
-	}
 	usedBy, _ := op["used_by"].([]any)
 	if len(usedBy) != 1 || usedBy[0] != "feature.pages.invoice" {
 		t.Fatalf("used_by = %#v", op["used_by"])
 	}
 	opText := string(b)[strings.Index(string(b), "get:"):]
-	order := []string{"id:", "name:", "service:", "summary:", "used_by:", "security:", "request:", "response:"}
+	order := []string{"id:", "name:", "service:", "summary:", "used_by:", "request:", "response:"}
 	for i := 1; i < len(order); i++ {
 		prev := strings.Index(opText, order[i-1])
 		next := strings.Index(opText, order[i])

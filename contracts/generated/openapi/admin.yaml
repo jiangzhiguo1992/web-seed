@@ -897,6 +897,14 @@ paths:
     get:
       operationId: listAccounts
       parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
         - description: 账号状态过滤
           in: query
           name: status
@@ -971,6 +979,15 @@ paths:
       summary: 列出账号
     post:
       operationId: createAccount
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       requestBody:
         content:
           application/json:
@@ -984,6 +1001,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAccountResponse'
           description: 已创建
+          headers:
+            Location:
+              description: 新账号资源地址
+              schema:
+                type: string
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1052,6 +1074,14 @@ paths:
     delete:
       operationId: deleteAccount
       parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
         - description: 账号 ID
           in: path
           name: id
@@ -1119,6 +1149,14 @@ paths:
     get:
       operationId: getAccount
       parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
         - description: 账号 ID
           in: path
           name: id
@@ -1183,6 +1221,14 @@ paths:
     patch:
       operationId: updateAccount
       parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
         - description: 账号 ID
           in: path
           name: id
@@ -1274,6 +1320,14 @@ paths:
     post:
       operationId: activateAccount
       parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
         - description: 账号 ID
           in: path
           name: id
@@ -1346,6 +1400,14 @@ paths:
     post:
       operationId: suspendAccount
       parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
         - description: 账号 ID
           in: path
           name: id
@@ -1433,6 +1495,15 @@ paths:
   /auth/bind/email:
     post:
       operationId: bindEmail
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       requestBody:
         content:
           application/json:
@@ -1517,6 +1588,15 @@ paths:
   /auth/bind/password:
     post:
       operationId: bindPassword
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       requestBody:
         content:
           application/json:
@@ -1603,6 +1683,15 @@ paths:
   /auth/bind/phone:
     post:
       operationId: bindPhone
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       requestBody:
         content:
           application/json:
@@ -1687,6 +1776,15 @@ paths:
   /auth/login:
     post:
       operationId: login
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       requestBody:
         content:
           application/json:
@@ -1761,6 +1859,15 @@ paths:
   /auth/logout:
     post:
       operationId: logout
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       requestBody:
         content:
           application/json:
@@ -1819,6 +1926,15 @@ paths:
   /auth/me:
     get:
       operationId: currentAccount
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       responses:
         200:
           content:
@@ -1875,6 +1991,15 @@ paths:
   /auth/refresh:
     post:
       operationId: refreshToken
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       requestBody:
         content:
           application/json:
@@ -1939,6 +2064,15 @@ paths:
   /auth/verification/send:
     post:
       operationId: sendVerification
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       requestBody:
         content:
           application/json:
@@ -2007,6 +2141,15 @@ paths:
   /auth/verification/verify:
     post:
       operationId: verifyCode
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
       requestBody:
         content:
           application/json:

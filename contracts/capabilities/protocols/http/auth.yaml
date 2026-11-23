@@ -21,17 +21,21 @@ paths:
       summary: "登录"
       used_by:
         - feature.pages.login
-      security: { BearerAuth: false }
       request:
+        headers:
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.auth.schemas.LoginInput
           to: params.input
       response:
         200:
           description: "登录成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.auth.schemas.AuthResult
         401:
           codes:
@@ -52,17 +56,21 @@ paths:
       summary: "发送验证码"
       used_by:
         - feature.pages.login
-      security: { BearerAuth: false }
       request:
+        headers:
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.verification.schemas.SendVerificationInput
           to: params.input
       response:
         202:
           description: "已受理"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.verification.schemas.VerificationSent
         422:
           codes:
@@ -79,17 +87,21 @@ paths:
       summary: "校验验证码"
       used_by:
         - feature.pages.login
-      security: { BearerAuth: false }
       request:
+        headers:
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.verification.schemas.VerifyCodeInput
           to: params.input
       response:
         200:
           description: "校验成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.verification.schemas.VerificationResult
         422:
           codes:
@@ -107,17 +119,21 @@ paths:
       summary: "刷新 JWT"
       used_by:
         - feature.pages.current_account
-      security: { BearerAuth: false }
       request:
+        headers:
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.token.schemas.RefreshInput
           to: params.input
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.token.schemas.RefreshResult
         401:
           codes:
@@ -132,10 +148,12 @@ paths:
       summary: "吊销 refresh JWT"
       used_by:
         - feature.pages.current_account
-      security: { BearerAuth: false }
       request:
+        headers:
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.token.schemas.RefreshInput
           to: params.input
       response:
@@ -153,17 +171,22 @@ paths:
       summary: "创建、修改或启停密码认证绑定"
       used_by:
         - feature.pages.account_security
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.auth.schemas.BindPasswordInput
           to: params.input
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.auth.schemas.AuthBinding
         401:
           codes:
@@ -188,17 +211,22 @@ paths:
       summary: "创建、换绑或启停手机号认证绑定"
       used_by:
         - feature.pages.account_security
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.auth.schemas.BindPhoneInput
           to: params.input
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.auth.schemas.AuthBinding
         403:
           codes:
@@ -220,17 +248,22 @@ paths:
       summary: "创建、换绑或启停邮箱认证绑定"
       used_by:
         - feature.pages.account_security
-      security: { BearerAuth: true }
       request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.auth.schemas.BindEmailInput
           to: params.input
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.auth.schemas.AuthBinding
         403:
           codes:
@@ -252,13 +285,17 @@ paths:
       summary: "校验访问令牌并返回当前账号"
       used_by:
         - feature.pages.current_account
-      security: { BearerAuth: true }
-      request: {}
+      request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
       response:
         200:
           description: "成功"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: data.entities.account
         401:
           codes:

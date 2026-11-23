@@ -176,11 +176,27 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 			if response == nil {
 				return fmt.Errorf("%s: response block required", where)
 			}
-			parameters, requestBody, serviceParams, err := normalizeRequest(request, where, resolve, componentByID, strict)
+			parameters, requestBody, serviceParams, auth, err := normalizeRequest(request, where, resolve, componentByID, strict)
 			if err != nil {
 				return err
 			}
 			op["x-service-params"] = serviceParams
+			if !auth && !strict {
+				legacy, err := legacySecurityEnabled(op["security"])
+				if err != nil {
+					return err
+				}
+				auth = legacy
+			}
+			if strict && op["security"] != nil {
+				return fmt.Errorf("%s: security removed; use request.headers Authorization", where)
+			}
+			delete(op, "security")
+			if auth {
+				op["security"] = []any{map[string]any{"BearerAuth": []any{}}}
+			} else {
+				op["security"] = []any{}
+			}
 			if len(parameters) > 0 {
 				op["parameters"] = parameters
 			}
@@ -335,39 +351,8 @@ func normalizeOperationMetadata(op map[string]any, where string, strict bool) er
 	delete(op, "id")
 	delete(op, "service")
 
-	if err := normalizeOperationSecurity(op, where); err != nil {
-		return err
-	}
-
 	delete(op, "audience")
 	delete(op, "used_by")
-	return nil
-}
-
-// normalizeOperationSecurity 把源契约的 { BearerAuth: bool } 转成 OpenAPI security。
-func normalizeOperationSecurity(op map[string]any, where string) error {
-	raw, ok := op["security"]
-	if !ok {
-		return fmt.Errorf("%s: security required", where)
-	}
-	security := asMap(raw)
-	if security == nil {
-		return fmt.Errorf("%s: security must be an object", where)
-	}
-	for key := range security {
-		if key != "BearerAuth" {
-			return fmt.Errorf("%s: unknown security key %s", where, key)
-		}
-	}
-	enabled, ok := security["BearerAuth"].(bool)
-	if !ok {
-		return fmt.Errorf("%s: security.BearerAuth must be a boolean", where)
-	}
-	if enabled {
-		op["security"] = []any{map[string]any{"BearerAuth": []any{}}}
-	} else {
-		op["security"] = []any{}
-	}
 	return nil
 }
 
@@ -457,16 +442,50 @@ func normalizeHTTPComponents(doc map[string]any, strict bool) (map[string]string
 	return byID, nil
 }
 
-func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, map[string]any, map[string]any, error) {
+func legacySecurityEnabled(raw any) (bool, error) {
+	if raw == nil {
+		return false, nil
+	}
+	if m := asMap(raw); m != nil {
+		value, ok := m["BearerAuth"].(bool)
+		if !ok {
+			return false, fmt.Errorf("security.BearerAuth must be a boolean")
+		}
+		return value, nil
+	}
+	list := asList(raw)
+	for _, item := range list {
+		req := asMap(item)
+		if req == nil {
+			continue
+		}
+		if _, ok := req["BearerAuth"]; ok {
+			return true, nil
+		}
+	}
+	return len(list) > 0, nil
+}
+
+func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, map[string]any, map[string]any, bool, error) {
 	for key := range request {
 		switch key {
-		case "path", "query", "body":
+		case "headers", "path", "query", "body":
 		default:
-			return nil, nil, nil, fmt.Errorf("%s: unknown request key %s", where, key)
+			return nil, nil, nil, false, fmt.Errorf("%s: unknown request key %s", where, key)
 		}
 	}
 	parameters := []any{}
 	serviceParams := map[string]any{}
+	headers, contentType, auth, err := normalizeRequestHeaders(asList(request["headers"]), where, resolve, componentByID, strict)
+	if err != nil {
+		return nil, nil, nil, false, err
+	}
+	if contentType == "" && !strict {
+		if body := asMap(request["body"]); body != nil {
+			contentType, _ = body["content_type"].(string)
+		}
+	}
+	parameters = append(parameters, headers...)
 	for _, section := range []struct {
 		name string
 		in   string
@@ -482,13 +501,13 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 		for i, item := range raw {
 			param, err := normalizeListedParameter(item, section.in, where, i, resolve, componentByID, strict)
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, false, err
 			}
 			source := asMap(item)
 			to, _ := source["to"].(string)
 			name, _ := source["name"].(string)
 			if to == "" {
-				return nil, nil, nil, fmt.Errorf("%s: %s[%d].to required", where, section.name, i)
+				return nil, nil, nil, false, fmt.Errorf("%s: %s[%d].to required", where, section.name, i)
 			}
 			mappings = append(mappings, map[string]any{"from": name, "to": to})
 			parameters = append(parameters, param)
@@ -496,18 +515,206 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 		serviceParams[section.name] = mappings
 	}
 	bodyRaw := asMap(request["body"])
-	body, err := normalizeBody(bodyRaw, where, "requestBody", resolve, componentByID, strict)
+	body, form, err := normalizeRequestBody(bodyRaw, contentType, where, resolve, componentByID, strict)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, false, err
+	}
+	if strict && bodyRaw != nil && !headerRequired(asList(request["headers"]), "Content-Type") {
+		return nil, nil, nil, false, fmt.Errorf("%s: request body requires required Content-Type header", where)
 	}
 	if bodyRaw != nil {
-		to, _ := bodyRaw["to"].(string)
-		if to == "" {
-			return nil, nil, nil, fmt.Errorf("%s: request.body.to required", where)
+		if form != nil {
+			serviceParams["form"] = form
+		} else if to, _ := bodyRaw["to"].(string); to != "" {
+			serviceParams["body"] = to
 		}
-		serviceParams["body"] = to
 	}
-	return parameters, body, serviceParams, nil
+	return parameters, body, serviceParams, auth, nil
+}
+
+var bodyMediaTypes = map[string]string{
+	"json":      "application/json",
+	"form":      "application/x-www-form-urlencoded",
+	"multipart": "multipart/form-data",
+	"text":      "text/plain",
+	"binary":    "application/octet-stream",
+}
+
+func headerRequired(raw []any, name string) bool {
+	for _, item := range raw {
+		header := asMap(item)
+		if header == nil {
+			continue
+		}
+		value, _ := header["name"].(string)
+		if !strings.EqualFold(value, name) {
+			continue
+		}
+		required, ok := header["required"].(bool)
+		return !ok || required
+	}
+	return false
+}
+
+func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, string, bool, error) {
+	parameters := []any{}
+	contentType := ""
+	auth := false
+	for i, item := range raw {
+		header := asMap(item)
+		if header == nil {
+			return nil, "", false, fmt.Errorf("%s: headers[%d] must be an object", where, i)
+		}
+		name, _ := header["name"].(string)
+		if name == "" {
+			return nil, "", false, fmt.Errorf("%s: headers[%d].name required", where, i)
+		}
+		if strings.EqualFold(name, "Content-Type") {
+			value, _ := header["value"].(string)
+			if value == "" {
+				return nil, "", false, fmt.Errorf("%s: Content-Type header requires value", where)
+			}
+			contentType = value
+			continue
+		}
+		if strings.EqualFold(name, "Authorization") {
+			value, _ := header["auth"].(string)
+			if value != "BearerAuth" {
+				return nil, "", false, fmt.Errorf("%s: Authorization header requires auth: BearerAuth", where)
+			}
+			if auth {
+				return nil, "", false, fmt.Errorf("%s: Authorization declared twice", where)
+			}
+			auth = true
+			continue
+		}
+		if value, _ := header["auth"].(string); value != "" {
+			return nil, "", false, fmt.Errorf("%s: header %s must not declare auth", where, name)
+		}
+		if header["schema"] != nil && header["value"] != nil {
+			return nil, "", false, fmt.Errorf("%s: header %s must declare schema or value, not both", where, name)
+		}
+		if header["schema"] == nil && header["value"] == nil {
+			return nil, "", false, fmt.Errorf("%s: header %s requires schema or value", where, name)
+		}
+		schema, err := normalizeHeaderSchema(header, resolve, componentByID, strict)
+		if err != nil {
+			return nil, "", false, fmt.Errorf("%s: header %s: %w", where, name, err)
+		}
+		required := true
+		if value, ok := header["required"].(bool); ok {
+			required = value
+		}
+		param := map[string]any{"name": name, "in": "header", "required": required, "schema": schema}
+		if description, _ := header["description"].(string); description != "" {
+			param["description"] = description
+		}
+		parameters = append(parameters, param)
+	}
+	return parameters, contentType, auth, nil
+}
+
+func normalizeHeaderSchema(header map[string]any, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {
+	var schema map[string]any
+	if raw := header["schema"]; raw != nil {
+		value, err := normalizeHTTPSchema(raw, resolve, componentByID, strict)
+		if err != nil {
+			return nil, err
+		}
+		schema = value
+	} else if value, _ := header["value"].(string); value != "" {
+		schema = map[string]any{"type": "string", "enum": []any{value}}
+	} else {
+		schema = map[string]any{"type": "string"}
+	}
+	if multiple, _ := header["multiple"].(bool); multiple {
+		schema = map[string]any{"type": "array", "items": schema}
+	}
+	return schema, nil
+}
+
+func bodyRequired(body map[string]any) bool {
+	if value, ok := body["required"].(bool); ok {
+		return value
+	}
+	return true
+}
+
+func normalizeRequestBody(body map[string]any, contentType, where string, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, []any, error) {
+	if body == nil {
+		if contentType != "" {
+			return nil, nil, fmt.Errorf("%s: Content-Type header declared without request body", where)
+		}
+		return nil, nil, nil
+	}
+	kind, _ := body["kind"].(string)
+	if kind == "" {
+		if strict {
+			return nil, nil, fmt.Errorf("%s: request.body.kind required", where)
+		}
+		kind = "json"
+	}
+	want, ok := bodyMediaTypes[kind]
+	if !ok {
+		return nil, nil, fmt.Errorf("%s: unknown request.body.kind %s", where, kind)
+	}
+	if contentType == "" {
+		return nil, nil, fmt.Errorf("%s: request body requires Content-Type header", where)
+	}
+	if contentType != want {
+		return nil, nil, fmt.Errorf("%s: Content-Type %s does not match body.kind %s (%s)", where, contentType, kind, want)
+	}
+	if kind == "form" || kind == "multipart" {
+		fields := asList(body["fields"])
+		if len(fields) == 0 {
+			return nil, nil, fmt.Errorf("%s: %s body requires fields", where, kind)
+		}
+		properties := map[string]any{}
+		required := []any{}
+		mappings := []any{}
+		for i, raw := range fields {
+			field := asMap(raw)
+			if field == nil {
+				return nil, nil, fmt.Errorf("%s: body.fields[%d] must be an object", where, i)
+			}
+			name, _ := field["name"].(string)
+			if name == "" {
+				return nil, nil, fmt.Errorf("%s: body.fields[%d].name required", where, i)
+			}
+			to, _ := field["to"].(string)
+			if to == "" {
+				return nil, nil, fmt.Errorf("%s: body.fields[%d].to required", where, i)
+			}
+			var schema map[string]any
+			if field["kind"] == "file" {
+				schema = map[string]any{"type": "string", "format": "binary"}
+			} else {
+				var err error
+				schema, err = normalizeHTTPSchema(field["schema"], resolve, componentByID, strict)
+				if err != nil {
+					return nil, nil, fmt.Errorf("%s: body field %s: %w", where, name, err)
+				}
+			}
+			properties[name] = schema
+			if requiredFlag, _ := field["required"].(bool); requiredFlag {
+				required = append(required, name)
+			}
+			mappings = append(mappings, map[string]any{"from": name, "to": to})
+		}
+		schema := map[string]any{"type": "object", "additionalProperties": false, "properties": properties}
+		if len(required) > 0 {
+			schema["required"] = required
+		}
+		return map[string]any{"required": bodyRequired(body), "content": map[string]any{contentType: map[string]any{"schema": schema}}}, mappings, nil
+	}
+	schema, err := normalizeHTTPSchema(body["schema"], resolve, componentByID, strict)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%s: request.body.schema: %w", where, err)
+	}
+	if kind == "binary" {
+		schema["format"] = "binary"
+	}
+	return map[string]any{"required": bodyRequired(body), "content": map[string]any{contentType: map[string]any{"schema": schema}}}, nil, nil
 }
 
 func normalizeListedParameter(raw any, in, where string, index int, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {
@@ -537,26 +744,46 @@ func normalizeListedParameter(raw any, in, where string, index int, resolve Type
 	return out, nil
 }
 
-func normalizeBody(body map[string]any, where, field string, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {
-	if body == nil {
-		return nil, nil
+func normalizeResponseHeaders(raw []any, where, status string, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, string, error) {
+	headers := map[string]any{}
+	contentType := ""
+	for i, item := range raw {
+		header := asMap(item)
+		if header == nil {
+			return nil, "", fmt.Errorf("%s: response %s headers[%d] must be an object", where, status, i)
+		}
+		name, _ := header["name"].(string)
+		if name == "" {
+			return nil, "", fmt.Errorf("%s: response %s headers[%d].name required", where, status, i)
+		}
+		if strings.EqualFold(name, "Content-Type") {
+			value, _ := header["value"].(string)
+			if value == "" {
+				return nil, "", fmt.Errorf("%s: response %s Content-Type header requires value", where, status)
+			}
+			contentType = value
+			continue
+		}
+		if value, _ := header["auth"].(string); value != "" {
+			return nil, "", fmt.Errorf("%s: response %s header %s must not declare auth", where, status, name)
+		}
+		if header["schema"] != nil && header["value"] != nil {
+			return nil, "", fmt.Errorf("%s: response %s header %s must declare schema or value, not both", where, status, name)
+		}
+		if header["schema"] == nil && header["value"] == nil {
+			return nil, "", fmt.Errorf("%s: response %s header %s requires schema or value", where, status, name)
+		}
+		schema, err := normalizeHeaderSchema(header, resolve, componentByID, strict)
+		if err != nil {
+			return nil, "", fmt.Errorf("%s: response %s header %s: %w", where, status, name, err)
+		}
+		definition := map[string]any{"schema": schema}
+		if description, _ := header["description"].(string); description != "" {
+			definition["description"] = description
+		}
+		headers[name] = definition
 	}
-	contentType, _ := body["content_type"].(string)
-	if contentType == "" {
-		return nil, fmt.Errorf("%s: %s.content_type required", where, field)
-	}
-	schema, err := normalizeHTTPSchema(body["schema"], resolve, componentByID, strict)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %s.schema: %w", where, field, err)
-	}
-	required := true
-	if value, ok := body["required"].(bool); ok {
-		required = value
-	}
-	return map[string]any{
-		"required": required,
-		"content":  map[string]any{contentType: map[string]any{"schema": schema}},
-	}, nil
+	return headers, contentType, nil
 }
 
 func normalizeResponse(response map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {
@@ -601,27 +828,53 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 			return nil, fmt.Errorf("%s: response %s description required", where, status)
 		}
 		normalized := map[string]any{"description": description}
-		if headers := asMap(resp["headers"]); len(headers) > 0 {
-			normalizedHeaders := map[string]any{}
-			for name, rawHeader := range headers {
-				if ref, ok := rawHeader.(string); ok && ref != "" {
-					normalizedHeaders[name] = map[string]any{"$ref": "#/components/headers/" + ref}
-					continue
-				}
-				normalizedHeaders[name] = rawHeader
+		body := asMap(resp["body"])
+		if body != nil && asList(resp["headers"]) == nil && !strict {
+			if legacy, _ := body["content_type"].(string); legacy != "" {
+				resp["headers"] = []any{map[string]any{"name": "Content-Type", "value": legacy, "required": true, "description": "响应体媒体类型"}}
 			}
-			normalized["headers"] = normalizedHeaders
 		}
-		if body := asMap(resp["body"]); body != nil {
-			contentType, _ := body["content_type"].(string)
+		headers, contentType, err := normalizeResponseHeaders(asList(resp["headers"]), where, status, resolve, componentByID, strict)
+		if err != nil {
+			return nil, err
+		}
+		if strict && asMap(resp["body"]) != nil && !headerRequired(asList(resp["headers"]), "Content-Type") {
+			return nil, fmt.Errorf("%s: response %s body requires required Content-Type header", where, status)
+		}
+		if len(headers) > 0 {
+			normalized["headers"] = headers
+		}
+		if code == 204 && (body != nil || contentType != "") {
+			return nil, fmt.Errorf("%s: response %s must not declare body or Content-Type", where, status)
+		}
+		if body != nil {
+			kind, _ := body["kind"].(string)
+			if kind == "" {
+				if strict {
+					return nil, fmt.Errorf("%s: response %s body.kind required", where, status)
+				}
+				kind = "json"
+			}
+			want, ok := bodyMediaTypes[kind]
+			if !ok || kind == "form" || kind == "multipart" {
+				return nil, fmt.Errorf("%s: response %s unsupported body.kind %s", where, status, kind)
+			}
 			if contentType == "" {
-				return nil, fmt.Errorf("%s: response %s body.content_type required", where, status)
+				return nil, fmt.Errorf("%s: response %s body requires Content-Type header", where, status)
+			}
+			if contentType != want {
+				return nil, fmt.Errorf("%s: response %s Content-Type %s does not match body.kind %s (%s)", where, status, contentType, kind, want)
 			}
 			schema, err := normalizeHTTPSchema(body["schema"], resolve, componentByID, strict)
 			if err != nil {
 				return nil, fmt.Errorf("%s: response %s body.schema: %w", where, status, err)
 			}
+			if kind == "binary" {
+				schema["format"] = "binary"
+			}
 			normalized["content"] = map[string]any{contentType: map[string]any{"schema": schema}}
+		} else if contentType != "" {
+			return nil, fmt.Errorf("%s: response %s Content-Type declared without body", where, status)
 		}
 		out[status] = normalized
 	}
