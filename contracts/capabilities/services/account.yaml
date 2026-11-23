@@ -290,7 +290,7 @@ services:
         goto: revoke_auth
       - id: revoke_auth
         kind: service
-        summary: "软删认证绑定并吊销令牌、作废验证体"
+        summary: "软删认证绑定并作废验证体"
         input:
           - { name: account_id, value: params.id, description: "被注销账号 ID" }
         output: [ ]

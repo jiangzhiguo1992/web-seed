@@ -1,10 +1,10 @@
 id: cap.services.auth
-summary: "认证会话服务：登录、认证绑定与账号注销编排"
+summary: "认证服务：登录、认证绑定与账号注销编排"
 owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "auth.login 不直接写 token 表；通过 cap.services.token.issue 签发"
+  - "auth.login 不直接写 token 表；通过 cap.services.token.issue 签发 JWT 并记录 token 哈希"
   - "认证失败统一返回 AUTH_INVALID_CREDENTIALS，不要枚举账号是否存在"
   - "登录失败计数必须先于错误返回写入；login 不使用整体事务"
   - "bind_email / bind_phone / bind_password 必须先读取 account 并校验 status ∈ (pending, active)"
@@ -23,7 +23,6 @@ schemas:
   BindPasswordInput:
     type: _types.object
     properties:
-      - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
       - { name: action, schema: { ref: data.enums.auth_password_action }, required: true, description: "认证绑定动作" }
       - { name: username, schema: { type: _types.auth_username }, nullable: true, description: "用户名" }
       - { name: password, schema: { type: _types.string }, nullable: true, write_only: true, description: "密码；仅请求写入，不回显" }
@@ -32,7 +31,6 @@ schemas:
   BindPhoneInput:
     type: _types.object
     properties:
-      - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
       - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
       - { name: code, schema: { type: _types.phone_code }, nullable: true, description: "手机号区号，例如 +86" }
       - { name: number, schema: { type: _types.phone_number }, nullable: true, description: "手机号；只允许数字" }
@@ -41,7 +39,6 @@ schemas:
   BindEmailInput:
     type: _types.object
     properties:
-      - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
       - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
       - { name: username, schema: { type: _types.email_username }, nullable: true, description: "用户名" }
       - { name: domain, schema: { type: _types.email_domain }, nullable: true, description: "邮箱域名" }
@@ -55,12 +52,13 @@ schemas:
       - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
       - { name: status, schema: { ref: data.enums.auth_status }, required: true, description: "认证绑定状态" }
       - { name: masked_target, schema: { type: _types.string }, description: "脱敏后的接收目标" }
-  AuthSession:
+  AuthResult:
     type: _types.object
     properties:
       - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
       - { name: tokens, schema: { ref: cap.services.token.schemas.AccessToken }, required: true, description: "访问令牌" }
-      - { name: attributes, schema: { ref: cap.services.auth.schemas.AuthAttributes }, required: true, description: "会话属性" }
+      - { name: attributes, schema: { ref: cap.services.auth.schemas.AuthAttributes }, required: true, description: "登录结果属性" }
+      - { name: refresh, schema: { ref: cap.services.token.schemas.RefreshToken }, required: true, description: "刷新 JWT" }
   AuthAttributes:
     type: _types.object
     properties:
@@ -76,8 +74,7 @@ services:
       - { name: ctx, type: context.Context }
       - { name: input, type: cap.services.auth.schemas.LoginInput }
     returns:
-      - { name: session, type: cap.services.auth.schemas.AuthSession, value: step.build_session.session }
-      - { name: refresh, type: cap.services.token.schemas.RefreshToken, value: step.split_tokens.refresh }
+      - { name: result, type: cap.services.auth.schemas.AuthResult, value: step.build_result.result }
       - { name: err, type: error }
     steps:
       - id: load_branch
@@ -309,17 +306,18 @@ services:
           - { name: refresh, type: cap.services.token.schemas.RefreshToken, description: "刷新令牌" }
         errors: [ ]
         rules: [ ]
-        goto: build_session
-      - id: build_session
+        goto: build_result
+      - id: build_result
         kind: logic
-        summary: "组装登录会话"
+        summary: "组装登录结果"
         input:
           - { name: account, value: step.load_account.account, description: "账号实体" }
           - { name: tokens, value: step.split_tokens.access, description: "访问令牌" }
+          - { name: refresh, value: step.split_tokens.refresh, description: "刷新令牌" }
           - { name: auth_type, value: params.input.auth_type, description: "登录认证类型" }
           - { name: device_id, value: params.input.device_id, description: "登录设备标识" }
         output:
-          - { name: session, type: cap.services.auth.schemas.AuthSession, description: "登录会话" }
+          - { name: result, type: cap.services.auth.schemas.AuthResult, description: "登录结果" }
         errors: [ ]
         rules: [ ]
         goto: $end
@@ -350,9 +348,10 @@ services:
   - name: bind_password
     summary: "创建、修改或启停密码认证绑定"
     visibility: public
-    tx_mode: none
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
+      - { name: account_id, type: _types.account_id }
       - { name: input, type: cap.services.auth.schemas.BindPasswordInput }
     returns:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
@@ -362,7 +361,7 @@ services:
         kind: query
         summary: "读取认证绑定所属账号"
         input:
-          - { name: id, value: params.input.account_id, description: "账号 ID" }
+          - { name: id, value: params.account_id, description: "账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
         query: data.queries.account.get_account
@@ -385,7 +384,7 @@ services:
         summary: "按 action 定位目标密码绑定：create 生成新 ID，其余使用现有绑定"
         input:
           - { name: action, value: params.input.action, description: "绑定动作" }
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: username, value: params.input.username, description: "用户名；用于定位现有绑定" }
         output:
           - { name: binding_id, type: _types.integer, description: "目标密码绑定 ID" }
@@ -460,7 +459,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_pwd.create ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: status, value: step.create_status.status, description: "绑定状态 verified" }
           - { name: username, value: step.create_username.username, description: "用户名" }
           - { name: password_hash, value: step.hash_create.password_hash, description: "密码哈希" }
@@ -562,6 +561,27 @@ services:
           - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors: [ ]
         rules: [ ]
+        goto: revoke_branch
+      - id: revoke_branch
+        kind: when
+        summary: "改密或停用密码后吊销账号全部令牌"
+        input:
+          - { name: action, value: params.input.action, description: "绑定动作" }
+        output: [ ]
+        when:
+          - input: action
+            expr: "input.action == 'update' || input.action == 'disable'"
+            goto: revoke_tokens
+        goto: $end
+      - id: revoke_tokens
+        kind: service
+        summary: "吊销账号全部令牌"
+        input:
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
+        output: [ ]
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        service: cap.services.token.revoke_by_account
         goto: $end
     used_by:
       - cap.protocols.http.auth.bind_password
@@ -572,6 +592,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
+      - { name: account_id, type: _types.account_id }
       - { name: input, type: cap.services.auth.schemas.BindPhoneInput }
     returns:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
@@ -581,7 +602,7 @@ services:
         kind: query
         summary: "读取认证绑定所属账号"
         input:
-          - { name: id, value: params.input.account_id, description: "账号 ID" }
+          - { name: id, value: params.account_id, description: "账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
         query: data.queries.account.get_account
@@ -604,7 +625,7 @@ services:
         summary: "按 action 定位现有手机绑定；create/replace 的新 ID 由 new_id 生成"
         input:
           - { name: action, value: params.input.action, description: "绑定动作" }
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: number, value: params.input.number, description: "手机号；用于定位现有绑定" }
         output:
           - { name: binding_id, type: _types.integer, description: "现有手机绑定 ID；create 时为 0" }
@@ -668,7 +689,7 @@ services:
         summary: "换绑前软删旧手机绑定"
         lifecycles: [ cap.lifecycles.auth_contact.destroy ]
         input:
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
         output: [ ]
         query: data.queries.auth.soft_delete_auth_phone_by_account
         goto: replace_revoke
@@ -696,7 +717,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新手机绑定 ID" }
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: status, value: step.replace_status.status, description: "绑定状态 unverified" }
           - { name: code, value: step.replace_phone_target.code, description: "手机号区号" }
           - { name: number, value: step.replace_phone_target.number, description: "手机号" }
@@ -741,7 +762,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新手机绑定 ID" }
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: status, value: step.create_status.status, description: "绑定状态 unverified" }
           - { name: code, value: step.create_phone.code, description: "手机号区号" }
           - { name: number, value: step.create_phone.number, description: "手机号" }
@@ -826,6 +847,27 @@ services:
           - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors: [ ]
         rules: [ ]
+        goto: revoke_branch
+      - id: revoke_branch
+        kind: when
+        summary: "换绑或停用手机后吊销账号全部令牌"
+        input:
+          - { name: action, value: params.input.action, description: "绑定动作" }
+        output: [ ]
+        when:
+          - input: action
+            expr: "input.action == 'replace' || input.action == 'disable'"
+            goto: revoke_tokens
+        goto: $end
+      - id: revoke_tokens
+        kind: service
+        summary: "吊销账号全部令牌"
+        input:
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
+        output: [ ]
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        service: cap.services.token.revoke_by_account
         goto: $end
     used_by:
       - cap.protocols.http.auth.bind_phone
@@ -836,6 +878,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
+      - { name: account_id, type: _types.account_id }
       - { name: input, type: cap.services.auth.schemas.BindEmailInput }
     returns:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
@@ -845,7 +888,7 @@ services:
         kind: query
         summary: "读取认证绑定所属账号"
         input:
-          - { name: id, value: params.input.account_id, description: "账号 ID" }
+          - { name: id, value: params.account_id, description: "账号 ID" }
         output:
           - { name: account, type: data.entities.account, description: "query 返回的 account" }
         query: data.queries.account.get_account
@@ -868,7 +911,7 @@ services:
         summary: "按 action 定位现有邮箱绑定；create/replace 的新 ID 由 new_id 生成"
         input:
           - { name: action, value: params.input.action, description: "绑定动作" }
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: username, value: params.input.username, description: "用户名；用于定位现有绑定" }
           - { name: domain, value: params.input.domain, description: "邮箱域名；用于定位现有绑定" }
         output:
@@ -945,7 +988,7 @@ services:
         summary: "换绑前软删旧邮箱绑定"
         lifecycles: [ cap.lifecycles.auth_contact.destroy ]
         input:
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
         output: [ ]
         query: data.queries.auth.soft_delete_auth_email_by_account
         goto: replace_revoke
@@ -964,7 +1007,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新邮箱绑定 ID" }
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: status, value: step.replace_status.status, description: "绑定状态 unverified" }
           - { name: username, value: step.replace_email_target.username, description: "用户名" }
           - { name: domain, value: step.replace_email_target.domain, description: "邮箱域名" }
@@ -1013,7 +1056,7 @@ services:
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新邮箱绑定 ID" }
-          - { name: account_id, value: params.input.account_id, description: "账号 ID" }
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: status, value: step.create_status.status, description: "绑定状态 unverified" }
           - { name: username, value: step.create_email_target.username, description: "用户名" }
           - { name: domain, value: step.create_email_target.domain, description: "邮箱域名" }
@@ -1099,6 +1142,27 @@ services:
           - { name: binding, type: cap.services.auth.schemas.AuthBinding, description: "认证绑定" }
         errors: [ ]
         rules: [ ]
+        goto: revoke_branch
+      - id: revoke_branch
+        kind: when
+        summary: "换绑或停用邮箱后吊销账号全部令牌"
+        input:
+          - { name: action, value: params.input.action, description: "绑定动作" }
+        output: [ ]
+        when:
+          - input: action
+            expr: "input.action == 'replace' || input.action == 'disable'"
+            goto: revoke_tokens
+        goto: $end
+      - id: revoke_tokens
+        kind: service
+        summary: "吊销账号全部令牌"
+        input:
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
+        output: [ ]
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        service: cap.services.token.revoke_by_account
         goto: $end
     used_by:
       - cap.protocols.http.auth.bind_email
@@ -1225,7 +1289,7 @@ services:
       - cap.services.auth.login
 
   - name: revoke_all_for_account
-    summary: "软删账号的认证绑定，并编排令牌吊销与验证体作废"
+    summary: "软删账号的认证绑定，并吊销令牌、作废验证体"
     visibility: public
     tx_mode: none
     params:

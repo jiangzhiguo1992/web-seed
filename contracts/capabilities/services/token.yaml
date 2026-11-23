@@ -1,18 +1,18 @@
 id: cap.services.token
-summary: "令牌服务：签发、刷新、吊销与校验"
+summary: "JWT 令牌服务：签发、刷新、吊销与校验"
 owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "token 只存 hash；令牌原文只通过 issue/refresh 的返回值暴露，HTTP 层只把 refresh token 写入 HttpOnly cookie"
-  - "verify 只校验 access token；refresh token 只在 refresh/logout 中使用"
+  - "JWT 原文只通过 issue/refresh 返回值暴露，不写 cookie；token 表只存 JWT 哈希与吊销/轮换元数据"
+  - "verify 只校验 access JWT；refresh JWT 只在 refresh/logout 中使用；JWT 不写 cookie"
 
 schemas:
   TokenPair:
     type: _types.object
     properties:
       - { name: access_token, schema: { type: _types.string }, required: true, read_only: true, description: "访问令牌" }
-      - { name: refresh_token, schema: { type: _types.string }, required: true, read_only: true, description: "刷新令牌" }
+      - { name: refresh_token, schema: { type: _types.string }, required: true, read_only: true, description: "刷新 JWT" }
       - { name: access_expire_at, schema: { type: _types.timestamp }, required: true, description: "访问令牌过期时间" }
       - { name: refresh_expire_at, schema: { type: _types.timestamp }, required: true, description: "刷新令牌过期时间" }
       - { name: token_type, schema: { type: _types.token_type }, description: "令牌类型；固定 Bearer" }
@@ -25,14 +25,23 @@ schemas:
   RefreshToken:
     type: _types.object
     properties:
-      - { name: refresh_token, schema: { type: _types.string }, required: true, read_only: true, description: "刷新令牌；只写 HttpOnly cookie，不进入响应体" }
+      - { name: refresh_token, schema: { type: _types.string }, required: true, read_only: true, description: "刷新 JWT" }
       - { name: refresh_expire_at, schema: { type: _types.timestamp }, required: true, description: "刷新令牌过期时间" }
+  RefreshInput:
+    type: _types.object
+    properties:
+      - { name: refresh_token, schema: { type: _types.string }, required: true, write_only: true, description: "刷新 JWT" }
+  RefreshResult:
+    type: _types.object
+    properties:
+      - { name: access, schema: { ref: cap.services.token.schemas.AccessToken }, required: true, description: "新的访问令牌" }
+      - { name: refresh, schema: { ref: cap.services.token.schemas.RefreshToken }, required: true, description: "新的刷新令牌" }
 
 services:
   - name: issue
     summary: "为账号签发 access + refresh 令牌对"
     visibility: public
-    tx_mode: none
+    tx_mode: required
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: _types.integer }
@@ -137,17 +146,16 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: refresh_token, type: _types.string }
+      - { name: input, type: cap.services.token.schemas.RefreshInput }
     returns:
-      - { name: access, type: cap.services.token.schemas.AccessToken, value: step.split_tokens.access }
-      - { name: refresh, type: cap.services.token.schemas.RefreshToken, value: step.split_tokens.refresh }
+      - { name: result, type: cap.services.token.schemas.RefreshResult, value: step.build_result.result }
       - { name: err, type: error }
     steps:
       - id: hash_old
         kind: logic
         summary: "计算旧刷新令牌的哈希"
         input:
-          - { name: refresh_token, value: params.refresh_token, description: "待换新的刷新令牌" }
+          - { name: refresh_token, value: params.input.refresh_token, description: "待换新的刷新令牌" }
         output:
           - { name: refresh_token_hash, type: _types.string, description: "旧刷新令牌哈希" }
         errors: [ ]
@@ -186,7 +194,7 @@ services:
         kind: logic
         summary: "校验旧刷新令牌的过期与吊销状态"
         input:
-          - { name: refresh_token, value: params.refresh_token, description: "待换新的刷新令牌" }
+          - { name: refresh_token, value: params.input.refresh_token, description: "待换新的刷新令牌" }
           - { name: old_token, value: step.load_old.row, description: "旧令牌行" }
         output: [ ]
         errors:
@@ -280,6 +288,17 @@ services:
           - { name: replaced_by_id, value: step.new_id.id, description: "替换旧令牌的新令牌 ID" }
         output: [ ]
         query: data.queries.token.revoke_token
+        goto: build_result
+      - id: build_result
+        kind: logic
+        summary: "组装刷新结果"
+        input:
+          - { name: access, value: step.split_tokens.access, description: "新的访问令牌" }
+          - { name: refresh, value: step.split_tokens.refresh, description: "新的刷新令牌" }
+        output:
+          - { name: result, type: cap.services.token.schemas.RefreshResult, description: "刷新结果" }
+        errors: [ ]
+        rules: [ ]
         goto: $end
     used_by:
       - cap.protocols.http.auth.refresh
@@ -290,7 +309,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: refresh_token, type: _types.string }
+      - { name: input, type: cap.services.token.schemas.RefreshInput }
     returns:
       - { name: err, type: error }
     steps:
@@ -298,7 +317,7 @@ services:
         kind: logic
         summary: "计算待吊销刷新令牌的哈希"
         input:
-          - { name: refresh_token, value: params.refresh_token, description: "要吊销的刷新令牌" }
+          - { name: refresh_token, value: params.input.refresh_token, description: "要吊销的刷新令牌" }
         output:
           - { name: refresh_token_hash, type: _types.string, description: "待吊销的刷新令牌哈希" }
         errors: [ ]
@@ -398,6 +417,9 @@ services:
         goto: $end
     used_by:
       - cap.events.token.revoke_account
+      - cap.services.auth.bind_email
+      - cap.services.auth.bind_password
+      - cap.services.auth.bind_phone
       - cap.services.auth.revoke_all_for_account
 
   - name: expire
@@ -454,7 +476,7 @@ services:
       - cap.events.token.expire_tokens
 
   - name: verify
-    summary: "校验访问令牌并返回账号"
+    summary: "校验 access JWT 与令牌记录并返回账号"
     visibility: public
     tx_mode: read_only
     params:
@@ -466,9 +488,9 @@ services:
     steps:
       - id: hash
         kind: logic
-        summary: "计算待校验访问令牌的哈希"
+        summary: "计算待校验 access JWT 的哈希"
         input:
-          - { name: access_token, value: params.access_token, description: "待校验的访问令牌" }
+          - { name: access_token, value: params.access_token, description: "待校验的 access JWT" }
         output:
           - { name: access_token_hash, type: _types.string, description: "待校验的访问令牌哈希" }
         errors: [ ]
@@ -476,7 +498,7 @@ services:
         goto: load_token
       - id: load_token
         kind: query
-        summary: "按访问令牌读取令牌"
+        summary: "按 access JWT 哈希读取令牌记录"
         input:
           - { name: access_token_hash, value: step.hash.access_token_hash, description: "待校验的访问令牌哈希" }
         output:
@@ -494,9 +516,9 @@ services:
         goto: verify
       - id: verify
         kind: logic
-        summary: "校验 access token 并返回账号"
+        summary: "校验 access JWT、过期与吊销状态"
         input:
-          - { name: access_token, value: params.access_token, description: "待校验的访问令牌" }
+          - { name: access_token, value: params.access_token, description: "待校验的 access JWT" }
           - { name: token, value: step.load_token.row, description: "令牌行，用于校验过期与吊销状态" }
           - { name: account, value: step.get_account.account, description: "令牌归属账号" }
         output:
