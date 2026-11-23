@@ -19,11 +19,6 @@ func httpDoc(operation map[string]any) map[string]any {
 	if operation["security"] == nil {
 		operation["security"] = []any{}
 	}
-	if request := asMap(operation["request"]); request != nil {
-		if request["headers"] == nil {
-			request["headers"] = map[string]any{"X-Request-Id": "RequestId"}
-		}
-	}
 	return map[string]any{
 		"mount": map[string]any{"api_version": "v1", "path": "/", "audience": []any{"admin"}},
 		"paths": map[string]any{
@@ -45,9 +40,6 @@ func testResolve(name string) (map[string]any, error) {
 func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request": map[string]any{
-			"headers": map[string]any{
-				"X-Request-Id": "RequestId",
-			},
 			"query": []any{
 				map[string]any{"name": "limit", "schema": "_types.integer", "required": false, "description": "size"},
 			},
@@ -59,9 +51,6 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 		"response": map[string]any{
 			"200": map[string]any{
 				"description": "ok",
-				"headers": map[string]any{
-					"X-Request-Id": map[string]any{"$ref": "#/components/headers/XRequestId"},
-				},
 				"body": map[string]any{
 					"content_type": "application/json",
 					"schema":       map[string]any{"$ref": "#/components/schemas/Output"},
@@ -77,23 +66,15 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 		t.Fatalf("request/response must be removed: %v", op)
 	}
 	params := asList(op["parameters"])
-	if len(params) != 2 {
-		t.Fatalf("want 2 parameters, got %d: %v", len(params), params)
+	if len(params) != 1 {
+		t.Fatalf("want 1 parameter, got %d: %v", len(params), params)
 	}
 	kinds := map[string]bool{}
-	refFound := false
 	for _, raw := range params {
 		param := asMap(raw)
-		if ref, _ := param["$ref"].(string); ref == "#/components/parameters/RequestId" {
-			refFound = true
-			continue
-		}
 		in, _ := param["in"].(string)
 		name, _ := param["name"].(string)
 		kinds[in+" "+name] = true
-	}
-	if !refFound {
-		t.Fatalf("missing RequestId parameter ref: %v", params)
 	}
 	for _, want := range []string{"query limit"} {
 		if !kinds[want] {
@@ -114,9 +95,6 @@ func TestNormalizeHTTPDocumentSecurity(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"security": []any{map[string]any{"scheme": "BearerAuth", "scopes": []any{}}},
 		"request": map[string]any{
-			"headers": map[string]any{
-				"X-Request-Id": "RequestId",
-			},
 			"mapping": map[string]any{
 				"security": []any{map[string]any{"scheme": "BearerAuth", "to": "params.access_token"}},
 			},
@@ -134,21 +112,6 @@ func TestNormalizeHTTPDocumentSecurity(t *testing.T) {
 	params := asMap(op["x-service-params"])
 	if asList(params["security"]) == nil {
 		t.Fatalf("security mapping not preserved: %v", params)
-	}
-}
-
-func TestNormalizeHTTPDocumentRejectsUnknownHeaderSlot(t *testing.T) {
-	doc := httpDoc(map[string]any{
-		"request": map[string]any{
-			"headers": map[string]any{
-				"Authorization": "Authorization",
-			},
-		},
-		"response": map[string]any{"204": map[string]any{"description": "ok"}},
-	})
-	err := NormalizeHTTPDocument(doc, testResolve, false)
-	if err == nil || !strings.Contains(err.Error(), "unknown request header slot") {
-		t.Fatalf("unknown header slot not rejected: %v", err)
 	}
 }
 

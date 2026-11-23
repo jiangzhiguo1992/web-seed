@@ -4,35 +4,6 @@ components:
       description: 建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误
       schema:
         type: string
-    XRequestId:
-      description: 请求链路 ID；服务端必须回传
-      schema:
-        maxLength: 64
-        type: string
-  parameters:
-    IdempotencyKey:
-      in: header
-      name: Idempotency-Key
-      required: false
-      schema:
-        maxLength: 64
-        minLength: 8
-        type: string
-    IdempotencyKeyRequired:
-      in: header
-      name: Idempotency-Key
-      required: true
-      schema:
-        maxLength: 64
-        minLength: 8
-        type: string
-    RequestId:
-      in: header
-      name: X-Request-Id
-      required: false
-      schema:
-        maxLength: 64
-        type: string
   responses:
     BadRequest:
       content:
@@ -40,45 +11,30 @@ components:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 请求非法
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     Conflict:
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 状态冲突
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     Forbidden:
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 无权限
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     Gone:
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 端点已移除
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     Internal:
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 服务端错误
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     Locked:
       content:
         application/json:
@@ -88,26 +44,24 @@ components:
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+    MethodNotAllowed:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+      description: 方法不允许
     NotFound:
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 资源不存在
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     PayloadTooLarge:
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 请求体超过上限
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     ServiceUnavailable:
       content:
         application/json:
@@ -117,8 +71,6 @@ components:
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     TooManyRequests:
       content:
         application/json:
@@ -128,35 +80,24 @@ components:
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     Unauthorized:
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 未认证
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     UnprocessableEntity:
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 语义校验失败
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
     UnsupportedMediaType:
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 不支持的 Content-Type
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
   schemas:
     AccessToken:
       additionalProperties: false
@@ -271,11 +212,11 @@ components:
           type: integer
         data:
           $ref: '#/components/schemas/AccountPage'
-        message:
+        msg:
           type: string
       required:
         - code
-        - message
+        - msg
         - data
       type: object
     ApiAccountResponse:
@@ -286,11 +227,11 @@ components:
           type: integer
         data:
           $ref: '#/components/schemas/Account'
-        message:
+        msg:
           type: string
       required:
         - code
-        - message
+        - msg
         - data
       type: object
     ApiAuthBindingResponse:
@@ -301,11 +242,11 @@ components:
           type: integer
         data:
           $ref: '#/components/schemas/AuthBinding'
-        message:
+        msg:
           type: string
       required:
         - code
-        - message
+        - msg
         - data
       type: object
     ApiAuthResultResponse:
@@ -316,11 +257,11 @@ components:
           type: integer
         data:
           $ref: '#/components/schemas/AuthResult'
-        message:
+        msg:
           type: string
       required:
         - code
-        - message
+        - msg
         - data
       type: object
     ApiErrorResponse:
@@ -332,11 +273,11 @@ components:
           type: integer
         data:
           type: "null"
-        message:
+        msg:
           type: string
       required:
         - code
-        - message
+        - msg
         - data
       type: object
     ApiRefreshResultResponse:
@@ -347,11 +288,11 @@ components:
           type: integer
         data:
           $ref: '#/components/schemas/RefreshResult'
-        message:
+        msg:
           type: string
       required:
         - code
-        - message
+        - msg
         - data
       type: object
     ApiVerificationResultResponse:
@@ -362,11 +303,11 @@ components:
           type: integer
         data:
           $ref: '#/components/schemas/VerificationResult'
-        message:
+        msg:
           type: string
       required:
         - code
-        - message
+        - msg
         - data
       type: object
     ApiVerificationSentResponse:
@@ -377,11 +318,11 @@ components:
           type: integer
         data:
           $ref: '#/components/schemas/VerificationSent'
-        message:
+        msg:
           type: string
       required:
         - code
-        - message
+        - msg
         - data
       type: object
     AuthAttributes:
@@ -956,7 +897,6 @@ paths:
     get:
       operationId: listAccounts
       parameters:
-        - $ref: '#/components/parameters/RequestId'
         - description: 账号状态过滤
           in: query
           name: status
@@ -987,9 +927,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAccountPageResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1005,6 +942,11 @@ paths:
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -1029,9 +971,6 @@ paths:
       summary: 列出账号
     post:
       operationId: createAccount
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKeyRequired'
       requestBody:
         content:
           application/json:
@@ -1045,9 +984,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAccountResponse'
           description: 已创建
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1063,6 +999,11 @@ paths:
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
@@ -1111,8 +1052,6 @@ paths:
     delete:
       operationId: deleteAccount
       parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKey'
         - description: 账号 ID
           in: path
           name: id
@@ -1123,9 +1062,6 @@ paths:
       responses:
         204:
           description: 已删除
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1146,6 +1082,11 @@ paths:
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
@@ -1178,7 +1119,6 @@ paths:
     get:
       operationId: getAccount
       parameters:
-        - $ref: '#/components/parameters/RequestId'
         - description: 账号 ID
           in: path
           name: id
@@ -1193,9 +1133,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1216,6 +1153,11 @@ paths:
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -1241,8 +1183,6 @@ paths:
     patch:
       operationId: updateAccount
       parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKey'
         - description: 账号 ID
           in: path
           name: id
@@ -1263,9 +1203,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1286,6 +1223,11 @@ paths:
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
@@ -1332,8 +1274,6 @@ paths:
     post:
       operationId: activateAccount
       parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKey'
         - description: 账号 ID
           in: path
           name: id
@@ -1348,9 +1288,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1371,6 +1308,11 @@ paths:
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
@@ -1404,8 +1346,6 @@ paths:
     post:
       operationId: suspendAccount
       parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKey'
         - description: 账号 ID
           in: path
           name: id
@@ -1426,9 +1366,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1449,6 +1386,11 @@ paths:
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
@@ -1491,9 +1433,6 @@ paths:
   /auth/bind/email:
     post:
       operationId: bindEmail
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
@@ -1507,9 +1446,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAuthBindingResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1527,6 +1463,11 @@ paths:
               code: COMMON_FORBIDDEN
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
@@ -1576,9 +1517,6 @@ paths:
   /auth/bind/password:
     post:
       operationId: bindPassword
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
@@ -1592,9 +1530,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAuthBindingResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1614,6 +1549,11 @@ paths:
               code: COMMON_FORBIDDEN
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
@@ -1663,9 +1603,6 @@ paths:
   /auth/bind/phone:
     post:
       operationId: bindPhone
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
@@ -1679,9 +1616,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAuthBindingResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1699,6 +1633,11 @@ paths:
               code: COMMON_FORBIDDEN
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
@@ -1748,8 +1687,6 @@ paths:
   /auth/login:
     post:
       operationId: login
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1763,9 +1700,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAuthResultResponse'
           description: 登录成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1783,6 +1717,11 @@ paths:
           x-error-codes:
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
@@ -1822,8 +1761,6 @@ paths:
   /auth/logout:
     post:
       operationId: logout
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1833,9 +1770,6 @@ paths:
       responses:
         204:
           description: 已吊销
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1846,6 +1780,11 @@ paths:
           x-error-codes:
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
@@ -1880,8 +1819,6 @@ paths:
   /auth/me:
     get:
       operationId: currentAccount
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
       responses:
         200:
           content:
@@ -1889,9 +1826,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1911,6 +1845,11 @@ paths:
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -1936,8 +1875,6 @@ paths:
   /auth/refresh:
     post:
       operationId: refreshToken
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1951,9 +1888,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiRefreshResultResponse'
           description: 成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
@@ -1966,6 +1900,11 @@ paths:
               code: AUTH_TOKEN_EXPIRED
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
@@ -2000,9 +1939,6 @@ paths:
   /auth/verification/send:
     post:
       operationId: sendVerification
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
@@ -2016,14 +1952,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiVerificationSentResponse'
           description: 已受理
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
@@ -2069,9 +2007,6 @@ paths:
   /auth/verification/verify:
     post:
       operationId: verifyCode
-      parameters:
-        - $ref: '#/components/parameters/RequestId'
-        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
@@ -2085,14 +2020,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiVerificationResultResponse'
           description: 校验成功
-          headers:
-            X-Request-Id:
-              $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:

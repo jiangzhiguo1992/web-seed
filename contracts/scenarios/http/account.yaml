@@ -22,8 +22,6 @@ scenarios:
       db:
         data.tables.account: []
     when:
-      headers:
-        Idempotency-Key: "idem-0001"
       body:
         number: "A-001"
         nickname: "Alice"
@@ -31,11 +29,9 @@ scenarios:
     then:
       response:
         status: 201
-        headers:
-          X-Request-Id: "<echo>"
         body:
           code: 0
-          message: "ok"
+          msg: "ok"
           data:
             id: 1001
             status: pending
@@ -81,11 +77,9 @@ scenarios:
     then:
       response:
         status: 200
-        headers:
-          X-Request-Id: "<echo>"
         body:
           code: 0
-          message: "ok"
+          msg: "ok"
           data:
             items: []
             offset: 0
@@ -115,11 +109,9 @@ scenarios:
     then:
       response:
         status: 404
-        headers:
-          X-Request-Id: "<echo>"
         body:
           code: 2001
-          message: "账号不存在"
+          msg: "账号不存在"
           data: null
       db:
         added: {}

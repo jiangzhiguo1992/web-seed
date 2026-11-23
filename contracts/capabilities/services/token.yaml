@@ -6,6 +6,7 @@ stability: draft
 do_not:
   - "JWT 原文只通过 issue/refresh 返回值暴露，不写 cookie；token 表只存 JWT 哈希与吊销/轮换元数据"
   - "verify 只校验 access JWT；refresh JWT 只在 refresh/logout 中使用；JWT 不写 cookie"
+  - "access/refresh JWT 的 sub 必须是 account_id，jti 必须是 token 表 id 的字符串形式"
 
 schemas:
   TokenPair:
@@ -169,7 +170,38 @@ services:
         output:
           - { name: row, type: data.entities.token, description: "query 返回的 row" }
         query: data.queries.token.get_token_by_refresh
+        goto: check_reuse
+      - id: check_reuse
+        kind: when
+        summary: "检测 refresh JWT 是否已被轮换或吊销"
+        input:
+          - { name: revoked_at, value: step.load_old.row.revoked_at, description: "旧 token 行吊销时间" }
+        output: [ ]
+        when:
+          - input: revoked_at
+            expr: "input.revoked_at != null"
+            goto: revoke_reuse
         goto: load_account
+      - id: revoke_reuse
+        kind: service
+        summary: "复用旧 refresh JWT：吊销账号全部令牌"
+        input:
+          - { name: account_id, value: step.load_old.row.account_id, description: "旧 token 归属账号 ID" }
+        output: [ ]
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        service: cap.services.token.revoke_by_account
+        goto: reject_reuse
+      - id: reject_reuse
+        kind: logic
+        summary: "复用旧 refresh JWT 返回统一错误"
+        input: [ ]
+        output: [ ]
+        errors:
+          - platform.errors.AUTH_TOKEN_INVALID
+        rules:
+          - { rule: feature.rules.auth.refresh_reuse_detection }
+        goto: $end
       - id: load_account
         kind: query
         summary: "读取旧令牌归属账号"
@@ -192,7 +224,7 @@ services:
         goto: validate
       - id: validate
         kind: logic
-        summary: "校验旧刷新令牌的过期与吊销状态"
+        summary: "校验旧刷新令牌的过期状态"
         input:
           - { name: refresh_token, value: params.input.refresh_token, description: "待换新的刷新令牌" }
           - { name: old_token, value: step.load_old.row, description: "旧令牌行" }
@@ -421,6 +453,7 @@ services:
       - cap.services.auth.bind_password
       - cap.services.auth.bind_phone
       - cap.services.auth.revoke_all_for_account
+      - cap.services.token.refresh
 
   - name: expire
     summary: "把过期令牌置为 expired"

@@ -7,8 +7,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func TestNewRouter_Health(t *testing.T) {
@@ -34,6 +37,75 @@ func TestNewRouter_NotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+}
+
+func TestNewRouterWithOptionsRequestValidator(t *testing.T) {
+	called := false
+	r := NewRouterWithOptions(Options{
+		Log: quietLog(),
+		RequestValidator: func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				next.ServeHTTP(w, r)
+			})
+		},
+	})
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if !called {
+		t.Fatal("request validator middleware was not invoked")
+	}
+}
+
+func TestServerRequestIDIgnoresClientHeader(t *testing.T) {
+	var got string
+	h := serverRequestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = middleware.GetReqID(r.Context())
+	}))
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("X-Client-Trace", "client-trace-id")
+	h.ServeHTTP(rec, req)
+
+	if got == "" || got == "client-trace-id" {
+		t.Fatalf("request id = %q, want server-generated id", got)
+	}
+	if rec.Header().Get("X-Client-Trace") != "" {
+		t.Fatalf("response must not echo X-Client-Trace: %q", rec.Header().Get("X-Client-Trace"))
+	}
+}
+
+func TestNewRouter_MethodNotAllowed(t *testing.T) {
+	r := NewRouter(quietLog())
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/healthz", nil))
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+}
+
+func TestRequestLoggerLogsPanic(t *testing.T) {
+	log, buf := testLogger()
+	handler := requestLogger(log)(recoverer(log)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("boom")
+	})))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if !strings.Contains(buf.String(), "http request") || !strings.Contains(buf.String(), "status=500") {
+		t.Fatalf("access log missing panic request: %s", buf.String())
 	}
 }
 

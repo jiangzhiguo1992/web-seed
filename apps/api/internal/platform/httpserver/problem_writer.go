@@ -4,19 +4,22 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type problemWriterKey struct{}
 
-// ProblemWriter 集中写 RFC 9457 错误响应，并记录非法 Retry-After。
+// ProblemWriter 集中写契约错误信封 {code,msg,data}，并记录非法 Retry-After。
 // handler 使用 ProblemWriterFrom(ctx).Write，而不是直接调用 WriteProblem。
 type ProblemWriter struct {
-	Log *slog.Logger
+	Log       *slog.Logger
+	RequestID string
 }
 
 func (pw ProblemWriter) Write(w http.ResponseWriter, p Problem) {
 	if err := writeProblem(w, p); err != nil && pw.Log != nil {
-		pw.Log.Warn("invalid Retry-After", "error", err, "status", p.Status)
+		pw.Log.Warn("invalid Retry-After", "error", err, "status", p.Status, "request_id", pw.RequestID)
 	}
 }
 
@@ -24,7 +27,7 @@ func (pw ProblemWriter) Write(w http.ResponseWriter, p Problem) {
 func WithProblemWriter(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := context.WithValue(r.Context(), problemWriterKey{}, ProblemWriter{Log: log})
+			ctx := context.WithValue(r.Context(), problemWriterKey{}, ProblemWriter{Log: log, RequestID: middleware.GetReqID(r.Context())})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

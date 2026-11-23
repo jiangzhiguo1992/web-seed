@@ -390,9 +390,9 @@ apps:
 
 ### 5.2 错误处理
 
-- HTTP 层统一信封：成功 `{code: 0, message: "ok", data: <resource>}`，错误 `{code: <biz_code>, message, data: null}`；HTTP status 保留 4xx/5xx
+- HTTP 层统一信封：成功 `{code: 0, msg: "ok", data: <resource>}`，错误 `{code: <biz_code>, msg, data: null}`；HTTP status 保留 4xx/5xx
 - `code` 取 `platform/errors/` 的整数 `biz_code`；成功码固定 0
-- 认证使用 JWT：access/refresh 都通过响应体下发，客户端用 `Authorization: Bearer` 携带 access token；没有 cookie、CSRF 或服务端 session；token 表只存 JWT 哈希用于吊销/轮换/审计；写接口用 `Idempotency-Key`
+- 认证使用 JWT：access/refresh 都通过响应体下发，客户端用 `Authorization: Bearer` 携带 access token；没有 cookie、CSRF 或服务端 session；token 表只存 JWT 哈希用于吊销/轮换/审计
 - 浏览器 JWT 存储：access JWT 只放内存；refresh JWT 放 `localStorage["web-seed.auth.refresh"]`（无 HttpOnly cookie 后的明确取舍，靠 CSP 降低 XSS）；登出时清空两者
 - 移动端 JWT 存储：refresh JWT 放 Keychain/Keystore；access JWT 只放内存
 - 不返回的 error 必须记录（含栈 + 上下文）
@@ -415,10 +415,10 @@ apps:
 
 | 项 | 约定 |
 |---|---|
-| 请求 ID | `X-Request-Id`，客户端可传，服务端校验否则生成，贯穿日志与响应 |
+| 请求 ID | 服务端收到请求时生成，贯穿日志与下游调用；不写入 HTTP 契约、不回传客户端 |
 | 超时 | server read/write、handler context、外部调用三层各有默认值 |
 | 体积 | 请求体上限可配，超限返回 413 |
-| 幂等 | `Idempotency-Key` 中间件留口 |
+| 幂等 | 由 API 内部按业务语义决定，不使用客户端幂等键 |
 | 健康 | `/healthz` 不查依赖；`/readyz` 查 DB |
 | 关闭 | 信号 → 停收 → 等在途 → 关池 |
 | 版本 | URL major `/v1`；弃用用 `Deprecation` / `Sunset` header |

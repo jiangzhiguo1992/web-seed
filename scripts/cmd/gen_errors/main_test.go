@@ -5,6 +5,23 @@ import (
 	"testing"
 )
 
+func TestRenderGo(t *testing.T) {
+	out := renderGo([]errorEntry{
+		{Code: "COMMON_BAD_REQUEST", BizCode: 1001, Status: 400},
+		{Code: "AUTH_TOKEN_INVALID", BizCode: 3001, Status: 401, Retryable: true},
+	})
+	for _, want := range []string{
+		"CommonBadRequest = 1001",
+		"AuthTokenInvalid = 3001",
+		`"platform.errors.COMMON_BAD_REQUEST": {BizCode: CommonBadRequest, Status: 400, Retryable: false}`,
+		`"platform.errors.AUTH_TOKEN_INVALID": {BizCode: AuthTokenInvalid, Status: 401, Retryable: true}`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("renderGo missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestRender(t *testing.T) {
 	doc := errorFile{
 		ID: "platform.errors",

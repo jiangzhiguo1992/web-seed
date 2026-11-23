@@ -67,7 +67,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 - 槽位键出现在节点位置报 `schema.slot-position`；
 - `_types.yaml` 用 `schemas.<kind>.keys` 描述自身；判别键与结构键必须 `required: true`；
 - `cap.events` 的 `topics[].publish.payload` 投影为 `Event<File><Topic>` component；生成物只保留标准 schema，不携带事件扩展键。
-- `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；平台级组件只在 `platform/http_conventions.components`，HTTP 文件没有私有组件。`request.headers` 是固定槽位（X-Request-Id / Idempotency-Key），`response.headers` 是固定槽位（X-Request-Id）；`security` 是 `[{ scheme, scopes }]`，`mapping` 的 path/query/security 是 `[{ from|scheme, to }]` 列表，不接受自由 map。
+- `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；平台级组件只在 `platform/http_conventions.components`，HTTP 文件没有私有组件。`request` 只写 path/query/body/mapping，`response` 只写 description/body/codes；`security` 是 `[{ scheme, scopes }]`，`mapping` 的 path/query/security 是 `[{ from|scheme, to }]` 列表，不接受自由 map。
 - `mount` 必须声明 `api_version` / `path` / `audience`：`api_version` 是 `v<数字>`，与 `mount.path`、`paths` key 一起由生成器派生 `servers: /<api_version>`；`paths` 必填且至少一个 operation。
 - `cap.protocols.http` 的文件级 `mount` 承载 `path` 与 `audience`：`path` 是公共资源前缀（`/account`）；audience 段在 `paths`（`/admin`），`audience` 来自 `platform/http_conventions.audiences`；operation 的 `used_by` 必须非空且精确等于页面引用，错误按 platform.errors 的 status 分组、`COMMON_*` 不在 operation 重复；平台基线状态（含 body/deprecated）由 `error_responses` 注入。
 - 槽位字段的值域可整体写 `types: [ _types.schema ]`，即允许 `schemas` 下声明的全部节点种类；不要重复枚举 kind。

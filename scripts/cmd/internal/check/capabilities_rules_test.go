@@ -316,8 +316,6 @@ paths:
         id: "cap.protocols.http.x.create"
         service: "cap.services.x.create"
       request:
-        headers:
-          X-Request-Id: RequestId
         body:
           content_type: "application/json"
           schema:
@@ -334,8 +332,6 @@ paths:
       response:
         "204":
           description: "OK"
-          headers:
-            X-Request-Id: XRequestId
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -673,8 +669,6 @@ paths:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
       request:
-        headers:
-          X-Request-Id: RequestId
         query:
           - name: id
             schema: { type: integer }
@@ -687,8 +681,6 @@ paths:
       response:
         "204":
           description: "OK"
-          headers:
-            X-Request-Id: XRequestId
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -823,14 +815,10 @@ paths:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
       request:
-        headers:
-          X-Request-Id: RequestId
         mapping: {}
       response:
         "204":
           description: "OK"
-          headers:
-            X-Request-Id: XRequestId
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -860,8 +848,6 @@ paths:
         - scheme: BearerAuth
           scopes: []
       request:
-        headers:
-          X-Request-Id: RequestId
         mapping:
           security:
             - scheme: BearerAuth
@@ -869,8 +855,6 @@ paths:
       response:
         "204":
           description: "OK"
-          headers:
-            X-Request-Id: XRequestId
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -901,14 +885,10 @@ paths:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
       request:
-        headers:
-          X-Request-Id: RequestId
         mapping: {}
       response:
         "204":
           description: "OK"
-          headers:
-            X-Request-Id: XRequestId
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -918,39 +898,6 @@ paths:
 	got := strings.Join(c.errs, "\n")
 	if !strings.Contains(got, "[http-path-params]") || !strings.Contains(got, "{id}") {
 		t.Fatalf("path placeholder mismatch not reported: %v", c.errs)
-	}
-}
-
-func TestHTTPHeaders(t *testing.T) {
-	root := t.TempDir()
-	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
-summary: "x"
-schema_version: 1
-stability: "draft"
-do_not: []
-paths:
-  /x:
-    get:
-      name: "getX"
-      security: []
-      contract:
-        id: "cap.protocols.http.x.get"
-        service: "cap.services.x.get"
-      request:
-        headers:
-          X-Request-Id: RequestId
-        mapping: {}
-      response:
-        "204":
-          description: "OK"
-`)
-	schema := copyMeta(t, root, "cap.protocols.http")
-	c := &Checker{root: root}
-	c.checkHTTPBindings(schema, map[string]serviceMeta{
-		"cap.services.x.get": {visibility: "public"},
-	}, map[string]bool{}, map[string]bool{})
-	if got := strings.Count(strings.Join(c.errs, "\n"), "[http-headers]"); got != 1 {
-		t.Fatalf("want missing response header error, got %d: %v", got, c.errs)
 	}
 }
 
@@ -2585,16 +2532,9 @@ func TestHTTPAudienceAndConsumer(t *testing.T) {
 error_responses:
   always: [400, 409, 503]
 components:
-  headers:
-    XRequestId: { schema: { type: string } }
-    RetryAfter: { schema: { type: string } }
-  parameters:
-    RequestId: { name: X-Request-Id, in: header, required: false, schema: { type: string } }
   responses:
     ServiceUnavailable:
       description: "503"
-      headers:
-        X-Request-Id: { $ref: "#/components/headers/XRequestId" }
 `)
 	writeCapFile(t, root, "contracts/project.yaml", `apps:
   admin:
@@ -2628,12 +2568,10 @@ paths:
       used_by: [feature.pages.x]
       security: []
       request:
-        headers: { X-Request-Id: RequestId }
         mapping: {}
       response:
         "204":
           description: "OK"
-          headers: { X-Request-Id: XRequestId }
   /open:
     get:
       name: getOpen
@@ -2643,12 +2581,10 @@ paths:
       used_by: []
       security: []
       request:
-        headers: { X-Request-Id: RequestId }
         mapping: {}
       response:
         "204":
           description: "OK"
-          headers: { X-Request-Id: XRequestId }
   /orphan:
     get:
       name: getOrphan
@@ -2658,12 +2594,10 @@ paths:
       used_by: []
       security: []
       request:
-        headers: { X-Request-Id: RequestId }
         mapping: {}
       response:
         "204":
           description: "OK"
-          headers: { X-Request-Id: XRequestId }
   /missing:
     get:
       name: getMissing
@@ -2673,12 +2607,10 @@ paths:
       used_by: []
       security: []
       request:
-        headers: { X-Request-Id: RequestId }
         mapping: {}
       response:
         "204":
           description: "OK"
-          headers: { X-Request-Id: XRequestId }
 `)
 	c := &Checker{root: root, strictHTTP: true}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -2828,7 +2760,7 @@ paths:
       used_by: [feature.pages.x]
       request: { mapping: {} }
       response:
-        "204": { description: OK, headers: { X-Request-Id: XRequestId } }
+        "204": { description: OK }
   /b:
     get:
       id: cap.protocols.http.x.b
@@ -2838,7 +2770,7 @@ paths:
       used_by: [feature.pages.x]
       request: { mapping: {} }
       response:
-        "204": { description: OK, headers: { X-Request-Id: XRequestId } }
+        "204": { description: OK }
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root, strictHTTP: true}

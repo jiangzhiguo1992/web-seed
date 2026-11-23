@@ -18,6 +18,7 @@ var defaultResponseNames = map[int]string{
 	401: "Unauthorized",
 	403: "Forbidden",
 	404: "NotFound",
+	405: "MethodNotAllowed",
 	409: "Conflict",
 	410: "Gone",
 	413: "PayloadTooLarge",

@@ -18,3 +18,4 @@ errors:
   - { code: COMMON_PAYLOAD_TOO_LARGE, biz_code: 1011, status: 413, retryable: false, i18n: errors.common.payload_too_large, message: "请求体超过上限" }
   - { code: COMMON_UNSUPPORTED_MEDIA_TYPE, biz_code: 1012, status: 415, retryable: false, i18n: errors.common.unsupported_media_type, message: "不支持的 Content-Type" }
   - { code: COMMON_GONE, biz_code: 1013, status: 410, retryable: false, i18n: errors.common.gone, message: "端点已移除" }
+  - { code: COMMON_METHOD_NOT_ALLOWED, biz_code: 1014, status: 405, retryable: false, i18n: errors.common.method_not_allowed, message: "方法不允许" }

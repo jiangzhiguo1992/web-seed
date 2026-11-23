@@ -38,7 +38,7 @@ events:
     properties: []
 
   - name: page.current_account_viewed
-    description: "会话页曝光"
+    description: "当前账号页曝光"
     trigger: mount
     page: feature.pages.current_account
     properties: []

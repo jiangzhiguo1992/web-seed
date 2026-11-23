@@ -2,46 +2,62 @@ package httpserver
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/yourorg/web-seed/apps/api/internal/generated"
 )
 
 func TestWriteProblem(t *testing.T) {
 	tests := []struct {
-		name       string
-		in         Problem
-		wantStatus int
-		wantType   string
+		name        string
+		in          Problem
+		wantStatus  int
+		wantCode    int
+		wantMessage string
 	}{
 		{
-			name:       "normal",
-			in:         Problem{Title: "not found", Status: 404, Code: "NOTE_NOT_FOUND"},
-			wantStatus: 404,
-			wantType:   "about:blank",
+			name:        "normal",
+			in:          Problem{Code: 2001, Message: "not found", Status: 404},
+			wantStatus:  404,
+			wantCode:    2001,
+			wantMessage: "not found",
 		},
 		{
-			name:       "zero status falls back to 500",
-			in:         Problem{Status: 0},
-			wantStatus: 500,
-			wantType:   "about:blank",
+			name:        "zero status falls back to 500",
+			in:          Problem{Code: 1007, Status: 0},
+			wantStatus:  500,
+			wantCode:    generated.CommonInternal,
+			wantMessage: "Internal Server Error",
 		},
 		{
-			name:       "below valid range falls back to 500",
-			in:         Problem{Status: 99},
-			wantStatus: 500,
-			wantType:   "about:blank",
+			name:        "below valid range falls back to 500",
+			in:          Problem{Code: 1007, Status: 99},
+			wantStatus:  500,
+			wantCode:    generated.CommonInternal,
+			wantMessage: "Internal Server Error",
 		},
 		{
-			name:       "above valid range falls back to 500",
-			in:         Problem{Status: 600},
-			wantStatus: 500,
-			wantType:   "about:blank",
+			name:        "above valid range falls back to 500",
+			in:          Problem{Code: 1007, Status: 600},
+			wantStatus:  500,
+			wantCode:    generated.CommonInternal,
+			wantMessage: "Internal Server Error",
 		},
 		{
-			name:       "custom type is preserved",
-			in:         Problem{Type: "https://example.com/errors/conflict", Status: 409},
-			wantStatus: 409,
-			wantType:   "https://example.com/errors/conflict",
+			name:        "empty message uses status text",
+			in:          Problem{Code: 1003, Status: 409},
+			wantStatus:  409,
+			wantCode:    1003,
+			wantMessage: "Conflict",
+		},
+		{
+			name:        "code outside contract range falls back to internal",
+			in:          Problem{Code: 0, Status: 400},
+			wantStatus:  400,
+			wantCode:    generated.CommonInternal,
+			wantMessage: "Bad Request",
 		},
 	}
 
@@ -49,25 +65,34 @@ func TestWriteProblem(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			if err := writeProblem(rec, tt.in); err != nil {
-				t.Fatalf("WriteProblem() error: %v", err)
+				t.Fatalf("writeProblem() error: %v", err)
 			}
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
-			if got := rec.Header().Get("Content-Type"); got != "application/problem+json" {
-				t.Fatalf("Content-Type = %q, want application/problem+json", got)
+			if got := rec.Header().Get("Content-Type"); got != "application/json" {
+				t.Fatalf("Content-Type = %q, want application/json", got)
 			}
 
-			var body Problem
+			var body map[string]any
 			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 				t.Fatalf("decode body: %v", err)
 			}
-			if body.Type != tt.wantType {
-				t.Fatalf("body.Type = %q, want %q", body.Type, tt.wantType)
+			if got, ok := body["code"].(float64); !ok || int(got) != tt.wantCode {
+				t.Fatalf("body.code = %v, want %d", body["code"], tt.wantCode)
 			}
-			if body.Status != tt.wantStatus {
-				t.Fatalf("body.Status = %d, want %d", body.Status, tt.wantStatus)
+			if got, _ := body["msg"].(string); got != tt.wantMessage {
+				t.Fatalf("body.msg = %q, want %q", got, tt.wantMessage)
+			}
+			if got, ok := body["data"]; !ok || got != nil {
+				t.Fatalf("body.data = %v, want null", got)
+			}
+			if _, ok := body["status"]; ok {
+				t.Fatalf("body must not carry status: %v", body)
+			}
+			if _, ok := body["type"]; ok {
+				t.Fatalf("body must not carry RFC 9457 type: %v", body)
 			}
 		})
 	}
@@ -83,53 +108,53 @@ func TestWriteProblemRetryAfter(t *testing.T) {
 	}{
 		{
 			name:       "503 writes header",
-			problem:    Problem{Status: 503, RetryAfter: "30"},
-			wantStatus: 503,
+			problem:    Problem{Code: 1010, Status: http.StatusServiceUnavailable, RetryAfter: "30"},
+			wantStatus: http.StatusServiceUnavailable,
 			wantHeader: "30",
 		},
 		{
 			name:       "429 writes header",
-			problem:    Problem{Status: 429, RetryAfter: "120"},
-			wantStatus: 429,
+			problem:    Problem{Code: 1006, Status: http.StatusTooManyRequests, RetryAfter: "120"},
+			wantStatus: http.StatusTooManyRequests,
 			wantHeader: "120",
 		},
 		{
 			name:       "503 writes http-date header",
-			problem:    Problem{Status: 503, RetryAfter: "Wed, 21 Oct 2015 07:28:00 GMT"},
-			wantStatus: 503,
+			problem:    Problem{Code: 1010, Status: http.StatusServiceUnavailable, RetryAfter: "Wed, 21 Oct 2015 07:28:00 GMT"},
+			wantStatus: http.StatusServiceUnavailable,
 			wantHeader: "Wed, 21 Oct 2015 07:28:00 GMT",
 		},
 		{
 			name:       "503 drops invalid header",
-			problem:    Problem{Status: 503, RetryAfter: "soon"},
-			wantStatus: 503,
+			problem:    Problem{Code: 1010, Status: http.StatusServiceUnavailable, RetryAfter: "soon"},
+			wantStatus: http.StatusServiceUnavailable,
 			wantErr:    true,
 		},
 		{
 			name:       "429 drops negative seconds",
-			problem:    Problem{Status: 429, RetryAfter: "-1"},
-			wantStatus: 429,
+			problem:    Problem{Code: 1006, Status: http.StatusTooManyRequests, RetryAfter: "-1"},
+			wantStatus: http.StatusTooManyRequests,
 			wantErr:    true,
 		},
 		{
 			name:       "503 without retry after",
-			problem:    Problem{Status: 503},
-			wantStatus: 503,
+			problem:    Problem{Code: 1010, Status: http.StatusServiceUnavailable},
+			wantStatus: http.StatusServiceUnavailable,
 		},
 		{
 			name:       "500 ignores retry after",
-			problem:    Problem{Status: 500, RetryAfter: "30"},
-			wantStatus: 500,
+			problem:    Problem{Code: 1007, Status: http.StatusInternalServerError, RetryAfter: "30"},
+			wantStatus: http.StatusInternalServerError,
 		},
 		{
-			name:       "invalid status falls back and drops header",
-			problem:    Problem{Status: 0, RetryAfter: "30"},
-			wantStatus: 500,
+			name:       "zero status ignores retry after",
+			problem:    Problem{Code: 1007, Status: 0, RetryAfter: "30"},
+			wantStatus: http.StatusInternalServerError,
 		},
 		{
-			name:       "empty retry after",
-			problem:    Problem{Status: 503, RetryAfter: ""},
-			wantStatus: 503,
+			name:       "503 empty retry after",
+			problem:    Problem{Code: 1010, Status: http.StatusServiceUnavailable, RetryAfter: ""},
+			wantStatus: http.StatusServiceUnavailable,
 		},
 	}
 
@@ -137,50 +162,17 @@ func TestWriteProblemRetryAfter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			err := writeProblem(rec, tt.problem)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("WriteProblem() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr && err == nil {
+				t.Fatal("expected error")
 			}
-
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d", rec.Code, tt.wantStatus)
 			}
 			if got := rec.Header().Get("Retry-After"); got != tt.wantHeader {
 				t.Fatalf("Retry-After = %q, want %q", got, tt.wantHeader)
-			}
-
-			var body map[string]any
-			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-				t.Fatalf("decode body: %v", err)
-			}
-			if _, ok := body["RetryAfter"]; ok {
-				t.Fatalf("RetryAfter must not appear in body")
-			}
-			if _, ok := body["retry_after"]; ok {
-				t.Fatalf("retry_after must not appear in body")
-			}
-		})
-	}
-}
-
-func TestValidRetryAfter(t *testing.T) {
-	cases := []struct {
-		value string
-		want  bool
-	}{
-		{"30", true},
-		{"0", true},
-		{"007", true},
-		{"Wed, 21 Oct 2015 07:28:00 GMT", true},
-		{"", false},
-		{"-1", false},
-		{" 30", false},
-		{"30 ", false},
-		{"soon", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.value, func(t *testing.T) {
-			if got := validRetryAfter(tc.value); got != tc.want {
-				t.Fatalf("validRetryAfter(%q) = %v, want %v", tc.value, got, tc.want)
 			}
 		})
 	}

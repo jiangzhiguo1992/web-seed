@@ -726,7 +726,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					c.checkHTTPConsumer(rel, method, path, contractID, serviceRef, meta.UsedBy, pagesByService)
 				}
 				c.checkHTTPErrors(rel, method, path, op, target, responses, policy, fileStability == "deprecated")
-				c.checkHTTPOperationHeaders(rel, method, path, op, httpSecuritySchemes, serviceRef)
+				c.checkHTTPOperationSecurity(rel, method, path, op, httpSecuritySchemes, serviceRef)
 				c.checkHTTPRequest(rel, method, path, op, target, schemas, httpParameters, httpParameterDefs)
 			}
 		}
@@ -891,15 +891,8 @@ func httpComponentSource(comp map[string]any) (string, string) {
 	return "", ""
 }
 
-// checkHTTPOperationHeaders 校验 security、幂等键与平台请求头声明。
-func (c *Checker) checkHTTPOperationHeaders(rel, method, path string, op map[string]any, schemes map[string]bool, serviceRef string) {
-	refs := map[string]bool{}
-	for _, raw := range asList(op["parameters"]) {
-		param, _ := asMap(raw)
-		if ref, _ := param["$ref"].(string); ref != "" {
-			refs[ref] = true
-		}
-	}
+// checkHTTPOperationSecurity 校验 operation 的 security 声明。
+func (c *Checker) checkHTTPOperationSecurity(rel, method, path string, op map[string]any, schemes map[string]bool, serviceRef string) {
 	securityDeclared := false
 	if raw, ok := op["security"]; ok {
 		for _, item := range asList(raw) {
@@ -920,25 +913,10 @@ func (c *Checker) checkHTTPOperationHeaders(rel, method, path string, op map[str
 	if len(c.accessBindings[serviceRef].permissions) > 0 && !securityDeclared {
 		c.rulef("http-security", "%s %s %s: service %s has permissions and requires security", rel, method, path, serviceRef)
 	}
-	if !refs["#/components/parameters/RequestId"] {
-		c.rulef("http-headers", "%s %s %s: X-Request-Id request header ($ref RequestId) is required", rel, method, path)
-	}
-	if refs["#/components/parameters/IdempotencyKey"] && refs["#/components/parameters/IdempotencyKeyRequired"] {
-		c.rulef("http-headers", "%s %s %s: declare only one of IdempotencyKey/IdempotencyKeyRequired", rel, method, path)
-	}
-	if (method == "get" || method == "head") && (refs["#/components/parameters/IdempotencyKey"] || refs["#/components/parameters/IdempotencyKeyRequired"]) {
-		c.rulef("http-headers", "%s %s %s: GET/HEAD must not declare Idempotency-Key", rel, method, path)
-	}
 }
 
 // checkHTTPResponse 校验 2xx 响应体与 service 业务返回值的一一对应。
 func (c *Checker) checkHTTPResponse(rel, method, path, status string, resp map[string]any, op map[string]any, schemas map[string]any, serviceMeta map[string]serviceMeta) {
-	if _, isRef := resp["$ref"]; !isRef {
-		headers, _ := asMap(resp["headers"])
-		if _, ok := headers["X-Request-Id"]; !ok {
-			c.rulef("http-headers", "%s %s %s: %s response must declare X-Request-Id header", rel, method, path, status)
-		}
-	}
 	code, err := strconv.Atoi(status)
 	if err != nil || code < 200 || code >= 300 {
 		return
@@ -1137,11 +1115,6 @@ func (c *Checker) checkHTTPMount(rel string, mount openapispec.HTTPMount, audien
 	}
 }
 
-// platformHeaders 是 HTTP 层平台头，不映射到 service 参数。
-var platformHeaders = map[string]bool{
-	"X-Request-Id": true, "Idempotency-Key": true,
-}
-
 // checkHTTPPathParams 校验路径占位符与 request.path 声明一一对应。
 func (c *Checker) checkHTTPPathParams(rel, method, path string, op map[string]any) {
 	placeholders := map[string]bool{}
@@ -1276,9 +1249,6 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 		}
 		in, _ := param["in"].(string)
 		name, _ := param["name"].(string)
-		if in == "header" && platformHeaders[name] {
-			continue
-		}
 		if in == "path" || in == "query" {
 			httpParams[in+"\x00"+name] = param
 		}

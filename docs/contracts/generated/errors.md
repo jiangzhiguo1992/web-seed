@@ -19,6 +19,7 @@
 | `COMMON_PAYLOAD_TOO_LARGE` | 1011 | 413 | false | `errors.common.payload_too_large` | 请求体超过上限 |
 | `COMMON_UNSUPPORTED_MEDIA_TYPE` | 1012 | 415 | false | `errors.common.unsupported_media_type` | 不支持的 Content-Type |
 | `COMMON_GONE` | 1013 | 410 | false | `errors.common.gone` | 端点已移除 |
+| `COMMON_METHOD_NOT_ALLOWED` | 1014 | 405 | false | `errors.common.method_not_allowed` | 方法不允许 |
 | `ACCOUNT_NOT_FOUND` | 2001 | 404 | false | `errors.account.not_found` | 账号不存在 |
 | `ACCOUNT_NUMBER_TAKEN` | 2002 | 409 | false | `errors.account.number_taken` | 账号编号已被使用 |
 | `ACCOUNT_NUMBER_INVALID` | 2003 | 422 | false | `errors.account.number_invalid` | 账号编号格式不合法 |

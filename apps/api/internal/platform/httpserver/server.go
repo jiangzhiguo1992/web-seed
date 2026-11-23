@@ -2,7 +2,7 @@
 //
 // 设计决策：
 //   - 使用 chi：零反射、贴近 net/http，必要时可退化为标准库
-//   - 错误响应统一 RFC 9457（application/problem+json）
+//   - 错误响应统一契约信封 {code,msg,data}（application/json）
 //   - 健康检查分离：/healthz 不查依赖，/readyz 查依赖（P3 接入 DB）
 //   - P2 起在路由层挂 OapiRequestValidator，handler 由契约生成
 //
@@ -13,14 +13,19 @@ package httpserver
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/yourorg/web-seed/apps/api/internal/generated"
 )
 
 // Options 是启动 HTTP 服务所需的参数。
@@ -30,23 +35,43 @@ type Options struct {
 
 	// Handler 为空时使用 NewRouter(Log)。测试或自定义装配可直接注入。
 	Handler http.Handler
+	// RequestValidator 由 composition 注入 oapi request validator；为空时跳过。
+	RequestValidator func(http.Handler) http.Handler
 	// ShutdownTimeout 为空或非正数时使用 10s。
 	ShutdownTimeout time.Duration
 }
 
 // NewRouter 构造路由与中间件链。
-//
-// 中间件顺序即为执行顺序：RequestID → ProblemWriter → RealIP → Recoverer → 访问日志。
-// P2 将在 Recoverer 之后插入契约请求校验中间件。
 func NewRouter(log *slog.Logger) chi.Router {
+	return NewRouterWithOptions(Options{Log: log})
+}
+
+// NewRouterWithOptions 构造路由与中间件链。
+//
+// 中间件顺序即为执行顺序：请求 ID（服务端生成）→ ProblemWriter → RealIP → 访问日志 → Recoverer → 请求校验。
+// RequestValidator 由 composition 注入生成的 OpenAPI 校验器；为空时跳过。
+func NewRouterWithOptions(opts Options) chi.Router {
+	log := opts.Log
+	if log == nil {
+		log = slog.Default()
+	}
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID)
+	r.Use(serverRequestID)
 	r.Use(WithProblemWriter(log))
 	// RealIP 信任 X-Forwarded-For / X-Real-IP，仅在可信反代之后启用。
 	// 直接暴露公网时必须移除，否则客户端可伪造来源 IP。
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
 	r.Use(requestLogger(log))
+	r.Use(recoverer(log))
+	if opts.RequestValidator != nil {
+		r.Use(opts.RequestValidator)
+	}
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		ProblemWriterFrom(r.Context()).Write(w, Problem{Code: generated.CommonNotFound, Message: "资源不存在", Status: http.StatusNotFound})
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		ProblemWriterFrom(r.Context()).Write(w, Problem{Code: generated.CommonMethodNotAllowed, Message: "方法不允许", Status: http.StatusMethodNotAllowed})
+	})
 
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, `{"status":"ok"}`)
@@ -68,7 +93,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	handler := opts.Handler
 	if handler == nil {
-		handler = NewRouter(opts.Log)
+		handler = NewRouterWithOptions(opts)
 	}
 	shutdownTimeout := opts.ShutdownTimeout
 	if shutdownTimeout <= 0 {
@@ -106,7 +131,40 @@ func Run(ctx context.Context, opts Options) error {
 	}
 }
 
+// serverRequestID 为每个请求生成服务端 request id，写入 context 供日志与下游调用使用。
+// 不读取、不回写客户端请求头；该 ID 只用于服务端排错，客户端不参与。
+func serverRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), middleware.RequestIDKey, newRequestID())
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func newRequestID() string {
+	var buf [16]byte
+	if _, err := rand.Read(buf[:]); err == nil {
+		return hex.EncodeToString(buf[:])
+	}
+	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+// recoverer 把 panic 统一写成契约错误信封，而不是 chi 默认的空 500。
+func recoverer(log *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Error("http panic", "error", rec, "stack", string(debug.Stack()), "request_id", middleware.GetReqID(r.Context()))
+					ProblemWriterFrom(r.Context()).Write(w, Problem{Code: generated.CommonInternal, Message: "服务端错误", Status: http.StatusInternalServerError})
+				}
+			}()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // requestLogger 输出结构化访问日志，字段名与 contracts/platform/observability/log-fields.yaml 对齐。
+// 它包在 recoverer 外层，panic 被 recoverer 接住后仍会输出访问日志。
 func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

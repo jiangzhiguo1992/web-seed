@@ -99,6 +99,14 @@ rules:
     given: "account.status != active（pending / suspended / deleted）"
     when: "签发、刷新或校验 JWT"
     then: "拒绝，返回 AUTH_TOKEN_INVALID，不暴露账号状态"
+  - id: feature.rules.auth.refresh_reuse_detection
+    kind: policy
+    summary: "复用已吊销 refresh JWT 时吊销账号全部 token 记录"
+    on_violation: platform.errors.AUTH_TOKEN_INVALID
+    implemented_by: [ cap.services.token.refresh ]
+    given: "old_token.revoked_at != null"
+    when: "刷新 JWT"
+    then: "调用 token.revoke_by_account 并返回 AUTH_TOKEN_INVALID"
   - id: feature.rules.auth.verification_purpose_status
     kind: policy
     summary: "登录/重置/解绑/注销要求认证记录已验证；注册/绑定/换绑允许未认证"

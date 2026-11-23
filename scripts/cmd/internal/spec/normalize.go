@@ -470,17 +470,12 @@ func normalizeHTTPComponents(doc map[string]any, strict bool) (map[string]string
 func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, map[string]any, error) {
 	for key := range request {
 		switch key {
-		case "path", "query", "headers", "body":
+		case "path", "query", "body":
 		default:
 			return nil, nil, fmt.Errorf("%s: unknown request key %s", where, key)
 		}
 	}
 	parameters := []any{}
-	headers, err := normalizeHeaders(request["headers"], where)
-	if err != nil {
-		return nil, nil, err
-	}
-	parameters = append(parameters, headers...)
 	for _, section := range []struct {
 		name string
 		in   string
@@ -505,36 +500,6 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 		return nil, nil, err
 	}
 	return parameters, body, nil
-}
-
-// normalizeHeaders 把固定 header 槽位转成 OpenAPI parameter $ref。
-// 槽位与组件名的对应关系由 _meta/cap.protocols.http.yaml 的 const/enum 约束。
-func normalizeHeaders(raw any, where string) ([]any, error) {
-	headers := asMap(raw)
-	if headers == nil {
-		return nil, nil
-	}
-	order := []string{"X-Request-Id", "Idempotency-Key"}
-	out := []any{}
-	for _, key := range order {
-		value, ok := headers[key]
-		if !ok {
-			continue
-		}
-		ref, _ := value.(string)
-		if ref == "" {
-			return nil, fmt.Errorf("%s: header %s must reference a component name", where, key)
-		}
-		out = append(out, map[string]any{"$ref": "#/components/parameters/" + ref})
-	}
-	for key := range headers {
-		switch key {
-		case "X-Request-Id", "Idempotency-Key":
-		default:
-			return nil, fmt.Errorf("%s: unknown request header slot %s", where, key)
-		}
-	}
-	return out, nil
 }
 
 func normalizeListedParameter(raw any, in, where string, index int, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {

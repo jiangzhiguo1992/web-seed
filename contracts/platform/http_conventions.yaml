@@ -6,8 +6,8 @@ summary: "HTTP 信封、状态码与平台组件约定"
 stability: draft
 
 response:
-  success: "统一信封 { code: 0, message: \"ok\", data: <service return> }；data 必须是 service 的非 err return"
-  error: "统一信封 { code: <biz_code>, message: <i18n>, data: null }；HTTP status 保留 4xx/5xx，不改成全部 200"
+  success: "统一信封 { code: 0, msg: \"ok\", data: <service return> }；data 必须是 service 的非 err return"
+  error: "统一信封 { code: <biz_code>, msg: <i18n>, data: null }；HTTP status 保留 4xx/5xx，不改成全部 200"
   empty:
     status: 204
     body: "无；204 是唯一不包信封的响应"
@@ -15,7 +15,7 @@ response:
 envelope:
   success_code: 0
   code: "整数业务码；0 成功，非 0 取 platform.errors.* 的 biz_code；取值范围 1000-9999"
-  message: "人类可读文案；成功固定 ok"
+  msg: "人类可读文案；成功固定 ok"
   data: "成功时为 service return；错误时为 null"
   generated_by: "gen_openapi 为每个 2xx data 类型生成 Api<Type>Response，源契约不手写信封"
 
@@ -29,18 +29,14 @@ pagination:
     ordering: "必须稳定（有唯一 tiebreaker，如 id）"
 
 headers:
-  request:
-    - { name: X-Request-Id, required: false, note: "固定槽位；每个 operation 必须声明引用 RequestId" }
-    - { name: Idempotency-Key, required: false, note: "固定槽位；可选写 IdempotencyKey，必填写 IdempotencyKeyRequired" }
   response:
-    - { name: X-Request-Id, required: true, note: "固定槽位；每个 2xx response 必须声明引用 XRequestId" }
     - { name: Retry-After, required: false, note: "由平台 components.responses 的 429/503 声明，不在 operation 里重复" }
     - { name: Deprecation, required: false, note: "弃用响应由 versioning 契约声明；不在 operation 里重复" }
     - { name: Sunset, required: false, note: "弃用响应由 versioning 契约声明；不在 operation 里重复" }
 
 status_codes:
   success: [200, 201, 202, 204]
-  client_error: [400, 401, 403, 404, 409, 410, 413, 415, 422, 423, 429]
+  client_error: [400, 401, 403, 404, 405, 409, 410, 413, 415, 422, 423, 429]
   server_error: [500, 502, 503, 504]
   forbidden_usage:
     - "200 表示错误"
@@ -50,7 +46,7 @@ status_codes:
 # 平台基线错误响应：这些状态由中间件或框架产生，不写进单个 operation 的 codes。
 # 业务错误只写自己的 status + codes；生成器把基线与业务响应合并成 OpenAPI responses。
 error_responses:
-  always: [400, 429, 500, 503]
+  always: [400, 405, 429, 500, 503]
   secured: [401, 403]
   body: [413, 415]
   deprecated: [410]
@@ -95,129 +91,79 @@ components:
       additionalProperties: false
       required:
         - "code"
-        - "message"
+        - "msg"
         - "data"
       properties:
         code:
           type: integer
           minimum: 1000
           maximum: 9999
-        message:
+        msg:
           type: string
         data:
           type: "null"
-  parameters:
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: false
-      schema:
-        type: string
-        minLength: 8
-        maxLength: 64
-    IdempotencyKeyRequired:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema:
-        type: string
-        minLength: 8
-        maxLength: 64
-    RequestId:
-      name: X-Request-Id
-      in: header
-      required: false
-      schema:
-        type: string
-        maxLength: 64
   headers:
     RetryAfter:
       description: "建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误"
       schema:
         type: string
-    XRequestId:
-      description: "请求链路 ID；服务端必须回传"
-      schema:
-        type: string
-        maxLength: 64
   responses:
     BadRequest:
       description: "请求非法"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     Unauthorized:
       description: "未认证"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     Forbidden:
       description: "无权限"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     NotFound:
       description: "资源不存在"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    MethodNotAllowed:
+      description: "方法不允许"
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     Gone:
       description: "端点已移除"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     PayloadTooLarge:
       description: "请求体超过上限"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     UnsupportedMediaType:
       description: "不支持的 Content-Type"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     Conflict:
       description: "状态冲突"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     UnprocessableEntity:
       description: "语义校验失败"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
@@ -227,8 +173,6 @@ components:
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
@@ -238,8 +182,6 @@ components:
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
@@ -249,17 +191,12 @@ components:
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     Internal:
       description: "服务端错误"
-      headers:
-        X-Request-Id:
-          $ref: '#/components/headers/XRequestId'
       content:
         application/json:
           schema:

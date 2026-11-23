@@ -112,14 +112,13 @@ scenarios:
       id_seq: [1001]
       db: { data.tables.account: [] }
     when:
-      headers: { Idempotency-Key: "idem-0001" }
       body: { number: "A-001", nickname: "Alice", user_id: null }
     then:
       response:
         status: 201
         body:
           code: 0
-          message: "ok"
+          msg: "ok"
           data: { id: 1001, status: pending, number: "A-001", nickname: "Alice", user_id: null, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", deleted_at: null }
       db:
         added:
@@ -252,8 +251,8 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 1. **版本归属**：`mount.api_version`（必填，`v<数字>`）成为唯一版本源；生成器按 app 内 include 文件的版本派生 `servers: /<api_version>`，`mount.path` 与 `paths` 不写版本。`project.yaml` 的 `app.api_version` 已删除；同一 app 混版本会被 checker/generator 拒绝。在没有 v2 mount 的情况下，`admin_v2` app 与生成物一并移除，待 v2 契约重做后再加回。
 2. **共享组件**：删除 `protocols/http/shared.yaml`，HTTP 文件也不再保留 `shared`。平台级 securityScheme / schema / parameter / header / response 全部在 `platform/http_conventions.yaml` 的 `components`，由 `gen_openapi` 注入每个 api app；HTTP 文件只引用组件名，不再定义文件私有组件。
 3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`security` 是 `[{ scheme, scopes }]`，`scheme` 枚举为 `BearerAuth`；`mapping.path/query` 是 `[{ from, to }]`，`mapping.security` 是 `[{ scheme, to }]`；path/query 参数是带 `name` / `schema` / `description` 的对象列表；body schema 必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
-4. **幂等字段删除**：`request.idempotency` / `x-idempotency` 已删除。`Idempotency-Key` 的组件选择（`IdempotencyKey` vs `IdempotencyKeyRequired`）本身已完整表达可选/必填语义，独立枚举只会制造第二份状态。
-5. **请求/响应头固定槽位**：`request.headers` 只允许 `X-Request-Id` / `Idempotency-Key`，值由 `const`/`enum` 限定为平台组件名；`response.headers` 只允许 `X-Request-Id`。`Authorization` 不写成 header 参数，由 `BearerAuth` security scheme 表达。
+4. **客户端幂等键删除**：幂等键 header、OpenAPI components 与场景字段全部删除；幂等由 API 内部按业务语义决定，不由客户端传入的 header 控制。
+5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。`request.headers` / `response.headers` 固定槽位移除；`Authorization` 仍由 `BearerAuth` security scheme 表达。
 6. **安全凭据显式映射**：`request.mapping.security` 把 security scheme 映射到 service 参数。`BearerAuth` 只能映射 `params.access_token`（string）或 `params.account_id`（integer）。绑定类 service 的 `account_id` 从请求体移到 service 参数，由 BearerAuth 映射，避免“token 校验了但业务信任 body 里的账号 ID”。
 7. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发，不使用 cookie/session。
 

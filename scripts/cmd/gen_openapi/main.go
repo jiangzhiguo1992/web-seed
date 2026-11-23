@@ -1125,7 +1125,6 @@ func wrapResponseEnvelopes(components, paths map[string]any) error {
 		schemas = map[string]any{}
 		components["schemas"] = schemas
 	}
-	injectRequestID := asMap(components["headers"])["XRequestId"] != nil
 	for _, path := range sortedKeys(paths) {
 		item := asMap(paths[path])
 		for _, rawOp := range item {
@@ -1141,16 +1140,6 @@ func wrapResponseEnvelopes(components, paths map[string]any) error {
 				resp := asMap(rawResp)
 				if resp == nil {
 					continue
-				}
-				if _, isRef := resp["$ref"]; !isRef && injectRequestID {
-					headers := asMap(resp["headers"])
-					if headers == nil {
-						headers = map[string]any{}
-						resp["headers"] = headers
-					}
-					if _, ok := headers["X-Request-Id"]; !ok {
-						headers["X-Request-Id"] = map[string]any{"$ref": "#/components/headers/XRequestId"}
-					}
 				}
 				code, ok := toInt(status)
 				if !ok || code < 200 || code >= 300 || code == 204 {
@@ -1178,11 +1167,11 @@ func wrapResponseEnvelopes(components, paths map[string]any) error {
 					schemas[envelopeName] = map[string]any{
 						"type":                 "object",
 						"additionalProperties": false,
-						"required":             []any{"code", "message", "data"},
+						"required":             []any{"code", "msg", "data"},
 						"properties": map[string]any{
-							"code":    map[string]any{"type": "integer", "const": 0},
-							"message": map[string]any{"type": "string"},
-							"data":    map[string]any{"$ref": "#/components/schemas/" + dataName},
+							"code": map[string]any{"type": "integer", "const": 0},
+							"msg":  map[string]any{"type": "string"},
+							"data": map[string]any{"$ref": "#/components/schemas/" + dataName},
 						},
 					}
 				}

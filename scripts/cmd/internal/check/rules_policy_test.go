@@ -117,6 +117,9 @@ var policyExpectations = map[string]policyExpectation{
 		},
 		enums: map[string][]string{"data.enums.account_status": {"active"}},
 	},
+	"feature.rules.auth.refresh_reuse_detection": {
+		tables: map[string][]string{"data.tables.token": {"account_id", "revoked_at"}},
+	},
 	"feature.rules.auth.verification_purpose_status": {
 		tables: map[string][]string{"data.tables.verification_body": {"purpose"}},
 		enums: map[string][]string{
@@ -504,6 +507,9 @@ var anchorAliases = map[string][]string{
 	"data.tables.account.user_id":                     {"用户", "user_id"},
 	"data.tables.account.deleted_at":                  {"软删", "deleted_at"},
 	"data.tables.account.status":                      {"状态", "status"},
+	"data.tables.token":                               {"token", "令牌"},
+	"data.tables.token.account_id":                    {"账号", "account_id"},
+	"data.tables.token.revoked_at":                    {"吊销", "revoked_at"},
 	"data.tables.verification_body":                   {"验证体", "验证码", "verification_body", "验证"},
 	"data.tables.verification_body.status":            {"状态", "status", "pending", "sent"},
 	"data.tables.verification_body.consumed_at":       {"consumed_at", "消费"},

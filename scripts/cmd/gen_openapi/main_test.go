@@ -501,15 +501,9 @@ components:
       additionalProperties: false
       properties:
         code: { type: integer }
-  parameters:
-    RequestId: { name: X-Request-Id, in: header, required: false, schema: { type: string } }
-  headers:
-    XRequestId: { schema: { type: string } }
   responses:
     Conflict:
       description: "409"
-      headers:
-        X-Request-Id: { $ref: "#/components/headers/XRequestId" }
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ApiErrorResponse" }
@@ -543,12 +537,10 @@ paths:
         - scheme: BearerAuth
           scopes: []
       request:
-        headers: { X-Request-Id: RequestId }
         mapping: {}
       response:
         "200":
           description: "OK"
-          headers: { X-Request-Id: XRequestId }
           body:
             content_type: application/json
             schema: cap.services.x.schemas.X
@@ -582,7 +574,6 @@ errors:
 		"BearerAuth:",
 		"ApiErrorResponse:",
 		"Conflict:",
-		"$ref: '#/components/parameters/RequestId'",
 		"url: /v1",
 	} {
 		if !strings.Contains(out, want) {

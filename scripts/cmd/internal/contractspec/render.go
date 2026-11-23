@@ -823,8 +823,7 @@ type httpMountScaffold struct {
 }
 
 type httpResponseScaffold struct {
-	Description string         `yaml:"description"`
-	Headers     map[string]any `yaml:"headers"`
+	Description string `yaml:"description"`
 }
 
 type httpOperationScaffold struct {
@@ -1144,17 +1143,11 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		UsedBy:   []string{"feature.pages." + name},
 		Security: []any{},
 		Request: map[string]any{
-			"headers": map[string]any{
-				"X-Request-Id": "RequestId",
-			},
 			"mapping": map[string]any{},
 		},
 		Response: map[string]httpResponseScaffold{
 			"204": {
 				Description: "OK",
-				Headers: map[string]any{
-					"X-Request-Id": "XRequestId",
-				},
 			},
 		},
 	}

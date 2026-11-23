@@ -332,6 +332,7 @@ scenarios:
         - 400
         - 401
         - 403
+        - 405
         - 409
         - 413
         - 415
@@ -386,17 +387,13 @@ scenarios:
               status: pending
               updated_at: "2026-01-01T00:00:00Z"
               user_id: null
-            message: ok
-          headers:
-            X-Request-Id: <echo>
+            msg: ok
           status: 201
       when:
         body:
           nickname: Alice
           number: A-001
           user_id: null
-        headers:
-          Idempotency-Key: idem-0001
   - id: scenario.http.account.get_not_found
     operation: cap.protocols.http.account.get
     http:
@@ -409,6 +406,7 @@ scenarios:
         - 401
         - 403
         - 404
+        - 405
         - 429
         - 500
         - 503
@@ -438,9 +436,7 @@ scenarios:
           body:
             code: 2001
             data: null
-            message: 账号不存在
-          headers:
-            X-Request-Id: <echo>
+            msg: 账号不存在
           status: 404
       when:
         path:
@@ -456,6 +452,7 @@ scenarios:
         - 400
         - 401
         - 403
+        - 405
         - 429
         - 500
         - 503
@@ -488,9 +485,7 @@ scenarios:
               items: []
               limit: 20
               offset: 0
-            message: ok
-          headers:
-            X-Request-Id: <echo>
+            msg: ok
           status: 200
       when:
         query:
