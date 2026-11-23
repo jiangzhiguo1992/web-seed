@@ -977,16 +977,38 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 列出账号
@@ -1013,10 +1035,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
@@ -1024,8 +1055,14 @@ paths:
               code: ACCOUNT_NUMBER_TAKEN
         413:
           $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1035,10 +1072,23 @@ paths:
               code: ACCOUNT_NUMBER_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 创建账号
@@ -1061,10 +1111,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
@@ -1079,10 +1138,23 @@ paths:
               code: ACCOUNT_ILLEGAL_TRANSITION
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 删除账号（软删）
@@ -1107,10 +1179,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
@@ -1118,10 +1199,23 @@ paths:
               code: ACCOUNT_NOT_FOUND
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 获取账号
@@ -1153,10 +1247,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
@@ -1169,8 +1272,14 @@ paths:
               code: ACCOUNT_ALREADY_DELETED
         413:
           $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1178,10 +1287,23 @@ paths:
               code: ACCOUNT_NICKNAME_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 更新账号资料
@@ -1208,10 +1330,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
@@ -1226,10 +1357,23 @@ paths:
               code: ACCOUNT_ILLEGAL_TRANSITION
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 激活账号
@@ -1270,10 +1414,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
@@ -1288,14 +1441,33 @@ paths:
               code: ACCOUNT_ILLEGAL_TRANSITION
         413:
           $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 封禁账号
@@ -1323,11 +1495,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
         409:
@@ -1339,8 +1519,14 @@ paths:
               code: AUTH_EMAIL_TAKEN
         413:
           $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1350,10 +1536,23 @@ paths:
               code: AUTH_VERIFICATION_TARGET_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 创建、换绑或启停邮箱认证绑定
@@ -1381,14 +1580,21 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
             - biz_code: 3001
               code: AUTH_INVALID_CREDENTIALS
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
         409:
@@ -1400,8 +1606,14 @@ paths:
               code: AUTH_USERNAME_TAKEN
         413:
           $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1409,10 +1621,23 @@ paths:
               code: AUTH_VERIFICATION_TARGET_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 创建、修改或启停密码认证绑定
@@ -1440,11 +1665,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
         409:
@@ -1456,8 +1689,14 @@ paths:
               code: AUTH_PHONE_TAKEN
         413:
           $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1467,10 +1706,23 @@ paths:
               code: AUTH_VERIFICATION_TARGET_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 创建、换绑或启停手机号认证绑定
@@ -1499,6 +1751,9 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
@@ -1513,8 +1768,14 @@ paths:
               code: ACCOUNT_SUSPENDED
         413:
           $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         423:
           $ref: '#/components/responses/Locked'
           x-error-codes:
@@ -1522,10 +1783,23 @@ paths:
               code: AUTH_LOCKED
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       summary: 登录
   /auth/logout:
     post:
@@ -1544,6 +1818,9 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
@@ -1551,10 +1828,23 @@ paths:
               code: AUTH_TOKEN_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       summary: 登出
   /auth/me:
     get:
@@ -1574,21 +1864,42 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
             - biz_code: 5002
               code: AUTH_TOKEN_EXPIRED
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       security:
         - BearerAuth: []
       summary: 校验访问令牌并返回当前账号
@@ -1613,6 +1924,9 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
@@ -1622,10 +1936,23 @@ paths:
               code: AUTH_TOKEN_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       summary: 刷新令牌
   /auth/verification/send:
     post:
@@ -1651,10 +1978,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         413:
           $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1668,10 +2004,23 @@ paths:
               code: AUTH_VERIFICATION_TARGET_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       summary: 发送验证码
   /auth/verification/verify:
     post:
@@ -1697,10 +2046,19 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
         413:
           $ref: '#/components/responses/PayloadTooLarge'
+          x-error-codes:
+            - biz_code: 1011
+              code: COMMON_PAYLOAD_TOO_LARGE
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
+          x-error-codes:
+            - biz_code: 1012
+              code: COMMON_UNSUPPORTED_MEDIA_TYPE
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1715,10 +2073,23 @@ paths:
               code: AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
         429:
           $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
         500:
           $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
         503:
           $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
       summary: 校验验证码
 servers:
   - url: /v2

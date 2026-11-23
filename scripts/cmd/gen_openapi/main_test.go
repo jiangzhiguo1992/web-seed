@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
 )
@@ -397,6 +399,8 @@ paths:
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
 shared:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer }
   responses:
     BadRequest: { description: "400" }
     Unauthorized: { description: "401" }
@@ -618,5 +622,26 @@ func TestRenderSchemaAnnotations(t *testing.T) {
 	ap := asMap(out["additionalProperties"])
 	if out["type"] != "object" || ap["type"] != "string" {
 		t.Fatalf("map values lost: %#v", out)
+	}
+}
+
+func TestGeneratedSpecsValidateWithKinOpenAPI(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loader := openapi3.NewLoader()
+	for name, body := range files {
+		doc, err := loader.LoadFromData(body)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if err := doc.Validate(context.Background()); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
 	}
 }

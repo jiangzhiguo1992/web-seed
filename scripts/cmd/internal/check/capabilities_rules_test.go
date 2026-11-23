@@ -2783,3 +2783,43 @@ paths:
 		t.Fatalf("optional body for required service param not reported: %v", c.errs)
 	}
 }
+
+func TestHTTPDuplicateServiceBinding(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+mount: { path: /x, audience: [admin] }
+paths:
+  /a:
+    get:
+      id: cap.protocols.http.x.a
+      name: getA
+      service: cap.services.x.get
+      summary: "a"
+      used_by: [feature.pages.x]
+      request: { mapping: {}, idempotency: none }
+      response:
+        "204": { description: OK, headers: { X-Request-Id: XRequestId } }
+  /b:
+    get:
+      id: cap.protocols.http.x.b
+      name: getB
+      service: cap.services.x.get
+      summary: "b"
+      used_by: [feature.pages.x]
+      request: { mapping: {}, idempotency: none }
+      response:
+        "204": { description: OK, headers: { X-Request-Id: XRequestId } }
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root, strictHTTP: true}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {visibility: "public"},
+	}, map[string]bool{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "bound by 2 operations") {
+		t.Fatalf("duplicate service binding not reported: %v", c.errs)
+	}
+}

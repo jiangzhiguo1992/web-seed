@@ -89,7 +89,7 @@ paths:
 
 反向闭合：页面引用的每个 service 必须至少被一个 HTTP operation 暴露。当前 16 个 operation 全部有页面消费者，`contract-check` 通过。
 
-已知建模限制：同一 service 被多个 HTTP operation 绑定时，页面只能反查到 service，`used_by` 是两个 operation 的并集。当前没有这种绑定；若将来出现，要么拆 service，要么在页面 action 上增加显式 operation 字段。
+已知建模限制：同一 service 被多个 HTTP operation 绑定时，页面只能反查到 service，`used_by` 是两个 operation 的并集。当前没有这种绑定；`http-consumer` 现在直接拒绝同一 service 的多 operation 绑定，要求拆 service；若将来必须共享，再在页面 action 上增加显式 operation 字段。
 
 ## 决策 5：验收场景源在 contracts，清单在 contracts/generated
 
@@ -205,3 +205,9 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 ## 当前覆盖率现状
 
 `contracts/generated/scenarios/manifest.yaml` 的 `coverage` 段由 `make gen-scenarios` 生成，列出每个 operation 的 `scenarios`、`success_statuses`、`missing_statuses`、每个错误码的 `covered`。当前只有 account 的 3 个场景，`go run ./gen_scenarios -strict` 会列出 13 个 operation 无场景，以及 create 等已覆盖 operation 的错误码缺口；这是真实信号，不是脚本失败。补齐场景的前提是先有 acceptance runner（真实 PG、整库 diff），否则只会得到“结构合法但语义空洞”的假覆盖。
+
+## 2026-11-23 硬化增量
+
+- `platform/http_conventions.yaml` 的基线解析收敛到 `internal/spec.LoadHTTPPolicy` 一处；checker、`gen_openapi`、`gen_scenarios` 共用，避免三份 `always/secured/body/deprecated` 漂移。
+- 生成的 OpenAPI 基线响应附带 `x-error-codes`（如 `COMMON_UNAUTHORIZED`），spec 自描述完整错误面；`gen_openapi` 在写出前用 `kin-openapi` 按 OpenAPI 3.1 做硬校验。
+- 同一 service 被多个 operation 绑定会由 `http-consumer` 直接拒绝；当前模型下页面只能反查到 service，多绑定会造成 `used_by` 并集歧义，要求拆 service，真需要共享时再引入 operation 级消费者。

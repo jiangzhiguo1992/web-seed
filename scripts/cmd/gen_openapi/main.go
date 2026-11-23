@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
 	"gopkg.in/yaml.v3"
@@ -117,6 +119,10 @@ func build(root string) (map[string][]byte, error) {
 		return nil, err
 	}
 	bizCodes, err := loadErrorBizCodes(root)
+	if err != nil {
+		return nil, err
+	}
+	commonByStatus, err := loadCommonErrors(root)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +278,8 @@ func build(root string) (map[string][]byte, error) {
 				}
 				for _, status := range effective {
 					key := fmt.Sprint(status)
-					if _, exists := resp[key]; exists {
+					if existing, exists := resp[key]; exists {
+						mergeBaselineCodes(existing, commonByStatus[status])
 						continue
 					}
 					name, ok := openapispec.DefaultResponseName(status)
@@ -282,7 +289,11 @@ func build(root string) (map[string][]byte, error) {
 					if _, ok := responses[name]; !ok {
 						return nil, fmt.Errorf("app %s: baseline error %d needs components.responses.%s", appName, status, name)
 					}
-					resp[key] = map[string]any{"$ref": "#/components/responses/" + name}
+					injected := map[string]any{"$ref": "#/components/responses/" + name}
+					if codes := commonByStatus[status]; len(codes) > 0 {
+						injected["x-error-codes"] = codes
+					}
+					resp[key] = injected
 				}
 				for status, rawResp := range resp {
 					response := asMap(rawResp)
@@ -311,6 +322,9 @@ func build(root string) (map[string][]byte, error) {
 		}
 		if bytes.Contains(b, []byte("_types.")) {
 			return nil, fmt.Errorf("%s: generated OpenAPI must not contain source-only _types references", app.Generated.Spec)
+		}
+		if err := validateOpenAPI(b); err != nil {
+			return nil, fmt.Errorf("%s: %w", app.Generated.Spec, err)
 		}
 		out[app.Generated.Spec] = b
 	}
@@ -365,38 +379,63 @@ func copyDoc(doc map[string]any) map[string]any {
 	return copyValue(doc).(map[string]any)
 }
 
-type httpPolicy struct {
-	Audiences  []string
-	Always     []int
-	Secured    []int
-	Body       []int
-	Deprecated []int
+type httpPolicy = openapispec.HTTPPolicy
+
+// loadHTTPPolicy 读取平台基线错误状态；解析只在 internal/spec 一处。
+func loadHTTPPolicy(root string) (httpPolicy, error) {
+	return openapispec.LoadHTTPPolicy(root)
 }
 
-// loadHTTPPolicy 读取平台基线错误状态。
-func loadHTTPPolicy(root string) (httpPolicy, error) {
-	doc, err := loadYAML(filepath.Join(root, "contracts/platform/http_conventions.yaml"))
+// loadCommonErrors 按状态聚合 COMMON_* 错误，供基线响应注入。
+func loadCommonErrors(root string) (map[int][]any, error) {
+	out := map[int][]any{}
+	files, err := globYAML(filepath.Join(root, "contracts/platform/errors"))
+	if os.IsNotExist(err) {
+		return out, nil
+	}
 	if err != nil {
-		return httpPolicy{}, err
+		return nil, err
 	}
-	var policy httpPolicy
-	for _, raw := range asList(doc["audiences"]) {
-		if value, ok := raw.(string); ok {
-			policy.Audiences = append(policy.Audiences, value)
+	for _, file := range files {
+		doc, err := loadYAML(file)
+		if err != nil {
+			return nil, err
 		}
-	}
-	errorResponses := asMap(doc["error_responses"])
-	for key, target := range map[string]*[]int{
-		"always": &policy.Always, "secured": &policy.Secured,
-		"body": &policy.Body, "deprecated": &policy.Deprecated,
-	} {
-		for _, raw := range asList(errorResponses[key]) {
-			if value, ok := toInt(raw); ok {
-				*target = append(*target, value)
+		for _, raw := range asList(doc["errors"]) {
+			item := asMap(raw)
+			code, _ := item["code"].(string)
+			if !strings.HasPrefix(code, "COMMON_") {
+				continue
 			}
+			status, ok := toInt(item["status"])
+			biz, okBiz := toInt(item["biz_code"])
+			if !ok || !okBiz {
+				continue
+			}
+			out[status] = append(out[status], map[string]any{
+				"code":     code,
+				"biz_code": biz,
+			})
 		}
 	}
-	return policy, nil
+	return out, nil
+}
+
+// mergeBaselineCodes 把基线 COMMON 错误并入已有 response 的 x-error-codes。
+func mergeBaselineCodes(raw any, codes []any) {
+	if len(codes) == 0 {
+		return
+	}
+	response, ok := raw.(map[string]any)
+	if !ok {
+		return
+	}
+	existing, ok := response["x-error-codes"].([]any)
+	if !ok {
+		response["x-error-codes"] = codes
+		return
+	}
+	response["x-error-codes"] = append(append([]any{}, codes...), existing...)
 }
 
 // loadErrorBizCodes 建立 platform.errors.* → 整数业务码索引。
@@ -447,6 +486,14 @@ func expandErrorCodes(resp map[string]any, raw any, bizCodes map[string]int) err
 	}
 	resp["x-error-codes"] = out
 	return nil
+}
+
+func validateOpenAPI(b []byte) error {
+	doc, err := openapi3.NewLoader().LoadFromData(b)
+	if err != nil {
+		return err
+	}
+	return doc.Validate(context.Background())
 }
 
 func containsString(list []string, value string) bool {

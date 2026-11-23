@@ -299,32 +299,10 @@ func containsString(values []string, target string) bool {
 	return false
 }
 
-type scenarioPolicy struct {
-	Always     []int
-	Secured    []int
-	Body       []int
-	Deprecated []int
-}
+type scenarioPolicy = openapispec.HTTPPolicy
 
 func loadPolicy(root string) (scenarioPolicy, error) {
-	doc, err := loadYAML(filepath.Join(root, "contracts/platform/http_conventions.yaml"))
-	if err != nil {
-		return scenarioPolicy{}, err
-	}
-	var policy scenarioPolicy
-	responses := asMap(doc["error_responses"])
-	for key, target := range map[string]*[]int{
-		"always": &policy.Always, "secured": &policy.Secured,
-		"body": &policy.Body, "deprecated": &policy.Deprecated,
-	} {
-		for _, raw := range asList(responses[key]) {
-			switch value := raw.(type) {
-			case int:
-				*target = append(*target, value)
-			}
-		}
-	}
-	return policy, nil
+	return openapispec.LoadHTTPPolicy(root)
 }
 
 type httpManifest struct {
@@ -336,29 +314,7 @@ type httpManifest struct {
 }
 
 func effectiveStatuses(info httpInfo, policy scenarioPolicy) []int {
-	seen := map[int]bool{}
-	out := []int{}
-	add := func(values []int) {
-		for _, value := range values {
-			if !seen[value] {
-				seen[value] = true
-				out = append(out, value)
-			}
-		}
-	}
-	add(info.Statuses)
-	add(policy.Always)
-	if info.Secured {
-		add(policy.Secured)
-	}
-	if info.HasBody {
-		add(policy.Body)
-	}
-	if info.Deprecated {
-		add(policy.Deprecated)
-	}
-	sort.Ints(out)
-	return out
+	return policy.EffectiveStatuses(info.Statuses, info.Secured, info.HasBody, info.Deprecated)
 }
 
 func loadHTTPOps(root string) (map[string]httpInfo, error) {

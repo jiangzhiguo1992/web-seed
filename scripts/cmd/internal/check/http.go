@@ -4,6 +4,7 @@ package check
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -27,38 +28,11 @@ type httpOpInfo struct {
 }
 
 // httpPolicy 是 platform/http_conventions.yaml 中与 HTTP 绑定相关的硬约束。
-type httpPolicy struct {
-	Audiences  []string
-	Always     []int
-	Secured    []int
-	Body       []int
-	Deprecated []int
-}
+type httpPolicy = openapispec.HTTPPolicy
 
-// loadHTTPPolicy 读取平台基线错误状态、调用端与未绑定 operation 登记。
+// loadHTTPPolicy 读取平台基线错误状态与调用端；解析只在 internal/spec 一处。
 func (c *Checker) loadHTTPPolicy() (httpPolicy, error) {
-	doc, err := loadYAML(filepath.Join(c.root, "contracts/platform/http_conventions.yaml"))
-	if err != nil {
-		return httpPolicy{}, err
-	}
-	policy := httpPolicy{}
-	for _, raw := range asList(doc["audiences"]) {
-		if value, ok := raw.(string); ok {
-			policy.Audiences = append(policy.Audiences, value)
-		}
-	}
-	errorResponses, _ := asMap(doc["error_responses"])
-	for key, target := range map[string]*[]int{
-		"always": &policy.Always, "secured": &policy.Secured,
-		"body": &policy.Body, "deprecated": &policy.Deprecated,
-	} {
-		for _, raw := range asList(errorResponses[key]) {
-			if value, ok := toInt(raw); ok {
-				*target = append(*target, value)
-			}
-		}
-	}
-	return policy, nil
+	return openapispec.LoadHTTPPolicy(c.root)
 }
 
 // apiApp 是 project.yaml 中参与 OpenAPI 生成的 api 应用。
@@ -557,6 +531,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	operationIDs := map[string]string{}
 	operations := map[string]string{}
 	exposedServices := map[string]bool{}
+	serviceOps := map[string][]string{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -640,6 +615,9 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				}
 				responses, _ := asMap(op["responses"])
 				serviceID, _ := op["x-service"].(string)
+				if serviceID != "" {
+					serviceOps[serviceID] = append(serviceOps[serviceID], method+" "+path)
+				}
 				info := httpOpInfo{Path: path, Method: method, Service: serviceID, Statuses: map[int]bool{}, Codes: map[string]bool{}}
 				for status, rawResp := range responses {
 					if n, err := strconv.Atoi(status); err == nil {
@@ -735,6 +713,12 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if !seen[app.Audience] {
 					c.rulef("http-audience", "project.yaml: app %s (audience %s) includes %s but no operation targets that audience", appName, app.Audience, include)
 				}
+			}
+		}
+		for service, ops := range serviceOps {
+			if len(ops) > 1 {
+				sort.Strings(ops)
+				c.rulef("http-consumer", "service %s is bound by %d operations (%s); split the service or add explicit operation-level consumers", service, len(ops), strings.Join(ops, ", "))
 			}
 		}
 		for service, pages := range pagesByService {
