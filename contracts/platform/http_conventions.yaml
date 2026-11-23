@@ -36,7 +36,7 @@ headers:
     - { name: X-CSRF-Token, required: false, note: "cookie 端点必须声明；double submit cookie" }
   response:
     - { name: X-Request-Id, required: true, note: "必须回传，便于关联日志；每个 response 必须声明" }
-    - { name: Set-Cookie, required: false, note: "登录/刷新设置 refresh_token HttpOnly cookie + csrf_token 可读 cookie；登出清除；Path=/v1/auth" }
+    - { name: Set-Cookie, required: false, note: "登录/刷新设置 refresh_token HttpOnly cookie + csrf_token 可读 cookie；登出清除；Path=/<app.api_version>/auth" }
     - { name: Retry-After, required: false, note: "429/503 时返回非负整数秒或 HTTP-date；COMMON_RATE_LIMITED / COMMON_LOOP_EXHAUSTED 使用；非法值不发送并返回参数错误" }
     - { name: RateLimit-Limit, required: false }
     - { name: RateLimit-Remaining, required: false }
@@ -52,7 +52,7 @@ idempotency:
 security:
   scheme: BearerAuth
   kind: http_bearer_jwt
-  cookie_refresh: "refresh_token 只写 HttpOnly cookie；Path=/v1/auth；cookie 端点必须 X-CSRF-Token"
+  cookie_refresh: "refresh_token 只写 HttpOnly cookie；Path=/<app.api_version>/auth；cookie 端点必须 X-CSRF-Token"
 
 status_codes:
   success: [200, 201, 202, 204]
@@ -62,6 +62,27 @@ status_codes:
     - "200 表示错误"
     - "500 表示业务校验失败"
     - "302 用于 API 重定向"
+
+# 平台基线错误响应：这些状态由中间件或框架产生，不写进单个 operation 的 codes。
+# 业务错误只写自己的 status + codes；生成器把基线与业务响应合并成 OpenAPI responses。
+error_responses:
+  always: [400, 429, 500, 503]
+  secured: [401, 403]
+
+# op.used_by 为空时必须在此登记；值必须是已存在的 cap.protocols.http.* operation。
+# 这些端点由 app shell、拦截器或尚未建模的页面流程消费，登记即显式承担缺口。
+unbound_operations:
+  - { operation: cap.protocols.http.auth.refresh, reason: "由 web app 会话拦截器消费，无页面契约" }
+  - { operation: cap.protocols.http.auth.logout, reason: "由 web app 会话拦截器消费，无页面契约" }
+  - { operation: cap.protocols.http.auth.me, reason: "由 web app 会话拦截器消费，无页面契约" }
+  - { operation: cap.protocols.http.auth.verification_send, reason: "登录/绑定流程尚未在页面契约中引用" }
+  - { operation: cap.protocols.http.auth.verification_verify, reason: "登录/绑定流程尚未在页面契约中引用" }
+  - { operation: cap.protocols.http.auth.bind_password, reason: "账号安全设置页尚未建模" }
+  - { operation: cap.protocols.http.auth.bind_phone, reason: "账号安全设置页尚未建模" }
+  - { operation: cap.protocols.http.auth.bind_email, reason: "账号安全设置页尚未建模" }
+
+# HTTP 调用端注册表；operation.audience 与 project.yaml 的 app.audience 都引用这里的值。
+audiences: [admin]
 
 content_types:
   json: application/json

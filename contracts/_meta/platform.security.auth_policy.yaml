@@ -78,7 +78,7 @@ fields:
               - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "cookie 名" }
               - { name: same_site, type: _types.string, required: true, enum: [ Lax, Strict, None ], description: "SameSite" }
               - { name: secure, type: _types.string, required: true, description: "secure 来源" }
-              - { name: path, type: _types.string, required: true, pattern: '^/[A-Za-z0-9_./-]*$', description: "cookie 路径" }
+              - { name: path, type: _types.string, required: true, pattern: '^/[A-Za-z0-9_./<>-]*$', description: "cookie 路径；可用 <app.api_version> 占位" }
               - { name: http_only, type: _types.boolean, required: true, description: "是否 HttpOnly" }
 
   - name: session

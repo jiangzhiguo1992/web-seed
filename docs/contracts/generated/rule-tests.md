@@ -22,6 +22,8 @@
 | cap.protocols.http | http-version | http-version | 1 |
 | cap.protocols.http | http-operation | http-operation | 1 |
 | cap.protocols.http | http-default-errors | http-default-errors | 1 |
+| cap.protocols.http | http-audience | http-audience | 1 |
+| cap.protocols.http | http-consumer | http-consumer | 1 |
 | cap.protocols.http | http-components | http-components | 1 |
 | cap.protocols.http | http-shared | http-shared | 1 |
 | cap.protocols.http | http-security | http-security | 1 |

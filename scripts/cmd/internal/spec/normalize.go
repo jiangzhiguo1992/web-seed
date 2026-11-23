@@ -28,8 +28,41 @@ var statusRe = func(s string) bool {
 	return true
 }
 
+// HTTPOperationMeta 是源契约里不属于 OpenAPI 的 operation 元数据。
+// audience 与 used_by 在 NormalizeHTTPDocument 之前读取，normalizer 会删除源字段。
+type HTTPOperationMeta struct {
+	Audience []string
+	UsedBy   []string
+}
+
+// CollectHTTPOperationMeta 读取每个 operation 的 audience/used_by，键是 path+method。
+func CollectHTTPOperationMeta(doc map[string]any) map[string]HTTPOperationMeta {
+	out := map[string]HTTPOperationMeta{}
+	for path, rawItem := range asMap(doc["paths"]) {
+		for method, rawOp := range asMap(rawItem) {
+			op := asMap(rawOp)
+			if op == nil || !isHTTPMethod(method) {
+				continue
+			}
+			meta := HTTPOperationMeta{}
+			for _, raw := range asList(op["audience"]) {
+				if value, ok := raw.(string); ok {
+					meta.Audience = append(meta.Audience, value)
+				}
+			}
+			for _, raw := range asList(op["used_by"]) {
+				if value, ok := raw.(string); ok {
+					meta.UsedBy = append(meta.UsedBy, value)
+				}
+			}
+			out[path+"\x00"+method] = meta
+		}
+	}
+	return out
+}
+
 // NormalizeHTTPDocument 原地把 components.schemas.*.source 与 paths.*.* 的
-// name/id/service/request/response/errors 转成 OpenAPI 形状。
+// name/id/service/request/response 转成 OpenAPI 形状。
 func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool) error {
 	if shared := asMap(doc["shared"]); shared != nil {
 		if doc["components"] != nil {
@@ -192,8 +225,11 @@ func pascal(s string) string {
 func normalizeOperationMetadata(op map[string]any, where string, strict bool) error {
 	for _, legacy := range []string{"x-contract-id", "x-service", "x-timeout-ms", "x-idempotency", "x-service-params", "x-errors", "x-default-errors"} {
 		if op[legacy] != nil {
-			return fmt.Errorf("%s: legacy %s removed; use name/id/service/request/errors", where, legacy)
+			return fmt.Errorf("%s: legacy %s removed; use name/id/service/request/response", where, legacy)
 		}
+	}
+	if op["errors"] != nil {
+		return fmt.Errorf("%s: errors removed; group platform.errors.* under response.<status>.codes", where)
 	}
 	name, _ := op["name"].(string)
 	if name == "" {
@@ -219,9 +255,6 @@ func normalizeOperationMetadata(op map[string]any, where string, strict bool) er
 				op["x-timeout-ms"] = n
 			}
 		}
-		if errors, ok := contract["default_errors"]; ok {
-			op["x-default-errors"] = errors
-		}
 		delete(op, "contract")
 	}
 	if contractID == "" || service == "" {
@@ -241,12 +274,8 @@ func normalizeOperationMetadata(op map[string]any, where string, strict bool) er
 		op["x-idempotency"] = idempotency
 		delete(request, "idempotency")
 	}
-	errors, ok := op["errors"]
-	if !ok {
-		return fmt.Errorf("%s: errors list required (may be empty)", where)
-	}
-	op["x-errors"] = errors
-	delete(op, "errors")
+	delete(op, "audience")
+	delete(op, "used_by")
 	return nil
 }
 
@@ -444,6 +473,33 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 		resp := asMap(raw)
 		if resp == nil {
 			return nil, fmt.Errorf("%s: response %s must be an object", where, status)
+		}
+		code, _ := strconv.Atoi(status)
+		if code < 200 || code >= 300 {
+			codes := asList(resp["codes"])
+			if len(codes) == 0 {
+				return nil, fmt.Errorf("%s: response %s requires non-empty codes", where, status)
+			}
+			if resp["description"] != nil || resp["headers"] != nil || resp["body"] != nil {
+				return nil, fmt.Errorf("%s: response %s only allows codes for non-2xx", where, status)
+			}
+			name, ok := DefaultResponseName(code)
+			if !ok {
+				return nil, fmt.Errorf("%s: response %s has no shared response mapping", where, status)
+			}
+			for _, rawCode := range codes {
+				if value, _ := rawCode.(string); strings.TrimSpace(value) == "" {
+					return nil, fmt.Errorf("%s: response %s codes must be non-empty platform.errors.* IDs", where, status)
+				}
+			}
+			out[status] = map[string]any{
+				"$ref":          "#/components/responses/" + name,
+				"x-error-codes": codes,
+			}
+			continue
+		}
+		if resp["codes"] != nil {
+			return nil, fmt.Errorf("%s: response %s is 2xx and must not declare codes", where, status)
 		}
 		description, _ := resp["description"].(string)
 		if strings.TrimSpace(description) == "" {

@@ -95,7 +95,7 @@ entries:
     stability: draft
     common_mistakes:
       - "在 handler 里直接读 r.URL.Query() 而不用生成参数"
-      - "逐接口重复声明 4xx/5xx 响应（已由 default_error_responses 注入）"
+      - "逐接口写 400/429/500/503 等平台基线状态（由 error_responses 注入）"
       - "响应 schema 缺少 additionalProperties: false"
       - "忘记 service 绑定到 cap.services"
   - { id: cap.protocols.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/登出/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
@@ -172,13 +172,14 @@ entries:
 
 # 跨文件的坑：不属于任何单一契约，但 AI 最容易犯
 global_notes:
-  - "错误响应由 capabilities/http 的 default_error_responses 注入，不要逐接口声明"
+  - "业务错误按状态写在 response.<status>.codes；COMMON_* 与 400/401/403/429/500/503 基线由 platform/http_conventions 管理，不在 operation 重复"
   - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.returns"
   - "data.entities 的字段名与表列名可能不同：entity 用 source.column 指明来源；method 返回 entity，不重复列映射"
   - "领域事件由 cap.events 的 topics[].publish.emitted_by 与 topics[].subscribe 声明；service step 用 events 引用事件、用 dispatch 投递命令，不写 emits/event"
   - "services.steps 只能引用 data.queries / cap.services / cap.lifecycles / feature.rules / cap.events；不得引用 data.tables 或 business.*"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table.queries / model.queries / query.used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
+  - "http operation 的 audience 与 used_by 是校验字段：used_by 必须精确等于页面引用，空值必须在 unbound_operations 登记"
   - "引擎分组与表级物理事实（tables.<engine>/caches/retention）只在 data/storage.yaml 声明；冗余列表直接写在 columns[].redundancy"
 
 # 白名单：允许没有入边的根契约

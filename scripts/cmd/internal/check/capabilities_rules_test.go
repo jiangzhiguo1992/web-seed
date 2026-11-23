@@ -230,7 +230,6 @@ paths:
       response:
         "204":
           description: "OK"
-      errors: []
 components:
   schemas:
     WrongInput:
@@ -277,7 +276,6 @@ paths:
       response:
         "204":
           description: "OK"
-      errors: []
 components:
   schemas:
     WrongInput:
@@ -338,7 +336,6 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
-      errors: []
 components:
   parameters:
     RequestId:
@@ -663,7 +660,6 @@ paths:
       response:
         "204":
           description: "OK"
-      errors: []
 components:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
@@ -702,7 +698,6 @@ paths:
       response:
         "204":
           description: "OK"
-      errors: []
 components:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
@@ -734,10 +729,15 @@ paths:
       response:
         "204":
           description: "OK"
-      errors:
-        - "platform.errors.COMMON_INTERNAL"
+        "500":
+          codes:
+            - "platform.errors.COMMON_INTERNAL"
 components:
   schemas: {}`)
+	writeCapFile(t, root, "contracts/platform/errors/common.yaml", `id: platform.errors.common
+errors:
+  - { code: COMMON_INTERNAL, biz_code: 1007, status: 500 }
+`)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -766,7 +766,6 @@ paths:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
       request: {}
-      errors: []
       parameters: []
       responses:
         "204":
@@ -785,10 +784,12 @@ components:
 
 func TestProjectAPIVersion(t *testing.T) {
 	root := t.TempDir()
+	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]`)
 	writeCapFile(t, root, "contracts/project.yaml", `apps:
   good:
     kind: api
     api_version: v1
+    audience: admin
     timeout_ms: 5000
     generated: { spec: generated/openapi/good.yaml }
   missing:
@@ -798,6 +799,7 @@ func TestProjectAPIVersion(t *testing.T) {
   invalid:
     kind: api
     api_version: "1"
+    audience: admin
     timeout_ms: 5000
     generated: { spec: generated/openapi/invalid.yaml }
   web:
@@ -843,7 +845,6 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
-      errors: []
 components:
   parameters:
     RequestId:
@@ -892,7 +893,6 @@ paths:
           headers:
             X-Request-Id:
               $ref: "#/components/headers/XRequestId"
-      errors: []
 components:
   parameters:
     RequestId:
@@ -936,7 +936,6 @@ paths:
       response:
         "204":
           description: "OK"
-      errors: []
 components:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
@@ -1583,7 +1582,6 @@ paths:
       response:
         "200":
           description: "ok"
-      errors: []
 components:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
@@ -1615,7 +1613,6 @@ paths:
       response:
         "200":
           description: "OK"
-      errors: []
 
     post:
       name: "postX"
@@ -1626,7 +1623,6 @@ paths:
       response:
         "200":
           description: "OK"
-      errors: []
 default_error_responses:
   - 418
   - 503`)
@@ -1639,11 +1635,9 @@ default_error_responses:
 		`missing required field "do_not"`,
 		`id "cap.http.x" must be "cap.protocols.http.x"`,
 		"duplicate x-contract-id",
-		"default status 418 has no components.responses mapping",
+		`unknown field "default_error_responses"`,
 		"[http-file]",
 		"[http-operation]",
-		"[http-default-errors]",
-		"[http-retry-after]",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
@@ -1676,7 +1670,6 @@ services:
       - id: load
         kind: logic
         summary: "x"
-        errors: []
         output: []
 `)
 	doc, err := loadYAML(filepath.Join(root, rel))
@@ -1716,53 +1709,57 @@ func TestLogicRulesValidated(t *testing.T) {
 	}
 }
 
-func TestHTTPOperationDefaults(t *testing.T) {
+func TestHTTPResponseCodes(t *testing.T) {
 	root := t.TempDir()
 	schema := copyMeta(t, root, "cap.protocols.http")
-	writeCapFile(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
-summary: "x"
-schema_version: 1
-stability: draft
-do_not: []
-components:
-  responses:
-    UnprocessableEntity: { description: "422" }
-    Locked: { description: "423" }
-`)
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
 summary: "x"
 schema_version: 1
 stability: "draft"
 do_not: []
-default_error_responses:
-  - 422
 paths:
   /x:
     get:
       name: "getX"
-      contract:
-        id: "cap.protocols.http.x.get"
-        service: "cap.services.x.get"
-        default_errors:
-          - 423
+      id: "cap.protocols.http.x.get"
+      service: "cap.services.x.get"
       request: {}
       response:
-        "200":
+        "204":
           description: "OK"
-        "423":
-          description: "should be injected"
-      errors: []
+        "409":
+          codes:
+            - "platform.errors.X"
+        "422":
+          codes:
+            - "platform.errors.Y"
+        "500":
+          codes:
+            - "platform.errors.COMMON_INTERNAL"
       x-typo: true`)
-	c := &Checker{root: root}
+	c := &Checker{root: root,
+		errCodeSet:  map[string]bool{"X": true, "Y": true, "Z": true, "COMMON_INTERNAL": true},
+		errorStatus: map[string]int{"X": 409, "Y": 409, "COMMON_INTERNAL": 500},
+	}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
-		"cap.services.x.get": {visibility: "public", paramTypes: map[string]bool{}},
+		"cap.services.x.get": {
+			visibility: "public",
+			errors: map[string]bool{
+				"platform.errors.X":               true,
+				"platform.errors.Y":               true,
+				"platform.errors.Z":               true,
+				"platform.errors.COMMON_INTERNAL": true,
+			},
+		},
 	}, map[string]bool{}, map[string]bool{})
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"unknown operation extension x-typo",
-		"status 423 is injected by default errors",
+		"platform.errors.COMMON_INTERNAL is a platform error",
+		"platform.errors.Y has status 409 but is listed under response 422",
+		"missing error platform.errors.Z",
+		"[http-errors]",
 		"[http-operation]",
-		"[http-default-errors]",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
@@ -1914,7 +1911,6 @@ services:
     returns:
       - {name: err, type: error}
       - {name: value, type: _types.string}
-    errors: []
     tx_mode: read_only
     steps:
       - {id: load, kind: logic, summary: "x", errors: [], output: []}
@@ -1961,7 +1957,6 @@ services:
     returns:
       - {name: err, type: error}
       - {name: value, type: _types.string}
-    errors: []
     tx_mode: read_only
     steps:
       - {id: load, kind: logic, summary: "x", errors: [], output: []}
@@ -2568,7 +2563,7 @@ paths:
               type: "object"
               additionalProperties: false
               x-service-return: "data.entities.missing"
-      errors: []`)
+      `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -2576,5 +2571,118 @@ paths:
 	}, map[string]bool{}, map[string]bool{})
 	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "[http-service-return]") {
 		t.Fatalf("missing service return not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPAudienceAndConsumer(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.protocols.http")
+	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+error_responses:
+  always: [400, 409, 503]
+  secured: [401]
+unbound_operations:
+  - { operation: cap.protocols.http.x.open, reason: "app shell" }
+  - { operation: cap.protocols.http.x.stale, reason: "stale" }
+`)
+	writeCapFile(t, root, "contracts/project.yaml", `apps:
+  admin:
+    kind: api
+    audience: admin
+    includes: [cap.protocols.http.x]
+`)
+	writeCapFile(t, root, "contracts/features/pages/x.yaml", `id: feature.pages.x
+data:
+  get:
+    capability: cap.services.x.get
+  page_only:
+    capability: cap.services.x.page_only
+`)
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+components:
+  responses:
+    BadRequest: { description: "400" }
+    ServiceUnavailable: { description: "503" }
+`)
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+audience: [admin]
+paths:
+  /ok:
+    get:
+      name: getOk
+      id: cap.protocols.http.x.ok
+      service: cap.services.x.get
+      used_by: [feature.pages.x]
+      request: {}
+      response:
+        "204": { description: "OK" }
+  /open:
+    get:
+      name: getOpen
+      id: cap.protocols.http.x.open
+      service: cap.services.x.open
+      used_by: []
+      request: {}
+      response:
+        "204": { description: "OK" }
+  /orphan:
+    get:
+      name: getOrphan
+      id: cap.protocols.http.x.orphan
+      service: cap.services.x.orphan
+      used_by: []
+      request: {}
+      response:
+        "204": { description: "OK" }
+  /missing:
+    get:
+      name: getMissing
+      id: cap.protocols.http.x.missing
+      service: cap.services.x.get
+      used_by: []
+      request: {}
+      response:
+        "204": { description: "OK" }
+  /other:
+    get:
+      name: getOther
+      id: cap.protocols.http.x.other
+      service: cap.services.x.get
+      used_by: [feature.pages.x]
+      audience: [user]
+      request: {}
+      response:
+        "204": { description: "OK" }
+`)
+	c := &Checker{root: root, strictHTTP: true}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get":       {visibility: "public"},
+		"cap.services.x.open":      {visibility: "public"},
+		"cap.services.x.orphan":    {visibility: "public"},
+		"cap.services.x.page_only": {visibility: "public"},
+	}, map[string]bool{}, map[string]bool{})
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"audience user is not declared",
+		"operation cap.protocols.http.x.orphan has no page consumer",
+		"missing used_by feature.pages.x",
+		"unbound_operations entry cap.protocols.http.x.stale is stale",
+		"service cap.services.x.page_only is referenced by pages but has no http operation",
+		"[http-audience]",
+		"[http-consumer]",
+		"[http-default-errors]",
+		"[http-retry-after]",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
 	}
 }

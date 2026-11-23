@@ -27,6 +27,7 @@ type project struct {
 	Apps map[string]struct {
 		Kind       string   `yaml:"kind"`
 		APIVersion string   `yaml:"api_version"`
+		Audience   string   `yaml:"audience"`
 		TimeoutMS  int      `yaml:"timeout_ms"`
 		Includes   []string `yaml:"includes"`
 		Generated  struct {
@@ -94,6 +95,8 @@ func build(root string) (map[string][]byte, error) {
 		return nil, err
 	}
 	byID := map[string]map[string]any{}
+	opMetaByID := map[string]map[string]openapispec.HTTPOperationMeta{}
+	fileAudienceByID := map[string][]string{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -101,11 +104,25 @@ func build(root string) (map[string][]byte, error) {
 		}
 		id, _ := doc["id"].(string)
 		if id != "" {
+			opMetaByID[id] = openapispec.CollectHTTPOperationMeta(doc)
+			for _, raw := range asList(doc["audience"]) {
+				if value, ok := raw.(string); ok {
+					fileAudienceByID[id] = append(fileAudienceByID[id], value)
+				}
+			}
 			if err := openapispec.NormalizeHTTPDocument(doc, httpTypeResolver(customTypeIdx), false); err != nil {
 				return nil, fmt.Errorf("%s: %w", file, err)
 			}
 			byID[id] = doc
 		}
+	}
+	policy, err := loadHTTPPolicy(root)
+	if err != nil {
+		return nil, err
+	}
+	bizCodes, err := loadErrorBizCodes(root)
+	if err != nil {
+		return nil, err
 	}
 	enumIdx, err := loadEnums(root)
 	if err != nil {
@@ -143,12 +160,17 @@ func build(root string) (map[string][]byte, error) {
 		}
 		paths := spec["paths"].(map[string]any)
 		components := spec["components"].(map[string]any)
-		opDefaults := map[string]map[string]bool{}
 		if app.APIVersion == "" {
 			return nil, fmt.Errorf("app %s: api_version required for api apps", appName)
 		}
 		if !apiVersionRe.MatchString(app.APIVersion) {
 			return nil, fmt.Errorf("app %s: api_version %q must match v<digits>", appName, app.APIVersion)
+		}
+		if app.Audience == "" {
+			return nil, fmt.Errorf("app %s: audience required for api apps", appName)
+		}
+		if !containsString(policy.Audiences, app.Audience) {
+			return nil, fmt.Errorf("app %s: audience %q is not declared in platform.http_conventions.audiences", appName, app.Audience)
 		}
 		if app.TimeoutMS <= 0 {
 			return nil, fmt.Errorf("app %s: timeout_ms must be a positive integer", appName)
@@ -159,29 +181,33 @@ func build(root string) (map[string][]byte, error) {
 			if doc == nil {
 				return nil, fmt.Errorf("app %s: include %s not found", appName, include)
 			}
+			filtered := map[string]any{}
 			for path, rawItem := range asMap(doc["paths"]) {
-				for method, rawOp := range asMap(rawItem) {
+				item := asMap(rawItem)
+				outItem := map[string]any{}
+				for method, rawOp := range item {
 					op := asMap(rawOp)
 					if op == nil {
+						outItem[method] = rawOp
+						continue
+					}
+					meta := opMetaByID[include][path+"\x00"+method]
+					audience := meta.Audience
+					if len(audience) == 0 {
+						audience = fileAudienceByID[include]
+					}
+					if !containsString(audience, app.Audience) {
 						continue
 					}
 					op["x-timeout-ms"] = app.TimeoutMS
 					delete(op, "x-service-params")
-					key := path + "\x00" + method
-					if raw, ok := op["x-default-errors"]; ok {
-						opDefaults[key] = map[string]bool{}
-						for _, item := range asList(raw) {
-							opDefaults[key][fmt.Sprint(item)] = true
-						}
-					} else if opDefaults[key] == nil {
-						opDefaults[key] = map[string]bool{}
-						for _, raw := range asList(doc["default_error_responses"]) {
-							opDefaults[key][fmt.Sprint(raw)] = true
-						}
-					}
+					outItem[method] = op
+				}
+				if len(outItem) > 0 {
+					filtered[path] = outItem
 				}
 			}
-			mergeMap(paths, asMap(doc["paths"]))
+			mergeMap(paths, filtered)
 			mergeMap(components, asMap(doc["components"]))
 		}
 		if err := ensureHTTPRefs(components, paths, typeIdx, entityIdx, enumIdx); err != nil {
@@ -239,22 +265,33 @@ func build(root string) (map[string][]byte, error) {
 					resp = map[string]any{}
 					op["responses"] = resp
 				}
-				for status := range opDefaults[path+"\x00"+method] {
-					if _, exists := resp[status]; exists {
+				effective := append([]int{}, policy.Always...)
+				if len(asList(op["security"])) > 0 {
+					effective = append(effective, policy.Secured...)
+				}
+				for _, status := range effective {
+					key := fmt.Sprint(status)
+					if _, exists := resp[key]; exists {
 						continue
 					}
-					n, ok := toInt(status)
+					name, ok := openapispec.DefaultResponseName(status)
 					if !ok {
-						return nil, fmt.Errorf("app %s: default status %s is not an integer", appName, status)
-					}
-					name, ok := openapispec.DefaultResponseName(n)
-					if !ok {
-						return nil, fmt.Errorf("app %s: default status %d has no response mapping", appName, n)
+						return nil, fmt.Errorf("app %s: baseline status %d has no response mapping", appName, status)
 					}
 					if _, ok := responses[name]; !ok {
-						return nil, fmt.Errorf("app %s: default error %d needs components.responses.%s", appName, n, name)
+						return nil, fmt.Errorf("app %s: baseline error %d needs components.responses.%s", appName, status, name)
 					}
-					resp[status] = map[string]any{"$ref": "#/components/responses/" + name}
+					resp[key] = map[string]any{"$ref": "#/components/responses/" + name}
+				}
+				for status, rawResp := range resp {
+					response := asMap(rawResp)
+					rawCodes, ok := response["x-error-codes"]
+					if !ok {
+						continue
+					}
+					if err := expandErrorCodes(response, rawCodes, bizCodes); err != nil {
+						return nil, fmt.Errorf("app %s: %s %s %s: %w", appName, method, path, status, err)
+					}
 				}
 				item[method] = op
 			}
@@ -279,14 +316,14 @@ func build(root string) (map[string][]byte, error) {
 	return out, nil
 }
 
-// stripGeneratedExtensions 删除契约内部元数据；生成物只输出标准 OpenAPI。
+// stripGeneratedExtensions 删除契约内部元数据；生成物只输出标准 OpenAPI 与错误码清单。
 func stripGeneratedExtensions(spec map[string]any) {
 	var walk func(any)
 	walk = func(v any) {
 		switch value := v.(type) {
 		case map[string]any:
 			for key := range value {
-				if strings.HasPrefix(key, "x-") {
+				if strings.HasPrefix(key, "x-") && key != "x-error-codes" {
 					delete(value, key)
 				}
 			}
@@ -300,6 +337,97 @@ func stripGeneratedExtensions(spec map[string]any) {
 		}
 	}
 	walk(spec)
+}
+
+type httpPolicy struct {
+	Audiences []string
+	Always    []int
+	Secured   []int
+}
+
+// loadHTTPPolicy 读取平台基线错误状态。
+func loadHTTPPolicy(root string) (httpPolicy, error) {
+	doc, err := loadYAML(filepath.Join(root, "contracts/platform/http_conventions.yaml"))
+	if err != nil {
+		return httpPolicy{}, err
+	}
+	var policy httpPolicy
+	for _, raw := range asList(doc["audiences"]) {
+		if value, ok := raw.(string); ok {
+			policy.Audiences = append(policy.Audiences, value)
+		}
+	}
+	errorResponses := asMap(doc["error_responses"])
+	for _, raw := range asList(errorResponses["always"]) {
+		if value, ok := toInt(raw); ok {
+			policy.Always = append(policy.Always, value)
+		}
+	}
+	for _, raw := range asList(errorResponses["secured"]) {
+		if value, ok := toInt(raw); ok {
+			policy.Secured = append(policy.Secured, value)
+		}
+	}
+	return policy, nil
+}
+
+// loadErrorBizCodes 建立 platform.errors.* → 整数业务码索引。
+func loadErrorBizCodes(root string) (map[string]int, error) {
+	out := map[string]int{}
+	files, err := globYAML(filepath.Join(root, "contracts/platform/errors"))
+	if os.IsNotExist(err) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
+		doc, err := loadYAML(file)
+		if err != nil {
+			return nil, err
+		}
+		for _, raw := range asList(doc["errors"]) {
+			item := asMap(raw)
+			code, _ := item["code"].(string)
+			biz, ok := toInt(item["biz_code"])
+			if code == "" || !ok {
+				continue
+			}
+			out["platform.errors."+code] = biz
+		}
+	}
+	return out, nil
+}
+
+// expandErrorCodes 把源契约的错误 ID 列表转成 {code, biz_code} 清单。
+func expandErrorCodes(resp map[string]any, raw any, bizCodes map[string]int) error {
+	out := []any{}
+	for _, item := range asList(raw) {
+		if expanded, ok := item.(map[string]any); ok {
+			out = append(out, expanded)
+			continue
+		}
+		id, _ := item.(string)
+		biz, ok := bizCodes[id]
+		if !ok {
+			return fmt.Errorf("x-error-codes references unknown %s", id)
+		}
+		out = append(out, map[string]any{
+			"code":     strings.TrimPrefix(id, "platform.errors."),
+			"biz_code": biz,
+		})
+	}
+	resp["x-error-codes"] = out
+	return nil
+}
+
+func containsString(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 func loadProject(path string) (*project, error) {

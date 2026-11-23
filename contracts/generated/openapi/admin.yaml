@@ -1,7 +1,7 @@
 components:
   headers:
     ClearAuthCookies:
-      description: 清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/v1/auth
+      description: 清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/<app.api_version>/auth
       schema:
         type: string
     RetryAfter:
@@ -9,7 +9,7 @@ components:
       schema:
         type: string
     SetAuthCookies:
-      description: 设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/v1/auth，SameSite=Lax，Secure 按环境
+      description: 设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/<app.api_version>/auth，SameSite=Lax，Secure 按环境
       schema:
         type: string
     XRequestId:
@@ -137,6 +137,8 @@ components:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 触发限流
       headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
     Unauthorized:
@@ -952,12 +954,6 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         403:
           $ref: '#/components/responses/Forbidden'
-        404:
-          $ref: '#/components/responses/NotFound'
-        409:
-          $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -994,12 +990,18 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         403:
           $ref: '#/components/responses/Forbidden'
-        404:
-          $ref: '#/components/responses/NotFound'
         409:
           $ref: '#/components/responses/Conflict'
+          x-error-codes:
+            - biz_code: 2002
+              code: ACCOUNT_NUMBER_TAKEN
         422:
           $ref: '#/components/responses/UnprocessableEntity'
+          x-error-codes:
+            - biz_code: 2004
+              code: ACCOUNT_NICKNAME_INVALID
+            - biz_code: 2003
+              code: ACCOUNT_NUMBER_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1034,10 +1036,16 @@ paths:
           $ref: '#/components/responses/Forbidden'
         404:
           $ref: '#/components/responses/NotFound'
+          x-error-codes:
+            - biz_code: 2001
+              code: ACCOUNT_NOT_FOUND
         409:
           $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
+          x-error-codes:
+            - biz_code: 2007
+              code: ACCOUNT_ALREADY_DELETED
+            - biz_code: 2006
+              code: ACCOUNT_ILLEGAL_TRANSITION
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1074,10 +1082,9 @@ paths:
           $ref: '#/components/responses/Forbidden'
         404:
           $ref: '#/components/responses/NotFound'
-        409:
-          $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
+          x-error-codes:
+            - biz_code: 2001
+              code: ACCOUNT_NOT_FOUND
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1121,10 +1128,19 @@ paths:
           $ref: '#/components/responses/Forbidden'
         404:
           $ref: '#/components/responses/NotFound'
+          x-error-codes:
+            - biz_code: 2001
+              code: ACCOUNT_NOT_FOUND
         409:
           $ref: '#/components/responses/Conflict'
+          x-error-codes:
+            - biz_code: 2007
+              code: ACCOUNT_ALREADY_DELETED
         422:
           $ref: '#/components/responses/UnprocessableEntity'
+          x-error-codes:
+            - biz_code: 2004
+              code: ACCOUNT_NICKNAME_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1163,10 +1179,16 @@ paths:
           $ref: '#/components/responses/Forbidden'
         404:
           $ref: '#/components/responses/NotFound'
+          x-error-codes:
+            - biz_code: 2001
+              code: ACCOUNT_NOT_FOUND
         409:
           $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
+          x-error-codes:
+            - biz_code: 2007
+              code: ACCOUNT_ALREADY_DELETED
+            - biz_code: 2006
+              code: ACCOUNT_ILLEGAL_TRANSITION
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1219,10 +1241,16 @@ paths:
           $ref: '#/components/responses/Forbidden'
         404:
           $ref: '#/components/responses/NotFound'
+          x-error-codes:
+            - biz_code: 2001
+              code: ACCOUNT_NOT_FOUND
         409:
           $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
+          x-error-codes:
+            - biz_code: 2007
+              code: ACCOUNT_ALREADY_DELETED
+            - biz_code: 2006
+              code: ACCOUNT_ILLEGAL_TRANSITION
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1260,12 +1288,21 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 2005
+              code: ACCOUNT_SUSPENDED
         409:
           $ref: '#/components/responses/Conflict'
+          x-error-codes:
+            - biz_code: 2007
+              code: ACCOUNT_ALREADY_DELETED
+            - biz_code: 3005
+              code: AUTH_EMAIL_TAKEN
         422:
           $ref: '#/components/responses/UnprocessableEntity'
-        423:
-          $ref: '#/components/responses/Locked'
+          x-error-codes:
+            - biz_code: 3007
+              code: AUTH_EMAIL_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1301,14 +1338,21 @@ paths:
           $ref: '#/components/responses/BadRequest'
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 3001
+              code: AUTH_INVALID_CREDENTIALS
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 2005
+              code: ACCOUNT_SUSPENDED
         409:
           $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
-        423:
-          $ref: '#/components/responses/Locked'
+          x-error-codes:
+            - biz_code: 2007
+              code: ACCOUNT_ALREADY_DELETED
+            - biz_code: 3003
+              code: AUTH_USERNAME_TAKEN
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1346,12 +1390,21 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         403:
           $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 2005
+              code: ACCOUNT_SUSPENDED
         409:
           $ref: '#/components/responses/Conflict'
+          x-error-codes:
+            - biz_code: 2007
+              code: ACCOUNT_ALREADY_DELETED
+            - biz_code: 3004
+              code: AUTH_PHONE_TAKEN
         422:
           $ref: '#/components/responses/UnprocessableEntity'
-        423:
-          $ref: '#/components/responses/Locked'
+          x-error-codes:
+            - biz_code: 3006
+              code: AUTH_PHONE_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1388,14 +1441,19 @@ paths:
           $ref: '#/components/responses/BadRequest'
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 3001
+              code: AUTH_INVALID_CREDENTIALS
         403:
           $ref: '#/components/responses/Forbidden'
-        409:
-          $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
+          x-error-codes:
+            - biz_code: 2005
+              code: ACCOUNT_SUSPENDED
         423:
           $ref: '#/components/responses/Locked'
+          x-error-codes:
+            - biz_code: 3002
+              code: AUTH_LOCKED
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1422,14 +1480,9 @@ paths:
           $ref: '#/components/responses/BadRequest'
         401:
           $ref: '#/components/responses/Unauthorized'
-        403:
-          $ref: '#/components/responses/Forbidden'
-        409:
-          $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
-        423:
-          $ref: '#/components/responses/Locked'
+          x-error-codes:
+            - biz_code: 5001
+              code: AUTH_TOKEN_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1457,14 +1510,13 @@ paths:
           $ref: '#/components/responses/BadRequest'
         401:
           $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 5002
+              code: AUTH_TOKEN_EXPIRED
+            - biz_code: 5001
+              code: AUTH_TOKEN_INVALID
         403:
           $ref: '#/components/responses/Forbidden'
-        409:
-          $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
-        423:
-          $ref: '#/components/responses/Locked'
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1497,14 +1549,11 @@ paths:
           $ref: '#/components/responses/BadRequest'
         401:
           $ref: '#/components/responses/Unauthorized'
-        403:
-          $ref: '#/components/responses/Forbidden'
-        409:
-          $ref: '#/components/responses/Conflict'
-        422:
-          $ref: '#/components/responses/UnprocessableEntity'
-        423:
-          $ref: '#/components/responses/Locked'
+          x-error-codes:
+            - biz_code: 5002
+              code: AUTH_TOKEN_EXPIRED
+            - biz_code: 5001
+              code: AUTH_TOKEN_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1536,16 +1585,17 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
-        401:
-          $ref: '#/components/responses/Unauthorized'
-        403:
-          $ref: '#/components/responses/Forbidden'
-        409:
-          $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/UnprocessableEntity'
-        423:
-          $ref: '#/components/responses/Locked'
+          x-error-codes:
+            - biz_code: 3007
+              code: AUTH_EMAIL_INVALID
+            - biz_code: 3006
+              code: AUTH_PHONE_INVALID
+            - biz_code: 4001
+              code: AUTH_VERIFICATION_INVALID
+            - biz_code: 4004
+              code: AUTH_VERIFICATION_TARGET_INVALID
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1577,16 +1627,18 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
-        401:
-          $ref: '#/components/responses/Unauthorized'
-        403:
-          $ref: '#/components/responses/Forbidden'
-        409:
-          $ref: '#/components/responses/Conflict'
         422:
           $ref: '#/components/responses/UnprocessableEntity'
+          x-error-codes:
+            - biz_code: 4002
+              code: AUTH_VERIFICATION_EXPIRED
+            - biz_code: 4001
+              code: AUTH_VERIFICATION_INVALID
         423:
           $ref: '#/components/responses/Locked'
+          x-error-codes:
+            - biz_code: 4003
+              code: AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:

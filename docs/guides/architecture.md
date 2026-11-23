@@ -392,7 +392,7 @@ apps:
 
 - HTTP 层统一信封：成功 `{code: 0, message: "ok", data: <resource>}`，错误 `{code: <biz_code>, message, data: null}`；HTTP status 保留 4xx/5xx
 - `code` 取 `platform/errors/` 的整数 `biz_code`；成功码固定 0
-- 浏览器 refresh token 只写 HttpOnly cookie（Path=/v1/auth）；cookie 端点必须校验 `X-CSRF-Token`；写接口用 `Idempotency-Key`
+- 浏览器 refresh token 只写 HttpOnly cookie（Path=/<app.api_version>/auth）；cookie 端点必须校验 `X-CSRF-Token`；写接口用 `Idempotency-Key`
 - 不返回的 error 必须记录（含栈 + 上下文）
 
 ### 5.3 事务边界

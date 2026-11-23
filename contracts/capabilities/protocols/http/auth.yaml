@@ -6,16 +6,9 @@ stability: draft
 do_not:
   - "不要把 password_hash 或 token 写入日志、事件"
   - "refresh_token 只写 HttpOnly cookie，不进入响应体"
-default_error_responses:
-  - 400
-  - 401
-  - 403
-  - 409
-  - 422
-  - 423
-  - 429
-  - 500
-  - 503
+
+audience: [admin]
+
 paths:
   /auth/login:
     post:
@@ -23,6 +16,8 @@ paths:
       name: login
       service: cap.services.auth.login
       summary: "登录"
+      used_by:
+        - feature.pages.login
       request:
         headers:
           X-Request-Id: RequestId
@@ -41,10 +36,15 @@ paths:
           body:
             content_type: application/json
             schema: cap.services.auth.schemas.AuthSession
-      errors:
-        - platform.errors.ACCOUNT_SUSPENDED
-        - platform.errors.AUTH_INVALID_CREDENTIALS
-        - platform.errors.AUTH_LOCKED
+        401:
+          codes:
+            - platform.errors.AUTH_INVALID_CREDENTIALS
+        403:
+          codes:
+            - platform.errors.ACCOUNT_SUSPENDED
+        423:
+          codes:
+            - platform.errors.AUTH_LOCKED
 
   /auth/verification/send:
     post:
@@ -52,6 +52,7 @@ paths:
       name: sendVerification
       service: cap.services.verification.send
       summary: "发送验证码"
+      used_by: []
       request:
         headers:
           X-Request-Id: RequestId
@@ -70,11 +71,12 @@ paths:
           body:
             content_type: application/json
             schema: cap.services.verification.schemas.VerificationSent
-      errors:
-        - platform.errors.AUTH_EMAIL_INVALID
-        - platform.errors.AUTH_PHONE_INVALID
-        - platform.errors.AUTH_VERIFICATION_INVALID
-        - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+        422:
+          codes:
+            - platform.errors.AUTH_EMAIL_INVALID
+            - platform.errors.AUTH_PHONE_INVALID
+            - platform.errors.AUTH_VERIFICATION_INVALID
+            - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
 
   /auth/verification/verify:
     post:
@@ -82,6 +84,7 @@ paths:
       name: verifyCode
       service: cap.services.verification.verify
       summary: "校验验证码"
+      used_by: []
       request:
         headers:
           X-Request-Id: RequestId
@@ -100,10 +103,13 @@ paths:
           body:
             content_type: application/json
             schema: cap.services.verification.schemas.VerificationResult
-      errors:
-        - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
-        - platform.errors.AUTH_VERIFICATION_EXPIRED
-        - platform.errors.AUTH_VERIFICATION_INVALID
+        422:
+          codes:
+            - platform.errors.AUTH_VERIFICATION_EXPIRED
+            - platform.errors.AUTH_VERIFICATION_INVALID
+        423:
+          codes:
+            - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
 
   /auth/refresh:
     post:
@@ -111,6 +117,7 @@ paths:
       name: refreshToken
       service: cap.services.token.refresh
       summary: "刷新令牌"
+      used_by: []
       request:
         headers:
           X-Request-Id: RequestId
@@ -130,9 +137,10 @@ paths:
           body:
             content_type: application/json
             schema: cap.services.token.schemas.AccessToken
-      errors:
-        - platform.errors.AUTH_TOKEN_EXPIRED
-        - platform.errors.AUTH_TOKEN_INVALID
+        401:
+          codes:
+            - platform.errors.AUTH_TOKEN_EXPIRED
+            - platform.errors.AUTH_TOKEN_INVALID
 
   /auth/logout:
     post:
@@ -140,6 +148,7 @@ paths:
       name: logout
       service: cap.services.token.logout
       summary: "登出"
+      used_by: []
       request:
         headers:
           X-Request-Id: RequestId
@@ -156,8 +165,9 @@ paths:
           headers:
             Set-Cookie: ClearAuthCookies
             X-Request-Id: XRequestId
-      errors:
-        - platform.errors.AUTH_TOKEN_INVALID
+        401:
+          codes:
+            - platform.errors.AUTH_TOKEN_INVALID
 
   /auth/bind/password:
     post:
@@ -165,6 +175,7 @@ paths:
       name: bindPassword
       service: cap.services.auth.bind_password
       summary: "创建、修改或启停密码认证绑定"
+      used_by: []
       security:
         - BearerAuth: []
       request:
@@ -185,11 +196,16 @@ paths:
           body:
             content_type: application/json
             schema: cap.services.auth.schemas.AuthBinding
-      errors:
-        - platform.errors.ACCOUNT_ALREADY_DELETED
-        - platform.errors.ACCOUNT_SUSPENDED
-        - platform.errors.AUTH_INVALID_CREDENTIALS
-        - platform.errors.AUTH_USERNAME_TAKEN
+        401:
+          codes:
+            - platform.errors.AUTH_INVALID_CREDENTIALS
+        403:
+          codes:
+            - platform.errors.ACCOUNT_SUSPENDED
+        409:
+          codes:
+            - platform.errors.ACCOUNT_ALREADY_DELETED
+            - platform.errors.AUTH_USERNAME_TAKEN
 
   /auth/bind/phone:
     post:
@@ -197,6 +213,7 @@ paths:
       name: bindPhone
       service: cap.services.auth.bind_phone
       summary: "创建、换绑或启停手机号认证绑定"
+      used_by: []
       security:
         - BearerAuth: []
       request:
@@ -217,11 +234,16 @@ paths:
           body:
             content_type: application/json
             schema: cap.services.auth.schemas.AuthBinding
-      errors:
-        - platform.errors.ACCOUNT_ALREADY_DELETED
-        - platform.errors.ACCOUNT_SUSPENDED
-        - platform.errors.AUTH_PHONE_INVALID
-        - platform.errors.AUTH_PHONE_TAKEN
+        403:
+          codes:
+            - platform.errors.ACCOUNT_SUSPENDED
+        409:
+          codes:
+            - platform.errors.ACCOUNT_ALREADY_DELETED
+            - platform.errors.AUTH_PHONE_TAKEN
+        422:
+          codes:
+            - platform.errors.AUTH_PHONE_INVALID
 
   /auth/bind/email:
     post:
@@ -229,6 +251,7 @@ paths:
       name: bindEmail
       service: cap.services.auth.bind_email
       summary: "创建、换绑或启停邮箱认证绑定"
+      used_by: []
       security:
         - BearerAuth: []
       request:
@@ -249,11 +272,16 @@ paths:
           body:
             content_type: application/json
             schema: cap.services.auth.schemas.AuthBinding
-      errors:
-        - platform.errors.ACCOUNT_ALREADY_DELETED
-        - platform.errors.ACCOUNT_SUSPENDED
-        - platform.errors.AUTH_EMAIL_INVALID
-        - platform.errors.AUTH_EMAIL_TAKEN
+        403:
+          codes:
+            - platform.errors.ACCOUNT_SUSPENDED
+        409:
+          codes:
+            - platform.errors.ACCOUNT_ALREADY_DELETED
+            - platform.errors.AUTH_EMAIL_TAKEN
+        422:
+          codes:
+            - platform.errors.AUTH_EMAIL_INVALID
 
   /auth/me:
     get:
@@ -261,6 +289,7 @@ paths:
       name: currentAccount
       service: cap.services.token.verify
       summary: "校验访问令牌并返回当前账号"
+      used_by: []
       security:
         - BearerAuth: []
       request:
@@ -279,6 +308,7 @@ paths:
           body:
             content_type: application/json
             schema: data.entities.account
-      errors:
-        - platform.errors.AUTH_TOKEN_EXPIRED
-        - platform.errors.AUTH_TOKEN_INVALID
+        401:
+          codes:
+            - platform.errors.AUTH_TOKEN_EXPIRED
+            - platform.errors.AUTH_TOKEN_INVALID

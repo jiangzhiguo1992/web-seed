@@ -7,16 +7,7 @@ do_not:
   - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
   - "枚举必须引用 data.enums.*；不要在此重复枚举值"
 
-default_error_responses:
-  - 400
-  - 401
-  - 403
-  - 404
-  - 409
-  - 422
-  - 429
-  - 500
-  - 503
+audience: [admin]
 
 paths:
   /account:
@@ -25,6 +16,8 @@ paths:
       name: listAccounts
       service: cap.services.account.list
       summary: "列出账号"
+      used_by:
+        - feature.pages.account_list
       security:
         - BearerAuth: []
       request:
@@ -48,13 +41,15 @@ paths:
           body:
             content_type: application/json
             schema: cap.services.account.schemas.AccountPage
-      errors: []
 
     post:
       id: cap.protocols.http.account.create
       name: createAccount
       service: cap.services.account.create
       summary: "创建账号"
+      used_by:
+        - feature.pages.account_list
+        - feature.pages.account_create
       security:
         - BearerAuth: []
       request:
@@ -75,10 +70,13 @@ paths:
           body:
             content_type: application/json
             schema: data.entities.account
-      errors:
-        - platform.errors.ACCOUNT_NICKNAME_INVALID
-        - platform.errors.ACCOUNT_NUMBER_INVALID
-        - platform.errors.ACCOUNT_NUMBER_TAKEN
+        409:
+          codes:
+            - platform.errors.ACCOUNT_NUMBER_TAKEN
+        422:
+          codes:
+            - platform.errors.ACCOUNT_NICKNAME_INVALID
+            - platform.errors.ACCOUNT_NUMBER_INVALID
 
   /account/{id}:
     get:
@@ -86,6 +84,8 @@ paths:
       name: getAccount
       service: cap.services.account.get
       summary: "获取账号"
+      used_by:
+        - feature.pages.account_detail
       security:
         - BearerAuth: []
       request:
@@ -105,14 +105,17 @@ paths:
           body:
             content_type: application/json
             schema: data.entities.account
-      errors:
-        - platform.errors.ACCOUNT_NOT_FOUND
+        404:
+          codes:
+            - platform.errors.ACCOUNT_NOT_FOUND
 
     patch:
       id: cap.protocols.http.account.update
       name: updateAccount
       service: cap.services.account.update
       summary: "更新账号资料"
+      used_by:
+        - feature.pages.account_detail
       security:
         - BearerAuth: []
       request:
@@ -137,16 +140,24 @@ paths:
           body:
             content_type: application/json
             schema: data.entities.account
-      errors:
-        - platform.errors.ACCOUNT_ALREADY_DELETED
-        - platform.errors.ACCOUNT_NICKNAME_INVALID
-        - platform.errors.ACCOUNT_NOT_FOUND
+        404:
+          codes:
+            - platform.errors.ACCOUNT_NOT_FOUND
+        409:
+          codes:
+            - platform.errors.ACCOUNT_ALREADY_DELETED
+        422:
+          codes:
+            - platform.errors.ACCOUNT_NICKNAME_INVALID
 
     delete:
       id: cap.protocols.http.account.delete
       name: deleteAccount
       service: cap.services.account.delete
       summary: "删除账号（软删）"
+      used_by:
+        - feature.pages.account_list
+        - feature.pages.account_detail
       security:
         - BearerAuth: []
       request:
@@ -164,17 +175,23 @@ paths:
           description: "已删除"
           headers:
             X-Request-Id: XRequestId
-      errors:
-        - platform.errors.ACCOUNT_ALREADY_DELETED
-        - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-        - platform.errors.ACCOUNT_NOT_FOUND
-  /account/{id}/activate:
+        404:
+          codes:
+            - platform.errors.ACCOUNT_NOT_FOUND
+        409:
+          codes:
+            - platform.errors.ACCOUNT_ALREADY_DELETED
+            - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
+  /account/{id}/activate:
     post:
       id: cap.protocols.http.account.activate
       name: activateAccount
       service: cap.services.account.activate
       summary: "激活账号"
+      used_by:
+        - feature.pages.account_list
+        - feature.pages.account_detail
       security:
         - BearerAuth: []
       request:
@@ -195,17 +212,23 @@ paths:
           body:
             content_type: application/json
             schema: data.entities.account
-      errors:
-        - platform.errors.ACCOUNT_ALREADY_DELETED
-        - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-        - platform.errors.ACCOUNT_NOT_FOUND
-  /account/{id}/suspend:
+        404:
+          codes:
+            - platform.errors.ACCOUNT_NOT_FOUND
+        409:
+          codes:
+            - platform.errors.ACCOUNT_ALREADY_DELETED
+            - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
+  /account/{id}/suspend:
     post:
       id: cap.protocols.http.account.suspend
       name: suspendAccount
       service: cap.services.account.suspend
       summary: "封禁账号"
+      used_by:
+        - feature.pages.account_list
+        - feature.pages.account_detail
       security:
         - BearerAuth: []
       request:
@@ -236,7 +259,10 @@ paths:
           body:
             content_type: application/json
             schema: data.entities.account
-      errors:
-        - platform.errors.ACCOUNT_ALREADY_DELETED
-        - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
-        - platform.errors.ACCOUNT_NOT_FOUND
+        404:
+          codes:
+            - platform.errors.ACCOUNT_NOT_FOUND
+        409:
+          codes:
+            - platform.errors.ACCOUNT_ALREADY_DELETED
+            - platform.errors.ACCOUNT_ILLEGAL_TRANSITION

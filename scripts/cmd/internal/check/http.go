@@ -13,8 +13,141 @@ import (
 // allowedOperationExtensions 是 operation 允许的 x-* 扩展键。
 var allowedOperationExtensions = map[string]bool{
 	"x-contract-id": true, "x-service": true,
-	"x-timeout-ms": true, "x-default-errors": true,
-	"x-service-params": true, "x-errors": true, "x-idempotency": true,
+	"x-timeout-ms":     true,
+	"x-service-params": true, "x-idempotency": true,
+}
+
+// httpPolicy 是 platform/http_conventions.yaml 中与 HTTP 绑定相关的硬约束。
+type httpPolicy struct {
+	Audiences []string
+	Always    []int
+	Secured   []int
+	Unbound   map[string]string
+}
+
+// loadHTTPPolicy 读取平台基线错误状态、调用端与未绑定 operation 登记。
+func (c *Checker) loadHTTPPolicy() (httpPolicy, error) {
+	doc, err := loadYAML(filepath.Join(c.root, "contracts/platform/http_conventions.yaml"))
+	if err != nil {
+		return httpPolicy{}, err
+	}
+	policy := httpPolicy{Unbound: map[string]string{}}
+	for _, raw := range asList(doc["audiences"]) {
+		if value, ok := raw.(string); ok {
+			policy.Audiences = append(policy.Audiences, value)
+		}
+	}
+	errorResponses, _ := asMap(doc["error_responses"])
+	for _, raw := range asList(errorResponses["always"]) {
+		if value, ok := toInt(raw); ok {
+			policy.Always = append(policy.Always, value)
+		}
+	}
+	for _, raw := range asList(errorResponses["secured"]) {
+		if value, ok := toInt(raw); ok {
+			policy.Secured = append(policy.Secured, value)
+		}
+	}
+	for _, raw := range asList(doc["unbound_operations"]) {
+		item, _ := asMap(raw)
+		operation, _ := item["operation"].(string)
+		reason, _ := item["reason"].(string)
+		if operation != "" {
+			policy.Unbound[operation] = reason
+		}
+	}
+	return policy, nil
+}
+
+// apiApp 是 project.yaml 中参与 OpenAPI 生成的 api 应用。
+type apiApp struct {
+	Audience string
+	Includes map[string]bool
+}
+
+// loadAPIApps 读取 project.yaml 的 api app；文件缺失时返回空集合。
+func (c *Checker) loadAPIApps() map[string]apiApp {
+	doc, err := loadYAML(filepath.Join(c.root, "contracts/project.yaml"))
+	if err != nil {
+		return nil
+	}
+	out := map[string]apiApp{}
+	apps, _ := asMap(doc["apps"])
+	for name, raw := range apps {
+		app, _ := asMap(raw)
+		if kind, _ := app["kind"].(string); kind != "api" {
+			continue
+		}
+		generated, _ := asMap(app["generated"])
+		if spec, _ := generated["spec"].(string); spec == "" {
+			continue
+		}
+		audience, _ := app["audience"].(string)
+		includes := map[string]bool{}
+		for _, rawInclude := range asList(app["includes"]) {
+			if include, ok := rawInclude.(string); ok {
+				includes[include] = true
+			}
+		}
+		out[name] = apiApp{Audience: audience, Includes: includes}
+	}
+	return out
+}
+
+// pageServices 返回 service ID → 引用它的页面集合。
+func (c *Checker) pageServices() map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	for _, file := range glob(c.root, "contracts/features/pages/*.yaml") {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		pageID, _ := doc["id"].(string)
+		if pageID == "" {
+			continue
+		}
+		add := func(service string) {
+			if service == "" {
+				return
+			}
+			if out[service] == nil {
+				out[service] = map[string]bool{}
+			}
+			out[service][pageID] = true
+		}
+		data, _ := asMap(doc["data"])
+		for _, raw := range data {
+			item, _ := asMap(raw)
+			service, _ := item["capability"].(string)
+			add(service)
+		}
+		actions, _ := asMap(doc["actions"])
+		for _, raw := range actions {
+			item, _ := asMap(raw)
+			service, _ := item["capability"].(string)
+			add(service)
+		}
+	}
+	return out
+}
+
+// validAudiences 把 policy 的 audience 列表转成集合。
+func validAudiences(policy httpPolicy) map[string]bool {
+	out := map[string]bool{}
+	for _, value := range policy.Audiences {
+		out[value] = true
+	}
+	return out
+}
+
+// containsInt 判断状态码是否在列表中。
+func containsInt(list []int, value int) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 // checkProjectAPIVersion 校验 project.yaml 的 api app 都显式声明 v<数字> 版本。
@@ -45,6 +178,14 @@ func (c *Checker) checkProjectAPIVersion() {
 		timeout, ok := toInt(app["timeout_ms"])
 		if !ok || timeout <= 0 {
 			c.rulef("http-version", "contracts/project.yaml: app %s timeout_ms must be a positive integer", name)
+		}
+		audience, _ := app["audience"].(string)
+		if audience == "" {
+			c.rulef("http-audience", "contracts/project.yaml: app %s requires audience", name)
+			continue
+		}
+		if policy, err := c.loadHTTPPolicy(); err == nil && !validAudiences(policy)[audience] {
+			c.rulef("http-audience", "contracts/project.yaml: app %s audience %q is not declared in platform.http_conventions.audiences", name, audience)
 		}
 	}
 }
@@ -239,8 +380,16 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	httpParameterDefs := map[string]map[string]any{}
 	httpSecuritySchemes := map[string]bool{}
 	httpResponses := map[string]bool{}
-	var serviceUnavailable map[string]any
-	hasDefault503 := false
+	httpResponseDefs := map[string]map[string]any{}
+	policy, policyErr := c.loadHTTPPolicy()
+	if policyErr != nil && c.strictHTTP {
+		c.rulef("schema.load", "contracts/platform/http_conventions.yaml: %v", policyErr)
+	}
+	audiences := validAudiences(policy)
+	apiApps := c.loadAPIApps()
+	pagesByService := c.pageServices()
+	seenAudience := map[string]map[string]bool{}
+	unboundSeen := map[string]bool{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -263,6 +412,10 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		if want := schema.Targets.FileID(filepath.Base(rel)); doc["id"] != want {
 			c.rulef("http-file", "%s: id %q must be %q", rel, doc["id"], want)
 		}
+		fileID, _ := doc["id"].(string)
+		if seenAudience[fileID] == nil {
+			seenAudience[fileID] = map[string]bool{}
+		}
 		components, _ := asMap(doc["components"])
 		headers, _ := asMap(components["headers"])
 		for name := range headers {
@@ -280,22 +433,17 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			httpSecuritySchemes[name] = true
 		}
 		responses, _ := asMap(components["responses"])
-		for name := range responses {
+		for name, raw := range responses {
 			httpResponses[name] = true
+			if def, ok := asMap(raw); ok {
+				httpResponseDefs[name] = def
+			}
 		}
 		if rawPaths, ok := asMap(doc["paths"]); ok && len(rawPaths) > 0 {
 			for path := range rawPaths {
 				if match(`^/v[0-9]+(/|$)`, path) {
 					c.rulef("http-version", "%s: path %s must not carry a version prefix; use app.api_version", rel, path)
 				}
-			}
-		}
-		if raw, ok := responses["ServiceUnavailable"]; ok {
-			serviceUnavailable, _ = asMap(raw)
-		}
-		for _, raw := range asList(doc["default_error_responses"]) {
-			if n, ok := toInt(raw); ok && n == 503 {
-				hasDefault503 = true
 			}
 		}
 		schemas, _ := asMap(components["schemas"])
@@ -375,19 +523,32 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			}
 		})
 	}
-	if hasDefault503 {
+	if c.strictHTTP {
 		if !httpHeaders["RetryAfter"] {
-			c.rulef("http-retry-after", "default_error_responses includes 503 but components.headers.RetryAfter is missing")
+			c.rulef("http-retry-after", "components.headers.RetryAfter is required for 429/503 responses")
 		}
-		if serviceUnavailable == nil {
-			c.rulef("http-retry-after", "default_error_responses includes 503 but components.responses.ServiceUnavailable is missing")
-		} else if !retryAfterHeader(serviceUnavailable) {
-			c.rulef("http-retry-after", "components.responses.ServiceUnavailable must declare Retry-After")
+		for _, status := range append(append([]int{}, policy.Always...), policy.Secured...) {
+			name, ok := openapispec.DefaultResponseName(status)
+			if !ok {
+				c.rulef("http-default-errors", "platform baseline status %d has no shared response mapping", status)
+				continue
+			}
+			if !httpResponses[name] {
+				c.rulef("http-default-errors", "platform baseline status %d requires components.responses.%s", status, name)
+			}
+		}
+		for _, status := range []int{429, 503} {
+			name, _ := openapispec.DefaultResponseName(status)
+			def, ok := httpResponseDefs[name]
+			if ok && !retryAfterHeader(def) {
+				c.rulef("http-retry-after", "components.responses.%s must declare Retry-After", name)
+			}
 		}
 	}
 	contractIDs := map[string]string{}
 	operationIDs := map[string]string{}
 	operations := map[string]string{}
+	exposedServices := map[string]bool{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -395,26 +556,19 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			continue
 		}
 		rel := relPath(c.root, file)
+		opMeta := openapispec.CollectHTTPOperationMeta(doc)
+		var fileAudience []string
+		for _, raw := range asList(doc["audience"]) {
+			if value, ok := raw.(string); ok {
+				fileAudience = append(fileAudience, value)
+			}
+		}
 		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP); err != nil {
 			continue
 		}
 		fileID, _ := doc["id"].(string)
 		components, _ := asMap(doc["components"])
 		schemas, _ := asMap(components["schemas"])
-		defaultErrors := map[string]bool{}
-		for _, raw := range asList(doc["default_error_responses"]) {
-			n, ok := toInt(raw)
-			if !ok || n < 100 || n > 599 {
-				continue // 范围/类型由 _meta 的 min/max 与 integer 报出
-			}
-			name, ok := openapispec.DefaultResponseName(n)
-			if !ok {
-				c.rulef("http-default-errors", "%s: default status %d has no components.responses mapping", rel, n)
-			} else if !httpResponses[name] {
-				c.rulef("http-default-errors", "%s: default status %d requires components.responses.%s", rel, n, name)
-			}
-			defaultErrors[fmt.Sprint(raw)] = true
-		}
 		paths, _ := asMap(doc["paths"])
 		for path, raw := range paths {
 			p, _ := asMap(raw)
@@ -471,29 +625,21 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 						c.rulef("http-operation", "%s %s %s: x-timeout-ms must be a positive integer", rel, method, path)
 					}
 				}
-				effectiveDefaults := defaultErrors
-				if raw, ok := op["x-default-errors"]; ok {
-					effectiveDefaults = map[string]bool{}
-					for _, item := range asList(raw) {
-						n, ok := toInt(item)
-						if !ok || n < 100 || n > 599 {
-							c.rulef("http-default-errors", "%s %s %s: x-default-errors must contain HTTP status codes 100-599, got %v", rel, method, path, item)
-							continue
+				meta := opMeta[path+"\x00"+method]
+				effectiveAudience := meta.Audience
+				if len(effectiveAudience) == 0 {
+					effectiveAudience = fileAudience
+				}
+				if c.strictHTTP {
+					c.checkHTTPAudience(rel, method, path, contractID, effectiveAudience, audiences)
+					for _, audience := range effectiveAudience {
+						if seenAudience[fileID] != nil {
+							seenAudience[fileID][audience] = true
 						}
-						name, ok := openapispec.DefaultResponseName(n)
-						if !ok {
-							c.rulef("http-default-errors", "%s %s %s: x-default-errors status %d has no components.responses mapping", rel, method, path, n)
-						} else if !httpResponses[name] {
-							c.rulef("http-default-errors", "%s %s %s: x-default-errors status %d requires components.responses.%s", rel, method, path, n, name)
-						}
-						effectiveDefaults[fmt.Sprint(n)] = true
 					}
 				}
 				responses, _ := asMap(op["responses"])
 				for status, rawResp := range responses {
-					if effectiveDefaults[status] {
-						c.rulef("http-default-errors", "%s %s %s: status %s is injected by default errors; do not repeat it", rel, method, path, status)
-					}
 					resp, _ := asMap(rawResp)
 					if content, ok := asMap(resp["content"]); ok {
 						for _, rawMedia := range content {
@@ -506,12 +652,6 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 						}
 					}
 					c.checkHTTPResponse(rel, method, path, status, resp, op, schemas, serviceMeta)
-				}
-				if raw, ok := responses["503"]; ok {
-					resp, _ := asMap(raw)
-					if !retryAfterHeader(resp) {
-						c.rulef("http-retry-after", "%s %s %s: 503 response must declare Retry-After", rel, method, path)
-					}
 				}
 				if op["x-flow"] != nil {
 					c.rulef("http-operation", "%s %s %s: x-flow removed; use x-service", rel, method, path)
@@ -541,9 +681,36 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if target.visibility != "public" {
 					c.rulef("service-visibility", "%s %s %s: service %s is not public", rel, method, path, serviceRef)
 				}
-				c.checkHTTPErrors(rel, method, path, op, target, effectiveDefaults, responses)
+				exposedServices[serviceRef] = true
+				if c.strictHTTP {
+					c.checkHTTPConsumer(rel, method, path, contractID, serviceRef, meta.UsedBy, pagesByService, policy.Unbound, unboundSeen)
+				}
+				c.checkHTTPErrors(rel, method, path, op, target, responses, policy)
 				c.checkHTTPOperationHeaders(rel, method, path, op, httpSecuritySchemes, serviceRef)
 				c.checkHTTPRequest(rel, method, path, op, target, schemas, httpParameters, httpParameterDefs)
+			}
+		}
+	}
+	if c.strictHTTP {
+		for appName, app := range apiApps {
+			for include := range app.Includes {
+				seen, ok := seenAudience[include]
+				if !ok || len(seen) == 0 {
+					continue
+				}
+				if !seen[app.Audience] {
+					c.rulef("http-audience", "project.yaml: app %s (audience %s) includes %s but no operation targets that audience", appName, app.Audience, include)
+				}
+			}
+		}
+		for service, pages := range pagesByService {
+			if len(pages) > 0 && !exposedServices[service] {
+				c.rulef("http-consumer", "service %s is referenced by pages but has no http operation", service)
+			}
+		}
+		for operation, reason := range policy.Unbound {
+			if !unboundSeen[operation] {
+				c.rulef("http-consumer", "platform.http_conventions.unbound_operations entry %s is stale (operation missing or has page consumers): %s", operation, reason)
 			}
 		}
 	}
@@ -764,40 +931,64 @@ func (c *Checker) checkHTTPResponse(rel, method, path, status string, resp map[s
 	}
 }
 
-// checkHTTPErrors 校验 operation 的 x-errors 与 service 错误集精确一致。
-func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, target serviceMeta, effectiveDefaults map[string]bool, responses map[string]any) {
-	raw, ok := op["x-errors"]
-	if !ok {
-		c.rulef("http-errors", "%s %s %s: x-errors required (may be empty)", rel, method, path)
-		return
-	}
+// checkHTTPErrors 校验 response.<status>.codes 与 service 错误集精确一致。
+func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, target serviceMeta, responses map[string]any, policy httpPolicy) {
 	got := map[string]bool{}
-	for _, item := range asList(raw) {
-		code, _ := item.(string)
-		if code == "" {
-			c.rulef("http-errors", "%s %s %s: x-errors entries must be non-empty platform.errors.* IDs", rel, method, path)
+	for status, rawResp := range responses {
+		resp, _ := asMap(rawResp)
+		code, err := strconv.Atoi(status)
+		if err != nil {
 			continue
 		}
-		got[code] = true
+		codes, has := resp["x-error-codes"]
+		if code >= 200 && code < 300 {
+			if has {
+				c.rulef("http-errors", "%s %s %s: 2xx response %s must not declare codes", rel, method, path, status)
+			}
+			continue
+		}
+		if !has {
+			continue
+		}
+		for _, item := range asList(codes) {
+			codeID, _ := item.(string)
+			if codeID == "" {
+				c.rulef("http-errors", "%s %s %s: response %s codes must be non-empty platform.errors.* IDs", rel, method, path, status)
+				continue
+			}
+			short := strings.TrimPrefix(codeID, "platform.errors.")
+			if !c.errorCodes()[short] {
+				c.rulef("http-errors", "%s %s %s: unknown error %s", rel, method, path, codeID)
+				continue
+			}
+			if strings.HasPrefix(short, "COMMON_") {
+				c.rulef("http-errors", "%s %s %s: %s is a platform error; do not list COMMON_*", rel, method, path, codeID)
+				continue
+			}
+			if got[codeID] {
+				c.rulef("http-errors", "%s %s %s: duplicate error %s", rel, method, path, codeID)
+				continue
+			}
+			got[codeID] = true
+			if !target.errors[codeID] {
+				c.rulef("http-errors", "%s %s %s: %s is not declared by service %s", rel, method, path, codeID, op["x-service"])
+			}
+			if want := c.errorStatus[short]; want != 0 && want != code {
+				c.rulef("http-errors", "%s %s %s: %s has status %d but is listed under response %s", rel, method, path, codeID, want, status)
+			}
+		}
+	}
+	secured := len(asList(op["security"])) > 0
+	for code := range target.errors {
 		short := strings.TrimPrefix(code, "platform.errors.")
-		if !c.errorCodes()[short] {
-			c.rulef("http-errors", "%s %s %s: unknown error %s", rel, method, path, code)
-			continue
-		}
-		if strings.HasPrefix(short, "COMMON_") {
-			c.rulef("http-errors", "%s %s %s: %s is a platform error; do not list COMMON_* here", rel, method, path, code)
-			continue
-		}
-		if !target.errors[code] {
-			c.rulef("http-errors", "%s %s %s: %s is not declared by service %s", rel, method, path, code, op["x-service"])
-		}
 		status := c.errorStatus[short]
 		if status == 0 {
 			continue
 		}
-		if !effectiveDefaults[fmt.Sprint(status)] {
+		covered := containsInt(policy.Always, status) || (secured && containsInt(policy.Secured, status))
+		if !covered {
 			if _, ok := responses[fmt.Sprint(status)]; !ok {
-				c.rulef("http-errors", "%s %s %s: %s status %d is not in effective responses", rel, method, path, code, status)
+				c.rulef("http-errors", "%s %s %s: service error %s status %d has no response (baseline or codes)", rel, method, path, code, status)
 			}
 		}
 	}
@@ -810,13 +1001,65 @@ func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, t
 	}
 	for code := range want {
 		if !got[code] {
-			c.rulef("http-errors", "%s %s %s: missing error %s from x-errors", rel, method, path, code)
+			c.rulef("http-errors", "%s %s %s: missing error %s from responses.<status>.codes", rel, method, path, code)
 		}
 	}
 	for code := range got {
 		if !want[code] {
-			c.rulef("http-errors", "%s %s %s: unexpected error %s in x-errors", rel, method, path, code)
+			c.rulef("http-errors", "%s %s %s: unexpected error %s in responses", rel, method, path, code)
 		}
+	}
+}
+
+// checkHTTPAudience 校验 operation 的有效 audience 非空且来自平台注册表。
+func (c *Checker) checkHTTPAudience(rel, method, path, contractID string, audience []string, valid map[string]bool) {
+	if len(audience) == 0 {
+		c.rulef("http-audience", "%s %s %s: operation %s requires audience (file or operation)", rel, method, path, contractID)
+		return
+	}
+	seen := map[string]bool{}
+	for _, value := range audience {
+		if seen[value] {
+			c.rulef("http-audience", "%s %s %s: duplicate audience %s", rel, method, path, value)
+			continue
+		}
+		seen[value] = true
+		if !valid[value] {
+			c.rulef("http-audience", "%s %s %s: audience %s is not declared in platform.http_conventions.audiences", rel, method, path, value)
+		}
+	}
+}
+
+// checkHTTPConsumer 校验 operation 的页面消费者与 service 的双向引用。
+func (c *Checker) checkHTTPConsumer(rel, method, path, contractID, service string, usedBy []string, pagesByService map[string]map[string]bool, unbound map[string]string, unboundSeen map[string]bool) {
+	expected := pagesByService[service]
+	declared := map[string]bool{}
+	for _, page := range usedBy {
+		if declared[page] {
+			c.rulef("http-consumer", "%s %s %s: duplicate used_by %s", rel, method, path, page)
+			continue
+		}
+		declared[page] = true
+		if !expected[page] {
+			c.rulef("http-consumer", "%s %s %s: used_by %s does not reference service %s", rel, method, path, page, service)
+		}
+	}
+	for page := range expected {
+		if !declared[page] {
+			c.rulef("http-consumer", "%s %s %s: missing used_by %s (page references %s)", rel, method, path, page, service)
+		}
+	}
+	if len(expected) == 0 {
+		if unbound[contractID] == "" {
+			c.rulef("http-consumer", "%s %s %s: operation %s has no page consumer; declare it in platform.http_conventions.unbound_operations", rel, method, path, contractID)
+			return
+		}
+		unboundSeen[contractID] = true
+		return
+	}
+	if unbound[contractID] != "" {
+		c.rulef("http-consumer", "%s %s %s: operation %s has page consumers; remove the unbound_operations entry", rel, method, path, contractID)
+		unboundSeen[contractID] = true
 	}
 }
 

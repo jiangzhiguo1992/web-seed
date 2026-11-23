@@ -46,13 +46,13 @@ fields:
     unique: true
     description: "实例级负向约束"
 
-  - name: default_error_responses
-    type: _types.list<_types.integer>
+  - name: audience
+    type: _types.list<_types.string>
     required: false
     unique: true
-    min: 100
-    max: 599
-    description: "默认注入的错误状态码"
+    min_items: 1
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "文件级默认调用端；值必须在 platform.http_conventions.audiences 中；operation 可覆盖"
 
   - name: paths
     type: _types.any
@@ -78,17 +78,19 @@ fields:
 
 rules:
   - { id: http-file, text: "文件 id 必须由 targets 派生", implemented_by: [ http-file ] }
-  - { id: http-shape, text: "每个 operation 必须使用 name/id/service/request/response/errors；禁止 contract、operation 级 x-*、parameters/requestBody/responses；request 只允许 path/query/headers/cookies/body/mapping/idempotency；response 的 key 是三位状态码；shared.schemas（规范化后 components.schemas）的 source 必须且只能声明一个溯源键", implemented_by: [ http-shape ] }
+  - { id: http-shape, text: "每个 operation 必须使用 name/id/service/request/response/audience/used_by；禁止 contract、operation 级 x-*、parameters/requestBody/responses；request 只允许 path/query/headers/cookies/body/mapping/idempotency；response 的 key 是三位状态码，2xx 必须写 description/headers/body，非 2xx 只能写非空 codes；shared.schemas（规范化后 components.schemas）的 source 必须且只能声明一个溯源键", implemented_by: [ http-shape ] }
   - { id: http-version, text: "paths 的 key 不得以 /v<数字> 开头；API 版本与 timeout_ms 只在 project.yaml 的 app 上声明，URL 前缀由生成器派生", implemented_by: [ http-version ] }
-  - { id: http-operation, text: "每个 operation 必须有全局唯一的 name、id、service；id 必须匹配当前文件且全局唯一；path+method 全局唯一；x-* 仅允许 x-contract-id/x-service/x-timeout-ms/x-default-errors/x-service-params/x-errors/x-idempotency（由 normalizer 生成，生成 OpenAPI 前删除）；service 必须指向存在的 public 同步 service", implemented_by: [ http-operation ] }
-  - { id: http-default-errors, text: "default_error_responses 与 x-default-errors 的状态码必须为 100-599；每个状态码必须有 shared.responses 映射；operation 不得在 response 中重复声明生效的默认状态码", implemented_by: [ http-default-errors ] }
+  - { id: http-operation, text: "每个 operation 必须有全局唯一的 name、id、service；id 必须匹配当前文件且全局唯一；path+method 全局唯一；x-* 仅允许 x-contract-id/x-service/x-timeout-ms/x-service-params/x-idempotency（由 normalizer 生成，生成 OpenAPI 前删除）；service 必须指向存在的 public 同步 service", implemented_by: [ http-operation ] }
+  - { id: http-default-errors, text: "平台基线错误状态必须由 platform.http_conventions.error_responses 声明，每个状态必须有 shared.responses 映射；operation 不得写空的错误 response", implemented_by: [ http-default-errors ] }
+  - { id: http-audience, text: "每个 operation 必须有有效 audience：operation 覆盖文件级默认值，每个值必须在 platform.http_conventions.audiences 中；project.yaml 中 api app 的 audience 必须在其 include 的每个 HTTP 文件中至少出现一次", implemented_by: [ http-audience ] }
+  - { id: http-consumer, text: "每个 operation 的 used_by 必须精确等于引用其 service 的 feature.pages 集合；used_by 为空时必须登记在 platform.http_conventions.unbound_operations；每个页面引用的 service 必须至少被一个 operation 暴露", implemented_by: [ http-consumer ] }
   - { id: http-components, text: "shared.schemas（规范化后 components.schemas）每个条目必须且只能是 source.service_type、source.enum、source.entity 或 source.platform:true 之一；service_type/enum/entity 条目不得写 properties；platform 条目必须 additionalProperties:false；所有 $ref 必须指向存在的 schema/header/response/parameter", implemented_by: [ http-components ] }
   - { id: http-shared, text: "shared.securitySchemes 每项必须有受支持的 type；http 必须有 scheme，apiKey 必须有 name 与 in，oauth2 必须有 flows，每个 flow 必须有 authorizationUrl/tokenUrl（按 flow 类型）与 scopes；openIdConnect 必须有 openIdConnectUrl；shared.responses 每项必须有非空 description，headers 必须是名称或带 schema 的定义，content 每项必须有 schema；shared.parameters 必须有 name/in/schema 且 path 参数 required；shared.headers 必须有 schema；shared.schemas 必须有 source 且只声明一个源键，非 platform schema 不得写 properties", implemented_by: [ http-shared ] }
   - { id: http-security, text: "operation.security 引用的 scheme 必须在 shared.securitySchemes 中声明；受保护 operation 必须显式声明 security", implemented_by: [ http-security ] }
   - { id: http-idempotency, text: "每个 operation 必须声明 request.idempotency：none/optional/required；optional/required 必须在 request.headers 声明 Idempotency-Key，required 必须使用 IdempotencyKeyRequired；none 不得声明 Idempotency-Key", implemented_by: [ http-idempotency ] }
   - { id: http-headers, text: "每个 operation 必须在 request.headers 声明 X-Request-Id: RequestId；每个 response.<status>.headers 必须声明 X-Request-Id: XRequestId；使用 cookie 参数的 operation 必须在 request.headers 声明 X-CSRF-Token: CSRFToken", implemented_by: [ http-headers ] }
-  - { id: http-retry-after, text: "default_error_responses 含 503 时必须定义 shared.headers.RetryAfter 与 shared.responses.ServiceUnavailable，且该响应声明 Retry-After；operation 的 503 response 必须声明 Retry-After", implemented_by: [ http-retry-after ] }
+  - { id: http-retry-after, text: "429 与 503 的 shared response 必须声明 Retry-After；operation 不得声明缺少 Retry-After 的 429/503 响应", implemented_by: [ http-retry-after ] }
   - { id: http-service-type, text: "request.body 必须由 request.mapping.body 绑定；body.schema 直接引用类型 ID；$ref 形态的 body 类型必须是 service 的 params 类型；匿名 object 形态的 body 每个 property 必须映射到 service 的标量参数，且不得有多余字段", implemented_by: [ http-service-type ] }
   - { id: http-service-params, text: "request.mapping 的 body/path/query/header/cookie 映射必须指向 service 存在的参数或字段；service 每个必填非 ctx 参数必须被覆盖；HTTP 参数必须全部有映射（平台头 X-Request-Id/Idempotency-Key/X-CSRF-Token 除外）；映射两侧类型必须一致", implemented_by: [ http-service-params ] }
   - { id: http-service-return, text: "2xx 带 body 的 response.<status>.body.schema 必须直接引用类型 ID；该类型必须对应 service 的非 err return；204 要求 service 没有业务 return；禁止在 body schema 上写 x-service-return", implemented_by: [ http-service-return ] }
-  - { id: http-errors, text: "每个 operation 必须有 errors（可为空）；每项必须是已定义的 platform.errors.*，不得是 COMMON_*；必须精确等于 service 的 errors 去掉 COMMON_*；每个错误的 status 必须在该 operation 的 response 集合中", implemented_by: [ http-errors ] }
+  - { id: http-errors, text: "每个 operation 的非 2xx response 必须以 codes 精确列出 service 的错误去掉 COMMON_*，并按错误 status 分组；每个 code 的 status 必须等于所在 response 的 key；每个 service 错误必须落到平台基线状态或非 2xx response；禁止列出 COMMON_* 与未知错误", implemented_by: [ http-errors ] }

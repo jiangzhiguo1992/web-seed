@@ -16,9 +16,6 @@ func httpDoc(operation map[string]any) map[string]any {
 			"service": "cap.services.x.post",
 		}
 	}
-	if operation["errors"] == nil {
-		operation["errors"] = []any{}
-	}
 	return map[string]any{
 		"paths": map[string]any{
 			"/x": map[string]any{"post": operation},
@@ -141,5 +138,73 @@ func TestNormalizeHTTPDocumentRequiresBlocks(t *testing.T) {
 	}
 	if err := NormalizeHTTPDocument(httpDoc(map[string]any{"request": map[string]any{}}), testResolve, false); err == nil {
 		t.Fatal("missing response block not rejected")
+	}
+}
+
+func TestNormalizeHTTPDocumentErrorCodes(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request": map[string]any{},
+		"response": map[string]any{
+			"204": map[string]any{"description": "ok"},
+			"409": map[string]any{"codes": []any{"platform.errors.ACCOUNT_NUMBER_TAKEN"}},
+		},
+	})
+	if err := NormalizeHTTPDocument(doc, testResolve, false); err != nil {
+		t.Fatal(err)
+	}
+	responses := asMap(asMap(asMap(doc["paths"])["/x"])["post"])["responses"]
+	resp := asMap(asMap(responses)["409"])
+	if resp["$ref"] != "#/components/responses/Conflict" {
+		t.Fatalf("409 must map to Conflict: %v", resp)
+	}
+	codes := asList(resp["x-error-codes"])
+	if len(codes) != 1 || codes[0] != "platform.errors.ACCOUNT_NUMBER_TAKEN" {
+		t.Fatalf("x-error-codes not preserved: %v", resp)
+	}
+}
+
+func TestNormalizeHTTPDocumentRejectsFlatErrors(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request":  map[string]any{},
+		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		"errors":   []any{"platform.errors.ACCOUNT_NOT_FOUND"},
+	})
+	err := NormalizeHTTPDocument(doc, testResolve, false)
+	if err == nil || !strings.Contains(err.Error(), "response.<status>.codes") {
+		t.Fatalf("flat errors not rejected: %v", err)
+	}
+}
+
+func TestNormalizeHTTPDocumentRejectsEmptyCodes(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request":  map[string]any{},
+		"response": map[string]any{"409": map[string]any{"codes": []any{}}},
+	})
+	err := NormalizeHTTPDocument(doc, testResolve, false)
+	if err == nil || !strings.Contains(err.Error(), "requires non-empty codes") {
+		t.Fatalf("empty codes not rejected: %v", err)
+	}
+}
+
+func TestCollectHTTPOperationMeta(t *testing.T) {
+	doc := map[string]any{
+		"audience": []any{"admin"},
+		"paths": map[string]any{
+			"/x": map[string]any{
+				"get": map[string]any{
+					"id":       "cap.protocols.http.x.get",
+					"audience": []any{"user"},
+					"used_by":  []any{"feature.pages.x"},
+				},
+			},
+		},
+	}
+	meta := CollectHTTPOperationMeta(doc)
+	got := meta["/x\x00get"]
+	if len(got.Audience) != 1 || got.Audience[0] != "user" {
+		t.Fatalf("audience not collected: %v", got)
+	}
+	if len(got.UsedBy) != 1 || got.UsedBy[0] != "feature.pages.x" {
+		t.Fatalf("used_by not collected: %v", got)
 	}
 }

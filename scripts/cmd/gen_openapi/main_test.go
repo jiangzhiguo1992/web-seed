@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,7 @@ func forbiddenSourceKey(v any) (string, bool) {
 	switch value := v.(type) {
 	case map[string]any:
 		for key, child := range value {
-			if strings.HasPrefix(key, "x-") || key == "source" || key == "contract" {
+			if (strings.HasPrefix(key, "x-") && key != "x-error-codes") || key == "source" || key == "contract" {
 				return key, true
 			}
 			if found, ok := forbiddenSourceKey(child); ok {
@@ -83,6 +84,16 @@ custom_types: {}
 
 }
 
+func writeHTTPPolicy(t *testing.T, root, always, secured string) {
+	t.Helper()
+	writeFixture(t, root, "contracts/platform/http_conventions.yaml", fmt.Sprintf(`audiences: [admin]
+error_responses:
+  always: %s
+  secured: %s
+unbound_operations: []
+`, always, secured))
+}
+
 func testNodeKinds() map[string]contractspec.SchemaKind {
 	return map[string]contractspec.SchemaKind{
 		"object": {Keys: []contractspec.Field{{Name: "type"}, {Name: "properties"}}},
@@ -112,6 +123,7 @@ func TestMarshalUnquotesStatusKeys(t *testing.T) {
 func TestBuildExpandsServiceTypes(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
+	writeHTTPPolicy(t, root, "[]", "[]")
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
@@ -119,12 +131,14 @@ apps:
   api:
     kind: api
     api_version: v1
+    audience: admin
     timeout_ms: 5000
     includes: [cap.protocols.http.x]
     generated:
       spec: generated/openapi/x.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+audience: [admin]
 paths:
   /x:
     get:
@@ -136,7 +150,6 @@ paths:
       response:
         "200":
           description: "OK"
-      errors: []
 components:
   schemas:
     X:
@@ -175,6 +188,7 @@ enums: []
 func TestBuildVersionedAppsShareFiles(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
+	writeHTTPPolicy(t, root, "[]", "[]")
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
@@ -182,19 +196,22 @@ apps:
   v1:
     kind: api
     api_version: v1
+    audience: admin
     timeout_ms: 5000
-    includes: [cap.protocols.http.x]
+    includes: [cap.protocols.http.x, cap.protocols.http.shared]
     generated:
       spec: generated/openapi/v1.yaml
   v2:
     kind: api
     api_version: v2
+    audience: admin
     timeout_ms: 5000
-    includes: [cap.protocols.http.x]
+    includes: [cap.protocols.http.x, cap.protocols.http.shared]
     generated:
       spec: generated/openapi/v2.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+audience: [admin]
 paths:
   /x:
     get:
@@ -206,7 +223,19 @@ paths:
       response:
         "200":
           description: "OK"
-      errors: []`)
+        "409":
+          codes:
+            - platform.errors.X
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
+components:
+  responses:
+    Conflict: { description: "409" }
+`)
+	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
+errors:
+  - { code: X, biz_code: 9001, status: 409 }
+`)
 	for _, dir := range []string{"contracts/capabilities/services", "contracts/data/entities"} {
 		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
 			t.Fatal(err)
@@ -224,12 +253,16 @@ paths:
 		if !strings.Contains(out, "getX") {
 			t.Fatalf("%s missing shared operation:\n%s", key, out)
 		}
+		if !strings.Contains(out, "biz_code: 9001") {
+			t.Fatalf("%s missing shared error codes:\n%s", key, out)
+		}
 	}
 }
 
 func TestBuildEventPayloads(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
+	writeHTTPPolicy(t, root, "[]", "[]")
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
@@ -237,6 +270,7 @@ apps:
   api:
     kind: api
     api_version: v1
+    audience: admin
     timeout_ms: 5000
     includes: []
     generated:
@@ -299,9 +333,10 @@ fields:
 	}
 }
 
-func TestBuildAppliesDefaultsPerFile(t *testing.T) {
+func TestBuildInjectsPlatformBaseline(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
+	writeHTTPPolicy(t, root, "[400, 429, 500, 503]", "[401, 403]")
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
@@ -309,58 +344,58 @@ apps:
   api:
     kind: api
     api_version: v1
+    audience: admin
     timeout_ms: 5000
     includes: [cap.protocols.http.a, cap.protocols.http.b, cap.protocols.http.shared]
     generated:
       spec: generated/openapi/x.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
+audience: [admin]
 paths:
   /a:
     get:
       name: "getA"
-      contract:
-        id: "cap.protocols.http.a.get"
-        service: "cap.services.x.get"
+      id: "cap.protocols.http.a.get"
+      service: "cap.services.x.get"
+      security:
+        - BearerAuth: []
       request: {}
       response:
         "200":
           description: "OK"
-      errors: []
-default_error_responses:
-  - 422`)
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
+components:
+  responses:
+    Conflict: { description: "409" }
+`)
+	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
+errors:
+  - { code: X, biz_code: 9001, status: 409 }
+`)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/b.yaml", `id: "cap.protocols.http.b"
+audience: [admin]
 paths:
   /b:
     get:
       name: "getB"
-      contract:
-        id: "cap.protocols.http.b.get"
-        service: "cap.services.x.get"
+      id: "cap.protocols.http.b.get"
+      service: "cap.services.x.get"
       request: {}
       response:
         "200":
           description: "OK"
-      errors: []
-default_error_responses:
-  - 423`)
+`)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
 components:
   responses:
-    UnprocessableEntity:
-      description: "422"
-      content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
-    Locked:
-      description: "423"
-      content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
-  schemas:
-    Problem:
-      type: object
-      additionalProperties: false
+    BadRequest: { description: "400" }
+    Unauthorized: { description: "401" }
+    Forbidden: { description: "403" }
+    TooManyRequests: { description: "429" }
+    Internal: { description: "500" }
+    ServiceUnavailable: { description: "503" }
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas: {}
@@ -379,17 +414,25 @@ enums: []
 	out := string(files["generated/openapi/x.yaml"])
 	a := out[strings.Index(out, "/a:"):strings.Index(out, "/b:")]
 	b := out[strings.Index(out, "/b:"):]
-	if !strings.Contains(a, "422:") || strings.Contains(a, "423:") {
-		t.Fatalf("file a defaults wrong:\n%s", a)
+	for _, want := range []string{"401:", "403:", "503:"} {
+		if !strings.Contains(a, want) {
+			t.Fatalf("secured operation missing %s:\n%s", want, a)
+		}
 	}
-	if !strings.Contains(b, "423:") || strings.Contains(b, "422:") {
-		t.Fatalf("file b defaults wrong:\n%s", b)
+	for _, want := range []string{"400:", "429:", "500:", "503:"} {
+		if !strings.Contains(b, want) {
+			t.Fatalf("public operation missing %s:\n%s", want, b)
+		}
+	}
+	if strings.Contains(b, "401:") || strings.Contains(b, "403:") {
+		t.Fatalf("public operation must not get secured baseline:\n%s", b)
 	}
 }
 
-func TestBuildOperationDefaultOverride(t *testing.T) {
+func TestBuildEmitsErrorCodes(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
+	writeHTTPPolicy(t, root, "[]", "[]")
 	writeFixture(t, root, "contracts/project.yaml", `project:
   name: test
   version: "1"
@@ -397,33 +440,98 @@ apps:
   api:
     kind: api
     api_version: v1
+    audience: admin
     timeout_ms: 5000
     includes: [cap.protocols.http.a, cap.protocols.http.shared]
     generated:
       spec: generated/openapi/x.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
+audience: [admin]
 paths:
   /a:
-    get:
-      name: "getA"
-      contract:
-        id: "cap.protocols.http.a.get"
-        service: "cap.services.x.get"
-        default_errors:
-          - 423
+    post:
+      name: "createA"
+      id: "cap.protocols.http.a.create"
+      service: "cap.services.x.create"
       request: {}
       response:
-        "200":
+        "204":
           description: "OK"
-      errors: []
-default_error_responses:
-  - 422`)
+        "409":
+          codes:
+            - platform.errors.ACCOUNT_NUMBER_TAKEN
+`)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
 components:
   responses:
-    UnprocessableEntity: { description: "422" }
-    Locked: { description: "423" }
+    Conflict: { description: "409" }
+`)
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+schemas: {}
+services: []
+`)
+	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
+enums: []
+`)
+	writeFixture(t, root, "contracts/platform/errors/account.yaml", `id: platform.errors.account
+errors:
+  - { code: ACCOUNT_NUMBER_TAKEN, biz_code: 2002, status: 409 }
+`)
+	if err := os.MkdirAll(filepath.Join(root, "contracts/data/entities"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(files["generated/openapi/x.yaml"])
+	for _, want := range []string{"x-error-codes:", "code: ACCOUNT_NUMBER_TAKEN", "biz_code: 2002"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("generated spec missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestBuildFiltersByAudience(t *testing.T) {
+	root := t.TempDir()
+	writeTypes(t, root)
+	writeHTTPPolicy(t, root, "[]", "[]")
+	writeFixture(t, root, "contracts/project.yaml", `project:
+  name: test
+  version: "1"
+apps:
+  admin:
+    kind: api
+    api_version: v1
+    audience: admin
+    timeout_ms: 5000
+    includes: [cap.protocols.http.a]
+    generated:
+      spec: generated/openapi/admin.yaml
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
+audience: [admin]
+paths:
+  /admin:
+    get:
+      name: "adminOnly"
+      id: "cap.protocols.http.a.admin"
+      service: "cap.services.x.get"
+      request: {}
+      response:
+        "204":
+          description: "OK"
+  /user:
+    get:
+      name: "userOnly"
+      id: "cap.protocols.http.a.user"
+      audience: [user]
+      service: "cap.services.x.get"
+      request: {}
+      response:
+        "204":
+          description: "OK"
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas: {}
@@ -439,10 +547,12 @@ enums: []
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := string(files["generated/openapi/x.yaml"])
-	paths := out[strings.Index(out, "paths:"):]
-	if !strings.Contains(paths, "423:") || strings.Contains(paths, "422:") {
-		t.Fatalf("operation override not applied:\n%s", out)
+	out := string(files["generated/openapi/admin.yaml"])
+	if !strings.Contains(out, "adminOnly") {
+		t.Fatalf("admin operation filtered out:\n%s", out)
+	}
+	if strings.Contains(out, "userOnly") || strings.Contains(out, "/user:") {
+		t.Fatalf("user operation leaked into admin spec:\n%s", out)
 	}
 }
 

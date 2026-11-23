@@ -85,11 +85,11 @@ shared:
         type: string
         maxLength: 64
     SetAuthCookies:
-      description: "设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/v1/auth，SameSite=Lax，Secure 按环境"
+      description: "设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/<app.api_version>/auth，SameSite=Lax，Secure 按环境"
       schema:
         type: string
     ClearAuthCookies:
-      description: "清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/v1/auth"
+      description: "清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/<app.api_version>/auth"
       schema:
         type: string
   responses:
@@ -146,6 +146,7 @@ shared:
     TooManyRequests:
       description: "触发限流"
       headers:
+        Retry-After: RetryAfter
         X-Request-Id: XRequestId
       content:
         application/json:

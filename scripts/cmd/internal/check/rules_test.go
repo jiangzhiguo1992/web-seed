@@ -254,7 +254,6 @@ paths:
           status: data.enums.x_status
       response:
         "204": { description: OK }
-      errors: [ ]
 components:
   schemas:
     Status:
