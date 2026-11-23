@@ -91,7 +91,7 @@ fields:
         description: "步骤清单；每一步显式声明 goto"
         item_fields:
           - { name: id, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID" }
-          - { name: kind, type: _types.string, required: true, enum: [ query, service, when, logic, events ], description: "步骤类型：query=查询、service=服务、logic=手写、events=事件、when=分支" }
+          - { name: kind, type: _types.string, required: true, enum: [ query, service, events, when, logic ], description: "步骤类型：query=查询、service=服务、logic=手写、events=事件、when=分支" }
           - { name: summary, type: _types.string, required: true, description: "一句话说明" }
           - { name: lifecycles, type: _types.set<_types.string>, required: false, unique: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "状态流转标记；create/destroy 直属，transition 用 transitions.<name>" }
 
@@ -118,6 +118,15 @@ fields:
           - { name: query, type: _types.string, required: false, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标查询；参数由本步 input 按同名映射" }
           - { name: service, type: _types.string, required: false, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标服务项；参数由本步 input 按同名映射" }
 
+          - name: events
+            type: _types.list<_types.object>
+            required: false
+            min_items: 1
+            unique_key: ref
+            description: "发射的事件；input 按所有事件 payload 并集映射"
+            item_fields:
+              - { name: ref, type: _types.string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标事件 topic ID" }
+
           - name: when
             type: _types.list<_types.object>
             required: false
@@ -135,15 +144,6 @@ fields:
             description: "业务规则依据"
             item_fields:
               - { name: rule, type: _types.string, required: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "业务规则 ID" }
-
-          - name: events
-            type: _types.list<_types.object>
-            required: false
-            min_items: 1
-            unique_key: ref
-            description: "发射的事件；input 按所有事件 payload 并集映射"
-            item_fields:
-              - { name: ref, type: _types.string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标事件 topic ID" }
 
           - { name: goto, type: _types.string, required: true, pattern: '^(\$end|[a-z][a-z0-9_]*)$', description: "唯一跳转目标；$end 结束 service" }
 
