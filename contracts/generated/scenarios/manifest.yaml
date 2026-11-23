@@ -1,0 +1,178 @@
+generated_from: contracts/scenarios/http
+scenarios:
+  - id: scenario.http.account.create_success
+    operation: cap.protocols.http.account.create
+    http:
+      method: post
+      path: /account/admin
+      service: cap.services.account.create
+      statuses:
+        - 201
+        - 400
+        - 401
+        - 403
+        - 409
+        - 413
+        - 415
+        - 422
+        - 429
+        - 500
+        - 503
+      codes:
+        - ACCOUNT_NICKNAME_INVALID
+        - ACCOUNT_NUMBER_INVALID
+        - ACCOUNT_NUMBER_TAKEN
+    scenario:
+      actor:
+        anonymous: false
+        permissions:
+          - platform.security.permissions.account_write
+      given:
+        clock: "2026-01-01T00:00:00Z"
+        db:
+          data.tables.account: []
+        id_seq:
+          - 1001
+      name: create_success
+      operation: cap.protocols.http.account.create
+      summary: 创建账号成功
+      then:
+        db:
+          added:
+            data.tables.account:
+              - created_at: "2026-01-01T00:00:00Z"
+                deleted_at: null
+                id: 1001
+                nickname: Alice
+                number: A-001
+                status: 0
+                updated_at: "2026-01-01T00:00:00Z"
+                user_id: null
+          changed: {}
+          removed: {}
+          unchanged: strict
+        events:
+          - cap.events.account.created
+        response:
+          body:
+            code: 0
+            data:
+              created_at: "2026-01-01T00:00:00Z"
+              deleted_at: null
+              id: 1001
+              nickname: Alice
+              number: A-001
+              status: pending
+              updated_at: "2026-01-01T00:00:00Z"
+              user_id: null
+            message: ok
+          headers:
+            X-Request-Id: <echo>
+          status: 201
+      when:
+        body:
+          nickname: Alice
+          number: A-001
+          user_id: null
+        headers:
+          Idempotency-Key: idem-0001
+  - id: scenario.http.account.get_not_found
+    operation: cap.protocols.http.account.get
+    http:
+      method: get
+      path: /account/admin/{id}
+      service: cap.services.account.get
+      statuses:
+        - 200
+        - 400
+        - 401
+        - 403
+        - 404
+        - 429
+        - 500
+        - 503
+      codes:
+        - ACCOUNT_NOT_FOUND
+    scenario:
+      actor:
+        anonymous: false
+        permissions:
+          - platform.security.permissions.account_read
+      given:
+        clock: "2026-01-01T00:00:00Z"
+        db:
+          data.tables.account: []
+        id_seq:
+          - 1
+      name: get_not_found
+      operation: cap.protocols.http.account.get
+      summary: 账号不存在
+      then:
+        db:
+          added: {}
+          changed: {}
+          removed: {}
+          unchanged: strict
+        response:
+          body:
+            code: 2001
+            data: null
+            message: 账号不存在
+          headers:
+            X-Request-Id: <echo>
+          status: 404
+      when:
+        path:
+          id: 999
+  - id: scenario.http.account.list_empty
+    operation: cap.protocols.http.account.list
+    http:
+      method: get
+      path: /account/admin
+      service: cap.services.account.list
+      statuses:
+        - 200
+        - 400
+        - 401
+        - 403
+        - 429
+        - 500
+        - 503
+      codes: []
+    scenario:
+      actor:
+        anonymous: false
+        permissions:
+          - platform.security.permissions.account_read
+      given:
+        clock: "2026-01-01T00:00:00Z"
+        db:
+          data.tables.account: []
+        id_seq:
+          - 1
+      name: list_empty
+      operation: cap.protocols.http.account.list
+      summary: 空列表
+      then:
+        db:
+          added: {}
+          changed: {}
+          removed: {}
+          unchanged: strict
+        response:
+          body:
+            code: 0
+            data:
+              has_more: false
+              items: []
+              limit: 20
+              offset: 0
+            message: ok
+          headers:
+            X-Request-Id: <echo>
+          status: 200
+      when:
+        query:
+          limit: 20
+          offset: 0
+schema_version: 1

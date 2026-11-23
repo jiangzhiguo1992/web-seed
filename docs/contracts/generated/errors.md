@@ -16,6 +16,9 @@
 | `COMMON_AUDIT_FAILED` | 1008 | 500 | true | `errors.common.audit_failed` | 审计写入失败 |
 | `COMMON_LOOP_EXHAUSTED` | 1009 | 503 | true | `errors.common.loop_exhausted` | 循环次数超过上限，请稍后重试 |
 | `COMMON_UNAVAILABLE` | 1010 | 503 | true | `errors.common.unavailable` | 服务暂不可用 |
+| `COMMON_PAYLOAD_TOO_LARGE` | 1011 | 413 | false | `errors.common.payload_too_large` | 请求体超过上限 |
+| `COMMON_UNSUPPORTED_MEDIA_TYPE` | 1012 | 415 | false | `errors.common.unsupported_media_type` | 不支持的 Content-Type |
+| `COMMON_GONE` | 1013 | 410 | false | `errors.common.gone` | 端点已移除 |
 | `ACCOUNT_NOT_FOUND` | 2001 | 404 | false | `errors.account.not_found` | 账号不存在 |
 | `ACCOUNT_NUMBER_TAKEN` | 2002 | 409 | false | `errors.account.number_taken` | 账号编号已被使用 |
 | `ACCOUNT_NUMBER_INVALID` | 2003 | 422 | false | `errors.account.number_invalid` | 账号编号格式不合法 |

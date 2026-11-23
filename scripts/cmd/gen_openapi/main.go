@@ -97,6 +97,7 @@ func build(root string) (map[string][]byte, error) {
 	byID := map[string]map[string]any{}
 	opMetaByID := map[string]map[string]openapispec.HTTPOperationMeta{}
 	fileAudienceByID := map[string][]string{}
+	fileStabilityByID := map[string]string{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -105,11 +106,8 @@ func build(root string) (map[string][]byte, error) {
 		id, _ := doc["id"].(string)
 		if id != "" {
 			opMetaByID[id] = openapispec.CollectHTTPOperationMeta(doc)
-			for _, raw := range asList(doc["audience"]) {
-				if value, ok := raw.(string); ok {
-					fileAudienceByID[id] = append(fileAudienceByID[id], value)
-				}
-			}
+			fileAudienceByID[id] = openapispec.CollectHTTPMount(doc).Audience
+			fileStabilityByID[id], _ = doc["stability"].(string)
 			if err := openapispec.NormalizeHTTPDocument(doc, httpTypeResolver(customTypeIdx), false); err != nil {
 				return nil, fmt.Errorf("%s: %w", file, err)
 			}
@@ -176,8 +174,9 @@ func build(root string) (map[string][]byte, error) {
 			return nil, fmt.Errorf("app %s: timeout_ms must be a positive integer", appName)
 		}
 		serverURL := "/" + app.APIVersion
+		deprecatedOps := map[string]bool{}
 		for _, include := range app.Includes {
-			doc := byID[include]
+			doc := copyDoc(byID[include])
 			if doc == nil {
 				return nil, fmt.Errorf("app %s: include %s not found", appName, include)
 			}
@@ -191,7 +190,8 @@ func build(root string) (map[string][]byte, error) {
 						outItem[method] = rawOp
 						continue
 					}
-					meta := opMetaByID[include][path+"\x00"+method]
+					contractID, _ := op["x-contract-id"].(string)
+					meta := opMetaByID[include][contractID]
 					audience := meta.Audience
 					if len(audience) == 0 {
 						audience = fileAudienceByID[include]
@@ -201,6 +201,9 @@ func build(root string) (map[string][]byte, error) {
 					}
 					op["x-timeout-ms"] = app.TimeoutMS
 					delete(op, "x-service-params")
+					if fileStabilityByID[include] == "deprecated" {
+						deprecatedOps[path+"\x00"+method] = true
+					}
 					outItem[method] = op
 				}
 				if len(outItem) > 0 {
@@ -268,6 +271,12 @@ func build(root string) (map[string][]byte, error) {
 				effective := append([]int{}, policy.Always...)
 				if len(asList(op["security"])) > 0 {
 					effective = append(effective, policy.Secured...)
+				}
+				if op["requestBody"] != nil {
+					effective = append(effective, policy.Body...)
+				}
+				if deprecatedOps[path+"\x00"+method] {
+					effective = append(effective, policy.Deprecated...)
 				}
 				for _, status := range effective {
 					key := fmt.Sprint(status)
@@ -339,10 +348,37 @@ func stripGeneratedExtensions(spec map[string]any) {
 	walk(spec)
 }
 
+func copyValue(v any) any {
+	switch value := v.(type) {
+	case map[string]any:
+		out := map[string]any{}
+		for key, child := range value {
+			out[key] = copyValue(child)
+		}
+		return out
+	case []any:
+		out := make([]any, len(value))
+		for i, child := range value {
+			out[i] = copyValue(child)
+		}
+		return out
+	}
+	return v
+}
+
+func copyDoc(doc map[string]any) map[string]any {
+	if doc == nil {
+		return nil
+	}
+	return copyValue(doc).(map[string]any)
+}
+
 type httpPolicy struct {
-	Audiences []string
-	Always    []int
-	Secured   []int
+	Audiences  []string
+	Always     []int
+	Secured    []int
+	Body       []int
+	Deprecated []int
 }
 
 // loadHTTPPolicy 读取平台基线错误状态。
@@ -358,14 +394,14 @@ func loadHTTPPolicy(root string) (httpPolicy, error) {
 		}
 	}
 	errorResponses := asMap(doc["error_responses"])
-	for _, raw := range asList(errorResponses["always"]) {
-		if value, ok := toInt(raw); ok {
-			policy.Always = append(policy.Always, value)
-		}
-	}
-	for _, raw := range asList(errorResponses["secured"]) {
-		if value, ok := toInt(raw); ok {
-			policy.Secured = append(policy.Secured, value)
+	for key, target := range map[string]*[]int{
+		"always": &policy.Always, "secured": &policy.Secured,
+		"body": &policy.Body, "deprecated": &policy.Deprecated,
+	} {
+		for _, raw := range asList(errorResponses[key]) {
+			if value, ok := toInt(raw); ok {
+				*target = append(*target, value)
+			}
 		}
 	}
 	return policy, nil

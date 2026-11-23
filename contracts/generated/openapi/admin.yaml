@@ -90,6 +90,15 @@ components:
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
+    Gone:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+      description: 端点已移除
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     Internal:
       content:
         application/json:
@@ -116,6 +125,15 @@ components:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 资源不存在
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+    PayloadTooLarge:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+      description: 请求体超过上限
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
@@ -156,6 +174,15 @@ components:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
       description: 语义校验失败
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+    UnsupportedMediaType:
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+      description: 不支持的 Content-Type
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
@@ -913,7 +940,7 @@ info:
   version: 0.1.0
 openapi: 3.1.0
 paths:
-  /account:
+  /account/admin:
     get:
       operationId: listAccounts
       parameters:
@@ -995,6 +1022,10 @@ paths:
           x-error-codes:
             - biz_code: 2002
               code: ACCOUNT_NUMBER_TAKEN
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1011,7 +1042,7 @@ paths:
       security:
         - BearerAuth: []
       summary: 创建账号
-  /account/{id}:
+  /account/admin/{id}:
     delete:
       operationId: deleteAccount
       parameters:
@@ -1136,6 +1167,10 @@ paths:
           x-error-codes:
             - biz_code: 2007
               code: ACCOUNT_ALREADY_DELETED
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1150,7 +1185,7 @@ paths:
       security:
         - BearerAuth: []
       summary: 更新账号资料
-  /account/{id}/activate:
+  /account/admin/{id}/activate:
     post:
       operationId: activateAccount
       parameters:
@@ -1198,7 +1233,7 @@ paths:
       security:
         - BearerAuth: []
       summary: 激活账号
-  /account/{id}/suspend:
+  /account/admin/{id}/suspend:
     post:
       operationId: suspendAccount
       parameters:
@@ -1251,6 +1286,10 @@ paths:
               code: ACCOUNT_ALREADY_DELETED
             - biz_code: 2006
               code: ACCOUNT_ILLEGAL_TRANSITION
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1298,6 +1337,10 @@ paths:
               code: ACCOUNT_ALREADY_DELETED
             - biz_code: 3005
               code: AUTH_EMAIL_TAKEN
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1353,6 +1396,10 @@ paths:
               code: ACCOUNT_ALREADY_DELETED
             - biz_code: 3003
               code: AUTH_USERNAME_TAKEN
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
         429:
           $ref: '#/components/responses/TooManyRequests'
         500:
@@ -1400,6 +1447,10 @@ paths:
               code: ACCOUNT_ALREADY_DELETED
             - biz_code: 3004
               code: AUTH_PHONE_TAKEN
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1449,6 +1500,10 @@ paths:
           x-error-codes:
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
         423:
           $ref: '#/components/responses/Locked'
           x-error-codes:
@@ -1585,6 +1640,10 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
@@ -1627,6 +1686,10 @@ paths:
               $ref: '#/components/headers/XRequestId'
         400:
           $ref: '#/components/responses/BadRequest'
+        413:
+          $ref: '#/components/responses/PayloadTooLarge'
+        415:
+          $ref: '#/components/responses/UnsupportedMediaType'
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:

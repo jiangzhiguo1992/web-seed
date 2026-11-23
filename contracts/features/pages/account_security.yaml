@@ -1,0 +1,73 @@
+# 账号认证安全页。密码/手机/邮箱绑定只通过 auth 服务的 bind_* 能力完成。
+
+id: feature.pages.account_security
+summary: "账号认证安全页"
+schema_version: 1
+stability: draft
+do_not:
+  - "认证绑定只通过 cap.services.auth.bind_*；页面不得直连 auth_* 表"
+  - "密码/验证码输入必须标记 secret，不得写入页面状态或日志"
+
+page: account_security
+route: feature.routes.account_security
+
+data:
+  account:
+    capability: cap.services.account.get
+    params:
+      id: { from: route.params.id, type: _types.integer, required: true }
+
+view_states:
+  loading:
+    when: "query.isPending"
+    ui: "skeleton-detail"
+  empty:
+    when: "false"
+    note: "安全页无空态"
+  error:
+    when: "query.isError"
+    ui: "error-panel"
+    show: "problem.detail"
+  forbidden:
+    when: "!hasPermission('platform.security.permissions.account_read')"
+    ui: "forbidden-panel"
+
+actions:
+  bind_password:
+    capability: cap.services.auth.bind_password
+    permission: platform.security.permissions.account_write
+    ui: "primary-button"
+    label: "设置密码"
+  bind_phone:
+    capability: cap.services.auth.bind_phone
+    permission: platform.security.permissions.account_write
+    ui: "primary-button"
+    label: "绑定手机号"
+  bind_email:
+    capability: cap.services.auth.bind_email
+    permission: platform.security.permissions.account_write
+    ui: "primary-button"
+    label: "绑定邮箱"
+
+fields:
+  - name: phone
+    widget: tel
+    optional: true
+    label: "手机号"
+  - name: email
+    widget: email
+    optional: true
+    label: "邮箱"
+  - name: password
+    widget: string
+    optional: true
+    minLength: 12
+    label: "密码"
+    autocomplete: new-password
+    secret: true
+  - name: code
+    widget: string
+    optional: true
+    maxLength: 6
+    label: "验证码"
+    autocomplete: one-time-code

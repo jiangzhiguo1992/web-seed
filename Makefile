@@ -4,7 +4,7 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
-        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-check contract-new contract-check contract-graph contract-impact contract-compat db-verify \
+        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-scenarios gen-scenarios-check gen-check contract-new contract-check contract-graph contract-impact contract-compat db-verify \
         gen-rule-ids check-rule-ids gen-check-core test-rules audit-types dev api-dev web-dev compose-up compose-down doctor derive check-docs check-index
 
 help: ## 显示可用目标
@@ -52,6 +52,7 @@ gen: contract-check ## 重新生成契约产物
 	$(MAKE) gen-errors
 	$(MAKE) gen-db
 	$(MAKE) gen-openapi
+	$(MAKE) gen-scenarios
 
 gen-openapi: contract-check ## 合并 protocols/http/* → contracts/generated/openapi
 	cd scripts/cmd && go run ./gen_openapi -root "$(CURDIR)"
@@ -68,6 +69,7 @@ gen-check-core: ## 校验除规则测试映射外的生成物
 	$(MAKE) gen-errors-check
 	$(MAKE) gen-db-check
 	$(MAKE) gen-openapi-check
+	$(MAKE) gen-scenarios-check
 
 gen-db: contract-check ## data/tables/* → apps/api/schema.sql + migrations/0001_baseline.sql
 	cd scripts/cmd && go run ./gen_db -root "$(CURDIR)"
@@ -92,6 +94,12 @@ gen-rule-tests: ## 规则 → 测试映射（docs/contracts/generated/rule-tests
 
 gen-rule-tests-check: ## 校验规则测试映射是否最新（CI）
 	cd scripts/cmd && go run ./gen_rule_tests -root "$(CURDIR)" -check -max-zero 0
+
+gen-scenarios: contract-check ## 把验收场景投影为 contracts/generated/scenarios/manifest.yaml
+	cd scripts/cmd && go run ./gen_scenarios -root "$(CURDIR)"
+
+gen-scenarios-check: ## 校验验收场景清单是否最新
+	cd scripts/cmd && go run ./gen_scenarios -root "$(CURDIR)" -check
 
 contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|feature.pages|cap.events|cap.protocols.http）
 	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" service="$(service)" path="$(path)" http_method="$(http_method)" ./scripts/contract/scaffold.sh

@@ -20,6 +20,7 @@
 | cap.protocols.http | http-file | http-file | 1 |
 | cap.protocols.http | http-shape | http-shape | 1 |
 | cap.protocols.http | http-version | http-version | 1 |
+| cap.protocols.http | http-mount | http-mount | 1 |
 | cap.protocols.http | http-operation | http-operation | 1 |
 | cap.protocols.http | http-default-errors | http-default-errors | 1 |
 | cap.protocols.http | http-audience | http-audience | 1 |
@@ -180,3 +181,6 @@
 | feature.rules | rule-structure | rule-structure | 1 |
 | feature.rules | rule-value | rule-value | 1 |
 | feature.rules | rule-id-unique | rule-id-unique | 1 |
+| scenario.http | scenario-structure | scenario-structure | 1 |
+| scenario.http | scenario-refs | scenario-refs | 1 |
+| scenario.http | scenario-db | scenario-db | 1 |

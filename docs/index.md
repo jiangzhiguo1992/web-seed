@@ -30,6 +30,7 @@
 | 改存储引擎 | `contract-change` | `data/storage.yaml` |
 | 新增页面 | `contract-change` + `add-feature`（P7） | `features/README.md`、`features/pages/*.yaml`、`features/routes.yaml` |
 | 改平台约定（错误码 / 权限 / 配置） | `contract-change` | `platform/README.md`、对应文件 |
+| 补 HTTP 验收场景 | `contract-change` | `_meta/scenario.http.yaml`、`scenarios/http/*.yaml` |
 | 新增 API / Web 应用 | `contract-change` + `add-app`（P7） | `project.yaml`（apps 段） |
 | 派生新项目 | `rename-project`（P7） | `project.yaml` |
 

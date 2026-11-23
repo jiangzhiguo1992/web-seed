@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
+	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
 )
 
 func TestServiceCycle(t *testing.T) {
@@ -126,6 +127,9 @@ func TestServiceOutputCoversReturns(t *testing.T) {
 
 func writeCapFile(t *testing.T, root, rel, body string) {
 	t.Helper()
+	if strings.Contains(body, "\npaths:") && !strings.Contains(body, "\nmount:") {
+		body = strings.Replace(body, "\npaths:", "\nmount:\n  path: /\n  audience: [admin]\n\npaths:", 1)
+	}
 	p := filepath.Join(root, rel)
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
@@ -2581,9 +2585,6 @@ func TestHTTPAudienceAndConsumer(t *testing.T) {
 error_responses:
   always: [400, 409, 503]
   secured: [401]
-unbound_operations:
-  - { operation: cap.protocols.http.x.open, reason: "app shell" }
-  - { operation: cap.protocols.http.x.stale, reason: "stale" }
 `)
 	writeCapFile(t, root, "contracts/project.yaml", `apps:
   admin:
@@ -2613,7 +2614,9 @@ summary: "x"
 schema_version: 1
 stability: draft
 do_not: []
-audience: [admin]
+mount:
+  path: /
+  audience: [admin]
 paths:
   /ok:
     get:
@@ -2672,9 +2675,8 @@ paths:
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"audience user is not declared",
-		"operation cap.protocols.http.x.orphan has no page consumer",
+		"operation cap.protocols.http.x.orphan must have at least one page in used_by",
 		"missing used_by feature.pages.x",
-		"unbound_operations entry cap.protocols.http.x.stale is stale",
 		"service cap.services.x.page_only is referenced by pages but has no http operation",
 		"[http-audience]",
 		"[http-consumer]",
@@ -2684,5 +2686,19 @@ paths:
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
+	}
+}
+
+func TestHTTPMountOrder(t *testing.T) {
+	c := &Checker{}
+	audiences := map[string]bool{"admin": true}
+	c.checkHTTPMount("x.yaml", openapispec.HTTPMount{Path: "/admin/account", Audience: []string{"admin"}}, audiences, true)
+	c.checkHTTPMount("x.yaml", openapispec.HTTPMount{Path: "/v1/account", Audience: []string{"admin"}}, audiences, true)
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, "[http-mount]") || !strings.Contains(got, "must be resource-first") {
+		t.Fatalf("audience-first mount not reported: %v", c.errs)
+	}
+	if !strings.Contains(got, "[http-version]") {
+		t.Fatalf("versioned mount not reported: %v", c.errs)
 	}
 }

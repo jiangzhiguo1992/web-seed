@@ -1,0 +1,128 @@
+# 账号 HTTP 验收场景。期望值是精确值，不是模式匹配。
+
+id: scenario.http.account
+summary: "账号 HTTP 验收场景"
+schema_version: 1
+stability: draft
+do_not:
+  - "期望响应体必须写完整信封，不得只写 data"
+  - "given.db 与 then.db 的表 ID 必须来自 data.tables.*，不得写物理表名"
+
+scenarios:
+  - name: create_success
+    summary: "创建账号成功"
+    operation: cap.protocols.http.account.create
+    actor:
+      anonymous: false
+      permissions:
+        - platform.security.permissions.account_write
+    given:
+      clock: "2026-01-01T00:00:00Z"
+      id_seq: [1001]
+      db:
+        data.tables.account: []
+    when:
+      headers:
+        Idempotency-Key: "idem-0001"
+      body:
+        number: "A-001"
+        nickname: "Alice"
+        user_id: null
+    then:
+      response:
+        status: 201
+        headers:
+          X-Request-Id: "<echo>"
+        body:
+          code: 0
+          message: "ok"
+          data:
+            id: 1001
+            status: pending
+            number: "A-001"
+            nickname: "Alice"
+            user_id: null
+            created_at: "2026-01-01T00:00:00Z"
+            updated_at: "2026-01-01T00:00:00Z"
+            deleted_at: null
+      db:
+        added:
+          data.tables.account:
+            - id: 1001
+              status: 0
+              number: "A-001"
+              nickname: "Alice"
+              user_id: null
+              created_at: "2026-01-01T00:00:00Z"
+              updated_at: "2026-01-01T00:00:00Z"
+              deleted_at: null
+        changed: {}
+        removed: {}
+        unchanged: strict
+      events:
+        - cap.events.account.created
+
+  - name: list_empty
+    summary: "空列表"
+    operation: cap.protocols.http.account.list
+    actor:
+      anonymous: false
+      permissions:
+        - platform.security.permissions.account_read
+    given:
+      clock: "2026-01-01T00:00:00Z"
+      id_seq: [1]
+      db:
+        data.tables.account: []
+    when:
+      query:
+        offset: 0
+        limit: 20
+    then:
+      response:
+        status: 200
+        headers:
+          X-Request-Id: "<echo>"
+        body:
+          code: 0
+          message: "ok"
+          data:
+            items: []
+            offset: 0
+            limit: 20
+            has_more: false
+      db:
+        added: {}
+        changed: {}
+        removed: {}
+        unchanged: strict
+
+  - name: get_not_found
+    summary: "账号不存在"
+    operation: cap.protocols.http.account.get
+    actor:
+      anonymous: false
+      permissions:
+        - platform.security.permissions.account_read
+    given:
+      clock: "2026-01-01T00:00:00Z"
+      id_seq: [1]
+      db:
+        data.tables.account: []
+    when:
+      path:
+        id: 999
+    then:
+      response:
+        status: 404
+        headers:
+          X-Request-Id: "<echo>"
+        body:
+          code: 2001
+          message: "账号不存在"
+          data: null
+      db:
+        added: {}
+        changed: {}
+        removed: {}
+        unchanged: strict

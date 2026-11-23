@@ -35,13 +35,22 @@ type HTTPOperationMeta struct {
 	UsedBy   []string
 }
 
-// CollectHTTPOperationMeta 读取每个 operation 的 audience/used_by，键是 path+method。
+// CollectHTTPOperationMeta 读取每个 operation 的 audience/used_by，键是契约 ID。
 func CollectHTTPOperationMeta(doc map[string]any) map[string]HTTPOperationMeta {
 	out := map[string]HTTPOperationMeta{}
-	for path, rawItem := range asMap(doc["paths"]) {
+	for _, rawItem := range asMap(doc["paths"]) {
 		for method, rawOp := range asMap(rawItem) {
 			op := asMap(rawOp)
 			if op == nil || !isHTTPMethod(method) {
+				continue
+			}
+			id, _ := op["id"].(string)
+			if id == "" {
+				if contract := asMap(op["contract"]); contract != nil {
+					id, _ = contract["id"].(string)
+				}
+			}
+			if id == "" {
 				continue
 			}
 			meta := HTTPOperationMeta{}
@@ -55,15 +64,73 @@ func CollectHTTPOperationMeta(doc map[string]any) map[string]HTTPOperationMeta {
 					meta.UsedBy = append(meta.UsedBy, value)
 				}
 			}
-			out[path+"\x00"+method] = meta
+			out[id] = meta
 		}
 	}
 	return out
 }
 
+// HTTPMount 是文件级挂载：base path 与调用端。
+type HTTPMount struct {
+	Path     string
+	Audience []string
+}
+
+// CollectHTTPMount 在 NormalizeHTTPDocument 之前读取 mount。
+func CollectHTTPMount(doc map[string]any) HTTPMount {
+	mount := asMap(doc["mount"])
+	if mount == nil {
+		return HTTPMount{}
+	}
+	out := HTTPMount{}
+	out.Path, _ = mount["path"].(string)
+	for _, raw := range asList(mount["audience"]) {
+		if value, ok := raw.(string); ok {
+			out.Audience = append(out.Audience, value)
+		}
+	}
+	return out
+}
+
+// applyHTTPMount 把 paths 的相对 key 拼接到 mount.path，并删除 mount 源块。
+func applyHTTPMount(doc map[string]any) error {
+	paths := asMap(doc["paths"])
+	if len(paths) == 0 {
+		return nil
+	}
+	mount := asMap(doc["mount"])
+	if mount == nil {
+		return fmt.Errorf("mount block required when paths is non-empty")
+	}
+	base, _ := mount["path"].(string)
+	if base == "" || !strings.HasPrefix(base, "/") {
+		return fmt.Errorf("mount.path must start with /")
+	}
+	joined := map[string]any{}
+	for local, item := range paths {
+		if local == "" || !strings.HasPrefix(local, "/") {
+			return fmt.Errorf("path %q must start with /", local)
+		}
+		full := base
+		if local != "/" {
+			full = strings.TrimSuffix(base, "/") + local
+		}
+		if _, exists := joined[full]; exists {
+			return fmt.Errorf("duplicate path %s after mount", full)
+		}
+		joined[full] = item
+	}
+	doc["paths"] = joined
+	delete(doc, "mount")
+	return nil
+}
+
 // NormalizeHTTPDocument 原地把 components.schemas.*.source 与 paths.*.* 的
 // name/id/service/request/response 转成 OpenAPI 形状。
 func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool) error {
+	if err := applyHTTPMount(doc); err != nil {
+		return err
+	}
 	if shared := asMap(doc["shared"]); shared != nil {
 		if doc["components"] != nil {
 			return fmt.Errorf("shared and components cannot coexist")

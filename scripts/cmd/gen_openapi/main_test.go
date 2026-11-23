@@ -138,7 +138,9 @@ apps:
       spec: generated/openapi/x.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
-audience: [admin]
+mount:
+  path: /
+  audience: [admin]
 paths:
   /x:
     get:
@@ -211,7 +213,9 @@ apps:
       spec: generated/openapi/v2.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
-audience: [admin]
+mount:
+  path: /
+  audience: [admin]
 paths:
   /x:
     get:
@@ -351,7 +355,9 @@ apps:
       spec: generated/openapi/x.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
-audience: [admin]
+mount:
+  path: /
+  audience: [admin]
 paths:
   /a:
     get:
@@ -375,7 +381,9 @@ errors:
   - { code: X, biz_code: 9001, status: 409 }
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/b.yaml", `id: "cap.protocols.http.b"
-audience: [admin]
+mount:
+  path: /
+  audience: [admin]
 paths:
   /b:
     get:
@@ -447,7 +455,9 @@ apps:
       spec: generated/openapi/x.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
-audience: [admin]
+mount:
+  path: /
+  audience: [admin]
 paths:
   /a:
     post:
@@ -511,7 +521,9 @@ apps:
       spec: generated/openapi/admin.yaml
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
-audience: [admin]
+mount:
+  path: /
+  audience: [admin]
 paths:
   /admin:
     get:

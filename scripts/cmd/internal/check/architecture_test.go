@@ -19,6 +19,7 @@ var domainFiles = map[string]string{
 	"http_types.go":    "http",
 	"lifecycles.go":    "lifecycles",
 	"pages.go":         "pages",
+	"scenario.go":      "scenario",
 	"events.go":        "events",
 	"rules.go":         "rules",
 }

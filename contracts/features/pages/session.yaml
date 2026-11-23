@@ -1,0 +1,49 @@
+# 当前会话页。刷新与登出由页面动作触发，令牌不进入页面状态。
+
+id: feature.pages.session
+summary: "当前会话页"
+schema_version: 1
+stability: draft
+do_not:
+  - "refresh_token 只在 HttpOnly cookie；页面不得读取或写入"
+  - "会话状态只能通过 cap.services.token.verify 获取，不要解析 JWT"
+
+page: session
+route: feature.routes.session
+
+data:
+  current:
+    capability: cap.services.token.verify
+
+view_states:
+  loading:
+    when: "query.isPending"
+    ui: "skeleton-detail"
+  empty:
+    when: "false"
+    note: "会话页无空态"
+  error:
+    when: "query.isError"
+    ui: "error-panel"
+    show: "problem.detail"
+  forbidden:
+    when: "problem.code == 'COMMON_UNAUTHORIZED'"
+    ui: "login-redirect"
+
+actions:
+  refresh:
+    capability: cap.services.token.refresh
+    ui: "secondary-button"
+    label: "刷新会话"
+  logout:
+    capability: cap.services.token.logout
+    ui: "danger-button"
+    label: "退出登录"
+    confirm: true
+
+fields:
+  - name: number
+    render: code
+  - name: status
+    enum: cap.lifecycles.account.states.values
+    render: badge

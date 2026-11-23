@@ -17,12 +17,22 @@ var allowedOperationExtensions = map[string]bool{
 	"x-service-params": true, "x-idempotency": true,
 }
 
+// httpOpInfo 是 scenario 校验所需的 operation 摘要。
+type httpOpInfo struct {
+	Path     string
+	Method   string
+	Service  string
+	Statuses map[int]bool
+	Codes    map[string]bool
+}
+
 // httpPolicy 是 platform/http_conventions.yaml 中与 HTTP 绑定相关的硬约束。
 type httpPolicy struct {
-	Audiences []string
-	Always    []int
-	Secured   []int
-	Unbound   map[string]string
+	Audiences  []string
+	Always     []int
+	Secured    []int
+	Body       []int
+	Deprecated []int
 }
 
 // loadHTTPPolicy 读取平台基线错误状态、调用端与未绑定 operation 登记。
@@ -31,29 +41,21 @@ func (c *Checker) loadHTTPPolicy() (httpPolicy, error) {
 	if err != nil {
 		return httpPolicy{}, err
 	}
-	policy := httpPolicy{Unbound: map[string]string{}}
+	policy := httpPolicy{}
 	for _, raw := range asList(doc["audiences"]) {
 		if value, ok := raw.(string); ok {
 			policy.Audiences = append(policy.Audiences, value)
 		}
 	}
 	errorResponses, _ := asMap(doc["error_responses"])
-	for _, raw := range asList(errorResponses["always"]) {
-		if value, ok := toInt(raw); ok {
-			policy.Always = append(policy.Always, value)
-		}
-	}
-	for _, raw := range asList(errorResponses["secured"]) {
-		if value, ok := toInt(raw); ok {
-			policy.Secured = append(policy.Secured, value)
-		}
-	}
-	for _, raw := range asList(doc["unbound_operations"]) {
-		item, _ := asMap(raw)
-		operation, _ := item["operation"].(string)
-		reason, _ := item["reason"].(string)
-		if operation != "" {
-			policy.Unbound[operation] = reason
+	for key, target := range map[string]*[]int{
+		"always": &policy.Always, "secured": &policy.Secured,
+		"body": &policy.Body, "deprecated": &policy.Deprecated,
+	} {
+		for _, raw := range asList(errorResponses[key]) {
+			if value, ok := toInt(raw); ok {
+				*target = append(*target, value)
+			}
 		}
 	}
 	return policy, nil
@@ -381,6 +383,9 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	httpSecuritySchemes := map[string]bool{}
 	httpResponses := map[string]bool{}
 	httpResponseDefs := map[string]map[string]any{}
+	if c.httpOps == nil {
+		c.httpOps = map[string]httpOpInfo{}
+	}
 	policy, policyErr := c.loadHTTPPolicy()
 	if policyErr != nil && c.strictHTTP {
 		c.rulef("schema.load", "contracts/platform/http_conventions.yaml: %v", policyErr)
@@ -389,7 +394,6 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	apiApps := c.loadAPIApps()
 	pagesByService := c.pageServices()
 	seenAudience := map[string]map[string]bool{}
-	unboundSeen := map[string]bool{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -401,6 +405,11 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 			c.validateDoc(doc, schema.Fields, rel)
 		}
 		c.checkHTTPShared(doc, rel)
+		mount := openapispec.CollectHTTPMount(doc)
+		rawPaths, _ := asMap(doc["paths"])
+		if c.strictHTTP {
+			c.checkHTTPMount(rel, mount, audiences, len(rawPaths) > 0)
+		}
 		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP); err != nil {
 			c.rulef("http-shape", "%s: %v", rel, err)
 			continue
@@ -527,7 +536,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		if !httpHeaders["RetryAfter"] {
 			c.rulef("http-retry-after", "components.headers.RetryAfter is required for 429/503 responses")
 		}
-		for _, status := range append(append([]int{}, policy.Always...), policy.Secured...) {
+		for _, status := range append(append(append(append([]int{}, policy.Always...), policy.Secured...), policy.Body...), policy.Deprecated...) {
 			name, ok := openapispec.DefaultResponseName(status)
 			if !ok {
 				c.rulef("http-default-errors", "platform baseline status %d has no shared response mapping", status)
@@ -557,12 +566,8 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		}
 		rel := relPath(c.root, file)
 		opMeta := openapispec.CollectHTTPOperationMeta(doc)
-		var fileAudience []string
-		for _, raw := range asList(doc["audience"]) {
-			if value, ok := raw.(string); ok {
-				fileAudience = append(fileAudience, value)
-			}
-		}
+		fileAudience := openapispec.CollectHTTPMount(doc).Audience
+		fileStability, _ := doc["stability"].(string)
 		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP); err != nil {
 			continue
 		}
@@ -625,7 +630,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 						c.rulef("http-operation", "%s %s %s: x-timeout-ms must be a positive integer", rel, method, path)
 					}
 				}
-				meta := opMeta[path+"\x00"+method]
+				meta := opMeta[contractID]
 				effectiveAudience := meta.Audience
 				if len(effectiveAudience) == 0 {
 					effectiveAudience = fileAudience
@@ -639,6 +644,39 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					}
 				}
 				responses, _ := asMap(op["responses"])
+				info := httpOpInfo{Path: path, Method: method, Service: op["x-service"].(string), Statuses: map[int]bool{}, Codes: map[string]bool{}}
+				for status, rawResp := range responses {
+					if n, err := strconv.Atoi(status); err == nil {
+						info.Statuses[n] = true
+						respMap, _ := asMap(rawResp)
+						for _, code := range asList(respMap["x-error-codes"]) {
+							if value, ok := code.(string); ok {
+								info.Codes[value] = true
+							}
+						}
+					}
+				}
+				for _, n := range policy.Always {
+					info.Statuses[n] = true
+				}
+				if len(asList(op["security"])) > 0 {
+					for _, n := range policy.Secured {
+						info.Statuses[n] = true
+					}
+				}
+				if op["requestBody"] != nil {
+					for _, n := range policy.Body {
+						info.Statuses[n] = true
+					}
+				}
+				if fileStability == "deprecated" {
+					for _, n := range policy.Deprecated {
+						info.Statuses[n] = true
+					}
+				}
+				if contractID != "" {
+					c.httpOps[contractID] = info
+				}
 				for status, rawResp := range responses {
 					resp, _ := asMap(rawResp)
 					if content, ok := asMap(resp["content"]); ok {
@@ -683,9 +721,9 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				}
 				exposedServices[serviceRef] = true
 				if c.strictHTTP {
-					c.checkHTTPConsumer(rel, method, path, contractID, serviceRef, meta.UsedBy, pagesByService, policy.Unbound, unboundSeen)
+					c.checkHTTPConsumer(rel, method, path, contractID, serviceRef, meta.UsedBy, pagesByService)
 				}
-				c.checkHTTPErrors(rel, method, path, op, target, responses, policy)
+				c.checkHTTPErrors(rel, method, path, op, target, responses, policy, fileStability == "deprecated")
 				c.checkHTTPOperationHeaders(rel, method, path, op, httpSecuritySchemes, serviceRef)
 				c.checkHTTPRequest(rel, method, path, op, target, schemas, httpParameters, httpParameterDefs)
 			}
@@ -706,11 +744,6 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		for service, pages := range pagesByService {
 			if len(pages) > 0 && !exposedServices[service] {
 				c.rulef("http-consumer", "service %s is referenced by pages but has no http operation", service)
-			}
-		}
-		for operation, reason := range policy.Unbound {
-			if !unboundSeen[operation] {
-				c.rulef("http-consumer", "platform.http_conventions.unbound_operations entry %s is stale (operation missing or has page consumers): %s", operation, reason)
 			}
 		}
 	}
@@ -932,7 +965,7 @@ func (c *Checker) checkHTTPResponse(rel, method, path, status string, resp map[s
 }
 
 // checkHTTPErrors 校验 response.<status>.codes 与 service 错误集精确一致。
-func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, target serviceMeta, responses map[string]any, policy httpPolicy) {
+func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, target serviceMeta, responses map[string]any, policy httpPolicy, deprecated bool) {
 	got := map[string]bool{}
 	for status, rawResp := range responses {
 		resp, _ := asMap(rawResp)
@@ -985,7 +1018,11 @@ func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, t
 		if status == 0 {
 			continue
 		}
-		covered := containsInt(policy.Always, status) || (secured && containsInt(policy.Secured, status))
+		hasBody := op["requestBody"] != nil
+		covered := containsInt(policy.Always, status) ||
+			(secured && containsInt(policy.Secured, status)) ||
+			(hasBody && containsInt(policy.Body, status)) ||
+			(deprecated && containsInt(policy.Deprecated, status))
 		if !covered {
 			if _, ok := responses[fmt.Sprint(status)]; !ok {
 				c.rulef("http-errors", "%s %s %s: service error %s status %d has no response (baseline or codes)", rel, method, path, code, status)
@@ -1031,7 +1068,7 @@ func (c *Checker) checkHTTPAudience(rel, method, path, contractID string, audien
 }
 
 // checkHTTPConsumer 校验 operation 的页面消费者与 service 的双向引用。
-func (c *Checker) checkHTTPConsumer(rel, method, path, contractID, service string, usedBy []string, pagesByService map[string]map[string]bool, unbound map[string]string, unboundSeen map[string]bool) {
+func (c *Checker) checkHTTPConsumer(rel, method, path, contractID, service string, usedBy []string, pagesByService map[string]map[string]bool) {
 	expected := pagesByService[service]
 	declared := map[string]bool{}
 	for _, page := range usedBy {
@@ -1044,22 +1081,42 @@ func (c *Checker) checkHTTPConsumer(rel, method, path, contractID, service strin
 			c.rulef("http-consumer", "%s %s %s: used_by %s does not reference service %s", rel, method, path, page, service)
 		}
 	}
+	if len(usedBy) == 0 {
+		c.rulef("http-consumer", "%s %s %s: operation %s must have at least one page in used_by", rel, method, path, contractID)
+	}
 	for page := range expected {
 		if !declared[page] {
 			c.rulef("http-consumer", "%s %s %s: missing used_by %s (page references %s)", rel, method, path, page, service)
 		}
 	}
-	if len(expected) == 0 {
-		if unbound[contractID] == "" {
-			c.rulef("http-consumer", "%s %s %s: operation %s has no page consumer; declare it in platform.http_conventions.unbound_operations", rel, method, path, contractID)
-			return
+}
+
+// checkHTTPMount 校验文件级挂载：资源在前、端在后，且不写版本。
+func (c *Checker) checkHTTPMount(rel string, mount openapispec.HTTPMount, audiences map[string]bool, hasPaths bool) {
+	if mount.Path == "" {
+		if hasPaths {
+			c.rulef("http-mount", "%s: mount block required when paths is non-empty", rel)
 		}
-		unboundSeen[contractID] = true
 		return
 	}
-	if unbound[contractID] != "" {
-		c.rulef("http-consumer", "%s %s %s: operation %s has page consumers; remove the unbound_operations entry", rel, method, path, contractID)
-		unboundSeen[contractID] = true
+	if !strings.HasPrefix(mount.Path, "/") {
+		c.rulef("http-mount", "%s: mount.path %s must start with /", rel, mount.Path)
+		return
+	}
+	if match(`^/v[0-9]+(/|$)`, mount.Path) {
+		c.rulef("http-version", "%s: mount.path %s must not carry a version prefix; use app.api_version", rel, mount.Path)
+	}
+	segments := strings.Split(strings.TrimPrefix(mount.Path, "/"), "/")
+	if len(segments) > 0 && audiences[segments[0]] {
+		c.rulef("http-mount", "%s: mount.path %s must be resource-first; use /<resource>/%s", rel, mount.Path, segments[0])
+	}
+	if len(mount.Audience) == 0 {
+		c.rulef("http-audience", "%s: mount.audience must not be empty", rel)
+	}
+	for _, audience := range mount.Audience {
+		if !audiences[audience] {
+			c.rulef("http-audience", "%s: mount.audience %s is not declared in platform.http_conventions.audiences", rel, audience)
+		}
 	}
 }
 

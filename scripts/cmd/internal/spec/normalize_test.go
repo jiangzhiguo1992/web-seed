@@ -17,6 +17,7 @@ func httpDoc(operation map[string]any) map[string]any {
 		}
 	}
 	return map[string]any{
+		"mount": map[string]any{"path": "/", "audience": []any{"admin"}},
 		"paths": map[string]any{
 			"/x": map[string]any{"post": operation},
 		},
@@ -188,7 +189,7 @@ func TestNormalizeHTTPDocumentRejectsEmptyCodes(t *testing.T) {
 
 func TestCollectHTTPOperationMeta(t *testing.T) {
 	doc := map[string]any{
-		"audience": []any{"admin"},
+		"mount": map[string]any{"path": "/", "audience": []any{"admin"}},
 		"paths": map[string]any{
 			"/x": map[string]any{
 				"get": map[string]any{
@@ -200,7 +201,7 @@ func TestCollectHTTPOperationMeta(t *testing.T) {
 		},
 	}
 	meta := CollectHTTPOperationMeta(doc)
-	got := meta["/x\x00get"]
+	got := meta["cap.protocols.http.x.get"]
 	if len(got.Audience) != 1 || got.Audience[0] != "user" {
 		t.Fatalf("audience not collected: %v", got)
 	}

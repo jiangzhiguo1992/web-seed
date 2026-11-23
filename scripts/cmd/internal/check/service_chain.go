@@ -519,6 +519,36 @@ func computeServiceWriteClosure(direct map[string]bool, edges map[string][]strin
 	return writes
 }
 
+// computeServiceQueryClosure 递归合并 service 及其子 service 的 query 集合。
+func computeServiceQueryClosure(direct map[string]map[string]bool, edges map[string][]string) map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	var walk func(id string, seen map[string]bool) map[string]bool
+	walk = func(id string, seen map[string]bool) map[string]bool {
+		if cached, ok := out[id]; ok {
+			return cached
+		}
+		if seen[id] {
+			return map[string]bool{}
+		}
+		seen[id] = true
+		queries := map[string]bool{}
+		for qid := range direct[id] {
+			queries[qid] = true
+		}
+		for _, child := range edges[id] {
+			for qid := range walk(child, seen) {
+				queries[qid] = true
+			}
+		}
+		out[id] = queries
+		return queries
+	}
+	for id := range direct {
+		walk(id, map[string]bool{})
+	}
+	return out
+}
+
 // checkQueryInput 校验 query 的 input：key 必须是参数名，必填参数必须出现，值类型必须兼容。
 func (c *Checker) checkQueryInput(input map[string]any, q *queryInfo, qid, rel, stepID string, tc stepTypeContext) {
 	params := map[string]bool{}

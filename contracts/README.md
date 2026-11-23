@@ -68,7 +68,7 @@
 
 ---
 
-## 2. 目录结构与五组契约
+## 2. 目录结构与契约分组
 
 ```
 contracts/
@@ -104,6 +104,9 @@ contracts/
 │   ├── pages/<page>.yaml     #   页面：数据源、四态、动作、字段
 │   └── rules/<subject>.yaml  #   业务规则（constraint / invariant / policy）
 │
+├── scenarios/                # ⑤ 验收场景（确定性请求 → 响应 → 持久数据）
+│   └── http/<file>.yaml      #   按 HTTP 文件分组；实现侧 runner 只读生成清单
+│
 ├── platform/                 # ④ 平台契约（工程约束）
 │   ├── environments.yaml     #   环境清单与差异
 │   ├── versioning.yaml       #   版本与兼容策略
@@ -115,7 +118,8 @@ contracts/
 │   └── analytics/events.yaml   security/{permissions,roles,auth_policy}.yaml
 │
 └── generated/                # 机器产物（见 4.7；禁止手改）
-    └── openapi/admin.yaml    #   合并 OpenAPI spec（代码生成输入）
+    ├── openapi/*.yaml        #   各 app 的合并 OpenAPI spec
+    └── scenarios/manifest.yaml # HTTP 验收场景清单（runner 输入）
 ```
 
 人读视图（`lineage.md` / `data.md` / `errors.md` / `permissions.md`）在 `docs/contracts/generated/`。

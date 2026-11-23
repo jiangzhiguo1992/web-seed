@@ -324,6 +324,7 @@ func (c *Checker) checkCapabilities() {
 	}
 
 	c.serviceWrites = computeServiceWriteClosure(directWrites, serviceEdges)
+	c.serviceQueryClosure = computeServiceQueryClosure(c.serviceQueries, serviceEdges)
 	c.checkAccess(serviceItemIDs)
 
 	// query 返回类型：供 step 输出路径解析；err 不参与结果形状。

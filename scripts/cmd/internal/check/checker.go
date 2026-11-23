@@ -44,41 +44,43 @@ type Checker struct {
 	queryTargets    contractspec.Targets
 
 	// 实体与查询解析索引。
-	tableColumns      map[string]map[string]columnMeta
-	tableDocs         map[string]map[string]any
-	tableTypeFamilies map[string]bool
-	entityDocs        []entityDoc
-	entityBaseDoc     map[string]any
-	entityBaseFields  []entityFieldInfo
-	entities          map[string]*entityInfo
-	entityOrder       []string
-	queries           map[string]*queryInfo
-	declaredWrites    map[string]bool
-	queryDocs         []queryDoc
-	queryDupIDs       map[string]bool
-	queryOrder        []string
-	enumValues        map[string]map[string]bool
-	enumCodes         map[string]map[int]bool
-	enumIDs           map[string]bool
-	errCodeSet        map[string]bool
-	errorStatus       map[string]int
-	errorBizCode      map[string]int
-	dataAccessErrSet  map[string]bool
-	permissionSet     map[string]bool
-	methodReturns     map[string]map[string]returnType
-	methodTypeDefs    map[string]map[string]any
-	serviceQueries    map[string]map[string]bool
-	serviceWrites     map[string]bool
-	ruleErrors        map[string]string
-	ruleOwners        map[string][]string
-	queryReturnTypes  map[string]map[string]returnType
-	eventPayloads     map[string]map[string]eventField
-	accessBindings    map[string]accessPolicy
-	inlineSeq         int
-	nodeKinds         map[string]contractspec.SchemaKind
-	propertyKeys      []contractspec.Field
-	valueTypes        contractspec.ValueTypes
-	strictHTTP        bool
+	tableColumns        map[string]map[string]columnMeta
+	tableDocs           map[string]map[string]any
+	tableTypeFamilies   map[string]bool
+	entityDocs          []entityDoc
+	entityBaseDoc       map[string]any
+	entityBaseFields    []entityFieldInfo
+	entities            map[string]*entityInfo
+	entityOrder         []string
+	queries             map[string]*queryInfo
+	declaredWrites      map[string]bool
+	queryDocs           []queryDoc
+	queryDupIDs         map[string]bool
+	queryOrder          []string
+	enumValues          map[string]map[string]bool
+	enumCodes           map[string]map[int]bool
+	enumIDs             map[string]bool
+	errCodeSet          map[string]bool
+	errorStatus         map[string]int
+	errorBizCode        map[string]int
+	dataAccessErrSet    map[string]bool
+	permissionSet       map[string]bool
+	methodReturns       map[string]map[string]returnType
+	methodTypeDefs      map[string]map[string]any
+	serviceQueries      map[string]map[string]bool
+	serviceQueryClosure map[string]map[string]bool
+	serviceWrites       map[string]bool
+	httpOps             map[string]httpOpInfo
+	ruleErrors          map[string]string
+	ruleOwners          map[string][]string
+	queryReturnTypes    map[string]map[string]returnType
+	eventPayloads       map[string]map[string]eventField
+	accessBindings      map[string]accessPolicy
+	inlineSeq           int
+	nodeKinds           map[string]contractspec.SchemaKind
+	propertyKeys        []contractspec.Field
+	valueTypes          contractspec.ValueTypes
+	strictHTTP          bool
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -166,6 +168,7 @@ func (c *Checker) run() {
 	c.checkRules(storageSchema)
 	c.checkCapabilities()
 	c.checkFeaturePages()
+	c.checkScenarioContracts()
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues)
 	c.checkCapabilityWrites(tableIDs)
