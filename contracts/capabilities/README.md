@@ -213,7 +213,7 @@ dispatch 项：
 
 - path / method / `name` / `id` / `service`；`name` 生成 OpenAPI operationId，`id` 仅用于契约追踪，不写入生成 OpenAPI
 - status code / content-type / header
-- API 版本只在 `project.yaml` 的 `app.api_version` 声明；URL 前缀由生成器派生为 `/<app.api_version>`，HTTP 文件与 paths 都不写版本；文件级不抽 `base_path`，多 app 挂载点属于 `project.yaml` 的 include
+- API 版本只在 `project.yaml` 的 `app.api_version` 声明；文件级 `mount.path` 只写资源前缀（如 `/account/admin`），生成器再拼 `/<app.api_version>`；版本不出现在 HTTP 文件与 paths
 - 超时只在 `project.yaml` 的 `app.timeout_ms` 统一配置，HTTP 文件不写 timeout
 - v2 是新的 API surface：在 `project.yaml` 新增 app（`api_version: v2`），未变模块可复用原文件，变更模块新建 `<module>_v2.yaml` 并只 include 到 v2 app；同一 app 不允许混版本
 - 每个 operation 用 `request` / `response` 两块：`request` 下分 `path` / `query` / `headers` / `cookies` / `body`；`response` 是状态码 map，2xx 写 `description` / `headers` / `body`，非 2xx 只写 `codes`
@@ -227,8 +227,8 @@ HTTP 约束：
 
 - 响应 schema 由类型 ID 解析：优先 `cap.services.schemas`，也允许 `data.entities.*` / `data.enums.*`；object 默认封闭。
 - 每个 operation 必须有 `id` 与 `service`；`service` 只能指向 `public` 且未被异步任务引用的同步 service。
-- 每个 operation 必须有有效 `audience`：文件级 `audience` 提供默认值，operation 可覆盖；值来自 `platform/http_conventions.yaml` 的 `audiences`。
-- 每个 operation 必须有 `used_by`（可为空）：精确列出引用该 service 的 `feature.pages.*`；为空时必须在 `platform/http_conventions.yaml` 的 `unbound_operations` 登记理由。
+- 每个有 `paths` 的文件必须有 `mount`：`mount.path` 是资源前缀，`mount.audience` 是调用端列表；operation 可覆盖 audience。`mount.path` 必须资源在前、端在后（`/account/admin`，不是 `/admin/account`），值来自 `platform/http_conventions.yaml` 的 `audiences`。
+- 每个 operation 必须有非空 `used_by`：精确列出引用该 service 的 `feature.pages.*`；缺页面就补页面，不允许用豁免清单绕过。
 - 每个 operation 必须有 `request.mapping`（可为空对象）：`body` / `path` / `query` / `header` / `cookie` 映射到 service 参数；service 必填非 ctx 参数必须全覆盖，HTTP 不得发明参数。`mapping` 只用于契约校验与后续 handler 生成，不写入 OpenAPI。
 - 每个 operation 必须有 `request.idempotency`：`none` / `optional` / `required`；`optional` 引用 `IdempotencyKey`，`required` 引用 `IdempotencyKeyRequired`，`none` 不得声明。
 - 每个 operation 必须在 `request.headers` 声明 `X-Request-Id: RequestId`；每个 `response.<status>.headers.X-Request-Id: XRequestId` 必须声明。
@@ -236,8 +236,8 @@ HTTP 约束：
 - 每个 operation 必须在 `response.<非2xx状态码>.codes` 下按状态分组列出该 service 的非 `COMMON_*` 错误；code 的错误 `status` 必须等于所在 response 的状态码，且必须与 service 错误集精确一致。`COMMON_*` 不在 operation 里重复。
 - 成功响应统一信封 `{ code: 0, message: "ok", data: <return> }`，由 `gen_openapi` 生成 `Api<Type>Response`；204 是唯一无信封的响应。
 - 错误响应统一引用 `protocols/http/shared.yaml` 的 `ApiErrorResponse`：`{ code: <biz_code>, message, data: null }`，HTTP status 保留 4xx/5xx。
-- 每个 `request.body` 与 2xx `response.<status>.body` 不写 `example`；验收场景放在 `contracts/scenarios/`，生成测试数据放在 `apps/api/internal/acceptance/generated/`（设计见 `docs/adr/0001-http-contract-boundaries.md`）。
-- 平台基线错误状态由 `platform/http_conventions.yaml` 的 `error_responses.always` / `secured` 声明，生成器负责注入；operation 只写业务错误 codes，不再有文件级默认错误列表。
+- 每个 `request.body` 与 2xx `response.<status>.body` 不写 `example`；验收场景源在 `contracts/scenarios/http/`，生成清单在 `contracts/generated/scenarios/manifest.yaml`（`make gen-scenarios`），实现侧 runner 只读清单。
+- 平台基线错误状态由 `platform/http_conventions.yaml` 的 `error_responses.always` / `secured` / `body` / `deprecated` 声明，生成器负责注入；operation 只写业务错误 codes，不再有文件级默认错误列表。
 - 429 与 503 必须通过 shared 的 `TooManyRequests` / `ServiceUnavailable` 返回 `Retry-After`。
 
 请求头/响应头定义位置：

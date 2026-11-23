@@ -15,3 +15,6 @@ errors:
   - { code: COMMON_AUDIT_FAILED, biz_code: 1008, status: 500, retryable: true, i18n: errors.common.audit_failed, message: "审计写入失败" }
   - { code: COMMON_LOOP_EXHAUSTED, biz_code: 1009, status: 503, retryable: true, i18n: errors.common.loop_exhausted, message: "循环次数超过上限，请稍后重试" }
   - { code: COMMON_UNAVAILABLE, biz_code: 1010, status: 503, retryable: true, i18n: errors.common.unavailable, message: "服务暂不可用" }
+  - { code: COMMON_PAYLOAD_TOO_LARGE, biz_code: 1011, status: 413, retryable: false, i18n: errors.common.payload_too_large, message: "请求体超过上限" }
+  - { code: COMMON_UNSUPPORTED_MEDIA_TYPE, biz_code: 1012, status: 415, retryable: false, i18n: errors.common.unsupported_media_type, message: "不支持的 Content-Type" }
+  - { code: COMMON_GONE, biz_code: 1013, status: 410, retryable: false, i18n: errors.common.gone, message: "端点已移除" }

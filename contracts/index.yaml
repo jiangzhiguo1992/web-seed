@@ -139,6 +139,9 @@ entries:
       - "在页面里直接引用 data.*"
   - { id: feature.pages.account_detail, path: features/pages/account_detail.yaml, summary: "账号详情页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.pages.account_create, path: features/pages/account_create.yaml, summary: "新建账号页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
+  - { id: feature.pages.account_security, path: features/pages/account_security.yaml, summary: "账号认证安全页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
+  - { id: feature.pages.session, path: features/pages/session.yaml, summary: "当前会话页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
+  - { id: scenario.http.account, path: scenarios/http/account.yaml, summary: "账号 HTTP 验收场景", consumers: [api, tools], enforcement: tested, stability: draft }
   - { id: feature.pages.login, path: features/pages/login.yaml, summary: "登录页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
   - { id: feature.pages.not_found, path: features/pages/not_found.yaml, summary: "404 页", consumers: [web/admin], enforcement: generated, stability: draft }
 
@@ -168,7 +171,10 @@ entries:
   - { id: platform.security.auth_policy, path: platform/security/auth_policy.yaml, summary: "会话与认证策略", consumers: [api, web/admin], enforcement: tested, stability: draft }
 
   # ---------- generated（产物索引，非契约正文） ----------
-  - { id: generated.openapi, path: generated/openapi/admin.yaml, summary: "合并 OpenAPI spec（代码生成输入）", consumers: [api, tools], enforcement: generated, stability: draft }
+  - { id: generated.openapi, path: generated/openapi/admin.yaml, summary: "管理端 v1 OpenAPI spec（代码生成输入）", consumers: [api, tools], enforcement: generated, stability: draft }
+  - { id: generated.openapi.admin_v2, path: generated/openapi/admin_v2.yaml, summary: "管理端 v2 OpenAPI spec", consumers: [api, tools], enforcement: generated, stability: draft }
+  - { id: generated.openapi.user, path: generated/openapi/user.yaml, summary: "用户端 v1 OpenAPI spec", consumers: [api, tools], enforcement: generated, stability: draft }
+  - { id: generated.scenarios, path: generated/scenarios/manifest.yaml, summary: "HTTP 验收场景清单", consumers: [api, tools], enforcement: generated, stability: draft }
 
 # 跨文件的坑：不属于任何单一契约，但 AI 最容易犯
 global_notes:
@@ -179,7 +185,7 @@ global_notes:
   - "services.steps 只能引用 data.queries / cap.services / cap.lifecycles / feature.rules / cap.events；不得引用 data.tables 或 business.*"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table.queries / model.queries / query.used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
-  - "http operation 的 audience 与 used_by 是校验字段：used_by 必须精确等于页面引用，空值必须在 unbound_operations 登记"
+  - "http operation 的 used_by 是校验字段：必须非空且精确等于页面引用；缺页面就补页面，不得用豁免清单"
   - "引擎分组与表级物理事实（tables.<engine>/caches/retention）只在 data/storage.yaml 声明；冗余列表直接写在 columns[].redundancy"
 
 # 白名单：允许没有入边的根契约

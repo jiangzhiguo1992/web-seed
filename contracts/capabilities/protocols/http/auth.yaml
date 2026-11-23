@@ -7,10 +7,12 @@ do_not:
   - "不要把 password_hash 或 token 写入日志、事件"
   - "refresh_token 只写 HttpOnly cookie，不进入响应体"
 
-audience: [admin]
+mount:
+  path: /auth
+  audience: [admin, user]
 
 paths:
-  /auth/login:
+  /login:
     post:
       id: cap.protocols.http.auth.login
       name: login
@@ -46,13 +48,14 @@ paths:
           codes:
             - platform.errors.AUTH_LOCKED
 
-  /auth/verification/send:
+  /verification/send:
     post:
       id: cap.protocols.http.auth.verification_send
       name: sendVerification
       service: cap.services.verification.send
       summary: "发送验证码"
-      used_by: []
+      used_by:
+        - feature.pages.login
       request:
         headers:
           X-Request-Id: RequestId
@@ -78,13 +81,14 @@ paths:
             - platform.errors.AUTH_VERIFICATION_INVALID
             - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
 
-  /auth/verification/verify:
+  /verification/verify:
     post:
       id: cap.protocols.http.auth.verification_verify
       name: verifyCode
       service: cap.services.verification.verify
       summary: "校验验证码"
-      used_by: []
+      used_by:
+        - feature.pages.login
       request:
         headers:
           X-Request-Id: RequestId
@@ -111,13 +115,14 @@ paths:
           codes:
             - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
 
-  /auth/refresh:
+  /refresh:
     post:
       id: cap.protocols.http.auth.refresh
       name: refreshToken
       service: cap.services.token.refresh
       summary: "刷新令牌"
-      used_by: []
+      used_by:
+        - feature.pages.session
       request:
         headers:
           X-Request-Id: RequestId
@@ -142,13 +147,14 @@ paths:
             - platform.errors.AUTH_TOKEN_EXPIRED
             - platform.errors.AUTH_TOKEN_INVALID
 
-  /auth/logout:
+  /logout:
     post:
       id: cap.protocols.http.auth.logout
       name: logout
       service: cap.services.token.logout
       summary: "登出"
-      used_by: []
+      used_by:
+        - feature.pages.session
       request:
         headers:
           X-Request-Id: RequestId
@@ -169,13 +175,14 @@ paths:
           codes:
             - platform.errors.AUTH_TOKEN_INVALID
 
-  /auth/bind/password:
+  /bind/password:
     post:
       id: cap.protocols.http.auth.bind_password
       name: bindPassword
       service: cap.services.auth.bind_password
       summary: "创建、修改或启停密码认证绑定"
-      used_by: []
+      used_by:
+        - feature.pages.account_security
       security:
         - BearerAuth: []
       request:
@@ -207,13 +214,14 @@ paths:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.AUTH_USERNAME_TAKEN
 
-  /auth/bind/phone:
+  /bind/phone:
     post:
       id: cap.protocols.http.auth.bind_phone
       name: bindPhone
       service: cap.services.auth.bind_phone
       summary: "创建、换绑或启停手机号认证绑定"
-      used_by: []
+      used_by:
+        - feature.pages.account_security
       security:
         - BearerAuth: []
       request:
@@ -245,13 +253,14 @@ paths:
           codes:
             - platform.errors.AUTH_PHONE_INVALID
 
-  /auth/bind/email:
+  /bind/email:
     post:
       id: cap.protocols.http.auth.bind_email
       name: bindEmail
       service: cap.services.auth.bind_email
       summary: "创建、换绑或启停邮箱认证绑定"
-      used_by: []
+      used_by:
+        - feature.pages.account_security
       security:
         - BearerAuth: []
       request:
@@ -283,13 +292,14 @@ paths:
           codes:
             - platform.errors.AUTH_EMAIL_INVALID
 
-  /auth/me:
+  /me:
     get:
       id: cap.protocols.http.auth.me
       name: currentAccount
       service: cap.services.token.verify
       summary: "校验访问令牌并返回当前账号"
-      used_by: []
+      used_by:
+        - feature.pages.session
       security:
         - BearerAuth: []
       request:

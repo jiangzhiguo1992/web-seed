@@ -7,10 +7,12 @@ do_not:
   - "响应禁止包含密码、手机号、邮箱、令牌；Account schema 不得加这些字段"
   - "枚举必须引用 data.enums.*；不要在此重复枚举值"
 
-audience: [admin]
+mount:
+  path: /account/admin
+  audience: [admin]
 
 paths:
-  /account:
+  /:
     get:
       id: cap.protocols.http.account.list
       name: listAccounts
@@ -78,7 +80,7 @@ paths:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
             - platform.errors.ACCOUNT_NUMBER_INVALID
 
-  /account/{id}:
+  /{id}:
     get:
       id: cap.protocols.http.account.get
       name: getAccount
@@ -86,6 +88,7 @@ paths:
       summary: "获取账号"
       used_by:
         - feature.pages.account_detail
+        - feature.pages.account_security
       security:
         - BearerAuth: []
       request:
@@ -183,7 +186,7 @@ paths:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
-  /account/{id}/activate:
+  /{id}/activate:
     post:
       id: cap.protocols.http.account.activate
       name: activateAccount
@@ -220,7 +223,7 @@ paths:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
-  /account/{id}/suspend:
+  /{id}/suspend:
     post:
       id: cap.protocols.http.account.suspend
       name: suspendAccount

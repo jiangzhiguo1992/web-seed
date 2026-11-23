@@ -43,6 +43,14 @@ actions:
     ui: "primary-button"
     label: "登录"
     on_success: "close_and_redirect(feature.routes.account_list)"
+  send_code:
+    capability: cap.services.verification.send
+    ui: "secondary-button"
+    label: "发送验证码"
+  verify_code:
+    capability: cap.services.verification.verify
+    ui: "primary-button"
+    label: "校验验证码"
 
 fields:
   - name: identifier
@@ -56,6 +64,12 @@ fields:
     minLength: 12
     autocomplete: current-password
     secret: true
+  - name: code
+    widget: string
+    optional: true
+    maxLength: 6
+    label: "验证码"
+    autocomplete: one-time-code
 
 security:
   rate_limit_hint: "连续失败 5 次锁定 15 分钟（见 platform.security.auth_policy）"

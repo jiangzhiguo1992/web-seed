@@ -49,6 +49,16 @@ routes:
     meta:
       title: "账号详情"
 
+  - id: feature.routes.account_security
+    path: /account/:id/security
+    name: account-security
+    page: feature.pages.account_security
+    layout: default
+    permission: platform.security.permissions.account_read
+    menu: null
+    meta:
+      title: "认证安全"
+
   - id: feature.routes.login
     path: /login
     name: login
@@ -59,6 +69,16 @@ routes:
     meta:
       title: "登录"
       public: true
+
+  - id: feature.routes.session
+    path: /session
+    name: session
+    page: feature.pages.session
+    layout: default
+    permission: null
+    menu: null
+    meta:
+      title: "当前会话"
 
 redirects:
   - { from: /, to: /account }

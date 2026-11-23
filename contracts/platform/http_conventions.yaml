@@ -56,7 +56,7 @@ security:
 
 status_codes:
   success: [200, 201, 202, 204]
-  client_error: [400, 401, 403, 404, 409, 413, 415, 422, 423, 429]
+  client_error: [400, 401, 403, 404, 409, 410, 413, 415, 422, 423, 429]
   server_error: [500, 502, 503, 504]
   forbidden_usage:
     - "200 表示错误"
@@ -68,21 +68,11 @@ status_codes:
 error_responses:
   always: [400, 429, 500, 503]
   secured: [401, 403]
+  body: [413, 415]
+  deprecated: [410]
 
-# op.used_by 为空时必须在此登记；值必须是已存在的 cap.protocols.http.* operation。
-# 这些端点由 app shell、拦截器或尚未建模的页面流程消费，登记即显式承担缺口。
-unbound_operations:
-  - { operation: cap.protocols.http.auth.refresh, reason: "由 web app 会话拦截器消费，无页面契约" }
-  - { operation: cap.protocols.http.auth.logout, reason: "由 web app 会话拦截器消费，无页面契约" }
-  - { operation: cap.protocols.http.auth.me, reason: "由 web app 会话拦截器消费，无页面契约" }
-  - { operation: cap.protocols.http.auth.verification_send, reason: "登录/绑定流程尚未在页面契约中引用" }
-  - { operation: cap.protocols.http.auth.verification_verify, reason: "登录/绑定流程尚未在页面契约中引用" }
-  - { operation: cap.protocols.http.auth.bind_password, reason: "账号安全设置页尚未建模" }
-  - { operation: cap.protocols.http.auth.bind_phone, reason: "账号安全设置页尚未建模" }
-  - { operation: cap.protocols.http.auth.bind_email, reason: "账号安全设置页尚未建模" }
-
-# HTTP 调用端注册表；operation.audience 与 project.yaml 的 app.audience 都引用这里的值。
-audiences: [admin]
+# HTTP 调用端注册表；mount.audience 与 project.yaml 的 app.audience 都引用这里的值。
+audiences: [admin, user]
 
 content_types:
   json: application/json

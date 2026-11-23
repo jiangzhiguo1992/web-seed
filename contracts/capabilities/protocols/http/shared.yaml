@@ -121,6 +121,27 @@ shared:
       content:
         application/json:
           schema: ApiErrorResponse
+    Gone:
+      description: "端点已移除"
+      headers:
+        X-Request-Id: XRequestId
+      content:
+        application/json:
+          schema: ApiErrorResponse
+    PayloadTooLarge:
+      description: "请求体超过上限"
+      headers:
+        X-Request-Id: XRequestId
+      content:
+        application/json:
+          schema: ApiErrorResponse
+    UnsupportedMediaType:
+      description: "不支持的 Content-Type"
+      headers:
+        X-Request-Id: XRequestId
+      content:
+        application/json:
+          schema: ApiErrorResponse
     Conflict:
       description: "状态冲突"
       headers:

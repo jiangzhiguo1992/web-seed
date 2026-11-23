@@ -20,6 +20,7 @@
 | `cap.events.yaml` | 异步 topic（publish/subscribe）与 crons/dispatches |
 | `cap.lifecycles.yaml` | 实体状态机 |
 | `cap.protocols.http.yaml` | OpenAPI 3.1 HTTP 绑定 |
+| `scenario.http.yaml` | HTTP 验收场景（请求/响应/持久数据差异） |
 | `feature.pages.yaml` | 页面契约 |
 | `feature.rules.yaml` | 可执行业务规则；所有规则都是 error，违反即阻止提交 |
 | `platform.modules.yaml` | 模块注册表（owner_module 来源） |
@@ -58,7 +59,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 - `_types.yaml` 用 `schemas.<kind>.keys` 描述自身；判别键与结构键必须 `required: true`；
 - `cap.events` 的 `topics[].publish.payload` 投影为 `Event<File><Topic>` component；生成物只保留标准 schema，不携带事件扩展键。
 - `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；只有 `shared.yaml` 的 `shared` 块承载跨模块组件，`shared.schemas` 只允许 `source` 溯源块（`service_type` / `enum` / `entity` / `platform`），命名对象必须来自 service/entity/enum，不得在 HTTP 层复制业务字段；生成 OpenAPI 时由脚本把 `shared` 转成 `components`。
-- `cap.protocols.http` 的 operation 额外有 `audience` / `used_by` 与非 2xx 的 `response.<status>.codes`：`audience` 来自 `platform/http_conventions.audiences`，`used_by` 必须精确等于页面引用（空值必须在 `unbound_operations` 登记），错误按 platform.errors 的 status 分组、`COMMON_*` 不在 operation 重复；平台基线状态由 `error_responses` 注入。
+- `cap.protocols.http` 的文件级 `mount` 承载 `path` 与 `audience`：`path` 是资源前缀（`/account/admin`，资源在前、端在后），`audience` 来自 `platform/http_conventions.audiences`；operation 的 `used_by` 必须非空且精确等于页面引用，错误按 platform.errors 的 status 分组、`COMMON_*` 不在 operation 重复；平台基线状态（含 body/deprecated）由 `error_responses` 注入。
 - 槽位字段的值域可整体写 `types: [ _types.schema ]`，即允许 `schemas` 下声明的全部节点种类；不要重复枚举 kind。
 - `map` 节点的键固定为 string（JSON/OpenAPI 对象键没有其他类型），因此没有 `key` 字段；需要 integer key 的 Go/SQL 容器用 `_types.map<_types.integer, T>`（`structures.map`），不要写进 schema 节点。
 - `map` 与 `array` 对齐：`values` 是值域，`min_items` / `max_items` 约束键数，`key_patterns` 约束键名（全部匹配），`validation` 校验映射级规则且只能引用 `value`；生成到 OpenAPI 为 `additionalProperties` / `minProperties` / `maxProperties` / `propertyNames`。
@@ -96,6 +97,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 | `make gen-check` | 校验全部生成物最新 |
 | `make gen-rule-ids` | 从 checker 的 `rulef("...")` 重新生成 `rule_ids_gen.go` |
 | `make gen-rule-tests` | 生成 `docs/contracts/generated/rule-tests.md`（规则 → `implemented_by` → 测试直接引用数） |
+| `make gen-scenarios` | 把 `contracts/scenarios/http/*.yaml` 投影为 `contracts/generated/scenarios/manifest.yaml` |
 | `make test-rules` | 运行 `feature.rules` 的 policy 行为断言骨架（`go test -tags rules`） |
 
 `contract-check` 已接入 `lefthook` pre-commit（`contracts/**/*.yaml`）与 CI；CI 额外运行 `make audit-types` 输出类型词汇报告。
