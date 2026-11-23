@@ -24,9 +24,9 @@ paths:
       security: { BearerAuth: true }
       request:
         query:
-          - { name: status, schema: data.enums.account_status, required: false, description: "账号状态过滤", to: params.filter.status }
-          - { name: offset, schema: _types.page_offset, required: false, description: "分页偏移；默认 0", to: params.filter.offset }
-          - { name: limit, schema: _types.page_limit, required: false, description: "分页大小；默认 20", to: params.filter.limit }
+          - { name: status, schema: data.enums.account_status, required: false, description: "账号状态过滤", to: params.status }
+          - { name: offset, schema: _types.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
+          - { name: limit, schema: _types.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
           description: "成功"
@@ -73,7 +73,7 @@ paths:
       security: { BearerAuth: true }
       request:
         path:
-          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
+          - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
       response:
         200:
           description: "成功"
@@ -94,7 +94,7 @@ paths:
       security: { BearerAuth: true }
       request:
         path:
-          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
+          - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
         body:
           content_type: application/json
           schema: cap.services.account.schemas.UpdateAccountInput
@@ -126,7 +126,7 @@ paths:
       security: { BearerAuth: true }
       request:
         path:
-          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
+          - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
       response:
         204:
           description: "已删除"
@@ -150,7 +150,7 @@ paths:
       security: { BearerAuth: true }
       request:
         path:
-          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
+          - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
       response:
         200:
           description: "成功"
@@ -177,7 +177,7 @@ paths:
       security: { BearerAuth: true }
       request:
         path:
-          - { name: id, schema: _types.integer, description: "账号 ID", to: params.id }
+          - { name: id, schema: _types.positive_integer, description: "账号 ID", to: params.id }
         body:
           content_type: application/json
           schema: cap.services.account.schemas.SuspendAccountInput

@@ -9,6 +9,11 @@ do_not:
   - "params 只能引用所属 family 在 contracts/_meta/_types.yaml 声明的参数"
 
 custom_types:
+  positive_integer:
+    family: integer
+    description: "正整数；用于需要 min 1 约束的 ID 值"
+    params:
+      min: 1
   account_number:
     family: string
     description: "账号编号"

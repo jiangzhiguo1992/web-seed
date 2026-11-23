@@ -254,9 +254,10 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 4. **客户端幂等键删除**：幂等键 header、OpenAPI components 与场景字段全部删除；幂等由 API 内部按业务语义决定，不由客户端传入的 header 控制。
 5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。`request.headers` / `response.headers` 固定槽位移除；`Authorization` 由 `security.BearerAuth` 表达。
 6. **安全凭据注入**：`security.BearerAuth: true` 时，认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
-7. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发，不使用 cookie/session。
+7. **账号 ID 类型**：删除 `_types.account_id`，HTTP path 与认证注入的 `account_id` 改用 `_types.positive_integer`（`min: 1`）；普通 service/query 的账号 ID 仍是 `_types.integer`。
+8. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发，不使用 cookie/session。
 
-同时参数级 `to` 的值统一写 `params.<service 参数路径>`（如 `params.input`、`params.filter.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
+同时参数级 `to` 的值统一写 `params.<service 参数路径>`（如 `params.input`、`params.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
 
 验证：`make contract-check`、`make gen`、`make gen-rule-ids`、`make test-tools` 通过；OpenAPI `servers` 带 `/<mount.api_version>`，平台组件出现在每个 spec 的 `components`。
 

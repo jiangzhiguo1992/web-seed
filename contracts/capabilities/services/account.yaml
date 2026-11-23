@@ -9,12 +9,6 @@ do_not:
   - "写操作前必须先完成校验；不要把校验逻辑放在写查询之后"
 
 schemas:
-  ListAccountsFilter:
-    type: _types.object
-    properties:
-      - { name: status, schema: { ref: data.enums.account_status }, nullable: true, description: "账号状态过滤" }
-      - { name: offset, schema: { type: _types.page_offset }, description: "分页偏移；默认 0" }
-      - { name: limit, schema: { type: _types.page_limit }, description: "分页大小；默认 20" }
   CreateAccountInput:
     type: _types.object
     properties:
@@ -79,7 +73,9 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: filter, type: cap.services.account.schemas.ListAccountsFilter }
+      - { name: status, type: data.enums.account_status, nullable: true }
+      - { name: offset, type: _types.page_offset }
+      - { name: limit, type: _types.page_limit }
     returns:
       - { name: page, type: cap.services.account.schemas.AccountPage, value: step.paginate.page }
       - { name: err, type: error }
@@ -88,9 +84,9 @@ services:
         kind: query
         summary: "调用 data.queries.account.list_accounts"
         input:
-          - { name: status, value: params.filter.status, description: "账号状态筛选" }
-          - { name: offset, value: params.filter.offset, description: "分页偏移" }
-          - { name: limit, value: params.filter.limit, description: "分页上限" }
+          - { name: status, value: params.status, description: "账号状态筛选" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页上限" }
         output:
           - { name: accounts, type: _types.list<data.entities.account>, description: "query 返回的 accounts" }
         query: data.queries.account.list_accounts
@@ -100,8 +96,8 @@ services:
         summary: "把账号列表包装成分页结果"
         input:
           - { name: accounts, value: step.list_accounts.accounts, description: "查询到的账号列表" }
-          - { name: offset, value: params.filter.offset, description: "分页偏移" }
-          - { name: limit, value: params.filter.limit, description: "分页上限" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页上限" }
         output:
           - { name: page, type: cap.services.account.schemas.AccountPage, description: "账号分页结果" }
         errors: [ ]
