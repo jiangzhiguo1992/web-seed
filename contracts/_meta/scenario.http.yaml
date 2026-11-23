@@ -73,7 +73,6 @@ fields:
           - { name: path, type: _types.map<_types.any>, required: false, description: "path 参数" }
           - { name: query, type: _types.map<_types.any>, required: false, description: "query 参数" }
           - { name: headers, type: _types.map<_types.any>, required: false, description: "请求头" }
-          - { name: cookies, type: _types.map<_types.any>, required: false, description: "cookie" }
           - { name: body, type: _types.any, soft: true, required: false, description: "请求体" }
           - { name: idempotency_key, type: _types.string, required: false, description: "Idempotency-Key" }
       - name: then
