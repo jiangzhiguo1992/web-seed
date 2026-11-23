@@ -4,6 +4,8 @@ schema_version: 1
 id: platform.observability.metrics
 summary: "指标名与标签"
 stability: draft
+do_not:
+  - "指标名与标签只在本文件登记；未登记指标 CI 警告"
 
 naming:
   pattern: "<subsystem>_<name>_<unit>"

@@ -70,6 +70,8 @@ type Checker struct {
 	serviceQueries      map[string]map[string]bool
 	serviceQueryClosure map[string]map[string]bool
 	serviceErrorClosure map[string]map[string]bool
+	pageParamTypes      map[string]map[string]string
+	pageTypeFamilies    map[string]string
 	serviceWrites       map[string]bool
 	httpOps             map[string]httpOpInfo
 	ruleErrors          map[string]string
@@ -108,6 +110,7 @@ func (c *Checker) run() {
 	c.checkErrorFiles()
 	c.checkProjectAPIVersion()
 	c.checkPlatformContracts()
+	c.checkRoles()
 	tableSchema, err := c.loadSchemaByType("data.tables")
 	if err != nil {
 		c.rulef("schema.load", "load tables schema: %v", err)
@@ -168,6 +171,16 @@ func (c *Checker) run() {
 	c.checkRules(querySchema)
 	c.checkRules(storageSchema)
 	c.checkCapabilities()
+	c.checkFeatureRoutes()
+	c.checkQuality()
+	c.checkAnalytics()
+	c.checkVersioning()
+	c.checkLogFields()
+	c.checkMetrics()
+	c.checkArchitecture()
+	c.checkAuthPolicy()
+	c.checkConfigEnv()
+	c.checkWebDeps()
 	c.checkFeaturePages()
 	c.checkScenarioContracts()
 	c.checkUndeclaredRuleIDs()

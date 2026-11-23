@@ -27,6 +27,9 @@ func (c *Checker) permissionExists(id string) bool {
 }
 
 func (c *Checker) checkAccess(serviceIDs map[string]bool) {
+	if schema, err := c.loadSchemaByType("platform.security.access"); err == nil {
+		c.checkRules(schema)
+	}
 	path := filepath.Join(c.root, "contracts/platform/security/access.yaml")
 	doc, err := loadYAML(path)
 	if err != nil {

@@ -7,6 +7,7 @@ package check
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -21,6 +22,8 @@ func (c *Checker) checkFeaturePages() {
 	lifecycleIDs, lifecycleActions, lifecycleStates := c.pageLifecycleIndex()
 	serviceIDs := c.pageServiceIndex()
 	routeIDs := c.pageRouteIndex()
+	c.pageParamTypes = c.buildPageParamTypes()
+	c.pageTypeFamilies = c.loadPageTypeFamilies()
 	for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -45,7 +48,7 @@ func (c *Checker) checkFeaturePages() {
 			c.rulef("page-refs", "%s: unknown route %s", rel, route)
 		}
 		lifecycleID := pageLifecycleID(doc)
-		c.checkPageNode(rel, doc, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs)
+		c.checkPageNode(rel, doc, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs, routeIDs)
 	}
 }
 
@@ -183,6 +186,149 @@ func (c *Checker) pageRouteIndex() map[string]bool {
 	return ids
 }
 
+// checkPageParams 校验 data/actions.params 的 key 与类型来自 service 参数或对象字段。
+func (c *Checker) checkPageParams(rel, service string, node map[string]any) {
+	params, _ := asMap(node["params"])
+	if params == nil {
+		return
+	}
+	fields := c.pageParamTypes[service]
+	for key, raw := range params {
+		p, _ := asMap(raw)
+		fieldType, ok := fields[key]
+		if !ok {
+			c.rulef("page-params", "%s: %s.%s is not a parameter or field of %s", rel, service, key, service)
+			continue
+		}
+		pageType, _ := p["type"].(string)
+		if pageType != "" && fieldType != "" && !c.pageTypeCompatible(pageType, fieldType) {
+			c.rulef("page-params", "%s: %s.%s type %s does not match service type %s", rel, service, key, pageType, fieldType)
+		}
+	}
+}
+
+func (c *Checker) pageTypeCompatible(pageType, serviceType string) bool {
+	pageType = c.pageBaseType(pageType)
+	serviceType = c.pageBaseType(serviceType)
+	if pageType == serviceType {
+		return true
+	}
+	if strings.HasPrefix(serviceType, "data.enums.") && pageType == "_types.string" {
+		return true
+	}
+	return false
+}
+
+func (c *Checker) pageBaseType(t string) string {
+	if !strings.HasPrefix(t, "_types.") {
+		return t
+	}
+	name := strings.TrimPrefix(t, "_types.")
+	if family := c.pageTypeFamilies[name]; family != "" {
+		return "_types." + family
+	}
+	return t
+}
+
+// loadPageTypeFamilies 读取 data.types.custom_types 的 family。
+func (c *Checker) loadPageTypeFamilies() map[string]string {
+	out := map[string]string{}
+	doc, err := loadYAML(filepath.Join(c.root, "contracts/data/types.yaml"))
+	if err != nil {
+		return out
+	}
+	custom, _ := asMap(doc["custom_types"])
+	for name, raw := range custom {
+		item, _ := asMap(raw)
+		if family, _ := item["family"].(string); family != "" {
+			out[name] = family
+		}
+	}
+	return out
+}
+
+// buildPageParamTypes 建立 service → 参数/对象字段 → 类型索引。
+func (c *Checker) buildPageParamTypes() map[string]map[string]string {
+	out := map[string]map[string]string{}
+	schema, err := c.loadSchemaByType("cap.services")
+	if err != nil {
+		return out
+	}
+	for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		fileID, _ := doc["id"].(string)
+		schemas, _ := asMap(doc["schemas"])
+		for _, raw := range asList(doc["services"]) {
+			item, _ := asMap(raw)
+			name, _ := item["name"].(string)
+			if name == "" {
+				continue
+			}
+			fields := map[string]string{}
+			for _, rawParam := range asList(item["params"]) {
+				pm, _ := asMap(rawParam)
+				pname, _ := pm["name"].(string)
+				if pname == "" || pname == "ctx" {
+					continue
+				}
+				ptype, _ := pm["type"].(string)
+				fields[pname] = ptype
+				for field, typ := range objectFields(schemas, ptype) {
+					if _, exists := fields[field]; !exists {
+						fields[field] = typ
+					}
+				}
+			}
+			out[fileID+"."+name] = fields
+		}
+	}
+	return out
+}
+
+// objectFields 解析 cap.services.<file>.schemas.<Type> 的 properties。
+func objectFields(schemas map[string]any, typ string) map[string]string {
+	out := map[string]string{}
+	parts := strings.Split(typ, ".")
+	if len(parts) < 5 || parts[0] != "cap" || parts[1] != "services" || parts[3] != "schemas" {
+		return out
+	}
+	schema, _ := asMap(schemas[parts[4]])
+	if schema == nil {
+		return out
+	}
+	for _, raw := range asList(schema["properties"]) {
+		p, _ := asMap(raw)
+		name, _ := p["name"].(string)
+		if name == "" {
+			continue
+		}
+		if s, _ := asMap(p["schema"]); s != nil {
+			if t, _ := s["type"].(string); t != "" {
+				out[name] = t
+			} else if r, _ := s["ref"].(string); r != "" {
+				out[name] = r
+			}
+		}
+	}
+	return out
+}
+
+// checkPageActionTarget 校验 on_success 的导航函数与目标路由。
+func (c *Checker) checkPageActionTarget(rel, value string, routeIDs map[string]bool) {
+	re := regexp.MustCompile(`^(navigate|close_and_redirect)\((feature\.routes\.[a-z][a-z0-9_]*)\)$`)
+	m := re.FindStringSubmatch(value)
+	if m == nil {
+		c.rulef("page-action-target", "%s: on_success %q must be navigate(feature.routes.*) or close_and_redirect(feature.routes.*)", rel, value)
+		return
+	}
+	if routeIDs != nil && !routeIDs[m[2]] {
+		c.rulef("page-action-target", "%s: on_success target %s is not a declared route", rel, m[2])
+	}
+}
+
 // pageLifecycleID 取页面唯一的状态机上下文，供 state_not 校验。
 func pageLifecycleID(doc map[string]any) string {
 	if transitionUI, ok := asMap(doc["transition_ui"]); ok {
@@ -230,14 +376,21 @@ func lifecycleRefID(ref string) string {
 	return strings.Join(parts[:3], ".")
 }
 
-func (c *Checker) checkPageNode(rel string, node any, lifecycleID string, lifecycleIDs, lifecycleActions map[string]bool, lifecycleStates map[string]map[string]bool, serviceIDs map[string]bool) {
+func (c *Checker) checkPageNode(rel string, node any, lifecycleID string, lifecycleIDs, lifecycleActions map[string]bool, lifecycleStates map[string]map[string]bool, serviceIDs map[string]bool, routeIDs map[string]bool) {
 	switch v := node.(type) {
 	case map[string]any:
 		for key, child := range v {
 			switch key {
 			case "capability":
-				if s, ok := child.(string); ok && s != "" && serviceIDs != nil && !serviceIDs[s] {
-					c.rulef("page-refs", "%s: unknown capability %s", rel, s)
+				if s, ok := child.(string); ok && s != "" {
+					if serviceIDs != nil && !serviceIDs[s] {
+						c.rulef("page-refs", "%s: unknown capability %s", rel, s)
+					}
+					c.checkPageParams(rel, s, v)
+				}
+			case "on_success":
+				if s, ok := child.(string); ok && s != "" {
+					c.checkPageActionTarget(rel, s, routeIDs)
 				}
 			case "permission":
 				if s, ok := child.(string); ok && s != "" && !c.permissionExists(s) {
@@ -284,11 +437,11 @@ func (c *Checker) checkPageNode(rel string, node any, lifecycleID string, lifecy
 					}
 				}
 			}
-			c.checkPageNode(rel, child, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs)
+			c.checkPageNode(rel, child, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs, routeIDs)
 		}
 	case []any:
 		for _, child := range v {
-			c.checkPageNode(rel, child, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs)
+			c.checkPageNode(rel, child, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs, routeIDs)
 		}
 	}
 }

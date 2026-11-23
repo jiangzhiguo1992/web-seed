@@ -130,7 +130,7 @@
 - [ ] `internal/composition/adminapi/handlers`（实现 StrictServerInterface）
 - [ ] `routes_test.go`：路由集合 == 契约集合 + 响应 schema 校验
 - [ ] 由 `features/**` 生成路由与页面骨架，补齐四态
-- [ ] Playwright 跑通 `feature.flows.account_create`
+- [ ] Playwright 跑通 `scenario.http.account.create_success`
 
 #### P5 一致性闸门（详见附录 A）
 

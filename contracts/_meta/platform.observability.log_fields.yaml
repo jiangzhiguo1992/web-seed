@@ -1,0 +1,74 @@
+# 日志字段与 PII 规则；结构由 contract-check 校验。
+
+id: meta.platform.observability.log_fields
+type: platform.observability.log_fields
+title: "日志字段与 PII 规则"
+targets:
+  dir: "contracts/platform/observability"
+  glob: "log_fields.yaml"
+  id: "platform.observability.log_fields"
+  naming: "snake_case"
+
+fields:
+  - name: schema_version
+    type: _types.integer
+    required: true
+    const: 1
+    description: "格式版本"
+  - name: id
+    type: _types.string
+    required: true
+    const: platform.observability.log_fields
+    description: "契约 ID"
+  - name: summary
+    type: _types.string
+    required: true
+    description: "一句话说明"
+  - name: stability
+    type: _types.string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+  - name: do_not
+    type: _types.set<_types.string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+  - name: format
+    type: _types.string
+    required: true
+    enum: [ json ]
+    description: "日志格式"
+  - name: timestamp
+    type: _types.string
+    required: true
+    description: "时间格式"
+  - name: level_field
+    type: _types.string
+    required: true
+    description: "级别字段名"
+  - name: required
+    type: _types.list<_types.any>
+    required: true
+    description: "必填字段"
+  - name: fields
+    type: _types.list<_types.any>
+    required: true
+    min_items: 1
+    description: "字段清单"
+  - name: never_log
+    type: _types.list<_types.any>
+    required: true
+    description: "禁止进入日志的字段"
+  - name: pii_source
+    type: _types.string
+    required: true
+    description: "PII 字段来源"
+  - name: rules
+    type: _types.list<_types.any>
+    required: true
+    description: "生成/校验规则"
+
+rules:
+  - { id: log-field-refs, text: "字段名唯一；required_for 只允许 http/job/worker/cli/test；never_log 条目必须是 snake_case 或 *suffix 形式；所有 sensitivity: pii|secret 的表列必须被 never_log 覆盖", implemented_by: [ log-field-refs ] }

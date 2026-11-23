@@ -15,7 +15,7 @@ token:
     algorithm: HS256
     ttl: 15m
     claims_required: [sub, aud, exp, iat, jti]
-    audience: [web/admin]
+    audience: [admin, user]
     pii_in_token: false
     storage: "hash"              # 仅存哈希用于吊销/审计；校验优先验签
   refresh:

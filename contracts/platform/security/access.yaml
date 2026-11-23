@@ -16,3 +16,8 @@ bindings:
   - { target: cap.services.token.logout, audit: true }
   - { target: cap.services.verification.send, audit: true, rate_limit: { requests: 5, window_seconds: 60 } }
   - { target: cap.services.verification.verify, audit: true, rate_limit: { requests: 10, window_seconds: 60 } }
+  - { target: cap.services.token.refresh, audit: true, rate_limit: { requests: 30, window_seconds: 60 } }
+  - { target: cap.services.token.verify, rate_limit: { requests: 120, window_seconds: 60 } }
+  - { target: cap.services.auth.bind_password, permissions: [platform.security.permissions.account_write], audit: true }
+  - { target: cap.services.auth.bind_phone, permissions: [platform.security.permissions.account_write], audit: true }
+  - { target: cap.services.auth.bind_email, permissions: [platform.security.permissions.account_write], audit: true }

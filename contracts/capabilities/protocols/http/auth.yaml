@@ -217,6 +217,7 @@ paths:
         422:
           codes:
             - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+            - platform.errors.AUTH_WEAK_PASSWORD
 
   /bind/phone:
     post:

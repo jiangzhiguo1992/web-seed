@@ -174,6 +174,9 @@ var policyExpectations = map[string]policyExpectation{
 	"feature.rules.auth.login_lockout": {
 		tables: map[string][]string{"data.tables.auth_pwd": {"failed_login_count", "locked_until"}},
 	},
+	"feature.rules.auth.password_strength": {
+		tables: map[string][]string{"data.tables.auth_pwd": {"password_hash"}},
+	},
 }
 
 type policyWorld struct {
@@ -525,6 +528,7 @@ var anchorAliases = map[string][]string{
 	"data.tables.auth_pwd.status":                     {"状态", "status"},
 	"data.tables.auth_pwd.failed_login_count":         {"failed_login_count", "失败"},
 	"data.tables.auth_pwd.locked_until":               {"locked_until", "锁定"},
+	"data.tables.auth_pwd.password_hash":              {"password", "密码"},
 	"data.tables.verification_action":                 {"verification_action", "动作", "日志"},
 	"data.tables.verification_action.result":          {"result", "结果"},
 	"data.tables.verification_action.account_id":      {"account_id", "账号"},

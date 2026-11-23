@@ -1005,6 +1005,8 @@ paths:
           x-error-codes:
             - biz_code: 4004
               code: AUTH_VERIFICATION_TARGET_INVALID
+            - biz_code: 3008
+              code: AUTH_WEAK_PASSWORD
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:

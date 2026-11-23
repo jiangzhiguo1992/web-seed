@@ -50,7 +50,6 @@ paths:
       service: cap.services.account.create
       summary: "创建账号"
       used_by:
-        - feature.pages.account_list
         - feature.pages.account_create
       security:
         - BearerAuth: []

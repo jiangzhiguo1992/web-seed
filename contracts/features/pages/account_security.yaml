@@ -35,16 +35,31 @@ view_states:
 actions:
   bind_password:
     capability: cap.services.auth.bind_password
+    params:
+      account_id: { from: route.params.id, type: _types.integer, required: true }
+      action: { from: form.action, type: _types.string, required: true }
+      username: { from: form.username, type: _types.string, optional: true }
+      password: { from: form.password, type: _types.string, optional: true, secret: true }
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "设置密码"
   bind_phone:
     capability: cap.services.auth.bind_phone
+    params:
+      account_id: { from: route.params.id, type: _types.integer, required: true }
+      action: { from: form.action, type: _types.string, required: true }
+      code: { from: form.code, type: _types.string, optional: true }
+      number: { from: form.phone, type: _types.string, optional: true }
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "绑定手机号"
   bind_email:
     capability: cap.services.auth.bind_email
+    params:
+      account_id: { from: route.params.id, type: _types.integer, required: true }
+      action: { from: form.action, type: _types.string, required: true }
+      username: { from: form.username, type: _types.string, optional: true }
+      domain: { from: form.email, type: _types.string, optional: true }
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "绑定邮箱"
@@ -71,3 +86,11 @@ fields:
     maxLength: 6
     label: "验证码"
     autocomplete: one-time-code
+  - name: username
+    widget: string
+    optional: true
+    label: "用户名"
+  - name: domain
+    widget: string
+    optional: true
+    label: "邮箱域名"

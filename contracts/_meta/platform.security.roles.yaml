@@ -67,3 +67,7 @@ fields:
     required: true
     pattern: '^platform\.security\.roles\.[a-z][a-z0-9_]*$'
     description: "默认角色 ID"
+
+rules:
+  - { id: role-inheritance, text: "inherits 必须指向已声明角色；禁止自继承与环；继承深度不得超过 constraints.max_inheritance_depth", implemented_by: [ role-inheritance ] }
+  - { id: role-permissions, text: "permissions 必须是已声明权限；仅 admin 可使用 *；default_role 必须存在", implemented_by: [ role-permissions ] }

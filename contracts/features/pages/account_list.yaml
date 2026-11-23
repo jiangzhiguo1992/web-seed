@@ -41,19 +41,23 @@ view_states:
 
 actions:
   create:
-    capability: cap.services.account.create
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "新建账号"
-    on_success: "navigate(feature.flows.account_create.success_target)"
+    on_success: "navigate(feature.routes.account_create)"
   activate:
     capability: cap.services.account.activate
+    params:
+      id: { from: row.id, type: _types.integer, required: true }
     permission: platform.security.permissions.account_write
     available_when: { transitions: [cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate] }
     ui: "row-action"
     label: "激活"
   suspend:
     capability: cap.services.account.suspend
+    params:
+      id: { from: row.id, type: _types.integer, required: true }
+      reason: { from: form.reason, type: _types.string, required: true }
     permission: platform.security.permissions.account_write
     available_when: { transition: cap.lifecycles.account.transitions.suspend }
     ui: "row-action"
@@ -61,6 +65,8 @@ actions:
     confirm: true
   delete:
     capability: cap.services.account.delete
+    params:
+      id: { from: row.id, type: _types.integer, required: true }
     permission: platform.security.permissions.account_delete
     available_when: { transition: cap.lifecycles.account.destroy }
     ui: "row-action"

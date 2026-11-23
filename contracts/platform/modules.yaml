@@ -6,3 +6,6 @@ do_not:
   - "模块名只增不改；重命名必须同步所有 owner_module"
 modules:
   - { name: account, summary: "账号、认证、令牌与验证码" }
+  - { name: auth, summary: "认证扩展（可选模块）" }
+  - { name: audit, summary: "审计（可选模块）" }
+  - { name: notification, summary: "通知（可选模块）" }

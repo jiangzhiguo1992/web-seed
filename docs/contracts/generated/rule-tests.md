@@ -18,6 +18,7 @@
 | cap.lifecycles | lifecycle-requires | lifecycle-requires | 1 |
 | cap.lifecycles | lifecycle-anchors | lifecycle-anchors | 1 |
 | cap.protocols.http | http-file | http-file | 1 |
+| cap.protocols.http | http-status | http-status | 1 |
 | cap.protocols.http | http-shape | http-shape | 1 |
 | cap.protocols.http | http-version | http-version | 1 |
 | cap.protocols.http | http-mount | http-mount | 1 |
@@ -43,6 +44,7 @@
 | cap.services | service-owner-write | service-owner-write | 1 |
 | cap.services | service-errors | service-errors | 1 |
 | cap.services | service-visibility | service-visibility | 1 |
+| cap.services | service-page-schema | service-page-schema | 1 |
 | cap.services | service-used | service-used | 1 |
 | cap.services | service-step-fields | service-step-fields | 1 |
 | cap.services | service-step-target | service-step-target | 1 |
@@ -176,11 +178,30 @@
 | data.tables | physical-primary-key | physical-primary-key | 1 |
 | data.tables | do-not-specific | do-not-specific | 2 |
 | feature.pages | page-structure | page-structure | 1 |
+| feature.pages | page-params | page-params | 1 |
+| feature.pages | page-action-target | page-action-target | 1 |
 | feature.pages | page-limits | page-limits | 1 |
 | feature.pages | page-refs | page-refs | 1 |
+| feature.routes | route-structure | route-structure | 1 |
+| feature.routes | route-redirect | route-redirect | 1 |
 | feature.rules | rule-structure | rule-structure | 1 |
 | feature.rules | rule-value | rule-value | 1 |
 | feature.rules | rule-id-unique | rule-id-unique | 1 |
+| platform.analytics.events | analytics-pii | analytics-pii | 1 |
+| platform.analytics.events | analytics-types | analytics-types | 1 |
+| platform.analytics.events | analytics-refs | analytics-refs, analytics-types | 1 |
+| platform.architecture.go_arch | architecture-refs | architecture-refs | 1 |
+| platform.environments | environment-shape | environment-shape | 1 |
+| platform.observability.log_fields | log-field-refs | log-field-refs | 1 |
+| platform.observability.metrics | metric-shape | metric-shape | 1 |
+| platform.quality | quality-refs | quality-refs | 1 |
+| platform.security.access | access-coverage | access-coverage | 1 |
+| platform.security.auth_policy | auth-policy-paths | auth-policy-paths | 1 |
+| platform.security.auth_policy | auth-policy-audience | auth-policy-audience | 1 |
+| platform.security.auth_policy | auth-policy-password | auth-policy-password | 1 |
+| platform.security.roles | role-inheritance | role-inheritance | 1 |
+| platform.security.roles | role-permissions | role-permissions | 1 |
+| platform.versioning | versioning-refs | versioning-refs | 1 |
 | scenario.http | scenario-structure | scenario-structure | 1 |
 | scenario.http | scenario-refs | scenario-refs | 1 |
 | scenario.http | scenario-db | scenario-db | 1 |

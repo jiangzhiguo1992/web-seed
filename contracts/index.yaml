@@ -126,7 +126,7 @@ entries:
   - { id: cap.events.account, path: capabilities/events/account.yaml, summary: "账号领域事件", consumers: [api, worker], enforcement: generated+tested, stability: draft }
 
   # ---------- features ----------
-  - { id: feature.routes, path: features/routes.yaml, summary: "路由与菜单", consumers: [web/admin], enforcement: generated, stability: draft }
+  - { id: feature.routes, path: features/routes.yaml, summary: "路由与菜单", consumers: [web/admin], enforcement: tested, stability: draft }
   - id: feature.pages.account_list
     path: features/pages/account_list.yaml
     summary: "账号列表页"
@@ -157,13 +157,13 @@ entries:
   - { id: platform.errors.data_access, path: platform/errors/data_access.yaml, summary: "数据访问基础设施错误基线", consumers: [api, tools], enforcement: tested, stability: draft }
   - { id: platform.http_conventions, path: platform/http_conventions.yaml, summary: "信封、分页、header、状态码", consumers: [api, web/admin], enforcement: generated, stability: draft }
   - { id: platform.quality, path: platform/quality.yaml, summary: "测试策略与门槛", consumers: [tools], enforcement: tested, stability: draft }
-  - { id: platform.config.env, path: platform/config/env.json, summary: "环境变量 schema", consumers: [api, web/admin, ops], enforcement: generated+tested, stability: draft }
+  - { id: platform.config.env, path: platform/config/env.json, summary: "环境变量 schema", consumers: [api, web/admin, ops], enforcement: tested, stability: draft }
   - { id: platform.architecture.go_arch, path: platform/architecture/go_arch.yaml, summary: "Go 分层约束", consumers: [tools], enforcement: tested, stability: draft }
   - { id: platform.architecture.web_deps, path: platform/architecture/web_deps.json, summary: "前端依赖方向约束", consumers: [tools], enforcement: tested, stability: draft }
   - { id: platform.design.tokens, path: platform/design/tokens.json, summary: "设计令牌", consumers: [web/admin], enforcement: generated, stability: draft }
-  - { id: platform.observability.log_fields, path: platform/observability/log_fields.yaml, summary: "日志字段与 PII 规则", consumers: [api, ops], enforcement: generated+tested, stability: draft }
-  - { id: platform.observability.metrics, path: platform/observability/metrics.yaml, summary: "指标名与标签", consumers: [api, ops], enforcement: generated, stability: draft }
-  - { id: platform.analytics.events, path: platform/analytics/events.yaml, summary: "埋点事件与属性", consumers: [web/admin, api], enforcement: generated, stability: draft }
+  - { id: platform.observability.log_fields, path: platform/observability/log_fields.yaml, summary: "日志字段与 PII 规则", consumers: [api, ops], enforcement: tested, stability: draft }
+  - { id: platform.observability.metrics, path: platform/observability/metrics.yaml, summary: "指标名与标签", consumers: [api, ops], enforcement: tested, stability: draft }
+  - { id: platform.analytics.events, path: platform/analytics/events.yaml, summary: "埋点事件与属性", consumers: [web/admin, api], enforcement: tested, stability: draft }
   - { id: platform.modules, path: platform/modules.yaml, summary: "模块清单", consumers: [api, worker, tools], enforcement: tested, stability: draft }
   - { id: platform.security.access, path: platform/security/access.yaml, summary: "入口访问策略（权限与审计）", consumers: [api, worker], enforcement: tested, stability: draft }
   - { id: platform.security.permissions, path: platform/security/permissions.yaml, summary: "权限点", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }

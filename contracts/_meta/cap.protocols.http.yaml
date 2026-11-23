@@ -159,6 +159,7 @@ fields:
 
 rules:
   - { id: http-file, text: "文件 id 必须由 targets 派生", implemented_by: [ http-file ] }
+  - { id: http-status, text: "response 的 status 必须落在 platform.http_conventions.status_codes 的 success/client_error/server_error 列表内；3xx 与未登记状态非法", implemented_by: [ http-status ] }
   - { id: http-shape, text: "paths 必须是 path → method → operation 的固定结构；operation 必须使用 id/name/service/summary/used_by/request/response（security 可选）；request 只允许 headers/path/query/cookies/body/mapping/idempotency；response 的 key 是三位状态码，2xx 必须写 description/headers/body，非 2xx 只能写非空 codes；shared.schemas（规范化后 components.schemas）的 source 必须且只能声明一个溯源键", implemented_by: [ http-shape ] }
   - { id: http-version, text: "mount.path 与 paths 的 key 不得以 /v<数字> 开头；API 版本与 timeout_ms 只在 project.yaml 的 app 上声明，URL 前缀由生成器派生", implemented_by: [ http-version ] }
   - { id: http-mount, text: "有 paths 的文件必须有 mount：mount.path 以 / 开头且只写公共资源前缀（如 /account，不写 /account/admin）；audience 段放在 paths 的 key 里（如 /admin）；paths 的 key 是相对路径且以 / 开头；拼接后的 path 全局唯一", implemented_by: [ http-mount ] }

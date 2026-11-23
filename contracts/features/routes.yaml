@@ -1,8 +1,8 @@
 # 路由与菜单。
 
-schema_version: 1
 id: feature.routes
 summary: "路由与菜单"
+schema_version: 1
 stability: draft
 do_not:
   - "页面路由由 feature.routes 生成，禁止手写"

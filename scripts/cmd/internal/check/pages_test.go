@@ -25,6 +25,9 @@ transitions:
 	writeCapFile(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 services:
   - name: create
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: status, type: _types.string }
   - name: delete
 `)
 	writeCapFile(t, root, "contracts/features/routes.yaml", `id: feature.routes

@@ -176,6 +176,9 @@ coverage:
       - code: AUTH_VERIFICATION_TARGET_INVALID
         status: 422
         covered: false
+      - code: AUTH_WEAK_PASSWORD
+        status: 422
+        covered: false
   - operation: cap.protocols.http.auth.bind_phone
     method: post
     path: /auth/bind/phone

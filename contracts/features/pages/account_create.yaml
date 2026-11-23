@@ -37,10 +37,14 @@ view_states:
 actions:
   submit:
     capability: cap.services.account.create
+    params:
+      number: { from: form.number, type: _types.string, required: true }
+      nickname: { from: form.nickname, type: _types.string, required: true }
+      user_id: { from: form.user_id, type: _types.integer, optional: true }
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "创建"
-    on_success: "navigate(feature.pages.account_detail)"
+    on_success: "navigate(feature.routes.account_detail)"
 
 fields:
   - name: number

@@ -79,6 +79,19 @@ jobs:
         run: time make check-index
       - run: make gen-check-core
 
+  contract-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: scripts/cmd/go.mod
+          cache-dependency-path: scripts/cmd/go.sum
+      - name: v1→v2 compatibility
+        run: make contract-compat
+
   rule-tests:
     runs-on: ubuntu-latest
     steps:

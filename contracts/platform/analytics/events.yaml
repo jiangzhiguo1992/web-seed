@@ -4,6 +4,11 @@ schema_version: 1
 id: platform.analytics.events
 summary: "埋点事件与属性"
 stability: draft
+do_not:
+  - "埋点事件名与属性只在本文件登记；pii: true 的属性生成时剔除"
+  - "property.type 必须是标量类型、data.types 或 data.enums；禁止 _types.any / _types.json"
+  - "不要假设 property 等于表列/实体字段；事件载荷与数据行不是一一对应"
+  - "session_id/account_id 当前视为非 PII 的关联 ID；若合规要求，改成 pii: true"
 
 naming:
   pattern: "<domain>.<past_tense>"
@@ -21,9 +26,28 @@ events:
   - name: page.account_list_viewed
     description: "账号列表页曝光"
     trigger: mount
+    page: feature.pages.account_list
     properties:
       - { name: item_count, type: _types.integer, pii: false }
-      - { name: filter_status, type: _types.string, pii: false }
+      - { name: filter_status, type: data.enums.account_status, pii: false }
+
+  - name: page.login_viewed
+    description: "登录页曝光"
+    trigger: mount
+    page: feature.pages.login
+    properties: []
+
+  - name: page.session_viewed
+    description: "会话页曝光"
+    trigger: mount
+    page: feature.pages.session
+    properties: []
+
+  - name: page.account_security_viewed
+    description: "账号认证安全页曝光"
+    trigger: mount
+    page: feature.pages.account_security
+    properties: []
 
   # ---------- 动作 ----------
   - name: account.create_clicked
@@ -37,7 +61,7 @@ events:
     ref: cap.protocols.http.account.create
     properties:
       - { name: account_id, type: _types.string, pii: false }
-      - { name: has_body, type: _types.boolean, pii: false }
+      - { name: has_payload, type: _types.boolean, pii: false }
       - { name: duration_ms, type: _types.integer, pii: false }
 
   - name: account.activated
@@ -58,6 +82,66 @@ events:
     description: "账号删除成功"
     trigger: api_success
     ref: cap.protocols.http.account.delete
+    properties:
+      - { name: account_id, type: _types.string, pii: false }
+
+  # ---------- 认证 ----------
+  - name: auth.login_succeeded
+    description: "登录成功"
+    trigger: api_success
+    ref: cap.protocols.http.auth.login
+    properties:
+      - { name: account_id, type: _types.string, pii: false }
+
+  - name: auth.login_failed
+    description: "登录失败"
+    trigger: api_error
+    ref: cap.protocols.http.auth.login
+    properties:
+      - { name: error_code, type: _types.string, pii: false }
+
+  - name: auth.token_refreshed
+    description: "刷新令牌成功"
+    trigger: api_success
+    ref: cap.protocols.http.auth.refresh
+    properties: []
+
+  - name: auth.logged_out
+    description: "退出登录"
+    trigger: api_success
+    ref: cap.protocols.http.auth.logout
+    properties: []
+
+  - name: auth.verification_sent
+    description: "验证码已发送"
+    trigger: api_success
+    ref: cap.protocols.http.auth.verification_send
+    properties: []
+
+  - name: auth.verification_verified
+    description: "验证码校验成功"
+    trigger: api_success
+    ref: cap.protocols.http.auth.verification_verify
+    properties: []
+
+  - name: auth.password_bound
+    description: "密码绑定变更成功"
+    trigger: api_success
+    ref: cap.protocols.http.auth.bind_password
+    properties:
+      - { name: account_id, type: _types.string, pii: false }
+
+  - name: auth.phone_bound
+    description: "手机号绑定变更成功"
+    trigger: api_success
+    ref: cap.protocols.http.auth.bind_phone
+    properties:
+      - { name: account_id, type: _types.string, pii: false }
+
+  - name: auth.email_bound
+    description: "邮箱绑定变更成功"
+    trigger: api_success
+    ref: cap.protocols.http.auth.bind_email
     properties:
       - { name: account_id, type: _types.string, pii: false }
 

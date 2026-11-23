@@ -614,6 +614,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					}
 				}
 				responses, _ := asMap(op["responses"])
+				c.checkHTTPStatusCodes(rel, method, path, responses, policy)
 				serviceID, _ := op["x-service"].(string)
 				if serviceID != "" {
 					serviceOps[serviceID] = append(serviceOps[serviceID], method+" "+path)
@@ -721,10 +722,41 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				c.rulef("http-consumer", "service %s is bound by %d operations (%s); split the service or add explicit operation-level consumers", service, len(ops), strings.Join(ops, ", "))
 			}
 		}
+		for service := range exposedServices {
+			binding := c.accessBindings[service]
+			if len(binding.permissions) == 0 && !binding.audit && !binding.rateLimited {
+				c.rulef("access-coverage", "service %s is exposed by http but has no platform.security.access binding", service)
+			}
+		}
 		for service, pages := range pagesByService {
 			if len(pages) > 0 && !exposedServices[service] {
 				c.rulef("http-consumer", "service %s is referenced by pages but has no http operation", service)
 			}
+		}
+	}
+}
+
+// checkHTTPStatusCodes 限制响应状态必须落在 platform.http_conventions.status_codes。
+func (c *Checker) checkHTTPStatusCodes(rel, method, path string, responses map[string]any, policy httpPolicy) {
+	if len(policy.SuccessCodes) == 0 && len(policy.ClientErrorCodes) == 0 && len(policy.ServerErrorCodes) == 0 {
+		return
+	}
+	for status := range responses {
+		code, err := strconv.Atoi(status)
+		if err != nil {
+			continue
+		}
+		var allowed []int
+		switch {
+		case code >= 200 && code < 300:
+			allowed = policy.SuccessCodes
+		case code >= 400 && code < 500:
+			allowed = policy.ClientErrorCodes
+		case code >= 500 && code < 600:
+			allowed = policy.ServerErrorCodes
+		}
+		if allowed == nil || !containsInt(allowed, code) {
+			c.rulef("http-status", "%s %s %s: status %d is not declared in platform.http_conventions.status_codes", rel, method, path, code)
 		}
 	}
 }

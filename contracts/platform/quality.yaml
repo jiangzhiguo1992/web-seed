@@ -4,6 +4,8 @@ schema_version: 1
 id: platform.quality
 summary: "测试策略与门槛"
 stability: draft
+do_not:
+  - "测试门槛只在本文件声明；CI 命令必须与 gates 对齐"
 
 coverage:
   api: { line: 70, packages: [internal/modules, internal/platform] }
@@ -17,7 +19,7 @@ coverage:
 must_test:
   - id: state_machine_transitions
     why: "非法转换必须 panic 或返回明确错误"
-    where: apps/api/internal/generated/features/*_state_test.go
+    where: apps/api/internal/modules/*/state_test.go
   - id: response_schema
     why: "防止实现多返回字段"
     where: apps/api/internal/composition/*/routes_test.go
@@ -36,8 +38,8 @@ must_test:
 
 e2e:
   tool: playwright
-  required_flows:
-    - feature.flows.account_create
+  required_scenarios:
+    - scenario.http.account.create_success
   base_url_source: platform.environments
 
 forbidden:

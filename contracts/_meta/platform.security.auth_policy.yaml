@@ -170,3 +170,8 @@ fields:
       - { name: model, type: _types.string, required: true, description: "授权模型" }
       - { name: note, type: _types.string, required: true, description: "模型说明" }
       - { name: deny_by_default, type: _types.boolean, required: true, description: "是否默认拒绝" }
+
+rules:
+  - { id: auth-policy-paths, text: "csrf.exempt_paths 必须对应已存在的 HTTP operation path（/<app.api_version>/... 或 /v<数字>/...）", implemented_by: [ auth-policy-paths ] }
+  - { id: auth-policy-audience, text: "token.access.audience 必须来自 platform.http_conventions.audiences", implemented_by: [ auth-policy-audience ] }
+  - { id: auth-policy-password, text: "页面 password 字段的 minLength 不得低于 auth_policy.password.min_length", implemented_by: [ auth-policy-password ] }

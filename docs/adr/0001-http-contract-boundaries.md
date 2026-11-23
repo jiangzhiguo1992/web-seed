@@ -211,3 +211,35 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 - `platform/http_conventions.yaml` 的基线解析收敛到 `internal/spec.LoadHTTPPolicy` 一处；checker、`gen_openapi`、`gen_scenarios` 共用，避免三份 `always/secured/body/deprecated` 漂移。
 - 生成的 OpenAPI 基线响应附带 `x-error-codes`（如 `COMMON_UNAUTHORIZED`），spec 自描述完整错误面；`gen_openapi` 在写出前用 `kin-openapi` 按 OpenAPI 3.1 做硬校验。
 - 同一 service 被多个 operation 绑定会由 `http-consumer` 直接拒绝；当前模型下页面只能反查到 service，多绑定会造成 `used_by` 并集歧义，要求拆 service，真需要共享时再引入 operation 级消费者。
+
+## 2026-11-23 契约层硬化（Batch 1–4）
+
+- `feature.routes` 新增 `_meta` 与 `route-structure` / `route-redirect` 校验；route id/path/name 唯一，page/permission/layout/redirect/not_found 引用闭合。
+- `feature.pages.actions` 新增 `params`；`page-params` 校验 data/actions.params 的 key 必须来自 service 参数或对象字段，并校验类型族；`page-action-target` 校验 `on_success` 只允许 `navigate`/`close_and_redirect` 到已声明 route。
+- access 新增 `_meta/platform.security.access.yaml` 与 `access-coverage`：每个被 HTTP 暴露的 service 必须有 permissions/audit/rate_limit binding；补齐 token.refresh、token.verify、auth.bind_* 五个绑定。
+- `feature.routes`、`platform.environments`、`platform.security.access` 纳入 `checkPlatformContracts`；roles 增加继承环/深度/未知权限/默认角色校验。
+- `platform.http_conventions.status_codes` 由 `http-status` 脚本化；`*Page` schema 由 `service-page-schema` 强制 items/offset/limit/has_more。
+- 密码强度规则 `feature.rules.auth.password_strength` 接入 bind_password create/update step，`AUTH_WEAK_PASSWORD` 进入 HTTP 422。
+- `index.yaml` 的 enforcement 与 README 真相表对齐：无 checker/generator 的 platform 契约降为 `review-only`，不再宣称 tested/generated。
+
+### 本轮边界
+
+- `page-params` 校验“页面声明的参数”是否属于 service 参数/对象字段及类型族；不强制 service 的每个必填参数都出现在页面 params，因为 cookie/path/route 上下文由 HTTP 层提供。它防的是拼写/类型漂移，不是完整性。
+- `page-action-target` 只允许 `navigate` / `close_and_redirect` 到 `feature.routes.*`；`close()` 等未来函数需要先扩语法，不能在页面里自由写。
+- `access-coverage` 只覆盖被 HTTP 暴露的 service；内部 service、异步 job 不走该规则。
+- `role-inheritance` 校验环/深度/未知权限；`role-permissions` 只允许 admin 使用 `*`，不展开继承后的有效权限集。
+- `feature.routes.app` 暂未与 `project.yaml` 的 web app 对齐；当前 `web/admin` 是 consumer 标签语义，需单独定名。
+
+### platform checker 边界
+
+- `quality-refs` 只校验 `required_scenarios` 存在、make 目标存在、`must_test.id` 唯一；不判断 gate 是否真的 blocking，也不执行命令。
+- `versioning-refs` 只校验 `api.current`、`detection.command` 与弃用头；不校验 `accepted_breaking_changes` 的语义。
+- `analytics-refs` 校验事件名/HTTP ref/page/forbidden，并校验 `common_properties` 的 forbidden/命名/重复、事件内 property 重名、`trigger: mount` 必须有 page、`trigger: api_success` 必须有 ref；`analytics-types` 校验 property.type 是标量 basic type、`data.types` 自定义类型或 `data.enums` 枚举名，拒绝 `_types.any` / `_types.json`；不校验 property 的值域约束是否与业务字段一致。值域映射刻意不建模：property 是事件载荷，不保证等于表列/实体字段；直接按名字映射会产生 `account_id(string)` vs 表列 `integer` 这类假阳性；能确定枚举来源的属性（如 `page.account_list_viewed.filter_status`）已改为 `data.enums.account_status`，其余保持事件载荷类型。
+- `analytics-pii` 校验 forbidden 名单 snake_case、同一 property 在 common/event 中的 type/pii 一致、pii:true 不得出现在 forbidden，并要求 `pii: true` 的属性被 `log_fields.never_log` 覆盖（`pii: false` 不得命中 never_log）；不把 property 自动映射到表列 sensitivity，表列覆盖由 `log-field-refs` 单独校验。`session_id`/`account_id` 当前按非 PII 关联 ID 处理，合规要求变化时需显式改 `pii: true`。
+- `log-field-refs` 校验字段名与 `required_for` 枚举、`never_log` 条目格式/重复，并反查 `data/tables/*.yaml` 中 `sensitivity: pii|secret` 的列是否被 `never_log` 覆盖；不校验日志调用点是否真的使用这些字段。`never_log` 的 `*_body` 曾把 analytics 的 `has_body` 误判为正文，已将属性改名为 `has_payload`；同类布尔字段（如未来的 `has_token`）会命中 `*_token`，命名时必须避开敏感后缀。`TestNeverLogPatterns` 固定了当前 glob 语义：`*_token` 命中 `access_token` 但不命中 `token_type`，`*_email` 命中 `contact_email` 但不命中 `email_verified`。
+- `metric-shape` 只校验指标名唯一、kind、forbidden labels；不强制 counter/histogram 的命名后缀。
+- `architecture-refs` 校验层/模块引用；不生成或执行 go-arch-lint / dependency-cruiser。
+- `auth-policy-paths` 只校验 CSRF 豁免路径能匹配 HTTP path；不校验 method/audience。
+- `auth-policy-password` 只校验页面 `password.minLength`；不校验服务端哈希算法或复杂度规则。
+- `config.env` 用 JSON Schema 编译，并校验 `required` 含 APP_ENV/HTTP_ADDR、`additionalProperties: false`、APP_ENV/LOG_LEVEL 枚举与默认值、secret 字段为 string；不校验运行时真实值。
+- `web_deps` 校验层名唯一、`rules.from` 唯一、`mayDependOn`/`forbid` 不重叠、`generates` 非空；不执行 dependency-cruiser，不校验 `from.path`/`to.path` 正则。

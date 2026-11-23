@@ -36,6 +36,7 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 	}
 	if types, ok := asMap(doc["schemas"]); ok {
 		c.checkTypeRefs(types, typeNames, rel)
+		c.checkPageSchemas(types, rel)
 	}
 	seen := map[string]bool{}
 	c.checkServiceUsed(rel, doc)
@@ -90,6 +91,42 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 				continue
 			}
 			c.checkTypeName(rm["type"], typeNames, rel+":"+name)
+		}
+	}
+}
+
+// checkPageSchemas 要求 *Page schema 使用统一分页形状。
+func (c *Checker) checkPageSchemas(types map[string]any, rel string) {
+	for name, raw := range types {
+		if !strings.HasSuffix(name, "Page") {
+			continue
+		}
+		schema, _ := asMap(raw)
+		props := map[string]map[string]any{}
+		for _, rawProp := range asList(schema["properties"]) {
+			p, _ := asMap(rawProp)
+			if field, _ := p["name"].(string); field != "" {
+				props[field] = p
+			}
+		}
+		want := map[string]string{
+			"items": "_types.array", "offset": "_types.page_offset",
+			"limit": "_types.page_limit", "has_more": "_types.boolean",
+		}
+		for field, typ := range want {
+			p := props[field]
+			if p == nil {
+				c.rulef("service-page-schema", "%s: schema %s is missing pagination field %s", rel, name, field)
+				continue
+			}
+			if required, _ := p["required"].(bool); !required {
+				c.rulef("service-page-schema", "%s: schema %s pagination field %s must be required", rel, name, field)
+			}
+			if got, _ := asMap(p["schema"]); got != nil {
+				if value, _ := got["type"].(string); value != typ {
+					c.rulef("service-page-schema", "%s: schema %s field %s type must be %s, got %s", rel, name, field, typ, value)
+				}
+			}
 		}
 	}
 }

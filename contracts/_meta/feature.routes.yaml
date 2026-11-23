@@ -1,0 +1,105 @@
+# 路由与菜单契约；页面/权限/布局引用由 checker 校验。
+
+id: meta.feature.routes
+type: feature.routes
+title: "路由与菜单"
+targets:
+  dir: "contracts/features"
+  glob: "routes.yaml"
+  id: "feature.routes"
+  naming: "snake_case"
+
+fields:
+  - name: id
+    type: _types.string
+    required: true
+    const: feature.routes
+    description: "契约 ID"
+
+  - name: summary
+    type: _types.string
+    required: true
+    description: "一句话说明"
+
+  - name: schema_version
+    type: _types.integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: stability
+    type: _types.string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: _types.set<_types.string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: app
+    type: _types.string
+    required: true
+    pattern: '^[A-Za-z][A-Za-z0-9_/-]*$'
+    description: "前端应用标识；与 consumers 标签同形"
+
+  - name: layout
+    type: _types.object
+    required: true
+    description: "布局注册表"
+    fields:
+      - { name: default, type: _types.string, required: true, description: "默认布局" }
+      - { name: auth, type: _types.string, required: true, description: "认证页布局" }
+
+  - name: routes
+    type: _types.list<_types.object>
+    required: true
+    min_items: 1
+    description: "路由列表"
+    item_fields:
+      - { name: id, type: _types.string, required: true, pattern: '^feature\.routes\.[a-z][a-z0-9_]*$', description: "路由 ID" }
+      - { name: path, type: _types.string, required: true, pattern: '^/[A-Za-z0-9_:/-]*$', description: "URL 路径；参数用 :name" }
+      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9-]*$', description: "路由名" }
+      - { name: page, type: _types.string, required: true, pattern: '^feature\.pages\.[a-z][a-z0-9_]*$', description: "页面 ID" }
+      - { name: layout, type: _types.string, required: true, description: "布局名；必须在 layout 注册表中" }
+      - { name: permission, type: _types.string, required: false, pattern: '^platform\.security\.permissions\.[a-z][a-z0-9_]*$', description: "权限 ID；公开路由为 null" }
+      - name: menu
+        type: _types.object
+        required: false
+        description: "菜单项；不展示为 null"
+        fields:
+          - { name: group, type: _types.string, required: true, description: "菜单分组" }
+          - { name: label, type: _types.string, required: true, description: "菜单文案" }
+          - { name: icon, type: _types.string, required: false, description: "图标名" }
+          - { name: order, type: _types.integer, required: false, description: "排序" }
+      - name: meta
+        type: _types.object
+        required: false
+        description: "路由元信息"
+        fields:
+          - { name: title, type: _types.string, required: false, description: "页面标题" }
+          - { name: public, type: _types.boolean, required: false, description: "是否公开路由" }
+          - { name: description, type: _types.string, required: false, description: "说明" }
+
+  - name: redirects
+    type: _types.list<_types.object>
+    required: false
+    description: "重定向列表"
+    item_fields:
+      - { name: from, type: _types.string, required: true, pattern: '^/[A-Za-z0-9_:/-]*$', description: "来源路径" }
+      - { name: to, type: _types.string, required: true, pattern: '^/[A-Za-z0-9_:/-]*$', description: "目标路径" }
+
+  - name: not_found
+    type: _types.object
+    required: false
+    description: "404 页面"
+    fields:
+      - { name: page, type: _types.string, required: true, pattern: '^feature\.pages\.[a-z][a-z0-9_]*$', description: "页面 ID" }
+      - { name: layout, type: _types.string, required: true, description: "布局名" }
+
+rules:
+  - { id: route-structure, text: "id 必须为 feature.routes；route id/path/name 唯一；page 必须存在；layout 必须在 layout 注册表中；permission 必须存在于 platform.security.permissions", implemented_by: [ route-structure ] }
+  - { id: route-redirect, text: "redirects.from/to 与 not_found.layout 必须是合法路径/布局；not_found.page 必须存在", implemented_by: [ route-redirect ] }

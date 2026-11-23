@@ -82,6 +82,7 @@ fields:
     description: "动作映射"
     item_fields:
       - { name: capability, type: _types.string, required: false, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "调用的 service ID" }
+      - { name: params, type: _types.any, soft: true, required: false, description: "参数映射；key 必须是 service 参数或对象字段" }
       - { name: permission, type: _types.string, required: false, pattern: '^platform\.security\.permissions\.[a-z][a-z0-9_]*$', description: "权限 ID" }
       - name: available_when
         type: _types.object
@@ -129,8 +130,8 @@ fields:
     required: false
     description: "分页配置"
     fields:
-      - { name: style, type: _types.string, required: true, description: "分页风格" }
-      - { name: param, type: _types.string, required: true, description: "分页参数名" }
+      - { name: style, type: _types.string, required: true, enum: [ offset ], description: "分页风格" }
+      - { name: param, type: _types.string, required: true, enum: [ offset ], description: "分页参数名" }
       - { name: limit_default, type: _types.integer, required: false, min: 1, description: "默认页大小" }
       - { name: limit_max, type: _types.integer, required: false, min: 1, description: "最大页大小" }
 
@@ -177,5 +178,7 @@ fields:
 
 rules:
   - { id: page-structure, text: "id 必须由 targets 派生；page 必须等于文件 stem；view_states 必须包含 loading、error、forbidden，以及 empty 或 idle 之一", implemented_by: [ page-structure ] }
+  - { id: page-params, text: "data/actions.params 的 key 必须是 capability 的 service 参数或对象字段；声明了 type 时必须与 service 字段类型一致", implemented_by: [ page-params ] }
+  - { id: page-action-target, text: "actions.on_success 必须是 navigate(feature.routes.*) 或 close_and_redirect(feature.routes.*)，目标 route 必须存在", implemented_by: [ page-action-target ] }
   - { id: page-limits, text: "pagination.limit_default <= limit_max；fields.minLength <= maxLength", implemented_by: [ page-limits ] }
   - { id: page-refs, text: "route/capability/permission/enum 与 available_when 内的 transition/transitions/state_not 引用必须存在；transition_ui.source 必须是已存在的 cap.lifecycles.*.transitions", implemented_by: [ page-refs ] }

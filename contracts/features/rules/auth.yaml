@@ -9,6 +9,7 @@ do_not:
   - "验证体规则只引用 data.entities.verification_body / verification_action，不引用物理表/查询"
   - "不要在 handler 里手写验证码消费、重发或动作写入逻辑"
   - "账号状态规则与 lifecycle requires 必须由 service step 真正执行，不能只声明"
+  - "密码强度只由 password_strength 规则约束，不在 handler 手写"
 rules:
   - id: feature.rules.auth.verification_one_time
     kind: policy
@@ -192,3 +193,11 @@ rules:
     given: "auth_pwd.failed_login_count >= auth_policy.password.max_attempts"
     when: "校验登录凭据"
     then: "拒绝，返回 AUTH_LOCKED，并写入 auth_pwd.locked_until = now + auth_policy.password.lockout"
+  - id: feature.rules.auth.password_strength
+    kind: policy
+    summary: "密码必须满足 auth_policy.password 的最小长度与复杂度"
+    on_violation: platform.errors.AUTH_WEAK_PASSWORD
+    implemented_by: [ cap.services.auth.bind_password ]
+    given: "password 长度 < auth_policy.password.min_length"
+    when: "创建或修改密码绑定"
+    then: "拒绝，返回 AUTH_WEAK_PASSWORD；不得写入密码哈希"

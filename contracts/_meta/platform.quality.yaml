@@ -1,0 +1,75 @@
+# 测试策略与门槛；结构由 contract-check 校验。
+
+id: meta.platform.quality
+type: platform.quality
+title: "测试策略与门槛"
+targets:
+  dir: "contracts/platform"
+  glob: "quality.yaml"
+  id: "platform.quality"
+  naming: "snake_case"
+
+fields:
+  - name: schema_version
+    type: _types.integer
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: id
+    type: _types.string
+    required: true
+    const: platform.quality
+    description: "契约 ID"
+
+  - name: summary
+    type: _types.string
+    required: true
+    description: "一句话说明"
+
+  - name: stability
+    type: _types.string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: _types.set<_types.string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: coverage
+    type: _types.any
+    soft: true
+    required: true
+    description: "覆盖率门槛"
+  - name: must_test
+    type: _types.any
+    soft: true
+    required: true
+    description: "必测项"
+  - name: e2e
+    type: _types.any
+    soft: true
+    required: true
+    description: "端到端策略"
+  - name: forbidden
+    type: _types.set<_types.string>
+    required: true
+    unique: true
+    description: "禁止项"
+  - name: gates
+    type: _types.list<_types.object>
+    required: true
+    min_items: 1
+    description: "CI 门槛"
+    item_fields:
+      - { name: name, type: _types.string, required: true, description: "门槛名" }
+      - { name: command, type: _types.string, required: true, description: "执行命令" }
+      - { name: blocking, type: _types.boolean, required: true, description: "是否阻断" }
+      - { name: note, type: _types.string, required: false, description: "说明" }
+
+rules:
+  - { id: quality-refs, text: "e2e.required_scenarios 必须指向已存在的 scenario.http.*；gates.command 为 make 目标时必须存在于 Makefile；must_test.id 唯一", implemented_by: [ quality-refs ] }

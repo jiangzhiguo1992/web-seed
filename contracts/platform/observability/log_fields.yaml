@@ -4,6 +4,8 @@ schema_version: 1
 id: platform.observability.log_fields
 summary: "日志字段与 PII 规则"
 stability: draft
+do_not:
+  - "字段/指标名只在本文件登记；未登记字段 CI 警告"
 
 format: json
 timestamp: RFC3339Nano
@@ -92,10 +94,25 @@ never_log:
   - secret
   - email
   - phone
+  - request_ip
+  - device_id
+  - location
+  - username
+  - nickname
+  - number
+  - content
   - "*_title"         # 任何 pii: true 的标题字段
-  - "*_body"          # 用户正文内容
+  - "*_body"          # 用户正文内容；has_body 这类布尔字段必须改名
+  - "*_hash"          # 密码/令牌/验证码哈希
+  - "*_token"         # access_token/refresh_token/csrf_token 等
+  - "*_password"      # old_password/new_password 等
+  - "*_secret"        # client_secret 等
+  - "*_cookie"        # session_cookie 等
+  - "*_authorization" # proxy_authorization 等
+  - "*_email"         # contact_email/primary_email 等
+  - "*_phone"         # contact_phone/primary_phone 等
 
-pii_source: "生成器汇总所有 data/tables/*.yaml 中 sensitivity: pii|secret 的列，自动加入 never_log"
+pii_source: "checker 汇总 data/tables/*.yaml 中 sensitivity: pii|secret 的列，必须被 never_log 覆盖"
 
 rules:
   - "路径记录路由模板（/v1/account/{id}），不记录实际值"

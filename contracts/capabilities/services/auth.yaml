@@ -405,7 +405,7 @@ services:
             goto: create_status
           - input: action
             expr: "input.action == 'update'"
-            goto: hash_update
+            goto: check_password_update
           - input: action
             expr: "input.action == 'enable'"
             goto: enable_status
@@ -432,6 +432,17 @@ services:
         errors:
           - platform.errors.AUTH_INVALID_CREDENTIALS
         rules: [ ]
+        goto: check_password_create
+      - id: check_password_create
+        kind: logic
+        summary: "校验创建密码满足强度要求"
+        input:
+          - { name: password, value: params.input.password, description: "明文密码" }
+        output: [ ]
+        errors:
+          - platform.errors.AUTH_WEAK_PASSWORD
+        rules:
+          - { rule: feature.rules.auth.password_strength }
         goto: hash_create
       - id: hash_create
         kind: logic
@@ -456,6 +467,17 @@ services:
         output: [ ]
         query: data.queries.auth.create_auth_pwd
         goto: load
+      - id: check_password_update
+        kind: logic
+        summary: "校验修改密码满足强度要求"
+        input:
+          - { name: password, value: params.input.password, description: "明文密码" }
+        output: [ ]
+        errors:
+          - platform.errors.AUTH_WEAK_PASSWORD
+        rules:
+          - { rule: feature.rules.auth.password_strength }
+        goto: hash_update
       - id: hash_update
         kind: logic
         summary: "对修改时的明文密码做哈希"

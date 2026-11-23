@@ -4,6 +4,8 @@ schema_version: 1
 id: platform.environments
 summary: "环境清单与差异"
 stability: draft
+do_not:
+  - "禁止在代码里按环境名写分支；环境差异只在本文件登记"
 
 environments:
   - name: dev
@@ -46,6 +48,10 @@ differences:
   # 唯一允许的环境差异清单，新增差异必须登记
   - { key: debug, environments: [dev], note: "仅本地开启 pprof / verbose error" }
   - { key: seed, environments: [dev, test], note: "允许写入示例数据" }
+  - { key: api_base_url, environments: [dev, test, staging, prod], note: "API 域名按环境不同" }
+  - { key: web_base_url, environments: [dev, test, staging, prod], note: "Web 域名按环境不同" }
+  - { key: logging.level, environments: [dev, test, staging, prod], note: "dev=debug/test=info/staging=info/prod=warn" }
+  - { key: security.require_https, environments: [staging, prod], note: "预发布与生产强制 HTTPS" }
   - { key: security.cookie_secure, environments: [staging, prod], note: "强制 Secure 属性" }
   - { key: security.require_mfa, environments: [prod], note: "管理员强制 MFA" }
 

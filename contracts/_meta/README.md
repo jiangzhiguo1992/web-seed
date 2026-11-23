@@ -21,12 +21,21 @@
 | `cap.lifecycles.yaml` | 实体状态机 |
 | `cap.protocols.http.yaml` | OpenAPI 3.1 HTTP 绑定 |
 | `scenario.http.yaml` | HTTP 验收场景（请求/响应/持久数据差异） |
-| `feature.pages.yaml` | 页面契约 |
+| `feature.pages.yaml` | 页面契约；data/actions.params 对齐 service 输入 |
+| `feature.routes.yaml` | 路由与菜单；route/page/permission/layout 引用 |
 | `feature.rules.yaml` | 可执行业务规则；所有规则都是 error，违反即阻止提交 |
 | `platform.modules.yaml` | 模块注册表（owner_module 来源） |
 | `platform.security.permissions.yaml` | 权限点 |
 | `platform.security.roles.yaml` | 角色与权限映射 |
 | `platform.security.auth_policy.yaml` | 认证、会话、令牌与密码策略 |
+| `platform.security.access.yaml` | 入口访问策略；HTTP service 覆盖 |
+| `platform.environments.yaml` | 环境清单、差异项与安全开关 |
+| `platform.versioning.yaml` | API 版本、兼容检测与弃用头 |
+| `platform.quality.yaml` | 测试门槛、必测项与 CI gates |
+| `platform.analytics.events.yaml` | 埋点事件、属性与 HTTP/页面引用 |
+| `platform.observability.log_fields.yaml` | 日志字段与 PII 规则 |
+| `platform.observability.metrics.yaml` | 指标名、标签与导出 |
+| `platform.architecture.go_arch.yaml` | Go 分层与模块依赖 |
 
 `scripts/contract/scaffold.sh`（`make contract-new`）与 `scripts/contract/validate.sh`
 （`make contract-check`）是薄适配器；`scripts/cmd/` 是独立 Go module，schema 解析与校验都在那里。

@@ -12,11 +12,14 @@ import (
 
 // HTTPPolicy 是平台 HTTP 基线：调用端与按条件注入的错误状态。
 type HTTPPolicy struct {
-	Audiences  []string
-	Always     []int
-	Secured    []int
-	Body       []int
-	Deprecated []int
+	Audiences        []string
+	Always           []int
+	Secured          []int
+	Body             []int
+	Deprecated       []int
+	SuccessCodes     []int
+	ClientErrorCodes []int
+	ServerErrorCodes []int
 }
 
 // LoadHTTPPolicy 读取 contracts/platform/http_conventions.yaml。
@@ -34,16 +37,24 @@ func LoadHTTPPolicy(root string) (HTTPPolicy, error) {
 			Body       []int `yaml:"body"`
 			Deprecated []int `yaml:"deprecated"`
 		} `yaml:"error_responses"`
+		StatusCodes struct {
+			Success     []int `yaml:"success"`
+			ClientError []int `yaml:"client_error"`
+			ServerError []int `yaml:"server_error"`
+		} `yaml:"status_codes"`
 	}
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		return HTTPPolicy{}, fmt.Errorf("%s: %w", path, err)
 	}
 	return HTTPPolicy{
-		Audiences:  doc.Audiences,
-		Always:     doc.ErrorResponses.Always,
-		Secured:    doc.ErrorResponses.Secured,
-		Body:       doc.ErrorResponses.Body,
-		Deprecated: doc.ErrorResponses.Deprecated,
+		Audiences:        doc.Audiences,
+		Always:           doc.ErrorResponses.Always,
+		Secured:          doc.ErrorResponses.Secured,
+		Body:             doc.ErrorResponses.Body,
+		Deprecated:       doc.ErrorResponses.Deprecated,
+		SuccessCodes:     doc.StatusCodes.Success,
+		ClientErrorCodes: doc.StatusCodes.ClientError,
+		ServerErrorCodes: doc.StatusCodes.ServerError,
 	}, nil
 }
 

@@ -2822,4 +2822,22 @@ paths:
 	if !strings.Contains(strings.Join(c.errs, "\n"), "bound by 2 operations") {
 		t.Fatalf("duplicate service binding not reported: %v", c.errs)
 	}
+	if !strings.Contains(strings.Join(c.errs, "\n"), "has no platform.security.access binding") || !strings.Contains(strings.Join(c.errs, "\n"), "[access-coverage]") {
+		t.Fatalf("access coverage not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPStatusCodes(t *testing.T) {
+	c := &Checker{}
+	c.checkHTTPStatusCodes("x.yaml", "get", "/x", map[string]any{
+		"200": map[string]any{"description": "ok"},
+		"418": map[string]any{"description": "teapot"},
+	}, httpPolicy{
+		SuccessCodes:     []int{200},
+		ClientErrorCodes: []int{400},
+		ServerErrorCodes: []int{500},
+	})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "status 418") || !strings.Contains(strings.Join(c.errs, "\n"), "[http-status]") {
+		t.Fatalf("unlisted status not reported: %v", c.errs)
+	}
 }

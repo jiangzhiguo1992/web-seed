@@ -10,7 +10,15 @@ import (
 )
 
 var platformSingletonTypes = []string{
+	"platform.environments",
 	"platform.modules",
+	"platform.quality",
+	"platform.versioning",
+	"platform.observability.log_fields",
+	"platform.observability.metrics",
+	"platform.architecture.go_arch",
+	"platform.analytics.events",
+	"platform.security.access",
 	"platform.security.permissions",
 	"platform.security.roles",
 	"platform.security.auth_policy",
@@ -23,6 +31,7 @@ func (c *Checker) checkPlatformContracts() {
 			c.rulef("schema.load", "load %s schema: %v", typ, err)
 			continue
 		}
+		c.checkRules(schema)
 		if err := checkSingletonTargets(schema); err != nil {
 			c.rulef("schema.targets", "%s: %v", schema.ID, err)
 			continue
@@ -42,6 +51,9 @@ func (c *Checker) checkPlatformContracts() {
 		if id, _ := doc["id"].(string); id != schema.Targets.ID {
 			c.rulef("schema.id-from-file", "%s: id must be %s, got %q", rel, schema.Targets.ID, id)
 		}
+		if typ == "platform.environments" {
+			c.checkEnvironmentShape(rel, doc)
+		}
 	}
 }
 
@@ -55,4 +67,23 @@ func checkSingletonTargets(schema *Schema) error {
 		return fmt.Errorf("singleton targets must use a fixed file, got id=%q glob=%q", t.ID, t.Glob)
 	}
 	return nil
+}
+
+// checkEnvironmentShape 校验环境名与差异键的语义。
+func (c *Checker) checkEnvironmentShape(rel string, doc map[string]any) {
+	seen := map[string]bool{}
+	for i, raw := range asList(doc["environments"]) {
+		item, _ := asMap(raw)
+		name, _ := item["name"].(string)
+		if seen[name] {
+			c.rulef("environment-shape", "%s: environments[%d] duplicate name %s", rel, i, name)
+		}
+		seen[name] = true
+	}
+	for i, raw := range asList(doc["differences"]) {
+		item, _ := asMap(raw)
+		if key, _ := item["key"].(string); key == "" {
+			c.rulef("environment-shape", "%s: differences[%d].key must not be empty", rel, i)
+		}
+	}
 }

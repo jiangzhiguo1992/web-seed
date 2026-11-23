@@ -4,6 +4,8 @@ schema_version: 1
 id: platform.architecture.go_arch
 summary: "Go 分层约束"
 stability: draft
+do_not:
+  - "分层规则只在本文件声明；生成 go-arch-lint 配置"
 
 layers:
   - name: cmd
