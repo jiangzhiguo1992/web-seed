@@ -166,7 +166,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 这次改为**封闭结构**：
 
 - `paths` 是 `map<path, object>`，对象只允许 `get/post/put/patch/delete/head/options`；每个 method 复用同一个 operation 节点（YAML anchor 只是写法，结构是固定的）。
-- operation 节点固定为 `id/name/service/summary/used_by/security/request/response`；`request` 固定为 `headers/path/query/body/mapping`；`response` 的 key 固定为三位状态码。
+- operation 节点固定为 `id/name/service/summary/used_by/security/request/response`；`request` 固定为 `path/query/body`，参数用 `to` 指向 service 参数；`response` 的 key 固定为三位状态码。
 - `used_by` 的非空由字段属性 `required: true` + `min_items: 1` 保证；`http-consumer` 只保留“精确集合”这一条脚本规则。
 - 删除 `components` 源字段；`shared` 是唯一源，normalizer 拒绝任何源文件里的 `components`。生成的 OpenAPI `components` 是产物，不是契约。
 - `make contract-new` 的 `RenderHTTP` 同步改为新形状；否则脚手架会继续生成旧结构，这是“AI 漂移”的另一个入口。
@@ -189,7 +189,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 | `used_by` 非空 | 字段 `required` + `min_items` | 结构校验 |
 | `used_by` 精确集合 | 页面引用反查 | `http-consumer` |
 | 错误码聚合 | service 错误闭包 | `service-errors` + `http-errors` |
-| 入参/出参映射 | `request.mapping` + 类型 ID | `http-service-params` / `http-service-type` / `http-service-return` |
+| 入参/出参映射 | 参数级 `to` + 类型 ID | `http-service-params` / `http-service-type` / `http-service-return` |
 | 基线错误 | `platform/http_conventions.error_responses` | `http-default-errors` |
 | 共享组件 | `shared` | `http-components` / `http-shared` |
 
@@ -198,7 +198,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 - 不解析事件订阅者来推导同步错误：事件是异步的，不贡献 HTTP 同步错误；`kind: events` 的 `step.errors` 仍然显式声明。
 - 不解析实体校验/数据库约束来推导错误：这些必须由 query/service 的 `step.errors` 显式声明；否则脚本只能猜测，违反“确定性”。
 - 不检查 `$ref` 类型内部的字段级 nullable/optional：那是被引用类型自己的契约；HTTP 层只校验“类型 ID 一致”。
-- 不把 `mapping` 写入 OpenAPI：它是契约校验用的绑定，不是运行时协议。
+- 不把参数级 `to` 写入 OpenAPI：它是契约校验用的绑定，不是运行时协议。
 - `COMMON_*` 只能落在平台基线状态（400/401/403/429/500/503，以及按条件注入的 413/415/410）；404/409 等非基线状态必须使用领域错误（如 `ACCOUNT_NOT_FOUND`），否则 operation 没有合法位置声明该错误。
 - 不在没有实现 runner 时伪造场景执行：场景覆盖率目前是 `gen_scenarios -strict` 的硬命令，未补齐会失败；默认 `make gen-check` 只校验清单最新，不掩盖缺口。
 
@@ -250,13 +250,13 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 1. **版本归属**：`mount.api_version`（必填，`v<数字>`）成为唯一版本源；生成器按 app 内 include 文件的版本派生 `servers: /<api_version>`，`mount.path` 与 `paths` 不写版本。`project.yaml` 的 `app.api_version` 已删除；同一 app 混版本会被 checker/generator 拒绝。在没有 v2 mount 的情况下，`admin_v2` app 与生成物一并移除，待 v2 契约重做后再加回。
 2. **共享组件**：删除 `protocols/http/shared.yaml`，HTTP 文件也不再保留 `shared`。平台级 securityScheme / schema / parameter / header / response 全部在 `platform/http_conventions.yaml` 的 `components`，由 `gen_openapi` 注入每个 api app；HTTP 文件只引用组件名，不再定义文件私有组件。
-3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`security` 是 `[{ scheme, scopes }]`，`scheme` 枚举为 `BearerAuth`；`mapping.path/query` 是 `[{ from, to }]`，`mapping.security` 是 `[{ scheme, to }]`；path/query 参数是带 `name` / `schema` / `description` 的对象列表；body schema 必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
+3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`security` 是 `{ BearerAuth: bool }`；path/query 参数是带 `name` / `schema` / `description` / `to` 的对象列表，body 带 `to`；body schema 必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
 4. **客户端幂等键删除**：幂等键 header、OpenAPI components 与场景字段全部删除；幂等由 API 内部按业务语义决定，不由客户端传入的 header 控制。
-5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。`request.headers` / `response.headers` 固定槽位移除；`Authorization` 仍由 `BearerAuth` security scheme 表达。
-6. **安全凭据显式映射**：`request.mapping.security` 把 security scheme 映射到 service 参数。`BearerAuth` 只能映射 `params.access_token`（string）或 `params.account_id`（integer）。绑定类 service 的 `account_id` 从请求体移到 service 参数，由 BearerAuth 映射，避免“token 校验了但业务信任 body 里的账号 ID”。
+5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。`request.headers` / `response.headers` 固定槽位移除；`Authorization` 由 `security.BearerAuth` 表达。
+6. **安全凭据注入**：`security.BearerAuth: true` 时，认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
 7. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发，不使用 cookie/session。
 
-同时 `request.mapping` 的值统一改为 `params.<service 参数路径>`（如 `params.input`、`params.filter.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
+同时参数级 `to` 的值统一写 `params.<service 参数路径>`（如 `params.input`、`params.filter.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
 
 验证：`make contract-check`、`make gen`、`make gen-rule-ids`、`make test-tools` 通过；OpenAPI `servers` 带 `/<mount.api_version>`，平台组件出现在每个 spec 的 `components`。
 

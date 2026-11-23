@@ -351,7 +351,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.account_id }
+      - { name: account_id, type: _types.integer }
       - { name: input, type: cap.services.auth.schemas.BindPasswordInput }
     returns:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
@@ -592,7 +592,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.account_id }
+      - { name: account_id, type: _types.integer }
       - { name: input, type: cap.services.auth.schemas.BindPhoneInput }
     returns:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
@@ -878,7 +878,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.account_id }
+      - { name: account_id, type: _types.integer }
       - { name: input, type: cap.services.auth.schemas.BindEmailInput }
     returns:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }

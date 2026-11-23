@@ -248,12 +248,14 @@ paths:
       name: list
       id: cap.protocols.http.x.list
       service: cap.services.x.get
+      security: { BearerAuth: false }
       request:
         query:
           - name: status
             schema: data.enums.x_status
             required: false
             description: "status"
+            to: params.filter.status
       response:
         "204": { description: OK }
 `)

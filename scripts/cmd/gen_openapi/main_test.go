@@ -151,6 +151,7 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -228,6 +229,7 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -368,7 +370,7 @@ paths:
       name: "get`+strings.ToUpper(item.name)+`"
       id: "cap.protocols.http.`+item.name+`.get"
       service: "cap.services.x.get"
-      security: []
+      security: { BearerAuth: false }
       request: {}
       response:
         "204": { description: "OK" }
@@ -426,9 +428,7 @@ paths:
       name: "getA"
       id: "cap.protocols.http.a.get"
       service: "cap.services.x.get"
-      security:
-        - scheme: BearerAuth
-          scopes: []
+      security: { BearerAuth: true }
       request: {}
       response:
         "200":
@@ -449,6 +449,7 @@ paths:
       name: "getB"
       id: "cap.protocols.http.b.get"
       service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -533,11 +534,8 @@ paths:
       service: cap.services.x.get
       summary: "a"
       used_by: [feature.pages.x]
-      security:
-        - scheme: BearerAuth
-          scopes: []
-      request:
-        mapping: {}
+      security: { BearerAuth: true }
+      request: {}
       response:
         "200":
           description: "OK"
@@ -614,6 +612,7 @@ paths:
       name: "createA"
       id: "cap.protocols.http.a.create"
       service: "cap.services.x.create"
+      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -676,6 +675,7 @@ paths:
       name: "adminOnly"
       id: "cap.protocols.http.a.admin"
       service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -692,6 +692,7 @@ paths:
       name: "userOnly"
       id: "cap.protocols.http.b.user"
       service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       response:
         "204":

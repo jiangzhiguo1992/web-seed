@@ -1167,11 +1167,12 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 	}
 	for key := range params {
 		switch key {
-		case "body", "path", "query", "security":
+		case "body", "path", "query":
 		default:
 			c.rulef("http-service-params", "%s %s %s: unknown x-service-params key %s", rel, method, path, key)
 		}
 	}
+	bearerAuth := securityDeclares(op, "BearerAuth")
 	rb, hasRB := asMap(op["requestBody"])
 	if hasRB && (method == "get" || method == "head") {
 		c.rulef("http-shape", "%s %s %s: GET/HEAD must not declare a request body", rel, method, path)
@@ -1205,6 +1206,9 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			if !exists || strings.Contains(paramPath, ".") {
 				c.rulef("http-service-type", "%s %s %s: body maps to unknown service parameter %s", rel, method, path, paramPath)
 			} else {
+				if isAuthInjectedParam(paramPath) {
+					c.rulef("http-service-params", "%s %s %s: body must not map to auth-injected service parameter %s", rel, method, path, paramPath)
+				}
 				covered[paramPath] = true
 				if target.requiredParams[paramPath] {
 					if required, _ := rb["required"].(bool); !required {
@@ -1260,7 +1264,7 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			from, _ := entry["from"].(string)
 			to, _ := entry["to"].(string)
 			if from == "" {
-				c.rulef("http-service-params", "%s %s %s: mapping.%s.from required", rel, method, path, location)
+				c.rulef("http-service-params", "%s %s %s: %s to declaration required", rel, method, path, location)
 				continue
 			}
 			param, ok := httpParams[location+"\x00"+from]
@@ -1271,13 +1275,17 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			mapped[location+"\x00"+from] = true
 			servicePath, ok := serviceParamPath(to)
 			if !ok {
-				c.rulef("http-service-params", "%s %s %s: mapping.%s.%s must map to params.<service parameter path>, got %v", rel, method, path, location, from, to)
+				c.rulef("http-service-params", "%s %s %s: %s parameter %s to must map to params.<service parameter path>, got %v", rel, method, path, location, from, to)
+				continue
+			}
+			if isAuthInjectedParam(strings.Split(servicePath, ".")[0]) {
+				c.rulef("http-service-params", "%s %s %s: %s parameter %s must not map to auth-injected service parameter %s", rel, method, path, location, from, servicePath)
 				continue
 			}
 			covered[strings.Split(servicePath, ".")[0]] = true
 			decl, ok := c.serviceParamType(target, servicePath)
 			if !ok {
-				c.rulef("http-service-params", "%s %s %s: mapping.%s.%s maps to unknown service field params.%s", rel, method, path, location, from, servicePath)
+				c.rulef("http-service-params", "%s %s %s: %s parameter %s maps to unknown service field params.%s", rel, method, path, location, from, servicePath)
 				continue
 			}
 			schema, _ := asMap(param["schema"])
@@ -1299,67 +1307,27 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			}
 		}
 	}
-	securityMapped := map[string]bool{}
-	for _, raw := range asList(params["security"]) {
-		entry, _ := asMap(raw)
-		scheme, _ := entry["scheme"].(string)
-		to, _ := entry["to"].(string)
-		if scheme == "" {
-			c.rulef("http-service-params", "%s %s %s: mapping.security.scheme required", rel, method, path)
-			continue
-		}
-		if securityMapped[scheme] {
-			c.rulef("http-service-params", "%s %s %s: mapping.security.%s declared twice", rel, method, path, scheme)
-			continue
-		}
-		securityMapped[scheme] = true
-		if !securityDeclares(op, scheme) {
-			c.rulef("http-service-params", "%s %s %s: mapping.security.%s is not declared in operation.security", rel, method, path, scheme)
-		}
-		servicePath, ok := serviceParamPath(to)
-		if !ok {
-			c.rulef("http-service-params", "%s %s %s: mapping.security.%s must map to params.<service parameter path>, got %v", rel, method, path, scheme, to)
-			continue
-		}
-		covered[strings.Split(servicePath, ".")[0]] = true
-		decl, ok := c.serviceParamType(target, servicePath)
-		if !ok {
-			c.rulef("http-service-params", "%s %s %s: mapping.security.%s maps to unknown service field params.%s", rel, method, path, scheme, servicePath)
-			continue
-		}
-		last := servicePath
-		if i := strings.LastIndex(servicePath, "."); i >= 0 {
-			last = servicePath[i+1:]
-		}
-		var want string
-		switch scheme {
-		case "BearerAuth":
-			switch last {
-			case "access_token":
-				want = "string"
-			case "account_id":
-				want = "integer"
-			default:
-				c.rulef("http-security", "%s %s %s: BearerAuth must map to params.access_token or params.account_id, got params.%s", rel, method, path, servicePath)
-				continue
-			}
-		default:
-			continue
-		}
-		if !familiesCompatible(want, c.httpServiceFamily(decl)) {
-			c.rulef("http-service-params", "%s %s %s: mapping.security.%s type differs from service field params.%s (%s)", rel, method, path, scheme, servicePath, decl)
-		}
-	}
 	for key := range httpParams {
 		if !mapped[key] {
-			c.rulef("http-service-params", "%s %s %s: HTTP parameter %s has no x-service-params mapping", rel, method, path, strings.ReplaceAll(key, "\x00", " "))
+			c.rulef("http-service-params", "%s %s %s: HTTP parameter %s has no to declaration", rel, method, path, strings.ReplaceAll(key, "\x00", " "))
 		}
 	}
 	for name := range target.requiredParams {
+		if isAuthInjectedParam(name) {
+			if !bearerAuth {
+				c.rulef("http-service-params", "%s %s %s: auth-injected service parameter %s requires security.BearerAuth=true", rel, method, path, name)
+			}
+			continue
+		}
 		if !covered[name] {
 			c.rulef("http-service-params", "%s %s %s: required service parameter %s is not covered", rel, method, path, name)
 		}
 	}
+}
+
+// isAuthInjectedParam 判断 service 参数是否由 BearerAuth 中间件注入，而不是来自 HTTP 参数。
+func isAuthInjectedParam(name string) bool {
+	return name == "account_id" || name == "access_token"
 }
 
 // securityDeclares 判断 operation.security 是否声明了某个 scheme。
@@ -1373,7 +1341,7 @@ func securityDeclares(op map[string]any, scheme string) bool {
 	return false
 }
 
-// serviceParamPath 解析 request.mapping 的 params.<name>[.<field>] 表达式。
+// serviceParamPath 解析 request 参数 to 的 params.<name>[.<field>] 表达式。
 func serviceParamPath(raw any) (string, bool) {
 	value, _ := raw.(string)
 	path := strings.TrimPrefix(value, "params.")

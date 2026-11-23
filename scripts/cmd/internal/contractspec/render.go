@@ -832,7 +832,7 @@ type httpOperationScaffold struct {
 	Service  string                          `yaml:"service"`
 	Summary  string                          `yaml:"summary"`
 	UsedBy   []string                        `yaml:"used_by"`
-	Security []any                           `yaml:"security"`
+	Security map[string]any                  `yaml:"security"`
 	Request  map[string]any                  `yaml:"request"`
 	Response map[string]httpResponseScaffold `yaml:"response"`
 }
@@ -1141,10 +1141,8 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		Service:  service,
 		Summary:  summary,
 		UsedBy:   []string{"feature.pages." + name},
-		Security: []any{},
-		Request: map[string]any{
-			"mapping": map[string]any{},
-		},
+		Security: map[string]any{"BearerAuth": false},
+		Request:  map[string]any{},
 		Response: map[string]httpResponseScaffold{
 			"204": {
 				Description: "OK",

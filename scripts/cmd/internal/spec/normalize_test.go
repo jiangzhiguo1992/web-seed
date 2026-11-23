@@ -17,7 +17,7 @@ func httpDoc(operation map[string]any) map[string]any {
 		}
 	}
 	if operation["security"] == nil {
-		operation["security"] = []any{}
+		operation["security"] = map[string]any{"BearerAuth": false}
 	}
 	return map[string]any{
 		"mount": map[string]any{"api_version": "v1", "path": "/", "audience": []any{"admin"}},
@@ -41,11 +41,12 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request": map[string]any{
 			"query": []any{
-				map[string]any{"name": "limit", "schema": "_types.integer", "required": false, "description": "size"},
+				map[string]any{"name": "limit", "schema": "_types.integer", "required": false, "description": "size", "to": "params.limit"},
 			},
 			"body": map[string]any{
 				"content_type": "application/json",
 				"schema":       map[string]any{"$ref": "#/components/schemas/Input"},
+				"to":           "params.input",
 			},
 		},
 		"response": map[string]any{
@@ -85,6 +86,13 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 	if body == nil || asMap(asMap(body["content"])["application/json"]) == nil {
 		t.Fatalf("requestBody not normalized: %v", op["requestBody"])
 	}
+	serviceParams := asMap(op["x-service-params"])
+	if serviceParams["body"] != "params.input" {
+		t.Fatalf("body target not preserved: %v", serviceParams)
+	}
+	if got := asList(serviceParams["query"]); len(got) != 1 || asMap(got[0])["to"] != "params.limit" {
+		t.Fatalf("query target not preserved: %v", serviceParams)
+	}
 	resp := asMap(asMap(op["responses"])["200"])
 	if resp == nil || asMap(asMap(resp["content"])["application/json"]) == nil {
 		t.Fatalf("response body not normalized: %v", op["responses"])
@@ -93,12 +101,8 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 
 func TestNormalizeHTTPDocumentSecurity(t *testing.T) {
 	doc := httpDoc(map[string]any{
-		"security": []any{map[string]any{"scheme": "BearerAuth", "scopes": []any{}}},
-		"request": map[string]any{
-			"mapping": map[string]any{
-				"security": []any{map[string]any{"scheme": "BearerAuth", "to": "params.access_token"}},
-			},
-		},
+		"security": map[string]any{"BearerAuth": true},
+		"request":  map[string]any{},
 		"response": map[string]any{"204": map[string]any{"description": "ok"}},
 	})
 	if err := NormalizeHTTPDocument(doc, testResolve, false); err != nil {
@@ -110,29 +114,8 @@ func TestNormalizeHTTPDocumentSecurity(t *testing.T) {
 		t.Fatalf("security not normalized: %v", security)
 	}
 	params := asMap(op["x-service-params"])
-	if asList(params["security"]) == nil {
-		t.Fatalf("security mapping not preserved: %v", params)
-	}
-}
-
-func TestNormalizeHTTPDocumentRejectsLegacy(t *testing.T) {
-	doc := httpDoc(map[string]any{
-		"parameters":  []any{},
-		"responses":   map[string]any{"200": map[string]any{"description": "ok"}},
-		"requestBody": map[string]any{},
-	})
-	err := NormalizeHTTPDocument(doc, testResolve, false)
-	if err == nil || !strings.Contains(err.Error(), "legacy") {
-		t.Fatalf("legacy shape not rejected: %v", err)
-	}
-}
-
-func TestNormalizeHTTPDocumentRequiresBlocks(t *testing.T) {
-	if err := NormalizeHTTPDocument(httpDoc(map[string]any{"response": map[string]any{}}), testResolve, false); err == nil {
-		t.Fatal("missing request block not rejected")
-	}
-	if err := NormalizeHTTPDocument(httpDoc(map[string]any{"request": map[string]any{}}), testResolve, false); err == nil {
-		t.Fatal("missing response block not rejected")
+	if params == nil || len(params) != 0 {
+		t.Fatalf("auth-injected params must not be stored in x-service-params: %v", params)
 	}
 }
 

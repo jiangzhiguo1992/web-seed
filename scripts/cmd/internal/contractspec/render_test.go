@@ -569,8 +569,8 @@ func TestRenderHTTP(t *testing.T) {
 	if op["name"] != "getInvoice" || op["id"] != "cap.protocols.http.invoice.get" || op["service"] != "cap.services.invoice.get" {
 		t.Fatalf("operation = %#v", op)
 	}
-	security, ok := op["security"].([]any)
-	if !ok || len(security) != 0 {
+	security, ok := op["security"].(map[string]any)
+	if !ok || security["BearerAuth"] != false {
 		t.Fatalf("security = %#v", op["security"])
 	}
 	usedBy, _ := op["used_by"].([]any)

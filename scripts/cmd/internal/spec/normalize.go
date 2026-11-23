@@ -176,10 +176,11 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 			if response == nil {
 				return fmt.Errorf("%s: response block required", where)
 			}
-			parameters, requestBody, err := normalizeRequest(request, where, resolve, componentByID, strict)
+			parameters, requestBody, serviceParams, err := normalizeRequest(request, where, resolve, componentByID, strict)
 			if err != nil {
 				return err
 			}
+			op["x-service-params"] = serviceParams
 			if len(parameters) > 0 {
 				op["parameters"] = parameters
 			}
@@ -198,7 +199,7 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 	return nil
 }
 
-// normalizeOperationMetadata 把 name/id/service/request.mapping/errors
+// normalizeOperationMetadata 把 name/id/service/errors
 // 转成生成物需要的 operationId 与 x-* 扩展，并删掉源字段。
 // ensureDirectComponents 为 operation 里的直接类型引用补出 components.schemas
 // 溯源声明，使账号/鉴权文件不需要再写 components 别名。
@@ -338,46 +339,35 @@ func normalizeOperationMetadata(op map[string]any, where string, strict bool) er
 		return err
 	}
 
-	request := asMap(op["request"])
-	if mapping, ok := request["mapping"]; ok {
-		op["x-service-params"] = mapping
-		delete(request, "mapping")
-	}
 	delete(op, "audience")
 	delete(op, "used_by")
 	return nil
 }
 
-// normalizeOperationSecurity 把源契约的 [{scheme, scopes}] 转成 OpenAPI 的 [{scheme: scopes}]。
+// normalizeOperationSecurity 把源契约的 { BearerAuth: bool } 转成 OpenAPI security。
 func normalizeOperationSecurity(op map[string]any, where string) error {
 	raw, ok := op["security"]
 	if !ok {
-		// 缺失由 _meta 的 required 校验；normalizer 只做结构转换。
+		return fmt.Errorf("%s: security required", where)
+	}
+	security := asMap(raw)
+	if security == nil {
+		return fmt.Errorf("%s: security must be an object", where)
+	}
+	for key := range security {
+		if key != "BearerAuth" {
+			return fmt.Errorf("%s: unknown security key %s", where, key)
+		}
+	}
+	enabled, ok := security["BearerAuth"].(bool)
+	if !ok {
+		return fmt.Errorf("%s: security.BearerAuth must be a boolean", where)
+	}
+	if enabled {
+		op["security"] = []any{map[string]any{"BearerAuth": []any{}}}
+	} else {
 		op["security"] = []any{}
-		return nil
 	}
-	out := []any{}
-	seen := map[string]bool{}
-	for i, item := range asList(raw) {
-		requirement := asMap(item)
-		if requirement == nil {
-			return fmt.Errorf("%s: security[%d] must be an object", where, i)
-		}
-		scheme, _ := requirement["scheme"].(string)
-		if scheme == "" {
-			return fmt.Errorf("%s: security[%d].scheme required", where, i)
-		}
-		if seen[scheme] {
-			return fmt.Errorf("%s: security scheme %s declared twice", where, scheme)
-		}
-		seen[scheme] = true
-		scopes := asList(requirement["scopes"])
-		if scopes == nil {
-			scopes = []any{}
-		}
-		out = append(out, map[string]any{scheme: scopes})
-	}
-	op["security"] = out
 	return nil
 }
 
@@ -467,15 +457,16 @@ func normalizeHTTPComponents(doc map[string]any, strict bool) (map[string]string
 	return byID, nil
 }
 
-func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, map[string]any, error) {
+func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, map[string]any, map[string]any, error) {
 	for key := range request {
 		switch key {
 		case "path", "query", "body":
 		default:
-			return nil, nil, fmt.Errorf("%s: unknown request key %s", where, key)
+			return nil, nil, nil, fmt.Errorf("%s: unknown request key %s", where, key)
 		}
 	}
 	parameters := []any{}
+	serviceParams := map[string]any{}
 	for _, section := range []struct {
 		name string
 		in   string
@@ -487,19 +478,36 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 		if len(raw) == 0 {
 			continue
 		}
+		mappings := []any{}
 		for i, item := range raw {
 			param, err := normalizeListedParameter(item, section.in, where, i, resolve, componentByID, strict)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
+			source := asMap(item)
+			to, _ := source["to"].(string)
+			name, _ := source["name"].(string)
+			if to == "" {
+				return nil, nil, nil, fmt.Errorf("%s: %s[%d].to required", where, section.name, i)
+			}
+			mappings = append(mappings, map[string]any{"from": name, "to": to})
 			parameters = append(parameters, param)
 		}
+		serviceParams[section.name] = mappings
 	}
-	body, err := normalizeBody(asMap(request["body"]), where, "requestBody", resolve, componentByID, strict)
+	bodyRaw := asMap(request["body"])
+	body, err := normalizeBody(bodyRaw, where, "requestBody", resolve, componentByID, strict)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return parameters, body, nil
+	if bodyRaw != nil {
+		to, _ := bodyRaw["to"].(string)
+		if to == "" {
+			return nil, nil, nil, fmt.Errorf("%s: request.body.to required", where)
+		}
+		serviceParams["body"] = to
+	}
+	return parameters, body, serviceParams, nil
 }
 
 func normalizeListedParameter(raw any, in, where string, index int, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {

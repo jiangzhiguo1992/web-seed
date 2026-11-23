@@ -223,14 +223,14 @@ paths:
       contract:
         id: "cap.protocols.http.x.create"
         service: "cap.services.x.create"
+      security: { BearerAuth: false }
       request:
         body:
           content_type: "application/json"
           schema:
             $ref: "#/components/schemas/WrongInput"
           required: true
-        mapping:
-          body: "params.input"
+          to: "params.input"
       response:
         "204":
           description: "OK"
@@ -269,14 +269,14 @@ paths:
       contract:
         id: "cap.protocols.http.x.create"
         service: "cap.services.x.create"
+      security: { BearerAuth: false }
       request:
         body:
           content_type: "application/json"
           schema:
             $ref: "#/components/schemas/WrongInput"
           required: true
-        mapping:
-          body: "params.input"
+          to: "params.input"
       response:
         "204":
           description: "OK"
@@ -315,6 +315,7 @@ paths:
       contract:
         id: "cap.protocols.http.x.create"
         service: "cap.services.x.create"
+      security: { BearerAuth: false }
       request:
         body:
           content_type: "application/json"
@@ -327,8 +328,7 @@ paths:
               id:
                 type: "integer"
           required: true
-        mapping:
-          body: params.input
+          to: params.input
       response:
         "204":
           description: "OK"
@@ -637,8 +637,8 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      request:
-        mapping: {}
+      security: { BearerAuth: false }
+      request: {}
       response:
         "204":
           description: "OK"
@@ -668,16 +668,14 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request:
         query:
           - name: id
             schema: { type: integer }
             required: false
             description: "id"
-        mapping:
-          query:
-            - from: id
-              to: params.missing
+            to: params.missing
       response:
         "204":
           description: "OK"
@@ -706,8 +704,8 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      request:
-        mapping: {}
+      security: { BearerAuth: false }
+      request: {}
       response:
         "204":
           description: "OK"
@@ -747,6 +745,7 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       parameters: []
       responses:
@@ -797,7 +796,7 @@ func TestProjectApps(t *testing.T) {
 	}
 }
 
-func TestHTTPSecurity(t *testing.T) {
+func TestHTTPSecurityNonBoolean(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
 summary: "x"
@@ -808,14 +807,11 @@ paths:
   /x:
     get:
       name: "getX"
-      security:
-        - scheme: UnknownAuth
-          scopes: []
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      request:
-        mapping: {}
+      security: { BearerAuth: "yes" }
+      request: {}
       response:
         "204":
           description: "OK"
@@ -825,12 +821,44 @@ paths:
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.get": {visibility: "public"},
 	}, map[string]bool{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-security]") {
-		t.Fatalf("unknown security scheme not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "security.BearerAuth must be a boolean") {
+		t.Fatalf("non-boolean security not reported: %v", c.errs)
 	}
 }
 
-func TestHTTPSecurityMapping(t *testing.T) {
+func TestHTTPSecurityRequiresPermissions(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+summary: "x"
+schema_version: 1
+stability: "draft"
+do_not: []
+paths:
+  /x:
+    get:
+      name: "getX"
+      contract:
+        id: "cap.protocols.http.x.get"
+        service: "cap.services.x.get"
+      security: { BearerAuth: false }
+      request: {}
+      response:
+        "204":
+          description: "OK"
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root, accessBindings: map[string]accessPolicy{
+		"cap.services.x.get": {permissions: []string{"x"}},
+	}}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {visibility: "public"},
+	}, map[string]bool{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-security]") {
+		t.Fatalf("permission-protected service without BearerAuth not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPSecurityAuthInjection(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
 summary: "x"
@@ -844,14 +872,8 @@ paths:
       contract:
         id: "cap.protocols.http.x.post"
         service: "cap.services.x.post"
-      security:
-        - scheme: BearerAuth
-          scopes: []
-      request:
-        mapping:
-          security:
-            - scheme: BearerAuth
-              to: params.refresh_token
+      security: { BearerAuth: true }
+      request: {}
       response:
         "204":
           description: "OK"
@@ -861,12 +883,47 @@ paths:
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.post": {
 			visibility:     "public",
-			requiredParams: map[string]bool{"refresh_token": true},
-			paramDecls:     map[string]string{"refresh_token": "_types.string"},
+			requiredParams: map[string]bool{"account_id": true},
+			paramDecls:     map[string]string{"account_id": "_types.integer"},
 		},
 	}, map[string]bool{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "BearerAuth must map to params.access_token or params.account_id") {
-		t.Fatalf("security mapping not checked: %v", c.errs)
+	if got := strings.Join(c.errs, "\n"); strings.Contains(got, "[http-service-params]") {
+		t.Fatalf("auth-injected account_id must not require mapping: %v", c.errs)
+	}
+}
+
+func TestHTTPSecurityRejectsHTTPAuthParam(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+summary: "x"
+schema_version: 1
+stability: "draft"
+do_not: []
+paths:
+  /x:
+    get:
+      name: "getX"
+      contract:
+        id: "cap.protocols.http.x.get"
+        service: "cap.services.x.get"
+      security: { BearerAuth: true }
+      request:
+        query:
+          - { name: account_id, schema: { type: integer }, required: true, description: "account", to: params.account_id }
+      response:
+        "204": { description: "OK" }
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {
+			visibility:     "public",
+			requiredParams: map[string]bool{"account_id": true},
+			paramDecls:     map[string]string{"account_id": "_types.integer"},
+		},
+	}, map[string]bool{}, map[string]bool{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must not map to auth-injected") {
+		t.Fatalf("HTTP auth param mapping not rejected: %v", c.errs)
 	}
 }
 
@@ -884,8 +941,8 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      request:
-        mapping: {}
+      security: { BearerAuth: false }
+      request: {}
       response:
         "204":
           description: "OK"
@@ -1531,6 +1588,7 @@ paths:
       contract:
         id: "cap.protocols.http.x.job"
         service: "cap.services.x.job"
+      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -1562,6 +1620,7 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -1572,6 +1631,7 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -1674,6 +1734,7 @@ paths:
       name: "getX"
       id: "cap.protocols.http.x.get"
       service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -2504,6 +2565,7 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
+      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -2566,9 +2628,8 @@ paths:
       id: cap.protocols.http.x.ok
       service: cap.services.x.get
       used_by: [feature.pages.x]
-      security: []
-      request:
-        mapping: {}
+      security: { BearerAuth: false }
+      request: {}
       response:
         "204":
           description: "OK"
@@ -2579,9 +2640,8 @@ paths:
       id: cap.protocols.http.x.open
       service: cap.services.x.open
       used_by: []
-      security: []
-      request:
-        mapping: {}
+      security: { BearerAuth: false }
+      request: {}
       response:
         "204":
           description: "OK"
@@ -2592,9 +2652,8 @@ paths:
       id: cap.protocols.http.x.orphan
       service: cap.services.x.orphan
       used_by: []
-      security: []
-      request:
-        mapping: {}
+      security: { BearerAuth: false }
+      request: {}
       response:
         "204":
           description: "OK"
@@ -2605,9 +2664,8 @@ paths:
       id: cap.protocols.http.x.missing
       service: cap.services.x.get
       used_by: []
-      security: []
-      request:
-        mapping: {}
+      security: { BearerAuth: false }
+      request: {}
       response:
         "204":
           description: "OK"
@@ -2717,13 +2775,13 @@ paths:
       service: cap.services.x.create
       summary: "x"
       used_by: [feature.pages.x]
+      security: { BearerAuth: false }
       request:
         body:
           content_type: application/json
           schema: cap.services.x.schemas.Input
           required: false
-        mapping:
-          body: "params.input"
+          to: "params.input"
       response:
         "204": { description: "OK" }
 `)
@@ -2758,7 +2816,8 @@ paths:
       service: cap.services.x.get
       summary: "a"
       used_by: [feature.pages.x]
-      request: { mapping: {} }
+      security: { BearerAuth: false }
+      request: {}
       response:
         "204": { description: OK }
   /b:
@@ -2768,7 +2827,8 @@ paths:
       service: cap.services.x.get
       summary: "b"
       used_by: [feature.pages.x]
-      request: { mapping: {} }
+      security: { BearerAuth: false }
+      request: {}
       response:
         "204": { description: OK }
 `)
