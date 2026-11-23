@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Agent 交互协议
-- 未经允许，git不能擅自commit和push。不要更改代码的暂存状态(用户自己改的)，且新的修改不叠加到暂存里。
+- 覆盖全局AGENTS.md里的**Git commit**准则：未经允许，git不能擅自commit和push。不要更改代码的暂存状态(用户自己改的)，且新的修改不叠加到暂存里。
 
 ## 项目概述
 > 参考文档 [`README.md`](README.md)

@@ -4,7 +4,7 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "token 只存 hash；原文只通过 issue 返回 TokenPair 暴露"
+  - "token 只存 hash；令牌原文只通过 issue/refresh 的返回值暴露，HTTP 层只把 refresh token 写入 HttpOnly cookie"
   - "verify 只校验 access token；refresh token 只在 refresh/logout 中使用"
 
 schemas:
@@ -16,6 +16,18 @@ schemas:
       - { name: access_expire_at, schema: { type: _types.timestamp }, required: true, description: "访问令牌过期时间" }
       - { name: refresh_expire_at, schema: { type: _types.timestamp }, required: true, description: "刷新令牌过期时间" }
       - { name: token_type, schema: { type: _types.token_type }, description: "令牌类型；固定 Bearer" }
+  AccessToken:
+    type: _types.object
+    properties:
+      - { name: access_token, schema: { type: _types.string }, required: true, read_only: true, description: "访问令牌" }
+      - { name: access_expire_at, schema: { type: _types.timestamp }, required: true, description: "访问令牌过期时间" }
+      - { name: token_type, schema: { type: _types.token_type }, description: "令牌类型；固定 Bearer" }
+  RefreshToken:
+    type: _types.object
+    properties:
+      - { name: refresh_token, schema: { type: _types.string }, required: true, read_only: true, description: "刷新令牌；只写 HttpOnly cookie，不进入响应体" }
+      - { name: refresh_expire_at, schema: { type: _types.timestamp }, required: true, description: "刷新令牌过期时间" }
+
 services:
   - name: issue
     summary: "为账号签发 access + refresh 令牌对"
@@ -127,7 +139,8 @@ services:
       - { name: ctx, type: context.Context }
       - { name: refresh_token, type: _types.string }
     returns:
-      - { name: tokens, type: cap.services.token.schemas.TokenPair, value: step.issue_tokens.tokens }
+      - { name: access, type: cap.services.token.schemas.AccessToken, value: step.split_tokens.access }
+      - { name: refresh, type: cap.services.token.schemas.RefreshToken, value: step.split_tokens.refresh }
       - { name: err, type: error }
     steps:
       - id: hash_old
@@ -189,13 +202,24 @@ services:
           - { name: tokens, type: cap.services.token.schemas.TokenPair, description: "换新后的令牌对" }
         errors: [ ]
         rules: [ ]
+        goto: split_tokens
+      - id: split_tokens
+        kind: logic
+        summary: "拆分新的访问令牌与刷新令牌"
+        input:
+          - { name: tokens, value: step.issue_tokens.tokens, description: "换新后的令牌对" }
+        output:
+          - { name: access, type: cap.services.token.schemas.AccessToken, description: "新的访问令牌" }
+          - { name: refresh, type: cap.services.token.schemas.RefreshToken, description: "新的刷新令牌" }
+        errors: [ ]
+        rules: [ ]
         goto: hash_new
       - id: hash_new
         kind: logic
         summary: "计算新访问令牌与新刷新令牌的哈希"
         input:
-          - { name: access_token, value: step.issue_tokens.tokens.access_token, description: "新访问令牌" }
-          - { name: refresh_token, value: step.issue_tokens.tokens.refresh_token, description: "新刷新令牌" }
+          - { name: access_token, value: step.split_tokens.access.access_token, description: "新访问令牌" }
+          - { name: refresh_token, value: step.split_tokens.refresh.refresh_token, description: "新刷新令牌" }
         output:
           - { name: access_token_hash, type: _types.string, description: "新访问令牌哈希" }
           - { name: refresh_token_hash, type: _types.string, description: "新刷新令牌哈希" }
@@ -240,8 +264,8 @@ services:
           - { name: device_id, value: step.load_old.row.device_id, description: "继承的设备标识" }
           - { name: access_token_hash, value: step.hash_new.access_token_hash, description: "新访问令牌哈希" }
           - { name: refresh_token_hash, value: step.hash_new.refresh_token_hash, description: "新刷新令牌哈希" }
-          - { name: access_expire_at, value: step.issue_tokens.tokens.access_expire_at, description: "访问令牌过期时间" }
-          - { name: refresh_expire_at, value: step.issue_tokens.tokens.refresh_expire_at, description: "刷新令牌过期时间" }
+          - { name: access_expire_at, value: step.split_tokens.access.access_expire_at, description: "访问令牌过期时间" }
+          - { name: refresh_expire_at, value: step.split_tokens.refresh.refresh_expire_at, description: "刷新令牌过期时间" }
         output: [ ]
         query: data.queries.token.create_token
         goto: revoke_token

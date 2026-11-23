@@ -59,7 +59,7 @@ schemas:
     type: _types.object
     properties:
       - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
-      - { name: tokens, schema: { ref: cap.services.token.schemas.TokenPair }, required: true, description: "令牌对" }
+      - { name: tokens, schema: { ref: cap.services.token.schemas.AccessToken }, required: true, description: "访问令牌" }
       - { name: attributes, schema: { ref: cap.services.auth.schemas.AuthAttributes }, required: true, description: "会话属性" }
   AuthAttributes:
     type: _types.object
@@ -77,6 +77,7 @@ services:
       - { name: input, type: cap.services.auth.schemas.LoginInput }
     returns:
       - { name: session, type: cap.services.auth.schemas.AuthSession, value: step.build_session.session }
+      - { name: refresh, type: cap.services.token.schemas.RefreshToken, value: step.split_tokens.refresh }
       - { name: err, type: error }
     steps:
       - id: load_branch
@@ -297,13 +298,24 @@ services:
         output:
           - { name: tokens, type: cap.services.token.schemas.TokenPair, description: "service 返回的 tokens" }
         service: cap.services.token.issue
+        goto: split_tokens
+      - id: split_tokens
+        kind: logic
+        summary: "拆分访问令牌与刷新令牌"
+        input:
+          - { name: tokens, value: step.issue_tokens.tokens, description: "签发后的令牌对" }
+        output:
+          - { name: access, type: cap.services.token.schemas.AccessToken, description: "访问令牌" }
+          - { name: refresh, type: cap.services.token.schemas.RefreshToken, description: "刷新令牌" }
+        errors: [ ]
+        rules: [ ]
         goto: build_session
       - id: build_session
         kind: logic
         summary: "组装登录会话"
         input:
           - { name: account, value: step.load_account.account, description: "账号实体" }
-          - { name: tokens, value: step.issue_tokens.tokens, description: "签发后的令牌对" }
+          - { name: tokens, value: step.split_tokens.access, description: "访问令牌" }
           - { name: auth_type, value: params.input.auth_type, description: "登录认证类型" }
           - { name: device_id, value: params.input.device_id, description: "登录设备标识" }
         output:

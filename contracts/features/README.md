@@ -68,7 +68,7 @@ features ✗ data.tables / data.queries（禁止直接引用表或查询）
 |---|---|
 | `loading` | 首次加载或刷新中 |
 | `empty` / `idle` | 请求成功但无数据；表单页用 `idle` 表示初始可编辑态 |
-| `error` | 请求失败，展示 `Problem.detail` |
+| `error` | 请求失败，展示错误信封的 `message` |
 | `forbidden` | 无权限时的表现 |
 
 缺任一状态即校验失败——这是前端最容易漏、也最影响体验的部分。`view_states` 与 `cap.lifecycles` 是不同概念：前者是 UI 加载态，后者是业务生命周期。

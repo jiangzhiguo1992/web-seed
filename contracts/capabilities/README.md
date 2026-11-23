@@ -213,19 +213,42 @@ dispatch 项：
 
 - path / method / operationId / `x-contract-id` / `x-service`
 - status code / content-type / header
-- request/response 的 schema `$ref`；request 用 `x-service-type`、response 用 `x-service-return` 以全限定 ID 指向
-  service 的 params/returns
-- `components.schemas` 通过 `x-service-type` / `x-enum` / `x-entity` 以全限定 ID 指向唯一来源
+- API 版本只在 `project.yaml` 的 `app.api_version` 声明；URL 前缀由生成器派生为 `/<app.api_version>`，HTTP 文件与 paths 都不写版本
+- v2 是新的 API surface：在 `project.yaml` 新增 app（`api_version: v2`），未变模块可复用原文件，变更模块新建 `<module>_v2.yaml` 并只 include 到 v2 app；同一 app 不允许混版本
+- request/response 的 schema `$ref`；request 的 `$ref` 用 `x-service-type` 指向 service 的 params，匿名 object 只允许映射 service 标量参数；response 用 component 的 `x-service-type` / `x-enum` / `x-entity` 指向 service 的 returns
+- `components.schemas` 只写溯源声明（`x-service-type` / `x-enum` / `x-entity` / `x-platform`），不得复制业务字段
 
 **不要写**：权限、审计、限流（在 `platform/security/access.yaml`）、事务（在 service 项）。
 
 HTTP 约束：
 
 - 响应 schema 由 `cap.services.schemas` 生成，object 默认封闭。
-- 错误响应统一引用 `protocols/http/shared.yaml` 的 `Problem`。
+- 每个 operation 必须有 `x-service-params`：`body` / `path` / `query` / `header` / `cookie` 映射到 service 参数；service 必填非 ctx 参数必须全覆盖，HTTP 不得发明参数。
+- 每个 operation 必须有 `x-idempotency`：`none` / `optional` / `required`；`optional` 引用 `IdempotencyKey`，`required` 引用 `IdempotencyKeyRequired`，`none` 不得声明。
+- 每个 operation 必须声明 `X-Request-Id` 请求头（`$ref RequestId`）；每个非 `$ref` response 必须声明 `X-Request-Id` 响应头。
+- 受保护 operation 用 `security: [ { BearerAuth: [] } ]`；cookie 端点（refresh/logout）必须声明 `X-CSRF-Token`（`$ref CSRFToken`），refresh token 只写 HttpOnly cookie。
+- 每个 operation 必须有 `x-errors`（可为空）：只列 `platform.errors.*` 中该 service 的非 `COMMON_*` 错误，且必须与 service 错误集精确一致。
+- 成功响应统一信封 `{ code: 0, message: "ok", data: <return> }`，由 `gen_openapi` 生成 `Api<Type>Response`；204 是唯一无信封的响应。
+- 错误响应统一引用 `protocols/http/shared.yaml` 的 `ApiErrorResponse`：`{ code: <biz_code>, message, data: null }`，HTTP status 保留 4xx/5xx。
+- 每个 requestBody 与 2xx body response 不写 `example`；测试数据放在独立测试目录，由测试文件维护。
 - 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明；operation 需要更细粒度时用 `x-default-errors` 覆盖。
 - 503 必须通过 shared 的 `ServiceUnavailable` 返回 `Retry-After`。
 - 每个 operation 必须写 `x-contract-id` 与 `x-service`；`x-service` 只能指向 `public` 且未被异步任务引用的同步 service。
+
+请求头/响应头定义位置：
+
+| 头 | 位置 | 引用方式 |
+|---|---|---|
+| `X-Request-Id`（请求） | `shared.yaml` `components.parameters.RequestId` | `operation.parameters` `$ref` |
+| `Idempotency-Key` | `shared.yaml` `IdempotencyKey` / `IdempotencyKeyRequired` | `operation.parameters` `$ref` |
+| `X-CSRF-Token` | `shared.yaml` `CSRFToken` | cookie operation 的 `operation.parameters` `$ref` |
+| `Authorization` | `shared.yaml` `Authorization` | 受保护 operation 的 `operation.parameters` `$ref` |
+| `X-Request-Id`（响应） | `shared.yaml` `components.headers.XRequestId` | `responses.<status>.headers` `$ref` |
+| `Set-Cookie` | `shared.yaml` `SetAuthCookies` / `ClearAuthCookies` | 登录/刷新/登出的 `responses.<status>.headers` `$ref` |
+| `Retry-After` | `shared.yaml` `components.headers.RetryAfter` | 423/429/503 响应 `headers` `$ref` |
+| `Content-Type: application/json` | `requestBody.content.application/json` / `responses.<status>.content.application/json` | media type key，不写成 header 参数；OpenAPI 生成器据此产出 Content-Type |
+
+`application/json` 不是 `parameters` 里的 header；它是 `content` 的 media type key，`oapi-codegen` 会据此生成请求/响应的 Content-Type。
 
 ---
 
@@ -267,6 +290,6 @@ contracts/capabilities/
 - `services/*.yaml` 已合并原 methods + flows；每个 service 项都有 steps。
 - `events/*.yaml` 按 triggers 分槽：topics（publish/subscribe）+ crons + dispatches；`services` 不再声明 `trigger/retry/concurrency`。
 - `capabilities/lifecycles/*` 承载生命周期；`features/rules/*` 承载业务规则；`capabilities/events/*` 承载异步主题与任务。
-- `protocols/http/*.yaml` 已全部使用 `x-service` 指向同步 service，response 用 `x-service-return` 绑定 returns。
+- `protocols/http/*.yaml` 已全部使用 `x-service` 指向同步 service，response 用 component 的 `x-service-type`/`x-enum`/`x-entity` 绑定 returns。
 - `data.queries.*.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，不得为空。
 - 术语表在 `docs/reference/glossary.md`（review-only，不占契约组）。
