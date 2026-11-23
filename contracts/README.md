@@ -97,7 +97,7 @@ contracts/
 │   ├── lifecycles/<dimension>.yaml # 状态机生命周期：subjects(entity+field)、states、create/destroy/transitions，锚到 service step
 │   ├── events/<module>.yaml   #   异步主题与任务：topics（publish/subscribe）+ crons + dispatches
 │   └── protocols/
-│       └── http/<module>.yaml #   HTTP 绑定：只写协议差异，x-service 指回 service
+│       └── http/<module>.yaml #   HTTP 绑定：只写协议差异，service 指回 service
 │
 ├── features/                 # ③ 功能契约（面向用户）
 │   ├── routes.yaml           #   路由、菜单、布局
@@ -191,7 +191,7 @@ feature ──> capabilities ──> data
 | 边 | 写在 | 字段 |
 |---|---|---|
 | feature → capabilities | 页面契约 | `capability:` / `feature.rules.*` / `cap.lifecycles.*` |
-| capabilities/protocols → capabilities/services | protocol operation | `x-service` |
+| capabilities/protocols → capabilities/services | protocol operation | `service` |
 | capabilities/services → capabilities/services | service steps | `kind: service` + `service` |
 | capabilities/services → features/rules | service steps | `kind: logic/transition` + `rules` |
 | capabilities/services → capabilities/lifecycles | service steps | `lifecycle`（create/destroy/transition） |
@@ -244,9 +244,9 @@ make contract-impact id=data.tables.account.col.number
 
 ```
 feature.pages.account_list
-  ├─ cap.protocols.http.account.list ─x-service→ cap.services.account.list
+  ├─ cap.protocols.http.account.list ─service→ cap.services.account.list
   │    └─ kind=logic → data.queries.account.list_accounts
-  └─ cap.protocols.http.account.create ─x-service→ cap.services.account.create
+  └─ cap.protocols.http.account.create ─service→ cap.services.account.create
        ├─ kind=logic → data.queries.account.create_account
        └─ rules → feature.rules.account.*
             └─ implemented_by → cap.services.account.create

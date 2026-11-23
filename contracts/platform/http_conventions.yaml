@@ -6,11 +6,18 @@ summary: "HTTP 信封与状态码约定"
 stability: draft
 
 response:
-  success: "直接返回资源或集合，不额外包 code/message 信封"
-  error: "application/problem+json（RFC 9457）"
+  success: "统一信封 { code: 0, message: \"ok\", data: <service return> }；data 必须是 service 的非 err return"
+  error: "统一信封 { code: <biz_code>, message: <i18n>, data: null }；HTTP status 保留 4xx/5xx，不改成全部 200"
   empty:
     status: 204
-    body: "无"
+    body: "无；204 是唯一不包信封的响应"
+
+envelope:
+  success_code: 0
+  code: "整数业务码；0 成功，非 0 取 platform.errors.* 的 biz_code；取值范围 1000-9999"
+  message: "人类可读文案；成功固定 ok"
+  data: "成功时为 service return；错误时为 null"
+  generated_by: "gen_openapi 为每个 2xx data 类型生成 Api<Type>Response，源契约不手写信封"
 
 pagination:
   style: offset
@@ -23,16 +30,29 @@ pagination:
 
 headers:
   request:
-    - { name: X-Request-Id, required: false, note: "客户端可传，服务端校验或生成" }
+    - { name: X-Request-Id, required: false, note: "客户端可传，服务端校验或生成；每个 operation 必须声明" }
     - { name: Accept-Language, required: false, note: "用于错误文案" }
+    - { name: Idempotency-Key, required: false, note: "request.idempotency=optional/required 时必须声明；required 用 IdempotencyKeyRequired" }
+    - { name: X-CSRF-Token, required: false, note: "cookie 端点必须声明；double submit cookie" }
   response:
-    - { name: X-Request-Id, required: true, note: "必须回传，便于关联日志" }
+    - { name: X-Request-Id, required: true, note: "必须回传，便于关联日志；每个 response 必须声明" }
+    - { name: Set-Cookie, required: false, note: "登录/刷新设置 refresh_token HttpOnly cookie + csrf_token 可读 cookie；登出清除；Path=/v1/auth" }
     - { name: Retry-After, required: false, note: "429/503 时返回非负整数秒或 HTTP-date；COMMON_RATE_LIMITED / COMMON_LOOP_EXHAUSTED 使用；非法值不发送并返回参数错误" }
     - { name: RateLimit-Limit, required: false }
     - { name: RateLimit-Remaining, required: false }
     - { name: RateLimit-Reset, required: false }
     - { name: Deprecation, required: false }
     - { name: Sunset, required: false }
+
+idempotency:
+  header: Idempotency-Key
+  values: [ none, optional, required ]
+  rule: "每个 operation 必须声明 request.idempotency；optional 用 IdempotencyKey，required 用 IdempotencyKeyRequired"
+
+security:
+  scheme: BearerAuth
+  kind: http_bearer_jwt
+  cookie_refresh: "refresh_token 只写 HttpOnly cookie；Path=/v1/auth；cookie 端点必须 X-CSRF-Token"
 
 status_codes:
   success: [200, 201, 202, 204]
@@ -45,8 +65,9 @@ status_codes:
 
 content_types:
   json: application/json
-  problem: application/problem+json
+  error: "application/json"
   upload: multipart/form-data
+  note: "application/json 在契约里由 request.body.content_type 与 response.<status>.body.content_type 表达；生成器写成 OpenAPI content.<content_type>，不在 parameters 里重复声明 Content-Type header"
 
 timeouts:
   server_read_header: 5s

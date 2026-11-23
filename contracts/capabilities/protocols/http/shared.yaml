@@ -4,109 +4,164 @@ schema_version: 1
 stability: draft
 do_not:
   - "shared 只放跨模块复用组件，不放 operation 或模块专属 schema"
-
-components:
+shared:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
-    Problem:
+    ApiErrorResponse:
+      source:
+        platform: true
       type: object
       additionalProperties: false
-      required: [ type, title, status ]
+      required:
+        - "code"
+        - "message"
+        - "data"
       properties:
-        type: { type: string, format: uri-reference, example: "about:blank" }
-        title: { type: string, example: "not found" }
-        status: { type: integer, minimum: 100, maximum: 599, example: 404 }
-        detail: { type: string }
-        instance: { type: string, format: uri-reference }
-        code: { type: string, example: "ACCOUNT_NOT_FOUND" }
-        errors:
-          type: array
-          items:
-            type: object
-            additionalProperties: false
-            required: [ field, message ]
-            properties:
-              field: { type: string }
-              message: { type: string }
-
-    PageInfo:
-      type: object
-      additionalProperties: false
-      required: [ has_more ]
-      properties:
-        has_more: { type: boolean }
-
+        code:
+          type: integer
+          minimum: 1000
+          maximum: 9999
+        message:
+          type: string
+        data:
+          type: null
   parameters:
+    Authorization:
+      name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: false
-      schema: { type: string, minLength: 8, maxLength: 64 }
-
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 64
     RequestId:
       name: X-Request-Id
       in: header
       required: false
-      schema: { type: string, maxLength: 64 }
-
+      schema:
+        type: string
+        maxLength: 64
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 64
+    RefreshTokenCookie:
+      name: refresh_token
+      in: cookie
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
   headers:
     RetryAfter:
       description: "建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误"
-      schema: { type: string, example: "30" }
-
+      schema:
+        type: string
+    XRequestId:
+      description: "请求链路 ID；服务端必须回传"
+      schema:
+        type: string
+        maxLength: 64
+    SetAuthCookies:
+      description: "设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/v1/auth，SameSite=Lax，Secure 按环境"
+      schema:
+        type: string
+    ClearAuthCookies:
+      description: "清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/v1/auth"
+      schema:
+        type: string
   responses:
     BadRequest:
       description: "请求非法"
+      headers:
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse
     Unauthorized:
       description: "未认证"
+      headers:
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse
     Forbidden:
       description: "无权限"
+      headers:
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse
     NotFound:
       description: "资源不存在"
+      headers:
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse
     Conflict:
       description: "状态冲突"
+      headers:
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse
     UnprocessableEntity:
       description: "语义校验失败"
+      headers:
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse
     Locked:
       description: "认证锁定中，可稍后重试"
       headers:
-        Retry-After:
-          $ref: "#/components/headers/RetryAfter"
+        Retry-After: RetryAfter
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse
     TooManyRequests:
       description: "触发限流"
+      headers:
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse
     ServiceUnavailable:
       description: "服务暂不可用或循环预算耗尽，可稍后重试"
       headers:
-        Retry-After:
-          $ref: "#/components/headers/RetryAfter"
+        Retry-After: RetryAfter
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse
     Internal:
       description: "服务端错误"
+      headers:
+        X-Request-Id: XRequestId
       content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+        application/json:
+          schema: ApiErrorResponse

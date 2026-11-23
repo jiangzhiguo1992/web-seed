@@ -7,7 +7,53 @@ import (
 	"testing"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
+	"gopkg.in/yaml.v3"
 )
+
+func TestGeneratedOpenAPISeparatesSourceVocabulary(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range files {
+		var doc any
+		if err := yaml.Unmarshal(body, &doc); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if key, found := forbiddenSourceKey(doc); found {
+			t.Fatalf("%s contains source-only key/value %q", name, key)
+		}
+	}
+}
+
+func forbiddenSourceKey(v any) (string, bool) {
+	switch value := v.(type) {
+	case map[string]any:
+		for key, child := range value {
+			if strings.HasPrefix(key, "x-") || key == "source" || key == "contract" {
+				return key, true
+			}
+			if found, ok := forbiddenSourceKey(child); ok {
+				return found, true
+			}
+		}
+	case []any:
+		for _, child := range value {
+			if found, ok := forbiddenSourceKey(child); ok {
+				return found, true
+			}
+		}
+	case string:
+		if strings.Contains(value, "_types.") {
+			return value, true
+		}
+	}
+	return "", false
+}
 
 func writeFixture(t *testing.T, root, rel, body string) {
 	t.Helper()
@@ -56,33 +102,36 @@ func TestBuildExpandsServiceTypes(t *testing.T) {
 apps:
   api:
     kind: api
+    api_version: v1
+    timeout_ms: 5000
     includes: [cap.protocols.http.x]
     generated:
       spec: generated/openapi/x.yaml
 `)
-	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
-base_path: /v1
+	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
 paths:
   /x:
     get:
-      operationId: getX
-      x-contract-id: cap.protocols.http.x.get
-      x-service: cap.services.x.get
-      responses:
+      name: "getX"
+      contract:
+        id: "cap.protocols.http.x.get"
+        service: "cap.services.x.get"
+      request: {}
+      response:
         "200":
-          description: OK
+          description: "OK"
+      errors: []
 components:
   schemas:
     X:
-      x-service-type: cap.services.x.schemas.X
-`)
+      source:
+        service_type: "cap.services.x.schemas.X"`)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   X:
     type: _types.object
     properties:
-      id:
-        type: integer
+      - { name: id, schema: { type: _types.integer }, required: true, description: "id" }
 services: []
 `)
 	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
@@ -100,9 +149,64 @@ enums: []
 		t.Fatal(err)
 	}
 	out := string(files["generated/openapi/x.yaml"])
-	for _, want := range []string{"openapi: 3.1.0", "getX", "x-service", "properties", "id:"} {
+	for _, want := range []string{"openapi: 3.1.0", "getX", "properties", "id:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("generated spec missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestBuildVersionedAppsShareFiles(t *testing.T) {
+	root := t.TempDir()
+	writeTypes(t, root)
+	writeFixture(t, root, "contracts/project.yaml", `project:
+  name: test
+  version: "1"
+apps:
+  v1:
+    kind: api
+    api_version: v1
+    timeout_ms: 5000
+    includes: [cap.protocols.http.x]
+    generated:
+      spec: generated/openapi/v1.yaml
+  v2:
+    kind: api
+    api_version: v2
+    timeout_ms: 5000
+    includes: [cap.protocols.http.x]
+    generated:
+      spec: generated/openapi/v2.yaml
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+paths:
+  /x:
+    get:
+      name: "getX"
+      contract:
+        id: "cap.protocols.http.x.get"
+        service: "cap.services.x.get"
+      request: {}
+      response:
+        "200":
+          description: "OK"
+      errors: []`)
+	for _, dir := range []string{"contracts/capabilities/services", "contracts/data/entities"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for version, key := range map[string]string{"v1": "generated/openapi/v1.yaml", "v2": "generated/openapi/v2.yaml"} {
+		out := string(files[key])
+		if !strings.Contains(out, "url: /"+version) {
+			t.Fatalf("%s missing server /%s:\n%s", key, version, out)
+		}
+		if !strings.Contains(out, "getX") {
+			t.Fatalf("%s missing shared operation:\n%s", key, out)
 		}
 	}
 }
@@ -116,6 +220,8 @@ func TestBuildEventPayloads(t *testing.T) {
 apps:
   api:
     kind: api
+    api_version: v1
+    timeout_ms: 5000
     includes: []
     generated:
       spec: generated/openapi/x.yaml
@@ -163,8 +269,6 @@ fields:
 	out := string(files["generated/openapi/x.yaml"])
 	for _, want := range []string{
 		"EventXCreated",
-		"x-event-id: cap.events.x.created",
-		"x-event-version: 1",
 		"additionalProperties:",
 		"minProperties: 1",
 		"maxProperties: 5",
@@ -188,32 +292,42 @@ func TestBuildAppliesDefaultsPerFile(t *testing.T) {
 apps:
   api:
     kind: api
+    api_version: v1
+    timeout_ms: 5000
     includes: [cap.protocols.http.a, cap.protocols.http.b, cap.protocols.http.shared]
     generated:
       spec: generated/openapi/x.yaml
 `)
-	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: cap.protocols.http.a
+	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
 paths:
   /a:
     get:
-      operationId: getA
-      x-contract-id: cap.protocols.http.a.get
-      x-service: cap.services.x.get
-      responses:
-        "200": { description: OK }
-default_error_responses: [422]
-`)
-	writeFixture(t, root, "contracts/capabilities/protocols/http/b.yaml", `id: cap.protocols.http.b
+      name: "getA"
+      contract:
+        id: "cap.protocols.http.a.get"
+        service: "cap.services.x.get"
+      request: {}
+      response:
+        "200":
+          description: "OK"
+      errors: []
+default_error_responses:
+  - 422`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/b.yaml", `id: "cap.protocols.http.b"
 paths:
   /b:
     get:
-      operationId: getB
-      x-contract-id: cap.protocols.http.b.get
-      x-service: cap.services.x.get
-      responses:
-        "200": { description: OK }
-default_error_responses: [423]
-`)
+      name: "getB"
+      contract:
+        id: "cap.protocols.http.b.get"
+        service: "cap.services.x.get"
+      request: {}
+      response:
+        "200":
+          description: "OK"
+      errors: []
+default_error_responses:
+  - 423`)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
 components:
   responses:
@@ -266,22 +380,29 @@ func TestBuildOperationDefaultOverride(t *testing.T) {
 apps:
   api:
     kind: api
+    api_version: v1
+    timeout_ms: 5000
     includes: [cap.protocols.http.a, cap.protocols.http.shared]
     generated:
       spec: generated/openapi/x.yaml
 `)
-	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: cap.protocols.http.a
+	writeFixture(t, root, "contracts/capabilities/protocols/http/a.yaml", `id: "cap.protocols.http.a"
 paths:
   /a:
     get:
-      operationId: getA
-      x-contract-id: cap.protocols.http.a.get
-      x-service: cap.services.x.get
-      x-default-errors: [423]
-      responses:
-        "200": { description: OK }
-default_error_responses: [422]
-`)
+      name: "getA"
+      contract:
+        id: "cap.protocols.http.a.get"
+        service: "cap.services.x.get"
+        default_errors:
+          - 423
+      request: {}
+      response:
+        "200":
+          description: "OK"
+      errors: []
+default_error_responses:
+  - 422`)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/shared.yaml", `id: cap.protocols.http.shared
 components:
   responses:

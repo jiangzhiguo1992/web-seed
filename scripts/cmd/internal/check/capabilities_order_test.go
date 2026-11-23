@@ -25,7 +25,6 @@ func TestCapabilityFileFieldOrder(t *testing.T) {
 		{Name: "schema_version", Type: "integer"},
 		{Name: "stability", Type: "string"},
 		{Name: "do_not", Type: "list<string>"},
-		{Name: "base_path", Type: "string"},
 		{Name: "default_error_responses", Type: "list<any>"},
 		{Name: "paths", Type: "any"},
 		{Name: "components", Type: "any"},

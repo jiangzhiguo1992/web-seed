@@ -32,6 +32,8 @@ apps:
   admin:
     kind: api
     description: "管理端 API"
+    api_version: v1
+    timeout_ms: 5000
     includes:
       - cap.protocols.http.shared
       - cap.protocols.http.account

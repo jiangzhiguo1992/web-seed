@@ -32,7 +32,7 @@
 ## 2. 依赖方向
 
 ```
-protocols ──x-service──> services ──steps──> data.queries
+protocols ──service──> services ──steps──> data.queries
      │                     │
      │                     ├──kind=service──> services（跨模块）
      │                     ├──rules─────────> features.rules
@@ -47,7 +47,7 @@ events/crons|dispatches ──service──> services
 
 | 边                   | 写在哪                             | 字段                                   |
 |----------------------|------------------------------------|----------------------------------------|
-| protocol → service   | `protocols/<protocol>/*.yaml`      | `x-service`                            |
+| protocol → service   | `protocols/<protocol>/*.yaml`      | `service`                              |
 | service → query      | `services/*.yaml` 的 steps         | `kind: query` + `query`                |
 | service → service    | `services/*.yaml` 的 steps         | `kind: service` + `service`            |
 | service → rule       | `services/*.yaml` 的 steps         | `kind: logic/when` + `rules[{rule}]`   |
@@ -211,44 +211,47 @@ dispatch 项：
 
 `protocols/<protocol>/<module>.yaml` 只写协议差异：
 
-- path / method / operationId / `x-contract-id` / `x-service`
+- path / method / `name` / `id` / `service`；`name` 生成 OpenAPI operationId，`id` 仅用于契约追踪，不写入生成 OpenAPI
 - status code / content-type / header
 - API 版本只在 `project.yaml` 的 `app.api_version` 声明；URL 前缀由生成器派生为 `/<app.api_version>`，HTTP 文件与 paths 都不写版本
+- 超时只在 `project.yaml` 的 `app.timeout_ms` 统一配置，HTTP 文件不写 timeout
 - v2 是新的 API surface：在 `project.yaml` 新增 app（`api_version: v2`），未变模块可复用原文件，变更模块新建 `<module>_v2.yaml` 并只 include 到 v2 app；同一 app 不允许混版本
-- request/response 的 schema `$ref`；request 的 `$ref` 用 `x-service-type` 指向 service 的 params，匿名 object 只允许映射 service 标量参数；response 用 component 的 `x-service-type` / `x-enum` / `x-entity` 指向 service 的 returns
-- `components.schemas` 只写溯源声明（`x-service-type` / `x-enum` / `x-entity` / `x-platform`），不得复制业务字段
+- 每个 operation 用 `request` / `response` 两块：`request` 下分 `path` / `query` / `headers` / `cookies` / `body`；`response` 是状态码 map，每项含 `description` / `headers` / `body`
+- `body` 用 `content_type` + `schema`；`content_type` 当前固定 `application/json`
+- `schema` 直接写类型 ID：`data.entities.*` / `data.enums.*` / `cap.services.*.schemas.*` / `_types.*`，不写 `#/components/...`
+- operation 直接写类型 ID 时无需声明组件；需要跨模块共享的 header/response/schema 才在 `shared.yaml` 的 `shared` 块声明，`shared.schemas` 只写 `source` 溯源块（`service_type` / `enum` / `entity` / `platform`），不得复制业务字段
 
 **不要写**：权限、审计、限流（在 `platform/security/access.yaml`）、事务（在 service 项）。
 
 HTTP 约束：
 
-- 响应 schema 由 `cap.services.schemas` 生成，object 默认封闭。
-- 每个 operation 必须有 `x-service-params`：`body` / `path` / `query` / `header` / `cookie` 映射到 service 参数；service 必填非 ctx 参数必须全覆盖，HTTP 不得发明参数。
-- 每个 operation 必须有 `x-idempotency`：`none` / `optional` / `required`；`optional` 引用 `IdempotencyKey`，`required` 引用 `IdempotencyKeyRequired`，`none` 不得声明。
-- 每个 operation 必须声明 `X-Request-Id` 请求头（`$ref RequestId`）；每个非 `$ref` response 必须声明 `X-Request-Id` 响应头。
-- 受保护 operation 用 `security: [ { BearerAuth: [] } ]`；cookie 端点（refresh/logout）必须声明 `X-CSRF-Token`（`$ref CSRFToken`），refresh token 只写 HttpOnly cookie。
-- 每个 operation 必须有 `x-errors`（可为空）：只列 `platform.errors.*` 中该 service 的非 `COMMON_*` 错误，且必须与 service 错误集精确一致。
+- 响应 schema 由类型 ID 解析：优先 `cap.services.schemas`，也允许 `data.entities.*` / `data.enums.*`；object 默认封闭。
+- 每个 operation 必须有 `id` 与 `service`；`service` 只能指向 `public` 且未被异步任务引用的同步 service。
+- 每个 operation 必须有 `request.mapping`（可为空对象）：`body` / `path` / `query` / `header` / `cookie` 映射到 service 参数；service 必填非 ctx 参数必须全覆盖，HTTP 不得发明参数。`mapping` 只用于契约校验与后续 handler 生成，不写入 OpenAPI。
+- 每个 operation 必须有 `request.idempotency`：`none` / `optional` / `required`；`optional` 引用 `IdempotencyKey`，`required` 引用 `IdempotencyKeyRequired`，`none` 不得声明。
+- 每个 operation 必须在 `request.headers` 声明 `X-Request-Id: RequestId`；每个 `response.<status>.headers.X-Request-Id: XRequestId` 必须声明。
+- 受保护 operation 用 `security: [ { BearerAuth: [] } ]`；cookie 端点（refresh/logout）必须在 `request.headers` 声明 `X-CSRF-Token: CSRFToken`，refresh token 只写 HttpOnly cookie。
+- 每个 operation 必须有 `errors`（可为空）：只列 `platform.errors.*` 中该 service 的非 `COMMON_*` 错误，且必须与 service 错误集精确一致。
 - 成功响应统一信封 `{ code: 0, message: "ok", data: <return> }`，由 `gen_openapi` 生成 `Api<Type>Response`；204 是唯一无信封的响应。
 - 错误响应统一引用 `protocols/http/shared.yaml` 的 `ApiErrorResponse`：`{ code: <biz_code>, message, data: null }`，HTTP status 保留 4xx/5xx。
-- 每个 requestBody 与 2xx body response 不写 `example`；测试数据放在独立测试目录，由测试文件维护。
-- 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明；operation 需要更细粒度时用 `x-default-errors` 覆盖。
+- 每个 `request.body` 与 2xx `response.<status>.body` 不写 `example`；测试数据放在独立测试目录，由测试文件维护。
+- 默认错误响应由 `default_error_responses` 注入，不要逐接口重复声明。
 - 503 必须通过 shared 的 `ServiceUnavailable` 返回 `Retry-After`。
-- 每个 operation 必须写 `x-contract-id` 与 `x-service`；`x-service` 只能指向 `public` 且未被异步任务引用的同步 service。
 
 请求头/响应头定义位置：
 
 | 头 | 位置 | 引用方式 |
 |---|---|---|
-| `X-Request-Id`（请求） | `shared.yaml` `components.parameters.RequestId` | `operation.parameters` `$ref` |
-| `Idempotency-Key` | `shared.yaml` `IdempotencyKey` / `IdempotencyKeyRequired` | `operation.parameters` `$ref` |
-| `X-CSRF-Token` | `shared.yaml` `CSRFToken` | cookie operation 的 `operation.parameters` `$ref` |
-| `Authorization` | `shared.yaml` `Authorization` | 受保护 operation 的 `operation.parameters` `$ref` |
-| `X-Request-Id`（响应） | `shared.yaml` `components.headers.XRequestId` | `responses.<status>.headers` `$ref` |
-| `Set-Cookie` | `shared.yaml` `SetAuthCookies` / `ClearAuthCookies` | 登录/刷新/登出的 `responses.<status>.headers` `$ref` |
-| `Retry-After` | `shared.yaml` `components.headers.RetryAfter` | 423/429/503 响应 `headers` `$ref` |
-| `Content-Type: application/json` | `requestBody.content.application/json` / `responses.<status>.content.application/json` | media type key，不写成 header 参数；OpenAPI 生成器据此产出 Content-Type |
+| `X-Request-Id`（请求） | `request.headers.X-Request-Id: RequestId` | 直接写 component 名 |
+| `Idempotency-Key` | `request.headers.Idempotency-Key: IdempotencyKey` / `IdempotencyKeyRequired` | 直接写 component 名 |
+| `X-CSRF-Token` | `request.headers.X-CSRF-Token: CSRFToken` | cookie operation |
+| `Authorization` | `request.headers.Authorization: Authorization` | 受保护 operation |
+| `X-Request-Id`（响应） | `response.<status>.headers.X-Request-Id: XRequestId` | 直接写 component 名 |
+| `Set-Cookie` | `response.<status>.headers.Set-Cookie: SetAuthCookies` / `ClearAuthCookies` | 登录/刷新/登出 |
+| `Retry-After` | `response.<status>.headers.Retry-After: RetryAfter` | 423/429/503 |
+| `Content-Type: application/json` | `request.body.content_type` / `response.<status>.body.content_type` | 显式字段，不写成 header |
 
-`application/json` 不是 `parameters` 里的 header；它是 `content` 的 media type key，`oapi-codegen` 会据此生成请求/响应的 Content-Type。
+`application/json` 不是 `parameters` 里的 header；它是 `request.body.content_type` / `response.<status>.body.content_type`，生成器据此写出 `content.<content_type>`，`oapi-codegen` 再生成 Content-Type。
 
 ---
 
@@ -290,6 +293,6 @@ contracts/capabilities/
 - `services/*.yaml` 已合并原 methods + flows；每个 service 项都有 steps。
 - `events/*.yaml` 按 triggers 分槽：topics（publish/subscribe）+ crons + dispatches；`services` 不再声明 `trigger/retry/concurrency`。
 - `capabilities/lifecycles/*` 承载生命周期；`features/rules/*` 承载业务规则；`capabilities/events/*` 承载异步主题与任务。
-- `protocols/http/*.yaml` 已全部使用 `x-service` 指向同步 service，response 用 component 的 `x-service-type`/`x-enum`/`x-entity` 绑定 returns。
+- `protocols/http/*.yaml` 已全部使用扁平 `service` 指向同步 service，response 用 component 的 `source.service_type`/`source.enum`/`source.entity` 绑定 returns。
 - `data.queries.*.used_by` 由 `make gen-graph` 写回，只允许 `cap.services.*`，不得为空。
 - 术语表在 `docs/reference/glossary.md`（review-only，不占契约组）。

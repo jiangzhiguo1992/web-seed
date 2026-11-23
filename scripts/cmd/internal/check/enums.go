@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
+	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
 )
 
 func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
@@ -320,6 +321,9 @@ func (c *Checker) collectServiceEnumRefs(v any, schemas map[string]map[string]an
 // collectHTTPEnumRefs 只把被 operation 引用的 x-enum component 计入使用；
 // 未被任何 operation 引用的 component 不算使用。
 func (c *Checker) collectHTTPEnumRefs(doc map[string]any, fileID string, serviceSchemas map[string]map[string]any, add func(string, string)) {
+	if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP); err != nil {
+		return
+	}
 	components, _ := asMap(doc["components"])
 	schemas, _ := asMap(components["schemas"])
 	responses, _ := asMap(components["responses"])
@@ -328,7 +332,13 @@ func (c *Checker) collectHTTPEnumRefs(doc map[string]any, fileID string, service
 	enumByComponent := map[string]string{}
 	for name, raw := range schemas {
 		component, _ := asMap(raw)
-		if enumID, _ := component["x-enum"].(string); strings.HasPrefix(enumID, "data.enums.") {
+		enumID, _ := component["x-enum"].(string)
+		if enumID == "" {
+			if source, ok := asMap(component["source"]); ok {
+				enumID, _ = source["enum"].(string)
+			}
+		}
+		if strings.HasPrefix(enumID, "data.enums.") {
 			enumByComponent[name] = enumID
 		}
 	}
@@ -374,7 +384,13 @@ func (c *Checker) collectHTTPEnumRefs(doc map[string]any, fileID string, service
 				add(enumID, owner)
 			}
 			component, _ := asMap(schemas[name])
-			if serviceRef, _ := component["x-service-type"].(string); serviceRef != "" {
+			serviceRef, _ := component["x-service-type"].(string)
+			if serviceRef == "" {
+				if source, ok := asMap(component["source"]); ok {
+					serviceRef, _ = source["service_type"].(string)
+				}
+			}
+			if serviceRef != "" {
 				if id, ok := serviceSchemaID(serviceRef); ok {
 					if def := serviceSchemas[id]; def != nil {
 						c.collectServiceEnumRefs(def, serviceSchemas, func(enumID string) {
@@ -405,6 +421,11 @@ func (c *Checker) collectHTTPEnumRefs(doc map[string]any, fileID string, service
 				continue
 			}
 			owner, _ := op["x-contract-id"].(string)
+			if owner == "" {
+				if contract, ok := asMap(op["contract"]); ok {
+					owner, _ = contract["id"].(string)
+				}
+			}
 			if owner == "" {
 				owner = fileID + "." + method
 			}

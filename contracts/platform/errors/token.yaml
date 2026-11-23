@@ -5,5 +5,5 @@ stability: draft
 do_not:
   - "令牌错误不要暴露令牌原文或 hash"
 errors:
-  - { code: AUTH_TOKEN_INVALID, status: 401, retryable: false, i18n: errors.auth.token_invalid, message: "令牌无效" }
-  - { code: AUTH_TOKEN_EXPIRED, status: 401, retryable: true, i18n: errors.auth.token_expired, message: "令牌已过期" }
+  - { code: AUTH_TOKEN_INVALID, biz_code: 5001, status: 401, retryable: false, i18n: errors.auth.token_invalid, message: "令牌无效" }
+  - { code: AUTH_TOKEN_EXPIRED, biz_code: 5002, status: 401, retryable: true, i18n: errors.auth.token_expired, message: "令牌已过期" }

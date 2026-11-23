@@ -823,7 +823,6 @@ type httpFileScaffold struct {
 	SchemaVersion         int            `yaml:"schema_version"`
 	Stability             string         `yaml:"stability"`
 	DoNot                 []string       `yaml:"do_not"`
-	BasePath              string         `yaml:"base_path"`
 	DefaultErrorResponses []int          `yaml:"default_error_responses,omitempty"`
 	Paths                 map[string]any `yaml:"paths"`
 }
@@ -1098,7 +1097,7 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 	if strings.TrimSpace(summary) == "" {
 		return nil, fmt.Errorf("RenderHTTP: summary must not be empty")
 	}
-	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "base_path": true, "default_error_responses": true, "paths": true, "components": true}, "cap.protocols.http"); err != nil {
+	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "default_error_responses": true, "paths": true, "components": true}, "cap.protocols.http"); err != nil {
 		return nil, err
 	}
 	if !strings.HasPrefix(service, "cap.services.") {
@@ -1116,14 +1115,26 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		return nil, fmt.Errorf("RenderHTTP: cannot derive id from targets.id")
 	}
 	op := map[string]any{
-		"operationId":   httpMethod + pascal(name),
-		"x-contract-id": fileID + "." + httpMethod,
-		"x-service":     service,
-		"summary":       summary,
-		"x-timeout-ms":  3000,
-		"responses": map[string]any{
-			"200": map[string]any{"description": "OK"},
+		"id":      fileID + "." + httpMethod,
+		"name":    httpMethod + pascal(name),
+		"service": service,
+		"summary": summary,
+		"request": map[string]any{
+			"headers": map[string]any{
+				"X-Request-Id": "RequestId",
+			},
+			"mapping":     map[string]any{},
+			"idempotency": "none",
 		},
+		"response": map[string]any{
+			"204": map[string]any{
+				"description": "OK",
+				"headers": map[string]any{
+					"X-Request-Id": "XRequestId",
+				},
+			},
+		},
+		"errors": []any{},
 	}
 	doc := httpFileScaffold{
 		SchemaVersion: intConst(s.Fields, "schema_version", 1),
@@ -1132,7 +1143,6 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		Stability:     scaffoldStability,
 		DoNot:         []string{},
 		OwnerModule:   module,
-		BasePath:      "/v1",
 		Paths:         map[string]any{path: map[string]any{httpMethod: op}},
 	}
 	b, err := marshal2(doc)

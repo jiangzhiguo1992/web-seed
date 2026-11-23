@@ -29,7 +29,7 @@ token:
       name: refresh_token
       same_site: Lax
       secure: platform.environments（security.cookie_secure）
-      path: /v1/auth/refresh
+      path: /v1/auth
       http_only: true
 
 session:
@@ -45,7 +45,16 @@ csrf:
   strategy: double_submit_cookie
   applies_to: cookie_based_endpoints
   header: X-CSRF-Token
+  cookie:
+    name: csrf_token
+    http_only: false
+    same_site: Lax
+    path: /v1/auth
   exempt: [GET, HEAD, OPTIONS]
+  exempt_paths:
+    - /v1/auth/login
+    - /v1/auth/verification/send
+    - /v1/auth/verification/verify
 
 password:
   algorithm: argon2id

@@ -48,7 +48,7 @@
 
 | 项 | 结论 | 关键证据与坑 |
 |---|---|---|
-| S1 | 可行 | `strict-server` 让响应类型由契约封闭；`NewStrictHandlerWithOptions` 可统一 problem+json 错误；**strict 只 decode 不校验**，必须额外挂 `OapiRequestValidatorWithOptions` |
+| S1 | 可行 | `strict-server` 让响应类型由契约封闭；`NewStrictHandlerWithOptions` 可统一输出错误信封；**strict 只 decode 不校验**，必须额外挂 `OapiRequestValidatorWithOptions` |
 | S2 | 可行有边界 | `sqlc.narg` 可用；`emit_pointers_for_null_types` 只对 text 生效，DATETIME/CHAR(36) 仍是 `sql.Null*` → repo 需适配层；动态 ORDER BY 只能用 `CASE WHEN` 枚举，且绕过索引 |
 | S3 | 可行 | 必须**每个业务模块独立 component**，单一 `modules` 组件无法表达"模块间禁止"；`cmd` 需允许依赖 `platform`；违规报错带文件:行号 |
 | S4 | 可行 | `workspace:*` + `vue-tsc` 跨包类型检查通过；**pnpm 12 配置键是 `allowBuilds`**（v11 起 `onlyBuiltDependencies` 已移除） |
@@ -60,7 +60,7 @@
 |---|---|---|
 | 2 路由比对 | 通过 | `api.GetSwagger()` 直接拿内嵌 spec，无需读 YAML；`chi.Walk` 枚举；负向用例（加 `/v1/debug`）可见 |
 | 3 响应校验 | 通过 | `additionalProperties: false` 下注入字段被拒；报错含 schema 与值 |
-| 请求校验 | 通过 | `title:""` 被 400 拦截，错误可自定义为 problem+json |
+| 请求校验 | 通过 | `title:""` 被 400 拦截，错误可自定义为统一信封 |
 
 **版本陷阱（必须锁定或写进 playbook）**
 
@@ -115,7 +115,7 @@
 
 - [ ] `config`：env 加载 + fail-fast + 测试断言 key 集合与 schema 一致
 - [ ] `httpserver`：中间件链（request-id / recover / logging / CORS / 安全头 / 超时 / 体积限制 / 请求校验）
-- [ ] `httpserver`：RFC 9457 错误信封 + error-codes 映射
+- [ ] `httpserver`：统一错误信封 + error-codes 映射
 - [ ] `database`：`database/sql` + `go-sql-driver/mysql` pool + `WithTx(ctx, fn)` + querier 注入
 - [ ] `observability`：slog（字段契约）+ RED 指标 + OTel hook（默认 `exporter=none`）
 - [ ] `security`：JWT 签发/校验（audience 区分）+ 密码哈希 + CORS 白名单
@@ -384,14 +384,15 @@ apps:
 
 - `strict-server` 为默认：`StrictServerInterface` 返回 `XxxResponseObject`，响应形状由契约封闭，返回未声明类型会在运行时被拒
 - 请求校验单独挂 `OapiRequestValidatorWithOptions`（strict 只 decode，不校验 `minLength`/`format`）
-- 错误统一走 `StrictHTTPServerOptions` 的两个 handler，输出 RFC 9457
+- 错误统一走 `StrictHTTPServerOptions` 的两个 handler，输出 `{code, message, data}` 信封
 - 生成物入库；CI 用 `make gen && git diff --exit-code` 保证同步
 - handler 落在 `composition/<app>/handlers/`，模块只提供 service——避免模块耦合 HTTP，也让多应用不同 spec 无需改模块
 
 ### 5.2 错误处理
 
-- HTTP 层用 RFC 9457 `application/problem+json`：`{type,title,status,detail,instance,code,errors[]}`
-- 业务错误码与 HTTP 状态解耦，映射表在 `platform/errors/`
+- HTTP 层统一信封：成功 `{code: 0, message: "ok", data: <resource>}`，错误 `{code: <biz_code>, message, data: null}`；HTTP status 保留 4xx/5xx
+- `code` 取 `platform/errors/` 的整数 `biz_code`；成功码固定 0
+- 浏览器 refresh token 只写 HttpOnly cookie（Path=/v1/auth）；cookie 端点必须校验 `X-CSRF-Token`；写接口用 `Idempotency-Key`
 - 不返回的 error 必须记录（含栈 + 上下文）
 
 ### 5.3 事务边界

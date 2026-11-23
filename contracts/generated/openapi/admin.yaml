@@ -1,11 +1,37 @@
 components:
   headers:
+    ClearAuthCookies:
+      description: 清除 refresh_token 与 csrf_token cookie；Max-Age=0；Path=/v1/auth
+      schema:
+        type: string
     RetryAfter:
       description: 建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误
       schema:
-        example: "30"
+        type: string
+    SetAuthCookies:
+      description: 设置 refresh_token HttpOnly cookie 与 csrf_token 可读 cookie；Path=/v1/auth，SameSite=Lax，Secure 按环境
+      schema:
+        type: string
+    XRequestId:
+      description: 请求链路 ID；服务端必须回传
+      schema:
+        maxLength: 64
         type: string
   parameters:
+    Authorization:
+      in: header
+      name: Authorization
+      required: true
+      schema:
+        minLength: 1
+        type: string
+    CSRFToken:
+      in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        minLength: 1
+        type: string
     IdempotencyKey:
       in: header
       name: Idempotency-Key
@@ -13,6 +39,21 @@ components:
       schema:
         maxLength: 64
         minLength: 8
+        type: string
+    IdempotencyKeyRequired:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        maxLength: 64
+        minLength: 8
+        type: string
+    RefreshTokenCookie:
+      in: cookie
+      name: refresh_token
+      required: true
+      schema:
+        minLength: 1
         type: string
     RequestId:
       in: header
@@ -24,89 +65,145 @@ components:
   responses:
     BadRequest:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 请求非法
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     Conflict:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 状态冲突
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     Forbidden:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 无权限
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     Internal:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 服务端错误
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     Locked:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 认证锁定中，可稍后重试
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     NotFound:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 资源不存在
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     ServiceUnavailable:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 服务暂不可用或循环预算耗尽，可稍后重试
       headers:
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     TooManyRequests:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 触发限流
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     Unauthorized:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 未认证
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
     UnprocessableEntity:
       content:
-        application/problem+json:
+        application/json:
           schema:
-            $ref: '#/components/schemas/Problem'
+            $ref: '#/components/schemas/ApiErrorResponse'
       description: 语义校验失败
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
   schemas:
+    AccessToken:
+      additionalProperties: false
+      properties:
+        access_expire_at:
+          description: 访问令牌过期时间
+          format: date-time
+          type: string
+        access_token:
+          description: 访问令牌
+          readOnly: true
+          type: string
+        token_type:
+          default: Bearer
+          description: 令牌类型；固定 Bearer
+          pattern: ^Bearer$
+          type: string
+      required:
+        - access_token
+        - access_expire_at
+      type: object
     Account:
       additionalProperties: false
       properties:
-        auth_email:
-          description: 账号绑定的邮箱
-          type: object
-        auth_phone:
-          description: 账号绑定的手机号
-          type: object
-        auth_pwd:
-          description: 账号的密码认证记录
-          type: object
+        created_at:
+          description: 创建时间
+          format: date-time
+          type: string
+        deleted_at:
+          description: 软删时间；为空表示未删除
+          format: date-time
+          nullable: true
+          type: string
+        id:
+          description: 实体唯一主键；来自主表 id 列（integer）
+          type: integer
         nickname:
           description: 昵称
-          type: object
+          maxLength: 100
+          minLength: 1
+          type: string
         number:
           description: 账号编号
-          type: object
+          maxLength: 64
+          minLength: 4
+          pattern: ^[A-Za-z0-9_-]+$
+          type: string
         status:
           description: 账号状态
           enum:
@@ -115,25 +212,22 @@ components:
             - suspended
             - deleted
           type: string
-        tokens:
-          description: 账号的设备令牌列表
-          items:
-            type: object
-          type: array
-        user_i_d:
+        updated_at:
+          description: 更新时间
+          format: date-time
+          type: string
+        user_id:
           description: 关联用户 ID
-          type: object
+          nullable: true
+          type: integer
       required:
+        - id
+        - created_at
+        - updated_at
         - status
         - number
         - nickname
-        - user_i_d
-        - tokens
-        - auth_pwd
-        - auth_phone
-        - auth_email
       type: object
-      x-entity: data.entities.account
     AccountPage:
       additionalProperties: false
       properties:
@@ -162,7 +256,6 @@ components:
         - limit
         - has_more
       type: object
-      x-service-type: cap.services.account.schemas.AccountPage
     AccountStatus:
       enum:
         - pending
@@ -170,7 +263,127 @@ components:
         - suspended
         - deleted
       type: string
-      x-enum: data.enums.account_status
+    ApiAccessTokenResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/AccessToken'
+        message:
+          type: string
+      required:
+        - code
+        - message
+        - data
+      type: object
+    ApiAccountPageResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/AccountPage'
+        message:
+          type: string
+      required:
+        - code
+        - message
+        - data
+      type: object
+    ApiAccountResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/Account'
+        message:
+          type: string
+      required:
+        - code
+        - message
+        - data
+      type: object
+    ApiAuthBindingResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/AuthBinding'
+        message:
+          type: string
+      required:
+        - code
+        - message
+        - data
+      type: object
+    ApiAuthSessionResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/AuthSession'
+        message:
+          type: string
+      required:
+        - code
+        - message
+        - data
+      type: object
+    ApiErrorResponse:
+      additionalProperties: false
+      properties:
+        code:
+          maximum: 9999
+          minimum: 1000
+          type: integer
+        data:
+          type: null
+        message:
+          type: string
+      required:
+        - code
+        - message
+        - data
+      type: object
+    ApiVerificationResultResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/VerificationResult'
+        message:
+          type: string
+      required:
+        - code
+        - message
+        - data
+      type: object
+    ApiVerificationSentResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/VerificationSent'
+        message:
+          type: string
+      required:
+        - code
+        - message
+        - data
+      type: object
     AuthAttributes:
       additionalProperties: false
       properties:
@@ -189,7 +402,6 @@ components:
       required:
         - auth_type
       type: object
-      x-service-type: cap.services.auth.schemas.AuthAttributes
     AuthBinding:
       additionalProperties: false
       properties:
@@ -222,7 +434,6 @@ components:
         - account_id
         - status
       type: object
-      x-service-type: cap.services.auth.schemas.AuthBinding
     AuthSession:
       additionalProperties: false
       properties:
@@ -233,14 +444,13 @@ components:
           $ref: '#/components/schemas/AuthAttributes'
           description: 会话属性
         tokens:
-          $ref: '#/components/schemas/TokenPair'
-          description: 令牌对
+          $ref: '#/components/schemas/AccessToken'
+          description: 访问令牌
       required:
         - account
         - tokens
         - attributes
       type: object
-      x-service-type: cap.services.auth.schemas.AuthSession
     BindEmailInput:
       additionalProperties: false
       properties:
@@ -271,7 +481,6 @@ components:
         - account_id
         - action
       type: object
-      x-service-type: cap.services.auth.schemas.BindEmailInput
     BindPasswordInput:
       additionalProperties: false
       properties:
@@ -301,7 +510,6 @@ components:
         - account_id
         - action
       type: object
-      x-service-type: cap.services.auth.schemas.BindPasswordInput
     BindPhoneInput:
       additionalProperties: false
       properties:
@@ -334,7 +542,6 @@ components:
         - account_id
         - action
       type: object
-      x-service-type: cap.services.auth.schemas.BindPhoneInput
     CreateAccountInput:
       additionalProperties: false
       properties:
@@ -357,7 +564,6 @@ components:
         - number
         - nickname
       type: object
-      x-service-type: cap.services.account.schemas.CreateAccountInput
     EventAccountActivated:
       additionalProperties: false
       description: 账号激活或解封
@@ -373,9 +579,6 @@ components:
         - id
         - activated_at
       type: object
-      x-event-id: cap.events.account.activated
-      x-event-name: account.activated
-      x-event-version: 1
     EventAccountCreated:
       additionalProperties: false
       description: 账号创建
@@ -407,9 +610,6 @@ components:
         - status
         - created_at
       type: object
-      x-event-id: cap.events.account.created
-      x-event-name: account.created
-      x-event-version: 1
     EventAccountDeleted:
       additionalProperties: false
       description: 账号软删
@@ -425,9 +625,6 @@ components:
         - id
         - deleted_at
       type: object
-      x-event-id: cap.events.account.deleted
-      x-event-name: account.deleted
-      x-event-version: 1
     EventAccountLoginFailed:
       additionalProperties: false
       description: 登录失败
@@ -452,9 +649,6 @@ components:
         - reason
         - failed_at
       type: object
-      x-event-id: cap.events.account.login_failed
-      x-event-name: account.login_failed
-      x-event-version: 1
     EventAccountLoginSucceeded:
       additionalProperties: false
       description: 登录成功
@@ -485,9 +679,6 @@ components:
         - id
         - login_at
       type: object
-      x-event-id: cap.events.account.login_succeeded
-      x-event-name: account.login_succeeded
-      x-event-version: 1
     EventAccountReactivated:
       additionalProperties: false
       description: 账号解封
@@ -503,9 +694,6 @@ components:
         - id
         - reactivated_at
       type: object
-      x-event-id: cap.events.account.reactivated
-      x-event-name: account.reactivated
-      x-event-version: 1
     EventAccountSuspended:
       additionalProperties: false
       description: 账号封禁
@@ -525,9 +713,6 @@ components:
         - reason
         - suspended_at
       type: object
-      x-event-id: cap.events.account.suspended
-      x-event-name: account.suspended
-      x-event-version: 1
     EventTokenIssued:
       additionalProperties: false
       description: 令牌签发
@@ -551,9 +736,6 @@ components:
         - account
         - issued_at
       type: object
-      x-event-id: cap.events.token.issued
-      x-event-name: token.issued
-      x-event-version: 1
     LoginInput:
       additionalProperties: false
       properties:
@@ -589,56 +771,6 @@ components:
       required:
         - auth_type
         - identifier
-      type: object
-      x-service-type: cap.services.auth.schemas.LoginInput
-    PageInfo:
-      additionalProperties: false
-      properties:
-        has_more:
-          type: boolean
-      required:
-        - has_more
-      type: object
-    Problem:
-      additionalProperties: false
-      properties:
-        code:
-          example: ACCOUNT_NOT_FOUND
-          type: string
-        detail:
-          type: string
-        errors:
-          items:
-            additionalProperties: false
-            properties:
-              field:
-                type: string
-              message:
-                type: string
-            required:
-              - field
-              - message
-            type: object
-          type: array
-        instance:
-          format: uri-reference
-          type: string
-        status:
-          example: 404
-          maximum: 599
-          minimum: 100
-          type: integer
-        title:
-          example: not found
-          type: string
-        type:
-          example: about:blank
-          format: uri-reference
-          type: string
-      required:
-        - type
-        - title
-        - status
       type: object
     SendVerificationInput:
       additionalProperties: false
@@ -678,39 +810,6 @@ components:
         - target
         - purpose
       type: object
-      x-service-type: cap.services.verification.schemas.SendVerificationInput
-    TokenPair:
-      additionalProperties: false
-      properties:
-        access_expire_at:
-          description: 访问令牌过期时间
-          format: date-time
-          type: string
-        access_token:
-          description: 访问令牌
-          readOnly: true
-          type: string
-        refresh_expire_at:
-          description: 刷新令牌过期时间
-          format: date-time
-          type: string
-        refresh_token:
-          description: 刷新令牌
-          readOnly: true
-          type: string
-        token_type:
-          default: Bearer
-          description: 令牌类型；固定 Bearer
-          pattern: ^Bearer$
-          type: string
-      required:
-        - access_token
-        - refresh_token
-        - access_expire_at
-        - refresh_expire_at
-      type: object
-      x-auth-response: true
-      x-service-type: cap.services.token.schemas.TokenPair
     UpdateAccountInput:
       additionalProperties: false
       properties:
@@ -722,21 +821,6 @@ components:
       required:
         - nickname
       type: object
-      x-service-type: cap.services.account.schemas.UpdateAccountInput
-    VerificationPurpose:
-      enum:
-        - register
-        - login
-        - reset_password
-        - bind_phone
-        - bind_email
-        - unbind_phone
-        - unbind_email
-        - change_phone
-        - change_email
-        - delete_account
-      type: string
-      x-enum: data.enums.verification_purpose
     VerificationResult:
       additionalProperties: false
       properties:
@@ -755,7 +839,6 @@ components:
         - verified
         - verification_id
       type: object
-      x-service-type: cap.services.verification.schemas.VerificationResult
     VerificationSent:
       additionalProperties: false
       properties:
@@ -774,7 +857,6 @@ components:
         - masked_target
         - expire_at
       type: object
-      x-service-type: cap.services.verification.schemas.VerificationSent
     VerifyCodeInput:
       additionalProperties: false
       properties:
@@ -819,7 +901,11 @@ components:
         - purpose
         - code
       type: object
-      x-service-type: cap.services.verification.schemas.VerifyCodeInput
+  securitySchemes:
+    BearerAuth:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
 info:
   title: web-seed admin API
   version: 0.1.0
@@ -830,10 +916,13 @@ paths:
       operationId: listAccounts
       parameters:
         - in: query
-          name: status
+          name: limit
           required: false
           schema:
-            $ref: '#/components/schemas/AccountStatus'
+            default: 20
+            maximum: 100
+            minimum: 1
+            type: integer
         - in: query
           name: offset
           required: false
@@ -842,31 +931,21 @@ paths:
             minimum: 0
             type: integer
         - in: query
-          name: limit
+          name: status
           required: false
           schema:
-            default: 20
-            maximum: 100
-            minimum: 1
-            type: integer
+            $ref: '#/components/schemas/AccountStatus'
+        - $ref: '#/components/parameters/RequestId'
       responses:
         "200":
           content:
             application/json:
-              example:
-                has_more: false
-                items:
-                  - created_at: "2026-11-11T09:30:00Z"
-                    id: 1
-                    nickname: 管理员
-                    number: ACC-0001
-                    status: active
-                limit: 20
-                offset: 0
               schema:
-                $ref: '#/components/schemas/AccountPage'
-                x-service-return: cap.services.account.schemas.AccountPage
+                $ref: '#/components/schemas/ApiAccountPageResponse'
           description: 成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
@@ -885,18 +964,17 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 列出账号
-      x-contract-id: cap.protocols.http.account.list
-      x-service: cap.services.account.list
-      x-timeout-ms: 3000
     post:
       operationId: createAccount
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyRequired'
+        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
-            example:
-              nickname: 管理员
-              number: ACC-0001
             schema:
               $ref: '#/components/schemas/CreateAccountInput'
         required: true
@@ -905,9 +983,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Account'
-                x-service-return: data.entities.account
+                $ref: '#/components/schemas/ApiAccountResponse'
           description: 已创建
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
@@ -926,10 +1006,9 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 创建账号
-      x-contract-id: cap.protocols.http.account.create
-      x-service: cap.services.account.create
-      x-timeout-ms: 5000
   /account/{id}:
     delete:
       operationId: deleteAccount
@@ -939,9 +1018,14 @@ paths:
           required: true
           schema:
             type: integer
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
       responses:
         "204":
           description: 已删除
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
@@ -960,9 +1044,9 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 删除账号（软删）
-      x-contract-id: cap.protocols.http.account.delete
-      x-service: cap.services.account.delete
     get:
       operationId: getAccount
       parameters:
@@ -971,14 +1055,17 @@ paths:
           required: true
           schema:
             type: integer
+        - $ref: '#/components/parameters/RequestId'
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Account'
-                x-service-return: data.entities.account
+                $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
@@ -997,9 +1084,9 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 获取账号
-      x-contract-id: cap.protocols.http.account.get
-      x-service: cap.services.account.get
     patch:
       operationId: updateAccount
       parameters:
@@ -1008,6 +1095,8 @@ paths:
           required: true
           schema:
             type: integer
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1019,9 +1108,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Account'
-                x-service-return: data.entities.account
+                $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
@@ -1040,9 +1131,9 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 更新账号资料
-      x-contract-id: cap.protocols.http.account.update
-      x-service: cap.services.account.update
   /account/{id}/activate:
     post:
       operationId: activateAccount
@@ -1052,14 +1143,18 @@ paths:
           required: true
           schema:
             type: integer
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Account'
-                x-service-return: data.entities.account
+                $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
@@ -1078,9 +1173,9 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 激活账号
-      x-contract-id: cap.protocols.http.account.activate
-      x-service: cap.services.account.activate
   /account/{id}/suspend:
     post:
       operationId: suspendAccount
@@ -1090,6 +1185,8 @@ paths:
           required: true
           schema:
             type: integer
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1109,9 +1206,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Account'
-                x-service-return: data.entities.account
+                $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
@@ -1130,12 +1229,15 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 封禁账号
-      x-contract-id: cap.protocols.http.account.suspend
-      x-service: cap.services.account.suspend
   /auth/bind/email:
     post:
       operationId: bindEmail
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1147,15 +1249,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthBinding'
-                x-service-return: cap.services.auth.schemas.AuthBinding
+                $ref: '#/components/schemas/ApiAuthBindingResponse'
           description: 成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
         "422":
           $ref: '#/components/responses/UnprocessableEntity'
         "423":
@@ -1166,13 +1272,15 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 创建、换绑或启停邮箱认证绑定
-      x-contract-id: cap.protocols.http.auth.bind_email
-      x-service: cap.services.auth.bind_email
-      x-timeout-ms: 5000
   /auth/bind/password:
     post:
       operationId: bindPassword
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1184,15 +1292,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthBinding'
-                x-service-return: cap.services.auth.schemas.AuthBinding
+                $ref: '#/components/schemas/ApiAuthBindingResponse'
           description: 成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
         "422":
           $ref: '#/components/responses/UnprocessableEntity'
         "423":
@@ -1203,13 +1315,15 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 创建、修改或启停密码认证绑定
-      x-contract-id: cap.protocols.http.auth.bind_password
-      x-service: cap.services.auth.bind_password
-      x-timeout-ms: 5000
   /auth/bind/phone:
     post:
       operationId: bindPhone
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
@@ -1221,15 +1335,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthBinding'
-                x-service-return: cap.services.auth.schemas.AuthBinding
+                $ref: '#/components/schemas/ApiAuthBindingResponse'
           description: 成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
         "422":
           $ref: '#/components/responses/UnprocessableEntity'
         "423":
@@ -1240,21 +1358,17 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 创建、换绑或启停手机号认证绑定
-      x-contract-id: cap.protocols.http.auth.bind_phone
-      x-service: cap.services.auth.bind_phone
-      x-timeout-ms: 5000
   /auth/login:
     post:
       operationId: login
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
-            example:
-              auth_type: pwd
-              device_id: web-admin
-              identifier: admin
-              password: a-strong-password
             schema:
               $ref: '#/components/schemas/LoginInput'
         required: true
@@ -1263,15 +1377,21 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthSession'
-                x-service-return: cap.services.auth.schemas.AuthSession
+                $ref: '#/components/schemas/ApiAuthSessionResponse'
           description: 登录成功
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SetAuthCookies'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
         "422":
           $ref: '#/components/responses/UnprocessableEntity'
         "423":
@@ -1283,34 +1403,29 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 登录
-      x-contract-id: cap.protocols.http.auth.login
-      x-service: cap.services.auth.login
-      x-timeout-ms: 5000
   /auth/logout:
     post:
       operationId: logout
-      requestBody:
-        content:
-          application/json:
-            schema:
-              additionalProperties: false
-              properties:
-                refresh_token:
-                  minLength: 1
-                  type: string
-              required:
-                - refresh_token
-              type: object
-        required: true
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/RefreshTokenCookie'
       responses:
         "204":
           description: 已登出
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/ClearAuthCookies'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
         "422":
           $ref: '#/components/responses/UnprocessableEntity'
         "423":
@@ -1322,32 +1437,30 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 登出
-      x-contract-id: cap.protocols.http.auth.logout
-      x-service: cap.services.token.logout
   /auth/me:
     get:
       operationId: currentAccount
       parameters:
-        - in: header
-          name: Authorization
-          required: true
-          schema:
-            minLength: 1
-            type: string
+        - $ref: '#/components/parameters/Authorization'
+        - $ref: '#/components/parameters/RequestId'
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Account'
-                x-service-return: data.entities.account
+                $ref: '#/components/schemas/ApiAccountResponse'
           description: 成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
         "422":
           $ref: '#/components/responses/UnprocessableEntity'
         "423":
@@ -1358,40 +1471,36 @@ paths:
           $ref: '#/components/responses/Internal'
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
+      security:
+        - BearerAuth: []
       summary: 校验访问令牌并返回当前账号
-      x-contract-id: cap.protocols.http.auth.me
-      x-service: cap.services.token.verify
-      x-timeout-ms: 3000
   /auth/refresh:
     post:
       operationId: refreshToken
-      requestBody:
-        content:
-          application/json:
-            schema:
-              additionalProperties: false
-              properties:
-                refresh_token:
-                  minLength: 1
-                  type: string
-              required:
-                - refresh_token
-              type: object
-        required: true
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/RefreshTokenCookie'
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TokenPair'
-                x-service-return: cap.services.token.schemas.TokenPair
+                $ref: '#/components/schemas/ApiAccessTokenResponse'
           description: 成功
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SetAuthCookies'
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
         "422":
           $ref: '#/components/responses/UnprocessableEntity'
         "423":
@@ -1403,19 +1512,15 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 刷新令牌
-      x-contract-id: cap.protocols.http.auth.refresh
-      x-service: cap.services.token.refresh
-      x-timeout-ms: 3000
   /auth/verification/send:
     post:
       operationId: sendVerification
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
-            example:
-              auth_type: phone
-              purpose: login
-              target: "+8613800138000"
             schema:
               $ref: '#/components/schemas/SendVerificationInput'
         required: true
@@ -1424,15 +1529,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VerificationSent'
-                x-service-return: cap.services.verification.schemas.VerificationSent
+                $ref: '#/components/schemas/ApiVerificationSentResponse'
           description: 已受理
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
         "422":
           $ref: '#/components/responses/UnprocessableEntity'
         "423":
@@ -1444,20 +1553,15 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 发送验证码
-      x-contract-id: cap.protocols.http.auth.verification_send
-      x-service: cap.services.verification.send
-      x-timeout-ms: 5000
   /auth/verification/verify:
     post:
       operationId: verifyCode
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/RequestId'
       requestBody:
         content:
           application/json:
-            example:
-              auth_type: phone
-              code: "123456"
-              purpose: login
-              target: "+8613800138000"
             schema:
               $ref: '#/components/schemas/VerifyCodeInput'
         required: true
@@ -1466,15 +1570,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VerificationResult'
-                x-service-return: cap.services.verification.schemas.VerificationResult
+                $ref: '#/components/schemas/ApiVerificationResultResponse'
           description: 校验成功
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
         "400":
           $ref: '#/components/responses/BadRequest'
         "401":
           $ref: '#/components/responses/Unauthorized'
         "403":
           $ref: '#/components/responses/Forbidden'
+        "409":
+          $ref: '#/components/responses/Conflict'
         "422":
           $ref: '#/components/responses/UnprocessableEntity'
         "423":
@@ -1486,8 +1594,5 @@ paths:
         "503":
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 校验验证码
-      x-contract-id: cap.protocols.http.auth.verification_verify
-      x-service: cap.services.verification.verify
-      x-timeout-ms: 5000
 servers:
   - url: /v1

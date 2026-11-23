@@ -56,8 +56,8 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 - 三个正交轴：`required` 管键是否存在，`nullable` 管值是否可为 null，`read_only`/`write_only` 管方向；
 - 槽位键出现在节点位置报 `schema.slot-position`；
 - `_types.yaml` 用 `schemas.<kind>.keys` 描述自身；判别键与结构键必须 `required: true`；
-- `cap.events` 的 `topics[].publish.payload` 投影为 `Event<File><Topic>` component，带 `x-event-id` / `x-event-name` / `x-event-version`；消费端直接从 OpenAPI 生成事件类型，不再手写。
-- `cap.protocols.http` 使用完整 OpenAPI 3.1，不复用这份 DSL。
+- `cap.events` 的 `topics[].publish.payload` 投影为 `Event<File><Topic>` component；生成物只保留标准 schema，不携带事件扩展键。
+- `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；只有 `shared.yaml` 的 `shared` 块承载跨模块组件，`shared.schemas` 只允许 `source` 溯源块（`service_type` / `enum` / `entity` / `platform`），命名对象必须来自 service/entity/enum，不得在 HTTP 层复制业务字段；生成 OpenAPI 时由脚本把 `shared` 转成 `components`。
 - 槽位字段的值域可整体写 `types: [ _types.schema ]`，即允许 `schemas` 下声明的全部节点种类；不要重复枚举 kind。
 - `map` 节点的键固定为 string（JSON/OpenAPI 对象键没有其他类型），因此没有 `key` 字段；需要 integer key 的 Go/SQL 容器用 `_types.map<_types.integer, T>`（`structures.map`），不要写进 schema 节点。
 - `map` 与 `array` 对齐：`values` 是值域，`min_items` / `max_items` 约束键数，`key_patterns` 约束键名（全部匹配），`validation` 校验映射级规则且只能引用 `value`；生成到 OpenAPI 为 `additionalProperties` / `minProperties` / `maxProperties` / `propertyNames`。

@@ -139,8 +139,12 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				ops, _ := asMap(rawOps)
 				for _, rawOp := range ops {
 					op, _ := asMap(rawOp)
-					svc, _ := op["x-service"].(string)
-					cid, _ := op["x-contract-id"].(string)
+					svc, _ := op["service"].(string)
+					cid, _ := op["id"].(string)
+					if contract, ok := asMap(op["contract"]); ok {
+						svc, _ = contract["service"].(string)
+						cid, _ = contract["id"].(string)
+					}
 					if svc != "" && cid != "" {
 						a.ServiceUsedBy[svc] = append(a.ServiceUsedBy[svc], cid)
 					}
@@ -761,7 +765,7 @@ func syncItemFieldBlock(path, listKey, itemKey, itemValue, field string, values 
 			rendered = append(rendered, "      - "+value)
 		}
 	}
-	if field == "used_by" {
+	if field == "used_by" && itemEnd < len(lines) {
 		rendered = append(rendered, "")
 	}
 	fieldLine := -1

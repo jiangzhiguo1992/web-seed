@@ -246,26 +246,19 @@ do_not: []
 paths:
   /x:
     get:
-      operationId: list
-      x-contract-id: cap.protocols.http.x.list
-      x-service: cap.services.x.get
-      parameters:
-        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/Status" } }
-      responses: {}
-  /y:
-    get:
-      operationId: status
-      x-contract-id: cap.protocols.http.x.status
-      x-service: cap.services.x.get
-      parameters:
-        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/StatusWrapper" } }
-      responses: {}
+      name: list
+      id: cap.protocols.http.x.list
+      service: cap.services.x.get
+      request:
+        query:
+          status: data.enums.x_status
+      response:
+        "204": { description: OK }
+      errors: [ ]
 components:
   schemas:
     Status:
-      x-enum: data.enums.x_status
-    StatusWrapper:
-      $ref: "#/components/schemas/Status"
+      source: { enum: data.enums.x_status }
 `)
 	writeCapFile(t, root, "contracts/capabilities/events/x.yaml", `id: cap.events.x
 summary: "x"
@@ -301,10 +294,8 @@ topics:
 	if u.capabilities["cap.events.x"] {
 		t.Fatalf("file-level event usage must not be recorded: %v", u.capabilities)
 	}
-	for _, owner := range []string{"cap.protocols.http.x.list", "cap.protocols.http.x.status"} {
-		if !u.capabilities[owner] {
-			t.Fatalf("http operation usage %s missing: %v", owner, u.capabilities)
-		}
+	if !u.capabilities["cap.protocols.http.x.list"] {
+		t.Fatalf("http operation usage missing: %v", u.capabilities)
 	}
 	if u.capabilities["cap.protocols.http.x"] {
 		t.Fatalf("file-level http usage must not be recorded: %v", u.capabilities)

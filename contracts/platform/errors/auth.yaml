@@ -5,11 +5,11 @@ stability: draft
 do_not:
   - "认证错误码不要暴露账号是否存在"
 errors:
-  - { code: AUTH_INVALID_CREDENTIALS, status: 401, retryable: false, i18n: errors.auth.invalid_credentials, message: "账号标识或凭据不正确" }
-  - { code: AUTH_LOCKED, status: 423, retryable: true, i18n: errors.auth.locked, message: "认证已锁定，请稍后再试" }
-  - { code: AUTH_USERNAME_TAKEN, status: 409, retryable: false, i18n: errors.auth.username_taken, message: "登录名已被使用" }
-  - { code: AUTH_PHONE_TAKEN, status: 409, retryable: false, i18n: errors.auth.phone_taken, message: "手机号已被绑定" }
-  - { code: AUTH_EMAIL_TAKEN, status: 409, retryable: false, i18n: errors.auth.email_taken, message: "邮箱已被绑定" }
-  - { code: AUTH_PHONE_INVALID, status: 422, retryable: false, i18n: errors.auth.phone_invalid, message: "手机号格式不合法" }
-  - { code: AUTH_EMAIL_INVALID, status: 422, retryable: false, i18n: errors.auth.email_invalid, message: "邮箱格式不合法" }
-  - { code: AUTH_WEAK_PASSWORD, status: 422, retryable: false, i18n: errors.auth.weak_password, message: "密码强度不足" }
+  - { code: AUTH_INVALID_CREDENTIALS, biz_code: 3001, status: 401, retryable: false, i18n: errors.auth.invalid_credentials, message: "账号标识或凭据不正确" }
+  - { code: AUTH_LOCKED, biz_code: 3002, status: 423, retryable: true, i18n: errors.auth.locked, message: "认证已锁定，请稍后再试" }
+  - { code: AUTH_USERNAME_TAKEN, biz_code: 3003, status: 409, retryable: false, i18n: errors.auth.username_taken, message: "登录名已被使用" }
+  - { code: AUTH_PHONE_TAKEN, biz_code: 3004, status: 409, retryable: false, i18n: errors.auth.phone_taken, message: "手机号已被绑定" }
+  - { code: AUTH_EMAIL_TAKEN, biz_code: 3005, status: 409, retryable: false, i18n: errors.auth.email_taken, message: "邮箱已被绑定" }
+  - { code: AUTH_PHONE_INVALID, biz_code: 3006, status: 422, retryable: false, i18n: errors.auth.phone_invalid, message: "手机号格式不合法" }
+  - { code: AUTH_EMAIL_INVALID, biz_code: 3007, status: 422, retryable: false, i18n: errors.auth.email_invalid, message: "邮箱格式不合法" }
+  - { code: AUTH_WEAK_PASSWORD, biz_code: 3008, status: 422, retryable: false, i18n: errors.auth.weak_password, message: "密码强度不足" }

@@ -379,7 +379,7 @@ func TestRepoContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c := &Checker{root: root}
+	c := &Checker{root: root, strictHTTP: true}
 	c.run()
 	if len(c.errs) > 0 {
 		t.Fatalf("repository contracts failed:\n%s", strings.Join(c.errs, "\n"))

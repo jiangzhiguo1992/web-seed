@@ -5,239 +5,280 @@ schema_version: 1
 stability: draft
 do_not:
   - "不要把 password_hash 或 token 写入日志、事件"
-
-base_path: /v1
-default_error_responses: [ 400, 401, 403, 422, 423, 429, 500, 503 ]
-
+  - "refresh_token 只写 HttpOnly cookie，不进入响应体"
+default_error_responses:
+  - 400
+  - 401
+  - 403
+  - 409
+  - 422
+  - 423
+  - 429
+  - 500
+  - 503
 paths:
   /auth/login:
     post:
-      operationId: login
-      x-contract-id: cap.protocols.http.auth.login
-      x-service: cap.services.auth.login
+      id: cap.protocols.http.auth.login
+      name: login
+      service: cap.services.auth.login
       summary: "登录"
-      x-timeout-ms: 5000
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/LoginInput" }
-            example: { auth_type: pwd, identifier: "admin", password: "a-strong-password", device_id: "web-admin" }
-      responses:
-        "200":
+      request:
+        headers:
+          X-Request-Id: RequestId
+        body:
+          content_type: application/json
+          schema: cap.services.auth.schemas.LoginInput
+        mapping:
+          body: "input"
+        idempotency: none
+      response:
+        200:
           description: "登录成功"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthSession"
-                x-service-return: cap.services.auth.schemas.AuthSession
+          headers:
+            Set-Cookie: SetAuthCookies
+            X-Request-Id: XRequestId
+          body:
+            content_type: application/json
+            schema: cap.services.auth.schemas.AuthSession
+      errors:
+        - platform.errors.ACCOUNT_SUSPENDED
+        - platform.errors.AUTH_INVALID_CREDENTIALS
+        - platform.errors.AUTH_LOCKED
 
   /auth/verification/send:
     post:
-      operationId: sendVerification
-      x-contract-id: cap.protocols.http.auth.verification_send
-      x-service: cap.services.verification.send
+      id: cap.protocols.http.auth.verification_send
+      name: sendVerification
+      service: cap.services.verification.send
       summary: "发送验证码"
-      x-timeout-ms: 5000
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SendVerificationInput" }
-            example: { auth_type: phone, target: "+8613800138000", purpose: login }
-      responses:
-        "202":
+      request:
+        headers:
+          X-Request-Id: RequestId
+          Idempotency-Key: IdempotencyKey
+        body:
+          content_type: application/json
+          schema: cap.services.verification.schemas.SendVerificationInput
+        mapping:
+          body: "input"
+        idempotency: optional
+      response:
+        202:
           description: "已受理"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/VerificationSent"
-                x-service-return: cap.services.verification.schemas.VerificationSent
+          headers:
+            X-Request-Id: XRequestId
+          body:
+            content_type: application/json
+            schema: cap.services.verification.schemas.VerificationSent
+      errors:
+        - platform.errors.AUTH_EMAIL_INVALID
+        - platform.errors.AUTH_PHONE_INVALID
+        - platform.errors.AUTH_VERIFICATION_INVALID
+        - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
 
   /auth/verification/verify:
     post:
-      operationId: verifyCode
-      x-contract-id: cap.protocols.http.auth.verification_verify
-      x-service: cap.services.verification.verify
+      id: cap.protocols.http.auth.verification_verify
+      name: verifyCode
+      service: cap.services.verification.verify
       summary: "校验验证码"
-      x-timeout-ms: 5000
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/VerifyCodeInput" }
-            example: { auth_type: phone, target: "+8613800138000", purpose: login, code: "123456" }
-      responses:
-        "200":
+      request:
+        headers:
+          X-Request-Id: RequestId
+          Idempotency-Key: IdempotencyKey
+        body:
+          content_type: application/json
+          schema: cap.services.verification.schemas.VerifyCodeInput
+        mapping:
+          body: "input"
+        idempotency: optional
+      response:
+        200:
           description: "校验成功"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/VerificationResult"
-                x-service-return: cap.services.verification.schemas.VerificationResult
+          headers:
+            X-Request-Id: XRequestId
+          body:
+            content_type: application/json
+            schema: cap.services.verification.schemas.VerificationResult
+      errors:
+        - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+        - platform.errors.AUTH_VERIFICATION_EXPIRED
+        - platform.errors.AUTH_VERIFICATION_INVALID
 
   /auth/refresh:
     post:
-      operationId: refreshToken
-      x-contract-id: cap.protocols.http.auth.refresh
-      x-service: cap.services.token.refresh
+      id: cap.protocols.http.auth.refresh
+      name: refreshToken
+      service: cap.services.token.refresh
       summary: "刷新令牌"
-      x-timeout-ms: 3000
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [ refresh_token ]
-              properties:
-                refresh_token: { type: string, minLength: 1 }
-      responses:
-        "200":
+      request:
+        headers:
+          X-Request-Id: RequestId
+          X-CSRF-Token: CSRFToken
+        cookies:
+          refresh_token: RefreshTokenCookie
+        mapping:
+          cookie:
+            refresh_token: refresh_token
+        idempotency: none
+      response:
+        200:
           description: "成功"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TokenPair"
-                x-service-return: cap.services.token.schemas.TokenPair
+          headers:
+            Set-Cookie: SetAuthCookies
+            X-Request-Id: XRequestId
+          body:
+            content_type: application/json
+            schema: cap.services.token.schemas.AccessToken
+      errors:
+        - platform.errors.AUTH_TOKEN_EXPIRED
+        - platform.errors.AUTH_TOKEN_INVALID
 
   /auth/logout:
     post:
-      operationId: logout
-      x-contract-id: cap.protocols.http.auth.logout
-      x-service: cap.services.token.logout
+      id: cap.protocols.http.auth.logout
+      name: logout
+      service: cap.services.token.logout
       summary: "登出"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: false
-              required: [ refresh_token ]
-              properties:
-                refresh_token: { type: string, minLength: 1 }
-      responses:
-        "204": { description: "已登出" }
+      request:
+        headers:
+          X-Request-Id: RequestId
+          X-CSRF-Token: CSRFToken
+        cookies:
+          refresh_token: RefreshTokenCookie
+        mapping:
+          cookie:
+            refresh_token: refresh_token
+        idempotency: none
+      response:
+        204:
+          description: "已登出"
+          headers:
+            Set-Cookie: ClearAuthCookies
+            X-Request-Id: XRequestId
+      errors:
+        - platform.errors.AUTH_TOKEN_INVALID
 
   /auth/bind/password:
     post:
-      operationId: bindPassword
-      x-contract-id: cap.protocols.http.auth.bind_password
-      x-service: cap.services.auth.bind_password
+      id: cap.protocols.http.auth.bind_password
+      name: bindPassword
+      service: cap.services.auth.bind_password
       summary: "创建、修改或启停密码认证绑定"
-      x-timeout-ms: 5000
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/BindPasswordInput" }
-      responses:
-        "200":
+      security:
+        - BearerAuth: []
+      request:
+        headers:
+          X-Request-Id: RequestId
+          Idempotency-Key: IdempotencyKey
+        body:
+          content_type: application/json
+          schema: cap.services.auth.schemas.BindPasswordInput
+        mapping:
+          body: "input"
+        idempotency: optional
+      response:
+        200:
           description: "成功"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthBinding"
-                x-service-return: cap.services.auth.schemas.AuthBinding
+          headers:
+            X-Request-Id: XRequestId
+          body:
+            content_type: application/json
+            schema: cap.services.auth.schemas.AuthBinding
+      errors:
+        - platform.errors.ACCOUNT_ALREADY_DELETED
+        - platform.errors.ACCOUNT_SUSPENDED
+        - platform.errors.AUTH_INVALID_CREDENTIALS
+        - platform.errors.AUTH_USERNAME_TAKEN
 
   /auth/bind/phone:
     post:
-      operationId: bindPhone
-      x-contract-id: cap.protocols.http.auth.bind_phone
-      x-service: cap.services.auth.bind_phone
+      id: cap.protocols.http.auth.bind_phone
+      name: bindPhone
+      service: cap.services.auth.bind_phone
       summary: "创建、换绑或启停手机号认证绑定"
-      x-timeout-ms: 5000
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/BindPhoneInput" }
-      responses:
-        "200":
+      security:
+        - BearerAuth: []
+      request:
+        headers:
+          X-Request-Id: RequestId
+          Idempotency-Key: IdempotencyKey
+        body:
+          content_type: application/json
+          schema: cap.services.auth.schemas.BindPhoneInput
+        mapping:
+          body: "input"
+        idempotency: optional
+      response:
+        200:
           description: "成功"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthBinding"
-                x-service-return: cap.services.auth.schemas.AuthBinding
+          headers:
+            X-Request-Id: XRequestId
+          body:
+            content_type: application/json
+            schema: cap.services.auth.schemas.AuthBinding
+      errors:
+        - platform.errors.ACCOUNT_ALREADY_DELETED
+        - platform.errors.ACCOUNT_SUSPENDED
+        - platform.errors.AUTH_PHONE_INVALID
+        - platform.errors.AUTH_PHONE_TAKEN
 
   /auth/bind/email:
     post:
-      operationId: bindEmail
-      x-contract-id: cap.protocols.http.auth.bind_email
-      x-service: cap.services.auth.bind_email
+      id: cap.protocols.http.auth.bind_email
+      name: bindEmail
+      service: cap.services.auth.bind_email
       summary: "创建、换绑或启停邮箱认证绑定"
-      x-timeout-ms: 5000
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/BindEmailInput" }
-      responses:
-        "200":
+      security:
+        - BearerAuth: []
+      request:
+        headers:
+          X-Request-Id: RequestId
+          Idempotency-Key: IdempotencyKey
+        body:
+          content_type: application/json
+          schema: cap.services.auth.schemas.BindEmailInput
+        mapping:
+          body: "input"
+        idempotency: optional
+      response:
+        200:
           description: "成功"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AuthBinding"
-                x-service-return: cap.services.auth.schemas.AuthBinding
+          headers:
+            X-Request-Id: XRequestId
+          body:
+            content_type: application/json
+            schema: cap.services.auth.schemas.AuthBinding
+      errors:
+        - platform.errors.ACCOUNT_ALREADY_DELETED
+        - platform.errors.ACCOUNT_SUSPENDED
+        - platform.errors.AUTH_EMAIL_INVALID
+        - platform.errors.AUTH_EMAIL_TAKEN
 
   /auth/me:
     get:
-      operationId: currentAccount
-      x-contract-id: cap.protocols.http.auth.me
-      x-service: cap.services.token.verify
+      id: cap.protocols.http.auth.me
+      name: currentAccount
+      service: cap.services.token.verify
       summary: "校验访问令牌并返回当前账号"
-      x-timeout-ms: 3000
-      parameters:
-        - { name: Authorization, in: header, required: true, schema: { type: string, minLength: 1 } }
-      responses:
-        "200":
+      security:
+        - BearerAuth: []
+      request:
+        headers:
+          X-Request-Id: RequestId
+          Authorization: Authorization
+        mapping:
+          header:
+            Authorization: access_token
+        idempotency: none
+      response:
+        200:
           description: "成功"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Account"
-                x-service-return: data.entities.account
-
-components:
-  schemas:
-    LoginInput:
-      x-service-type: cap.services.auth.schemas.LoginInput
-
-    SendVerificationInput:
-      x-service-type: cap.services.verification.schemas.SendVerificationInput
-
-    VerifyCodeInput:
-      x-service-type: cap.services.verification.schemas.VerifyCodeInput
-
-    TokenPair:
-      x-service-type: cap.services.token.schemas.TokenPair
-      x-auth-response: true
-
-    AuthSession:
-      x-service-type: cap.services.auth.schemas.AuthSession
-    AuthAttributes:
-      x-service-type: cap.services.auth.schemas.AuthAttributes
-
-    VerificationPurpose:
-      x-enum: data.enums.verification_purpose
-
-    VerificationSent:
-      x-service-type: cap.services.verification.schemas.VerificationSent
-
-    VerificationResult:
-      x-service-type: cap.services.verification.schemas.VerificationResult
-
-    BindPasswordInput:
-      x-service-type: cap.services.auth.schemas.BindPasswordInput
-    BindPhoneInput:
-      x-service-type: cap.services.auth.schemas.BindPhoneInput
-    BindEmailInput:
-      x-service-type: cap.services.auth.schemas.BindEmailInput
-    AuthBinding:
-      x-service-type: cap.services.auth.schemas.AuthBinding
-    Account:
-      x-entity: data.entities.account
+          headers:
+            X-Request-Id: XRequestId
+          body:
+            content_type: application/json
+            schema: data.entities.account
+      errors:
+        - platform.errors.AUTH_TOKEN_EXPIRED
+        - platform.errors.AUTH_TOKEN_INVALID

@@ -61,6 +61,8 @@ type Checker struct {
 	enumCodes         map[string]map[int]bool
 	enumIDs           map[string]bool
 	errCodeSet        map[string]bool
+	errorStatus       map[string]int
+	errorBizCode      map[string]int
 	dataAccessErrSet  map[string]bool
 	permissionSet     map[string]bool
 	methodReturns     map[string]map[string]returnType
@@ -76,11 +78,12 @@ type Checker struct {
 	nodeKinds         map[string]contractspec.SchemaKind
 	propertyKeys      []contractspec.Field
 	valueTypes        contractspec.ValueTypes
+	strictHTTP        bool
 }
 
 // Run 执行全部契约校验并返回错误列表。
 func Run(root string) []string {
-	c := &Checker{root: root}
+	c := &Checker{root: root, strictHTTP: true}
 	c.run()
 	return c.errs
 }
@@ -100,6 +103,7 @@ func (c *Checker) run() {
 	c.checkDoNotDuplicates()
 	c.checkModules()
 	c.checkErrorFiles()
+	c.checkProjectAPIVersion()
 	c.checkPlatformContracts()
 	tableSchema, err := c.loadSchemaByType("data.tables")
 	if err != nil {
@@ -356,9 +360,13 @@ func loadYAML(path string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var m map[string]any
-	if err := yaml.Unmarshal(b, &m); err != nil {
+	var raw any
+	if err := yaml.Unmarshal(b, &raw); err != nil {
 		return nil, err
+	}
+	m, ok := normalizeYAMLKeys(raw).(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: top-level map required", path)
 	}
 	return m, nil
 }

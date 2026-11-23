@@ -562,7 +562,7 @@ func TestRenderHTTP(t *testing.T) {
 	paths, _ := doc["paths"].(map[string]any)
 	path, _ := paths["/invoice"].(map[string]any)
 	op, _ := path["get"].(map[string]any)
-	if op["x-contract-id"] != "cap.protocols.http.invoice.get" || op["x-service"] != "cap.services.invoice.get" {
+	if op["name"] != "getInvoice" || op["id"] != "cap.protocols.http.invoice.get" || op["service"] != "cap.services.invoice.get" {
 		t.Fatalf("operation = %#v", op)
 	}
 }

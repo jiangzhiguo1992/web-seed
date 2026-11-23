@@ -26,7 +26,7 @@ var defaultResponseNames = map[int]string{
 	503: "ServiceUnavailable",
 }
 
-// Validate 检查 spec 的关键结构：路径/参数/响应/请求体、operationId、x-service、$ref 与 required。
+// Validate 检查 spec 的关键结构：路径/参数/响应/请求体、operationId、$ref 与 required。
 func Validate(spec map[string]any) error {
 	if spec["openapi"] == nil {
 		return fmt.Errorf("openapi version required")
@@ -72,9 +72,6 @@ func Validate(spec map[string]any) error {
 				return fmt.Errorf("duplicate operationId %s", id)
 			}
 			seen[id] = true
-			if op["x-service"] == nil {
-				return fmt.Errorf("%s %s: x-service required", method, path)
-			}
 			if err := validateOperation(op, method, path); err != nil {
 				return err
 			}

@@ -97,7 +97,7 @@ entries:
       - "在 handler 里直接读 r.URL.Query() 而不用生成参数"
       - "逐接口重复声明 4xx/5xx 响应（已由 default_error_responses 注入）"
       - "响应 schema 缺少 additionalProperties: false"
-      - "忘记 x-service 绑定到 cap.services"
+      - "忘记 service 绑定到 cap.services"
   - { id: cap.protocols.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/登出/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号服务：查询、创建、更新、状态转换与软删编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证会话服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,15 +17,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var apiVersionRe = regexp.MustCompile(`^v[0-9]+$`)
+
 type project struct {
 	Project struct {
 		Name    string `yaml:"name"`
 		Version string `yaml:"version"`
 	} `yaml:"project"`
 	Apps map[string]struct {
-		Kind      string   `yaml:"kind"`
-		Includes  []string `yaml:"includes"`
-		Generated struct {
+		Kind       string   `yaml:"kind"`
+		APIVersion string   `yaml:"api_version"`
+		TimeoutMS  int      `yaml:"timeout_ms"`
+		Includes   []string `yaml:"includes"`
+		Generated  struct {
 			Spec   string `yaml:"spec"`
 			Server string `yaml:"server"`
 		} `yaml:"generated"`
@@ -84,6 +89,10 @@ func build(root string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	customTypeIdx, err := loadCustomTypes(root)
+	if err != nil {
+		return nil, err
+	}
 	byID := map[string]map[string]any{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
@@ -92,6 +101,9 @@ func build(root string) (map[string][]byte, error) {
 		}
 		id, _ := doc["id"].(string)
 		if id != "" {
+			if err := openapispec.NormalizeHTTPDocument(doc, httpTypeResolver(customTypeIdx), false); err != nil {
+				return nil, fmt.Errorf("%s: %w", file, err)
+			}
 			byID[id] = doc
 		}
 	}
@@ -99,15 +111,11 @@ func build(root string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	customTypeIdx, err := loadCustomTypes(root)
-	if err != nil {
-		return nil, err
-	}
 	typeIdx, err := loadServiceTypes(root, customTypeIdx, enumIdx)
 	if err != nil {
 		return nil, err
 	}
-	entityIdx, err := loadEntities(root, enumIdx)
+	entityIdx, err := loadEntities(root, enumIdx, customTypeIdx)
 	if err != nil {
 		return nil, err
 	}
@@ -136,14 +144,20 @@ func build(root string) (map[string][]byte, error) {
 		paths := spec["paths"].(map[string]any)
 		components := spec["components"].(map[string]any)
 		opDefaults := map[string]map[string]bool{}
-		serverURL := ""
+		if app.APIVersion == "" {
+			return nil, fmt.Errorf("app %s: api_version required for api apps", appName)
+		}
+		if !apiVersionRe.MatchString(app.APIVersion) {
+			return nil, fmt.Errorf("app %s: api_version %q must match v<digits>", appName, app.APIVersion)
+		}
+		if app.TimeoutMS <= 0 {
+			return nil, fmt.Errorf("app %s: timeout_ms must be a positive integer", appName)
+		}
+		serverURL := "/" + app.APIVersion
 		for _, include := range app.Includes {
 			doc := byID[include]
 			if doc == nil {
 				return nil, fmt.Errorf("app %s: include %s not found", appName, include)
-			}
-			if base, _ := doc["base_path"].(string); base != "" && serverURL == "" {
-				serverURL = base
 			}
 			for path, rawItem := range asMap(doc["paths"]) {
 				for method, rawOp := range asMap(rawItem) {
@@ -151,6 +165,8 @@ func build(root string) (map[string][]byte, error) {
 					if op == nil {
 						continue
 					}
+					op["x-timeout-ms"] = app.TimeoutMS
+					delete(op, "x-service-params")
 					key := path + "\x00" + method
 					if raw, ok := op["x-default-errors"]; ok {
 						opDefaults[key] = map[string]bool{}
@@ -167,6 +183,9 @@ func build(root string) (map[string][]byte, error) {
 			}
 			mergeMap(paths, asMap(doc["paths"]))
 			mergeMap(components, asMap(doc["components"]))
+		}
+		if err := ensureHTTPRefs(components, paths, typeIdx, entityIdx, enumIdx); err != nil {
+			return nil, fmt.Errorf("app %s: %w", appName, err)
 		}
 		expandSchemas(components, typeIdx, enumIdx, entityIdx)
 		schemas := asMap(components["schemas"])
@@ -241,6 +260,10 @@ func build(root string) (map[string][]byte, error) {
 			}
 			paths[path] = item
 		}
+		if err := wrapResponseEnvelopes(components, paths); err != nil {
+			return nil, fmt.Errorf("app %s: %w", appName, err)
+		}
+		stripGeneratedExtensions(spec)
 		if err := openapispec.Validate(spec); err != nil {
 			return nil, fmt.Errorf("app %s: %w", appName, err)
 		}
@@ -248,9 +271,35 @@ func build(root string) (map[string][]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		if bytes.Contains(b, []byte("_types.")) {
+			return nil, fmt.Errorf("%s: generated OpenAPI must not contain source-only _types references", app.Generated.Spec)
+		}
 		out[app.Generated.Spec] = b
 	}
 	return out, nil
+}
+
+// stripGeneratedExtensions 删除契约内部元数据；生成物只输出标准 OpenAPI。
+func stripGeneratedExtensions(spec map[string]any) {
+	var walk func(any)
+	walk = func(v any) {
+		switch value := v.(type) {
+		case map[string]any:
+			for key := range value {
+				if strings.HasPrefix(key, "x-") {
+					delete(value, key)
+				}
+			}
+			for _, child := range value {
+				walk(child)
+			}
+		case []any:
+			for _, child := range value {
+				walk(child)
+			}
+		}
+	}
+	walk(spec)
 }
 
 func loadProject(path string) (*project, error) {
@@ -270,11 +319,37 @@ func loadYAML(path string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var m map[string]any
-	if err := yaml.Unmarshal(b, &m); err != nil {
+	var raw any
+	if err := yaml.Unmarshal(b, &raw); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	m, ok := normalizeYAMLKeys(raw).(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: top-level map required", path)
+	}
 	return m, nil
+}
+
+func normalizeYAMLKeys(v any) any {
+	switch value := v.(type) {
+	case map[string]any:
+		for key, child := range value {
+			value[key] = normalizeYAMLKeys(child)
+		}
+		return value
+	case map[any]any:
+		out := map[string]any{}
+		for key, child := range value {
+			out[fmt.Sprint(key)] = normalizeYAMLKeys(child)
+		}
+		return out
+	case []any:
+		for i, child := range value {
+			value[i] = normalizeYAMLKeys(child)
+		}
+		return value
+	}
+	return v
 }
 
 func globYAML(dir string) ([]string, error) {
@@ -433,7 +508,7 @@ func loadServiceTypes(root string, customTypes map[string]contractspec.CustomVal
 }
 
 // loadEventPayloads 把 cap.events topics 的 payload 投影成 OpenAPI components。
-// 组件名：Event<File><TopicName>，并带 x-event-id/name/version 供消费端生成。
+// 组件名：Event<File><TopicName>。
 func loadEventPayloads(root string, customTypes map[string]contractspec.CustomValueType, enums map[string][]any, known map[string]bool) (map[string]map[string]any, error) {
 	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts/_meta"))
 	if err != nil {
@@ -473,13 +548,6 @@ func loadEventPayloads(root string, customTypes map[string]contractspec.CustomVa
 			schema, err := renderSchemaNode(payload, customTypes, enums, known, kinds)
 			if err != nil {
 				return nil, fmt.Errorf("event %s: %w", name, err)
-			}
-			if id, _ := topic["id"].(string); id != "" {
-				schema["x-event-id"] = id
-			}
-			schema["x-event-name"] = name
-			if v, ok := topic["version"]; ok {
-				schema["x-event-version"] = v
 			}
 			if summary, _ := topic["summary"].(string); summary != "" {
 				schema["description"] = summary
@@ -605,6 +673,24 @@ func applyPropertyAnnotations(prop, out map[string]any) {
 	}
 }
 
+// httpTypeResolver 把 _types.<name> 解析成 OpenAPI 标量 schema。
+func httpTypeResolver(customTypes map[string]contractspec.CustomValueType) openapispec.TypeResolver {
+	return func(name string) (map[string]any, error) {
+		typ := strings.TrimPrefix(name, "_types.")
+		if typ == "any" {
+			return map[string]any{}, nil
+		}
+		if _, ok := customTypes[typ]; !ok {
+			switch typ {
+			case "string", "boolean", "integer", "float", "decimal", "datetime", "timestamp", "json", "bytes":
+			default:
+				return nil, fmt.Errorf("unknown type %s", name)
+			}
+		}
+		return scalarSchema(name, customTypes), nil
+	}
+}
+
 func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueType) map[string]any {
 	typ = strings.TrimPrefix(typ, "_types.")
 	family := typ
@@ -684,10 +770,58 @@ func loadEnums(root string) (map[string][]any, error) {
 	return out, nil
 }
 
-func loadEntities(root string, enums map[string][]any) (map[string]map[string]any, error) {
+func loadEntities(root string, enums map[string][]any, customTypes map[string]contractspec.CustomValueType) (map[string]map[string]any, error) {
 	out := map[string]map[string]any{}
+	baseFields, err := loadEntityBaseFields(root)
+	if err != nil {
+		return nil, err
+	}
+	columns, err := loadTableColumns(root)
+	if err != nil {
+		return nil, err
+	}
 	files, err := globYAML(filepath.Join(root, "contracts/data/entities"))
 	if err != nil {
+		return nil, err
+	}
+	for _, file := range files {
+		doc, err := loadYAML(file)
+		if err != nil {
+			return nil, err
+		}
+		id, _ := doc["id"].(string)
+		if id == "" || id == "data.entities.base" {
+			continue
+		}
+		fields := mergeEntityFields(baseFields, asList(doc["fields"]))
+		out[lastSegment(id)] = entitySchema(fields, enums, columns, customTypes)
+	}
+	return out, nil
+}
+
+type columnMeta struct {
+	typ      string
+	nullable bool
+}
+
+func loadEntityBaseFields(root string) ([]any, error) {
+	doc, err := loadYAML(filepath.Join(root, "contracts/data/entities/_base.yaml"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return asList(doc["fields"]), nil
+}
+
+func loadTableColumns(root string) (map[string]columnMeta, error) {
+	out := map[string]columnMeta{}
+	files, err := globYAML(filepath.Join(root, "contracts/data/tables"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return out, nil
+		}
 		return nil, err
 	}
 	for _, file := range files {
@@ -699,9 +833,35 @@ func loadEntities(root string, enums map[string][]any) (map[string]map[string]an
 		if id == "" {
 			continue
 		}
-		out[lastSegment(id)] = entitySchema(asList(doc["fields"]), enums)
+		for _, raw := range asList(doc["columns"]) {
+			column := asMap(raw)
+			name, _ := column["name"].(string)
+			typ, _ := column["type"].(string)
+			nullable, _ := column["nullable"].(bool)
+			if name != "" && typ != "" {
+				out[id+".col."+name] = columnMeta{typ: typ, nullable: nullable}
+			}
+		}
 	}
 	return out, nil
+}
+
+func mergeEntityFields(base, own []any) []any {
+	ownNames := map[string]bool{}
+	for _, raw := range own {
+		field := asMap(raw)
+		if name, _ := field["name"].(string); name != "" {
+			ownNames[name] = true
+		}
+	}
+	out := make([]any, 0, len(base)+len(own))
+	for _, raw := range base {
+		field := asMap(raw)
+		if name, _ := field["name"].(string); name != "" && !ownNames[name] {
+			out = append(out, raw)
+		}
+	}
+	return append(out, own...)
 }
 
 // collectSchemaRefs 收集 event schema 内的 component 引用，补齐事件依赖。
@@ -727,6 +887,152 @@ func collectSchemaRefs(schema map[string]any, refs map[string]bool) {
 			if child := asMap(raw); child != nil {
 				collectSchemaRefs(child, refs)
 			}
+		}
+	}
+}
+
+func wrapResponseEnvelopes(components, paths map[string]any) error {
+	schemas := asMap(components["schemas"])
+	if schemas == nil {
+		schemas = map[string]any{}
+		components["schemas"] = schemas
+	}
+	injectRequestID := asMap(components["headers"])["XRequestId"] != nil
+	for _, path := range sortedKeys(paths) {
+		item := asMap(paths[path])
+		for _, rawOp := range item {
+			op := asMap(rawOp)
+			if op == nil {
+				continue
+			}
+			responses := asMap(op["responses"])
+			if responses == nil {
+				continue
+			}
+			for status, rawResp := range responses {
+				resp := asMap(rawResp)
+				if resp == nil {
+					continue
+				}
+				if _, isRef := resp["$ref"]; !isRef && injectRequestID {
+					headers := asMap(resp["headers"])
+					if headers == nil {
+						headers = map[string]any{}
+						resp["headers"] = headers
+					}
+					if _, ok := headers["X-Request-Id"]; !ok {
+						headers["X-Request-Id"] = map[string]any{"$ref": "#/components/headers/XRequestId"}
+					}
+				}
+				code, ok := toInt(status)
+				if !ok || code < 200 || code >= 300 || code == 204 {
+					continue
+				}
+				content := asMap(resp["content"])
+				if content == nil {
+					continue
+				}
+				media := asMap(content["application/json"])
+				if media == nil {
+					continue
+				}
+				schema := asMap(media["schema"])
+				if schema == nil {
+					continue
+				}
+				ref, _ := schema["$ref"].(string)
+				if !strings.HasPrefix(ref, "#/components/schemas/") {
+					continue
+				}
+				dataName := strings.TrimPrefix(ref, "#/components/schemas/")
+				envelopeName := "Api" + dataName + "Response"
+				if _, exists := schemas[envelopeName]; !exists {
+					schemas[envelopeName] = map[string]any{
+						"type":                 "object",
+						"additionalProperties": false,
+						"required":             []any{"code", "message", "data"},
+						"properties": map[string]any{
+							"code":    map[string]any{"type": "integer", "const": 0},
+							"message": map[string]any{"type": "string"},
+							"data":    map[string]any{"$ref": "#/components/schemas/" + dataName},
+						},
+					}
+				}
+				media["schema"] = map[string]any{"$ref": "#/components/schemas/" + envelopeName}
+			}
+		}
+	}
+	return nil
+}
+
+// ensureHTTPRefs 递归补齐 operation/schema 引用到的 service schema、entity、enum 组件。
+func ensureHTTPRefs(components, paths map[string]any, typeIdx, entityIdx map[string]map[string]any, enumIdx map[string][]any) error {
+	schemas := asMap(components["schemas"])
+	if schemas == nil {
+		schemas = map[string]any{}
+		components["schemas"] = schemas
+	}
+	for {
+		refs := map[string]bool{}
+		collectDocSchemaRefs(paths, refs)
+		for _, raw := range schemas {
+			if schema := asMap(raw); schema != nil {
+				collectSchemaRefs(schema, refs)
+				if xt, _ := schema["x-service-type"].(string); xt != "" {
+					if def := typeIdx[lastSegment(xt)]; def != nil {
+						collectSchemaRefs(def, refs)
+					}
+				}
+			}
+		}
+		added := false
+		for ref := range refs {
+			if schemas[ref] != nil {
+				continue
+			}
+			if def := typeIdx[ref]; def != nil {
+				schemas[ref] = def
+				added = true
+				continue
+			}
+			found := false
+			for name, def := range entityIdx {
+				if pascal(name) == ref {
+					schemas[ref] = def
+					added = true
+					found = true
+					break
+				}
+			}
+			if found {
+				continue
+			}
+			for name, values := range enumIdx {
+				if pascal(name) == ref {
+					schemas[ref] = map[string]any{"type": "string", "enum": values}
+					added = true
+					break
+				}
+			}
+		}
+		if !added {
+			return nil
+		}
+	}
+}
+
+func collectDocSchemaRefs(v any, refs map[string]bool) {
+	switch value := v.(type) {
+	case map[string]any:
+		if ref, _ := value["$ref"].(string); strings.HasPrefix(ref, "#/components/schemas/") {
+			refs[strings.TrimPrefix(ref, "#/components/schemas/")] = true
+		}
+		for _, child := range value {
+			collectDocSchemaRefs(child, refs)
+		}
+	case []any:
+		for _, child := range value {
+			collectDocSchemaRefs(child, refs)
 		}
 	}
 }
@@ -790,7 +1096,7 @@ func expandSchema(schema map[string]any, types map[string]map[string]any, enums 
 	}
 }
 
-func entitySchema(fields []any, enums map[string][]any) map[string]any {
+func entitySchema(fields []any, enums map[string][]any, columns map[string]columnMeta, customTypes map[string]contractspec.CustomValueType) map[string]any {
 	props := map[string]any{}
 	var required []any
 	for _, raw := range fields {
@@ -801,17 +1107,36 @@ func entitySchema(fields []any, enums map[string][]any) map[string]any {
 		if sensitivity, _ := f["sensitivity"].(string); sensitivity == "secret" {
 			continue
 		}
+		source := asMap(f["source"])
+		join := asMap(source["join"])
+		if lazy, _ := join["lazy"].(bool); lazy {
+			continue
+		}
 		name, _ := f["name"].(string)
 		jsonName, _ := f["json_name"].(string)
 		if jsonName == "" {
-			jsonName = snake(name)
+			jsonName = contractspec.SnakeCase(name)
 		}
 		if jsonName == "" {
 			continue
 		}
 		typ, _ := f["type"].(string)
-		sch := typeSchema(typ, enums)
-		if nullable, _ := f["nullable"].(bool); nullable {
+		nullable, hasNullable := f["nullable"].(bool)
+		if typ == "" {
+			if ref, _ := source["column"].(string); ref != "" {
+				if column, ok := columns[ref]; ok {
+					typ = column.typ
+					if !hasNullable {
+						nullable = column.nullable
+					}
+				}
+			}
+		}
+		if typ == "" {
+			continue
+		}
+		sch := typeSchema(typ, enums, customTypes)
+		if nullable {
 			sch["nullable"] = true
 		} else {
 			required = append(required, jsonName)
@@ -832,16 +1157,19 @@ func entitySchema(fields []any, enums map[string][]any) map[string]any {
 	return out
 }
 
-func typeSchema(typ string, enums map[string][]any) map[string]any {
+func typeSchema(typ string, enums map[string][]any, customTypes map[string]contractspec.CustomValueType) map[string]any {
 	typ = strings.TrimPrefix(strings.TrimSpace(typ), "*")
 	if strings.HasPrefix(typ, "_types.list<") && strings.HasSuffix(typ, ">") {
 		inner := strings.TrimSuffix(strings.TrimPrefix(typ, "_types.list<"), ">")
-		return map[string]any{"type": "array", "items": typeSchema(inner, enums)}
+		return map[string]any{"type": "array", "items": typeSchema(inner, enums, customTypes)}
 	}
 	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
-		return map[string]any{"type": "array", "items": typeSchema(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"), enums)}
+		return map[string]any{"type": "array", "items": typeSchema(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"), enums, customTypes)}
 	}
 	typ = strings.TrimPrefix(typ, "_types.")
+	if _, ok := customTypes[typ]; ok {
+		return scalarSchema(typ, customTypes)
+	}
 	switch typ {
 	case "string":
 		return map[string]any{"type": "string"}
@@ -853,9 +1181,14 @@ func typeSchema(typ string, enums map[string][]any) map[string]any {
 		return map[string]any{"type": "string", "format": "date-time"}
 	case "number", "float", "decimal":
 		return map[string]any{"type": "number"}
+	case "json":
+		return map[string]any{"type": "object"}
 	}
 	if strings.HasPrefix(typ, "data.enums.") {
 		return map[string]any{"type": "string", "enum": enums[lastSegment(typ)]}
+	}
+	if strings.HasPrefix(typ, "data.entities.") {
+		return map[string]any{"$ref": "#/components/schemas/" + pascal(lastSegment(typ))}
 	}
 	return map[string]any{"type": "object"}
 }
@@ -883,19 +1216,4 @@ func pascal(name string) string {
 		}
 	}
 	return b.String()
-}
-
-func snake(name string) string {
-	var out []rune
-	for i, r := range name {
-		if r >= 'A' && r <= 'Z' {
-			if i > 0 {
-				out = append(out, '_')
-			}
-			out = append(out, r+'a'-'A')
-			continue
-		}
-		out = append(out, r)
-	}
-	return string(out)
 }

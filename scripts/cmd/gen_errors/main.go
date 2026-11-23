@@ -19,6 +19,7 @@ import (
 
 type errorEntry struct {
 	Code      string `yaml:"code"`
+	BizCode   int    `yaml:"biz_code"`
 	Status    int    `yaml:"status"`
 	Retryable bool   `yaml:"retryable"`
 	I18n      string `yaml:"i18n"`
@@ -111,10 +112,10 @@ func render(entries []errorEntry, dataAccess []string) string {
 	b.WriteString("# 错误码\n\n")
 	b.WriteString("> 本文件由 `contracts/platform/errors/*.yaml` 生成，禁止手改。生成命令：`make gen-errors`。\n\n")
 	b.WriteString("**ID**: `platform.errors`\n\n")
-	b.WriteString("| code | status | retryable | i18n | message |\n")
-	b.WriteString("|---|---|---|---|---|\n")
+	b.WriteString("| code | biz_code | status | retryable | i18n | message |\n")
+	b.WriteString("|---|---|---|---|---|---|\n")
 	for _, e := range entries {
-		fmt.Fprintf(&b, "| `%s` | %d | %t | `%s` | %s |\n", e.Code, e.Status, e.Retryable, e.I18n, escape(e.Message))
+		fmt.Fprintf(&b, "| `%s` | %d | %d | %t | `%s` | %s |\n", e.Code, e.BizCode, e.Status, e.Retryable, e.I18n, escape(e.Message))
 	}
 	if len(dataAccess) > 0 {
 		b.WriteString("\n## 数据访问基线\n\n")

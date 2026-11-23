@@ -218,3 +218,26 @@ func (c *Checker) columnExists(table, col string) bool {
 	_, ok := c.tableColumns[table][col]
 	return ok
 }
+
+// normalizeYAMLKeys 把 YAML 数字键等非字符串键统一转成字符串，供 map[string]any 消费。
+func normalizeYAMLKeys(v any) any {
+	switch value := v.(type) {
+	case map[string]any:
+		for key, child := range value {
+			value[key] = normalizeYAMLKeys(child)
+		}
+		return value
+	case map[any]any:
+		out := map[string]any{}
+		for key, child := range value {
+			out[fmt.Sprint(key)] = normalizeYAMLKeys(child)
+		}
+		return out
+	case []any:
+		for i, child := range value {
+			value[i] = normalizeYAMLKeys(child)
+		}
+		return value
+	}
+	return v
+}
