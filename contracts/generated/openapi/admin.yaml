@@ -937,7 +937,7 @@ paths:
             $ref: '#/components/schemas/AccountStatus'
         - $ref: '#/components/parameters/RequestId'
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -946,23 +946,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "404":
+        404:
           $ref: '#/components/responses/NotFound'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -979,7 +979,7 @@ paths:
               $ref: '#/components/schemas/CreateAccountInput'
         required: true
       responses:
-        "201":
+        201:
           content:
             application/json:
               schema:
@@ -988,23 +988,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "404":
+        404:
           $ref: '#/components/responses/NotFound'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1021,28 +1021,28 @@ paths:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/RequestId'
       responses:
-        "204":
+        204:
           description: 已删除
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "404":
+        404:
           $ref: '#/components/responses/NotFound'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1057,7 +1057,7 @@ paths:
             type: integer
         - $ref: '#/components/parameters/RequestId'
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1066,23 +1066,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "404":
+        404:
           $ref: '#/components/responses/NotFound'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1104,7 +1104,7 @@ paths:
               $ref: '#/components/schemas/UpdateAccountInput'
         required: true
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1113,23 +1113,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "404":
+        404:
           $ref: '#/components/responses/NotFound'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1146,7 +1146,7 @@ paths:
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/RequestId'
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1155,23 +1155,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "404":
+        404:
           $ref: '#/components/responses/NotFound'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1202,7 +1202,7 @@ paths:
               type: object
         required: true
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1211,23 +1211,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "404":
+        404:
           $ref: '#/components/responses/NotFound'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1245,7 +1245,7 @@ paths:
               $ref: '#/components/schemas/BindEmailInput'
         required: true
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1254,23 +1254,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "423":
+        423:
           $ref: '#/components/responses/Locked'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1288,7 +1288,7 @@ paths:
               $ref: '#/components/schemas/BindPasswordInput'
         required: true
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1297,23 +1297,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "423":
+        423:
           $ref: '#/components/responses/Locked'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1331,7 +1331,7 @@ paths:
               $ref: '#/components/schemas/BindPhoneInput'
         required: true
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1340,23 +1340,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "423":
+        423:
           $ref: '#/components/responses/Locked'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1373,7 +1373,7 @@ paths:
               $ref: '#/components/schemas/LoginInput'
         required: true
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1384,23 +1384,23 @@ paths:
               $ref: '#/components/headers/SetAuthCookies'
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "423":
+        423:
           $ref: '#/components/responses/Locked'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 登录
   /auth/logout:
@@ -1411,30 +1411,30 @@ paths:
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/RefreshTokenCookie'
       responses:
-        "204":
+        204:
           description: 已登出
           headers:
             Set-Cookie:
               $ref: '#/components/headers/ClearAuthCookies'
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "423":
+        423:
           $ref: '#/components/responses/Locked'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 登出
   /auth/me:
@@ -1444,7 +1444,7 @@ paths:
         - $ref: '#/components/parameters/Authorization'
         - $ref: '#/components/parameters/RequestId'
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1453,23 +1453,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "423":
+        423:
           $ref: '#/components/responses/Locked'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       security:
         - BearerAuth: []
@@ -1482,7 +1482,7 @@ paths:
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/RefreshTokenCookie'
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1493,23 +1493,23 @@ paths:
               $ref: '#/components/headers/SetAuthCookies'
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "423":
+        423:
           $ref: '#/components/responses/Locked'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 刷新令牌
   /auth/verification/send:
@@ -1525,7 +1525,7 @@ paths:
               $ref: '#/components/schemas/SendVerificationInput'
         required: true
       responses:
-        "202":
+        202:
           content:
             application/json:
               schema:
@@ -1534,23 +1534,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "423":
+        423:
           $ref: '#/components/responses/Locked'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 发送验证码
   /auth/verification/verify:
@@ -1566,7 +1566,7 @@ paths:
               $ref: '#/components/schemas/VerifyCodeInput'
         required: true
       responses:
-        "200":
+        200:
           content:
             application/json:
               schema:
@@ -1575,23 +1575,23 @@ paths:
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
-        "400":
+        400:
           $ref: '#/components/responses/BadRequest'
-        "401":
+        401:
           $ref: '#/components/responses/Unauthorized'
-        "403":
+        403:
           $ref: '#/components/responses/Forbidden'
-        "409":
+        409:
           $ref: '#/components/responses/Conflict'
-        "422":
+        422:
           $ref: '#/components/responses/UnprocessableEntity'
-        "423":
+        423:
           $ref: '#/components/responses/Locked'
-        "429":
+        429:
           $ref: '#/components/responses/TooManyRequests'
-        "500":
+        500:
           $ref: '#/components/responses/Internal'
-        "503":
+        503:
           $ref: '#/components/responses/ServiceUnavailable'
       summary: 校验验证码
 servers:

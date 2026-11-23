@@ -48,14 +48,37 @@ func validateGeneratedSpecs(root string) []string {
 			errs = append(errs, fmt.Sprintf("[schema.openapi] %s: %v", rel, err))
 			continue
 		}
-		var doc map[string]any
-		if err := yaml.Unmarshal(b, &doc); err != nil {
+		var raw any
+		if err := yaml.Unmarshal(b, &raw); err != nil {
 			errs = append(errs, fmt.Sprintf("[schema.openapi] %s: %v", rel, err))
 			continue
 		}
+		doc, _ := normalizeKeys(raw).(map[string]any)
 		if err := spec.Validate(doc); err != nil {
 			errs = append(errs, fmt.Sprintf("[schema.openapi] %s: %v", rel, err))
 		}
 	}
 	return errs
+}
+
+func normalizeKeys(v any) any {
+	switch value := v.(type) {
+	case map[string]any:
+		for key, child := range value {
+			value[key] = normalizeKeys(child)
+		}
+		return value
+	case map[any]any:
+		out := map[string]any{}
+		for key, child := range value {
+			out[fmt.Sprint(key)] = normalizeKeys(child)
+		}
+		return out
+	case []any:
+		for i, child := range value {
+			value[i] = normalizeKeys(child)
+		}
+		return value
+	}
+	return v
 }

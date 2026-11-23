@@ -93,6 +93,22 @@ func testNodeKinds() map[string]contractspec.SchemaKind {
 	}
 }
 
+func TestMarshalUnquotesStatusKeys(t *testing.T) {
+	b, err := marshal(map[string]any{
+		"200": map[string]any{"description": "ok"},
+		"503": map[string]any{"description": "retry"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"200":`) || strings.Contains(string(b), `"503":`) {
+		t.Fatalf("status keys still quoted:\n%s", b)
+	}
+	if !strings.Contains(string(b), "200:") || !strings.Contains(string(b), "503:") {
+		t.Fatalf("status keys missing:\n%s", b)
+	}
+}
+
 func TestBuildExpandsServiceTypes(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
@@ -363,10 +379,10 @@ enums: []
 	out := string(files["generated/openapi/x.yaml"])
 	a := out[strings.Index(out, "/a:"):strings.Index(out, "/b:")]
 	b := out[strings.Index(out, "/b:"):]
-	if !strings.Contains(a, `"422"`) || strings.Contains(a, `"423"`) {
+	if !strings.Contains(a, "422:") || strings.Contains(a, "423:") {
 		t.Fatalf("file a defaults wrong:\n%s", a)
 	}
-	if !strings.Contains(b, `"423"`) || strings.Contains(b, `"422"`) {
+	if !strings.Contains(b, "423:") || strings.Contains(b, "422:") {
 		t.Fatalf("file b defaults wrong:\n%s", b)
 	}
 }
@@ -425,7 +441,7 @@ enums: []
 	}
 	out := string(files["generated/openapi/x.yaml"])
 	paths := out[strings.Index(out, "paths:"):]
-	if !strings.Contains(paths, `"423"`) || strings.Contains(paths, `"422"`) {
+	if !strings.Contains(paths, "423:") || strings.Contains(paths, "422:") {
 		t.Fatalf("operation override not applied:\n%s", out)
 	}
 }

@@ -219,10 +219,7 @@ paths:
           schema:
             type: _types.object
             properties:
-              reason:
-                type: _types.string
-                min_len: 1
-                max_len: 200
+              reason: { type: _types.string, min_len: 1, max_len: 200 }
             required:
               - reason
         mapping:

@@ -447,8 +447,22 @@ func marshal(v any) ([]byte, error) {
 	if err := enc.Close(); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), nil
+	return unquoteStatusKeys(buf.Bytes()), nil
 }
+
+// unquoteStatusKeys 只去掉响应状态码键的引号："200": → 200:；
+// 描述文本等字符串内容不受影响。
+func unquoteStatusKeys(b []byte) []byte {
+	lines := strings.Split(string(b), "\n")
+	for i, line := range lines {
+		if match := quotedStatusLine.FindStringSubmatch(line); match != nil {
+			lines[i] = match[1] + match[2] + ":"
+		}
+	}
+	return []byte(strings.Join(lines, "\n"))
+}
+
+var quotedStatusLine = regexp.MustCompile(`^(\s*)"(\d{3})":$`)
 
 func fail(err error) {
 	fmt.Fprintln(os.Stderr, "gen-openapi:", err)
