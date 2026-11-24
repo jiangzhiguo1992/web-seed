@@ -84,30 +84,30 @@ fields:
                 description: "HTTP 请求头；Authorization 用 auth 标记，Content-Type 用 value 标记"
                 item_fields:
                   - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "HTTP header 名" }
-                  - { name: required, type: _types.boolean, required: false, description: "是否必填；默认 true" }
+                  - { name: required, type: _types.boolean, required: false, description: "是否必填；默认 false；Content-Type 与 Authorization 的必需性分别由 body 与 security 决定" }
                   - { name: description, type: _types.string, required: true, description: "header 含义" }
-                  - { name: schema, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID" }
-                  - { name: value, type: _types.string, required: false, description: "固定值；与 schema 二选一" }
+                  - { name: type, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID；与 value 二选一" }
+                  - { name: value, type: _types.string, required: false, description: "固定值；与 type 二选一" }
                   - { name: auth, type: _types.string, required: false, enum: [ BearerAuth ], description: "认证方案；仅 request 的 Authorization 使用" }
                   - { name: multiple, type: _types.boolean, required: false, description: "是否允许重复；如 Link" }
               - name: path
                 type: _types.list<_types.object>
                 required: false
                 unique_key: name
-                description: "path 参数；每项必须写 name/schema/description/to"
+                description: "path 参数；每项必须写 name/type/description/to"
                 item_fields:
                   - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "path 参数名，必须与路径中的 {name} 一致" }
-                  - { name: schema, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID，不允许实体或匿名 object" }
+                  - { name: type, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID，不允许实体或匿名 object" }
                   - { name: description, type: _types.string, required: true, description: "参数含义" }
                   - { name: to, type: _types.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
               - name: query
                 type: _types.list<_types.object>
                 required: false
                 unique_key: name
-                description: "query 参数；每项必须写 name/schema/required/description/to"
+                description: "query 参数；每项必须写 name/type/required/description/to"
                 item_fields:
                   - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "query 参数名" }
-                  - { name: schema, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID" }
+                  - { name: type, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID" }
                   - { name: required, type: _types.boolean, required: false, description: "是否必填；默认 false" }
                   - { name: description, type: _types.string, required: true, description: "参数含义" }
                   - { name: to, type: _types.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
@@ -118,17 +118,17 @@ fields:
                 fields:
                   - { name: kind, type: _types.string, required: true, enum: [ json, form, multipart, text, binary ], description: "body 编码类型" }
                   - { name: required, type: _types.boolean, required: false, description: "是否必填；默认 true" }
-                  - { name: schema, type: _types.string, required: false, pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|_types\.[a-z][a-z0-9_]*)$', description: "json/text/binary 的类型 ID；form/multipart 不写" }
+                  - { name: type, type: _types.string, required: false, pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|_types\.[a-z][a-z0-9_]*)$', description: "json/text/binary 的类型 ID；form/multipart 不写" }
                   - { name: to, type: _types.string, required: false, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "json/text/binary 对应的 service 参数路径" }
                   - name: fields
                     type: _types.list<_types.object>
                     required: false
                     unique_key: name
-                    description: "form/multipart 字段；每项写 name/required/description/to"
+                    description: "form/multipart 字段；每项写 name/required/description/to；text 字段写 type，file 字段不写"
                     item_fields:
                       - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
                       - { name: kind, type: _types.string, required: false, enum: [ text, file ], description: "multipart 文件字段用 file；默认 text" }
-                      - { name: schema, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "text 字段类型 ID" }
+                      - { name: type, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "text 字段类型 ID" }
                       - { name: required, type: _types.boolean, required: false, description: "是否必填；默认 false" }
                       - { name: description, type: _types.string, required: true, description: "字段含义" }
                       - { name: to, type: _types.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
@@ -136,7 +136,7 @@ fields:
             type: _types.map<_types.object>
             required: true
             key_patterns: [ '^[1-5][0-9]{2}$' ]
-            description: "HTTP 状态码 → 响应；2xx 写 description/headers/body，非 2xx 只写 codes"
+            description: "HTTP 状态码（三位，作为 map 键）→ 响应；2xx 写 description/headers/body，非 2xx 只写 codes"
             item_fields:
               - { name: description, type: _types.string, required: false, description: "响应说明；2xx 必填" }
               - name: headers
@@ -146,10 +146,10 @@ fields:
                 description: "HTTP 响应头；Content-Type 用 value 标记"
                 item_fields:
                   - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "HTTP header 名" }
-                  - { name: required, type: _types.boolean, required: false, description: "是否必填；默认 true" }
+                  - { name: required, type: _types.boolean, required: false, description: "是否必填；默认 false" }
                   - { name: description, type: _types.string, required: true, description: "header 含义" }
-                  - { name: schema, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID" }
-                  - { name: value, type: _types.string, required: false, description: "固定值；与 schema 二选一" }
+                  - { name: type, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID" }
+                  - { name: value, type: _types.string, required: false, description: "固定值；与 type 二选一" }
                   - { name: multiple, type: _types.boolean, required: false, description: "是否允许重复；如 Link" }
               - name: body
                 type: _types.object
@@ -157,7 +157,7 @@ fields:
                 description: "响应体；kind 决定媒体类型，Content-Type header 必须匹配"
                 fields:
                   - { name: kind, type: _types.string, required: true, enum: [ json, text, binary ], description: "响应体编码类型" }
-                  - { name: schema, type: _types.string, required: true, pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|_types\.[a-z][a-z0-9_]*)$', description: "响应体类型 ID" }
+                  - { name: type, type: _types.string, required: true, pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|_types\.[a-z][a-z0-9_]*)$', description: "响应体类型 ID" }
               - { name: codes, type: _types.list<_types.string>, required: false, unique: true, min_items: 1, pattern: '^platform\.errors\.', description: "该状态下的业务错误 ID；非 2xx 必填" }
       - name: post
         type: _types.object
@@ -193,7 +193,7 @@ fields:
 rules:
   - { id: http-file, text: "文件 id 必须由 targets 派生", implemented_by: [ http-file ] }
   - { id: http-status, text: "response 的 status 必须落在 platform.http_conventions.status_codes 的 success/client_error/server_error 列表内；3xx 与未登记状态非法", implemented_by: [ http-status ] }
-  - { id: http-shape, text: "paths 必须是 path → method → operation；operation 必须使用 id/name/service/summary/used_by/request/response；request 只允许 headers/path/query/body；GET/HEAD 不得声明 request.body；response 的 key 是三位状态码，2xx 必须写 description；带 body 时必须同时在 headers 声明 Content-Type；204 不得声明 body/Content-Type；非 2xx 只能写非空 codes", implemented_by: [ http-shape ] }
+  - { id: http-shape, text: "paths 必须是 path → method → operation；operation 必须使用 id/name/service/summary/used_by/request/response；request 只允许 headers/path/query/body；header 的 required 默认 false；GET/HEAD 不得声明 request.body；response 的 key 是三位状态码，2xx 必须写 description；带 body 时必须同时在 headers 声明 Content-Type；204 不得声明 body/Content-Type；非 2xx 只能写非空 codes", implemented_by: [ http-shape ] }
   - { id: http-version, text: "mount.api_version 必须是 v<数字>；mount.path 与 paths 的 key 不得以 /v<数字> 开头；生成器按 app 内各文件一致的 mount.api_version 派生 servers: /<version>，同一 app 不得混版本；project.yaml 的 api app 只校验 audience 与 timeout_ms", implemented_by: [ http-version ] }
   - { id: http-mount, text: "每个文件必须有 mount：api_version/path/audience；mount.path 以 / 开头且只写公共资源前缀（如 /account，不写 /account/admin）；audience 段放在 paths 的 key 里（如 /admin）；paths 的 key 是相对路径且以 / 开头；拼接后的 path 全局唯一", implemented_by: [ http-mount ] }
   - { id: http-path-params, text: "paths 的 key 中每个 {name} 占位符必须是 [a-z][a-z0-9_]*，且与 request.path 的 name 一一对应；request.path 不得声明路径中不存在的参数", implemented_by: [ http-path-params ] }
@@ -206,7 +206,7 @@ rules:
   - { id: http-security, text: "request.headers 中 Authorization 必须且只能使用 auth: BearerAuth；有权限点的 service 必须声明 Authorization；认证存在时 account_id/access_token service 参数由认证中间件注入，HTTP 参数不得映射到它们", implemented_by: [ http-security ] }
   - { id: http-headers, text: "request.headers 与 response.headers 的 name 必须唯一且符合 HTTP token；不得声明 Connection/Content-Length/Expect/Transfer-Encoding 等传输层头；request 的 Authorization 只能出现一次且 auth: BearerAuth，response 禁止 auth；有 body 时必须有 Content-Type，且其 value 与 body.kind 对应的媒体类型一致；204 不得声明 body 或 Content-Type", implemented_by: [ http-headers ] }
   - { id: http-retry-after, text: "429 与 503 的 platform response 必须声明 Retry-After；operation 不得声明缺少 Retry-After 的 429/503 响应", implemented_by: [ http-retry-after ] }
-  - { id: http-service-type, text: "request.body.kind 决定媒体类型；json/text/binary 的 body.schema 与 to 必须指向同一个具名 service 参数且类型一致；form/multipart 的每个 field.to 必须指向具名 service 参数；不支持匿名 object", implemented_by: [ http-service-type ] }
+  - { id: http-service-type, text: "request.body.kind 决定媒体类型；json/text/binary 的 body.type 与 to 必须指向同一个具名 service 参数且类型一致；form/multipart 的每个 field.to 必须指向具名 service 参数；不支持匿名 object", implemented_by: [ http-service-type ] }
   - { id: http-service-params, text: "headers 不映射 service 参数；path/query 与 body/to 或 form/multipart fields/to 必须写 params.<service 参数路径>；每个路径/查询/表单参数必须声明 to；service 每个必填非 ctx 参数必须被覆盖（认证注入的 account_id/access_token 除外）；映射两侧类型必须一致", implemented_by: [ http-service-params ] }
-  - { id: http-service-return, text: "2xx 带 body 的 response.<status>.body.schema 必须直接引用类型 ID；该类型必须对应 service 的非 err return；204 要求 service 没有业务 return；禁止在 body schema 上写 x-service-return", implemented_by: [ http-service-return ] }
+  - { id: http-service-return, text: "2xx 带 body 的 response.<status>.body.type 必须直接引用类型 ID；该类型必须对应 service 的非 err return；204 要求 service 没有业务 return；禁止在 body 类型上写 x-service-return", implemented_by: [ http-service-return ] }
   - { id: http-errors, text: "每个 operation 的非 2xx response 必须以 codes 精确列出 service 错误闭包（由 service-errors 递归计算）去掉 COMMON_*，并按错误 status 分组；每个 code 的 status 必须等于所在 response 的 key；每个 service 错误必须落到平台基线状态或非 2xx response；禁止列出 COMMON_* 与未知错误", implemented_by: [ http-errors ] }
