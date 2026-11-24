@@ -5,7 +5,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "不要把 password_hash 或 token 写入日志、事件"
-  - "JWT 只通过响应体和 Authorization header 传递；不使用 cookie 或服务端 session"
+  - "JWT 只通过响应体和 Authorization header 传递"
 
 mount:
   api_version: v1

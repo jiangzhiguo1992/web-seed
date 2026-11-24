@@ -128,7 +128,8 @@ func applyHTTPMount(doc map[string]any) error {
 
 // NormalizeHTTPDocument 原地把 components.schemas.*.source 与 paths.*.* 的
 // name/id/service/request/response 转成 OpenAPI 形状。
-func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool) error {
+func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool, transport ...[]string) error {
+	blocked := headerSet(transport...)
 	if err := applyHTTPMount(doc); err != nil {
 		return err
 	}
@@ -176,7 +177,7 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 			if response == nil {
 				return fmt.Errorf("%s: response block required", where)
 			}
-			parameters, requestBody, serviceParams, auth, err := normalizeRequest(request, where, resolve, componentByID, strict)
+			parameters, requestBody, serviceParams, auth, err := normalizeRequest(request, where, resolve, componentByID, strict, blocked)
 			if err != nil {
 				return err
 			}
@@ -193,7 +194,7 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 			if requestBody != nil {
 				op["requestBody"] = requestBody
 			}
-			responses, err := normalizeResponse(response, where, resolve, componentByID, strict)
+			responses, err := normalizeResponse(response, where, resolve, componentByID, strict, blocked)
 			if err != nil {
 				return err
 			}
@@ -432,7 +433,7 @@ func normalizeHTTPComponents(doc map[string]any, strict bool) (map[string]string
 	return byID, nil
 }
 
-func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, map[string]any, map[string]any, bool, error) {
+func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool) ([]any, map[string]any, map[string]any, bool, error) {
 	for key := range request {
 		switch key {
 		case "headers", "path", "query", "body":
@@ -442,7 +443,7 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 	}
 	parameters := []any{}
 	serviceParams := map[string]any{}
-	headers, contentType, auth, err := normalizeRequestHeaders(asList(request["headers"]), where, resolve, componentByID, strict)
+	headers, contentType, auth, err := normalizeRequestHeaders(asList(request["headers"]), where, resolve, componentByID, strict, blocked)
 	if err != nil {
 		return nil, nil, nil, false, err
 	}
@@ -494,6 +495,18 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 	return parameters, body, serviceParams, auth, nil
 }
 
+func headerSet(lists ...[]string) map[string]bool {
+	set := map[string]bool{}
+	for _, list := range lists {
+		for _, name := range list {
+			if name = strings.TrimSpace(name); name != "" {
+				set[strings.ToLower(name)] = true
+			}
+		}
+	}
+	return set
+}
+
 var bodyMediaTypes = map[string]string{
 	"json":      "application/json",
 	"form":      "application/x-www-form-urlencoded",
@@ -518,7 +531,7 @@ func headerRequired(raw []any, name string) bool {
 	return false
 }
 
-func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, string, bool, error) {
+func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool) ([]any, string, bool, error) {
 	parameters := []any{}
 	contentType := ""
 	auth := false
@@ -530,6 +543,9 @@ func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, comp
 		name, _ := header["name"].(string)
 		if name == "" {
 			return nil, "", false, fmt.Errorf("%s: headers[%d].name required", where, i)
+		}
+		if blocked[strings.ToLower(name)] {
+			return nil, "", false, fmt.Errorf("%s: header %s is transport-managed and must not be declared", where, name)
 		}
 		if strings.EqualFold(name, "Content-Type") {
 			value, _ := header["value"].(string)
@@ -710,7 +726,7 @@ func normalizeListedParameter(raw any, in, where string, index int, resolve Type
 	return out, nil
 }
 
-func normalizeResponseHeaders(raw []any, where, status string, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, string, error) {
+func normalizeResponseHeaders(raw []any, where, status string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool) (map[string]any, string, error) {
 	headers := map[string]any{}
 	contentType := ""
 	for i, item := range raw {
@@ -721,6 +737,9 @@ func normalizeResponseHeaders(raw []any, where, status string, resolve TypeResol
 		name, _ := header["name"].(string)
 		if name == "" {
 			return nil, "", fmt.Errorf("%s: response %s headers[%d].name required", where, status, i)
+		}
+		if blocked[strings.ToLower(name)] {
+			return nil, "", fmt.Errorf("%s: response %s header %s is transport-managed and must not be declared", where, status, name)
 		}
 		if strings.EqualFold(name, "Content-Type") {
 			value, _ := header["value"].(string)
@@ -752,7 +771,7 @@ func normalizeResponseHeaders(raw []any, where, status string, resolve TypeResol
 	return headers, contentType, nil
 }
 
-func normalizeResponse(response map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {
+func normalizeResponse(response map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool) (map[string]any, error) {
 	out := map[string]any{}
 	for status, raw := range response {
 		if !statusRe(status) {
@@ -795,7 +814,7 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 		}
 		normalized := map[string]any{"description": description}
 		body := asMap(resp["body"])
-		headers, contentType, err := normalizeResponseHeaders(asList(resp["headers"]), where, status, resolve, componentByID, strict)
+		headers, contentType, err := normalizeResponseHeaders(asList(resp["headers"]), where, status, resolve, componentByID, strict, blocked)
 		if err != nil {
 			return nil, err
 		}

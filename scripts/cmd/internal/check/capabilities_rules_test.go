@@ -948,6 +948,48 @@ func TestHTTPHeadersRule(t *testing.T) {
 	}
 }
 
+func TestHTTPTransportHeadersRejectedAtSource(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `transport_headers: [Connection, Content-Length]
+audiences: [admin]
+`)
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+mount: { api_version: v1, path: /, audience: [admin] }
+paths:
+  /x:
+    get:
+      id: cap.protocols.http.x.get
+      name: getX
+      service: cap.services.x.get
+      summary: "x"
+      used_by: [feature.pages.x]
+      request:
+        headers:
+          - { name: Connection, required: false, value: keep-alive, description: "transport" }
+      response:
+        "200":
+          description: "OK"
+          headers:
+            - { name: Content-Length, required: false, schema: _types.integer, description: "length" }
+          body:
+            kind: json
+            schema: _types.string
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root, strictHTTP: true}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {visibility: "public"},
+	}, map[string]bool{}, map[string]bool{})
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, "[http-headers]") || !strings.Contains(got, "transport-managed") {
+		t.Fatalf("source transport header not reported by http-headers: %v", c.errs)
+	}
+}
+
 func TestHTTPPathParams(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"

@@ -422,8 +422,12 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		if want := schema.Targets.FileID(filepath.Base(rel)); doc["id"] != want {
 			c.rulef("http-file", "%s: id %q must be %q", rel, doc["id"], want)
 		}
-		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP); err != nil {
-			c.rulef("http-shape", "%s: %v", rel, err)
+		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, policy.TransportHeaders); err != nil {
+			if strings.Contains(err.Error(), "transport-managed") {
+				c.rulef("http-headers", "%s: %v", rel, err)
+			} else {
+				c.rulef("http-shape", "%s: %v", rel, err)
+			}
 			continue
 		}
 		fileID, _ := doc["id"].(string)
@@ -568,7 +572,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		opMeta := openapispec.CollectHTTPOperationMeta(doc)
 		fileAudience := openapispec.CollectHTTPMount(doc).Audience
 		fileStability, _ := doc["stability"].(string)
-		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP); err != nil {
+		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, policy.TransportHeaders); err != nil {
 			continue
 		}
 		fileID, _ := doc["id"].(string)

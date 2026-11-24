@@ -93,6 +93,10 @@ func build(root string) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	policy, err := loadHTTPPolicy(root)
+	if err != nil {
+		return nil, err
+	}
 	byID := map[string]map[string]any{}
 	fileAudienceByID := map[string][]string{}
 	fileVersionByID := map[string]string{}
@@ -108,15 +112,11 @@ func build(root string) (map[string][]byte, error) {
 			fileAudienceByID[id] = mount.Audience
 			fileVersionByID[id] = mount.APIVersion
 			fileStabilityByID[id], _ = doc["stability"].(string)
-			if err := openapispec.NormalizeHTTPDocument(doc, httpTypeResolver(customTypeIdx), false); err != nil {
+			if err := openapispec.NormalizeHTTPDocument(doc, httpTypeResolver(customTypeIdx), false, policy.TransportHeaders); err != nil {
 				return nil, fmt.Errorf("%s: %w", file, err)
 			}
 			byID[id] = doc
 		}
-	}
-	policy, err := loadHTTPPolicy(root)
-	if err != nil {
-		return nil, err
 	}
 	bizCodes, err := loadErrorBizCodes(root)
 	if err != nil {

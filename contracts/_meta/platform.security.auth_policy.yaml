@@ -1,4 +1,4 @@
-# JWT 认证策略：access/refresh 都是 JWT；token 表存哈希用于吊销/轮换/审计；不定义 cookie/session。
+# JWT 认证策略：access/refresh 都是 JWT；token 表存哈希用于吊销/轮换/审计。
 
 id: meta.platform.security.auth_policy
 type: platform.security.auth_policy

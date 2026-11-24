@@ -89,7 +89,7 @@ fields:
                   - { name: schema, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID" }
                   - { name: value, type: _types.string, required: false, description: "固定值；与 schema 二选一" }
                   - { name: auth, type: _types.string, required: false, enum: [ BearerAuth ], description: "认证方案；仅 request 的 Authorization 使用" }
-                  - { name: multiple, type: _types.boolean, required: false, description: "是否允许重复；如 Set-Cookie" }
+                  - { name: multiple, type: _types.boolean, required: false, description: "是否允许重复；如 Link" }
               - name: path
                 type: _types.list<_types.object>
                 required: false
@@ -150,7 +150,7 @@ fields:
                   - { name: description, type: _types.string, required: true, description: "header 含义" }
                   - { name: schema, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID" }
                   - { name: value, type: _types.string, required: false, description: "固定值；与 schema 二选一" }
-                  - { name: multiple, type: _types.boolean, required: false, description: "是否允许重复；如 Set-Cookie" }
+                  - { name: multiple, type: _types.boolean, required: false, description: "是否允许重复；如 Link" }
               - name: body
                 type: _types.object
                 required: false
@@ -204,7 +204,7 @@ rules:
   - { id: http-components, text: "所有 $ref 必须指向存在的 platform components；direct type ID 生成的 components.schemas 必须且只能声明一个 source 溯源键；非 platform schema 不得写 properties", implemented_by: [ http-components ] }
   - { id: http-shared, text: "platform/http_conventions.components 的结构校验：securitySchemes 每项必须有受支持的 type；http 必须有 scheme，apiKey 必须有 name 与 in，oauth2 必须有 flows，openIdConnect 必须有 openIdConnectUrl；responses 每项必须有非空 description，headers 必须是 $ref 或带 schema 的定义，content 每项必须有 schema；parameters 必须有 name/in/schema 且 path 参数 required；headers 必须有 schema；schemas 必须是封闭 object", implemented_by: [ http-shared ] }
   - { id: http-security, text: "request.headers 中 Authorization 必须且只能使用 auth: BearerAuth；有权限点的 service 必须声明 Authorization；认证存在时 account_id/access_token service 参数由认证中间件注入，HTTP 参数不得映射到它们", implemented_by: [ http-security ] }
-  - { id: http-headers, text: "request.headers 与 response.headers 的 name 必须唯一且符合 HTTP token；request 的 Authorization 只能出现一次且 auth: BearerAuth，response 禁止 auth；有 body 时必须有 Content-Type，且其 value 与 body.kind 对应的媒体类型一致；204 不得声明 body 或 Content-Type", implemented_by: [ http-headers ] }
+  - { id: http-headers, text: "request.headers 与 response.headers 的 name 必须唯一且符合 HTTP token；不得声明 Connection/Content-Length/Expect/Transfer-Encoding 等传输层头；request 的 Authorization 只能出现一次且 auth: BearerAuth，response 禁止 auth；有 body 时必须有 Content-Type，且其 value 与 body.kind 对应的媒体类型一致；204 不得声明 body 或 Content-Type", implemented_by: [ http-headers ] }
   - { id: http-retry-after, text: "429 与 503 的 platform response 必须声明 Retry-After；operation 不得声明缺少 Retry-After 的 429/503 响应", implemented_by: [ http-retry-after ] }
   - { id: http-service-type, text: "request.body.kind 决定媒体类型；json/text/binary 的 body.schema 与 to 必须指向同一个具名 service 参数且类型一致；form/multipart 的每个 field.to 必须指向具名 service 参数；不支持匿名 object", implemented_by: [ http-service-type ] }
   - { id: http-service-params, text: "headers 不映射 service 参数；path/query 与 body/to 或 form/multipart fields/to 必须写 params.<service 参数路径>；每个路径/查询/表单参数必须声明 to；service 每个必填非 ctx 参数必须被覆盖（认证注入的 account_id/access_token 除外）；映射两侧类型必须一致", implemented_by: [ http-service-params ] }

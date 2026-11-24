@@ -6,7 +6,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "认证状态只能通过 cap.services.token.verify 获取，不要解析 JWT"
-  - "access JWT 只存内存，不写 localStorage/sessionStorage/cookie"
+  - "access JWT 只存内存，不写 localStorage/sessionStorage"
   - "refresh JWT 只由 auth 层存储（browser localStorage / mobile Keychain），不进入页面组件状态或 URL"
 
 page: current_account

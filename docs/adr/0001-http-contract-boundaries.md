@@ -1,7 +1,7 @@
 # ADR 0001：HTTP 契约的边界与验收模型
 
 - 状态：已采纳（mount、错误模型、audience、consumer、多 app、模板封闭化、错误闭包、覆盖率报告已实现；acceptance runner 待实现）
-- 修订：文末「2026-11-23 决策修订」与「2026-11-23 JWT 认证决策」取代本文关于版本归属、`shared.yaml`、`_types.any`、`request.idempotency` 以及 cookie/session 认证的旧结论。
+- 修订：文末「2026-11-23 决策修订」与「2026-11-23 JWT 认证决策」取代本文关于版本归属、`shared.yaml`、`_types.any`、`request.idempotency` 以及旧认证方案的结论。
 - 日期：2026-11-23
 - 关联：`contracts/capabilities/protocols/http/*.yaml`、`contracts/platform/http_conventions.yaml`、`contracts/_meta/cap.protocols.http.yaml`、`contracts/_meta/scenario.http.yaml`
 
@@ -254,9 +254,9 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 4. **客户端幂等键删除**：幂等键 header、OpenAPI components 与场景字段全部删除；幂等由 API 内部按业务语义决定，不由客户端传入的 header 控制。
 5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。HTTP 契约的 `request.headers` / `response.headers` 保留为独立字段，`Authorization` 通过 header 的 `auth: BearerAuth` 表达。
 6. **安全凭据注入**：`request.headers` 中的 `Authorization` 使用 `auth: BearerAuth`；认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
-7. **契约优先 HTTP 模型**：`request.headers` / `response.headers` 独立于 body；`Content-Type`、`Accept`、`Connection`、`Authorization` 等都在 headers 中声明；`body.kind` 支持 json/form/multipart/text/binary；response 支持按状态声明 headers 与 body。生成器再把这些映射为 OpenAPI security/content/headers，契约阶段不以 OpenAPI 的字段形状为约束。
+7. **契约优先 HTTP 模型**：`request.headers` / `response.headers` 独立于 body；`Content-Type`、`Accept`、`Authorization` 等业务/表示层头在 headers 中声明；`Connection`、`Content-Length`、`Expect`、`Transfer-Encoding` 等传输层头不写进契约；`body.kind` 支持 json/form/multipart/text/binary；response 支持按状态声明 headers 与 body。生成器再把这些映射为 OpenAPI security/content/headers，契约阶段不以 OpenAPI 的字段形状为约束。
 8. **账号 ID 类型**：删除 `_types.account_id`，HTTP path 与认证注入的 `account_id` 改用 `_types.positive_integer`（`min: 1`）；普通 service/query 的账号 ID 仍是 `_types.integer`。
-9. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发，不使用 cookie/session。
+9. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发。
 
 同时参数级 `to` 的值统一写 `params.<service 参数路径>`（如 `params.input`、`params.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
 
@@ -265,10 +265,10 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 ## 2026-11-23 JWT 认证决策
 
-认证机制从 cookies + session 改为 JWT，并保留你设计的 token 表作为 JWT 哈希与吊销/轮换记录。以下结论取代本文件所有 cookie/session 相关内容：
+认证机制从旧方案改为 JWT，并保留你设计的 token 表作为 JWT 哈希与吊销/轮换记录。以下结论取代本文件所有旧认证方案相关内容：
 
 1. **令牌形态**：access 与 refresh 都是 JWT；`platform.security.auth_policy.token.access/refresh.format` 固定 `jwt`，`issuer` 必须声明，`claims_required` 固定包含 `iss/sub/aud/exp/iat/jti`，`pii_in_token` 固定 false。token 表只存 JWT 哈希与吊销/轮换元数据，不存原文。
-2. **传输方式**：登录与刷新只通过响应体返回 JWT；客户端用 `Authorization: Bearer` 携带 access JWT。删除 `RefreshCookieAuth`、`RefreshTokenAuth`、`X-CSRF-Token`、`Set-Cookie`、`cookie_secure`、`csrf`、`session` 以及相关平台组件。
+2. **传输方式**：登录与刷新只通过响应体返回 JWT；客户端用 `Authorization: Bearer` 携带 access JWT。删除旧认证方案及相关认证与平台组件。
 3. **token 表保留**：`data.tables.token`、`data.entities.token`、`data.queries.token`、`cap.lifecycles.token`、`cap.events.token` 全部保留；JWT 哈希用于吊销、refresh rotation/reuse detection 与审计。
 4. **端点变化**：`POST /auth/login` 返回 `AuthResult`（含必填 `refresh`）；`POST /auth/refresh` 是公开 operation，请求体 `RefreshInput`，响应 `RefreshResult`；`POST /auth/logout` 保留，请求体 `RefreshInput`，吊销 refresh JWT 记录；access JWT 通过 token 表 revoked_at 立即失效。
 5. **失效边界**：`token.revocation.strategy` 固定 `server`。`token.verify` 验签后读取 token 表校验 revoked_at/expiry，因此登出、refresh 轮换、账号删除、改密/换绑手机或邮箱都会吊销 token 表记录，access JWT 即时失效。

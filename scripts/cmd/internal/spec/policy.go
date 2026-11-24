@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -20,6 +21,7 @@ type HTTPPolicy struct {
 	SuccessCodes     []int
 	ClientErrorCodes []int
 	ServerErrorCodes []int
+	TransportHeaders []string
 	Components       map[string]any
 }
 
@@ -43,10 +45,22 @@ func LoadHTTPPolicy(root string) (HTTPPolicy, error) {
 			ClientError []int `yaml:"client_error"`
 			ServerError []int `yaml:"server_error"`
 		} `yaml:"status_codes"`
-		Components map[string]any `yaml:"components"`
+		TransportHeaders []string       `yaml:"transport_headers"`
+		Components       map[string]any `yaml:"components"`
 	}
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		return HTTPPolicy{}, fmt.Errorf("%s: %w", path, err)
+	}
+	seen := map[string]bool{}
+	for _, name := range doc.TransportHeaders {
+		if !validHeaderToken(name) {
+			return HTTPPolicy{}, fmt.Errorf("%s: transport_headers contains invalid header token %q", path, name)
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			return HTTPPolicy{}, fmt.Errorf("%s: transport_headers contains duplicate header %q", path, name)
+		}
+		seen[key] = true
 	}
 	return HTTPPolicy{
 		Audiences:        doc.Audiences,
@@ -57,6 +71,7 @@ func LoadHTTPPolicy(root string) (HTTPPolicy, error) {
 		SuccessCodes:     doc.StatusCodes.Success,
 		ClientErrorCodes: doc.StatusCodes.ClientError,
 		ServerErrorCodes: doc.StatusCodes.ServerError,
+		TransportHeaders: doc.TransportHeaders,
 		Components:       doc.Components,
 	}, nil
 }
@@ -86,4 +101,21 @@ func (p HTTPPolicy) EffectiveStatuses(base []int, secured, hasBody, deprecated b
 	}
 	sort.Ints(out)
 	return out
+}
+
+func validHeaderToken(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case strings.ContainsRune("!#$%&'*+-.^_`|~", r):
+		default:
+			return false
+		}
+	}
+	return true
 }

@@ -4,8 +4,8 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "JWT 原文只通过 issue/refresh 返回值暴露，不写 cookie；token 表只存 JWT 哈希与吊销/轮换元数据"
-  - "verify 只校验 access JWT；refresh JWT 只在 refresh/logout 中使用；JWT 不写 cookie"
+  - "JWT 原文只通过 issue/refresh 返回值暴露；token 表只存 JWT 哈希与吊销/轮换元数据"
+  - "verify 只校验 access JWT；refresh JWT 只在 refresh/logout 中使用"
   - "access/refresh JWT 的 sub 必须是 account_id，jti 必须是 token 表 id 的字符串形式"
 
 schemas:

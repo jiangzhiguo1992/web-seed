@@ -386,6 +386,22 @@ paths:
 	}
 }
 
+func TestGeneratedSpecsOmitTransportHeaders(t *testing.T) {
+	dir := filepath.Join("..", "..", "..", "contracts", "generated", "openapi")
+	for _, name := range []string{"admin.yaml", "user.yaml"} {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := string(b)
+		for _, forbidden := range []string{"name: Connection", "name: Content-Length", "name: Set-Cookie", "Set-Cookie:"} {
+			if strings.Contains(out, forbidden) {
+				t.Fatalf("%s contains transport header %q", name, forbidden)
+			}
+		}
+	}
+}
+
 func TestBuildFormBody(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)

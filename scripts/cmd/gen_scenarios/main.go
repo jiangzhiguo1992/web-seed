@@ -79,11 +79,11 @@ type scenarioEntry struct {
 }
 
 func build(root string) ([]byte, []coverageEntry, error) {
-	ops, err := loadHTTPOps(root)
+	policy, err := loadPolicy(root)
 	if err != nil {
 		return nil, nil, err
 	}
-	policy, err := loadPolicy(root)
+	ops, err := loadHTTPOps(root, policy)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -317,7 +317,7 @@ func effectiveStatuses(info httpInfo, policy scenarioPolicy) []int {
 	return policy.EffectiveStatuses(info.Statuses, info.Secured, info.HasBody, info.Deprecated)
 }
 
-func loadHTTPOps(root string) (map[string]httpInfo, error) {
+func loadHTTPOps(root string, policy scenarioPolicy) (map[string]httpInfo, error) {
 	files, err := filepath.Glob(filepath.Join(root, "contracts/capabilities/protocols/http/*.yaml"))
 	if err != nil {
 		return nil, err
@@ -329,7 +329,7 @@ func loadHTTPOps(root string) (map[string]httpInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := openapispec.NormalizeHTTPDocument(doc, resolve, false); err != nil {
+		if err := openapispec.NormalizeHTTPDocument(doc, resolve, false, policy.TransportHeaders); err != nil {
 			return nil, err
 		}
 		for path, rawItem := range asMap(doc["paths"]) {

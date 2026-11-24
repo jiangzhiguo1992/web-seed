@@ -221,6 +221,8 @@ dispatch 项：
 - `request.path` / `request.query` 是列表，每项必须写 `name` / `schema` / `description` / `to`（query 另有 `required`）；`schema` 只能是 `_types.*` 或 `data.enums.*`
 - `body` 用 `kind` 区分编码：`json` / `form` / `multipart` / `text` / `binary`；`json/text/binary` 写 `schema` + `to`，`form/multipart` 写 `fields`，每个 field 写 `to`
 - 有 body 时必须声明 `Content-Type` header，且 value 必须等于 `body.kind` 对应的媒体类型；响应 body 同理
+- `Connection` / `Content-Length` / `Expect` / `Transfer-Encoding` 等传输层头不写进 `headers`；名单由 `platform/http_conventions.transport_headers` 定义，checker 与 generator 统一读取
+- `Upgrade-Insecure-Requests` 等端到端浏览器 hint 不列入平台 header 目录；需要时按普通 header 声明。
 - `schema` 直接写类型 ID：`data.entities.*` / `data.enums.*` / `cap.services.*.schemas.*` / `_types.*`，不写 `#/components/...`
 - 平台级 header 语义、securityScheme、response、schema 统一定义在 `platform/http_conventions.yaml`；HTTP 文件不写私有 components
 
@@ -249,8 +251,8 @@ HTTP 约束：
 |---|---|---|
 | `Authorization` | `request.headers[].auth: BearerAuth` | OpenAPI security，不生成普通 header parameter |
 | `Content-Type` | `request.headers` / `response.headers` 的 `value` | OpenAPI request/response media type |
-| `Accept` / `Connection` / 自定义 header | `request.headers` / `response.headers` 的 `schema` 或 `value` | OpenAPI header parameter |
-| `Location` / `Set-Cookie` / `Retry-After` | `response.headers` | OpenAPI response header |
+| `Accept` / 自定义 header | `request.headers` / `response.headers` 的 `schema` 或 `value` | OpenAPI header parameter |
+| `Location` / `Retry-After` | `response.headers` | OpenAPI response header |
 
 `Content-Type` 在契约里就是 header；生成器把它映射成 OpenAPI `content.<value>`，不会重复生成普通 header parameter。
 

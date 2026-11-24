@@ -13,7 +13,7 @@
 | 密码认证 | auth_pwd | 账号的密码登录记录 | password、pwd（作为实体名） |
 | 手机认证 | auth_phone | 账号绑定的手机号记录 | mobile、phone（作为实体名） |
 | 邮箱认证 | auth_email | 账号绑定的邮箱记录，拆分为 username/domain/entity/tld | mail |
-| 令牌 | token | JWT：access/refresh 都是 JWT；token 表只存哈希用于吊销/轮换/审计，不存原文 | session、cookie（登录态不使用 session/cookie） |
+| 令牌 | token | JWT：access/refresh 都是 JWT；token 表只存哈希用于吊销/轮换/审计，不存原文 | 旧的登录态方案（当前不保存服务端认证状态） |
 | 验证体 | verification body | 一次性验证凭证与短信/邮件消息快照，含验证码哈希、认证绑定 ID、状态与尝试次数 | verify、verifyBody、code（作为实体名） |
 | 验证动作 | verification action | 校验请求的追加日志，含结果、IP、设备、地点与提交内容哈希 | attempt（仅表示校验） |
 | 待激活 | pending | 账号初始状态，不能登录 | inactive、new |

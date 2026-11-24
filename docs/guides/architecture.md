@@ -392,8 +392,8 @@ apps:
 
 - HTTP 层统一信封：成功 `{code: 0, msg: "ok", data: <resource>}`，错误 `{code: <biz_code>, msg, data: null}`；HTTP status 保留 4xx/5xx
 - `code` 取 `platform/errors/` 的整数 `biz_code`；成功码固定 0
-- 认证使用 JWT：access/refresh 都通过响应体下发，客户端用 `Authorization: Bearer` 携带 access token；没有 cookie、CSRF 或服务端 session；token 表只存 JWT 哈希用于吊销/轮换/审计
-- 浏览器 JWT 存储：access JWT 只放内存；refresh JWT 放 `localStorage["web-seed.auth.refresh"]`（无 HttpOnly cookie 后的明确取舍，靠 CSP 降低 XSS）；登出时清空两者
+- 认证使用 JWT：access/refresh 都通过响应体下发，客户端用 `Authorization: Bearer` 携带 access token；服务端不保存认证状态；token 表只存 JWT 哈希用于吊销/轮换/审计
+- 浏览器 JWT 存储：access JWT 只放内存；refresh JWT 放 `localStorage["web-seed.auth.refresh"]`（明确取舍，靠 CSP 降低 XSS）；登出时清空两者
 - 移动端 JWT 存储：refresh JWT 放 Keychain/Keystore；access JWT 只放内存
 - 不返回的 error 必须记录（含栈 + 上下文）
 

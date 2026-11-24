@@ -905,14 +905,6 @@ paths:
             enum:
               - application/json
             type: string
-        - description: hop-by-hop 连接控制
-          in: header
-          name: Connection
-          required: false
-          schema:
-            enum:
-              - keep-alive
-            type: string
         - description: 账号状态过滤
           in: query
           name: status
@@ -943,11 +935,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiAccountPageResponse'
           description: 成功
-          headers:
-            Content-Length:
-              description: 响应体长度；通常由传输层生成
-              schema:
-                type: integer
         400:
           $ref: '#/components/responses/BadRequest'
           x-error-codes:

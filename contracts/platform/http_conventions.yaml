@@ -28,18 +28,17 @@ pagination:
     shape: "{ items: [], offset, limit, has_more }"
     ordering: "必须稳定（有唯一 tiebreaker，如 id）"
 
+# 传输层头由 HTTP server/proxy 生成，不写进 request.headers / response.headers；
+# 名单在 transport_headers，checker 与 generator 统一读取。
+# Upgrade-Insecure-Requests 等端到端浏览器 hint 不列入本目录；需要时按普通 header 声明。
 headers:
   request:
     - { name: Authorization, required: false, note: "request.headers 中用 auth: BearerAuth 标记；生成器映射为 OpenAPI security" }
     - { name: Content-Type, required: false, note: "有 body 时必填；value 必须等于 body.kind 对应的媒体类型" }
     - { name: Accept, required: false, note: "可选；声明期望的响应媒体类型" }
-    - { name: Connection, required: false, note: "hop-by-hop 连接控制；契约可声明，生成器可按传输层处理" }
-    - { name: Cookie, required: false, note: "当前 JWT 认证不使用 cookie；如未来使用，按普通 header 声明" }
   response:
     - { name: Content-Type, required: false, note: "有 body 时必填；value 必须等于 body.kind 对应的媒体类型" }
-    - { name: Content-Length, required: false, note: "响应体长度；通常由传输层生成" }
     - { name: Location, required: false, note: "201 或 3xx 的资源地址" }
-    - { name: Set-Cookie, required: false, note: "可重复；multiple: true" }
     - { name: Retry-After, required: false, note: "由平台 components.responses 的 429/503 声明，不在 operation 里重复" }
     - { name: Cache-Control, required: false, note: "缓存策略" }
     - { name: ETag, required: false, note: "实体标签" }
@@ -65,6 +64,20 @@ error_responses:
   deprecated: [410]
 
 audiences: [admin, user]
+
+transport_headers:
+  - Connection
+  - Content-Length
+  - Expect
+  - Host
+  - Keep-Alive
+  - Proxy-Authenticate
+  - Proxy-Authorization
+  - Proxy-Connection
+  - TE
+  - Trailer
+  - Transfer-Encoding
+  - Upgrade
 
 body_types:
   json: application/json

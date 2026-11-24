@@ -135,8 +135,8 @@ func TestNormalizeHTTPDocumentResponseHeaders(t *testing.T) {
 				"description": "ok",
 				"headers": []any{
 					map[string]any{"name": "Content-Type", "value": "application/json", "required": true, "description": "body"},
-					map[string]any{"name": "Set-Cookie", "schema": "_types.string", "multiple": true, "required": false, "description": "cookie"},
-					map[string]any{"name": "Content-Length", "schema": "_types.integer", "required": false, "description": "length"},
+					map[string]any{"name": "Link", "schema": "_types.string", "multiple": true, "required": false, "description": "link"},
+					map[string]any{"name": "ETag", "schema": "_types.string", "required": false, "description": "etag"},
 				},
 				"body": map[string]any{"kind": "json", "schema": "_types.string"},
 			},
@@ -148,12 +148,12 @@ func TestNormalizeHTTPDocumentResponseHeaders(t *testing.T) {
 	op := asMap(asMap(asMap(doc["paths"])["/x"])["post"])
 	resp := asMap(asMap(op["responses"])["200"])
 	headers := asMap(resp["headers"])
-	if asMap(headers["Content-Length"]) == nil {
-		t.Fatalf("Content-Length header missing: %v", headers)
+	if asMap(headers["ETag"]) == nil {
+		t.Fatalf("ETag header missing: %v", headers)
 	}
-	cookie := asMap(headers["Set-Cookie"])
-	if asMap(cookie["schema"])["type"] != "array" {
-		t.Fatalf("Set-Cookie multiple not array: %v", cookie)
+	link := asMap(headers["Link"])
+	if asMap(link["schema"])["type"] != "array" {
+		t.Fatalf("Link multiple not array: %v", link)
 	}
 	if _, ok := headers["Content-Type"]; ok {
 		t.Fatalf("Content-Type must become response content, not header: %v", headers)
@@ -186,6 +186,63 @@ func TestNormalizeHTTPDocumentFormBody(t *testing.T) {
 	params := asMap(op["x-service-params"])
 	if got := asList(params["form"]); len(got) != 1 || asMap(got[0])["to"] != "params.input.username" {
 		t.Fatalf("form target not preserved: %v", params)
+	}
+}
+
+func TestNormalizeHTTPDocumentRejectsTransportHeaders(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		op   map[string]any
+	}{
+		{"request connection", map[string]any{
+			"request": map[string]any{
+				"headers": []any{map[string]any{"name": "Connection", "value": "keep-alive", "required": false, "description": "transport"}},
+			},
+			"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		}},
+		{"request expect", map[string]any{
+			"request": map[string]any{
+				"headers": []any{map[string]any{"name": "Expect", "value": "100-continue", "required": false, "description": "transport"}},
+			},
+			"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		}},
+		{"response content-length", map[string]any{
+			"request": map[string]any{},
+			"response": map[string]any{
+				"200": map[string]any{
+					"description": "ok",
+					"headers":     []any{map[string]any{"name": "Content-Length", "schema": "_types.integer", "required": false, "description": "length"}},
+					"body":        map[string]any{"kind": "json", "schema": "_types.string"},
+				},
+			},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := httpDoc(tc.op)
+			err := NormalizeHTTPDocument(doc, testResolve, false, []string{"Connection", "Content-Length", "Expect"})
+			if err == nil || !strings.Contains(err.Error(), "transport-managed") {
+				t.Fatalf("transport header not rejected: %v", err)
+			}
+		})
+	}
+}
+
+func TestNormalizeHTTPDocumentAllowsUpgradeInsecureRequests(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request": map[string]any{
+			"headers": []any{
+				map[string]any{"name": "Upgrade-Insecure-Requests", "schema": "_types.string", "required": false, "description": "browser hint"},
+			},
+		},
+		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+	})
+	if err := NormalizeHTTPDocument(doc, testResolve, false, []string{"Connection", "Content-Length", "Expect"}); err != nil {
+		t.Fatal(err)
+	}
+	op := asMap(asMap(asMap(doc["paths"])["/x"])["post"])
+	params := asList(op["parameters"])
+	if len(params) != 1 || asMap(params[0])["name"] != "Upgrade-Insecure-Requests" {
+		t.Fatalf("Upgrade-Insecure-Requests must remain an ordinary header: %v", params)
 	}
 }
 
