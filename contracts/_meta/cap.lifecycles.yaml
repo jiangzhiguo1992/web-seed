@@ -62,7 +62,7 @@ fields:
     fields:
       - { name: values, type: _types.set<_types.string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "状态取值集合" }
       - { name: initial, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "初始状态" }
-      - { name: final, type: _types.set<_types.string>, required: false, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "终态集合；省略表示没有终态" }
+      - { name: final, type: _types.set<_types.string>, required: true, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "终态集合；没有终态写 []" }
 
   - name: create
     type: _types.object
@@ -71,9 +71,8 @@ fields:
     fields:
       - name: requires
         type: _types.list<_types.object>
-        required: false
-        min_items: 1
-        description: "创建前的跨维度状态前提；列表内全部满足（AND）"
+        required: true
+        description: "创建前的跨维度状态前提；无前置写 []；列表内全部满足（AND）"
         item_fields:
           - { name: lifecycle, type: _types.string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期" }
           - { name: states, type: _types.set<_types.string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合" }
@@ -86,9 +85,8 @@ fields:
     fields:
       - name: requires
         type: _types.list<_types.object>
-        required: false
-        min_items: 1
-        description: "销毁前的跨维度状态前提；列表内全部满足（AND）"
+        required: true
+        description: "销毁前的跨维度状态前提；无前置写 []；列表内全部满足（AND）"
         item_fields:
           - { name: lifecycle, type: _types.string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期" }
           - { name: states, type: _types.set<_types.string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合" }
@@ -106,9 +104,8 @@ fields:
       - { name: to, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "目标状态" }
       - name: requires
         type: _types.list<_types.object>
-        required: false
-        min_items: 1
-        description: "跨维度前置状态；列表内全部满足（AND）"
+        required: true
+        description: "跨维度前置状态；无前置写 []；列表内全部满足（AND）"
         item_fields:
           - { name: lifecycle, type: _types.string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "前置状态所属生命周期" }
           - { name: states, type: _types.set<_types.string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合" }
