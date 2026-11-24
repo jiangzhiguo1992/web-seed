@@ -17,27 +17,22 @@ func TestColumnSQL(t *testing.T) {
 		{
 			name: "bigint primary key",
 			col:  column{Name: "id", Type: "integer", Bits: 64, PrimaryKey: true},
-			want: "`id` BIGINT NOT NULL",
-		},
-		{
-			name: "unsigned int",
-			col:  column{Name: "count", Type: "integer", Bits: 64, Unsigned: true, Nullable: true},
-			want: "`count` BIGINT UNSIGNED",
+			want: `"id" BIGINT NOT NULL`,
 		},
 		{
 			name: "varchar",
 			col:  column{Name: "number", Type: "string", MaxLen: 64, Nullable: false},
-			want: "`number` VARCHAR(64) NOT NULL",
+			want: `"number" VARCHAR(64) NOT NULL`,
 		},
 		{
 			name: "text",
 			col:  column{Name: "body", Type: "string", Nullable: true},
-			want: "`body` TEXT",
+			want: `"body" TEXT`,
 		},
 		{
 			name: "timestamp default",
 			col:  column{Name: "created_at", Type: "timestamp", DefaultSQL: "now()"},
-			want: "`created_at` DATETIME(6) NOT NULL DEFAULT (now())",
+			want: `"created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now())`,
 		},
 	}
 	for _, tc := range cases {
@@ -50,19 +45,6 @@ func TestColumnSQL(t *testing.T) {
 				t.Fatalf("columnSQL() = %q, want %q", got, tc.want)
 			}
 		})
-	}
-}
-
-func TestLiveOnlyIndexUsesFunctionalKey(t *testing.T) {
-	idx := index{Name: "uq_account_number", Columns: []string{"number"}, Unique: true, LiveOnly: true}
-	got := renderIndex("account", idx)
-	if !strings.Contains(got, "CREATE UNIQUE INDEX `uq_account_number` ON `account` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `number`);") {
-		t.Fatalf("unexpected live_only index: %s", got)
-	}
-
-	plain := renderIndex("account", index{Name: "idx_account_number", Columns: []string{"number"}})
-	if strings.Contains(plain, "CASE WHEN") {
-		t.Fatalf("non-live index must not use functional key: %s", plain)
 	}
 }
 
@@ -80,7 +62,7 @@ func TestRenderVerificationResultConstraint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got, "CONSTRAINT `ck_verification_action_result` CHECK (result IN (1, 2, 3, 4))") {
+	if !strings.Contains(got, `CONSTRAINT "ck_verification_action_result" CHECK (result IN (1, 2, 3, 4))`) {
 		t.Fatalf("missing result constraint: %s", got)
 	}
 }
@@ -157,20 +139,20 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 	}
 }
 
-func TestPostgresLiveOnlyIndexUsesPartialPredicate(t *testing.T) {
+func TestLiveOnlyIndexUsesPartialPredicate(t *testing.T) {
 	idx := index{Name: "uq_account_number", Columns: []string{"number"}, Unique: true, LiveOnly: true}
-	got := renderPostgresIndex("account", idx)
+	got := renderIndex("account", idx)
 	want := `CREATE UNIQUE INDEX "uq_account_number" ON "account" ("number") WHERE "deleted_at" IS NULL;` + "\n"
 	if got != want {
 		t.Fatalf("postgres live_only index = %q, want %q", got, want)
 	}
-	plain := renderPostgresIndex("account", index{Name: "idx_account_number", Columns: []string{"number"}})
+	plain := renderIndex("account", index{Name: "idx_account_number", Columns: []string{"number"}})
 	if strings.Contains(plain, "WHERE") {
 		t.Fatalf("non-live index must not use partial predicate: %s", plain)
 	}
 }
 
-func TestPostgresTypeMapping(t *testing.T) {
+func TestTypeMapping(t *testing.T) {
 	cases := []struct {
 		in   column
 		want string
@@ -184,12 +166,18 @@ func TestPostgresTypeMapping(t *testing.T) {
 		{column{Type: "bytes"}, "BYTEA"},
 	}
 	for _, tc := range cases {
-		got, err := postgresType(tc.in)
+		got, err := columnType(tc.in)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if got != tc.want {
-			t.Fatalf("postgresType(%+v) = %q, want %q", tc.in, got, tc.want)
+			t.Fatalf("columnType(%+v) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestColumnTypeRejectsUnsigned(t *testing.T) {
+	if _, err := columnType(column{Name: "count", Type: "integer", Bits: 64, Unsigned: true}); err == nil {
+		t.Fatal("unsigned integer must be rejected for PostgreSQL")
 	}
 }

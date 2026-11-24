@@ -24,7 +24,7 @@ const (
 	baseContractFile = "_base.yaml"
 	baseContractPath = "contracts/data/tables/_base.yaml"
 
-	// MySQL 表 COMMENT 上限 2048 字符、列 COMMENT 上限 1024 字符。
+	// 表 COMMENT 长度预算 2048 字符、列 COMMENT 预算 1024 字符。
 	tableSummaryMaxRunes  = 2048
 	columnCommentMaxRunes = 1024
 )
@@ -415,7 +415,7 @@ func (c *Checker) recordIndexName(name, rel string) {
 	c.rulef("index-name-unique", "%s: index %q already declared in %s", rel, name, prevRel)
 }
 
-// checkTableTextLengths 校验会进入 DDL COMMENT 的文本长度，避免 MySQL 静默截断。
+// checkTableTextLengths 校验会进入 DDL COMMENT 的文本长度预算。
 func (c *Checker) checkTableTextLengths(doc map[string]any, rel string) {
 	if summary, _ := doc["summary"].(string); utf8.RuneCountInString(summary) > tableSummaryMaxRunes {
 		c.rulef("table-summary-length", "%s: summary must be <= %d characters, got %d", rel, tableSummaryMaxRunes, utf8.RuneCountInString(summary))

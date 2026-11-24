@@ -7,6 +7,7 @@ package account
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -57,13 +58,23 @@ type Repository interface {
 	GetAccount(ctx context.Context, id int64) (Account, error)
 }
 
-// Service 实现 cap.services.account.get。
-type Service struct {
-	repo Repository
+// DeleteNotifier 是 cap.services.account.notify_deleted 的投递边界。
+// 返回 error 时由异步队列按 dispatch retry/dead_letter 策略重试。
+type DeleteNotifier interface {
+	NotifyDeleted(ctx context.Context, accountID int64, deletedAt time.Time) error
 }
 
-func New(repo Repository) *Service {
-	return &Service{repo: repo}
+// ErrNotifierUnavailable 表示未装配注销通知投递器。
+var ErrNotifierUnavailable = errors.New("account: delete notifier is not configured")
+
+// Service 实现 cap.services.account.* 中已声明的能力。
+type Service struct {
+	repo     Repository
+	notifier DeleteNotifier
+}
+
+func New(repo Repository, notifier DeleteNotifier) *Service {
+	return &Service{repo: repo, notifier: notifier}
 }
 
 // Get 对应 cap.services.account.get/load：读账号、软删视为不存在、执行 self_only。
@@ -81,4 +92,13 @@ func (s *Service) Get(ctx context.Context, id int64) (Account, error) {
 		}
 	}
 	return a, nil
+}
+
+// NotifyDeleted 对应 cap.services.account.notify_deleted/notify。
+// 投递失败直接返回 error，交给 dispatch 的 retry/dead_letter 策略处理。
+func (s *Service) NotifyDeleted(ctx context.Context, accountID int64, deletedAt time.Time) error {
+	if s.notifier == nil {
+		return ErrNotifierUnavailable
+	}
+	return s.notifier.NotifyDeleted(ctx, accountID, deletedAt)
 }

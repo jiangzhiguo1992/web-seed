@@ -51,7 +51,8 @@ services:
         kind: logic
         rules: [ { rule: feature.rules.x.r1 } ]
         lifecycles: [cap.lifecycles.x.transitions.activate]
-        state_gate: [ { lifecycle: cap.lifecycles.x, values: [pending] } ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.x, values: [pending] }
       - id: emit_activated
         kind: events
         events: [{ref: cap.events.x.activated}]
@@ -60,7 +61,8 @@ services:
       - id: soft_delete
         kind: logic
         lifecycles: [cap.lifecycles.x.destroy]
-        state_gate: [ { lifecycle: cap.lifecycles.x, values: [pending, active] } ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.x, values: [pending, active] }
   - name: consume
     steps:
       - id: handle
@@ -98,6 +100,7 @@ topics:
     publish:
       payload: { type: _types.integer }
       emitted_by: []
+
   - id: cap.events.x.activated
     name: x.activated
     version: 1
@@ -168,6 +171,7 @@ topics:
 	for _, want := range []string{
 		"emitted_by:\n        - cap.services.x.create",
 		"emitted_by:\n        - cap.services.x.activate",
+		"emitted_by:\n        - cap.services.x.create\n\n  - id: cap.events.x.activated",
 	} {
 		if !strings.Contains(string(events), want) {
 			t.Fatalf("events missing %q:\n%s", want, events)

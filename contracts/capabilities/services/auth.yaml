@@ -187,7 +187,10 @@ services:
         output:
           - { name: success, type: _types.boolean, description: "登录是否成功" }
           - { name: reason, type: data.enums.login_failed_reason, description: "失败原因；成功时为 null", nullable: true }
-        errors: [ ]
+        errors:
+          - platform.errors.AUTH_INVALID_CREDENTIALS
+          - platform.errors.ACCOUNT_SUSPENDED
+          - platform.errors.AUTH_LOCKED
         rules:
           - { rule: feature.rules.auth.auth_login_requires_verified }
           - { rule: feature.rules.auth.auth_login_rejects_pending_account }
@@ -1258,8 +1261,7 @@ services:
           - { name: max_attempts, type: _types.integer, description: "最大连续失败次数" }
           - { name: lockout, type: _types.integer, description: "锁定时长（秒）" }
         errors: [ ]
-        rules:
-          - { rule: feature.rules.auth.login_lockout }
+        rules: [ ]
         goto: lock_until
       - id: lock_until
         kind: logic

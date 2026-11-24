@@ -71,10 +71,10 @@ gen-check-core: ## 校验除规则测试映射外的生成物
 	$(MAKE) gen-openapi-check
 	$(MAKE) gen-scenarios-check
 
-gen-db: contract-check ## data/tables/* → MySQL schema + PostgreSQL schema + migrations
+gen-db: contract-check ## data/tables/* → PostgreSQL schema + migrations
 	cd scripts/cmd && go run ./gen_db -root "$(CURDIR)"
 
-gen-db-check: ## 校验 MySQL/PostgreSQL schema 与 migrations 是否为最新
+gen-db-check: ## 校验 PostgreSQL schema 与 migrations 是否为最新
 	cd scripts/cmd && go run ./gen_db -root "$(CURDIR)" -check
 
 gen-graph: ## 按引用计算并写回 table/entity 的 used_by

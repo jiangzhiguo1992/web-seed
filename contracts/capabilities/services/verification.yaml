@@ -73,6 +73,7 @@ services:
           - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
           - platform.errors.AUTH_PHONE_INVALID
           - platform.errors.AUTH_EMAIL_INVALID
+          - platform.errors.COMMON_INTERNAL
         rules:
           - { rule: feature.rules.auth.verification_target_normalization }
           - { rule: feature.rules.auth.verification_no_enumeration }
@@ -438,7 +439,10 @@ services:
           - { name: verification, value: step.load_verification.row, description: "待校验的验证体行" }
         output:
           - { name: outcome, type: data.enums.verification_result, description: "本次校验结果" }
-        errors: [ ]
+        errors:
+          - platform.errors.AUTH_VERIFICATION_INVALID
+          - platform.errors.AUTH_VERIFICATION_EXPIRED
+          - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
         rules:
           - { rule: feature.rules.auth.verification_one_time }
           - { rule: feature.rules.auth.verification_expiry }
@@ -447,10 +451,6 @@ services:
           - { rule: feature.rules.auth.verification_purpose_status }
           - { rule: feature.rules.auth.verification_no_enumeration }
           - { rule: feature.rules.auth.verification_register_account }
-          - { rule: feature.rules.auth.verification_success_sets_verified }
-          - { rule: feature.rules.auth.verification_action_recorded }
-          - { rule: feature.rules.auth.verification_action_append_only }
-          - { rule: feature.rules.auth.verification_consumed_consistent }
         goto: record_branch
       - id: record_branch
         kind: when
@@ -592,8 +592,13 @@ services:
         output:
           - { name: result, type: cap.services.verification.schemas.VerificationResult, description: "校验结果" }
           - { name: verified, type: _types.boolean, description: "是否验证通过" }
-        errors: [ ]
-        rules: [ ]
+        errors:
+          - platform.errors.COMMON_INTERNAL
+          - platform.errors.AUTH_VERIFICATION_INVALID
+        rules:
+          - { rule: feature.rules.auth.verification_action_recorded }
+          - { rule: feature.rules.auth.verification_action_append_only }
+          - { rule: feature.rules.auth.verification_consumed_consistent }
         goto: status_verified
       - id: status_verified
         kind: logic
@@ -601,8 +606,10 @@ services:
         input: [ ]
         output:
           - { name: status, type: data.enums.auth_status, description: "目标状态：已认证" }
-        errors: [ ]
-        rules: [ ]
+        errors:
+          - platform.errors.COMMON_INTERNAL
+        rules:
+          - { rule: feature.rules.auth.verification_success_sets_verified }
         goto: require_verified
       - id: require_verified
         kind: when

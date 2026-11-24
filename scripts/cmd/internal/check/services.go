@@ -365,6 +365,18 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			}
 		}
 
+		if kind == "logic" || kind == "when" {
+			for _, rawRule := range asList(step["rules"]) {
+				rm, _ := asMap(rawRule)
+				rid, _ := rm["rule"].(string)
+				for _, code := range c.ruleErrors[rid] {
+					if !stepErrors[code] {
+						c.rulef("service-errors", "%s: step %s rule %s error %s is not declared by this step", rel, stepID, rid, code)
+					}
+				}
+			}
+		}
+
 	}
 
 	// 业务返回值必须有显式来源；来源的静态类型与 nullable 必须与 returns 声明一致。
@@ -590,6 +602,13 @@ func (c *Checker) checkServiceStateGate(step map[string]any, rel, stepID string)
 			allAllowed[lifecycleID] = sameSet(expected[lifecycleID], c.lifecycleStates[lifecycleID])
 		}
 	}
+	related := c.stepTouchedLifecycles(step)
+	for _, raw := range asList(step["lifecycles"]) {
+		action, _ := raw.(string)
+		for lifecycleID := range c.lifecycleActionStates[action] {
+			related[lifecycleID] = true
+		}
+	}
 	declared := map[string]map[string]bool{}
 	for i, raw := range asList(step["state_gate"]) {
 		item, ok := asMap(raw)
@@ -601,6 +620,9 @@ func (c *Checker) checkServiceStateGate(step map[string]any, rel, stepID string)
 		if lifecycleID == "" {
 			c.rulef("service-state-gate", "%s: step %s state_gate[%d] requires lifecycle", rel, stepID, i)
 			continue
+		}
+		if !related[lifecycleID] {
+			c.rulef("service-state-gate", "%s: step %s state_gate lifecycle %s is not related to the step", rel, stepID, lifecycleID)
 		}
 		if declared[lifecycleID] != nil {
 			c.rulef("service-state-gate", "%s: step %s repeats lifecycle %s in state_gate", rel, stepID, lifecycleID)
@@ -644,6 +666,40 @@ func (c *Checker) checkServiceStateGate(step map[string]any, rel, stepID string)
 			c.rulef("service-state-gate", "%s: step %s state_gate for %s must be %v, got %v", rel, stepID, lifecycleID, sortedSetKeys(want), sortedSetKeys(got))
 		}
 	}
+}
+
+// stepTouchedLifecycles 返回 step 通过 query 表或 entity 输出触及的 lifecycle。
+func (c *Checker) stepTouchedLifecycles(step map[string]any) map[string]bool {
+	touched := map[string]bool{}
+	for _, raw := range stepQueryItems(step) {
+		qo, _ := asMap(raw)
+		qid, _ := qo["ref"].(string)
+		q := c.queries[qid]
+		if q == nil {
+			continue
+		}
+		for _, table := range q.Targets {
+			for lifecycleID, tables := range c.lifecycleSubjectTables {
+				if tables[table] {
+					touched[lifecycleID] = true
+				}
+			}
+		}
+	}
+	for _, raw := range asList(step["output"]) {
+		om, _ := asMap(raw)
+		typ, _ := om["type"].(string)
+		entityID, ok := entityRef(typ)
+		if !ok {
+			continue
+		}
+		for lifecycleID, entities := range c.lifecycleSubjectEntities {
+			if entities[entityID] {
+				touched[lifecycleID] = true
+			}
+		}
+	}
+	return touched
 }
 
 func setKeys(m map[string]bool) []string {

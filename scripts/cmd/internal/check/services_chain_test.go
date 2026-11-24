@@ -1164,17 +1164,24 @@ func TestServiceStateGate(t *testing.T) {
 			"cap.lifecycles.x.create":               {"cap.lifecycles.x": {"pending": true, "active": true}},
 		},
 	}
+	gate := func(lifecycle string, values ...string) []any {
+		raw := make([]any, 0, len(values))
+		for _, value := range values {
+			raw = append(raw, value)
+		}
+		return []any{map[string]any{"lifecycle": lifecycle, "values": raw}}
+	}
 	step := map[string]any{
 		"id": "run", "kind": "logic", "summary": "x",
 		"lifecycles": []any{"cap.lifecycles.x.transitions.activate"},
-		"state_gate": []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"pending"}}},
+		"state_gate": gate("cap.lifecycles.x", "pending"),
 	}
 	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid state_gate reported: %v", c.errs)
 	}
 
-	step["state_gate"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"active"}}}
+	step["state_gate"] = gate("cap.lifecycles.x", "active")
 	c.errs = nil
 	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
 	mustContainRule(t, c.errs, "service-state-gate")
@@ -1192,14 +1199,14 @@ func TestServiceStateGate(t *testing.T) {
 	if len(c.errs) != 0 {
 		t.Fatalf("create without state_gate reported: %v", c.errs)
 	}
-	step["state_gate"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"pending", "active"}}}
+	step["state_gate"] = gate("cap.lifecycles.x", "pending", "active")
 	c.errs = nil
 	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "must be omitted") {
-		t.Fatalf("all-state create gate not reported: %v", c.errs)
+		t.Fatalf("all-state create state_gate not reported: %v", c.errs)
 	}
 
-	step["state_gate"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"*"}}}
+	step["state_gate"] = gate("cap.lifecycles.x", "*")
 	c.errs = nil
 	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "must omit *") {
@@ -1212,6 +1219,25 @@ func TestServiceStateGate(t *testing.T) {
 	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
 	if len(c.errs) != 0 {
 		t.Fatalf("non-action without state_gate reported: %v", c.errs)
+	}
+
+	c.lifecycleStates["cap.lifecycles.y"] = map[string]bool{"active": true}
+	step["state_gate"] = gate("cap.lifecycles.y", "active")
+	c.errs = nil
+	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "not related") {
+		t.Fatalf("unrelated state_gate not reported: %v", c.errs)
+	}
+
+	c.queries = map[string]*queryInfo{"data.queries.x.get": {Targets: []string{"data.tables.x"}}}
+	c.lifecycleSubjectTables = map[string]map[string]bool{"cap.lifecycles.x": {"data.tables.x": true}}
+	step["kind"] = "query"
+	step["query"] = "data.queries.x.get"
+	step["state_gate"] = gate("cap.lifecycles.x", "pending")
+	c.errs = nil
+	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
+	if len(c.errs) != 0 {
+		t.Fatalf("touched state_gate reported: %v", c.errs)
 	}
 }
 
@@ -1234,5 +1260,46 @@ func TestServiceErrorSubset(t *testing.T) {
 	c := &Checker{errCodeSet: map[string]bool{"CHILD": true, "OTHER": true}}
 	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
 		meta, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	mustContainRule(t, c.errs, "service-errors")
+}
+
+func TestServiceRuleErrorsCovered(t *testing.T) {
+	doc := map[string]any{
+		"summary": "x", "tx_mode": "read_only",
+		"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
+		"returns": []any{},
+		"steps": []any{map[string]any{
+			"id": "run", "kind": "logic", "summary": "x", "goto": "$end",
+			"errors": []any{}, "output": []any{},
+			"rules": []any{map[string]any{"rule": "feature.rules.x.r"}},
+		}},
+	}
+	meta := map[string]serviceMeta{"cap.services.x.run": {module: "x", visibility: "public", errors: map[string]bool{}}}
+	c := &Checker{
+		errCodeSet: map[string]bool{"A": true},
+		ruleErrors: map[string][]string{"feature.rules.x.r": {"platform.errors.A"}},
+	}
+	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
+		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	mustContainRule(t, c.errs, "service-errors")
+
+	doc["steps"].([]any)[0].(map[string]any)["errors"] = []any{"platform.errors.A"}
+	meta["cap.services.x.run"] = serviceMeta{module: "x", visibility: "public", errors: map[string]bool{"platform.errors.A": true}}
+	c.errs = nil
+	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
+		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	if len(c.errs) != 0 {
+		t.Fatalf("declared rule error reported: %v", c.errs)
+	}
+
+	doc["steps"].([]any)[0].(map[string]any)["errors"] = []any{}
+	doc["steps"].([]any)[0].(map[string]any)["goto"] = "other"
+	doc["steps"] = append(doc["steps"].([]any), map[string]any{
+		"id": "other", "kind": "logic", "summary": "x", "goto": "$end",
+		"errors": []any{"platform.errors.A"}, "output": []any{}, "rules": []any{},
+	})
+	c.errs = nil
+	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
+		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	mustContainRule(t, c.errs, "service-errors")
 }

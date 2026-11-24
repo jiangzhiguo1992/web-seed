@@ -760,6 +760,7 @@ type ruleScaffold struct {
 	ID            string   `yaml:"id"`
 	Kind          string   `yaml:"kind"`
 	Summary       string   `yaml:"summary"`
+	Errors        []string `yaml:"errors"`
 	ImplementedBy []string `yaml:"implemented_by"`
 }
 
@@ -981,7 +982,7 @@ func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
 		return nil, err
 	}
 	if f, ok := FindField(s.Fields, "rules"); ok {
-		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "kind": true, "summary": true, "implemented_by": true}, "feature.rules.rules"); err != nil {
+		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "kind": true, "summary": true, "errors": true, "implemented_by": true}, "feature.rules.rules"); err != nil {
 			return nil, err
 		}
 	}
@@ -997,6 +998,7 @@ func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
 			ID:            fileID + ".example",
 			Kind:          "policy",
 			Summary:       "TODO: 规则说明",
+			Errors:        []string{},
 			ImplementedBy: []string{},
 		}},
 	}

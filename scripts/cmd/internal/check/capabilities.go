@@ -368,6 +368,7 @@ func (c *Checker) checkCapabilities() {
 
 	// rules / states / events 先收集 ID，再互相校验。
 	ruleIDs := map[string]bool{}
+	ruleErrors := map[string][]string{}
 	for _, file := range glob(c.root, filepath.Join(ruleSchema.Targets.Dir, ruleSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -383,9 +384,15 @@ func (c *Checker) checkCapabilities() {
 				c.rulef("rule-id-unique", "%s: duplicate rule id %s", relPath(c.root, file), id)
 			}
 			ruleIDs[id] = true
+			for _, rawErr := range asList(item["errors"]) {
+				if code, _ := rawErr.(string); code != "" {
+					ruleErrors[id] = append(ruleErrors[id], code)
+				}
+			}
 		}
 	}
 	c.ruleIDSet = ruleIDs
+	c.ruleErrors = ruleErrors
 	c.serviceErrorClosure = computeServiceErrorClosure(serviceFiles, c.queries)
 	for id, errs := range c.serviceErrorClosure {
 		meta := serviceMetaByID[id]
@@ -425,6 +432,8 @@ func (c *Checker) checkCapabilities() {
 	lifecycleStates := map[string]map[string]bool{}
 	c.lifecycleStates = lifecycleStates
 	c.lifecycleActionStates = map[string]map[string]map[string]bool{}
+	c.lifecycleSubjectTables = map[string]map[string]bool{}
+	c.lifecycleSubjectEntities = map[string]map[string]bool{}
 	requiresGraph := map[string][]string{}
 	dimensions := map[string]string{}
 	enumStates := map[string]map[string]bool{}
@@ -450,6 +459,18 @@ func (c *Checker) checkCapabilities() {
 		for _, subj := range subjects {
 			if subj.Entity == "" || subj.Field == "" {
 				continue
+			}
+			if subj.Table != "" {
+				if c.lifecycleSubjectTables[fileID] == nil {
+					c.lifecycleSubjectTables[fileID] = map[string]bool{}
+				}
+				c.lifecycleSubjectTables[fileID][subj.Table] = true
+			}
+			if subj.Entity != "" {
+				if c.lifecycleSubjectEntities[fileID] == nil {
+					c.lifecycleSubjectEntities[fileID] = map[string]bool{}
+				}
+				c.lifecycleSubjectEntities[fileID][subj.Entity] = true
 			}
 			key := subj.Entity + "." + subj.Field
 			if prev, ok := dimensions[key]; ok {

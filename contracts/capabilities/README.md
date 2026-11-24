@@ -110,7 +110,7 @@ service 项必须声明：
 - `input` 是 `{name, value, description}` 列表，所有 step 必填（无输入写 `[ ]`）；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式。query/service 时 `name` 是目标参数名；events 时是至少一个事件 payload 的字段名；logic/when 时是本步读取名。
 - `output` 是 `{name, type, description, nullable}` 列表，所有 step 必填（无产出写 `[ ]`）；`events` / `when` 只能为空。query/service 时 `name` 必须是目标 returns 字段，`type/nullable` 必须与目标严格一致；logic 时是自身产出。消费者只能引用已声明的 output，不能直接穿透到目标 returns。
 - `lifecycles` 是状态流转标记，可列多个 lifecycle 动作，任何 kind 都可带；它只表示本步包含这些状态流转，不限制本步只做状态流转；位置固定在 `summary` 之后。
-- `state_gate` 是 `[ { lifecycle, values } ]`：声明本步允许的 lifecycle 状态；省略表示全部状态允许，因此 `values` 里不得写 `*`。只写明确限制的动作：transition 在 `from` 不是全状态时必须写且等于 `from`，destroy 在非终态不是全状态时必须写且等于全部非终态；全状态允许时禁止写，create 同样省略。位置固定在 `lifecycles` 之后。
+- `state_gate` 是 `[{ lifecycle, values }]`：声明本步允许的 lifecycle 状态；每个 lifecycle 必须由本步的 `lifecycles` 动作或 query/entity 输出触及；省略表示全部状态允许，因此集合里不得写 `*`。只写明确限制的动作：transition 在 `from` 不是全状态时必须写且等于 `from`，destroy 在非终态不是全状态时必须写且等于全部非终态；全状态允许时禁止写，create 同样省略。位置固定在 `lifecycles` 之后。
 - `when` 只用于 `kind: when`：每项 `{input, expr, goto}`；`input` 必须是本步 input 中声明的名字，`expr` 是受限布尔表达式，只能引用本步 `input.<name>[.<field>]`、字面量与 `== != > >= < <= && || !` 和括号，且必须引用 `input` 指定的主体；字面量类型必须与字段静态类型兼容（boolean 用 `true`/`false`，integer 用整数，string 用字符串，`data.enums.*` 用枚举名）。按列表顺序匹配，第一个为真的分支跳转，都不满足时走本步 `goto`。
 - 计算值必须先落成前序 `kind: logic` 的 `output`，再以 `step.<id>.<path>` 引用；`expr:` 软区已移除。
 - `query` 是 `kind: query` 的单值字符串 ID，实例写作 `query: data.queries.<file>.<name>`；logic 不直接调 query，查询一律独立成 step。
@@ -119,7 +119,7 @@ service 项必须声明：
 - 入口策略错误（权限→`COMMON_FORBIDDEN`、限流→`COMMON_RATE_LIMITED`、审计→`COMMON_AUDIT_FAILED`）只由 `access.yaml`
   拥有，service 与 step 不重复声明。
 - `step.errors` 只列该步骤实际返回的领域错误：`kind: query` 缺省取该 query 的错误集，声明时必须覆盖；`kind: service` 取目标 service
-  的错误集；`logic` 实现的规则不再携带 `on_violation`，错误必须由 `step.errors` 显式声明。
+  的错误集；`logic` 实现的规则用 `feature.rules.errors` 声明可能错误，service 必须在 `step.errors` 中覆盖。
 - `rules` 是对象列表：每项 `{ rule: feature.rules.* }`，rule 值是结构 ID，不加引号；按引用检查存在性，不允许字符串简写。
 - `lifecycles` 只是标记：它表示本步包含这些状态流转，不限制本步的 kind，也不要求本步自己写状态列；目标状态以 lifecycle 为唯一事实源。`state_gate` 与 `lifecycles` 互补：前者声明前置可用状态，后者声明本步实现的动作；`gen-graph` 只把写了 `state_gate` 的 step 反向写成 `lifecycle.states.values[].steps`，省略 `state_gate` 的 step 不进入矩阵，禁止手改。
 - 数据链是硬约束：`input` 的值只能是 `params.<path>` 或 `step.<id>.<path>`，且值的静态类型必须与目标参数类型兼容
@@ -172,7 +172,7 @@ capabilities 不承载 `rules/` 目录；features 不承载 `states/` 目录。
 - `topics`：消息契约。`publish` 声明消息格式（`payload`）与发射者（`emitted_by`，生成）；
   `subscribe` 声明消费该主题的异步任务（嵌套即绑定，不支持跨文件订阅）。
 - `crons`：周期任务，声明 `schedule`/retry/concurrency，引用一个同步 service 作为 handler。
-- `dispatches`：内部命令（队列），声明命令 `payload`/`delay`/retry/concurrency，引用一个同步 service 作为唯一消费者；`emitted_by` 由 `make gen-graph` 从投递 step 反推，至少一个。
+- `dispatches`：内部命令（队列），声明命令 `payload`/`delay`/retry/concurrency，引用一个同步 service 作为唯一消费者；`payload` 字段必须与消费者 service 的非 `ctx` 参数同名、required/nullable 一致且类型一致，不多不少；`emitted_by` 由 `make gen-graph` 从投递 step 反推，至少一个。
 
 文件级：`id` / `summary` / `owner_module` / `schema_version` / `stability` / `do_not` /
 `topics` / `crons` / `dispatches`；三者至少一个非空。

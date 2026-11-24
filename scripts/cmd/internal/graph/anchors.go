@@ -867,9 +867,9 @@ func syncItemNestedField(path, listKey, itemKey, itemValue, parentKey, field str
 	if fieldLine >= 0 {
 		j := fieldLine + 1
 		for j < parentEnd {
+			// 空行属于文件格式，不并入字段块，避免生成时吞掉用户保留的分隔行。
 			if strings.TrimSpace(lines[j]) == "" {
-				j++
-				continue
+				break
 			}
 			indent := len(lines[j]) - len(strings.TrimLeft(lines[j], " "))
 			if indent <= 6 {

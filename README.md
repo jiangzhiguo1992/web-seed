@@ -120,7 +120,7 @@ web-seed/
 | HTTP | chi + net/http | 已用 |
 | 契约生成 | 4 个生成器：graph / errors / db / openapi | 已用 |
 | 接口生成 | oapi-codegen（`strict-server`）+ openapi-typescript | ⬜ P2 |
-| 数据访问 | go-sql-driver/mysql + sqlc | ⬜ P2 |
+| 数据访问 | pgx + sqlc | ⬜ P2 |
 | 迁移 | goose | ✅ 0001_baseline / 增量 P5 |
 | 日志 | slog（JSON） | 已用 |
 | 前端 | Vue 3.5 + Vite 7 + TypeScript 5.9 | 已用 |

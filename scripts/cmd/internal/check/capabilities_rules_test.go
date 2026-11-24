@@ -1514,11 +1514,37 @@ dispatches:
     delay: 30m
 `
 	writeCapFile(t, root, rel, valid)
-	services := map[string]serviceMeta{"cap.services.x.send": {module: "x"}, "cap.services.x.issue": {module: "x"}}
+	services := map[string]serviceMeta{
+		"cap.services.x.send": {
+			module: "x", params: map[string]bool{"ctx": true, "order_id": true},
+			requiredParams: map[string]bool{"order_id": true},
+			paramDecls:     map[string]string{"order_id": "_types.integer"},
+		},
+		"cap.services.x.issue": {module: "x"},
+	}
 	c := &Checker{root: root}
 	async := c.checkEventsDoc(schema, services, map[string]bool{"cap.services.x.send": true, "cap.services.x.issue": true})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid dispatch reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	writeCapFile(t, root, rel, strings.Replace(valid, "name: order_id", "name: missing", 1))
+	c.checkEventsDoc(schema, services, map[string]bool{"cap.services.x.send": true, "cap.services.x.issue": true})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "has no consumer param") {
+		t.Fatalf("unknown payload field not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	services["cap.services.x.send"] = serviceMeta{
+		module: "x", params: map[string]bool{"ctx": true, "order_id": true, "extra": true},
+		requiredParams: map[string]bool{"order_id": true, "extra": true},
+		paramDecls:     map[string]string{"order_id": "_types.integer", "extra": "_types.string"},
+	}
+	writeCapFile(t, root, rel, valid)
+	c.checkEventsDoc(schema, services, map[string]bool{"cap.services.x.send": true, "cap.services.x.issue": true})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "consumer param extra has no payload field") {
+		t.Fatalf("extra consumer param not reported: %v", c.errs)
 	}
 	if !async["cap.services.x.send"] {
 		t.Fatalf("dispatch service not collected: %v", async)

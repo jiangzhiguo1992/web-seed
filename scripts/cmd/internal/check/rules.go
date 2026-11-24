@@ -81,6 +81,15 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 		default:
 			c.rulef("rule-structure", "%s: rule %s kind must be constraint/invariant/policy", rel, id)
 		}
+		for _, rawErr := range asList(item["errors"]) {
+			code, _ := rawErr.(string)
+			if code == "" {
+				continue
+			}
+			if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+				c.rulef("rule-structure", "%s: rule %s unknown error %s", rel, id, code)
+			}
+		}
 		implemented := asList(item["implemented_by"])
 		if len(implemented) == 0 {
 			c.rulef("rule-structure", "%s: rule %s implemented_by must not be empty", rel, id)

@@ -150,7 +150,7 @@ fields:
           - { name: ttl, type: _types.string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁 TTL" }
 
 rules:
-  - { id: event-structure, text: "topic.id 必须为 cap.events.<name> 且全局唯一；topic name 在文件内唯一且必须以 <file>. 开头；version >= 1；topic.publish.emitted_by 与 dispatch.emitted_by 必须指向存在的 cap.services.*；dispatch.emitted_by 至少一个", implemented_by: [ event-structure ] }
+  - { id: event-structure, text: "topic.id 必须为 cap.events.<name> 且全局唯一；topic name 在文件内唯一且必须以 <file>. 开头；version >= 1；topic.publish.emitted_by 与 dispatch.emitted_by 必须指向存在的 cap.services.*；dispatch.emitted_by 至少一个；dispatch payload 字段必须与唯一消费者 service 的非 ctx 参数同名、required/nullable 一致且类型一致，不多不少", implemented_by: [ event-structure ] }
   - { id: event-file-shape, text: "契约 ID 必须与 targets 派生一致；topics/crons/dispatches 至少一个非空；topic、subscribe、cron、dispatch 的 ID 共享 cap.events.* 空间且全局唯一", implemented_by: [ event-file-shape ] }
   - { id: event-orphan, text: "topic 必须被发布或被订阅：publish.emitted_by 非空或 subscribe 非空", implemented_by: [ event-orphan ] }
   - { id: async-service, text: "subscribe.service / cron.service / dispatch.service 必须存在且与 events 文件的 owner_module 同模块；被异步任务引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service ] }

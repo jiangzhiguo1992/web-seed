@@ -200,6 +200,7 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 				}
 			}
 			svc, _ := item["service"].(string)
+			c.checkDispatchConsumer(rel, name, item, serviceMeta)
 			bind(rel, "dispatch", name, svc, module)
 		}
 	}
@@ -264,4 +265,38 @@ func validCronField(field string, min, max int) bool {
 		}
 	}
 	return true
+}
+
+// checkDispatchConsumer 校验 dispatch payload 与唯一消费者 service 的参数一致。
+func (c *Checker) checkDispatchConsumer(rel, name string, item map[string]any, services map[string]serviceMeta) {
+	svc, _ := item["service"].(string)
+	meta, ok := services[svc]
+	if !ok || meta.params == nil {
+		return
+	}
+	fields := eventPayloadFields(item["payload"])
+	for field, f := range fields {
+		if !meta.params[field] {
+			c.rulef("event-structure", "%s.%s: payload field %s has no consumer param", rel, name, field)
+			continue
+		}
+		if f.required != meta.requiredParams[field] {
+			c.rulef("event-structure", "%s.%s: payload field %s required=%t but consumer param required=%t", rel, name, field, f.required, meta.requiredParams[field])
+		}
+		if f.nullable != meta.paramNullable[field] {
+			c.rulef("event-structure", "%s.%s: payload field %s nullable=%t but consumer param nullable=%t", rel, name, field, f.nullable, meta.paramNullable[field])
+		}
+		want := normalizeContractType(meta.paramDecls[field])
+		if f.typ != "" && want != "" && f.typ != want {
+			c.rulef("event-structure", "%s.%s: payload field %s type %s does not match consumer param type %s", rel, name, field, f.typ, want)
+		}
+	}
+	for param := range meta.params {
+		if param == "ctx" {
+			continue
+		}
+		if _, ok := fields[param]; !ok {
+			c.rulef("event-structure", "%s.%s: consumer param %s has no payload field", rel, name, param)
+		}
+	}
 }

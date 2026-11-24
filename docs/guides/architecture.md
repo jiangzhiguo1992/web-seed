@@ -49,7 +49,7 @@
 | 项 | 结论 | 关键证据与坑 |
 |---|---|---|
 | S1 | 可行 | `strict-server` 让响应类型由契约封闭；`NewStrictHandlerWithOptions` 可统一输出错误信封；**strict 只 decode 不校验**，必须额外挂 `OapiRequestValidatorWithOptions` |
-| S2 | 可行有边界 | `sqlc.narg` 可用；`emit_pointers_for_null_types` 只对 text 生效，DATETIME/CHAR(36) 仍是 `sql.Null*` → repo 需适配层；动态 ORDER BY 只能用 `CASE WHEN` 枚举，且绕过索引 |
+| S2 | 可行有边界 | `sqlc.narg` 可用；PG 的 timestamptz/uuid 生成 `pgtype.*` 而不是 `database/sql.Null*` → repo 需适配层；动态 ORDER BY 只能用 `CASE WHEN` 枚举，且绕过索引 |
 | S3 | 可行 | 必须**每个业务模块独立 component**，单一 `modules` 组件无法表达"模块间禁止"；`cmd` 需允许依赖 `platform`；违规报错带文件:行号 |
 | S4 | 可行 | `workspace:*` + `vue-tsc` 跨包类型检查通过；**pnpm 12 配置键是 `allowBuilds`**（v11 起 `onlyBuiltDependencies` 已移除） |
 | S5 | 可行有硬配置 | Tailwind v4 **不自动扫描 workspace 共享包**，每个 app 的 CSS 必须 `@source` 每个共享包；`@theme` 变量默认只输出被使用的；包名 `@import` 可解析 |
@@ -98,7 +98,7 @@
 - [x] `capabilities/protocols/http/*.yaml` + `platform/http_conventions.components` → 合并为 `generated/openapi/admin.yaml`
 - [ ] 合并 spec → Go server 类型（`oapi-codegen strict-server`）
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
-- [x] `data/tables/*.yaml` → `schema.sql` + `schema.postgres.sql` + `migrations/0001_baseline.sql`（增量 diff 仍 P5）
+- [x] `data/tables/*.yaml` → PostgreSQL `schema.sql` + `migrations/0001_baseline.sql`（增量 diff 仍 P5）
 - [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/auth_* 拆分（契约已落盘）
 - [x] 契约元规范：`_meta/<type>.yaml` 覆盖全部契约类型 + `make contract-new` + `make contract-check`（结构 / ID / 约束 / 索引 / 引用 / 数据流 / 类型级规则）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
@@ -116,7 +116,7 @@
 - [ ] `config`：env 加载 + fail-fast + 测试断言 key 集合与 schema 一致
 - [ ] `httpserver`：中间件链（request-id / recover / logging / CORS / 安全头 / 超时 / 体积限制 / 请求校验）
 - [ ] `httpserver`：统一错误信封 + error-codes 映射
-- [ ] `database`：`database/sql` + `go-sql-driver/mysql` pool + `WithTx(ctx, fn)` + querier 注入
+- [ ] `database`：`pgx` pool + `WithTx(ctx, fn)` + querier 注入
 - [ ] `observability`：slog（字段契约）+ RED 指标 + OTel hook（默认 `exporter=none`）
 - [ ] `security`：JWT 签发/校验（audience 区分）+ 密码哈希 + CORS 白名单
 - [ ] 优雅关闭：信号 → 停收 → 等在途 → 关池
@@ -222,7 +222,7 @@
 ### 2.3 生成链
 
 ```
-data/tables/*.yaml ──> gen-db ──> schema.sql + schema.postgres.sql + migrations/*.sql
+data/tables/*.yaml ──> gen-db ──> PostgreSQL schema.sql + migrations/*.sql
 
 capabilities/protocols/http/*.yaml + platform/http_conventions.components ──> gen-openapi ──> generated/openapi/admin.yaml
 
@@ -374,7 +374,7 @@ apps:
 | 关注点 | 默认 | 备选 | 理由 |
 |---|---|---|---|
 | HTTP | `chi` + `oapi-codegen strict-server` | stdlib / gin | 响应类型由契约封闭；strict 只 decode，校验由 `OapiRequestValidator` 补齐 |
-| 数据 | `go-sql-driver/mysql` + `sqlc` | GORM | 编译期类型安全，SQL 可见 |
+| 数据 | `pgx` + `sqlc` | GORM | 编译期类型安全，SQL 可见 |
 | 迁移 | `goose` | atlas | 纯 SQL、可 embed、只前进 |
 | 契约生成 | `oapi-codegen` | swaggo | design-first 防漂移 |
 | 日志 | `slog` | zap | 标准库 |

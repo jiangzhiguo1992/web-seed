@@ -31,6 +31,8 @@ feature ──> capabilities ──> data
 | `queries/<scope>.yaml` | 能怎么读写 | 入参、返回、目标表、索引/缓存/归档引用 | 不是 SQL |
 | `enums/<module>.yaml` | 值是什么 | 跨端词汇：按 owner_module 拆分，integer `code` ↔ 名称 | 不是表约束 |
 | `storage.yaml` | 物理侧事实 | 引擎归属、扁平保留、缓存、归档（含能否回迁） | 不是部署配置，也不是索引或视图 |
+
+本项目固定 `supported_engines: [postgres, redis]`：PostgreSQL 是唯一权威表引擎，Redis 只作为 `caches` 的非权威副本。
 | `types.yaml` | 值类型叫什么 | 项目级标量约束：family + 固定参数 | 不是表结构，也不是枚举 |
 
 `storage.yaml` 与 `types.yaml` 是**固定文件**：文件名不随实例增长，只有一个契约 ID。`enums/` 按 `owner_module` 一文件一契约（文件 ID `data.enums.<module>`），文件内承载多个 `data.enums.<name>` 项；枚举项 ID 全局唯一。`tables/` / `entities/` / `queries/` / `enums/` 的实例清单以 `contracts/index.yaml` 为准，本文件不列举。
@@ -67,7 +69,7 @@ tables / entities / queries ──(type)──>  types
 ### 3.1 表不建数据库外键，但声明逻辑外键
 
 **选择**：DDL 不生成 `FOREIGN KEY`；跨表引用用 `columns[].references` 表达（目标唯一列 + `on_delete`），一致性校验仍由应用服务与 `feature.rules` 保证。
-**理由**：数据库外键把部署顺序、分库分表、软删语义绑死在引擎上；契约层要允许引擎替换（`storage.yaml` 的 `supported_engines`）。逻辑外键只描述业务层的硬删级联与关系语义，不产生 DDL。
+**理由**：数据库外键把部署顺序、分库分表、软删语义绑死在引擎上；契约层把引擎事实集中在 `storage.yaml` 的 `supported_engines`，不与业务表结构混写。逻辑外键只描述业务层的硬删级联与关系语义，不产生 DDL。
 **代价**：引用完整性不由数据库拒绝，漏写 `references` 不会报错；但一旦写了，`[强制: reference-target]` / `[强制: reference-join]` 会校验目标唯一性与实体关系一致性。跨表不变量的落点是 `feature.rules`，不是注释。
 
 ### 3.2 表不使用枚举，只存 integer 码
@@ -188,7 +190,7 @@ indexes:
       - data.queries.account.exists_account_number
 ```
 
-`live_only: true` 只用于唯一索引，表示唯一性只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。`gen-db` 同时产出 MySQL `schema.sql` 与 PostgreSQL `schema.postgres.sql`：MySQL 用 `CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END` 表达式键，PostgreSQL 用 `WHERE deleted_at IS NULL` partial unique index。当前 `storage.tables.postgres` 只登记归档表，`schema.postgres.sql` 是契约表的可移植镜像，不代表 PostgreSQL 已成为权威引擎。非唯一索引不使用该字段，需要 live 行前导时把 `deleted_at` 显式写进 `indexes[].columns`，并在 `index_ref` 中把它作为最左列声明。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
+`live_only: true` 只用于唯一索引，表示唯一性只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。本项目只支持 PostgreSQL + Redis：`gen-db` 产出 PostgreSQL `schema.sql`，`live_only` 用 `WHERE deleted_at IS NULL` partial unique index。非唯一索引不使用该字段，需要 live 行前导时把 `deleted_at` 显式写进 `indexes[].columns`，并在 `index_ref` 中把它作为最左列声明。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
 
 ### 5.2 查询：参数 + 返回 + 索引/缓存/归档引用
 
@@ -243,7 +245,7 @@ indexes:
 | 在表里声明引擎 | 引擎归属只在 `storage.tables.<engine>` | 登记到 `storage.yaml` 的引擎条目 |
 | 在表里写 `initial_rows` / seed | 字段不存在，生成器不识别 | 先扩展 `_meta/data.tables.yaml` 与生成器 |
 | 枚举值复用旧 `code` | 历史行仍引用旧码 | 新增 `code` |
-| `summary` / 列 `comment` 超长 | MySQL 会静默截断 COMMENT | `summary` <= 2048、列 `comment` <= 1024（`[强制: table-summary-length]` / `[强制: column-comment-length]`） |
+| `summary` / 列 `comment` 超长 | 超出 COMMENT 文本预算 | `summary` <= 2048、列 `comment` <= 1024（`[强制: table-summary-length]` / `[强制: column-comment-length]`） |
 
 ---
 

@@ -3,7 +3,7 @@
 
 package generated
 
-// ConstraintErrors maps MySQL CHECK constraint names to platform error codes.
+// ConstraintErrors maps PostgreSQL CHECK constraint names to platform error codes.
 var ConstraintErrors = map[string]string{
 	"ck_account_deleted_consistent":         "platform.errors.ACCOUNT_ILLEGAL_TRANSITION",
 	"ck_auth_email_account_live":            "platform.errors.COMMON_INTERNAL",
