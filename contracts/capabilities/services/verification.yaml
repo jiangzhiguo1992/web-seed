@@ -55,7 +55,7 @@ services:
       - { name: input, type: cap.services.verification.schemas.SendVerificationInput }
     returns:
       - { name: verification, type: cap.services.verification.schemas.VerificationSent, value: step.send.verification }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: resolve_auth_id
         kind: logic
@@ -303,7 +303,7 @@ services:
       - { name: input, type: cap.services.verification.schemas.VerifyCodeInput }
     returns:
       - { name: result, type: cap.services.verification.schemas.VerificationResult, value: step.record_done.result }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: resolve_auth_id
         kind: logic
@@ -664,7 +664,7 @@ services:
       - { name: location, type: _types.string, nullable: true }
       - { name: input_hash, type: _types.string }
     returns:
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: log
         kind: query
@@ -692,7 +692,7 @@ services:
     returns:
       - { name: expired_rows, type: _types.integer, value: step.expire_stale.affected_rows }
       - { name: revoked_rows, type: _types.integer, value: step.revoke_exhausted.affected_rows }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: now
         kind: logic
@@ -775,7 +775,7 @@ services:
       - { name: auth_type, type: data.enums.auth_type }
       - { name: auth_id, type: _types.integer }
     returns:
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: no_purpose
         kind: logic
@@ -833,7 +833,7 @@ services:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: _types.integer }
     returns:
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: status_revoked
         kind: logic

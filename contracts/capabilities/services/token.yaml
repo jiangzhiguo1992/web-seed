@@ -49,7 +49,7 @@ services:
       - { name: device_id, type: _types.string, nullable: true }
     returns:
       - { name: tokens, type: cap.services.token.schemas.TokenPair, value: step.issue_tokens.tokens }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: load_account
         kind: query
@@ -150,7 +150,7 @@ services:
       - { name: input, type: cap.services.token.schemas.RefreshInput }
     returns:
       - { name: result, type: cap.services.token.schemas.RefreshResult, value: step.build_result.result }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: hash_old
         kind: logic
@@ -343,7 +343,7 @@ services:
       - { name: ctx, type: context.Context }
       - { name: input, type: cap.services.token.schemas.RefreshInput }
     returns:
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: hash
         kind: logic
@@ -414,7 +414,7 @@ services:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: _types.integer }
     returns:
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: now
         kind: logic
@@ -463,7 +463,7 @@ services:
       - { name: ctx, type: context.Context }
     returns:
       - { name: affected_rows, type: _types.integer, value: step.expire_tokens.affected_rows }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: now
         kind: logic
@@ -517,7 +517,7 @@ services:
       - { name: access_token, type: _types.string }
     returns:
       - { name: account, type: data.entities.account, value: step.verify.account }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: hash
         kind: logic
@@ -573,7 +573,7 @@ services:
       - { name: ctx, type: context.Context }
     returns:
       - { name: affected_rows, type: _types.integer, value: step.delete_expired_tokens.affected_rows }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: batch_limit
         kind: logic
@@ -608,7 +608,7 @@ services:
       - { name: account_id, type: _types.integer }
       - { name: issued_at, type: _types.timestamp }
     returns:
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: log
         kind: logic

@@ -41,7 +41,7 @@ services:
       - { name: id, type: _types.integer }
     returns:
       - { name: account, type: data.entities.account, value: step.get_account.account }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: get_account
         kind: query
@@ -78,7 +78,7 @@ services:
       - { name: limit, type: _types.page_limit }
     returns:
       - { name: page, type: cap.services.account.schemas.AccountPage, value: step.paginate.page }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: list_accounts
         kind: query
@@ -115,7 +115,7 @@ services:
       - { name: input, type: cap.services.account.schemas.CreateAccountInput }
     returns:
       - { name: account, type: data.entities.account, value: step.create_account.account }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: new_id
         kind: logic
@@ -208,7 +208,7 @@ services:
       - { name: input, type: cap.services.account.schemas.UpdateAccountInput }
     returns:
       - { name: account, type: data.entities.account, value: step.update_account.account }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: get_account
         kind: query
@@ -257,7 +257,7 @@ services:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.integer }
     returns:
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: get_account
         kind: query
@@ -344,7 +344,7 @@ services:
       - { name: id, type: _types.integer }
     returns:
       - { name: account, type: data.entities.account, value: step.set_account_status.account }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: get_account
         kind: query
@@ -441,7 +441,7 @@ services:
       - { name: input, type: cap.services.account.schemas.SuspendAccountInput }
     returns:
       - { name: account, type: data.entities.account, value: step.set_account_status.account }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: get_account
         kind: query

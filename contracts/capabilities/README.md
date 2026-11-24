@@ -87,7 +87,7 @@ events/crons|dispatches ──service──> services
 service 项必须声明：
 
 - `name` / `summary` / `visibility`（`public` 跨模块可见，`internal` 仅本模块可见）
-- `params` / `returns`；最后一项必须是 `{name: err, type: error}`，不能省略；无业务返回值也必须写 `err`；每个业务返回项必须写 `value` 指向来源（`params.<path>` 或前序 `step.<id>.<path>`），`err` 不写 `value`；`params[].default` 只在
+- `params` / `returns`；最后一项必须是 `{name: err, type: error, value: "*"}`，不能省略；无业务返回值也必须写 `err`；每个业务返回项必须写 `value` 指向来源（`params.<path>` 或前序 `step.<id>.<path>`），`err` 固定写 `*`（错误可来自任意步骤），业务项不得写 `*`；`params[].default` 只在
   `nullable: true` 时允许，调用方省略时取该值
 - `tx_mode`（`required` / `read_only` / `none`）
 - `steps`（至少一步）
@@ -124,7 +124,7 @@ service 项必须声明：
 - 数据链是硬约束：`input` 的值只能是 `params.<path>` 或 `step.<id>.<path>`，且值的静态类型必须与目标参数类型兼容
   （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；可空的源不得赋给非 null 目标（query/service/events input 的源若 nullable，目标参数/payload 字段必须 nullable）；`step.<id>` 还必须通过 goto/when 边从被引用步骤可达，
   不能引用不可达分支；query/service 的 output 必须与目标 returns 对齐，每个显式 `output`（`events` / `when` 为空）必须被后续 `input` 引用或被 `returns.value` 引用；`returns` 的每个业务字段必须写 `value`（`params.<path>` 或 `step.<id>.<path>`），类型一致且 nullable 严格一致
-  （`*T` 与嵌套字段的 nullable 都参与；`err` 不写 `value`）；service 的每个非 `ctx` 参数必须被至少一个 `input` 引用。
+  （`*T` 与嵌套字段的 nullable 都参与；`err` 固定写 `value: "*"`）；service 的每个非 `ctx` 参数必须被至少一个 `input` 引用。
 - 分支汇聚是硬约束：step input 引用的前序 step 必须在所有到达该 step 的路径上都已执行；若无法保证，同一 step 引用的未保证生产者必须两两互斥且构成完备切面（每条路径恰好经过一个）；`returns.value` 的来源必须能到达 service 终点。
 - `params[].type` 只允许基础类型、`data.enums.*`、`data.entities.*`、全限定本地 schema（`cap.services.<file>.schemas.<Type>`）或 `_types` 类型族；指针与 `List<>` 各最多一层。
 - 控制流由 `when` / `goto` 显式声明；`goto` 只允许前向，循环仍不支持；错误流转由实现决定；契约不声明 `on_error` / `max_iterations`。
@@ -149,11 +149,11 @@ service 项必须声明：
 
 - 一个 lifecycle = 一个状态机：`subjects` 列出共享该状态机的全部 `{entity, field}`，必须同枚举、同 `owner_module`；同一 `(entity, field)` 只能被一份契约声明；
 - `states` 是对象：`values` 是状态集合，`initial` 是初始状态，`final` 是终态集合；每个 state 必须从 initial 可达；
-- `final` 是列表：单终态（如 account 的 `[deleted]`）与多终态（如 verification 的 `[consumed, expired, revoked, failed]`）用同一形状表达；`destroy` 存在时 `final` 最多一个；
+- `final` 必填，没有终态写 `[]`：单终态（如 account 的 `[deleted]`）与多终态（如 verification 的 `[consumed, expired, revoked, failed]`）用同一形状表达；`destroy` 存在时 `final` 最多一个；
 - `destroy` 可从任意非 final 状态销毁，不写 `from` / `to`；`final` 恰好一个时 destroy 进入该终态，`final` 为空时只软删实体，多终态 lifecycle 不使用 destroy；
 - 幂等转换：把当前状态也写进 `from`（自环），不要单独维护幂等列表；
 - `create` / `destroy` 写 `services`（由 `make gen-graph` 从 step.lifecycles 反推）与 `events`（必须由对应 service 的 step 发出）；`transitions[].implemented_by` 仍由 gen-graph 写回；
-- `transitions[].requires` 声明跨维度前置状态：`{lifecycle, states: [...]}`，处于任一状态即可，列表内 AND；requires 图不得有环；实现该转换的 service 必须自行校验；
+- `create.requires` / `destroy.requires` / `transitions[].requires` 都必填，没有前置写 `[]`；`requires` 声明跨维度前置状态：`{lifecycle, states: [...]}`，处于任一状态即可，列表内 AND；requires 图不得有环；实现该转换的 service 必须自行校验；
 - service 的 `kind: logic` / `kind: when` step 用 `rules: [{ rule: feature.rules.* }]` 引用业务规则；
 - 任意 step 用 `lifecycles: [cap.lifecycles.<lifecycle>.create|destroy|transitions.<name>]` 回引生命周期动作；`lifecycles` 不限制 step 的 kind，一个 step 可列多个动作；
 - 每个生命周期动作的 step 不再声明 `state.write`；`lifecycles` 只是标记，不限制 step kind，也不要求本步写状态列；

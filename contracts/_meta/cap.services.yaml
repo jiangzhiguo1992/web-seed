@@ -81,7 +81,7 @@ fields:
         item_fields:
           - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名" }
           - { name: type, type: _types.string, required: true, pattern: '^(\*?(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.list<(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "_types.* 或 data.*/cap.services 本地 schema；可带一层 * 或 _types.list<>" }
-          - { name: value, type: _types.string, required: false, pattern: '^(params|step)\.[a-z][a-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*|\[[0-9]+\])*$', description: "业务返回值的来源：params.<path> 或 step.<id>.<path>；err 不写 value" }
+          - { name: value, type: _types.string, required: true, pattern: '^(\*|(params|step)\.[a-z][a-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*|\[[0-9]+\])*)$', description: "返回值来源：params.<path> 或 step.<id>.<path>；err 固定写 *，表示错误可来自任意步骤" }
           - { name: nullable, type: _types.boolean, required: false, description: "是否可空" }
 
       - name: steps
@@ -151,7 +151,7 @@ fields:
 
 rules:
   - { id: service-id, text: "契约 ID 必须与 targets 派生一致，且全局唯一；service 项 ID 全局唯一", implemented_by: [ service-id ] }
-  - { id: service-signature, text: "params[0] 必须是 ctx context.Context；params/returns name 唯一；returns 最后一项必须是 {name: err, type: error} 且只能出现一次；err 不得写 value", implemented_by: [ service-signature ] }
+  - { id: service-signature, text: "params[0] 必须是 ctx context.Context；params/returns name 唯一；returns 最后一项必须是 {name: err, type: error, value: \"*\"} 且只能出现一次；err.value 固定为 *，非 err 不得写 *", implemented_by: [ service-signature ] }
   - { id: service-unique, text: "service name、step.id、step 内 output/input/events/rules 项、step.lifecycles 的同一 action 均不得重复", implemented_by: [ service-unique ] }
   - { id: service-schema, text: "schemas 名必须是 Go 标识符且全局唯一；schema 类型名在所有 service 文件中全局唯一", implemented_by: [ service-schema ] }
   - { id: service-ref, text: "query / service / events[].ref / lifecycles / rules 引用必须存在；params/returns/schemas 中的 data.enums.* / data.entities.* / 本地类型必须存在（语法由 service-param-type 校验）；events[].ref 必须指向 cap.events topics 或 dispatches", implemented_by: [ service-ref ] }
@@ -178,7 +178,7 @@ rules:
   - { id: service-input-required, text: "query/service 必填参数（ctx 除外）与 events 必填 payload 字段必须全部出现", implemented_by: [ service-input-required ] }
   - { id: service-param-default, text: "params.default 只在 nullable:true 时允许；可判定时类型必须匹配", implemented_by: [ service-param-default ] }
   - { id: service-output, text: "query/service 的 output 必须是目标 returns 的子集，name 必须存在且 type/nullable 严格一致；logic 的 output 是自身产出；source 为 step 时对应 output 视为已消费", implemented_by: [ service-output, service-output-type, service-output-nullable ] }
-  - { id: service-output-value, text: "returns 每个业务字段必须写 value（params.<path> 或前序 step.<id>.<path>），err 不得写 value", implemented_by: [ service-output-value ] }
+  - { id: service-output-value, text: "returns 每个字段必须写 value：业务字段用 params.<path> 或前序 step.<id>.<path>，err 固定写 *；业务字段不得写 *", implemented_by: [ service-output-value ] }
   - { id: service-chain, text: "每个显式 output（events 除外）必须被后续 step 的 input 引用或被 returns.value 引用；service 的每个非 ctx 参数必须被至少一个 step 的 input 值引用；kind=service 的目标 returns 不要求全部声明为 output，一旦声明 output 必须被消费；step input 中的 step.<id> 引用必须通过 goto 可达；returns.value 的引用必须能到达 $end", implemented_by: [ service-chain ] }
   - { id: service-merge, text: "step input 引用的前序 step 必须在所有到达消费点的路径上都已执行；若无法保证，同一消费点引用的未保证生产者必须两两互斥（互不可达），且所有到达消费点的路径必须恰好经过其中之一；returns.value 只要求来源能到达 $end", implemented_by: [ service-merge ] }
   - { id: service-transaction, text: "tx_mode=read_only 的 service 不得直接写表，也不得经 kind=service 间接调用会写表的 service；写操作必须声明 tx_mode=required 或 none；tx_mode≠none 的 service 不得调用 tx_mode=required 的 service（避免嵌套事务）", implemented_by: [ service-transaction ] }

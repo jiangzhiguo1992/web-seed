@@ -168,7 +168,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 ## 6. 不要做的事
 
 - 不要重建 `contracts/_meta/schema/` 或 `templates/`；不要在 `_meta` 之外手写第二份字段模板。
-- 不要手写生成字段（`table.referenced_by` / `table.queries` / `model.included_by` / `model.queries` /
+- 不要手写生成字段（`table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` /
   `query.used_by` / `feature.rules.implemented_by` / 生命周期锚点 / `topics[].publish.emitted_by`）。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`。
