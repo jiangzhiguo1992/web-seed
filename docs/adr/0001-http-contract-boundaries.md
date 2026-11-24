@@ -173,7 +173,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 仍然保留的 `_types.any` 只有两处，且都是**多态叶子**：
 
-- `request.body.schema` / `response.body.schema`：可以是类型 ID 字符串，也可以是匿名 object；`http-service-type` / `http-service-return` 负责语义。
+- `request.body.type` / `response.body.type`：可以是类型 ID 字符串，也可以是匿名 object；`http-service-type` / `http-service-return` 负责语义。
 - `shared.*`：OpenAPI 组件片段；`http-components` / `http-shared` 负责逐项校验。
 
 这两处不是“懒得定义”，而是 YAML 类型系统没有 union；如果强行拆成两个字段，会让 AI 在两种写法之间选择，反而增加漂移。边界写在这里，而不是藏在模板里。
@@ -250,7 +250,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 1. **版本归属**：`mount.api_version`（必填，`v<数字>`）成为唯一版本源；生成器按 app 内 include 文件的版本派生 `servers: /<api_version>`，`mount.path` 与 `paths` 不写版本。`project.yaml` 的 `app.api_version` 已删除；同一 app 混版本会被 checker/generator 拒绝。在没有 v2 mount 的情况下，`admin_v2` app 与生成物一并移除，待 v2 契约重做后再加回。
 2. **共享组件**：删除 `protocols/http/shared.yaml`，HTTP 文件也不再保留 `shared`。平台级 securityScheme / schema / parameter / header / response 全部在 `platform/http_conventions.yaml` 的 `components`，由 `gen_openapi` 注入每个 api app；HTTP 文件只引用组件名，不再定义文件私有组件。
-3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`request` / `response` 都有独立 `headers`；path/query 参数是带 `name` / `schema` / `description` / `to` 的对象列表；body 用 `kind` 区分 json/form/multipart/text/binary；body schema 必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
+3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`request` / `response` 都有独立 `headers`；path/query 参数是带 `name` / `type` / `description` / `to` 的对象列表；body 用 `kind` 区分 json/form/multipart/text/binary；body 类型必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
 4. **客户端幂等键删除**：幂等键 header、OpenAPI components 与场景字段全部删除；幂等由 API 内部按业务语义决定，不由客户端传入的 header 控制。
 5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。HTTP 契约的 `request.headers` / `response.headers` 保留为独立字段，`Authorization` 通过 header 的 `auth: BearerAuth` 表达。
 6. **安全凭据注入**：`request.headers` 中的 `Authorization` 使用 `auth: BearerAuth`；认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
@@ -273,3 +273,11 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 4. **端点变化**：`POST /auth/login` 返回 `AuthResult`（含必填 `refresh`）；`POST /auth/refresh` 是公开 operation，请求体 `RefreshInput`，响应 `RefreshResult`；`POST /auth/logout` 保留，请求体 `RefreshInput`，吊销 refresh JWT 记录；access JWT 通过 token 表 revoked_at 立即失效。
 5. **失效边界**：`token.revocation.strategy` 固定 `server`。`token.verify` 验签后读取 token 表校验 revoked_at/expiry，因此登出、refresh 轮换、账号删除、改密/换绑手机或邮箱都会吊销 token 表记录，access JWT 即时失效。
 6. **账号删除**：`account.delete` 软删认证绑定、作废验证体并调用 `token.revoke_by_account` 吊销 token 表记录；access JWT 随之立即失效。
+
+## 2026-11-24 字段命名与 header 默认值
+
+1. **值域字段统一叫 `type`**：HTTP 源契约的 header / path / query / body / form field 原先用 `schema` 表示类型 ID，现全部改名为 `type`；OpenAPI 生成物里的 `schema` 键是生成结果，不变。`normalizeHTTPSchema` 只负责把 `type` 值投影为 OpenAPI schema。
+2. **header 的 `required` 默认 false**：`request.headers` / `response.headers` 不再默认必填；`Content-Type` 的必需性由 body 决定，`Authorization` 的必需性由 security 决定。原先用 `required: true` 标记 Content-Type 的 strict 检查已删除，正常化器只要求“有 body 时声明 Content-Type”。
+3. **request body 单行书写**：`request.body` 统一写 `body: { kind: json, type: <类型 ID>, to: params.<参数> }`。这只是 YAML 展示格式，不改变校验语义；response body 仍按模板块状书写。
+4. **form 不独立于 body**：`form` / `multipart` 是 `body.kind` 的取值，与 `json` 互斥；`fields` 是表单字段列表，不新增独立的 `form` 顶层字段。
+5. **response 保持状态码 map**：键是三位 HTTP 状态码，值是该状态下的 description/headers/body/codes。多个状态码共享同一响应形状时重复声明；当前没有该需求，不引入 list 或 response alias。

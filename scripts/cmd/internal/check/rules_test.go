@@ -251,7 +251,7 @@ paths:
       request:
         query:
           - name: status
-            schema: data.enums.x_status
+            type: data.enums.x_status
             required: false
             description: "status"
             to: params.filter.status

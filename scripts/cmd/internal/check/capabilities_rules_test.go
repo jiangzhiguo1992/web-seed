@@ -228,7 +228,7 @@ paths:
           - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
           kind: json
-          schema:
+          type:
             $ref: "#/components/schemas/WrongInput"
           required: true
           to: "params.input"
@@ -275,7 +275,7 @@ paths:
           - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
           kind: json
-          schema:
+          type:
             $ref: "#/components/schemas/WrongInput"
           required: true
           to: "params.input"
@@ -322,7 +322,7 @@ paths:
           - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
           kind: json
-          schema:
+          type:
             type: "object"
             additionalProperties: false
             required:
@@ -699,7 +699,7 @@ paths:
       request:
         query:
           - name: id
-            schema: { type: integer }
+            type: { type: integer }
             required: false
             description: "id"
             to: params.missing
@@ -936,7 +936,7 @@ paths:
         headers:
           - { name: Authorization, required: true, auth: BearerAuth, description: "token" }
         query:
-          - { name: account_id, schema: { type: integer }, required: true, description: "account", to: params.account_id }
+          - { name: account_id, type: { type: integer }, required: true, description: "account", to: params.account_id }
       response:
         "204": { description: "OK" }
 `)
@@ -1000,10 +1000,10 @@ paths:
         "200":
           description: "OK"
           headers:
-            - { name: Content-Length, required: false, schema: _types.integer, description: "length" }
+            - { name: Content-Length, required: false, type: _types.integer, description: "length" }
           body:
             kind: json
-            schema: _types.string
+            type: _types.string
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root, strictHTTP: true}
@@ -2709,7 +2709,7 @@ paths:
             - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema:
+            type:
               type: "object"
               additionalProperties: false
               x-service-return: "data.entities.missing"
@@ -2913,7 +2913,7 @@ paths:
         body:
           kind: form
           fields:
-            - { name: username, schema: _types.string, required: true, description: "name", to: params.input.username }
+            - { name: username, type: _types.string, required: true, description: "name", to: params.input.username }
       response:
         "204": { description: "OK" }
 `)
@@ -2958,7 +2958,7 @@ paths:
           - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
           kind: json
-          schema: cap.services.x.schemas.Input
+          type: cap.services.x.schemas.Input
           required: false
           to: "params.input"
       response:

@@ -24,19 +24,16 @@ paths:
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
-          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
-        body:
-          kind: json
-          schema: cap.services.auth.schemas.LoginInput
-          to: params.input
+          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+        body: { kind: json, type: cap.services.auth.schemas.LoginInput, to: params.input }
       response:
         200:
           description: "登录成功"
           headers:
-            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: cap.services.auth.schemas.AuthResult
+            type: cap.services.auth.schemas.AuthResult
         401:
           codes:
             - platform.errors.AUTH_INVALID_CREDENTIALS
@@ -59,19 +56,16 @@ paths:
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
-          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
-        body:
-          kind: json
-          schema: cap.services.verification.schemas.SendVerificationInput
-          to: params.input
+          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+        body: { kind: json, type: cap.services.verification.schemas.SendVerificationInput, to: params.input }
       response:
         202:
           description: "已受理"
           headers:
-            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: cap.services.verification.schemas.VerificationSent
+            type: cap.services.verification.schemas.VerificationSent
         422:
           codes:
             - platform.errors.AUTH_EMAIL_INVALID
@@ -90,19 +84,16 @@ paths:
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
-          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
-        body:
-          kind: json
-          schema: cap.services.verification.schemas.VerifyCodeInput
-          to: params.input
+          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+        body: { kind: json, type: cap.services.verification.schemas.VerifyCodeInput, to: params.input }
       response:
         200:
           description: "校验成功"
           headers:
-            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: cap.services.verification.schemas.VerificationResult
+            type: cap.services.verification.schemas.VerificationResult
         422:
           codes:
             - platform.errors.AUTH_VERIFICATION_EXPIRED
@@ -122,19 +113,16 @@ paths:
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
-          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
-        body:
-          kind: json
-          schema: cap.services.token.schemas.RefreshInput
-          to: params.input
+          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+        body: { kind: json, type: cap.services.token.schemas.RefreshInput, to: params.input }
       response:
         200:
           description: "成功"
           headers:
-            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: cap.services.token.schemas.RefreshResult
+            type: cap.services.token.schemas.RefreshResult
         401:
           codes:
             - platform.errors.AUTH_TOKEN_EXPIRED
@@ -151,11 +139,8 @@ paths:
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
-          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
-        body:
-          kind: json
-          schema: cap.services.token.schemas.RefreshInput
-          to: params.input
+          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+        body: { kind: json, type: cap.services.token.schemas.RefreshInput, to: params.input }
       response:
         204:
           description: "已吊销"
@@ -173,21 +158,18 @@ paths:
         - feature.pages.account_security
       request:
         headers:
-          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
-          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
-        body:
-          kind: json
-          schema: cap.services.auth.schemas.BindPasswordInput
-          to: params.input
+          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+        body: { kind: json, type: cap.services.auth.schemas.BindPasswordInput, to: params.input }
       response:
         200:
           description: "成功"
           headers:
-            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: cap.services.auth.schemas.AuthBinding
+            type: cap.services.auth.schemas.AuthBinding
         401:
           codes:
             - platform.errors.AUTH_INVALID_CREDENTIALS
@@ -213,21 +195,18 @@ paths:
         - feature.pages.account_security
       request:
         headers:
-          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
-          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
-        body:
-          kind: json
-          schema: cap.services.auth.schemas.BindPhoneInput
-          to: params.input
+          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+        body: { kind: json, type: cap.services.auth.schemas.BindPhoneInput, to: params.input }
       response:
         200:
           description: "成功"
           headers:
-            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: cap.services.auth.schemas.AuthBinding
+            type: cap.services.auth.schemas.AuthBinding
         403:
           codes:
             - platform.errors.ACCOUNT_SUSPENDED
@@ -250,21 +229,18 @@ paths:
         - feature.pages.account_security
       request:
         headers:
-          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
-          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
-        body:
-          kind: json
-          schema: cap.services.auth.schemas.BindEmailInput
-          to: params.input
+          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+        body: { kind: json, type: cap.services.auth.schemas.BindEmailInput, to: params.input }
       response:
         200:
           description: "成功"
           headers:
-            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: cap.services.auth.schemas.AuthBinding
+            type: cap.services.auth.schemas.AuthBinding
         403:
           codes:
             - platform.errors.ACCOUNT_SUSPENDED
@@ -287,16 +263,16 @@ paths:
         - feature.pages.current_account
       request:
         headers:
-          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
       response:
         200:
           description: "成功"
           headers:
-            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: data.entities.account
+            type: data.entities.account
         401:
           codes:
             - platform.errors.AUTH_TOKEN_EXPIRED

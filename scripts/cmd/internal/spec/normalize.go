@@ -253,7 +253,7 @@ func ensureDirectComponents(doc map[string]any) error {
 		switch v := value.(type) {
 		case map[string]any:
 			for key, child := range v {
-				if key == "schema" {
+				if key == "type" {
 					if id, ok := child.(string); ok {
 						if err := add(id); err != nil {
 							return err
@@ -482,9 +482,6 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 	if err != nil {
 		return nil, nil, nil, false, err
 	}
-	if strict && bodyRaw != nil && !headerRequired(asList(request["headers"]), "Content-Type") {
-		return nil, nil, nil, false, fmt.Errorf("%s: request body requires required Content-Type header", where)
-	}
 	if bodyRaw != nil {
 		if form != nil {
 			serviceParams["form"] = form
@@ -513,22 +510,6 @@ var bodyMediaTypes = map[string]string{
 	"multipart": "multipart/form-data",
 	"text":      "text/plain",
 	"binary":    "application/octet-stream",
-}
-
-func headerRequired(raw []any, name string) bool {
-	for _, item := range raw {
-		header := asMap(item)
-		if header == nil {
-			continue
-		}
-		value, _ := header["name"].(string)
-		if !strings.EqualFold(value, name) {
-			continue
-		}
-		required, ok := header["required"].(bool)
-		return !ok || required
-	}
-	return false
 }
 
 func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool) ([]any, string, bool, error) {
@@ -569,17 +550,17 @@ func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, comp
 		if value, _ := header["auth"].(string); value != "" {
 			return nil, "", false, fmt.Errorf("%s: header %s must not declare auth", where, name)
 		}
-		if header["schema"] != nil && header["value"] != nil {
-			return nil, "", false, fmt.Errorf("%s: header %s must declare schema or value, not both", where, name)
+		if header["type"] != nil && header["value"] != nil {
+			return nil, "", false, fmt.Errorf("%s: header %s must declare type or value, not both", where, name)
 		}
-		if header["schema"] == nil && header["value"] == nil {
-			return nil, "", false, fmt.Errorf("%s: header %s requires schema or value", where, name)
+		if header["type"] == nil && header["value"] == nil {
+			return nil, "", false, fmt.Errorf("%s: header %s requires type or value", where, name)
 		}
 		schema, err := normalizeHeaderSchema(header, resolve, componentByID, strict)
 		if err != nil {
 			return nil, "", false, fmt.Errorf("%s: header %s: %w", where, name, err)
 		}
-		required := true
+		required := false
 		if value, ok := header["required"].(bool); ok {
 			required = value
 		}
@@ -594,7 +575,7 @@ func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, comp
 
 func normalizeHeaderSchema(header map[string]any, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, error) {
 	var schema map[string]any
-	if raw := header["schema"]; raw != nil {
+	if raw := header["type"]; raw != nil {
 		value, err := normalizeHTTPSchema(raw, resolve, componentByID, strict)
 		if err != nil {
 			return nil, err
@@ -672,7 +653,7 @@ func normalizeRequestBody(body map[string]any, contentType, where string, resolv
 				schema = map[string]any{"type": "string", "format": "binary"}
 			} else {
 				var err error
-				schema, err = normalizeHTTPSchema(field["schema"], resolve, componentByID, strict)
+				schema, err = normalizeHTTPSchema(field["type"], resolve, componentByID, strict)
 				if err != nil {
 					return nil, nil, fmt.Errorf("%s: body field %s: %w", where, name, err)
 				}
@@ -689,9 +670,9 @@ func normalizeRequestBody(body map[string]any, contentType, where string, resolv
 		}
 		return map[string]any{"required": bodyRequired(body), "content": map[string]any{contentType: map[string]any{"schema": schema}}}, mappings, nil
 	}
-	schema, err := normalizeHTTPSchema(body["schema"], resolve, componentByID, strict)
+	schema, err := normalizeHTTPSchema(body["type"], resolve, componentByID, strict)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s: request.body.schema: %w", where, err)
+		return nil, nil, fmt.Errorf("%s: request.body.type: %w", where, err)
 	}
 	if kind == "binary" {
 		schema["format"] = "binary"
@@ -708,7 +689,7 @@ func normalizeListedParameter(raw any, in, where string, index int, resolve Type
 	if name == "" {
 		return nil, fmt.Errorf("%s: %s[%d].name required", where, in, index)
 	}
-	schema, err := normalizeHTTPSchema(param["schema"], resolve, componentByID, strict)
+	schema, err := normalizeHTTPSchema(param["type"], resolve, componentByID, strict)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %s parameter %s: %w", where, in, name, err)
 	}
@@ -752,11 +733,11 @@ func normalizeResponseHeaders(raw []any, where, status string, resolve TypeResol
 		if value, _ := header["auth"].(string); value != "" {
 			return nil, "", fmt.Errorf("%s: response %s header %s must not declare auth", where, status, name)
 		}
-		if header["schema"] != nil && header["value"] != nil {
-			return nil, "", fmt.Errorf("%s: response %s header %s must declare schema or value, not both", where, status, name)
+		if header["type"] != nil && header["value"] != nil {
+			return nil, "", fmt.Errorf("%s: response %s header %s must declare type or value, not both", where, status, name)
 		}
-		if header["schema"] == nil && header["value"] == nil {
-			return nil, "", fmt.Errorf("%s: response %s header %s requires schema or value", where, status, name)
+		if header["type"] == nil && header["value"] == nil {
+			return nil, "", fmt.Errorf("%s: response %s header %s requires type or value", where, status, name)
 		}
 		schema, err := normalizeHeaderSchema(header, resolve, componentByID, strict)
 		if err != nil {
@@ -818,9 +799,6 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 		if err != nil {
 			return nil, err
 		}
-		if strict && asMap(resp["body"]) != nil && !headerRequired(asList(resp["headers"]), "Content-Type") {
-			return nil, fmt.Errorf("%s: response %s body requires required Content-Type header", where, status)
-		}
 		if len(headers) > 0 {
 			normalized["headers"] = headers
 		}
@@ -842,9 +820,9 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 			if contentType != want {
 				return nil, fmt.Errorf("%s: response %s Content-Type %s does not match body.kind %s (%s)", where, status, contentType, kind, want)
 			}
-			schema, err := normalizeHTTPSchema(body["schema"], resolve, componentByID, strict)
+			schema, err := normalizeHTTPSchema(body["type"], resolve, componentByID, strict)
 			if err != nil {
-				return nil, fmt.Errorf("%s: response %s body.schema: %w", where, status, err)
+				return nil, fmt.Errorf("%s: response %s body.type: %w", where, status, err)
 			}
 			if kind == "binary" {
 				schema["format"] = "binary"
@@ -873,7 +851,7 @@ func normalizeHTTPSchema(raw any, resolve TypeResolver, componentByID map[string
 	case map[string]any:
 		if ref, _ := value["$ref"].(string); ref != "" {
 			if strict {
-				return nil, fmt.Errorf("schema $ref removed; use direct type id")
+				return nil, fmt.Errorf("type $ref removed; use direct type id")
 			}
 			return value, nil
 		}
@@ -923,7 +901,7 @@ func normalizeHTTPSchema(raw any, resolve TypeResolver, componentByID map[string
 		// 迁移期：裸 JSON 类型与标准 object 仍接受。
 		if typ == "object" && value["properties"] != nil {
 			if strict {
-				return nil, fmt.Errorf("standard object schema removed; use type: _types.object")
+				return nil, fmt.Errorf("inline object type removed; use a named type id")
 			}
 			properties := map[string]any{}
 			for name, rawProperty := range asMap(value["properties"]) {
@@ -940,11 +918,11 @@ func normalizeHTTPSchema(raw any, resolve TypeResolver, componentByID map[string
 			return out, nil
 		}
 		if strict {
-			return nil, fmt.Errorf("schema must be a direct type id or _types node")
+			return nil, fmt.Errorf("type must be a direct type id or _types node")
 		}
 		return value, nil
 	}
-	return nil, fmt.Errorf("schema must be a direct type ref or _types node")
+	return nil, fmt.Errorf("type must be a direct type id or _types node")
 }
 
 func applyHTTPScalarParams(out map[string]any, node map[string]any) {

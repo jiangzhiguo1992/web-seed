@@ -159,7 +159,7 @@ paths:
             - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: cap.services.x.schemas.X`)
+            type: cap.services.x.schemas.X`)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   X:
@@ -436,7 +436,7 @@ paths:
         body:
           kind: form
           fields:
-            - { name: username, schema: _types.string, required: true, description: "name", to: params.input.username }
+            - { name: username, type: _types.string, required: true, description: "name", to: params.input.username }
       response:
         "204":
           description: "OK"
@@ -685,7 +685,7 @@ paths:
             - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
-            schema: cap.services.x.schemas.X
+            type: cap.services.x.schemas.X
         "409":
           codes: [platform.errors.X]
 `)

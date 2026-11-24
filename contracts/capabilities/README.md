@@ -14,7 +14,7 @@
 | `services/<module>.yaml`             | 模块能提供哪些可调用单元、如何实现 | services[]、steps、input/output 数据链、事务、写归属 | Go interface、usecase 骨架、写归属校验 |
 | `lifecycles/<dimension>.yaml`        | 实体的某个状态机如何创建、流转与销毁 | subjects[{entity,field}]、states(values/initial/final)、create/destroy、transitions | 生命周期常量、转换表、非法动作测试     |
 | `events/<module>.yaml`               | 哪些异步主题与任务、如何触发与重试 | topics[]（publish.payload + subscribe）、crons[]（schedule/retry）、dispatches[]（payload/delay/retry） | 事件常量、payload 类型、worker 注册表  |
-| `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露           | path、method、status、header、schema 引用            | server 类型、client、合并 spec         |
+| `protocols/<protocol>/<module>.yaml` | 服务如何通过某种协议暴露           | path、method、status、header、类型引用              | server 类型、client、合并 spec         |
 
 一句话区分：
 
@@ -216,15 +216,16 @@ dispatch 项：
 - status code / content-type / header
 - API 版本由文件级 `mount.api_version` 声明（`v<数字>`）；完整 path = `mount.path` + `paths` key，生成器按 app include 文件的版本派生 `servers: /<api_version>`。`mount.path` 只写公共资源前缀（如 `/account`），audience 段写在 `paths`（如 `/admin`）；`paths`、`mount.path` 都不写版本前缀
 - `project.yaml` 的 api app 只声明 `audience` / `timeout_ms` / `includes`，不再声明 `api_version`；同一 app 的 include 文件必须处于同一版本（checker 与生成器都拒绝混版本）
-- 每个 operation 用 `request` / `response` 两块；`request` 允许 `headers` / `path` / `query` / `body`；`response` 是状态码 map，2xx 写 `description` / `headers` / `body`，非 2xx 只写 `codes`
-- `request.headers` 与 `response.headers` 是独立的 header 列表，不放在 body 下；`Authorization` 用 `auth: BearerAuth` 标记，`Content-Type` 用 `value` 标记
-- 认证统一用 `Authorization` header：受保护 operation 写 `{ name: Authorization, required: true, auth: BearerAuth }`；公开 operation 不写
-- `request.path` / `request.query` 是列表，每项必须写 `name` / `schema` / `description` / `to`（query 另有 `required`）；`schema` 只能是 `_types.*` 或 `data.enums.*`
-- `body` 用 `kind` 区分编码：`json` / `form` / `multipart` / `text` / `binary`；`json/text/binary` 写 `schema` + `to`，`form/multipart` 写 `fields`，每个 field 写 `to`
+- 每个 operation 用 `request` / `response` 两块；`request` 允许 `headers` / `path` / `query` / `body`；`response` 是以三位状态码为键的 map，2xx 写 `description` / `headers` / `body`，非 2xx 只写 `codes`
+- `request.headers` 与 `response.headers` 是独立的 header 列表，不放在 body 下；`Authorization` 用 `auth: BearerAuth` 标记，`Content-Type` 用 `value` 标记；header 的 `required` 默认 false，Content-Type 与 Authorization 的必需性分别由 body 与 security 决定
+- 认证统一用 `Authorization` header：受保护 operation 写 `{ name: Authorization, auth: BearerAuth }`；公开 operation 不写
+- `request.path` / `request.query` 是列表，每项必须写 `name` / `type` / `description` / `to`（query 另有 `required`）；`type` 只能是 `_types.*` 或 `data.enums.*`
+- `body` 用 `kind` 区分编码：`json` / `form` / `multipart` / `text` / `binary`；`json/text/binary` 写 `type` + `to`，`form/multipart` 写 `fields`，每个 field 写 `to`；form 是 body 的一种编码，不是独立于 body 的字段，不能与 json 同时出现
+- `request.body` 用单行 flow mapping 书写：`body: { kind: json, type: <类型 ID>, to: params.<参数> }`
 - 有 body 时必须声明 `Content-Type` header，且 value 必须等于 `body.kind` 对应的媒体类型；响应 body 同理
 - `Connection` / `Content-Length` / `Expect` / `Transfer-Encoding` 等传输层头不写进 `headers`；名单由 `platform/http_conventions.transport_headers` 定义，checker 与 generator 统一读取
 - `Upgrade-Insecure-Requests` 等端到端浏览器 hint 不列入平台 header 目录；需要时按普通 header 声明。
-- `schema` 直接写类型 ID：`data.entities.*` / `data.enums.*` / `cap.services.*.schemas.*` / `_types.*`，不写 `#/components/...`
+- `type` 直接写类型 ID：`data.entities.*` / `data.enums.*` / `cap.services.*.schemas.*` / `_types.*`，不写 `#/components/...`
 - 平台级 header 语义、securityScheme、response、schema 统一定义在 `platform/http_conventions.yaml`；HTTP 文件不写私有 components
 
 **不要写**：权限、审计、限流（在 `platform/security/access.yaml`）、事务（在 service 项）。
@@ -252,7 +253,7 @@ HTTP 约束：
 |---|---|---|
 | `Authorization` | `request.headers[].auth: BearerAuth` | OpenAPI security，不生成普通 header parameter |
 | `Content-Type` | `request.headers` / `response.headers` 的 `value` | OpenAPI request/response media type |
-| `Accept` / 自定义 header | `request.headers` / `response.headers` 的 `schema` 或 `value` | OpenAPI header parameter |
+| `Accept` / 自定义 header | `request.headers` / `response.headers` 的 `type` 或 `value` | OpenAPI header parameter |
 | `Location` / `Retry-After` | `response.headers` | OpenAPI response header |
 
 `Content-Type` 在契约里就是 header；生成器把它映射成 OpenAPI `content.<value>`，不会重复生成普通 header parameter。
