@@ -98,6 +98,25 @@ func (c *Checker) checkAuthPolicy() {
 			}
 		}
 	}
+	c.checkAuthMFA(rel, doc)
+}
+
+// checkAuthMFA 校验强制 MFA 的角色引用真实存在；MFA 只在本文件声明。
+func (c *Checker) checkAuthMFA(rel string, doc map[string]any) {
+	mfa, _ := asMap(doc["mfa"])
+	if mfa == nil {
+		return
+	}
+	roles := c.roleIDs()
+	for _, raw := range asList(mfa["required_for_roles"]) {
+		code, _ := raw.(string)
+		if code == "" {
+			continue
+		}
+		if !roles["platform.security.roles."+code] {
+			c.rulef("auth-policy-mfa", "%s: mfa.required_for_roles references unknown role %s", rel, code)
+		}
+	}
 }
 
 func (c *Checker) featurePageFiles() []string {

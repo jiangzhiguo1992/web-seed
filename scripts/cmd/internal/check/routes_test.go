@@ -289,11 +289,12 @@ fields:
   revocation: { strategy: server, note: "x" }
 password: { min_length: 12, hash_field: data.tables.missing.col.password_hash }
 verification: { table: data.tables.missing }
+mfa: { required_for_roles: [ghost] }
 `)
 	c := &Checker{root: root}
 	c.checkAuthPolicy()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"[auth-policy-jwt]", "[auth-policy-audience]", "[auth-policy-password]", "[auth-policy-storage]"} {
+	for _, want := range []string{"[auth-policy-jwt]", "[auth-policy-audience]", "[auth-policy-password]", "[auth-policy-storage]", "[auth-policy-mfa]"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}

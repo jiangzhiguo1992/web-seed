@@ -18,6 +18,7 @@ var platformSingletonTypes = []string{
 	"platform.observability.metrics",
 	"platform.architecture.go_arch",
 	"platform.analytics.events",
+	"platform.http_conventions",
 	"platform.security.access",
 	"platform.security.permissions",
 	"platform.security.roles",

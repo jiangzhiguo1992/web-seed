@@ -593,6 +593,17 @@ func TestEntityValidationUsedBy(t *testing.T) {
 	if !strings.Contains(entityErrs(c), "does not query entity table") {
 		t.Fatalf("validation consumer without entity query not reported: %v", c.errs)
 	}
+
+	c.errs = nil
+	c.errCodeSet = map[string]bool{"COMMON_INTERNAL": true}
+	e.Doc["validation"] = []any{map[string]any{
+		"name": "v", "expr": "x > 0", "on_violation": "platform.errors.MISSING",
+		"used_by": []any{"cap.services.x.get"},
+	}}
+	c.checkEntityValidation(e)
+	if !strings.Contains(entityErrs(c), "[entity-validation]") {
+		t.Fatalf("unknown validation error not reported: %v", c.errs)
+	}
 }
 
 func TestColumnsReturnShape(t *testing.T) {

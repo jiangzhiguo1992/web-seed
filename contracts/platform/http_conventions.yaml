@@ -4,6 +4,9 @@ schema_version: 1
 id: platform.http_conventions
 summary: "HTTP 信封、状态码与平台组件约定"
 stability: draft
+do_not:
+  - "传输层头由 HTTP server/proxy 生成，不写进 request.headers / response.headers"
+  - "3xx 与未登记状态码不得出现在 operation.response"
 
 response:
   success: "统一信封 { code: 0, msg: \"ok\", data: <service return> }；data 必须是 service 的非 err return"

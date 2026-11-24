@@ -25,6 +25,8 @@
 | `feature.routes.yaml` | 路由与菜单；route/page/permission/layout 引用 |
 | `feature.rules.yaml` | 可执行业务规则；所有规则都是 error，违反即阻止提交 |
 | `platform.modules.yaml` | 模块注册表（owner_module 来源） |
+| `platform.http_conventions.yaml` | HTTP 信封、分页、header、状态码与平台组件 |
+| `platform.errors.yaml` | 错误码文件（全局约定 + 分域错误 + 基础设施基线） |
 | `platform.security.permissions.yaml` | 权限点 |
 | `platform.security.roles.yaml` | 角色与权限映射 |
 | `platform.security.auth_policy.yaml` | JWT、token 表哈希、MFA 与密码策略 |
@@ -67,7 +69,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 - 槽位键出现在节点位置报 `schema.slot-position`；
 - `_types.yaml` 用 `schemas.<kind>.keys` 描述自身；判别键与结构键必须 `required: true`；
 - `cap.events` 的 `topics[].publish.payload` 投影为 `Event<File><Topic>` component；生成物只保留标准 schema，不携带事件扩展键。
-- `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；平台级组件只在 `platform/http_conventions.components`，HTTP 文件没有私有组件。`request` 写 headers/path/query/body，headers 独立于 body；path/query/body/form 用 `to` 指向 service 参数，值域字段统一叫 `type`；`response` 是以三位状态码为键的 map，写 msg/headers/body/errors；operation 字段顺序固定为 id/name/summary/service/request/response/used_by；header/query/body/body.fields 的 `required` 省略为 true，可选项写 false；认证用 `Authorization` header 的 `auth: Bearer`，不再有 security/mapping 字段。
+- `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；平台级组件在 `platform/http_conventions.components`，HTTP 文件可声明私有组件并由 `gen_openapi` 合并。`request` 写 headers/path/query/body，headers 独立于 body；path/query/body/form 用 `to` 指向 service 参数，值域字段统一叫 `type`；`response` 是以三位状态码为键的 map，写 msg/headers/body/errors；operation 字段顺序固定为 id/name/summary/service/request/response/used_by；header/query/body/body.fields 的 `required` 省略为 true，可选项写 false；认证用 `Authorization` header 的 `auth: Bearer`，不再有 security/mapping 字段。
 - `mount` 必须声明 `api_version` / `path` / `audience`：`api_version` 是 `v<数字>`，与 `mount.path`、`paths` key 一起由生成器派生 `servers: /<api_version>`；`paths` 必填且至少一个 operation。
 - `cap.protocols.http` 的文件级 `mount` 承载 `path` 与 `audience`：`path` 是公共资源前缀（`/account`）；audience 段在 `paths`（`/admin`），`audience` 来自 `platform/http_conventions.audiences`；operation 的 `used_by` 必须非空且精确等于页面引用，错误按 platform.errors 的 status 分组、`COMMON_*` 不在 operation 重复；平台基线状态（含 body/deprecated）由 `error_responses` 注入。
 - 槽位字段的值域可整体写 `types: [ _types.schema ]`，即允许 `schemas` 下声明的全部节点种类；不要重复枚举 kind。

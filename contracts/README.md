@@ -45,11 +45,19 @@
 
 ### 1.3 enforcement 三档
 
-| 档位 | 含义 | 缺失后果 |
+| 档位 | 含义 | 机器证据 |
 |---|---|---|
-| `generated` | 从契约生成代码，手改即漂移 | CI diff 失败 |
-| `tested` | 有测试断言契约 | 测试失败 |
-| `review-only` | 只能靠 review，必须显式标注 | 风险可见，不静默 |
+| `generated` | 从契约生成代码，手改即漂移 | `enforcement_gates.generated.<type>` 里的 `make <target>` 必须存在 |
+| `tested` | 有测试断言契约 | `enforcement_gates.tested.<type>` 里的测试文件必须存在 |
+| `review-only` | 只能靠 review，必须显式标注 | 不登记 gate，风险可见 |
+
+`generated+tested` 同时要求两组证据。`contracts/index.yaml` 的 `enforcement_gates` 是唯一登记处：
+按契约类型登记生成目标与测试文件，`contract-check` 校验目标/文件存在，并拒绝声明了
+`generated` / `tested` 却没有 gate 的条目。`generated/` 下的产物条目豁免。
+
+`generated` 只给有专属生成产物的类型（DDL、OpenAPI paths、event payload、scenario、errors、
+HTTP components）；仅作为生成器输入的契约（entities、queries、services、lifecycles、pages、
+roles）不标 `generated`，用 `tested` 覆盖。
 
 **没有 `enforcement` 声明的文件不算契约。**
 
@@ -536,6 +544,7 @@ data/storage.yaml ──> 按引擎分组的表条目 + 表级物理事实
 
 P2：契约与 `contract-check` 已可用，生成器待实现（逐项状态见 §5.1）。
 
-`generated` / `tested` 是目标值，不代表已有闸门；每条契约的实际 enforcement 与 stability 以 `index.yaml` 为准。data 层已启用的闸门见 `data/README.md` §7。
+`generated` / `tested` 是当前值，不是目标值：没有 gate 的契约只能声明 `review-only`，否则
+`contract-check` 报 `schema.enforcement`。data 层已启用的闸门见 `data/README.md` §7。
 
 `_meta/<type>.yaml` 是字段规范，不是实例契约，不登记 `index.yaml`，也不进入 `generated/`。

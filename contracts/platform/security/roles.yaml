@@ -13,7 +13,6 @@ roles:
     description: "全部权限"
     inherits: []
     permissions: ["*"]
-    mfa_required: true
 
   - code: operator
     name: 运营

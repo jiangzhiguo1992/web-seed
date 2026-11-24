@@ -312,6 +312,7 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 	if strings.Count(errs, `unknown column "missing"`) != 1 {
 		t.Fatalf("expected one unknown-column error, got:\n%s", errs)
 	}
+	mustContainRule(t, c.errs, "index-definition")
 }
 
 func TestIsBaseTableRef(t *testing.T) {
@@ -500,6 +501,7 @@ func TestConstraintUsedBy(t *testing.T) {
 	if !strings.Contains(strings.Join(c.errs, "\n"), "does not write table") {
 		t.Fatalf("read query accepted as constraint used_by: %v", c.errs)
 	}
+	mustContainRule(t, c.errs, "constraint-used-by")
 
 	c.errs = nil
 	doc["constraints"] = []any{map[string]any{
@@ -527,6 +529,7 @@ func TestConstraintOnViolationMustExist(t *testing.T) {
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown error code") {
 		t.Fatalf("unknown on_violation accepted: %v", c.errs)
 	}
+	mustContainRule(t, c.errs, "constraint-fields")
 }
 
 func TestUniqueIndexLiveOnlyOptional(t *testing.T) {
@@ -1016,6 +1019,7 @@ func TestBasePrimaryKeyNullable(t *testing.T) {
 	if !strings.Contains(strings.Join(c.errs, "\n"), `base column "id" nullable must be false`) {
 		t.Fatalf("nullable base primary key not reported: %v", c.errs)
 	}
+	mustContainRule(t, c.errs, "base-columns")
 }
 
 func TestHTTPCapabilityWriteLayerRejected(t *testing.T) {
@@ -2816,6 +2820,7 @@ func TestBaseFileMustBeFixed(t *testing.T) {
 	if !strings.Contains(strings.Join(c.errs, "\n"), "base contract must live in _base.yaml") {
 		t.Fatalf("base file location not reported: %v", c.errs)
 	}
+	mustContainRule(t, c.errs, "base-file")
 }
 
 func TestMissingBaseContract(t *testing.T) {
@@ -2832,6 +2837,7 @@ func TestMissingBaseContract(t *testing.T) {
 	if !strings.Contains(strings.Join(c.errs, "\n"), "missing base contract") {
 		t.Fatalf("missing base contract not reported: %v", c.errs)
 	}
+	mustContainRule(t, c.errs, "base-file")
 }
 
 func TestColumnRefRequiresCol(t *testing.T) {

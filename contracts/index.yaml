@@ -29,11 +29,11 @@ groups:
 # stability: stable | draft | deprecated
 entries:
   # ---------- 项目 ----------
-  - { id: project, path: project.yaml, summary: "项目元信息与 derive 输入", consumers: [ops, tools], enforcement: generated, stability: draft }
+  - { id: project, path: project.yaml, summary: "项目元信息与 derive 输入", consumers: [ops, tools], enforcement: tested, stability: draft }
 
   # ---------- data ----------
   - { id: data.tables.base, path: data/tables/_base.yaml, summary: "表结构基类（5 个基础字段）", consumers: [tools], enforcement: generated, stability: draft }
-  - { id: data.entities.base, path: data/entities/_base.yaml, summary: "实体字段基类（5 个基础字段）", consumers: [tools], enforcement: generated, stability: draft }
+  - { id: data.entities.base, path: data/entities/_base.yaml, summary: "实体字段基类（5 个基础字段）", consumers: [tools], enforcement: tested, stability: draft }
   - { id: data.storage, path: data/storage.yaml, summary: "数据存储约束（引擎/表级保留/缓存/归档）", consumers: [api, worker, ops], enforcement: tested, stability: draft }
   - { id: data.types, path: data/types.yaml, summary: "项目级值类型词汇（family + 固定参数）", consumers: [api, web/admin, worker, tools], enforcement: tested, stability: draft }
   - id: data.tables.account
@@ -72,18 +72,18 @@ entries:
       - "把 auth_id/auth_type/account_id 复制进动作表"
       - "用裸哈希存 input_hash"
       - "更新或软删历史动作"
-  - { id: data.entities.account, path: data/entities/account.yaml, summary: "账号数据实体与关系", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: data.entities.token, path: data/entities/token.yaml, summary: "令牌数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.entities.auth_pwd, path: data/entities/auth_pwd.yaml, summary: "密码认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.entities.auth_phone, path: data/entities/auth_phone.yaml, summary: "手机号认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.entities.auth_email, path: data/entities/auth_email.yaml, summary: "邮箱认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.entities.verification_body, path: data/entities/verification_body.yaml, summary: "验证体数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.entities.verification_action, path: data/entities/verification_action.yaml, summary: "验证动作数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.queries.account, path: data/queries/account.yaml, summary: "账号查询集", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.queries.token, path: data/queries/token.yaml, summary: "令牌查询集", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.queries.auth, path: data/queries/auth.yaml, summary: "认证查询集（密码/手机/邮箱）", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.queries.verification, path: data/queries/verification.yaml, summary: "验证查询集（验证体与验证动作）", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: data.enums.account, path: data/enums/account.yaml, summary: "账号域跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated, stability: draft }
+  - { id: data.entities.account, path: data/entities/account.yaml, summary: "账号数据实体与关系", consumers: [api, web/admin], enforcement: tested, stability: draft }
+  - { id: data.entities.token, path: data/entities/token.yaml, summary: "令牌数据实体", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.entities.auth_pwd, path: data/entities/auth_pwd.yaml, summary: "密码认证数据实体", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.entities.auth_phone, path: data/entities/auth_phone.yaml, summary: "手机号认证数据实体", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.entities.auth_email, path: data/entities/auth_email.yaml, summary: "邮箱认证数据实体", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.entities.verification_body, path: data/entities/verification_body.yaml, summary: "验证体数据实体", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.entities.verification_action, path: data/entities/verification_action.yaml, summary: "验证动作数据实体", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.queries.account, path: data/queries/account.yaml, summary: "账号查询集", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.queries.token, path: data/queries/token.yaml, summary: "令牌查询集", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.queries.auth, path: data/queries/auth.yaml, summary: "认证查询集（密码/手机/邮箱）", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.queries.verification, path: data/queries/verification.yaml, summary: "验证查询集（验证体与验证动作）", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.enums.account, path: data/enums/account.yaml, summary: "账号域跨端枚举集合", consumers: [api, web/admin, worker], enforcement: tested, stability: draft }
 
   # ---------- capabilities ----------
   - id: cap.protocols.http.account
@@ -98,10 +98,10 @@ entries:
       - "响应 schema 缺少 additionalProperties: false"
       - "忘记 service 绑定到 cap.services"
   - { id: cap.protocols.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号服务：查询、创建、更新、状态转换与软删编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：JWT 签发、刷新与校验", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号服务：查询、创建、更新、状态转换与软删编排", consumers: [api, web/admin], enforcement: tested, stability: draft }
+  - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: tested, stability: draft }
+  - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：JWT 签发、刷新与校验", consumers: [api], enforcement: tested, stability: draft }
+  - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: tested, stability: draft }
   - { id: cap.events.token, path: capabilities/events/token.yaml, summary: "令牌异步任务：过期标记与清理", consumers: [worker], enforcement: generated+tested, stability: draft }
   - { id: cap.events.verification, path: capabilities/events/verification.yaml, summary: "验证体异步任务：过期与超限清理", consumers: [worker], enforcement: generated+tested, stability: draft }
 
@@ -110,16 +110,16 @@ entries:
     path: capabilities/lifecycles/account.yaml
     summary: "账号生命周期：创建、状态转换与软删"
     consumers: [api, web/admin]
-    enforcement: generated+tested
+    enforcement: tested
     stability: draft
     common_mistakes:
       - "在 service/query 里手写 status 判断，不引用 cap.lifecycles.*"
       - "新增状态却不加转换或 create/destroy 引用"
       - "把 suspended 与 deleted 混用"
-  - { id: cap.lifecycles.auth_pwd, path: capabilities/lifecycles/auth_pwd.yaml, summary: "密码认证绑定生命周期", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.lifecycles.auth_contact, path: capabilities/lifecycles/auth_contact.yaml, summary: "手机/邮箱认证绑定生命周期", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.lifecycles.token, path: capabilities/lifecycles/token.yaml, summary: "令牌生命周期", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.lifecycles.verification, path: capabilities/lifecycles/verification.yaml, summary: "验证体生命周期", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.lifecycles.auth_pwd, path: capabilities/lifecycles/auth_pwd.yaml, summary: "密码认证绑定生命周期", consumers: [api], enforcement: tested, stability: draft }
+  - { id: cap.lifecycles.auth_contact, path: capabilities/lifecycles/auth_contact.yaml, summary: "手机/邮箱认证绑定生命周期", consumers: [api], enforcement: tested, stability: draft }
+  - { id: cap.lifecycles.token, path: capabilities/lifecycles/token.yaml, summary: "令牌生命周期", consumers: [api], enforcement: tested, stability: draft }
+  - { id: cap.lifecycles.verification, path: capabilities/lifecycles/verification.yaml, summary: "验证体生命周期", consumers: [api], enforcement: tested, stability: draft }
   - { id: feature.rules.account, path: features/rules/account.yaml, summary: "账号业务规则集", consumers: [api], enforcement: tested, stability: draft }
   - { id: feature.rules.auth, path: features/rules/auth.yaml, summary: "认证业务规则集（验证体）", consumers: [api], enforcement: tested, stability: draft }
   - { id: cap.events.account, path: capabilities/events/account.yaml, summary: "账号领域事件", consumers: [api, worker], enforcement: generated+tested, stability: draft }
@@ -130,19 +130,19 @@ entries:
     path: features/pages/account_list.yaml
     summary: "账号列表页"
     consumers: [web/admin]
-    enforcement: generated+tested
+    enforcement: tested
     stability: draft
     common_mistakes:
       - "手写 /v1/account 而不是引用 capability"
       - "漏掉 forbidden 态"
       - "在页面里直接引用 data.*"
-  - { id: feature.pages.account_detail, path: features/pages/account_detail.yaml, summary: "账号详情页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
-  - { id: feature.pages.account_create, path: features/pages/account_create.yaml, summary: "新建账号页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
-  - { id: feature.pages.account_security, path: features/pages/account_security.yaml, summary: "账号认证安全页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
-  - { id: feature.pages.current_account, path: features/pages/current_account.yaml, summary: "当前账号页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
+  - { id: feature.pages.account_detail, path: features/pages/account_detail.yaml, summary: "账号详情页", consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.pages.account_create, path: features/pages/account_create.yaml, summary: "新建账号页", consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.pages.account_security, path: features/pages/account_security.yaml, summary: "账号认证安全页", consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.pages.current_account, path: features/pages/current_account.yaml, summary: "当前账号页", consumers: [web/admin], enforcement: tested, stability: draft }
   - { id: scenario.http.account, path: scenarios/http/account.yaml, summary: "账号 HTTP 验收场景", consumers: [api, tools], enforcement: tested, stability: draft }
-  - { id: feature.pages.login, path: features/pages/login.yaml, summary: "登录页", consumers: [web/admin], enforcement: generated+tested, stability: draft }
-  - { id: feature.pages.not_found, path: features/pages/not_found.yaml, summary: "404 页", consumers: [web/admin], enforcement: generated, stability: draft }
+  - { id: feature.pages.login, path: features/pages/login.yaml, summary: "登录页", consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.pages.not_found, path: features/pages/not_found.yaml, summary: "404 页", consumers: [web/admin], enforcement: tested, stability: draft }
 
   # ---------- platform ----------
   - { id: platform.environments, path: platform/environments.yaml, summary: "环境清单与差异", consumers: [ops, api, web/admin], enforcement: tested, stability: draft }
@@ -154,19 +154,19 @@ entries:
   - { id: platform.errors.verification, path: platform/errors/verification.yaml, summary: "验证码错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.errors.token, path: platform/errors/token.yaml, summary: "令牌错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.errors.data_access, path: platform/errors/data_access.yaml, summary: "数据访问基础设施错误基线", consumers: [api, tools], enforcement: tested, stability: draft }
-  - { id: platform.http_conventions, path: platform/http_conventions.yaml, summary: "信封、分页、header、状态码与平台 HTTP 组件", consumers: [api, web/admin], enforcement: generated, stability: draft }
+  - { id: platform.http_conventions, path: platform/http_conventions.yaml, summary: "信封、分页、header、状态码与平台 HTTP 组件", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.quality, path: platform/quality.yaml, summary: "测试策略与门槛", consumers: [tools], enforcement: tested, stability: draft }
   - { id: platform.config.env, path: platform/config/env.json, summary: "环境变量 schema", consumers: [api, web/admin, ops], enforcement: tested, stability: draft }
   - { id: platform.architecture.go_arch, path: platform/architecture/go_arch.yaml, summary: "Go 分层约束", consumers: [tools], enforcement: tested, stability: draft }
   - { id: platform.architecture.web_deps, path: platform/architecture/web_deps.json, summary: "前端依赖方向约束", consumers: [tools], enforcement: tested, stability: draft }
-  - { id: platform.design.tokens, path: platform/design/tokens.json, summary: "设计令牌", consumers: [web/admin], enforcement: generated, stability: draft }
+  - { id: platform.design.tokens, path: platform/design/tokens.json, summary: "设计令牌", consumers: [web/admin], enforcement: review-only, stability: draft }
   - { id: platform.observability.log_fields, path: platform/observability/log_fields.yaml, summary: "日志字段与 PII 规则", consumers: [api, ops], enforcement: tested, stability: draft }
   - { id: platform.observability.metrics, path: platform/observability/metrics.yaml, summary: "指标名与标签", consumers: [api, ops], enforcement: tested, stability: draft }
   - { id: platform.analytics.events, path: platform/analytics/events.yaml, summary: "埋点事件与属性", consumers: [web/admin, api], enforcement: tested, stability: draft }
   - { id: platform.modules, path: platform/modules.yaml, summary: "模块清单", consumers: [api, worker, tools], enforcement: tested, stability: draft }
   - { id: platform.security.access, path: platform/security/access.yaml, summary: "入口访问策略（权限与审计）", consumers: [api, worker], enforcement: tested, stability: draft }
-  - { id: platform.security.permissions, path: platform/security/permissions.yaml, summary: "权限点", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
-  - { id: platform.security.roles, path: platform/security/roles.yaml, summary: "角色与权限映射", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: platform.security.permissions, path: platform/security/permissions.yaml, summary: "权限点", consumers: [api, web/admin], enforcement: tested, stability: draft }
+  - { id: platform.security.roles, path: platform/security/roles.yaml, summary: "角色与权限映射", consumers: [api, web/admin], enforcement: tested, stability: draft }
   - { id: platform.security.auth_policy, path: platform/security/auth_policy.yaml, summary: "JWT 令牌认证策略", consumers: [api, web/admin], enforcement: tested, stability: draft }
 
   # ---------- generated（产物索引，非契约正文） ----------
@@ -196,3 +196,45 @@ orphan_whitelist:
   - platform.quality
   - platform.architecture.go_arch
   - platform.architecture.web_deps
+
+# enforcement 的机器可检证据：generated 必须是 Makefile 目标，tested 必须是存在的测试文件。
+enforcement_gates:
+  generated:
+    data.tables: [make gen-db]
+    cap.protocols.http: [make gen-openapi]
+    cap.events: [make gen-openapi]
+    scenario.http: [make gen-scenarios]
+    platform.errors: [make gen-errors]
+    platform.http_conventions: [make gen-openapi]
+  tested:
+    data.tables: [scripts/cmd/internal/check/check_test.go]
+    data.entities: [scripts/cmd/internal/check/entities_test.go]
+    data.enums: [scripts/cmd/internal/check/check_test.go]
+    data.queries: [scripts/cmd/internal/check/check_test.go]
+    data.storage: [scripts/cmd/internal/check/query_storage_test.go]
+    data.types: [scripts/cmd/internal/check/typevocab_test.go]
+    cap.services: [scripts/cmd/internal/check/capabilities_rules_test.go]
+    cap.events: [scripts/cmd/internal/check/capabilities_rules_test.go]
+    cap.lifecycles: [scripts/cmd/internal/check/capabilities_rules_test.go]
+    cap.protocols.http: [scripts/cmd/internal/check/capabilities_rules_test.go]
+    feature.pages: [scripts/cmd/internal/check/pages_test.go]
+    feature.routes: [scripts/cmd/internal/check/routes_test.go]
+    feature.rules: [scripts/cmd/internal/check/rules_test.go]
+    scenario.http: [scripts/cmd/internal/check/scenario_test.go]
+    platform.environments: [scripts/cmd/internal/check/routes_test.go]
+    platform.versioning: [scripts/cmd/internal/check/routes_test.go]
+    platform.errors: [scripts/cmd/internal/check/errors_test.go]
+    platform.http_conventions: [scripts/cmd/internal/check/capabilities_rules_test.go]
+    platform.quality: [scripts/cmd/internal/check/routes_test.go]
+    platform.config.env: [scripts/cmd/internal/check/routes_test.go]
+    platform.architecture.go_arch: [scripts/cmd/internal/check/routes_test.go]
+    platform.architecture.web_deps: [scripts/cmd/internal/check/routes_test.go]
+    platform.observability.log_fields: [scripts/cmd/internal/check/routes_test.go]
+    platform.observability.metrics: [scripts/cmd/internal/check/routes_test.go]
+    platform.analytics.events: [scripts/cmd/internal/check/routes_test.go]
+    platform.modules: [scripts/cmd/internal/check/routes_test.go]
+    platform.security.access: [scripts/cmd/internal/check/capabilities_rules_test.go]
+    platform.security.auth_policy: [scripts/cmd/internal/check/routes_test.go]
+    platform.security.permissions: [scripts/cmd/internal/check/roles_test.go]
+    platform.security.roles: [scripts/cmd/internal/check/roles_test.go]
+    project: [scripts/cmd/internal/check/capabilities_rules_test.go]

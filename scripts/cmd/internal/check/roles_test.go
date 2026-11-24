@@ -84,6 +84,15 @@ func TestPlatformMetaRejectsUnknownNestedField(t *testing.T) {
 			item, _ := asMap(envs[0])
 			item["bogus"] = true
 		}},
+		{"platform.http_conventions", "contracts/platform/http_conventions.yaml", func(doc map[string]any) {
+			envelope, _ := asMap(doc["envelope"])
+			envelope["bogus"] = true
+		}},
+		{"platform.errors", "contracts/platform/errors/token.yaml", func(doc map[string]any) {
+			errs := asList(doc["errors"])
+			item, _ := asMap(errs[0])
+			item["bogus"] = true
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.typ, func(t *testing.T) {

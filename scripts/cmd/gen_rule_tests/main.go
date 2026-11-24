@@ -24,7 +24,13 @@ type row struct {
 	Type          string
 	Rule          string
 	ImplementedBy string
-	Refs          int
+	Asserted      int
+	Dynamic       int
+}
+
+type testRef struct {
+	asserted int
+	dynamic  int
 }
 
 func main() {
@@ -55,8 +61,18 @@ func main() {
 			fmt.Fprintf(os.Stderr, "gen-rule-tests: %s is not up to date; run make gen-rule-tests\n", target)
 			os.Exit(1)
 		}
-		if zero := bytes.Count(content, []byte("| 0 |")); *maxZero >= 0 && zero > *maxZero {
-			fmt.Fprintf(os.Stderr, "gen-rule-tests: %d rules have no direct test refs (max %d)\n", zero, *maxZero)
+		zero := 0
+		rows, err := loadRows(abs, knownTests(abs))
+		if err != nil {
+			fail(err)
+		}
+		for _, r := range rows {
+			if r.Asserted == 0 && r.Dynamic == 0 {
+				zero++
+			}
+		}
+		if *maxZero >= 0 && zero > *maxZero {
+			fmt.Fprintf(os.Stderr, "gen-rule-tests: %d rules have no test refs (max %d)\n", zero, *maxZero)
 			os.Exit(1)
 		}
 		fmt.Println("rule-tests: OK")
@@ -74,6 +90,28 @@ func main() {
 func build(root string) ([]byte, error) {
 	known := loadKnownRuleIDs(root)
 	testRefs := loadTestRefs(root, known)
+	rows, err := loadRows(root, testRefs)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	buf.WriteString("# 规则 → 测试映射\n\n")
+	buf.WriteString("> 自动生成；运行 `make gen-rule-tests`。`asserted` 是测试里对 rule ID 的字面断言次数；`dynamic` 是表驱动测试文件中的动态断言引用（每文件计 1）；两者都为 0 表示没有测试覆盖。\n\n")
+	buf.WriteString("| type | rule | implemented_by | asserted | dynamic |\n")
+	buf.WriteString("|---|---|---|---|---|\n")
+	for _, r := range rows {
+		fmt.Fprintf(&buf, "| %s | %s | %s | %d | %d |\n", r.Type, r.Rule, r.ImplementedBy, r.Asserted, r.Dynamic)
+	}
+	return buf.Bytes(), nil
+}
+
+// knownTests 返回 rule ID → 测试引用统计。
+func knownTests(root string) map[string]testRef {
+	return loadTestRefs(root, loadKnownRuleIDs(root))
+}
+
+// loadRows 读取全部 _meta rules 并填测试引用。
+func loadRows(root string, testRefs map[string]testRef) ([]row, error) {
 	var rows []row
 	files, err := filepath.Glob(filepath.Join(root, "contracts/_meta/*.yaml"))
 	if err != nil {
@@ -99,23 +137,17 @@ func build(root string) ([]byte, error) {
 			return nil, err
 		}
 		for _, r := range s.Rules {
+			tr := testRefs[r.ID]
 			rows = append(rows, row{
 				Type:          s.Type,
 				Rule:          r.ID,
 				ImplementedBy: strings.Join(r.ImplementedBy, ", "),
-				Refs:          testRefs[r.ID],
+				Asserted:      tr.asserted,
+				Dynamic:       tr.dynamic,
 			})
 		}
 	}
-	var buf bytes.Buffer
-	buf.WriteString("# 规则 → 测试映射\n\n")
-	buf.WriteString("> 自动生成；运行 `make gen-rule-tests`。`refs` 是测试文件中直接出现 rule ID 的次数；`0` 表示当前只有实现、没有直接断言。\n\n")
-	buf.WriteString("| type | rule | implemented_by | refs |\n")
-	buf.WriteString("|---|---|---|---|\n")
-	for _, r := range rows {
-		fmt.Fprintf(&buf, "| %s | %s | %s | %d |\n", r.Type, r.Rule, r.ImplementedBy, r.Refs)
-	}
-	return buf.Bytes(), nil
+	return rows, nil
 }
 
 // loadKnownRuleIDs 从生成的 rule_ids_gen.go 读取规则 ID 清单。
@@ -133,9 +165,13 @@ func loadKnownRuleIDs(root string) []string {
 	return ids
 }
 
-// loadTestRefs 统计 check 包测试中每个 rule ID 的直接引用次数。
-func loadTestRefs(root string, ids []string) map[string]int {
-	out := map[string]int{}
+// loadTestRefs 统计 check 包测试中的断言引用：
+//   - asserted：mustContainRule 的字面 rule ID，或 "[rule]" 字面断言；
+//   - dynamic：表驱动测试里通过变量传入 rule ID 的引用（每文件计 1）。
+func loadTestRefs(root string, ids []string) map[string]testRef {
+	out := map[string]testRef{}
+	mustRe := regexp.MustCompile(`mustContainRule\([^,]+,\s*[^,]+,\s*"([^"]+)"`)
+	bracketRe := regexp.MustCompile(`"\[([a-z0-9.-]+)\]"`)
 	files, _ := filepath.Glob(filepath.Join(root, "scripts/cmd/internal/check/*_test.go"))
 	for _, file := range files {
 		b, err := os.ReadFile(file)
@@ -143,9 +179,29 @@ func loadTestRefs(root string, ids []string) map[string]int {
 			continue
 		}
 		content := string(b)
+		for _, m := range mustRe.FindAllStringSubmatch(content, -1) {
+			ref := out[m[1]]
+			ref.asserted++
+			out[m[1]] = ref
+		}
+		for _, m := range bracketRe.FindAllStringSubmatch(content, -1) {
+			ref := out[m[1]]
+			ref.asserted++
+			out[m[1]] = ref
+		}
+		dynamic := (regexp.MustCompile(`mustContainRule\([^,]+,\s*[^,]+,\s*[A-Za-z]`).MatchString(content) ||
+			strings.Contains(content, `"["+`) ||
+			strings.Contains(content, `"[" + `)) &&
+			(strings.Contains(content, "mustContainRule") || strings.Contains(content, "strings.Contains"))
+		if !dynamic {
+			continue
+		}
 		for _, id := range ids {
-			if strings.Contains(content, id) {
-				out[id]++
+			re := regexp.MustCompile(`(^|[^A-Za-z0-9_.-])` + regexp.QuoteMeta(id) + `([^A-Za-z0-9_.-]|$)`)
+			if re.MatchString(content) {
+				ref := out[id]
+				ref.dynamic++
+				out[id] = ref
 			}
 		}
 	}

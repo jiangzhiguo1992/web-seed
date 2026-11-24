@@ -6,6 +6,7 @@ import (
 )
 
 func (c *Checker) checkRoles() {
+	c.checkPermissions()
 	path := filepath.Join(c.root, "contracts/platform/security/roles.yaml")
 	doc, err := loadYAML(path)
 	if err != nil {
@@ -86,6 +87,42 @@ func (c *Checker) checkRoles() {
 	}
 	if defaultRole, _ := doc["default_role"].(string); defaultRole != "" && roles[defaultRole] == nil {
 		c.rulef("role-permissions", "%s: default_role %s is not a declared role", rel, defaultRole)
+	}
+}
+
+// checkPermissions 校验权限码由 <resource>_<action> 组成，action 来自 naming.actions。
+func (c *Checker) checkPermissions() {
+	path := filepath.Join(c.root, "contracts/platform/security/permissions.yaml")
+	doc, err := loadYAML(path)
+	if err != nil {
+		return
+	}
+	rel := relPath(c.root, path)
+	naming, _ := asMap(doc["naming"])
+	if pattern, _ := naming["pattern"].(string); pattern != "<resource>_<action>" {
+		c.rulef("permission-code-shape", "%s: naming.pattern must be <resource>_<action>, got %q", rel, pattern)
+	}
+	actions := map[string]bool{}
+	for _, raw := range asList(naming["actions"]) {
+		action, _ := raw.(string)
+		if action != "" {
+			actions[action] = true
+		}
+	}
+	for i, raw := range asList(doc["permissions"]) {
+		item, _ := asMap(raw)
+		code, _ := item["code"].(string)
+		resource, _ := item["resource"].(string)
+		action, _ := item["action"].(string)
+		if code == "" || resource == "" || action == "" {
+			continue // schema.required 负责
+		}
+		if code != resource+"_"+action {
+			c.rulef("permission-code-shape", "%s: permissions[%d] code %s must be %s_%s", rel, i, code, resource, action)
+		}
+		if !actions[action] {
+			c.rulef("permission-code-shape", "%s: permissions[%d] (%s) action %s is not in naming.actions", rel, i, code, action)
+		}
 	}
 }
 

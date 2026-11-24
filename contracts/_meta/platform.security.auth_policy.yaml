@@ -143,4 +143,5 @@ rules:
   - { id: auth-policy-jwt, text: "token.access/refresh 必须是 jwt，issuer 非空，claims_required 必须精确包含 iss/sub/aud/exp/iat/jti，pii_in_token 必须为 false，revocation.strategy=refresh_token 时 persistence/table 必须存在且一致", implemented_by: [ auth-policy-jwt ] }
   - { id: auth-policy-audience, text: "token.access.audience 必须来自 platform.http_conventions.audiences", implemented_by: [ auth-policy-audience ] }
   - { id: auth-policy-storage, text: "token.persistence、token.refresh.table、verification.table 与 password.hash_field 指向的表/列必须存在", implemented_by: [ auth-policy-storage ] }
+  - { id: auth-policy-mfa, text: "mfa.required_for_roles 中的角色码必须存在于 platform.security.roles；角色契约不得再声明 mfa_required", implemented_by: [ auth-policy-mfa ] }
   - { id: auth-policy-password, text: "页面 password 字段的 minLength 不得低于 auth_policy.password.min_length", implemented_by: [ auth-policy-password ] }

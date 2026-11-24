@@ -1,8 +1,8 @@
 # 错误码全局约定；具体错误码按域放在同目录文件。
 
-schema_version: 1
 id: platform.errors.base
 summary: "错误码全局约定"
+schema_version: 1
 stability: draft
 do_not:
   - "错误码只增不改；改变含义必须新建 code"

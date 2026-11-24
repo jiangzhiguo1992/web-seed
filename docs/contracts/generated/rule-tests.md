@@ -1,208 +1,210 @@
 # 规则 → 测试映射
 
-> 自动生成；运行 `make gen-rule-tests`。`refs` 是测试文件中直接出现 rule ID 的次数；`0` 表示当前只有实现、没有直接断言。
+> 自动生成；运行 `make gen-rule-tests`。`asserted` 是测试里对 rule ID 的字面断言次数；`dynamic` 是表驱动测试文件中的动态断言引用（每文件计 1）；两者都为 0 表示没有测试覆盖。
 
-| type | rule | implemented_by | refs |
-|---|---|---|---|
-| cap.events | event-structure | event-structure | 1 |
-| cap.events | event-file-shape | event-file-shape | 1 |
-| cap.events | event-orphan | event-orphan | 1 |
-| cap.events | async-service | async-service | 1 |
-| cap.events | async-structure | async-structure | 1 |
-| cap.events | event-cron-schedule | event-cron-schedule | 1 |
-| cap.lifecycles | lifecycle-structure | lifecycle-structure | 1 |
-| cap.lifecycles | lifecycle-exhaustive | lifecycle-exhaustive | 1 |
-| cap.lifecycles | lifecycle-subject | lifecycle-subject | 1 |
-| cap.lifecycles | lifecycle-dimension | lifecycle-dimension | 1 |
-| cap.lifecycles | lifecycle-enum-coverage | lifecycle-enum-coverage | 1 |
-| cap.lifecycles | lifecycle-requires | lifecycle-requires | 1 |
-| cap.lifecycles | lifecycle-anchors | lifecycle-anchors | 1 |
-| cap.protocols.http | http-file | http-file | 1 |
-| cap.protocols.http | http-status | http-status | 1 |
-| cap.protocols.http | http-shape | http-shape | 1 |
-| cap.protocols.http | http-body-types | http-body-types | 1 |
-| cap.protocols.http | http-version | http-version | 1 |
-| cap.protocols.http | http-mount | http-mount | 1 |
-| cap.protocols.http | http-path-params | http-path-params | 1 |
-| cap.protocols.http | http-operation | http-operation | 1 |
-| cap.protocols.http | http-default-errors | http-default-errors | 1 |
-| cap.protocols.http | http-audience | http-audience | 1 |
-| cap.protocols.http | http-consumer | http-consumer | 1 |
-| cap.protocols.http | http-components | http-components | 1 |
-| cap.protocols.http | http-shared | http-shared | 1 |
-| cap.protocols.http | http-security | http-security | 1 |
-| cap.protocols.http | http-headers | http-headers | 1 |
-| cap.protocols.http | http-retry-after | http-retry-after | 1 |
-| cap.protocols.http | http-service-type | http-service-type | 1 |
-| cap.protocols.http | http-service-params | http-service-params | 1 |
-| cap.protocols.http | http-service-return | http-service-return | 1 |
-| cap.protocols.http | http-errors | http-errors | 1 |
-| cap.services | service-id | service-id | 1 |
-| cap.services | service-signature | service-signature | 1 |
-| cap.services | service-unique | service-unique | 1 |
-| cap.services | service-schema | service-schema | 1 |
-| cap.services | service-ref | service-ref | 4 |
-| cap.services | service-owner-write | service-owner-write | 1 |
-| cap.services | service-errors | service-errors | 1 |
-| cap.services | service-visibility | service-visibility | 1 |
-| cap.services | service-page-schema | service-page-schema | 1 |
-| cap.services | service-used | service-used | 1 |
-| cap.services | service-step-fields | service-step-fields | 1 |
-| cap.services | service-step-target | service-step-target | 1 |
-| cap.services | service-state-gate | service-state-gate | 1 |
-| cap.services | service-step-shape | service-step-shape | 1 |
-| cap.services | service-when-shape | service-when-shape | 1 |
-| cap.services | service-when-refs | service-when-refs | 1 |
-| cap.services | service-when-types | service-when-types | 3 |
-| cap.services | service-goto | service-goto | 2 |
-| cap.services | service-cycle | service-cycle | 1 |
-| cap.services | service-input-format | service-input-format | 1 |
-| cap.services | service-input-ref | service-input-ref | 2 |
-| cap.services | service-input-order | service-input-order | 2 |
-| cap.services | service-input-type | service-input-type | 1 |
-| cap.services | service-param-type | service-param-type | 1 |
-| cap.services | service-input-nullable | service-input-nullable | 1 |
-| cap.services | service-input-name | service-input-name | 1 |
-| cap.services | service-input-required | service-input-required | 1 |
-| cap.services | service-param-default | service-param-default | 1 |
-| cap.services | service-output | service-output, service-output-type, service-output-nullable | 1 |
-| cap.services | service-output-value | service-output-value | 1 |
-| cap.services | service-chain | service-chain | 2 |
-| cap.services | service-merge | service-merge | 2 |
-| cap.services | service-transaction | service-transaction | 1 |
-| data.entities | entity-base-file | entity-base-file | 1 |
-| data.entities | entity-base-shape | entity-base-shape | 1 |
-| data.entities | entity-base-only | entity-base-only | 1 |
-| data.entities | entity-no-base-fields | entity-no-base-fields | 1 |
-| data.entities | entity-base-field-first | entity-base-field-first | 1 |
-| data.entities | entity-table-shape | entity-table-shape | 1 |
-| data.entities | entity-table-covered | entity-table-covered | 1 |
-| data.entities | entity-name | entity-name | 2 |
-| data.entities | entity-field-name | entity-field-name | 1 |
-| data.entities | entity-name-unique | entity-name-unique | 1 |
-| data.entities | entity-owner-module | entity-owner-module | 1 |
-| data.entities | entity-key-order | entity-key-order | 1 |
-| data.entities | entity-model-order | entity-model-order | 1 |
-| data.entities | entity-id | entity-id | 1 |
-| data.entities | entity-field-variant | entity-field-variant | 1 |
-| data.entities | entity-field-source | entity-field-source | 1 |
-| data.entities | entity-field-type | entity-field-type | 1 |
-| data.entities | entity-field-column | entity-field-column | 1 |
-| data.entities | entity-field-sensitive | entity-field-sensitive | 1 |
-| data.entities | entity-field-json-name | entity-field-json-name | 1 |
-| data.entities | entity-relation-type | entity-relation-type | 1 |
-| data.entities | entity-relation-target | entity-relation-target | 1 |
-| data.entities | entity-relation-via | entity-relation-via | 1 |
-| data.entities | entity-relation-cardinality | entity-relation-cardinality | 1 |
-| data.entities | entity-validation | entity-validation | 1 |
-| data.entities | entity-validation-used-by | entity-validation-used-by | 1 |
-| data.entities | entity-used-by | entity-used-by | 1 |
-| data.entities | entity-included-by | entity-included-by | 2 |
-| data.entities | entity-relation-arity | entity-relation-arity | 1 |
-| data.entities | entity-do-not-specific | entity-do-not-specific | 1 |
-| data.enums | enum-key-order | enum-key-order | 1 |
-| data.enums | enum-id | enum-id | 1 |
-| data.enums | enum-values-unique | enum-values-unique | 1 |
-| data.enums | enum-code-unique | enum-code-unique | 1 |
-| data.enums | enum-type-unique | enum-type-unique | 1 |
-| data.enums | enum-used-by | enum-used-by | 1 |
-| data.enums | enum-do-not-specific | enum-do-not-specific | 1 |
-| data.queries | query-key-order | query-key-order | 1 |
-| data.queries | query-name-unique | query-name-unique | 1 |
-| data.queries | query-shape | query-shape | 1 |
-| data.queries | query-table-shape | query-table-shape | 1 |
-| data.queries | query-params | query-params | 1 |
-| data.queries | query-param-column | query-param-column | 1 |
-| data.queries | query-pagination | query-pagination | 1 |
-| data.queries | query-returns | query-returns | 1 |
-| data.queries | query-return-columns | query-return-columns | 1 |
-| data.queries | query-sensitive-columns | query-sensitive-columns | 1 |
-| data.queries | query-errors | query-errors | 1 |
-| data.queries | query-index-ref | query-index-ref | 1 |
-| data.queries | query-index-used-by | query-index-used-by | 1 |
-| data.queries | query-cache-ref | query-cache-ref | 1 |
-| data.queries | query-cache-keys | query-cache-keys | 1 |
-| data.queries | query-cache-write | query-cache-write | 1 |
-| data.queries | query-archive-ref | query-archive-ref | 1 |
-| data.queries | query-archive-used-by | query-archive-used-by | 1 |
-| data.queries | query-used-by | query-used-by | 1 |
-| data.queries | query-unused | query-unused | 1 |
-| data.queries | query-do-not-specific | query-do-not-specific | 1 |
-| data.storage | storage-registry | storage-registry | 1 |
-| data.storage | storage-entry-fields | storage-entry-fields | 1 |
-| data.storage | storage-cache-fields | storage-cache-fields | 1 |
-| data.storage | storage-archive-fields | storage-archive-fields | 1 |
-| data.storage | storage-cache-prefix | storage-cache-prefix | 1 |
-| data.storage | storage-entry-description | storage-entry-description | 1 |
-| data.storage | storage-cache-key | storage-cache-key | 1 |
-| data.storage | storage-cache-used-by | storage-cache-used-by | 1 |
-| data.storage | storage-engine | storage-engine | 1 |
-| data.storage | storage-retention | storage-retention | 1 |
-| data.storage | storage-duration | storage-duration | 1 |
-| data.storage | storage-ttl-bound | storage-ttl-bound | 1 |
-| data.storage | storage-archive-source | storage-archive-source | 1 |
-| data.storage | storage-archive-ref | storage-archive-ref | 1 |
-| data.tables | table-key-order | table-key-order | 1 |
-| data.tables | table-summary-length | table-summary-length | 1 |
-| data.tables | column-comment-length | column-comment-length | 1 |
-| data.tables | base-file | base-file | 2 |
-| data.tables | base-columns | base-columns | 1 |
-| data.tables | base-only | base-only | 2 |
-| data.tables | extends-ref | extends-ref | 1 |
-| data.tables | extends-conflict | extends-conflict | 1 |
-| data.tables | no-base-columns | no-base-columns | 1 |
-| data.tables | column-type | column-type | 1 |
-| data.tables | family-params | family-params | 1 |
-| data.tables | family-length | family-length | 1 |
-| data.tables | family-range | family-range | 1 |
-| data.tables | family-decimal | family-decimal | 1 |
-| data.tables | index-live-only | index-live-only | 1 |
-| data.tables | constraint-fields | constraint-fields | 1 |
-| data.tables | constraint-used-by | constraint-used-by | 1 |
-| data.tables | enum-code-literal | enum-code-literal | 1 |
-| data.tables | table-queries-generated | table-queries-generated | 1 |
-| data.tables | table-entities | table-entities | 1 |
-| data.tables | table-referenced-by | table-referenced-by | 2 |
-| data.tables | owner-write | owner-write | 2 |
-| data.tables | physical-name-unique | physical-name-unique | 1 |
-| data.tables | index-definition | index-definition | 1 |
-| data.tables | index-used-by-ref | index-used-by-ref | 1 |
-| data.tables | index-name-unique | index-name-unique | 1 |
-| data.tables | redundant-group | redundant-group | 1 |
-| data.tables | redundant-ref | redundant-ref | 1 |
-| data.tables | reference-target | reference-target | 1 |
-| data.tables | reference-on-delete | reference-on-delete | 1 |
-| data.tables | reference-join | reference-join | 1 |
-| data.tables | default-type | default-type | 1 |
-| data.tables | default-vs-default-sql | default-vs-default-sql | 1 |
-| data.tables | physical-primary-key | physical-primary-key | 1 |
-| data.tables | do-not-specific | do-not-specific | 2 |
-| feature.pages | page-structure | page-structure | 1 |
-| feature.pages | page-params | page-params | 1 |
-| feature.pages | page-action-target | page-action-target | 1 |
-| feature.pages | page-limits | page-limits | 1 |
-| feature.pages | page-refs | page-refs | 1 |
-| feature.routes | route-structure | route-structure | 1 |
-| feature.routes | route-redirect | route-redirect | 1 |
-| feature.rules | rule-structure | rule-structure | 1 |
-| feature.rules | rule-value | rule-value | 1 |
-| feature.rules | rule-id-unique | rule-id-unique | 1 |
-| platform.analytics.events | analytics-pii | analytics-pii | 1 |
-| platform.analytics.events | analytics-types | analytics-types | 1 |
-| platform.analytics.events | analytics-refs | analytics-refs, analytics-types | 1 |
-| platform.architecture.go_arch | architecture-refs | architecture-refs | 1 |
-| platform.environments | environment-shape | environment-shape | 1 |
-| platform.observability.log_fields | log-field-refs | log-field-refs | 1 |
-| platform.observability.metrics | metric-shape | metric-shape | 1 |
-| platform.quality | quality-refs | quality-refs | 1 |
-| platform.security.access | access-coverage | access-coverage | 1 |
-| platform.security.auth_policy | auth-policy-jwt | auth-policy-jwt | 1 |
-| platform.security.auth_policy | auth-policy-audience | auth-policy-audience | 1 |
-| platform.security.auth_policy | auth-policy-storage | auth-policy-storage | 1 |
-| platform.security.auth_policy | auth-policy-password | auth-policy-password | 1 |
-| platform.security.roles | role-inheritance | role-inheritance | 1 |
-| platform.security.roles | role-permissions | role-permissions | 1 |
-| platform.versioning | versioning-refs | versioning-refs | 1 |
-| scenario.http | scenario-structure | scenario-structure | 1 |
-| scenario.http | scenario-refs | scenario-refs | 1 |
-| scenario.http | scenario-db | scenario-db | 1 |
+| type | rule | implemented_by | asserted | dynamic |
+|---|---|---|---|---|
+| cap.events | event-structure | event-structure | 1 | 1 |
+| cap.events | event-file-shape | event-file-shape | 2 | 1 |
+| cap.events | event-orphan | event-orphan | 1 | 1 |
+| cap.events | async-service | async-service | 3 | 1 |
+| cap.events | async-structure | async-structure | 1 | 1 |
+| cap.events | event-cron-schedule | event-cron-schedule | 1 | 1 |
+| cap.lifecycles | lifecycle-structure | lifecycle-structure | 1 | 1 |
+| cap.lifecycles | lifecycle-exhaustive | lifecycle-exhaustive | 2 | 1 |
+| cap.lifecycles | lifecycle-subject | lifecycle-subject | 2 | 1 |
+| cap.lifecycles | lifecycle-dimension | lifecycle-dimension | 1 | 1 |
+| cap.lifecycles | lifecycle-enum-coverage | lifecycle-enum-coverage | 1 | 1 |
+| cap.lifecycles | lifecycle-requires | lifecycle-requires | 4 | 1 |
+| cap.lifecycles | lifecycle-anchors | lifecycle-anchors | 3 | 1 |
+| cap.protocols.http | http-file | http-file | 1 | 1 |
+| cap.protocols.http | http-status | http-status | 1 | 1 |
+| cap.protocols.http | http-shape | http-shape | 1 | 1 |
+| cap.protocols.http | http-body-types | http-body-types | 1 | 1 |
+| cap.protocols.http | http-version | http-version | 2 | 1 |
+| cap.protocols.http | http-mount | http-mount | 1 | 1 |
+| cap.protocols.http | http-path-params | http-path-params | 1 | 1 |
+| cap.protocols.http | http-operation | http-operation | 2 | 1 |
+| cap.protocols.http | http-default-errors | http-default-errors | 1 | 1 |
+| cap.protocols.http | http-audience | http-audience | 1 | 1 |
+| cap.protocols.http | http-consumer | http-consumer | 1 | 1 |
+| cap.protocols.http | http-components | http-components | 1 | 1 |
+| cap.protocols.http | http-shared | http-shared | 1 | 1 |
+| cap.protocols.http | http-security | http-security | 1 | 1 |
+| cap.protocols.http | http-headers | http-headers | 2 | 1 |
+| cap.protocols.http | http-retry-after | http-retry-after | 1 | 1 |
+| cap.protocols.http | http-service-type | http-service-type | 7 | 1 |
+| cap.protocols.http | http-service-params | http-service-params | 4 | 1 |
+| cap.protocols.http | http-service-return | http-service-return | 2 | 1 |
+| cap.protocols.http | http-errors | http-errors | 2 | 1 |
+| cap.services | service-id | service-id | 1 | 1 |
+| cap.services | service-signature | service-signature | 2 | 1 |
+| cap.services | service-unique | service-unique | 1 | 1 |
+| cap.services | service-schema | service-schema | 1 | 1 |
+| cap.services | service-ref | service-ref | 3 | 1 |
+| cap.services | service-owner-write | service-owner-write | 1 | 1 |
+| cap.services | service-errors | service-errors | 3 | 0 |
+| cap.services | service-visibility | service-visibility | 1 | 1 |
+| cap.services | service-page-schema | service-page-schema | 1 | 0 |
+| cap.services | service-used | service-used | 2 | 1 |
+| cap.services | service-step-fields | service-step-fields | 0 | 1 |
+| cap.services | service-step-target | service-step-target | 0 | 1 |
+| cap.services | service-state-gate | service-state-gate | 1 | 0 |
+| cap.services | service-step-shape | service-step-shape | 0 | 1 |
+| cap.services | service-when-shape | service-when-shape | 3 | 0 |
+| cap.services | service-when-refs | service-when-refs | 3 | 0 |
+| cap.services | service-when-types | service-when-types | 3 | 1 |
+| cap.services | service-goto | service-goto | 3 | 0 |
+| cap.services | service-cycle | service-cycle | 3 | 1 |
+| cap.services | service-input-format | service-input-format | 2 | 0 |
+| cap.services | service-input-ref | service-input-ref | 4 | 1 |
+| cap.services | service-input-order | service-input-order | 2 | 1 |
+| cap.services | service-input-type | service-input-type | 0 | 1 |
+| cap.services | service-param-type | service-param-type | 1 | 0 |
+| cap.services | service-input-nullable | service-input-nullable | 0 | 1 |
+| cap.services | service-input-name | service-input-name | 0 | 1 |
+| cap.services | service-input-required | service-input-required | 0 | 1 |
+| cap.services | service-param-default | service-param-default | 0 | 1 |
+| cap.services | service-output | service-output, service-output-type, service-output-nullable | 1 | 0 |
+| cap.services | service-output-value | service-output-value | 1 | 0 |
+| cap.services | service-chain | service-chain | 4 | 0 |
+| cap.services | service-merge | service-merge | 12 | 0 |
+| cap.services | service-transaction | service-transaction | 3 | 0 |
+| data.entities | entity-base-file | entity-base-file | 1 | 1 |
+| data.entities | entity-base-shape | entity-base-shape | 1 | 0 |
+| data.entities | entity-base-only | entity-base-only | 0 | 1 |
+| data.entities | entity-no-base-fields | entity-no-base-fields | 1 | 1 |
+| data.entities | entity-base-field-first | entity-base-field-first | 1 | 0 |
+| data.entities | entity-table-shape | entity-table-shape | 1 | 1 |
+| data.entities | entity-table-covered | entity-table-covered | 0 | 1 |
+| data.entities | entity-name | entity-name | 1 | 0 |
+| data.entities | entity-field-name | entity-field-name | 1 | 0 |
+| data.entities | entity-name-unique | entity-name-unique | 0 | 1 |
+| data.entities | entity-owner-module | entity-owner-module | 1 | 1 |
+| data.entities | entity-key-order | entity-key-order | 0 | 1 |
+| data.entities | entity-model-order | entity-model-order | 0 | 1 |
+| data.entities | entity-id | entity-id | 1 | 1 |
+| data.entities | entity-field-variant | entity-field-variant | 2 | 0 |
+| data.entities | entity-field-source | entity-field-source | 1 | 0 |
+| data.entities | entity-field-type | entity-field-type | 2 | 0 |
+| data.entities | entity-field-column | entity-field-column | 1 | 1 |
+| data.entities | entity-field-sensitive | entity-field-sensitive | 1 | 0 |
+| data.entities | entity-field-json-name | entity-field-json-name | 1 | 0 |
+| data.entities | entity-relation-type | entity-relation-type | 1 | 1 |
+| data.entities | entity-relation-target | entity-relation-target | 1 | 1 |
+| data.entities | entity-relation-via | entity-relation-via | 1 | 0 |
+| data.entities | entity-relation-cardinality | entity-relation-cardinality | 1 | 1 |
+| data.entities | entity-validation | entity-validation | 1 | 0 |
+| data.entities | entity-validation-used-by | entity-validation-used-by | 1 | 0 |
+| data.entities | entity-used-by | entity-used-by | 1 | 0 |
+| data.entities | entity-included-by | entity-included-by | 1 | 1 |
+| data.entities | entity-relation-arity | entity-relation-arity | 1 | 0 |
+| data.entities | entity-do-not-specific | entity-do-not-specific | 1 | 1 |
+| data.enums | enum-key-order | enum-key-order | 1 | 0 |
+| data.enums | enum-id | enum-id | 0 | 1 |
+| data.enums | enum-values-unique | enum-values-unique | 0 | 1 |
+| data.enums | enum-code-unique | enum-code-unique | 1 | 0 |
+| data.enums | enum-type-unique | enum-type-unique | 1 | 0 |
+| data.enums | enum-used-by | enum-used-by | 1 | 0 |
+| data.enums | enum-do-not-specific | enum-do-not-specific | 3 | 0 |
+| data.queries | query-key-order | query-key-order | 0 | 1 |
+| data.queries | query-name-unique | query-name-unique | 1 | 1 |
+| data.queries | query-shape | query-shape | 1 | 0 |
+| data.queries | query-table-shape | query-table-shape | 1 | 0 |
+| data.queries | query-params | query-params | 1 | 1 |
+| data.queries | query-param-column | query-param-column | 1 | 0 |
+| data.queries | query-pagination | query-pagination | 1 | 1 |
+| data.queries | query-returns | query-returns | 1 | 0 |
+| data.queries | query-return-columns | query-return-columns | 1 | 1 |
+| data.queries | query-sensitive-columns | query-sensitive-columns | 5 | 0 |
+| data.queries | query-errors | query-errors | 1 | 1 |
+| data.queries | query-index-ref | query-index-ref | 1 | 0 |
+| data.queries | query-index-used-by | query-index-used-by | 1 | 1 |
+| data.queries | query-cache-ref | query-cache-ref | 1 | 0 |
+| data.queries | query-cache-keys | query-cache-keys | 2 | 0 |
+| data.queries | query-cache-write | query-cache-write | 1 | 0 |
+| data.queries | query-archive-ref | query-archive-ref | 1 | 1 |
+| data.queries | query-archive-used-by | query-archive-used-by | 1 | 1 |
+| data.queries | query-used-by | query-used-by | 1 | 1 |
+| data.queries | query-unused | query-unused | 1 | 1 |
+| data.queries | query-do-not-specific | query-do-not-specific | 1 | 1 |
+| data.storage | storage-registry | storage-registry | 2 | 0 |
+| data.storage | storage-entry-fields | storage-entry-fields | 1 | 1 |
+| data.storage | storage-cache-fields | storage-cache-fields | 1 | 0 |
+| data.storage | storage-archive-fields | storage-archive-fields | 1 | 1 |
+| data.storage | storage-cache-prefix | storage-cache-prefix | 1 | 1 |
+| data.storage | storage-entry-description | storage-entry-description | 1 | 0 |
+| data.storage | storage-cache-key | storage-cache-key | 1 | 0 |
+| data.storage | storage-cache-used-by | storage-cache-used-by | 1 | 1 |
+| data.storage | storage-engine | storage-engine | 1 | 0 |
+| data.storage | storage-retention | storage-retention | 1 | 0 |
+| data.storage | storage-duration | storage-duration | 1 | 0 |
+| data.storage | storage-ttl-bound | storage-ttl-bound | 1 | 1 |
+| data.storage | storage-archive-source | storage-archive-source | 1 | 0 |
+| data.storage | storage-archive-ref | storage-archive-ref | 1 | 0 |
+| data.tables | table-key-order | table-key-order | 0 | 1 |
+| data.tables | table-summary-length | table-summary-length | 1 | 1 |
+| data.tables | column-comment-length | column-comment-length | 1 | 1 |
+| data.tables | base-file | base-file | 2 | 0 |
+| data.tables | base-columns | base-columns | 1 | 0 |
+| data.tables | base-only | base-only | 2 | 0 |
+| data.tables | extends-ref | extends-ref | 1 | 0 |
+| data.tables | extends-conflict | extends-conflict | 3 | 0 |
+| data.tables | no-base-columns | no-base-columns | 3 | 0 |
+| data.tables | column-type | column-type | 1 | 0 |
+| data.tables | family-params | family-params | 1 | 1 |
+| data.tables | family-length | family-length | 0 | 1 |
+| data.tables | family-range | family-range | 1 | 1 |
+| data.tables | family-decimal | family-decimal | 1 | 1 |
+| data.tables | index-live-only | index-live-only | 1 | 0 |
+| data.tables | constraint-fields | constraint-fields | 1 | 0 |
+| data.tables | constraint-used-by | constraint-used-by | 1 | 0 |
+| data.tables | enum-code-literal | enum-code-literal | 1 | 1 |
+| data.tables | table-queries-generated | table-queries-generated | 1 | 1 |
+| data.tables | table-entities | table-entities | 1 | 0 |
+| data.tables | table-referenced-by | table-referenced-by | 2 | 1 |
+| data.tables | owner-write | owner-write | 1 | 0 |
+| data.tables | physical-name-unique | physical-name-unique | 1 | 1 |
+| data.tables | index-definition | index-definition | 1 | 0 |
+| data.tables | index-used-by-ref | index-used-by-ref | 1 | 1 |
+| data.tables | index-name-unique | index-name-unique | 1 | 0 |
+| data.tables | redundant-group | redundant-group | 1 | 0 |
+| data.tables | redundant-ref | redundant-ref | 2 | 0 |
+| data.tables | reference-target | reference-target | 1 | 0 |
+| data.tables | reference-on-delete | reference-on-delete | 1 | 0 |
+| data.tables | reference-join | reference-join | 1 | 0 |
+| data.tables | default-type | default-type | 1 | 0 |
+| data.tables | default-vs-default-sql | default-vs-default-sql | 1 | 0 |
+| data.tables | physical-primary-key | physical-primary-key | 1 | 0 |
+| data.tables | do-not-specific | do-not-specific | 1 | 0 |
+| feature.pages | page-structure | page-structure | 0 | 1 |
+| feature.pages | page-params | page-params | 2 | 0 |
+| feature.pages | page-action-target | page-action-target | 1 | 0 |
+| feature.pages | page-limits | page-limits | 0 | 1 |
+| feature.pages | page-refs | page-refs | 1 | 1 |
+| feature.routes | route-structure | route-structure | 1 | 0 |
+| feature.routes | route-redirect | route-redirect | 1 | 0 |
+| feature.rules | rule-structure | rule-structure | 1 | 1 |
+| feature.rules | rule-value | rule-value | 1 | 0 |
+| feature.rules | rule-id-unique | rule-id-unique | 1 | 1 |
+| platform.analytics.events | analytics-pii | analytics-pii | 1 | 0 |
+| platform.analytics.events | analytics-types | analytics-types | 2 | 0 |
+| platform.analytics.events | analytics-refs | analytics-refs, analytics-types | 1 | 0 |
+| platform.architecture.go_arch | architecture-refs | architecture-refs | 1 | 0 |
+| platform.environments | environment-shape | environment-shape | 1 | 0 |
+| platform.observability.log_fields | log-field-refs | log-field-refs | 1 | 0 |
+| platform.observability.metrics | metric-shape | metric-shape | 1 | 0 |
+| platform.quality | quality-refs | quality-refs | 1 | 0 |
+| platform.security.access | access-coverage | access-coverage | 1 | 1 |
+| platform.security.auth_policy | auth-policy-jwt | auth-policy-jwt | 1 | 0 |
+| platform.security.auth_policy | auth-policy-audience | auth-policy-audience | 1 | 0 |
+| platform.security.auth_policy | auth-policy-storage | auth-policy-storage | 1 | 0 |
+| platform.security.auth_policy | auth-policy-mfa | auth-policy-mfa | 1 | 0 |
+| platform.security.auth_policy | auth-policy-password | auth-policy-password | 1 | 0 |
+| platform.security.permissions | permission-code-shape | permission-code-shape | 1 | 0 |
+| platform.security.roles | role-inheritance | role-inheritance | 1 | 0 |
+| platform.security.roles | role-permissions | role-permissions | 1 | 0 |
+| platform.versioning | versioning-refs | versioning-refs | 1 | 0 |
+| scenario.http | scenario-structure | scenario-structure | 1 | 0 |
+| scenario.http | scenario-refs | scenario-refs | 1 | 0 |
+| scenario.http | scenario-db | scenario-db | 1 | 0 |

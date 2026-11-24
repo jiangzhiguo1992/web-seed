@@ -12,16 +12,32 @@ func (c *Checker) checkErrorFiles() {
 		c.rulef("schema.load", "contracts/platform/errors: no files")
 		return
 	}
+	schema, err := c.loadSchemaByType("platform.errors")
+	if err != nil {
+		c.rulef("schema.load", "load platform.errors schema: %v", err)
+		return
+	}
+	c.valueTypes = schema.ValueTypes
+	c.checkRules(schema)
 	baseDoc, err := loadYAML(filepath.Join(c.root, "contracts/platform/errors/_base.yaml"))
 	if err != nil {
 		c.rulef("schema.load", "contracts/platform/errors/_base.yaml: %v", err)
 		return
 	}
 	naming, _ := asMap(baseDoc["naming"])
+	if naming == nil {
+		c.rulef("schema.required", "contracts/platform/errors/_base.yaml: naming is required")
+	}
 	maxTotal, _ := toInt(naming["max_total"])
 	order := stringList(baseDoc["order"])
+	if len(order) == 0 {
+		c.rulef("schema.required", "contracts/platform/errors/_base.yaml: order is required")
+	}
 
 	bizDoc, _ := asMap(baseDoc["biz_code"])
+	if bizDoc == nil {
+		c.rulef("schema.required", "contracts/platform/errors/_base.yaml: biz_code is required")
+	}
 	bizSuccess, _ := toInt(bizDoc["success_code"])
 	bizRanges := map[string][2]int{}
 	ranges, _ := asMap(bizDoc["ranges"])
@@ -55,25 +71,31 @@ func (c *Checker) checkErrorFiles() {
 			c.rulef("schema.load", "%s: %v", rel, err)
 			continue
 		}
+		c.validateDoc(doc, schema.Fields, rel)
+		c.checkFieldOrder(rel, schema.Fields, orderRules{})
+		c.checkStability(doc, rel)
+		if raw, ok := doc["summary"]; ok {
+			if s, _ := raw.(string); strings.TrimSpace(s) == "" {
+				c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
+			}
+		}
 		wantID := "platform.errors." + strings.TrimPrefix(stem, "_")
 		if id, _ := doc["id"].(string); id != wantID {
 			c.rulef("schema.id-from-file", "%s: id must be %s, got %q", rel, wantID, id)
-		}
-		if s, _ := doc["summary"].(string); strings.TrimSpace(s) == "" {
-			c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
 		}
 		switch stem {
 		case "_base":
 			continue
 		case "data_access":
-			for _, raw := range asList(doc["common_errors"]) {
+			common := asList(doc["common_errors"])
+			if len(common) == 0 {
+				c.rulef("schema.required", "%s: common_errors must not be empty", rel)
+				continue
+			}
+			for _, raw := range common {
 				code, _ := raw.(string)
 				if code == "" {
-					c.rulef("schema.non-empty", "%s: common_errors entries must not be empty", rel)
 					continue
-				}
-				if baseline[code] {
-					c.rulef("schema.unique", "%s: duplicate common error %s", rel, code)
 				}
 				baseline[code] = true
 			}
@@ -81,7 +103,7 @@ func (c *Checker) checkErrorFiles() {
 		}
 		errs := asList(doc["errors"])
 		if len(errs) == 0 {
-			c.rulef("schema.non-empty", "%s: errors must not be empty", rel)
+			c.rulef("schema.required", "%s: errors must not be empty", rel)
 			continue
 		}
 		fileSet[stem] = true
@@ -93,19 +115,27 @@ func (c *Checker) checkErrorFiles() {
 			m, _ := asMap(raw)
 			code, _ := m["code"].(string)
 			if code == "" {
-				c.rulef("schema.required", "%s: errors[%d]: missing code", rel, i)
 				continue
 			}
 			if prev, ok := seen[code]; ok {
-				c.rulef("schema.unique", "%s: duplicate error code %s (also in %s)", rel, code, prev)
+				if prev != rel {
+					c.rulef("schema.unique", "%s: duplicate error code %s (also in %s)", rel, code, prev)
+				}
 			} else {
 				seen[code] = rel
 			}
-			status, ok := toInt(m["status"])
-			if !ok || status < 100 || status > 599 {
-				c.rulef("schema.limit", "%s: errors[%d] (%s): status must be 100-599", rel, i, code)
-			} else {
+			if status, ok := toInt(m["status"]); ok {
 				c.errorStatus[code] = status
+			}
+			if raw, ok := m["i18n"]; ok {
+				if s, _ := raw.(string); strings.TrimSpace(s) == "" {
+					c.rulef("schema.non-empty", "%s: errors[%d] (%s): i18n must not be empty", rel, i, code)
+				}
+			}
+			if raw, ok := m["message"]; ok {
+				if s, _ := raw.(string); strings.TrimSpace(s) == "" {
+					c.rulef("schema.non-empty", "%s: errors[%d] (%s): message must not be empty", rel, i, code)
+				}
 			}
 			bizCode, hasBiz := toInt(m["biz_code"])
 			if hasBiz {
@@ -113,7 +143,7 @@ func (c *Checker) checkErrorFiles() {
 			}
 			switch {
 			case !hasBiz:
-				c.rulef("schema.required", "%s: errors[%d] (%s): missing biz_code", rel, i, code)
+				continue
 			case bizCode <= bizSuccess:
 				c.rulef("schema.limit", "%s: errors[%d] (%s): biz_code %d must be greater than success code %d", rel, i, code, bizCode, bizSuccess)
 			case hasRange && (bizCode < fileRange[0] || bizCode > fileRange[1]):
@@ -124,12 +154,6 @@ func (c *Checker) checkErrorFiles() {
 				} else {
 					seenBiz[bizCode] = rel
 				}
-			}
-			if s, _ := m["i18n"].(string); strings.TrimSpace(s) == "" {
-				c.rulef("schema.non-empty", "%s: errors[%d] (%s): i18n must not be empty", rel, i, code)
-			}
-			if s, _ := m["message"].(string); strings.TrimSpace(s) == "" {
-				c.rulef("schema.non-empty", "%s: errors[%d] (%s): message must not be empty", rel, i, code)
 			}
 			total++
 		}

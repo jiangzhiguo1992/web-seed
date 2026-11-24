@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -16,7 +18,7 @@ var (
 	indexConsumerRe    = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]*([-/.][A-Za-z][A-Za-z0-9_]*)*$`)
 	indexEnforcement   = map[string]bool{"generated": true, "generated+tested": true, "tested": true, "review-only": true}
 	indexEntryKeys     = map[string]bool{"id": true, "path": true, "summary": true, "consumers": true, "enforcement": true, "stability": true, "common_mistakes": true}
-	indexTopLevelKeys  = map[string]bool{"schema_version": true, "read_order": true, "groups": true, "entries": true, "global_notes": true, "orphan_whitelist": true}
+	indexTopLevelKeys  = map[string]bool{"schema_version": true, "read_order": true, "groups": true, "entries": true, "global_notes": true, "orphan_whitelist": true, "enforcement_gates": true}
 	indexStabilityEnum = map[string]bool{"stable": true, "draft": true, "deprecated": true}
 )
 
@@ -397,4 +399,129 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 			c.rulef("schema.index", "%s: path %s has id %s, expected %s", rel, p, got, id)
 		}
 	}
+	c.checkEnforcementGates(rel, rawEntries, doc)
+}
+
+// checkEnforcementGates 让 index enforcement 成为可机检声明：
+// generated 必须登记生成命令，tested 必须登记测试文件。
+func (c *Checker) checkEnforcementGates(rel string, entries []any, doc map[string]any) {
+	gates, _ := asMap(doc["enforcement_gates"])
+	if gates == nil {
+		if _, err := os.Stat(filepath.Join(c.root, "Makefile")); err == nil {
+			c.rulef("schema.enforcement", "%s: enforcement_gates is required", rel)
+		}
+		return // 只拷贝 contracts/ 的局部夹具没有生成/测试工具链
+	}
+	makefile := filepath.Join(c.root, "Makefile")
+	if _, err := os.Stat(makefile); err != nil {
+		return // 只拷贝 contracts/ 的局部夹具没有生成/测试工具链
+	}
+	generated, _ := asMap(gates["generated"])
+	tested, _ := asMap(gates["tested"])
+	types := c.contractTypes()
+	for key := range gates {
+		if key != "generated" && key != "tested" {
+			c.rulef("schema.enforcement", "%s: enforcement_gates.%s is not a known gate group", rel, key)
+		}
+	}
+	for typ := range generated {
+		if !types[typ] {
+			c.rulef("schema.enforcement", "%s: enforcement_gates.generated.%s is not a known contract type", rel, typ)
+		}
+	}
+	for typ := range tested {
+		if !types[typ] {
+			c.rulef("schema.enforcement", "%s: enforcement_gates.tested.%s is not a known contract type", rel, typ)
+		}
+	}
+	targets := makeTargets(filepath.Join(c.root, "Makefile"))
+	for _, raw := range entries {
+		m, _ := asMap(raw)
+		id, _ := m["id"].(string)
+		path, _ := m["path"].(string)
+		enforcement, _ := m["enforcement"].(string)
+		if id == "" || strings.HasPrefix(path, "generated/") {
+			continue
+		}
+		typ := contractTypeForID(id, types)
+		if typ == "" {
+			c.rulef("schema.enforcement", "%s: %s has no contract type mapping", rel, id)
+			continue
+		}
+		if strings.Contains(enforcement, "generated") {
+			commands := asList(generated[typ])
+			if len(commands) == 0 {
+				c.rulef("schema.enforcement", "%s: %s claims %s but enforcement_gates.generated.%s is missing", rel, id, enforcement, typ)
+			}
+			for _, rawCmd := range commands {
+				command, _ := rawCmd.(string)
+				if !strings.HasPrefix(command, "make ") {
+					c.rulef("schema.enforcement", "%s: %s generated gate %q must be a make target", rel, id, command)
+					continue
+				}
+				target := strings.Fields(command)[1]
+				if target != "" && !targets[target] {
+					c.rulef("schema.enforcement", "%s: %s generated gate target %s is not in Makefile", rel, id, target)
+				}
+			}
+		}
+		if strings.Contains(enforcement, "tested") {
+			files := asList(tested[typ])
+			if len(files) == 0 {
+				c.rulef("schema.enforcement", "%s: %s claims %s but enforcement_gates.tested.%s is missing", rel, id, enforcement, typ)
+			}
+			for _, rawFile := range files {
+				testFile, _ := rawFile.(string)
+				if testFile == "" {
+					continue
+				}
+				if !strings.HasSuffix(testFile, "_test.go") {
+					c.rulef("schema.enforcement", "%s: %s tested gate %s must be a Go test file", rel, id, testFile)
+					continue
+				}
+				if _, err := os.Stat(filepath.Join(c.root, testFile)); err != nil {
+					c.rulef("schema.enforcement", "%s: %s tested gate %s does not exist", rel, id, testFile)
+				}
+			}
+		}
+	}
+}
+
+// contractTypes 返回可映射的契约类型：_meta 注册类型 + 无 _meta 的单例类型。
+func (c *Checker) contractTypes() map[string]bool {
+	out := map[string]bool{
+		"project": true, "data.types": true,
+		"platform.config.env": true, "platform.architecture.web_deps": true,
+		"platform.design.tokens": true,
+	}
+	files, _ := filepath.Glob(filepath.Join(c.root, "contracts/_meta/*.yaml"))
+	for _, file := range files {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+		var head struct {
+			Type string `yaml:"type"`
+		}
+		if err := yaml.Unmarshal(b, &head); err != nil {
+			continue
+		}
+		if head.Type != "" {
+			out[head.Type] = true
+		}
+	}
+	return out
+}
+
+// contractTypeForID 取 id 匹配的最长类型前缀。
+func contractTypeForID(id string, types map[string]bool) string {
+	best := ""
+	for typ := range types {
+		if id == typ || strings.HasPrefix(id, typ+".") {
+			if len(typ) > len(best) {
+				best = typ
+			}
+		}
+	}
+	return best
 }
