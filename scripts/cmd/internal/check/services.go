@@ -80,6 +80,11 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 				}
 				seenReturns[rn] = true
 			}
+			if rn == "err" {
+				if value, _ := rm["value"].(string); value != "*" {
+					c.rulef("service-signature", "%s.%s: return err must declare value \"*\"", rel, name)
+				}
+			}
 		}
 		for _, rawParam := range asList(item["params"]) {
 			pm, _ := asMap(rawParam)
@@ -392,12 +397,16 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			continue
 		}
 		if rn == "err" {
-			if _, ok := rm["value"]; ok {
-				c.rulef("service-signature", "%s: return err must not declare value", rel)
+			if value, _ := rm["value"].(string); value != "*" {
+				c.rulef("service-signature", "%s: return err must declare value \"*\"", rel)
 			}
 			continue
 		}
 		value, _ := rm["value"].(string)
+		if value == "*" {
+			c.rulef("service-output-value", "%s: return %s must not use \"*\"; only err may", rel, rn)
+			continue
+		}
 		if strings.TrimSpace(value) == "" {
 			c.rulef("service-output-value", "%s: return %s requires value (params.<path> or step.<id>.<path>)", rel, rn)
 			continue

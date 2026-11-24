@@ -342,7 +342,7 @@ func TestServiceStructuralRules(t *testing.T) {
 		return map[string]any{
 			"name": "run", "summary": "x", "visibility": "public", "tx_mode": "read_only",
 			"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
-			"returns": []any{map[string]any{"name": "err", "type": "error"}},
+			"returns": []any{map[string]any{"name": "err", "type": "error", "value": "*"}},
 			"steps":   []any{},
 		}
 	}
@@ -362,6 +362,24 @@ func TestServiceStructuralRules(t *testing.T) {
 		c.checkServiceDoc(map[string]any{"id": "cap.services.x", "services": []any{d}}, "contracts/capabilities/services/x.yaml", schema, map[string]bool{})
 		if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "params[0] must be ctx") || !strings.Contains(got, "[service-signature]") {
 			t.Fatalf("missing service-signature: %s", got)
+		}
+	})
+
+	t.Run("service-err-value", func(t *testing.T) {
+		root, err := filepath.Abs("../../../..")
+		if err != nil {
+			t.Fatal(err)
+		}
+		schema, err := loadSchema(filepath.Join(root, "contracts/_meta/cap.services.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		d := base()
+		d["returns"] = []any{map[string]any{"name": "err", "type": "error", "value": "step.x.err"}}
+		c := &Checker{root: root}
+		c.checkServiceDoc(map[string]any{"id": "cap.services.x", "services": []any{d}}, "contracts/capabilities/services/x.yaml", schema, map[string]bool{})
+		if got := strings.Join(c.errs, "\n"); !strings.Contains(got, `return err must declare value "*"`) || !strings.Contains(got, "[service-signature]") {
+			t.Fatalf("missing service err value check: %s", got)
 		}
 	})
 

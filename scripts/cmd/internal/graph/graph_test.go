@@ -119,8 +119,14 @@ func TestCompute(t *testing.T) {
 	if got := snap.Tables["data.tables.a"].ReferencedBy; len(got) != 1 || got[0] != "data.tables.b.col.account_id" {
 		t.Fatalf("table a referenced_by = %v", got)
 	}
+	if got := snap.Tables["data.tables.b"].References; len(got) != 1 || got[0] != "data.tables.a.col.id" {
+		t.Fatalf("table b references = %v", got)
+	}
 	if got := snap.Entities["data.entities.e1"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("entity e1 queries = %v", got)
+	}
+	if got := snap.Entities["data.entities.e1"].Includes; len(got) != 1 || got[0] != "data.entities.e2" {
+		t.Fatalf("entity e1 includes = %v", got)
 	}
 	if got := snap.Entities["data.entities.e2"].IncludedBy; len(got) != 1 || got[0] != "data.entities.e1" {
 		t.Fatalf("entity e2 included_by = %v", got)
@@ -210,18 +216,30 @@ func TestWriteAndCheck(t *testing.T) {
 	if !strings.Contains(string(a), "queries:\n    - data.queries.q.get_a") {
 		t.Fatalf("table a queries not written:\n%s", a)
 	}
+	if !strings.Contains(string(a), "references: []") {
+		t.Fatalf("table a references not written:\n%s", a)
+	}
 	if !strings.Contains(string(a), "referenced_by:\n    - data.tables.b.col.account_id") {
 		t.Fatalf("table a referenced_by not written:\n%s", a)
 	}
 	b, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/b.yaml"))
+	if !strings.Contains(string(b), "references:\n    - data.tables.a.col.id") {
+		t.Fatalf("table b references not written:\n%s", b)
+	}
 	if !strings.Contains(string(b), "data.queries.q.get_b") {
 		t.Fatalf("table b queries not written:\n%s", b)
 	}
 	e1, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e1.yaml"))
+	if !strings.Contains(string(e1), "includes:\n    - data.entities.e2") {
+		t.Fatalf("entity e1 includes not written:\n%s", e1)
+	}
 	if !strings.Contains(string(e1), "queries:\n    - data.queries.q.get_a") {
 		t.Fatalf("entity e1 queries not written:\n%s", e1)
 	}
 	e2, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e2.yaml"))
+	if !strings.Contains(string(e2), "includes: []") {
+		t.Fatalf("entity e2 empty includes not written:\n%s", e2)
+	}
 	if !strings.Contains(string(e2), "included_by:\n    - data.entities.e1") {
 		t.Fatalf("entity e2 included_by not written:\n%s", e2)
 	}

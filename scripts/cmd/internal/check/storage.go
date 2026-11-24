@@ -22,7 +22,7 @@ var storageEntryFields = storageFieldSet("table", "description", "retention", "u
 
 // storageArchiveFields 是归档条目的字段集：archive_of 指向原表，promotable 决定能否回迁，
 // on_conflict 是回迁冲突策略，table 是归档物理表名。
-var storageArchiveFields = storageFieldSet("archive_of", "promotable", "on_conflict", "table", "retention", "unit", "ttl", "age_by", "after_unit", "after")
+var storageArchiveFields = storageFieldSet("archive_of", "description", "promotable", "on_conflict", "table", "retention", "unit", "ttl", "age_by", "after_unit", "after")
 
 // storageCacheFields 是非权威副本条目的字段集。
 var storageCacheFields = storageFieldSet("cache_of", "key", "prefix", "retention", "unit", "cache_ttl")
@@ -440,6 +440,9 @@ func (c *Checker) parseStorageArchive(engine string, rawArchiveOf any, entry map
 	if archiveOf == "" {
 		c.rulef("storage-archive-source", "%s: archive_of must be a non-empty table ID", where)
 		return nil
+	}
+	if desc, _ := entry["description"].(string); strings.TrimSpace(desc) == "" {
+		c.rulef("storage-entry-description", "%s: description is required", where)
 	}
 	for _, key := range sortedAnyKeys(entry) {
 		if !storageArchiveFields[key] {

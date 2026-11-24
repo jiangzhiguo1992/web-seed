@@ -8,6 +8,12 @@ import (
 // referenceTestChecker 构造引用校验所需的最小物理表视图：
 // a 是被引用表（id 主键 + code 非唯一列），b 是声明 references 的子表。
 func referenceTestChecker(column map[string]any, referencedBy []any) *Checker {
+	outgoing := []any{}
+	if ref, ok := asMap(column["references"]); ok {
+		if target, _ := ref["column"].(string); target != "" {
+			outgoing = append(outgoing, target)
+		}
+	}
 	return &Checker{
 		baseID: "data.tables.base",
 		inheritedCols: map[string]map[string]bool{
@@ -28,11 +34,11 @@ func referenceTestChecker(column map[string]any, referencedBy []any) *Checker {
 		},
 		tableDocs: map[string]map[string]any{
 			"data.tables.a": {
-				"table":   map[string]any{"referenced_by": referencedBy},
+				"table":   map[string]any{"references": []any{}, "referenced_by": referencedBy},
 				"columns": []any{map[string]any{"name": "code", "type": "string"}},
 			},
 			"data.tables.b": {
-				"table":   map[string]any{"referenced_by": []any{}},
+				"table":   map[string]any{"references": outgoing, "referenced_by": []any{}},
 				"columns": []any{column},
 			},
 		},
@@ -199,6 +205,21 @@ func TestTableReferencedByMismatch(t *testing.T) {
 	c.checkReferences(referenceTestTables())
 	if !strings.Contains(entityErrs(c), "table.referenced_by must be [data.tables.b.col.a_id], got [data.tables.b.col.opt_id]") {
 		t.Fatalf("extra referenced_by not reported: %v", c.errs)
+	}
+}
+
+func TestTableReferencesMismatch(t *testing.T) {
+	c := referenceTestChecker(map[string]any{
+		"name":       "a_id",
+		"references": map[string]any{"column": "data.tables.a.col.id", "on_delete": "cascade"},
+	}, []any{"data.tables.b.col.a_id"})
+	c.tableDocs["data.tables.b"]["table"] = map[string]any{
+		"references":    []any{"data.tables.a.col.code"},
+		"referenced_by": []any{},
+	}
+	c.checkReferences(referenceTestTables())
+	if got := entityErrs(c); !strings.Contains(got, "table.references must be [data.tables.a.col.id], got [data.tables.a.col.code]") || !strings.Contains(got, "[table-referenced-by]") {
+		t.Fatalf("table.references mismatch not reported: %v", c.errs)
 	}
 }
 

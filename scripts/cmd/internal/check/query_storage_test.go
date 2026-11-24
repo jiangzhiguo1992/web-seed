@@ -115,7 +115,7 @@ func TestQueryCacheRefs(t *testing.T) {
 func TestQueryArchiveRefs(t *testing.T) {
 	archive := storageArchiveEntry{source: "data.tables.x", promotable: true, ageBy: "created_at"}
 	archives := map[string]storageArchiveEntry{"data.tables.x": archive}
-	ref := queryArchiveRef{Archive: "data.tables.x.archive", AgeBy: "created_at"}
+	ref := queryArchiveRef{Archive: "data.tables.x.archive", Promotable: true, HasPromotable: true, AgeBy: "created_at"}
 	readQ := &queryInfo{
 		ID: "data.queries.x.q", File: "x.yaml",
 		Targets: []string{"data.tables.x"},
@@ -129,25 +129,57 @@ func TestQueryArchiveRefs(t *testing.T) {
 	}
 
 	mismatchQ := *readQ
-	mismatchQ.Archive = []queryArchiveRef{{Archive: ref.Archive, AgeBy: "updated_at"}}
+	mismatchQ.Archive = []queryArchiveRef{{Archive: ref.Archive, Promotable: false, HasPromotable: true}}
 	c = newQueryStorageChecker(&mismatchQ, nil, archives)
+	c.checkQueryStorageRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must match storage promotable") {
+		t.Fatalf("archive promotable mismatch not reported: %v", c.errs)
+	}
+
+	missingFlagQ := *readQ
+	missingFlagQ.Archive = []queryArchiveRef{{Archive: ref.Archive, AgeBy: "created_at"}}
+	c = newQueryStorageChecker(&missingFlagQ, nil, archives)
+	c.checkQueryStorageRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "requires promotable") {
+		t.Fatalf("missing promotable not reported: %v", c.errs)
+	}
+
+	missingAgeQ := *readQ
+	missingAgeQ.Archive = []queryArchiveRef{{Archive: ref.Archive, Promotable: true, HasPromotable: true}}
+	c = newQueryStorageChecker(&missingAgeQ, nil, archives)
+	c.checkQueryStorageRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "requires age_by") {
+		t.Fatalf("missing age_by not reported: %v", c.errs)
+	}
+
+	ageMismatchQ := *readQ
+	ageMismatchQ.Archive = []queryArchiveRef{{Archive: ref.Archive, Promotable: true, HasPromotable: true, AgeBy: "updated_at"}}
+	c = newQueryStorageChecker(&ageMismatchQ, nil, archives)
 	c.checkQueryStorageRefs()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "must match storage age_by") {
 		t.Fatalf("archive age_by mismatch not reported: %v", c.errs)
 	}
 
-	notPromotable := map[string]storageArchiveEntry{"data.tables.x": {source: "data.tables.x", promotable: false}}
-	c = newQueryStorageChecker(readQ, nil, notPromotable)
+	notPromotable := map[string]storageArchiveEntry{"data.tables.x": {source: "data.tables.x", promotable: false, ageBy: "created_at"}}
+	readOnlyRef := queryArchiveRef{Archive: ref.Archive, Promotable: false, HasPromotable: true}
+	readOnlyQ := *readQ
+	readOnlyQ.Archive = []queryArchiveRef{readOnlyRef}
+	c = newQueryStorageChecker(&readOnlyQ, nil, notPromotable)
 	c.checkQueryStorageRefs()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "is not promotable") {
-		t.Fatalf("non-promotable archive not reported: %v", c.errs)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid non-promotable archive ref reported: %v", c.errs)
 	}
-	if strings.Contains(strings.Join(c.errs, "\n"), "no query references it") {
-		t.Fatalf("non-promotable archive must not require a query: %v", c.errs)
+
+	ageOnReadOnlyQ := *readQ
+	ageOnReadOnlyQ.Archive = []queryArchiveRef{{Archive: ref.Archive, Promotable: false, HasPromotable: true, AgeBy: "created_at"}}
+	c = newQueryStorageChecker(&ageOnReadOnlyQ, nil, notPromotable)
+	c.checkQueryStorageRefs()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "age_by is only allowed when promotable is true") {
+		t.Fatalf("age_by on non-promotable ref not reported: %v", c.errs)
 	}
 
 	unknownQ := *readQ
-	unknownQ.Archive = []queryArchiveRef{{Archive: "data.tables.y.archive", AgeBy: "created_at"}}
+	unknownQ.Archive = []queryArchiveRef{{Archive: "data.tables.y.archive", Promotable: true, HasPromotable: true, AgeBy: "created_at"}}
 	c = newQueryStorageChecker(&unknownQ, nil, archives)
 	c.checkQueryStorageRefs()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "is not declared in storage.tables") {
@@ -158,12 +190,12 @@ func TestQueryArchiveRefs(t *testing.T) {
 	noRefQ.Archive = nil
 	c = newQueryStorageChecker(&noRefQ, nil, archives)
 	c.checkQueryStorageRefs()
-	if !strings.Contains(strings.Join(c.errs, "\n"), "is promotable but no query references it") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "no query declares archive.promotable:true") {
 		t.Fatalf("unreferenced promotable archive not reported: %v", c.errs)
 	}
 
 	malformedQ := *readQ
-	malformedQ.Archive = []queryArchiveRef{{Archive: "data.tables.x.archived", AgeBy: "created_at"}}
+	malformedQ.Archive = []queryArchiveRef{{Archive: "data.tables.x.archived", Promotable: true, HasPromotable: true, AgeBy: "created_at"}}
 	c = newQueryStorageChecker(&malformedQ, nil, archives)
 	c.checkQueryStorageRefs()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "malformed archive ref") {

@@ -29,6 +29,7 @@ type tableDef struct {
 	Name         string   `yaml:"name"`
 	Extends      []string `yaml:"extends"`
 	Entities     []string `yaml:"entities"`
+	References   []string `yaml:"references"`
 	ReferencedBy []string `yaml:"referenced_by"`
 	Queries      []string `yaml:"queries"`
 }
@@ -78,6 +79,7 @@ type entityModelScaffold struct {
 	Name       string   `yaml:"name"`
 	Extends    []string `yaml:"extends"`
 	Tables     []string `yaml:"tables"`
+	Includes   []string `yaml:"includes"`
 	IncludedBy []string `yaml:"included_by"`
 	Queries    []string `yaml:"queries"`
 }
@@ -170,7 +172,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		return nil, err
 	}
 	tableField, _ := FindField(s.Fields, "table")
-	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "extends": true, "entities": true, "queries": true, "referenced_by": true}, s.Type+".table"); err != nil {
+	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "extends": true, "entities": true, "references": true, "queries": true, "referenced_by": true}, s.Type+".table"); err != nil {
 		return nil, err
 	}
 	columnField, _ := FindField(s.Fields, "columns")
@@ -217,6 +219,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 			Name:         name,
 			Extends:      []string{baseTableID},
 			Entities:     []string{},
+			References:   []string{},
 			Queries:      []string{},
 			ReferencedBy: []string{},
 		},
@@ -302,7 +305,7 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 		return nil, fmt.Errorf("RenderEntity: model is missing in schema")
 	}
 	if err := requireSupported(modelField.Fields, map[string]bool{
-		"name": true, "extends": true, "tables": true, "queries": true, "included_by": true,
+		"name": true, "extends": true, "tables": true, "includes": true, "queries": true, "included_by": true,
 	}, "data.entities.model"); err != nil {
 		return nil, err
 	}
@@ -331,6 +334,7 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 			Name:       lowerCamel(name),
 			Extends:    []string{"data.entities.base"},
 			Tables:     []string{tableID},
+			Includes:   []string{},
 			Queries:    []string{},
 			IncludedBy: []string{},
 		},
@@ -773,13 +777,14 @@ type lifecycleFileScaffold struct {
 }
 
 type lifecycleActionScaffold struct {
+	Requires      []string `yaml:"requires"`
 	ImplementedBy []string `yaml:"implemented_by"`
 }
 
 type lifecycleStatesScaffold struct {
 	Values  []string `yaml:"values"`
 	Initial string   `yaml:"initial"`
-	Final   []string `yaml:"final,omitempty"`
+	Final   []string `yaml:"final"`
 }
 
 type lifecycleSubjectScaffold struct {
@@ -930,7 +935,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 			Summary:    "TODO: 服务说明",
 			Visibility: "public",
 			Params:     []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: fileID + ".schemas.GetInput"}},
-			Returns:    []methodArgScaffold{{Name: "value", Type: "_types.any", Value: "step.load.value"}, {Name: "err", Type: "error"}},
+			Returns:    []methodArgScaffold{{Name: "value", Type: "_types.any", Value: "step.load.value"}, {Name: "err", Type: "error", Value: "*"}},
 			TxMode:     "read_only",
 			Steps: []stepScaffold{
 				{
@@ -1035,6 +1040,7 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 			Final:   []string{"active"},
 		},
 		Create: lifecycleActionScaffold{
+			Requires:      []string{},
 			ImplementedBy: []string{"cap.services." + name + ".create.create"},
 		},
 	}

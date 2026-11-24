@@ -682,6 +682,28 @@ func TestEntityValidationNameRejectedBySchema(t *testing.T) {
 	}
 }
 
+func TestEntityIncludes(t *testing.T) {
+	e := &entityInfo{
+		ID: "data.entities.x", Rel: "x.yaml",
+		Fields: []entityFieldInfo{
+			relationField("Ys", "List<data.entities.y>", "data.tables.x", "id", "data.tables.y", "x_id", "lazy"),
+		},
+		Doc: map[string]any{"model": map[string]any{"includes": []any{"data.entities.y"}}},
+	}
+	c := &Checker{}
+	c.checkEntityIncludes(e)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid model.includes reported: %v", c.errs)
+	}
+
+	e.Doc = map[string]any{"model": map[string]any{"includes": []any{"data.entities.z"}}}
+	c.errs = nil
+	c.checkEntityIncludes(e)
+	if got := entityErrs(c); !strings.Contains(got, "model.includes must be [data.entities.y]") || !strings.Contains(got, "[entity-included-by]") {
+		t.Fatalf("model.includes mismatch not reported: %v", c.errs)
+	}
+}
+
 func TestEntityUsedByQueries(t *testing.T) {
 	c := &Checker{
 		entityOrder: []string{"data.entities.account"},

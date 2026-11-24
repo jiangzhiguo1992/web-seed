@@ -40,10 +40,12 @@ type queryIndexRef struct {
 	Columns []string
 }
 
-// queryArchiveRef 是 archive 的一项：归档 ID 与回迁时更新的年龄列。
+// queryArchiveRef 是 archive 的一项：归档 ID、是否回迁与回迁时更新的年龄列。
 type queryArchiveRef struct {
-	Archive string
-	AgeBy   string
+	Archive       string
+	Promotable    bool
+	HasPromotable bool
+	AgeBy         string
 }
 
 type queryInfo struct {
@@ -176,6 +178,7 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		}
 		ref := queryArchiveRef{}
 		ref.Archive, _ = am["archive"].(string)
+		ref.Promotable, ref.HasPromotable = am["promotable"].(bool)
 		ref.AgeBy, _ = am["age_by"].(string)
 		q.Archive = append(q.Archive, ref)
 	}

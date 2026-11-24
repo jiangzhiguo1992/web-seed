@@ -816,7 +816,7 @@ func TestStorageCacheRetentionFlatFields(t *testing.T) {
 func TestStorageArchiveEntryShape(t *testing.T) {
 	c := &Checker{}
 	a := c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
-		"archive_of": "data.tables.src", "promotable": true, "on_conflict": "skip", "table": "src_archive",
+		"archive_of": "data.tables.src", "description": "src 归档", "promotable": true, "on_conflict": "skip", "table": "src_archive",
 		"age_by": "created_at", "after_unit": "days", "after": 90,
 	}, "storage tables.postgres[0]")
 	if len(c.errs) != 0 {
@@ -828,7 +828,7 @@ func TestStorageArchiveEntryShape(t *testing.T) {
 
 	c = &Checker{}
 	c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
-		"archive_of": "data.tables.src", "promotable": true, "table": "src_archive",
+		"archive_of": "data.tables.src", "description": "src 归档", "promotable": true, "table": "src_archive",
 		"age_by": "created_at", "after_unit": "days", "after": 90,
 	}, "storage tables.postgres[0]")
 	if got := entityErrs(c); !strings.Contains(got, "promotable archive requires on_conflict") || !strings.Contains(got, "[storage-archive-source]") {
@@ -837,7 +837,7 @@ func TestStorageArchiveEntryShape(t *testing.T) {
 
 	c = &Checker{}
 	c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
-		"archive_of": "data.tables.src", "promotable": true, "on_conflict": "merge", "table": "src_archive",
+		"archive_of": "data.tables.src", "description": "src 归档", "promotable": true, "on_conflict": "merge", "table": "src_archive",
 		"age_by": "created_at", "after_unit": "days", "after": 90,
 	}, "storage tables.postgres[0]")
 	if !strings.Contains(entityErrs(c), "on_conflict must be skip/overwrite/error") {
@@ -846,7 +846,7 @@ func TestStorageArchiveEntryShape(t *testing.T) {
 
 	c = &Checker{}
 	c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
-		"archive_of": "data.tables.src", "promotable": false, "on_conflict": "skip", "table": "src_archive",
+		"archive_of": "data.tables.src", "description": "src 归档", "promotable": false, "on_conflict": "skip", "table": "src_archive",
 		"age_by": "created_at", "after_unit": "days", "after": 90,
 	}, "storage tables.postgres[0]")
 	if !strings.Contains(entityErrs(c), "on_conflict is only allowed when promotable is true") {
@@ -855,7 +855,7 @@ func TestStorageArchiveEntryShape(t *testing.T) {
 
 	c = &Checker{}
 	c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
-		"archive_of": "data.tables.src", "table": "Archive Table",
+		"archive_of": "data.tables.src", "description": "src 归档", "table": "Archive Table",
 		"age_by": "deleted_at", "after_unit": "weeks", "after": 0, "entities": []any{},
 	}, "storage tables.postgres[0]")
 	errs := entityErrs(c)
@@ -873,7 +873,7 @@ func TestStorageArchiveEntryShape(t *testing.T) {
 
 	c = &Checker{}
 	c.parseStorageArchive("postgres", "data.tables.src", map[string]any{
-		"archive_of": "data.tables.src", "age_by": "created_at", "after_unit": "days", "after": 90,
+		"archive_of": "data.tables.src", "description": "src 归档", "age_by": "created_at", "after_unit": "days", "after": 90,
 	}, "storage tables.postgres[0]")
 	if !strings.Contains(entityErrs(c), "table is required") {
 		t.Fatalf("missing archive table not reported: %v", c.errs)

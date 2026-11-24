@@ -97,7 +97,7 @@
 | data.entities | entity-validation | entity-validation | 1 |
 | data.entities | entity-validation-used-by | entity-validation-used-by | 1 |
 | data.entities | entity-used-by | entity-used-by | 1 |
-| data.entities | entity-included-by | entity-included-by | 1 |
+| data.entities | entity-included-by | entity-included-by | 2 |
 | data.entities | entity-relation-arity | entity-relation-arity | 1 |
 | data.entities | entity-do-not-specific | entity-do-not-specific | 1 |
 | data.enums | enum-key-order | enum-key-order | 1 |
@@ -162,7 +162,7 @@
 | data.tables | enum-code-literal | enum-code-literal | 1 |
 | data.tables | table-queries-generated | table-queries-generated | 1 |
 | data.tables | table-entities | table-entities | 1 |
-| data.tables | table-referenced-by | table-referenced-by | 1 |
+| data.tables | table-referenced-by | table-referenced-by | 2 |
 | data.tables | owner-write | owner-write | 2 |
 | data.tables | physical-name-unique | physical-name-unique | 1 |
 | data.tables | index-definition | index-definition | 1 |

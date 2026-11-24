@@ -475,8 +475,24 @@ func (c *Checker) checkEntities(schema *Schema) {
 		if !sameSet(got, want) {
 			c.rulef("entity-included-by", "%s: model.included_by must be %v, got %v", e.Rel, sortedKeys(want), sortedKeys(got))
 		}
+		c.checkEntityIncludes(e)
 	}
 	c.checkEagerCycles()
+}
+
+// checkEntityIncludes 校验 model.includes 与关系字段的目标 entity 集合一致。
+func (c *Checker) checkEntityIncludes(e *entityInfo) {
+	model, _ := asMap(e.Doc["model"])
+	got := stringSet(asList(model["includes"]))
+	want := map[string]bool{}
+	for _, f := range e.Fields {
+		if f.IsRelation && f.TargetID != "" {
+			want[f.TargetID] = true
+		}
+	}
+	if !sameSet(got, want) {
+		c.rulef("entity-included-by", "%s: model.includes must be %v, got %v", e.Rel, sortedKeys(want), sortedKeys(got))
+	}
 }
 
 // checkBaseFieldFirst 要求重声明的基类字段（当前仅 Status）必须是 fields 第一项。

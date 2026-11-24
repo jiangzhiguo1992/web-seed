@@ -12,8 +12,8 @@ import (
 //   - 读查询的每个缓存键列必须出现在 params[].column 或同表 index_ref[].columns 中；
 //   - 读查询由 params 绑定全部缓存键时必须声明该缓存；
 //   - 写查询必须列出每个被写表的全部逻辑缓存（写同步项不要求键出现在 params/index_ref）；
-//   - 归档引用必须是 promotable 归档，且源表在 query.tables 中；
-//   - 反向：每个逻辑缓存、每个 promotable 归档至少被一个查询有效引用。
+//   - 归档引用必须存在，promotable 与 storage 一致，源表在 query.tables 中；
+//   - 回迁入口：每个 storage promotable 归档至少被一个 archive.promotable:true 查询引用。
 func (c *Checker) checkQueryStorageRefs() {
 	usedCaches := map[string]bool{}
 	usedArchives := map[string]bool{}
@@ -76,17 +76,25 @@ func (c *Checker) checkQueryStorageRefs() {
 				c.rulef("query-archive-ref", "%s: archive %s is not declared in storage.tables", where, ref.Archive)
 				continue
 			}
-			if !entry.promotable {
-				c.rulef("query-archive-ref", "%s: archive %s is not promotable", where, ref.Archive)
+			if !ref.HasPromotable {
+				c.rulef("query-archive-ref", "%s: archive %s requires promotable", where, ref.Archive)
+			} else if ref.Promotable != entry.promotable {
+				c.rulef("query-archive-ref", "%s: archive %s promotable=%t must match storage promotable=%t", where, ref.Archive, ref.Promotable, entry.promotable)
 			}
 			if !q.tableSet()[source] {
 				c.rulef("query-archive-ref", "%s: archive source %s is not in query tables", where, source)
 				continue
 			}
-			if entry.promotable {
+			if ref.Promotable && ref.AgeBy == "" {
+				c.rulef("query-archive-ref", "%s: archive %s promotable query requires age_by", where, ref.Archive)
+			}
+			if !ref.Promotable && ref.AgeBy != "" {
+				c.rulef("query-archive-ref", "%s: archive %s age_by is only allowed when promotable is true", where, ref.Archive)
+			}
+			if ref.Promotable {
 				usedArchives[source] = true
 			}
-			if ref.AgeBy != entry.ageBy {
+			if ref.Promotable && ref.AgeBy != entry.ageBy {
 				c.rulef("query-archive-ref", "%s: archive %s age_by %q must match storage age_by %q", where, ref.Archive, ref.AgeBy, entry.ageBy)
 			}
 		}
@@ -103,7 +111,7 @@ func (c *Checker) checkQueryStorageRefs() {
 	sort.Strings(sources)
 	for _, source := range sources {
 		if c.archiveEntries[source].promotable && !usedArchives[source] {
-			c.rulef("query-archive-used-by", "archive %s.archive is promotable but no query references it", source)
+			c.rulef("query-archive-used-by", "archive %s.archive is promotable but no query declares archive.promotable:true", source)
 		}
 	}
 }

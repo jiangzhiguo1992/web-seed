@@ -27,6 +27,7 @@ func referencePairKey(a, b string) string {
 func (c *Checker) checkReferences(tableIDs map[string]string) {
 	var decls []referenceDecl
 	inbound := map[string]map[string]bool{}
+	outbound := map[string]map[string]bool{}
 	for _, id := range sortedStringMapKeys(tableIDs) {
 		if id == c.baseID {
 			continue
@@ -61,12 +62,36 @@ func (c *Checker) checkReferences(tableIDs map[string]string) {
 					inbound[targetTable] = map[string]bool{}
 				}
 				inbound[targetTable][source] = true
+				if outbound[id] == nil {
+					outbound[id] = map[string]bool{}
+				}
+				outbound[id][target] = true
 			}
 			c.checkReferenceDecl(source, target, onDelete, where)
 		}
 	}
+	c.checkTableReferences(tableIDs, outbound)
 	c.checkTableReferencedBy(tableIDs, inbound)
 	c.checkReferenceJoins(decls)
+}
+
+// checkTableReferences 校验 table.references 与列级 references 的双向一致。
+// table.references 是出边（目标列），table.referenced_by 是入边（源列）。
+func (c *Checker) checkTableReferences(tableIDs map[string]string, outbound map[string]map[string]bool) {
+	for _, id := range sortedStringMapKeys(tableIDs) {
+		if id == c.baseID {
+			continue
+		}
+		table, _ := asMap(c.tableDocs[id]["table"])
+		got := stringSet(asList(table["references"]))
+		want := outbound[id]
+		if want == nil {
+			want = map[string]bool{}
+		}
+		if !sameSet(got, want) {
+			c.rulef("table-referenced-by", "%s: table.references must be %v, got %v", tableIDs[id], sortedKeys(want), sortedKeys(got))
+		}
+	}
 }
 
 // checkTableReferencedBy 校验 table.referenced_by 与列级 references 的双向一致。

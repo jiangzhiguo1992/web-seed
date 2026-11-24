@@ -18,11 +18,13 @@ import (
 
 type TableUsedBy struct {
 	Queries      []string
+	References   []string
 	ReferencedBy []string
 }
 
 type EntityUsedBy struct {
 	Queries    []string
+	Includes   []string
 	IncludedBy []string
 }
 
@@ -38,11 +40,13 @@ type Snapshot struct {
 
 type tableSet struct {
 	queries      map[string]bool
+	references   map[string]bool
 	referencedBy map[string]bool
 }
 
 type entitySet struct {
 	queries    map[string]bool
+	includes   map[string]bool
 	includedBy map[string]bool
 }
 
@@ -148,7 +152,7 @@ func Compute(root string) (*Snapshot, error) {
 			continue
 		}
 		tableDocs[id] = doc
-		tables[id] = &tableSet{queries: map[string]bool{}, referencedBy: map[string]bool{}}
+		tables[id] = &tableSet{queries: map[string]bool{}, references: map[string]bool{}, referencedBy: map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 	}
 	// table.referenced_by：把每条列级 references 的源列登记到目标表。
@@ -167,6 +171,7 @@ func Compute(root string) (*Snapshot, error) {
 			}
 			if ts := tables[targetTable]; ts != nil {
 				ts.referencedBy[id+".col."+name] = true
+				tables[id].references[target] = true
 			} else {
 				return nil, fmt.Errorf("%s: columns.%s.references target %s is not a data.tables contract", tableFiles[id], name, target)
 			}
@@ -187,7 +192,7 @@ func Compute(root string) (*Snapshot, error) {
 			continue
 		}
 		entityDocs[id] = doc
-		entities[id] = &entitySet{queries: map[string]bool{}, includedBy: map[string]bool{}}
+		entities[id] = &entitySet{queries: map[string]bool{}, includes: map[string]bool{}, includedBy: map[string]bool{}}
 		entityFiles[id] = rel(root, f)
 	}
 	// model.included_by：把关系字段的来源实体登记到目标实体。
@@ -209,6 +214,7 @@ func Compute(root string) (*Snapshot, error) {
 				return nil, fmt.Errorf("%s: fields.%s type %s is not a data.entities contract", entityFiles[id], name, typ)
 			}
 			target.includedBy[id] = true
+			entities[id].includes[targetID] = true
 		}
 	}
 	queryIDTemplate := contractspec.Targets{ID: queryTarget.id}
@@ -300,10 +306,10 @@ func Compute(root string) (*Snapshot, error) {
 		QueryFiles:  queryFiles,
 	}
 	for id, ts := range tables {
-		snap.Tables[id] = TableUsedBy{Queries: sortedKeys(ts.queries), ReferencedBy: sortedKeys(ts.referencedBy)}
+		snap.Tables[id] = TableUsedBy{Queries: sortedKeys(ts.queries), References: sortedKeys(ts.references), ReferencedBy: sortedKeys(ts.referencedBy)}
 	}
 	for id, es := range entities {
-		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries), IncludedBy: sortedKeys(es.includedBy)}
+		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries), Includes: sortedKeys(es.includes), IncludedBy: sortedKeys(es.includedBy)}
 	}
 	for id, qs := range queryServices {
 		snap.Queries[id] = sortedKeys(qs)
@@ -316,7 +322,14 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	var changed []string
 	for _, id := range sortedFileKeys(s.TableFiles) {
 		file := s.TableFiles[id]
-		ok, err := syncNestedListFile(filepath.Join(root, file), "table", "entities", "referenced_by", s.Tables[id].ReferencedBy)
+		ok, err := syncNestedListFile(filepath.Join(root, file), "table", "entities", "references", s.Tables[id].References)
+		if err != nil {
+			return changed, err
+		}
+		if ok {
+			changed = append(changed, file)
+		}
+		ok, err = syncNestedListFile(filepath.Join(root, file), "table", "references", "referenced_by", s.Tables[id].ReferencedBy)
 		if err != nil {
 			return changed, err
 		}
@@ -333,7 +346,14 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	}
 	for _, id := range sortedFileKeys(s.EntityFiles) {
 		file := s.EntityFiles[id]
-		ok, err := syncNestedListFile(filepath.Join(root, file), "model", "tables", "included_by", s.Entities[id].IncludedBy)
+		ok, err := syncNestedListFile(filepath.Join(root, file), "model", "tables", "includes", s.Entities[id].Includes)
+		if err != nil {
+			return changed, err
+		}
+		if ok {
+			changed = append(changed, file)
+		}
+		ok, err = syncNestedListFile(filepath.Join(root, file), "model", "includes", "included_by", s.Entities[id].IncludedBy)
 		if err != nil {
 			return changed, err
 		}
@@ -381,14 +401,19 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		gotRefs := nestedList(doc, "table", "referenced_by")
+		gotRefsOut, refsOutPresent := nestedListValue(doc, "table", "references")
+		wantRefsOut := s.Tables[id].References
+		if !refsOutPresent || !sameSet(gotRefsOut, wantRefsOut) {
+			drift = append(drift, fmt.Sprintf("%s: table.references must be %v, got %v", file, wantRefsOut, gotRefsOut))
+		}
+		gotRefs, refsPresent := nestedListValue(doc, "table", "referenced_by")
 		wantRefs := s.Tables[id].ReferencedBy
-		if !sameSet(gotRefs, wantRefs) {
+		if !refsPresent || !sameSet(gotRefs, wantRefs) {
 			drift = append(drift, fmt.Sprintf("%s: table.referenced_by must be %v, got %v", file, wantRefs, gotRefs))
 		}
-		got := nestedList(doc, "table", "queries")
+		got, queriesPresent := nestedListValue(doc, "table", "queries")
 		want := s.Tables[id].Queries
-		if !sameSet(got, want) {
+		if !queriesPresent || !sameSet(got, want) {
 			drift = append(drift, fmt.Sprintf("%s: table.queries must be %v, got %v", file, want, got))
 		}
 	}
@@ -398,14 +423,19 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		gotIncluded := nestedList(doc, "model", "included_by")
+		gotIncludes, includesPresent := nestedListValue(doc, "model", "includes")
+		wantIncludes := s.Entities[id].Includes
+		if !includesPresent || !sameSet(gotIncludes, wantIncludes) {
+			drift = append(drift, fmt.Sprintf("%s: model.includes must be %v, got %v", file, wantIncludes, gotIncludes))
+		}
+		gotIncluded, includedPresent := nestedListValue(doc, "model", "included_by")
 		wantIncluded := s.Entities[id].IncludedBy
-		if !sameSet(gotIncluded, wantIncluded) {
+		if !includedPresent || !sameSet(gotIncluded, wantIncluded) {
 			drift = append(drift, fmt.Sprintf("%s: model.included_by must be %v, got %v", file, wantIncluded, gotIncluded))
 		}
-		got := nestedList(doc, "model", "queries")
+		got, queriesPresent := nestedListValue(doc, "model", "queries")
 		want := s.Entities[id].Queries
-		if !sameSet(got, want) {
+		if !queriesPresent || !sameSet(got, want) {
 			drift = append(drift, fmt.Sprintf("%s: model.queries must be %v, got %v", file, want, got))
 		}
 	}
@@ -446,7 +476,8 @@ func syncNestedListFile(path, parentKey, afterKey, childKey string, values []str
 	if err := yaml.Unmarshal(src, &doc); err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
-	if sameSet(nestedList(doc, parentKey, childKey), values) {
+	cur, present := nestedListValue(doc, parentKey, childKey)
+	if present && sameSet(cur, values) {
 		return false, nil
 	}
 	out, err := applyNestedList(src, parentKey, afterKey, childKey, values)
@@ -513,10 +544,17 @@ func writeAtomic(path string, out []byte) error {
 	return os.Rename(tmpName, path)
 }
 
-// nestedList 读取 table/model 下的列表字段。
-func nestedList(doc map[string]any, parentKey, childKey string) []string {
-	p, _ := asMap(doc[parentKey])
-	return stringList(p[childKey])
+// nestedListValue 读取 table/model 下的列表字段，并区分“缺失”与“空列表”。
+func nestedListValue(doc map[string]any, parentKey, childKey string) ([]string, bool) {
+	p, ok := asMap(doc[parentKey])
+	if !ok {
+		return nil, false
+	}
+	raw, ok := p[childKey]
+	if !ok {
+		return nil, false
+	}
+	return stringList(raw), true
 }
 
 // splitTableColumnRef 解析 data.tables.<t>.col.<c>。

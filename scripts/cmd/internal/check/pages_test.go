@@ -16,11 +16,13 @@ states:
   initial: active
   final: [deleted]
 create:
+  requires: [ ]
   implemented_by: [cap.services.x.create.step]
 destroy:
+  requires: [ ]
   implemented_by: [cap.services.x.delete.step]
 transitions:
-  - { name: activate, description: "a", from: [active], to: deleted, implemented_by: [cap.services.x.create.step] }
+  - { name: activate, description: "a", from: [active], to: deleted, requires: [ ], implemented_by: [cap.services.x.create.step] }
 `)
 	writeCapFile(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 services:

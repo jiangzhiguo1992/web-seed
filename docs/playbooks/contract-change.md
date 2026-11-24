@@ -69,7 +69,7 @@ make contract-impact id=<被修改的 ID>
 | 应用包含哪些接口 | `contracts/project.yaml` 的 `apps` 段 |
 | 定时任务 / 订阅 / 异步命令 | `contracts/capabilities/events/<module>.yaml` 的 `crons` / `topics[].subscribe` / `dispatches` |
 | 跨模块调用 | `contracts/capabilities/services/<module>.yaml` |
-| 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables.<engine>` 普通条目（`description` / `retention`）；归档用 `archive_of` 条目并用 `promotable` 标明能否回迁（能回迁时必须写 `on_conflict`） |
+| 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables.<engine>` 普通条目（`description` / `retention`）；归档用 `archive_of` 条目（`description` + `promotable` 标明能否回迁，能回迁时必须写 `on_conflict`） |
 | 查询 | `contracts/data/queries/<scope>.yaml` |
 | 枚举 | `contracts/data/enums/<module>.yaml` |
 | 实体 / 生命周期 / 规则 / 流程 | `contracts/capabilities/{services,lifecycles,events}/**` + `contracts/features/rules/**` |
@@ -97,7 +97,7 @@ make contract-new type=feature.pages name=note_list summary="备注列表页"
 
 `column_type` 可选；指定后第一列使用该类型族（生成 `_types.<name>`），并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
 
-生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables.<engine>` 列表下登记条目**（`description` 必须等于表 `summary`，`retention` 按需写在条目内；归档另写 `archive_of` 条目并声明 `promotable`，不建表契约；能回迁的归档必须被某个查询的 `archive` 引用并写 `on_conflict`，查询侧的 `age_by` 必须与 storage 一致），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体；`table.referenced_by` 由 `make gen-graph` 维护，不要手改。新实体在 `model.included_by` 列出包含它的实体，两处由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`；storage 条目：`contracts/_meta/data.storage.yaml`；类型族：`contracts/_meta/_types.yaml`；项目自定义类型：`contracts/data/types.yaml`。
+生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables.<engine>` 列表下登记条目**（每条都必须写 `description`：普通条目等于表 `summary`，归档条目说明归档用途；`retention` 按需写在条目内；归档另写 `archive_of` 条目并声明 `promotable`，不建表契约；`promotable:true` 的归档必须被某个 `archive.promotable:true` 的查询引用并写 `on_conflict`，查询侧的 `age_by` 必须与 storage 一致；只读穿透写 `archive.promotable:false` 且不写 `age_by`），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体；`table.references` / `table.referenced_by` / `model.includes` / `model.included_by` 由 `make gen-graph` 维护，不要手改，由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`；storage 条目：`contracts/_meta/data.storage.yaml`；类型族：`contracts/_meta/_types.yaml`；项目自定义类型：`contracts/data/types.yaml`。
 
 ### 3.2 校验
 
@@ -105,7 +105,7 @@ make contract-new type=feature.pages name=note_list summary="备注列表页"
 make contract-check
 ```
 
-校验结构、ID、字段顺序（以 `_meta/<type>.yaml` 的 `fields` / `item_fields` 为准）、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`table.entities` / `model.included_by`（显式映射）与 `table.queries` / `model.queries` / `query.used_by`（生成物）。不通过不要进入生成。
+校验结构、ID、字段顺序（以 `_meta/<type>.yaml` 的 `fields` / `item_fields` 为准）、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`table.entities`（显式映射）与 `table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` / `query.used_by`（生成物）。不通过不要进入生成。
 
 修改 `rules` 的 `implemented_by` 后，运行 `make gen-rule-ids` 更新 `rule_ids_gen.go`；`make contract-check` 会拒绝过期的生成文件。
 

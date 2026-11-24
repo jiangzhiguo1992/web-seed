@@ -1,6 +1,7 @@
 package check
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -57,6 +58,28 @@ func TestLengthKeysRequireLengthType(t *testing.T) {
 	}
 	if err := validateFieldTypes([]Field{{Name: "n", Type: "_types.integer", Pattern: "^x$"}}, ValueTypes{}, false); err == nil {
 		t.Fatal("pattern on integer must be rejected")
+	}
+}
+
+func TestTableColumnNullableRequired(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	columns, ok := contractspec.FindField(schema.Fields, "columns")
+	if !ok {
+		t.Fatal("columns field missing in data.tables meta")
+	}
+	c := &Checker{}
+	c.validateValue([]any{map[string]any{
+		"name": "x", "type": "_types.integer",
+	}}, columns, "columns")
+	if !strings.Contains(entityErrs(c), `missing required field "nullable"`) {
+		t.Fatalf("missing column nullable not reported: %v", c.errs)
 	}
 }
 

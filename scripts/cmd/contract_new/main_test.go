@@ -259,7 +259,7 @@ services:
       - { name: id, type: _types.integer }
     returns:
       - { name: exists, type: _types.boolean, value: step.load.exists }
-      - { name: err, type: error }
+      - { name: err, type: error, value: "*" }
     steps:
       - id: load
         kind: query

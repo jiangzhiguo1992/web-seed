@@ -484,14 +484,17 @@ states:
   initial: pending
   final: [deleted]
 create:
+  requires: [ ]
   implemented_by: [cap.services.x.create.create]
 destroy:
+  requires: [ ]
   implemented_by: [cap.services.x.delete.soft_delete]
 transitions:
   - name: activate
     description: "a"
     from: [pending]
     to: active
+    requires: [ ]
     implemented_by: [cap.services.x.activate.transition]
 `
 	writeCapFile(t, root, rel, valid)
@@ -1047,14 +1050,17 @@ states:
   initial: pending
   final: [deleted]
 create:
+  requires: [ ]
   implemented_by: [cap.services.x.create.create]
 destroy:
+  requires: [ ]
   implemented_by: [cap.services.x.delete.soft_delete]
 transitions:
   - name: activate
     description: "a"
     from: [pending]
     to: active
+    requires: [ ]
     implemented_by: [cap.services.x.activate.transition]
 `
 	cases := []struct {
@@ -1069,7 +1075,7 @@ transitions:
 		},
 		{
 			name: "unreachable final",
-			body: strings.Replace(valid, "destroy:\n  implemented_by: [cap.services.x.delete.soft_delete]\n", "", 1),
+			body: strings.Replace(valid, "destroy:\n  requires: [ ]\n  implemented_by: [cap.services.x.delete.soft_delete]\n", "", 1),
 			want: "[lifecycle-exhaustive]",
 		},
 		{
@@ -1135,6 +1141,7 @@ subjects:
 states:
   values: [pending, active]
   initial: pending
+  final: [ ]
 transitions:
   - name: activate
     description: "a"
@@ -1199,6 +1206,7 @@ states:
   initial: active
   final: [active]
 create:
+  requires: [ ]
   implemented_by: [cap.services.x.create.create]
 `
 	check := func(body string) string {
