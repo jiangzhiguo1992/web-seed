@@ -50,7 +50,10 @@ paths:
           - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
-        body: { kind: json, type: cap.services.account.schemas.CreateAccountInput, to: params.input }
+        body:
+          kind: json
+          type: cap.services.account.schemas.CreateAccountInput
+          to: params.input
       response:
         201:
           description: "已创建"
@@ -61,10 +64,10 @@ paths:
             kind: json
             type: data.entities.account
         409:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_NUMBER_TAKEN
         422:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
             - platform.errors.ACCOUNT_NUMBER_INVALID
 
@@ -92,7 +95,7 @@ paths:
             kind: json
             type: data.entities.account
         404:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_NOT_FOUND
 
     patch:
@@ -109,7 +112,10 @@ paths:
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         path:
           - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
-        body: { kind: json, type: cap.services.account.schemas.UpdateAccountInput, to: params.input }
+        body:
+          kind: json
+          type: cap.services.account.schemas.UpdateAccountInput
+          to: params.input
       response:
         200:
           description: "成功"
@@ -119,13 +125,13 @@ paths:
             kind: json
             type: data.entities.account
         404:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
         422:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
 
     delete:
@@ -146,10 +152,10 @@ paths:
         204:
           description: "已删除"
         404:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
@@ -177,10 +183,10 @@ paths:
             kind: json
             type: data.entities.account
         404:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
 
@@ -200,7 +206,10 @@ paths:
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         path:
           - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
-        body: { kind: json, type: cap.services.account.schemas.SuspendAccountInput, to: params.input }
+        body:
+          kind: json
+          type: cap.services.account.schemas.SuspendAccountInput
+          to: params.input
       response:
         200:
           description: "成功"
@@ -210,9 +219,9 @@ paths:
             kind: json
             type: data.entities.account
         404:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
-          codes:
+          errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION

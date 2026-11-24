@@ -126,10 +126,25 @@ func applyHTTPMount(doc map[string]any) error {
 	return nil
 }
 
+// HTTPNormalizeOptions 是契约源文档投影为 OpenAPI 所需的平台映射。
+type HTTPNormalizeOptions struct {
+	TransportHeaders []string
+	BodyTypes        map[string]string
+}
+
 // NormalizeHTTPDocument 原地把 components.schemas.*.source 与 paths.*.* 的
 // name/id/service/request/response 转成 OpenAPI 形状。
-func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool, transport ...[]string) error {
-	blocked := headerSet(transport...)
+func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool, options ...HTTPNormalizeOptions) error {
+	var transport []string
+	bodyTypes := map[string]string{}
+	if len(options) > 0 {
+		transport = options[0].TransportHeaders
+		bodyTypes = options[0].BodyTypes
+	}
+	if len(bodyTypes) == 0 {
+		return fmt.Errorf("body_types is required to normalize http bodies")
+	}
+	blocked := headerSet(transport)
 	if err := applyHTTPMount(doc); err != nil {
 		return err
 	}
@@ -177,7 +192,7 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 			if response == nil {
 				return fmt.Errorf("%s: response block required", where)
 			}
-			parameters, requestBody, serviceParams, auth, err := normalizeRequest(request, where, resolve, componentByID, strict, blocked)
+			parameters, requestBody, serviceParams, auth, err := normalizeRequest(request, where, resolve, componentByID, strict, blocked, bodyTypes)
 			if err != nil {
 				return err
 			}
@@ -194,7 +209,7 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 			if requestBody != nil {
 				op["requestBody"] = requestBody
 			}
-			responses, err := normalizeResponse(response, where, resolve, componentByID, strict, blocked)
+			responses, err := normalizeResponse(response, where, resolve, componentByID, strict, blocked, bodyTypes)
 			if err != nil {
 				return err
 			}
@@ -306,7 +321,7 @@ func normalizeOperationMetadata(op map[string]any, where string, strict bool) er
 		}
 	}
 	if op["errors"] != nil {
-		return fmt.Errorf("%s: errors removed; group platform.errors.* under response.<status>.codes", where)
+		return fmt.Errorf("%s: errors removed; group platform.errors.* under response.<status>.errors", where)
 	}
 	name, _ := op["name"].(string)
 	if name == "" {
@@ -433,7 +448,7 @@ func normalizeHTTPComponents(doc map[string]any, strict bool) (map[string]string
 	return byID, nil
 }
 
-func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool) ([]any, map[string]any, map[string]any, bool, error) {
+func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool, bodyTypes map[string]string) ([]any, map[string]any, map[string]any, bool, error) {
 	for key := range request {
 		switch key {
 		case "headers", "path", "query", "body":
@@ -478,7 +493,7 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 		serviceParams[section.name] = mappings
 	}
 	bodyRaw := asMap(request["body"])
-	body, form, err := normalizeRequestBody(bodyRaw, contentType, where, resolve, componentByID, strict)
+	body, form, err := normalizeRequestBody(bodyRaw, contentType, where, resolve, componentByID, strict, bodyTypes)
 	if err != nil {
 		return nil, nil, nil, false, err
 	}
@@ -502,14 +517,6 @@ func headerSet(lists ...[]string) map[string]bool {
 		}
 	}
 	return set
-}
-
-var bodyMediaTypes = map[string]string{
-	"json":      "application/json",
-	"form":      "application/x-www-form-urlencoded",
-	"multipart": "multipart/form-data",
-	"text":      "text/plain",
-	"binary":    "application/octet-stream",
 }
 
 func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool) ([]any, string, bool, error) {
@@ -560,7 +567,7 @@ func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, comp
 		if err != nil {
 			return nil, "", false, fmt.Errorf("%s: header %s: %w", where, name, err)
 		}
-		required := false
+		required := true
 		if value, ok := header["required"].(bool); ok {
 			required = value
 		}
@@ -599,7 +606,7 @@ func bodyRequired(body map[string]any) bool {
 	return true
 }
 
-func normalizeRequestBody(body map[string]any, contentType, where string, resolve TypeResolver, componentByID map[string]string, strict bool) (map[string]any, []any, error) {
+func normalizeRequestBody(body map[string]any, contentType, where string, resolve TypeResolver, componentByID map[string]string, strict bool, bodyTypes map[string]string) (map[string]any, []any, error) {
 	if body == nil {
 		if contentType != "" {
 			return nil, nil, fmt.Errorf("%s: Content-Type header declared without request body", where)
@@ -610,7 +617,7 @@ func normalizeRequestBody(body map[string]any, contentType, where string, resolv
 	if kind == "" {
 		return nil, nil, fmt.Errorf("%s: request.body.kind required", where)
 	}
-	want, ok := bodyMediaTypes[kind]
+	want, ok := bodyTypes[kind]
 	if !ok {
 		return nil, nil, fmt.Errorf("%s: unknown request.body.kind %s", where, kind)
 	}
@@ -650,8 +657,14 @@ func normalizeRequestBody(body map[string]any, contentType, where string, resolv
 			}
 			var schema map[string]any
 			if fieldKind == "file" {
+				if field["type"] != nil {
+					return nil, nil, fmt.Errorf("%s: body field %s: file field must not declare type", where, name)
+				}
 				schema = map[string]any{"type": "string", "format": "binary"}
 			} else {
+				if field["type"] == nil {
+					return nil, nil, fmt.Errorf("%s: body field %s: text field requires type", where, name)
+				}
 				var err error
 				schema, err = normalizeHTTPSchema(field["type"], resolve, componentByID, strict)
 				if err != nil {
@@ -744,6 +757,13 @@ func normalizeResponseHeaders(raw []any, where, status string, resolve TypeResol
 			return nil, "", fmt.Errorf("%s: response %s header %s: %w", where, status, name, err)
 		}
 		definition := map[string]any{"schema": schema}
+		required := true
+		if value, ok := header["required"].(bool); ok {
+			required = value
+		}
+		if required {
+			definition["required"] = true
+		}
 		if description, _ := header["description"].(string); description != "" {
 			definition["description"] = description
 		}
@@ -752,7 +772,7 @@ func normalizeResponseHeaders(raw []any, where, status string, resolve TypeResol
 	return headers, contentType, nil
 }
 
-func normalizeResponse(response map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool) (map[string]any, error) {
+func normalizeResponse(response map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool, blocked map[string]bool, bodyTypes map[string]string) (map[string]any, error) {
 	out := map[string]any{}
 	for status, raw := range response {
 		if !statusRe(status) {
@@ -764,30 +784,30 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 		}
 		code, _ := strconv.Atoi(status)
 		if code < 200 || code >= 300 {
-			codes := asList(resp["codes"])
-			if len(codes) == 0 {
-				return nil, fmt.Errorf("%s: response %s requires non-empty codes", where, status)
+			errs := asList(resp["errors"])
+			if len(errs) == 0 {
+				return nil, fmt.Errorf("%s: response %s requires non-empty errors", where, status)
 			}
-			if resp["description"] != nil || resp["headers"] != nil || resp["body"] != nil {
-				return nil, fmt.Errorf("%s: response %s only allows codes for non-2xx", where, status)
+			if resp["description"] != nil || resp["body"] != nil || len(asList(resp["headers"])) > 0 {
+				return nil, fmt.Errorf("%s: response %s only allows errors and empty headers for non-2xx", where, status)
 			}
 			name, ok := DefaultResponseName(code)
 			if !ok {
 				return nil, fmt.Errorf("%s: response %s has no shared response mapping", where, status)
 			}
-			for _, rawCode := range codes {
+			for _, rawCode := range errs {
 				if value, _ := rawCode.(string); strings.TrimSpace(value) == "" {
-					return nil, fmt.Errorf("%s: response %s codes must be non-empty platform.errors.* IDs", where, status)
+					return nil, fmt.Errorf("%s: response %s errors must be non-empty platform.errors.* IDs", where, status)
 				}
 			}
 			out[status] = map[string]any{
 				"$ref":          "#/components/responses/" + name,
-				"x-error-codes": codes,
+				"x-error-codes": errs,
 			}
 			continue
 		}
-		if resp["codes"] != nil {
-			return nil, fmt.Errorf("%s: response %s is 2xx and must not declare codes", where, status)
+		if resp["errors"] != nil {
+			return nil, fmt.Errorf("%s: response %s is 2xx and must not declare errors", where, status)
 		}
 		description, _ := resp["description"].(string)
 		if strings.TrimSpace(description) == "" {
@@ -810,7 +830,7 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 			if kind == "" {
 				return nil, fmt.Errorf("%s: response %s body.kind required", where, status)
 			}
-			want, ok := bodyMediaTypes[kind]
+			want, ok := bodyTypes[kind]
 			if !ok || kind == "form" || kind == "multipart" {
 				return nil, fmt.Errorf("%s: response %s unsupported body.kind %s", where, status, kind)
 			}

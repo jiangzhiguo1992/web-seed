@@ -176,7 +176,7 @@ entries:
 
 # 跨文件的坑：不属于任何单一契约，但 AI 最容易犯
 global_notes:
-  - "业务错误按状态写在 response.<status>.codes；COMMON_* 与 400/401/403/429/500/503 基线由 platform/http_conventions 管理，不在 operation 重复"
+  - "业务错误按状态写在 response.<status>.errors；COMMON_* 与 400/401/403/429/500/503 基线由 platform/http_conventions 管理，不在 operation 重复"
   - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.returns"
   - "data.entities 的字段名与表列名可能不同：entity 用 source.column 指明来源；method 返回 entity，不重复列映射"
   - "领域事件由 cap.events 的 topics[].publish.emitted_by 与 topics[].subscribe 声明；service step 用 events 引用事件、用 dispatch 投递命令，不写 emits/event"

@@ -112,13 +112,13 @@ func build(root string) (map[string][]byte, error) {
 			fileAudienceByID[id] = mount.Audience
 			fileVersionByID[id] = mount.APIVersion
 			fileStabilityByID[id], _ = doc["stability"].(string)
-			if err := openapispec.NormalizeHTTPDocument(doc, httpTypeResolver(customTypeIdx), false, policy.TransportHeaders); err != nil {
+			if err := openapispec.NormalizeHTTPDocument(doc, httpTypeResolver(customTypeIdx), false, openapispec.HTTPNormalizeOptions{TransportHeaders: policy.TransportHeaders, BodyTypes: policy.BodyTypes}); err != nil {
 				return nil, fmt.Errorf("%s: %w", file, err)
 			}
 			byID[id] = doc
 		}
 	}
-	bizCodes, err := loadErrorBizCodes(root)
+	errorInfos, err := loadErrorInfo(root)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +312,7 @@ func build(root string) (map[string][]byte, error) {
 					if !ok {
 						continue
 					}
-					if err := expandErrorCodes(response, rawCodes, bizCodes); err != nil {
+					if err := expandErrorCodes(response, rawCodes, errorInfos); err != nil {
 						return nil, fmt.Errorf("app %s: %s %s %s: %w", appName, method, path, status, err)
 					}
 				}
@@ -423,9 +423,11 @@ func loadCommonErrors(root string) (map[int][]any, error) {
 			if !ok || !okBiz {
 				continue
 			}
+			message, _ := item["message"].(string)
 			out[status] = append(out[status], map[string]any{
 				"code":     code,
 				"biz_code": biz,
+				"msg":      message,
 			})
 		}
 	}
@@ -449,9 +451,15 @@ func mergeBaselineCodes(raw any, codes []any) {
 	response["x-error-codes"] = append(append([]any{}, codes...), existing...)
 }
 
-// loadErrorBizCodes 建立 platform.errors.* → 整数业务码索引。
-func loadErrorBizCodes(root string) (map[string]int, error) {
-	out := map[string]int{}
+// errorInfo 是生成 OpenAPI x-error-codes 所需的错误元数据。
+type errorInfo struct {
+	BizCode int
+	Message string
+}
+
+// loadErrorInfo 建立 platform.errors.* → biz_code/message 索引。
+func loadErrorInfo(root string) (map[string]errorInfo, error) {
+	out := map[string]errorInfo{}
 	files, err := globYAML(filepath.Join(root, "contracts/platform/errors"))
 	if os.IsNotExist(err) {
 		return out, nil
@@ -471,14 +479,15 @@ func loadErrorBizCodes(root string) (map[string]int, error) {
 			if code == "" || !ok {
 				continue
 			}
-			out["platform.errors."+code] = biz
+			message, _ := item["message"].(string)
+			out["platform.errors."+code] = errorInfo{BizCode: biz, Message: message}
 		}
 	}
 	return out, nil
 }
 
-// expandErrorCodes 把源契约的错误 ID 列表转成 {code, biz_code} 清单。
-func expandErrorCodes(resp map[string]any, raw any, bizCodes map[string]int) error {
+// expandErrorCodes 把源契约的错误 ID 列表转成 {code, biz_code, msg} 清单。
+func expandErrorCodes(resp map[string]any, raw any, infos map[string]errorInfo) error {
 	out := []any{}
 	for _, item := range asList(raw) {
 		if expanded, ok := item.(map[string]any); ok {
@@ -486,13 +495,14 @@ func expandErrorCodes(resp map[string]any, raw any, bizCodes map[string]int) err
 			continue
 		}
 		id, _ := item.(string)
-		biz, ok := bizCodes[id]
+		info, ok := infos[id]
 		if !ok {
 			return fmt.Errorf("x-error-codes references unknown %s", id)
 		}
 		out = append(out, map[string]any{
 			"code":     strings.TrimPrefix(id, "platform.errors."),
-			"biz_code": biz,
+			"biz_code": info.BizCode,
+			"msg":      info.Message,
 		})
 	}
 	resp["x-error-codes"] = out

@@ -7,10 +7,11 @@ stability: draft
 
 response:
   success: "统一信封 { code: 0, msg: \"ok\", data: <service return> }；data 必须是 service 的非 err return"
-  error: "统一信封 { code: <biz_code>, msg: <i18n>, data: null }；HTTP status 保留 4xx/5xx，不改成全部 200"
+  error: "统一信封 { code: <biz_code>, msg: <i18n>, data: null }；HTTP status 保留 4xx/5xx，不改成全部 200；一次响应只返回一个业务错误，同一状态的候选错误由 x-error-codes 列出"
+  raw: "text/binary 响应不包 JSON 信封，body.type 直接对应 service 的 string return"
   empty:
     status: 204
-    body: "无；204 是唯一不包信封的响应"
+    body: "无 body；204 与 text/binary 是仅有的不包 JSON 信封的成功响应"
 
 envelope:
   success_code: 0
@@ -31,6 +32,7 @@ pagination:
 # 传输层头由 HTTP server/proxy 生成，不写进 request.headers / response.headers；
 # 名单在 transport_headers，checker 与 generator 统一读取。
 # Upgrade-Insecure-Requests 等端到端浏览器 hint 不列入本目录；需要时按普通 header 声明。
+# 下表的 required 是 header 的全局语义；operation 的 request/response headers item 默认 required: true，可选 header 显式 false。
 headers:
   request:
     - { name: Authorization, required: false, note: "request.headers 中用 auth: BearerAuth 标记；生成器映射为 OpenAPI security" }

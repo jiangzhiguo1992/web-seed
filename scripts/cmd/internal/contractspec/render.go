@@ -1163,7 +1163,7 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		Service: service,
 		Summary: summary,
 		UsedBy:  []string{"feature.pages." + name},
-		Request: map[string]any{},
+		Request: map[string]any{"headers": []any{}},
 		Response: map[string]httpResponseScaffold{
 			"204": {
 				Description: "OK",

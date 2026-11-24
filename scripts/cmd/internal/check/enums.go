@@ -321,7 +321,11 @@ func (c *Checker) collectServiceEnumRefs(v any, schemas map[string]map[string]an
 // collectHTTPEnumRefs 只把被 operation 引用的 x-enum component 计入使用；
 // 未被任何 operation 引用的 component 不算使用。
 func (c *Checker) collectHTTPEnumRefs(doc map[string]any, fileID string, serviceSchemas map[string]map[string]any, add func(string, string)) {
-	if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP); err != nil {
+	policy, err := c.loadHTTPPolicy()
+	if err != nil {
+		return
+	}
+	if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, openapispec.HTTPNormalizeOptions{TransportHeaders: policy.TransportHeaders, BodyTypes: policy.BodyTypes}); err != nil {
 		return
 	}
 	components, _ := asMap(doc["components"])

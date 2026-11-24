@@ -215,6 +215,9 @@ func TestRuleValueValidation(t *testing.T) {
 
 func TestEnumUsageUsesConcreteOwner(t *testing.T) {
 	root := t.TempDir()
+	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+body_types: { json: application/json, form: application/x-www-form-urlencoded, multipart: multipart/form-data, text: text/plain, binary: application/octet-stream }
+`)
 	writeCapFile(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 summary: "x"
 schema_version: 1

@@ -329,7 +329,7 @@ func loadHTTPOps(root string, policy scenarioPolicy) (map[string]httpInfo, error
 		if err != nil {
 			return nil, err
 		}
-		if err := openapispec.NormalizeHTTPDocument(doc, resolve, false, policy.TransportHeaders); err != nil {
+		if err := openapispec.NormalizeHTTPDocument(doc, resolve, false, openapispec.HTTPNormalizeOptions{TransportHeaders: policy.TransportHeaders, BodyTypes: policy.BodyTypes}); err != nil {
 			return nil, err
 		}
 		for path, rawItem := range asMap(doc["paths"]) {

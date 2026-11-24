@@ -20,6 +20,10 @@ error_responses:
   body: [413]
   deprecated: [410]
 transport_headers: [Connection, Content-Length, Expect]
+body_types:
+  json: application/json
+  text: text/plain
+  note: "mapping"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -33,6 +37,9 @@ transport_headers: [Connection, Content-Length, Expect]
 	if len(policy.TransportHeaders) != 3 || policy.TransportHeaders[2] != "Expect" {
 		t.Fatalf("transport_headers = %v", policy.TransportHeaders)
 	}
+	if len(policy.BodyTypes) != 2 || policy.BodyTypes["json"] != "application/json" || policy.BodyTypes["text"] != "text/plain" {
+		t.Fatalf("body_types = %v", policy.BodyTypes)
+	}
 	got := policy.EffectiveStatuses([]int{201}, true, true, false)
 	want := []int{201, 400, 401, 413, 500}
 	if len(got) != len(want) {
@@ -42,6 +49,24 @@ transport_headers: [Connection, Content-Length, Expect]
 		if got[i] != want[i] {
 			t.Fatalf("statuses = %v", got)
 		}
+	}
+}
+
+func TestLoadHTTPPolicyRejectsDuplicateBodyMediaTypes(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "contracts/platform/http_conventions.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`body_types:
+  json: application/json
+  text: application/json
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadHTTPPolicy(root)
+	if err == nil || !strings.Contains(err.Error(), "share media type") {
+		t.Fatalf("duplicate body media type not rejected: %v", err)
 	}
 }
 

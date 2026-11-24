@@ -73,6 +73,7 @@ var knownRuleIDs = map[string]bool{
 	"family-params":               true,
 	"family-range":                true,
 	"http-audience":               true,
+	"http-body-types":             true,
 	"http-components":             true,
 	"http-consumer":               true,
 	"http-default-errors":         true,

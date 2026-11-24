@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
 )
 
@@ -366,6 +367,9 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	if policyErr != nil && c.strictHTTP {
 		c.rulef("schema.load", "contracts/platform/http_conventions.yaml: %v", policyErr)
 	}
+	if policyErr == nil {
+		c.checkHTTPBodyTypes(schema, policy.BodyTypes)
+	}
 	platformComponents := asMapValue(policy.Components)
 	if platformComponents != nil {
 		c.checkHTTPComponents(platformComponents, "contracts/platform/http_conventions.yaml", true)
@@ -404,6 +408,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		}
 		rel := relPath(c.root, file)
 		if c.strictHTTP {
+			ensureHTTPResponseHeaders(doc)
 			c.validateDoc(doc, schema.Fields, rel)
 			c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		}
@@ -422,7 +427,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		if want := schema.Targets.FileID(filepath.Base(rel)); doc["id"] != want {
 			c.rulef("http-file", "%s: id %q must be %q", rel, doc["id"], want)
 		}
-		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, policy.TransportHeaders); err != nil {
+		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, openapispec.HTTPNormalizeOptions{TransportHeaders: policy.TransportHeaders, BodyTypes: policy.BodyTypes}); err != nil {
 			if strings.Contains(err.Error(), "transport-managed") {
 				c.rulef("http-headers", "%s: %v", rel, err)
 			} else {
@@ -572,7 +577,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		opMeta := openapispec.CollectHTTPOperationMeta(doc)
 		fileAudience := openapispec.CollectHTTPMount(doc).Audience
 		fileStability, _ := doc["stability"].(string)
-		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, policy.TransportHeaders); err != nil {
+		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, openapispec.HTTPNormalizeOptions{TransportHeaders: policy.TransportHeaders, BodyTypes: policy.BodyTypes}); err != nil {
 			continue
 		}
 		fileID, _ := doc["id"].(string)
@@ -695,7 +700,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 							}
 						}
 					}
-					c.checkHTTPResponse(rel, method, path, status, resp, op, schemas, serviceMeta)
+					c.checkHTTPResponse(rel, method, path, status, resp, op, schemas, serviceMeta, policy.BodyTypes)
 				}
 				if op["x-flow"] != nil {
 					c.rulef("http-operation", "%s %s %s: x-flow removed; use x-service", rel, method, path)
@@ -732,7 +737,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				c.checkHTTPErrors(rel, method, path, op, target, responses, policy, fileStability == "deprecated")
 				c.checkHTTPOperationSecurity(rel, method, path, op, httpSecuritySchemes, serviceRef)
 				c.checkHTTPHeaders(rel, method, path, op)
-				c.checkHTTPRequest(rel, method, path, op, target, schemas, httpParameters, httpParameterDefs)
+				c.checkHTTPRequest(rel, method, path, op, target, schemas, httpParameters, httpParameterDefs, policy.BodyTypes)
 			}
 		}
 	}
@@ -778,7 +783,105 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	}
 }
 
-// checkHTTPStatusCodes 限制响应状态必须落在 platform.http_conventions.status_codes。
+// ensureHTTPResponseHeaders 为结构校验补出非 2xx/204 的空 headers；
+// 源契约仍按“非 2xx/204 不写 headers”书写，模板的 required: true 由领域规则兜底。
+func ensureHTTPResponseHeaders(doc map[string]any) {
+	paths, _ := asMap(doc["paths"])
+	for _, rawItem := range paths {
+		item, _ := asMap(rawItem)
+		for method, rawOp := range item {
+			switch method {
+			case "get", "post", "put", "patch", "delete", "head", "options":
+			default:
+				continue
+			}
+			op, _ := asMap(rawOp)
+			responses, _ := asMap(op["response"])
+			for status, rawResp := range responses {
+				resp, _ := asMap(rawResp)
+				if resp == nil || resp["headers"] != nil {
+					continue
+				}
+				code, err := strconv.Atoi(status)
+				if err == nil && (code == 204 || code < 200 || code >= 300) {
+					resp["headers"] = []any{}
+				}
+			}
+		}
+	}
+}
+
+// checkHTTPBodyTypes 校验模板里的 body.kind 枚举与平台的 body_types 映射不漂移。
+func (c *Checker) checkHTTPBodyTypes(schema *Schema, bodyTypes map[string]string) {
+	request, response := httpBodyKindEnums(schema)
+	platform := make([]string, 0, len(bodyTypes))
+	for kind := range bodyTypes {
+		platform = append(platform, kind)
+	}
+	sort.Strings(platform)
+	if !sameStringSet(request, platform) {
+		sort.Strings(request)
+		c.rulef("http-body-types", "request.body.kind enum %v must equal platform.http_conventions.body_types keys %v", request, platform)
+	}
+	for _, kind := range response {
+		if _, ok := bodyTypes[kind]; !ok {
+			c.rulef("http-body-types", "response.body.kind %s is not declared in platform.http_conventions.body_types", kind)
+		}
+	}
+	if len(response) == 0 {
+		c.rulef("http-body-types", "response.body.kind enum must not be empty")
+	}
+}
+
+// httpBodyKindEnums 读取 _meta 中 request/response body.kind 的 enum。
+func httpBodyKindEnums(schema *Schema) (request, response []string) {
+	paths, ok := contractspec.FindField(schema.Fields, "paths")
+	if !ok || len(paths.ItemFields) == 0 {
+		return nil, nil
+	}
+	op := paths.ItemFields[0].ItemFields
+	kindEnum := func(body Field) []string {
+		kind, ok := contractspec.FindField(body.Fields, "kind")
+		if !ok {
+			return nil
+		}
+		out := make([]string, 0, len(kind.Enum))
+		for _, value := range kind.Enum {
+			if s, ok := value.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	if requestField, ok := contractspec.FindField(op, "request"); ok {
+		if body, ok := contractspec.FindField(requestField.Fields, "body"); ok {
+			request = kindEnum(body)
+		}
+	}
+	if responseField, ok := contractspec.FindField(op, "response"); ok {
+		if body, ok := contractspec.FindField(responseField.ItemFields, "body"); ok {
+			response = kindEnum(body)
+		}
+	}
+	return request, response
+}
+
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, value := range a {
+		seen[value] = true
+	}
+	for _, value := range b {
+		if !seen[value] {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *Checker) checkHTTPStatusCodes(rel, method, path string, responses map[string]any, policy httpPolicy) {
 	if len(policy.SuccessCodes) == 0 && len(policy.ClientErrorCodes) == 0 && len(policy.ServerErrorCodes) == 0 {
 		return
@@ -844,6 +947,29 @@ func retryAfterHeader(resp map[string]any) bool {
 	}
 	_, ok := asMap(ra["schema"])
 	return ok
+}
+
+// singleMediaSchema 返回唯一的媒体类型及其 schema；body 只允许一个媒体类型。
+func singleMediaSchema(content map[string]any) (string, map[string]any) {
+	if len(content) != 1 {
+		return "", nil
+	}
+	for mediaType, raw := range content {
+		media, _ := asMap(raw)
+		schema, _ := asMap(media["schema"])
+		return mediaType, schema
+	}
+	return "", nil
+}
+
+// bodyKindByMediaType 按 platform.http_conventions.body_types 反查 body.kind。
+func bodyKindByMediaType(bodyTypes map[string]string, mediaType string) string {
+	for kind, value := range bodyTypes {
+		if value == mediaType {
+			return kind
+		}
+	}
+	return ""
 }
 
 func schemaPropertyMap(v any) map[string]any {
@@ -921,7 +1047,7 @@ func (c *Checker) checkHTTPOperationSecurity(rel, method, path string, op map[st
 }
 
 // checkHTTPResponse 校验 2xx 响应体与 service 业务返回值的一一对应。
-func (c *Checker) checkHTTPResponse(rel, method, path, status string, resp map[string]any, op map[string]any, schemas map[string]any, serviceMeta map[string]serviceMeta) {
+func (c *Checker) checkHTTPResponse(rel, method, path, status string, resp map[string]any, op map[string]any, schemas map[string]any, serviceMeta map[string]serviceMeta, bodyTypes map[string]string) {
 	code, err := strconv.Atoi(status)
 	if err != nil || code < 200 || code >= 300 {
 		return
@@ -932,50 +1058,75 @@ func (c *Checker) checkHTTPResponse(rel, method, path, status string, resp map[s
 		return
 	}
 	content, _ := asMap(resp["content"])
-	media, _ := asMap(content["application/json"])
-	schema, _ := asMap(media["schema"])
+	mediaType, schema := singleMediaSchema(content)
 	if code == 204 {
 		if len(target.returns) != 0 {
 			c.rulef("http-service-return", "%s %s %s: 204 requires service %s without business returns", rel, method, path, serviceRef)
 		}
-		if schema != nil {
+		if mediaType != "" || schema != nil {
 			c.rulef("http-service-return", "%s %s %s: 204 must not declare a response body", rel, method, path)
 		}
 		return
 	}
 	if schema == nil {
-		c.rulef("http-service-return", "%s %s %s: %s requires an application/json response body", rel, method, path, status)
+		c.rulef("http-service-return", "%s %s %s: %s requires a response body", rel, method, path, status)
 		return
 	}
-	ref, _ := schema["$ref"].(string)
-	if !strings.HasPrefix(ref, "#/components/schemas/") {
-		c.rulef("http-service-return", "%s %s %s: %s response schema must be a $ref to components.schemas", rel, method, path, status)
-		return
-	}
-	name := strings.TrimPrefix(ref, "#/components/schemas/")
-	comp, ok := asMap(schemas[name])
-	if !ok {
-		c.rulef("http-components", "%s %s %s: %s response $ref %s points to a missing component", rel, method, path, status, name)
-		return
-	}
-	kind, typeID := httpComponentSource(comp)
-	if kind == "" || kind == "platform" {
-		c.rulef("http-service-return", "%s %s %s: %s response component %s must be source.service_type/source.enum/source.entity", rel, method, path, status, name)
-		return
-	}
-	found := false
-	for _, rt := range target.returns {
-		if rt.typ == typeID {
-			found = true
-			break
+	kind := bodyKindByMediaType(bodyTypes, mediaType)
+	switch kind {
+	case "json":
+		ref, _ := schema["$ref"].(string)
+		if !strings.HasPrefix(ref, "#/components/schemas/") {
+			c.rulef("http-service-return", "%s %s %s: %s response schema must be a $ref to components.schemas", rel, method, path, status)
+			return
 		}
-	}
-	if !found {
-		c.rulef("http-service-return", "%s %s %s: %s response type %s is not a return of %s", rel, method, path, status, typeID, serviceRef)
+		name := strings.TrimPrefix(ref, "#/components/schemas/")
+		comp, ok := asMap(schemas[name])
+		if !ok {
+			c.rulef("http-components", "%s %s %s: %s response $ref %s points to a missing component", rel, method, path, status, name)
+			return
+		}
+		sourceKind, typeID := httpComponentSource(comp)
+		if sourceKind == "" || sourceKind == "platform" {
+			c.rulef("http-service-return", "%s %s %s: %s response component %s must be source.service_type/source.enum/source.entity", rel, method, path, status, name)
+			return
+		}
+		found := false
+		for _, rt := range target.returns {
+			if rt.typ == typeID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.rulef("http-service-return", "%s %s %s: %s response type %s is not a return of %s", rel, method, path, status, typeID, serviceRef)
+		}
+	case "text", "binary":
+		family := c.httpSchemaFamily(schema, schemas)
+		if family != "string" {
+			c.rulef("http-service-return", "%s %s %s: %s %s response must be a string, got %s", rel, method, path, status, kind, family)
+			return
+		}
+		found := false
+		for _, rt := range target.returns {
+			if familiesCompatible(family, c.httpServiceFamily(rt.typ)) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			c.rulef("http-service-return", "%s %s %s: %s %s response is not a return of %s", rel, method, path, status, kind, serviceRef)
+		}
+	default:
+		if mediaType == "" {
+			c.rulef("http-service-return", "%s %s %s: %s response content type is missing", rel, method, path, status)
+		} else {
+			c.rulef("http-service-return", "%s %s %s: %s response media type %s is not declared in platform.body_types", rel, method, path, status, mediaType)
+		}
 	}
 }
 
-// checkHTTPErrors 校验 response.<status>.codes 与 service 错误集精确一致。
+// checkHTTPErrors 校验 response.<status>.errors 与 service 错误集精确一致。
 func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, target serviceMeta, responses map[string]any, policy httpPolicy, deprecated bool) {
 	got := map[string]bool{}
 	for status, rawResp := range responses {
@@ -987,7 +1138,7 @@ func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, t
 		codes, has := resp["x-error-codes"]
 		if code >= 200 && code < 300 {
 			if has {
-				c.rulef("http-errors", "%s %s %s: 2xx response %s must not declare codes", rel, method, path, status)
+				c.rulef("http-errors", "%s %s %s: 2xx response %s must not declare errors", rel, method, path, status)
 			}
 			continue
 		}
@@ -997,7 +1148,7 @@ func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, t
 		for _, item := range asList(codes) {
 			codeID, _ := item.(string)
 			if codeID == "" {
-				c.rulef("http-errors", "%s %s %s: response %s codes must be non-empty platform.errors.* IDs", rel, method, path, status)
+				c.rulef("http-errors", "%s %s %s: response %s errors must be non-empty platform.errors.* IDs", rel, method, path, status)
 				continue
 			}
 			short := strings.TrimPrefix(codeID, "platform.errors.")
@@ -1036,7 +1187,7 @@ func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, t
 			(deprecated && containsInt(policy.Deprecated, status))
 		if !covered {
 			if _, ok := responses[fmt.Sprint(status)]; !ok {
-				c.rulef("http-errors", "%s %s %s: service error %s status %d has no response (baseline or codes)", rel, method, path, code, status)
+				c.rulef("http-errors", "%s %s %s: service error %s status %d has no response (baseline or errors)", rel, method, path, code, status)
 			}
 		}
 	}
@@ -1049,7 +1200,7 @@ func (c *Checker) checkHTTPErrors(rel, method, path string, op map[string]any, t
 	}
 	for code := range want {
 		if !got[code] {
-			c.rulef("http-errors", "%s %s %s: missing error %s from responses.<status>.codes", rel, method, path, code)
+			c.rulef("http-errors", "%s %s %s: missing error %s from responses.<status>.errors", rel, method, path, code)
 		}
 	}
 	for code := range got {
@@ -1202,7 +1353,7 @@ func (c *Checker) checkHTTPHeaders(rel, method, path string, op map[string]any) 
 }
 
 // checkHTTPRequest 校验请求体与 HTTP 参数都来自 x-service 的 params，且覆盖全部必填参数。
-func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, target serviceMeta, schemas map[string]any, httpParameters map[string]bool, httpParameterDefs map[string]map[string]any) {
+func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, target serviceMeta, schemas map[string]any, httpParameters map[string]bool, httpParameterDefs map[string]map[string]any, bodyTypes map[string]string) {
 	params, ok := asMap(op["x-service-params"])
 	if !ok {
 		c.rulef("http-service-params", "%s %s %s: x-service-params required", rel, method, path)
@@ -1221,15 +1372,29 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 		c.rulef("http-shape", "%s %s %s: GET/HEAD must not declare a request body", rel, method, path)
 	}
 	var bodySchema map[string]any
+	bodyKind := ""
 	if hasRB {
 		content, _ := asMap(rb["content"])
-		media, _ := asMap(content["application/json"])
-		bodySchema, _ = asMap(media["schema"])
+		mediaType, schema := singleMediaSchema(content)
+		bodySchema = schema
+		bodyKind = bodyKindByMediaType(bodyTypes, mediaType)
 		c.checkClosedObjects(bodySchema, rel, method+" "+path+" requestBody")
-		switch family := c.httpSchemaFamily(bodySchema, schemas); {
-		case family == "object", strings.HasPrefix(family, "schema:"), strings.HasPrefix(family, "entity:"):
+		family := c.httpSchemaFamily(bodySchema, schemas)
+		switch bodyKind {
+		case "json", "form", "multipart":
+			if family != "object" && !strings.HasPrefix(family, "schema:") && !strings.HasPrefix(family, "entity:") {
+				c.rulef("http-service-type", "%s %s %s: %s requestBody must be an object schema, got %s", rel, method, path, bodyKind, family)
+			}
+		case "text", "binary":
+			if family != "string" {
+				c.rulef("http-service-type", "%s %s %s: %s requestBody must be a string, got %s", rel, method, path, bodyKind, family)
+			}
 		default:
-			c.rulef("http-service-type", "%s %s %s: requestBody must be an object schema, got %s", rel, method, path, family)
+			if mediaType == "" {
+				c.rulef("http-service-type", "%s %s %s: requestBody content type is missing", rel, method, path)
+			} else {
+				c.rulef("http-service-type", "%s %s %s: requestBody media type %s is not declared in platform.body_types", rel, method, path, mediaType)
+			}
 		}
 	}
 	body, hasBody := params["body"]
@@ -1265,18 +1430,24 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 						c.rulef("http-service-params", "%s %s %s: requestBody must be required because service parameter %s is required", rel, method, path, paramPath)
 					}
 				}
-				ref, _ := bodySchema["$ref"].(string)
-				if !strings.HasPrefix(ref, "#/components/schemas/") {
-					c.rulef("http-service-type", "%s %s %s: body for %s must be a $ref to its service schema", rel, method, path, paramPath)
-				} else {
-					name := strings.TrimPrefix(ref, "#/components/schemas/")
-					comp, ok := asMap(schemas[name])
-					if !ok {
-						c.rulef("http-components", "%s %s %s: requestBody $ref %s points to a missing component", rel, method, path, name)
-					} else if kind, typeID := httpComponentSource(comp); kind == "" || kind == "platform" {
-						c.rulef("http-service-type", "%s %s %s: requestBody component %s must be source.service_type/source.enum/source.entity", rel, method, path, name)
-					} else if typeID != decl {
-						c.rulef("http-service-type", "%s %s %s: requestBody type %s is not the type of %s (%s)", rel, method, path, typeID, paramPath, decl)
+				if bodyKind == "text" || bodyKind == "binary" {
+					if !familiesCompatible(c.httpSchemaFamily(bodySchema, schemas), c.httpServiceFamily(decl)) {
+						c.rulef("http-service-type", "%s %s %s: %s body type differs from service parameter %s (%s)", rel, method, path, bodyKind, paramPath, decl)
+					}
+				} else if bodyKind != "" {
+					ref, _ := bodySchema["$ref"].(string)
+					if !strings.HasPrefix(ref, "#/components/schemas/") {
+						c.rulef("http-service-type", "%s %s %s: body for %s must be a $ref to its service schema", rel, method, path, paramPath)
+					} else {
+						name := strings.TrimPrefix(ref, "#/components/schemas/")
+						comp, ok := asMap(schemas[name])
+						if !ok {
+							c.rulef("http-components", "%s %s %s: requestBody $ref %s points to a missing component", rel, method, path, name)
+						} else if kind, typeID := httpComponentSource(comp); kind == "" || kind == "platform" {
+							c.rulef("http-service-type", "%s %s %s: requestBody component %s must be source.service_type/source.enum/source.entity", rel, method, path, name)
+						} else if typeID != decl {
+							c.rulef("http-service-type", "%s %s %s: requestBody type %s is not the type of %s (%s)", rel, method, path, typeID, paramPath, decl)
+						}
 					}
 				}
 			}
@@ -1284,6 +1455,7 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 	}
 
 	if hasForm {
+		declared := map[string]map[string]bool{}
 		for _, raw := range asList(form) {
 			entry, _ := asMap(raw)
 			from, _ := entry["from"].(string)
@@ -1301,7 +1473,17 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 				c.rulef("http-service-params", "%s %s %s: form field %s must not map to auth-injected service parameter %s", rel, method, path, from, servicePath)
 				continue
 			}
-			covered[strings.Split(servicePath, ".")[0]] = true
+			top := strings.Split(servicePath, ".")[0]
+			field := strings.Split(strings.TrimPrefix(servicePath, top+"."), ".")[0]
+			if field == "" {
+				c.rulef("http-service-params", "%s %s %s: form field %s must map to params.%s.<field>", rel, method, path, from, top)
+				continue
+			}
+			if declared[top] == nil {
+				declared[top] = map[string]bool{}
+			}
+			declared[top][field] = true
+			covered[top] = true
 			decl, ok := c.serviceParamType(target, servicePath)
 			if !ok {
 				c.rulef("http-service-params", "%s %s %s: form field %s maps to unknown service field params.%s", rel, method, path, from, servicePath)
@@ -1312,6 +1494,18 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 				httpFamily := c.httpSchemaFamily(prop, schemas)
 				if !familiesCompatible(httpFamily, c.httpServiceFamily(decl)) {
 					c.rulef("http-service-params", "%s %s %s: form field %s type differs from service field params.%s (%s)", rel, method, path, from, servicePath, decl)
+				}
+			}
+		}
+		for top, fields := range declared {
+			decl := target.paramDecls[top]
+			def := target.typeSchemas[strings.TrimPrefix(decl, "*")]
+			for _, rawProp := range asList(def["properties"]) {
+				prop, _ := asMap(rawProp)
+				name, _ := prop["name"].(string)
+				required, _ := prop["required"].(bool)
+				if required && !fields[name] {
+					c.rulef("http-service-params", "%s %s %s: form field %s is required by service parameter params.%s", rel, method, path, name, top)
 				}
 			}
 		}

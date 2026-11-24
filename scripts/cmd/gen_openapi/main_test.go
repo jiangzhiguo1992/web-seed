@@ -92,6 +92,12 @@ func writeHTTPPolicy(t *testing.T, root, always, secured string) {
 error_responses:
   always: %s
   secured: %s
+body_types:
+  json: application/json
+  form: application/x-www-form-urlencoded
+  multipart: multipart/form-data
+  text: text/plain
+  binary: application/octet-stream
 unbound_operations: []
 `, always, secured))
 }
@@ -194,6 +200,12 @@ func TestBuildAppsShareFiles(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
 	writeFixture(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+body_types:
+  json: application/json
+  form: application/x-www-form-urlencoded
+  multipart: multipart/form-data
+  text: text/plain
+  binary: application/octet-stream
 error_responses: { always: [], secured: [] }
 components:
   responses:
@@ -235,12 +247,12 @@ paths:
         "200":
           description: "OK"
         "409":
-          codes:
+          errors:
             - platform.errors.X
 `)
 	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
 errors:
-  - { code: X, biz_code: 9001, status: 409 }
+  - { code: X, biz_code: 9001, status: 409, message: "conflict" }
 `)
 	for _, dir := range []string{"contracts/capabilities/services", "contracts/data/entities"} {
 		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
@@ -402,6 +414,66 @@ func TestGeneratedSpecsOmitTransportHeaders(t *testing.T) {
 	}
 }
 
+func TestBuildTextResponse(t *testing.T) {
+	root := t.TempDir()
+	writeTypes(t, root)
+	writeHTTPPolicy(t, root, "[]", "[]")
+	writeFixture(t, root, "contracts/project.yaml", `project:
+  name: test
+  version: "1"
+apps:
+  api:
+    kind: api
+    audience: admin
+    timeout_ms: 5000
+    includes: [cap.protocols.http.x]
+    generated:
+      spec: generated/openapi/x.yaml
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+mount:
+  api_version: v1
+  path: /
+  audience: [admin]
+paths:
+  /x:
+    get:
+      name: getX
+      id: cap.protocols.http.x.get
+      service: cap.services.x.get
+      request: {}
+      response:
+        "200":
+          description: "OK"
+          headers:
+            - { name: Content-Type, required: true, value: text/plain, description: "body" }
+          body:
+            kind: text
+            type: _types.string
+`)
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+schemas: {}
+services: []
+`)
+	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
+enums: []
+`)
+	if err := os.MkdirAll(filepath.Join(root, "contracts/data/entities"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(files["generated/openapi/x.yaml"])
+	if !strings.Contains(out, "text/plain") {
+		t.Fatalf("text response media type missing:\n%s", out)
+	}
+	if strings.Contains(out, "ApiStringResponse") {
+		t.Fatalf("text response must not be wrapped in JSON envelope:\n%s", out)
+	}
+}
+
 func TestBuildFormBody(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
@@ -532,6 +604,12 @@ func TestBuildInjectsPlatformBaseline(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
 	writeFixture(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+body_types:
+  json: application/json
+  form: application/x-www-form-urlencoded
+  multipart: multipart/form-data
+  text: text/plain
+  binary: application/octet-stream
 error_responses:
   always: [400, 429, 500, 503]
   secured: [401, 403]
@@ -578,7 +656,7 @@ paths:
 `)
 	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
 errors:
-  - { code: X, biz_code: 9001, status: 409 }
+  - { code: X, biz_code: 9001, status: 409, message: "conflict" }
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/b.yaml", `id: "cap.protocols.http.b"
 mount:
@@ -632,6 +710,12 @@ func TestBuildInjectsPlatformComponents(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
 	writeFixture(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+body_types:
+  json: application/json
+  form: application/x-www-form-urlencoded
+  multipart: multipart/form-data
+  text: text/plain
+  binary: application/octet-stream
 error_responses:
   always: [409]
 components:
@@ -687,7 +771,7 @@ paths:
             kind: json
             type: cap.services.x.schemas.X
         "409":
-          codes: [platform.errors.X]
+          errors: [platform.errors.X]
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
@@ -699,7 +783,7 @@ services: []
 `)
 	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
 errors:
-  - { code: X, biz_code: 9001, status: 409 }
+  - { code: X, biz_code: 9001, status: 409, message: "conflict" }
 `)
 	for _, dir := range []string{"contracts/data/enums", "contracts/data/entities"} {
 		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
@@ -728,6 +812,12 @@ func TestBuildEmitsErrorCodes(t *testing.T) {
 	root := t.TempDir()
 	writeTypes(t, root)
 	writeFixture(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+body_types:
+  json: application/json
+  form: application/x-www-form-urlencoded
+  multipart: multipart/form-data
+  text: text/plain
+  binary: application/octet-stream
 error_responses: { always: [], secured: [] }
 components:
   responses:
@@ -761,7 +851,7 @@ paths:
         "204":
           description: "OK"
         "409":
-          codes:
+          errors:
             - platform.errors.ACCOUNT_NUMBER_TAKEN
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
@@ -773,7 +863,7 @@ enums: []
 `)
 	writeFixture(t, root, "contracts/platform/errors/account.yaml", `id: platform.errors.account
 errors:
-  - { code: ACCOUNT_NUMBER_TAKEN, biz_code: 2002, status: 409 }
+  - { code: ACCOUNT_NUMBER_TAKEN, biz_code: 2002, status: 409, message: "taken" }
 `)
 	if err := os.MkdirAll(filepath.Join(root, "contracts/data/entities"), 0o755); err != nil {
 		t.Fatal(err)
@@ -783,7 +873,7 @@ errors:
 		t.Fatal(err)
 	}
 	out := string(files["generated/openapi/x.yaml"])
-	for _, want := range []string{"x-error-codes:", "code: ACCOUNT_NUMBER_TAKEN", "biz_code: 2002"} {
+	for _, want := range []string{"x-error-codes:", "code: ACCOUNT_NUMBER_TAKEN", "biz_code: 2002", "msg: taken"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("generated spec missing %q:\n%s", want, out)
 		}

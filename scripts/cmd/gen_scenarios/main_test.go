@@ -38,7 +38,10 @@ func TestLoadHTTPOpsRejectsTransportHeaders(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("contracts/platform/http_conventions.yaml", "transport_headers: [Connection]\naudiences: [admin]\n")
+	write("contracts/platform/http_conventions.yaml", `transport_headers: [Connection]
+audiences: [admin]
+body_types: { json: application/json, form: application/x-www-form-urlencoded, multipart: multipart/form-data, text: text/plain, binary: application/octet-stream }
+`)
 	write("contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 mount: { api_version: v1, path: /, audience: [admin] }
 paths:

@@ -940,40 +940,49 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 列出账号
@@ -1011,62 +1020,76 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
             - biz_code: 2002
               code: ACCOUNT_NUMBER_TAKEN
+              msg: 账号编号已被使用
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
             - biz_code: 2004
               code: ACCOUNT_NICKNAME_INVALID
+              msg: 昵称长度不合法
             - biz_code: 2003
               code: ACCOUNT_NUMBER_INVALID
+              msg: 账号编号格式不合法
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 创建账号
@@ -1097,52 +1120,64 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+              msg: 账号不存在
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
             - biz_code: 2007
               code: ACCOUNT_ALREADY_DELETED
+              msg: 账号已删除
             - biz_code: 2006
               code: ACCOUNT_ILLEGAL_TRANSITION
+              msg: 当前状态不允许该操作
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 删除账号（软删）
@@ -1176,45 +1211,55 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+              msg: 账号不存在
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 获取账号
@@ -1254,65 +1299,79 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+              msg: 账号不存在
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
             - biz_code: 2007
               code: ACCOUNT_ALREADY_DELETED
+              msg: 账号已删除
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
             - biz_code: 2004
               code: ACCOUNT_NICKNAME_INVALID
+              msg: 昵称长度不合法
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 更新账号资料
@@ -1347,52 +1406,64 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+              msg: 账号不存在
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
             - biz_code: 2007
               code: ACCOUNT_ALREADY_DELETED
+              msg: 账号已删除
             - biz_code: 2006
               code: ACCOUNT_ILLEGAL_TRANSITION
+              msg: 当前状态不允许该操作
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 激活账号
@@ -1433,62 +1504,76 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
         404:
           $ref: '#/components/responses/NotFound'
           x-error-codes:
             - biz_code: 2001
               code: ACCOUNT_NOT_FOUND
+              msg: 账号不存在
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
             - biz_code: 2007
               code: ACCOUNT_ALREADY_DELETED
+              msg: 账号已删除
             - biz_code: 2006
               code: ACCOUNT_ILLEGAL_TRANSITION
+              msg: 当前状态不允许该操作
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 封禁账号
@@ -1522,66 +1607,82 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
+              msg: 账号已被封禁
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
             - biz_code: 2007
               code: ACCOUNT_ALREADY_DELETED
+              msg: 账号已删除
             - biz_code: 3005
               code: AUTH_EMAIL_TAKEN
+              msg: 邮箱已被绑定
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
             - biz_code: 3007
               code: AUTH_EMAIL_INVALID
+              msg: 邮箱格式不合法
             - biz_code: 4004
               code: AUTH_VERIFICATION_TARGET_INVALID
+              msg: 验证目标格式不合法
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 创建、换绑或启停邮箱认证绑定
@@ -1615,68 +1716,85 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
             - biz_code: 3001
               code: AUTH_INVALID_CREDENTIALS
+              msg: 账号标识或凭据不正确
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
+              msg: 账号已被封禁
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
             - biz_code: 2007
               code: ACCOUNT_ALREADY_DELETED
+              msg: 账号已删除
             - biz_code: 3003
               code: AUTH_USERNAME_TAKEN
+              msg: 登录名已被使用
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
             - biz_code: 4004
               code: AUTH_VERIFICATION_TARGET_INVALID
+              msg: 验证目标格式不合法
             - biz_code: 3008
               code: AUTH_WEAK_PASSWORD
+              msg: 密码强度不足
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 创建、修改或启停密码认证绑定
@@ -1710,66 +1828,82 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
+              msg: 账号已被封禁
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         409:
           $ref: '#/components/responses/Conflict'
           x-error-codes:
             - biz_code: 2007
               code: ACCOUNT_ALREADY_DELETED
+              msg: 账号已删除
             - biz_code: 3004
               code: AUTH_PHONE_TAKEN
+              msg: 手机号已被绑定
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
             - biz_code: 3006
               code: AUTH_PHONE_INVALID
+              msg: 手机号格式不合法
             - biz_code: 4004
               code: AUTH_VERIFICATION_TARGET_INVALID
+              msg: 验证目标格式不合法
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 创建、换绑或启停手机号认证绑定
@@ -1803,57 +1937,70 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 3001
               code: AUTH_INVALID_CREDENTIALS
+              msg: 账号标识或凭据不正确
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
+              msg: 令牌无效
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
+              msg: 账号已被封禁
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         423:
           $ref: '#/components/responses/Locked'
           x-error-codes:
             - biz_code: 3002
               code: AUTH_LOCKED
+              msg: 认证已锁定，请稍后再试
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security: []
       summary: 登录
   /auth/logout:
@@ -1882,45 +2029,55 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
+              msg: 令牌无效
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security: []
       summary: 吊销 refresh JWT
   /auth/me:
@@ -1947,44 +2104,55 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 1002
               code: COMMON_UNAUTHORIZED
+              msg: 未认证
             - biz_code: 5002
               code: AUTH_TOKEN_EXPIRED
+              msg: 令牌已过期
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
+              msg: 令牌无效
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 1003
               code: COMMON_FORBIDDEN
+              msg: 无权限
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security:
         - BearerAuth: []
       summary: 校验访问令牌并返回当前账号
@@ -2018,47 +2186,58 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         401:
           $ref: '#/components/responses/Unauthorized'
           x-error-codes:
             - biz_code: 5002
               code: AUTH_TOKEN_EXPIRED
+              msg: 令牌已过期
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
+              msg: 令牌无效
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security: []
       summary: 刷新 JWT
   /auth/verification/send:
@@ -2091,51 +2270,64 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
             - biz_code: 3007
               code: AUTH_EMAIL_INVALID
+              msg: 邮箱格式不合法
             - biz_code: 3006
               code: AUTH_PHONE_INVALID
+              msg: 手机号格式不合法
             - biz_code: 4001
               code: AUTH_VERIFICATION_INVALID
+              msg: 验证码不正确
             - biz_code: 4004
               code: AUTH_VERIFICATION_TARGET_INVALID
+              msg: 验证目标格式不合法
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security: []
       summary: 发送验证码
   /auth/verification/verify:
@@ -2168,52 +2360,64 @@ paths:
           x-error-codes:
             - biz_code: 1001
               code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
             - biz_code: 1014
               code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
             - biz_code: 1011
               code: COMMON_PAYLOAD_TOO_LARGE
+              msg: 请求体超过上限
         415:
           $ref: '#/components/responses/UnsupportedMediaType'
           x-error-codes:
             - biz_code: 1012
               code: COMMON_UNSUPPORTED_MEDIA_TYPE
+              msg: 不支持的 Content-Type
         422:
           $ref: '#/components/responses/UnprocessableEntity'
           x-error-codes:
             - biz_code: 4002
               code: AUTH_VERIFICATION_EXPIRED
+              msg: 验证码已过期
             - biz_code: 4001
               code: AUTH_VERIFICATION_INVALID
+              msg: 验证码不正确
         423:
           $ref: '#/components/responses/Locked'
           x-error-codes:
             - biz_code: 4003
               code: AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+              msg: 验证码尝试次数过多
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
             - biz_code: 1006
               code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
         500:
           $ref: '#/components/responses/Internal'
           x-error-codes:
             - biz_code: 1007
               code: COMMON_INTERNAL
+              msg: 服务端错误
             - biz_code: 1008
               code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
         503:
           $ref: '#/components/responses/ServiceUnavailable'
           x-error-codes:
             - biz_code: 1009
               code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
             - biz_code: 1010
               code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
       security: []
       summary: 校验验证码
 servers:

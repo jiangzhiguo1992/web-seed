@@ -20,6 +20,7 @@
 | cap.protocols.http | http-file | http-file | 1 |
 | cap.protocols.http | http-status | http-status | 1 |
 | cap.protocols.http | http-shape | http-shape | 1 |
+| cap.protocols.http | http-body-types | http-body-types | 1 |
 | cap.protocols.http | http-version | http-version | 1 |
 | cap.protocols.http | http-mount | http-mount | 1 |
 | cap.protocols.http | http-path-params | http-path-params | 1 |

@@ -22,6 +22,7 @@ type HTTPPolicy struct {
 	ClientErrorCodes []int
 	ServerErrorCodes []int
 	TransportHeaders []string
+	BodyTypes        map[string]string
 	Components       map[string]any
 }
 
@@ -46,6 +47,7 @@ func LoadHTTPPolicy(root string) (HTTPPolicy, error) {
 			ServerError []int `yaml:"server_error"`
 		} `yaml:"status_codes"`
 		TransportHeaders []string       `yaml:"transport_headers"`
+		BodyTypes        map[string]any `yaml:"body_types"`
 		Components       map[string]any `yaml:"components"`
 	}
 	if err := yaml.Unmarshal(b, &doc); err != nil {
@@ -62,6 +64,25 @@ func LoadHTTPPolicy(root string) (HTTPPolicy, error) {
 		}
 		seen[key] = true
 	}
+	bodyTypes := map[string]string{}
+	mediaOwners := map[string]string{}
+	for kind, raw := range doc.BodyTypes {
+		value, ok := raw.(string)
+		if !ok {
+			return HTTPPolicy{}, fmt.Errorf("%s: body_types.%s must be a string", path, kind)
+		}
+		if kind == "note" {
+			continue
+		}
+		if kind == "" || strings.TrimSpace(value) == "" {
+			return HTTPPolicy{}, fmt.Errorf("%s: body_types.%s must be non-empty", path, kind)
+		}
+		if owner, exists := mediaOwners[value]; exists {
+			return HTTPPolicy{}, fmt.Errorf("%s: body_types.%s and body_types.%s share media type %s", path, owner, kind, value)
+		}
+		mediaOwners[value] = kind
+		bodyTypes[kind] = value
+	}
 	return HTTPPolicy{
 		Audiences:        doc.Audiences,
 		Always:           doc.ErrorResponses.Always,
@@ -72,6 +93,7 @@ func LoadHTTPPolicy(root string) (HTTPPolicy, error) {
 		ClientErrorCodes: doc.StatusCodes.ClientError,
 		ServerErrorCodes: doc.StatusCodes.ServerError,
 		TransportHeaders: doc.TransportHeaders,
+		BodyTypes:        bodyTypes,
 		Components:       doc.Components,
 	}, nil
 }

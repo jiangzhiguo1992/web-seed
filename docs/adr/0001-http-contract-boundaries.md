@@ -43,14 +43,14 @@ paths:
     body: [413, 415]         # operation 有 requestBody 时
     deprecated: [410]        # 文件 stability: deprecated 时
   ```
-- operation 的非 2xx response 只写业务 codes：
+- operation 的非 2xx response 只写业务 errors：
   ```yaml
   409:
-    codes: [platform.errors.ACCOUNT_NUMBER_TAKEN]
+    errors: [platform.errors.ACCOUNT_NUMBER_TAKEN]
   ```
 - `COMMON_*` 不在 operation 重复；基线状态由生成器注入。
 - 业务错误可以补在基线状态上（如受保护端点的 403 补 `ACCOUNT_SUSPENDED`），但不得写空的错误 response。
-- 生成 OpenAPI 时，业务响应附带 `x-error-codes: [{code, biz_code}]`，客户端/AI 可直接看到错误清单。
+- 生成 OpenAPI 时，业务响应附带 `x-error-codes: [{code, biz_code, msg}]`，客户端/AI 可直接看到错误清单。
 - 429/503 的 shared response 必须声明 `Retry-After`；423/429/503 的 shared response 已覆盖。
 - 410/413/415 已补齐 `platform.errors`（`COMMON_GONE`/`COMMON_PAYLOAD_TOO_LARGE`/`COMMON_UNSUPPORTED_MEDIA_TYPE`）与 `shared.responses`。
 
@@ -68,7 +68,7 @@ paths:
 | `events` / 其他 step | `step.errors` |
 | 异步事件 | 不贡献同步错误 |
 
-递归有环保护；`http-errors` 用闭包校验每个 operation 的 `codes`，`COMMON_*` 不进入业务 codes。闭包实现与单元测试在 `scripts/cmd/internal/check/capabilities.go` / `capabilities_rules_test.go`，不依赖 AI 手工枚举。
+递归有环保护；`http-errors` 用闭包校验每个 operation 的 `errors`，`COMMON_*` 不进入业务 codes。闭包实现与单元测试在 `scripts/cmd/internal/check/capabilities.go` / `capabilities_rules_test.go`，不依赖 AI 手工枚举。
 
 ## 决策 3：audience 是生成过滤器，不是标签
 
@@ -137,7 +137,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 - **多 app 同文件**：`admin` / `admin_v2` 复用同一 HTTP 文件，版本由 app 派生；生成器对每个 app 深拷贝文档，避免生成过程中的 mutation 串味。
 - **op 级 audience 冲突**：文件级 `mount.audience` 是默认值，op 覆盖只能收窄/扩展该文件的有效端；`http-audience` 校验每个 app 的 audience 在其 include 文件中至少命中一次。若一个文件同时服务多个端且路径完全不同，应拆文件，而不是在同一 mount 下堆 op 级 audience。
-- **基线/业务码合并**：同一状态既可能是平台基线（403）又有业务码（`ACCOUNT_SUSPENDED`），合并规则是“状态由基线注入，codes 由 operation 补充”；checker 要求每个 service 错误落到基线或非 2xx response。
+- **基线/业务码合并**：同一状态既可能是平台基线（403）又有业务码（`ACCOUNT_SUSPENDED`），合并规则是“状态由基线注入，errors 由 operation 补充”；checker 要求每个 service 错误落到基线或非 2xx response。
 - **used_by 歧义**：见决策 4 的建模限制。
 
 ## 被否决的替代方案
@@ -274,10 +274,11 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 5. **失效边界**：`token.revocation.strategy` 固定 `server`。`token.verify` 验签后读取 token 表校验 revoked_at/expiry，因此登出、refresh 轮换、账号删除、改密/换绑手机或邮箱都会吊销 token 表记录，access JWT 即时失效。
 6. **账号删除**：`account.delete` 软删认证绑定、作废验证体并调用 `token.revoke_by_account` 吊销 token 表记录；access JWT 随之立即失效。
 
-## 2026-11-24 字段命名与 header 默认值
+## 2026-11-24 字段命名、header 默认值与错误字段
 
 1. **值域字段统一叫 `type`**：HTTP 源契约的 header / path / query / body / form field 原先用 `schema` 表示类型 ID，现全部改名为 `type`；OpenAPI 生成物里的 `schema` 键是生成结果，不变。`normalizeHTTPSchema` 只负责把 `type` 值投影为 OpenAPI schema。
-2. **header 的 `required` 默认 false**：`request.headers` / `response.headers` 不再默认必填；`Content-Type` 的必需性由 body 决定，`Authorization` 的必需性由 security 决定。原先用 `required: true` 标记 Content-Type 的 strict 检查已删除，正常化器只要求“有 body 时声明 Content-Type”。
-3. **request body 单行书写**：`request.body` 统一写 `body: { kind: json, type: <类型 ID>, to: params.<参数> }`。这只是 YAML 展示格式，不改变校验语义；response body 仍按模板块状书写。
+2. **header 的 `required` 默认 true**：`request.headers` / `response.headers` 的条目可省略 `required`，省略时值为 true；可选 header 写 `required: false`。`request.headers` 与 `response.headers` 列表本身都必填；非 2xx/204 的 `response.headers` 写空列表 `[]`。`Content-Type` 的必需性由 body 决定，`Authorization` 的必需性由 security 决定。
+3. **request body 块状书写**：`request.body` 按模板顺序写 `kind` / `type` / `to`，不写成单行 flow mapping；response body 同样块状。格式不改变校验语义。
 4. **form 不独立于 body**：`form` / `multipart` 是 `body.kind` 的取值，与 `json` 互斥；`fields` 是表单字段列表，不新增独立的 `form` 顶层字段。
-5. **response 保持状态码 map**：键是三位 HTTP 状态码，值是该状态下的 description/headers/body/codes。多个状态码共享同一响应形状时重复声明；当前没有该需求，不引入 list 或 response alias。
+5. **response 保持状态码 map**：键是三位 HTTP 状态码，值是该状态下的 description/headers/body/errors。多个状态码共享同一响应形状时重复声明；当前没有该需求，不引入 list 或 response alias。
+6. **错误字段改名为 `errors` 并携带 code+msg**：源契约写 `response.<status>.errors: [platform.errors.*]`，只保留错误 ID 引用，`msg` 仍由 `platform.errors` 单一源维护；生成 OpenAPI 的 `x-error-codes` 投影为 `[{code, biz_code, msg}]`，客户端/AI 可直接看到 code 与 msg。

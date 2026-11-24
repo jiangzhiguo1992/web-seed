@@ -374,6 +374,20 @@ func copyMeta(t *testing.T, root, typ string) *Schema {
 			writeCapFile(t, root, "contracts/_meta/"+name, string(shared))
 		}
 	}
+	policyPath := filepath.Join(root, "contracts/platform/http_conventions.yaml")
+	if typ == "cap.protocols.http" {
+		if _, err := os.Stat(policyPath); os.IsNotExist(err) {
+			writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+body_types:
+  json: application/json
+  form: application/x-www-form-urlencoded
+  multipart: multipart/form-data
+  text: text/plain
+  binary: application/octet-stream
+transport_headers: []
+`)
+		}
+	}
 	s, _, err := contractspec.LoadSchemaByType(root, typ)
 	if err != nil {
 		t.Fatal(err)
@@ -736,7 +750,7 @@ paths:
         "204":
           description: "OK"
         "500":
-          codes:
+          errors:
             - "platform.errors.COMMON_INTERNAL"
 shared:
   schemas: {}`)
@@ -978,6 +992,7 @@ func TestHTTPTransportHeadersRejectedAtSource(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `transport_headers: [Connection, Content-Length]
 audiences: [admin]
+body_types: { json: application/json, form: application/x-www-form-urlencoded, multipart: multipart/form-data, text: text/plain, binary: application/octet-stream }
 `)
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
@@ -1876,13 +1891,13 @@ paths:
         "204":
           description: "OK"
         "409":
-          codes:
+          errors:
             - "platform.errors.X"
         "422":
-          codes:
+          errors:
             - "platform.errors.Y"
         "500":
-          codes:
+          errors:
             - "platform.errors.COMMON_INTERNAL"
       x-typo: true`)
 	c := &Checker{root: root,
@@ -2728,6 +2743,7 @@ func TestHTTPAudienceAndConsumer(t *testing.T) {
 	root := t.TempDir()
 	schema := copyMeta(t, root, "cap.protocols.http")
 	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
+body_types: { json: application/json, form: application/x-www-form-urlencoded, multipart: multipart/form-data, text: text/plain, binary: application/octet-stream }
 error_responses:
   always: [400, 409, 503]
 components:
@@ -2825,6 +2841,16 @@ paths:
 	}
 }
 
+func TestHTTPBodyTypesMismatch(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{}
+	c.checkHTTPBodyTypes(schema, map[string]string{"json": "application/json"})
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "[http-body-types]") {
+		t.Fatalf("body type drift not reported: %v", c.errs)
+	}
+}
+
 func TestHTTPMountOrder(t *testing.T) {
 	c := &Checker{}
 	audiences := map[string]bool{"admin": true}
@@ -2918,7 +2944,7 @@ paths:
         "204": { description: "OK" }
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
-	c := &Checker{root: root}
+	c := &Checker{root: root, valueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{"string": {}}}}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.create": {
 			visibility:     "public",
@@ -2926,7 +2952,7 @@ paths:
 			paramDecls:     map[string]string{"input": "cap.services.x.schemas.Input"},
 			typeSchemas: map[string]map[string]any{
 				"cap.services.x.schemas.Input": {"properties": []any{
-					map[string]any{"name": "username", "schema": map[string]any{"type": "_types.string"}},
+					map[string]any{"name": "username", "schema": map[string]any{"type": "_types.string"}, "required": true},
 				}},
 			},
 		},
@@ -2934,6 +2960,129 @@ paths:
 	got := strings.Join(c.errs, "\n")
 	if strings.Contains(got, "[http-service-params]") || strings.Contains(got, "[http-service-type]") {
 		t.Fatalf("valid form body rejected: %v", c.errs)
+	}
+}
+
+func TestHTTPFormBodyMissingRequiredField(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+mount: { api_version: v1, path: /, audience: [admin] }
+paths:
+  /x:
+    post:
+      id: cap.protocols.http.x.create
+      name: createX
+      service: cap.services.x.create
+      summary: "x"
+      used_by: [feature.pages.x]
+      request:
+        headers:
+          - { name: Content-Type, required: true, value: application/x-www-form-urlencoded, description: "body" }
+        body:
+          kind: form
+          fields:
+            - { name: username, type: _types.string, required: true, description: "name", to: params.input.username }
+      response:
+        "204": { description: "OK" }
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root, valueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{"string": {}}}}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.create": {
+			visibility:     "public",
+			requiredParams: map[string]bool{"input": true},
+			paramDecls:     map[string]string{"input": "cap.services.x.schemas.Input"},
+			typeSchemas: map[string]map[string]any{
+				"cap.services.x.schemas.Input": {"properties": []any{
+					map[string]any{"name": "username", "schema": map[string]any{"type": "_types.string"}, "required": true},
+					map[string]any{"name": "nickname", "schema": map[string]any{"type": "_types.string"}, "required": true},
+				}},
+			},
+		},
+	}, map[string]bool{}, map[string]bool{})
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "form field nickname is required") {
+		t.Fatalf("missing required form field not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPTextRequestBody(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+mount: { api_version: v1, path: /, audience: [admin] }
+paths:
+  /x:
+    post:
+      id: cap.protocols.http.x.post
+      name: postX
+      service: cap.services.x.post
+      summary: "x"
+      request:
+        headers:
+          - { name: Content-Type, required: true, value: text/plain, description: "body" }
+        body:
+          kind: text
+          type: _types.string
+          to: params.input
+      response:
+        "204": { description: "OK" }
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root, valueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{"string": {}}}}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.post": {
+			visibility:     "public",
+			requiredParams: map[string]bool{"input": true},
+			paramDecls:     map[string]string{"input": "_types.string"},
+		},
+	}, map[string]bool{}, map[string]bool{})
+	if got := strings.Join(c.errs, "\n"); strings.Contains(got, "[http-service-type]") || strings.Contains(got, "[http-service-params]") {
+		t.Fatalf("valid text request body rejected: %v", c.errs)
+	}
+}
+
+func TestHTTPBinaryResponseBody(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+mount: { api_version: v1, path: /, audience: [admin] }
+paths:
+  /x:
+    get:
+      id: cap.protocols.http.x.get
+      name: getX
+      service: cap.services.x.get
+      summary: "x"
+      request: {}
+      response:
+        "200":
+          description: "OK"
+          headers:
+            - { name: Content-Type, required: true, value: application/octet-stream, description: "body" }
+          body:
+            kind: binary
+            type: _types.string
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root, valueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{"string": {}}}}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {
+			visibility: "public",
+			returns:    map[string]returnType{"data": {typ: "_types.string"}},
+		},
+	}, map[string]bool{}, map[string]bool{})
+	if got := strings.Join(c.errs, "\n"); strings.Contains(got, "[http-service-return]") || strings.Contains(got, "[http-service-type]") {
+		t.Fatalf("valid binary response body rejected: %v", c.errs)
 	}
 }
 
