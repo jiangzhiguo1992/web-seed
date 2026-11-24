@@ -66,10 +66,11 @@ fields:
         required: false
         min_items: 1
         unique_key: archive
-        description: "允许穿透的 promotable 归档；主表未命中时读归档并回迁热表（存储层行为，不改变 tables[].write）"
+        description: "穿透归档；promotable:true 表示本查询命中归档时回迁热表（存储层行为，不改变 tables[].write）"
         item_fields:
           - { name: archive, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.archive$', description: "归档引用" }
-          - { name: age_by, type: _types.string, required: true, enum: [ created_at, updated_at ], description: "回迁时更新的年龄列；必须与 storage 归档条目的 age_by 一致" }
+          - { name: promotable, type: _types.boolean, required: true, description: "本查询是否回迁；必须与 storage 归档条目的 promotable 一致" }
+          - { name: age_by, type: _types.string, required: false, enum: [ created_at, updated_at ], description: "回迁时更新的年龄列；promotable:true 时必填且必须与 storage 一致" }
       - name: caches
         type: _types.list<_types.string>
         required: false
@@ -132,8 +133,8 @@ rules:
   - { id: query-cache-ref, text: "query.caches 每项必须是 storage.caches 已登记的逻辑缓存（data.tables.<t>.cache.<k>[+<k>]），且 cache_of 在 query.tables 中", implemented_by: [ query-cache-ref ] }
   - { id: query-cache-keys, text: "读查询的每个缓存键列必须出现在 params[].column 或同表 index_ref[].columns 中；由 params 绑定全部缓存键时必须声明该缓存", implemented_by: [ query-cache-keys ] }
   - { id: query-cache-write, text: "写查询必须列出每个被写表的全部逻辑缓存（写同步项不要求键出现在 params/index_ref）", implemented_by: [ query-cache-write ] }
-  - { id: query-archive-ref, text: "query.archive 每项是 {archive, age_by}：archive 必须是 storage 中 promotable:true 的归档（data.tables.<t>.archive），源表在 query.tables 中；age_by 必须与 storage 归档条目的 age_by 一致", implemented_by: [ query-archive-ref ] }
-  - { id: query-archive-used-by, text: "每个 promotable 归档必须至少被一个查询的 archive 引用", implemented_by: [ query-archive-used-by ] }
+  - { id: query-archive-ref, text: "query.archive 每项是 {archive, promotable, age_by}：archive 必须是 storage 已声明的归档（data.tables.<t>.archive），源表在 query.tables 中；promotable 必须与 storage 条目一致；promotable:true 时 age_by 必填且与 storage 一致，false 时禁止 age_by", implemented_by: [ query-archive-ref ] }
+  - { id: query-archive-used-by, text: "每个 storage promotable:true 的归档必须至少被一个 archive.promotable:true 的查询引用（回迁入口）；promotable:false 的归档不要求回迁入口", implemented_by: [ query-archive-used-by ] }
   - { id: query-used-by, text: "query.used_by 必须等于 service steps 中引用本 query 的 service 项集合，由 gen-graph 写入，禁止手改", implemented_by: [ query-used-by ] }
   - { id: query-unused, text: "query 必须被至少一个 service step 引用；used_by 不得为空", implemented_by: [ query-unused ] }
   - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识、owner_module 或任一 query 名；通用规则放组 README，禁止复制", implemented_by: [ query-do-not-specific ] }
