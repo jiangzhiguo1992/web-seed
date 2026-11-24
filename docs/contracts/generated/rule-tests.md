@@ -198,6 +198,7 @@
 | platform.security.access | access-coverage | access-coverage | 1 |
 | platform.security.auth_policy | auth-policy-jwt | auth-policy-jwt | 1 |
 | platform.security.auth_policy | auth-policy-audience | auth-policy-audience | 1 |
+| platform.security.auth_policy | auth-policy-storage | auth-policy-storage | 1 |
 | platform.security.auth_policy | auth-policy-password | auth-policy-password | 1 |
 | platform.security.roles | role-inheritance | role-inheritance | 1 |
 | platform.security.roles | role-permissions | role-permissions | 1 |

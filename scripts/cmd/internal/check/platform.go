@@ -69,21 +69,35 @@ func checkSingletonTargets(schema *Schema) error {
 	return nil
 }
 
-// checkEnvironmentShape 校验环境名与差异键的语义。
+// checkEnvironmentShape 校验差异项与密钥来源只引用已声明环境，且密钥来源覆盖全部环境。
 func (c *Checker) checkEnvironmentShape(rel string, doc map[string]any) {
-	seen := map[string]bool{}
-	for i, raw := range asList(doc["environments"]) {
+	envs := map[string]bool{}
+	for _, raw := range asList(doc["environments"]) {
 		item, _ := asMap(raw)
-		name, _ := item["name"].(string)
-		if seen[name] {
-			c.rulef("environment-shape", "%s: environments[%d] duplicate name %s", rel, i, name)
+		if name, _ := item["name"].(string); name != "" {
+			envs[name] = true
 		}
-		seen[name] = true
 	}
 	for i, raw := range asList(doc["differences"]) {
 		item, _ := asMap(raw)
-		if key, _ := item["key"].(string); key == "" {
-			c.rulef("environment-shape", "%s: differences[%d].key must not be empty", rel, i)
+		for _, rawEnv := range asList(item["environments"]) {
+			env, _ := rawEnv.(string)
+			if env != "" && !envs[env] {
+				c.rulef("environment-shape", "%s: differences[%d] references unknown environment %s", rel, i, env)
+			}
+		}
+	}
+	secrets, hasSecrets := asMap(doc["secrets_source"])
+	if hasSecrets {
+		for name := range secrets {
+			if !envs[name] {
+				c.rulef("environment-shape", "%s: secrets_source.%s is not a declared environment", rel, name)
+			}
+		}
+		for name := range envs {
+			if _, ok := secrets[name]; !ok {
+				c.rulef("environment-shape", "%s: secrets_source is missing environment %s", rel, name)
+			}
 		}
 	}
 }

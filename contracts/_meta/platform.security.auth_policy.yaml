@@ -1,4 +1,4 @@
-# JWT 认证策略：access/refresh 都是 JWT；token 表存哈希用于吊销/轮换/审计。
+# JWT 会话与密码/验证码策略。
 
 id: meta.platform.security.auth_policy
 type: platform.security.auth_policy
@@ -142,4 +142,5 @@ fields:
 rules:
   - { id: auth-policy-jwt, text: "token.access/refresh 必须是 jwt，issuer 非空，claims_required 必须精确包含 iss/sub/aud/exp/iat/jti，pii_in_token 必须为 false，revocation.strategy=refresh_token 时 persistence/table 必须存在且一致", implemented_by: [ auth-policy-jwt ] }
   - { id: auth-policy-audience, text: "token.access.audience 必须来自 platform.http_conventions.audiences", implemented_by: [ auth-policy-audience ] }
+  - { id: auth-policy-storage, text: "token.persistence、token.refresh.table、verification.table 与 password.hash_field 指向的表/列必须存在", implemented_by: [ auth-policy-storage ] }
   - { id: auth-policy-password, text: "页面 password 字段的 minLength 不得低于 auth_policy.password.min_length", implemented_by: [ auth-policy-password ] }

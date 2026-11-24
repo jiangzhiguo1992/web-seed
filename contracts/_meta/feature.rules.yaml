@@ -1,4 +1,4 @@
-# 可执行业务规则；违反即阻止提交。
+# 业务规则：约束/不变量/策略。
 
 id: meta.feature.rules
 type: feature.rules

@@ -1,4 +1,4 @@
-# 测试策略与门槛；结构由 contract-check 校验。
+# 测试策略与 CI 门槛。
 
 id: meta.platform.quality
 type: platform.quality
@@ -41,29 +41,56 @@ fields:
     description: "实例级负向约束"
 
   - name: coverage
-    type: _types.any
-    soft: true
+    type: _types.object
     required: true
     description: "覆盖率门槛"
+    fields:
+      - name: api
+        type: _types.object
+        required: false
+        description: "API 覆盖率"
+        fields:
+          - { name: line, type: _types.integer, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
+          - { name: packages, type: _types.list<_types.string>, required: true, min_items: 1, description: "统计包" }
+      - name: web
+        type: _types.object
+        required: false
+        description: "Web 覆盖率"
+        fields:
+          - { name: line, type: _types.integer, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
+          - { name: packages, type: _types.list<_types.string>, required: true, min_items: 1, description: "统计包" }
+      - { name: exclude, type: _types.list<_types.string>, required: false, description: "排除模式" }
+
   - name: must_test
-    type: _types.any
-    soft: true
+    type: _types.list<_types.object>
     required: true
+    min_items: 1
     description: "必测项"
+    item_fields:
+      - { name: id, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "必测项 ID" }
+      - { name: why, type: _types.string, required: true, description: "为什么必测" }
+      - { name: where, type: _types.string, required: true, description: "测试文件位置" }
+
   - name: e2e
-    type: _types.any
-    soft: true
+    type: _types.object
     required: true
     description: "端到端策略"
+    fields:
+      - { name: tool, type: _types.string, required: true, description: "E2E 工具" }
+      - { name: required_scenarios, type: _types.list<_types.string>, required: true, min_items: 1, pattern: '^scenario\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "必跑验收场景" }
+      - { name: base_url_source, type: _types.string, required: true, description: "base URL 来源" }
+
   - name: forbidden
     type: _types.set<_types.string>
     required: true
     unique: true
     description: "禁止项"
+
   - name: gates
     type: _types.list<_types.object>
     required: true
     min_items: 1
+    unique_key: name
     description: "CI 门槛"
     item_fields:
       - { name: name, type: _types.string, required: true, description: "门槛名" }

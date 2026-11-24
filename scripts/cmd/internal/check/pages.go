@@ -22,6 +22,7 @@ func (c *Checker) checkFeaturePages() {
 	lifecycleIDs, lifecycleActions, lifecycleStates := c.pageLifecycleIndex()
 	serviceIDs := c.pageServiceIndex()
 	routeIDs := c.pageRouteIndex()
+	eventNames := c.analyticsEventNames()
 	c.pageParamTypes = c.buildPageParamTypes()
 	c.pageTypeFamilies = c.loadPageTypeFamilies()
 	for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
@@ -48,7 +49,59 @@ func (c *Checker) checkFeaturePages() {
 			c.rulef("page-refs", "%s: unknown route %s", rel, route)
 		}
 		lifecycleID := pageLifecycleID(doc)
+		c.checkPageTransitionUI(rel, doc, lifecycleIDs)
+		c.checkPageAnalytics(rel, doc, eventNames)
 		c.checkPageNode(rel, doc, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs, routeIDs)
+	}
+}
+
+// analyticsEventNames 返回 platform.analytics.events 声明的全部事件名。
+func (c *Checker) analyticsEventNames() map[string]bool {
+	doc, err := loadYAML(filepath.Join(c.root, "contracts/platform/analytics/events.yaml"))
+	if err != nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, raw := range asList(doc["events"]) {
+		item, _ := asMap(raw)
+		if name, _ := item["name"].(string); name != "" {
+			out[name] = true
+		}
+	}
+	return out
+}
+
+// checkPageTransitionUI 校验 transition_ui.source 指向已声明的 lifecycle。
+func (c *Checker) checkPageTransitionUI(rel string, doc map[string]any, lifecycleIDs map[string]bool) {
+	ui, _ := asMap(doc["transition_ui"])
+	if ui == nil {
+		return
+	}
+	source, _ := ui["source"].(string)
+	if source == "" || lifecycleIDs == nil {
+		return
+	}
+	id := lifecycleRefID(source)
+	if id == "" || !lifecycleIDs[id] {
+		c.rulef("page-refs", "%s: unknown lifecycle %s in transition_ui.source", rel, source)
+	}
+}
+
+// checkPageAnalytics 校验页面埋点引用已声明的事件名。
+func (c *Checker) checkPageAnalytics(rel string, doc map[string]any, eventNames map[string]bool) {
+	analytics, _ := asMap(doc["analytics"])
+	if analytics == nil || eventNames == nil {
+		return
+	}
+	if name, _ := analytics["page_view"].(string); name != "" && !eventNames[name] {
+		c.rulef("page-refs", "%s: unknown analytics event %s", rel, name)
+	}
+	actions, _ := asMap(analytics["actions"])
+	for key, raw := range actions {
+		name, _ := raw.(string)
+		if name != "" && !eventNames[name] {
+			c.rulef("page-refs", "%s: analytics.actions.%s references unknown event %s", rel, key, name)
+		}
 	}
 }
 
@@ -201,6 +254,31 @@ func (c *Checker) checkPageParams(rel, service string, node map[string]any) {
 		pageType, _ := p["type"].(string)
 		if pageType != "" && fieldType != "" && !c.pageTypeCompatible(pageType, fieldType) {
 			c.rulef("page-params", "%s: %s.%s type %s does not match service type %s", rel, service, key, pageType, fieldType)
+		}
+		if rawEnum, ok := p["enum"]; ok {
+			switch v := rawEnum.(type) {
+			case string:
+				if v == "" {
+					c.rulef("page-params", "%s: %s.%s enum must not be empty", rel, service, key)
+				}
+			case []any:
+				if len(v) == 0 {
+					c.rulef("page-params", "%s: %s.%s enum list must not be empty", rel, service, key)
+				}
+				for _, item := range v {
+					if s, _ := item.(string); s == "" {
+						c.rulef("page-params", "%s: %s.%s enum list items must be non-empty strings", rel, service, key)
+						break
+					}
+				}
+			default:
+				c.rulef("page-params", "%s: %s.%s enum must be a reference string or string list", rel, service, key)
+			}
+		}
+		if _, hasRequired := p["required"]; hasRequired {
+			if _, hasOptional := p["optional"]; hasOptional {
+				c.rulef("page-params", "%s: %s.%s must not declare both required and optional", rel, service, key)
+			}
 		}
 	}
 }
@@ -399,8 +477,12 @@ func (c *Checker) checkPageNode(rel string, node any, lifecycleID string, lifecy
 					switch {
 					case strings.HasPrefix(s, "cap.lifecycles."):
 						c.checkLifecycleStatesRef(rel, s, lifecycleIDs)
-					case strings.HasPrefix(s, "data.enums.") && !c.enumIDs[s]:
-						c.rulef("page-refs", "%s: unknown enum %s", rel, s)
+					case strings.HasPrefix(s, "data.enums."):
+						if !c.enumIDs[s] {
+							c.rulef("page-refs", "%s: unknown enum %s", rel, s)
+						}
+					default:
+						c.rulef("page-refs", "%s: enum %q must be a data.enums.* or cap.lifecycles.* reference", rel, s)
 					}
 				}
 			case "transition":

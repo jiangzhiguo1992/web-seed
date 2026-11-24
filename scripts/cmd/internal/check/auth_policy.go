@@ -59,6 +59,7 @@ func (c *Checker) checkAuthPolicy() {
 			c.rulef("auth-policy-jwt", "%s: token.persistence and token.refresh.table must be the same non-empty table", rel)
 		}
 	}
+	c.checkAuthStorage(rel, doc)
 
 	audiences := map[string]bool{}
 	if conventions, err := loadYAML(filepath.Join(c.root, "contracts/platform/http_conventions.yaml")); err == nil {
@@ -105,4 +106,45 @@ func (c *Checker) featurePageFiles() []string {
 		return nil
 	}
 	return glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob))
+}
+
+// checkAuthStorage 校验认证策略引用的表与列真实存在。
+func (c *Checker) checkAuthStorage(rel string, doc map[string]any) {
+	token, _ := asMap(doc["token"])
+	if persistence, _ := token["persistence"].(string); persistence != "" && (c.isBaseTableRef(persistence) || !c.hasTable(persistence)) {
+		c.rulef("auth-policy-storage", "%s: token.persistence %s is not a declared physical table", rel, persistence)
+	}
+	if refresh, _ := asMap(token["refresh"]); refresh != nil {
+		if table, _ := refresh["table"].(string); table != "" && (c.isBaseTableRef(table) || !c.hasTable(table)) {
+			c.rulef("auth-policy-storage", "%s: token.refresh.table %s is not a declared physical table", rel, table)
+		}
+	}
+	if verification, _ := asMap(doc["verification"]); verification != nil {
+		if table, _ := verification["table"].(string); table != "" && (c.isBaseTableRef(table) || !c.hasTable(table)) {
+			c.rulef("auth-policy-storage", "%s: verification.table %s is not a declared physical table", rel, table)
+		}
+	}
+	password, _ := asMap(doc["password"])
+	ref, _ := password["hash_field"].(string)
+	if ref == "" {
+		return
+	}
+	table, col, ok := splitColumnRef(ref)
+	if !ok || c.isBaseTableRef(table) || !c.hasTable(table) || !c.hasColumn(table, col) {
+		c.rulef("auth-policy-storage", "%s: password.hash_field %s is not a declared table column", rel, ref)
+	}
+}
+
+func (c *Checker) hasTable(id string) bool {
+	_, ok := c.tableOwners[id]
+	return ok
+}
+
+func (c *Checker) hasColumn(table, col string) bool {
+	cols := c.tableColumns[table]
+	if cols == nil {
+		return false
+	}
+	_, ok := cols[col]
+	return ok
 }

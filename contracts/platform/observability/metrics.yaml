@@ -1,11 +1,11 @@
-# 指标名与标签唯一来源。默认注册但不导出（exporter=none）。
+# 指标名、标签与导出配置。
 
 schema_version: 1
 id: platform.observability.metrics
 summary: "指标名与标签"
 stability: draft
 do_not:
-  - "指标名与标签只在本文件登记；未登记指标 CI 警告"
+  - "指标名与标签只使用本文件登记的项；不得临时新增未登记指标"
 
 naming:
   pattern: "<subsystem>_<name>_<unit>"

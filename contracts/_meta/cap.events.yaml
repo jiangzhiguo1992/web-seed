@@ -1,4 +1,4 @@
-# 异步 topic 与任务；topic 内分 publish / subscribe，任务按触发源分 crons / dispatches。
+# 异步 topic、cron 与 dispatch。
 
 id: meta.cap.events
 type: cap.events

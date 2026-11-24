@@ -144,6 +144,13 @@ func (c *Checker) checkAnalytics() {
 			indexProp(pwhere, prop)
 		}
 	}
+	provider, _ := asMap(doc["provider"])
+	if def, _ := provider["default"].(string); def != "" {
+		options := stringSet(asList(provider["options"]))
+		if len(options) > 0 && !options[def] {
+			c.rulef("analytics-refs", "%s: provider.default %s is not in provider.options", rel, def)
+		}
+	}
 }
 
 // analyticsTypes 返回可用的 analytics property 类型。

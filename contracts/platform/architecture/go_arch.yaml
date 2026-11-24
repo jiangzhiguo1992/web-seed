@@ -1,11 +1,11 @@
-# Go 分层与模块边界。生成 go-arch-lint 配置，违反即 CI 失败。
+# Go 分层与模块依赖边界。
 
 schema_version: 1
 id: platform.architecture.go_arch
 summary: "Go 分层约束"
 stability: draft
 do_not:
-  - "分层规则只在本文件声明；生成 go-arch-lint 配置"
+  - "分层规则只在本文件声明；实现不得绕过层边界直接依赖"
 
 layers:
   - name: cmd

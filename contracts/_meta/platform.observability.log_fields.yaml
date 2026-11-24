@@ -1,4 +1,4 @@
-# 日志字段与 PII 规则；结构由 contract-check 校验。
+# 日志字段与 PII 规则。
 
 id: meta.platform.observability.log_fields
 type: platform.observability.log_fields
@@ -49,26 +49,40 @@ fields:
     required: true
     description: "级别字段名"
   - name: required
-    type: _types.list<_types.any>
+    type: _types.list<_types.object>
     required: true
+    min_items: 1
     description: "必填字段"
+    item_fields:
+      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
+      - { name: type, type: _types.string, required: true, pattern: '^_types\.[a-z][a-z0-9_]*$', description: "类型 ID" }
+      - { name: format, type: _types.string, required: false, description: "值格式" }
+      - { name: enum, type: _types.list<_types.string>, required: false, min_items: 1, description: "取值集合" }
   - name: fields
-    type: _types.list<_types.any>
+    type: _types.list<_types.object>
     required: true
     min_items: 1
     description: "字段清单"
+    item_fields:
+      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
+      - { name: type, type: _types.string, required: true, pattern: '^_types\.[a-z][a-z0-9_]*$', description: "类型 ID" }
+      - { name: pii, type: _types.boolean, required: true, description: "是否 PII" }
+      - { name: required_for, type: _types.list<_types.string>, required: false, description: "必须出现的入口" }
+      - { name: note, type: _types.string, required: false, description: "说明" }
+      - { name: ref, type: _types.string, required: false, description: "取值来源" }
   - name: never_log
-    type: _types.list<_types.any>
+    type: _types.set<_types.string>
     required: true
+    unique: true
     description: "禁止进入日志的字段"
   - name: pii_source
     type: _types.string
     required: true
     description: "PII 字段来源"
   - name: rules
-    type: _types.list<_types.any>
+    type: _types.list<_types.string>
     required: true
-    description: "生成/校验规则"
+    description: "日志生成/校验规则"
 
 rules:
-  - { id: log-field-refs, text: "字段名唯一；required_for 只允许 http/job/worker/cli/test；never_log 条目必须是 snake_case 或 *suffix 形式；所有 sensitivity: pii|secret 的表列必须被 never_log 覆盖", implemented_by: [ log-field-refs ] }
+  - { id: log-field-refs, text: "字段名唯一；required_for 只允许 http/job/worker/cli/test；never_log 条目必须是 snake_case 或 *suffix 形式；level_field 必须声明在 required 或 fields 中；所有 sensitivity: pii|secret 的表列必须被 never_log 覆盖", implemented_by: [ log-field-refs ] }

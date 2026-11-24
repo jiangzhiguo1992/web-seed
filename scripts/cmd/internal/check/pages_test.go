@@ -55,7 +55,7 @@ data:
   detail:
     capability: cap.services.x.create
     params:
-      status: { enum: cap.lifecycles.x.states.values }
+      status: { from: query.status, enum: cap.lifecycles.x.states.values }
 view_states:
   loading: { when: "true" }
   empty: { when: "false" }
@@ -96,9 +96,11 @@ transition_ui:
 		rule string
 	}{
 		{"unknown transition", strings.Replace(valid, "cap.lifecycles.x.destroy", "cap.lifecycles.x.missing", 1), "unknown lifecycle action", "page-refs"},
+		{"unknown transition source", strings.Replace(valid, "source: cap.lifecycles.x.transitions", "source: cap.lifecycles.missing.transitions", 1), "unknown lifecycle", "page-refs"},
 		{"unknown state", strings.Replace(valid, "state_not: [deleted]", "state_not: [missing]", 1), "unknown state missing", "page-refs"},
 		{"unknown capability", strings.Replace(valid, "capability: cap.services.x.create", "capability: cap.services.x.missing", 1), "unknown capability", "page-refs"},
 		{"unknown permission", strings.Replace(valid, "platform.security.permissions.account_read", "platform.security.permissions.missing", 1), "unknown permission", "page-refs"},
+		{"unknown enum reference", strings.Replace(valid, "enum: cap.lifecycles.x.states.values", "enum: garbage", 1), "must be a data.enums.* or cap.lifecycles.* reference", "page-refs"},
 		{"unknown route", strings.Replace(valid, "route: feature.routes.x", "route: feature.routes.missing", 1), "unknown route", "page-refs"},
 		{"missing forbidden state", strings.Replace(valid, "  forbidden: { when: \"false\" }\n", "", 1), "view_states missing forbidden", "page-structure"},
 		{"page mismatch", strings.Replace(valid, "page: x", "page: y", 1), `page "y" must be "x"`, "page-structure"},
@@ -116,5 +118,46 @@ transition_ui:
 				t.Fatalf("want rule [%s], got %q", tc.rule, got)
 			}
 		})
+	}
+}
+
+func TestPageAnalyticsRefs(t *testing.T) {
+	root := t.TempDir()
+	copyMeta(t, root, "feature.pages")
+	writeCapFile(t, root, "contracts/platform/analytics/events.yaml", `events:
+  - { name: page.x_viewed, description: "x", trigger: mount, properties: [] }
+`)
+	writeCapFile(t, root, "contracts/features/pages/x.yaml", `id: feature.pages.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+page: x
+route: null
+view_states:
+  loading: { when: "true" }
+  empty: { when: "false" }
+  error: { when: "false" }
+  forbidden: { when: "false" }
+analytics:
+  page_view: page.missing_viewed
+  actions:
+    create: page.x_viewed
+    delete: page.missing_clicked
+`)
+	c := &Checker{root: root}
+	c.checkFeaturePages()
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"unknown analytics event page.missing_viewed",
+		"actions.delete references unknown event page.missing_clicked",
+		"[page-refs]",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "page.x_viewed") && strings.Contains(got, "unknown analytics event page.x_viewed") {
+		t.Fatalf("declared event reported as unknown: %v", c.errs)
 	}
 }

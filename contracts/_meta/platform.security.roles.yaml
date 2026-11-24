@@ -1,4 +1,4 @@
-# 角色与权限映射；角色只增不改。
+# 角色与权限映射。
 
 id: meta.platform.security.roles
 type: platform.security.roles
@@ -70,4 +70,4 @@ fields:
 
 rules:
   - { id: role-inheritance, text: "inherits 必须指向已声明角色；禁止自继承与环；继承深度不得超过 constraints.max_inheritance_depth", implemented_by: [ role-inheritance ] }
-  - { id: role-permissions, text: "permissions 必须是已声明权限；仅 admin 可使用 *；default_role 必须存在", implemented_by: [ role-permissions ] }
+  - { id: role-permissions, text: "permissions 必须是已声明权限；仅 permissions.boundaries.wildcard.allowed_for 中的角色可使用 *；default_role 必须存在", implemented_by: [ role-permissions ] }

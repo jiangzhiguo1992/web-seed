@@ -67,12 +67,15 @@ func (c *Checker) checkRoles() {
 		if d := resolve(id, map[string]bool{}); maxDepth > 0 && d > maxDepth {
 			c.rulef("role-inheritance", "%s: role %s inheritance depth %d exceeds %d", rel, id, d, maxDepth)
 		}
+	}
+	allowedWildcard := c.wildcardRoles(roles)
+	for _, id := range order {
 		item := roles[id]
 		for _, raw := range asList(item["permissions"]) {
 			perm, _ := raw.(string)
 			if perm == "*" {
-				if id != "platform.security.roles.admin" {
-					c.rulef("role-permissions", "%s: only admin may use wildcard permission", rel)
+				if !allowedWildcard[id] {
+					c.rulef("role-permissions", "%s: role %s uses wildcard but is not in permissions.boundaries.wildcard.allowed_for", rel, id)
 				}
 				continue
 			}
@@ -84,4 +87,27 @@ func (c *Checker) checkRoles() {
 	if defaultRole, _ := doc["default_role"].(string); defaultRole != "" && roles[defaultRole] == nil {
 		c.rulef("role-permissions", "%s: default_role %s is not a declared role", rel, defaultRole)
 	}
+}
+
+// wildcardRoles 读取 permissions.boundaries.wildcard.allowed_for，并校验其角色引用。
+func (c *Checker) wildcardRoles(roles map[string]map[string]any) map[string]bool {
+	out := map[string]bool{}
+	path := filepath.Join(c.root, "contracts/platform/security/permissions.yaml")
+	doc, err := loadYAML(path)
+	if err != nil {
+		return out
+	}
+	boundaries, _ := asMap(doc["boundaries"])
+	wildcard, _ := asMap(boundaries["wildcard"])
+	for _, raw := range asList(wildcard["allowed_for"]) {
+		id, _ := raw.(string)
+		if id == "" {
+			continue
+		}
+		out[id] = true
+		if roles[id] == nil {
+			c.rulef("role-permissions", "%s: wildcard allowed_for references unknown role %s", relPath(c.root, path), id)
+		}
+	}
+	return out
 }

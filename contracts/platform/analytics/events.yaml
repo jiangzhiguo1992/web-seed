@@ -1,12 +1,11 @@
-# 埋点事件唯一来源。未登记事件编译失败；pii: true 的属性生成时剔除。
+# 埋点事件与属性；载荷不保证映射表列。
 
 schema_version: 1
 id: platform.analytics.events
 summary: "埋点事件与属性"
 stability: draft
 do_not:
-  - "埋点事件名与属性只在本文件登记；pii: true 的属性生成时剔除"
-  - "property.type 必须是标量类型、data.types 或 data.enums；禁止 _types.any / _types.json"
+  - "事件名与属性只在本文件登记；pii: true 的属性不得进入埋点载荷"
   - "不要假设 property 等于表列/实体字段；事件载荷与数据行不是一一对应"
   - "session_id/account_id 当前视为非 PII 的关联 ID；若合规要求，改成 pii: true"
 

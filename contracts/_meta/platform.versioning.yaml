@@ -1,4 +1,4 @@
-# API 版本与兼容策略；结构由 contract-check 校验。
+# API 版本、弃用与兼容策略。
 
 id: meta.platform.versioning
 type: platform.versioning
@@ -36,30 +36,77 @@ fields:
     unique: true
     description: "实例级负向约束"
   - name: api
-    type: _types.any
-    soft: true
+    type: _types.object
     required: true
     description: "API 版本策略"
+    fields:
+      - { name: scheme, type: _types.string, required: true, description: "版本方案" }
+      - { name: current, type: _types.string, required: true, pattern: '^v[0-9]+$', description: "当前主版本" }
+      - name: stability_levels
+        type: _types.list<_types.object>
+        required: true
+        min_items: 1
+        description: "稳定性级别"
+        item_fields:
+          - { name: level, type: _types.string, required: true, enum: [ experimental, stable, deprecated ], description: "级别" }
+          - { name: note, type: _types.string, required: true, description: "说明" }
   - name: contract
-    type: _types.any
-    soft: true
+    type: _types.object
     required: true
     description: "契约演进策略"
+    fields:
+      - { name: schema_version, type: _types.integer, required: true, const: 1, description: "契约格式版本" }
+      - { name: evolution, type: _types.string, required: true, enum: [ additive_only ], description: "演进方式" }
   - name: compatibility
-    type: _types.any
-    soft: true
+    type: _types.object
     required: true
     description: "破坏性变更定义"
+    fields:
+      - name: accepted_breaking_changes
+        type: _types.list<_types.object>
+        required: true
+        description: "已接受的破坏性变更"
+        item_fields:
+          - { name: id, type: _types.string, required: true, description: "变更 ID" }
+          - { name: baseline, type: _types.string, required: true, description: "对比基线" }
+          - { name: reason, type: _types.string, required: true, description: "接受原因" }
+          - { name: scope, type: _types.list<_types.string>, required: true, min_items: 1, pattern: '^v[0-9]+$', description: "影响版本" }
+      - name: breaking_changes
+        type: _types.object
+        required: true
+        description: "破坏性变更判定"
+        fields:
+          - { name: definition, type: _types.list<_types.string>, required: true, min_items: 1, description: "判定项" }
+          - { name: requires, type: _types.string, required: true, enum: [ major_version_bump ], description: "处置方式" }
+      - { name: non_breaking, type: _types.list<_types.string>, required: true, min_items: 1, description: "非破坏性变更" }
   - name: deprecation
-    type: _types.any
-    soft: true
+    type: _types.object
     required: true
     description: "弃用流程"
+    fields:
+      - { name: header_required, type: _types.boolean, required: true, description: "是否强制弃用头" }
+      - name: headers
+        type: _types.list<_types.object>
+        required: true
+        min_items: 1
+        description: "弃用响应头"
+        item_fields:
+          - { name: name, type: _types.string, required: true, description: "header 名" }
+          - { name: format, type: _types.string, required: true, description: "header 值格式" }
+          - { name: example, type: _types.string, required: true, description: "示例值" }
+      - { name: min_window_days, type: _types.integer, required: true, min: 0, description: "最短弃用窗口" }
+      - { name: process, type: _types.list<_types.string>, required: true, min_items: 1, description: "弃用步骤" }
   - name: detection
-    type: _types.any
-    soft: true
+    type: _types.object
     required: true
     description: "兼容性检测"
+    fields:
+      - { name: command, type: _types.string, required: true, description: "检测命令" }
+      - { name: baseline_command, type: _types.string, required: true, description: "基线对比命令" }
+      - { name: tool, type: _types.string, required: true, description: "检测工具" }
+      - { name: baseline, type: _types.string, required: true, description: "基线引用" }
+      - { name: fail_on, type: _types.list<_types.string>, required: true, min_items: 1, description: "失败条件" }
+      - { name: note, type: _types.string, required: true, description: "说明" }
   - name: client_requirements
     type: _types.list<_types.string>
     required: true

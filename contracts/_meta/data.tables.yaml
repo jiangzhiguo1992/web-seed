@@ -100,7 +100,7 @@ fields:
     item_fields:
       - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "列名" }
       - { name: type, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*)$', description: "值类型引用 _types.<name> 或列引用 data.tables.<t>.col.<c>" }
-      - { name: nullable, type: _types.boolean, required: true, default: false, description: "是否可空；必须显式声明" }
+      - { name: nullable, type: _types.boolean, required: true, default: false, description: "是否可空" }
       - { name: primary_key, type: _types.boolean, required: false, description: "基类主键标记" }
       - { name: default, type: _types.any, required: false, description: "字面量默认值" }
       - { name: default_sql, type: _types.string, soft: true, required: false, description: "SQL 表达式默认值" }
@@ -117,7 +117,7 @@ fields:
       - name: references
         type: _types.object
         required: false
-        description: "逻辑外键：本列指向目标表唯一列；数据库不建外键；多态关联不写"
+        description: "逻辑外键：本列指向目标表唯一列；不建数据库外键"
         fields:
           - { name: column, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标列" }
           - { name: on_delete, type: _types.string, required: true, enum: [ cascade, restrict, set_null, no_action ], description: "硬删动作" }

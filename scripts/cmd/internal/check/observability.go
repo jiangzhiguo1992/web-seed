@@ -74,6 +74,21 @@ func (c *Checker) checkLogFields() {
 			}
 		}
 	}
+	levelField, _ := doc["level_field"].(string)
+	if levelField != "" && !seen[levelField] {
+		declared := false
+		for _, raw := range asList(doc["required"]) {
+			if item, ok := asMap(raw); ok {
+				if name, _ := item["name"].(string); name == levelField {
+					declared = true
+					break
+				}
+			}
+		}
+		if !declared {
+			c.rulef("log-field-refs", "%s: level_field %s is not declared in required or fields", rel, levelField)
+		}
+	}
 }
 
 func (c *Checker) checkMetrics() {
@@ -110,6 +125,13 @@ func (c *Checker) checkMetrics() {
 			if forbidden[label] {
 				c.rulef("metric-shape", "%s: forbidden label %s", where, label)
 			}
+		}
+	}
+	exporter, _ := asMap(doc["exporter"])
+	if def, _ := exporter["default"].(string); def != "" {
+		options := stringSet(asList(exporter["options"]))
+		if len(options) > 0 && !options[def] {
+			c.rulef("metric-shape", "%s: exporter.default %s is not in exporter.options", rel, def)
 		}
 	}
 }

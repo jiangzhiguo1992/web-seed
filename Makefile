@@ -110,7 +110,7 @@ contract-check: ## 校验契约结构、引用与 used_by（全部类型）
 audit-types: ## 审计契约 type 词汇（_types/外部引用/显式例外）
 	cd scripts/cmd && go run ./audit_types -root "$(CURDIR)"
 
-check-index: ## 校验 index 全类型登记及 renderer/targets ID 一致
+check-index: ## 校验 _meta 全类型可渲染且 index 接受全部契约类型
 	cd scripts/cmd && go test ./internal/check -run '^TestIndexAcceptsAllContractTypes$$' -count=1
 
 gen-rule-ids: ## 从 checker 的 rulef(...) 生成 rule_ids_gen.go

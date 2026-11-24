@@ -1,6 +1,4 @@
-# 埋点事件与属性；结构由 contract-check 校验。
-# 值域映射刻意不建模：property 是事件载荷，不保证等于表列/实体字段；
-# 直接按名字映射会产生 account_id(string) vs 表列 integer 这类假阳性。
+# 埋点事件与属性；载荷不保证映射表列。
 
 id: meta.platform.analytics.events
 type: platform.analytics.events
@@ -17,31 +15,26 @@ fields:
     required: true
     const: 1
     description: "格式版本"
-
   - name: id
     type: _types.string
     required: true
     const: platform.analytics.events
     description: "契约 ID"
-
   - name: summary
     type: _types.string
     required: true
     description: "一句话说明"
-
   - name: stability
     type: _types.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
-
   - name: do_not
     type: _types.set<_types.string>
     required: true
     unique: true
     description: "实例级负向约束"
-
   - name: naming
     type: _types.object
     required: true
@@ -50,7 +43,6 @@ fields:
       - { name: pattern, type: _types.string, required: true, description: "事件名模式" }
       - { name: property_case, type: _types.string, required: true, enum: [ snake_case ], description: "属性命名风格" }
       - { name: id_policy, type: _types.string, required: true, description: "标识策略" }
-
   - name: common_properties
     type: _types.list<_types.object>
     required: true
@@ -59,12 +51,10 @@ fields:
       - { name: name, type: _types.string, required: true, description: "属性名" }
       - { name: type, type: _types.string, required: true, description: "类型" }
       - { name: pii, type: _types.boolean, required: true, description: "是否 PII" }
-
   - name: events
     type: _types.list<_types.object>
     required: true
     min_items: 1
-    unique_key: name
     description: "事件列表"
     item_fields:
       - { name: name, type: _types.string, required: true, description: "事件名" }
@@ -80,22 +70,20 @@ fields:
           - { name: name, type: _types.string, required: true, description: "属性名" }
           - { name: type, type: _types.string, required: true, description: "类型" }
           - { name: pii, type: _types.boolean, required: true, description: "是否 PII" }
-
   - name: forbidden_properties
     type: _types.set<_types.string>
     required: true
     unique: true
     description: "禁止进入埋点的属性名"
-
   - name: provider
     type: _types.object
     required: true
     description: "埋点提供方"
     fields:
       - { name: default, type: _types.string, required: true, description: "默认 provider" }
-      - { name: options, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, description: "可选 provider" }
+      - { name: options, type: _types.list<_types.string>, required: true, min_items: 1, description: "可选 provider" }
 
 rules:
   - { id: analytics-pii, text: "forbidden_properties 必须 snake_case；同一 property 在 common_properties/events 中的 type 与 pii 必须一致；pii:true 的属性不得出现在 forbidden_properties，且必须被 log_fields.never_log 覆盖；pii:false 不得命中 never_log", implemented_by: [ analytics-pii ] }
   - { id: analytics-types, text: "property.type 必须是标量 basic type、data.types 的自定义类型或 data.enums 的枚举名；_types.any 与 _types.json 禁止", implemented_by: [ analytics-types ] }
-  - { id: analytics-refs, text: "事件名唯一；ref 必须是已存在的 HTTP operation；page 必须是已存在的 feature.pages；properties 不得使用 forbidden_properties", implemented_by: [ analytics-refs, analytics-types ] }
+  - { id: analytics-refs, text: "事件名唯一；ref 必须是已存在的 HTTP operation；page 必须是已存在的 feature.pages；properties 不得使用 forbidden_properties；provider.default 必须属于 provider.options", implemented_by: [ analytics-refs, analytics-types ] }

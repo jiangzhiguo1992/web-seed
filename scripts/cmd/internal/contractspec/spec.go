@@ -179,7 +179,7 @@ type Field struct {
 	MaxLen  any    `yaml:"max_len"`
 	Len     any    `yaml:"len"`
 	Pattern string `yaml:"pattern"`
-	// KeyPatterns 是 map 键的正则列表；string key 时任一匹配即可。
+	// KeyPatterns 是 map 键的正则列表；string key 时必须全部匹配。
 	KeyPatterns []string `yaml:"key_patterns"`
 	Description string   `yaml:"description"`
 	Examples    []any    `yaml:"examples"`

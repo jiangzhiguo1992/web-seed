@@ -82,6 +82,22 @@ func TestPageParams(t *testing.T) {
 	}
 }
 
+func TestPageParamEnumShape(t *testing.T) {
+	c := &Checker{pageParamTypes: map[string]map[string]string{
+		"cap.services.x.get": {"id": "_types.integer", "status": "_types.string"},
+	}}
+	c.checkPageParams("x.yaml", "cap.services.x.get", map[string]any{
+		"params": map[string]any{
+			"id":     map[string]any{"enum": 1},
+			"status": map[string]any{"enum": []any{}},
+		},
+	})
+	got := strings.Join(c.errs, "\n")
+	if strings.Count(got, "[page-params]") != 2 {
+		t.Fatalf("enum shape not reported: %v", c.errs)
+	}
+}
+
 func TestServicePageSchema(t *testing.T) {
 	c := &Checker{}
 	c.checkPageSchemas(map[string]any{
@@ -97,12 +113,25 @@ func TestEnvironmentShape(t *testing.T) {
 	c.checkEnvironmentShape("x.yaml", map[string]any{
 		"environments": []any{
 			map[string]any{"name": "dev"},
-			map[string]any{"name": "dev"},
+			map[string]any{"name": "prod"},
 		},
-		"differences": []any{map[string]any{"key": ""}},
+		"differences": []any{map[string]any{
+			"key":          "debug",
+			"environments": []any{"ghost"},
+		}},
+		"secrets_source": map[string]any{"staging": "x"},
 	})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[environment-shape]") {
-		t.Fatalf("environment shape not reported: %v", c.errs)
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"unknown environment ghost",
+		"secrets_source.staging is not a declared environment",
+		"missing environment dev",
+		"missing environment prod",
+		"[environment-shape]",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
 	}
 }
 
@@ -151,12 +180,12 @@ events:
     properties:
       - { name: email, type: _types.string, pii: false }
 forbidden_properties: [email]
-provider: { default: noop, options: [noop] }
+provider: { default: ghost, options: [noop] }
 `)
 	c := &Checker{root: root}
 	c.checkAnalytics()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"must match", "not an HTTP operation", "forbidden", "[analytics-refs]"} {
+	for _, want := range []string{"must match", "not an HTTP operation", "forbidden", "provider.default ghost", "[analytics-refs]"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
@@ -198,17 +227,19 @@ func TestObservabilityRefs(t *testing.T) {
 	writeCapFile(t, root, "contracts/platform/observability/log_fields.yaml", `fields:
   - { name: x, required_for: [bogus] }
   - { name: x }
+level_field: ghost
 `)
 	writeCapFile(t, root, "contracts/platform/observability/metrics.yaml", `label_rules: { forbidden_labels: [user_id] }
 metrics:
   - { name: x, kind: gauge, labels: [user_id] }
   - { name: x, kind: bogus }
+exporter: { default: ghost, options: [none] }
 `)
 	c := &Checker{root: root}
 	c.checkLogFields()
 	c.checkMetrics()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"[log-field-refs]", "[metric-shape]"} {
+	for _, want := range []string{"[log-field-refs]", "[metric-shape]", "level_field ghost", "exporter.default ghost"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
@@ -251,16 +282,18 @@ fields:
 	writeCapFile(t, root, "contracts/platform/http_conventions.yaml", `audiences: [admin]
 `)
 	writeCapFile(t, root, "contracts/platform/security/auth_policy.yaml", `token:
+  persistence: data.tables.missing
   issuer: ""
   access: { format: opaque, audience: [ghost], pii_in_token: true, claims_required: [] }
-  refresh: { format: opaque, pii_in_token: true, claims_required: [] }
+  refresh: { format: opaque, table: data.tables.missing, pii_in_token: true, claims_required: [] }
   revocation: { strategy: server, note: "x" }
-password: { min_length: 12 }
+password: { min_length: 12, hash_field: data.tables.missing.col.password_hash }
+verification: { table: data.tables.missing }
 `)
 	c := &Checker{root: root}
 	c.checkAuthPolicy()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"[auth-policy-jwt]", "[auth-policy-audience]", "[auth-policy-password]"} {
+	for _, want := range []string{"[auth-policy-jwt]", "[auth-policy-audience]", "[auth-policy-password]", "[auth-policy-storage]"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}

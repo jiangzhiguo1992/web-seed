@@ -6,7 +6,6 @@ summary: "JWT 令牌认证策略"
 stability: draft
 do_not:
   - "认证只依赖 JWT 与 Authorization header"
-  - "不要把密码、邮箱、手机号等 PII 写进 JWT"
   - "token 表只存 JWT 哈希与吊销/轮换元数据，不存 JWT 原文"
 
 token:

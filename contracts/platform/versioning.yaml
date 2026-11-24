@@ -1,11 +1,11 @@
-# API 版本与契约兼容策略。
+# API 版本、弃用与兼容策略。
 
 schema_version: 1
 id: platform.versioning
 summary: "版本与兼容策略"
 stability: draft
 do_not:
-  - "API 版本只在 HTTP 文件的 mount.api_version 声明；本文件只写策略"
+  - "弃用窗口内不得移除端点；只能标记 deprecated"
 
 api:
   scheme: url_major             # /v1 /v2
@@ -46,7 +46,7 @@ deprecation:
     - { name: Sunset, format: HTTP-date, example: "Wed, 11 Mar 2027 00:00:00 GMT" }
   min_window_days: 90
   process:
-    - 契约标记 stability: deprecated
+    - "契约标记 stability: deprecated"
     - "响应加 Deprecation / Sunset"
     - "文档登记迁移指南"
     - "窗口结束且无调用后移除"

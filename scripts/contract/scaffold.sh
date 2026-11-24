@@ -66,7 +66,6 @@ case "$type" in
     go run ./contract_new -root "$ROOT" -type cap.services -name "$name" -module "$module" -summary "$summary" -out auto
     ;;
 
-
   feature.rules)
     go run ./contract_new -root "$ROOT" -type feature.rules -name "$name" -module "$module" -summary "$summary" -out auto
     ;;

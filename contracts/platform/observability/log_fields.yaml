@@ -1,11 +1,11 @@
-# 日志字段唯一来源。未登记字段 CI 警告；pii: true 的字段禁止进入日志。
+# 日志字段与 PII 规则。
 
 schema_version: 1
 id: platform.observability.log_fields
 summary: "日志字段与 PII 规则"
 stability: draft
 do_not:
-  - "字段/指标名只在本文件登记；未登记字段 CI 警告"
+  - "日志字段只使用本文件登记的字段；不得临时新增未登记字段"
 
 format: json
 timestamp: RFC3339Nano

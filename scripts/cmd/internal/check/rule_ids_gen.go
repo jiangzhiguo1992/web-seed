@@ -13,6 +13,7 @@ var knownRuleIDs = map[string]bool{
 	"auth-policy-audience":        true,
 	"auth-policy-jwt":             true,
 	"auth-policy-password":        true,
+	"auth-policy-storage":         true,
 	"base-columns":                true,
 	"base-file":                   true,
 	"base-only":                   true,

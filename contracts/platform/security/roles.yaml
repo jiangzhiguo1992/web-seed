@@ -4,7 +4,8 @@ schema_version: 1
 id: platform.security.roles
 summary: "角色与权限映射"
 stability: draft
-do_not: []
+do_not:
+  - "角色只增不改；删除必须走弃用流程"
 
 roles:
   - code: admin
