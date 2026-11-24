@@ -14,12 +14,18 @@ subjects:
   - { entity: data.entities.auth_phone, field: status }
   - { entity: data.entities.auth_email, field: status }
 states:
-  values: [ unverified, verified, disabled ]
+  values:
+    - { value: unverified, steps: [ cap.services.auth.bind_email.create_auth_email, cap.services.auth.bind_email.load, cap.services.auth.bind_email.replace_create, cap.services.auth.bind_email.replace_soft_delete, cap.services.auth.bind_phone.create_auth_phone, cap.services.auth.bind_phone.load, cap.services.auth.bind_phone.replace_create, cap.services.auth.bind_phone.replace_soft_delete, cap.services.auth.login.get_auth_email_by_username_domain, cap.services.auth.login.get_auth_phone_by_number, cap.services.auth.revoke_all_for_account.soft_delete_auth_email_by_account, cap.services.auth.revoke_all_for_account.soft_delete_auth_phone_by_account, cap.services.verification.verify.apply_email_verified, cap.services.verification.verify.apply_phone_verified ] }
+    - { value: verified, steps: [ cap.services.auth.bind_email.create_auth_email, cap.services.auth.bind_email.disable_email_status, cap.services.auth.bind_email.load, cap.services.auth.bind_email.replace_create, cap.services.auth.bind_email.replace_soft_delete, cap.services.auth.bind_phone.create_auth_phone, cap.services.auth.bind_phone.disable_phone_status, cap.services.auth.bind_phone.load, cap.services.auth.bind_phone.replace_create, cap.services.auth.bind_phone.replace_soft_delete, cap.services.auth.login.get_auth_email_by_username_domain, cap.services.auth.login.get_auth_phone_by_number, cap.services.auth.revoke_all_for_account.soft_delete_auth_email_by_account, cap.services.auth.revoke_all_for_account.soft_delete_auth_phone_by_account ] }
+    - { value: disabled, steps: [ cap.services.auth.bind_email.create_auth_email, cap.services.auth.bind_email.enable_email_status, cap.services.auth.bind_email.load, cap.services.auth.bind_email.replace_create, cap.services.auth.bind_email.replace_soft_delete, cap.services.auth.bind_phone.create_auth_phone, cap.services.auth.bind_phone.enable_phone_status, cap.services.auth.bind_phone.load, cap.services.auth.bind_phone.replace_create, cap.services.auth.bind_phone.replace_soft_delete, cap.services.auth.login.get_auth_email_by_username_domain, cap.services.auth.login.get_auth_phone_by_number, cap.services.auth.revoke_all_for_account.soft_delete_auth_email_by_account, cap.services.auth.revoke_all_for_account.soft_delete_auth_phone_by_account ] }
   initial: unverified
   final: [ ]
 create:
   requires:
-    - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+    - lifecycle: cap.lifecycles.account
+      states: [ pending, active ]
+      rules: [ "feature.rules.auth.auth_binding_rejects_suspended_account", "feature.rules.auth.auth_binding_rejects_deleted_account" ]
+      on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
   implemented_by:
     - cap.services.auth.bind_email.create_auth_email
     - cap.services.auth.bind_email.replace_create
@@ -27,7 +33,10 @@ create:
     - cap.services.auth.bind_phone.replace_create
 destroy:
   requires:
-    - { lifecycle: cap.lifecycles.account, states: [ pending, active, suspended ] }
+    - lifecycle: cap.lifecycles.account
+      states: [ pending, active, suspended ]
+      rules: [ "feature.rules.auth.auth_binding_rejects_deleted_account" ]
+      on_violation: platform.errors.ACCOUNT_ALREADY_DELETED
   implemented_by:
     - cap.services.auth.bind_email.replace_soft_delete
     - cap.services.auth.bind_phone.replace_soft_delete
@@ -39,7 +48,10 @@ transitions:
     from: [ unverified ]
     to: verified
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+      - lifecycle: cap.lifecycles.account
+        states: [ pending, active ]
+        rules: [ "feature.rules.auth.auth_binding_rejects_suspended_account", "feature.rules.auth.auth_binding_rejects_deleted_account" ]
+        on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.verification.verify.apply_email_verified
       - cap.services.verification.verify.apply_phone_verified
@@ -48,7 +60,10 @@ transitions:
     from: [ verified ]
     to: disabled
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+      - lifecycle: cap.lifecycles.account
+        states: [ pending, active ]
+        rules: [ "feature.rules.auth.auth_binding_rejects_suspended_account", "feature.rules.auth.auth_binding_rejects_deleted_account" ]
+        on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.auth.bind_email.disable_email_status
       - cap.services.auth.bind_phone.disable_phone_status
@@ -57,7 +72,10 @@ transitions:
     from: [ disabled ]
     to: verified
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+      - lifecycle: cap.lifecycles.account
+        states: [ pending, active ]
+        rules: [ "feature.rules.auth.auth_binding_rejects_suspended_account", "feature.rules.auth.auth_binding_rejects_deleted_account" ]
+        on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.auth.bind_email.enable_email_status
       - cap.services.auth.bind_phone.enable_phone_status

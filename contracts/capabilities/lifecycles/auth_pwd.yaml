@@ -12,17 +12,25 @@ do_not:
 subjects:
   - { entity: data.entities.auth_pwd, field: status }
 states:
-  values: [ verified, disabled ]
+  values:
+    - { value: verified, steps: [ cap.services.auth.bind_password.create_auth_pwd, cap.services.auth.bind_password.disable_pwd_status, cap.services.auth.bind_password.load, cap.services.auth.bind_password.update_auth_pwd_hash, cap.services.auth.login.get_auth_pwd_by_username, cap.services.auth.record_login_failure.record_auth_pwd_login_failure, cap.services.auth.record_login_success.record_auth_pwd_login_success, cap.services.auth.revoke_all_for_account.soft_delete_auth_pwd_by_account ] }
+    - { value: disabled, steps: [ cap.services.auth.bind_password.create_auth_pwd, cap.services.auth.bind_password.enable_pwd_status, cap.services.auth.bind_password.load, cap.services.auth.bind_password.update_auth_pwd_hash, cap.services.auth.login.get_auth_pwd_by_username, cap.services.auth.record_login_failure.record_auth_pwd_login_failure, cap.services.auth.record_login_success.record_auth_pwd_login_success, cap.services.auth.revoke_all_for_account.soft_delete_auth_pwd_by_account ] }
   initial: verified
   final: [ ]
 create:
   requires:
-    - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+    - lifecycle: cap.lifecycles.account
+      states: [ pending, active ]
+      rules: [ "feature.rules.auth.auth_binding_rejects_suspended_account", "feature.rules.auth.auth_binding_rejects_deleted_account" ]
+      on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
   implemented_by:
     - cap.services.auth.bind_password.create_auth_pwd
 destroy:
   requires:
-    - { lifecycle: cap.lifecycles.account, states: [ pending, active, suspended ] }
+    - lifecycle: cap.lifecycles.account
+      states: [ pending, active, suspended ]
+      rules: [ "feature.rules.auth.auth_binding_rejects_deleted_account" ]
+      on_violation: platform.errors.ACCOUNT_ALREADY_DELETED
   implemented_by:
     - cap.services.auth.revoke_all_for_account.soft_delete_auth_pwd_by_account
 transitions:
@@ -31,7 +39,10 @@ transitions:
     from: [ verified ]
     to: disabled
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+      - lifecycle: cap.lifecycles.account
+        states: [ pending, active ]
+        rules: [ "feature.rules.auth.auth_binding_rejects_suspended_account", "feature.rules.auth.auth_binding_rejects_deleted_account" ]
+        on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.auth.bind_password.disable_pwd_status
   - name: enable
@@ -39,6 +50,9 @@ transitions:
     from: [ disabled ]
     to: verified
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+      - lifecycle: cap.lifecycles.account
+        states: [ pending, active ]
+        rules: [ "feature.rules.auth.auth_binding_rejects_suspended_account", "feature.rules.auth.auth_binding_rejects_deleted_account" ]
+        on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.auth.bind_password.enable_pwd_status

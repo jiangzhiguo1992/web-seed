@@ -14,12 +14,21 @@ do_not:
 subjects:
   - { entity: data.entities.verification_body, field: status }
 states:
-  values: [ pending, sent, consumed, expired, revoked, failed ]
+  values:
+    - { value: pending, steps: [ cap.services.verification.cleanup.expire_stale, cap.services.verification.cleanup.revoke_exhausted, cap.services.verification.revoke_by_account.revoke_active_verifications_by_account, cap.services.verification.revoke_by_auth.revoke_active_verifications_by_auth, cap.services.verification.send.create, cap.services.verification.send.mark_sent, cap.services.verification.send.revoke_old, cap.services.verification.verify.increment, cap.services.verification.verify.load_verification ] }
+    - { value: sent, steps: [ cap.services.verification.cleanup.expire_stale, cap.services.verification.cleanup.revoke_exhausted, cap.services.verification.revoke_by_account.revoke_active_verifications_by_account, cap.services.verification.revoke_by_auth.revoke_active_verifications_by_auth, cap.services.verification.send.create, cap.services.verification.send.mark_failed, cap.services.verification.send.revoke_old, cap.services.verification.verify.consume, cap.services.verification.verify.increment, cap.services.verification.verify.load_verification ] }
+    - { value: consumed, steps: [ cap.services.verification.send.create, cap.services.verification.verify.increment, cap.services.verification.verify.load_verification ] }
+    - { value: expired, steps: [ cap.services.verification.send.create, cap.services.verification.verify.increment, cap.services.verification.verify.load_verification ] }
+    - { value: revoked, steps: [ cap.services.verification.send.create, cap.services.verification.verify.increment, cap.services.verification.verify.load_verification ] }
+    - { value: failed, steps: [ cap.services.verification.send.create, cap.services.verification.verify.increment, cap.services.verification.verify.load_verification ] }
   initial: pending
   final: [ consumed, expired, revoked, failed ]
 create:
   requires:
-    - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+    - lifecycle: cap.lifecycles.account
+      states: [ pending, active ]
+      rules: [ "feature.rules.auth.verification_account_active" ]
+      on_violation: platform.errors.AUTH_VERIFICATION_INVALID
   implemented_by:
     - cap.services.verification.send.create
 transitions:
@@ -28,7 +37,10 @@ transitions:
     from: [ pending ]
     to: sent
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+      - lifecycle: cap.lifecycles.account
+        states: [ pending, active ]
+        rules: [ "feature.rules.auth.verification_account_active" ]
+        on_violation: platform.errors.AUTH_VERIFICATION_INVALID
     implemented_by:
       - cap.services.verification.send.mark_sent
   - name: consume
@@ -36,7 +48,10 @@ transitions:
     from: [ sent ]
     to: consumed
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+      - lifecycle: cap.lifecycles.account
+        states: [ pending, active ]
+        rules: [ "feature.rules.auth.verification_account_active" ]
+        on_violation: platform.errors.AUTH_VERIFICATION_INVALID
     implemented_by:
       - cap.services.verification.verify.consume
   - name: expire
@@ -61,6 +76,9 @@ transitions:
     from: [ sent ]
     to: failed
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
+      - lifecycle: cap.lifecycles.account
+        states: [ pending, active ]
+        rules: [ "feature.rules.auth.verification_account_active" ]
+        on_violation: platform.errors.AUTH_VERIFICATION_INVALID
     implemented_by:
       - cap.services.verification.send.mark_failed
