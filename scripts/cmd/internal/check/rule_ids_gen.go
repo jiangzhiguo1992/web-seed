@@ -211,7 +211,7 @@ var knownRuleIDs = map[string]bool{
 	"service-ref":                 true,
 	"service-schema":              true,
 	"service-signature":           true,
-	"service-states":              true,
+	"service-state-gate":          true,
 	"service-step-fields":         true,
 	"service-step-shape":          true,
 	"service-step-target":         true,

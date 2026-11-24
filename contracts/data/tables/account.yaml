@@ -7,6 +7,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "account 表禁止写入密码/手机号/邮箱/令牌；这些在 auth_* / token 表"
+  - "account.number 是永久身份；软删后也不可复用，唯一性查询不得过滤 deleted_at"
 
 table:
   name: account

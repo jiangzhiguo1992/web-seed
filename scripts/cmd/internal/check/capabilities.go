@@ -368,8 +368,6 @@ func (c *Checker) checkCapabilities() {
 
 	// rules / states / events 先收集 ID，再互相校验。
 	ruleIDs := map[string]bool{}
-	ruleErrors := map[string]string{}
-	ruleOwners := map[string][]string{}
 	for _, file := range glob(c.root, filepath.Join(ruleSchema.Targets.Dir, ruleSchema.Targets.Glob)) {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -385,20 +383,10 @@ func (c *Checker) checkCapabilities() {
 				c.rulef("rule-id-unique", "%s: duplicate rule id %s", relPath(c.root, file), id)
 			}
 			ruleIDs[id] = true
-			if code, _ := item["on_violation"].(string); code != "" {
-				ruleErrors[id] = code
-			}
-			for _, rawOwner := range asList(item["implemented_by"]) {
-				if owner, _ := rawOwner.(string); owner != "" {
-					ruleOwners[id] = append(ruleOwners[id], owner)
-				}
-			}
 		}
 	}
-	c.ruleErrors = ruleErrors
-	c.ruleOwners = ruleOwners
 	c.ruleIDSet = ruleIDs
-	c.serviceErrorClosure = computeServiceErrorClosure(serviceFiles, c.queries, ruleErrors)
+	c.serviceErrorClosure = computeServiceErrorClosure(serviceFiles, c.queries)
 	for id, errs := range c.serviceErrorClosure {
 		meta := serviceMetaByID[id]
 		meta.errors = errs
@@ -437,8 +425,6 @@ func (c *Checker) checkCapabilities() {
 	lifecycleStates := map[string]map[string]bool{}
 	c.lifecycleStates = lifecycleStates
 	c.lifecycleActionStates = map[string]map[string]map[string]bool{}
-	c.lifecycleSubjectTables = map[string]map[string]bool{}
-	c.lifecycleSubjectEntities = map[string]map[string]bool{}
 	requiresGraph := map[string][]string{}
 	dimensions := map[string]string{}
 	enumStates := map[string]map[string]bool{}
@@ -465,16 +451,6 @@ func (c *Checker) checkCapabilities() {
 			if subj.Entity == "" || subj.Field == "" {
 				continue
 			}
-			if subj.Table != "" {
-				if c.lifecycleSubjectTables[fileID] == nil {
-					c.lifecycleSubjectTables[fileID] = map[string]bool{}
-				}
-				c.lifecycleSubjectTables[fileID][subj.Table] = true
-			}
-			if c.lifecycleSubjectEntities[fileID] == nil {
-				c.lifecycleSubjectEntities[fileID] = map[string]bool{}
-			}
-			c.lifecycleSubjectEntities[fileID][subj.Entity] = true
 			key := subj.Entity + "." + subj.Field
 			if prev, ok := dimensions[key]; ok {
 				c.rulef("lifecycle-dimension", "%s: dimension %s already declared by %s", rel, key, prev)
@@ -592,9 +568,8 @@ func (c *Checker) checkCapabilities() {
 
 // computeServiceErrorClosure 递归计算每个 service 可能返回的完整错误集。
 // 规则：query 取 query.errors；service 未声明 step.errors 时取目标闭包，
-// 声明时只取声明集合；logic/when 取 step.errors 与 rules[].rule 的 on_violation；
-// 其他 step 取 step.errors。事件不贡献同步错误。
-func computeServiceErrorClosure(serviceFiles []string, queries map[string]*queryInfo, ruleErrors map[string]string) map[string]map[string]bool {
+// 声明时只取声明集合；其他 step 取 step.errors。事件不贡献同步错误。
+func computeServiceErrorClosure(serviceFiles []string, queries map[string]*queryInfo) map[string]map[string]bool {
 	type sources struct {
 		direct   map[string]bool
 		children map[string]bool
@@ -651,15 +626,6 @@ func computeServiceErrorClosure(serviceFiles []string, queries map[string]*query
 				default:
 					for _, rawErr := range asList(step["errors"]) {
 						if code, _ := rawErr.(string); code != "" {
-							src.direct[code] = true
-						}
-					}
-				}
-				if kind == "logic" || kind == "when" {
-					for _, rawRule := range asList(step["rules"]) {
-						rm, _ := asMap(rawRule)
-						rid, _ := rm["rule"].(string)
-						if code := ruleErrors[rid]; code != "" {
 							src.direct[code] = true
 						}
 					}

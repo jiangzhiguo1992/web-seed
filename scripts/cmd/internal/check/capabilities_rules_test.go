@@ -396,7 +396,6 @@ rules:
   - id: feature.rules.x.r1
     kind: policy
     summary: "x"
-    on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [cap.services.x.create]
 `
 	writeCapFile(t, root, rel, valid)
@@ -420,7 +419,6 @@ rules:
   - id: feature.rules.x.r2
     kind: constraint
     summary: "x"
-    on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [cap.services.x.create]
 `)
 	doc, err = loadYAML(filepath.Join(root, rel))
@@ -443,7 +441,6 @@ rules:
   - id: feature.rules.x.r3
     kind: policy
     summary: "x"
-    on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [cap.services.missing.create]
 `)
 	doc, err = loadYAML(filepath.Join(root, rel))
@@ -453,7 +450,30 @@ rules:
 	c.errs = nil
 	c.checkRuleDoc(doc, rel, schema, serviceIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown service cap.services.missing.create") {
-		t.Fatalf("unknown implemented_by service not reported: %v", c.errs)
+		t.Fatalf("unknown service not reported: %v", c.errs)
+	}
+
+	writeCapFile(t, root, rel, `id: feature.rules.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+rules:
+  - id: feature.rules.x.r4
+    kind: policy
+    summary: "x"
+    on_violation: platform.errors.COMMON_INTERNAL
+    implemented_by: [cap.services.x.create]
+`)
+	doc, err = loadYAML(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.errs = nil
+	c.checkRuleDoc(doc, rel, schema, serviceIDs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown field \"on_violation\"") {
+		t.Fatalf("feature rule on_violation must be rejected: %v", c.errs)
 	}
 }
 
@@ -2826,7 +2846,6 @@ services:
 	got := computeServiceErrorClosure(
 		[]string{filepath.Join(root, rel)},
 		queries,
-		map[string]string{"feature.rules.x.rule": "platform.errors.RULE"},
 	)
 	check := func(service string, want ...string) {
 		t.Helper()
@@ -2840,8 +2859,8 @@ services:
 			}
 		}
 	}
-	check("child", "platform.errors.CHILD", "platform.errors.RULE")
-	check("parent_inherit", "platform.errors.CHILD", "platform.errors.RULE")
+	check("child", "platform.errors.CHILD")
+	check("parent_inherit", "platform.errors.CHILD")
 	check("parent_subset", "platform.errors.OWN")
 	check("parent_query", "platform.errors.QUERY", "platform.errors.OWN")
 }

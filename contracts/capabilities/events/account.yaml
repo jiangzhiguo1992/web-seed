@@ -114,3 +114,18 @@ topics:
       emitted_by:
         - cap.services.auth.login
         - cap.services.auth.record_login_failure
+
+dispatches:
+  - id: cap.events.account.notify_deleted
+    name: notify_deleted
+    summary: "异步通知账号注销"
+    payload:
+      type: _types.object
+      properties:
+        - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
+        - { name: deleted_at, schema: { type: _types.timestamp }, required: true, description: "软删时间" }
+    service: cap.services.account.notify_deleted
+    emitted_by: [ cap.services.account.delete ]
+    timeout: 1h
+    retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
+    concurrency: { key: account_notify_deleted, ttl: 5m }

@@ -119,9 +119,6 @@ services:
       - id: get_auth_pwd_by_username
         kind: query
         summary: "调用 data.queries.auth.get_auth_pwd_by_username"
-        states:
-          - lifecycle: cap.lifecycles.auth_pwd
-            values: [ "*" ]
         input:
           - { name: username, value: params.input.identifier, description: "用户名" }
         output:
@@ -131,9 +128,6 @@ services:
       - id: get_auth_phone_by_number
         kind: query
         summary: "调用 data.queries.auth.get_auth_phone_by_number"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ "*" ]
         input:
           - { name: code, value: step.phone_code.code, description: "手机号区号" }
           - { name: number, value: params.input.identifier, description: "手机号" }
@@ -144,9 +138,6 @@ services:
       - id: get_auth_email_by_username_domain
         kind: query
         summary: "调用 data.queries.auth.get_auth_email_by_username_domain"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ "*" ]
         input:
           - { name: username, value: step.split_identifier.username, description: "用户名" }
           - { name: domain, value: step.split_identifier.domain, description: "邮箱域名" }
@@ -176,9 +167,6 @@ services:
       - id: load_account
         kind: query
         summary: "加载登录账号"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: step.load.account_id, description: "认证绑定命中的账号 ID" }
         output:
@@ -372,9 +360,6 @@ services:
       - id: load_account
         kind: query
         summary: "读取认证绑定所属账号"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.account_id, description: "账号 ID" }
         output:
@@ -471,9 +456,6 @@ services:
       - id: create_auth_pwd
         kind: query
         summary: "调用 data.queries.auth.create_auth_pwd"
-        states:
-          - lifecycle: cap.lifecycles.auth_pwd
-            values: [ "*" ]
         lifecycles: [ cap.lifecycles.auth_pwd.create ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
@@ -508,9 +490,6 @@ services:
       - id: update_auth_pwd_hash
         kind: query
         summary: "调用 data.queries.auth.update_auth_pwd_hash"
-        states:
-          - lifecycle: cap.lifecycles.auth_pwd
-            values: [ "*" ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: password_hash, value: step.hash_update.password_hash, description: "密码哈希" }
@@ -529,10 +508,9 @@ services:
       - id: enable_pwd_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_pwd_status"
-        states:
-          - lifecycle: cap.lifecycles.auth_pwd
-            values: [ disabled ]
         lifecycles: [ cap.lifecycles.auth_pwd.transitions.enable ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.auth_pwd, values: [ disabled ] }
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.enable_status.status, description: "绑定状态 verified" }
@@ -551,10 +529,9 @@ services:
       - id: disable_pwd_status
         kind: query
         summary: "调用 data.queries.auth.set_auth_pwd_status"
-        states:
-          - lifecycle: cap.lifecycles.auth_pwd
-            values: [ verified ]
         lifecycles: [ cap.lifecycles.auth_pwd.transitions.disable ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.auth_pwd, values: [ verified ] }
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.disable_status.status, description: "绑定状态 disabled" }
@@ -573,9 +550,6 @@ services:
       - id: load
         kind: query
         summary: "读取变更后的密码绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_pwd
-            values: [ "*" ]
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
         output:
@@ -631,9 +605,6 @@ services:
       - id: load_account
         kind: query
         summary: "读取认证绑定所属账号"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.account_id, description: "账号 ID" }
         output:
@@ -720,9 +691,6 @@ services:
       - id: replace_soft_delete
         kind: query
         summary: "换绑前软删旧手机绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ disabled, unverified, verified ]
         lifecycles: [ cap.lifecycles.auth_contact.destroy ]
         input:
           - { name: account_id, value: params.account_id, description: "账号 ID" }
@@ -750,9 +718,6 @@ services:
       - id: replace_create
         kind: query
         summary: "创建新的手机绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ "*" ]
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新手机绑定 ID" }
@@ -798,9 +763,6 @@ services:
       - id: create_auth_phone
         kind: query
         summary: "创建手机绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ "*" ]
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新手机绑定 ID" }
@@ -824,10 +786,9 @@ services:
       - id: enable_phone_status
         kind: query
         summary: "启用手机绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ disabled ]
         lifecycles: [ cap.lifecycles.auth_contact.transitions.enable ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.auth_contact, values: [ disabled ] }
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.enable_status.status, description: "绑定状态 verified" }
@@ -846,10 +807,9 @@ services:
       - id: disable_phone_status
         kind: query
         summary: "停用手机绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ verified ]
         lifecycles: [ cap.lifecycles.auth_contact.transitions.disable ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.auth_contact, values: [ verified ] }
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.disable_status.status, description: "绑定状态 disabled" }
@@ -880,9 +840,6 @@ services:
       - id: load
         kind: query
         summary: "读取变更后的手机绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ "*" ]
         input:
           - { name: id, value: step.merge_id.target_id, description: "认证绑定 ID" }
         output:
@@ -938,9 +895,6 @@ services:
       - id: load_account
         kind: query
         summary: "读取认证绑定所属账号"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.account_id, description: "账号 ID" }
         output:
@@ -1040,9 +994,6 @@ services:
       - id: replace_soft_delete
         kind: query
         summary: "换绑前软删旧邮箱绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ disabled, unverified, verified ]
         lifecycles: [ cap.lifecycles.auth_contact.destroy ]
         input:
           - { name: account_id, value: params.account_id, description: "账号 ID" }
@@ -1061,9 +1012,6 @@ services:
       - id: replace_create
         kind: query
         summary: "创建新的邮箱绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ "*" ]
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新邮箱绑定 ID" }
@@ -1113,9 +1061,6 @@ services:
       - id: create_auth_email
         kind: query
         summary: "创建邮箱绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ "*" ]
         lifecycles: [ cap.lifecycles.auth_contact.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新邮箱绑定 ID" }
@@ -1140,10 +1085,9 @@ services:
       - id: enable_email_status
         kind: query
         summary: "启用邮箱绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ disabled ]
         lifecycles: [ cap.lifecycles.auth_contact.transitions.enable ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.auth_contact, values: [ disabled ] }
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.enable_status.status, description: "绑定状态 verified" }
@@ -1162,10 +1106,9 @@ services:
       - id: disable_email_status
         kind: query
         summary: "停用邮箱绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ verified ]
         lifecycles: [ cap.lifecycles.auth_contact.transitions.disable ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.auth_contact, values: [ verified ] }
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
           - { name: status, value: step.disable_status.status, description: "绑定状态 disabled" }
@@ -1196,9 +1139,6 @@ services:
       - id: load
         kind: query
         summary: "读取变更后的邮箱绑定"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ "*" ]
         input:
           - { name: id, value: step.merge_id.target_id, description: "认证绑定 ID" }
         output:
@@ -1276,9 +1216,6 @@ services:
       - id: record_auth_pwd_login_success
         kind: query
         summary: "记录登录成功并清零失败计数"
-        states:
-          - lifecycle: cap.lifecycles.auth_pwd
-            values: [ "*" ]
         input:
           - { name: id, value: step.reset_id.id, description: "密码绑定 ID" }
         output: [ ]
@@ -1341,9 +1278,6 @@ services:
       - id: record_auth_pwd_login_failure
         kind: query
         summary: "调用 data.queries.auth.record_auth_pwd_login_failure"
-        states:
-          - lifecycle: cap.lifecycles.auth_pwd
-            values: [ "*" ]
         input:
           - { name: id, value: params.auth_pwd_id, description: "密码绑定 ID" }
           - { name: lock_until, value: step.lock_until.lock_until, description: "锁定截止时间" }
@@ -1379,9 +1313,6 @@ services:
       - id: soft_delete_auth_pwd_by_account
         kind: query
         summary: "调用 data.queries.auth.soft_delete_auth_pwd_by_account"
-        states:
-          - lifecycle: cap.lifecycles.auth_pwd
-            values: [ disabled, verified ]
         lifecycles: [ cap.lifecycles.auth_pwd.destroy ]
         input:
           - { name: account_id, value: params.account_id, description: "账号 ID" }
@@ -1391,9 +1322,6 @@ services:
       - id: soft_delete_auth_phone_by_account
         kind: query
         summary: "调用 data.queries.auth.soft_delete_auth_phone_by_account"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ disabled, unverified, verified ]
         lifecycles: [ cap.lifecycles.auth_contact.destroy ]
         input:
           - { name: account_id, value: params.account_id, description: "账号 ID" }
@@ -1403,9 +1331,6 @@ services:
       - id: soft_delete_auth_email_by_account
         kind: query
         summary: "调用 data.queries.auth.soft_delete_auth_email_by_account"
-        states:
-          - lifecycle: cap.lifecycles.auth_contact
-            values: [ disabled, unverified, verified ]
         lifecycles: [ cap.lifecycles.auth_contact.destroy ]
         input:
           - { name: account_id, value: params.account_id, description: "账号 ID" }

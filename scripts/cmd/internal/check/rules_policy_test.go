@@ -3,7 +3,7 @@
 // rules_policy_test.go 是 feature.rules policy 规则的可执行断言。
 //
 // 断言分三层：
-//  1. 规则自身结构：implemented_by / on_violation / given / when / then 非空；
+//  1. 规则自身结构：implemented_by / given / when / then 非空；
 //  2. 规则引用的契约对象：实体、表列、枚举值、service、错误码必须真实存在；
 //  3. 每条 policy 的关键表列/枚举/do_not 期望（policyExpectations）。
 //
@@ -26,7 +26,6 @@ type policyRule struct {
 	ID            string   `yaml:"id"`
 	Kind          string   `yaml:"kind"`
 	Summary       string   `yaml:"summary"`
-	OnViolation   string   `yaml:"on_violation"`
 	ImplementedBy []string `yaml:"implemented_by"`
 	Given         string   `yaml:"given"`
 	When          string   `yaml:"when"`
@@ -371,9 +370,6 @@ func checkPolicyRule(id string) error {
 	if len(rule.ImplementedBy) == 0 {
 		return fmt.Errorf("implemented_by is empty")
 	}
-	if rule.OnViolation == "" {
-		return fmt.Errorf("on_violation is empty")
-	}
 	if rule.Given == "" || rule.When == "" || rule.Then == "" {
 		return fmt.Errorf("given/when/then must be non-empty")
 	}
@@ -391,10 +387,6 @@ func assertPolicy(id string) error {
 	w, err := loadPolicyWorld()
 	if err != nil {
 		return err
-	}
-	code := strings.TrimPrefix(rule.OnViolation, "platform.errors.")
-	if !w.errors[code] {
-		return fmt.Errorf("on_violation %s is not declared in platform/errors", rule.OnViolation)
 	}
 	for _, svc := range rule.ImplementedBy {
 		if !w.services[svc] {

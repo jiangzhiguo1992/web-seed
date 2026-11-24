@@ -156,3 +156,40 @@ func TestGeneratedFilesUpToDate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPostgresLiveOnlyIndexUsesPartialPredicate(t *testing.T) {
+	idx := index{Name: "uq_account_number", Columns: []string{"number"}, Unique: true, LiveOnly: true}
+	got := renderPostgresIndex("account", idx)
+	want := `CREATE UNIQUE INDEX "uq_account_number" ON "account" ("number") WHERE "deleted_at" IS NULL;` + "\n"
+	if got != want {
+		t.Fatalf("postgres live_only index = %q, want %q", got, want)
+	}
+	plain := renderPostgresIndex("account", index{Name: "idx_account_number", Columns: []string{"number"}})
+	if strings.Contains(plain, "WHERE") {
+		t.Fatalf("non-live index must not use partial predicate: %s", plain)
+	}
+}
+
+func TestPostgresTypeMapping(t *testing.T) {
+	cases := []struct {
+		in   column
+		want string
+	}{
+		{column{Type: "integer", Bits: 64}, "BIGINT"},
+		{column{Type: "string", MaxLen: 32}, "VARCHAR(32)"},
+		{column{Type: "timestamp"}, "TIMESTAMPTZ(6)"},
+		{column{Type: "boolean"}, "BOOLEAN"},
+		{column{Type: "decimal", Precision: 10, Scale: 2}, "NUMERIC(10,2)"},
+		{column{Type: "json"}, "JSONB"},
+		{column{Type: "bytes"}, "BYTEA"},
+	}
+	for _, tc := range cases {
+		got, err := postgresType(tc.in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != tc.want {
+			t.Fatalf("postgresType(%+v) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

@@ -109,7 +109,7 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				stepID, _ := step["id"].(string)
 				fullStepID := serviceID + "." + stepID
 				if stepID != "" {
-					if parsed := parseStepStates(step["states"]); len(parsed) > 0 {
+					if parsed := parseStateGate(step["state_gate"]); len(parsed) > 0 {
 						stepStates[fullStepID] = parsed
 					}
 				}
@@ -285,8 +285,7 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				if !ok {
 					continue
 				}
-				expanded := expandStateValues(values, order)
-				for _, state := range expanded {
+				for _, state := range values {
 					stepsByState[state] = append(stepsByState[state], stepID)
 				}
 			}
@@ -315,17 +314,8 @@ func lifecycleStateNames(raw any) []string {
 	return out
 }
 
-func expandStateValues(values, all []string) []string {
-	for _, value := range values {
-		if value == "*" {
-			return all
-		}
-	}
-	return values
-}
-
-// parseStepStates 读取 step.states 的 lifecycle -> values；不展开 *。
-func parseStepStates(raw any) map[string][]string {
+// parseStateGate 读取 step.state_gate 的 lifecycle -> values；省略表示全部允许。
+func parseStateGate(raw any) map[string][]string {
 	out := map[string][]string{}
 	for _, item := range asList(raw) {
 		m, _ := asMap(item)

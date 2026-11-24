@@ -48,7 +48,7 @@
 | cap.services | service-used | service-used | 1 |
 | cap.services | service-step-fields | service-step-fields | 1 |
 | cap.services | service-step-target | service-step-target | 1 |
-| cap.services | service-states | service-states | 1 |
+| cap.services | service-state-gate | service-state-gate | 1 |
 | cap.services | service-step-shape | service-step-shape | 1 |
 | cap.services | service-when-shape | service-when-shape | 1 |
 | cap.services | service-when-refs | service-when-refs | 1 |

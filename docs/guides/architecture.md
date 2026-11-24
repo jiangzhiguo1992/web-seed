@@ -98,7 +98,7 @@
 - [x] `capabilities/protocols/http/*.yaml` + `platform/http_conventions.components` → 合并为 `generated/openapi/admin.yaml`
 - [ ] 合并 spec → Go server 类型（`oapi-codegen strict-server`）
 - [ ] 合并 spec → TS 类型（`openapi-typescript` + `openapi-fetch`）
-- [x] `data/tables/*.yaml` → `schema.sql` + `migrations/0001_baseline.sql`（增量 diff 仍 P5）
+- [x] `data/tables/*.yaml` → `schema.sql` + `schema.postgres.sql` + `migrations/0001_baseline.sql`（增量 diff 仍 P5）
 - [x] 数据契约重构：`tables/_base` 基类、`data/storage.yaml`、account/auth_* 拆分（契约已落盘）
 - [x] 契约元规范：`_meta/<type>.yaml` 覆盖全部契约类型 + `make contract-new` + `make contract-check`（结构 / ID / 约束 / 索引 / 引用 / 数据流 / 类型级规则）
 - [ ] `data/queries/*.yaml` → `queries/*.sql` → sqlc 代码
@@ -222,7 +222,7 @@
 ### 2.3 生成链
 
 ```
-data/tables/*.yaml ──> gen-db ──> schema.sql + migrations/*.sql
+data/tables/*.yaml ──> gen-db ──> schema.sql + schema.postgres.sql + migrations/*.sql
 
 capabilities/protocols/http/*.yaml + platform/http_conventions.components ──> gen-openapi ──> generated/openapi/admin.yaml
 

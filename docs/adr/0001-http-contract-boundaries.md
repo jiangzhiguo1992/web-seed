@@ -64,7 +64,7 @@ paths:
 |---|---|
 | `query` | `query.errors` + `step.errors` |
 | `service` | 未声明 `step.errors`：目标 service 的闭包；声明：只取声明集合（必须是目标子集） |
-| `logic` / `when` | `step.errors` + `rules[].rule` 对应 `feature.rules` 的 `on_violation` |
+| `logic` / `when` | `step.errors` |
 | `events` / 其他 step | `step.errors` |
 | 异步事件 | 不贡献同步错误 |
 

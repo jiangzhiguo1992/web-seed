@@ -44,51 +44,47 @@ type Checker struct {
 	queryTargets    contractspec.Targets
 
 	// 实体与查询解析索引。
-	tableColumns             map[string]map[string]columnMeta
-	tableDocs                map[string]map[string]any
-	tableTypeFamilies        map[string]bool
-	entityDocs               []entityDoc
-	entityBaseDoc            map[string]any
-	entityBaseFields         []entityFieldInfo
-	entities                 map[string]*entityInfo
-	entityOrder              []string
-	queries                  map[string]*queryInfo
-	declaredWrites           map[string]bool
-	queryDocs                []queryDoc
-	queryDupIDs              map[string]bool
-	queryOrder               []string
-	enumValues               map[string]map[string]bool
-	enumCodes                map[string]map[int]bool
-	enumIDs                  map[string]bool
-	errCodeSet               map[string]bool
-	errorStatus              map[string]int
-	errorBizCode             map[string]int
-	dataAccessErrSet         map[string]bool
-	permissionSet            map[string]bool
-	methodReturns            map[string]map[string]returnType
-	methodTypeDefs           map[string]map[string]any
-	serviceQueries           map[string]map[string]bool
-	serviceQueryClosure      map[string]map[string]bool
-	serviceErrorClosure      map[string]map[string]bool
-	pageParamTypes           map[string]map[string]string
-	pageTypeFamilies         map[string]string
-	serviceWrites            map[string]bool
-	httpOps                  map[string]httpOpInfo
-	ruleErrors               map[string]string
-	ruleOwners               map[string][]string
-	ruleIDSet                map[string]bool
-	lifecycleStates          map[string]map[string]bool
-	lifecycleActionStates    map[string]map[string]map[string]bool
-	lifecycleSubjectTables   map[string]map[string]bool
-	lifecycleSubjectEntities map[string]map[string]bool
-	queryReturnTypes         map[string]map[string]returnType
-	eventPayloads            map[string]map[string]eventField
-	accessBindings           map[string]accessPolicy
-	inlineSeq                int
-	nodeKinds                map[string]contractspec.SchemaKind
-	propertyKeys             []contractspec.Field
-	valueTypes               contractspec.ValueTypes
-	strictHTTP               bool
+	tableColumns          map[string]map[string]columnMeta
+	tableDocs             map[string]map[string]any
+	tableTypeFamilies     map[string]bool
+	entityDocs            []entityDoc
+	entityBaseDoc         map[string]any
+	entityBaseFields      []entityFieldInfo
+	entities              map[string]*entityInfo
+	entityOrder           []string
+	queries               map[string]*queryInfo
+	declaredWrites        map[string]bool
+	queryDocs             []queryDoc
+	queryDupIDs           map[string]bool
+	queryOrder            []string
+	enumValues            map[string]map[string]bool
+	enumCodes             map[string]map[int]bool
+	enumIDs               map[string]bool
+	errCodeSet            map[string]bool
+	errorStatus           map[string]int
+	errorBizCode          map[string]int
+	dataAccessErrSet      map[string]bool
+	permissionSet         map[string]bool
+	methodReturns         map[string]map[string]returnType
+	methodTypeDefs        map[string]map[string]any
+	serviceQueries        map[string]map[string]bool
+	serviceQueryClosure   map[string]map[string]bool
+	serviceErrorClosure   map[string]map[string]bool
+	pageParamTypes        map[string]map[string]string
+	pageTypeFamilies      map[string]string
+	serviceWrites         map[string]bool
+	httpOps               map[string]httpOpInfo
+	ruleIDSet             map[string]bool
+	lifecycleStates       map[string]map[string]bool
+	lifecycleActionStates map[string]map[string]map[string]bool
+	queryReturnTypes      map[string]map[string]returnType
+	eventPayloads         map[string]map[string]eventField
+	accessBindings        map[string]accessPolicy
+	inlineSeq             int
+	nodeKinds             map[string]contractspec.SchemaKind
+	propertyKeys          []contractspec.Field
+	valueTypes            contractspec.ValueTypes
+	strictHTTP            bool
 }
 
 // Run 执行全部契约校验并返回错误列表。
@@ -283,7 +279,7 @@ var proseListFields = map[string]bool{
 	"allowed_cases": true, "client_requirements": true, "common_mistakes": true,
 	"definition": true, "do_not": true, "forbidden": true,
 	"forbidden_usage": true, "global_notes": true, "non_breaking": true,
-	"process": true, "rules": true, "scope": true,
+	"process": true, "scope": true,
 }
 
 func (c *Checker) checkProseQuotes(n *yaml.Node, rel string) {

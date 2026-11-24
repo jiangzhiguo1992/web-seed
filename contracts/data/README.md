@@ -188,7 +188,7 @@ indexes:
       - data.queries.account.exists_account_number
 ```
 
-`live_only: true` 只用于唯一索引，表示唯一性只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。当前生成器只产出 MySQL DDL：用 `CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END` 表达式键排除软删行；PostgreSQL 对应 `WHERE deleted_at IS NULL` partial unique index（DDL 生成尚未接入）。非唯一索引不使用该字段，需要 live 行前导时把 `deleted_at` 显式写进 `indexes[].columns`，并在 `index_ref` 中把它作为最左列声明。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
+`live_only: true` 只用于唯一索引，表示唯一性只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。`gen-db` 同时产出 MySQL `schema.sql` 与 PostgreSQL `schema.postgres.sql`：MySQL 用 `CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END` 表达式键，PostgreSQL 用 `WHERE deleted_at IS NULL` partial unique index。当前 `storage.tables.postgres` 只登记归档表，`schema.postgres.sql` 是契约表的可移植镜像，不代表 PostgreSQL 已成为权威引擎。非唯一索引不使用该字段，需要 live 行前导时把 `deleted_at` 显式写进 `indexes[].columns`，并在 `index_ref` 中把它作为最左列声明。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
 
 ### 5.2 查询：参数 + 返回 + 索引/缓存/归档引用
 

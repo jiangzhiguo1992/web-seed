@@ -102,15 +102,15 @@ service 项必须声明：
 | `events`     | `events`（至少一项 `{ref}`，可多个）                                     | 纯事件发射；可发多个事件，`step.input` 是这些事件 payload 字段的并集，name 必须属于至少一个事件的 payload；每个事件的必填字段必须出现；`output` 必须为空列表；logic 不直接发事件 |
 | `when`       | `input` + `output: [ ]` + `when`；可选 `rules`                          | 条件分支；每项是 `{input, expr, goto}`：`input` 必须是本步 input 中声明的名字，`expr` 只能引用本步 `input.<name>[.<field>]` 且必须引用该主体；按列表顺序匹配，第一个为真的分支生效 |
 
-字段按 kind 取交集：`id` / `kind` / `summary` / `states` / `input` / `output` / `errors` / `lifecycles` / `goto` 恒有；`input` / `output` 所有 kind 都必须展示（无内容写空列表），`events` / `when` 的 `output` 必须为空；`query` 仅 `query`；`service` 仅 `service`；`events` 仅 `events`；`rules` 仅 `logic` / `when`；`when` 仅 `when`。
+字段按 kind 取交集：`id` / `kind` / `summary` / `lifecycles` / `state_gate` / `input` / `output` / `errors` / `goto` 恒有；`input` / `output` 所有 kind 都必须展示（无内容写空列表），`events` / `when` 的 `output` 必须为空；`query` 仅 `query`；`service` 仅 `service`；`events` 仅 `events`；`rules` 仅 `logic` / `when`；`when` 仅 `when`。
 
 一一对应：`kind: query` → `query`、`kind: service` → `service`、`kind: events` → `events`、`kind: logic` → `rules`、`kind: when` → `when`。出现哪个业务字段，kind 就必须是对应的那一种；logic 不能携带 `query` / `service` / `events`，query / service / events 也不能携带 `rules`。`input` / `output` / `errors` / `goto` 是数据流与公共字段，不参与一一对应。
 
 - `goto` 必填：它是本步结束后的唯一跳转目标，必须指向本 service 的后续 step，或 `$end` 表示直接结束 service；`kind: when` 的 `goto` 是所有分支都不匹配时的默认跳转。控制流没有隐式顺序，前向限制保证无环；首步必须能经 goto/when 分支到达所有 step。
 - `input` 是 `{name, value, description}` 列表，所有 step 必填（无输入写 `[ ]`）；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式。query/service 时 `name` 是目标参数名；events 时是至少一个事件 payload 的字段名；logic/when 时是本步读取名。
 - `output` 是 `{name, type, description, nullable}` 列表，所有 step 必填（无产出写 `[ ]`）；`events` / `when` 只能为空。query/service 时 `name` 必须是目标 returns 字段，`type/nullable` 必须与目标严格一致；logic 时是自身产出。消费者只能引用已声明的 output，不能直接穿透到目标 returns。
-- `states` 是 `[{lifecycle, values}]`：声明本步允许的 lifecycle 状态；`values: [ "*" ]` 表示无状态前置。只要求触及该 lifecycle 主表/实体的 step 声明；状态转换 step 的 `values` 必须等于 `transition.from`，`create` 覆盖全状态，`destroy` 覆盖全部非终态。位置固定在 `summary` 之后、`lifecycles` 之前。
-- `lifecycles` 是状态流转标记，可列多个 lifecycle 动作，任何 kind 都可带；它只表示本步包含这些状态流转，不限制本步只做状态流转；位置固定在 `states` 之后。
+- `lifecycles` 是状态流转标记，可列多个 lifecycle 动作，任何 kind 都可带；它只表示本步包含这些状态流转，不限制本步只做状态流转；位置固定在 `summary` 之后。
+- `state_gate` 是 `[ { lifecycle, values } ]`：声明本步允许的 lifecycle 状态；省略表示全部状态允许，因此 `values` 里不得写 `*`。只写明确限制的动作：transition 在 `from` 不是全状态时必须写且等于 `from`，destroy 在非终态不是全状态时必须写且等于全部非终态；全状态允许时禁止写，create 同样省略。位置固定在 `lifecycles` 之后。
 - `when` 只用于 `kind: when`：每项 `{input, expr, goto}`；`input` 必须是本步 input 中声明的名字，`expr` 是受限布尔表达式，只能引用本步 `input.<name>[.<field>]`、字面量与 `== != > >= < <= && || !` 和括号，且必须引用 `input` 指定的主体；字面量类型必须与字段静态类型兼容（boolean 用 `true`/`false`，integer 用整数，string 用字符串，`data.enums.*` 用枚举名）。按列表顺序匹配，第一个为真的分支跳转，都不满足时走本步 `goto`。
 - 计算值必须先落成前序 `kind: logic` 的 `output`，再以 `step.<id>.<path>` 引用；`expr:` 软区已移除。
 - `query` 是 `kind: query` 的单值字符串 ID，实例写作 `query: data.queries.<file>.<name>`；logic 不直接调 query，查询一律独立成 step。
@@ -119,9 +119,9 @@ service 项必须声明：
 - 入口策略错误（权限→`COMMON_FORBIDDEN`、限流→`COMMON_RATE_LIMITED`、审计→`COMMON_AUDIT_FAILED`）只由 `access.yaml`
   拥有，service 与 step 不重复声明。
 - `step.errors` 只列该步骤实际返回的领域错误：`kind: query` 缺省取该 query 的错误集，声明时必须覆盖；`kind: service` 取目标 service
-  的错误集；`logic` 的 `rules[].rule` 对应规则的 `on_violation` 错误必须出现在 service 错误集。
+  的错误集；`logic` 实现的规则不再携带 `on_violation`，错误必须由 `step.errors` 显式声明。
 - `rules` 是对象列表：每项 `{ rule: feature.rules.* }`，rule 值是结构 ID，不加引号；按引用检查存在性，不允许字符串简写。
-- `lifecycles` 只是标记：它表示本步包含这些状态流转，不限制本步的 kind，也不要求本步自己写状态列；目标状态以 lifecycle 为唯一事实源。`states` 与 `lifecycles` 互补：前者声明前置可用状态，后者声明本步实现的动作；`gen-graph` 把 `states` 反向写成 `lifecycle.states.values[].steps`，形成状态 × step 矩阵，禁止手改。
+- `lifecycles` 只是标记：它表示本步包含这些状态流转，不限制本步的 kind，也不要求本步自己写状态列；目标状态以 lifecycle 为唯一事实源。`state_gate` 与 `lifecycles` 互补：前者声明前置可用状态，后者声明本步实现的动作；`gen-graph` 只把写了 `state_gate` 的 step 反向写成 `lifecycle.states.values[].steps`，省略 `state_gate` 的 step 不进入矩阵，禁止手改。
 - 数据链是硬约束：`input` 的值只能是 `params.<path>` 或 `step.<id>.<path>`，且值的静态类型必须与目标参数类型兼容
   （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；可空的源不得赋给非 null 目标（query/service/events input 的源若 nullable，目标参数/payload 字段必须 nullable）；`step.<id>` 还必须通过 goto/when 边从被引用步骤可达，
   不能引用不可达分支；query/service 的 output 必须与目标 returns 对齐，每个显式 `output`（`events` / `when` 为空）必须被后续 `input` 引用或被 `returns.value` 引用；`returns` 的每个业务字段必须写 `value`（`params.<path>` 或 `step.<id>.<path>`），类型一致且 nullable 严格一致

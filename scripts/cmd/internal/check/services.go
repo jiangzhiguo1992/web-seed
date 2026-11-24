@@ -201,9 +201,9 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		if target, _ := step["goto"].(string); target != "" {
 			c.checkGoto(rel, stepID, target, allIndex, i)
 		}
-		c.checkServiceStepStates(step, rel, stepID)
+		c.checkServiceStateGate(step, rel, stepID)
 		allowed := map[string]bool{
-			"id": true, "kind": true, "summary": true, "states": true, "errors": true, "lifecycles": true, "goto": true,
+			"id": true, "kind": true, "summary": true, "state_gate": true, "errors": true, "lifecycles": true, "goto": true,
 		}
 		for _, field := range stepKindFields[kind] {
 			allowed[field] = true
@@ -362,30 +362,6 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 					c.rulef("service-ref", "%s: step %s unknown error %s", rel, stepID, code)
 				}
 				stepErrors[code] = true
-			}
-		}
-		if kind == "logic" || kind == "when" {
-			for _, rawRule := range asList(step["rules"]) {
-				rm, _ := asMap(rawRule)
-				rid, _ := rm["rule"].(string)
-				code := c.ruleErrors[rid]
-				if code == "" {
-					continue
-				}
-				owners := c.ruleOwners[rid]
-				if len(owners) == 0 {
-					owners = []string{id}
-				}
-				declared := false
-				for _, owner := range owners {
-					if serviceMeta[owner].errors[code] {
-						declared = true
-						break
-					}
-				}
-				if !declared {
-					c.rulef("service-errors", "%s: rule %s error %s is not declared by service(s) %v", rel, rid, code, owners)
-				}
 			}
 		}
 
@@ -596,11 +572,12 @@ func (c *Checker) checkGoto(rel, stepID, target string, allIndex map[string]int,
 }
 
 // checkStepWhen 校验 kind=when 的条件分支：input 引用本步 input，expr 只能引用本步 input。
-// checkServiceStepStates 校验 step.states：触及 lifecycle 主表/实体的 step 必须声明，
-// transition step 必须等于 transition.from，create 覆盖全状态，destroy 覆盖全部非终态。
-func (c *Checker) checkServiceStepStates(step map[string]any, rel, stepID string) {
-	touched := c.stepTouchedLifecycles(step)
+// checkServiceStateGate 校验 step.state_gate：省略表示全部允许；
+// transition 必须写且等于 transition.from；destroy 必须写且等于全部非终态；
+// create 可省略，写了必须等于全部状态。
+func (c *Checker) checkServiceStateGate(step map[string]any, rel, stepID string) {
 	expected := map[string]map[string]bool{}
+	allAllowed := map[string]bool{}
 	for _, raw := range asList(step["lifecycles"]) {
 		action, _ := raw.(string)
 		for lifecycleID, states := range c.lifecycleActionStates[action] {
@@ -610,23 +587,23 @@ func (c *Checker) checkServiceStepStates(step map[string]any, rel, stepID string
 			for state := range states {
 				expected[lifecycleID][state] = true
 			}
-			touched[lifecycleID] = true
+			allAllowed[lifecycleID] = sameSet(expected[lifecycleID], c.lifecycleStates[lifecycleID])
 		}
 	}
 	declared := map[string]map[string]bool{}
-	for i, raw := range asList(step["states"]) {
+	for i, raw := range asList(step["state_gate"]) {
 		item, ok := asMap(raw)
 		if !ok {
-			c.rulef("service-states", "%s: step %s states[%d] must be an object", rel, stepID, i)
+			c.rulef("service-state-gate", "%s: step %s state_gate[%d] must be an object", rel, stepID, i)
 			continue
 		}
 		lifecycleID, _ := item["lifecycle"].(string)
 		if lifecycleID == "" {
-			c.rulef("service-states", "%s: step %s states[%d] requires lifecycle", rel, stepID, i)
+			c.rulef("service-state-gate", "%s: step %s state_gate[%d] requires lifecycle", rel, stepID, i)
 			continue
 		}
 		if declared[lifecycleID] != nil {
-			c.rulef("service-states", "%s: step %s repeats lifecycle %s in states", rel, stepID, lifecycleID)
+			c.rulef("service-state-gate", "%s: step %s repeats lifecycle %s in state_gate", rel, stepID, lifecycleID)
 		}
 		values := map[string]bool{}
 		for _, rawValue := range asList(item["values"]) {
@@ -635,75 +612,38 @@ func (c *Checker) checkServiceStepStates(step map[string]any, rel, stepID string
 				continue
 			}
 			if value == "*" {
-				all := c.lifecycleStates[lifecycleID]
-				if len(all) == 0 {
-					c.rulef("service-states", "%s: step %s states lifecycle %s is unknown", rel, stepID, lifecycleID)
-					continue
-				}
-				for state := range all {
-					values[state] = true
-				}
+				c.rulef("service-state-gate", "%s: step %s state_gate for %s must omit * when all states are allowed", rel, stepID, lifecycleID)
 				continue
 			}
 			if !c.lifecycleStates[lifecycleID][value] {
-				c.rulef("service-states", "%s: step %s states unknown state %s of %s", rel, stepID, value, lifecycleID)
+				c.rulef("service-state-gate", "%s: step %s state_gate unknown state %s of %s", rel, stepID, value, lifecycleID)
 				continue
 			}
 			values[value] = true
 		}
 		if len(values) == 0 {
-			c.rulef("service-states", "%s: step %s states for %s must not be empty", rel, stepID, lifecycleID)
+			c.rulef("service-state-gate", "%s: step %s state_gate for %s must not be empty", rel, stepID, lifecycleID)
+		} else if sameSet(values, c.lifecycleStates[lifecycleID]) {
+			c.rulef("service-state-gate", "%s: step %s state_gate for %s must be omitted when all states are allowed", rel, stepID, lifecycleID)
 		}
 		declared[lifecycleID] = values
 	}
-	for lifecycleID := range touched {
-		if declared[lifecycleID] == nil {
-			c.rulef("service-states", "%s: step %s touches %s but does not declare states", rel, stepID, lifecycleID)
-		}
-	}
 	for lifecycleID, want := range expected {
 		got := declared[lifecycleID]
+		if allAllowed[lifecycleID] {
+			if got != nil {
+				c.rulef("service-state-gate", "%s: step %s state_gate for %s must be omitted when all states are allowed", rel, stepID, lifecycleID)
+			}
+			continue
+		}
 		if got == nil {
+			c.rulef("service-state-gate", "%s: step %s action on %s requires state_gate", rel, stepID, lifecycleID)
 			continue
 		}
 		if !sameSet(got, want) {
-			c.rulef("service-states", "%s: step %s states for %s must be %v, got %v", rel, stepID, lifecycleID, sortedSetKeys(want), sortedSetKeys(got))
+			c.rulef("service-state-gate", "%s: step %s state_gate for %s must be %v, got %v", rel, stepID, lifecycleID, sortedSetKeys(want), sortedSetKeys(got))
 		}
 	}
-}
-
-// stepTouchedLifecycles 返回 step 通过 query 表或 entity 输出触及的 lifecycle。
-func (c *Checker) stepTouchedLifecycles(step map[string]any) map[string]bool {
-	touched := map[string]bool{}
-	for _, raw := range stepQueryItems(step) {
-		qo, _ := asMap(raw)
-		qid, _ := qo["ref"].(string)
-		q := c.queries[qid]
-		if q == nil {
-			continue
-		}
-		for _, table := range q.Targets {
-			for lifecycleID, tables := range c.lifecycleSubjectTables {
-				if tables[table] {
-					touched[lifecycleID] = true
-				}
-			}
-		}
-	}
-	for _, raw := range asList(step["output"]) {
-		om, _ := asMap(raw)
-		typ, _ := om["type"].(string)
-		entityID, ok := entityRef(typ)
-		if !ok {
-			continue
-		}
-		for lifecycleID, entities := range c.lifecycleSubjectEntities {
-			if entities[entityID] {
-				touched[lifecycleID] = true
-			}
-		}
-	}
-	return touched
 }
 
 func setKeys(m map[string]bool) []string {

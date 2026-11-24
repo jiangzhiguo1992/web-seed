@@ -46,9 +46,6 @@ services:
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.id, description: "待读取的账号 ID" }
         output:
@@ -86,9 +83,6 @@ services:
       - id: list_accounts
         kind: query
         summary: "调用 data.queries.account.list_accounts"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: status, value: params.status, description: "账号状态筛选" }
           - { name: offset, value: params.offset, description: "分页偏移" }
@@ -158,9 +152,6 @@ services:
       - id: exists_account_number
         kind: query
         summary: "调用 data.queries.account.exists_account_number"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: number, value: params.input.number, description: "待创建账号的编号" }
         output:
@@ -181,9 +172,6 @@ services:
       - id: create_account
         kind: query
         summary: "调用 data.queries.account.create_account"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         lifecycles: [ cap.lifecycles.account.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新账号 ID" }
@@ -225,9 +213,6 @@ services:
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.id, description: "账号 ID" }
         output:
@@ -254,9 +239,6 @@ services:
       - id: update_account
         kind: query
         summary: "调用 data.queries.account.update_account"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.id, description: "待更新账号 ID" }
           - { name: nickname, value: params.input.nickname, description: "新昵称" }
@@ -280,9 +262,6 @@ services:
       - id: get_account
         kind: query
         summary: "读取待删除账号"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.id, description: "待删除账号 ID" }
         output:
@@ -336,10 +315,9 @@ services:
       - id: soft_delete_account
         kind: query
         summary: "调用 data.queries.account.soft_delete_account"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ active, pending, suspended ]
         lifecycles: [ cap.lifecycles.account.destroy ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.account, values: [ active, pending, suspended ] }
         input:
           - { name: id, value: params.id, description: "待软删账号 ID" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
@@ -355,6 +333,16 @@ services:
         output: [ ]
         events:
           - ref: cap.events.account.deleted
+        goto: notify_deleted
+      - id: notify_deleted
+        kind: events
+        summary: "投递账号注销异步通知"
+        input:
+          - { name: account_id, value: params.id, description: "账号 ID" }
+          - { name: deleted_at, value: step.now.deleted_at, description: "软删时间" }
+        output: [ ]
+        events:
+          - ref: cap.events.account.notify_deleted
         goto: $end
     used_by:
       - cap.protocols.http.account.delete
@@ -373,9 +361,6 @@ services:
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.id, description: "账号 ID" }
         output:
@@ -407,10 +392,9 @@ services:
       - id: set_account_status
         kind: query
         summary: "调用 data.queries.account.set_account_status"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ pending, suspended ]
         lifecycles: [ cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.account, values: [ pending, suspended ] }
         input:
           - { name: id, value: params.id, description: "待激活账号 ID" }
           - { name: status, value: step.target_status.status, description: "目标状态：激活" }
@@ -476,9 +460,6 @@ services:
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.id, description: "账号 ID" }
         output:
@@ -510,10 +491,9 @@ services:
       - id: set_account_status
         kind: query
         summary: "调用 data.queries.account.set_account_status"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ active ]
         lifecycles: [ cap.lifecycles.account.transitions.suspend ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.account, values: [ active ] }
         input:
           - { name: id, value: params.id, description: "待封禁账号 ID" }
           - { name: status, value: step.target_status.status, description: "目标状态：封禁" }
@@ -543,3 +523,27 @@ services:
         goto: $end
     used_by:
       - cap.protocols.http.account.suspend
+
+  - name: notify_deleted
+    summary: "异步通知账号注销"
+    visibility: internal
+    tx_mode: none
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: account_id, type: _types.integer }
+      - { name: deleted_at, type: _types.timestamp }
+    returns:
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: notify
+        kind: logic
+        summary: "投递注销通知"
+        input:
+          - { name: account_id, value: params.account_id, description: "账号 ID" }
+          - { name: deleted_at, value: params.deleted_at, description: "软删时间" }
+        output: [ ]
+        errors: [ ]
+        rules: [ ]
+        goto: $end
+    used_by:
+      - cap.events.account.notify_deleted

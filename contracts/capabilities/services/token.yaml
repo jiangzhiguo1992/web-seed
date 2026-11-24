@@ -54,9 +54,6 @@ services:
       - id: load_account
         kind: query
         summary: "读取令牌归属账号"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: params.account_id, description: "待签发令牌的账号 ID" }
         output:
@@ -107,9 +104,6 @@ services:
       - id: create_token
         kind: query
         summary: "调用 data.queries.token.create_token"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ "*" ]
         lifecycles: [ cap.lifecycles.token.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新令牌 ID" }
@@ -171,9 +165,6 @@ services:
       - id: load_old
         kind: query
         summary: "按刷新令牌读取旧令牌"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ "*" ]
         input:
           - { name: refresh_token_hash, value: step.hash_old.refresh_token_hash, description: "待换新的刷新令牌哈希" }
         output:
@@ -214,9 +205,6 @@ services:
       - id: load_account
         kind: query
         summary: "读取旧令牌归属账号"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: step.load_old.row.account_id, description: "旧令牌归属账号 ID" }
         output:
@@ -308,9 +296,6 @@ services:
       - id: create_token
         kind: query
         summary: "调用 data.queries.token.create_token"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ "*" ]
         lifecycles: [ cap.lifecycles.token.create ]
         input:
           - { name: id, value: step.new_id.id, description: "新令牌 ID" }
@@ -327,10 +312,9 @@ services:
       - id: revoke_token
         kind: query
         summary: "调用 data.queries.token.revoke_token"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ active ]
         lifecycles: [ cap.lifecycles.token.transitions.revoke ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.token, values: [ active ] }
         input:
           - { name: refresh_token_hash, value: step.hash_old.refresh_token_hash, description: "待作废的旧刷新令牌哈希" }
           - { name: revoked_at, value: step.now.revoked_at, description: "旧令牌作废时间" }
@@ -394,9 +378,6 @@ services:
       - id: get_token_by_refresh
         kind: query
         summary: "调用 data.queries.token.get_token_by_refresh"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ "*" ]
         input:
           - { name: refresh_token_hash, value: step.hash.refresh_token_hash, description: "待吊销的刷新令牌哈希" }
         output:
@@ -416,10 +397,9 @@ services:
       - id: revoke_token
         kind: query
         summary: "调用 data.queries.token.revoke_token"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ active ]
         lifecycles: [ cap.lifecycles.token.transitions.revoke ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.token, values: [ active ] }
         input:
           - { name: refresh_token_hash, value: step.hash.refresh_token_hash, description: "待吊销的刷新令牌哈希" }
           - { name: revoked_at, value: step.now.revoked_at, description: "吊销时间" }
@@ -461,10 +441,9 @@ services:
       - id: revoke_tokens_by_account
         kind: query
         summary: "调用 data.queries.token.revoke_tokens_by_account"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ active ]
         lifecycles: [ cap.lifecycles.token.transitions.revoke ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.token, values: [ active ] }
         input:
           - { name: account_id, value: params.account_id, description: "被吊销令牌的账号 ID" }
           - { name: revoked_at, value: step.now.revoked_at, description: "吊销时间" }
@@ -521,10 +500,9 @@ services:
       - id: expire_tokens
         kind: query
         summary: "调用 data.queries.token.expire_tokens"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ active ]
         lifecycles: [ cap.lifecycles.token.transitions.expire ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.token, values: [ active ] }
         input:
           - { name: now, value: step.now.now, description: "当前时间" }
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
@@ -561,9 +539,6 @@ services:
       - id: load_token
         kind: query
         summary: "按 access JWT 哈希读取令牌记录"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ "*" ]
         input:
           - { name: access_token_hash, value: step.hash.access_token_hash, description: "待校验的访问令牌哈希" }
         output:
@@ -573,9 +548,6 @@ services:
       - id: get_account
         kind: query
         summary: "调用 data.queries.account.get_account"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: id, value: step.load_token.row.account_id, description: "令牌归属账号 ID" }
         output:
@@ -585,9 +557,6 @@ services:
       - id: verify
         kind: logic
         summary: "校验 access JWT、过期与吊销状态"
-        states:
-          - lifecycle: cap.lifecycles.account
-            values: [ "*" ]
         input:
           - { name: access_token, value: params.access_token, description: "待校验的 access JWT" }
           - { name: token, value: step.load_token.row, description: "令牌行，用于校验过期与吊销状态" }
@@ -625,9 +594,6 @@ services:
       - id: delete_expired_tokens
         kind: query
         summary: "调用 data.queries.token.delete_expired_tokens"
-        states:
-          - lifecycle: cap.lifecycles.token
-            values: [ "*" ]
         input:
           - { name: limit, value: step.batch_limit.limit, description: "单批删除上限" }
         output:

@@ -547,41 +547,6 @@ func TestServiceReadOnlyRejectsWriteQuery(t *testing.T) {
 	}
 }
 
-func TestServiceRuleOnViolationMustBeDeclared(t *testing.T) {
-	base := func(errors []any) map[string]any {
-		return map[string]any{
-			"summary": "x", "tx_mode": "read_only",
-			"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
-			"returns": []any{},
-			"steps": []any{map[string]any{
-				"id": "run", "kind": "logic", "summary": "x", "goto": "$end",
-				"errors": errors, "output": []any{},
-				"rules": []any{map[string]any{"rule": "feature.rules.x.r"}},
-			}},
-		}
-	}
-	run := func(errors []any) string {
-		serviceErrors := map[string]bool{}
-		if len(errors) > 0 {
-			serviceErrors["platform.errors.A"] = true
-		}
-		meta := map[string]serviceMeta{
-			"cap.services.x.run": {module: "x", visibility: "public", errors: serviceErrors},
-		}
-		c := &Checker{ruleErrors: map[string]string{"feature.rules.x.r": "platform.errors.A"}}
-		c.checkServiceItem(base(errors), "f", "cap.services.x.run", "x",
-			meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
-		return strings.Join(c.errs, "\n")
-	}
-
-	if got := run([]any{}); !strings.Contains(got, "rule feature.rules.x.r error platform.errors.A is not declared") || !strings.Contains(got, "[service-errors]") {
-		t.Fatalf("rule error not reported: %s", got)
-	}
-	if got := run([]any{"platform.errors.A"}); strings.Contains(got, "is not declared by service") {
-		t.Fatalf("declared rule error reported: %s", got)
-	}
-}
-
 func TestServiceReturnTypeMismatch(t *testing.T) {
 	base := func(retType, outType string) map[string]any {
 		return map[string]any{
@@ -645,32 +610,6 @@ func TestServiceReturnNullability(t *testing.T) {
 	}
 	if got := run(false, true); !strings.Contains(got, "nullability") {
 		t.Fatalf("non-nullable return from nullable output not reported: %s", got)
-	}
-}
-
-func TestServiceRuleOwnerCoverage(t *testing.T) {
-	doc := map[string]any{
-		"summary": "x", "tx_mode": "read_only",
-		"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
-		"returns": []any{},
-		"steps": []any{map[string]any{
-			"id": "run", "kind": "logic", "summary": "x", "goto": "$end",
-			"errors": []any{}, "output": []any{},
-			"rules": []any{map[string]any{"rule": "feature.rules.x.r"}},
-		}},
-	}
-	meta := map[string]serviceMeta{
-		"cap.services.x.run":   {module: "x", visibility: "public", errors: map[string]bool{}},
-		"cap.services.x.owner": {module: "x", visibility: "public", errors: map[string]bool{"platform.errors.A": true}},
-	}
-	c := &Checker{
-		ruleErrors: map[string]string{"feature.rules.x.r": "platform.errors.A"},
-		ruleOwners: map[string][]string{"feature.rules.x.r": {"cap.services.x.owner"}},
-	}
-	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
-		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
-	if got := strings.Join(c.errs, "\n"); strings.Contains(got, "is not declared by service") {
-		t.Fatalf("owner-declared rule error reported: %s", got)
 	}
 }
 
@@ -1217,46 +1156,83 @@ func TestServiceNullableInput(t *testing.T) {
 	}
 }
 
-func TestServiceStepStates(t *testing.T) {
+func TestServiceStateGate(t *testing.T) {
 	c := &Checker{
-		queries: map[string]*queryInfo{
-			"data.queries.x.get": {ID: "data.queries.x.get", Targets: []string{"data.tables.x"}},
-		},
-		lifecycleStates:        map[string]map[string]bool{"cap.lifecycles.x": {"pending": true, "active": true}},
-		lifecycleSubjectTables: map[string]map[string]bool{"cap.lifecycles.x": {"data.tables.x": true}},
+		lifecycleStates: map[string]map[string]bool{"cap.lifecycles.x": {"pending": true, "active": true}},
 		lifecycleActionStates: map[string]map[string]map[string]bool{
 			"cap.lifecycles.x.transitions.activate": {"cap.lifecycles.x": {"pending": true}},
+			"cap.lifecycles.x.create":               {"cap.lifecycles.x": {"pending": true, "active": true}},
 		},
 	}
 	step := map[string]any{
-		"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.get",
-		"states":     []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"pending"}}},
+		"id": "run", "kind": "logic", "summary": "x",
 		"lifecycles": []any{"cap.lifecycles.x.transitions.activate"},
+		"state_gate": []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"pending"}}},
 	}
-	c.checkServiceStepStates(step, "f", "cap.services.x.run.run")
+	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
 	if len(c.errs) != 0 {
-		t.Fatalf("valid states reported: %v", c.errs)
+		t.Fatalf("valid state_gate reported: %v", c.errs)
 	}
 
-	step["states"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"active"}}}
+	step["state_gate"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"active"}}}
 	c.errs = nil
-	c.checkServiceStepStates(step, "f", "cap.services.x.run.run")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-states]") {
-		t.Fatalf("transition states mismatch not reported: %v", c.errs)
+	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
+	mustContainRule(t, c.errs, "service-state-gate")
+
+	delete(step, "state_gate")
+	c.errs = nil
+	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "requires state_gate") {
+		t.Fatalf("missing transition state_gate not reported: %v", c.errs)
 	}
 
-	delete(step, "states")
+	step["lifecycles"] = []any{"cap.lifecycles.x.create"}
+	c.errs = nil
+	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
+	if len(c.errs) != 0 {
+		t.Fatalf("create without state_gate reported: %v", c.errs)
+	}
+	step["state_gate"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"pending", "active"}}}
+	c.errs = nil
+	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must be omitted") {
+		t.Fatalf("all-state create gate not reported: %v", c.errs)
+	}
+
+	step["state_gate"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"*"}}}
+	c.errs = nil
+	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must omit *") {
+		t.Fatalf("wildcard state_gate not reported: %v", c.errs)
+	}
+
 	delete(step, "lifecycles")
+	delete(step, "state_gate")
 	c.errs = nil
-	c.checkServiceStepStates(step, "f", "cap.services.x.run.run")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "does not declare states") {
-		t.Fatalf("missing states on touched step not reported: %v", c.errs)
-	}
-
-	step["states"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"*"}}}
-	c.errs = nil
-	c.checkServiceStepStates(step, "f", "cap.services.x.run.run")
+	c.checkServiceStateGate(step, "f", "cap.services.x.run.run")
 	if len(c.errs) != 0 {
-		t.Fatalf("wildcard states reported: %v", c.errs)
+		t.Fatalf("non-action without state_gate reported: %v", c.errs)
 	}
+}
+
+func TestServiceErrorSubset(t *testing.T) {
+	doc := map[string]any{
+		"summary": "x", "tx_mode": "read_only",
+		"params":  []any{map[string]any{"name": "ctx", "type": "context.Context"}},
+		"returns": []any{},
+		"steps": []any{map[string]any{
+			"id": "run", "kind": "service", "summary": "x", "goto": "$end",
+			"service": "cap.services.x.child",
+			"input":   []any{}, "output": []any{},
+			"errors": []any{"platform.errors.OTHER"},
+		}},
+	}
+	meta := map[string]serviceMeta{
+		"cap.services.x.run":   {module: "x", visibility: "public", errors: map[string]bool{}},
+		"cap.services.x.child": {module: "x", visibility: "public", errors: map[string]bool{"platform.errors.CHILD": true}},
+	}
+	c := &Checker{errCodeSet: map[string]bool{"CHILD": true, "OTHER": true}}
+	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
+		meta, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+	mustContainRule(t, c.errs, "service-errors")
 }

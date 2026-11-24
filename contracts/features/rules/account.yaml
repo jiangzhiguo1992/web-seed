@@ -17,12 +17,10 @@ rules:
     field: number
     op: pattern
     value: "^[A-Za-z0-9_-]{4,64}$"
-    on_violation: platform.errors.ACCOUNT_NUMBER_INVALID
     implemented_by: [ cap.services.account.create ]
   - id: feature.rules.account.number_unique
     kind: policy
     summary: "未删除账号内编号唯一"
-    on_violation: platform.errors.ACCOUNT_NUMBER_TAKEN
     implemented_by: [ cap.services.account.create ]
     given: "已存在 active 账号 ACC-0001"
     when: "创建 ACC-0001"
@@ -31,12 +29,10 @@ rules:
     kind: invariant
     summary: "昵称长度 1–100"
     assert: "len(nickname) >= 1 && len(nickname) <= 100"
-    on_violation: platform.errors.ACCOUNT_NICKNAME_INVALID
     implemented_by: [ cap.services.account.create, cap.services.account.update ]
   - id: feature.rules.account.self_only
     kind: policy
     summary: "非管理员只能查看和修改自己的账号"
-    on_violation: platform.errors.COMMON_FORBIDDEN
     implemented_by: [ cap.services.account.get, cap.services.account.update ]
     given: "当前用户 id = A，目标账号 user_id = B"
     when: "非 admin 角色访问 B"
@@ -44,7 +40,6 @@ rules:
   - id: feature.rules.account.deleted_cannot_modify
     kind: policy
     summary: "已软删账号不可修改、不可再次删除"
-    on_violation: platform.errors.ACCOUNT_ALREADY_DELETED
     implemented_by: [ cap.services.account.delete, cap.services.account.update ]
     given: "deleted_at != nil"
     when: "update / delete"
@@ -52,7 +47,6 @@ rules:
   - id: feature.rules.account.delete_revokes_auth
     kind: policy
     summary: "软删账号必须同时软删认证绑定并作废未消费验证体；已签发 JWT 由账号状态校验失效"
-    on_violation: platform.errors.COMMON_INTERNAL
     implemented_by: [ cap.services.account.delete ]
     given: "account.delete 只更新 account.status/deleted_at"
     when: "软删账号"
@@ -61,12 +55,10 @@ rules:
     kind: invariant
     summary: "status=deleted 当且仅当 deleted_at 非空"
     assert: "(status == deleted) == (deleted_at != nil)"
-    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by: [ cap.services.account.delete ]
   - id: feature.rules.account.activate_requires_pending_or_suspended
     kind: policy
     summary: "只有 pending 或 suspended 账号可以激活"
-    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by: [ cap.services.account.activate ]
     given: "account.status not in (pending, suspended)"
     when: "激活账号"
@@ -74,7 +66,6 @@ rules:
   - id: feature.rules.account.suspend_requires_active
     kind: policy
     summary: "只有 active 账号可以封禁"
-    on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by: [ cap.services.account.suspend ]
     given: "account.status != active"
     when: "封禁账号"
