@@ -16,6 +16,8 @@ table:
     - data.tables.base
   entities:
     - data.entities.token
+  references:
+    - data.tables.account.col.id
   referenced_by: [ ]
   queries:
     - data.queries.token.create_token

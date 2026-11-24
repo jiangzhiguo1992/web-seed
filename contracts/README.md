@@ -206,8 +206,8 @@ feature ──> capabilities ──> data
 | capabilities/services → data | service 契约 | `steps[].queries[].query` / query `errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` / `caches` / `archive` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `source.join.from/to` |
-| data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `table.queries`（生成物） |
-| data.entities → 上游（反向） | 实体文件 | `model.included_by`（显式，checker 校验） / `model.queries`（生成物） |
+| data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `table.references` / `table.referenced_by` / `table.queries`（生成物） |
+| data.entities → 上游（反向） | 实体文件 | `model.includes` / `model.included_by` / `model.queries`（生成物） |
 | data.queries → 上游（反向） | 查询项 | `used_by`（生成物，指向 `cap.services.*`，不得为空） |
 
 ### 3.2.1 capabilities 的业务规格引用

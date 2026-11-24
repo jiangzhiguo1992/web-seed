@@ -16,6 +16,8 @@ table:
     - data.tables.base
   entities:
     - data.entities.verification_action
+  references:
+    - data.tables.account.col.id
   referenced_by: [ ]
   queries:
     - data.queries.verification.create_verification_action

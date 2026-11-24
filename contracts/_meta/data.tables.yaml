@@ -68,6 +68,14 @@ fields:
         unique: true
         pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
         description: "映射本表的 entity ID 列表"
+      - name: references
+        type: _types.set<_types.string>
+        required: true
+        unique: true
+        pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
+        generated: true
+        write: forbidden
+        description: "本表列引用的目标列"
       - name: referenced_by
         type: _types.set<_types.string>
         required: true
@@ -92,7 +100,7 @@ fields:
     item_fields:
       - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "列名" }
       - { name: type, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*)$', description: "值类型引用 _types.<name> 或列引用 data.tables.<t>.col.<c>" }
-      - { name: nullable, type: _types.boolean, required: false, default: false, description: "是否可空" }
+      - { name: nullable, type: _types.boolean, required: true, default: false, description: "是否可空；必须显式声明" }
       - { name: primary_key, type: _types.boolean, required: false, description: "基类主键标记" }
       - { name: default, type: _types.any, required: false, description: "字面量默认值" }
       - { name: default_sql, type: _types.string, soft: true, required: false, description: "SQL 表达式默认值" }
@@ -159,7 +167,7 @@ rules:
   - { id: enum-code-literal, text: "表 CHECK 以 = / <> / != / IN / NOT IN 引用枚举列时，字面量必须是该枚举的 code；范围比较不校验", implemented_by: [ enum-code-literal ] }
   - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
-  - { id: table-referenced-by, text: "table.referenced_by 由 gen-graph 生成，禁止手改；必须等于所有指向本表列的 references 源列集合；每项必须是存在的列引用且其 references.column 指向本表", implemented_by: [ table-referenced-by ] }
+  - { id: table-referenced-by, text: "table.references 与 table.referenced_by 由 gen-graph 生成，禁止手改；references 必须等于本表 columns[].references.column 的目标列集合，referenced_by 必须等于所有指向本表列的 references 源列集合；两侧互为反向且每项必须是存在的列引用", implemented_by: [ table-referenced-by ] }
   - { id: owner-write, text: "查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 service step 的 query 中", implemented_by: [ owner-write ] }
   - { id: physical-name-unique, text: "物理表名全局唯一", implemented_by: [ physical-name-unique ] }
   - { id: index-definition, text: "索引列必须是本表存在的列；unique 索引名用 uq_ 前缀，非唯一索引名用 idx_ 前缀", implemented_by: [ index-definition ] }
