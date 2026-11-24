@@ -31,37 +31,43 @@ type columnMeta struct {
 
 // entityFieldInfo 是实体字段（标量或关系）的解析结果。
 type entityFieldInfo struct {
-	Name            string
-	ColumnTable     string
-	Column          string
-	SourceColumnRef string
-	SourceComputed  string
-	SourceSoft      string
-	HasSource       bool
-	HasType         bool
-	Type            string
-	Nullable        bool
-	HasNullable     bool
-	Sensitivity     string
-	HasSensitivity  bool
-	JSONName        string
-	Description     string
-	HasDescription  bool
-	IsRelation      bool
-	IsList          bool
-	TargetID        string
-	HasJoin         bool
-	JoinFromRef     string
-	JoinFromTable   string
-	JoinFromColumn  string
-	JoinToRef       string
-	JoinToTable     string
-	JoinToColumn    string
-	Lazy            bool
-	HasLazy         bool
-	FromBase        bool
-	OverridesBase   bool
-	BaseRedeclared  bool
+	Name              string
+	ColumnTable       string
+	Column            string
+	SourceColumnRef   string
+	SourceComputed    string
+	SourceSoft        string
+	HasSource         bool
+	HasType           bool
+	Type              string
+	Nullable          bool
+	HasNullable       bool
+	Sensitivity       string
+	HasSensitivity    bool
+	JSONName          string
+	Description       string
+	HasDescription    bool
+	IsRelation        bool
+	IsList            bool
+	TargetID          string
+	HasJoin           bool
+	JoinFromRef       string
+	JoinFromTable     string
+	JoinFromColumn    string
+	JoinToRef         string
+	JoinToTable       string
+	JoinToColumn      string
+	HasThrough        bool
+	ThroughTable      string
+	ThroughFromRef    string
+	ThroughFromTable  string
+	ThroughFromColumn string
+	ThroughToRef      string
+	ThroughToTable    string
+	ThroughToColumn   string
+	FromBase          bool
+	OverridesBase     bool
+	BaseRedeclared    bool
 }
 
 // entityInfo 保存单个 entity 的解析结果，供跨文件检查复用。
@@ -271,8 +277,17 @@ func parseEntityField(m map[string]any) *entityFieldInfo {
 					f.JoinToTable, f.JoinToColumn = t, col
 				}
 			}
-			if v, ok := join["lazy"].(bool); ok {
-				f.Lazy, f.HasLazy = v, true
+			if through, ok := asMap(join["through"]); ok {
+				f.HasThrough = true
+				f.ThroughTable, _ = through["table"].(string)
+				f.ThroughFromRef, _ = through["from"].(string)
+				f.ThroughToRef, _ = through["to"].(string)
+				if t, col, ok := splitColumnRef(f.ThroughFromRef); ok {
+					f.ThroughFromTable, f.ThroughFromColumn = t, col
+				}
+				if t, col, ok := splitColumnRef(f.ThroughToRef); ok {
+					f.ThroughToTable, f.ThroughToColumn = t, col
+				}
 			}
 		}
 	}
@@ -443,7 +458,7 @@ func (c *Checker) checkEntities(schema *Schema) {
 		}
 	}
 
-	expectedEnt := map[string]map[string]bool{}
+	expectedIncluded := map[string]map[string]string{}
 	for _, e := range c.entities {
 		c.checkEntityModel(e)
 		c.checkEntityOwnerModule(e)
@@ -451,7 +466,7 @@ func (c *Checker) checkEntities(schema *Schema) {
 		c.checkEntityID(e)
 		c.checkEntityName(e)
 		c.checkEntityFieldMetadata(e)
-		c.checkEntityRelations(e, expectedEnt)
+		c.checkEntityRelations(e, expectedIncluded)
 		c.checkEntityValidation(e)
 		for _, t := range e.Tables {
 			usedTables[t] = true
@@ -467,32 +482,73 @@ func (c *Checker) checkEntities(schema *Schema) {
 	}
 	for _, e := range c.entities {
 		model, _ := asMap(e.Doc["model"])
-		got := stringSet(asList(model["included_by"]))
-		want := expectedEnt[e.ID]
-		if want == nil {
-			want = map[string]bool{}
-		}
-		if !sameSet(got, want) {
-			c.rulef("entity-included-by", "%s: model.included_by must be %v, got %v", e.Rel, sortedKeys(want), sortedKeys(got))
-		}
-		c.checkEntityIncludes(e)
+		c.checkEntityRelationIndex(e, model, "includes", c.entityIncludes(e))
+		c.checkEntityRelationIndex(e, model, "included_by", expectedIncluded[e.ID])
 	}
-	c.checkEagerCycles()
 }
 
-// checkEntityIncludes 校验 model.includes 与关系字段的目标 entity 集合一致。
-func (c *Checker) checkEntityIncludes(e *entityInfo) {
-	model, _ := asMap(e.Doc["model"])
-	got := stringSet(asList(model["includes"]))
-	want := map[string]bool{}
-	for _, f := range e.Fields {
-		if f.IsRelation && f.TargetID != "" {
-			want[f.TargetID] = true
+// entityIncludes 由关系字段推导本实体到目标的基数。
+func (c *Checker) entityIncludes(e *entityInfo) map[string]string {
+	out := map[string]string{}
+	for i := range e.Fields {
+		f := &e.Fields[i]
+		if !f.IsRelation || f.TargetID == "" {
+			continue
+		}
+		if card := c.relationCardinality(f); card != "" {
+			out[f.TargetID] = card
 		}
 	}
-	if !sameSet(got, want) {
-		c.rulef("entity-included-by", "%s: model.includes must be %v, got %v", e.Rel, sortedKeys(want), sortedKeys(got))
+	return out
+}
+
+// checkEntityRelationIndex 对账 model.includes / model.included_by 的对象列表。
+func (c *Checker) checkEntityRelationIndex(e *entityInfo, model map[string]any, key string, want map[string]string) {
+	got := parseEntityRelationIndex(model[key])
+	if want == nil {
+		want = map[string]string{}
 	}
+	if !sameRelationMap(got, want) {
+		c.rulef("entity-included-by", "%s: model.%s must be %v, got %v", e.Rel, key, formatRelationMap(want), formatRelationMap(got))
+	}
+}
+
+func parseEntityRelationIndex(raw any) map[string]string {
+	out := map[string]string{}
+	for _, item := range asList(raw) {
+		m, _ := asMap(item)
+		entity, _ := m["entity"].(string)
+		card, _ := m["cardinality"].(string)
+		if entity != "" {
+			out[entity] = card
+		}
+	}
+	return out
+}
+
+func sameRelationMap(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+func formatRelationMap(m map[string]string) string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k+"("+m[k]+")")
+	}
+	return "[" + strings.Join(out, ", ") + "]"
 }
 
 // checkBaseFieldFirst 要求重声明的基类字段（当前仅 Status）必须是 fields 第一项。
@@ -700,9 +756,12 @@ func (c *Checker) checkRelationFieldShape(f entityFieldInfo, where string) {
 	if f.HasNullable {
 		c.rulef("entity-field-variant", "%s: relation field must not declare nullable", where)
 	}
-	if !f.HasType || f.JoinFromRef == "" || f.JoinToRef == "" || !f.HasLazy {
-		c.rulef("entity-field-variant", "%s: relation field requires type/source.join.from/source.join.to/source.join.lazy", where)
+	if !f.HasType || f.JoinFromRef == "" || f.JoinToRef == "" {
+		c.rulef("entity-field-variant", "%s: relation field requires type/source.join.from/source.join.to", where)
 		return
+	}
+	if f.HasThrough && (f.ThroughTable == "" || f.ThroughFromRef == "" || f.ThroughToRef == "") {
+		c.rulef("entity-field-variant", "%s: source.join.through requires table/from/to", where)
 	}
 	if _, ok := entityRef(f.Type); !ok || strings.Contains(f.Type, "*") {
 		c.rulef("entity-relation-type", "%s: relation type must be data.entities.* or _types.list<data.entities.*>, got %s", where, f.Type)
@@ -896,7 +955,8 @@ func (c *Checker) checkEntityFieldMetadata(e *entityInfo) {
 	}
 }
 
-func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[string]bool) {
+func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[string]string) {
+	seenCard := map[string]string{}
 	for i := range e.Fields {
 		r := &e.Fields[i]
 		if !r.IsRelation {
@@ -920,11 +980,6 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			c.rulef("entity-relation-target", "%s: source.join.to table %s is not mapped by %s", where, r.JoinToTable, targetID)
 			continue
 		}
-		if expected[targetID] == nil {
-			expected[targetID] = map[string]bool{}
-		}
-		expected[targetID][e.ID] = true
-
 		fromMeta, fromOK := c.tableColumns[r.JoinFromTable][r.JoinFromColumn]
 		if !fromOK {
 			c.rulef("entity-relation-via", "%s: source.join.from %s not found", where, r.JoinFromRef)
@@ -943,33 +998,108 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			c.rulef("entity-relation-via", "%s: join column type %s does not match %s type %s", where, c.resolvedColumnType(fromMeta.typ), r.JoinToRef, c.resolvedColumnType(toMeta.typ))
 			continue
 		}
+		if !r.HasThrough {
+			fromRef := c.columnReferenceTarget(r.JoinFromTable, r.JoinFromColumn)
+			toRef := c.columnReferenceTarget(r.JoinToTable, r.JoinToColumn)
+			if fromRef != r.JoinToRef && toRef != r.JoinFromRef {
+				c.rulef("entity-relation-via", "%s: join columns must be linked by column-level references", where)
+			}
+		}
+		if r.HasThrough {
+			c.checkRelationThrough(r, where)
+		}
 		card := c.relationCardinality(r)
 		if card == "" {
-			c.rulef("entity-relation-cardinality", "%s: one side of join columns must be unique (PK or unique index)", where)
+			c.rulef("entity-relation-cardinality", "%s: one side of join columns must be unique (PK or unique index), or source.join.through must be declared", where)
 			continue
 		}
-		if card == "one_to_many" && !r.IsList {
-			c.rulef("entity-relation-arity", "%s: one_to_many relation must use _types.list<data.entities.*>, got %s", where, r.Type)
+		if prev, ok := seenCard[targetID]; ok && prev != card {
+			c.rulef("entity-relation-cardinality", "%s: conflicting cardinalities to %s: %s and %s", where, targetID, prev, card)
 		}
-		if card != "one_to_many" && r.IsList {
-			c.rulef("entity-relation-arity", "%s: _types.list<data.entities.*> requires one_to_many cardinality, got %s", where, card)
+		seenCard[targetID] = card
+		if expected[targetID] == nil {
+			expected[targetID] = map[string]string{}
 		}
-		if r.HasLazy && !r.Lazy {
-			if r.TargetID == e.ID {
-				c.rulef("entity-relation-eager-cycle", "%s: self relation must be lazy", where)
-			}
-			if !c.hasIndex(r.JoinToTable, r.JoinToColumn) {
-				c.rulef("entity-relation-eager-index", "%s: eager relation requires index on %s.%s", where, r.JoinToTable, r.JoinToColumn)
-			}
+		expected[targetID][e.ID] = inverseCardinality(card)
+		if (card == "one_to_many" || card == "many_to_many") && !r.IsList {
+			c.rulef("entity-relation-arity", "%s: %s relation must use _types.list<data.entities.*>, got %s", where, card, r.Type)
+		}
+		if card != "one_to_many" && card != "many_to_many" && r.IsList {
+			c.rulef("entity-relation-arity", "%s: _types.list<data.entities.*> requires one_to_many/many_to_many cardinality, got %s", where, card)
 		}
 	}
 }
 
-// relationCardinality 由两端列的唯一性推断关系基数：
+// checkRelationThrough 校验多对多中间表：两列必须属于中间表，并分别 references 到关系两端。
+func (c *Checker) checkRelationThrough(r *entityFieldInfo, where string) {
+	if r.ThroughTable == "" || r.ThroughFromRef == "" || r.ThroughToRef == "" {
+		c.rulef("entity-relation-via", "%s: source.join.through requires table/from/to", where)
+		return
+	}
+	if c.tableColumns[r.ThroughTable] == nil {
+		c.rulef("entity-relation-via", "%s: through table %s not found", where, r.ThroughTable)
+		return
+	}
+	for _, ref := range []string{r.ThroughFromRef, r.ThroughToRef} {
+		t, _, ok := splitColumnRef(ref)
+		if !ok || t != r.ThroughTable {
+			c.rulef("entity-relation-via", "%s: through column %s must belong to %s", where, ref, r.ThroughTable)
+			return
+		}
+	}
+	if target := c.columnReferenceTarget(r.ThroughFromTable, r.ThroughFromColumn); target != r.JoinFromRef {
+		c.rulef("entity-relation-via", "%s: through.from %s must reference %s, got %s", where, r.ThroughFromRef, r.JoinFromRef, target)
+	}
+	if target := c.columnReferenceTarget(r.ThroughToTable, r.ThroughToColumn); target != r.JoinToRef {
+		c.rulef("entity-relation-via", "%s: through.to %s must reference %s, got %s", where, r.ThroughToRef, r.JoinToRef, target)
+	}
+	fromMeta, fromOK := c.tableColumns[r.ThroughFromTable][r.ThroughFromColumn]
+	toMeta, toOK := c.tableColumns[r.ThroughToTable][r.ThroughToColumn]
+	if !fromOK || !toOK {
+		return
+	}
+	if srcMeta, ok := c.tableColumns[r.JoinFromTable][r.JoinFromColumn]; ok && c.resolvedColumnType(fromMeta.typ) != c.resolvedColumnType(srcMeta.typ) {
+		c.rulef("entity-relation-via", "%s: through.from type %s does not match %s type %s", where, c.resolvedColumnType(fromMeta.typ), r.JoinFromRef, c.resolvedColumnType(srcMeta.typ))
+	}
+	if dstMeta, ok := c.tableColumns[r.JoinToTable][r.JoinToColumn]; ok && c.resolvedColumnType(toMeta.typ) != c.resolvedColumnType(dstMeta.typ) {
+		c.rulef("entity-relation-via", "%s: through.to type %s does not match %s type %s", where, c.resolvedColumnType(toMeta.typ), r.JoinToRef, c.resolvedColumnType(dstMeta.typ))
+	}
+}
+
+// columnReferenceTarget 返回列级 references 的目标列；未声明时返回空。
+func (c *Checker) columnReferenceTarget(table, col string) string {
+	doc := c.tableDocs[table]
+	for _, raw := range asList(doc["columns"]) {
+		m, _ := asMap(raw)
+		if name, _ := m["name"].(string); name != col {
+			continue
+		}
+		ref, _ := asMap(m["references"])
+		target, _ := ref["column"].(string)
+		return target
+	}
+	return ""
+}
+
+// inverseCardinality 翻转关系方向：one_to_many ↔ many_to_one，其余不变。
+func inverseCardinality(card string) string {
+	switch card {
+	case "one_to_many":
+		return "many_to_one"
+	case "many_to_one":
+		return "one_to_many"
+	}
+	return card
+}
+
+// relationCardinality 由两端列的唯一性推断关系基数；through 存在时固定 many_to_many。
 //   - 两端唯一: one_to_one
 //   - from 唯一: one_to_many
 //   - to 唯一: many_to_one
 func (c *Checker) relationCardinality(r *entityFieldInfo) string {
+	if r.HasThrough {
+		return "many_to_many"
+	}
 	fromUnique := c.columnUnique(r.JoinFromTable, r.JoinFromColumn)
 	toUnique := c.columnUnique(r.JoinToTable, r.JoinToColumn)
 	switch {
@@ -989,7 +1119,7 @@ func (c *Checker) columnUnique(table, col string) bool {
 		return true
 	}
 	for _, idx := range c.tableIndexes[table] {
-		if idx.unique && len(idx.columns) == 1 && idx.columns[0] == col {
+		if idx.unique && !idx.liveOnly && len(idx.columns) == 1 && idx.columns[0] == col {
 			return true
 		}
 	}
@@ -1019,18 +1149,6 @@ func (c *Checker) resolvedColumnType(typ string) string {
 		typ = meta.typ
 	}
 	return typ
-}
-
-func (c *Checker) hasIndex(tableID, col string) bool {
-	if meta, ok := c.tableColumns[tableID][col]; ok && meta.primaryKey {
-		return true
-	}
-	for _, idx := range c.tableIndexes[tableID] {
-		if len(idx.columns) > 0 && idx.columns[0] == col {
-			return true
-		}
-	}
-	return false
 }
 
 func (c *Checker) checkEntityValidation(e *entityInfo) {
@@ -1086,43 +1204,6 @@ func (c *Checker) checkEntityValidationUsedBy(e *entityInfo, m map[string]any, w
 		if !ok {
 			c.rulef("entity-validation-used-by", "%s: service %s does not query entity table %s", where, sid, e.Primary)
 		}
-	}
-}
-
-// checkEagerCycles 检测 eager 关系图是否成环。
-func (c *Checker) checkEagerCycles() {
-	adj := map[string][]string{}
-	for id, e := range c.entities {
-		for _, r := range e.Fields {
-			// 自引用由 checkEntityRelations 报“self relation must be lazy”，这里只查多节点环。
-			// TargetID 已剥离 List<>，否则一对多 eager 关系不会进入邻接表。
-			if r.IsRelation && r.HasLazy && !r.Lazy && r.TargetID != "" && r.TargetID != id {
-				adj[id] = append(adj[id], r.TargetID)
-			}
-		}
-	}
-	state := map[string]int{}
-	var walk func(id string, stack []string) bool
-	walk = func(id string, stack []string) bool {
-		if state[id] == 1 {
-			c.rulef("entity-relation-eager-cycle", "eager relation cycle: %s", strings.Join(append(stack, id), " -> "))
-			return true
-		}
-		if state[id] == 2 {
-			return false
-		}
-		state[id] = 1
-		for _, next := range adj[id] {
-			if walk(next, append(stack, id)) {
-				state[id] = 2
-				return true
-			}
-		}
-		state[id] = 2
-		return false
-	}
-	for _, id := range c.entityOrder {
-		walk(id, nil)
 	}
 }
 

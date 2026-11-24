@@ -22,10 +22,15 @@ type TableUsedBy struct {
 	ReferencedBy []string
 }
 
+type EntityRelation struct {
+	Entity      string
+	Cardinality string
+}
+
 type EntityUsedBy struct {
 	Queries    []string
-	Includes   []string
-	IncludedBy []string
+	Includes   []EntityRelation
+	IncludedBy []EntityRelation
 }
 
 type Snapshot struct {
@@ -46,8 +51,8 @@ type tableSet struct {
 
 type entitySet struct {
 	queries    map[string]bool
-	includes   map[string]bool
-	includedBy map[string]bool
+	includes   map[string]string
+	includedBy map[string]string
 }
 
 // scanTarget 是 _meta targets 的扫描路径与 ID 模板。
@@ -139,6 +144,7 @@ func Compute(root string) (*Snapshot, error) {
 
 	tableIDTemplate := contractspec.Targets{ID: tableTarget.id}
 	tableDocs := map[string]map[string]any{}
+	tableUnique := map[string]map[string]bool{}
 	for _, f := range glob(root, filepath.Join(tableTarget.dir, tableTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
 			continue
@@ -154,6 +160,17 @@ func Compute(root string) (*Snapshot, error) {
 		tableDocs[id] = doc
 		tables[id] = &tableSet{queries: map[string]bool{}, references: map[string]bool{}, referencedBy: map[string]bool{}}
 		tableFiles[id] = rel(root, f)
+		unique := map[string]bool{"id": true}
+		for _, raw := range asList(doc["indexes"]) {
+			idx, _ := asMap(raw)
+			uniqueFlag, _ := idx["unique"].(bool)
+			liveOnly, _ := idx["live_only"].(bool)
+			cols := stringList(idx["columns"])
+			if uniqueFlag && !liveOnly && len(cols) == 1 {
+				unique[cols[0]] = true
+			}
+		}
+		tableUnique[id] = unique
 	}
 	// table.referenced_by：把每条列级 references 的源列登记到目标表。
 	for id, doc := range tableDocs {
@@ -192,7 +209,7 @@ func Compute(root string) (*Snapshot, error) {
 			continue
 		}
 		entityDocs[id] = doc
-		entities[id] = &entitySet{queries: map[string]bool{}, includes: map[string]bool{}, includedBy: map[string]bool{}}
+		entities[id] = &entitySet{queries: map[string]bool{}, includes: map[string]string{}, includedBy: map[string]string{}}
 		entityFiles[id] = rel(root, f)
 	}
 	// model.included_by：把关系字段的来源实体登记到目标实体。
@@ -213,8 +230,12 @@ func Compute(root string) (*Snapshot, error) {
 				name, _ := field["name"].(string)
 				return nil, fmt.Errorf("%s: fields.%s type %s is not a data.entities contract", entityFiles[id], name, typ)
 			}
-			target.includedBy[id] = true
-			entities[id].includes[targetID] = true
+			card := relationCardinalityFromDoc(field, tableUnique)
+			if card == "" {
+				continue
+			}
+			target.includedBy[id] = inverseCardinality(card)
+			entities[id].includes[targetID] = card
 		}
 	}
 	queryIDTemplate := contractspec.Targets{ID: queryTarget.id}
@@ -309,7 +330,7 @@ func Compute(root string) (*Snapshot, error) {
 		snap.Tables[id] = TableUsedBy{Queries: sortedKeys(ts.queries), References: sortedKeys(ts.references), ReferencedBy: sortedKeys(ts.referencedBy)}
 	}
 	for id, es := range entities {
-		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries), Includes: sortedKeys(es.includes), IncludedBy: sortedKeys(es.includedBy)}
+		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries), Includes: sortedRelations(es.includes), IncludedBy: sortedRelations(es.includedBy)}
 	}
 	for id, qs := range queryServices {
 		snap.Queries[id] = sortedKeys(qs)
@@ -346,14 +367,14 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	}
 	for _, id := range sortedFileKeys(s.EntityFiles) {
 		file := s.EntityFiles[id]
-		ok, err := syncNestedListFile(filepath.Join(root, file), "model", "tables", "includes", s.Entities[id].Includes)
+		ok, err := syncNestedRelationListFile(filepath.Join(root, file), "model", "tables", "includes", s.Entities[id].Includes)
 		if err != nil {
 			return changed, err
 		}
 		if ok {
 			changed = append(changed, file)
 		}
-		ok, err = syncNestedListFile(filepath.Join(root, file), "model", "includes", "included_by", s.Entities[id].IncludedBy)
+		ok, err = syncNestedRelationListFile(filepath.Join(root, file), "model", "includes", "included_by", s.Entities[id].IncludedBy)
 		if err != nil {
 			return changed, err
 		}
@@ -423,15 +444,15 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		gotIncludes, includesPresent := nestedListValue(doc, "model", "includes")
+		gotIncludes, includesPresent := nestedRelationListValue(doc, "model", "includes")
 		wantIncludes := s.Entities[id].Includes
-		if !includesPresent || !sameSet(gotIncludes, wantIncludes) {
-			drift = append(drift, fmt.Sprintf("%s: model.includes must be %v, got %v", file, wantIncludes, gotIncludes))
+		if !includesPresent || !sameRelations(gotIncludes, wantIncludes) {
+			drift = append(drift, fmt.Sprintf("%s: model.includes must be %v, got %v", file, formatRelations(wantIncludes), formatRelations(gotIncludes)))
 		}
-		gotIncluded, includedPresent := nestedListValue(doc, "model", "included_by")
+		gotIncluded, includedPresent := nestedRelationListValue(doc, "model", "included_by")
 		wantIncluded := s.Entities[id].IncludedBy
-		if !includedPresent || !sameSet(gotIncluded, wantIncluded) {
-			drift = append(drift, fmt.Sprintf("%s: model.included_by must be %v, got %v", file, wantIncluded, gotIncluded))
+		if !includedPresent || !sameRelations(gotIncluded, wantIncluded) {
+			drift = append(drift, fmt.Sprintf("%s: model.included_by must be %v, got %v", file, formatRelations(wantIncluded), formatRelations(gotIncluded)))
 		}
 		got, queriesPresent := nestedListValue(doc, "model", "queries")
 		want := s.Entities[id].Queries
@@ -485,6 +506,79 @@ func syncNestedListFile(path, parentKey, afterKey, childKey string, values []str
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
 	return true, writeAtomic(path, out)
+}
+
+// syncNestedRelationListFile 写入 {entity, cardinality} 对象列表；用 flow mapping 保持一行一项。
+func syncNestedRelationListFile(path, parentKey, afterKey, childKey string, values []EntityRelation) (bool, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	doc := map[string]any{}
+	if err := yaml.Unmarshal(src, &doc); err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	if cur, present := nestedRelationListValue(doc, parentKey, childKey); present && sameRelations(cur, values) {
+		return false, nil
+	}
+	items := make([]string, len(values))
+	for i, v := range values {
+		items[i] = fmt.Sprintf("{ entity: %s, cardinality: %s }", v.Entity, v.Cardinality)
+	}
+	out, err := applyNestedList(src, parentKey, afterKey, childKey, items)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	return true, writeAtomic(path, out)
+}
+
+func nestedRelationListValue(doc map[string]any, parentKey, childKey string) ([]EntityRelation, bool) {
+	p, ok := asMap(doc[parentKey])
+	if !ok {
+		return nil, false
+	}
+	raw, ok := p[childKey]
+	if !ok {
+		return nil, false
+	}
+	var out []EntityRelation
+	for _, item := range asList(raw) {
+		m, _ := asMap(item)
+		out = append(out, EntityRelation{
+			Entity:      stringValue(m["entity"]),
+			Cardinality: stringValue(m["cardinality"]),
+		})
+	}
+	return out, true
+}
+
+func stringValue(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
+func sameRelations(a, b []EntityRelation) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	index := map[string]string{}
+	for _, r := range a {
+		index[r.Entity] = r.Cardinality
+	}
+	for _, r := range b {
+		if index[r.Entity] != r.Cardinality {
+			return false
+		}
+	}
+	return true
+}
+
+func formatRelations(values []EntityRelation) string {
+	out := make([]string, len(values))
+	for i, r := range values {
+		out[i] = r.Entity + "(" + r.Cardinality + ")"
+	}
+	return "[" + strings.Join(out, ", ") + "]"
 }
 
 func syncQueryUsedByFile(path string, usedBy [][]string) (bool, error) {
@@ -906,6 +1000,15 @@ func sortedKeys(set map[string]bool) []string {
 	return out
 }
 
+func sortedRelations(set map[string]string) []EntityRelation {
+	out := make([]EntityRelation, 0, len(set))
+	for entity, card := range set {
+		out = append(out, EntityRelation{Entity: entity, Cardinality: card})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Entity < out[j].Entity })
+	return out
+}
+
 func sortedFileKeys(m map[string]string) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
@@ -938,6 +1041,46 @@ func sameSet(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// relationCardinalityFromDoc 从实体字段与表唯一索引推导关系基数；through 固定 many_to_many。
+func relationCardinalityFromDoc(field map[string]any, tableUnique map[string]map[string]bool) string {
+	src, _ := asMap(field["source"])
+	join, _ := asMap(src["join"])
+	if join == nil {
+		return ""
+	}
+	if _, ok := asMap(join["through"]); ok {
+		return "many_to_many"
+	}
+	from, _ := join["from"].(string)
+	to, _ := join["to"].(string)
+	fromTable, fromCol, ok1 := splitTableColumnRef(from)
+	toTable, toCol, ok2 := splitTableColumnRef(to)
+	if !ok1 || !ok2 {
+		return ""
+	}
+	fromUnique := tableUnique[fromTable][fromCol]
+	toUnique := tableUnique[toTable][toCol]
+	switch {
+	case fromUnique && toUnique:
+		return "one_to_one"
+	case fromUnique:
+		return "one_to_many"
+	case toUnique:
+		return "many_to_one"
+	}
+	return ""
+}
+
+func inverseCardinality(card string) string {
+	switch card {
+	case "one_to_many":
+		return "many_to_one"
+	case "many_to_one":
+		return "one_to_many"
+	}
+	return card
 }
 
 // entityTypeID 从实体字段 type 提取目标 entity ID，兼容 *T、List<T> 与 _types.list<T>。

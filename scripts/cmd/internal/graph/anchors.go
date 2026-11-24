@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // lifecycleFileAction 是生命周期文件里的一个动作，供 Write/Check 定位。
@@ -27,20 +29,26 @@ type Anchors struct {
 	Events         map[string][]string
 	ServiceUsedBy  map[string][]string
 
-	RuleFiles      map[string][]string
-	LifecycleFiles map[string][]lifecycleFileAction
-	EventFiles     map[string][]string
+	RuleFiles           map[string][]string
+	LifecycleFiles      map[string][]lifecycleFileAction
+	LifecycleStates     map[string][]string
+	LifecycleStateSteps map[string]map[string][]string
+	EventFiles          map[string][]string
+	DispatchFiles       map[string][]string
 }
 
 func newAnchors() *Anchors {
 	return &Anchors{
-		Rules:          map[string][]string{},
-		LifecycleSteps: map[string][]string{},
-		Events:         map[string][]string{},
-		ServiceUsedBy:  map[string][]string{},
-		RuleFiles:      map[string][]string{},
-		LifecycleFiles: map[string][]lifecycleFileAction{},
-		EventFiles:     map[string][]string{},
+		Rules:               map[string][]string{},
+		LifecycleSteps:      map[string][]string{},
+		Events:              map[string][]string{},
+		ServiceUsedBy:       map[string][]string{},
+		RuleFiles:           map[string][]string{},
+		LifecycleFiles:      map[string][]lifecycleFileAction{},
+		LifecycleStates:     map[string][]string{},
+		LifecycleStateSteps: map[string]map[string][]string{},
+		EventFiles:          map[string][]string{},
+		DispatchFiles:       map[string][]string{},
 	}
 }
 
@@ -79,6 +87,7 @@ func contains(values []string, value string) bool {
 // computeAnchors 扫描 services 的 steps，并登记 rules/states/events 的文件归属。
 func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 	a := newAnchors()
+	stepStates := map[string]map[string][]string{}
 	for _, f := range glob(root, filepath.Join(serviceTarget.dir, serviceTarget.glob)) {
 		doc, err := loadYAML(f)
 		if err != nil {
@@ -99,6 +108,11 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				step, _ := asMap(rawStep)
 				stepID, _ := step["id"].(string)
 				fullStepID := serviceID + "." + stepID
+				if stepID != "" {
+					if parsed := parseStepStates(step["states"]); len(parsed) > 0 {
+						stepStates[fullStepID] = parsed
+					}
+				}
 				for _, rawL := range asList(step["lifecycles"]) {
 					actionID, _ := rawL.(string)
 					a.addLifecycleStep(actionID, fullStepID)
@@ -227,6 +241,13 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 					a.EventFiles[relFile] = append(a.EventFiles[relFile], id)
 				}
 			}
+			for _, raw := range asList(doc["dispatches"]) {
+				item, _ := asMap(raw)
+				id, _ := item["id"].(string)
+				if id != "" {
+					a.DispatchFiles[relFile] = append(a.DispatchFiles[relFile], id)
+				}
+			}
 		}
 	}
 	lifecycleTarget, err := resolveTarget(root, "cap.lifecycles")
@@ -255,9 +276,66 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 				actionID := fileID + ".transitions." + name
 				a.LifecycleFiles[relFile] = append(a.LifecycleFiles[relFile], lifecycleFileAction{id: actionID, name: name, kind: "transition"})
 			}
+			statesObj, _ := asMap(doc["states"])
+			order := lifecycleStateNames(statesObj["values"])
+			a.LifecycleStates[fileID] = order
+			stepsByState := map[string][]string{}
+			for stepID, byLifecycle := range stepStates {
+				values, ok := byLifecycle[fileID]
+				if !ok {
+					continue
+				}
+				expanded := expandStateValues(values, order)
+				for _, state := range expanded {
+					stepsByState[state] = append(stepsByState[state], stepID)
+				}
+			}
+			for state := range stepsByState {
+				stepsByState[state] = uniqueSorted(stepsByState[state])
+			}
+			a.LifecycleStateSteps[fileID] = stepsByState
 		}
 	}
 	return a, nil
+}
+
+func lifecycleStateNames(raw any) []string {
+	var out []string
+	for _, item := range asList(raw) {
+		if s, ok := item.(string); ok && s != "" {
+			out = append(out, s)
+			continue
+		}
+		if m, ok := asMap(item); ok {
+			if v, _ := m["value"].(string); v != "" {
+				out = append(out, v)
+			}
+		}
+	}
+	return out
+}
+
+func expandStateValues(values, all []string) []string {
+	for _, value := range values {
+		if value == "*" {
+			return all
+		}
+	}
+	return values
+}
+
+// parseStepStates 读取 step.states 的 lifecycle -> values；不展开 *。
+func parseStepStates(raw any) map[string][]string {
+	out := map[string][]string{}
+	for _, item := range asList(raw) {
+		m, _ := asMap(item)
+		lifecycleID, _ := m["lifecycle"].(string)
+		if lifecycleID == "" {
+			continue
+		}
+		out[lifecycleID] = stringList(m["values"])
+	}
+	return out
 }
 
 func uniqueSorted(values []string) []string {
@@ -310,9 +388,34 @@ func (a *Anchors) Write(root string) ([]string, error) {
 			}
 		}
 	}
+	for _, file := range sortedLifecycleFileKeys(a.LifecycleFiles) {
+		doc, err := loadYAML(filepath.Join(root, file))
+		if err != nil {
+			return changed, err
+		}
+		fileID, _ := doc["id"].(string)
+		ok, err := syncLifecycleStateFile(filepath.Join(root, file), a.LifecycleStates[fileID], a.LifecycleStateSteps[fileID])
+		if err != nil {
+			return changed, err
+		}
+		if ok {
+			changed = append(changed, file)
+		}
+	}
 	for _, file := range sortedStringKeys(a.EventFiles) {
 		for _, id := range a.EventFiles[file] {
 			ok, err := syncItemNestedField(filepath.Join(root, file), "topics", "id", id, "publish", "emitted_by", a.Events[id])
+			if err != nil {
+				return changed, err
+			}
+			if ok {
+				changed = append(changed, file)
+			}
+		}
+	}
+	for _, file := range sortedStringKeys(a.DispatchFiles) {
+		for _, id := range a.DispatchFiles[file] {
+			ok, err := syncItemField(filepath.Join(root, file), "dispatches", "id", id, "emitted_by", a.Events[id])
 			if err != nil {
 				return changed, err
 			}
@@ -399,6 +502,13 @@ func (a *Anchors) Check(root string) ([]string, error) {
 				drift = append(drift, fmt.Sprintf("%s: %s.implemented_by must be %v, got %v", file, item.id, want, got))
 			}
 		}
+		states, _ := asMap(doc["states"])
+		if gotOrder := lifecycleStateNames(states["values"]); !sameStringOrder(gotOrder, a.LifecycleStates[fileID]) {
+			drift = append(drift, fmt.Sprintf("%s: states.values order must be %v, got %v", file, a.LifecycleStates[fileID], gotOrder))
+		}
+		if !sameLifecycleSteps(states["values"], a.LifecycleStateSteps[fileID]) {
+			drift = append(drift, fmt.Sprintf("%s: states.values[].steps is out of date", file))
+		}
 	}
 	for _, file := range sortedStringKeys(a.EventFiles) {
 		doc, err := loadYAML(filepath.Join(root, file))
@@ -418,6 +528,23 @@ func (a *Anchors) Check(root string) ([]string, error) {
 			}
 			if !sameSet(got, a.Events[id]) {
 				drift = append(drift, fmt.Sprintf("%s: %s.publish.emitted_by must be %v, got %v", file, id, a.Events[id], got))
+			}
+		}
+	}
+	for _, file := range sortedStringKeys(a.DispatchFiles) {
+		doc, err := loadYAML(filepath.Join(root, file))
+		if err != nil {
+			return nil, err
+		}
+		for _, raw := range asList(doc["dispatches"]) {
+			item, _ := asMap(raw)
+			id, _ := item["id"].(string)
+			if id == "" {
+				continue
+			}
+			got := stringList(item["emitted_by"])
+			if !sameSet(got, a.Events[id]) {
+				drift = append(drift, fmt.Sprintf("%s: %s.emitted_by must be %v, got %v", file, id, a.Events[id], got))
 			}
 		}
 	}
@@ -462,6 +589,61 @@ func sortedLifecycleFileKeys(m map[string][]lifecycleFileAction) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// syncLifecycleStateFile 重写 states.values 为 [{value, steps}]，保持状态顺序。
+func syncLifecycleStateFile(path string, order []string, steps map[string][]string) (bool, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	doc := map[string]any{}
+	if err := yaml.Unmarshal(src, &doc); err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	states, _ := asMap(doc["states"])
+	gotOrder := lifecycleStateNames(states["values"])
+	if sameStringOrder(gotOrder, order) && sameLifecycleSteps(states["values"], steps) {
+		return false, nil
+	}
+	items := make([]string, 0, len(order))
+	for _, state := range order {
+		items = append(items, fmt.Sprintf("{ value: %s, steps: %s }", state, renderFlowList(steps[state])))
+	}
+	out, err := applyNestedList(src, "states", "initial", "values", items)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	return true, writeAtomic(path, out)
+}
+
+func sameStringOrder(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func sameLifecycleSteps(raw any, want map[string][]string) bool {
+	for _, item := range asList(raw) {
+		m, ok := asMap(item)
+		if !ok {
+			return false // 旧字符串列表需要迁移为 {value, steps}
+		}
+		state, _ := m["value"].(string)
+		if state == "" {
+			continue
+		}
+		if !sameSet(stringList(m["steps"]), want[state]) {
+			return false
+		}
+	}
+	return true
 }
 
 // syncNestedField 在 top-level objectKey 块内设置字段（块风格列表）。
@@ -596,8 +778,10 @@ func syncItemField(path, listKey, itemKey, itemValue, field string, values []str
 		switch field {
 		case "implemented_by":
 			anchor = "on_violation:"
-		case "consumers":
+		case "consumed_by", "consumers":
 			anchor = "emitted_by:"
+		case "emitted_by":
+			anchor = "service:"
 		}
 		insert := itemEnd
 		for i := itemStart + 1; i < itemEnd; i++ {

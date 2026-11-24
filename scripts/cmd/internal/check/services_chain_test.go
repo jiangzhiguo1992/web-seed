@@ -1216,3 +1216,47 @@ func TestServiceNullableInput(t *testing.T) {
 		t.Fatalf("nullable event input not reported: %v", c.errs)
 	}
 }
+
+func TestServiceStepStates(t *testing.T) {
+	c := &Checker{
+		queries: map[string]*queryInfo{
+			"data.queries.x.get": {ID: "data.queries.x.get", Targets: []string{"data.tables.x"}},
+		},
+		lifecycleStates:        map[string]map[string]bool{"cap.lifecycles.x": {"pending": true, "active": true}},
+		lifecycleSubjectTables: map[string]map[string]bool{"cap.lifecycles.x": {"data.tables.x": true}},
+		lifecycleActionStates: map[string]map[string]map[string]bool{
+			"cap.lifecycles.x.transitions.activate": {"cap.lifecycles.x": {"pending": true}},
+		},
+	}
+	step := map[string]any{
+		"id": "run", "kind": "query", "summary": "x", "query": "data.queries.x.get",
+		"states":     []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"pending"}}},
+		"lifecycles": []any{"cap.lifecycles.x.transitions.activate"},
+	}
+	c.checkServiceStepStates(step, "f", "cap.services.x.run.run")
+	if len(c.errs) != 0 {
+		t.Fatalf("valid states reported: %v", c.errs)
+	}
+
+	step["states"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"active"}}}
+	c.errs = nil
+	c.checkServiceStepStates(step, "f", "cap.services.x.run.run")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-states]") {
+		t.Fatalf("transition states mismatch not reported: %v", c.errs)
+	}
+
+	delete(step, "states")
+	delete(step, "lifecycles")
+	c.errs = nil
+	c.checkServiceStepStates(step, "f", "cap.services.x.run.run")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "does not declare states") {
+		t.Fatalf("missing states on touched step not reported: %v", c.errs)
+	}
+
+	step["states"] = []any{map[string]any{"lifecycle": "cap.lifecycles.x", "values": []any{"*"}}}
+	c.errs = nil
+	c.checkServiceStepStates(step, "f", "cap.services.x.run.run")
+	if len(c.errs) != 0 {
+		t.Fatalf("wildcard states reported: %v", c.errs)
+	}
+}

@@ -190,6 +190,15 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 			if id != "" && fileID != "" && id != fileID+"."+name {
 				c.rulef("async-structure", "%s.%s: dispatch id %q must be %s", rel, name, id, fileID+"."+name)
 			}
+			emitters := stringList(item["emitted_by"])
+			if len(emitters) == 0 {
+				c.rulef("event-structure", "%s.%s: dispatch requires at least one emitted_by service", rel, name)
+			}
+			for _, emitter := range emitters {
+				if !serviceIDs[emitter] {
+					c.rulef("event-structure", "%s.%s: unknown dispatch emitter %s", rel, name, emitter)
+				}
+			}
 			svc, _ := item["service"].(string)
 			bind(rel, "dispatch", name, svc, module)
 		}

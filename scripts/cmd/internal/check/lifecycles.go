@@ -100,6 +100,33 @@ func (c *Checker) lifecycleSubjects(raw any) []lifecycleSubject {
 	return out
 }
 
+// lifecycleStateValues 读取 states.values；兼容旧的字符串列表与新的 {value, steps} 对象列表。
+func cloneStringSet(in map[string]bool) map[string]bool {
+	out := map[string]bool{}
+	for k, v := range in {
+		if v {
+			out[k] = true
+		}
+	}
+	return out
+}
+
+func lifecycleStateValues(raw any) []string {
+	var out []string
+	for _, item := range asList(raw) {
+		if s, ok := item.(string); ok && s != "" {
+			out = append(out, s)
+			continue
+		}
+		if m, ok := asMap(item); ok {
+			if v, _ := m["value"].(string); v != "" {
+				out = append(out, v)
+			}
+		}
+	}
+	return out
+}
+
 // findEntityFieldByJSONName 按 json_name（snake_case）查实体字段。
 func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Schema, stepIDs map[string]bool, actionSteps map[string][]string, lifecycleStates map[string]map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
@@ -161,7 +188,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 	}
 
 	states, _ := asMap(doc["states"])
-	stateList := stringList(states["values"])
+	stateList := lifecycleStateValues(states["values"])
 	stateNames := map[string]bool{}
 	for _, name := range stateList {
 		if stateNames[name] {
@@ -240,6 +267,19 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			for _, state := range states {
 				if !refStates[state] {
 					c.rulef("lifecycle-requires", "%s: %s requires unknown state %s of %s", rel, actionID, state, ref)
+				}
+			}
+			if code, _ := rm["on_violation"].(string); code == "" {
+				c.rulef("lifecycle-requires", "%s: %s requires on_violation", rel, actionID)
+			} else if errs := c.errorCodes(); len(errs) > 0 && !errs[strings.TrimPrefix(code, "platform.errors.")] {
+				c.rulef("lifecycle-requires", "%s: %s requires unknown error %s", rel, actionID, code)
+			}
+			if c.ruleIDSet != nil {
+				for _, rawRule := range asList(rm["rules"]) {
+					ruleID, _ := rawRule.(string)
+					if ruleID != "" && !c.ruleIDSet[ruleID] {
+						c.rulef("lifecycle-requires", "%s: %s requires unknown rule %s", rel, actionID, ruleID)
+					}
 				}
 			}
 			if seen[ref] {

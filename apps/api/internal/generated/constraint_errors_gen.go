@@ -6,10 +6,13 @@ package generated
 // ConstraintErrors maps MySQL CHECK constraint names to platform error codes.
 var ConstraintErrors = map[string]string{
 	"ck_account_deleted_consistent":         "platform.errors.ACCOUNT_ILLEGAL_TRANSITION",
+	"ck_auth_email_account_live":            "platform.errors.COMMON_INTERNAL",
 	"ck_auth_email_domain_lowercase":        "platform.errors.AUTH_EMAIL_INVALID",
 	"ck_auth_email_status":                  "platform.errors.COMMON_INTERNAL",
 	"ck_auth_email_username_lowercase":      "platform.errors.COMMON_INTERNAL",
+	"ck_auth_phone_account_live":            "platform.errors.COMMON_INTERNAL",
 	"ck_auth_phone_status":                  "platform.errors.COMMON_INTERNAL",
+	"ck_auth_pwd_account_live":              "platform.errors.COMMON_INTERNAL",
 	"ck_auth_pwd_status":                    "platform.errors.COMMON_INTERNAL",
 	"ck_auth_pwd_username_lowercase":        "platform.errors.COMMON_INTERNAL",
 	"ck_token_expire_order":                 "platform.errors.COMMON_INTERNAL",

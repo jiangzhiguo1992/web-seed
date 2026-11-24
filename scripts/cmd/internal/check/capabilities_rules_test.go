@@ -480,7 +480,10 @@ do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
 states:
-  values: [pending, active, deleted]
+  values:
+    - { value: pending, steps: [] }
+    - { value: active, steps: [] }
+    - { value: deleted, steps: [] }
   initial: pending
   final: [deleted]
 create:
@@ -1046,7 +1049,10 @@ do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
 states:
-  values: [pending, active, deleted]
+  values:
+    - { value: pending, steps: [] }
+    - { value: active, steps: [] }
+    - { value: deleted, steps: [] }
   initial: pending
   final: [deleted]
 create:
@@ -1090,7 +1096,7 @@ transitions:
 		},
 		{
 			name: "state not in status enum",
-			body: strings.Replace(valid, "values: [pending, active, deleted]", "values: [pending, broken, deleted]", 1),
+			body: strings.Replace(valid, "value: active", "value: broken", 1),
 			want: "[lifecycle-subject]",
 		},
 		{
@@ -1124,8 +1130,8 @@ func TestCheckLifecycleRequires(t *testing.T) {
 	root := t.TempDir()
 	schema := copyMeta(t, root, "cap.lifecycles")
 	rel := "contracts/capabilities/lifecycles/x.yaml"
-	stepIDs := map[string]bool{"cap.services.x.activate.transition": true}
-	actionSteps := map[string][]string{"cap.lifecycles.x.transitions.activate": {"cap.services.x.activate.transition"}}
+	stepIDs := map[string]bool{"cap.services.x.activate.transition": true, "cap.services.x.create.create": true}
+	actionSteps := map[string][]string{"cap.lifecycles.x.transitions.activate": {"cap.services.x.activate.transition"}, "cap.lifecycles.x.create": {"cap.services.x.create.create"}}
 	lifecycleStates := map[string]map[string]bool{
 		"cap.lifecycles.x": {"pending": true, "active": true, "deleted": true},
 		"cap.lifecycles.y": {"active": true},
@@ -1139,15 +1145,20 @@ do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
 states:
-  values: [pending, active]
+  values:
+    - { value: pending, steps: [] }
+    - { value: active, steps: [] }
   initial: pending
   final: [ ]
+create:
+  requires: [ ]
+  implemented_by: [cap.services.x.create.create]
 transitions:
   - name: activate
     description: "a"
     from: [pending]
     to: active
-    requires: [ { lifecycle: cap.lifecycles.y, states: [active] } ]
+    requires: [ { lifecycle: cap.lifecycles.y, states: [active], on_violation: platform.errors.COMMON_INTERNAL } ]
     implemented_by: [cap.services.x.activate.transition]
 `
 	check := func(body string) string {
@@ -1177,10 +1188,13 @@ transitions:
 	if got := check(strings.Replace(valid, "states: [active]", "states: [missing]", 1)); !strings.Contains(got, "[lifecycle-requires]") {
 		t.Fatalf("unknown requires state not reported: %s", got)
 	}
+	if got := check(strings.Replace(valid, ", on_violation: platform.errors.COMMON_INTERNAL", "", 1)); !strings.Contains(got, "requires on_violation") {
+		t.Fatalf("missing requires on_violation not reported: %s", got)
+	}
 	if got := check(strings.Replace(valid, "cap.lifecycles.y", "cap.lifecycles.x", 1)); !strings.Contains(got, "requires itself") {
 		t.Fatalf("self requires not reported: %s", got)
 	}
-	repeat := strings.Replace(valid, "requires: [ { lifecycle: cap.lifecycles.y, states: [active] } ]",
+	repeat := strings.Replace(valid, "requires: [ { lifecycle: cap.lifecycles.y, states: [active], on_violation: platform.errors.COMMON_INTERNAL } ]",
 		"requires: [ { lifecycle: cap.lifecycles.y, states: [active] }, { lifecycle: cap.lifecycles.y, states: [active] } ]", 1)
 	if got := check(repeat); !strings.Contains(got, "repeats lifecycle") {
 		t.Fatalf("repeated requires lifecycle not reported: %s", got)
@@ -1202,7 +1216,8 @@ do_not: []
 subjects:
   - { entity: data.entities.x, field: status }
 states:
-  values: [active]
+  values:
+    - { value: active, steps: [] }
   initial: active
   final: [active]
 create:
@@ -1279,7 +1294,8 @@ do_not: []
 subjects:
   - { entity: data.entities.account, field: status }
 states:
-  values: [active]
+  values:
+    - { value: active, steps: [] }
   initial: active
 `
 	}
@@ -1474,17 +1490,25 @@ dispatches:
       properties:
         - { name: order_id, schema: { type: _types.integer }, required: true, description: "id" }
     service: cap.services.x.send
+    emitted_by: [ cap.services.x.issue ]
     delay: 30m
 `
 	writeCapFile(t, root, rel, valid)
-	services := map[string]serviceMeta{"cap.services.x.send": {module: "x"}}
+	services := map[string]serviceMeta{"cap.services.x.send": {module: "x"}, "cap.services.x.issue": {module: "x"}}
 	c := &Checker{root: root}
-	async := c.checkEventsDoc(schema, services, map[string]bool{})
+	async := c.checkEventsDoc(schema, services, map[string]bool{"cap.services.x.send": true, "cap.services.x.issue": true})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid dispatch reported: %v", c.errs)
 	}
 	if !async["cap.services.x.send"] {
 		t.Fatalf("dispatch service not collected: %v", async)
+	}
+
+	c.errs = nil
+	writeCapFile(t, root, rel, strings.Replace(valid, "emitted_by: [ cap.services.x.issue ]", "emitted_by: [ ]", 1))
+	async = c.checkEventsDoc(schema, services, map[string]bool{"cap.services.x.send": true, "cap.services.x.issue": true})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "requires at least one emitted_by") {
+		t.Fatalf("empty dispatch emitted_by not reported: %v", c.errs)
 	}
 
 	writeCapFile(t, root, rel, strings.Replace(valid, "cap.services.x.send", "cap.services.y.send", 1))

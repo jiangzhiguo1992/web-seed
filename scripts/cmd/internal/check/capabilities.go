@@ -397,6 +397,7 @@ func (c *Checker) checkCapabilities() {
 	}
 	c.ruleErrors = ruleErrors
 	c.ruleOwners = ruleOwners
+	c.ruleIDSet = ruleIDs
 	c.serviceErrorClosure = computeServiceErrorClosure(serviceFiles, c.queries, ruleErrors)
 	for id, errs := range c.serviceErrorClosure {
 		meta := serviceMetaByID[id]
@@ -434,6 +435,10 @@ func (c *Checker) checkCapabilities() {
 	}
 	lifecycleActions := map[string]bool{}
 	lifecycleStates := map[string]map[string]bool{}
+	c.lifecycleStates = lifecycleStates
+	c.lifecycleActionStates = map[string]map[string]map[string]bool{}
+	c.lifecycleSubjectTables = map[string]map[string]bool{}
+	c.lifecycleSubjectEntities = map[string]map[string]bool{}
 	requiresGraph := map[string][]string{}
 	dimensions := map[string]string{}
 	enumStates := map[string]map[string]bool{}
@@ -448,16 +453,28 @@ func (c *Checker) checkCapabilities() {
 		subjects := c.lifecycleSubjects(doc["subjects"])
 		states := map[string]bool{}
 		statesObj, _ := asMap(doc["states"])
-		for _, rawState := range asList(statesObj["values"]) {
-			if name, _ := rawState.(string); name != "" {
-				states[name] = true
-			}
+		for _, name := range lifecycleStateValues(statesObj["values"]) {
+			states[name] = true
 		}
 		lifecycleStates[fileID] = states
+		finalSet := map[string]bool{}
+		for _, name := range stringList(statesObj["final"]) {
+			finalSet[name] = true
+		}
 		for _, subj := range subjects {
 			if subj.Entity == "" || subj.Field == "" {
 				continue
 			}
+			if subj.Table != "" {
+				if c.lifecycleSubjectTables[fileID] == nil {
+					c.lifecycleSubjectTables[fileID] = map[string]bool{}
+				}
+				c.lifecycleSubjectTables[fileID][subj.Table] = true
+			}
+			if c.lifecycleSubjectEntities[fileID] == nil {
+				c.lifecycleSubjectEntities[fileID] = map[string]bool{}
+			}
+			c.lifecycleSubjectEntities[fileID][subj.Entity] = true
 			key := subj.Entity + "." + subj.Field
 			if prev, ok := dimensions[key]; ok {
 				c.rulef("lifecycle-dimension", "%s: dimension %s already declared by %s", rel, key, prev)
@@ -477,10 +494,20 @@ func (c *Checker) checkCapabilities() {
 			}
 		}
 		if _, ok := asMap(doc["create"]); ok {
-			lifecycleActions[fileID+".create"] = true
+			actionID := fileID + ".create"
+			lifecycleActions[actionID] = true
+			c.lifecycleActionStates[actionID] = map[string]map[string]bool{fileID: cloneStringSet(states)}
 		}
 		if _, ok := asMap(doc["destroy"]); ok {
-			lifecycleActions[fileID+".destroy"] = true
+			actionID := fileID + ".destroy"
+			lifecycleActions[actionID] = true
+			nonFinal := map[string]bool{}
+			for name := range states {
+				if !finalSet[name] {
+					nonFinal[name] = true
+				}
+			}
+			c.lifecycleActionStates[actionID] = map[string]map[string]bool{fileID: nonFinal}
 		}
 		collectRequires := func(item map[string]any) {
 			for _, rawReq := range asList(item["requires"]) {
@@ -501,7 +528,15 @@ func (c *Checker) checkCapabilities() {
 			item, _ := asMap(raw)
 			name, _ := item["name"].(string)
 			if name != "" {
-				lifecycleActions[fileID+".transitions."+name] = true
+				actionID := fileID + ".transitions." + name
+				lifecycleActions[actionID] = true
+				from := map[string]bool{}
+				for _, rawFrom := range asList(item["from"]) {
+					if state, _ := rawFrom.(string); state != "" {
+						from[state] = true
+					}
+				}
+				c.lifecycleActionStates[actionID] = map[string]map[string]bool{fileID: from}
 			}
 			collectRequires(item)
 		}

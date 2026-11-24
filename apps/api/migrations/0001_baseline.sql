@@ -14,7 +14,7 @@ CREATE TABLE `account` (
   CONSTRAINT `ck_account_deleted_consistent` CHECK ((status = 3) = (deleted_at IS NOT NULL)),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='账号主表';
-CREATE UNIQUE INDEX `uq_account_number` ON `account` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `number`);
+CREATE UNIQUE INDEX `uq_account_number` ON `account` (`number`);
 CREATE INDEX `idx_account_created_at_id` ON `account` (`deleted_at`, `created_at`, `id`);
 
 CREATE TABLE `auth_email` (
@@ -23,7 +23,7 @@ CREATE TABLE `auth_email` (
   `created_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '创建时间；数据库默认 now()',
   `updated_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '更新时间；应用层写入',
   `deleted_at` DATETIME(6) COMMENT '软删时间；应用层写入；为空表示未删除',
-  `account_id` INT NOT NULL COMMENT '关联账号',
+  `account_id` INT COMMENT '关联账号',
   `username` VARCHAR(64) NOT NULL COMMENT '邮箱 @ 前的本地部分；小写归一',
   `domain` VARCHAR(190) NOT NULL COMMENT '完整域名，例如 example.com；小写归一',
   `entity` VARCHAR(190) COMMENT '邮箱服务商，例如 163、gmail等',
@@ -31,10 +31,11 @@ CREATE TABLE `auth_email` (
   CONSTRAINT `ck_auth_email_domain_lowercase` CHECK (domain = lower(domain)),
   CONSTRAINT `ck_auth_email_username_lowercase` CHECK (username = lower(username)),
   CONSTRAINT `ck_auth_email_status` CHECK (status IN (0, 1, 2)),
+  CONSTRAINT `ck_auth_email_account_live` CHECK ((deleted_at IS NULL) = (account_id IS NOT NULL)),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邮箱认证表';
-CREATE UNIQUE INDEX `uq_auth_email_username_domain` ON `auth_email` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `username`, `domain`);
-CREATE UNIQUE INDEX `uq_auth_email_account` ON `auth_email` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `account_id`);
+CREATE UNIQUE INDEX `uq_auth_email_username_domain` ON `auth_email` (`username`, `domain`);
+CREATE UNIQUE INDEX `uq_auth_email_account` ON `auth_email` (`account_id`);
 
 CREATE TABLE `auth_phone` (
   `id` BIGINT NOT NULL COMMENT '主键 integer（bits: 64）；生成方式由实现决定',
@@ -42,15 +43,16 @@ CREATE TABLE `auth_phone` (
   `created_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '创建时间；数据库默认 now()',
   `updated_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '更新时间；应用层写入',
   `deleted_at` DATETIME(6) COMMENT '软删时间；应用层写入；为空表示未删除',
-  `account_id` INT NOT NULL COMMENT '关联账号',
+  `account_id` INT COMMENT '关联账号',
   `code` VARCHAR(8) NOT NULL COMMENT '国际区号，例如 +86',
   `number` VARCHAR(32) NOT NULL COMMENT '手机号；只允许数字，与 code 拼成 E.164 快照',
   `operator` VARCHAR(32) COMMENT '运营商',
   CONSTRAINT `ck_auth_phone_status` CHECK (status IN (0, 1, 2)),
+  CONSTRAINT `ck_auth_phone_account_live` CHECK ((deleted_at IS NULL) = (account_id IS NOT NULL)),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='手机号认证表';
-CREATE UNIQUE INDEX `uq_auth_phone_number` ON `auth_phone` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `code`, `number`);
-CREATE UNIQUE INDEX `uq_auth_phone_account` ON `auth_phone` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `account_id`);
+CREATE UNIQUE INDEX `uq_auth_phone_number` ON `auth_phone` (`code`, `number`);
+CREATE UNIQUE INDEX `uq_auth_phone_account` ON `auth_phone` (`account_id`);
 
 CREATE TABLE `auth_pwd` (
   `id` BIGINT NOT NULL COMMENT '主键 integer（bits: 64）；生成方式由实现决定',
@@ -58,17 +60,18 @@ CREATE TABLE `auth_pwd` (
   `created_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '创建时间；数据库默认 now()',
   `updated_at` DATETIME(6) NOT NULL DEFAULT (now()) COMMENT '更新时间；应用层写入',
   `deleted_at` DATETIME(6) COMMENT '软删时间；应用层写入；为空表示未删除',
-  `account_id` INT NOT NULL COMMENT '关联账号',
+  `account_id` INT COMMENT '关联账号',
   `username` VARCHAR(254) NOT NULL COMMENT '登录名；小写归一且唯一',
   `password_hash` VARCHAR(255) NOT NULL COMMENT 'argon2id 口令哈希；新密码写入此列',
   `failed_login_count` INT NOT NULL DEFAULT 0 COMMENT '连续失败次数；成功登录后归零',
   `locked_until` DATETIME(6) COMMENT '锁定截止时间；为空表示未锁定',
   CONSTRAINT `ck_auth_pwd_username_lowercase` CHECK (username = lower(username)),
   CONSTRAINT `ck_auth_pwd_status` CHECK (status IN (1, 2)),
+  CONSTRAINT `ck_auth_pwd_account_live` CHECK ((deleted_at IS NULL) = (account_id IS NOT NULL)),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='密码认证表';
-CREATE UNIQUE INDEX `uq_auth_pwd_username` ON `auth_pwd` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `username`);
-CREATE UNIQUE INDEX `uq_auth_pwd_account` ON `auth_pwd` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `account_id`);
+CREATE UNIQUE INDEX `uq_auth_pwd_username` ON `auth_pwd` (`username`);
+CREATE UNIQUE INDEX `uq_auth_pwd_account` ON `auth_pwd` (`account_id`);
 
 CREATE TABLE `token` (
   `id` BIGINT NOT NULL COMMENT '主键 integer（bits: 64）；生成方式由实现决定',
@@ -92,8 +95,8 @@ CREATE TABLE `token` (
   CONSTRAINT `ck_token_replaced_by_self` CHECK (replaced_by_id IS NULL OR replaced_by_id <> id),
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='令牌表';
-CREATE UNIQUE INDEX `uq_token_access_hash` ON `token` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `access_token_hash`);
-CREATE UNIQUE INDEX `uq_token_refresh_hash` ON `token` ((CASE WHEN `deleted_at` IS NULL THEN 1 ELSE NULL END), `refresh_token_hash`);
+CREATE UNIQUE INDEX `uq_token_access_hash` ON `token` (`access_token_hash`);
+CREATE UNIQUE INDEX `uq_token_refresh_hash` ON `token` (`refresh_token_hash`);
 CREATE INDEX `idx_token_account_status` ON `token` (`deleted_at`, `account_id`, `status`);
 CREATE INDEX `idx_token_refresh_expire_at` ON `token` (`deleted_at`, `refresh_expire_at`);
 

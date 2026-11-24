@@ -48,6 +48,7 @@
 | cap.services | service-used | service-used | 1 |
 | cap.services | service-step-fields | service-step-fields | 1 |
 | cap.services | service-step-target | service-step-target | 1 |
+| cap.services | service-states | service-states | 1 |
 | cap.services | service-step-shape | service-step-shape | 1 |
 | cap.services | service-when-shape | service-when-shape | 1 |
 | cap.services | service-when-refs | service-when-refs | 1 |
@@ -92,8 +93,6 @@
 | data.entities | entity-relation-target | entity-relation-target | 1 |
 | data.entities | entity-relation-via | entity-relation-via | 1 |
 | data.entities | entity-relation-cardinality | entity-relation-cardinality | 1 |
-| data.entities | entity-relation-eager-index | entity-relation-eager-index | 1 |
-| data.entities | entity-relation-eager-cycle | entity-relation-eager-cycle | 1 |
 | data.entities | entity-validation | entity-validation | 1 |
 | data.entities | entity-validation-used-by | entity-validation-used-by | 1 |
 | data.entities | entity-used-by | entity-used-by | 1 |

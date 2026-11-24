@@ -37,7 +37,7 @@ func relationField(name, targetEntity, fromTable, fromCol, toTable, toCol, load 
 		Type: targetEntity, HasType: true,
 		JoinFromRef: fromTable + ".col." + fromCol, JoinFromTable: fromTable, JoinFromColumn: fromCol,
 		JoinToRef: toTable + ".col." + toCol, JoinToTable: toTable, JoinToColumn: toCol,
-		Lazy: load == "lazy", HasLazy: true, Description: name,
+		Description: name,
 	}
 	f.TargetID = targetEntity
 	if target, ok := entityRef(targetEntity); ok {
@@ -318,6 +318,11 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 				"data.tables.notes":   {"id": {typ: "string", primaryKey: true}, "account_id": {typ: "string"}},
 			},
 			tableIndexes: indexes,
+			tableDocs: map[string]map[string]any{
+				"data.tables.notes": {"columns": []any{
+					map[string]any{"name": "account_id", "references": map[string]any{"column": "data.tables.account.col.id"}},
+				}},
+			},
 			entities: map[string]*entityInfo{
 				"data.entities.account": {
 					ID: "data.entities.account", Rel: "account.yaml", Tables: []string{"data.tables.account"}, Primary: "data.tables.account",
@@ -340,7 +345,7 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 	c := newChecker(true)
 	e := c.entities["data.entities.account"]
 	e.Fields = append(e.Fields, relationField("Notes", "List<data.entities.notes>", "data.tables.account", "id", "data.tables.notes", "account_id", "eager"))
-	c.checkEntityRelations(e, map[string]map[string]bool{})
+	c.checkEntityRelations(e, map[string]map[string]string{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid eager relation reported: %v", c.errs)
 	}
@@ -348,23 +353,15 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 	c = newChecker(true)
 	e = c.entities["data.entities.account"]
 	e.Fields = append(e.Fields, relationField("Notes", "data.entities.notes", "data.tables.account", "id", "data.tables.notes", "account_id", "eager"))
-	c.checkEntityRelations(e, map[string]map[string]bool{})
+	c.checkEntityRelations(e, map[string]map[string]string{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-arity]") {
 		t.Fatalf("one_to_many single type not reported: %v", c.errs)
-	}
-
-	c = newChecker(false)
-	e = c.entities["data.entities.account"]
-	e.Fields = append(e.Fields, relationField("Notes", "List<data.entities.notes>", "data.tables.account", "id", "data.tables.notes", "account_id", "eager"))
-	c.checkEntityRelations(e, map[string]map[string]bool{})
-	if !strings.Contains(entityErrs(c), "[entity-relation-eager-index]") {
-		t.Fatalf("missing eager index not reported: %v", c.errs)
 	}
 
 	c = newChecker(true)
 	e = c.entities["data.entities.notes"]
 	e.Fields = append(e.Fields, relationField("Account", "data.entities.account", "data.tables.notes", "account_id", "data.tables.account", "id", "lazy"))
-	c.checkEntityRelations(e, map[string]map[string]bool{})
+	c.checkEntityRelations(e, map[string]map[string]string{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid many_to_one reported: %v", c.errs)
 	}
@@ -397,7 +394,7 @@ func TestEntityRelationJoinColumnTypeMismatch(t *testing.T) {
 	}
 	e := c.entities["data.entities.account"]
 	e.Fields = append(e.Fields, relationField("Notes", "data.entities.notes", "data.tables.account", "id", "data.tables.notes", "account_id", "lazy"))
-	c.checkEntityRelations(e, map[string]map[string]bool{})
+	c.checkEntityRelations(e, map[string]map[string]string{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-via]") || !strings.Contains(entityErrs(c), "does not match") {
 		t.Fatalf("join column type mismatch not reported: %v", c.errs)
 	}
@@ -420,28 +417,10 @@ func TestEntityRelationRejectsEmptySource(t *testing.T) {
 	}
 }
 
-func TestEntityRelationJoinRequiresLazy(t *testing.T) {
-	f := parseEntityField(map[string]any{
-		"name":        "Notes",
-		"type":        "data.entities.notes",
-		"description": "notes",
-		"source": map[string]any{"join": map[string]any{
-			"from": "data.tables.account.col.id",
-			"to":   "data.tables.notes.col.account_id",
-		}},
-	})
-	c := &Checker{}
-	c.checkRelationFieldShape(*f, "x")
-	errs := entityErrs(c)
-	if !strings.Contains(errs, "[entity-field-variant]") || !strings.Contains(errs, "source.join.lazy") {
-		t.Fatalf("missing join.lazy not reported: %v", c.errs)
-	}
-}
-
 func TestEntityRelationJoinRequiresFromTo(t *testing.T) {
 	cases := map[string]map[string]any{
-		"missing from": {"to": "data.tables.notes.col.account_id", "lazy": true},
-		"missing to":   {"from": "data.tables.account.col.id", "lazy": true},
+		"missing from": {"to": "data.tables.notes.col.account_id"},
+		"missing to":   {"from": "data.tables.account.col.id"},
 		"empty join":   {},
 	}
 	for name, join := range cases {
@@ -469,7 +448,6 @@ func TestEntityRelationRejectsMixedSource(t *testing.T) {
 			"join": map[string]any{
 				"from": "data.tables.account.col.id",
 				"to":   "data.tables.notes.col.account_id",
-				"lazy": true,
 			},
 		},
 	})
@@ -502,7 +480,6 @@ func TestEntityRelationRejectsNullable(t *testing.T) {
 		"source": map[string]any{"join": map[string]any{
 			"from": "data.tables.notes.col.account_id",
 			"to":   "data.tables.account.col.id",
-			"lazy": true,
 		}},
 	})
 	c := &Checker{}
@@ -688,18 +665,21 @@ func TestEntityIncludes(t *testing.T) {
 		Fields: []entityFieldInfo{
 			relationField("Ys", "List<data.entities.y>", "data.tables.x", "id", "data.tables.y", "x_id", "lazy"),
 		},
-		Doc: map[string]any{"model": map[string]any{"includes": []any{"data.entities.y"}}},
 	}
-	c := &Checker{}
-	c.checkEntityIncludes(e)
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.x": {"id": {primaryKey: true}},
+		"data.tables.y": {"x_id": {}},
+	}}
+	model := map[string]any{"includes": []any{map[string]any{"entity": "data.entities.y", "cardinality": "one_to_many"}}}
+	c.checkEntityRelationIndex(e, model, "includes", c.entityIncludes(e))
 	if len(c.errs) != 0 {
 		t.Fatalf("valid model.includes reported: %v", c.errs)
 	}
 
-	e.Doc = map[string]any{"model": map[string]any{"includes": []any{"data.entities.z"}}}
+	model = map[string]any{"includes": []any{map[string]any{"entity": "data.entities.z", "cardinality": "one_to_many"}}}
 	c.errs = nil
-	c.checkEntityIncludes(e)
-	if got := entityErrs(c); !strings.Contains(got, "model.includes must be [data.entities.y]") || !strings.Contains(got, "[entity-included-by]") {
+	c.checkEntityRelationIndex(e, model, "includes", c.entityIncludes(e))
+	if got := entityErrs(c); !strings.Contains(got, "model.includes must be [data.entities.y(one_to_many)]") || !strings.Contains(got, "[entity-included-by]") {
 		t.Fatalf("model.includes mismatch not reported: %v", c.errs)
 	}
 }
@@ -727,20 +707,6 @@ func TestEntityUsedByQueries(t *testing.T) {
 	c.checkEntityUsedBy()
 	if !strings.Contains(entityErrs(c), "[entity-used-by]") {
 		t.Fatalf("missing model.queries not reported: %v", c.errs)
-	}
-}
-
-func TestEagerCycles(t *testing.T) {
-	c := &Checker{
-		entityOrder: []string{"a", "b"},
-		entities: map[string]*entityInfo{
-			"a": {ID: "a", Fields: []entityFieldInfo{relationField("B", "b", "data.tables.a", "b_id", "data.tables.b", "a_id", "eager")}},
-			"b": {ID: "b", Fields: []entityFieldInfo{relationField("A", "a", "data.tables.b", "a_id", "data.tables.a", "b_id", "eager")}},
-		},
-	}
-	c.checkEagerCycles()
-	if !strings.Contains(entityErrs(c), "[entity-relation-eager-cycle]") {
-		t.Fatalf("eager cycle not reported: %v", c.errs)
 	}
 }
 
@@ -1579,5 +1545,50 @@ func TestQueryReturnNullable(t *testing.T) {
 	c.checkQueryReturns(q)
 	if !strings.Contains(entityErrs(c), "affected_rows forbids nullable") {
 		t.Fatalf("affected_rows nullable not reported: %v", c.errs)
+	}
+}
+
+func TestEntityManyToManyThrough(t *testing.T) {
+	f := parseEntityField(map[string]any{
+		"name":        "Roles",
+		"type":        "_types.list<data.entities.role>",
+		"description": "roles",
+		"source": map[string]any{"join": map[string]any{
+			"from": "data.tables.user.col.id",
+			"to":   "data.tables.role.col.id",
+			"through": map[string]any{
+				"table": "data.tables.user_role",
+				"from":  "data.tables.user_role.col.user_id",
+				"to":    "data.tables.user_role.col.role_id",
+			},
+		}},
+	})
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.user":      {"id": {typ: "integer", primaryKey: true}},
+			"data.tables.role":      {"id": {typ: "integer", primaryKey: true}},
+			"data.tables.user_role": {"user_id": {typ: "integer"}, "role_id": {typ: "integer"}},
+		},
+		tableDocs: map[string]map[string]any{
+			"data.tables.user_role": {"columns": []any{
+				map[string]any{"name": "user_id", "references": map[string]any{"column": "data.tables.user.col.id"}},
+				map[string]any{"name": "role_id", "references": map[string]any{"column": "data.tables.role.col.id"}},
+			}},
+		},
+	}
+	c.checkRelationThrough(f, "x")
+	if len(c.errs) != 0 {
+		t.Fatalf("valid through reported: %v", c.errs)
+	}
+	if got := c.relationCardinality(f); got != "many_to_many" {
+		t.Fatalf("through cardinality = %q", got)
+	}
+
+	c.errs = nil
+	f.ThroughToRef = "data.tables.user_role.col.user_id"
+	f.ThroughToTable, f.ThroughToColumn = "data.tables.user_role", "user_id"
+	c.checkRelationThrough(f, "x")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must reference data.tables.role.col.id") {
+		t.Fatalf("wrong through target not reported: %v", c.errs)
 	}
 }

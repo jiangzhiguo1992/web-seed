@@ -134,7 +134,7 @@ func TestEntityFieldColumnRule(t *testing.T) {
 
 func TestEntityRelationTypeRule(t *testing.T) {
 	c := &Checker{}
-	c.checkRelationFieldShape(entityFieldInfo{Name: "B", IsRelation: true, Type: "string", HasType: true, JoinFromRef: "a", JoinToRef: "b", HasLazy: true, Lazy: true}, "where")
+	c.checkRelationFieldShape(entityFieldInfo{Name: "B", IsRelation: true, Type: "string", HasType: true, JoinFromRef: "a", JoinToRef: "b"}, "where")
 	mustContainRule(t, c.errs, "entity-relation-type")
 }
 
@@ -144,7 +144,7 @@ func TestEntityRelationTargetRule(t *testing.T) {
 		ID: "data.entities.a", Rel: "a.yaml", Tables: []string{"data.tables.a"},
 		Fields: []entityFieldInfo{{Name: "B", IsRelation: true, Type: "data.entities.missing", TargetID: "data.entities.missing"}},
 	}
-	c.checkEntityRelations(e, map[string]map[string]bool{})
+	c.checkEntityRelations(e, map[string]map[string]string{})
 	mustContainRule(t, c.errs, "entity-relation-target")
 }
 
@@ -166,7 +166,7 @@ func TestEntityRelationCardinalityRule(t *testing.T) {
 			JoinToTable: "data.tables.b", JoinToColumn: "id",
 		}},
 	}
-	c.checkEntityRelations(e, map[string]map[string]bool{})
+	c.checkEntityRelations(e, map[string]map[string]string{})
 	mustContainRule(t, c.errs, "entity-relation-cardinality")
 }
 
@@ -547,7 +547,9 @@ model:
   name: A
   extends: [data.entities.wrong]
   tables: [data.tables.` + name + `]
-  included_by: [data.entities.x]
+  includes: []
+  included_by: [ { entity: data.entities.x, cardinality: one_to_one } ]
+  queries: []
 fields: []
 `
 		if err := os.WriteFile(filepath.Join(dir, name+".yaml"), []byte(body), 0o644); err != nil {

@@ -110,10 +110,8 @@ func (c *Checker) pageLifecycleIndex() (map[string]bool, map[string]bool, map[st
 		ids[id] = true
 		statesObj, _ := asMap(doc["states"])
 		set := map[string]bool{}
-		for _, raw := range asList(statesObj["values"]) {
-			if name, _ := raw.(string); name != "" {
-				set[name] = true
-			}
+		for _, name := range pageLifecycleStateValues(statesObj["values"]) {
+			set[name] = true
 		}
 		states[id] = set
 		if _, ok := asMap(doc["create"]); ok {
@@ -444,6 +442,22 @@ func (c *Checker) checkPageNode(rel string, node any, lifecycleID string, lifecy
 			c.checkPageNode(rel, child, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs, routeIDs)
 		}
 	}
+}
+
+func pageLifecycleStateValues(raw any) []string {
+	var out []string
+	for _, item := range asList(raw) {
+		if s, ok := item.(string); ok && s != "" {
+			out = append(out, s)
+			continue
+		}
+		if m, ok := asMap(item); ok {
+			if v, _ := m["value"].(string); v != "" {
+				out = append(out, v)
+			}
+		}
+	}
+	return out
 }
 
 func (c *Checker) checkLifecycleStatesRef(rel, ref string, lifecycleIDs map[string]bool) {

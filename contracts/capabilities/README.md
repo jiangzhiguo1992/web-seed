@@ -102,14 +102,15 @@ service 项必须声明：
 | `events`     | `events`（至少一项 `{ref}`，可多个）                                     | 纯事件发射；可发多个事件，`step.input` 是这些事件 payload 字段的并集，name 必须属于至少一个事件的 payload；每个事件的必填字段必须出现；`output` 必须为空列表；logic 不直接发事件 |
 | `when`       | `input` + `output: [ ]` + `when`；可选 `rules`                          | 条件分支；每项是 `{input, expr, goto}`：`input` 必须是本步 input 中声明的名字，`expr` 只能引用本步 `input.<name>[.<field>]` 且必须引用该主体；按列表顺序匹配，第一个为真的分支生效 |
 
-字段按 kind 取交集：`id` / `kind` / `summary` / `input` / `output` / `errors` / `lifecycles` / `goto` 恒有；`input` / `output` 所有 kind 都必须展示（无内容写空列表），`events` / `when` 的 `output` 必须为空；`query` 仅 `query`；`service` 仅 `service`；`events` 仅 `events`；`rules` 仅 `logic` / `when`；`when` 仅 `when`。
+字段按 kind 取交集：`id` / `kind` / `summary` / `states` / `input` / `output` / `errors` / `lifecycles` / `goto` 恒有；`input` / `output` 所有 kind 都必须展示（无内容写空列表），`events` / `when` 的 `output` 必须为空；`query` 仅 `query`；`service` 仅 `service`；`events` 仅 `events`；`rules` 仅 `logic` / `when`；`when` 仅 `when`。
 
 一一对应：`kind: query` → `query`、`kind: service` → `service`、`kind: events` → `events`、`kind: logic` → `rules`、`kind: when` → `when`。出现哪个业务字段，kind 就必须是对应的那一种；logic 不能携带 `query` / `service` / `events`，query / service / events 也不能携带 `rules`。`input` / `output` / `errors` / `goto` 是数据流与公共字段，不参与一一对应。
 
 - `goto` 必填：它是本步结束后的唯一跳转目标，必须指向本 service 的后续 step，或 `$end` 表示直接结束 service；`kind: when` 的 `goto` 是所有分支都不匹配时的默认跳转。控制流没有隐式顺序，前向限制保证无环；首步必须能经 goto/when 分支到达所有 step。
 - `input` 是 `{name, value, description}` 列表，所有 step 必填（无输入写 `[ ]`）；`value` 只能是 `params.<path>` 或 `step.<id>.<path>`，禁止内联表达式。query/service 时 `name` 是目标参数名；events 时是至少一个事件 payload 的字段名；logic/when 时是本步读取名。
 - `output` 是 `{name, type, description, nullable}` 列表，所有 step 必填（无产出写 `[ ]`）；`events` / `when` 只能为空。query/service 时 `name` 必须是目标 returns 字段，`type/nullable` 必须与目标严格一致；logic 时是自身产出。消费者只能引用已声明的 output，不能直接穿透到目标 returns。
-- `lifecycles` 是状态流转标记，可列多个 lifecycle 动作，任何 kind 都可带；它只表示本步包含这些状态流转，不限制本步只做状态流转；位置固定在 `summary` 之后。
+- `states` 是 `[{lifecycle, values}]`：声明本步允许的 lifecycle 状态；`values: [ "*" ]` 表示无状态前置。只要求触及该 lifecycle 主表/实体的 step 声明；状态转换 step 的 `values` 必须等于 `transition.from`，`create` 覆盖全状态，`destroy` 覆盖全部非终态。位置固定在 `summary` 之后、`lifecycles` 之前。
+- `lifecycles` 是状态流转标记，可列多个 lifecycle 动作，任何 kind 都可带；它只表示本步包含这些状态流转，不限制本步只做状态流转；位置固定在 `states` 之后。
 - `when` 只用于 `kind: when`：每项 `{input, expr, goto}`；`input` 必须是本步 input 中声明的名字，`expr` 是受限布尔表达式，只能引用本步 `input.<name>[.<field>]`、字面量与 `== != > >= < <= && || !` 和括号，且必须引用 `input` 指定的主体；字面量类型必须与字段静态类型兼容（boolean 用 `true`/`false`，integer 用整数，string 用字符串，`data.enums.*` 用枚举名）。按列表顺序匹配，第一个为真的分支跳转，都不满足时走本步 `goto`。
 - 计算值必须先落成前序 `kind: logic` 的 `output`，再以 `step.<id>.<path>` 引用；`expr:` 软区已移除。
 - `query` 是 `kind: query` 的单值字符串 ID，实例写作 `query: data.queries.<file>.<name>`；logic 不直接调 query，查询一律独立成 step。
@@ -120,7 +121,7 @@ service 项必须声明：
 - `step.errors` 只列该步骤实际返回的领域错误：`kind: query` 缺省取该 query 的错误集，声明时必须覆盖；`kind: service` 取目标 service
   的错误集；`logic` 的 `rules[].rule` 对应规则的 `on_violation` 错误必须出现在 service 错误集。
 - `rules` 是对象列表：每项 `{ rule: feature.rules.* }`，rule 值是结构 ID，不加引号；按引用检查存在性，不允许字符串简写。
-- `lifecycles` 只是标记：它表示本步包含这些状态流转，不限制本步的 kind，也不要求本步自己写状态列；目标状态以 lifecycle 为唯一事实源。
+- `lifecycles` 只是标记：它表示本步包含这些状态流转，不限制本步的 kind，也不要求本步自己写状态列；目标状态以 lifecycle 为唯一事实源。`states` 与 `lifecycles` 互补：前者声明前置可用状态，后者声明本步实现的动作；`gen-graph` 把 `states` 反向写成 `lifecycle.states.values[].steps`，形成状态 × step 矩阵，禁止手改。
 - 数据链是硬约束：`input` 的值只能是 `params.<path>` 或 `step.<id>.<path>`，且值的静态类型必须与目标参数类型兼容
   （指针/`List<>` 结构一致，类型族归一后比较，枚举按 integer）；可空的源不得赋给非 null 目标（query/service/events input 的源若 nullable，目标参数/payload 字段必须 nullable）；`step.<id>` 还必须通过 goto/when 边从被引用步骤可达，
   不能引用不可达分支；query/service 的 output 必须与目标 returns 对齐，每个显式 `output`（`events` / `when` 为空）必须被后续 `input` 引用或被 `returns.value` 引用；`returns` 的每个业务字段必须写 `value`（`params.<path>` 或 `step.<id>.<path>`），类型一致且 nullable 严格一致
@@ -148,12 +149,12 @@ service 项必须声明：
 `contracts/capabilities/lifecycles/`：
 
 - 一个 lifecycle = 一个状态机：`subjects` 列出共享该状态机的全部 `{entity, field}`，必须同枚举、同 `owner_module`；同一 `(entity, field)` 只能被一份契约声明；
-- `states` 是对象：`values` 是状态集合，`initial` 是初始状态，`final` 是终态集合；每个 state 必须从 initial 可达；
+- `states` 是对象：`values` 是 `[{value, steps}]` 状态集合（`steps` 由 `gen-graph` 写入，禁止手改），`initial` 是初始状态，`final` 是终态集合；每个 state 必须从 initial 可达；
 - `final` 必填，没有终态写 `[]`：单终态（如 account 的 `[deleted]`）与多终态（如 verification 的 `[consumed, expired, revoked, failed]`）用同一形状表达；`destroy` 存在时 `final` 最多一个；
 - `destroy` 可从任意非 final 状态销毁，不写 `from` / `to`；`final` 恰好一个时 destroy 进入该终态，`final` 为空时只软删实体，多终态 lifecycle 不使用 destroy；
 - 幂等转换：把当前状态也写进 `from`（自环），不要单独维护幂等列表；
 - `create` / `destroy` 写 `services`（由 `make gen-graph` 从 step.lifecycles 反推）与 `events`（必须由对应 service 的 step 发出）；`transitions[].implemented_by` 仍由 gen-graph 写回；
-- `create.requires` / `destroy.requires` / `transitions[].requires` 都必填，没有前置写 `[]`；`requires` 声明跨维度前置状态：`{lifecycle, states: [...]}`，处于任一状态即可，列表内 AND；requires 图不得有环；实现该转换的 service 必须自行校验；
+- `create.requires` / `destroy.requires` / `transitions[].requires` 都必填，没有前置写 `[]`；`requires` 声明跨维度前置状态：`{lifecycle, states: [...], rules: [...], on_violation}`，处于任一状态即可，列表内 AND；`on_violation` 必填且必须是存在的错误码，`rules` 指向解释该前置条件的 `feature.rules.*`；requires 图不得有环；实现该转换的 service 必须自行校验；
 - service 的 `kind: logic` / `kind: when` step 用 `rules: [{ rule: feature.rules.* }]` 引用业务规则；
 - 任意 step 用 `lifecycles: [cap.lifecycles.<lifecycle>.create|destroy|transitions.<name>]` 回引生命周期动作；`lifecycles` 不限制 step 的 kind，一个 step 可列多个动作；
 - 每个生命周期动作的 step 不再声明 `state.write`；`lifecycles` 只是标记，不限制 step kind，也不要求本步写状态列；
@@ -171,7 +172,7 @@ capabilities 不承载 `rules/` 目录；features 不承载 `states/` 目录。
 - `topics`：消息契约。`publish` 声明消息格式（`payload`）与发射者（`emitted_by`，生成）；
   `subscribe` 声明消费该主题的异步任务（嵌套即绑定，不支持跨文件订阅）。
 - `crons`：周期任务，声明 `schedule`/retry/concurrency，引用一个同步 service 作为 handler。
-- `dispatches`：内部命令（队列），声明命令 `payload`/`delay`/retry/concurrency，引用一个同步 service 作为唯一消费者。
+- `dispatches`：内部命令（队列），声明命令 `payload`/`delay`/retry/concurrency，引用一个同步 service 作为唯一消费者；`emitted_by` 由 `make gen-graph` 从投递 step 反推，至少一个。
 
 文件级：`id` / `summary` / `owner_module` / `schema_version` / `stability` / `do_not` /
 `topics` / `crons` / `dispatches`；三者至少一个非空。
@@ -198,8 +199,8 @@ cron 项：
 
 dispatch 项：
 
-- `id` / `name` / `summary` / `payload` / `service` / `delay` / `timeout` / `retry` / `concurrency`；
-- `payload` 是命令参数值域；`service` 是唯一消费者；
+- `id` / `name` / `summary` / `payload` / `service` / `emitted_by` / `delay` / `timeout` / `retry` / `concurrency`；
+- `payload` 是命令参数值域；`service` 是唯一消费者；`emitted_by` 是投递该命令的 service 项集合，至少一个，由 `make gen-graph` 维护；
 - `timeout` 是队列等待超时（入队后超过该时长未被消费则过期），不是执行超时。
 - service step 用 `kind: events` + `events[].ref: <topic-or-dispatch-id>` 投递命令；input 按 payload 字段同名映射。
 

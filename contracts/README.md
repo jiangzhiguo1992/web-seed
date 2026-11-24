@@ -207,7 +207,7 @@ feature ──> capabilities ──> data
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` / `caches` / `archive` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `source.join.from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities`（显式，checker 校验） / `table.references` / `table.referenced_by` / `table.queries`（生成物） |
-| data.entities → 上游（反向） | 实体文件 | `model.includes` / `model.included_by` / `model.queries`（生成物） |
+| data.entities → 上游（反向） | 实体文件 | `model.includes` / `model.included_by`（`{entity, cardinality}` 生成物）/ `model.queries`（生成物） |
 | data.queries → 上游（反向） | 查询项 | `used_by`（生成物，指向 `cap.services.*`，不得为空） |
 
 ### 3.2.1 capabilities 的业务规格引用
@@ -317,7 +317,7 @@ id: data.tables.account
 summary: 账号主表
 stability: stable
 do_not:                        # 只写实例级；通用约束见组 README 或 _base
-  - number 唯一索引必须 live_only: true
+  - number 唯一索引必须全局唯一，不加 live_only
 
 table:
   name: account                  # 物理表名；必须显式声明，本仓库保持单数
@@ -495,7 +495,7 @@ data/storage.yaml ──> 按引擎分组的表条目 + 表级物理事实
 | 规则 | 说明 |
 |---|---|
 | 禁止手写迁移 | 改 `tables/*.yaml` 后跑 `make gen-db` |
-| 目标引擎 | MySQL 8.0.16+；`live_only` 仅唯一索引可设为 true，用 functional unique index 表达（`deleted_at IS NULL` 表达式键），不是 PostgreSQL partial index；非唯一索引需要 live 前导时显式写 `deleted_at` 列 |
+| 目标引擎 | 当前生成器产出 MySQL 8.0.16+ DDL；`live_only` 仅唯一索引可设为 true：MySQL 用 functional unique index 的 `CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END` 表达式键，PostgreSQL 对应 `WHERE deleted_at IS NULL` partial unique index（PostgreSQL DDL 生成尚未接入）；非唯一索引需要 live 前导时显式写 `deleted_at` 列 |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验（⬜ P5） | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
 | 结构化 DDL | 归档用 `archive_of` 条目（`promotable` 标明能否回迁，能回迁时必须写 `on_conflict`），混合表达式索引用 `columns` + `indexes[].expression`（纯表达式索引不支持）；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |

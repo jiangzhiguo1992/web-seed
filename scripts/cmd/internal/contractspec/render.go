@@ -777,14 +777,26 @@ type lifecycleFileScaffold struct {
 }
 
 type lifecycleActionScaffold struct {
-	Requires      []string `yaml:"requires"`
-	ImplementedBy []string `yaml:"implemented_by"`
+	Requires      []lifecycleRequireScaffold `yaml:"requires"`
+	ImplementedBy []string                   `yaml:"implemented_by"`
+}
+
+type lifecycleRequireScaffold struct {
+	Lifecycle   string   `yaml:"lifecycle"`
+	States      []string `yaml:"states"`
+	Rules       []string `yaml:"rules,omitempty"`
+	OnViolation string   `yaml:"on_violation"`
+}
+
+type lifecycleStateScaffold struct {
+	Value string   `yaml:"value"`
+	Steps []string `yaml:"steps"`
 }
 
 type lifecycleStatesScaffold struct {
-	Values  []string `yaml:"values"`
-	Initial string   `yaml:"initial"`
-	Final   []string `yaml:"final"`
+	Values  []lifecycleStateScaffold `yaml:"values"`
+	Initial string                   `yaml:"initial"`
+	Final   []string                 `yaml:"final"`
 }
 
 type lifecycleSubjectScaffold struct {
@@ -1021,6 +1033,11 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 		if err := requireSupported(f.Fields, map[string]bool{"values": true, "initial": true, "final": true}, "cap.lifecycles.states"); err != nil {
 			return nil, err
 		}
+		if values, ok := FindField(f.Fields, "values"); ok {
+			if err := requireSupported(values.ItemFields, map[string]bool{"value": true, "steps": true}, "cap.lifecycles.states.values"); err != nil {
+				return nil, err
+			}
+		}
 	}
 	fileID := s.Targets.FileID(name + ".yaml")
 	if fileID == "" {
@@ -1035,12 +1052,12 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 		OwnerModule:   module,
 		Subjects:      []lifecycleSubjectScaffold{{Entity: "data.entities." + name, Field: "status"}},
 		States: lifecycleStatesScaffold{
-			Values:  []string{"active"},
+			Values:  []lifecycleStateScaffold{{Value: "active", Steps: []string{}}},
 			Initial: "active",
 			Final:   []string{"active"},
 		},
 		Create: lifecycleActionScaffold{
-			Requires:      []string{},
+			Requires:      []lifecycleRequireScaffold{},
 			ImplementedBy: []string{"cap.services." + name + ".create.create"},
 		},
 	}

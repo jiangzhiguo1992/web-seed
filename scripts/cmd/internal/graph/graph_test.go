@@ -72,7 +72,7 @@ model:
   queries: []
   included_by: []
 fields:
-  - { name: E2, type: data.entities.e2, source: { join: { from: data.tables.a.col.id, to: data.tables.b.col.id, lazy: true } }, description: "e2" }
+  - { name: E2, type: data.entities.e2, source: { join: { from: data.tables.a.col.id, to: data.tables.b.col.id } }, description: "e2" }
 `)
 	writeFixture(t, root, "contracts/data/entities/e2.yaml", `# entity e2
 id: data.entities.e2
@@ -125,10 +125,10 @@ func TestCompute(t *testing.T) {
 	if got := snap.Entities["data.entities.e1"].Queries; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("entity e1 queries = %v", got)
 	}
-	if got := snap.Entities["data.entities.e1"].Includes; len(got) != 1 || got[0] != "data.entities.e2" {
+	if got := snap.Entities["data.entities.e1"].Includes; len(got) != 1 || got[0].Entity != "data.entities.e2" || got[0].Cardinality != "one_to_one" {
 		t.Fatalf("entity e1 includes = %v", got)
 	}
-	if got := snap.Entities["data.entities.e2"].IncludedBy; len(got) != 1 || got[0] != "data.entities.e1" {
+	if got := snap.Entities["data.entities.e2"].IncludedBy; len(got) != 1 || got[0].Entity != "data.entities.e1" || got[0].Cardinality != "one_to_one" {
 		t.Fatalf("entity e2 included_by = %v", got)
 	}
 	if got := snap.Queries["data.queries.q.get_a"]; len(got) != 1 || got[0] != "cap.services.x.get" {
@@ -230,7 +230,7 @@ func TestWriteAndCheck(t *testing.T) {
 		t.Fatalf("table b queries not written:\n%s", b)
 	}
 	e1, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e1.yaml"))
-	if !strings.Contains(string(e1), "includes:\n    - data.entities.e2") {
+	if !strings.Contains(string(e1), "{ entity: data.entities.e2, cardinality: one_to_one }") {
 		t.Fatalf("entity e1 includes not written:\n%s", e1)
 	}
 	if !strings.Contains(string(e1), "queries:\n    - data.queries.q.get_a") {
@@ -240,7 +240,7 @@ func TestWriteAndCheck(t *testing.T) {
 	if !strings.Contains(string(e2), "includes: []") {
 		t.Fatalf("entity e2 empty includes not written:\n%s", e2)
 	}
-	if !strings.Contains(string(e2), "included_by:\n    - data.entities.e1") {
+	if !strings.Contains(string(e2), "{ entity: data.entities.e1, cardinality: one_to_one }") {
 		t.Fatalf("entity e2 included_by not written:\n%s", e2)
 	}
 	q, _ := os.ReadFile(filepath.Join(root, "contracts/data/queries/q.yaml"))

@@ -264,6 +264,9 @@ services:
       - id: load
         kind: query
         summary: "调用脚手架查询"
+        states:
+          - lifecycle: cap.lifecycles.account
+            values: [ "*" ]
         input:
           - { name: id, value: params.id, description: "主键" }
         output:

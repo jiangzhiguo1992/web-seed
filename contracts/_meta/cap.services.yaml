@@ -93,6 +93,14 @@ fields:
           - { name: id, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID" }
           - { name: kind, type: _types.string, required: true, enum: [ query, service, events, when, logic ], description: "步骤类型：query=查询、service=服务、logic=手写、events=事件、when=分支" }
           - { name: summary, type: _types.string, required: true, description: "一句话说明" }
+          - name: states
+            type: _types.list<_types.object>
+            required: false
+            unique_key: lifecycle
+            description: "状态前置；只对触及 lifecycle 主表/实体的 step 要求；values 写 * 表示该 lifecycle 全状态"
+            item_fields:
+              - { name: lifecycle, type: _types.string, required: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*$', description: "lifecycle ID" }
+              - { name: values, type: _types.set<_types.string>, required: true, min_items: 1, unique: true, pattern: '^(\*|[a-z][a-z0-9_]*)$', description: "允许的状态；* 表示该 lifecycle 全状态" }
           - { name: lifecycles, type: _types.set<_types.string>, required: false, unique: true, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "状态流转标记；create/destroy 直属，transition 用 transitions.<name>" }
 
           - name: input
@@ -162,6 +170,7 @@ rules:
   - { id: service-used, text: "stability=stable 的 service 必须至少被一个 http operation、异步任务或 service 调用引用（used_by 非空）；draft 允许未接线", implemented_by: [ service-used ] }
   - { id: service-step-fields, text: "每个 kind 只允许公共字段、数据流字段与自身专属字段：query→query、service→service、events→events、logic→rules、when→when；query/service 是单值字符串 ID；lifecycles 是任意 kind 都可带的标记；input 项必须写 name 与 value，output 项必须写 name/type/description", implemented_by: [ service-step-fields ] }
   - { id: service-step-target, text: "kind=query 必须有 query；kind=service 必须有 service；kind=events 必须有至少一个 events[].ref", implemented_by: [ service-step-target ] }
+  - { id: service-states, text: "触及 lifecycle 主表/实体的 step 必须声明 states；state 必须存在、values 非空且是已声明状态或 *；transition step 的 states 必须等于 transition.from；create step 必须覆盖全状态，destroy step 必须覆盖全部非终态；重复 lifecycle 不允许", implemented_by: [ service-states ] }
   - { id: service-step-shape, text: "kind=events/when 的 output 必须为空；kind=logic 必须有 rules（可为空列表）与 output+errors；kind=when 必须有 when；events/rules 条目必须是对象，events 写 ref、rules 写 rule", implemented_by: [ service-step-shape ] }
   - { id: service-when-shape, text: "when 只允许 kind=when；每项必须有 input/expr/goto；expr 只能引用本步 input.<name>[.<field>]、字面量与 == != > >= < <= && || !", implemented_by: [ service-when-shape ] }
   - { id: service-when-refs, text: "when.input 必须是本步 input 中声明的名字且被该分支 expr 引用；本步每个 input 必须至少被一个分支引用", implemented_by: [ service-when-refs ] }

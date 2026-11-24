@@ -1325,8 +1325,7 @@ func entitySchema(fields []any, enums map[string][]any, columns map[string]colum
 			continue
 		}
 		source := asMap(f["source"])
-		join := asMap(source["join"])
-		if lazy, _ := join["lazy"].(bool); lazy {
+		if asMap(source["join"]) != nil {
 			continue
 		}
 		name, _ := f["name"].(string)

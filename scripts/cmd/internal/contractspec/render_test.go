@@ -634,7 +634,7 @@ func TestRenderLifecycle(t *testing.T) {
 	states, _ := doc["states"].(map[string]any)
 	values, _ := states["values"].([]any)
 	final, _ := states["final"].([]any)
-	if len(values) != 1 || values[0] != "active" || states["initial"] != "active" || len(final) != 1 || final[0] != "active" {
+	if len(values) != 1 || values[0].(map[string]any)["value"] != "active" || states["initial"] != "active" || len(final) != 1 || final[0] != "active" {
 		t.Fatalf("states = %#v", states)
 	}
 	create, _ := doc["create"].(map[string]any)
