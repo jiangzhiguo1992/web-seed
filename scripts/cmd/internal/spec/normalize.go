@@ -199,7 +199,7 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 			op["x-service-params"] = serviceParams
 			delete(op, "security")
 			if auth {
-				op["security"] = []any{map[string]any{"BearerAuth": []any{}}}
+				op["security"] = []any{map[string]any{"Bearer": []any{}}}
 			} else {
 				op["security"] = []any{}
 			}
@@ -545,8 +545,8 @@ func normalizeRequestHeaders(raw []any, where string, resolve TypeResolver, comp
 		}
 		if strings.EqualFold(name, "Authorization") {
 			value, _ := header["auth"].(string)
-			if value != "BearerAuth" {
-				return nil, "", false, fmt.Errorf("%s: Authorization header requires auth: BearerAuth", where)
+			if value != "Bearer" {
+				return nil, "", false, fmt.Errorf("%s: Authorization header requires auth: Bearer", where)
 			}
 			if auth {
 				return nil, "", false, fmt.Errorf("%s: Authorization declared twice", where)
@@ -672,7 +672,11 @@ func normalizeRequestBody(body map[string]any, contentType, where string, resolv
 				}
 			}
 			properties[name] = schema
-			if requiredFlag, _ := field["required"].(bool); requiredFlag {
+			requiredFlag := true
+			if value, ok := field["required"].(bool); ok {
+				requiredFlag = value
+			}
+			if requiredFlag {
 				required = append(required, name)
 			}
 			mappings = append(mappings, map[string]any{"from": name, "to": to})
@@ -712,7 +716,7 @@ func normalizeListedParameter(raw any, in, where string, index int, resolve Type
 	} else if required, ok := param["required"].(bool); ok {
 		out["required"] = required
 	} else {
-		out["required"] = false
+		out["required"] = true
 	}
 	if description, _ := param["description"].(string); description != "" {
 		out["description"] = description
@@ -783,13 +787,17 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 			return nil, fmt.Errorf("%s: response %s must be an object", where, status)
 		}
 		code, _ := strconv.Atoi(status)
+		msg, _ := resp["msg"].(string)
+		if strings.TrimSpace(msg) == "" {
+			return nil, fmt.Errorf("%s: response %s msg required", where, status)
+		}
 		if code < 200 || code >= 300 {
 			errs := asList(resp["errors"])
 			if len(errs) == 0 {
 				return nil, fmt.Errorf("%s: response %s requires non-empty errors", where, status)
 			}
 			if resp["description"] != nil || resp["body"] != nil || len(asList(resp["headers"])) > 0 {
-				return nil, fmt.Errorf("%s: response %s only allows errors and empty headers for non-2xx", where, status)
+				return nil, fmt.Errorf("%s: response %s only allows msg, errors and empty headers for non-2xx", where, status)
 			}
 			name, ok := DefaultResponseName(code)
 			if !ok {
@@ -801,19 +809,16 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 				}
 			}
 			out[status] = map[string]any{
-				"$ref":          "#/components/responses/" + name,
-				"x-error-codes": errs,
+				"$ref":           "#/components/responses/" + name,
+				"x-response-msg": msg,
+				"x-error-codes":  errs,
 			}
 			continue
 		}
 		if resp["errors"] != nil {
 			return nil, fmt.Errorf("%s: response %s is 2xx and must not declare errors", where, status)
 		}
-		description, _ := resp["description"].(string)
-		if strings.TrimSpace(description) == "" {
-			return nil, fmt.Errorf("%s: response %s description required", where, status)
-		}
-		normalized := map[string]any{"description": description}
+		normalized := map[string]any{"description": msg}
 		body := asMap(resp["body"])
 		headers, contentType, err := normalizeResponseHeaders(asList(resp["headers"]), where, status, resolve, componentByID, strict, blocked)
 		if err != nil {

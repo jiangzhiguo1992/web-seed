@@ -17,13 +17,11 @@ paths:
     get:
       id: cap.protocols.http.account.list
       name: listAccounts
-      service: cap.services.account.list
       summary: "列出账号"
-      used_by:
-        - feature.pages.account_list
+      service: cap.services.account.list
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         query:
           - { name: status, type: data.enums.account_status, required: false, description: "账号状态过滤", to: params.status }
@@ -31,23 +29,23 @@ paths:
           - { name: limit, type: _types.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: cap.services.account.schemas.AccountPage
+      used_by:
+        - feature.pages.account_list
 
     post:
       id: cap.protocols.http.account.create
       name: createAccount
-      service: cap.services.account.create
       summary: "创建账号"
-      used_by:
-        - feature.pages.account_create
+      service: cap.services.account.create
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         body:
@@ -56,7 +54,7 @@ paths:
           to: params.input
       response:
         201:
-          description: "已创建"
+          msg: "已创建"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
             - { name: Location, required: false, type: _types.string, description: "新账号资源地址" }
@@ -64,50 +62,56 @@ paths:
             kind: json
             type: data.entities.account
         409:
+          msg: "状态冲突"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_NUMBER_TAKEN
         422:
+          msg: "语义校验失败"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
             - platform.errors.ACCOUNT_NUMBER_INVALID
+      used_by:
+        - feature.pages.account_create
 
   /admin/{id}:
     get:
       id: cap.protocols.http.account.get
       name: getAccount
-      service: cap.services.account.get
       summary: "获取账号"
-      used_by:
-        - feature.pages.account_detail
-        - feature.pages.account_security
+      service: cap.services.account.get
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
           - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: data.entities.account
         404:
+          msg: "资源不存在"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
+      used_by:
+        - feature.pages.account_detail
+        - feature.pages.account_security
 
     patch:
       id: cap.protocols.http.account.update
       name: updateAccount
-      service: cap.services.account.update
       summary: "更新账号资料"
-      used_by:
-        - feature.pages.account_detail
+      service: cap.services.account.update
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         path:
@@ -118,90 +122,104 @@ paths:
           to: params.input
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: data.entities.account
         404:
+          msg: "资源不存在"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
+          msg: "状态冲突"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
         422:
+          msg: "语义校验失败"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
+      used_by:
+        - feature.pages.account_detail
 
     delete:
       id: cap.protocols.http.account.delete
       name: deleteAccount
-      service: cap.services.account.delete
       summary: "删除账号（软删）"
-      used_by:
-        - feature.pages.account_list
-        - feature.pages.account_detail
+      service: cap.services.account.delete
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
           - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
       response:
         204:
-          description: "已删除"
+          msg: "已删除"
+          headers: []
         404:
+          msg: "资源不存在"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
+          msg: "状态冲突"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+      used_by:
+        - feature.pages.account_list
+        - feature.pages.account_detail
 
   /admin/{id}/activate:
     post:
       id: cap.protocols.http.account.activate
       name: activateAccount
-      service: cap.services.account.activate
       summary: "激活账号"
-      used_by:
-        - feature.pages.account_list
-        - feature.pages.account_detail
+      service: cap.services.account.activate
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
           - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: data.entities.account
         404:
+          msg: "资源不存在"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
+          msg: "状态冲突"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+      used_by:
+        - feature.pages.account_list
+        - feature.pages.account_detail
 
   /admin/{id}/suspend:
     post:
       id: cap.protocols.http.account.suspend
       name: suspendAccount
-      service: cap.services.account.suspend
       summary: "封禁账号"
-      used_by:
-        - feature.pages.account_list
-        - feature.pages.account_detail
+      service: cap.services.account.suspend
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         path:
@@ -212,16 +230,23 @@ paths:
           to: params.input
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: data.entities.account
         404:
+          msg: "资源不存在"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
+          msg: "状态冲突"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+      used_by:
+        - feature.pages.account_list
+        - feature.pages.account_detail

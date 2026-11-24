@@ -26,7 +26,7 @@ func ValidateScaffold(root, typ string, doc []byte, fileName string) []string {
 	relaxed := *schema
 	relaxed.Fields = relaxGeneratedFields(schema.Fields)
 	if typ == "cap.protocols.http" {
-		ensureHTTPResponseHeaders(m)
+		applyHTTPRequiredDefaults(m)
 	}
 	c.nodeKinds = schema.NodeKinds
 	c.propertyKeys = schema.PropertyKeys

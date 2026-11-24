@@ -64,7 +64,7 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 		},
 		"response": map[string]any{
 			"200": map[string]any{
-				"description": "ok",
+				"msg": "ok",
 				"headers": []any{
 					map[string]any{"name": "Content-Type", "value": "application/json", "required": true, "description": "body"},
 				},
@@ -119,19 +119,19 @@ func TestNormalizeHTTPDocumentHeaders(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request": map[string]any{
 			"headers": []any{
-				map[string]any{"name": "Authorization", "auth": "BearerAuth", "required": true, "description": "token"},
+				map[string]any{"name": "Authorization", "auth": "Bearer", "required": true, "description": "token"},
 				map[string]any{"name": "Content-Type", "value": "application/json", "required": true, "description": "body"},
 				map[string]any{"name": "Accept", "value": "application/json", "required": false, "description": "accept"},
 			},
 			"body": map[string]any{"kind": "json", "type": "_types.string", "to": "params.input"},
 		},
-		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 	})
 	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions()); err != nil {
 		t.Fatal(err)
 	}
 	op := asMap(asMap(asMap(doc["paths"])["/x"])["post"])
-	if got := asList(op["security"]); len(got) != 1 || asMap(got[0])["BearerAuth"] == nil {
+	if got := asList(op["security"]); len(got) != 1 || asMap(got[0])["Bearer"] == nil {
 		t.Fatalf("security not derived from Authorization: %v", op["security"])
 	}
 	params := asList(op["parameters"])
@@ -145,7 +145,7 @@ func TestNormalizeHTTPDocumentResponseHeaders(t *testing.T) {
 		"request": map[string]any{},
 		"response": map[string]any{
 			"200": map[string]any{
-				"description": "ok",
+				"msg": "ok",
 				"headers": []any{
 					map[string]any{"name": "Content-Type", "value": "application/json", "required": true, "description": "body"},
 					map[string]any{"name": "Link", "type": "_types.string", "multiple": true, "required": false, "description": "link"},
@@ -184,7 +184,7 @@ func TestNormalizeHTTPDocumentHeaderRequiredDefaultsTrue(t *testing.T) {
 				map[string]any{"name": "X-Trace", "type": "_types.string", "description": "trace"},
 			},
 		},
-		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 	})
 	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions()); err != nil {
 		t.Fatal(err)
@@ -193,6 +193,25 @@ func TestNormalizeHTTPDocumentHeaderRequiredDefaultsTrue(t *testing.T) {
 	params := asList(op["parameters"])
 	if len(params) != 1 || asMap(params[0])["required"] != true {
 		t.Fatalf("header required must default to true: %v", params)
+	}
+}
+
+func TestNormalizeHTTPDocumentQueryRequiredDefaultsTrue(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request": map[string]any{
+			"query": []any{
+				map[string]any{"name": "q", "type": "_types.string", "description": "query", "to": "params.q"},
+			},
+		},
+		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
+	})
+	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions()); err != nil {
+		t.Fatal(err)
+	}
+	op := asMap(asMap(asMap(doc["paths"])["/x"])["post"])
+	params := asList(op["parameters"])
+	if len(params) != 1 || asMap(params[0])["required"] != true {
+		t.Fatalf("query required must default to true: %v", params)
 	}
 }
 
@@ -210,7 +229,7 @@ func TestNormalizeHTTPDocumentAllowsOptionalContentType(t *testing.T) {
 					},
 					"body": map[string]any{"kind": "json", "type": "_types.string", "to": "params.input"},
 				},
-				"response": map[string]any{"204": map[string]any{"description": "ok"}},
+				"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 			}},
 		},
 	}
@@ -233,7 +252,7 @@ func TestNormalizeHTTPDocumentRejectsLegacySchemaField(t *testing.T) {
 					},
 					"body": map[string]any{"kind": "json", "schema": "_types.string", "to": "params.input"},
 				},
-				"response": map[string]any{"204": map[string]any{"description": "ok"}},
+				"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 			}},
 		},
 	}
@@ -252,11 +271,11 @@ func TestNormalizeHTTPDocumentFormBody(t *testing.T) {
 			"body": map[string]any{
 				"kind": "form",
 				"fields": []any{
-					map[string]any{"name": "username", "type": "_types.string", "required": true, "description": "name", "to": "params.input.username"},
+					map[string]any{"name": "username", "type": "_types.string", "description": "name", "to": "params.input.username"},
 				},
 			},
 		},
-		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 	})
 	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions()); err != nil {
 		t.Fatal(err)
@@ -265,6 +284,10 @@ func TestNormalizeHTTPDocumentFormBody(t *testing.T) {
 	body := asMap(op["requestBody"])
 	if body == nil || asMap(asMap(body["content"])["application/x-www-form-urlencoded"]) == nil {
 		t.Fatalf("form body not normalized: %v", op["requestBody"])
+	}
+	schema := asMap(asMap(asMap(body["content"])["application/x-www-form-urlencoded"])["schema"])
+	if required := asList(schema["required"]); len(required) != 1 || required[0] != "username" {
+		t.Fatalf("form field required must default to true: %v", schema)
 	}
 	params := asMap(op["x-service-params"])
 	if got := asList(params["form"]); len(got) != 1 || asMap(got[0])["to"] != "params.input.username" {
@@ -281,21 +304,21 @@ func TestNormalizeHTTPDocumentRejectsTransportHeaders(t *testing.T) {
 			"request": map[string]any{
 				"headers": []any{map[string]any{"name": "Connection", "value": "keep-alive", "required": false, "description": "transport"}},
 			},
-			"response": map[string]any{"204": map[string]any{"description": "ok"}},
+			"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 		}},
 		{"request expect", map[string]any{
 			"request": map[string]any{
 				"headers": []any{map[string]any{"name": "Expect", "value": "100-continue", "required": false, "description": "transport"}},
 			},
-			"response": map[string]any{"204": map[string]any{"description": "ok"}},
+			"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 		}},
 		{"response content-length", map[string]any{
 			"request": map[string]any{},
 			"response": map[string]any{
 				"200": map[string]any{
-					"description": "ok",
-					"headers":     []any{map[string]any{"name": "Content-Length", "type": "_types.integer", "required": false, "description": "length"}},
-					"body":        map[string]any{"kind": "json", "type": "_types.string"},
+					"msg":     "ok",
+					"headers": []any{map[string]any{"name": "Content-Length", "type": "_types.integer", "required": false, "description": "length"}},
+					"body":    map[string]any{"kind": "json", "type": "_types.string"},
 				},
 			},
 		}},
@@ -317,7 +340,7 @@ func TestNormalizeHTTPDocumentAllowsUpgradeInsecureRequests(t *testing.T) {
 				map[string]any{"name": "Upgrade-Insecure-Requests", "type": "_types.string", "required": false, "description": "browser hint"},
 			},
 		},
-		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 	})
 	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions("Connection", "Content-Length", "Expect")); err != nil {
 		t.Fatal(err)
@@ -343,7 +366,7 @@ func TestNormalizeHTTPDocumentMultipartBody(t *testing.T) {
 				},
 			},
 		},
-		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 	})
 	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions()); err != nil {
 		t.Fatal(err)
@@ -362,17 +385,17 @@ func TestNormalizeHTTPDocumentSecurity(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request": map[string]any{
 			"headers": []any{
-				map[string]any{"name": "Authorization", "auth": "BearerAuth", "required": true, "description": "token"},
+				map[string]any{"name": "Authorization", "auth": "Bearer", "required": true, "description": "token"},
 			},
 		},
-		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 	})
 	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions()); err != nil {
 		t.Fatal(err)
 	}
 	op := asMap(asMap(asMap(doc["paths"])["/x"])["post"])
 	security := asList(op["security"])
-	if len(security) != 1 || asMap(security[0])["BearerAuth"] == nil {
+	if len(security) != 1 || asMap(security[0])["Bearer"] == nil {
 		t.Fatalf("security not normalized: %v", security)
 	}
 	params := asMap(op["x-service-params"])
@@ -385,8 +408,8 @@ func TestNormalizeHTTPDocumentErrorCodes(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request": map[string]any{},
 		"response": map[string]any{
-			"204": map[string]any{"description": "ok"},
-			"409": map[string]any{"errors": []any{"platform.errors.ACCOUNT_NUMBER_TAKEN"}},
+			"204": map[string]any{"msg": "ok"},
+			"409": map[string]any{"msg": "conflict", "errors": []any{"platform.errors.ACCOUNT_NUMBER_TAKEN"}},
 		},
 	})
 	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions()); err != nil {
@@ -401,12 +424,45 @@ func TestNormalizeHTTPDocumentErrorCodes(t *testing.T) {
 	if len(codes) != 1 || codes[0] != "platform.errors.ACCOUNT_NUMBER_TAKEN" {
 		t.Fatalf("x-error-codes not preserved: %v", resp)
 	}
+	if resp["x-response-msg"] != "conflict" {
+		t.Fatalf("x-response-msg not preserved: %v", resp)
+	}
+}
+
+func TestNormalizeHTTPDocumentResponseMsgRequired(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request": map[string]any{},
+		"response": map[string]any{
+			"204": map[string]any{},
+		},
+	})
+	err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions())
+	if err == nil || !strings.Contains(err.Error(), "msg required") {
+		t.Fatalf("missing msg not rejected: %v", err)
+	}
+}
+
+func TestNormalizeHTTPDocumentResponseMsgBecomesDescription(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request": map[string]any{},
+		"response": map[string]any{
+			"200": map[string]any{"msg": "成功"},
+		},
+	})
+	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions()); err != nil {
+		t.Fatal(err)
+	}
+	resp := asMap(asMap(asMap(asMap(doc["paths"])["/x"])["post"])["responses"])["200"]
+	respMap, _ := resp.(map[string]any)
+	if respMap["description"] != "成功" {
+		t.Fatalf("msg must become OpenAPI description: %v", resp)
+	}
 }
 
 func TestNormalizeHTTPDocumentRejectsFlatErrors(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request":  map[string]any{},
-		"response": map[string]any{"204": map[string]any{"description": "ok"}},
+		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 		"errors":   []any{"platform.errors.ACCOUNT_NOT_FOUND"},
 	})
 	err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions())
@@ -418,7 +474,7 @@ func TestNormalizeHTTPDocumentRejectsFlatErrors(t *testing.T) {
 func TestNormalizeHTTPDocumentRejectsEmptyCodes(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request":  map[string]any{},
-		"response": map[string]any{"409": map[string]any{"errors": []any{}}},
+		"response": map[string]any{"409": map[string]any{"msg": "conflict", "errors": []any{}}},
 	})
 	err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions())
 	if err == nil || !strings.Contains(err.Error(), "requires non-empty errors") {

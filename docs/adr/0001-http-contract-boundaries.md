@@ -252,8 +252,8 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 2. **共享组件**：删除 `protocols/http/shared.yaml`，HTTP 文件也不再保留 `shared`。平台级 securityScheme / schema / parameter / header / response 全部在 `platform/http_conventions.yaml` 的 `components`，由 `gen_openapi` 注入每个 api app；HTTP 文件只引用组件名，不再定义文件私有组件。
 3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`request` / `response` 都有独立 `headers`；path/query 参数是带 `name` / `type` / `description` / `to` 的对象列表；body 用 `kind` 区分 json/form/multipart/text/binary；body 类型必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
 4. **客户端幂等键删除**：幂等键 header、OpenAPI components 与场景字段全部删除；幂等由 API 内部按业务语义决定，不由客户端传入的 header 控制。
-5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。HTTP 契约的 `request.headers` / `response.headers` 保留为独立字段，`Authorization` 通过 header 的 `auth: BearerAuth` 表达。
-6. **安全凭据注入**：`request.headers` 中的 `Authorization` 使用 `auth: BearerAuth`；认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
+5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。HTTP 契约的 `request.headers` / `response.headers` 保留为独立字段，`Authorization` 通过 header 的 `auth: Bearer` 表达。
+6. **安全凭据注入**：`request.headers` 中的 `Authorization` 使用 `auth: Bearer`；认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
 7. **契约优先 HTTP 模型**：`request.headers` / `response.headers` 独立于 body；`Content-Type`、`Accept`、`Authorization` 等业务/表示层头在 headers 中声明；`Connection`、`Content-Length`、`Expect`、`Transfer-Encoding` 等传输层头不写进契约；`body.kind` 支持 json/form/multipart/text/binary；response 支持按状态声明 headers 与 body。生成器再把这些映射为 OpenAPI security/content/headers，契约阶段不以 OpenAPI 的字段形状为约束。
 8. **账号 ID 类型**：删除 `_types.account_id`，HTTP path 与认证注入的 `account_id` 改用 `_types.positive_integer`（`min: 1`）；普通 service/query 的账号 ID 仍是 `_types.integer`。
 9. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发。
@@ -274,11 +274,13 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 5. **失效边界**：`token.revocation.strategy` 固定 `server`。`token.verify` 验签后读取 token 表校验 revoked_at/expiry，因此登出、refresh 轮换、账号删除、改密/换绑手机或邮箱都会吊销 token 表记录，access JWT 即时失效。
 6. **账号删除**：`account.delete` 软删认证绑定、作废验证体并调用 `token.revoke_by_account` 吊销 token 表记录；access JWT 随之立即失效。
 
-## 2026-11-24 字段命名、header 默认值与错误字段
+## 2026-11-24 字段命名、required、msg 与错误字段
 
 1. **值域字段统一叫 `type`**：HTTP 源契约的 header / path / query / body / form field 原先用 `schema` 表示类型 ID，现全部改名为 `type`；OpenAPI 生成物里的 `schema` 键是生成结果，不变。`normalizeHTTPSchema` 只负责把 `type` 值投影为 OpenAPI schema。
-2. **header 的 `required` 默认 true**：`request.headers` / `response.headers` 的条目可省略 `required`，省略时值为 true；可选 header 写 `required: false`。`request.headers` 与 `response.headers` 列表本身都必填；非 2xx/204 的 `response.headers` 写空列表 `[]`。`Content-Type` 的必需性由 body 决定，`Authorization` 的必需性由 security 决定。
-3. **request body 块状书写**：`request.body` 按模板顺序写 `kind` / `type` / `to`，不写成单行 flow mapping；response body 同样块状。格式不改变校验语义。
+2. **`required` 省略为 true**：header / query / body / body.fields 的 `required` 可省略，省略时值为 true；可选项显式写 `required: false`。`request.headers` 与 `response.headers` 列表本身都必填；非 2xx/204 的 `response.headers` 写空列表 `[]`。
+3. **request body 块状书写**：`request.body` 按模板顺序写 `kind` / `type` / `to`，`required` 省略为 true，不写成单行 flow mapping；response body 同样块状。格式不改变校验语义。
 4. **form 不独立于 body**：`form` / `multipart` 是 `body.kind` 的取值，与 `json` 互斥；`fields` 是表单字段列表，不新增独立的 `form` 顶层字段。
-5. **response 保持状态码 map**：键是三位 HTTP 状态码，值是该状态下的 description/headers/body/errors。多个状态码共享同一响应形状时重复声明；当前没有该需求，不引入 list 或 response alias。
-6. **错误字段改名为 `errors` 并携带 code+msg**：源契约写 `response.<status>.errors: [platform.errors.*]`，只保留错误 ID 引用，`msg` 仍由 `platform.errors` 单一源维护；生成 OpenAPI 的 `x-error-codes` 投影为 `[{code, biz_code, msg}]`，客户端/AI 可直接看到 code 与 msg。
+5. **response 保持状态码 map**：键是三位 HTTP 状态码，值写 `msg` / `headers` / `body` / `errors`；`msg` 对应统一信封的 `msg`，所有状态码必填，非 2xx 也必填。多个状态码共享同一响应形状时重复声明；当前没有该需求，不引入 list 或 response alias。
+6. **错误字段保持 `errors: list<string>`**：`errors` 是“该状态允许出现的错误 ID 集合”，不是响应体；统一信封由 `platform/http_conventions.components.schemas.ApiErrorResponse` 定义一次。源契约只引用 `platform.errors.*`，生成 OpenAPI 时投影为 `x-error-codes: [{code, biz_code, msg}]`，`msg` 仍由 `platform.errors` 单一源维护。把 `errors` 改成 `list<object>` 会复制 code/msg 并与 `platform.errors` 产生双源漂移，因此不采用。
+7. **operation 字段顺序**：固定为 `id` / `name` / `summary` / `service` / `request` / `response` / `used_by`；`used_by` 放最后，避免在 operation 主体中间打断请求/响应阅读。
+8. **认证方案名统一为 `Bearer`**：源契约 `auth: Bearer`，平台 `components.securitySchemes.Bearer` 同名；生成 OpenAPI 的 `security` 直接使用该名字，不再维护 `BearerAuth` 的额外映射。

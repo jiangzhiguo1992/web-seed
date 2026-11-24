@@ -91,6 +91,8 @@ func (c *Checker) checkNodeOrder(n *yaml.Node, fields []Field, rel, path string,
 					}
 				}
 			}
+		case value.Kind == yaml.MappingNode && len(f.ItemFields) > 0:
+			c.checkNodeOrder(value, f.ItemFields, rel, childPath, rules)
 		case value.Kind == yaml.MappingNode && len(f.Fields) > 0:
 			c.checkNodeOrder(value, f.Fields, rel, childPath, rules)
 		case value.Kind == yaml.SequenceNode && typ == "list<map<object>>":

@@ -57,7 +57,7 @@ paths:
           - { name: Connection, required: false, value: keep-alive, description: "transport" }
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	policy, err := loadPolicy(root)
 	if err != nil {

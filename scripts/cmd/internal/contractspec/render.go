@@ -840,17 +840,18 @@ type httpMountScaffold struct {
 }
 
 type httpResponseScaffold struct {
-	Description string `yaml:"description"`
+	Msg     string `yaml:"msg"`
+	Headers []any  `yaml:"headers"`
 }
 
 type httpOperationScaffold struct {
 	ID       string                          `yaml:"id"`
 	Name     string                          `yaml:"name"`
-	Service  string                          `yaml:"service"`
 	Summary  string                          `yaml:"summary"`
-	UsedBy   []string                        `yaml:"used_by"`
+	Service  string                          `yaml:"service"`
 	Request  map[string]any                  `yaml:"request"`
 	Response map[string]httpResponseScaffold `yaml:"response"`
+	UsedBy   []string                        `yaml:"used_by"`
 }
 
 type httpFileScaffold struct {
@@ -1166,7 +1167,8 @@ func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod stri
 		Request: map[string]any{"headers": []any{}},
 		Response: map[string]httpResponseScaffold{
 			"204": {
-				Description: "OK",
+				Msg:     "OK",
+				Headers: []any{},
 			},
 		},
 	}

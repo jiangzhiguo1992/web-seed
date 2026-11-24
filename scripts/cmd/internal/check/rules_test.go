@@ -259,7 +259,7 @@ paths:
             description: "status"
             to: params.filter.status
       response:
-        "204": { description: OK }
+        "204": { msg: OK }
 `)
 	writeCapFile(t, root, "contracts/capabilities/events/x.yaml", `id: cap.events.x
 summary: "x"

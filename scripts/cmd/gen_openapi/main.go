@@ -342,14 +342,14 @@ func build(root string) (map[string][]byte, error) {
 	return out, nil
 }
 
-// stripGeneratedExtensions 删除契约内部元数据；生成物只输出标准 OpenAPI 与错误码清单。
+// stripGeneratedExtensions 删除契约内部元数据；生成物只输出标准 OpenAPI、错误码清单与状态默认消息。
 func stripGeneratedExtensions(spec map[string]any) {
 	var walk func(any)
 	walk = func(v any) {
 		switch value := v.(type) {
 		case map[string]any:
 			for key := range value {
-				if strings.HasPrefix(key, "x-") && key != "x-error-codes" {
+				if strings.HasPrefix(key, "x-") && key != "x-error-codes" && key != "x-response-msg" {
 					delete(value, key)
 				}
 			}

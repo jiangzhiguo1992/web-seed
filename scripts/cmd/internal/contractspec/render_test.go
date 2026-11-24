@@ -574,7 +574,7 @@ func TestRenderHTTP(t *testing.T) {
 		t.Fatalf("used_by = %#v", op["used_by"])
 	}
 	opText := string(b)[strings.Index(string(b), "get:"):]
-	order := []string{"id:", "name:", "service:", "summary:", "used_by:", "request:", "response:"}
+	order := []string{"id:", "name:", "summary:", "service:", "request:", "response:", "used_by:"}
 	for i := 1; i < len(order); i++ {
 		prev := strings.Index(opText, order[i-1])
 		next := strings.Index(opText, order[i])

@@ -8,6 +8,7 @@ stability: draft
 response:
   success: "统一信封 { code: 0, msg: \"ok\", data: <service return> }；data 必须是 service 的非 err return"
   error: "统一信封 { code: <biz_code>, msg: <i18n>, data: null }；HTTP status 保留 4xx/5xx，不改成全部 200；一次响应只返回一个业务错误，同一状态的候选错误由 x-error-codes 列出"
+  error_msg: "response.<status>.msg 是该状态的默认消息；具体错误码的 msg 以 platform.errors 的 message 为准"
   raw: "text/binary 响应不包 JSON 信封，body.type 直接对应 service 的 string return"
   empty:
     status: 204
@@ -32,10 +33,10 @@ pagination:
 # 传输层头由 HTTP server/proxy 生成，不写进 request.headers / response.headers；
 # 名单在 transport_headers，checker 与 generator 统一读取。
 # Upgrade-Insecure-Requests 等端到端浏览器 hint 不列入本目录；需要时按普通 header 声明。
-# 下表的 required 是 header 的全局语义；operation 的 request/response headers item 默认 required: true，可选 header 显式 false。
+# 下表的 required 是 header 的全局语义；operation 的 request/response headers item 可省略 required，省略为 true。
 headers:
   request:
-    - { name: Authorization, required: false, note: "request.headers 中用 auth: BearerAuth 标记；生成器映射为 OpenAPI security" }
+    - { name: Authorization, required: false, note: "request.headers 中用 auth: Bearer 标记；生成器映射为 OpenAPI security" }
     - { name: Content-Type, required: false, note: "有 body 时必填；value 必须等于 body.kind 对应的媒体类型" }
     - { name: Accept, required: false, note: "可选；声明期望的响应媒体类型" }
   response:
@@ -111,7 +112,7 @@ cors:
 # HTTP 文件没有私有组件；所有引用都指向这里的组件名。
 components:
   securitySchemes:
-    BearerAuth:
+    Bearer:
       type: http
       scheme: bearer
       bearerFormat: JWT

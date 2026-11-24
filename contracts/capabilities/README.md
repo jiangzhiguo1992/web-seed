@@ -216,12 +216,13 @@ dispatch 项：
 - status code / content-type / header
 - API 版本由文件级 `mount.api_version` 声明（`v<数字>`）；完整 path = `mount.path` + `paths` key，生成器按 app include 文件的版本派生 `servers: /<api_version>`。`mount.path` 只写公共资源前缀（如 `/account`），audience 段写在 `paths`（如 `/admin`）；`paths`、`mount.path` 都不写版本前缀
 - `project.yaml` 的 api app 只声明 `audience` / `timeout_ms` / `includes`，不再声明 `api_version`；同一 app 的 include 文件必须处于同一版本（checker 与生成器都拒绝混版本）
-- 每个 operation 用 `request` / `response` 两块；`request` 允许 `headers` / `path` / `query` / `body`；`response` 是以三位状态码为键的 map，2xx 写 `description` / `headers` / `body`，非 2xx 写 `errors` 与空 `headers`
-- `request.headers` 与 `response.headers` 是独立的 header 列表，不放在 body 下；`Authorization` 用 `auth: BearerAuth` 标记，`Content-Type` 用 `value` 标记；header item 的 `required` 默认 true（可省略）；两个 headers 列表都必填，非 2xx/204 的 response headers 写 `[]`
-- 认证统一用 `Authorization` header：受保护 operation 写 `{ name: Authorization, required: true, description: ..., auth: BearerAuth }`；公开 operation 不写
-- `request.path` / `request.query` 是列表，每项必须写 `name` / `type` / `description` / `to`（query 另有 `required`）；`type` 只能是 `_types.*` 或 `data.enums.*`
+- 每个 operation 用 `request` / `response` 两块；`request` 允许 `headers` / `path` / `query` / `body`；`response` 是以三位状态码为键的 map，所有状态写 `msg`；2xx 另有 `headers` / `body`，非 2xx 另有 `errors`
+- operation 字段顺序固定为 `id` / `name` / `summary` / `service` / `request` / `response` / `used_by`；`used_by` 放最后。
+- `request.headers` 与 `response.headers` 是独立的 header 列表，不放在 body 下；`Authorization` 用 `auth: Bearer` 标记，`Content-Type` 用 `value` 标记；header/query/body/body.fields 的 `required` 省略为 true，可选项写 false；两个 headers 列表都必填，非 2xx/204 的 response headers 写 `[]`
+- 认证统一用 `Authorization` header：受保护 operation 写 `{ name: Authorization, required: true, description: ..., auth: Bearer }`；公开 operation 不写
+- `request.path` / `request.query` 是列表；path 每项写 `name` / `type` / `description` / `to`，query 每项写 `required`（省略为 true，可选项写 false）；`type` 只能是 `_types.*` 或 `data.enums.*`
 - `body` 用 `kind` 区分编码：`json` / `form` / `multipart` / `text` / `binary`；`json/text/binary` 写 `type` + `to`，`form/multipart` 写 `fields`，每个 field 写 `to`；form 是 body 的一种编码，不是独立于 body 的字段，不能与 json 同时出现
-- `request.body` 按模板块状书写：`body:` 下依次写 `kind` / `type` / `to`
+- `request.body` 按模板块状书写：`body:` 下依次写 `kind` / `type` / `to`；`required` 省略为 true
 - 有 body 时必须声明 `Content-Type` header，且 value 必须等于 `body.kind` 对应的媒体类型；响应 body 同理
 - `Connection` / `Content-Length` / `Expect` / `Transfer-Encoding` 等传输层头不写进 `headers`；名单由 `platform/http_conventions.transport_headers` 定义，checker 与 generator 统一读取
 - `Upgrade-Insecure-Requests` 等端到端浏览器 hint 不列入平台 header 目录；需要时按普通 header 声明。
@@ -241,7 +242,7 @@ HTTP 约束：
 - service 必填非 ctx 参数必须全覆盖；`Authorization` 存在时 `account_id` / `access_token` 由认证中间件注入，HTTP 参数不得指向它们。
 - 幂等由 API 内部按业务语义决定，不使用客户端传入的幂等键。
 - JWT 认证：access/refresh 都是 JWT，登录与刷新只通过响应体返回；客户端用 `Authorization: Bearer` 携带 access token。
-- 每个 operation 必须在 `response.<非2xx状态码>.errors` 下按状态分组列出该 service 的非 `COMMON_*` 错误；非 2xx 与 204 的 `headers` 写空列表 `[]`。
+- 每个 operation 必须在 `response.<非2xx状态码>.errors` 下按状态分组列出该 service 的非 `COMMON_*` 错误；所有 response 必须写 `msg`；非 2xx 与 204 的 `headers` 写空列表 `[]`。
 - `response.<status>.errors` 只写 `platform.errors.*` ID 引用；生成 OpenAPI 时投影为 `x-error-codes: [{code, biz_code, msg}]`，`msg` 来自 `platform.errors`，不在 operation 里重复维护。
 - 成功响应统一信封 `{ code: 0, msg: "ok", data: <return> }`；`text` / `binary` 响应直接返回 string，不包 JSON 信封；错误响应 `{ code: <biz_code>, msg, data: null }`。
 - 每个 `request.body` 与 2xx `response.<status>.body` 不写 `example`；验收场景源在 `contracts/scenarios/http/`。
@@ -252,7 +253,7 @@ HTTP 约束：
 
 | 内容 | 契约位置 | 生成策略 |
 |---|---|---|
-| `Authorization` | `request.headers[].auth: BearerAuth` | OpenAPI security，不生成普通 header parameter |
+| `Authorization` | `request.headers[].auth: Bearer` | OpenAPI security，不生成普通 header parameter |
 | `Content-Type` | `request.headers` / `response.headers` 的 `value` | OpenAPI request/response media type |
 | `Accept` / 自定义 header | `request.headers` / `response.headers` 的 `type` 或 `value` | OpenAPI header parameter |
 | `Location` / `Retry-After` | `response.headers` | OpenAPI response header |

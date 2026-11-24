@@ -408,7 +408,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		}
 		rel := relPath(c.root, file)
 		if c.strictHTTP {
-			ensureHTTPResponseHeaders(doc)
+			applyHTTPRequiredDefaults(doc)
 			c.validateDoc(doc, schema.Fields, rel)
 			c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		}
@@ -783,31 +783,46 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	}
 }
 
-// ensureHTTPResponseHeaders 为结构校验补出非 2xx/204 的空 headers；
-// 源契约仍按“非 2xx/204 不写 headers”书写，模板的 required: true 由领域规则兜底。
-func ensureHTTPResponseHeaders(doc map[string]any) {
+// applyHTTPRequiredDefaults 把省略的 required 按 true 补进内存文档。
+// HTTP 语义默认必填，源契约不必重复写 required: true；模板仍把该字段声明为必填。
+func applyHTTPRequiredDefaults(doc map[string]any) {
 	paths, _ := asMap(doc["paths"])
-	for _, rawItem := range paths {
-		item, _ := asMap(rawItem)
-		for method, rawOp := range item {
+	for _, rawPath := range paths {
+		pathItem, _ := asMap(rawPath)
+		for method, rawOp := range pathItem {
 			switch method {
 			case "get", "post", "put", "patch", "delete", "head", "options":
 			default:
 				continue
 			}
 			op, _ := asMap(rawOp)
+			request, _ := asMap(op["request"])
+			applyRequiredDefaults(request["headers"])
+			applyRequiredDefaults(request["query"])
+			if body, ok := asMap(request["body"]); ok {
+				setRequiredDefault(body)
+				applyRequiredDefaults(body["fields"])
+			}
 			responses, _ := asMap(op["response"])
-			for status, rawResp := range responses {
+			for _, rawResp := range responses {
 				resp, _ := asMap(rawResp)
-				if resp == nil || resp["headers"] != nil {
-					continue
-				}
-				code, err := strconv.Atoi(status)
-				if err == nil && (code == 204 || code < 200 || code >= 300) {
-					resp["headers"] = []any{}
-				}
+				applyRequiredDefaults(resp["headers"])
 			}
 		}
+	}
+}
+
+func applyRequiredDefaults(raw any) {
+	for _, item := range asList(raw) {
+		if value, ok := asMap(item); ok {
+			setRequiredDefault(value)
+		}
+	}
+}
+
+func setRequiredDefault(value map[string]any) {
+	if _, ok := value["required"]; !ok {
+		value["required"] = true
 	}
 }
 
@@ -1366,7 +1381,7 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			c.rulef("http-service-params", "%s %s %s: unknown x-service-params key %s", rel, method, path, key)
 		}
 	}
-	bearerAuth := securityDeclares(op, "BearerAuth")
+	bearerAuth := securityDeclares(op, "Bearer")
 	rb, hasRB := asMap(op["requestBody"])
 	if hasRB && (method == "get" || method == "head") {
 		c.rulef("http-shape", "%s %s %s: GET/HEAD must not declare a request body", rel, method, path)
@@ -1593,7 +1608,7 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 	for name := range target.requiredParams {
 		if isAuthInjectedParam(name) {
 			if !bearerAuth {
-				c.rulef("http-service-params", "%s %s %s: auth-injected service parameter %s requires security.BearerAuth=true", rel, method, path, name)
+				c.rulef("http-service-params", "%s %s %s: auth-injected service parameter %s requires security.Bearer=true", rel, method, path, name)
 			}
 			continue
 		}
@@ -1603,7 +1618,7 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 	}
 }
 
-// isAuthInjectedParam 判断 service 参数是否由 BearerAuth 中间件注入，而不是来自 HTTP 参数。
+// isAuthInjectedParam 判断 service 参数是否由 Bearer 中间件注入，而不是来自 HTTP 参数。
 func isAuthInjectedParam(name string) bool {
 	return name == "account_id" || name == "access_token"
 }

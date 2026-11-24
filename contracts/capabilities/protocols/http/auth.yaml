@@ -17,10 +17,8 @@ paths:
     post:
       id: cap.protocols.http.auth.login
       name: login
-      service: cap.services.auth.login
       summary: "登录"
-      used_by:
-        - feature.pages.login
+      service: cap.services.auth.login
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
@@ -31,31 +29,37 @@ paths:
           to: params.input
       response:
         200:
-          description: "登录成功"
+          msg: "登录成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: cap.services.auth.schemas.AuthResult
         401:
+          msg: "未认证"
+          headers: []
           errors:
             - platform.errors.AUTH_INVALID_CREDENTIALS
             - platform.errors.AUTH_TOKEN_INVALID
         403:
+          msg: "无权限"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_SUSPENDED
         423:
+          msg: "认证锁定中，可稍后重试"
+          headers: []
           errors:
             - platform.errors.AUTH_LOCKED
+      used_by:
+        - feature.pages.login
 
   /verification/send:
     post:
       id: cap.protocols.http.auth.verification_send
       name: sendVerification
-      service: cap.services.verification.send
       summary: "发送验证码"
-      used_by:
-        - feature.pages.login
+      service: cap.services.verification.send
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
@@ -66,27 +70,29 @@ paths:
           to: params.input
       response:
         202:
-          description: "已受理"
+          msg: "已受理"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: cap.services.verification.schemas.VerificationSent
         422:
+          msg: "语义校验失败"
+          headers: []
           errors:
             - platform.errors.AUTH_EMAIL_INVALID
             - platform.errors.AUTH_PHONE_INVALID
             - platform.errors.AUTH_VERIFICATION_INVALID
             - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+      used_by:
+        - feature.pages.login
 
   /verification/verify:
     post:
       id: cap.protocols.http.auth.verification_verify
       name: verifyCode
-      service: cap.services.verification.verify
       summary: "校验验证码"
-      used_by:
-        - feature.pages.login
+      service: cap.services.verification.verify
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
@@ -97,28 +103,32 @@ paths:
           to: params.input
       response:
         200:
-          description: "校验成功"
+          msg: "校验成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: cap.services.verification.schemas.VerificationResult
         422:
+          msg: "语义校验失败"
+          headers: []
           errors:
             - platform.errors.AUTH_VERIFICATION_EXPIRED
             - platform.errors.AUTH_VERIFICATION_INVALID
         423:
+          msg: "认证锁定中，可稍后重试"
+          headers: []
           errors:
             - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
+      used_by:
+        - feature.pages.login
 
   /refresh:
     post:
       id: cap.protocols.http.auth.refresh
       name: refreshToken
-      service: cap.services.token.refresh
       summary: "刷新 JWT"
-      used_by:
-        - feature.pages.current_account
+      service: cap.services.token.refresh
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
@@ -129,25 +139,27 @@ paths:
           to: params.input
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: cap.services.token.schemas.RefreshResult
         401:
+          msg: "未认证"
+          headers: []
           errors:
             - platform.errors.AUTH_TOKEN_EXPIRED
             - platform.errors.AUTH_TOKEN_INVALID
+      used_by:
+        - feature.pages.current_account
 
   /logout:
     post:
       id: cap.protocols.http.auth.logout
       name: logout
-      service: cap.services.token.logout
       summary: "吊销 refresh JWT"
-      used_by:
-        - feature.pages.current_account
+      service: cap.services.token.logout
       request:
         headers:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
@@ -158,22 +170,25 @@ paths:
           to: params.input
       response:
         204:
-          description: "已吊销"
+          msg: "已吊销"
+          headers: []
         401:
+          msg: "未认证"
+          headers: []
           errors:
             - platform.errors.AUTH_TOKEN_INVALID
+      used_by:
+        - feature.pages.current_account
 
   /bind/password:
     post:
       id: cap.protocols.http.auth.bind_password
       name: bindPassword
-      service: cap.services.auth.bind_password
       summary: "创建、修改或启停密码认证绑定"
-      used_by:
-        - feature.pages.account_security
+      service: cap.services.auth.bind_password
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         body:
@@ -182,38 +197,46 @@ paths:
           to: params.input
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: cap.services.auth.schemas.AuthBinding
         401:
+          msg: "未认证"
+          headers: []
           errors:
             - platform.errors.AUTH_INVALID_CREDENTIALS
         403:
+          msg: "无权限"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_SUSPENDED
         409:
+          msg: "状态冲突"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.AUTH_USERNAME_TAKEN
         422:
+          msg: "语义校验失败"
+          headers: []
           errors:
             - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
             - platform.errors.AUTH_WEAK_PASSWORD
+      used_by:
+        - feature.pages.account_security
 
   /bind/phone:
     post:
       id: cap.protocols.http.auth.bind_phone
       name: bindPhone
-      service: cap.services.auth.bind_phone
       summary: "创建、换绑或启停手机号认证绑定"
-      used_by:
-        - feature.pages.account_security
+      service: cap.services.auth.bind_phone
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         body:
@@ -222,35 +245,41 @@ paths:
           to: params.input
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: cap.services.auth.schemas.AuthBinding
         403:
+          msg: "无权限"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_SUSPENDED
         409:
+          msg: "状态冲突"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.AUTH_PHONE_TAKEN
         422:
+          msg: "语义校验失败"
+          headers: []
           errors:
             - platform.errors.AUTH_PHONE_INVALID
             - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+      used_by:
+        - feature.pages.account_security
 
   /bind/email:
     post:
       id: cap.protocols.http.auth.bind_email
       name: bindEmail
-      service: cap.services.auth.bind_email
       summary: "创建、换绑或启停邮箱认证绑定"
-      used_by:
-        - feature.pages.account_security
+      service: cap.services.auth.bind_email
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         body:
@@ -259,45 +288,55 @@ paths:
           to: params.input
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: cap.services.auth.schemas.AuthBinding
         403:
+          msg: "无权限"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_SUSPENDED
         409:
+          msg: "状态冲突"
+          headers: []
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.AUTH_EMAIL_TAKEN
         422:
+          msg: "语义校验失败"
+          headers: []
           errors:
             - platform.errors.AUTH_EMAIL_INVALID
             - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+      used_by:
+        - feature.pages.account_security
 
   /me:
     get:
       id: cap.protocols.http.auth.me
       name: currentAccount
-      service: cap.services.token.verify
       summary: "校验访问令牌并返回当前账号"
-      used_by:
-        - feature.pages.current_account
+      service: cap.services.token.verify
       request:
         headers:
-          - { name: Authorization, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
       response:
         200:
-          description: "成功"
+          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: data.entities.account
         401:
+          msg: "未认证"
+          headers: []
           errors:
             - platform.errors.AUTH_TOKEN_EXPIRED
             - platform.errors.AUTH_TOKEN_INVALID
+      used_by:
+        - feature.pages.current_account

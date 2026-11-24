@@ -37,7 +37,7 @@ func forbiddenSourceKey(v any) (string, bool) {
 	switch value := v.(type) {
 	case map[string]any:
 		for key, child := range value {
-			if (strings.HasPrefix(key, "x-") && key != "x-error-codes") || key == "source" || key == "contract" {
+			if (strings.HasPrefix(key, "x-") && key != "x-error-codes" && key != "x-response-msg") || key == "source" || key == "contract" {
 				return key, true
 			}
 			if found, ok := forbiddenSourceKey(child); ok {
@@ -160,7 +160,7 @@ paths:
       request: {}
       response:
         "200":
-          description: "OK"
+          msg: "OK"
           headers:
             - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
@@ -245,8 +245,9 @@ paths:
       request: {}
       response:
         "200":
-          description: "OK"
+          msg: "OK"
         "409":
+          msg: "conflict"
           errors:
             - platform.errors.X
 `)
@@ -384,7 +385,7 @@ paths:
       service: "cap.services.x.get"
       request: {}
       response:
-        "204": { description: "OK" }
+        "204": { msg: "OK" }
 `)
 	}
 	for _, dir := range []string{"contracts/capabilities/services", "contracts/data/enums", "contracts/data/entities"} {
@@ -444,7 +445,7 @@ paths:
       request: {}
       response:
         "200":
-          description: "OK"
+          msg: "OK"
           headers:
             - { name: Content-Type, required: true, value: text/plain, description: "body" }
           body:
@@ -511,7 +512,7 @@ paths:
             - { name: username, type: _types.string, required: true, description: "name", to: params.input.username }
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
@@ -576,7 +577,7 @@ paths:
             - { name: avatar, kind: file, required: false, description: "file", to: params.input.avatar }
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas: {}
@@ -615,7 +616,7 @@ error_responses:
   secured: [401, 403]
 components:
   securitySchemes:
-    BearerAuth: { type: http, scheme: bearer }
+    Bearer: { type: http, scheme: bearer }
   responses:
     BadRequest: { description: "400" }
     Unauthorized: { description: "401" }
@@ -649,10 +650,10 @@ paths:
       service: "cap.services.x.get"
       request:
         headers:
-          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, required: true, auth: Bearer, description: "JWT access token" }
       response:
         "200":
-          description: "OK"
+          msg: "OK"
 `)
 	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
 errors:
@@ -672,7 +673,7 @@ paths:
       request: {}
       response:
         "200":
-          description: "OK"
+          msg: "OK"
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas: {}
@@ -720,7 +721,7 @@ error_responses:
   always: [409]
 components:
   securitySchemes:
-    BearerAuth: { type: http, scheme: bearer }
+    Bearer: { type: http, scheme: bearer }
   schemas:
     ApiErrorResponse:
       type: object
@@ -761,16 +762,17 @@ paths:
       used_by: [feature.pages.x]
       request:
         headers:
-          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
+          - { name: Authorization, required: true, auth: Bearer, description: "JWT access token" }
       response:
         "200":
-          description: "OK"
+          msg: "OK"
           headers:
             - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
             kind: json
             type: cap.services.x.schemas.X
         "409":
+          msg: "conflict"
           errors: [platform.errors.X]
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
@@ -797,7 +799,7 @@ errors:
 	out := string(files["generated/openapi/x.yaml"])
 	for _, want := range []string{
 		"/a:",
-		"BearerAuth:",
+		"Bearer:",
 		"ApiErrorResponse:",
 		"Conflict:",
 		"url: /v1",
@@ -849,8 +851,9 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
         "409":
+          msg: "conflict"
           errors:
             - platform.errors.ACCOUNT_NUMBER_TAKEN
 `)
@@ -873,7 +876,7 @@ errors:
 		t.Fatal(err)
 	}
 	out := string(files["generated/openapi/x.yaml"])
-	for _, want := range []string{"x-error-codes:", "code: ACCOUNT_NUMBER_TAKEN", "biz_code: 2002", "msg: taken"} {
+	for _, want := range []string{"x-response-msg: conflict", "x-error-codes:", "code: ACCOUNT_NUMBER_TAKEN", "biz_code: 2002", "msg: taken"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("generated spec missing %q:\n%s", want, out)
 		}
@@ -911,7 +914,7 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	writeFixture(t, root, "contracts/capabilities/protocols/http/b.yaml", `id: "cap.protocols.http.b"
 mount:
@@ -927,7 +930,7 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas: {}

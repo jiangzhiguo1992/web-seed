@@ -234,7 +234,7 @@ paths:
           to: "params.input"
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 shared:
   schemas:
     WrongInput:
@@ -281,7 +281,7 @@ paths:
           to: "params.input"
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 shared:
   schemas:
     WrongInput:
@@ -334,7 +334,7 @@ paths:
           to: params.input
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -683,7 +683,7 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 shared:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
@@ -719,7 +719,7 @@ paths:
             to: params.missing
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -748,8 +748,9 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
         "500":
+          msg: "internal"
           errors:
             - "platform.errors.COMMON_INTERNAL"
 shared:
@@ -789,7 +790,7 @@ paths:
       parameters: []
       responses:
         "204":
-          description: "OK"
+          msg: "OK"
 shared:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
@@ -854,14 +855,14 @@ paths:
           - { name: Authorization, required: true, description: "token" }
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
 		"cap.services.x.get": {visibility: "public"},
 	}, map[string]bool{}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "Authorization header requires auth: BearerAuth") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "Authorization header requires auth: Bearer") {
 		t.Fatalf("invalid Authorization header not reported: %v", c.errs)
 	}
 }
@@ -883,7 +884,7 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root, accessBindings: map[string]accessPolicy{
@@ -893,7 +894,7 @@ paths:
 		"cap.services.x.get": {visibility: "public"},
 	}, map[string]bool{}, map[string]bool{})
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[http-security]") {
-		t.Fatalf("permission-protected service without BearerAuth not reported: %v", c.errs)
+		t.Fatalf("permission-protected service without Bearer not reported: %v", c.errs)
 	}
 }
 
@@ -913,10 +914,10 @@ paths:
         service: "cap.services.x.post"
       request:
         headers:
-          - { name: Authorization, required: true, auth: BearerAuth, description: "token" }
+          - { name: Authorization, required: true, auth: Bearer, description: "token" }
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -948,11 +949,11 @@ paths:
         service: "cap.services.x.get"
       request:
         headers:
-          - { name: Authorization, required: true, auth: BearerAuth, description: "token" }
+          - { name: Authorization, required: true, auth: Bearer, description: "token" }
         query:
           - { name: account_id, type: { type: integer }, required: true, description: "account", to: params.account_id }
       response:
-        "204": { description: "OK" }
+        "204": { msg: "OK" }
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -1013,7 +1014,7 @@ paths:
           - { name: Connection, required: false, value: keep-alive, description: "transport" }
       response:
         "200":
-          description: "OK"
+          msg: "OK"
           headers:
             - { name: Content-Length, required: false, type: _types.integer, description: "length" }
           body:
@@ -1048,7 +1049,7 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -1746,7 +1747,7 @@ paths:
       request: {}
       response:
         "200":
-          description: "ok"
+          msg: "ok"
 shared:
   schemas: {}`)
 	schema := copyMeta(t, root, "cap.protocols.http")
@@ -1777,7 +1778,7 @@ paths:
       request: {}
       response:
         "200":
-          description: "OK"
+          msg: "OK"
 
     post:
       name: "postX"
@@ -1787,7 +1788,7 @@ paths:
       request: {}
       response:
         "200":
-          description: "OK"
+          msg: "OK"
 default_error_responses:
   - 418
   - 503`)
@@ -1889,14 +1890,17 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
         "409":
+          msg: "conflict"
           errors:
             - "platform.errors.X"
         "422":
+          msg: "unprocessable"
           errors:
             - "platform.errors.Y"
         "500":
+          msg: "internal"
           errors:
             - "platform.errors.COMMON_INTERNAL"
       x-typo: true`)
@@ -2719,7 +2723,7 @@ paths:
       request: {}
       response:
         "200":
-          description: "OK"
+          msg: "OK"
           headers:
             - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
@@ -2784,7 +2788,7 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
   /open:
     get:
       name: getOpen
@@ -2795,7 +2799,7 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
   /orphan:
     get:
       name: getOrphan
@@ -2806,7 +2810,7 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
   /missing:
     get:
       name: getMissing
@@ -2817,7 +2821,7 @@ paths:
       request: {}
       response:
         "204":
-          description: "OK"
+          msg: "OK"
 `)
 	c := &Checker{root: root, strictHTTP: true}
 	c.checkHTTPBindings(schema, map[string]serviceMeta{
@@ -2848,6 +2852,37 @@ func TestHTTPBodyTypesMismatch(t *testing.T) {
 	c.checkHTTPBodyTypes(schema, map[string]string{"json": "application/json"})
 	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "[http-body-types]") {
 		t.Fatalf("body type drift not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPOperationFieldOrder(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+mount: { api_version: v1, path: /, audience: [admin] }
+paths:
+  /x:
+    get:
+      id: cap.protocols.http.x.get
+      name: getX
+      service: cap.services.x.get
+      summary: "x"
+      request: { headers: [] }
+      response:
+        "204": { msg: "OK" }
+      used_by: [feature.pages.x]
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root, strictHTTP: true}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {visibility: "public"},
+	}, map[string]bool{}, map[string]bool{})
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "field summary must come before service") {
+		t.Fatalf("operation field order not reported: %v", c.errs)
 	}
 }
 
@@ -2941,7 +2976,7 @@ paths:
           fields:
             - { name: username, type: _types.string, required: true, description: "name", to: params.input.username }
       response:
-        "204": { description: "OK" }
+        "204": { msg: "OK" }
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root, valueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{"string": {}}}}
@@ -2987,7 +3022,7 @@ paths:
           fields:
             - { name: username, type: _types.string, required: true, description: "name", to: params.input.username }
       response:
-        "204": { description: "OK" }
+        "204": { msg: "OK" }
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root, valueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{"string": {}}}}
@@ -3032,7 +3067,7 @@ paths:
           type: _types.string
           to: params.input
       response:
-        "204": { description: "OK" }
+        "204": { msg: "OK" }
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root, valueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{"string": {}}}}
@@ -3066,7 +3101,7 @@ paths:
       request: {}
       response:
         "200":
-          description: "OK"
+          msg: "OK"
           headers:
             - { name: Content-Type, required: true, value: application/octet-stream, description: "body" }
           body:
@@ -3111,7 +3146,7 @@ paths:
           required: false
           to: "params.input"
       response:
-        "204": { description: "OK" }
+        "204": { msg: "OK" }
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root}
@@ -3132,6 +3167,7 @@ func TestHTTPDuplicateServiceBinding(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
 summary: "x"
+owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
@@ -3141,22 +3177,22 @@ paths:
     get:
       id: cap.protocols.http.x.a
       name: getA
-      service: cap.services.x.get
       summary: "a"
-      used_by: [feature.pages.x]
-      request: {}
+      service: cap.services.x.get
+      request: { headers: [] }
       response:
-        "204": { description: OK }
+        "204": { msg: OK }
+      used_by: [feature.pages.x]
   /b:
     get:
       id: cap.protocols.http.x.b
       name: getB
-      service: cap.services.x.get
       summary: "b"
-      used_by: [feature.pages.x]
-      request: {}
+      service: cap.services.x.get
+      request: { headers: [] }
       response:
-        "204": { description: OK }
+        "204": { msg: OK }
+      used_by: [feature.pages.x]
 `)
 	schema := copyMeta(t, root, "cap.protocols.http")
 	c := &Checker{root: root, strictHTTP: true}

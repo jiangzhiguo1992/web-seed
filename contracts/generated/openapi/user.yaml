@@ -790,7 +790,7 @@ components:
         - code
       type: object
   securitySchemes:
-    BearerAuth:
+    Bearer:
       bearerFormat: JWT
       scheme: bearer
       type: http
@@ -845,6 +845,7 @@ paths:
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
               msg: 账号已被封禁
+          x-response-msg: 无权限
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
@@ -860,6 +861,7 @@ paths:
             - biz_code: 3005
               code: AUTH_EMAIL_TAKEN
               msg: 邮箱已被绑定
+          x-response-msg: 状态冲突
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
@@ -881,6 +883,7 @@ paths:
             - biz_code: 4004
               code: AUTH_VERIFICATION_TARGET_INVALID
               msg: 验证目标格式不合法
+          x-response-msg: 语义校验失败
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -906,7 +909,7 @@ paths:
               code: COMMON_UNAVAILABLE
               msg: 服务暂不可用
       security:
-        - BearerAuth: []
+        - Bearer: []
       summary: 创建、换绑或启停邮箱认证绑定
   /auth/bind/password:
     post:
@@ -948,6 +951,7 @@ paths:
             - biz_code: 3001
               code: AUTH_INVALID_CREDENTIALS
               msg: 账号标识或凭据不正确
+          x-response-msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
@@ -957,6 +961,7 @@ paths:
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
               msg: 账号已被封禁
+          x-response-msg: 无权限
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
@@ -972,6 +977,7 @@ paths:
             - biz_code: 3003
               code: AUTH_USERNAME_TAKEN
               msg: 登录名已被使用
+          x-response-msg: 状态冲突
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
@@ -993,6 +999,7 @@ paths:
             - biz_code: 3008
               code: AUTH_WEAK_PASSWORD
               msg: 密码强度不足
+          x-response-msg: 语义校验失败
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -1018,7 +1025,7 @@ paths:
               code: COMMON_UNAVAILABLE
               msg: 服务暂不可用
       security:
-        - BearerAuth: []
+        - Bearer: []
       summary: 创建、修改或启停密码认证绑定
   /auth/bind/phone:
     post:
@@ -1066,6 +1073,7 @@ paths:
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
               msg: 账号已被封禁
+          x-response-msg: 无权限
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
@@ -1081,6 +1089,7 @@ paths:
             - biz_code: 3004
               code: AUTH_PHONE_TAKEN
               msg: 手机号已被绑定
+          x-response-msg: 状态冲突
         413:
           $ref: '#/components/responses/PayloadTooLarge'
           x-error-codes:
@@ -1102,6 +1111,7 @@ paths:
             - biz_code: 4004
               code: AUTH_VERIFICATION_TARGET_INVALID
               msg: 验证目标格式不合法
+          x-response-msg: 语义校验失败
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -1127,7 +1137,7 @@ paths:
               code: COMMON_UNAVAILABLE
               msg: 服务暂不可用
       security:
-        - BearerAuth: []
+        - Bearer: []
       summary: 创建、换绑或启停手机号认证绑定
   /auth/login:
     post:
@@ -1169,12 +1179,14 @@ paths:
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
               msg: 令牌无效
+          x-response-msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
             - biz_code: 2005
               code: ACCOUNT_SUSPENDED
               msg: 账号已被封禁
+          x-response-msg: 无权限
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
@@ -1199,6 +1211,7 @@ paths:
             - biz_code: 3002
               code: AUTH_LOCKED
               msg: 认证已锁定，请稍后再试
+          x-response-msg: 认证锁定中，可稍后重试
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -1258,6 +1271,7 @@ paths:
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
               msg: 令牌无效
+          x-response-msg: 未认证
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
@@ -1339,6 +1353,7 @@ paths:
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
               msg: 令牌无效
+          x-response-msg: 未认证
         403:
           $ref: '#/components/responses/Forbidden'
           x-error-codes:
@@ -1376,7 +1391,7 @@ paths:
               code: COMMON_UNAVAILABLE
               msg: 服务暂不可用
       security:
-        - BearerAuth: []
+        - Bearer: []
       summary: 校验访问令牌并返回当前账号
   /auth/refresh:
     post:
@@ -1418,6 +1433,7 @@ paths:
             - biz_code: 5001
               code: AUTH_TOKEN_INVALID
               msg: 令牌无效
+          x-response-msg: 未认证
         405:
           $ref: '#/components/responses/MethodNotAllowed'
           x-error-codes:
@@ -1526,6 +1542,7 @@ paths:
             - biz_code: 4004
               code: AUTH_VERIFICATION_TARGET_INVALID
               msg: 验证目标格式不合法
+          x-response-msg: 语义校验失败
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
@@ -1610,12 +1627,14 @@ paths:
             - biz_code: 4001
               code: AUTH_VERIFICATION_INVALID
               msg: 验证码不正确
+          x-response-msg: 语义校验失败
         423:
           $ref: '#/components/responses/Locked'
           x-error-codes:
             - biz_code: 4003
               code: AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
               msg: 验证码尝试次数过多
+          x-response-msg: 认证锁定中，可稍后重试
         429:
           $ref: '#/components/responses/TooManyRequests'
           x-error-codes:
