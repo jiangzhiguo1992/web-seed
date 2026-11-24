@@ -15,9 +15,9 @@ model:
   tables:
     - data.tables.auth_email
   includes:
-    - data.entities.account
+    - { entity: data.entities.account, cardinality: one_to_one }
   included_by:
-    - data.entities.account
+    - { entity: data.entities.account, cardinality: one_to_one }
   queries:
     - data.queries.auth.create_auth_email
     - data.queries.auth.get_auth_email_by_id
@@ -56,7 +56,6 @@ fields:
       join:
         from: data.tables.auth_email.col.account_id
         to: data.tables.account.col.id
-        lazy: true
 
 validation:
   - name: domain_parts

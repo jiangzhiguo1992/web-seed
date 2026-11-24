@@ -15,7 +15,7 @@ model:
   tables:
     - data.tables.verification_action
   includes:
-    - data.entities.account
+    - { entity: data.entities.account, cardinality: many_to_one }
   included_by: [ ]
   queries:
     - data.queries.verification.create_verification_action
@@ -57,4 +57,3 @@ fields:
       join:
         from: data.tables.verification_action.col.account_id
         to: data.tables.account.col.id
-        lazy: true

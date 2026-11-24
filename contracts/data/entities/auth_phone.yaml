@@ -15,9 +15,9 @@ model:
   tables:
     - data.tables.auth_phone
   includes:
-    - data.entities.account
+    - { entity: data.entities.account, cardinality: one_to_one }
   included_by:
-    - data.entities.account
+    - { entity: data.entities.account, cardinality: one_to_one }
   queries:
     - data.queries.auth.create_auth_phone
     - data.queries.auth.get_auth_phone_by_id
@@ -52,4 +52,3 @@ fields:
       join:
         from: data.tables.auth_phone.col.account_id
         to: data.tables.account.col.id
-        lazy: true

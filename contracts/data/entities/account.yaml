@@ -15,17 +15,17 @@ model:
   tables:
     - data.tables.account
   includes:
-    - data.entities.auth_email
-    - data.entities.auth_phone
-    - data.entities.auth_pwd
-    - data.entities.token
+    - { entity: data.entities.auth_email, cardinality: one_to_one }
+    - { entity: data.entities.auth_phone, cardinality: one_to_one }
+    - { entity: data.entities.auth_pwd, cardinality: one_to_one }
+    - { entity: data.entities.token, cardinality: one_to_many }
   included_by:
-    - data.entities.auth_pwd
-    - data.entities.auth_phone
-    - data.entities.auth_email
-    - data.entities.token
-    - data.entities.verification_body
-    - data.entities.verification_action
+    - { entity: data.entities.auth_email, cardinality: one_to_one }
+    - { entity: data.entities.auth_phone, cardinality: one_to_one }
+    - { entity: data.entities.auth_pwd, cardinality: one_to_one }
+    - { entity: data.entities.token, cardinality: one_to_many }
+    - { entity: data.entities.verification_action, cardinality: one_to_many }
+    - { entity: data.entities.verification_body, cardinality: one_to_many }
   queries:
     - data.queries.account.create_account
     - data.queries.account.get_account
@@ -58,7 +58,6 @@ fields:
       join:
         from: data.tables.account.col.id
         to: data.tables.token.col.account_id
-        lazy: true
 
   - name: AuthPwd
     type: data.entities.auth_pwd
@@ -67,7 +66,6 @@ fields:
       join:
         from: data.tables.account.col.id
         to: data.tables.auth_pwd.col.account_id
-        lazy: true
 
   - name: AuthPhone
     type: data.entities.auth_phone
@@ -76,7 +74,6 @@ fields:
       join:
         from: data.tables.account.col.id
         to: data.tables.auth_phone.col.account_id
-        lazy: true
 
   - name: AuthEmail
     type: data.entities.auth_email
@@ -85,4 +82,3 @@ fields:
       join:
         from: data.tables.account.col.id
         to: data.tables.auth_email.col.account_id
-        lazy: true
