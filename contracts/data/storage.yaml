@@ -24,9 +24,9 @@ tables:
     - { table: data.tables.verification_body, description: "验证体（一次性验证凭证与消息快照）" }
     - { table: data.tables.verification_action, description: "验证动作（校验请求记录）" }
   postgres:
-    - { table: token_archive, archive_of: data.tables.token, promotable: true, on_conflict: overwrite, age_by: updated_at, after_unit: days, after: 180 }
-    - { table: verification_body_archive, archive_of: data.tables.verification_body, promotable: false, age_by: created_at, after_unit: days, after: 30 }
-    - { table: verification_action_archive, archive_of: data.tables.verification_action, promotable: false, age_by: created_at, after_unit: days, after: 30 }
+    - { table: token_archive, description: "令牌冷数据归档；可按 updated_at 回迁热表", archive_of: data.tables.token, promotable: true, on_conflict: overwrite, age_by: updated_at, after_unit: days, after: 180 }
+    - { table: verification_body_archive, description: "验证体冷数据归档；只读，不回迁", archive_of: data.tables.verification_body, promotable: false, age_by: created_at, after_unit: days, after: 30 }
+    - { table: verification_action_archive, description: "验证动作冷数据归档；只读，不回迁", archive_of: data.tables.verification_action, promotable: false, age_by: created_at, after_unit: days, after: 30 }
   mongodb: [ ]
 
 caches:

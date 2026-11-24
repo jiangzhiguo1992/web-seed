@@ -62,7 +62,7 @@ fields:
     description: "engine -> 表条目；key 是权威引擎，value 是条目列表"
     item_fields:
       - { name: table, type: _types.string, required: true, description: "权威表 ID；归档条目中是归档物理表名" }
-      - { name: description, type: _types.string, required: false, description: "普通条目说明；必须等于表 summary" }
+      - { name: description, type: _types.string, required: true, description: "条目说明；普通条目必须等于表 summary，归档条目说明归档用途" }
       - { name: retention, type: _types.boolean, required: false, description: "是否开启保留" }
       - { name: unit, type: _types.string, required: false, enum: [ minutes, hours, days ], description: "保留时长单位" }
       - { name: ttl, type: _types.integer, required: false, min: 1, description: "过期时长" }
@@ -90,9 +90,9 @@ rules:
   - { id: storage-registry, text: "storage.tables 每个引擎条目是 map<list<object>>：table 必填、同引擎内不重复、覆盖每张物理表且只引用已存在的表；每张表只能出现在一个权威引擎下；基类不是物理表；caches 条目是 map<list<object>>，cache_of 必须引用已登记的权威表", implemented_by: [ storage-registry ] }
   - { id: storage-entry-fields, text: "普通条目只允许 table/description/retention/unit/ttl", implemented_by: [ storage-entry-fields ] }
   - { id: storage-cache-fields, text: "caches 条目只允许 cache_of/key/prefix/retention/unit/cache_ttl", implemented_by: [ storage-cache-fields ] }
-  - { id: storage-archive-fields, text: "归档条目只允许 archive_of/promotable/on_conflict/table/retention/unit/ttl/age_by/after_unit/after", implemented_by: [ storage-archive-fields ] }
+  - { id: storage-archive-fields, text: "归档条目只允许 archive_of/description/promotable/on_conflict/table/retention/unit/ttl/age_by/after_unit/after", implemented_by: [ storage-archive-fields ] }
   - { id: storage-cache-prefix, text: "caches[].prefix 在同一引擎内唯一", implemented_by: [ storage-cache-prefix ] }
-  - { id: storage-entry-description, text: "tables 条目二选一：普通条目写 description（等于对应 data.tables 的 summary），归档条目写 archive_of；两者互斥", implemented_by: [ storage-entry-description ] }
+  - { id: storage-entry-description, text: "tables 每条必须有 description；普通条目 description 必须等于对应 data.tables 的 summary，归档条目必须写 archive_of，description 说明归档用途；archive_of 只允许出现在归档条目", implemented_by: [ storage-entry-description ] }
   - { id: storage-cache-key, text: "caches 的 key 是非空去重列名列表（account_id / col.account_id / 完整列引用），表由 cache_of 确定，每列必须属于该表（含继承列）；同一引擎内 (cache_of,key) 唯一，key 顺序参与比较；跨引擎同 (cache_of,key) 视为同一逻辑缓存", implemented_by: [ storage-cache-key ] }
   - { id: storage-cache-used-by, text: "storage.caches 的每个逻辑缓存必须至少被一个查询的 caches 有效引用（cache_of 在 query.tables 中）；未被引用或只有无效引用的缓存必须删除", implemented_by: [ storage-cache-used-by ] }
   - { id: storage-engine, text: "storage.tables 的键必须在 supported_engines 中，且每个 supported_engine 都必须有对应条目列表", implemented_by: [ storage-engine ] }
