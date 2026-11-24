@@ -181,16 +181,6 @@ func NormalizeHTTPDocument(doc map[string]any, resolve TypeResolver, strict bool
 				return err
 			}
 			op["x-service-params"] = serviceParams
-			if !auth && !strict {
-				legacy, err := legacySecurityEnabled(op["security"])
-				if err != nil {
-					return err
-				}
-				auth = legacy
-			}
-			if strict && op["security"] != nil {
-				return fmt.Errorf("%s: security removed; use request.headers Authorization", where)
-			}
 			delete(op, "security")
 			if auth {
 				op["security"] = []any{map[string]any{"BearerAuth": []any{}}}
@@ -442,30 +432,6 @@ func normalizeHTTPComponents(doc map[string]any, strict bool) (map[string]string
 	return byID, nil
 }
 
-func legacySecurityEnabled(raw any) (bool, error) {
-	if raw == nil {
-		return false, nil
-	}
-	if m := asMap(raw); m != nil {
-		value, ok := m["BearerAuth"].(bool)
-		if !ok {
-			return false, fmt.Errorf("security.BearerAuth must be a boolean")
-		}
-		return value, nil
-	}
-	list := asList(raw)
-	for _, item := range list {
-		req := asMap(item)
-		if req == nil {
-			continue
-		}
-		if _, ok := req["BearerAuth"]; ok {
-			return true, nil
-		}
-	}
-	return len(list) > 0, nil
-}
-
 func normalizeRequest(request map[string]any, where string, resolve TypeResolver, componentByID map[string]string, strict bool) ([]any, map[string]any, map[string]any, bool, error) {
 	for key := range request {
 		switch key {
@@ -480,11 +446,7 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 	if err != nil {
 		return nil, nil, nil, false, err
 	}
-	if contentType == "" && !strict {
-		if body := asMap(request["body"]); body != nil {
-			contentType, _ = body["content_type"].(string)
-		}
-	}
+
 	parameters = append(parameters, headers...)
 	for _, section := range []struct {
 		name string
@@ -649,10 +611,7 @@ func normalizeRequestBody(body map[string]any, contentType, where string, resolv
 	}
 	kind, _ := body["kind"].(string)
 	if kind == "" {
-		if strict {
-			return nil, nil, fmt.Errorf("%s: request.body.kind required", where)
-		}
-		kind = "json"
+		return nil, nil, fmt.Errorf("%s: request.body.kind required", where)
 	}
 	want, ok := bodyMediaTypes[kind]
 	if !ok {
@@ -685,8 +644,15 @@ func normalizeRequestBody(body map[string]any, contentType, where string, resolv
 			if to == "" {
 				return nil, nil, fmt.Errorf("%s: body.fields[%d].to required", where, i)
 			}
+			fieldKind, _ := field["kind"].(string)
+			if fieldKind == "" {
+				fieldKind = "text"
+			}
+			if fieldKind == "file" && kind != "multipart" {
+				return nil, nil, fmt.Errorf("%s: body field %s: file kind requires multipart", where, name)
+			}
 			var schema map[string]any
-			if field["kind"] == "file" {
+			if fieldKind == "file" {
 				schema = map[string]any{"type": "string", "format": "binary"}
 			} else {
 				var err error
@@ -829,11 +795,6 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 		}
 		normalized := map[string]any{"description": description}
 		body := asMap(resp["body"])
-		if body != nil && asList(resp["headers"]) == nil && !strict {
-			if legacy, _ := body["content_type"].(string); legacy != "" {
-				resp["headers"] = []any{map[string]any{"name": "Content-Type", "value": legacy, "required": true, "description": "响应体媒体类型"}}
-			}
-		}
 		headers, contentType, err := normalizeResponseHeaders(asList(resp["headers"]), where, status, resolve, componentByID, strict)
 		if err != nil {
 			return nil, err
@@ -850,10 +811,7 @@ func normalizeResponse(response map[string]any, where string, resolve TypeResolv
 		if body != nil {
 			kind, _ := body["kind"].(string)
 			if kind == "" {
-				if strict {
-					return nil, fmt.Errorf("%s: response %s body.kind required", where, status)
-				}
-				kind = "json"
+				return nil, fmt.Errorf("%s: response %s body.kind required", where, status)
 			}
 			want, ok := bodyMediaTypes[kind]
 			if !ok || kind == "form" || kind == "multipart" {

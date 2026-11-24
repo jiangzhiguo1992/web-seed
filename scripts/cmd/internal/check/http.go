@@ -1298,8 +1298,17 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 				continue
 			}
 			covered[strings.Split(servicePath, ".")[0]] = true
-			if _, ok := c.serviceParamType(target, servicePath); !ok {
+			decl, ok := c.serviceParamType(target, servicePath)
+			if !ok {
 				c.rulef("http-service-params", "%s %s %s: form field %s maps to unknown service field params.%s", rel, method, path, from, servicePath)
+				continue
+			}
+			props := schemaPropertyMap(bodySchema["properties"])
+			if prop, _ := asMap(props[from]); prop != nil {
+				httpFamily := c.httpSchemaFamily(prop, schemas)
+				if !familiesCompatible(httpFamily, c.httpServiceFamily(decl)) {
+					c.rulef("http-service-params", "%s %s %s: form field %s type differs from service field params.%s (%s)", rel, method, path, from, servicePath, decl)
+				}
 			}
 		}
 	}

@@ -223,10 +223,11 @@ paths:
       contract:
         id: "cap.protocols.http.x.create"
         service: "cap.services.x.create"
-      security: { BearerAuth: false }
       request:
+        headers:
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: "application/json"
+          kind: json
           schema:
             $ref: "#/components/schemas/WrongInput"
           required: true
@@ -269,10 +270,11 @@ paths:
       contract:
         id: "cap.protocols.http.x.create"
         service: "cap.services.x.create"
-      security: { BearerAuth: false }
       request:
+        headers:
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: "application/json"
+          kind: json
           schema:
             $ref: "#/components/schemas/WrongInput"
           required: true
@@ -315,10 +317,11 @@ paths:
       contract:
         id: "cap.protocols.http.x.create"
         service: "cap.services.x.create"
-      security: { BearerAuth: false }
       request:
+        headers:
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: "application/json"
+          kind: json
           schema:
             type: "object"
             additionalProperties: false
@@ -637,7 +640,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -668,7 +670,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request:
         query:
           - name: id
@@ -704,7 +705,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -745,7 +745,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       parameters: []
       responses:
@@ -963,7 +962,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -1610,7 +1608,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.job"
         service: "cap.services.x.job"
-      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -1642,7 +1639,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -1653,7 +1649,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -1756,7 +1751,6 @@ paths:
       name: "getX"
       id: "cap.protocols.http.x.get"
       service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -2587,13 +2581,14 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "200":
           description: "OK"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: "application/json"
+            kind: json
             schema:
               type: "object"
               additionalProperties: false
@@ -2777,6 +2772,52 @@ services:
 	check("parent_query", "platform.errors.QUERY", "platform.errors.OWN")
 }
 
+func TestHTTPFormBody(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+mount: { api_version: v1, path: /, audience: [admin] }
+paths:
+  /x:
+    post:
+      id: cap.protocols.http.x.create
+      name: createX
+      service: cap.services.x.create
+      summary: "x"
+      used_by: [feature.pages.x]
+      request:
+        headers:
+          - { name: Content-Type, required: true, value: application/x-www-form-urlencoded, description: "body" }
+        body:
+          kind: form
+          fields:
+            - { name: username, schema: _types.string, required: true, description: "name", to: params.input.username }
+      response:
+        "204": { description: "OK" }
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.create": {
+			visibility:     "public",
+			requiredParams: map[string]bool{"input": true},
+			paramDecls:     map[string]string{"input": "cap.services.x.schemas.Input"},
+			typeSchemas: map[string]map[string]any{
+				"cap.services.x.schemas.Input": {"properties": []any{
+					map[string]any{"name": "username", "schema": map[string]any{"type": "_types.string"}},
+				}},
+			},
+		},
+	}, map[string]bool{}, map[string]bool{})
+	got := strings.Join(c.errs, "\n")
+	if strings.Contains(got, "[http-service-params]") || strings.Contains(got, "[http-service-type]") {
+		t.Fatalf("valid form body rejected: %v", c.errs)
+	}
+}
+
 func TestHTTPRequiredBody(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
@@ -2793,10 +2834,11 @@ paths:
       service: cap.services.x.create
       summary: "x"
       used_by: [feature.pages.x]
-      security: { BearerAuth: false }
       request:
+        headers:
+          - { name: Content-Type, required: true, value: application/json, description: "请求体媒体类型" }
         body:
-          content_type: application/json
+          kind: json
           schema: cap.services.x.schemas.Input
           required: false
           to: "params.input"

@@ -248,7 +248,6 @@ paths:
       name: list
       id: cap.protocols.http.x.list
       service: cap.services.x.get
-      security: { BearerAuth: false }
       request:
         query:
           - name: status

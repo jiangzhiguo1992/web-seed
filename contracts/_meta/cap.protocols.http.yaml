@@ -82,7 +82,7 @@ fields:
                 required: false
                 unique_key: name
                 description: "HTTP 请求头；Authorization 用 auth 标记，Content-Type 用 value 标记"
-                item_fields: &http_header
+                item_fields:
                   - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "HTTP header 名" }
                   - { name: required, type: _types.boolean, required: false, description: "是否必填；默认 true" }
                   - { name: description, type: _types.string, required: true, description: "header 含义" }
@@ -144,7 +144,7 @@ fields:
                 required: false
                 unique_key: name
                 description: "HTTP 响应头；Content-Type 用 value 标记"
-                item_fields: &http_response_header
+                item_fields:
                   - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "HTTP header 名" }
                   - { name: required, type: _types.boolean, required: false, description: "是否必填；默认 true" }
                   - { name: description, type: _types.string, required: true, description: "header 含义" }

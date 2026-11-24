@@ -151,13 +151,14 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "200":
           description: "OK"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.x.schemas.X`)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
@@ -229,7 +230,6 @@ paths:
       contract:
         id: "cap.protocols.http.x.get"
         service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -370,7 +370,6 @@ paths:
       name: "get`+strings.ToUpper(item.name)+`"
       id: "cap.protocols.http.`+item.name+`.get"
       service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "204": { description: "OK" }
@@ -384,6 +383,132 @@ paths:
 	_, err := build(root)
 	if err == nil || !strings.Contains(err.Error(), "includes mix mount.api_version") {
 		t.Fatalf("mixed mount versions not rejected: %v", err)
+	}
+}
+
+func TestBuildFormBody(t *testing.T) {
+	root := t.TempDir()
+	writeTypes(t, root)
+	writeHTTPPolicy(t, root, "[]", "[]")
+	writeFixture(t, root, "contracts/project.yaml", `project:
+  name: test
+  version: "1"
+apps:
+  api:
+    kind: api
+    api_version: v1
+    audience: admin
+    timeout_ms: 5000
+    includes: [cap.protocols.http.x]
+    generated:
+      spec: generated/openapi/x.yaml
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+mount:
+  api_version: v1
+  path: /
+  audience: [admin]
+paths:
+  /x:
+    post:
+      name: createX
+      id: cap.protocols.http.x.create
+      service: cap.services.x.create
+      request:
+        headers:
+          - { name: Content-Type, required: true, value: application/x-www-form-urlencoded, description: "body" }
+        body:
+          kind: form
+          fields:
+            - { name: username, schema: _types.string, required: true, description: "name", to: params.input.username }
+      response:
+        "204":
+          description: "OK"
+`)
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+schemas:
+  Input:
+    type: _types.object
+    properties:
+      - { name: username, schema: { type: _types.string }, required: true, description: "name" }
+services: []
+`)
+	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
+enums: []
+`)
+	if err := os.MkdirAll(filepath.Join(root, "contracts/data/entities"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(files["generated/openapi/x.yaml"])
+	for _, want := range []string{"application/x-www-form-urlencoded", "username", "required:"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("generated form spec missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestBuildMultipartBody(t *testing.T) {
+	root := t.TempDir()
+	writeTypes(t, root)
+	writeHTTPPolicy(t, root, "[]", "[]")
+	writeFixture(t, root, "contracts/project.yaml", `project:
+  name: test
+  version: "1"
+apps:
+  api:
+    kind: api
+    api_version: v1
+    audience: admin
+    timeout_ms: 5000
+    includes: [cap.protocols.http.x]
+    generated:
+      spec: generated/openapi/x.yaml
+`)
+	writeFixture(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: "cap.protocols.http.x"
+mount:
+  api_version: v1
+  path: /
+  audience: [admin]
+paths:
+  /x:
+    post:
+      name: createX
+      id: cap.protocols.http.x.create
+      service: cap.services.x.create
+      request:
+        headers:
+          - { name: Content-Type, required: true, value: multipart/form-data, description: "body" }
+        body:
+          kind: multipart
+          fields:
+            - { name: avatar, kind: file, required: false, description: "file", to: params.input.avatar }
+      response:
+        "204":
+          description: "OK"
+`)
+	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
+schemas: {}
+services: []
+`)
+	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
+enums: []
+`)
+	if err := os.MkdirAll(filepath.Join(root, "contracts/data/entities"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files, err := build(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := string(files["generated/openapi/x.yaml"])
+	for _, want := range []string{"multipart/form-data", "avatar", "format: binary"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("generated multipart spec missing %q:\n%s", want, out)
+		}
 	}
 }
 
@@ -428,8 +553,9 @@ paths:
       name: "getA"
       id: "cap.protocols.http.a.get"
       service: "cap.services.x.get"
-      security: { BearerAuth: true }
-      request: {}
+      request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
       response:
         "200":
           description: "OK"
@@ -449,7 +575,6 @@ paths:
       name: "getB"
       id: "cap.protocols.http.b.get"
       service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "200":
@@ -534,13 +659,16 @@ paths:
       service: cap.services.x.get
       summary: "a"
       used_by: [feature.pages.x]
-      security: { BearerAuth: true }
-      request: {}
+      request:
+        headers:
+          - { name: Authorization, required: true, auth: BearerAuth, description: "JWT access token" }
       response:
         "200":
           description: "OK"
+          headers:
+            - { name: Content-Type, required: true, value: application/json, description: "响应体媒体类型" }
           body:
-            content_type: application/json
+            kind: json
             schema: cap.services.x.schemas.X
         "409":
           codes: [platform.errors.X]
@@ -612,7 +740,6 @@ paths:
       name: "createA"
       id: "cap.protocols.http.a.create"
       service: "cap.services.x.create"
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -675,7 +802,6 @@ paths:
       name: "adminOnly"
       id: "cap.protocols.http.a.admin"
       service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
@@ -692,7 +818,6 @@ paths:
       name: "userOnly"
       id: "cap.protocols.http.b.user"
       service: "cap.services.x.get"
-      security: { BearerAuth: false }
       request: {}
       response:
         "204":
