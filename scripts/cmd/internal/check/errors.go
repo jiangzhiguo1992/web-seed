@@ -2,9 +2,152 @@
 package check
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 )
+
+// checkErrorFilePlacement 约束字段只出现在固定文件：
+// _base 写全局约定，data_access 写基础设施基线，域文件只写 errors。
+func (c *Checker) checkErrorFilePlacement(rel, stem string, doc map[string]any) {
+	has := func(key string) bool { _, ok := doc[key]; return ok }
+	baseOnly := []string{"naming", "biz_code", "order", "mapping_rules"}
+	if stem == "_base" {
+		for _, key := range []string{"errors", "common_errors"} {
+			if has(key) {
+				c.rulef("error-file-placement", "%s: _base.yaml must not declare %s", rel, key)
+			}
+		}
+		return
+	}
+	for _, key := range baseOnly {
+		if has(key) {
+			c.rulef("error-file-placement", "%s: %s is only allowed in _base.yaml", rel, key)
+		}
+	}
+	if stem == "data_access" {
+		if has("errors") {
+			c.rulef("error-file-placement", "%s: data_access.yaml must use common_errors, not errors", rel)
+		}
+		return
+	}
+	if has("common_errors") {
+		c.rulef("error-file-placement", "%s: common_errors is only allowed in data_access.yaml", rel)
+	}
+}
+
+// checkErrorI18n 校验 i18n 由错误码派生：errors.<code 小写，首个 _ 换成 .>。
+func (c *Checker) checkErrorI18n(rel string, i int, m map[string]any) {
+	code, _ := m["code"].(string)
+	i18n, _ := m["i18n"].(string)
+	if code == "" || i18n == "" {
+		return
+	}
+	want := "errors." + strings.Replace(strings.ToLower(code), "_", ".", 1)
+	if i18n != want {
+		c.rulef("error-i18n-derivation", "%s: errors[%d] (%s): i18n must be %s, got %s", rel, i, code, want, i18n)
+	}
+}
+
+// checkErrorLocales 校验 i18n key 存在于 project.defaults.locale 对应的前端资源文件。
+func (c *Checker) checkErrorLocales(expected map[string]string) {
+	if len(expected) == 0 {
+		return
+	}
+	if _, err := os.Stat(filepath.Join(c.root, "Makefile")); err != nil {
+		return // 只拷贝 contracts/ 的局部夹具没有前端资源
+	}
+	project, err := loadYAML(filepath.Join(c.root, "contracts/project.yaml"))
+	if err != nil {
+		c.rulef("error-i18n-locale", "contracts/project.yaml: %v", err)
+		return
+	}
+	defaults, _ := asMap(project["defaults"])
+	defaultLocale, _ := defaults["locale"].(string)
+	if defaultLocale == "" {
+		c.rulef("schema.required", "contracts/project.yaml: defaults.locale is required")
+		return
+	}
+	locales := stringList(defaults["locales"])
+	if len(locales) == 0 {
+		locales = []string{defaultLocale}
+	}
+	hasDefault := false
+	for _, locale := range locales {
+		if locale == defaultLocale {
+			hasDefault = true
+		}
+	}
+	if !hasDefault {
+		c.rulef("error-i18n-locale", "contracts/project.yaml: defaults.locales must include %s", defaultLocale)
+		locales = append(locales, defaultLocale)
+	}
+	for _, locale := range locales {
+		if locale != "" {
+			c.checkErrorLocaleFile(locale, locale == defaultLocale, expected)
+		}
+	}
+}
+
+// checkErrorLocaleFile 校验单个 locale 文件：key 集合一致；默认 locale 值等于 message，其他 locale 非空。
+func (c *Checker) checkErrorLocaleFile(locale string, isDefault bool, expected map[string]string) {
+	path := filepath.Join(c.root, "apps/web/admin/src/shared/locales", locale+".json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		c.rulef("error-i18n-locale", "%s: locale catalog missing", relPath(c.root, path))
+		return
+	}
+	var doc any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		c.rulef("error-i18n-locale", "%s: %v", relPath(c.root, path), err)
+		return
+	}
+	present := map[string]string{}
+	flattenLocale(doc, "", present)
+	for key, want := range expected {
+		got, ok := present[key]
+		if !ok {
+			c.rulef("error-i18n-locale", "%s: missing i18n key %s", relPath(c.root, path), key)
+			continue
+		}
+		if isDefault {
+			if got != want {
+				c.rulef("error-i18n-locale", "%s: i18n message mismatch for %s: want %q, got %q", relPath(c.root, path), key, want, got)
+			}
+			continue
+		}
+		if got == "" {
+			c.rulef("error-i18n-locale", "%s: empty i18n value for %s", relPath(c.root, path), key)
+		}
+	}
+	for key := range present {
+		if _, ok := expected[key]; !ok {
+			c.rulef("error-i18n-locale", "%s: unknown i18n key %s", relPath(c.root, path), key)
+		}
+	}
+}
+
+func flattenLocale(v any, prefix string, out map[string]string) {
+	switch x := v.(type) {
+	case map[string]any:
+		for key, child := range x {
+			next := key
+			if prefix != "" {
+				next = prefix + "." + key
+			}
+			flattenLocale(child, next, out)
+		}
+	default:
+		if prefix != "" {
+			if s, ok := x.(string); ok {
+				out[prefix] = s
+			} else {
+				out[prefix] = ""
+			}
+		}
+	}
+}
 
 func (c *Checker) checkErrorFiles() {
 	files := glob(c.root, "contracts/platform/errors/*.yaml")
@@ -56,6 +199,7 @@ func (c *Checker) checkErrorFiles() {
 		bizRanges[stem] = [2]int{min, max}
 	}
 
+	i18nMessages := map[string]string{}
 	seen := map[string]string{}
 	seenBiz := map[int]string{}
 	c.errorStatus = map[string]int{}
@@ -74,6 +218,7 @@ func (c *Checker) checkErrorFiles() {
 		c.validateDoc(doc, schema.Fields, rel)
 		c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		c.checkStability(doc, rel)
+		c.checkErrorFilePlacement(rel, stem, doc)
 		if raw, ok := doc["summary"]; ok {
 			if s, _ := raw.(string); strings.TrimSpace(s) == "" {
 				c.rulef("schema.non-empty", "%s: summary must not be empty", rel)
@@ -127,10 +272,10 @@ func (c *Checker) checkErrorFiles() {
 			if status, ok := toInt(m["status"]); ok {
 				c.errorStatus[code] = status
 			}
-			if raw, ok := m["i18n"]; ok {
-				if s, _ := raw.(string); strings.TrimSpace(s) == "" {
-					c.rulef("schema.non-empty", "%s: errors[%d] (%s): i18n must not be empty", rel, i, code)
-				}
+			c.checkErrorI18n(rel, i, m)
+			if key, _ := m["i18n"].(string); key != "" {
+				message, _ := m["message"].(string)
+				i18nMessages[key] = message
 			}
 			if raw, ok := m["message"]; ok {
 				if s, _ := raw.(string); strings.TrimSpace(s) == "" {
@@ -158,6 +303,7 @@ func (c *Checker) checkErrorFiles() {
 			total++
 		}
 	}
+	c.checkErrorLocales(i18nMessages)
 	if maxTotal > 0 && total > maxTotal {
 		c.rulef("schema.limit", "contracts/platform/errors: %d errors exceed naming.max_total %d", total, maxTotal)
 	}

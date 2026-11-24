@@ -166,11 +166,22 @@ func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isP
 	if components == nil {
 		return
 	}
+	sections := []string{"schemas", "responses", "parameters", "examples", "requestBodies", "headers", "securitySchemes", "links", "callbacks", "pathItems"}
+	names := map[string]map[string]bool{}
+	for _, section := range sections {
+		names[section] = map[string]bool{}
+		for name := range asMapValue(components[section]) {
+			names[section][name] = true
+		}
+	}
 	schemes := asMapValue(components["securitySchemes"])
 	for name, raw := range schemes {
 		scheme := asMapValue(raw)
 		if scheme == nil {
 			c.rulef("http-shared", "%s: components.securitySchemes.%s must be an object", rel, name)
+			continue
+		}
+		if _, ref := scheme["$ref"]; ref {
 			continue
 		}
 		typ, _ := scheme["type"].(string)
@@ -241,6 +252,9 @@ func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isP
 			c.rulef("http-shared", "%s: components.responses.%s must be an object", rel, name)
 			continue
 		}
+		if _, ref := response["$ref"]; ref {
+			continue
+		}
 		if v, _ := response["description"].(string); strings.TrimSpace(v) == "" {
 			c.rulef("http-shared", "%s: components.responses.%s.description required", rel, name)
 		}
@@ -274,6 +288,9 @@ func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isP
 			c.rulef("http-shared", "%s: components.parameters.%s must be an object", rel, name)
 			continue
 		}
+		if _, ref := parameter["$ref"]; ref {
+			continue
+		}
 		if v, _ := parameter["name"].(string); strings.TrimSpace(v) == "" {
 			c.rulef("http-shared", "%s: components.parameters.%s.name required", rel, name)
 		}
@@ -296,6 +313,9 @@ func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isP
 			c.rulef("http-shared", "%s: components.headers.%s must be an object", rel, name)
 			continue
 		}
+		if _, ref := header["$ref"]; ref {
+			continue
+		}
 		if header["schema"] == nil {
 			c.rulef("http-shared", "%s: components.headers.%s.schema required", rel, name)
 		}
@@ -304,6 +324,9 @@ func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isP
 		schema := asMapValue(raw)
 		if schema == nil {
 			c.rulef("http-shared", "%s: components.schemas.%s must be an object", rel, name)
+			continue
+		}
+		if _, ref := schema["$ref"]; ref {
 			continue
 		}
 		if isPlatform {
@@ -342,6 +365,150 @@ func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isP
 			if platform, _ := source["platform"].(bool); !platform {
 				c.rulef("http-shared", "%s: components.schemas.%s.properties only allowed for platform schemas", rel, name)
 			}
+		}
+	}
+	for name, raw := range asMapValue(components["examples"]) {
+		example := asMapValue(raw)
+		if example == nil {
+			c.rulef("http-shared", "%s: components.examples.%s must be an object", rel, name)
+			continue
+		}
+		if _, ref := example["$ref"]; ref {
+			continue
+		}
+		_, hasValue := example["value"]
+		_, hasExternal := example["externalValue"]
+		if hasValue == hasExternal {
+			c.rulef("http-shared", "%s: components.examples.%s must declare exactly one of value/externalValue", rel, name)
+		}
+	}
+	for name, raw := range asMapValue(components["requestBodies"]) {
+		body := asMapValue(raw)
+		if body == nil {
+			c.rulef("http-shared", "%s: components.requestBodies.%s must be an object", rel, name)
+			continue
+		}
+		if _, ref := body["$ref"]; ref {
+			continue
+		}
+		content := asMapValue(body["content"])
+		if len(content) == 0 {
+			c.rulef("http-shared", "%s: components.requestBodies.%s.content required", rel, name)
+		}
+		for contentType, rawMedia := range content {
+			media := asMapValue(rawMedia)
+			if media == nil || media["schema"] == nil {
+				c.rulef("http-shared", "%s: components.requestBodies.%s.content.%s.schema required", rel, name, contentType)
+			}
+		}
+		if v, ok := body["required"]; ok {
+			if _, ok := v.(bool); !ok {
+				c.rulef("http-shared", "%s: components.requestBodies.%s.required must be a boolean", rel, name)
+			}
+		}
+	}
+	for name, raw := range asMapValue(components["links"]) {
+		link := asMapValue(raw)
+		if link == nil {
+			c.rulef("http-shared", "%s: components.links.%s must be an object", rel, name)
+			continue
+		}
+		if _, ref := link["$ref"]; ref {
+			continue
+		}
+		opRef, _ := link["operationRef"].(string)
+		opID, _ := link["operationId"].(string)
+		if (opRef == "") == (opID == "") {
+			c.rulef("http-shared", "%s: components.links.%s must declare exactly one of operationRef/operationId", rel, name)
+		}
+	}
+	for name, raw := range asMapValue(components["callbacks"]) {
+		callback := asMapValue(raw)
+		if callback == nil {
+			c.rulef("http-shared", "%s: components.callbacks.%s must be an object", rel, name)
+			continue
+		}
+		if _, ref := callback["$ref"]; ref {
+			continue
+		}
+		if len(callback) == 0 {
+			c.rulef("http-shared", "%s: components.callbacks.%s must not be empty", rel, name)
+		}
+		for expr, rawItem := range callback {
+			item := asMapValue(rawItem)
+			if item == nil {
+				c.rulef("http-shared", "%s: components.callbacks.%s.%s must be an object", rel, name, expr)
+				continue
+			}
+			if !hasOperation(item) {
+				c.rulef("http-shared", "%s: components.callbacks.%s.%s must contain an operation or $ref", rel, name, expr)
+			}
+		}
+	}
+	for name, raw := range asMapValue(components["pathItems"]) {
+		item := asMapValue(raw)
+		if item == nil {
+			c.rulef("http-shared", "%s: components.pathItems.%s must be an object", rel, name)
+			continue
+		}
+		if !hasOperation(item) {
+			c.rulef("http-shared", "%s: components.pathItems.%s must contain an operation or $ref", rel, name)
+		}
+	}
+	if isPlatform {
+		for section, raw := range components {
+			c.checkComponentRefs(rel, "components."+section, raw, names)
+		}
+	}
+}
+
+// hasOperation 判断 Path Item 是否声明了至少一个 HTTP operation 或 $ref。
+func hasOperation(item map[string]any) bool {
+	if _, ok := item["$ref"]; ok {
+		return true
+	}
+	for _, method := range []string{"get", "put", "post", "delete", "options", "head", "patch", "trace"} {
+		if _, ok := item[method]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// isDataNode 判断字段值是否为任意 JSON 数据，其中的 $ref 只是数据而非引用。
+func isDataNode(key string, child any) bool {
+	if strings.HasPrefix(key, "x-") {
+		return true
+	}
+	switch key {
+	case "value", "example", "default", "enum", "const":
+		return true
+	case "examples":
+		_, list := child.([]any)
+		return list
+	}
+	return false
+}
+
+// checkComponentRefs 递归校验平台组件内的本地 $ref 目标存在。
+func (c *Checker) checkComponentRefs(rel, where string, v any, names map[string]map[string]bool) {
+	switch x := v.(type) {
+	case map[string]any:
+		if ref, _ := x["$ref"].(string); strings.HasPrefix(ref, "#/components/") {
+			parts := strings.SplitN(strings.TrimPrefix(ref, "#/components/"), "/", 2)
+			if len(parts) != 2 || names[parts[0]] == nil || !names[parts[0]][parts[1]] {
+				c.rulef("http-shared", "%s: %s $ref %s does not resolve", rel, where, ref)
+			}
+		}
+		for key, child := range x {
+			if key == "$ref" || isDataNode(key, child) {
+				continue
+			}
+			c.checkComponentRefs(rel, where+"."+key, child, names)
+		}
+	case []any:
+		for i, child := range x {
+			c.checkComponentRefs(rel, fmt.Sprintf("%s[%d]", where, i), child, names)
 		}
 	}
 }

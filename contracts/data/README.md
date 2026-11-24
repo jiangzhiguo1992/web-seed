@@ -253,6 +253,8 @@ indexes:
 
 `make contract-check` 覆盖 data 层全部结构与引用校验（`data.tables` / `data.enums` / `data.entities` / `data.queries` / `storage` / `types`），并内嵌 `used_by` 新鲜度与 `rule-id` 同步检查。
 
+`data.queries` 在 sqlc 落地前保持 `tested`。提升路径：新增 `make gen-sqlc` 与 `make gen-sqlc-check`，把 `gen-sqlc` 接入 `gen`、`gen-sqlc-check` 接入 `gen-check-core`；在 `contracts/index.yaml` 的 `enforcement_gates.generated.data.queries` 登记 `make gen-sqlc`，再把所有 `data.queries.*` 改为 `generated+tested`。`TestQueriesEnforcementFollowsSQLC` 固化目标、recipe、gate 与 index 四项，缺任一步都会失败。
+
 | 闸门 | 机制 | 状态 |
 |---|---|---|
 | 契约结构与引用 | `make contract-check`（lefthook pre-commit + CI） | ✅ 已启用 |

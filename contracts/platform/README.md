@@ -59,5 +59,5 @@
 `index.yaml` 的 `enforcement` 必须与实际校验一致。当前：
 
 - `tested`：`platform.environments`（schema + environment-shape）、`platform.versioning`（schema + versioning-refs）、`platform.quality`（schema + quality-refs）、`platform.analytics.events`（schema + analytics-refs）、`platform.observability.log_fields`（schema + log-field-refs）、`platform.observability.metrics`（schema + metric-shape）、`platform.architecture.go_arch`（schema + architecture-refs）、`platform.security.access`（schema + access-coverage）、`platform.security.roles`（schema + role-inheritance/role-permissions）、`platform.security.auth_policy`（schema + auth-policy-jwt/audience/password/storage/mfa）、`platform.security.permissions`（schema + permission-code-shape）、`feature.routes`（schema + route-structure/route-redirect）。
-- `generated`：`platform.http_conventions`（gen_openapi）。
+- `generated`：`platform.errors`（gen_errors）、`platform.http_conventions`（gen_openapi）。
 - `review-only`：`platform.design.tokens`。JSON 契约已接结构校验；`gen-env.sh` 的生成能力仍未实现，但 schema 本身已测试。

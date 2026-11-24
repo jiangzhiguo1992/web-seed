@@ -161,9 +161,19 @@ fields:
       - { name: allow_credentials, type: _types.boolean, required: true, description: "是否允许凭据" }
       - { name: max_age_seconds, type: _types.integer, required: true, min: 0, description: "预检缓存秒数" }
   - name: components
-    type: _types.any
-    soft: true
+    type: _types.object
     required: true
-    description: "OpenAPI 平台组件；结构由 http-shared 校验"
+    description: "OpenAPI 平台组件；值结构由 http-shared 校验"
+    fields:
+      - { name: schemas, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "schema 组件" }
+      - { name: responses, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "response 组件" }
+      - { name: parameters, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "parameter 组件" }
+      - { name: examples, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "example 组件" }
+      - { name: requestBodies, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "requestBody 组件" }
+      - { name: headers, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "header 组件" }
+      - { name: securitySchemes, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "securityScheme 组件" }
+      - { name: links, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "link 组件" }
+      - { name: callbacks, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "callback 组件" }
+      - { name: pathItems, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "pathItem 组件" }
 
 rules: []

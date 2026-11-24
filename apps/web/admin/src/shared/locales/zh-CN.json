@@ -1,0 +1,45 @@
+{
+  "errors": {
+    "auth": {
+      "token_invalid": "令牌无效",
+      "token_expired": "令牌已过期",
+      "verification_invalid": "验证码不正确",
+      "verification_expired": "验证码已过期",
+      "verification_attempts_exceeded": "验证码尝试次数过多",
+      "verification_target_invalid": "验证目标格式不合法",
+      "invalid_credentials": "账号标识或凭据不正确",
+      "locked": "认证已锁定，请稍后再试",
+      "username_taken": "登录名已被使用",
+      "phone_taken": "手机号已被绑定",
+      "email_taken": "邮箱已被绑定",
+      "phone_invalid": "手机号格式不合法",
+      "email_invalid": "邮箱格式不合法",
+      "weak_password": "密码强度不足"
+    },
+    "common": {
+      "bad_request": "请求参数不合法",
+      "unauthorized": "未认证",
+      "forbidden": "无权限",
+      "not_found": "资源不存在",
+      "conflict": "状态冲突",
+      "rate_limited": "请求过于频繁",
+      "internal": "服务端错误",
+      "audit_failed": "审计写入失败",
+      "loop_exhausted": "循环次数超过上限，请稍后重试",
+      "unavailable": "服务暂不可用",
+      "payload_too_large": "请求体超过上限",
+      "unsupported_media_type": "不支持的 Content-Type",
+      "gone": "端点已移除",
+      "method_not_allowed": "方法不允许"
+    },
+    "account": {
+      "not_found": "账号不存在",
+      "number_taken": "账号编号已被使用",
+      "number_invalid": "账号编号格式不合法",
+      "nickname_invalid": "昵称长度不合法",
+      "suspended": "账号已被封禁",
+      "illegal_transition": "当前状态不允许该操作",
+      "already_deleted": "账号已删除"
+    }
+  }
+}

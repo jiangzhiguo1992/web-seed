@@ -1,0 +1,45 @@
+{
+  "errors": {
+    "common": {
+      "bad_request": "Invalid request parameters",
+      "unauthorized": "Not authenticated",
+      "forbidden": "Forbidden",
+      "not_found": "Resource not found",
+      "conflict": "Conflict",
+      "rate_limited": "Too many requests",
+      "internal": "Internal server error",
+      "audit_failed": "Failed to write audit log",
+      "loop_exhausted": "Loop limit exceeded, please try again later",
+      "unavailable": "Service unavailable",
+      "payload_too_large": "Request body too large",
+      "unsupported_media_type": "Unsupported media type",
+      "gone": "Endpoint removed",
+      "method_not_allowed": "Method not allowed"
+    },
+    "account": {
+      "not_found": "Account not found",
+      "number_taken": "Account number already in use",
+      "number_invalid": "Invalid account number",
+      "nickname_invalid": "Invalid nickname length",
+      "suspended": "Account suspended",
+      "illegal_transition": "Operation not allowed in current state",
+      "already_deleted": "Account already deleted"
+    },
+    "auth": {
+      "token_invalid": "Invalid token",
+      "token_expired": "Token expired",
+      "verification_invalid": "Invalid verification code",
+      "verification_expired": "Verification code expired",
+      "verification_attempts_exceeded": "Too many verification attempts",
+      "verification_target_invalid": "Invalid verification target",
+      "invalid_credentials": "Invalid account identifier or credentials",
+      "locked": "Authentication locked, please try again later",
+      "username_taken": "Username already in use",
+      "phone_taken": "Phone number already bound",
+      "email_taken": "Email already bound",
+      "phone_invalid": "Invalid phone number",
+      "email_invalid": "Invalid email address",
+      "weak_password": "Password is too weak"
+    }
+  }
+}

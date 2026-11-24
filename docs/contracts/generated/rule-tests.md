@@ -192,6 +192,9 @@
 | platform.analytics.events | analytics-refs | analytics-refs, analytics-types | 1 | 0 |
 | platform.architecture.go_arch | architecture-refs | architecture-refs | 1 | 0 |
 | platform.environments | environment-shape | environment-shape | 1 | 0 |
+| platform.errors | error-file-placement | error-file-placement | 1 | 0 |
+| platform.errors | error-i18n-derivation | error-i18n-derivation | 1 | 0 |
+| platform.errors | error-i18n-locale | error-i18n-locale | 1 | 0 |
 | platform.observability.log_fields | log-field-refs | log-field-refs | 1 | 0 |
 | platform.observability.metrics | metric-shape | metric-shape | 1 | 0 |
 | platform.quality | quality-refs | quality-refs | 1 | 0 |

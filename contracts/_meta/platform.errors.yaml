@@ -88,4 +88,7 @@ fields:
     pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$'
     description: "基础设施错误基线"
 
-rules: []
+rules:
+  - { id: error-file-placement, text: "_base.yaml 只写 naming/biz_code/order/mapping_rules；errors 只在域文件；common_errors 只在 data_access.yaml；_base 不写 errors/common_errors，data_access 不写 errors", implemented_by: [ error-file-placement ] }
+  - { id: error-i18n-derivation, text: "i18n 必须等于 errors.<code 小写，首个 _ 换成 .>；如 AUTH_TOKEN_INVALID → errors.auth.token_invalid", implemented_by: [ error-i18n-derivation ] }
+  - { id: error-i18n-locale, text: "每个 errors[].i18n 必须存在于 project.defaults.locales（含默认 locale）对应的 apps/web/admin/src/shared/locales/<locale>.json；默认 locale 值必须等于 errors[].message，其他 locale 值非空；所有 locale 不得有多余 key", implemented_by: [ error-i18n-locale ] }

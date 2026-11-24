@@ -8,8 +8,10 @@ import (
 	pathpkg "path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
+	"github.com/yourorg/web-seed/scripts/cmd/internal/ruletests"
 	"gopkg.in/yaml.v3"
 )
 
@@ -419,6 +421,7 @@ func (c *Checker) checkEnforcementGates(rel string, entries []any, doc map[strin
 	generated, _ := asMap(gates["generated"])
 	tested, _ := asMap(gates["tested"])
 	types := c.contractTypes()
+	rulesByType := c.contractRules()
 	for key := range gates {
 		if key != "generated" && key != "tested" {
 			c.rulef("schema.enforcement", "%s: enforcement_gates.%s is not a known gate group", rel, key)
@@ -479,8 +482,28 @@ func (c *Checker) checkEnforcementGates(rel string, entries []any, doc map[strin
 					c.rulef("schema.enforcement", "%s: %s tested gate %s must be a Go test file", rel, id, testFile)
 					continue
 				}
-				if _, err := os.Stat(filepath.Join(c.root, testFile)); err != nil {
+				path := filepath.Join(c.root, testFile)
+				if _, err := os.Stat(path); err != nil {
 					c.rulef("schema.enforcement", "%s: %s tested gate %s does not exist", rel, id, testFile)
+					continue
+				}
+				if ids := ruleIDs(rulesByType[typ]); len(ids) > 0 {
+					content, err := os.ReadFile(path)
+					if err != nil {
+						c.rulef("schema.enforcement", "%s: %s tested gate %s: %v", rel, id, testFile, err)
+						continue
+					}
+					asserted := false
+					refs := ruletests.RefsIn(string(content), ids)
+					for _, rid := range ids {
+						if ref := refs[rid]; ref.Asserted > 0 || ref.Dynamic > 0 {
+							asserted = true
+							break
+						}
+					}
+					if !asserted {
+						c.rulef("schema.enforcement", "%s: %s tested gate %s does not assert any %s rule", rel, id, testFile, typ)
+					}
 				}
 			}
 		}
@@ -511,6 +534,47 @@ func (c *Checker) contractTypes() map[string]bool {
 		}
 	}
 	return out
+}
+
+// contractRules 返回契约类型 → _meta rules ID 集合。
+func (c *Checker) contractRules() map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	files, _ := filepath.Glob(filepath.Join(c.root, "contracts/_meta/*.yaml"))
+	for _, file := range files {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+		var head struct {
+			Type  string `yaml:"type"`
+			Rules []struct {
+				ID string `yaml:"id"`
+			} `yaml:"rules"`
+		}
+		if err := yaml.Unmarshal(b, &head); err != nil || head.Type == "" {
+			continue
+		}
+		ids := map[string]bool{}
+		for _, rule := range head.Rules {
+			if rule.ID != "" {
+				ids[rule.ID] = true
+			}
+		}
+		if len(ids) > 0 {
+			out[head.Type] = ids
+		}
+	}
+	return out
+}
+
+// ruleIDs 把集合转成稳定切片。
+func ruleIDs(set map[string]bool) []string {
+	ids := make([]string, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // contractTypeForID 取 id 匹配的最长类型前缀。

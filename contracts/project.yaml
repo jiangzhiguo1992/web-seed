@@ -24,6 +24,7 @@ web:
 defaults:
   timezone: UTC
   locale: zh-CN
+  locales: [zh-CN, en]
   currency: CNY
   id_strategy: integer
 

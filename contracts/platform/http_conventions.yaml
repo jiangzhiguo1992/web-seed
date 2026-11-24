@@ -114,11 +114,6 @@ cors:
 # 平台级 HTTP 组件：直接使用 OpenAPI 3.1 components 形状，由 gen_openapi 注入每个 api app。
 # HTTP 文件没有私有组件；所有引用都指向这里的组件名。
 components:
-  securitySchemes:
-    Bearer:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
   schemas:
     ApiErrorResponse:
       type: object
@@ -136,11 +131,6 @@ components:
           type: string
         data:
           type: "null"
-  headers:
-    RetryAfter:
-      description: "建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误"
-      schema:
-        type: string
   responses:
     BadRequest:
       description: "请求非法"
@@ -235,3 +225,13 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
+  headers:
+    RetryAfter:
+      description: "建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误"
+      schema:
+        type: string
+  securitySchemes:
+    Bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

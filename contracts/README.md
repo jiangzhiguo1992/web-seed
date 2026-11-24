@@ -55,9 +55,10 @@
 按契约类型登记生成目标与测试文件，`contract-check` 校验目标/文件存在，并拒绝声明了
 `generated` / `tested` 却没有 gate 的条目。`generated/` 下的产物条目豁免。
 
-`generated` 只给有专属生成产物的类型（DDL、OpenAPI paths、event payload、scenario、errors、
-HTTP components）；仅作为生成器输入的契约（entities、queries、services、lifecycles、pages、
-roles）不标 `generated`，用 `tested` 覆盖。
+`generated` 只给被现有 `make gen-*` 消费并产出受检产物的类型（DDL、OpenAPI、errors、
+scenarios、HTTP components）；只由 checker 校验、没有生成器消费的契约（queries、lifecycles、
+pages、permissions、roles）标 `tested`。`tested` gate 对声明了 `_meta.rules` 的类型要求测试文件
+至少断言一条该类型规则；没有 `_meta.rules` 的类型只校验测试文件存在。
 
 **没有 `enforcement` 声明的文件不算契约。**
 

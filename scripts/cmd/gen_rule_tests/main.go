@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
+	"github.com/yourorg/web-seed/scripts/cmd/internal/ruletests"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,11 +27,6 @@ type row struct {
 	ImplementedBy string
 	Asserted      int
 	Dynamic       int
-}
-
-type testRef struct {
-	asserted int
-	dynamic  int
 }
 
 func main() {
@@ -89,7 +85,7 @@ func main() {
 
 func build(root string) ([]byte, error) {
 	known := loadKnownRuleIDs(root)
-	testRefs := loadTestRefs(root, known)
+	testRefs := ruletests.Refs(root, known)
 	rows, err := loadRows(root, testRefs)
 	if err != nil {
 		return nil, err
@@ -106,12 +102,12 @@ func build(root string) ([]byte, error) {
 }
 
 // knownTests 返回 rule ID → 测试引用统计。
-func knownTests(root string) map[string]testRef {
-	return loadTestRefs(root, loadKnownRuleIDs(root))
+func knownTests(root string) map[string]ruletests.Ref {
+	return ruletests.Refs(root, loadKnownRuleIDs(root))
 }
 
 // loadRows 读取全部 _meta rules 并填测试引用。
-func loadRows(root string, testRefs map[string]testRef) ([]row, error) {
+func loadRows(root string, testRefs map[string]ruletests.Ref) ([]row, error) {
 	var rows []row
 	files, err := filepath.Glob(filepath.Join(root, "contracts/_meta/*.yaml"))
 	if err != nil {
@@ -142,8 +138,8 @@ func loadRows(root string, testRefs map[string]testRef) ([]row, error) {
 				Type:          s.Type,
 				Rule:          r.ID,
 				ImplementedBy: strings.Join(r.ImplementedBy, ", "),
-				Asserted:      tr.asserted,
-				Dynamic:       tr.dynamic,
+				Asserted:      tr.Asserted,
+				Dynamic:       tr.Dynamic,
 			})
 		}
 	}
@@ -163,49 +159,6 @@ func loadKnownRuleIDs(root string) []string {
 		ids = append(ids, m[1])
 	}
 	return ids
-}
-
-// loadTestRefs 统计 check 包测试中的断言引用：
-//   - asserted：mustContainRule 的字面 rule ID，或 "[rule]" 字面断言；
-//   - dynamic：表驱动测试里通过变量传入 rule ID 的引用（每文件计 1）。
-func loadTestRefs(root string, ids []string) map[string]testRef {
-	out := map[string]testRef{}
-	mustRe := regexp.MustCompile(`mustContainRule\([^,]+,\s*[^,]+,\s*"([^"]+)"`)
-	bracketRe := regexp.MustCompile(`"\[([a-z0-9.-]+)\]"`)
-	files, _ := filepath.Glob(filepath.Join(root, "scripts/cmd/internal/check/*_test.go"))
-	for _, file := range files {
-		b, err := os.ReadFile(file)
-		if err != nil {
-			continue
-		}
-		content := string(b)
-		for _, m := range mustRe.FindAllStringSubmatch(content, -1) {
-			ref := out[m[1]]
-			ref.asserted++
-			out[m[1]] = ref
-		}
-		for _, m := range bracketRe.FindAllStringSubmatch(content, -1) {
-			ref := out[m[1]]
-			ref.asserted++
-			out[m[1]] = ref
-		}
-		dynamic := (regexp.MustCompile(`mustContainRule\([^,]+,\s*[^,]+,\s*[A-Za-z]`).MatchString(content) ||
-			strings.Contains(content, `"["+`) ||
-			strings.Contains(content, `"[" + `)) &&
-			(strings.Contains(content, "mustContainRule") || strings.Contains(content, "strings.Contains"))
-		if !dynamic {
-			continue
-		}
-		for _, id := range ids {
-			re := regexp.MustCompile(`(^|[^A-Za-z0-9_.-])` + regexp.QuoteMeta(id) + `([^A-Za-z0-9_.-]|$)`)
-			if re.MatchString(content) {
-				ref := out[id]
-				ref.dynamic++
-				out[id] = ref
-			}
-		}
-	}
-	return out
 }
 
 func fail(err error) {
