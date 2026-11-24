@@ -14,16 +14,16 @@ subjects:
   - { entity: data.entities.token, field: status }
 states:
   values:
-    - { value: active, steps: [ cap.services.token.expire.expire_tokens, cap.services.token.issue.create_token, cap.services.token.logout.get_token_by_refresh, cap.services.token.logout.revoke_token, cap.services.token.purge_expired.delete_expired_tokens, cap.services.token.refresh.create_token, cap.services.token.refresh.load_old, cap.services.token.refresh.revoke_token, cap.services.token.revoke_by_account.revoke_tokens_by_account, cap.services.token.verify.load_token ] }
-    - { value: revoked, steps: [ cap.services.token.issue.create_token, cap.services.token.logout.get_token_by_refresh, cap.services.token.purge_expired.delete_expired_tokens, cap.services.token.refresh.create_token, cap.services.token.refresh.load_old, cap.services.token.verify.load_token ] }
-    - { value: expired, steps: [ cap.services.token.issue.create_token, cap.services.token.logout.get_token_by_refresh, cap.services.token.purge_expired.delete_expired_tokens, cap.services.token.refresh.create_token, cap.services.token.refresh.load_old, cap.services.token.verify.load_token ] }
+    - { value: active, steps: [ cap.services.token.expire.expire_tokens, cap.services.token.logout.revoke_token, cap.services.token.refresh.revoke_token, cap.services.token.revoke_by_account.revoke_tokens_by_account ] }
+    - { value: revoked, steps: [] }
+    - { value: expired, steps: [] }
   initial: active
   final: [ revoked, expired ]
 create:
   requires:
     - lifecycle: cap.lifecycles.account
       states: [ active ]
-      rules: [ "feature.rules.auth.auth_token_requires_active_account" ]
+      rules: [ feature.rules.auth.auth_token_requires_active_account ]
       on_violation: platform.errors.AUTH_TOKEN_INVALID
   implemented_by:
     - cap.services.token.issue.create_token
