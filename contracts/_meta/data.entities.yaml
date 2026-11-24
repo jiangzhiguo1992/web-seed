@@ -54,6 +54,7 @@ fields:
       - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名" }
       - { name: extends, type: _types.set<_types.string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "实体基类" }
       - { name: tables, type: _types.list<_types.string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "映射的物理表" }
+      - { name: includes, type: _types.set<_types.string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "本实体关系字段指向的 entity" }
       - { name: included_by, type: _types.set<_types.string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "关系字段指向本实体的 entity" }
       - { name: queries, type: _types.set<_types.string>, required: true, unique: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "返回本实体的查询" }
 
@@ -125,6 +126,6 @@ rules:
   - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；on_violation 必须存在", implemented_by: [ entity-validation ] }
   - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
   - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入", implemented_by: [ entity-used-by ] }
-  - { id: entity-included-by, text: "model.included_by 必须等于关系字段 type 指向本实体的 entity 集合，由 gen-graph 写入；每个 entity 必须存在且确实指向本实体", implemented_by: [ entity-included-by ] }
+  - { id: entity-included-by, text: "model.includes 与 model.included_by 由 gen-graph 写入，禁止手改；includes 必须等于本实体关系字段 type 指向的 entity 集合，included_by 必须等于关系字段指向本实体的 entity 集合；每个 entity 必须存在且两侧互为反向", implemented_by: [ entity-included-by ] }
   - { id: entity-relation-arity, text: "关系基数必须与类型形状一致：one_to_many 用 _types.list<data.entities.*>，one_to_one/many_to_one 用单个 data.entities.*", implemented_by: [ entity-relation-arity ] }
   - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

@@ -14,6 +14,8 @@ model:
     - data.entities.base
   tables:
     - data.tables.token
+  includes:
+    - data.entities.account
   included_by:
     - data.entities.account
   queries:

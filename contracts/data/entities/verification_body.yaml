@@ -16,6 +16,8 @@ model:
     - data.entities.base
   tables:
     - data.tables.verification_body
+  includes:
+    - data.entities.account
   included_by: [ ]
   queries:
     - data.queries.verification.create_verification

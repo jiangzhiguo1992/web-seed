@@ -14,6 +14,11 @@ model:
     - data.entities.base
   tables:
     - data.tables.account
+  includes:
+    - data.entities.auth_email
+    - data.entities.auth_phone
+    - data.entities.auth_pwd
+    - data.entities.token
   included_by:
     - data.entities.auth_pwd
     - data.entities.auth_phone
