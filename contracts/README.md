@@ -495,7 +495,7 @@ data/storage.yaml ──> 按引擎分组的表条目 + 表级物理事实
 | 规则 | 说明 |
 |---|---|
 | 禁止手写迁移 | 改 `tables/*.yaml` 后跑 `make gen-db` |
-| 目标引擎 | PostgreSQL + Redis；`gen-db` 产出 PostgreSQL `schema.sql`，`live_only` 仅唯一索引可设为 true，用 `WHERE deleted_at IS NULL` partial unique index；非唯一索引需要 live 前导时显式写 `deleted_at` 列 |
+| 目标引擎 | PostgreSQL 权威表 + Redis 缓存；`gen-db` 产出 PostgreSQL `schema.sql`，`live_only` 仅唯一索引可设为 true，用 `WHERE deleted_at IS NULL` partial unique index；非唯一索引需要 live 前导时显式写 `deleted_at` 列 |
 | 允许受控调整 | 仅限生成器无法表达的操作（如 `CONCURRENTLY`），必须标 `-- manual-adjust: <原因>` |
 | CI 双向校验（⬜ P5） | ① 空库 apply 全部迁移后 schema 必须等于契约目标态；② 契约变更必须有对应迁移 |
 | 结构化 DDL | 归档用 `archive_of` 条目（`promotable` 标明能否回迁，能回迁时必须写 `on_conflict`），混合表达式索引用 `columns` + `indexes[].expression`（纯表达式索引不支持）；大表索引的并发策略由运行时迁移配置决定；**不设未结构化 DDL 字段** |

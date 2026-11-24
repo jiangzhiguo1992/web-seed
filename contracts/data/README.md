@@ -31,9 +31,9 @@ feature ──> capabilities ──> data
 | `queries/<scope>.yaml` | 能怎么读写 | 入参、返回、目标表、索引/缓存/归档引用 | 不是 SQL |
 | `enums/<module>.yaml` | 值是什么 | 跨端词汇：按 owner_module 拆分，integer `code` ↔ 名称 | 不是表约束 |
 | `storage.yaml` | 物理侧事实 | 引擎归属、扁平保留、缓存、归档（含能否回迁） | 不是部署配置，也不是索引或视图 |
-
-本项目固定 `supported_engines: [postgres, redis]`：PostgreSQL 是唯一权威表引擎，Redis 只作为 `caches` 的非权威副本。
 | `types.yaml` | 值类型叫什么 | 项目级标量约束：family + 固定参数 | 不是表结构，也不是枚举 |
+
+本项目固定 `supported_engines: [postgres]`：PostgreSQL 是唯一权威表引擎，Redis 只作为 `caches` 的非权威副本。
 
 `storage.yaml` 与 `types.yaml` 是**固定文件**：文件名不随实例增长，只有一个契约 ID。`enums/` 按 `owner_module` 一文件一契约（文件 ID `data.enums.<module>`），文件内承载多个 `data.enums.<name>` 项；枚举项 ID 全局唯一。`tables/` / `entities/` / `queries/` / `enums/` 的实例清单以 `contracts/index.yaml` 为准，本文件不列举。
 
@@ -190,7 +190,7 @@ indexes:
       - data.queries.account.exists_account_number
 ```
 
-`live_only: true` 只用于唯一索引，表示唯一性只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。本项目只支持 PostgreSQL + Redis：`gen-db` 产出 PostgreSQL `schema.sql`，`live_only` 用 `WHERE deleted_at IS NULL` partial unique index。非唯一索引不使用该字段，需要 live 行前导时把 `deleted_at` 显式写进 `indexes[].columns`，并在 `index_ref` 中把它作为最左列声明。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
+`live_only: true` 只用于唯一索引，表示唯一性只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。本项目权威表只支持 PostgreSQL，Redis 仅做缓存：`gen-db` 产出 PostgreSQL `schema.sql`，`live_only` 用 `WHERE deleted_at IS NULL` partial unique index。非唯一索引不使用该字段，需要 live 行前导时把 `deleted_at` 显式写进 `indexes[].columns`，并在 `index_ref` 中把它作为最左列声明。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
 
 ### 5.2 查询：参数 + 返回 + 索引/缓存/归档引用
 
