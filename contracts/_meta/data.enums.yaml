@@ -52,7 +52,7 @@ fields:
     description: "枚举项列表"
     item_fields:
       - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "枚举名；项 ID 为 data.enums.<name>" }
-      - { name: description, type: _types.string, required: false, description: "枚举用途" }
+      - { name: description, type: _types.string, required: true, description: "枚举用途" }
       - { name: go_type, type: _types.string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "Go 类型名" }
       - { name: ts_type, type: _types.string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "TS 类型名" }
       - name: values
@@ -62,7 +62,7 @@ fields:
         item_fields:
           - { name: value, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "对外字符串值" }
           - { name: code, type: _types.integer, required: true, min: 0, max: 2147483647, description: "持久化整数码" }
-          - { name: description, type: _types.string, required: false, description: "枚举值说明" }
+          - { name: description, type: _types.string, required: true, description: "枚举值说明" }
       - name: used_by
         type: _types.set<_types.string>
         required: true
