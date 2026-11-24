@@ -13,27 +13,29 @@ do_not:
 subjects:
   - { entity: data.entities.token, field: status }
 states:
-  values: [active, revoked, expired]
+  values: [ active, revoked, expired ]
   initial: active
-  final: [revoked, expired]
+  final: [ revoked, expired ]
 create:
   requires:
-    - { lifecycle: cap.lifecycles.account, states: [active] }
+    - { lifecycle: cap.lifecycles.account, states: [ active ] }
   implemented_by:
     - cap.services.token.issue.create_token
     - cap.services.token.refresh.create_token
 transitions:
   - name: revoke
     description: "主动吊销令牌"
-    from: [active]
+    from: [ active ]
     to: revoked
+    requires: [ ]
     implemented_by:
       - cap.services.token.logout.revoke_token
       - cap.services.token.refresh.revoke_token
       - cap.services.token.revoke_by_account.revoke_tokens_by_account
   - name: expire
     description: "把超过 refresh_expire_at 的活跃令牌置为 expired"
-    from: [active]
+    from: [ active ]
     to: expired
+    requires: [ ]
     implemented_by:
       - cap.services.token.expire.expire_tokens

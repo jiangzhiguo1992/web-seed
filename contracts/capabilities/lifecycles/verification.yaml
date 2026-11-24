@@ -14,41 +14,43 @@ do_not:
 subjects:
   - { entity: data.entities.verification_body, field: status }
 states:
-  values: [pending, sent, consumed, expired, revoked, failed]
+  values: [ pending, sent, consumed, expired, revoked, failed ]
   initial: pending
-  final: [consumed, expired, revoked, failed]
+  final: [ consumed, expired, revoked, failed ]
 create:
   requires:
-    - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+    - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
   implemented_by:
     - cap.services.verification.send.create
 transitions:
   - name: send
     description: "验证体创建后标记为已发送"
-    from: [pending]
+    from: [ pending ]
     to: sent
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
     implemented_by:
       - cap.services.verification.send.mark_sent
   - name: consume
     description: "验证码校验成功后消费"
-    from: [sent]
+    from: [ sent ]
     to: consumed
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
     implemented_by:
       - cap.services.verification.verify.consume
   - name: expire
     description: "超过 expire_at 的 pending/sent 验证体由 cleanup 置为 expired"
-    from: [pending, sent]
+    from: [ pending, sent ]
     to: expired
+    requires: [ ]
     implemented_by:
       - cap.services.verification.cleanup.expire_stale
   - name: revoke
     description: "重发、换绑、停用或清理时作废"
-    from: [pending, sent]
+    from: [ pending, sent ]
     to: revoked
+    requires: [ ]
     implemented_by:
       - cap.services.verification.cleanup.revoke_exhausted
       - cap.services.verification.revoke_by_account.revoke_active_verifications_by_account
@@ -56,9 +58,9 @@ transitions:
       - cap.services.verification.send.revoke_old
   - name: fail
     description: "验证码发送失败"
-    from: [sent]
+    from: [ sent ]
     to: failed
     requires:
-      - { lifecycle: cap.lifecycles.account, states: [pending, active] }
+      - { lifecycle: cap.lifecycles.account, states: [ pending, active ] }
     implemented_by:
       - cap.services.verification.send.mark_failed

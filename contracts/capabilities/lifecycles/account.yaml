@@ -12,31 +12,36 @@ do_not:
 subjects:
   - { entity: data.entities.account, field: status }
 states:
-  values: [pending, active, suspended, deleted]
+  values: [ pending, active, suspended, deleted ]
   initial: pending
-  final: [deleted]
+  final: [ deleted ]
 create:
+  requires: [ ]
   implemented_by:
     - cap.services.account.create.create_account
 destroy:
+  requires: [ ]
   implemented_by:
     - cap.services.account.delete.soft_delete_account
 transitions:
   - name: activate
     description: "激活账号"
-    from: [pending]
+    from: [ pending ]
     to: active
+    requires: [ ]
     implemented_by:
       - cap.services.account.activate.set_account_status
   - name: suspend
     description: "封禁账号"
-    from: [active]
+    from: [ active ]
     to: suspended
+    requires: [ ]
     implemented_by:
       - cap.services.account.suspend.set_account_status
   - name: reactivate
     description: "解封"
-    from: [suspended]
+    from: [ suspended ]
     to: active
+    requires: [ ]
     implemented_by:
       - cap.services.account.activate.set_account_status
