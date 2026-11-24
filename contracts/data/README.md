@@ -149,8 +149,8 @@ columns:
 | 字段 | 谁写 | 含义 |
 |---|---|---|
 | `table.entities` | 手写 | 映射本表的 entity 集合（`[强制: table-entities]`） |
-| `model.includes` | `make gen-graph` | 本实体关系字段指向的 entity（`[强制: entity-included-by]`，禁止手改） |
-| `model.included_by` | `make gen-graph` | 通过关系字段指向本实体的 entity（`[强制: entity-included-by]`，禁止手改） |
+| `model.includes` | `make gen-graph` | 本实体关系字段指向的 entity 及基数 `{entity, cardinality}`（`[强制: entity-included-by]`，禁止手改） |
+| `model.included_by` | `make gen-graph` | 通过关系字段指向本实体的 entity 及反向基数 `{entity, cardinality}`（`[强制: entity-included-by]`，禁止手改） |
 | `table.references` | `make gen-graph` | 本表 `columns[].references` 的目标列（`[强制: table-referenced-by]`，禁止手改） |
 | `table.referenced_by` | `make gen-graph` | 指向本表列的 `references` 源列（`[强制: table-referenced-by]`，禁止手改） |
 | `indexes[].used_by` | 手写 | 使用该索引的 query（设计声明） |
@@ -183,13 +183,12 @@ indexes:
   - name: uq_account_number
     columns: [ number ]
     unique: true
-    live_only: true
-    comment: "账号编号在未删除账号内唯一"
+    comment: "账号编号全局唯一；软删后不释放"
     used_by:
-      - data.queries.account.get_account_by_number
+      - data.queries.account.exists_account_number
 ```
 
-`live_only: true` 只用于唯一索引，表示唯一性只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。MySQL 生成时用 `CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END` 表达式键排除软删行；非唯一索引不使用该字段，需要 live 行前导时把 `deleted_at` 显式写进 `indexes[].columns`，并在 `index_ref` 中把它作为最左列声明。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
+`live_only: true` 只用于唯一索引，表示唯一性只约束未软删行——软删后同值可以重建；`false` / 省略则约束全表（含软删行）。当前生成器只产出 MySQL DDL：用 `CASE WHEN deleted_at IS NULL THEN 1 ELSE NULL END` 表达式键排除软删行；PostgreSQL 对应 `WHERE deleted_at IS NULL` partial unique index（DDL 生成尚未接入）。非唯一索引不使用该字段，需要 live 行前导时把 `deleted_at` 显式写进 `indexes[].columns`，并在 `index_ref` 中把它作为最左列声明。`on_violation` 由 `make gen-db` 汇总到 `apps/api/internal/generated/constraint_errors_gen.go` 的 `ConstraintErrors`，供错误翻译使用。
 
 ### 5.2 查询：参数 + 返回 + 索引/缓存/归档引用
 
@@ -224,10 +223,9 @@ indexes:
     join:
       from: data.tables.account.col.id
       to: data.tables.auth_pwd.col.account_id
-      lazy: true
 ```
 
-标量字段与关系字段互斥：标量写 `source.column/computed/soft`，关系写 `type` + `source.join.from/to/lazy`，两套键不得混用（`[强制: entity-field-variant]`）。实体不重复物理长度参数；统计口径不同时用 query 的 `returns`，不要把查询专属聚合塞进实体。
+标量字段与关系字段互斥：标量写 `source.column/computed/soft`，关系写 `type` + `source.join.from/to`，两套键不得混用（`[强制: entity-field-variant]`）。多对多关系在 `source.join.through` 写中间表 `{table, from, to}`，中间表两列必须分别列级 `references` 到关系两端；关系基数由两端唯一索引与 `through` 推导（`[强制: entity-relation-cardinality]`），`model.includes` / `model.included_by` 由 `make gen-graph` 写入 `{entity, cardinality}`。实体不重复物理长度参数；统计口径不同时用 query 的 `returns`，不要把查询专属聚合塞进实体。
 
 ---
 

@@ -8,6 +8,7 @@ stability: draft
 do_not:
   - "auth_pwd.password_hash 只存哈希，不存原文"
   - "auth_pwd.status 只允许 verified/disabled；unverified 不适用于密码绑定"
+  - "软删时必须同时把 account_id 置 NULL；ck_auth_pwd_account_live 会拒绝未置空的行"
 
 table:
   name: auth_pwd
@@ -31,7 +32,7 @@ table:
 columns:
   - name: account_id
     type: _types.integer
-    nullable: false
+    nullable: true
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
@@ -75,12 +76,18 @@ constraints:
       - data.queries.auth.create_auth_pwd
       - data.queries.auth.set_auth_pwd_status
 
+  - name: ck_auth_pwd_account_live
+    expr: "(deleted_at IS NULL) = (account_id IS NOT NULL)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.auth.create_auth_pwd
+      - data.queries.auth.soft_delete_auth_pwd_by_account
+
 indexes:
   - name: uq_auth_pwd_username
     columns: [ username ]
     unique: true
-    live_only: true
-    comment: "登录名在未删除记录内唯一"
+    comment: "登录名全局唯一；软删后不释放"
     used_by:
       - data.queries.auth.get_auth_pwd_by_username
       - data.queries.auth.create_auth_pwd
@@ -88,8 +95,7 @@ indexes:
   - name: uq_auth_pwd_account
     columns: [ account_id ]
     unique: true
-    live_only: true
-    comment: "未删除记录内一个账号只有一条密码记录"
+    comment: "账号绑定全局唯一；软删行 account_id 置 NULL 后释放"
     used_by:
       - data.queries.auth.create_auth_pwd
       - data.queries.auth.soft_delete_auth_pwd_by_account

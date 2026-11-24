@@ -7,6 +7,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "auth 查询不要向非认证调用方或跨模块返回 password_hash"
+  - "auth_email/auth_phone/auth_pwd 的唯一键是全局唯一；软删不释放，创建前不要用过滤掉 deleted_at 的查询判重"
 
 queries:
   - name: GetAuthPwdByUsername

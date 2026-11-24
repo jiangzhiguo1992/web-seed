@@ -7,7 +7,8 @@ schema_version: 1
 stability: draft
 do_not:
   - "auth_email 同一账号只能绑定一个未删除的邮箱"
-  - "uq_auth_email_username_domain 不区分 status；未认证/停用绑定仍占用邮箱，换绑前先软删旧记录"
+  - "uq_auth_email_username_domain 是全局唯一；软删也不释放邮箱，重建同名邮箱会失败"
+  - "软删时必须同时把 account_id 置 NULL；ck_auth_email_account_live 会拒绝未置空的行"
 
 table:
   name: auth_email
@@ -28,7 +29,7 @@ table:
 columns:
   - name: account_id
     type: _types.integer
-    nullable: false
+    nullable: true
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
@@ -75,12 +76,18 @@ constraints:
       - data.queries.auth.create_auth_email
       - data.queries.auth.set_auth_email_status
 
+  - name: ck_auth_email_account_live
+    expr: "(deleted_at IS NULL) = (account_id IS NOT NULL)"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by:
+      - data.queries.auth.create_auth_email
+      - data.queries.auth.soft_delete_auth_email_by_account
+
 indexes:
   - name: uq_auth_email_username_domain
     columns: [ username, domain ]
     unique: true
-    live_only: true
-    comment: "邮箱在未删除记录内唯一"
+    comment: "邮箱全局唯一；软删后不释放"
     used_by:
       - data.queries.auth.get_auth_email_by_username_domain
       - data.queries.auth.create_auth_email
@@ -88,8 +95,7 @@ indexes:
   - name: uq_auth_email_account
     columns: [ account_id ]
     unique: true
-    live_only: true
-    comment: "账号绑定唯一性"
+    comment: "账号绑定全局唯一；软删行 account_id 置 NULL 后释放"
     used_by:
       - data.queries.auth.create_auth_email
       - data.queries.auth.soft_delete_auth_email_by_account

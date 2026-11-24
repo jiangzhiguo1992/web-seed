@@ -64,8 +64,7 @@ indexes:
   - name: uq_account_number
     columns: [ number ]
     unique: true
-    live_only: true
-    comment: "账号编号在未删除账号内唯一"
+    comment: "账号编号全局唯一；软删后不释放"
     used_by:
       - data.queries.account.exists_account_number
       - data.queries.account.create_account

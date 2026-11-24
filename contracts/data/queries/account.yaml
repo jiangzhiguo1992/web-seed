@@ -7,7 +7,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "account 之外的邮箱/手机号/密码查询不要写在这里，去 data.queries.auth"
-  - "account.number 唯一性查询必须带 deleted_at IS NULL"
+  - "account.number 是全局唯一；唯一性查询不得过滤 deleted_at，否则软删账号仍占用编号导致插入失败"
 
 queries:
   - name: GetAccount
@@ -42,7 +42,7 @@ queries:
       - cap.services.verification.verify
 
   - name: ExistsAccountNumber
-    description: "判断账号编号是否已被占用"
+    description: "判断账号编号是否已被占用（含软删账号）"
     tables:
       - { table: data.tables.account }
     params:
