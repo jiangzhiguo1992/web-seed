@@ -151,7 +151,7 @@ func RenderTable(s *Schema, name, module, summary string) ([]byte, error) {
 }
 
 func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverride string) ([]byte, error) {
-	if s == nil || s.Type != "data.tables" {
+	if s == nil || s.Contract != "data.tables" {
 		return nil, fmt.Errorf("RenderTable: want data.tables schema")
 	}
 	if !validName(name) {
@@ -172,19 +172,19 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 		return nil, err
 	}
 	tableField, _ := FindField(s.Fields, "table")
-	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "extends": true, "entities": true, "references": true, "queries": true, "referenced_by": true}, s.Type+".table"); err != nil {
+	if err := requireSupported(tableField.Fields, map[string]bool{"name": true, "extends": true, "entities": true, "references": true, "queries": true, "referenced_by": true}, s.Contract+".table"); err != nil {
 		return nil, err
 	}
 	columnField, _ := FindField(s.Fields, "columns")
 	if err := requireSupported(columnField.ItemFields, map[string]bool{
 		"name": true, "type": true, "nullable": true, "comment": true, "redundancy": true, "references": true,
-	}, s.Type+".columns"); err != nil {
+	}, s.Contract+".columns"); err != nil {
 		return nil, err
 	}
 	constraintsField, _ := FindField(s.Fields, "constraints")
 	if err := requireSupported(constraintsField.ItemFields, map[string]bool{
 		"name": true, "expr": true, "on_violation": true, "used_by": true,
-	}, s.Type+".constraints"); err != nil {
+	}, s.Contract+".constraints"); err != nil {
 		return nil, err
 	}
 	tableID := s.Targets.FileID(name + ".yaml")
@@ -236,7 +236,7 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 }
 
 func RenderEnumItem(s *Schema, name, module string) ([]byte, error) {
-	if s == nil || s.Type != "data.enums" {
+	if s == nil || s.Contract != "data.enums" {
 		return nil, fmt.Errorf("RenderEnumItem: want data.enums schema")
 	}
 	if !validName(name) {
@@ -253,11 +253,11 @@ func RenderEnumItem(s *Schema, name, module string) ([]byte, error) {
 	if err := requireSupported(enumsField.ItemFields, map[string]bool{
 		"name": true, "description": true,
 		"go_type": true, "ts_type": true, "used_by": true, "values": true,
-	}, s.Type+".enums"); err != nil {
+	}, s.Contract+".enums"); err != nil {
 		return nil, err
 	}
 	valuesField, _ := FindField(enumsField.ItemFields, "values")
-	if err := requireSupported(valuesField.ItemFields, map[string]bool{"value": true, "code": true, "description": true}, s.Type+".enums.values"); err != nil {
+	if err := requireSupported(valuesField.ItemFields, map[string]bool{"value": true, "code": true, "description": true}, s.Contract+".enums.values"); err != nil {
 		return nil, err
 	}
 	pc := pascal(name)
@@ -279,7 +279,7 @@ func RenderEnumItem(s *Schema, name, module string) ([]byte, error) {
 
 // RenderEntity 生成单表读模型的最小骨架；tableID 是目标表契约 ID。
 func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte, error) {
-	if s == nil || s.Type != "data.entities" {
+	if s == nil || s.Contract != "data.entities" {
 		return nil, fmt.Errorf("RenderEntity: want data.entities schema")
 	}
 	if !validName(name) || strings.TrimSpace(tableID) == "" {
@@ -348,7 +348,7 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 
 // RenderQuery 生成查询文件的最小合法骨架：SELECT EXISTS 只依赖主键 id。
 func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, error) {
-	if s == nil || s.Type != "data.queries" {
+	if s == nil || s.Contract != "data.queries" {
 		return nil, fmt.Errorf("RenderQuery: want data.queries schema")
 	}
 	if !validName(name) || !validName(module) || strings.TrimSpace(tableID) == "" {
@@ -447,6 +447,9 @@ func normalizeScaffoldColumnType(raw string, vt ValueTypes) (string, error) {
 			return "", fmt.Errorf("custom type %s does not take a variant", family)
 		}
 		return "_types.basics." + family, nil
+	}
+	if family == "any" {
+		return "_types.basics.any", nil
 	}
 	fam, ok := vt.TypeFamilies[family]
 	if !ok {
@@ -729,6 +732,7 @@ type serviceFileScaffold struct {
 }
 
 type serviceSchemaScaffold struct {
+	Kind       string                    `yaml:"kind,omitempty"`
 	Type       string                    `yaml:"type,omitempty"`
 	Properties []servicePropertyScaffold `yaml:"properties,omitempty"`
 	Items      *serviceSchemaScaffold    `yaml:"items,omitempty"`
@@ -877,7 +881,7 @@ type eventPublishScaffold struct {
 }
 
 type eventPayloadScaffold struct {
-	Type       string                    `yaml:"type"`
+	Kind       string                    `yaml:"kind"`
 	Properties []servicePropertyScaffold `yaml:"properties"`
 }
 
@@ -915,7 +919,7 @@ type httpFileScaffold struct {
 
 // RenderService 生成 cap.services 的最小合法骨架。
 func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
-	if s == nil || s.Type != "cap.services" {
+	if s == nil || s.Contract != "cap.services" {
 		return nil, fmt.Errorf("RenderService: want cap.services schema")
 	}
 	if !validName(name) || !validName(module) {
@@ -982,7 +986,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 		OwnerModule:   module,
 		Schemas: map[string]serviceSchemaScaffold{
 			"GetInput": {
-				Type: "_types.schemas.object",
+				Kind: "_types.schemas.object",
 				Properties: []servicePropertyScaffold{{
 					Name:        "id",
 					Schema:      serviceSchemaScaffold{Type: "_types.basics.id"},
@@ -1021,7 +1025,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 
 // RenderRule 生成 feature.rules 的最小 policy 骨架。
 func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
-	if s == nil || s.Type != "feature.rules" {
+	if s == nil || s.Contract != "feature.rules" {
 		return nil, fmt.Errorf("RenderRule: want feature.rules schema")
 	}
 	if !validName(name) || !validName(module) {
@@ -1060,7 +1064,7 @@ func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
 
 // RenderLifecycle 生成 cap.lifecycles 的最小生命周期骨架。
 func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
-	if s == nil || s.Type != "cap.lifecycles" {
+	if s == nil || s.Contract != "cap.lifecycles" {
 		return nil, fmt.Errorf("RenderLifecycle: want cap.lifecycles schema")
 	}
 	if !validName(name) || !validName(module) {
@@ -1119,7 +1123,7 @@ func RenderLifecycle(s *Schema, name, module, summary string) ([]byte, error) {
 
 // RenderEvents 生成 cap.events 的最小骨架：一个 topic + 一个订阅它的 job。
 func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
-	if s == nil || s.Type != "cap.events" {
+	if s == nil || s.Contract != "cap.events" {
 		return nil, fmt.Errorf("RenderEvents: want cap.events schema")
 	}
 	if !validName(name) || !validName(module) {
@@ -1159,7 +1163,7 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 			Idempotent: false,
 			Publish: eventPublishScaffold{
 				Payload: eventPayloadScaffold{
-					Type: "_types.schemas.object",
+					Kind: "_types.schemas.object",
 					Properties: []servicePropertyScaffold{{
 						Name:        "id",
 						Schema:      serviceSchemaScaffold{Type: "_types.basics.id"},
@@ -1180,7 +1184,7 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 
 // RenderHTTP 生成 cap.protocols.http 的最小单 operation 骨架。
 func RenderHTTP(s *Schema, name, module, summary, service, path, httpMethod string) ([]byte, error) {
-	if s == nil || s.Type != "cap.protocols.http" {
+	if s == nil || s.Contract != "cap.protocols.http" {
 		return nil, fmt.Errorf("RenderHTTP: want cap.protocols.http schema")
 	}
 	if !validName(name) || !validName(module) {
@@ -1262,7 +1266,7 @@ type pageStateScaffold struct {
 
 // RenderPage 生成 feature.pages 的最小合法骨架：四态齐全，route 留空待绑定。
 func RenderPage(s *Schema, name, summary string) ([]byte, error) {
-	if s == nil || s.Type != "feature.pages" {
+	if s == nil || s.Contract != "feature.pages" {
 		return nil, fmt.Errorf("RenderPage: want feature.pages schema")
 	}
 	if !validName(name) {

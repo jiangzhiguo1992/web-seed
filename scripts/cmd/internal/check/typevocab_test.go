@@ -38,8 +38,8 @@ func TestTypeVocabulary(t *testing.T) {
 	for _, typ := range []string{"_types.schemas.object", "_types.schemas.array", "_types.schemas.map"} {
 		c.errs = nil
 		c.checkTypeRef(typ, "x")
-		if len(c.errs) != 0 {
-			t.Fatalf("schema kind %s rejected: %v", typ, c.errs)
+		if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.type-vocabulary]") {
+			t.Fatalf("schema kind %s must not be a data type: %v", typ, c.errs)
 		}
 	}
 }
@@ -161,8 +161,8 @@ func TestTypeVocabularyOpenAPIException(t *testing.T) {
 	c := &Checker{root: root}
 	c.checkTypeVocabulary()
 	joined := strings.Join(c.errs, "\n")
-	if strings.Contains(joined, "protocols/http") {
-		t.Fatalf("protocols/http exception reported: %v", c.errs)
+	if !strings.Contains(joined, "protocols/http") {
+		t.Fatalf("protocols/http bare object not reported: %v", c.errs)
 	}
 	if strings.Contains(joined, "generated") {
 		t.Fatalf("generated exception reported: %v", c.errs)
@@ -177,21 +177,21 @@ func TestSchemaMapNode(t *testing.T) {
 	schema := copyMeta(t, root, "cap.services")
 	c := &Checker{root: root, nodeKinds: schema.NodeKinds, propertyKeys: schema.PropertyKeys, valueTypes: schema.ValueTypes}
 	c.validateSchemaNode(map[string]any{
-		"type":   "_types.schemas.map",
+		"kind":   "_types.schemas.map",
 		"values": map[string]any{"type": "_types.basics.string"},
 	}, "payload")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid map node rejected: %v", c.errs)
 	}
 	c.errs = nil
-	c.validateSchemaNode(map[string]any{"type": "_types.schemas.map"}, "payload")
+	c.validateSchemaNode(map[string]any{"kind": "_types.schemas.map"}, "payload")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "map node requires values") {
 		t.Fatalf("map node without values not rejected: %v", c.errs)
 	}
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":      "_types.schemas.map",
+		"kind":      "_types.schemas.map",
 		"values":    map[string]any{"type": "_types.basics.string"},
 		"min_items": 2,
 		"max_items": 1,
@@ -202,7 +202,7 @@ func TestSchemaMapNode(t *testing.T) {
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":         "_types.schemas.map",
+		"kind":         "_types.schemas.map",
 		"values":       map[string]any{"type": "_types.basics.string"},
 		"key_patterns": []any{"^[a-z]+$", "^[a-z0-9_]+$"},
 	}, "payload")
@@ -212,7 +212,7 @@ func TestSchemaMapNode(t *testing.T) {
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":         "_types.schemas.map",
+		"kind":         "_types.schemas.map",
 		"values":       map[string]any{"type": "_types.basics.string"},
 		"key_patterns": []any{"[invalid"},
 	}, "payload")
@@ -222,7 +222,7 @@ func TestSchemaMapNode(t *testing.T) {
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":   "_types.schemas.map",
+		"kind":   "_types.schemas.map",
 		"values": map[string]any{"type": "_types.basics.string"},
 		"validation": []any{
 			map[string]any{"rule": "value != null", "message": "必填"},
@@ -234,7 +234,7 @@ func TestSchemaMapNode(t *testing.T) {
 
 	c.errs = nil
 	c.validateSchemaNode(map[string]any{
-		"type":   "_types.schemas.map",
+		"kind":   "_types.schemas.map",
 		"values": map[string]any{"type": "_types.basics.string"},
 		"validation": []any{
 			map[string]any{"rule": "value.foo != null", "message": "x"},

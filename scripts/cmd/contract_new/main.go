@@ -190,7 +190,7 @@ func loadTableSchema(root string) (*contractspec.Schema, error) {
 
 // loadTableContract 按 data.tables.targets 校验目标表契约存在，并返回 owner_module 与表契约 ID。
 func loadTableContract(root string, schema *contractspec.Schema, table string) (string, string, error) {
-	if schema == nil || schema.Type != "data.tables" || schema.Targets.Dir == "" {
+	if schema == nil || schema.Contract != "data.tables" || schema.Targets.Dir == "" {
 		return "", "", fmt.Errorf("data.tables targets are missing")
 	}
 	path := filepath.Join(root, schema.Targets.Dir, table+".yaml")

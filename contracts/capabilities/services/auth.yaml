@@ -11,9 +11,9 @@ do_not:
 
 schemas:
   LoginInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
+      - { name: auth_type, schema: { type: data.enums.auth_type }, required: true, description: "认证类型" }
       - { name: identifier, schema: { type: _types.basics.auth_identifier }, required: true, description: "登录标识" }
       - { name: password, schema: { type: _types.basics.string }, nullable: true, write_only: true, description: "密码；仅请求写入，不回显" }
       - { name: code, schema: { type: _types.basics.phone_code }, nullable: true, description: "手机号区号，例如 +86" }
@@ -21,48 +21,48 @@ schemas:
     validation:
       - { rule: "input.auth_type != \"pwd\" || input.password != null", message: "密码认证必须提供密码" }
   BindPasswordInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: action, schema: { ref: data.enums.auth_password_action }, required: true, description: "认证绑定动作" }
+      - { name: action, schema: { type: data.enums.auth_password_action }, required: true, description: "认证绑定动作" }
       - { name: username, schema: { type: _types.basics.auth_username }, nullable: true, description: "用户名" }
       - { name: password, schema: { type: _types.basics.string }, nullable: true, write_only: true, description: "密码；仅请求写入，不回显" }
     validation:
       - { rule: "input.action != \"create\" && input.action != \"update\" || input.password != null", message: "创建或修改密码必须提供密码" }
   BindPhoneInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
+      - { name: action, schema: { type: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
       - { name: code, schema: { type: _types.basics.phone_code }, nullable: true, description: "手机号区号，例如 +86" }
       - { name: number, schema: { type: _types.basics.phone_number }, nullable: true, description: "手机号；只允许数字" }
     validation:
       - { rule: "input.action != \"create\" || input.number != null", message: "创建手机绑定必须提供手机号" }
   BindEmailInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: action, schema: { ref: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
+      - { name: action, schema: { type: data.enums.auth_bind_action }, required: true, description: "认证绑定动作" }
       - { name: username, schema: { type: _types.basics.email_username }, nullable: true, description: "用户名" }
       - { name: domain, schema: { type: _types.basics.email_domain }, nullable: true, description: "邮箱域名" }
     validation:
       - { rule: "input.action != \"create\" || input.username != null && input.domain != null", message: "创建邮箱绑定必须提供用户名和域名" }
   AuthBinding:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
+      - { name: auth_type, schema: { type: data.enums.auth_type }, required: true, description: "认证类型" }
       - { name: auth_id, schema: { type: _types.basics.id }, required: true, description: "认证绑定 ID" }
       - { name: account_id, schema: { type: _types.basics.id }, required: true, description: "账号 ID" }
-      - { name: status, schema: { ref: data.enums.auth_status }, required: true, description: "认证绑定状态" }
+      - { name: status, schema: { type: data.enums.auth_status }, required: true, description: "认证绑定状态" }
       - { name: masked_target, schema: { type: _types.basics.string }, description: "脱敏后的接收目标" }
   AuthResult:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
-      - { name: tokens, schema: { ref: cap.services.token.schemas.AccessToken }, required: true, description: "访问令牌" }
-      - { name: attributes, schema: { ref: cap.services.auth.schemas.AuthAttributes }, required: true, description: "登录结果属性" }
-      - { name: refresh, schema: { ref: cap.services.token.schemas.RefreshToken }, required: true, description: "刷新 JWT" }
+      - { name: account, schema: { type: data.entities.account }, required: true, description: "账号实体" }
+      - { name: tokens, schema: { type: cap.services.token.schemas.AccessToken }, required: true, description: "访问令牌" }
+      - { name: attributes, schema: { type: cap.services.auth.schemas.AuthAttributes }, required: true, description: "登录结果属性" }
+      - { name: refresh, schema: { type: cap.services.token.schemas.RefreshToken }, required: true, description: "刷新 JWT" }
   AuthAttributes:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "本次登录使用的认证类型" }
+      - { name: auth_type, schema: { type: data.enums.auth_type }, required: true, description: "本次登录使用的认证类型" }
       - { name: device_id, schema: { type: _types.basics.device_id }, nullable: true, description: "登录设备标识" }
 
 services:

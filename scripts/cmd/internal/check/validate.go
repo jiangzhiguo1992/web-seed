@@ -192,6 +192,9 @@ func parseTypeExprDepth(raw string, vt ValueTypes, depth int) (typeExpr, error) 
 	case contractspec.TypeClassBasics:
 		family, variant, hasVariant := splitBasicsName(name)
 		if fam, ok := vt.TypeFamilies[family]; ok {
+			if len(fam.Types) == 0 && !hasVariant {
+				return typeExpr{Base: family}, nil
+			}
 			if hasVariant {
 				if _, ok := fam.Types[variant]; !ok {
 					return typeExpr{}, fmt.Errorf("unknown basics variant %q for family %s", variant, family)

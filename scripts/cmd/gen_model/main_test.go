@@ -130,3 +130,18 @@ func TestTypeTableMatchesScalarMapping(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderDecimalUsesQuotedJSON(t *testing.T) {
+	out, err := renderGo(nil, []entitySpec{{
+		ID:     "data.entities.x",
+		GoName: "X",
+		Public: true,
+		Fields: []fieldSpec{{GoName: "Amount", JSONName: "amount", GoType: "decimal.Decimal"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "decimal.MarshalJSONWithoutQuotes = false") {
+		t.Fatalf("decimal wire format not pinned to quoted string:\n%s", out)
+	}
+}

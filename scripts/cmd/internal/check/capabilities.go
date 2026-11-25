@@ -103,10 +103,10 @@ func payloadPropertyType(raw any) string {
 	if !ok {
 		return ""
 	}
-	if ref, _ := node["ref"].(string); ref != "" {
-		return ref
-	}
 	typ, _ := node["type"].(string)
+	if strings.HasPrefix(typ, "data.") || (strings.HasPrefix(typ, "cap.services.") && strings.Contains(typ, ".schemas.")) {
+		return typ
+	}
 	typ = normalizeTypeExpr(typ)
 	switch typ {
 	case "object", "array", "map", "":

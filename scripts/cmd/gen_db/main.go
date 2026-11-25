@@ -181,6 +181,7 @@ type column struct {
 	Timezone    bool
 	TimezoneSet bool
 	FracSeconds int
+	Length      int
 	Nullable    bool
 	PrimaryKey  bool
 	Default     any
@@ -537,6 +538,12 @@ func columnType(c column) (string, error) {
 			return "", fmt.Errorf("column %s: unsupported integer bits %d", c.Name, bits)
 		}
 	case "string":
+		switch c.Kind {
+		case "tsvector":
+			return "TSVECTOR", nil
+		case "tsquery":
+			return "TSQUERY", nil
+		}
 		if c.MaxLen > 0 {
 			if c.Fixed {
 				return fmt.Sprintf("CHAR(%d)", c.MaxLen), nil
@@ -586,39 +593,23 @@ func columnType(c column) (string, error) {
 			return "", fmt.Errorf("column %s: decimal precision required", c.Name)
 		}
 		return fmt.Sprintf("NUMERIC(%d,%d)", c.Precision, c.Scale), nil
-	case "money":
-		return "MONEY", nil
 	case "json":
 		if c.Kind == "json" {
 			return "JSON", nil
 		}
 		return "JSONB", nil
-	case "jsonpath":
-		return "JSONPATH", nil
 	case "bytes":
 		return "BYTEA", nil
-	case "uuid":
-		return "UUID", nil
-	case "interval":
-		return "INTERVAL", nil
-	case "network":
-		return strings.ToUpper(defaultKind(c.Kind, "inet")), nil
 	case "bit":
-		return strings.ToUpper(defaultKind(c.Kind, "varbit")), nil
-	case "textsearch":
-		return strings.ToUpper(defaultKind(c.Kind, "tsvector")), nil
+		kind := strings.ToUpper(defaultKind(c.Kind, "varbit"))
+		if c.Length > 0 {
+			return fmt.Sprintf("%s(%d)", kind, c.Length), nil
+		}
+		return kind, nil
 	case "geometry":
 		return strings.ToUpper(defaultKind(c.Kind, "point")), nil
-	case "range":
-		return strings.ToUpper(defaultKind(c.Kind, "int4range")), nil
-	case "multirange":
-		return strings.ToUpper(defaultKind(c.Kind, "int4multirange")), nil
-	case "oid":
-		return strings.ToUpper(defaultKind(c.Kind, "oid")), nil
 	case "xml":
 		return "XML", nil
-	case "pg_lsn":
-		return "PG_LSN", nil
 	default:
 		return "", fmt.Errorf("column %s: unsupported type %s", c.Name, c.Type)
 	}

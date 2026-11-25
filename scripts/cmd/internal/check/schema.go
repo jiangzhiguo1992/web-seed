@@ -29,7 +29,7 @@ func (c *Checker) validateSchemaNodeWith(v any, path string, allowed []string) {
 	}
 	kind, ok := contractspec.SchemaNodeKind(m, c.nodeKinds)
 	if !ok {
-		c.rulef("schema.type", "%s: schema node must have exactly one of ref or type", path)
+		c.rulef("schema.type", "%s: schema node must have exactly one of kind or type", path)
 		return
 	}
 	if !allowsSchemaKind(allowed, kind) {
@@ -184,7 +184,7 @@ func (c *Checker) validatePropertyExtras(m map[string]any, path string) {
 	}
 	if def, ok := m["default"]; ok {
 		if sm, ok := asMap(m["schema"]); ok {
-			if ref, _ := sm["ref"].(string); strings.HasPrefix(ref, "data.enums.") {
+			if ref, _ := sm["type"].(string); strings.HasPrefix(ref, "data.enums.") {
 				if values := c.enumValues[ref]; values != nil {
 					if s, ok := def.(string); !ok || !values[s] {
 						c.rulef("schema.default", "%s.default: %v is not a value of %s", path, def, ref)
@@ -207,7 +207,7 @@ func (c *Checker) validatePropertyExtras(m map[string]any, path string) {
 // resolveRefValuePath 解析 ref 节点的 value.<path> 到目标 entity 字段。
 // 只展开 data.entities.*；多级路径按 relation 的 type 递归进入目标 entity。
 func (c *Checker) resolveRefValuePath(m map[string]any, rest, where string) *entityFieldInfo {
-	ref, _ := m["ref"].(string)
+	ref, _ := m["type"].(string)
 	cur := c.entities[ref]
 	if cur == nil {
 		return nil
@@ -360,25 +360,25 @@ func (c *Checker) validateScalarNode(m map[string]any, path string) {
 }
 
 func (c *Checker) validateRefNode(m map[string]any, path string) {
-	ref, _ := m["ref"].(string)
+	ref, _ := m["type"].(string)
 	if ref == "" {
-		c.rulef("schema.non-empty", "%s.ref: must not be empty", path)
+		c.rulef("schema.non-empty", "%s.type: must not be empty", path)
 		return
 	}
 	switch {
 	case strings.HasPrefix(ref, "data.enums."):
 		if !c.enumIDs[ref] {
-			c.rulef("service-ref", "%s.ref: unknown enum %s", path, ref)
+			c.rulef("service-ref", "%s.type: unknown enum %s", path, ref)
 		}
 	case strings.HasPrefix(ref, "data.entities."):
 		if c.entities[ref] == nil {
-			c.rulef("service-ref", "%s.ref: unknown entity %s", path, ref)
+			c.rulef("service-ref", "%s.type: unknown entity %s", path, ref)
 		}
 	case strings.HasPrefix(ref, "data.tables."):
-		c.rulef("service-ref", "%s.ref: %s is not a schema type; use data.entities.*", path, ref)
+		c.rulef("service-ref", "%s.type: %s is not a schema type; use data.entities.*", path, ref)
 	default:
 		if c.methodTypeDefs[ref] == nil {
-			c.rulef("service-ref", "%s.ref: unknown schema %s", path, ref)
+			c.rulef("service-ref", "%s.type: unknown schema %s", path, ref)
 		}
 	}
 	c.validateNodeRules(m, "ref", path, nil)
@@ -487,11 +487,11 @@ func schemaLocalRefs(v any) []string {
 	var out []string
 	switch x := v.(type) {
 	case map[string]any:
-		if ref, _ := x["ref"].(string); ref != "" && !strings.HasPrefix(ref, "data.") {
+		if ref, _ := x["type"].(string); strings.HasPrefix(ref, "cap.services.") {
 			out = append(out, ref)
 		}
 		for k, child := range x {
-			if k == "ref" {
+			if k == "type" {
 				continue
 			}
 			out = append(out, schemaLocalRefs(child)...)

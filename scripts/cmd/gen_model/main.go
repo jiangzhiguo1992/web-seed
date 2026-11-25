@@ -508,7 +508,7 @@ func goScalar(spec columnSpec, nullable bool) string {
 		} else {
 			typ = "float64"
 		}
-	case "decimal", "money":
+	case "decimal":
 		typ = "decimal.Decimal"
 	case "timestamp", "datetime":
 		typ = "time.Time"
@@ -516,12 +516,12 @@ func goScalar(spec columnSpec, nullable bool) string {
 		typ = "json.RawMessage"
 	case "bytes":
 		typ = "[]byte"
-	case "uuid", "jsonpath", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
-		typ = "string"
-	case "interval":
-		typ = "time.Duration"
-	case "oid":
-		typ = "uint32"
+	case "bit":
+		typ = "big.Int"
+	case "xml":
+		typ = "etree.Document"
+	case "geometry":
+		typ = "geojson.Geometry"
 	case "any":
 		typ = "any"
 	default:
@@ -540,16 +540,18 @@ func tsScalar(spec columnSpec, nullable bool) string {
 		typ = "string"
 	case "boolean":
 		typ = "boolean"
-	case "integer", "float", "oid":
+	case "integer", "float":
 		typ = "number"
-	case "decimal", "money":
+	case "decimal":
 		typ = "string"
 	case "timestamp", "datetime":
 		typ = "string"
 	case "json", "any":
 		typ = "unknown"
-	case "bytes", "uuid", "jsonpath", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
+	case "bytes", "bit", "xml":
 		typ = "string"
+	case "geometry":
+		typ = "unknown"
 	default:
 		typ = "unknown"
 	}
@@ -568,7 +570,7 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 	b.WriteString(header)
 	b.WriteString("\npackage model\n\n")
 	hasEnums := len(enums) > 0
-	hasJSON, hasTime, hasDecimal := false, false, false
+	hasJSON, hasTime, hasDecimal, hasBig, hasGeo, hasXML := false, false, false, false, false, false
 	for _, e := range entities {
 		for _, f := range e.Fields {
 			if f.GoType == "json.RawMessage" {
@@ -579,6 +581,15 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 			}
 			if strings.Contains(f.GoType, "decimal.Decimal") {
 				hasDecimal = true
+			}
+			if f.GoType == "big.Int" || f.GoType == "*big.Int" {
+				hasBig = true
+			}
+			if strings.Contains(f.GoType, "geojson.Geometry") {
+				hasGeo = true
+			}
+			if strings.Contains(f.GoType, "etree.Document") {
+				hasXML = true
 			}
 		}
 	}
@@ -595,12 +606,24 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 	if hasDecimal {
 		imports = append(imports, "\"github.com/shopspring/decimal\"")
 	}
+	if hasBig {
+		imports = append(imports, "\"math/big\"")
+	}
+	if hasGeo {
+		imports = append(imports, "\"github.com/twpayne/go-geom/encoding/geojson\"")
+	}
+	if hasXML {
+		imports = append(imports, "\"github.com/beevik/etree\"")
+	}
 	if len(imports) > 0 {
 		b.WriteString("import (\n")
 		for _, imp := range imports {
 			fmt.Fprintf(&b, "\t%s\n", imp)
 		}
 		b.WriteString(")\n\n")
+	}
+	if hasDecimal {
+		b.WriteString("func init() {\n\tdecimal.MarshalJSONWithoutQuotes = false\n}\n\n")
 	}
 
 	enumIDs := make([]string, 0, len(enums))

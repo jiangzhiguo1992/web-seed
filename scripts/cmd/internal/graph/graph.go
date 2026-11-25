@@ -85,8 +85,8 @@ func resolveTarget(root, typ string) (scanTarget, error) {
 			return scanTarget{}, err
 		}
 		var head struct {
-			Type    string `yaml:"type"`
-			Targets struct {
+			Contract string `yaml:"contract"`
+			Targets  struct {
 				Dir  string `yaml:"dir"`
 				Glob string `yaml:"glob"`
 				ID   string `yaml:"id"`
@@ -95,7 +95,7 @@ func resolveTarget(root, typ string) (scanTarget, error) {
 		if err := yaml.Unmarshal(b, &head); err != nil {
 			return scanTarget{}, fmt.Errorf("%s: %w", file, err)
 		}
-		if head.Type != typ {
+		if head.Contract != typ {
 			continue
 		}
 		if found != nil {

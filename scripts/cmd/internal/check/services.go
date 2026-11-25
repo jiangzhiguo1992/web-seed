@@ -129,6 +129,12 @@ func (c *Checker) checkPageSchemas(types map[string]any, rel string) {
 				c.rulef("service-page-schema", "%s: schema %s pagination field %s must be required", rel, name, field)
 			}
 			if got, _ := asMap(p["schema"]); got != nil {
+				if field == "items" {
+					if kind, _ := got["kind"].(string); kind != "_types.schemas.array" {
+						c.rulef("service-page-schema", "%s: schema %s field items kind must be _types.schemas.array, got %s", rel, name, kind)
+					}
+					continue
+				}
 				if value, _ := got["type"].(string); value != typ {
 					c.rulef("service-page-schema", "%s: schema %s field %s type must be %s, got %s", rel, name, field, typ, value)
 				}

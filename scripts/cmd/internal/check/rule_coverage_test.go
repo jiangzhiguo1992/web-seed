@@ -501,7 +501,7 @@ schema_version: 1
 stability: draft
 do_not: []
 schemas:
-  Foo: { type: _types.schemas.object, properties: {} }
+  Foo: { kind: _types.schemas.object, properties: {} }
 services: []
 `
 		if err := os.WriteFile(filepath.Join(dir, name+".yaml"), []byte(body), 0o644); err != nil {

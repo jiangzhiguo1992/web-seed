@@ -191,7 +191,9 @@ func build(root string) (map[string][]byte, error) {
 		if appVersion != "" {
 			spec["servers"] = []any{map[string]any{"url": "/" + appVersion}}
 		}
-		mergeMap(components, copyDoc(policy.Components))
+		policyComponents := copyDoc(policy.Components)
+		restoreJSONTypes(policyComponents)
+		mergeMap(components, policyComponents)
 		deprecatedOps := map[string]bool{}
 		for _, include := range app.Includes {
 			doc := copyDoc(byID[include])
@@ -381,6 +383,27 @@ func copyValue(v any) any {
 		return out
 	}
 	return v
+}
+
+// restoreJSONTypes 把契约层的 json_type 还原为 OpenAPI 的 type；
+// platform/http_conventions 是唯一允许出现 OpenAPI 原生类型的平台组件岛。
+func restoreJSONTypes(v any) {
+	switch x := v.(type) {
+	case map[string]any:
+		if jt, ok := x["json_type"]; ok {
+			if _, exists := x["type"]; !exists {
+				x["type"] = jt
+			}
+			delete(x, "json_type")
+		}
+		for _, child := range x {
+			restoreJSONTypes(child)
+		}
+	case []any:
+		for _, child := range x {
+			restoreJSONTypes(child)
+		}
+	}
 }
 
 func copyDoc(doc map[string]any) map[string]any {
@@ -799,7 +822,7 @@ func loadEventPayloads(root string, customTypes map[string]contractspec.CustomVa
 func renderSchemaNode(node map[string]any, customTypes map[string]contractspec.CustomValueType, enums map[string][]any, known map[string]bool, kinds map[string]contractspec.SchemaKind) (map[string]any, error) {
 	kind, ok := contractspec.SchemaNodeKind(node, kinds)
 	if !ok {
-		return nil, fmt.Errorf("schema node must have exactly one of ref or type")
+		return nil, fmt.Errorf("schema node must have exactly one of kind or type")
 	}
 	switch kind {
 	case "object":
@@ -871,7 +894,7 @@ func renderSchemaNode(node map[string]any, customTypes map[string]contractspec.C
 		typ, _ := node["type"].(string)
 		return scalarSchema(typ, customTypes), nil
 	case "ref":
-		ref, _ := node["ref"].(string)
+		ref, _ := node["type"].(string)
 		switch {
 		case strings.HasPrefix(ref, "data.enums."):
 			return map[string]any{"type": "string", "enum": enums[lastSegment(ref)]}, nil
@@ -923,7 +946,7 @@ func httpTypeResolver(customTypes map[string]contractspec.CustomValueType) opena
 		}
 		if _, ok := customTypes[family]; !ok {
 			switch family {
-			case "string", "boolean", "integer", "float", "decimal", "money", "datetime", "timestamp", "json", "bytes", "uuid", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "oid", "pg_lsn":
+			case "string", "boolean", "integer", "float", "decimal", "datetime", "timestamp", "json", "bytes", "bit", "xml", "geometry":
 			default:
 				return nil, fmt.Errorf("unknown type %s", name)
 			}
@@ -953,17 +976,20 @@ func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueTyp
 	case "timestamp", "datetime":
 		out["type"] = "string"
 		out["format"] = "date-time"
-	case "float", "decimal", "money":
+	case "float":
 		out["type"] = "number"
+	case "decimal":
+		out["type"] = "string"
+		out["format"] = "decimal"
 	case "json":
 		out["type"] = "object"
 	case "bytes":
 		out["type"] = "string"
 		out["format"] = "byte"
-	case "uuid", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
+	case "bit", "xml":
 		out["type"] = "string"
-	case "oid":
-		out["type"] = "integer"
+	case "geometry":
+		out["type"] = "object"
 	default:
 		out["type"] = "object"
 	}
@@ -1417,14 +1443,16 @@ func typeSchema(typ string, enums map[string][]any, customTypes map[string]contr
 		return map[string]any{"type": "boolean"}
 	case "timestamp", "datetime":
 		return map[string]any{"type": "string", "format": "date-time"}
-	case "number", "float", "decimal", "money":
+	case "number", "float":
 		return map[string]any{"type": "number"}
+	case "decimal":
+		return map[string]any{"type": "string", "format": "decimal"}
 	case "json":
 		return map[string]any{"type": "object"}
-	case "uuid", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
+	case "bit", "xml":
 		return map[string]any{"type": "string"}
-	case "oid":
-		return map[string]any{"type": "integer"}
+	case "geometry":
+		return map[string]any{"type": "object"}
 	}
 	if strings.HasPrefix(typ, "data.enums.") {
 		return map[string]any{"type": "string", "enum": enums[lastSegment(typ)]}

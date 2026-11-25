@@ -1920,7 +1920,7 @@ fields:
 	if err := os.WriteFile(entityPath, []byte(entity), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	c.loadEntities(&Schema{Type: "data.entities", Targets: contractspec.Targets{Dir: "contracts/data/entities", Glob: "*.yaml"}})
+	c.loadEntities(&Schema{Contract: "data.entities", Targets: contractspec.Targets{Dir: "contracts/data/entities", Glob: "*.yaml"}})
 	c.checkEnums(loadEnumSchemaForTest(t))
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "[enum-used-by]") || !strings.Contains(errs, "used_by must be") {
@@ -2010,7 +2010,7 @@ fields:
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
-	c.loadEntities(&Schema{Type: "data.entities", Targets: contractspec.Targets{Dir: "contracts/data/entities", Glob: "*.yaml"}})
+	c.loadEntities(&Schema{Contract: "data.entities", Targets: contractspec.Targets{Dir: "contracts/data/entities", Glob: "*.yaml"}})
 	usages := c.enumUsages()
 	u := usages["data.enums.x_status"]
 	if u == nil || !u.entities["data.entities.x"] {

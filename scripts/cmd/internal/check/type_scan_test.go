@@ -40,9 +40,6 @@ func TestContractTypeFieldsAreDataTypes(t *testing.T) {
 						if key == "type" && !isDataTypeRef(s) {
 							t.Errorf("%s: type %q is not a data type", childWhere, s)
 						}
-						if key == "kind" && (s == "object" || s == "array" || s == "map") {
-							t.Errorf("%s: schema nodes must use type: _types.schemas.*, not kind", childWhere)
-						}
 					}
 					walk(child, childWhere)
 				}
@@ -63,15 +60,7 @@ func TestContractTypeFieldsAreDataTypes(t *testing.T) {
 
 func typeScanExempt(rel string) bool {
 	switch {
-	case strings.HasPrefix(rel, "contracts/_meta/"):
-		return true
 	case strings.HasPrefix(rel, "contracts/generated/"):
-		return true
-	case strings.HasPrefix(rel, "contracts/capabilities/protocols/http/"):
-		return true
-	case rel == "contracts/platform/http_conventions.yaml":
-		return true
-	case rel == "contracts/index.yaml", rel == "contracts/project.yaml":
 		return true
 	}
 	return false
@@ -81,6 +70,9 @@ func isDataTypeRef(s string) bool {
 	s = strings.TrimPrefix(strings.TrimSpace(s), "*")
 	if s == "" {
 		return true
+	}
+	if strings.HasPrefix(s, "_types.schemas.") {
+		return false
 	}
 	for _, prefix := range []string{"_types.", "data.", "cap.services.", "context.Context", "error", "time."} {
 		if strings.HasPrefix(s, prefix) {

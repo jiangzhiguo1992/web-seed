@@ -225,9 +225,9 @@ stability: draft
 do_not: []
 schemas:
   Filter:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: status, schema: { ref: data.enums.x_status }, required: true, description: "status" }
+      - { name: status, schema: { type: data.enums.x_status }, required: true, description: "status" }
 services:
   - name: get
     summary: "x"
@@ -273,9 +273,9 @@ topics:
     summary: "x"
     publish:
       payload:
-        type: _types.schemas.object
+        kind: _types.schemas.object
         properties:
-          - { name: status, schema: { ref: data.enums.x_status }, required: true, description: "status" }
+          - { name: status, schema: { type: data.enums.x_status }, required: true, description: "status" }
       emitted_by: []
 `)
 	c := &Checker{root: root}

@@ -12,9 +12,9 @@ do_not:
 
 schemas:
   UnitPage:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: items, schema: { type: _types.schemas.array, items: { ref: data.entities.unit } }, required: true, description: "分页项列表" }
+      - { name: items, schema: { kind: _types.schemas.array, items: { type: data.entities.unit } }, required: true, description: "分页项列表" }
       - { name: offset, schema: { type: _types.basics.page_offset }, required: true, description: "当前页偏移" }
       - { name: limit, schema: { type: _types.basics.page_limit }, required: true, description: "当前页大小" }
       - { name: has_more, schema: { type: _types.basics.boolean }, required: true, description: "是否还有下一页" }

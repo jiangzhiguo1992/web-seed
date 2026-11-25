@@ -99,12 +99,6 @@ func (c *Checker) checkTypeRef(v any, path string) {
 		c.checkTypeRef(inner, path+".item")
 		return
 	}
-	if class, name, ok := contractspec.SplitTypeRef(s); ok && class == contractspec.TypeClassSchemas {
-		if !knownSchemaKind(name) {
-			c.typeVocabularyf(path, s, "%s: unknown schema kind %s", path, s)
-		}
-		return
-	}
 	if strings.HasPrefix(s, "_types.") {
 		if class, name, ok := contractspec.SplitTypeRef(s); ok && class == contractspec.TypeClassBasics {
 			family, variant, hasVariant := splitBasicsName(name)

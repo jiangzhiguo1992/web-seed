@@ -363,7 +363,7 @@ func (c *Checker) checkIndex(tableIDs map[string]string, enumSchema, entitySchem
 		}
 		for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
 			wantID := schema.Targets.FileID(filepath.Base(file))
-			if schema.Type == "data.entities" && filepath.Base(file) == "_base.yaml" {
+			if schema.Contract == "data.entities" && filepath.Base(file) == "_base.yaml" {
 				wantID = baseEntityID
 			}
 			if wantID == "" {
@@ -524,13 +524,13 @@ func (c *Checker) contractTypes() map[string]bool {
 			continue
 		}
 		var head struct {
-			Type string `yaml:"type"`
+			Contract string `yaml:"contract"`
 		}
 		if err := yaml.Unmarshal(b, &head); err != nil {
 			continue
 		}
-		if head.Type != "" {
-			out[head.Type] = true
+		if head.Contract != "" {
+			out[head.Contract] = true
 		}
 	}
 	return out
@@ -546,12 +546,12 @@ func (c *Checker) contractRules() map[string]map[string]bool {
 			continue
 		}
 		var head struct {
-			Type  string `yaml:"type"`
-			Rules []struct {
+			Contract string `yaml:"contract"`
+			Rules    []struct {
 				ID string `yaml:"id"`
 			} `yaml:"rules"`
 		}
-		if err := yaml.Unmarshal(b, &head); err != nil || head.Type == "" {
+		if err := yaml.Unmarshal(b, &head); err != nil || head.Contract == "" {
 			continue
 		}
 		ids := map[string]bool{}
@@ -561,7 +561,7 @@ func (c *Checker) contractRules() map[string]map[string]bool {
 			}
 		}
 		if len(ids) > 0 {
-			out[head.Type] = ids
+			out[head.Contract] = ids
 		}
 	}
 	return out

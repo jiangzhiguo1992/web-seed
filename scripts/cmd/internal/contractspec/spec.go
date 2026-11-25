@@ -15,7 +15,7 @@ import (
 
 type Schema struct {
 	ID         string                `yaml:"id"`
-	Type       string                `yaml:"type"`
+	Contract   string                `yaml:"contract"`
 	Title      string                `yaml:"title"`
 	Targets    Targets               `yaml:"targets"`
 	ValueTypes ValueTypes            `yaml:"-"`
@@ -126,29 +126,32 @@ const SchemaAlias = "_types.schemas.*"
 // SchemaNodeKind 返回 schema 节点的种类：ref 优先，其次由 type 的
 // `_types.schemas.object|array|map` 或 `_types.basics.*` 决定。
 func SchemaNodeKind(node map[string]any, kinds map[string]SchemaKind) (string, bool) {
-	_, hasRef := node["ref"]
+	kind, _ := node["kind"].(string)
 	typ, _ := node["type"].(string)
-	if hasRef && typ != "" {
+	if kind != "" && typ != "" {
 		return "", false
 	}
-	if hasRef {
-		return "ref", kinds["ref"].Keys != nil
-	}
-	switch typ {
-	case "":
-		return "", false
+	switch kind {
 	case "_types.schemas.object":
 		return "object", kinds["object"].Keys != nil
 	case "_types.schemas.array":
 		return "array", kinds["array"].Keys != nil
 	case "_types.schemas.map":
 		return "map", kinds["map"].Keys != nil
+	case "":
 	default:
-		if class, _, ok := SplitTypeRef(typ); ok && class == TypeClassBasics {
-			return "scalar", kinds["scalar"].Keys != nil
-		}
 		return "", false
 	}
+	if typ == "" {
+		return "", false
+	}
+	if class, _, ok := SplitTypeRef(typ); ok && class == TypeClassBasics {
+		return "scalar", kinds["scalar"].Keys != nil
+	}
+	if strings.HasPrefix(typ, "data.") || (strings.HasPrefix(typ, "cap.services.") && strings.Contains(typ, ".schemas.")) {
+		return "ref", kinds["ref"].Keys != nil
+	}
+	return "", false
 }
 
 // SchemaKind 描述一种 schema 节点的判别键与允许键；判别键隐式必填。
@@ -275,12 +278,12 @@ func LoadSchemaByType(root, typ string) (*Schema, string, error) {
 			return nil, "", err
 		}
 		var head struct {
-			Type string `yaml:"type"`
+			Contract string `yaml:"contract"`
 		}
 		if err := yaml.Unmarshal(b, &head); err != nil {
 			return nil, "", fmt.Errorf("%s: %w", file, err)
 		}
-		if head.Type != typ {
+		if head.Contract != typ {
 			continue
 		}
 		if found != nil {
@@ -457,11 +460,11 @@ func LoadCustomTypes(root string, families map[string]ValueTypeFamily) (*CustomT
 // schemaNodeRequiredKeys 是 SchemaNodeKind 硬编码的四种节点及其结构键。
 // 加新 kind 必须同时改 SchemaNodeKind，元规范不能单方面扩展种类。
 var schemaNodeRequiredKeys = map[string][]string{
-	"object": {"type", "properties"},
-	"array":  {"type", "items"},
-	"map":    {"type", "values"},
+	"object": {"kind", "properties"},
+	"array":  {"kind", "items"},
+	"map":    {"kind", "values"},
 	"scalar": {"type"},
-	"ref":    {"ref"},
+	"ref":    {"type"},
 }
 
 // validateStructures 校验 _types.structures：key 必须是已知容器，
@@ -717,11 +720,11 @@ func LoadSchema(path string) (*Schema, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if s.Type == "" || len(s.Fields) == 0 {
+	if s.Contract == "" || len(s.Fields) == 0 {
 		return nil, fmt.Errorf("%s: empty schema (type/fields)", path)
 	}
-	if s.ID != "meta."+s.Type {
-		return nil, fmt.Errorf("%s: id must be meta.%s, got %q", path, s.Type, s.ID)
+	if s.ID != "meta."+s.Contract {
+		return nil, fmt.Errorf("%s: id must be meta.%s, got %q", path, s.Contract, s.ID)
 	}
 	if err := validateMetaFieldTypes(s.Fields); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
@@ -739,8 +742,9 @@ func validateMetaFieldTypes(fields []Field) error {
 			continue
 		}
 		if f.Type != "" && f.Type != "*" {
-			if _, _, ok := SplitTypeRef(f.Type); !ok {
-				return fmt.Errorf("field %s: meta type must be _types.<basics|structures|schemas>.<name> or \"*\", got %q", f.Name, f.Type)
+			class, _, ok := SplitTypeRef(f.Type)
+			if !ok || class == TypeClassSchemas {
+				return fmt.Errorf("field %s: meta type must be _types.<basics|structures>.<name> or \"*\", got %q", f.Name, f.Type)
 			}
 		}
 		if err := validateMetaFieldTypes(f.Fields); err != nil {
@@ -787,17 +791,12 @@ var (
 	pgConcrete   = map[string]bool{
 		"smallint": true, "integer": true, "bigint": true, "smallserial": true, "serial": true, "bigserial": true,
 		"text": true, "varchar": true, "char": true, "character varying": true, "character": true, "bpchar": true, "name": true,
-		"numeric": true, "decimal": true, "money": true, "boolean": true, "real": true, "double precision": true,
+		"tsvector": true, "tsquery": true,
+		"numeric": true, "decimal": true, "boolean": true, "real": true, "double precision": true,
 		"date": true, "time": true, "timetz": true, "timestamp": true, "timestamptz": true,
-		"json": true, "jsonb": true, "jsonpath": true, "bytea": true, "uuid": true, "interval": true,
-		"inet": true, "cidr": true, "macaddr": true, "macaddr8": true,
-		"bit": true, "varbit": true, "tsvector": true, "tsquery": true, "xml": true,
+		"json": true, "jsonb": true, "bytea": true,
+		"bit": true, "varbit": true, "xml": true,
 		"point": true, "line": true, "lseg": true, "box": true, "path": true, "polygon": true, "circle": true,
-		"int4range": true, "int8range": true, "numrange": true, "tsrange": true, "tstzrange": true, "daterange": true,
-		"int4multirange": true, "int8multirange": true, "nummultirange": true, "tsmultirange": true, "tstzmultirange": true, "datemultirange": true,
-		"oid": true, "regproc": true, "regprocedure": true, "regoper": true, "regoperator": true, "regclass": true,
-		"regcollation": true, "regtype": true, "regrole": true, "regnamespace": true, "regconfig": true, "regdictionary": true,
-		"pg_lsn": true,
 	}
 	tsConcrete = map[string]bool{"string": true, "number": true, "boolean": true, "unknown": true}
 )
@@ -810,6 +809,9 @@ func validateTypeFamilies(path string, families map[string]ValueTypeFamily) erro
 			return fmt.Errorf("%s: family %s must have a name and description", path, name)
 		}
 		if len(fam.Types) == 0 {
+			if name == "any" {
+				continue
+			}
 			return fmt.Errorf("%s: family %s must declare types", path, name)
 		}
 		expected := []string{name}

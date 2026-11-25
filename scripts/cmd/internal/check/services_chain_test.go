@@ -202,7 +202,7 @@ func TestServiceChainOutputAndParamUsage(t *testing.T) {
 func TestServiceNestedInputPath(t *testing.T) {
 	c := &Checker{methodTypeDefs: map[string]map[string]any{
 		"Filter": {
-			"type": "_types.schemas.object",
+			"kind": "_types.schemas.object",
 			"properties": []any{
 				map[string]any{"name": "status", "schema": map[string]any{"type": "integer"}},
 			},
@@ -1309,37 +1309,37 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 	c := &Checker{
 		methodTypeDefs: map[string]map[string]any{
 			schemaPrefix + "DictionaryScalarInput": {
-				"type": "_types.schemas.object",
+				"kind": "_types.schemas.object",
 				"properties": []any{map[string]any{
 					"name":   "items",
-					"schema": map[string]any{"type": "_types.schemas.array", "items": map[string]any{"type": "_types.basics.string"}},
+					"schema": map[string]any{"kind": "_types.schemas.array", "items": map[string]any{"type": "_types.basics.string"}},
 				}},
 			},
 			schemaPrefix + "DictionaryImportInput": {
-				"type": "_types.schemas.object",
+				"kind": "_types.schemas.object",
 				"properties": []any{
 					map[string]any{
 						"name": "items",
 						"schema": map[string]any{
-							"type":  "_types.schemas.array",
-							"items": map[string]any{"ref": schemaPrefix + "DictionaryImportItem"},
+							"kind":  "array",
+							"items": map[string]any{"type": schemaPrefix + "DictionaryImportItem"},
 						},
 					},
 				},
 			},
 			schemaPrefix + "DictionaryRefInput": {
-				"type": "_types.schemas.object",
+				"kind": "_types.schemas.object",
 				"properties": []any{map[string]any{
 					"name":   "items",
-					"schema": map[string]any{"ref": schemaPrefix + "DictionaryImportItems"},
+					"schema": map[string]any{"type": schemaPrefix + "DictionaryImportItems"},
 				}},
 			},
 			schemaPrefix + "DictionaryImportItems": {
-				"type":  "_types.schemas.array",
-				"items": map[string]any{"ref": schemaPrefix + "DictionaryImportItem"},
+				"kind":  "array",
+				"items": map[string]any{"type": schemaPrefix + "DictionaryImportItem"},
 			},
 			schemaPrefix + "DictionaryImportItem": {
-				"type": "_types.schemas.object",
+				"kind": "_types.schemas.object",
 				"properties": []any{
 					map[string]any{"name": "parent_id", "schema": map[string]any{"type": "_types.basics.id"}, "nullable": true},
 					map[string]any{"name": "code", "schema": map[string]any{"type": "_types.basics.string"}, "required": true},

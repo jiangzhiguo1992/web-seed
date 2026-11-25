@@ -9,25 +9,25 @@ import (
 
 func TestAnchorsWriteAndCheck(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "contracts/_meta/cap.services.yaml", `type: cap.services
+	writeFixture(t, root, "contracts/_meta/cap.services.yaml", `contract: cap.services
 targets:
   dir: contracts/capabilities/services
   glob: "*.yaml"
   id: "cap.services.<file>"
 `)
-	writeFixture(t, root, "contracts/_meta/feature.rules.yaml", `type: feature.rules
+	writeFixture(t, root, "contracts/_meta/feature.rules.yaml", `contract: feature.rules
 targets:
   dir: contracts/features/rules
   glob: "*.yaml"
   id: "feature.rules.<file>"
 `)
-	writeFixture(t, root, "contracts/_meta/cap.lifecycles.yaml", `type: cap.lifecycles
+	writeFixture(t, root, "contracts/_meta/cap.lifecycles.yaml", `contract: cap.lifecycles
 targets:
   dir: contracts/capabilities/lifecycles
   glob: "*.yaml"
   id: "cap.lifecycles.<file>"
 `)
-	writeFixture(t, root, "contracts/_meta/cap.events.yaml", `type: cap.events
+	writeFixture(t, root, "contracts/_meta/cap.events.yaml", `contract: cap.events
 targets:
   dir: contracts/capabilities/events
   glob: "*.yaml"
@@ -181,13 +181,13 @@ topics:
 
 func TestAnchorsReplaceMultilineFields(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "contracts/_meta/cap.services.yaml", `type: cap.services
+	writeFixture(t, root, "contracts/_meta/cap.services.yaml", `contract: cap.services
 targets:
   dir: contracts/capabilities/services
   glob: "*.yaml"
   id: "cap.services.<file>"
 `)
-	writeFixture(t, root, "contracts/_meta/cap.lifecycles.yaml", `type: cap.lifecycles
+	writeFixture(t, root, "contracts/_meta/cap.lifecycles.yaml", `contract: cap.lifecycles
 targets:
   dir: contracts/capabilities/lifecycles
   glob: "*.yaml"

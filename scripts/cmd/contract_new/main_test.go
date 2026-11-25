@@ -13,8 +13,7 @@ import (
 )
 
 func tableSchemaForTest() *contractspec.Schema {
-	return &contractspec.Schema{
-		Type:    "data.tables",
+	return &contractspec.Schema{Contract: "data.tables",
 		Targets: contractspec.Targets{Dir: "contracts/data/tables", Glob: "*.yaml", ID: "data.tables.<file>"},
 	}
 }

@@ -120,12 +120,12 @@ func loadRows(root string, testRefs map[string]ruletests.Ref) ([]row, error) {
 			return nil, err
 		}
 		var head struct {
-			Type string `yaml:"type"`
+			Contract string `yaml:"contract"`
 		}
 		if err := yaml.Unmarshal(b, &head); err != nil {
 			return nil, err
 		}
-		if head.Type == "" {
+		if head.Contract == "" {
 			continue
 		}
 		s, err := contractspec.LoadSchema(file)
@@ -135,7 +135,7 @@ func loadRows(root string, testRefs map[string]ruletests.Ref) ([]row, error) {
 		for _, r := range s.Rules {
 			tr := testRefs[r.ID]
 			rows = append(rows, row{
-				Type:          s.Type,
+				Type:          s.Contract,
 				Rule:          r.ID,
 				ImplementedBy: strings.Join(r.ImplementedBy, ", "),
 				Asserted:      tr.Asserted,

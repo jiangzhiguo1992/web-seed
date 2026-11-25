@@ -514,6 +514,9 @@ func schemaFromAny(v any) (map[string]any, bool) {
 }
 
 func isArraySchema(schema map[string]any) bool {
+	if kind, _ := schema["kind"].(string); kind == "array" || kind == "_types.schemas.array" {
+		return true
+	}
 	if typ, _ := schema["type"].(string); normalizeTypeExpr(typ) == "array" {
 		return true
 	}
@@ -624,9 +627,6 @@ func branchTypeName(branch map[string]any) (string, bool) {
 
 func (c *Checker) schemaTypeName(schema map[string]any) (string, bool) {
 	if ref, _ := schema["$ref"].(string); ref != "" {
-		return resolveTypeRef(ref)
-	}
-	if ref, _ := schema["ref"].(string); ref != "" {
 		return resolveTypeRef(ref)
 	}
 	if isArraySchema(schema) {
@@ -881,21 +881,23 @@ func (c *Checker) schemaFieldNode(node map[string]any, name string) (map[string]
 
 // arrayItemNode 取 array 的 items 节点；ref 先解析。
 func (c *Checker) arrayItemNode(node map[string]any) (map[string]any, bool) {
-	if ref, _ := node["ref"].(string); ref != "" {
+	if ref, _ := node["type"].(string); strings.HasPrefix(ref, "data.") || strings.HasPrefix(ref, "cap.services.") {
 		resolved, ok := c.typeNode(ref)
 		if !ok {
 			return nil, false
 		}
 		node = resolved
 	}
-	if typ, _ := node["type"].(string); typ != "_types.schemas.array" {
-		return nil, false
+	if kind, _ := node["kind"].(string); kind != "array" && kind != "_types.schemas.array" {
+		if typ, _ := node["type"].(string); typ != "_types.schemas.array" {
+			return nil, false
+		}
 	}
 	item, ok := schemaFromAny(node["items"])
 	if !ok {
 		return nil, false
 	}
-	if ref, _ := item["ref"].(string); ref != "" {
+	if ref, _ := item["type"].(string); strings.HasPrefix(ref, "data.") || strings.HasPrefix(ref, "cap.services.") {
 		return c.typeNode(ref)
 	}
 	return item, true

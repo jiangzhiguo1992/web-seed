@@ -163,10 +163,30 @@ func (c *Checker) checkProjectApps() {
 // checkHTTPComponents 校验平台 HTTP 组件的外层结构；
 // schemas 在平台侧是普通 OpenAPI 对象，在文件侧必须是单一 source 溯源。
 
+func restoreJSONTypes(v any) {
+	switch x := v.(type) {
+	case map[string]any:
+		if jt, ok := x["json_type"]; ok {
+			if _, exists := x["type"]; !exists {
+				x["type"] = jt
+			}
+			delete(x, "json_type")
+		}
+		for _, child := range x {
+			restoreJSONTypes(child)
+		}
+	case []any:
+		for _, child := range x {
+			restoreJSONTypes(child)
+		}
+	}
+}
+
 func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isPlatform bool) {
 	if components == nil {
 		return
 	}
+	restoreJSONTypes(components)
 	sections := []string{"schemas", "responses", "parameters", "examples", "requestBodies", "headers", "securitySchemes", "links", "callbacks", "pathItems"}
 	names := map[string]map[string]bool{}
 	for _, section := range sections {
@@ -1867,14 +1887,18 @@ func (c *Checker) httpServiceFamily(t string) string {
 		return c.httpServiceFamily(custom.Family)
 	}
 	switch t {
-	case "string", "timestamp", "datetime", "bytes", "uuid", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
+	case "string", "timestamp", "datetime", "bytes", "bit", "xml":
 		return "string"
-	case "integer", "oid":
+	case "geometry":
+		return "object"
+	case "integer":
 		return "integer"
 	case "boolean":
 		return "boolean"
-	case "float", "decimal", "money", "number":
+	case "float", "number":
 		return "number"
+	case "decimal":
+		return "string"
 	case "json":
 		return "object"
 	}

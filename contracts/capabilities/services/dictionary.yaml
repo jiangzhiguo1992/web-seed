@@ -13,14 +13,14 @@ do_not:
 
 schemas:
   DictionaryPage:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: items, schema: { type: _types.schemas.array, items: { ref: data.entities.dictionary } }, required: true, description: "分页项列表" }
+      - { name: items, schema: { kind: _types.schemas.array, items: { type: data.entities.dictionary } }, required: true, description: "分页项列表" }
       - { name: offset, schema: { type: _types.basics.page_offset }, required: true, description: "当前页偏移" }
       - { name: limit, schema: { type: _types.basics.page_limit }, required: true, description: "当前页大小" }
       - { name: has_more, schema: { type: _types.basics.boolean }, required: true, description: "是否还有下一页" }
   CreateDictionaryInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: parent_id, schema: { type: _types.basics.id }, nullable: true, description: "父节点 ID；顶级为空" }
       - { name: code, schema: { type: _types.basics.string }, required: true, description: "全局唯一编码" }
@@ -30,7 +30,7 @@ schemas:
       - { name: remark, schema: { type: _types.basics.string }, nullable: true, description: "备注" }
       - { name: extra, schema: { type: _types.basics.json }, nullable: true, description: "扩展元数据" }
   UpdateDictionaryInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: name, schema: { type: _types.basics.string }, required: true, description: "展示名" }
       - { name: color, schema: { type: _types.basics.string }, nullable: true, description: "展示颜色 #RRGGBB" }
@@ -38,15 +38,15 @@ schemas:
       - { name: remark, schema: { type: _types.basics.string }, nullable: true, description: "备注" }
       - { name: extra, schema: { type: _types.basics.json }, nullable: true, description: "扩展元数据" }
   SetDictionaryStatusInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: status, schema: { ref: data.enums.dictionary_status }, required: true, description: "目标状态" }
+      - { name: status, schema: { type: data.enums.dictionary_status }, required: true, description: "目标状态" }
   MoveDictionaryInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: parent_id, schema: { type: _types.basics.id }, nullable: true, description: "新父节点；null 表示移到顶级" }
   DictionaryImportItem:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: parent_id, schema: { type: _types.basics.id }, nullable: true, description: "父节点 ID；null 表示顶级" }
       - { name: code, schema: { type: _types.basics.string }, required: true, description: "全局唯一编码" }
@@ -56,16 +56,16 @@ schemas:
       - { name: remark, schema: { type: _types.basics.string }, nullable: true, description: "备注" }
       - { name: extra, schema: { type: _types.basics.json }, nullable: true, description: "扩展元数据" }
   DictionaryImportInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - name: items
         schema:
-          type: _types.schemas.array
-          items: { ref: cap.services.dictionary.schemas.DictionaryImportItem }
+          kind: _types.schemas.array
+          items: { type: cap.services.dictionary.schemas.DictionaryImportItem }
         required: true
         description: "字典项数组"
   ImportResult:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: affected_rows, schema: { type: _types.basics.integer.32 }, required: true, description: "成功写入的行数" }
 

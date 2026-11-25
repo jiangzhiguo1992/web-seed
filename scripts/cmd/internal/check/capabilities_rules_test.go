@@ -147,7 +147,7 @@ type_families:
 `)
 	writeCapFile(t, root, "contracts/_meta/_types.yaml", string(mustRead(t, filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))))
 	writeCapFile(t, root, "contracts/_meta/cap.services.yaml", `id: meta.cap.services
-type: cap.services
+contract: cap.services
 targets:
   dir: contracts/capabilities/services
   glob: "*.yaml"
@@ -164,7 +164,7 @@ fields:
   - {name: services, type: _types.basics.any, description: "services"}
 `)
 	for _, typ := range []string{"feature.rules", "cap.lifecycles", "cap.events", "cap.protocols.http"} {
-		writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", "id: meta."+typ+"\ntype: "+typ+`
+		writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", "id: meta."+typ+"\ncontract: "+typ+`
 targets:
   dir: contracts/features/unused
   glob: "*.yaml"
@@ -1429,7 +1429,7 @@ topics:
     idempotent: false
     publish:
       payload:
-        ref: data.entities.account
+        type: data.entities.account
       emitted_by: [cap.services.x.create]
 `
 	writeCapFile(t, root, rel, valid)
@@ -1469,7 +1469,7 @@ topics:
     idempotent: false
     publish:
       payload:
-        type: _types.schemas.object
+        kind: _types.schemas.object
         properties:
           - { name: id, schema: { type: _types.basics.integer }, required: true, description: "id" }
       emitted_by: [cap.services.x.emit]
@@ -1561,7 +1561,7 @@ dispatches:
     name: send
     summary: "x"
     payload:
-      type: _types.schemas.object
+      kind: _types.schemas.object
       properties:
         - { name: order_id, schema: { type: _types.basics.integer }, required: true, description: "id" }
     service: cap.services.x.send
@@ -2094,11 +2094,11 @@ stability: draft
 do_not: []
 schemas:
   XInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - name: nested
         schema:
-          type: _types.schemas.object
+          kind: _types.schemas.object
           properties:
             - { name: id, schema: { type: _types.basics.integer }, description: "id" }
             - name: typo
@@ -2145,12 +2145,12 @@ stability: draft
 do_not: []
 schemas:
   XInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - name: nested
         description: "nested"
         schema:
-          type: _types.schemas.object
+          kind: _types.schemas.object
           properties:
             - { name: id, schema: { type: _types.basics.integer }, description: "id" }
 services:
@@ -2184,11 +2184,11 @@ func TestSchemaEmptyTypeAndRef(t *testing.T) {
 		"ref":    {Keys: []contractspec.Field{{Name: "type"}}},
 	}}
 	c.validateSchemaNode(map[string]any{"type": ""}, "x")
-	c.validateSchemaNode(map[string]any{"ref": ""}, "y")
+	c.validateSchemaNode(map[string]any{"type": ""}, "y")
 	got := strings.Join(c.errs, "\n")
-	if !strings.Contains(got, "x: schema node must have exactly one of ref or type") ||
-		!strings.Contains(got, "y.ref: must not be empty") {
-		t.Fatalf("empty type/ref accepted: %v", c.errs)
+	if !strings.Contains(got, "x: schema node must have exactly one of kind or type") ||
+		!strings.Contains(got, "y: schema node must have exactly one of kind or type") {
+		t.Fatalf("empty type/kind accepted: %v", c.errs)
 	}
 }
 
@@ -2202,7 +2202,7 @@ func TestSchemaPropertyDefault(t *testing.T) {
 	c := &Checker{
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
-				{Name: "type", Type: "_types.basics.string"},
+				{Name: "kind", Type: "_types.basics.string"},
 				{Name: "properties", Type: "_types.structures.list<_types.structures.object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 			"scalar": {Keys: []contractspec.Field{{Name: "type", Type: "_types.basics.string"}}},
@@ -2220,10 +2220,10 @@ func TestSchemaPropertyDefault(t *testing.T) {
 		},
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "_types.schemas.object",
+		"kind": "_types.schemas.object",
 		"properties": []any{
-			map[string]any{"name": "ok_enum", "schema": map[string]any{"ref": "data.enums.mode"}, "default": "a", "description": "ok"},
-			map[string]any{"name": "bad_enum", "schema": map[string]any{"ref": "data.enums.mode"}, "default": "z", "description": "bad"},
+			map[string]any{"name": "ok_enum", "schema": map[string]any{"type": "data.enums.mode"}, "default": "a", "description": "ok"},
+			map[string]any{"name": "bad_enum", "schema": map[string]any{"type": "data.enums.mode"}, "default": "z", "description": "bad"},
 			map[string]any{"name": "bad_int", "schema": map[string]any{"type": "_types.basics.integer"}, "default": "x", "description": "bad"},
 		},
 	}, "x")
@@ -2250,19 +2250,19 @@ func TestSchemaNestedValueIsValidated(t *testing.T) {
 	c := &Checker{
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
-				{Name: "type", Type: "_types.basics.string"},
+				{Name: "kind", Type: "_types.basics.string"},
 				{Name: "properties", Type: "_types.structures.list<_types.structures.object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 			"array": {Keys: []contractspec.Field{
-				{Name: "type", Type: "_types.basics.string"},
+				{Name: "kind", Type: "_types.basics.string"},
 				{Name: "items", Types: []string{"object", "array", "scalar", "ref"}},
 			}},
 		},
 		propertyKeys: propertyKeys,
 	}
-	c.validateSchemaNode(map[string]any{"type": "_types.schemas.array", "items": 42}, "a")
+	c.validateSchemaNode(map[string]any{"kind": "_types.schemas.array", "items": 42}, "a")
 	c.validateSchemaNode(map[string]any{
-		"type": "_types.schemas.object",
+		"kind": "_types.schemas.object",
 		"properties": []any{
 			map[string]any{"name": "x", "schema": 42, "description": "x"},
 		},
@@ -2287,7 +2287,7 @@ func TestSchemaTypesConstraint(t *testing.T) {
 	c := &Checker{
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
-				{Name: "type", Type: "_types.basics.string"},
+				{Name: "kind", Type: "_types.basics.string"},
 				{Name: "properties", Type: "_types.structures.list<_types.structures.object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 			"scalar": {Keys: []contractspec.Field{{Name: "type", Type: "_types.basics.string"}}},
@@ -2300,10 +2300,10 @@ func TestSchemaTypesConstraint(t *testing.T) {
 		},
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "_types.schemas.object",
+		"kind": "_types.schemas.object",
 		"properties": []any{
 			map[string]any{"name": "ok", "schema": map[string]any{"type": "_types.basics.string"}, "description": "ok"},
-			map[string]any{"name": "bad", "schema": map[string]any{"type": "_types.schemas.object", "properties": []any{}}, "description": "bad"},
+			map[string]any{"name": "bad", "schema": map[string]any{"kind": "_types.schemas.object", "properties": []any{}}, "description": "bad"},
 		},
 	}, "x")
 	got := strings.Join(c.errs, "\n")
@@ -2354,7 +2354,7 @@ func TestObjectValidation(t *testing.T) {
 	c := &Checker{
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
-				{Name: "type", Type: "_types.basics.string"},
+				{Name: "kind", Type: "_types.basics.string"},
 				{Name: "properties", Type: "_types.structures.list<_types.structures.object>", ItemFields: propertyKeys},
 				{Name: "validation", Type: "_types.structures.list<_types.structures.object>", ItemFields: []contractspec.Field{
 					{Name: "rule", Type: "_types.basics.string", Required: true},
@@ -2366,7 +2366,7 @@ func TestObjectValidation(t *testing.T) {
 		propertyKeys: propertyKeys,
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "_types.schemas.object",
+		"kind": "_types.schemas.object",
 		"properties": []any{
 			map[string]any{"name": "status", "schema": map[string]any{"type": "_types.basics.string"}, "description": "状态"},
 			map[string]any{"name": "own_type", "schema": map[string]any{"type": "_types.basics.string"}, "description": "归属"},
@@ -2404,12 +2404,12 @@ func TestNodeValidationKinds(t *testing.T) {
 	c := &Checker{
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
-				{Name: "type", Type: "_types.basics.string"},
+				{Name: "kind", Type: "_types.basics.string"},
 				{Name: "properties", Type: "_types.structures.list<_types.structures.object>", UniqueKey: "name", ItemFields: propertyKeys},
 				{Name: "validation", Type: "_types.structures.list<_types.structures.object>", ItemFields: ruleKeys},
 			}},
 			"array": {Keys: []contractspec.Field{
-				{Name: "type", Type: "_types.basics.string"},
+				{Name: "kind", Type: "_types.basics.string"},
 				{Name: "items", Types: []string{"scalar"}},
 				{Name: "validation", Type: "_types.structures.list<_types.structures.object>", ItemFields: ruleKeys},
 			}},
@@ -2418,12 +2418,12 @@ func TestNodeValidationKinds(t *testing.T) {
 				{Name: "validation", Type: "_types.structures.list<_types.structures.object>", ItemFields: ruleKeys},
 			}},
 			"ref": {Keys: []contractspec.Field{
-				{Name: "ref", Type: "_types.basics.string"},
+				{Name: "type", Type: "_types.basics.string"},
 				{Name: "validation", Type: "_types.structures.list<_types.structures.object>", ItemFields: ruleKeys},
 			}},
 		},
 		propertyKeys:   propertyKeys,
-		methodTypeDefs: map[string]map[string]any{"cap.services.x.schemas.X": {"type": "_types.schemas.object"}},
+		methodTypeDefs: map[string]map[string]any{"cap.services.x.schemas.X": {"kind": "_types.schemas.object"}},
 		valueTypes: contractspec.ValueTypes{
 			TypeFamilies: map[string]contractspec.ValueTypeFamily{"string": {Description: "string"}},
 		},
@@ -2434,10 +2434,10 @@ func TestNodeValidationKinds(t *testing.T) {
 	c.validateSchemaNode(map[string]any{"type": "_types.basics.string", "validation": []any{
 		map[string]any{"rule": "value.x != null", "message": "bad"},
 	}}, "scalar_bad")
-	c.validateSchemaNode(map[string]any{"ref": "cap.services.x.schemas.X", "validation": []any{
+	c.validateSchemaNode(map[string]any{"type": "cap.services.x.schemas.X", "validation": []any{
 		map[string]any{"rule": "value.status != null", "message": "ok"},
 	}}, "ref_ok")
-	c.validateSchemaNode(map[string]any{"type": "_types.schemas.array", "items": map[string]any{"type": "_types.basics.string"}, "validation": []any{
+	c.validateSchemaNode(map[string]any{"kind": "_types.schemas.array", "items": map[string]any{"type": "_types.basics.string"}, "validation": []any{
 		map[string]any{"rule": "value.x != null", "message": "bad"},
 	}}, "array_bad")
 	got := strings.Join(c.errs, "\n")
@@ -2462,7 +2462,7 @@ func TestRefValidationEntityPath(t *testing.T) {
 	c := &Checker{
 		nodeKinds: map[string]SchemaKind{
 			"ref": {Keys: []contractspec.Field{
-				{Name: "ref", Type: "_types.basics.string"},
+				{Name: "type", Type: "_types.basics.string"},
 				{Name: "validation", Type: "_types.structures.list<_types.structures.object>", ItemFields: ruleKeys},
 			}},
 		},
@@ -2480,7 +2480,7 @@ func TestRefValidationEntityPath(t *testing.T) {
 		},
 	}
 	c.validateSchemaNode(map[string]any{
-		"ref": "data.entities.account",
+		"type": "data.entities.account",
 		"validation": []any{
 			map[string]any{"rule": "value.status != \"active\"", "message": "ok enum"},
 			map[string]any{"rule": "value.own.kind == 1", "message": "ok nested"},
@@ -2531,11 +2531,11 @@ func TestCustomTypeParamTarget(t *testing.T) {
 
 func TestSchemaCycle(t *testing.T) {
 	c := &Checker{methodTypeDefs: map[string]map[string]any{
-		"A": {"type": "_types.schemas.object", "properties": []any{
-			map[string]any{"name": "b", "schema": map[string]any{"ref": "B"}, "description": "b"},
+		"cap.services.x.schemas.A": {"kind": "_types.schemas.object", "properties": []any{
+			map[string]any{"name": "b", "schema": map[string]any{"type": "cap.services.x.schemas.B"}, "description": "b"},
 		}},
-		"B": {"type": "_types.schemas.object", "properties": []any{
-			map[string]any{"name": "a", "schema": map[string]any{"ref": "A"}, "description": "a"},
+		"cap.services.x.schemas.B": {"kind": "_types.schemas.object", "properties": []any{
+			map[string]any{"name": "a", "schema": map[string]any{"type": "cap.services.x.schemas.A"}, "description": "a"},
 		}},
 	}}
 	c.checkSchemaCycles()
@@ -2576,7 +2576,7 @@ func TestSchemaFieldSpecs(t *testing.T) {
 	c := &Checker{
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
-				{Name: "type", Type: "_types.basics.string"},
+				{Name: "kind", Type: "_types.basics.string"},
 				{Name: "properties", Type: "_types.structures.list<_types.structures.object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 			"scalar": {Keys: []contractspec.Field{
@@ -2591,7 +2591,7 @@ func TestSchemaFieldSpecs(t *testing.T) {
 		},
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "_types.schemas.object",
+		"kind": "_types.schemas.object",
 		"properties": []any{
 			map[string]any{
 				"name":        "id",
@@ -2646,14 +2646,14 @@ func TestSchemaPropertyRequiresSchemaAndDescription(t *testing.T) {
 	c := &Checker{
 		nodeKinds: map[string]SchemaKind{
 			"object": {Keys: []contractspec.Field{
-				{Name: "type", Type: "_types.basics.string"},
+				{Name: "kind", Type: "_types.basics.string"},
 				{Name: "properties", Type: "_types.structures.list<_types.structures.object>", UniqueKey: "name", ItemFields: propertyKeys},
 			}},
 		},
 		propertyKeys: propertyKeys,
 	}
 	c.validateSchemaNode(map[string]any{
-		"type": "_types.schemas.object",
+		"kind": "_types.schemas.object",
 		"properties": []any{
 			map[string]any{"name": "id"},
 		},

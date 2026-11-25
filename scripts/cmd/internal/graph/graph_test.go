@@ -22,11 +22,11 @@ func writeFixture(t *testing.T, root, rel, body string) {
 // writeTargets 为 graph.Compute 提供 _meta targets，避免测试依赖生产回退。
 func writeTargets(t *testing.T, root, tableDir, entityDir, queryDir string) {
 	t.Helper()
-	writeFixture(t, root, "contracts/_meta/data.tables.yaml", fmt.Sprintf("type: data.tables\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n", tableDir))
-	writeFixture(t, root, "contracts/_meta/data.entities.yaml", fmt.Sprintf("type: data.entities\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.entities.<file>\"\n", entityDir))
-	writeFixture(t, root, "contracts/_meta/data.queries.yaml", fmt.Sprintf("type: data.queries\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.queries.<file>\"\n", queryDir))
+	writeFixture(t, root, "contracts/_meta/data.tables.yaml", fmt.Sprintf("contract: data.tables\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n", tableDir))
+	writeFixture(t, root, "contracts/_meta/data.entities.yaml", fmt.Sprintf("contract: data.entities\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.entities.<file>\"\n", entityDir))
+	writeFixture(t, root, "contracts/_meta/data.queries.yaml", fmt.Sprintf("contract: data.queries\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"data.queries.<file>\"\n", queryDir))
 	serviceDir := "contracts/capabilities/services"
-	writeFixture(t, root, "contracts/_meta/cap.services.yaml", fmt.Sprintf("type: cap.services\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"cap.services.<file>\"\n", serviceDir))
+	writeFixture(t, root, "contracts/_meta/cap.services.yaml", fmt.Sprintf("contract: cap.services\ntargets:\n  dir: %q\n  glob: \"*.yaml\"\n  id: \"cap.services.<file>\"\n", serviceDir))
 	ensureDirs(t, root, serviceDir)
 }
 
@@ -172,8 +172,8 @@ queries:
 
 func TestResolveTargetRejectsDuplicate(t *testing.T) {
 	root := t.TempDir()
-	writeFixture(t, root, "contracts/_meta/a.yaml", "type: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n")
-	writeFixture(t, root, "contracts/_meta/b.yaml", "type: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n")
+	writeFixture(t, root, "contracts/_meta/a.yaml", "contract: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n")
+	writeFixture(t, root, "contracts/_meta/b.yaml", "contract: data.tables\ntargets:\n  dir: contracts/data/tables\n  glob: \"*.yaml\"\n  id: \"data.tables.<file>\"\n")
 	if _, err := Compute(root); err == nil || !strings.Contains(err.Error(), "duplicate meta type") {
 		t.Fatalf("duplicate meta not reported: %v", err)
 	}

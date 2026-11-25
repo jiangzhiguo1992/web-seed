@@ -161,13 +161,14 @@ func TestTypeMapping(t *testing.T) {
 	}{
 		{column{Type: "integer", Bits: 64}, "BIGINT"},
 		{column{Type: "string", MaxLen: 32}, "VARCHAR(32)"},
+		{column{Type: "string", Kind: "tsvector"}, "TSVECTOR"},
 		{column{Type: "timestamp"}, "TIMESTAMPTZ(6)"},
 		{column{Type: "boolean"}, "BOOLEAN"},
 		{column{Type: "decimal", Precision: 10, Scale: 2}, "NUMERIC(10,2)"},
 		{column{Type: "json"}, "JSONB"},
 		{column{Type: "json", Kind: "json"}, "JSON"},
-		{column{Type: "money"}, "MONEY"},
 		{column{Type: "bytes"}, "BYTEA"},
+		{column{Type: "bit", Kind: "bit", Length: 8}, "BIT(8)"},
 	}
 	for _, tc := range cases {
 		got, err := columnType(tc.in)

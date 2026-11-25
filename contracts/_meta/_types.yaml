@@ -5,8 +5,9 @@ title: "统一类型注册表"
 
 basics:
   string:
-    description: "字符序列"
+    description: "字符序列；kind 选择 text 或全文检索类型；varchar/char 由 max_len/fixed 表达"
     params:
+      kind: { type: _types.basics.string, required: false, enum: [ text, tsvector, tsquery ], default: text, description: "字符存储类型" }
       min_len: { type: _types.basics.integer, required: false, min: 0, description: "最小长度" }
       max_len: { type: _types.basics.integer, required: false, min: 1, description: "最大长度" }
       fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
@@ -41,7 +42,7 @@ basics:
       32: { go: float32, pg: [ real ], ts: number }
       64: { go: float64, pg: [ double precision ], ts: number }
   decimal:
-    description: "精确小数；Go 侧用 decimal.Decimal 承载，不使用 string 或 float"
+    description: "精确小数；Go 侧用 decimal.Decimal 承载，JSON 输出固定为字符串（gen_model 设 MarshalJSONWithoutQuotes=false），不使用 string 或 float"
     params:
       precision: { type: _types.basics.integer, required: true, min: 1, examples: [ 19 ], description: "总位数" }
       scale: { type: _types.basics.integer, required: false, default: 0, min: 0, description: "小数位数" }
@@ -78,25 +79,28 @@ basics:
     types:
       bytes: { go: "[]byte", pg: [ bytea ], ts: string }
   bit:
-    description: "位串；kind 选择定长 bit 或变长 varbit"
+    description: "位串；kind 选择定长 bit 或变长 varbit，length 指定位数；Go 用 big.Int 按数值位解释，前导 0 需按 length 补齐"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ bit, varbit ], default: varbit, description: "位串类型" }
+      length: { type: _types.basics.integer, required: false, min: 1, description: "位数；kind=bit 时应声明" }
     types:
       bit: { go: big.Int, pg: [ bit, varbit ], ts: string }
   xml:
-    description: "XML 文档"
+    description: "XML 文档；Go 侧用 etree.Document 承载"
     params: { }
     types:
-      xml: { go: "[]byte", pg: [ xml ], ts: string }
+      xml: { go: etree.Document, pg: [ xml ], ts: string }
   geometry:
-    description: "几何类型；kind 选择 PostgreSQL 几何类型"
+    description: "几何类型；Go 侧用 geojson.Geometry 承载 GeoJSON；数据库侧由 repository 用 Decode/Encode + EWKB 适配"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ point, line, lseg, box, path, polygon, circle ], default: point, description: "几何类型" }
     types:
-      geometry: { go: geom.T, pg: [ point, line, lseg, box, path, polygon, circle ], ts: string }
+      geometry: { go: geojson.Geometry, pg: [ point, line, lseg, box, path, polygon, circle ], ts: unknown }
   any:
-    description: "任意值；用于无法静态建模的字段；没有确定性存储落型，因此没有 types 表"
+    description: "任意值；用于无法静态建模的字段；没有确定性存储落型"
     params: { }
+    types:
+      any: { go: any, pg: [ ], ts: unknown }
 
 structures:
   list:
@@ -139,8 +143,8 @@ schemas:
       - name: kind
         type: _types.basics.string
         required: true
-        const: object
-        description: "固定为 object"
+        const: _types.schemas.object
+        description: "固定为 _types.schemas.object"
       - name: properties
         type: _types.structures.list<_types.structures.object>
         required: true
@@ -195,8 +199,8 @@ schemas:
       - name: kind
         type: _types.basics.string
         required: true
-        const: array
-        description: "固定为 array"
+        const: _types.schemas.array
+        description: "固定为 _types.schemas.array"
       - name: items
         types: [ _types.schemas.* ]
         required: true
@@ -229,8 +233,8 @@ schemas:
       - name: kind
         type: _types.basics.string
         required: true
-        const: map
-        description: "固定为 map"
+        const: _types.schemas.map
+        description: "固定为 _types.schemas.map"
       - name: values
         types: [ _types.schemas.* ]
         required: true
@@ -307,11 +311,10 @@ schemas:
             required: true
             description: "违反规则时的错误文案"
 
-# 类型词汇审计的显式例外；例外之外出现裸 object/array/map 或未知 _types.* 一律失败。
+# 类型词汇审计的显式例外；例外之外 type 不是数据类型或 _types.* 未知一律失败。
 type_vocabulary:
   exceptions:
     - { path: contracts/generated, kind: dir, reason: "生成产物：OpenAPI 使用 JSON Schema 外部词汇" }
-    - { path: contracts/capabilities/protocols/http, kind: dir, reason: "完整 OpenAPI 3.1：type: object/array 是外部词汇" }
 
 # 每个类型族参数的消费方：openapi=生成到 OpenAPI，storage=仅存储层，runtime=业务运行时。
 param_targets:
@@ -331,3 +334,4 @@ param_targets:
   timezone: storage
   fractional_seconds: storage
   kind: storage
+  length: storage

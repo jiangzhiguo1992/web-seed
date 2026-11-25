@@ -394,7 +394,7 @@ func TestScaffoldsNeverEmitStable(t *testing.T) {
 }
 
 func TestRenderEnumItemRejectsInvalidName(t *testing.T) {
-	enumSchema := &Schema{Type: "data.enums"}
+	enumSchema := &Schema{Contract: "data.enums"}
 	if _, err := RenderEnumItem(enumSchema, "Bad-Name", "account"); err == nil {
 		t.Fatal("expected invalid enum name to fail")
 	}
@@ -423,7 +423,7 @@ func TestRenderEnumItem(t *testing.T) {
 }
 
 func TestRenderEnumItemUsesNameAsIDSource(t *testing.T) {
-	s := &Schema{Type: "data.enums", Targets: Targets{ID: "data.enums.<file>", Dir: "contracts/data/enums"}}
+	s := &Schema{Contract: "data.enums", Targets: Targets{ID: "data.enums.<file>", Dir: "contracts/data/enums"}}
 	b, err := RenderEnumItem(s, "note_status", "account")
 	if err != nil {
 		t.Fatal(err)
@@ -445,7 +445,7 @@ func TestRenderEnumItemUsesNameAsIDSource(t *testing.T) {
 }
 
 func TestRenderEnumItemRequiresTargets(t *testing.T) {
-	if _, err := RenderEnumItem(&Schema{Type: "data.enums"}, "note_status", "account"); err == nil {
+	if _, err := RenderEnumItem(&Schema{Contract: "data.enums"}, "note_status", "account"); err == nil {
 		t.Fatal("expected missing targets to fail")
 	}
 }

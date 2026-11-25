@@ -117,7 +117,7 @@ cors:
 components:
   schemas:
     ApiErrorResponse:
-      type: object
+      json_type: object
       additionalProperties: false
       required:
         - "code"
@@ -125,13 +125,13 @@ components:
         - "data"
       properties:
         code:
-          type: integer
+          json_type: integer
           minimum: 1000
           maximum: 9999
         msg:
-          type: string
+          json_type: string
         data:
-          type: "null"
+          json_type: "null"
   responses:
     BadRequest:
       description: "请求非法"
@@ -230,9 +230,9 @@ components:
     RetryAfter:
       description: "建议重试等待秒数或 HTTP-date；非法值不发送，调用方记录参数错误"
       schema:
-        type: string
+        json_type: string
   securitySchemes:
     Bearer:
-      type: http
+      json_type: http
       scheme: bearer
       bearerFormat: JWT

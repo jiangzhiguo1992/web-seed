@@ -16,14 +16,14 @@ do_not:
 
 schemas:
   AttachmentPage:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: items, schema: { type: _types.schemas.array, items: { ref: data.entities.attachment } }, required: true, description: "分页项列表" }
+      - { name: items, schema: { kind: _types.schemas.array, items: { type: data.entities.attachment } }, required: true, description: "分页项列表" }
       - { name: offset, schema: { type: _types.basics.page_offset }, required: true, description: "当前页偏移" }
       - { name: limit, schema: { type: _types.basics.page_limit }, required: true, description: "当前页大小" }
       - { name: has_more, schema: { type: _types.basics.boolean }, required: true, description: "是否还有下一页" }
   CreateUploadInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: owner_table_name, schema: { type: _types.basics.string }, required: true, description: "所有者物理表名" }
       - { name: owner_id, schema: { type: _types.basics.id }, required: true, description: "所有者行 ID" }
@@ -33,17 +33,17 @@ schemas:
       - { name: content_type, schema: { type: _types.basics.string }, required: true, description: "MIME 类型" }
       - { name: size_bytes, schema: { type: _types.basics.byte_size }, required: true, description: "对象大小（字节）" }
       - { name: sha256, schema: { type: _types.basics.string }, nullable: true, description: "SHA-256 十六进制" }
-      - { name: visibility, schema: { ref: data.enums.attachment_visibility }, required: true, description: "访问级别" }
+      - { name: visibility, schema: { type: data.enums.attachment_visibility }, required: true, description: "访问级别" }
       - { name: replaces_id, schema: { type: _types.basics.id }, nullable: true, description: "被替换的旧附件 ID；新上传为 null" }
   UploadTicket:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: attachment_id, schema: { type: _types.basics.id }, required: true, description: "附件 ID" }
       - { name: object_key, schema: { type: _types.basics.string }, required: true, description: "对象存储 key" }
       - { name: upload_url, schema: { type: _types.basics.string }, required: true, description: "预签名上传 URL" }
       - { name: expires_at, schema: { type: _types.basics.timestamp }, required: true, description: "上传 URL 过期时间" }
   SignedURL:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: url, schema: { type: _types.basics.string }, required: true, description: "预签名下载 URL" }
       - { name: expires_at, schema: { type: _types.basics.timestamp }, required: true, description: "下载 URL 过期时间" }

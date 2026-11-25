@@ -169,7 +169,7 @@ paths:
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   X:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: id, schema: { type: _types.basics.integer }, required: true, description: "id" }
 services: []
@@ -316,13 +316,13 @@ topics:
     summary: "created"
     publish:
       payload:
-        type: _types.schemas.object
+        kind: _types.schemas.object
         properties:
           - { name: id, schema: { type: _types.basics.integer }, required: true, description: "id" }
-          - { name: account, schema: { ref: data.entities.account }, required: true, description: "account" }
+          - { name: account, schema: { type: data.entities.account }, required: true, description: "account" }
           - name: attributes
             schema:
-              type: _types.schemas.map
+              kind: _types.schemas.map
               values: { type: _types.basics.string }
               min_items: 1
               max_items: 5
@@ -517,7 +517,7 @@ paths:
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   Input:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: username, schema: { type: _types.basics.string }, required: true, description: "name" }
 services: []
@@ -778,7 +778,7 @@ paths:
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   X:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: id, schema: { type: _types.basics.integer }, required: true, description: "id" }
 services: []
@@ -957,7 +957,7 @@ enums: []
 
 func TestRenderSchemaAnnotations(t *testing.T) {
 	obj := map[string]any{
-		"type": "_types.schemas.object",
+		"kind": "_types.schemas.object",
 		"properties": []any{
 			map[string]any{
 				"name":        "id",
@@ -982,7 +982,7 @@ func TestRenderSchemaAnnotations(t *testing.T) {
 		t.Fatalf("required aggregation lost: %#v", out)
 	}
 
-	list := map[string]any{"type": "_types.schemas.array", "items": map[string]any{"type": "_types.basics.string"}}
+	list := map[string]any{"kind": "_types.schemas.array", "items": map[string]any{"type": "_types.basics.string"}}
 	out, err = renderSchemaNode(list, nil, nil, map[string]bool{}, testNodeKinds())
 	if err != nil {
 		t.Fatal(err)
@@ -992,7 +992,7 @@ func TestRenderSchemaAnnotations(t *testing.T) {
 		t.Fatalf("array items lost: %#v", item)
 	}
 
-	m := map[string]any{"type": "_types.schemas.map", "values": map[string]any{"type": "_types.basics.string"}}
+	m := map[string]any{"kind": "_types.schemas.map", "values": map[string]any{"type": "_types.basics.string"}}
 	out, err = renderSchemaNode(m, nil, nil, map[string]bool{}, testNodeKinds())
 	if err != nil {
 		t.Fatal(err)

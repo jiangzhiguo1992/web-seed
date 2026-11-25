@@ -28,7 +28,7 @@ func TestLoadSchemaByType(t *testing.T) {
 	writeMeta(t, root, "_types.yaml", string(shared))
 	writeMeta(t, root, "data.tables.yaml", `
 id: meta.data.tables
-type: data.tables
+contract: data.tables
 fields:
   - { name: id, type: _types.basics.string }
 `)
@@ -36,7 +36,7 @@ fields:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Type != "data.tables" || filepath.Base(path) != "data.tables.yaml" {
+	if s.Contract != "data.tables" || filepath.Base(path) != "data.tables.yaml" {
 		t.Fatalf("unexpected schema: %#v %s", s, path)
 	}
 	if _, _, err := LoadSchemaByType(root, "missing"); err == nil {
@@ -48,7 +48,7 @@ func TestLoadSchemaByTypeRequiresSharedTypes(t *testing.T) {
 	root := t.TempDir()
 	writeMeta(t, root, "data.tables.yaml", `
 id: meta.data.tables
-type: data.tables
+contract: data.tables
 fields:
   - { name: id, type: _types.basics.string }
 `)
@@ -71,7 +71,7 @@ func TestLoadSchemaRejectsUnknownField(t *testing.T) {
 	path := filepath.Join(root, "data.tables.yaml")
 	body := `
 id: meta.data.tables
-type: data.tables
+contract: data.tables
 fields:
   - { name: id, type: _types.basics.string, requred: true }
 `
@@ -136,12 +136,7 @@ func TestSharedTypeVocabularyExceptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]string{
-		"contracts/_meta":                          "dir",
-		"contracts/generated":                      "dir",
-		"contracts/capabilities/protocols/http":    "dir",
-		"contracts/platform/http_conventions.yaml": "file",
-		"contracts/index.yaml":                     "file",
-		"contracts/project.yaml":                   "file",
+		"contracts/generated": "dir",
 	}
 	if len(shared.TypeVocabulary.Exceptions) != len(want) {
 		t.Fatalf("exceptions = %#v", shared.TypeVocabulary.Exceptions)
@@ -219,7 +214,7 @@ func TestSchemaNodeKindRequiresNamespace(t *testing.T) {
 	if _, ok := SchemaNodeKind(map[string]any{"type": "_types.object"}, kinds); ok {
 		t.Fatal("legacy _types.object must not be a schema node kind")
 	}
-	if kind, ok := SchemaNodeKind(map[string]any{"type": "_types.schemas.object"}, kinds); !ok || kind != "object" {
+	if kind, ok := SchemaNodeKind(map[string]any{"kind": "_types.schemas.object"}, kinds); !ok || kind != "object" {
 		t.Fatalf("qualified object node = (%q,%v)", kind, ok)
 	}
 	if kind, ok := SchemaNodeKind(map[string]any{"type": "_types.basics.string"}, kinds); !ok || kind != "scalar" {

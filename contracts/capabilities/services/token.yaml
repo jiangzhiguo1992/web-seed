@@ -10,7 +10,7 @@ do_not:
 
 schemas:
   TokenPair:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: access_token, schema: { type: _types.basics.string }, required: true, read_only: true, description: "访问令牌" }
       - { name: refresh_token, schema: { type: _types.basics.string }, required: true, read_only: true, description: "刷新 JWT" }
@@ -18,25 +18,25 @@ schemas:
       - { name: refresh_expire_at, schema: { type: _types.basics.timestamp }, required: true, description: "刷新令牌过期时间" }
       - { name: token_type, schema: { type: _types.basics.token_type }, description: "令牌类型；固定 Bearer" }
   AccessToken:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: access_token, schema: { type: _types.basics.string }, required: true, read_only: true, description: "访问令牌" }
       - { name: access_expire_at, schema: { type: _types.basics.timestamp }, required: true, description: "访问令牌过期时间" }
       - { name: token_type, schema: { type: _types.basics.token_type }, description: "令牌类型；固定 Bearer" }
   RefreshToken:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: refresh_token, schema: { type: _types.basics.string }, required: true, read_only: true, description: "刷新 JWT" }
       - { name: refresh_expire_at, schema: { type: _types.basics.timestamp }, required: true, description: "刷新令牌过期时间" }
   RefreshInput:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
       - { name: refresh_token, schema: { type: _types.basics.string }, required: true, write_only: true, description: "刷新 JWT" }
   RefreshResult:
-    type: _types.schemas.object
+    kind: _types.schemas.object
     properties:
-      - { name: access, schema: { ref: cap.services.token.schemas.AccessToken }, required: true, description: "新的访问令牌" }
-      - { name: refresh, schema: { ref: cap.services.token.schemas.RefreshToken }, required: true, description: "新的刷新令牌" }
+      - { name: access, schema: { type: cap.services.token.schemas.AccessToken }, required: true, description: "新的访问令牌" }
+      - { name: refresh, schema: { type: cap.services.token.schemas.RefreshToken }, required: true, description: "新的刷新令牌" }
 
 services:
   - name: issue

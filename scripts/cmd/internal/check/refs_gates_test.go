@@ -11,7 +11,7 @@ func TestEnforcementGates(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "Makefile", "gen-x:\n\t@true\n")
 	writeCapFile(t, root, "scripts/cmd/internal/check/x_test.go", "package check\n")
-	writeCapFile(t, root, "contracts/_meta/x.yaml", "type: x\n")
+	writeCapFile(t, root, "contracts/_meta/x.yaml", "contract: x\n")
 	doc := map[string]any{
 		"enforcement_gates": map[string]any{
 			"generated": map[string]any{"x": []any{"make gen-x"}},
@@ -45,7 +45,7 @@ func TestEnforcementGates(t *testing.T) {
 func TestEnforcementGateRequiresRuleAssertion(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "Makefile", "gen-x:\n\t@true\n")
-	writeCapFile(t, root, "contracts/_meta/y.yaml", "type: y\nrules:\n  - { id: rule-y, text: \"x\", implemented_by: [ rule-y ] }\n")
+	writeCapFile(t, root, "contracts/_meta/y.yaml", "contract: y\nrules:\n  - { id: rule-y, text: \"x\", implemented_by: [ rule-y ] }\n")
 	writeCapFile(t, root, "scripts/cmd/internal/check/y_test.go", "package check\n")
 	doc := map[string]any{
 		"enforcement_gates": map[string]any{
