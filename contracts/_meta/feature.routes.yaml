@@ -51,8 +51,8 @@ fields:
     required: true
     description: "布局注册表"
     fields:
-      - { name: default, type: _types.basics.string, required: true, description: "默认布局" }
-      - { name: auth, type: _types.basics.string, required: true, description: "认证页布局" }
+      - { name: default, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_-]*$', description: "默认布局" }
+      - { name: auth, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_-]*$', description: "认证页布局" }
 
   - name: routes
     type: _types.structures.list<_types.structures.object>
@@ -61,7 +61,7 @@ fields:
     description: "路由列表"
     item_fields:
       - { name: id, type: _types.basics.string, required: true, pattern: '^feature\.routes\.[a-z][a-z0-9_]*$', description: "路由 ID" }
-      - { name: path, type: _types.basics.string, required: true, pattern: '^/[A-Za-z0-9_:/-]*$', description: "URL 路径；参数用 :name" }
+      - { name: path, type: _types.basics.string, required: true, pattern: &route_path '^/([A-Za-z0-9_-]+|:[a-z][a-zA-Z0-9_]*)(/([A-Za-z0-9_-]+|:[a-z][a-zA-Z0-9_]*))*$|^/$', description: "URL 路径；参数用 :name" }
       - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9-]*$', description: "路由名" }
       - { name: page, type: _types.basics.string, required: true, pattern: '^feature\.pages\.[a-z][a-z0-9_]*$', description: "页面 ID" }
       - { name: layout, type: _types.basics.string, required: true, description: "布局名；必须在 layout 注册表中" }
@@ -89,8 +89,8 @@ fields:
     required: false
     description: "重定向列表"
     item_fields:
-      - { name: from, type: _types.basics.string, required: true, pattern: '^/[A-Za-z0-9_:/-]*$', description: "来源路径" }
-      - { name: to, type: _types.basics.string, required: true, pattern: '^/[A-Za-z0-9_:/-]*$', description: "目标路径" }
+      - { name: from, type: _types.basics.string, required: true, pattern: *route_path, description: "来源路径" }
+      - { name: to, type: _types.basics.string, required: true, pattern: *route_path, description: "目标路径" }
 
   - name: not_found
     type: _types.structures.object

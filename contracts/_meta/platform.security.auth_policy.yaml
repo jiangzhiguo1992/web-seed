@@ -9,12 +9,6 @@ targets:
   id: "platform.security.auth_policy"
 
 fields:
-  - name: schema_version
-    type: _types.basics.integer
-    required: true
-    const: 1
-    description: "格式版本"
-
   - name: id
     type: _types.basics.string
     required: true
@@ -25,6 +19,12 @@ fields:
     type: _types.basics.string
     required: true
     description: "一句话说明"
+
+  - name: schema_version
+    type: _types.basics.integer
+    required: true
+    const: 1
+    description: "格式版本"
 
   - name: stability
     type: _types.basics.string

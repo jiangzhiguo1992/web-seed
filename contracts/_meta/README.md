@@ -114,6 +114,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 | `make gen-rule-ids` | 从 checker 的 `rulef("...")` 重新生成 `rule_ids_gen.go` |
 | `make gen-rule-tests` | 生成 `docs/contracts/generated/rule-tests.md`（规则 → `implemented_by` → 测试直接引用数） |
 | `make gen-scenarios` | 把 `contracts/scenarios/http/*.yaml` 投影为 `contracts/generated/scenarios/manifest.yaml` |
+| `make gen-async` | 把 `contracts/capabilities/events/*.yaml` 投影为 `contracts/generated/async/manifest.yaml`（worker 重试/并发/调度策略） |
 | `make test-rules` | 运行 `feature.rules` 的 policy 行为断言骨架（`go test -tags rules`） |
 
 `contract-check` 已接入 `lefthook` pre-commit（`contracts/**/*.yaml`）与 CI；CI 额外运行 `make audit-types` 输出类型词汇报告。
@@ -125,6 +126,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 ## 4. 校验机制
 
 - `_meta/<type>.yaml` 由 `KnownFields` 严格解析：拼错字段（如 `requred`）直接失败。
+- `_meta` 的 `pattern` / `key_patterns` 必须整体锚定（`^...$`），由 `TestMetaPatternsAreAnchored` 兜底，避免退化为前缀匹配。
 - 实例结构由 `fields` / `item_fields` 的 `required` / `type` / `enum` / `allowed` / `pattern` / `unique` /
   `unique_key` / `min` / `max` / `min_items` / `min_len` / `max_len` / `len` / `const` / `types` / `key_patterns` 校验；
   `soft: true` 标记不做通用结构校验的 soft zone（领域规则仍可部分检查）。
