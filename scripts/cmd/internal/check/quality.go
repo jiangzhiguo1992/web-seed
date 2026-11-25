@@ -15,6 +15,10 @@ func (c *Checker) checkQuality() {
 		return
 	}
 	rel := relPath(c.root, path)
+	hasApps := c.appTreeExists()
+	if hasApps {
+		c.checkCoveragePackages(rel, asMapValue(doc["coverage"]))
+	}
 	scenarios := c.scenarioIDs()
 	if e2e, _ := asMap(doc["e2e"]); e2e != nil {
 		for _, raw := range asList(e2e["required_scenarios"]) {
@@ -52,7 +56,51 @@ func (c *Checker) checkQuality() {
 			c.rulef("quality-refs", "%s: must_test[%d] duplicate id %s", rel, i, id)
 		}
 		seen[id] = true
+		status, _ := item["status"].(string)
+		if hasApps && (status == "" || status == "required") {
+			where, _ := item["where"].(string)
+			matches, _ := filepath.Glob(filepath.Join(c.root, where))
+			if len(matches) == 0 {
+				c.rulef("quality-refs", "%s: must_test[%d] where %s does not match any file", rel, i, where)
+			}
+		}
 	}
+}
+
+// appTreeExists 报告仓库是否包含 apps/（contracts-only 骨架测试不检查应用路径）。
+func (c *Checker) appTreeExists() bool {
+	info, err := os.Stat(filepath.Join(c.root, "apps"))
+	return err == nil && info.IsDir()
+}
+
+// checkCoveragePackages 校验覆盖率统计包在对应应用中存在。
+func (c *Checker) checkCoveragePackages(rel string, coverage map[string]any) {
+	for _, kind := range []string{"api", "web"} {
+		part, _ := asMap(coverage[kind])
+		for _, raw := range asList(part["packages"]) {
+			pkg, _ := raw.(string)
+			if pkg == "" {
+				continue
+			}
+			if !c.coveragePackageExists(kind, pkg) {
+				c.rulef("quality-refs", "%s: coverage.%s.packages %s does not exist", rel, kind, pkg)
+			}
+		}
+	}
+}
+
+func (c *Checker) coveragePackageExists(kind, pkg string) bool {
+	if kind == "api" {
+		info, err := os.Stat(filepath.Join(c.root, "apps/api", pkg))
+		return err == nil && info.IsDir()
+	}
+	matches, _ := filepath.Glob(filepath.Join(c.root, "apps/web/*", pkg))
+	for _, match := range matches {
+		if info, err := os.Stat(match); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 // contractIDs 读取 contracts/index.yaml 的契约 ID 集合。

@@ -229,7 +229,7 @@ capabilities/protocols/http/*.yaml + platform/http_conventions.components ──
 platform/errors/*.yaml ──> gen-errors ──> docs/contracts/generated/errors.md
 
 capabilities/services/*.yaml ──> (P2) Go interface / usecase / handler
-capabilities/events/*.yaml ──> gen-async ──> generated/async/manifest.yaml（worker 重试/并发/调度策略）
+capabilities/events/*.yaml ──> gen-async ──> generated/async/manifest.yaml（worker 重试/并发/调度策略；runtime worker 仍为 P2）
 capabilities/events/*.yaml ──> (P2) topic 常量 / payload 类型 / worker 注册表
 data/queries/*.yaml ──> (P2) queries/*.sql ──> sqlc
 capabilities/{lifecycles,events}/** + features/rules/** ──> (P2) 生命周期 / 常量 / 断言 / 测试骨架

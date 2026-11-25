@@ -44,6 +44,12 @@ func TestAuthHashFieldSensitivity(t *testing.T) {
 		t.Fatalf("public hash field not reported: %v", c.errs)
 	}
 	c.errs = nil
+	c.tableColumns["data.tables.x"]["h"] = columnMeta{sensitivity: "pii"}
+	c.checkAuthStorage("x.yaml", doc)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must have sensitivity: secret") {
+		t.Fatalf("pii hash field not reported: %v", c.errs)
+	}
+	c.errs = nil
 	c.tableColumns["data.tables.x"]["h"] = columnMeta{sensitivity: "secret"}
 	c.checkAuthStorage("x.yaml", doc)
 	if len(c.errs) != 0 {
@@ -151,6 +157,8 @@ deprecation:
   headers:
     - { name: Deprecation, format: RFC9745, example: nope }
     - { name: Sunset, format: HTTP-date, example: "Wed, 11 Mar 2027 00:00:00 GMT" }
+    - { name: BadDate, format: HTTP-date, example: nope }
+    - { name: Unknown, format: Foo, example: x }
 `)
 	c := &Checker{root: root}
 	c.checkVersioning()
@@ -160,6 +168,12 @@ deprecation:
 	}
 	if strings.Contains(got, "Sunset example") {
 		t.Fatalf("valid HTTP-date rejected: %v", c.errs)
+	}
+	if !strings.Contains(got, "BadDate example must be HTTP-date") {
+		t.Fatalf("bad HTTP-date not reported: %v", c.errs)
+	}
+	if !strings.Contains(got, `Unknown has unknown format "Foo"`) {
+		t.Fatalf("unknown format not reported: %v", c.errs)
 	}
 }
 
@@ -182,5 +196,80 @@ analytics:
 	c.checkAnalytics()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "analytics.page_view must be page.x_viewed") {
 		t.Fatalf("page view mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestMetricNaming(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/platform/observability/metrics.yaml", `naming: { pattern: "x", unit_suffixes: [_total, _seconds] }
+label_rules: { forbidden_labels: [] }
+metrics:
+  - { name: bad_counter, kind: counter, labels: [], description: "x" }
+  - { name: bad_histogram, kind: histogram, labels: [], description: "x" }
+  - { name: good_counter_total, kind: counter, labels: [], description: "x" }
+  - { name: good_duration_seconds, kind: histogram, labels: [], description: "x" }
+  - { name: bad_histogram_total, kind: histogram, labels: [], description: "x" }
+exporter: { default: none, options: [none] }
+`)
+	c := &Checker{root: root}
+	c.checkMetrics()
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{"metrics[0]: counter name must end with _total", "metrics[1]: histogram name must end with a unit suffix", "metrics[4]: histogram name must end with a unit suffix"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %v", want, c.errs)
+		}
+	}
+	if strings.Contains(got, "good_counter_total") || strings.Contains(got, "good_duration_seconds") {
+		t.Fatalf("valid metric reported: %v", c.errs)
+	}
+}
+
+func TestQualityCoverageAndMustTest(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "apps/api/.keep", "")
+	writeCapFile(t, root, "apps/web/admin/.keep", "")
+	writeCapFile(t, root, "contracts/index.yaml", "entries: []\n")
+	writeCapFile(t, root, "contracts/platform/quality.yaml", `coverage:
+  api: { line: 1, packages: [internal/missing] }
+  web: { line: 1, packages: [src/missing] }
+  exclude: []
+must_test:
+  - { id: required_missing, why: "x", where: apps/api/missing_test.go, status: required }
+  - { id: planned_missing, why: "x", where: apps/api/planned_test.go, status: planned }
+e2e: { tool: playwright, required_scenarios: [], base_url_source: platform.foo }
+gates: []
+`)
+	c := &Checker{root: root}
+	c.checkQuality()
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"coverage.api.packages internal/missing does not exist",
+		"coverage.web.packages src/missing does not exist",
+		"must_test[0] where apps/api/missing_test.go does not match any file",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %v", want, c.errs)
+		}
+	}
+	if strings.Contains(got, "planned_missing") {
+		t.Fatalf("planned test reported: %v", c.errs)
+	}
+}
+
+func TestAnalyticsPageViewMissing(t *testing.T) {
+	root := t.TempDir()
+	meta := mustRead(t, filepath.Join("..", "..", "..", "..", "contracts", "_meta", "feature.pages.yaml"))
+	writeCapFile(t, root, "contracts/_meta/feature.pages.yaml", string(meta))
+	writeCapFile(t, root, "contracts/features/pages/x.yaml", "id: feature.pages.x\npage: x\n")
+	writeCapFile(t, root, "contracts/platform/analytics/events.yaml", `events:
+  - name: page.x_viewed
+    trigger: mount
+    page: feature.pages.x
+    properties: []
+`)
+	c := &Checker{root: root}
+	c.checkAnalytics()
+	if !strings.Contains(strings.Join(c.errs, "\n"), `analytics.page_view must be page.x_viewed, got ""`) {
+		t.Fatalf("missing page view not reported: %v", c.errs)
 	}
 }

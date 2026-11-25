@@ -150,3 +150,24 @@ func TestBuildManifestDeterministic(t *testing.T) {
 		t.Fatalf("manifest is order-sensitive:\n%s\n%s", left, right)
 	}
 }
+
+func TestBuildManifestEmpty(t *testing.T) {
+	b, err := marshal(buildManifest(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "schema_version: 1") || strings.Contains(string(b), "topics:") {
+		t.Fatalf("unexpected empty manifest:\n%s", b)
+	}
+}
+
+func TestBuildManifestTopicWithoutSubscribers(t *testing.T) {
+	m := buildManifest([]eventsDoc{{Topics: []topic{{ID: "cap.events.x.t", Name: "x.t", Version: 1}}}})
+	b, err := marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "subscribers:") {
+		t.Fatalf("empty subscribers emitted:\n%s", b)
+	}
+}

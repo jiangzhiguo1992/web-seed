@@ -125,6 +125,9 @@ func (c *Checker) checkEnvironmentShape(rel string, doc map[string]any) {
 	for _, raw := range asList(doc["environments"]) {
 		item, _ := asMap(raw)
 		if name, _ := item["name"].(string); name != "" {
+			if envs[name] {
+				c.rulef("environment-shape", "%s: duplicate environment %s", rel, name)
+			}
 			envs[name] = true
 		}
 		security, _ := asMap(item["security"])

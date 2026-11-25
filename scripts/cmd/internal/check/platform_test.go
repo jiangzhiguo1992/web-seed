@@ -57,3 +57,33 @@ func TestEnvironmentHTTPS(t *testing.T) {
 		t.Fatalf("https web base url reported: %v", c.errs)
 	}
 }
+
+func TestEnvironmentDuplicateName(t *testing.T) {
+	doc := map[string]any{
+		"environments": []any{
+			map[string]any{"name": "dev", "debug": true},
+			map[string]any{"name": "dev", "debug": false},
+		},
+		"differences":    []any{map[string]any{"key": "debug", "environments": []any{"dev"}}},
+		"secrets_source": map[string]any{"dev": ".env"},
+	}
+	c := &Checker{}
+	c.checkEnvironmentShape("x.yaml", doc)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "duplicate environment dev") {
+		t.Fatalf("duplicate environment not reported: %v", c.errs)
+	}
+}
+
+func TestEnvironmentValueSetsMissingNested(t *testing.T) {
+	envs := []any{
+		map[string]any{"name": "dev", "security": map[string]any{"require_https": false}},
+		map[string]any{"name": "prod", "security": map[string]any{"require_https": true, "require_mfa": true}},
+	}
+	sets := environmentValueSets(envs)
+	if len(sets["security.require_mfa"]) != 2 {
+		t.Fatalf("missing nested key must count as a distinct value: %+v", sets["security.require_mfa"])
+	}
+	if len(sets["security.require_https"]) != 2 {
+		t.Fatalf("nested value not varied: %+v", sets["security.require_https"])
+	}
+}

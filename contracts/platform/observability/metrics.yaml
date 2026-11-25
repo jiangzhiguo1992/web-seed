@@ -8,8 +8,8 @@ do_not:
   - "指标名与标签只使用本文件登记的项；不得临时新增未登记指标"
 
 naming:
-  pattern: "<subsystem>_<name>_<unit>"
-  unit_suffixes: [_total, _seconds, _bytes, _ratio]
+  pattern: "<subsystem>_<name>[_<unit>]"
+  unit_suffixes: [_total, _seconds, _bytes, _ratio, _ms, _timestamp]
 
 metrics:
   # ---------- HTTP ----------

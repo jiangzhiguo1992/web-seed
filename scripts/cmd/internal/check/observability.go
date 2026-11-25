@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 func (c *Checker) checkLogFields() {
@@ -105,6 +106,8 @@ func (c *Checker) checkMetrics() {
 			forbidden[name] = true
 		}
 	}
+	naming, _ := asMap(doc["naming"])
+	unitSuffixes := stringSet(asList(naming["unit_suffixes"]))
 	seen := map[string]bool{}
 	for i, raw := range asList(doc["metrics"]) {
 		item, _ := asMap(raw)
@@ -117,8 +120,19 @@ func (c *Checker) checkMetrics() {
 			c.rulef("metric-shape", "%s: duplicate metric %s", where, name)
 		}
 		seen[name] = true
-		if kind, _ := item["kind"].(string); kind != "" && kind != "counter" && kind != "gauge" && kind != "histogram" {
+		kind, _ := item["kind"].(string)
+		if kind != "" && kind != "counter" && kind != "gauge" && kind != "histogram" {
 			c.rulef("metric-shape", "%s: unknown kind %s", where, kind)
+		}
+		switch kind {
+		case "counter":
+			if !strings.HasSuffix(name, "_total") {
+				c.rulef("metric-shape", "%s: counter name must end with _total", where)
+			}
+		case "histogram":
+			if !hasUnitSuffix(name, unitSuffixes) {
+				c.rulef("metric-shape", "%s: histogram name must end with a unit suffix (%v)", where, sortedKeys(unitSuffixes))
+			}
 		}
 		labels := map[string]bool{}
 		for _, rawLabel := range asList(item["labels"]) {
@@ -142,6 +156,16 @@ func (c *Checker) checkMetrics() {
 			c.rulef("metric-shape", "%s: exporter.default %s is not in exporter.options", rel, def)
 		}
 	}
+}
+
+// hasUnitSuffix 报告指标名是否以 unit_suffixes 中的单位结尾；_total 只用于 counter。
+func hasUnitSuffix(name string, suffixes map[string]bool) bool {
+	for suffix := range suffixes {
+		if suffix != "_total" && strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func neverLogPatterns(doc map[string]any) []string {
