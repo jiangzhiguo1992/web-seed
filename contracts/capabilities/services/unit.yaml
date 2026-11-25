@@ -1,0 +1,110 @@
+# 计量单位读取服务。
+
+id: cap.services.unit
+summary: "计量单位读取服务"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "本服务只读 unit；写入通过种子/管理迁移维护，不在运行时暴露 CRUD"
+  - "get 按全局唯一 code 读取；不要用 name 做查询键"
+  - "list 只按 dimension 过滤；跨量纲换算不在服务层完成"
+
+schemas:
+  UnitPage:
+    kind: object
+    properties:
+      - { name: items, schema: { kind: array, items: { type: data.entities.unit } }, required: true, description: "分页项列表" }
+      - { name: offset, schema: { type: _types.basics.page_offset }, required: true, description: "当前页偏移" }
+      - { name: limit, schema: { type: _types.basics.page_limit }, required: true, description: "当前页大小" }
+      - { name: has_more, schema: { type: _types.basics.boolean }, required: true, description: "是否还有下一页" }
+
+services:
+  - name: get
+    summary: "按编码读取计量单位"
+    visibility: public
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: code, type: _types.basics.string }
+    returns:
+      - { name: unit, type: data.entities.unit, value: step.load.unit, nullable: true }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: load
+        kind: query
+        summary: "按 code 读取单位"
+        input:
+          - { name: code, value: params.code, description: "单位编码" }
+        output:
+          - { name: unit, type: data.entities.unit, description: "单位", nullable: true }
+        errors: [ ]
+        query: data.queries.unit.get_unit_by_code
+        goto: $end
+    used_by: []
+
+  - name: list
+    summary: "按量纲分页列出计量单位"
+    visibility: public
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: dimension, type: _types.basics.string, nullable: true }
+      - { name: offset, type: _types.basics.integer.32 }
+      - { name: limit, type: _types.basics.integer.32 }
+    returns:
+      - { name: page, type: cap.services.unit.schemas.UnitPage, value: step.paginate.page }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: list_units
+        kind: query
+        summary: "按量纲读取单位列表"
+        input:
+          - { name: dimension, value: params.dimension, description: "量纲；为空表示全部" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: units, type: _types.structures.list<data.entities.unit>, description: "单位列表" }
+        errors: [ ]
+        query: data.queries.unit.list_units
+        goto: paginate
+      - id: paginate
+        kind: logic
+        summary: "把单位列表包装成分页结果"
+        input:
+          - { name: units, value: step.list_units.units, description: "查询到的单位列表" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: page, type: cap.services.unit.schemas.UnitPage, description: "单位分页结果" }
+        errors: [ ]
+        rules: [ ]
+        goto: $end
+    used_by: []
+
+  - name: list_children
+    summary: "按父单位列出直接子单位"
+    visibility: public
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: parent_id, type: _types.basics.id }
+      - { name: offset, type: _types.basics.integer.32 }
+      - { name: limit, type: _types.basics.integer.32 }
+    returns:
+      - { name: units, type: _types.structures.list<data.entities.unit>, value: step.children.units }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: children
+        kind: query
+        summary: "按 parent_id 读取直接子单位"
+        input:
+          - { name: parent_id, value: params.parent_id, description: "父单位 ID" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: units, type: _types.structures.list<data.entities.unit>, description: "直接子单位列表" }
+        errors: [ ]
+        query: data.queries.unit.list_unit_children
+        goto: $end
+    used_by: []
