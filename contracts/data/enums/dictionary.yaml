@@ -1,0 +1,22 @@
+# 字典域跨前后端枚举集合。
+
+id: data.enums.dictionary
+summary: "字典域枚举集合"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "data.enums.dictionary 只放字典自身的状态码；业务枚举不要写进本文件"
+  - "dictionary_status 的 code 删除后不得复用；历史数据仍引用旧 code"
+  - "dictionary_status 只表达开关状态；可编辑的字典选项放 dictionary 表，不在这里加值"
+
+enums:
+  - name: dictionary_status
+    description: "字典与字典项状态"
+    go_type: DictionaryStatus
+    ts_type: DictionaryStatus
+    values:
+      - { value: enabled, code: 0, description: "启用；可选择" }
+      - { value: disabled, code: 1, description: "停用；不可选择" }
+    used_by:
+      - data.entities.dictionary

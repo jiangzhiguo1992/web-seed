@@ -1,0 +1,61 @@
+# 字典实体。
+
+id: data.entities.dictionary
+summary: "字典实体"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "data.entities.dictionary 是只读展示模型；字典值不参与业务分支"
+  - "Dictionary.Parent 只表达一层父子关系；不要递归展开整棵树"
+  - "ParentID 为 null 时不要读取 Parent；顶级节点没有父节点"
+  - "Dictionary.Code 是全局稳定标识，不用 ID 或 name 替代"
+
+model:
+  name: Dictionary
+  extends:
+    - data.entities.base
+  tables:
+    - data.tables.dictionary
+  includes:
+    - { entity: data.entities.dictionary, cardinality: many_to_one }
+  included_by:
+    - { entity: data.entities.dictionary, cardinality: one_to_many }
+  queries:
+    - data.queries.dictionary.get_dictionary
+    - data.queries.dictionary.list_dictionary_children
+    - data.queries.dictionary.list_root_dictionaries
+
+fields:
+  - name: Status
+    type: data.enums.dictionary_status
+    description: "字典状态"
+    source: { column: data.tables.dictionary.col.status }
+
+  - name: ParentID
+    description: "父节点 ID；顶级为 null"
+    source: { column: data.tables.dictionary.col.parent_id }
+
+  - name: Code
+    description: "字典编码；全局唯一且创建后不可变"
+    source: { column: data.tables.dictionary.col.code }
+
+  - name: Name
+    description: "展示名；允许重复"
+    source: { column: data.tables.dictionary.col.name }
+
+  - name: Color
+    description: "展示颜色；#RRGGBB"
+    source: { column: data.tables.dictionary.col.color }
+
+  - name: Sort
+    description: "同一父节点下的展示顺序"
+    source: { column: data.tables.dictionary.col.sort }
+
+  - name: Parent
+    type: data.entities.dictionary
+    description: "父节点；顶级为 null"
+    source:
+      join:
+        from: data.tables.dictionary.col.parent_id
+        to: data.tables.dictionary.col.id

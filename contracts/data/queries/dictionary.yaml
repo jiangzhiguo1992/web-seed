@@ -1,0 +1,63 @@
+# 字典查询集。
+
+id: data.queries.dictionary
+summary: "字典查询集"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "ListRootDictionaries / ListDictionaryChildren 不写业务筛选；启用/停用由调用方按 status 处理"
+  - "GetDictionary 按全局唯一的 code 读取；不要用 name 做查询键"
+  - "dictionary 查询集只读；字典维护写查询单独设计，不塞进本文件"
+
+queries:
+  - name: ListRootDictionaries
+    description: "分页读取顶级字典节点"
+    tables:
+      - { table: data.tables.dictionary }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: offset, type: _types.integer, nullable: true, default: 0 }
+      - { name: limit, type: _types.integer, nullable: true, default: 20 }
+    returns:
+      - { name: dictionaries, list: true, kind: entity, entity: data.entities.dictionary }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.dictionary.idx_dictionary_parent_sort, columns: [ deleted_at, parent_id, sort, id ] }
+    used_by:
+      - cap.services.dictionary.list_roots
+
+  - name: ListDictionaryChildren
+    description: "按父节点列出子节点并保持展示顺序"
+    tables:
+      - { table: data.tables.dictionary }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: parent_id, type: _types.integer, column: data.tables.dictionary.col.parent_id }
+      - { name: offset, type: _types.integer, nullable: true, default: 0 }
+      - { name: limit, type: _types.integer, nullable: true, default: 20 }
+    returns:
+      - { name: children, list: true, kind: entity, entity: data.entities.dictionary }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.dictionary.idx_dictionary_parent_sort, columns: [ deleted_at, parent_id, sort, id ] }
+    used_by:
+      - cap.services.dictionary.list_children
+
+  - name: GetDictionary
+    description: "按编码读取单个字典节点"
+    tables:
+      - { table: data.tables.dictionary }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: code, type: _types.string, column: data.tables.dictionary.col.code }
+    returns:
+      - { name: dictionary, kind: entity, entity: data.entities.dictionary, nullable: true }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.dictionary.uq_dictionary_code, columns: [ code ] }
+    used_by:
+      - cap.services.dictionary.get
