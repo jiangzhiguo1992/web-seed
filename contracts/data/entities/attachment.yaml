@@ -1,0 +1,87 @@
+# 附件实体。
+
+id: data.entities.attachment
+summary: "附件实体"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "data.entities.attachment 不存 URL/签名地址；只暴露 ObjectKey"
+  - "Attachment.OwnerID 是多态引用；查询必须同时带 OwnerTableName"
+  - "Attachment.ObjectKey 是存储 key；不要用 OriginalName 替代"
+
+model:
+  name: Attachment
+  extends:
+    - data.entities.base
+  tables:
+    - data.tables.attachment
+  includes:
+    - { field: Replaces, entity: data.entities.attachment, cardinality: many_to_one }
+  included_by:
+    - { entity: data.entities.attachment, field: Replaces, cardinality: one_to_many }
+  queries:
+    - data.queries.attachment.create_attachment
+    - data.queries.attachment.get_attachment
+    - data.queries.attachment.get_attachment_by_key
+    - data.queries.attachment.list_attachments
+    - data.queries.attachment.set_attachment_status
+
+fields:
+  - name: Status
+    type: data.enums.attachment_status
+    description: "附件状态"
+    source: { column: data.tables.attachment.col.status }
+
+  - name: OwnerTableName
+    description: "所有者物理表名"
+    source: { column: data.tables.attachment.col.owner_table_name }
+
+  - name: OwnerID
+    description: "所有者行 ID"
+    source: { column: data.tables.attachment.col.owner_id }
+
+  - name: Purpose
+    description: "用途：icon/avatar/attachment 等"
+    source: { column: data.tables.attachment.col.purpose }
+
+  - name: Sort
+    description: "同一 owner+purpose 内的展示顺序"
+    source: { column: data.tables.attachment.col.sort }
+
+  - name: ObjectKey
+    description: "对象存储 key；不存 URL"
+    source: { column: data.tables.attachment.col.object_key }
+
+  - name: OriginalName
+    description: "原始文件名；仅展示/下载"
+    source: { column: data.tables.attachment.col.original_name }
+
+  - name: ContentType
+    description: "MIME 类型"
+    source: { column: data.tables.attachment.col.content_type }
+
+  - name: SizeBytes
+    description: "对象大小（字节）"
+    source: { column: data.tables.attachment.col.size_bytes }
+
+  - name: Sha256
+    description: "SHA-256 十六进制；完整性/去重校验"
+    source: { column: data.tables.attachment.col.sha256 }
+
+  - name: Visibility
+    type: data.enums.attachment_visibility
+    description: "访问级别"
+    source: { column: data.tables.attachment.col.visibility }
+
+  - name: ReplacesID
+    description: "被替换的旧附件 ID；无替换为 null"
+    source: { column: data.tables.attachment.col.replaces_id }
+
+  - name: Replaces
+    type: data.entities.attachment
+    description: "被替换的旧附件"
+    source:
+      join:
+        from: data.tables.attachment.col.replaces_id
+        to: data.tables.attachment.col.id
