@@ -180,7 +180,7 @@ rules:
   - { id: service-input-format, text: "input.value 必须是 params.<path> 或 step.<id>.<path>，禁止内联表达式", implemented_by: [ service-input-format ] }
   - { id: service-input-ref, text: "引用的 params/step 字段必须存在且可按静态类型解析", implemented_by: [ service-input-ref ] }
   - { id: service-input-order, text: "step.<id> 引用必须位于当前 step 之前，且通过 goto 可达", implemented_by: [ service-input-order ] }
-  - { id: service-input-type, text: "input 值的静态类型必须与目标参数/payload 字段兼容（指针/List 结构与目标一致，类型族归一后比较，枚举按 integer）", implemented_by: [ service-input-type ] }
+  - { id: service-input-type, text: "input 值的静态类型必须与目标参数/payload 字段兼容（指针/List 结构与目标一致，类型族归一后比较，枚举按 integer；integer 位宽必须一致，_types.id=64）", implemented_by: [ service-input-type ] }
   - { id: service-param-type, text: "params/returns/schemas 的 type 语法：只允许 _types.*、data.enums.*、data.entities.*、cap.services.*.schemas.*、context.Context、error、time.*；指针与 _types.list<> 各最多一层；data.tables.* 禁止", implemented_by: [ service-param-type ] }
   - { id: service-input-nullable, text: "可空的源不得赋给非 null 目标", implemented_by: [ service-input-nullable ] }
   - { id: service-input-name, text: "query/service 的 input name 必须是目标参数名且不得多余；events 的 input name 必须是 payload 字段名且不得多余；query/service 不得传 ctx", implemented_by: [ service-input-name ] }

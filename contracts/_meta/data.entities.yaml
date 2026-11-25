@@ -57,22 +57,22 @@ fields:
       - name: includes
         type: _types.list<_types.object>
         required: true
-        unique_key: entity
         generated: true
         write: forbidden
-        description: "本实体关系字段指向的 entity 及从本实体到目标实体的基数"
+        description: "本实体每个关系字段指向的 entity 及从本实体到目标实体的基数"
         item_fields:
+          - { name: field, type: _types.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "本实体的关系字段名" }
           - { name: entity, type: _types.string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "目标 entity ID" }
           - { name: cardinality, type: _types.string, required: true, enum: [ one_to_one, one_to_many, many_to_one, many_to_many ], description: "从本实体到目标实体的基数" }
       - name: included_by
         type: _types.list<_types.object>
         required: true
-        unique_key: entity
         generated: true
         write: forbidden
-        description: "关系字段指向本实体的 entity 及从本实体到来源实体的反向基数"
+        description: "指向本实体的每个来源关系字段及从本实体到来源实体的反向基数"
         item_fields:
           - { name: entity, type: _types.string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "来源 entity ID" }
+          - { name: field, type: _types.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "来源实体的关系字段名" }
           - { name: cardinality, type: _types.string, required: true, enum: [ one_to_one, one_to_many, many_to_one, many_to_many ], description: "从本实体到来源实体的反向基数" }
       - { name: queries, type: _types.set<_types.string>, required: true, unique: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "返回本实体的查询" }
 
@@ -145,10 +145,10 @@ rules:
   - { id: entity-relation-type, text: "关系字段的 type 必须是 data.entities.* ID，且不得为指针", implemented_by: [ entity-relation-type ] }
   - { id: entity-relation-target, text: "关系字段的 type 必须是已存在的 entity，且 source.join.to 的表必须被该 entity 映射", implemented_by: [ entity-relation-target ] }
   - { id: entity-relation-via, text: "source.join.from 必须属于当前 entity 的表；source.join.to 必须属于关系字段 type 映射的表；两列类型族必须一致，且必须由列级 references 相连（一端引用另一端）；through 存在时，through.table 必须是物理表，through.from 必须引用 source.join.from，through.to 必须引用 source.join.to，且中间表两列都必须有列级 references", implemented_by: [ entity-relation-via ] }
-  - { id: entity-relation-cardinality, text: "关系基数由关联表的 references/referenced_by 与唯一索引推断：两端唯一 one_to_one；from 唯一 one_to_many；to 唯一 many_to_one；through 存在 many_to_many；两端都不唯一且无 through 则不允许；同一实体到同一目标实体的多个关系基数必须一致", implemented_by: [ entity-relation-cardinality ] }
+  - { id: entity-relation-cardinality, text: "关系基数由关联表的 references/referenced_by 与唯一索引推断：两端唯一 one_to_one；from 唯一 one_to_many；to 唯一 many_to_one；through 存在 many_to_many；两端都不唯一且无 through 则不允许；不同关系字段可指向同一目标实体，各自独立推断基数", implemented_by: [ entity-relation-cardinality ] }
   - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；on_violation 必须存在", implemented_by: [ entity-validation ] }
   - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
   - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入", implemented_by: [ entity-used-by ] }
-  - { id: entity-included-by, text: "model.includes 与 model.included_by 由 gen-graph 写入，禁止手改；每项是 {entity, cardinality}：includes 记录本实体到目标的基数，included_by 记录本实体到来源的反向基数；两侧必须互为反向且与关系字段、关联表唯一索引一致", implemented_by: [ entity-included-by ] }
+  - { id: entity-included-by, text: "model.includes 与 model.included_by 由 gen-graph 写入，禁止手改；每项是 {field, entity, cardinality}（included_by 的 field 是来源实体的关系字段）：includes 记录本实体每个关系字段到目标的基数，included_by 记录本实体到来源的反向基数；两侧必须互为反向且与关系字段、关联表唯一索引一致；(entity, field) 不得重复", implemented_by: [ entity-included-by ] }
   - { id: entity-relation-arity, text: "关系基数必须与类型形状一致：one_to_many/many_to_many 用 _types.list<data.entities.*>，one_to_one/many_to_one 用单个 data.entities.*", implemented_by: [ entity-relation-arity ] }
   - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

@@ -105,7 +105,8 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 | `make contract-check` | 结构 / ID / 约束 / 索引 / 引用 / owner / 数据流 / 类型级规则 |
 | `make audit-types` | 审计全部契约 `type` 键：`_types.*` / 外部引用 / 显式例外，输出计数并以非零退出码报告裸类型 |
 | `make check-index` | 校验 index 全类型登记及 renderer/targets ID 一致 |
-| `make gen` | 生成 DDL / OpenAPI（HTTP + `cap.events` payload components）/ 错误文档 |
+| `make gen-model` | 生成 Go 模型（`apps/api/internal/generated/model`）与 TS 模型（`apps/web/packages/api-client/src/generated/model.ts`） |
+| `make gen` | 生成 DDL / OpenAPI（HTTP + `cap.events` payload components）/ Go/TS 模型 / 错误文档 |
 | `make gen-check` | 校验全部生成物最新 |
 | `make gen-rule-ids` | 从 checker 的 `rulef("...")` 重新生成 `rule_ids_gen.go` |
 | `make gen-rule-tests` | 生成 `docs/contracts/generated/rule-tests.md`（规则 → `implemented_by` → 测试直接引用数） |
