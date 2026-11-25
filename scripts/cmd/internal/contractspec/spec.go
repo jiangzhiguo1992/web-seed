@@ -720,7 +720,6 @@ var (
 		"date": true, "time": true, "timetz": true, "timestamp": true, "timestamptz": true,
 		"json": true, "jsonb": true, "bytea": true,
 		"bit": true, "varbit": true, "xml": true,
-		"point": true, "line": true, "lseg": true, "box": true, "path": true, "polygon": true, "circle": true,
 	}
 	tsConcrete = map[string]bool{"string": true, "number": true, "boolean": true, "unknown": true}
 )
@@ -743,6 +742,12 @@ func validateTypeFamilies(path string, families map[string]ValueTypeFamily) erro
 			expected = expected[:0]
 			for _, v := range bits.Enum {
 				expected = append(expected, fmt.Sprint(v))
+			}
+		} else if len(fam.Types) > 1 {
+			// 无 bits 枚举的多 variant 族（如 timestamp 的 time/long）以 types 的键为准。
+			expected = expected[:0]
+			for key := range fam.Types {
+				expected = append(expected, key)
 			}
 		}
 		for _, key := range expected {

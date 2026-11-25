@@ -23,8 +23,8 @@ queries:
       - { name: device_id, type: _types.basics.string, column: data.tables.token.col.device_id, nullable: true }
       - { name: access_token_hash, type: _types.basics.string, column: data.tables.token.col.access_token_hash }
       - { name: refresh_token_hash, type: _types.basics.string, column: data.tables.token.col.refresh_token_hash }
-      - { name: access_expire_at, type: _types.basics.timestamp, column: data.tables.token.col.access_expire_at }
-      - { name: refresh_expire_at, type: _types.basics.timestamp, column: data.tables.token.col.refresh_expire_at }
+      - { name: access_expire_at, type: _types.basics.timestamp.long, column: data.tables.token.col.access_expire_at }
+      - { name: refresh_expire_at, type: _types.basics.timestamp.long, column: data.tables.token.col.refresh_expire_at }
     returns:
       - { name: row, kind: entity, type: data.entities.token }
       - { name: err, kind: error }
@@ -84,7 +84,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: refresh_token_hash, type: _types.basics.string, column: data.tables.token.col.refresh_token_hash }
-      - { name: revoked_at, type: _types.basics.timestamp, column: data.tables.token.col.revoked_at }
+      - { name: revoked_at, type: _types.basics.timestamp.long, column: data.tables.token.col.revoked_at }
       - { name: revoke_reason, type: data.enums.token_revoke_reason, column: data.tables.token.col.revoke_reason }
       - { name: replaced_by_id, type: _types.basics.id, column: data.tables.token.col.replaced_by_id, nullable: true }
     returns:
@@ -107,7 +107,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: _types.basics.id, column: data.tables.token.col.account_id }
-      - { name: revoked_at, type: _types.basics.timestamp, column: data.tables.token.col.revoked_at }
+      - { name: revoked_at, type: _types.basics.timestamp.long, column: data.tables.token.col.revoked_at }
       - { name: revoke_reason, type: data.enums.token_revoke_reason, column: data.tables.token.col.revoke_reason }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -126,7 +126,7 @@ queries:
       - data.tables.token.cache.access_token_hash
     params:
       - { name: ctx, type: context.Context }
-      - { name: now, type: _types.basics.timestamp }
+      - { name: now, type: _types.basics.timestamp.long }
       - { name: status, type: data.enums.token_status }
       - { name: limit, type: _types.basics.integer.32, nullable: true, default: 100 }
     returns:

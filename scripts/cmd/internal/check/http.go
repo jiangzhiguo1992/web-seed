@@ -1880,7 +1880,10 @@ func (c *Checker) httpServiceFamily(t string) string {
 	if strings.HasPrefix(t, "_types.structures.list<") {
 		return "array"
 	}
-	if family, _, ok := contractspec.SplitBasicsRef(t); ok {
+	if family, variant, ok := contractspec.SplitBasicsRef(t); ok {
+		if family == "timestamp" && variant == "long" {
+			return "integer"
+		}
 		t = family
 	}
 	if custom, ok := c.valueTypes.CustomTypes[t]; ok {
@@ -1889,8 +1892,6 @@ func (c *Checker) httpServiceFamily(t string) string {
 	switch t {
 	case "string", "timestamp", "datetime", "bytes", "bit", "xml":
 		return "string"
-	case "geometry":
-		return "object"
 	case "integer":
 		return "integer"
 	case "boolean":

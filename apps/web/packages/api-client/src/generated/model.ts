@@ -143,9 +143,9 @@ export type VerificationStatus = (typeof VerificationStatus)[keyof typeof Verifi
 export interface Account {
   id: number
   status: AccountStatus
-  created_at: string
-  updated_at: string
-  deleted_at?: string | null
+  created_at: number
+  updated_at: number
+  deleted_at?: number | null
   number: string
   nickname: string
   user_id?: number | null
@@ -154,9 +154,9 @@ export interface Account {
 export interface Attachment {
   id: number
   status: AttachmentStatus
-  created_at: string
-  updated_at: string
-  deleted_at?: string | null
+  created_at: number
+  updated_at: number
+  deleted_at?: number | null
   owner_table_name: string
   owner_id: number
   purpose: string
@@ -173,9 +173,9 @@ export interface Attachment {
 export interface Dictionary {
   id: number
   status: DictionaryStatus
-  created_at: string
-  updated_at: string
-  deleted_at?: string | null
+  created_at: number
+  updated_at: number
+  deleted_at?: number | null
   parent_id?: number | null
   code: string
   name: string
@@ -188,9 +188,9 @@ export interface Dictionary {
 export interface Unit {
   id: number
   status: UnitStatus
-  created_at: string
-  updated_at: string
-  deleted_at?: string | null
+  created_at: number
+  updated_at: number
+  deleted_at?: number | null
   parent_id?: number | null
   code: string
   name: string

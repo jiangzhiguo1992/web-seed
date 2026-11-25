@@ -58,7 +58,7 @@ columns:
     comment: "连续失败次数；成功登录后归零"
 
   - name: locked_until
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.time
     nullable: true
     comment: "锁定截止时间；为空表示未锁定"
 

@@ -299,7 +299,7 @@ services:
         summary: "取当前时间作为软删时间"
         input: [ ]
         output:
-          - { name: deleted_at, type: _types.basics.timestamp, description: "软删时间" }
+          - { name: deleted_at, type: _types.basics.timestamp.long, description: "软删时间" }
         errors: [ ]
         rules: [ ]
         goto: status_deleted
@@ -407,7 +407,7 @@ services:
         summary: "取当前时间作为激活时间"
         input: [ ]
         output:
-          - { name: activated_at, type: _types.basics.timestamp, description: "激活时间" }
+          - { name: activated_at, type: _types.basics.timestamp.long, description: "激活时间" }
         errors: [ ]
         rules: [ ]
         goto: event_branch
@@ -506,7 +506,7 @@ services:
         summary: "取当前时间作为封禁时间"
         input: [ ]
         output:
-          - { name: suspended_at, type: _types.basics.timestamp, description: "封禁时间" }
+          - { name: suspended_at, type: _types.basics.timestamp.long, description: "封禁时间" }
         errors: [ ]
         rules: [ ]
         goto: emit_suspended
@@ -531,7 +531,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: _types.basics.id }
-      - { name: deleted_at, type: _types.basics.timestamp }
+      - { name: deleted_at, type: _types.basics.timestamp.long }
     returns:
       - { name: err, type: error, value: "*" }
     steps:

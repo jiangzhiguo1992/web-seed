@@ -24,18 +24,18 @@ columns:
     comment: "业务状态整数码；枚举映射在 entity 层"
 
   - name: created_at
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.long
     nullable: false
     default_sql: now()
     comment: "创建时间；数据库默认 now()"
 
   - name: updated_at
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.long
     nullable: false
     default_sql: now()
     comment: "更新时间；应用层写入"
 
   - name: deleted_at
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.long
     nullable: true
     comment: "软删时间；应用层写入；为空表示未删除"

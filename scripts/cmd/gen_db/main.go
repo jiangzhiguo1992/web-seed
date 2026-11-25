@@ -395,6 +395,14 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 		}
 		if family, variant, ok := contractspec.SplitBasicsRef(c.Type); ok {
 			c.Type = family
+			if family == "timestamp" && variant != "" {
+				c.TimezoneSet = true
+				c.Timezone = variant == "time"
+			}
+			if family == "datetime" && variant != "" {
+				c.TimezoneSet = true
+				c.Timezone = variant == "timezone"
+			}
 			if c.Bits == 0 && variant != "" {
 				c.Bits, _ = strconv.Atoi(variant)
 			}
@@ -639,8 +647,6 @@ func columnType(c column) (string, error) {
 			return fmt.Sprintf("%s(%d)", kind, c.Length), nil
 		}
 		return kind, nil
-	case "geometry":
-		return strings.ToUpper(defaultKind(c.Kind, "point")), nil
 	case "xml":
 		return "XML", nil
 	default:

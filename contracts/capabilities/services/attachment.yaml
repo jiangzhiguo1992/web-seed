@@ -41,12 +41,12 @@ schemas:
       - { name: attachment_id, schema: { type: _types.basics.id }, required: true, description: "附件 ID" }
       - { name: object_key, schema: { type: _types.basics.string }, required: true, description: "对象存储 key" }
       - { name: upload_url, schema: { type: _types.basics.string }, required: true, description: "预签名上传 URL" }
-      - { name: expires_at, schema: { type: _types.basics.timestamp }, required: true, description: "上传 URL 过期时间" }
+      - { name: expires_at, schema: { type: _types.basics.timestamp.long }, required: true, description: "上传 URL 过期时间" }
   SignedURL:
     kind: _types.schemas.object
     properties:
       - { name: url, schema: { type: _types.basics.string }, required: true, description: "预签名下载 URL" }
-      - { name: expires_at, schema: { type: _types.basics.timestamp }, required: true, description: "下载 URL 过期时间" }
+      - { name: expires_at, schema: { type: _types.basics.timestamp.long }, required: true, description: "下载 URL 过期时间" }
 
 services:
   - name: list
@@ -264,7 +264,7 @@ services:
           - { name: size_bytes, value: params.input.size_bytes, description: "对象大小" }
         output:
           - { name: upload_url, type: _types.basics.string, description: "预签名上传 URL" }
-          - { name: expires_at, type: _types.basics.timestamp, description: "上传 URL 过期时间" }
+          - { name: expires_at, type: _types.basics.timestamp.long, description: "上传 URL 过期时间" }
         errors: [ ]
         rules: [ ]
         goto: build_ticket
@@ -516,7 +516,7 @@ services:
           - { name: visibility, value: step.get_attachment.attachment.visibility, description: "访问级别" }
         output:
           - { name: url, type: _types.basics.string, description: "下载 URL" }
-          - { name: expires_at, type: _types.basics.timestamp, description: "下载 URL 过期时间" }
+          - { name: expires_at, type: _types.basics.timestamp.long, description: "下载 URL 过期时间" }
         errors: [ ]
         rules: [ ]
         goto: build_signed
@@ -605,7 +605,7 @@ services:
         summary: "计算 24 小时前的时间"
         input: [ ]
         output:
-          - { name: cutoff, type: _types.basics.timestamp, description: "24 小时前的截止时间" }
+          - { name: cutoff, type: _types.basics.timestamp.long, description: "24 小时前的截止时间" }
         errors: [ ]
         rules: [ ]
         goto: status_deleted

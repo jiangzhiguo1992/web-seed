@@ -455,6 +455,12 @@ func normalizeScaffoldColumnType(raw string, vt ValueTypes) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("unknown column type %q (not a family or custom type)", raw)
 	}
+	if variant == "" && family == "timestamp" {
+		variant = "time"
+	}
+	if variant == "" && family == "datetime" {
+		variant = "timezone"
+	}
 	if variant == "" {
 		if len(fam.Types) == 1 {
 			if _, ok := fam.Types[family]; ok {

@@ -176,7 +176,6 @@ func TestTypeMapping(t *testing.T) {
 		{column{Type: "json", Kind: "json"}, "JSON"},
 		{column{Type: "datetime", Mode: "date"}, "DATE"},
 		{column{Type: "datetime", Mode: "time", TimezoneSet: true, Timezone: true}, "TIMETZ(6)"},
-		{column{Type: "geometry", Kind: "polygon"}, "POLYGON"},
 	}
 	for _, tc := range cases {
 		got, err := columnType(tc.in)
@@ -253,9 +252,12 @@ func TestTypeTableMatchesColumnType(t *testing.T) {
 			case "decimal":
 				col.Precision, col.Scale = 19, 4
 			case "datetime":
-				col.Mode = "date"
+				col.Mode = "datetime"
+				col.TimezoneSet = true
+				col.Timezone = variant == "timezone"
 			case "timestamp":
-				col.TimezoneSet, col.Timezone = true, true
+				col.TimezoneSet = true
+				col.Timezone = variant == "time"
 			}
 			if len(ct.PG) > 0 && family != "integer" && family != "float" && family != "string" && family != "decimal" && family != "datetime" && family != "timestamp" && family != "json" && family != "bytes" && family != "any" {
 				col.Kind = ct.PG[0]

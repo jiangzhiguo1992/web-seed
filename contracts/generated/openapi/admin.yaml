@@ -104,8 +104,8 @@ components:
       properties:
         access_expire_at:
           description: 访问令牌过期时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         access_token:
           description: 访问令牌
           readOnly: true
@@ -124,13 +124,13 @@ components:
       properties:
         created_at:
           description: 创建时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         deleted_at:
           description: 软删时间；为空表示未删除
-          format: date-time
+          format: int64
           nullable: true
-          type: string
+          type: integer
         id:
           description: 实体唯一主键；来自主表 id 列（integer）
           type: integer
@@ -155,8 +155,8 @@ components:
           type: string
         updated_at:
           description: 更新时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         user_id:
           description: 关联用户 ID
           nullable: true
@@ -438,13 +438,13 @@ components:
           type: string
         created_at:
           description: 创建时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         deleted_at:
           description: 软删时间；为空表示未删除
-          format: date-time
+          format: int64
           nullable: true
-          type: string
+          type: integer
         id:
           description: 实体唯一主键；来自主表 id 列（integer）
           type: integer
@@ -488,8 +488,8 @@ components:
           type: string
         updated_at:
           description: 更新时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         visibility:
           description: 访问级别
           enum:
@@ -805,13 +805,13 @@ components:
           type: string
         created_at:
           description: 创建时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         deleted_at:
           description: 软删时间；为空表示未删除
-          format: date-time
+          format: int64
           nullable: true
-          type: string
+          type: integer
         extra:
           description: 扩展元数据；只放 UI/非关键信息
           nullable: true
@@ -842,8 +842,8 @@ components:
           type: string
         updated_at:
           description: 更新时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
       required:
         - id
         - created_at
@@ -931,8 +931,8 @@ components:
       properties:
         activated_at:
           description: 账号激活时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         id:
           description: 唯一标识
           type: integer
@@ -946,8 +946,8 @@ components:
       properties:
         created_at:
           description: 创建时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         id:
           description: 唯一标识
           type: integer
@@ -977,8 +977,8 @@ components:
       properties:
         deleted_at:
           description: 软删时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         id:
           description: 唯一标识
           type: integer
@@ -996,8 +996,8 @@ components:
           type: integer
         failed_at:
           description: 登录失败时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         reason:
           description: 失败或停用原因
           enum:
@@ -1031,8 +1031,8 @@ components:
           type: string
         login_at:
           description: 登录时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         user_agent:
           description: 客户端 User-Agent
           type: string
@@ -1049,8 +1049,8 @@ components:
           type: integer
         reactivated_at:
           description: 账号重新激活时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
       required:
         - id
         - reactivated_at
@@ -1067,8 +1067,8 @@ components:
           type: string
         suspended_at:
           description: 账号停用时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
       required:
         - id
         - reason
@@ -1086,8 +1086,8 @@ components:
           type: integer
         issued_at:
           description: 签发时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         token_id:
           description: 令牌 ID
           type: integer
@@ -1178,8 +1178,8 @@ components:
       properties:
         refresh_expire_at:
           description: 刷新令牌过期时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         refresh_token:
           description: 刷新 JWT
           readOnly: true
@@ -1244,8 +1244,8 @@ components:
       properties:
         expires_at:
           description: 下载 URL 过期时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         url:
           description: 预签名下载 URL
           type: string
@@ -1308,8 +1308,8 @@ components:
           type: integer
         expires_at:
           description: 上传 URL 过期时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         object_key:
           description: 对象存储 key
           type: string
@@ -1327,9 +1327,9 @@ components:
       properties:
         consumed_at:
           description: 验证码消费时间；未消费为 null
-          format: date-time
+          format: int64
           nullable: true
-          type: string
+          type: integer
         verification_id:
           description: 验证记录 ID
           type: integer
@@ -1345,8 +1345,8 @@ components:
       properties:
         expire_at:
           description: 过期时间
-          format: date-time
-          type: string
+          format: int64
+          type: integer
         id:
           description: 验证记录 ID
           type: integer

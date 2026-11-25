@@ -110,6 +110,7 @@ func run(root string, check bool) error {
 
 type columnSpec struct {
 	Family      string
+	Variant     string
 	Custom      string
 	Bits        int
 	Precision   int
@@ -243,7 +244,7 @@ func parseColumnsInto(out map[string]columnSpec, raw any, customs map[string]con
 		if isBasics {
 			typ = family
 		}
-		spec := columnSpec{}
+		spec := columnSpec{Variant: variant}
 		if custom, ok := customs[typ]; ok {
 			spec.Custom = typ
 			spec.Family = custom.Family
@@ -367,12 +368,15 @@ func loadEntities(root string, schema *contractspec.Schema, tables map[string]ma
 func baseFields(cols map[string]columnSpec) []fieldSpec {
 	id := cols["id"]
 	status := cols["status"]
+	created := cols["created_at"]
+	updated := cols["updated_at"]
+	deleted := cols["deleted_at"]
 	return []fieldSpec{
 		{GoName: "ID", JSONName: "id", GoType: goScalar(id, false), TSType: tsScalar(id, false), Sensitivity: "public"},
 		{GoName: "Status", JSONName: "status", GoType: goScalar(status, false), TSType: tsScalar(status, false), Sensitivity: "public"},
-		{GoName: "CreatedAt", JSONName: "created_at", GoType: "time.Time", TSType: "string", Sensitivity: "public"},
-		{GoName: "UpdatedAt", JSONName: "updated_at", GoType: "time.Time", TSType: "string", Sensitivity: "public"},
-		{GoName: "DeletedAt", JSONName: "deleted_at", GoType: "*time.Time", TSType: "string", Nullable: true, Sensitivity: "public"},
+		{GoName: "CreatedAt", JSONName: "created_at", GoType: goScalar(created, false), TSType: tsScalar(created, false), Sensitivity: "public"},
+		{GoName: "UpdatedAt", JSONName: "updated_at", GoType: goScalar(updated, false), TSType: tsScalar(updated, false), Sensitivity: "public"},
+		{GoName: "DeletedAt", JSONName: "deleted_at", GoType: goScalar(deleted, true), TSType: tsScalar(deleted, true), Nullable: true, Sensitivity: "public"},
 	}
 }
 
@@ -469,7 +473,7 @@ func typeSpec(typ string, customs map[string]contractspec.CustomValueType) colum
 	if family != "" {
 		typ = family
 	}
-	spec := columnSpec{Family: typ}
+	spec := columnSpec{Family: typ, Variant: variant}
 	if variant != "" {
 		spec.Bits, _ = strconv.Atoi(variant)
 	}
@@ -510,7 +514,13 @@ func goScalar(spec columnSpec, nullable bool) string {
 		}
 	case "decimal":
 		typ = "decimal.Decimal"
-	case "timestamp", "datetime":
+	case "timestamp":
+		if spec.Variant == "long" {
+			typ = "int64"
+		} else {
+			typ = "time.Time"
+		}
+	case "datetime":
 		typ = "time.Time"
 	case "json":
 		typ = "json.RawMessage"
@@ -520,8 +530,6 @@ func goScalar(spec columnSpec, nullable bool) string {
 		typ = "big.Int"
 	case "xml":
 		typ = "map[string]any"
-	case "geometry":
-		typ = "geojson.Geometry"
 	case "any":
 		typ = "any"
 	default:
@@ -544,7 +552,13 @@ func tsScalar(spec columnSpec, nullable bool) string {
 		typ = "number"
 	case "decimal":
 		typ = "number"
-	case "timestamp", "datetime":
+	case "timestamp":
+		if spec.Variant == "long" {
+			typ = "number"
+		} else {
+			typ = "string"
+		}
+	case "datetime":
 		typ = "string"
 	case "json", "any":
 		typ = "unknown"
@@ -553,8 +567,6 @@ func tsScalar(spec columnSpec, nullable bool) string {
 	case "bit":
 		typ = "number"
 	case "xml":
-		typ = "unknown"
-	case "geometry":
 		typ = "unknown"
 	default:
 		typ = "unknown"
@@ -574,7 +586,7 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 	b.WriteString(header)
 	b.WriteString("\npackage model\n\n")
 	hasEnums := len(enums) > 0
-	hasJSON, hasTime, hasDecimal, hasBits, hasGeo := false, false, false, false, false
+	hasJSON, hasTime, hasDecimal, hasBits := false, false, false, false
 	for _, e := range entities {
 		for _, f := range e.Fields {
 			if f.GoType == "json.RawMessage" {
@@ -588,9 +600,6 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 			}
 			if strings.Contains(f.GoType, "big.Int") {
 				hasBits = true
-			}
-			if strings.Contains(f.GoType, "geojson.Geometry") {
-				hasGeo = true
 			}
 		}
 	}
@@ -609,9 +618,6 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 	}
 	if hasBits {
 		imports = append(imports, "\"math/big\"")
-	}
-	if hasGeo {
-		imports = append(imports, "\"github.com/twpayne/go-geom/encoding/geojson\"")
 	}
 	if len(imports) > 0 {
 		b.WriteString("import (\n")

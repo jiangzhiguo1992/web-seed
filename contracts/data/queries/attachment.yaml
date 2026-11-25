@@ -143,7 +143,7 @@ queries:
       - { table: data.tables.attachment, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: cutoff, type: _types.basics.timestamp }
+      - { name: cutoff, type: _types.basics.timestamp.long }
       - { name: status, type: _types.basics.integer.32, column: data.tables.attachment.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -160,7 +160,7 @@ queries:
       - { table: data.tables.attachment, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: cutoff, type: _types.basics.timestamp }
+      - { name: cutoff, type: _types.basics.timestamp.long }
       - { name: status, type: _types.basics.integer.32, column: data.tables.attachment.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }

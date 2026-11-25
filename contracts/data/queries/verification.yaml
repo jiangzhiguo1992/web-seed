@@ -23,7 +23,7 @@ queries:
       - { name: auth_id, type: _types.basics.id, column: data.tables.verification_body.col.auth_id }
       - { name: code_hash, type: _types.basics.string, column: data.tables.verification_body.col.code_hash }
       - { name: content, type: _types.basics.string, column: data.tables.verification_body.col.content, nullable: true }
-      - { name: expire_at, type: _types.basics.timestamp, column: data.tables.verification_body.col.expire_at }
+      - { name: expire_at, type: _types.basics.timestamp.long, column: data.tables.verification_body.col.expire_at }
     returns:
       - { name: row, kind: entity, type: data.entities.verification_body }
       - { name: err, kind: error }
@@ -41,7 +41,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.verification_body.col.id }
-      - { name: sent_at, type: _types.basics.timestamp, column: data.tables.verification_body.col.sent_at }
+      - { name: sent_at, type: _types.basics.timestamp.long, column: data.tables.verification_body.col.sent_at }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -78,7 +78,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.verification_body.col.id }
-      - { name: consumed_at, type: _types.basics.timestamp, column: data.tables.verification_body.col.consumed_at }
+      - { name: consumed_at, type: _types.basics.timestamp.long, column: data.tables.verification_body.col.consumed_at }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -131,7 +131,7 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: now, type: _types.basics.timestamp }
+      - { name: now, type: _types.basics.timestamp.long }
       - { name: status, type: data.enums.verification_status }
       - { name: limit, type: _types.basics.integer.32, nullable: true, default: 100 }
     returns:

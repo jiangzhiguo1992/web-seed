@@ -7,11 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 func TestHTTPNotifierPostsPayload(t *testing.T) {
-	deletedAt := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	deletedAt := int64(1763985600)
 	var got deletePayload
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -27,7 +26,7 @@ func TestHTTPNotifierPostsPayload(t *testing.T) {
 	if err := NewHTTPNotifier(srv.URL).NotifyDeleted(context.Background(), 42, deletedAt); err != nil {
 		t.Fatal(err)
 	}
-	if got.AccountID != 42 || !got.DeletedAt.Equal(deletedAt) {
+	if got.AccountID != 42 || got.DeletedAt != deletedAt {
 		t.Fatalf("payload = %#v", got)
 	}
 }
@@ -38,14 +37,14 @@ func TestHTTPNotifierFailureStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := NewHTTPNotifier(srv.URL).NotifyDeleted(context.Background(), 42, time.Now())
+	err := NewHTTPNotifier(srv.URL).NotifyDeleted(context.Background(), 42, 1)
 	if err == nil {
 		t.Fatal("expected error for non-2xx status")
 	}
 }
 
 func TestHTTPNotifierRequiresEndpoint(t *testing.T) {
-	err := NewHTTPNotifier("").NotifyDeleted(context.Background(), 42, time.Now())
+	err := NewHTTPNotifier("").NotifyDeleted(context.Background(), 42, 1)
 	if !errors.Is(err, ErrNotifierUnavailable) {
 		t.Fatalf("err = %v, want ErrNotifierUnavailable", err)
 	}

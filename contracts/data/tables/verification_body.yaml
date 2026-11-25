@@ -74,17 +74,17 @@ columns:
     comment: "发送正文快照；可能含验证码原文，按 secret 管理，禁止进入日志/响应/事件"
 
   - name: sent_at
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.long
     nullable: true
     comment: "实际发送时间；发送失败为空"
 
   - name: expire_at
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.long
     nullable: false
     comment: "验证码过期时间；必须晚于 created_at"
 
   - name: consumed_at
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.long
     nullable: true
     comment: "验证通过/消费时间；为空表示未使用"
 

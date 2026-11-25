@@ -113,7 +113,7 @@ func TestTypeTableMatchesScalarMapping(t *testing.T) {
 	}
 	for family, fam := range shared.TypeFamilies {
 		for variant, ct := range fam.Types {
-			spec := columnSpec{Family: family}
+			spec := columnSpec{Family: family, Variant: variant}
 			if family == "integer" || family == "float" {
 				bits, err := strconv.Atoi(variant)
 				if err != nil {

@@ -952,9 +952,9 @@ func (s *VerificationStatus) UnmarshalJSON(data []byte) error {
 type Account struct {
 	ID        int64         `json:"id"`
 	Status    AccountStatus `json:"status"`
-	CreatedAt time.Time     `json:"created_at"`
-	UpdatedAt time.Time     `json:"updated_at"`
-	DeletedAt *time.Time    `json:"deleted_at"`
+	CreatedAt int64         `json:"created_at"`
+	UpdatedAt int64         `json:"updated_at"`
+	DeletedAt *int64        `json:"deleted_at"`
 	Number    string        `json:"number"`
 	Nickname  string        `json:"nickname"`
 	UserID    *int64        `json:"user_id"`
@@ -964,9 +964,9 @@ type Account struct {
 type Attachment struct {
 	ID             int64                `json:"id"`
 	Status         AttachmentStatus     `json:"status"`
-	CreatedAt      time.Time            `json:"created_at"`
-	UpdatedAt      time.Time            `json:"updated_at"`
-	DeletedAt      *time.Time           `json:"deleted_at"`
+	CreatedAt      int64                `json:"created_at"`
+	UpdatedAt      int64                `json:"updated_at"`
+	DeletedAt      *int64               `json:"deleted_at"`
 	OwnerTableName string               `json:"owner_table_name"`
 	OwnerID        int64                `json:"owner_id"`
 	Purpose        string               `json:"purpose"`
@@ -984,9 +984,9 @@ type Attachment struct {
 type authEmail struct {
 	ID        int64      `json:"id"`
 	Status    AuthStatus `json:"status"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at"`
+	CreatedAt int64      `json:"created_at"`
+	UpdatedAt int64      `json:"updated_at"`
+	DeletedAt *int64     `json:"deleted_at"`
 	AccountID *int64     `json:"account_id"`
 	Username  string     `json:"username"`
 	Domain    string     `json:"domain"`
@@ -998,9 +998,9 @@ type authEmail struct {
 type authPhone struct {
 	ID        int64      `json:"id"`
 	Status    AuthStatus `json:"status"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at"`
+	CreatedAt int64      `json:"created_at"`
+	UpdatedAt int64      `json:"updated_at"`
+	DeletedAt *int64     `json:"deleted_at"`
 	AccountID *int64     `json:"account_id"`
 	Code      string     `json:"code"`
 	Number    string     `json:"number"`
@@ -1011,9 +1011,9 @@ type authPhone struct {
 type authPwd struct {
 	ID               int64      `json:"id"`
 	Status           AuthStatus `json:"status"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
-	DeletedAt        *time.Time `json:"deleted_at"`
+	CreatedAt        int64      `json:"created_at"`
+	UpdatedAt        int64      `json:"updated_at"`
+	DeletedAt        *int64     `json:"deleted_at"`
 	AccountID        *int64     `json:"account_id"`
 	Username         string     `json:"username"`
 	passwordHash     string
@@ -1025,9 +1025,9 @@ type authPwd struct {
 type Dictionary struct {
 	ID        int64            `json:"id"`
 	Status    DictionaryStatus `json:"status"`
-	CreatedAt time.Time        `json:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at"`
-	DeletedAt *time.Time       `json:"deleted_at"`
+	CreatedAt int64            `json:"created_at"`
+	UpdatedAt int64            `json:"updated_at"`
+	DeletedAt *int64           `json:"deleted_at"`
 	ParentID  *int64           `json:"parent_id"`
 	Code      string           `json:"code"`
 	Name      string           `json:"name"`
@@ -1041,17 +1041,17 @@ type Dictionary struct {
 type token struct {
 	ID               int64       `json:"id"`
 	Status           TokenStatus `json:"status"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
-	DeletedAt        *time.Time  `json:"deleted_at"`
+	CreatedAt        int64       `json:"created_at"`
+	UpdatedAt        int64       `json:"updated_at"`
+	DeletedAt        *int64      `json:"deleted_at"`
 	AccountID        int64       `json:"account_id"`
 	UserID           *int64      `json:"user_id"`
 	DeviceID         *string     `json:"device_id"`
 	accessTokenHash  string
 	refreshTokenHash string
-	AccessExpireAt   time.Time          `json:"access_expire_at"`
-	RefreshExpireAt  time.Time          `json:"refresh_expire_at"`
-	RevokedAt        *time.Time         `json:"revoked_at"`
+	AccessExpireAt   int64              `json:"access_expire_at"`
+	RefreshExpireAt  int64              `json:"refresh_expire_at"`
+	RevokedAt        *int64             `json:"revoked_at"`
 	RevokeReason     *TokenRevokeReason `json:"revoke_reason"`
 	ReplacedByID     *int64             `json:"replaced_by_id"`
 }
@@ -1060,9 +1060,9 @@ type token struct {
 type Unit struct {
 	ID        int64      `json:"id"`
 	Status    UnitStatus `json:"status"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"deleted_at"`
+	CreatedAt int64      `json:"created_at"`
+	UpdatedAt int64      `json:"updated_at"`
+	DeletedAt *int64     `json:"deleted_at"`
 	ParentID  *int64     `json:"parent_id"`
 	Code      string     `json:"code"`
 	Name      string     `json:"name"`
@@ -1078,9 +1078,9 @@ type Unit struct {
 type verificationAction struct {
 	ID             int64              `json:"id"`
 	Status         int32              `json:"status"`
-	CreatedAt      time.Time          `json:"created_at"`
-	UpdatedAt      time.Time          `json:"updated_at"`
-	DeletedAt      *time.Time         `json:"deleted_at"`
+	CreatedAt      int64              `json:"created_at"`
+	UpdatedAt      int64              `json:"updated_at"`
+	DeletedAt      *int64             `json:"deleted_at"`
 	VerificationID int64              `json:"verification_id"`
 	AccountID      int64              `json:"account_id"`
 	Result         VerificationResult `json:"result"`
@@ -1094,17 +1094,17 @@ type verificationAction struct {
 type verificationBody struct {
 	ID           int64               `json:"id"`
 	Status       VerificationStatus  `json:"status"`
-	CreatedAt    time.Time           `json:"created_at"`
-	UpdatedAt    time.Time           `json:"updated_at"`
-	DeletedAt    *time.Time          `json:"deleted_at"`
+	CreatedAt    int64               `json:"created_at"`
+	UpdatedAt    int64               `json:"updated_at"`
+	DeletedAt    *int64              `json:"deleted_at"`
 	AccountID    int64               `json:"account_id"`
 	AuthType     AuthType            `json:"auth_type"`
 	AuthID       int64               `json:"auth_id"`
 	Purpose      VerificationPurpose `json:"purpose"`
 	codeHash     string
 	content      *string
-	SentAt       *time.Time `json:"sent_at"`
-	ExpireAt     time.Time  `json:"expire_at"`
-	ConsumedAt   *time.Time `json:"consumed_at"`
-	AttemptCount int32      `json:"attempt_count"`
+	SentAt       *int64 `json:"sent_at"`
+	ExpireAt     int64  `json:"expire_at"`
+	ConsumedAt   *int64 `json:"consumed_at"`
+	AttemptCount int32  `json:"attempt_count"`
 }

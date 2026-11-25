@@ -66,12 +66,12 @@ basics:
     types:
       decimal: { go: decimal.Decimal, pg: [ numeric, decimal ], ts: number }
   datetime:
-    description: "日期/时间；mode 选择日期、时间或日期时间，timezone 控制时区"
+    description: "日期/时间；mode 选择日期、时间或日期时间，timezone 带时区，time 不带时区"
     params:
       mode: { type: _types.basics.string, required: false, enum: [ date, time, datetime ], default: datetime, description: "模式" }
-      timezone: { type: _types.basics.boolean, required: false, default: false, description: "带时区" }
     types:
-      datetime: { go: time.Time, pg: [ date, time, timetz, timestamp, timestamptz ], ts: string }
+      timezone: { go: time.Time, pg: [ date, timetz, timestamptz ], ts: string }
+      time: { go: time.Time, pg: [ date, time, timestamp ], ts: string }
   timestamp:
     description: "绝对时间点；time 带时区（timestamptz），long 不带时区（timestamp），fractional_seconds 控制小数秒"
     params:

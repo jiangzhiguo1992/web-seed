@@ -946,7 +946,7 @@ func httpTypeResolver(customTypes map[string]contractspec.CustomValueType) opena
 		}
 		if _, ok := customTypes[family]; !ok {
 			switch family {
-			case "string", "boolean", "integer", "float", "decimal", "datetime", "timestamp", "json", "bytes", "bit", "xml", "geometry":
+			case "string", "boolean", "integer", "float", "decimal", "datetime", "timestamp", "json", "bytes", "bit", "xml":
 			default:
 				return nil, fmt.Errorf("unknown type %s", name)
 			}
@@ -956,7 +956,7 @@ func httpTypeResolver(customTypes map[string]contractspec.CustomValueType) opena
 }
 
 func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueType) map[string]any {
-	family, _, _ := contractspec.SplitBasicsRef(typ)
+	family, variant, _ := contractspec.SplitBasicsRef(typ)
 	var params map[string]any
 	if family == "" {
 		family = typ
@@ -973,7 +973,15 @@ func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueTyp
 		out["type"] = "integer"
 	case "boolean":
 		out["type"] = "boolean"
-	case "timestamp", "datetime":
+	case "timestamp":
+		if variant == "long" {
+			out["type"] = "integer"
+			out["format"] = "int64"
+		} else {
+			out["type"] = "string"
+			out["format"] = "date-time"
+		}
+	case "datetime":
 		out["type"] = "string"
 		out["format"] = "date-time"
 	case "float", "decimal":
@@ -985,8 +993,6 @@ func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueTyp
 		out["format"] = "byte"
 	case "bit", "xml":
 		out["type"] = "string"
-	case "geometry":
-		out["type"] = "object"
 	default:
 		out["type"] = "object"
 	}
@@ -1426,7 +1432,7 @@ func typeSchema(typ string, enums map[string][]any, customTypes map[string]contr
 	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
 		return map[string]any{"type": "array", "items": typeSchema(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"), enums, customTypes)}
 	}
-	family, _, isBasics := contractspec.SplitBasicsRef(typ)
+	family, variant, isBasics := contractspec.SplitBasicsRef(typ)
 	if isBasics {
 		typ = family
 	}
@@ -1440,7 +1446,12 @@ func typeSchema(typ string, enums map[string][]any, customTypes map[string]contr
 		return map[string]any{"type": "integer"}
 	case "boolean":
 		return map[string]any{"type": "boolean"}
-	case "timestamp", "datetime":
+	case "timestamp":
+		if variant == "long" {
+			return map[string]any{"type": "integer", "format": "int64"}
+		}
+		return map[string]any{"type": "string", "format": "date-time"}
+	case "datetime":
 		return map[string]any{"type": "string", "format": "date-time"}
 	case "number", "float", "decimal":
 		return map[string]any{"type": "number"}
@@ -1448,8 +1459,6 @@ func typeSchema(typ string, enums map[string][]any, customTypes map[string]contr
 		return map[string]any{"type": "object"}
 	case "bit", "xml":
 		return map[string]any{"type": "string"}
-	case "geometry":
-		return map[string]any{"type": "object"}
 	}
 	if strings.HasPrefix(typ, "data.enums.") {
 		return map[string]any{"type": "string", "enum": enums[lastSegment(typ)]}

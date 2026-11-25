@@ -203,6 +203,44 @@ func TestSchemaNodeKindRequiresNamespace(t *testing.T) {
 	}
 }
 
+func TestDatetimeTypeKeys(t *testing.T) {
+	shared, err := LoadSharedTypes(filepath.Join("..", "..", "..", "..", "contracts", "_meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fam, ok := shared.TypeFamilies["datetime"]
+	if !ok {
+		t.Fatal("datetime family missing")
+	}
+	for _, want := range []string{"timezone", "time"} {
+		if _, ok := fam.Types[want]; !ok {
+			t.Fatalf("datetime missing type key %q", want)
+		}
+	}
+	if len(fam.Types) != 2 {
+		t.Fatalf("datetime type keys = %v", fam.Types)
+	}
+}
+
+func TestTimestampTypeKeys(t *testing.T) {
+	shared, err := LoadSharedTypes(filepath.Join("..", "..", "..", "..", "contracts", "_meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fam, ok := shared.TypeFamilies["timestamp"]
+	if !ok {
+		t.Fatal("timestamp family missing")
+	}
+	for _, want := range []string{"time", "long"} {
+		if _, ok := fam.Types[want]; !ok {
+			t.Fatalf("timestamp missing variant %q", want)
+		}
+	}
+	if len(fam.Types) != 2 {
+		t.Fatalf("timestamp type keys = %v", fam.Types)
+	}
+}
+
 func TestSharedTypesConcreteTypes(t *testing.T) {
 	root := t.TempDir()
 	shared, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))

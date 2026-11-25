@@ -28,7 +28,7 @@ schemas:
     properties:
       - { name: id, schema: { type: _types.basics.id }, required: true, description: "验证记录 ID" }
       - { name: masked_target, schema: { type: _types.basics.string }, required: true, description: "脱敏后的接收目标" }
-      - { name: expire_at, schema: { type: _types.basics.timestamp }, required: true, description: "过期时间" }
+      - { name: expire_at, schema: { type: _types.basics.timestamp.long }, required: true, description: "过期时间" }
   VerifyCodeInput:
     kind: _types.schemas.object
     properties:
@@ -44,7 +44,7 @@ schemas:
     properties:
       - { name: verified, schema: { type: _types.basics.boolean }, required: true, description: "是否验证通过" }
       - { name: verification_id, schema: { type: _types.basics.id }, required: true, description: "验证记录 ID" }
-      - { name: consumed_at, schema: { type: _types.basics.timestamp }, nullable: true, description: "验证码消费时间；未消费为 null" }
+      - { name: consumed_at, schema: { type: _types.basics.timestamp.long }, nullable: true, description: "验证码消费时间；未消费为 null" }
 services:
   - name: send
     summary: "发送短信/邮件验证码"
@@ -148,7 +148,7 @@ services:
         summary: "计算验证码过期时间"
         input: [ ]
         output:
-          - { name: expire_at, type: _types.basics.timestamp, description: "验证码过期时间" }
+          - { name: expire_at, type: _types.basics.timestamp.long, description: "验证码过期时间" }
         errors: [ ]
         rules: [ ]
         goto: now
@@ -157,7 +157,7 @@ services:
         summary: "取当前时间作为发送时间"
         input: [ ]
         output:
-          - { name: sent_at, type: _types.basics.timestamp, description: "发送时间" }
+          - { name: sent_at, type: _types.basics.timestamp.long, description: "发送时间" }
         errors: [ ]
         rules: [ ]
         goto: status_sent
@@ -362,7 +362,7 @@ services:
         summary: "取当前时间作为消费时间"
         input: [ ]
         output:
-          - { name: consumed_at, type: _types.basics.timestamp, description: "消费时间" }
+          - { name: consumed_at, type: _types.basics.timestamp.long, description: "消费时间" }
         errors: [ ]
         rules: [ ]
         goto: status_consumed
@@ -718,7 +718,7 @@ services:
         summary: "取当前时间"
         input: [ ]
         output:
-          - { name: now, type: _types.basics.timestamp, description: "当前时间" }
+          - { name: now, type: _types.basics.timestamp.long, description: "当前时间" }
         errors: [ ]
         rules: [ ]
         goto: max_attempts

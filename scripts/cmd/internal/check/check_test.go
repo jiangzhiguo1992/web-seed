@@ -35,7 +35,7 @@ func TestIsColumnType(t *testing.T) {
 		{"uuid", false},
 		{"varchar", false},
 		{"_types.basics.timestamp", true},
-		{"_types.basics.datetime", true},
+		{"_types.basics.datetime.time", true},
 		{"_types.basics.decimal", true},
 		{"_types.basics.float", true},
 		{"date", false},

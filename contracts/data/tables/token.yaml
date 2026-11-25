@@ -65,17 +65,17 @@ columns:
     comment: "刷新令牌哈希"
 
   - name: access_expire_at
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.long
     nullable: false
     comment: "访问令牌过期时间"
 
   - name: refresh_expire_at
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.long
     nullable: false
     comment: "刷新令牌过期时间"
 
   - name: revoked_at
-    type: _types.basics.timestamp
+    type: _types.basics.timestamp.long
     nullable: true
     comment: "吊销时间；为空表示未吊销"
 

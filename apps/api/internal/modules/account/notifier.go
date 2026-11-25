@@ -22,11 +22,11 @@ func NewHTTPNotifier(endpoint string) *HTTPNotifier {
 }
 
 type deletePayload struct {
-	AccountID int64     `json:"account_id"`
-	DeletedAt time.Time `json:"deleted_at"`
+	AccountID int64 `json:"account_id"`
+	DeletedAt int64 `json:"deleted_at"`
 }
 
-func (n *HTTPNotifier) NotifyDeleted(ctx context.Context, accountID int64, deletedAt time.Time) error {
+func (n *HTTPNotifier) NotifyDeleted(ctx context.Context, accountID int64, deletedAt int64) error {
 	if n.Endpoint == "" {
 		return ErrNotifierUnavailable
 	}
