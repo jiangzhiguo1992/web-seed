@@ -84,4 +84,4 @@ fields:
     description: "禁止提交的文件模式"
 
 rules:
-  - { id: environment-shape, text: "differences[].environments 与 secrets_source 的键必须是已声明环境；secrets_source 必须覆盖每个环境", implemented_by: [ environment-shape ] }
+  - { id: environment-shape, text: "differences[].environments 与 secrets_source 的键必须是已声明环境；secrets_source 必须覆盖每个环境；每个实际差异必须登记，每个登记项必须确实有差异；require_https 为 true 时 api/web_base_url 必须是 https", implemented_by: [ environment-shape ] }

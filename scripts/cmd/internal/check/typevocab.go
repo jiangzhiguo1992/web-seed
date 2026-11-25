@@ -119,7 +119,7 @@ func (c *Checker) checkTypeRef(v any, path string) {
 	}
 	switch {
 	case strings.HasPrefix(s, "data.enums."):
-		if c.enumIDs != nil && !c.enumIDs[s] {
+		if !c.enumDeclared(s) {
 			c.typeVocabularyf(path, s, "%s: unknown enum %s", path, s)
 		}
 		return

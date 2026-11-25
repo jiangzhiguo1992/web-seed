@@ -595,23 +595,12 @@ func (c *Checker) checkEntityDoNot(ed entityDoc, short string) {
 			}
 		}
 	}
-	for _, raw := range asList(ed.doc["do_not"]) {
-		s, _ := raw.(string)
-		trimmed := strings.TrimSpace(s)
-		if trimmed == "" {
+	for _, v := range doNotViolations(asList(ed.doc["do_not"]), names) {
+		if v.Empty {
 			c.rulef("entity-do-not-specific", "%s: do_not entries must not be empty", ed.rel)
 			continue
 		}
-		specific := false
-		for name := range names {
-			if strings.Contains(trimmed, name) {
-				specific = true
-				break
-			}
-		}
-		if !specific {
-			c.rulef("entity-do-not-specific", "%s: do_not must mention the entity or one of its fields: %s", ed.rel, trimmed)
-		}
+		c.rulef("entity-do-not-specific", "%s: do_not must mention the entity or one of its fields: %s", ed.rel, v.Text)
 	}
 }
 
@@ -1188,7 +1177,7 @@ func (c *Checker) checkEntityValidation(e *entityInfo) {
 		}
 		seen[name] = true
 		if code, _ := m["on_violation"].(string); code != "" {
-			if errs := c.errorCodes(); len(errs) > 0 && !errs[strings.TrimPrefix(code, "platform.errors.")] {
+			if errs := c.errorCodes(); len(errs) > 0 && !c.errorCodeDeclared(code) {
 				c.rulef("entity-validation", "%s: unknown error code %s", where, code)
 			}
 		}
@@ -1297,6 +1286,16 @@ func (c *Checker) errorCodes() map[string]bool {
 		}
 	}
 	return c.errCodeSet
+}
+
+// errorCodeDeclared 判断 platform.errors.<CODE> 是否已声明。
+// 注册表未加载（空）时返回 false，调用方自行决定是否跳过。
+func (c *Checker) errorCodeDeclared(ref string) bool {
+	code, ok := strings.CutPrefix(ref, "platform.errors.")
+	if !ok || code == "" {
+		return false
+	}
+	return c.errorCodes()[code]
 }
 
 // dataAccessErrors 返回数据访问基础设施错误基线。

@@ -111,6 +111,12 @@ func (c *Checker) checkStorage(tableIDs map[string]string, schema *Schema) {
 		return
 	}
 	supported := stringSet(asList(doc["supported_engines"]))
+	notSupported := stringSet(asList(doc["not_supported_topologies"]))
+	for _, name := range sortedStringSetKeys(supported) {
+		if notSupported[name] {
+			c.rulef("storage-engine", "%s: %s cannot be both supported and not_supported", rel, name)
+		}
+	}
 	for _, engine := range sortedAnyKeys(rawTables) {
 		if !supported[engine] {
 			c.rulef("storage-engine", "%s: tables.%s is not a supported engine", rel, engine)

@@ -90,6 +90,7 @@ func (c *Checker) checkAnalytics() {
 		c.checkAnalyticsPropertyType(where, item, types)
 		indexProp(where, item)
 	}
+	pageViews := c.pageViewEvents()
 	seen := map[string]bool{}
 	for i, raw := range asList(doc["events"]) {
 		item, _ := asMap(raw)
@@ -121,6 +122,11 @@ func (c *Checker) checkAnalytics() {
 		}
 		if trigger == "mount" && page == "" {
 			c.rulef("analytics-refs", "%s: trigger mount requires page", where)
+		}
+		if trigger == "mount" && page != "" {
+			if pv := pageViews[page]; pv != name {
+				c.rulef("analytics-refs", "%s: page %s analytics.page_view must be %s, got %q", where, page, name, pv)
+			}
 		}
 		propSeen := map[string]bool{}
 		for j, rawProp := range asList(item["properties"]) {
@@ -194,6 +200,26 @@ func (c *Checker) analyticsTypes() map[string]bool {
 			if name, _ := item["name"].(string); name != "" {
 				out["data.enums."+name] = true
 			}
+		}
+	}
+	return out
+}
+
+// pageViewEvents 返回 feature.pages 的 page ID → analytics.page_view 事件名。
+func (c *Checker) pageViewEvents() map[string]string {
+	out := map[string]string{}
+	for _, file := range c.featurePageFiles() {
+		page, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		id, _ := page["id"].(string)
+		analytics, _ := asMap(page["analytics"])
+		if id == "" || analytics == nil {
+			continue
+		}
+		if name, _ := analytics["page_view"].(string); name != "" {
+			out[id] = name
 		}
 	}
 	return out

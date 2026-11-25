@@ -23,6 +23,11 @@ func (c *Checker) checkQuality() {
 				c.rulef("quality-refs", "%s: e2e.required_scenarios references unknown %s", rel, id)
 			}
 		}
+		if source, _ := e2e["base_url_source"].(string); source != "" {
+			if ids := c.contractIDs(); len(ids) > 0 && !ids[source] {
+				c.rulef("quality-refs", "%s: e2e.base_url_source references unknown contract %s", rel, source)
+			}
+		}
 	}
 	targets := makeTargets(filepath.Join(c.root, "Makefile"))
 	for i, raw := range asList(doc["gates"]) {
@@ -31,10 +36,7 @@ func (c *Checker) checkQuality() {
 		}
 		gate, _ := asMap(raw)
 		command, _ := gate["command"].(string)
-		if !strings.HasPrefix(command, "make ") {
-			continue
-		}
-		target := strings.Fields(command)[1]
+		target := makeCommandTarget(command)
 		if target != "" && !targets[target] {
 			c.rulef("quality-refs", "%s: gates[%d] command target %s is not in Makefile", rel, i, target)
 		}
@@ -51,6 +53,34 @@ func (c *Checker) checkQuality() {
 		}
 		seen[id] = true
 	}
+}
+
+// contractIDs 读取 contracts/index.yaml 的契约 ID 集合。
+func (c *Checker) contractIDs() map[string]bool {
+	out := map[string]bool{}
+	doc, err := loadYAML(filepath.Join(c.root, "contracts/index.yaml"))
+	if err != nil {
+		return out
+	}
+	for _, raw := range asList(doc["entries"]) {
+		item, _ := asMap(raw)
+		if id, _ := item["id"].(string); id != "" {
+			out[id] = true
+		}
+	}
+	return out
+}
+
+// makeCommandTarget 返回 make 命令的首个目标；不是 make 命令或缺少目标时返回空。
+func makeCommandTarget(command string) string {
+	if !strings.HasPrefix(command, "make ") {
+		return ""
+	}
+	fields := strings.Fields(command)
+	if len(fields) < 2 {
+		return ""
+	}
+	return fields[1]
 }
 
 func (c *Checker) scenarioIDs() map[string]bool {

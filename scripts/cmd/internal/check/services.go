@@ -251,7 +251,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			} else if target, ok := serviceMeta[ref]; !ok {
 				c.rulef("service-ref", "%s: step %s unknown service %s", rel, stepID, ref)
 			} else {
-				if target.module != module && target.visibility != "public" {
+				if !servicePublic(target, module) {
 					c.rulef("service-visibility", "%s: step %s cannot call internal %s from another module", rel, stepID, ref)
 				}
 				if txMode != "none" && target.txMode == "required" {
@@ -349,7 +349,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			} else {
 				for _, rawErr := range asList(step["errors"]) {
 					code, _ := rawErr.(string)
-					if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+					if !c.errorCodeDeclared(code) {
 						c.rulef("service-ref", "%s: step %s unknown error %s", rel, stepID, code)
 					}
 					stepErrors[code] = true
@@ -364,7 +364,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		default:
 			for _, rawErr := range asList(step["errors"]) {
 				code, _ := rawErr.(string)
-				if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+				if !c.errorCodeDeclared(code) {
 					c.rulef("service-ref", "%s: step %s unknown error %s", rel, stepID, code)
 				}
 				stepErrors[code] = true

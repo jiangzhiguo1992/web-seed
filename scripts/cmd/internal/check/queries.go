@@ -292,7 +292,7 @@ func (c *Checker) checkQueryErrors(q *queryInfo) {
 			c.rulef("query-errors", "%s: query %s must not repeat data-access baseline error %s", q.File, q.ID, code)
 			continue
 		}
-		if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+		if !c.errorCodeDeclared(code) {
 			c.rulef("query-errors", "%s: query %s references unknown error %s", q.File, q.ID, code)
 		}
 	}
@@ -312,23 +312,12 @@ func (c *Checker) checkQueryDoNot(qd queryDoc) {
 			}
 		}
 	}
-	for _, raw := range asList(qd.doc["do_not"]) {
-		s, _ := raw.(string)
-		trimmed := strings.TrimSpace(s)
-		if trimmed == "" {
+	for _, v := range doNotViolations(asList(qd.doc["do_not"]), names) {
+		if v.Empty {
 			c.rulef("query-do-not-specific", "%s: do_not entries must not be empty", qd.rel)
 			continue
 		}
-		specific := false
-		for name := range names {
-			if strings.Contains(trimmed, name) {
-				specific = true
-				break
-			}
-		}
-		if !specific {
-			c.rulef("query-do-not-specific", "%s: do_not must mention the query set or one of its queries: %s", qd.rel, trimmed)
-		}
+		c.rulef("query-do-not-specific", "%s: do_not must mention the query set or one of its queries: %s", qd.rel, v.Text)
 	}
 }
 

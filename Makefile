@@ -4,7 +4,7 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
-        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-model gen-model-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-scenarios gen-scenarios-check gen-check contract-new contract-check contract-graph contract-impact contract-compat contract-compat-baseline db-verify \
+        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-model gen-model-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-scenarios gen-scenarios-check gen-async gen-async-check gen-check contract-new contract-check contract-graph contract-impact contract-compat contract-compat-baseline db-verify \
         gen-rule-ids check-rule-ids gen-check-core test-rules audit-types dev api-dev web-dev compose-up compose-down doctor derive check-docs check-index
 
 help: ## 显示可用目标
@@ -54,6 +54,7 @@ gen: contract-check ## 重新生成契约产物
 	$(MAKE) gen-db
 	$(MAKE) gen-openapi
 	$(MAKE) gen-scenarios
+	$(MAKE) gen-async
 
 gen-openapi: contract-check ## 合并 protocols/http/* → contracts/generated/openapi
 	cd scripts/cmd && go run ./gen_openapi -root "$(CURDIR)"
@@ -72,6 +73,7 @@ gen-check-core: ## 校验除规则测试映射外的生成物
 	$(MAKE) gen-db-check
 	$(MAKE) gen-openapi-check
 	$(MAKE) gen-scenarios-check
+	$(MAKE) gen-async-check
 
 gen-db: contract-check ## data/tables/* → PostgreSQL schema + migrations
 	cd scripts/cmd && go run ./gen_db -root "$(CURDIR)"
@@ -108,6 +110,12 @@ gen-scenarios: contract-check ## 把验收场景投影为 contracts/generated/sc
 
 gen-scenarios-check: ## 校验验收场景清单是否最新
 	cd scripts/cmd && go run ./gen_scenarios -root "$(CURDIR)" -check
+
+gen-async: contract-check ## cap.events → contracts/generated/async/manifest.yaml
+	cd scripts/cmd && go run ./gen_async -root "$(CURDIR)"
+
+gen-async-check: ## 校验异步任务清单是否最新
+	cd scripts/cmd && go run ./gen_async -root "$(CURDIR)" -check
 
 contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|feature.pages|cap.events|cap.protocols.http）
 	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" service="$(service)" path="$(path)" http_method="$(http_method)" ./scripts/contract/scaffold.sh

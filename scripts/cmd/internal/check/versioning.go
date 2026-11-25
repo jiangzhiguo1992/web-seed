@@ -2,7 +2,9 @@
 package check
 
 import (
+	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -29,12 +31,12 @@ func (c *Checker) checkVersioning() {
 		c.rulef("versioning-refs", "%s: api.current %s is not declared by any HTTP mount.api_version", rel, current)
 	}
 	detection, _ := asMap(doc["detection"])
-	command, _ := detection["command"].(string)
-	if strings.HasPrefix(command, "make ") {
-		targets := makeTargets(filepath.Join(c.root, "Makefile"))
-		target := strings.Fields(command)[1]
+	targets := makeTargets(filepath.Join(c.root, "Makefile"))
+	for _, key := range []string{"command", "baseline_command"} {
+		command, _ := detection[key].(string)
+		target := makeCommandTarget(command)
 		if len(targets) > 0 && target != "" && !targets[target] {
-			c.rulef("versioning-refs", "%s: detection.command target %s is not in Makefile", rel, target)
+			c.rulef("versioning-refs", "%s: detection.%s target %s is not in Makefile", rel, key, target)
 		}
 	}
 	headers := map[string]bool{}
@@ -72,6 +74,21 @@ func (c *Checker) checkVersioning() {
 		item, _ := asMap(raw)
 		if name, _ := item["name"].(string); name != "" && !headers[name] {
 			c.rulef("versioning-refs", "%s: deprecation header %s is not registered in http_conventions.headers.response", rel, name)
+		}
+		format, _ := item["format"].(string)
+		example, _ := item["example"].(string)
+		switch format {
+		case "RFC9745":
+			value, ok := strings.CutPrefix(example, "@")
+			if _, err := strconv.ParseInt(value, 10, 64); !ok || err != nil {
+				c.rulef("versioning-refs", "%s: deprecation header %s example must be @<unix-seconds>", rel, item["name"])
+			}
+		case "HTTP-date":
+			if _, err := http.ParseTime(example); err != nil {
+				c.rulef("versioning-refs", "%s: deprecation header %s example must be HTTP-date", rel, item["name"])
+			}
+		default:
+			c.rulef("versioning-refs", "%s: deprecation header %s has unknown format %q", rel, item["name"], format)
 		}
 	}
 }

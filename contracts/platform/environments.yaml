@@ -1,8 +1,8 @@
 # 环境清单与显式差异。
 
-schema_version: 1
 id: platform.environments
 summary: "环境清单与差异"
+schema_version: 1
 stability: draft
 do_not:
   - "禁止在代码里按环境名写分支；环境差异只在本文件登记"

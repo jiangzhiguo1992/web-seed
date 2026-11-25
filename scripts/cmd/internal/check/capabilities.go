@@ -34,6 +34,11 @@ type serviceMeta struct {
 	returns        map[string]returnType
 }
 
+// servicePublic 报告目标 service 对调用方可见：public，或同一模块内的 internal。
+func servicePublic(target serviceMeta, callerModule string) bool {
+	return target.visibility == "public" || (callerModule != "" && target.module == callerModule)
+}
+
 // stepTypeContext 提供 input 值静态类型解析所需的步骤上下文。
 type stepTypeContext struct {
 	doc         map[string]any

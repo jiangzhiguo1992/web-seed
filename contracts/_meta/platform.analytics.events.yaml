@@ -86,4 +86,4 @@ fields:
 rules:
   - { id: analytics-pii, text: "forbidden_properties 必须 snake_case；同一 property 在 common_properties/events 中的 type 与 pii 必须一致；pii:true 的属性不得出现在 forbidden_properties，且必须被 log_fields.never_log 覆盖；pii:false 不得命中 never_log", implemented_by: [ analytics-pii ] }
   - { id: analytics-types, text: "property.type 必须是标量 basic type、data.types 的自定义类型或 data.enums 的枚举名；_types.basics.any 与 _types.basics.json 禁止", implemented_by: [ analytics-types ] }
-  - { id: analytics-refs, text: "事件名唯一；ref 必须是已存在的 HTTP operation；page 必须是已存在的 feature.pages；properties 不得使用 forbidden_properties；provider.default 必须属于 provider.options", implemented_by: [ analytics-refs, analytics-types ] }
+  - { id: analytics-refs, text: "事件名唯一；ref 必须是已存在的 HTTP operation；page 必须是已存在的 feature.pages，且 trigger=mount 时该页 analytics.page_view 必须等于事件名；properties 不得使用 forbidden_properties；provider.default 必须属于 provider.options", implemented_by: [ analytics-refs, analytics-types ] }

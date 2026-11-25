@@ -1,8 +1,8 @@
 # JWT 认证策略：access/refresh 都是 JWT；token 表存哈希，用于校验吊销、轮换与审计。
 
-schema_version: 1
 id: platform.security.auth_policy
 summary: "JWT 令牌认证策略"
+schema_version: 1
 stability: draft
 do_not:
   - "认证只依赖 JWT 与 Authorization header"

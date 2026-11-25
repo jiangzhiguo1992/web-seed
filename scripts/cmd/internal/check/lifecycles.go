@@ -183,7 +183,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 		}
 	}
 	enumValues := c.enumValues[statusEnum]
-	if statusEnum != "" && c.enumIDs != nil && !c.enumIDs[statusEnum] {
+	if statusEnum != "" && !c.enumDeclared(statusEnum) {
 		c.rulef("lifecycle-subject", "%s: subject enum %s does not exist", rel, statusEnum)
 	}
 
@@ -271,7 +271,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 			}
 			if code, _ := rm["on_violation"].(string); code == "" {
 				c.rulef("lifecycle-requires", "%s: %s requires on_violation", rel, actionID)
-			} else if errs := c.errorCodes(); len(errs) > 0 && !errs[strings.TrimPrefix(code, "platform.errors.")] {
+			} else if errs := c.errorCodes(); len(errs) > 0 && !c.errorCodeDeclared(code) {
 				c.rulef("lifecycle-requires", "%s: %s requires unknown error %s", rel, actionID, code)
 			}
 			if c.ruleIDSet != nil {

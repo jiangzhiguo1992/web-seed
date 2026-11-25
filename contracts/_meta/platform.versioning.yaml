@@ -114,4 +114,4 @@ fields:
     description: "客户端要求"
 
 rules:
-  - { id: versioning-refs, text: "api.current 必须是某个 HTTP mount.api_version；detection.command 为 make 目标时必须存在；deprecation.headers 必须已在 http_conventions 响应头登记；accepted_breaking_changes 的 id 唯一、scope 必须是 HTTP mount.api_version", implemented_by: [ versioning-refs ] }
+  - { id: versioning-refs, text: "api.current 必须是某个 HTTP mount.api_version；detection.command 与 detection.baseline_command 为 make 目标时必须存在；deprecation.headers 必须已在 http_conventions 响应头登记，format 只允许 RFC9745/HTTP-date 且 example 必须匹配格式；accepted_breaking_changes 的 id 唯一、scope 必须是 HTTP mount.api_version", implemented_by: [ versioning-refs ] }

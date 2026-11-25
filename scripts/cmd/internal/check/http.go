@@ -598,6 +598,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		if c.strictHTTP {
 			applyHTTPRequiredDefaults(doc)
 			c.validateDoc(doc, schema.Fields, rel)
+			c.checkHTTPHeaderKinds(rel, doc)
 			c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		}
 		mount := openapispec.CollectHTTPMount(doc)
@@ -669,7 +670,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				sources++
 				if !match(`^data\.enums\.[a-z][a-z0-9_]*$`, ref) {
 					c.rulef("http-components", "%s: components.schemas.%s.source.enum must match data.enums.<name>", rel, name)
-				} else if !c.enumIDs[ref] {
+				} else if !c.enumDeclared(ref) {
 					c.rulef("http-components", "%s: components.schemas.%s.source.enum references unknown enum %s", rel, name, ref)
 				}
 			}
@@ -915,7 +916,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					c.rulef("async-service", "%s %s %s: service %s is used by a cap.events job and cannot be bound to http", rel, method, path, serviceRef)
 					continue
 				}
-				if target.visibility != "public" {
+				if !servicePublic(target, "") {
 					c.rulef("service-visibility", "%s %s %s: service %s is not public", rel, method, path, serviceRef)
 				}
 				exposedServices[serviceRef] = true
@@ -1514,6 +1515,61 @@ func (c *Checker) checkHTTPPathParams(rel, method, path string, op map[string]an
 		if !declared[name] {
 			c.rulef("http-path-params", "%s %s %s: path placeholder {%s} has no request.path declaration", rel, method, path, name)
 		}
+	}
+}
+
+// checkHTTPHeaderKinds 校验源契约 header 恰好声明 auth/value/type 之一。
+// 归一化后的形式无法再区分三者来源，因此必须在契约层拦截。
+func (c *Checker) checkHTTPHeaderKinds(rel string, doc map[string]any) {
+	paths, _ := asMap(doc["paths"])
+	for path, rawPath := range paths {
+		pathItem, _ := asMap(rawPath)
+		for method, rawOp := range pathItem {
+			switch method {
+			case "get", "post", "put", "patch", "delete", "head", "options":
+			default:
+				continue
+			}
+			op, _ := asMap(rawOp)
+			where := fmt.Sprintf("%s %s %s", rel, strings.ToUpper(method), path)
+			request, _ := asMap(op["request"])
+			for i, raw := range asList(request["headers"]) {
+				c.checkHTTPHeaderKind(where+" request.headers", i, raw, true)
+			}
+			responses, _ := asMap(op["response"])
+			for status, rawResp := range responses {
+				resp, _ := asMap(rawResp)
+				for i, raw := range asList(resp["headers"]) {
+					c.checkHTTPHeaderKind(fmt.Sprintf("%s response.%s.headers", where, status), i, raw, false)
+				}
+			}
+		}
+	}
+}
+
+func (c *Checker) checkHTTPHeaderKind(where string, index int, raw any, request bool) {
+	header, _ := asMap(raw)
+	if header == nil {
+		return
+	}
+	name, _ := header["name"].(string)
+	kinds := 0
+	if request {
+		if _, ok := header["auth"]; ok {
+			kinds++
+		}
+	}
+	if value, ok := header["value"]; ok {
+		kinds++
+		if s, _ := value.(string); strings.TrimSpace(s) == "" {
+			c.rulef("http-headers", "%s[%d] (%s): value must not be empty", where, index, name)
+		}
+	}
+	if _, ok := header["type"]; ok {
+		kinds++
+	}
+	if kinds != 1 {
+		c.rulef("http-headers", "%s[%d] (%s): header must declare exactly one of auth/value/type", where, index, name)
 	}
 }
 

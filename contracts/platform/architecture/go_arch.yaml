@@ -1,8 +1,8 @@
 # Go 分层与模块依赖边界。
 
-schema_version: 1
 id: platform.architecture.go_arch
 summary: "Go 分层约束"
+schema_version: 1
 stability: draft
 do_not:
   - "分层规则只在本文件声明；实现不得绕过层边界直接依赖"

@@ -717,7 +717,7 @@ func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) 
 	}
 	switch {
 	case strings.HasPrefix(base, "data.enums."):
-		if !c.enumIDs[base] {
+		if !c.enumDeclared(base) {
 			c.rulef("service-ref", "%s: unknown enum %s", where, base)
 		}
 		return

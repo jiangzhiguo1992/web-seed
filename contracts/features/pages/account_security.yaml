@@ -94,3 +94,6 @@ fields:
     widget: string
     optional: true
     label: "邮箱域名"
+
+analytics:
+  page_view: page.account_security_viewed

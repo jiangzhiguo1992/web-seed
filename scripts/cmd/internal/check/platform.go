@@ -70,6 +70,55 @@ func checkSingletonTargets(schema *Schema) error {
 	return nil
 }
 
+// environmentValueSets 展开每个环境对象的叶子值：key → 取值集合；缺失值也计入集合。
+func environmentValueSets(environments []any) map[string]map[string]bool {
+	flat := make([]map[string]string, 0, len(environments))
+	for _, raw := range environments {
+		env, _ := asMap(raw)
+		if env == nil {
+			continue
+		}
+		values := map[string]string{}
+		flattenEnvironment(env, "", values)
+		flat = append(flat, values)
+	}
+	out := map[string]map[string]bool{}
+	for _, values := range flat {
+		for key := range values {
+			if out[key] == nil {
+				out[key] = map[string]bool{}
+			}
+		}
+	}
+	for _, values := range flat {
+		for key := range out {
+			value, ok := values[key]
+			if !ok {
+				value = "\x00missing"
+			}
+			out[key][value] = true
+		}
+	}
+	return out
+}
+
+func flattenEnvironment(env map[string]any, prefix string, out map[string]string) {
+	for key, raw := range env {
+		if prefix == "" && (key == "name" || key == "description") {
+			continue
+		}
+		full := key
+		if prefix != "" {
+			full = prefix + "." + key
+		}
+		if child, ok := asMap(raw); ok {
+			flattenEnvironment(child, full, out)
+			continue
+		}
+		out[full] = fmt.Sprint(raw)
+	}
+}
+
 // checkEnvironmentShape 校验差异项与密钥来源只引用已声明环境，且密钥来源覆盖全部环境。
 func (c *Checker) checkEnvironmentShape(rel string, doc map[string]any) {
 	envs := map[string]bool{}
@@ -78,14 +127,37 @@ func (c *Checker) checkEnvironmentShape(rel string, doc map[string]any) {
 		if name, _ := item["name"].(string); name != "" {
 			envs[name] = true
 		}
+		security, _ := asMap(item["security"])
+		if require, _ := security["require_https"].(bool); require {
+			for _, key := range []string{"api_base_url", "web_base_url"} {
+				if value, _ := item[key].(string); value != "" && !strings.HasPrefix(value, "https://") {
+					c.rulef("environment-shape", "%s: %s must use https when security.require_https is true", rel, key)
+				}
+			}
+		}
 	}
+	differences := map[string]bool{}
 	for i, raw := range asList(doc["differences"]) {
 		item, _ := asMap(raw)
+		if key, _ := item["key"].(string); key != "" {
+			differences[key] = true
+		}
 		for _, rawEnv := range asList(item["environments"]) {
 			env, _ := rawEnv.(string)
 			if env != "" && !envs[env] {
 				c.rulef("environment-shape", "%s: differences[%d] references unknown environment %s", rel, i, env)
 			}
+		}
+	}
+	values := environmentValueSets(asList(doc["environments"]))
+	for key, set := range values {
+		if len(set) > 1 && !differences[key] {
+			c.rulef("environment-shape", "%s: environment difference %s is not registered in differences", rel, key)
+		}
+	}
+	for key := range differences {
+		if len(values[key]) <= 1 {
+			c.rulef("environment-shape", "%s: differences key %s is not actually different across environments", rel, key)
 		}
 	}
 	secrets, hasSecrets := asMap(doc["secrets_source"])

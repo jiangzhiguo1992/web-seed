@@ -503,11 +503,7 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 				c.rulef("base-columns", "%s: base status default must be 0", rel)
 			}
 		}
-		if _, ok := m["default"]; ok {
-			if _, ok := m["default_sql"]; ok {
-				c.rulef("default-vs-default-sql", "%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, n)
-			}
-		}
+		c.checkDefaultExclusive(m, rel, i, n)
 		if n == "id" {
 			if raw, ok := m["bits"]; ok {
 				if bits, ok := toInt(raw); !ok || bits != 64 {
@@ -575,11 +571,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if pk, _ := m["primary_key"].(bool); pk {
 			c.rulef("physical-primary-key", "%s: columns[%d] (%s): physical tables must not declare primary_key; base id is the primary key", rel, i, name)
 		}
-		if _, ok := m["default"]; ok {
-			if _, ok2 := m["default_sql"]; ok2 {
-				c.rulef("default-vs-default-sql", "%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, i, name)
-			}
-		}
+		c.checkDefaultExclusive(m, rel, i, name)
 		if t, _ := m["type"].(string); !isColumnType(t, schema.ValueTypes) {
 			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (type_families/custom_types %v or data.tables.<t>.col.<c>)", rel, i, name, t, valueTypeNames(schema.ValueTypes))
 		} else {
@@ -609,7 +601,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			c.rulef("schema.unique-names", "%s: constraints[%d]: duplicate constraint %q", rel, i, name)
 		}
 		if code, _ := m["on_violation"].(string); code != "" {
-			if errs := c.errorCodes(); len(errs) > 0 && !errs[strings.TrimPrefix(code, "platform.errors.")] {
+			if errs := c.errorCodes(); len(errs) > 0 && !c.errorCodeDeclared(code) {
 				c.rulef("constraint-fields", "%s: constraints[%d] (%s): unknown error code %s", rel, i, name, code)
 			}
 		}
@@ -756,21 +748,22 @@ func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, ta
 	for n := range indexNames {
 		add(n)
 	}
-	for i, raw := range asList(doc["do_not"]) {
-		s, ok := raw.(string)
-		if !ok {
+	for _, v := range doNotViolations(asList(doc["do_not"]), tokens) {
+		if v.Empty {
+			c.rulef("do-not-specific", "%s: do_not[%d] must not be empty", rel, v.Index)
 			continue
 		}
-		found := false
-		for tok := range tokens {
-			if strings.Contains(s, tok) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			c.rulef("do-not-specific", "%s: do_not[%d] must mention a specific identifier of table %q (file stem, physical name, column, constraint or index)", rel, i, stem)
-		}
+		c.rulef("do-not-specific", "%s: do_not[%d] must mention a specific identifier of table %q (file stem, physical name, column, constraint or index): %s", rel, v.Index, stem, v.Text)
+	}
+}
+
+// checkDefaultExclusive 校验列的 default 与 default_sql 互斥。
+func (c *Checker) checkDefaultExclusive(m map[string]any, rel string, index int, name string) {
+	if _, ok := m["default"]; !ok {
+		return
+	}
+	if _, ok := m["default_sql"]; ok {
+		c.rulef("default-vs-default-sql", "%s: columns[%d] (%s): default and default_sql are mutually exclusive", rel, index, name)
 	}
 }
 

@@ -1,8 +1,8 @@
 # 测试策略与门槛。改动会影响 CI 结果。
 
-schema_version: 1
 id: platform.quality
 summary: "测试策略与门槛"
+schema_version: 1
 stability: draft
 do_not:
   - "测试门槛只在本文件声明；CI 命令必须与 gates 对齐"

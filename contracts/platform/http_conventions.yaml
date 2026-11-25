@@ -1,8 +1,8 @@
 # HTTP 信封、分页、header、状态码与平台组件约定。只写规则与平台级组件，不写 operation。
 
-schema_version: 1
 id: platform.http_conventions
 summary: "HTTP 信封、状态码与平台组件约定"
+schema_version: 1
 stability: draft
 do_not:
   - "传输层头由 HTTP server/proxy 生成，不写进 request.headers / response.headers"

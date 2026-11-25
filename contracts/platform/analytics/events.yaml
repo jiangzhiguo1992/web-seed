@@ -1,8 +1,8 @@
 # 埋点事件与属性；载荷不保证映射表列。
 
-schema_version: 1
 id: platform.analytics.events
 summary: "埋点事件与属性"
+schema_version: 1
 stability: draft
 do_not:
   - "事件名与属性只在本文件登记；pii: true 的属性不得进入埋点载荷"

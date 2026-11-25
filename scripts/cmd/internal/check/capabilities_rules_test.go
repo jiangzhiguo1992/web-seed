@@ -3257,3 +3257,107 @@ func TestCustomTypeNameCollision(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPHeaderKinds(t *testing.T) {
+	doc := map[string]any{
+		"paths": map[string]any{
+			"/x": map[string]any{
+				"get": map[string]any{
+					"request": map[string]any{
+						"headers": []any{
+							map[string]any{"name": "Authorization", "required": true, "auth": "Bearer"},
+							map[string]any{"name": "X-Both", "required": true, "value": "v", "type": "_types.basics.string"},
+							map[string]any{"name": "X-None", "required": true},
+							map[string]any{"name": "X-Empty", "required": true, "value": ""},
+						},
+					},
+					"response": map[string]any{
+						"200": map[string]any{
+							"headers": []any{
+								map[string]any{"name": "X-Ok", "required": true, "type": "_types.basics.string"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	c := &Checker{}
+	c.checkHTTPHeaderKinds("x.yaml", doc)
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{"exactly one of auth/value/type", "X-None", "X-Both", "X-Empty", "value must not be empty"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %v", want, c.errs)
+		}
+	}
+	if strings.Contains(got, "X-Ok") || strings.Contains(got, "Authorization") {
+		t.Fatalf("valid headers reported: %v", c.errs)
+	}
+}
+
+func TestHTTPHeaderKindsResponseAuth(t *testing.T) {
+	doc := map[string]any{
+		"paths": map[string]any{
+			"/x": map[string]any{
+				"get": map[string]any{
+					"request": map[string]any{
+						"headers": []any{
+							map[string]any{"name": "Authorization", "required": true, "auth": "Bearer", "value": "v"},
+						},
+					},
+					"response": map[string]any{
+						"200": map[string]any{
+							"headers": []any{
+								map[string]any{"name": "X-Auth", "required": true, "auth": "Bearer"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	c := &Checker{}
+	c.checkHTTPHeaderKinds("x.yaml", doc)
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{"response.200.headers[0] (X-Auth)", "request.headers[0] (Authorization)"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in %v", want, c.errs)
+		}
+	}
+}
+
+func TestStorageSupportedNotSupportedDisjoint(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `supported_engines: [postgres]
+not_supported_topologies: [sharding]
+tables:
+  postgres:
+    - { table: data.tables.x }
+`
+	if err := os.WriteFile(filepath.Join(dir, "storage.yaml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	c.checkStorage(map[string]string{"data.tables.x": "x.yaml"}, nil)
+	if strings.Contains(strings.Join(c.errs, "\n"), "cannot be both supported and not_supported") {
+		t.Fatalf("disjoint engines reported: %v", c.errs)
+	}
+}
+
+func TestStorageWithoutNotSupported(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/data/storage.yaml", `supported_engines: [postgres]
+tables:
+  postgres:
+    - { table: data.tables.x }
+`)
+	c := &Checker{root: root}
+	c.checkStorage(map[string]string{"data.tables.x": "x.yaml"}, nil)
+	if strings.Contains(strings.Join(c.errs, "\n"), "cannot be both supported and not_supported") {
+		t.Fatalf("missing not_supported_topologies reported: %v", c.errs)
+	}
+}

@@ -483,7 +483,7 @@ func (c *Checker) checkPageNode(rel string, node any, lifecycleID string, lifecy
 					case strings.HasPrefix(s, "cap.lifecycles."):
 						c.checkLifecycleStatesRef(rel, s, lifecycleIDs)
 					case strings.HasPrefix(s, "data.enums."):
-						if !c.enumIDs[s] {
+						if !c.enumDeclared(s) {
 							c.rulef("page-refs", "%s: unknown enum %s", rel, s)
 						}
 					default:

@@ -71,4 +71,4 @@ fields:
       - { name: config_source, type: _types.basics.string, required: true, description: "配置来源" }
 
 rules:
-  - { id: metric-shape, text: "指标名唯一；labels 不得使用 label_rules.forbidden_labels；kind 只允许 counter/gauge/histogram；exporter.default 必须属于 exporter.options", implemented_by: [ metric-shape ] }
+  - { id: metric-shape, text: "指标名唯一；同一指标的 labels 不得重复；labels 不得使用 label_rules.forbidden_labels；kind 只允许 counter/gauge/histogram；exporter.default 必须属于 exporter.options", implemented_by: [ metric-shape ] }

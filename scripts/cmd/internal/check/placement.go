@@ -71,6 +71,41 @@ func (c *Checker) checkFieldPlacement() {
 	}
 }
 
+// doNotViolation 是 do_not 中一条不合规的项：Empty 表示空白项，否则 Text 表示未提及任何具体标识。
+type doNotViolation struct {
+	Index int
+	Text  string
+	Empty bool
+}
+
+// doNotViolations 找出 do_not 中为空或未提及 tokens 任一标识的项。
+// 非字符串项由 schema.type 报错，这里跳过。
+func doNotViolations(items []any, tokens map[string]bool) []doNotViolation {
+	var out []doNotViolation
+	for i, raw := range items {
+		s, ok := raw.(string)
+		if !ok {
+			continue
+		}
+		trimmed := strings.TrimSpace(s)
+		if trimmed == "" {
+			out = append(out, doNotViolation{Index: i, Empty: true})
+			continue
+		}
+		found := false
+		for tok := range tokens {
+			if tok != "" && strings.Contains(trimmed, tok) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			out = append(out, doNotViolation{Index: i, Text: trimmed})
+		}
+	}
+	return out
+}
+
 // checkDoNotDuplicates 防止把组级指导重新抄回具体契约。
 func (c *Checker) checkDoNotDuplicates() {
 	seen := map[string]string{}

@@ -86,7 +86,7 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 			if code == "" {
 				continue
 			}
-			if !c.errorCodes()[strings.TrimPrefix(code, "platform.errors.")] {
+			if !c.errorCodeDeclared(code) {
 				c.rulef("rule-structure", "%s: rule %s unknown error %s", rel, id, code)
 			}
 		}

@@ -170,3 +170,31 @@ func TestFieldPlacement(t *testing.T) {
 		t.Fatalf("domain rules wrongly reported: %v", c.errs)
 	}
 }
+
+func TestDoNotViolations(t *testing.T) {
+	tokens := map[string]bool{"x": true, "": true}
+	got := doNotViolations([]any{"x is required", "other", "", 3, nil}, tokens)
+	if len(got) != 2 {
+		t.Fatalf("violations = %+v, want 2", got)
+	}
+	if got[0].Empty || got[0].Text != "other" || got[0].Index != 1 {
+		t.Fatalf("unexpected first violation: %+v", got[0])
+	}
+	if !got[1].Empty || got[1].Index != 2 {
+		t.Fatalf("unexpected second violation: %+v", got[1])
+	}
+}
+
+func TestErrorCodeDeclared(t *testing.T) {
+	c := &Checker{root: t.TempDir()}
+	if c.errorCodeDeclared("platform.errors.X") {
+		t.Fatal("empty registry must not declare codes")
+	}
+	c.errCodeSet = map[string]bool{"X": true}
+	if !c.errorCodeDeclared("platform.errors.X") {
+		t.Fatal("declared code not recognized")
+	}
+	if c.errorCodeDeclared("X") {
+		t.Fatal("unprefixed code must not match")
+	}
+}

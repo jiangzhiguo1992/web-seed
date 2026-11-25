@@ -1,8 +1,10 @@
 package contractspec
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -262,5 +264,124 @@ func TestSharedTypesConcreteTypes(t *testing.T) {
 	writeMeta(t, root, "_types.yaml", body)
 	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), `invalid pg type "bogus"`) {
 		t.Fatalf("invalid pg type: %v", err)
+	}
+}
+
+// loadMetaSchemas 加载 contracts/_meta 下除 _types 外的全部类型规范。
+func loadMetaSchemas(t *testing.T) []*Schema {
+	t.Helper()
+	dir := filepath.Join("..", "..", "..", "..", "contracts", "_meta")
+	files, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []*Schema
+	for _, file := range files {
+		base := filepath.Base(file)
+		if base == "_types.yaml" {
+			continue
+		}
+		s, err := LoadSchema(file)
+		if err != nil {
+			t.Fatalf("%s: %v", file, err)
+		}
+		out = append(out, s)
+	}
+	if len(out) == 0 {
+		t.Fatal("no meta schemas loaded")
+	}
+	return out
+}
+
+func walkMetaFields(fields []Field, fn func(Field)) {
+	for _, f := range fields {
+		fn(f)
+		walkMetaFields(f.Fields, fn)
+		walkMetaFields(f.ItemFields, fn)
+	}
+}
+
+// TestMetaPatternsAreAnchored 防止正则退化成前缀匹配：字段与 key 的正则必须整体锚定。
+func TestMetaPatternsAreAnchored(t *testing.T) {
+	if violations := metaPatternViolations(loadMetaSchemas(t)); len(violations) > 0 {
+		t.Fatalf("unanchored patterns: %v", violations)
+	}
+}
+
+func TestMetaPatternsAreAnchoredRejectsPrefix(t *testing.T) {
+	bad := &Schema{Contract: "x", Fields: []Field{
+		{Name: "prefix", Pattern: `^prefix`},
+		{Name: "key", KeyPatterns: []string{`^[a-z]+`}},
+	}}
+	violations := metaPatternViolations([]*Schema{bad})
+	if len(violations) != 2 {
+		t.Fatalf("want 2 violations, got %v", violations)
+	}
+}
+
+func metaPatternViolations(schemas []*Schema) []string {
+	var out []string
+	for _, s := range schemas {
+		walkMetaFields(s.Fields, func(f Field) {
+			if f.Pattern != "" && (!strings.HasPrefix(f.Pattern, "^") || !strings.HasSuffix(f.Pattern, "$")) {
+				out = append(out, fmt.Sprintf("%s.%s: pattern must be anchored: %q", s.Contract, f.Name, f.Pattern))
+			}
+			for _, p := range f.KeyPatterns {
+				if !strings.HasPrefix(p, "^") || !strings.HasSuffix(p, "$") {
+					out = append(out, fmt.Sprintf("%s.%s: key_pattern must be anchored: %q", s.Contract, f.Name, p))
+				}
+			}
+		})
+	}
+	return out
+}
+
+// TestMetaGeneratedFieldsAreMarked 保证描述里声明由 gen-graph 写入的字段同时标记 generated/write。
+func TestMetaGeneratedFieldsAreMarked(t *testing.T) {
+	for _, s := range loadMetaSchemas(t) {
+		walkMetaFields(s.Fields, func(f Field) {
+			if strings.Contains(f.Description, "gen-graph") && (!f.Generated || f.Write != "forbidden") {
+				t.Errorf("%s.%s: gen-graph field must set generated: true and write: forbidden", s.Contract, f.Name)
+			}
+		})
+	}
+}
+
+// TestMetaErrorPatternsCanonical 统一 platform.errors 引用的正则，避免前缀匹配吞掉空错误码。
+func TestMetaErrorPatternsCanonical(t *testing.T) {
+	const canonical = `^platform\.errors\.[A-Z][A-Z0-9_]*$`
+	for _, s := range loadMetaSchemas(t) {
+		walkMetaFields(s.Fields, func(f Field) {
+			if (f.Name == "errors" || f.Name == "on_violation") && f.Pattern != "" && f.Pattern != canonical {
+				t.Errorf("%s.%s: error reference pattern must be %q, got %q", s.Contract, f.Name, canonical, f.Pattern)
+			}
+		})
+	}
+}
+
+func TestFeatureRoutesPathPattern(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "..")
+	s, _, err := LoadSchemaByType(root, "feature.routes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes, ok := FindField(s.Fields, "routes")
+	if !ok {
+		t.Fatal("routes field missing")
+	}
+	path, ok := FindField(routes.ItemFields, "path")
+	if !ok || path.Pattern == "" {
+		t.Fatal("path pattern missing")
+	}
+	re := regexp.MustCompile(path.Pattern)
+	for _, valid := range []string{"/", "/account", "/account/:id", "/account/:id/security"} {
+		if !re.MatchString(valid) {
+			t.Errorf("valid path rejected: %q", valid)
+		}
+	}
+	for _, invalid := range []string{"", "//", "/account/", "/account//x", "/:"} {
+		if re.MatchString(invalid) {
+			t.Errorf("invalid path accepted: %q", invalid)
+		}
 	}
 }

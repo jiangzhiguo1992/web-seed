@@ -1,8 +1,8 @@
 # 日志字段与 PII 规则。
 
-schema_version: 1
 id: platform.observability.log_fields
 summary: "日志字段与 PII 规则"
+schema_version: 1
 stability: draft
 do_not:
   - "日志字段只使用本文件登记的字段；不得临时新增未登记字段"

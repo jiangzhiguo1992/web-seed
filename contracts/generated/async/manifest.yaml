@@ -1,0 +1,126 @@
+schema_version: 1
+generated_from: contracts/capabilities/events
+topics:
+  - id: cap.events.account.activated
+    name: account.activated
+    version: 1
+    idempotent: true
+    emitted_by:
+      - cap.services.account.activate
+  - id: cap.events.account.created
+    name: account.created
+    version: 1
+    idempotent: true
+    emitted_by:
+      - cap.services.account.create
+  - id: cap.events.account.deleted
+    name: account.deleted
+    version: 1
+    idempotent: true
+    emitted_by:
+      - cap.services.account.delete
+  - id: cap.events.account.login_failed
+    name: account.login_failed
+    version: 1
+    idempotent: false
+    emitted_by:
+      - cap.services.auth.login
+      - cap.services.auth.record_login_failure
+  - id: cap.events.account.login_succeeded
+    name: account.login_succeeded
+    version: 1
+    idempotent: false
+    emitted_by:
+      - cap.services.auth.record_login_success
+  - id: cap.events.account.reactivated
+    name: account.reactivated
+    version: 1
+    idempotent: true
+    emitted_by:
+      - cap.services.account.activate
+  - id: cap.events.account.suspended
+    name: account.suspended
+    version: 1
+    idempotent: true
+    emitted_by:
+      - cap.services.account.suspend
+  - id: cap.events.token.issued
+    name: token.issued
+    version: 1
+    idempotent: true
+    emitted_by:
+      - cap.services.token.issue
+    subscribers:
+      - id: cap.events.token.record_issued
+        name: record_issued
+        service: cap.services.token.record_issued
+        retry:
+          max_attempts: 3
+          backoff: exponential
+          dead_letter: true
+        concurrency:
+          key: token_record_issued
+          ttl: 1m
+crons:
+  - id: cap.events.attachment.cleanup_stale_uploads
+    name: cleanup_stale_uploads
+    service: cap.services.attachment.cleanup_stale_uploads
+    schedule: '*/30 * * * *'
+    overlap: forbid
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      dead_letter: true
+    concurrency:
+      key: attachment_cleanup_stale
+      ttl: 30m
+  - id: cap.events.token.expire_tokens
+    name: expire_tokens
+    service: cap.services.token.expire
+    schedule: 0 * * * *
+    overlap: forbid
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      dead_letter: true
+    concurrency:
+      key: token_expire
+      ttl: 1h
+  - id: cap.events.token.purge_expired
+    name: purge_expired
+    service: cap.services.token.purge_expired
+    schedule: 30 3 * * *
+    overlap: forbid
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      dead_letter: true
+    concurrency:
+      key: token_purge
+      ttl: 1h
+  - id: cap.events.verification.cleanup
+    name: cleanup
+    service: cap.services.verification.cleanup
+    schedule: '*/15 * * * *'
+    overlap: forbid
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      dead_letter: true
+    concurrency:
+      key: verification_cleanup
+      ttl: 15m
+dispatches:
+  - id: cap.events.account.notify_deleted
+    name: notify_deleted
+    service: cap.services.account.notify_deleted
+    emitted_by:
+      - cap.services.account.delete
+    timeout: 1h
+    retry:
+      max_attempts: 3
+      backoff: exponential
+      dead_letter: true
+    concurrency:
+      key: account_notify_deleted
+      ttl: 5m

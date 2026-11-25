@@ -2,6 +2,8 @@
 package check
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 )
 
@@ -60,6 +62,7 @@ func (c *Checker) checkAuthPolicy() {
 		}
 	}
 	c.checkAuthStorage(rel, doc)
+	c.checkAuthSecretEnv(rel, doc)
 
 	audiences := map[string]bool{}
 	if conventions, err := loadYAML(filepath.Join(c.root, "contracts/platform/http_conventions.yaml")); err == nil {
@@ -69,12 +72,24 @@ func (c *Checker) checkAuthPolicy() {
 			}
 		}
 	}
+	appAudiences := map[string]bool{}
+	for _, app := range c.loadAPIApps() {
+		if app.Audience != "" {
+			appAudiences[app.Audience] = true
+		}
+	}
 	for _, name := range []string{"access", "refresh"} {
 		part, _ := asMap(token[name])
 		for _, raw := range asList(part["audience"]) {
 			audience, _ := raw.(string)
-			if audience != "" && len(audiences) > 0 && !audiences[audience] {
+			if audience == "" {
+				continue
+			}
+			if len(audiences) > 0 && !audiences[audience] {
 				c.rulef("auth-policy-audience", "%s: token.%s.audience %s is not in platform.http_conventions.audiences", rel, name, audience)
+			}
+			if len(appAudiences) > 0 && !appAudiences[audience] {
+				c.rulef("auth-policy-audience", "%s: token.%s.audience %s is not a project api app audience", rel, name, audience)
 			}
 		}
 	}
@@ -151,6 +166,40 @@ func (c *Checker) checkAuthStorage(rel string, doc map[string]any) {
 	table, col, ok := splitColumnRef(ref)
 	if !ok || c.isBaseTableRef(table) || !c.hasTable(table) || !c.hasColumn(table, col) {
 		c.rulef("auth-policy-storage", "%s: password.hash_field %s is not a declared table column", rel, ref)
+		return
+	}
+	if meta, ok := c.tableColumns[table][col]; ok && normalizeSensitivity(meta.sensitivity) != sensitivitySecret {
+		c.rulef("auth-policy-storage", "%s: password.hash_field %s must have sensitivity: secret", rel, ref)
+	}
+}
+
+// checkAuthSecretEnv 校验验证码 secret 环境变量已在 platform/config/env.json 登记且标记 secret。
+func (c *Checker) checkAuthSecretEnv(rel string, doc map[string]any) {
+	verification, _ := asMap(doc["verification"])
+	code, _ := asMap(verification["code"])
+	name, _ := code["secret_env"].(string)
+	if name == "" {
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(c.root, "contracts/platform/config/env.json"))
+	if err != nil {
+		return
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Secret bool `json:"secret"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(b, &schema); err != nil {
+		return
+	}
+	prop, ok := schema.Properties[name]
+	if !ok {
+		c.rulef("auth-policy-storage", "%s: verification.code.secret_env %s is not declared in platform/config/env.json", rel, name)
+		return
+	}
+	if !prop.Secret {
+		c.rulef("auth-policy-storage", "%s: verification.code.secret_env %s must set secret: true", rel, name)
 	}
 }
 

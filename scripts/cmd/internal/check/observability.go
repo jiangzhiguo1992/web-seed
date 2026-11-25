@@ -120,8 +120,16 @@ func (c *Checker) checkMetrics() {
 		if kind, _ := item["kind"].(string); kind != "" && kind != "counter" && kind != "gauge" && kind != "histogram" {
 			c.rulef("metric-shape", "%s: unknown kind %s", where, kind)
 		}
+		labels := map[string]bool{}
 		for _, rawLabel := range asList(item["labels"]) {
 			label, _ := rawLabel.(string)
+			if label == "" {
+				continue
+			}
+			if labels[label] {
+				c.rulef("metric-shape", "%s: duplicate label %s", where, label)
+			}
+			labels[label] = true
 			if forbidden[label] {
 				c.rulef("metric-shape", "%s: forbidden label %s", where, label)
 			}

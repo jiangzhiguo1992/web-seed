@@ -1,8 +1,8 @@
 # 指标名、标签与导出配置。
 
-schema_version: 1
 id: platform.observability.metrics
 summary: "指标名与标签"
+schema_version: 1
 stability: draft
 do_not:
   - "指标名与标签只使用本文件登记的项；不得临时新增未登记指标"

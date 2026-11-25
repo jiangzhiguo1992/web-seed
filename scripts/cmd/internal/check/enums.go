@@ -132,23 +132,12 @@ func (c *Checker) checkEnumDoNot(doc map[string]any, rel, setID string, enumName
 	for name := range tsTypes {
 		tokens[name] = true
 	}
-	for i, raw := range asList(doc["do_not"]) {
-		s, _ := raw.(string)
-		trimmed := strings.TrimSpace(s)
-		if trimmed == "" {
-			c.rulef("enum-do-not-specific", "%s: do_not[%d] must not be empty", rel, i)
+	for _, v := range doNotViolations(asList(doc["do_not"]), tokens) {
+		if v.Empty {
+			c.rulef("enum-do-not-specific", "%s: do_not[%d] must not be empty", rel, v.Index)
 			continue
 		}
-		specific := false
-		for tok := range tokens {
-			if strings.Contains(trimmed, tok) {
-				specific = true
-				break
-			}
-		}
-		if !specific {
-			c.rulef("enum-do-not-specific", "%s: do_not[%d] must mention %s, an enum name, or go_type/ts_type: %s", rel, i, setID, trimmed)
-		}
+		c.rulef("enum-do-not-specific", "%s: do_not[%d] must mention %s, an enum name, or go_type/ts_type: %s", rel, v.Index, setID, v.Text)
 	}
 }
 
@@ -550,6 +539,14 @@ func isGeneratedDriftError(e string) bool {
 	return false
 }
 
+// enumDeclared 报告 data.enums.* 是否已登记；注册表未加载时返回 true，避免部分测试误报。
+func (c *Checker) enumDeclared(id string) bool {
+	if c.enumIDs == nil {
+		return true
+	}
+	return c.enumIDs[id]
+}
+
 // checkEnumUsedBy 要求 used_by 与 entity 字段和 capability 引用的并集完全一致。
 func (c *Checker) checkEnumUsedBy(rel string, i int, id string, m map[string]any, usage *enumUsage) {
 	raw, ok := m["used_by"]
@@ -566,7 +563,9 @@ func (c *Checker) checkEnumUsedBy(rel string, i int, id string, m map[string]any
 		}
 	}
 	declared := stringSet(asList(raw))
-	if !sameSet(declared, expected) {
+	if len(declared) == 0 {
+		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by must not be empty", rel, i, id)
+	} else if !sameSet(declared, expected) {
 		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by must be %v, got %v", rel, i, id, sortedKeys(expected), sortedKeys(declared))
 	}
 }

@@ -596,6 +596,7 @@ func TestStorageRegistryAndEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := `supported_engines: [postgres, mysql]
+not_supported_topologies: [postgres, sharding]
 tables:
   postgres:
     - { table: data.tables.x }
@@ -626,6 +627,7 @@ tables:
 		"tables.postgres[2]: duplicates data.tables.z",
 		"table data.tables.w is registered under both mysql and postgres",
 		"tables.mongodb is not a supported engine",
+		"postgres cannot be both supported and not_supported",
 		"[storage-registry]",
 		"[storage-engine]",
 		"[storage-entry-description]",
@@ -1938,10 +1940,18 @@ func TestEnumUsedByShape(t *testing.T) {
 	if !ok {
 		t.Fatal("used_by field missing in meta")
 	}
+	if !usedBy.Generated || usedBy.Write != "forbidden" {
+		t.Fatalf("used_by must be generated and write-forbidden")
+	}
 	c := &Checker{}
+	c.checkEnumUsedBy("x.yaml", 0, "data.enums.x", map[string]any{"used_by": []any{}}, &enumUsage{})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[enum-used-by]") || !strings.Contains(strings.Join(c.errs, "\n"), "must not be empty") {
+		t.Fatalf("empty used_by must fail enum-used-by: %v", c.errs)
+	}
+	c.errs = nil
 	c.validateValue([]any{}, usedBy, "enums[].used_by")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.range]") {
-		t.Fatalf("empty used_by must fail min_items: %v", c.errs)
+	if len(c.errs) != 0 {
+		t.Fatalf("generated used_by must relax min_items: %v", c.errs)
 	}
 	c.errs = nil
 	c.validateValue([]any{"bad.prefix"}, usedBy, "enums[].used_by")

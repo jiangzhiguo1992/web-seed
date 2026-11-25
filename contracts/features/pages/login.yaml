@@ -91,6 +91,9 @@ fields:
     optional: true
     label: "账号 ID"
 
+analytics:
+  page_view: page.login_viewed
+
 security:
   rate_limit_hint: "连续失败 5 次锁定 15 分钟（见 platform.security.auth_policy）"
   error_copy_uniform: "账号标识与密码错误统一提示，避免枚举账号"

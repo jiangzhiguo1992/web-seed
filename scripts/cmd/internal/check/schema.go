@@ -367,7 +367,7 @@ func (c *Checker) validateRefNode(m map[string]any, path string) {
 	}
 	switch {
 	case strings.HasPrefix(ref, "data.enums."):
-		if !c.enumIDs[ref] {
+		if !c.enumDeclared(ref) {
 			c.rulef("service-ref", "%s.type: unknown enum %s", path, ref)
 		}
 	case strings.HasPrefix(ref, "data.entities."):

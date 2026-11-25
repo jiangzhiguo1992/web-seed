@@ -56,7 +56,7 @@ fields:
           - { name: format, type: _types.basics.string, required: true, const: jwt, description: "固定 JWT" }
           - { name: algorithm, type: _types.basics.string, required: true, enum: [ HS256, RS256, ES256 ], description: "签名算法" }
           - { name: ttl, type: _types.basics.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
-          - { name: claims_required, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 6, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims；固定为 iss/sub/aud/exp/iat/jti" }
+          - { name: claims_required, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 6, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims；集合见 auth-policy-jwt" }
           - { name: audience, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, description: "允许的 audience" }
           - { name: pii_in_token, type: _types.basics.boolean, required: true, description: "是否允许 PII 进入 token" }
       - name: refresh
@@ -67,7 +67,7 @@ fields:
           - { name: format, type: _types.basics.string, required: true, const: jwt, description: "固定 JWT" }
           - { name: algorithm, type: _types.basics.string, required: true, enum: [ HS256, RS256, ES256 ], description: "签名算法" }
           - { name: ttl, type: _types.basics.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
-          - { name: claims_required, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 6, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims；固定为 iss/sub/aud/exp/iat/jti" }
+          - { name: claims_required, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 6, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims；集合见 auth-policy-jwt" }
           - { name: audience, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, description: "允许的 audience" }
           - { name: pii_in_token, type: _types.basics.boolean, required: true, description: "是否允许 PII 进入 token" }
           - { name: rotation, type: _types.basics.boolean, required: true, description: "每次刷新是否签发新 refresh JWT" }
@@ -141,7 +141,7 @@ fields:
 
 rules:
   - { id: auth-policy-jwt, text: "token.access/refresh 必须是 jwt，issuer 非空，claims_required 必须精确包含 iss/sub/aud/exp/iat/jti，pii_in_token 必须为 false，revocation.strategy=refresh_token 时 persistence/table 必须存在且一致", implemented_by: [ auth-policy-jwt ] }
-  - { id: auth-policy-audience, text: "token.access.audience 必须来自 platform.http_conventions.audiences", implemented_by: [ auth-policy-audience ] }
-  - { id: auth-policy-storage, text: "token.persistence、token.refresh.table、verification.table 与 password.hash_field 指向的表/列必须存在", implemented_by: [ auth-policy-storage ] }
+  - { id: auth-policy-audience, text: "token.access/refresh.audience 必须来自 platform.http_conventions.audiences 与 project.yaml api app audience", implemented_by: [ auth-policy-audience ] }
+  - { id: auth-policy-storage, text: "token.persistence、token.refresh.table、verification.table 与 password.hash_field 指向的表/列必须存在；password.hash_field 必须 sensitivity: secret；verification.code.secret_env 必须在 platform/config/env.json 登记且 secret: true", implemented_by: [ auth-policy-storage ] }
   - { id: auth-policy-mfa, text: "mfa.required_for_roles 中的角色码必须存在于 platform.security.roles；角色契约不得再声明 mfa_required", implemented_by: [ auth-policy-mfa ] }
   - { id: auth-policy-password, text: "页面 password 字段的 minLength 不得低于 auth_policy.password.min_length", implemented_by: [ auth-policy-password ] }

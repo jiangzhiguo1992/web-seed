@@ -1,8 +1,8 @@
 # 权限点唯一来源。
 
-schema_version: 1
 id: platform.security.permissions
 summary: "权限点"
+schema_version: 1
 stability: draft
 do_not:
   - "权限点只增不改；删除必须走弃用流程"
