@@ -70,6 +70,11 @@ basics:
       kind: { type: _types.basics.string, required: false, enum: [ json, jsonb ], default: jsonb, description: "JSON 类型" }
     types:
       json: { go: json.RawMessage, pg: [ json, jsonb ], ts: unknown }
+  xml:
+    description: "XML 文档；Go 用 map[string]any 表示，序列化由 repository 用 encoding/xml 适配"
+    params: { }
+    types:
+      xml: { go: "map[string]any", pg: [ xml ], ts: unknown }
   bytes:
     description: "二进制"
     params:
@@ -85,11 +90,6 @@ basics:
       length: { type: _types.basics.integer, required: false, min: 1, description: "位数；kind=bit 时应声明" }
     types:
       bit: { go: big.Int, pg: [ bit, varbit ], ts: number }
-  xml:
-    description: "XML 文档；Go 用 map[string]any 表示，序列化由 repository 用 encoding/xml 适配"
-    params: { }
-    types:
-      xml: { go: "map[string]any", pg: [ xml ], ts: unknown }
   geometry:
     description: "PostgreSQL 内置几何类型；Go 用 go-geom 的 geojson.Geometry，数据库文本格式由 repository 适配"
     params:
