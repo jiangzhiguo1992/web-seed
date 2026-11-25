@@ -51,7 +51,6 @@ fields:
     type: _types.structures.set<_types.basics.string>
     required: false
     unique: true
-    min_items: 1
     pattern: '^[a-z][a-z0-9_-]*$'
     description: "明确不支持的拓扑"
 

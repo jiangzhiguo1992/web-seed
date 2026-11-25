@@ -125,7 +125,7 @@ fields:
 
   - name: constraints
     type: _types.structures.list<_types.structures.object>
-    required: false
+    required: true
     description: "DDL CHECK 约束；唯一性用 indexes[].unique"
     item_fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^ck_[a-z][a-z0-9_]*$', description: "约束名" }
@@ -135,7 +135,7 @@ fields:
 
   - name: indexes
     type: _types.structures.list<_types.structures.object>
-    required: false
+    required: true
     description: "索引"
     item_fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^(idx|uq)_[a-z][a-z0-9_]*$', description: "索引名" }

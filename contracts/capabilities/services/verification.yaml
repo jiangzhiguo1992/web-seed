@@ -45,6 +45,7 @@ schemas:
       - { name: verified, schema: { type: _types.basics.boolean }, required: true, description: "是否验证通过" }
       - { name: verification_id, schema: { type: _types.basics.id }, required: true, description: "验证记录 ID" }
       - { name: consumed_at, schema: { type: _types.basics.timestamp.long }, nullable: true, description: "验证码消费时间；未消费为 null" }
+
 services:
   - name: send
     summary: "发送短信/邮件验证码"

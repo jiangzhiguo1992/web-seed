@@ -8,6 +8,7 @@ stability: draft
 do_not:
   - "data.enums.system 只放 system 模块跨端枚举；字典选项、上传用途等可扩展值放 dictionary/attachment 表"
   - "attachment_status / attachment_visibility / dictionary_status / unit_status 的 code 删除后不得复用"
+
 enums:
   - name: attachment_status
     description: "附件状态"
