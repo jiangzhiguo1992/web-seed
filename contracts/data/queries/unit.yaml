@@ -1,0 +1,65 @@
+# 计量单位查询集。
+
+id: data.queries.unit
+summary: "计量单位查询集"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "本文件只包含 unit 的读查询；写查询必须同时补 service step，不能只加 query"
+  - "GetUnitByCode 按全局唯一 code 读取；不要用 name 做查询键"
+  - "ListUnits 只按 dimension 过滤；跨量纲换算不在查询层完成"
+  - "ListUnitChildren 只返回直接子单位；不要递归展开整棵树"
+
+queries:
+  - name: GetUnitByCode
+    description: "按编码读取单个计量单位"
+    tables:
+      - { table: data.tables.unit }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: code, type: _types.basics.string, column: data.tables.unit.col.code }
+    returns:
+      - { name: unit, kind: entity, entity: data.entities.unit, nullable: true }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.unit.uq_unit_code, columns: [ code ] }
+    used_by:
+      - cap.services.unit.get
+
+  - name: ListUnits
+    description: "按量纲分页列出计量单位"
+    tables:
+      - { table: data.tables.unit }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: dimension, type: _types.basics.string, column: data.tables.unit.col.dimension, nullable: true }
+      - { name: offset, type: _types.basics.integer.32, nullable: true, default: 0 }
+      - { name: limit, type: _types.basics.integer.32, nullable: true, default: 20 }
+    returns:
+      - { name: units, list: true, kind: entity, entity: data.entities.unit }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.unit.idx_unit_dimension_sort, columns: [ deleted_at, dimension, sort, id ] }
+    used_by:
+      - cap.services.unit.list
+
+  - name: ListUnitChildren
+    description: "按父单位列出直接子单位"
+    tables:
+      - { table: data.tables.unit }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: parent_id, type: _types.basics.id, column: data.tables.unit.col.parent_id }
+      - { name: offset, type: _types.basics.integer.32, nullable: true, default: 0 }
+      - { name: limit, type: _types.basics.integer.32, nullable: true, default: 20 }
+    returns:
+      - { name: units, list: true, kind: entity, entity: data.entities.unit }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.unit.idx_unit_parent, columns: [ parent_id ] }
+    used_by:
+      - cap.services.unit.list_children

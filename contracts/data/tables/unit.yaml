@@ -1,0 +1,113 @@
+# 计量单位表。
+
+id: data.tables.unit
+summary: "计量单位表"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "unit.code 全局唯一且创建后不得修改；name 允许重复（如 分 cent/minute）"
+  - "同一 dimension 内才能换算；unit.parent_id 不得跨量纲挂父级"
+  - "每个单位最多一个父级；unit.parent_id 不得自引用或形成环；根单位 parent_id/rate 均为 NULL"
+  - "unit.rate 只表示 1 个父单位 = rate 个本单位；不得存跨级比例"
+  - "非根单位的有效值范围为 [0, rate)；unit 不另存 min/max，rate 的正负与范围由种子/管理写入校验"
+  - "unit 是只读参考数据；写入通过种子/管理迁移维护，新增写查询必须同时补 service step"
+
+table:
+  name: unit
+  extends:
+    - data.tables.base
+  entities:
+    - data.entities.unit
+  references:
+    - data.tables.unit.col.id
+  referenced_by:
+    - data.tables.unit.col.parent_id
+  queries:
+    - data.queries.unit.get_unit_by_code
+    - data.queries.unit.list_unit_children
+    - data.queries.unit.list_units
+
+columns:
+  - name: parent_id
+    type: _types.basics.id
+    nullable: true
+    references: { column: data.tables.unit.col.id, on_delete: restrict }
+    comment: "父单位；顶级为 NULL"
+
+  - name: code
+    type: _types.basics.string
+    nullable: false
+    min_len: 1
+    max_len: 32
+    pattern: '^[a-z][a-z0-9_]*$'
+    comment: "全局唯一编码；创建后不可变"
+
+  - name: name
+    type: _types.basics.string
+    nullable: false
+    min_len: 1
+    max_len: 32
+    comment: "展示名；允许重复"
+
+  - name: dimension
+    type: _types.basics.string
+    nullable: false
+    min_len: 1
+    max_len: 32
+    pattern: '^[a-z][a-z0-9_]*$'
+    comment: "量纲；只有同量纲可换算"
+
+  - name: rate
+    type: _types.basics.integer.64
+    nullable: true
+    min: 2
+    comment: "1 个父单位 = rate 个本单位；根单位为 NULL"
+
+  - name: symbol
+    type: _types.basics.string
+    nullable: true
+    max_len: 8
+    comment: "展示符号；如 元、kg"
+
+  - name: step
+    type: _types.basics.integer.32
+    nullable: false
+    min: 1
+    default: 1
+    comment: "默认下单步长；商品级可覆盖"
+
+  - name: sort
+    type: _types.basics.integer.32
+    nullable: false
+    min: 0
+    default: 0
+    comment: "同量纲展示顺序；从 0 开始"
+
+  - name: remark
+    type: _types.basics.string
+    nullable: true
+    max_len: 200
+    comment: "备注；仅用于说明"
+
+constraints: []
+
+indexes:
+  - name: uq_unit_code
+    columns: [ code ]
+    unique: true
+    comment: "单位编码全局唯一；停用或软删后不释放"
+    used_by:
+      - data.queries.unit.get_unit_by_code
+
+  - name: idx_unit_dimension_sort
+    columns: [ deleted_at, dimension, sort, id ]
+    comment: "按量纲列出单位并保持展示顺序"
+    used_by:
+      - data.queries.unit.list_units
+
+  - name: idx_unit_parent
+    columns: [ parent_id ]
+    comment: "按父单位列出直接子单位"
+    used_by:
+      - data.queries.unit.list_unit_children

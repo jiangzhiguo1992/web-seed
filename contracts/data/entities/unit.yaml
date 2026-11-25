@@ -1,0 +1,88 @@
+# 计量单位实体。
+
+id: data.entities.unit
+summary: "计量单位实体"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "data.entities.unit 是只读展示模型；单位换算不在实体层递归展开"
+  - "Unit.Parent / Unit.Children 只表达一层父子关系；不要递归展开整棵单位树"
+  - "Unit.ParentID 为 null 时不要读取 Parent；顶级单位没有父节点"
+  - "Unit.Code 是全局稳定标识，不用 ID 或 name 替代"
+
+model:
+  name: Unit
+  extends:
+    - data.entities.base
+  tables:
+    - data.tables.unit
+  includes:
+    - { field: Children, entity: data.entities.unit, cardinality: one_to_many }
+    - { field: Parent, entity: data.entities.unit, cardinality: many_to_one }
+  included_by:
+    - { entity: data.entities.unit, field: Children, cardinality: many_to_one }
+    - { entity: data.entities.unit, field: Parent, cardinality: one_to_many }
+  queries:
+    - data.queries.unit.get_unit_by_code
+    - data.queries.unit.list_unit_children
+    - data.queries.unit.list_units
+
+fields:
+  - name: Status
+    type: data.enums.unit_status
+    description: "单位状态"
+    source: { column: data.tables.unit.col.status }
+
+  - name: ParentID
+    description: "父单位 ID；顶级为 null"
+    source: { column: data.tables.unit.col.parent_id }
+
+  - name: Code
+    description: "全局唯一编码；创建后不可变"
+    source: { column: data.tables.unit.col.code }
+
+  - name: Name
+    description: "展示名；允许重复"
+    source: { column: data.tables.unit.col.name }
+
+  - name: Dimension
+    description: "量纲；只有同量纲可换算"
+    source: { column: data.tables.unit.col.dimension }
+
+  - name: Rate
+    type: "*_types.basics.integer.64"
+    description: "1 个父单位 = rate 个本单位；根单位为 null"
+    source: { column: data.tables.unit.col.rate }
+
+  - name: Symbol
+    description: "展示符号；如 元、kg"
+    source: { column: data.tables.unit.col.symbol }
+
+  - name: Step
+    description: "默认下单步长"
+    source: { column: data.tables.unit.col.step }
+
+  - name: Sort
+    description: "同量纲展示顺序"
+    source: { column: data.tables.unit.col.sort }
+
+  - name: Remark
+    description: "备注；仅用于说明"
+    source: { column: data.tables.unit.col.remark }
+
+  - name: Parent
+    type: data.entities.unit
+    description: "父单位；顶级为 null"
+    source:
+      join:
+        from: data.tables.unit.col.parent_id
+        to: data.tables.unit.col.id
+
+  - name: Children
+    type: _types.structures.list<data.entities.unit>
+    description: "直接子单位列表"
+    source:
+      join:
+        from: data.tables.unit.col.id
+        to: data.tables.unit.col.parent_id
