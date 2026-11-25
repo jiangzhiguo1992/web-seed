@@ -35,8 +35,8 @@ func TestGeneratedFieldMarkers(t *testing.T) {
 
 func TestStringLengthBounds(t *testing.T) {
 	c := &Checker{}
-	c.validateValue("ab", Field{Type: "_types.string", MinLen: 3}, "x")
-	c.validateValue("abcd", Field{Type: "_types.string", MaxLen: 3}, "x")
+	c.validateValue("ab", Field{Type: "_types.basics.string", MinLen: 3}, "x")
+	c.validateValue("abcd", Field{Type: "_types.basics.string", MaxLen: 3}, "x")
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, "[schema.len]") {
 		t.Fatalf("string bounds not enforced: %v", c.errs)
@@ -44,19 +44,19 @@ func TestStringLengthBounds(t *testing.T) {
 }
 
 func TestLengthKeysRequireLengthType(t *testing.T) {
-	if err := validateFieldTypes([]Field{{Name: "n", Type: "_types.integer", MinLen: 1}}, ValueTypes{}, false); err == nil {
+	if err := validateFieldTypes([]Field{{Name: "n", Type: "_types.basics.integer", MinLen: 1}}, ValueTypes{}, false); err == nil {
 		t.Fatal("min_len on integer must be rejected")
 	}
-	if err := validateFieldTypes([]Field{{Name: "n", Type: "_types.string", MaxLen: "x"}}, ValueTypes{}, false); err == nil {
+	if err := validateFieldTypes([]Field{{Name: "n", Type: "_types.basics.string", MaxLen: "x"}}, ValueTypes{}, false); err == nil {
 		t.Fatal("non-numeric max_len must be rejected")
 	}
-	if err := validateFieldTypes([]Field{{Name: "s", Type: "_types.string", Len: 3}}, ValueTypes{}, false); err == nil {
+	if err := validateFieldTypes([]Field{{Name: "s", Type: "_types.basics.string", Len: 3}}, ValueTypes{}, false); err == nil {
 		t.Fatal("len on string must be rejected")
 	}
-	if err := validateFieldTypes([]Field{{Name: "a", Type: "_types.array<_types.string>", Len: 3, MinItems: 1}}, ValueTypes{}, false); err == nil {
+	if err := validateFieldTypes([]Field{{Name: "a", Type: "_types.structures.array<_types.basics.string>", Len: 3, MinItems: 1}}, ValueTypes{}, false); err == nil {
 		t.Fatal("min_items on array must be rejected")
 	}
-	if err := validateFieldTypes([]Field{{Name: "n", Type: "_types.integer", Pattern: "^x$"}}, ValueTypes{}, false); err == nil {
+	if err := validateFieldTypes([]Field{{Name: "n", Type: "_types.basics.integer", Pattern: "^x$"}}, ValueTypes{}, false); err == nil {
 		t.Fatal("pattern on integer must be rejected")
 	}
 }
@@ -76,7 +76,7 @@ func TestTableColumnNullableRequired(t *testing.T) {
 	}
 	c := &Checker{}
 	c.validateValue([]any{map[string]any{
-		"name": "x", "type": "_types.integer",
+		"name": "x", "type": "_types.basics.integer",
 	}}, columns, "columns")
 	if !strings.Contains(entityErrs(c), `missing required field "nullable"`) {
 		t.Fatalf("missing column nullable not reported: %v", c.errs)
@@ -107,12 +107,40 @@ func TestTypesRejectsDeadBounds(t *testing.T) {
 }
 
 func TestDefaultMustBeEnumValue(t *testing.T) {
-	f := Field{Name: "x", Type: "_types.string", Enum: []any{"stable", "draft"}, Default: "draf"}
+	f := Field{Name: "x", Type: "_types.basics.string", Enum: []any{"stable", "draft"}, Default: "draf"}
 	if err := validateFieldTypes([]Field{f}, ValueTypes{}, false); err == nil || !strings.Contains(err.Error(), "not in enum") {
 		t.Fatalf("default outside enum must be rejected: %v", err)
 	}
 	f.Default = "draft"
 	if err := validateFieldTypes([]Field{f}, ValueTypes{}, false); err != nil {
 		t.Fatalf("default inside enum rejected: %v", err)
+	}
+}
+
+func TestTypeRefNamespaceRequired(t *testing.T) {
+	vt := testValueTypes()
+	cases := []struct {
+		typ string
+		ok  bool
+	}{
+		{"_types.basics.string", true},
+		{"_types.structures.object", true},
+		{"_types.structures.list<_types.basics.string>", true},
+		{"_types.structures.map<_types.basics.integer, _types.structures.object>", true},
+		{"_types.string", false},
+		{"_types.object", false},
+		{"_types.schemas.object", false},
+		{"_types.basics.list", false},
+		{"_types.structures.string", false},
+		{"_types.schemas.string", false},
+	}
+	for _, tc := range cases {
+		_, err := parseTypeExpr(tc.typ, vt)
+		if tc.ok && err != nil {
+			t.Fatalf("%s: unexpected error: %v", tc.typ, err)
+		}
+		if !tc.ok && err == nil {
+			t.Fatalf("%s: expected namespace error", tc.typ)
+		}
 	}
 }

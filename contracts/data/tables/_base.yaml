@@ -12,31 +12,31 @@ do_not:
 
 columns:
   - name: id
-    type: _types.integer
+    type: _types.basics.integer
     nullable: false
     primary_key: true
     bits: 64
     comment: "主键 integer（bits: 64）；生成方式由实现决定"
 
   - name: status
-    type: _types.integer
+    type: _types.basics.integer
     nullable: false
     default: 0
     comment: "业务状态整数码；枚举映射在 entity 层"
 
   - name: created_at
-    type: _types.timestamp
+    type: _types.basics.timestamp
     nullable: false
     default_sql: now()
     comment: "创建时间；数据库默认 now()"
 
   - name: updated_at
-    type: _types.timestamp
+    type: _types.basics.timestamp
     nullable: false
     default_sql: now()
     comment: "更新时间；应用层写入"
 
   - name: deleted_at
-    type: _types.timestamp
+    type: _types.basics.timestamp
     nullable: true
     comment: "软删时间；应用层写入；为空表示未删除"

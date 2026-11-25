@@ -29,7 +29,7 @@ services:
   - name: create
     params:
       - { name: ctx, type: context.Context }
-      - { name: status, type: _types.string }
+      - { name: status, type: _types.basics.string }
   - name: delete
 `)
 	writeCapFile(t, root, "contracts/features/routes.yaml", `id: feature.routes

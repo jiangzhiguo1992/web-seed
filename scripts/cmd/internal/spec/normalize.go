@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// TypeResolver 把 _types.<name> 解析成 OpenAPI 标量 schema。
+// TypeResolver 把 _types.basics.<name> 解析成 OpenAPI 标量 schema。
 type TypeResolver func(name string) (map[string]any, error)
 
 var statusRe = func(s string) bool {
@@ -883,7 +883,7 @@ func normalizeHTTPSchema(raw any, resolve TypeResolver, componentByID map[string
 		typ, _ := value["type"].(string)
 		if strings.HasPrefix(typ, "_types.") {
 			switch typ {
-			case "_types.object":
+			case "_types.schemas.object":
 				properties := map[string]any{}
 				rawProperties := asMap(value["properties"])
 				for name, rawProperty := range rawProperties {
@@ -905,7 +905,7 @@ func normalizeHTTPSchema(raw any, resolve TypeResolver, componentByID map[string
 					out["description"] = description
 				}
 				return out, nil
-			case "_types.list":
+			case "_types.structures.list":
 				item, err := normalizeHTTPSchema(value["items"], resolve, componentByID, strict)
 				if err != nil {
 					return nil, fmt.Errorf("items: %w", err)

@@ -10,26 +10,26 @@ do_not:
 
 schemas:
   CreateAccountInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: number, schema: { type: _types.account_number }, required: true, description: "账号编号" }
-      - { name: nickname, schema: { type: _types.account_nickname }, required: true, description: "账号昵称" }
-      - { name: user_id, schema: { type: _types.id }, nullable: true, description: "关联用户 ID" }
+      - { name: number, schema: { type: _types.basics.account_number }, required: true, description: "账号编号" }
+      - { name: nickname, schema: { type: _types.basics.account_nickname }, required: true, description: "账号昵称" }
+      - { name: user_id, schema: { type: _types.basics.id }, nullable: true, description: "关联用户 ID" }
   UpdateAccountInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: nickname, schema: { type: _types.account_nickname }, required: true, description: "账号昵称" }
+      - { name: nickname, schema: { type: _types.basics.account_nickname }, required: true, description: "账号昵称" }
   SuspendAccountInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: reason, schema: { type: _types.account_suspend_reason }, required: true, description: "封禁原因" }
+      - { name: reason, schema: { type: _types.basics.account_suspend_reason }, required: true, description: "封禁原因" }
   AccountPage:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: items, schema: { type: _types.array, items: { ref: data.entities.account } }, required: true, description: "分页项列表" }
-      - { name: offset, schema: { type: _types.page_offset }, required: true, description: "当前页偏移" }
-      - { name: limit, schema: { type: _types.page_limit }, required: true, description: "当前页大小" }
-      - { name: has_more, schema: { type: _types.boolean }, required: true, description: "是否还有下一页" }
+      - { name: items, schema: { type: _types.schemas.array, items: { ref: data.entities.account } }, required: true, description: "分页项列表" }
+      - { name: offset, schema: { type: _types.basics.page_offset }, required: true, description: "当前页偏移" }
+      - { name: limit, schema: { type: _types.basics.page_limit }, required: true, description: "当前页大小" }
+      - { name: has_more, schema: { type: _types.basics.boolean }, required: true, description: "是否还有下一页" }
 
 services:
   - name: get
@@ -38,7 +38,7 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: account, type: data.entities.account, value: step.get_account.account }
       - { name: err, type: error, value: "*" }
@@ -74,8 +74,8 @@ services:
     params:
       - { name: ctx, type: context.Context }
       - { name: status, type: data.enums.account_status, nullable: true }
-      - { name: offset, type: _types.page_offset }
-      - { name: limit, type: _types.page_limit }
+      - { name: offset, type: _types.basics.page_offset }
+      - { name: limit, type: _types.basics.page_limit }
     returns:
       - { name: page, type: cap.services.account.schemas.AccountPage, value: step.paginate.page }
       - { name: err, type: error, value: "*" }
@@ -88,7 +88,7 @@ services:
           - { name: offset, value: params.offset, description: "分页偏移" }
           - { name: limit, value: params.limit, description: "分页上限" }
         output:
-          - { name: accounts, type: _types.list<data.entities.account>, description: "query 返回的 accounts" }
+          - { name: accounts, type: _types.structures.list<data.entities.account>, description: "query 返回的 accounts" }
         query: data.queries.account.list_accounts
         goto: paginate
       - id: paginate
@@ -122,7 +122,7 @@ services:
         summary: "生成新账号 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.id, description: "新账号 ID" }
+          - { name: id, type: _types.basics.id, description: "新账号 ID" }
         errors: [ ]
         rules: [ ]
         goto: status_pending
@@ -155,7 +155,7 @@ services:
         input:
           - { name: number, value: params.input.number, description: "待创建账号的编号" }
         output:
-          - { name: exists, type: _types.boolean, description: "query 返回的 exists" }
+          - { name: exists, type: _types.basics.boolean, description: "query 返回的 exists" }
         query: data.queries.account.exists_account_number
         goto: check_unique
       - id: check_unique
@@ -204,7 +204,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
       - { name: input, type: cap.services.account.schemas.UpdateAccountInput }
     returns:
       - { name: account, type: data.entities.account, value: step.update_account.account }
@@ -255,7 +255,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:
@@ -299,7 +299,7 @@ services:
         summary: "取当前时间作为软删时间"
         input: [ ]
         output:
-          - { name: deleted_at, type: _types.timestamp, description: "软删时间" }
+          - { name: deleted_at, type: _types.basics.timestamp, description: "软删时间" }
         errors: [ ]
         rules: [ ]
         goto: status_deleted
@@ -353,7 +353,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: account, type: data.entities.account, value: step.set_account_status.account }
       - { name: err, type: error, value: "*" }
@@ -407,7 +407,7 @@ services:
         summary: "取当前时间作为激活时间"
         input: [ ]
         output:
-          - { name: activated_at, type: _types.timestamp, description: "激活时间" }
+          - { name: activated_at, type: _types.basics.timestamp, description: "激活时间" }
         errors: [ ]
         rules: [ ]
         goto: event_branch
@@ -451,7 +451,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
       - { name: input, type: cap.services.account.schemas.SuspendAccountInput }
     returns:
       - { name: account, type: data.entities.account, value: step.set_account_status.account }
@@ -506,7 +506,7 @@ services:
         summary: "取当前时间作为封禁时间"
         input: [ ]
         output:
-          - { name: suspended_at, type: _types.timestamp, description: "封禁时间" }
+          - { name: suspended_at, type: _types.basics.timestamp, description: "封禁时间" }
         errors: [ ]
         rules: [ ]
         goto: emit_suspended
@@ -530,8 +530,8 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.id }
-      - { name: deleted_at, type: _types.timestamp }
+      - { name: account_id, type: _types.basics.id }
+      - { name: deleted_at, type: _types.basics.timestamp }
     returns:
       - { name: err, type: error, value: "*" }
     steps:

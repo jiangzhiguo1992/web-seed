@@ -1,4 +1,4 @@
-// http_types.go 把 HTTP 契约里的 _types 引用解析成 OpenAPI 标量 schema。
+// http_types.go 把 HTTP 契约里的 _types.basics 引用解析成 OpenAPI 标量 schema。
 package check
 
 import (
@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// httpTypeResolver 供 NormalizeHTTPDocument 解析 _types.<name>。
+// httpTypeResolver 供 NormalizeHTTPDocument 解析 _types.basics.<name>。
 func (c *Checker) httpTypeResolver(name string) (map[string]any, error) {
-	typ := strings.TrimPrefix(name, "_types.")
+	typ := strings.TrimPrefix(name, "_types.basics.")
 	family := typ
 	params := map[string]any{}
 	if custom, ok := c.valueTypes.CustomTypes[typ]; ok {

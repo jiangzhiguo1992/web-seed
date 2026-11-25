@@ -15,10 +15,10 @@ naming:
   id_policy: "埋点事件使用 name 作为唯一标识，不进入 ID 图；图校验只检查事件名集合"
 
 common_properties:
-  - { name: app, type: _types.string, pii: false }
-  - { name: env, type: _types.string, pii: false }
-  - { name: session_id, type: _types.string, pii: false }
-  - { name: page, type: _types.string, pii: false }
+  - { name: app, type: _types.basics.string, pii: false }
+  - { name: env, type: _types.basics.string, pii: false }
+  - { name: session_id, type: _types.basics.string, pii: false }
+  - { name: page, type: _types.basics.string, pii: false }
 
 events:
   # ---------- 页面 ----------
@@ -27,7 +27,7 @@ events:
     trigger: mount
     page: feature.pages.account_list
     properties:
-      - { name: item_count, type: _types.integer, pii: false }
+      - { name: item_count, type: _types.basics.integer, pii: false }
       - { name: filter_status, type: data.enums.account_status, pii: false }
 
   - name: page.login_viewed
@@ -59,30 +59,30 @@ events:
     trigger: api_success
     ref: cap.protocols.http.account.create
     properties:
-      - { name: account_id, type: _types.string, pii: false }
-      - { name: has_payload, type: _types.boolean, pii: false }
-      - { name: duration_ms, type: _types.integer, pii: false }
+      - { name: account_id, type: _types.basics.string, pii: false }
+      - { name: has_payload, type: _types.basics.boolean, pii: false }
+      - { name: duration_ms, type: _types.basics.integer, pii: false }
 
   - name: account.activated
     description: "账号激活成功"
     trigger: api_success
     ref: cap.protocols.http.account.activate
     properties:
-      - { name: account_id, type: _types.string, pii: false }
+      - { name: account_id, type: _types.basics.string, pii: false }
 
   - name: account.suspended
     description: "账号封禁成功"
     trigger: api_success
     ref: cap.protocols.http.account.suspend
     properties:
-      - { name: account_id, type: _types.string, pii: false }
+      - { name: account_id, type: _types.basics.string, pii: false }
 
   - name: account.deleted
     description: "账号删除成功"
     trigger: api_success
     ref: cap.protocols.http.account.delete
     properties:
-      - { name: account_id, type: _types.string, pii: false }
+      - { name: account_id, type: _types.basics.string, pii: false }
 
   # ---------- 认证 ----------
   - name: auth.login_succeeded
@@ -90,14 +90,14 @@ events:
     trigger: api_success
     ref: cap.protocols.http.auth.login
     properties:
-      - { name: account_id, type: _types.string, pii: false }
+      - { name: account_id, type: _types.basics.string, pii: false }
 
   - name: auth.login_failed
     description: "登录失败"
     trigger: api_error
     ref: cap.protocols.http.auth.login
     properties:
-      - { name: error_code, type: _types.string, pii: false }
+      - { name: error_code, type: _types.basics.string, pii: false }
 
   - name: auth.token_refreshed
     description: "刷新令牌成功"
@@ -128,30 +128,30 @@ events:
     trigger: api_success
     ref: cap.protocols.http.auth.bind_password
     properties:
-      - { name: account_id, type: _types.string, pii: false }
+      - { name: account_id, type: _types.basics.string, pii: false }
 
   - name: auth.phone_bound
     description: "手机号绑定变更成功"
     trigger: api_success
     ref: cap.protocols.http.auth.bind_phone
     properties:
-      - { name: account_id, type: _types.string, pii: false }
+      - { name: account_id, type: _types.basics.string, pii: false }
 
   - name: auth.email_bound
     description: "邮箱绑定变更成功"
     trigger: api_success
     ref: cap.protocols.http.auth.bind_email
     properties:
-      - { name: account_id, type: _types.string, pii: false }
+      - { name: account_id, type: _types.basics.string, pii: false }
 
   # ---------- 失败 ----------
   - name: request.failed
     description: "请求失败"
     trigger: api_error
     properties:
-      - { name: capability, type: _types.string, pii: false }
-      - { name: error_code, type: _types.string, pii: false }
-      - { name: status, type: _types.integer, pii: false }
+      - { name: capability, type: _types.basics.string, pii: false }
+      - { name: error_code, type: _types.basics.string, pii: false }
+      - { name: status, type: _types.basics.integer, pii: false }
 
 forbidden_properties:
   - title

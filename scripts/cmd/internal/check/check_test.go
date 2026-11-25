@@ -30,19 +30,19 @@ func TestIsColumnType(t *testing.T) {
 		in   string
 		want bool
 	}{
-		{"_types.string", true},
+		{"_types.basics.string", true},
 		{"string", false},
 		{"uuid", false},
 		{"varchar", false},
-		{"_types.timestamp", true},
-		{"_types.datetime", true},
-		{"_types.decimal", true},
-		{"_types.float", true},
+		{"_types.basics.timestamp", true},
+		{"_types.basics.datetime", true},
+		{"_types.basics.decimal", true},
+		{"_types.basics.float", true},
 		{"date", false},
 		{"time", false},
 		{"text", false},
 		{"timestamptz", false},
-		{"_types.integer", true},
+		{"_types.basics.integer", true},
 		{"int", false},
 		{"int32", false},
 		{"double", false},
@@ -71,10 +71,10 @@ func TestValidateFieldTypes(t *testing.T) {
 	if err := validateFieldTypes([]Field{{Name: "x", Type: "uuid"}}, testValueTypes(), false); err == nil {
 		t.Fatal("expected invalid schema type to fail")
 	}
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "float"}}, testValueTypes(), false); err != nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "_types.basics.float"}}, testValueTypes(), false); err != nil {
 		t.Fatalf("float schema type reported: %v", err)
 	}
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "decimal"}}, testValueTypes(), false); err != nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "_types.basics.decimal"}}, testValueTypes(), false); err != nil {
 		t.Fatalf("decimal schema type reported: %v", err)
 	}
 }
@@ -137,8 +137,8 @@ func TestCheckSharedTypes(t *testing.T) {
 
 func TestNumericFamilyParamTypes(t *testing.T) {
 	c := &Checker{}
-	c.validateValue(1.5, Field{Type: "float"}, "float")
-	c.validateValue(1.5, Field{Type: "decimal"}, "decimal")
+	c.validateValue(1.5, Field{Type: "_types.basics.float"}, "float")
+	c.validateValue(1.5, Field{Type: "_types.basics.decimal"}, "decimal")
 	if len(c.errs) != 0 {
 		t.Fatalf("numeric family param types reported: %v", c.errs)
 	}
@@ -179,15 +179,15 @@ func TestStabilityTransition(t *testing.T) {
 func TestCommonColumnFieldsExcludesFamilyParams(t *testing.T) {
 	schema := &Schema{
 		Fields: []Field{{
-			Name: "columns", Type: "list<object>", ItemFields: []Field{
-				{Name: "name", Type: "string"},
-				{Name: "type", Type: "string"},
-				{Name: "min_len", Type: "integer"},
-				{Name: "comment", Type: "string"},
+			Name: "columns", Type: "_types.structures.list<_types.structures.object>", ItemFields: []Field{
+				{Name: "name", Type: "_types.basics.string"},
+				{Name: "type", Type: "_types.basics.string"},
+				{Name: "min_len", Type: "_types.basics.integer"},
+				{Name: "comment", Type: "_types.basics.string"},
 			},
 		}},
 		ValueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{
-			"string": {Params: map[string]Field{"min_len": {Type: "integer"}}},
+			"string": {Params: map[string]Field{"min_len": {Type: "_types.basics.integer"}}},
 		}},
 	}
 	common := commonColumnFields(schema)
@@ -202,22 +202,22 @@ func TestCommonColumnFieldsExcludesFamilyParams(t *testing.T) {
 func TestFamilyParams(t *testing.T) {
 	schema := &Schema{
 		Fields: []Field{{
-			Name: "columns", Type: "list<object>", ItemFields: []Field{
-				{Name: "name", Type: "string"},
-				{Name: "type", Type: "string"},
-				{Name: "nullable", Type: "boolean"},
+			Name: "columns", Type: "_types.structures.list<_types.structures.object>", ItemFields: []Field{
+				{Name: "name", Type: "_types.basics.string"},
+				{Name: "type", Type: "_types.basics.string"},
+				{Name: "nullable", Type: "_types.basics.boolean"},
 			},
 		}},
 		ValueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{
 			"decimal": {Params: map[string]Field{
-				"precision": {Type: "integer", Required: true, Min: 1},
-				"scale":     {Type: "integer", Min: 0},
+				"precision": {Type: "_types.basics.integer", Required: true, Min: 1},
+				"scale":     {Type: "_types.basics.integer", Min: 0},
 			}},
 			"string": {Params: map[string]Field{
-				"min_len": {Type: "integer", Min: 0},
-				"max_len": {Type: "integer", Min: 0},
-				"pattern": {Type: "string"},
-				"fixed":   {Type: "boolean"},
+				"min_len": {Type: "_types.basics.integer", Min: 0},
+				"max_len": {Type: "_types.basics.integer", Min: 0},
+				"pattern": {Type: "_types.basics.string"},
+				"fixed":   {Type: "_types.basics.boolean"},
 			}},
 		}}}
 
@@ -261,7 +261,7 @@ func TestFamilyParams(t *testing.T) {
 
 func TestValidateDocRequiredAndUnknown(t *testing.T) {
 	c := &Checker{}
-	fields := []Field{{Name: "id", Type: "string", Required: true}}
+	fields := []Field{{Name: "id", Type: "_types.basics.string", Required: true}}
 	c.validateDoc(map[string]any{"extra": 1}, fields, "x")
 	errs := strings.Join(c.errs, "\n")
 	if !strings.Contains(errs, `missing required field "id"`) {
@@ -278,8 +278,8 @@ func TestTableRulesRejectUnknownColumn(t *testing.T) {
 		ValueTypes: ValueTypes{
 			TypeFamilies: map[string]ValueTypeFamily{
 				"string": {Params: map[string]Field{
-					"min_len": {Type: "integer", Min: 0},
-					"max_len": {Type: "integer", Min: 0},
+					"min_len": {Type: "_types.basics.integer", Min: 0},
+					"max_len": {Type: "_types.basics.integer", Min: 0},
 				}},
 			},
 		},
@@ -349,12 +349,12 @@ func TestCheckColumnRef(t *testing.T) {
 
 func TestBaseRequiresSummary(t *testing.T) {
 	schema := &Schema{Targets: testTargets(), Fields: []Field{
-		{Name: "schema_version", Type: "integer", Required: true, Const: 1},
-		{Name: "id", Type: "string", Required: true},
-		{Name: "summary", Type: "string", Required: true},
-		{Name: "stability", Type: "string", Required: true, Enum: []any{"stable"}},
-		{Name: "do_not", Type: "list<string>"},
-		{Name: "columns", Type: "list<object>", Required: true, ItemFields: []Field{{Name: "name", Type: "string", Required: true}}},
+		{Name: "schema_version", Type: "_types.basics.integer", Required: true, Const: 1},
+		{Name: "id", Type: "_types.basics.string", Required: true},
+		{Name: "summary", Type: "_types.basics.string", Required: true},
+		{Name: "stability", Type: "_types.basics.string", Required: true, Enum: []any{"stable"}},
+		{Name: "do_not", Type: "_types.structures.list<_types.basics.string>"},
+		{Name: "columns", Type: "_types.structures.list<_types.structures.object>", Required: true, ItemFields: []Field{{Name: "name", Type: "_types.basics.string", Required: true}}},
 	}}
 	doc := map[string]any{
 		"schema_version": 1,
@@ -395,7 +395,7 @@ func minimalTableDoc() map[string]any {
 		"owner_module": "x",
 		"table":        map[string]any{"name": "x", "extends": []any{"data.tables.base"}},
 		"columns": []any{
-			map[string]any{"name": "code", "type": "_types.string"},
+			map[string]any{"name": "code", "type": "_types.basics.string"},
 		},
 	}
 }
@@ -973,7 +973,7 @@ func TestStorageArchiveEntriesRequireAgeByColumn(t *testing.T) {
 
 func TestValidateListAllowed(t *testing.T) {
 	c := &Checker{}
-	c.validateValue([]any{"desc", "sideways"}, Field{Type: "list<string>", Allowed: []any{"asc", "desc"}}, "order")
+	c.validateValue([]any{"desc", "sideways"}, Field{Type: "_types.structures.list<_types.basics.string>", Allowed: []any{"asc", "desc"}}, "order")
 	if !strings.Contains(strings.Join(c.errs, "\n"), `"sideways" not allowed`) {
 		t.Fatalf("list item not checked against allowed: %v", c.errs)
 	}
@@ -981,7 +981,7 @@ func TestValidateListAllowed(t *testing.T) {
 
 func TestValidateIntegerMin(t *testing.T) {
 	c := &Checker{}
-	c.validateValue(0, Field{Type: "integer", Min: 1}, "retention")
+	c.validateValue(0, Field{Type: "_types.basics.integer", Min: 1}, "retention")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "0 < min 1") {
 		t.Fatalf("integer min not checked: %v", c.errs)
 	}
@@ -1059,9 +1059,9 @@ writes:
 
 func TestPersistenceReadOnlyRejected(t *testing.T) {
 	c := &Checker{}
-	fields := []Field{{Name: "persistence", Type: "object", Required: true, Fields: []Field{
-		{Name: "table", Type: "string"},
-		{Name: "tables", Type: "list<string>"},
+	fields := []Field{{Name: "persistence", Type: "_types.structures.object", Required: true, Fields: []Field{
+		{Name: "table", Type: "_types.basics.string"},
+		{Name: "tables", Type: "_types.structures.list<_types.basics.string>"},
 	}}}
 	doc := map[string]any{"persistence": map[string]any{
 		"tables":           []any{"data.tables.auth_pwd"},
@@ -1868,7 +1868,7 @@ enums:
 
 func TestEnumSchemaShape(t *testing.T) {
 	schema := &Schema{ID: "meta.data.enums", Fields: []Field{{
-		Name: "enums", Type: "list<object>", ItemFields: []Field{
+		Name: "enums", Type: "_types.structures.list<_types.structures.object>", ItemFields: []Field{
 			{Name: "name", Required: true},
 			{Name: "values", Required: true, ItemFields: []Field{{Name: "value", Required: true}}},
 		},
@@ -1967,7 +1967,7 @@ func TestEnumCapabilityUsage(t *testing.T) {
 	capability := `id: cap.methods.x
 types:
   Filter:
-    type: _types.object
+    type: _types.structures.object
     properties:
       status: { type: data.enums.x_status }
 `
@@ -2052,7 +2052,7 @@ func TestEnumRefsScanAllContracts(t *testing.T) {
 id: cap.methods.x
 types:
   Input:
-    type: _types.object
+    type: _types.structures.object
     properties:
       status: { type: data.enums.missing_status }
 `
@@ -2213,11 +2213,11 @@ func TestExtendsChainInheritsColumns(t *testing.T) {
 summary: "base"
 stability: "stable"
 columns:
-  - { name: id, type: _types.string, primary_key: true, nullable: false }
-  - { name: status, type: _types.integer, nullable: false }
-  - { name: created_at, type: _types.timestamp, nullable: false }
-  - { name: updated_at, type: _types.timestamp, nullable: false }
-  - { name: deleted_at, type: _types.timestamp, nullable: true }
+  - { name: id, type: _types.basics.string, primary_key: true, nullable: false }
+  - { name: status, type: _types.basics.integer, nullable: false }
+  - { name: created_at, type: _types.basics.timestamp, nullable: false }
+  - { name: updated_at, type: _types.basics.timestamp, nullable: false }
+  - { name: deleted_at, type: _types.basics.timestamp, nullable: true }
 rules:
   - { id: base-file, text: "x", implemented_by: [base-file] }
   - { id: base-columns, text: "x", implemented_by: [base-columns] }
@@ -2226,19 +2226,19 @@ rules:
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: _types.string, nullable: false }
+   - { name: code, type: _types.basics.string, nullable: false }
 `)
 	write("child.yaml", `id: data.tables.child
 table:
   extends: [ data.tables.parent ]
 columns:
-   - { name: code, type: _types.string, nullable: false }
+   - { name: code, type: _types.basics.string, nullable: false }
 `)
 	write("grandchild.yaml", `id: data.tables.grandchild
 table:
   extends: [ data.tables.child ]
 columns:
-   - { name: extra, type: _types.string, nullable: false }
+   - { name: extra, type: _types.basics.string, nullable: false }
 `)
 	c := &Checker{root: root}
 	_, cols := c.checkTables(&Schema{Targets: testTargets()})
@@ -2261,19 +2261,19 @@ func TestExtendsMultipleParents(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: _types.string, nullable: false }
+   - { name: code, type: _types.basics.string, nullable: false }
 `)
 	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: name, type: _types.string, nullable: false }
+   - { name: name, type: _types.basics.string, nullable: false }
 `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
 table:
   extends: [ data.tables.left, data.tables.right ]
 columns:
-   - { name: extra, type: _types.string, nullable: false }
+   - { name: extra, type: _types.basics.string, nullable: false }
 `)
 	c := &Checker{root: root}
 	_, cols := c.checkTables(&Schema{Targets: testTargets()})
@@ -2292,13 +2292,13 @@ func TestExtendsConflict(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: _types.string, nullable: false }
+   - { name: code, type: _types.basics.string, nullable: false }
 `)
 	writeTableFixture(t, root, "right.yaml", `id: data.tables.right
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: _types.string, nullable: false }
+   - { name: code, type: _types.basics.string, nullable: false }
 `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
 table:
@@ -2319,7 +2319,7 @@ func TestExtendsDiamond(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: _types.string, nullable: false }
+   - { name: code, type: _types.basics.string, nullable: false }
 `)
 	writeTableFixture(t, root, "left.yaml", `id: data.tables.left
 table:
@@ -2373,19 +2373,19 @@ func TestExtendsCycle(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: gcol, type: _types.string, nullable: false }
+   - { name: gcol, type: _types.basics.string, nullable: false }
 `)
 	write("a.yaml", `id: data.tables.a
 table:
   extends: [ data.tables.b, data.tables.g ]
 columns:
-   - { name: acol, type: _types.string, nullable: false }
+   - { name: acol, type: _types.basics.string, nullable: false }
 `)
 	write("b.yaml", `id: data.tables.b
 table:
   extends: [ data.tables.a ]
 columns:
-   - { name: bcol, type: _types.string, nullable: false }
+   - { name: bcol, type: _types.basics.string, nullable: false }
 `)
 	write("c.yaml", `id: data.tables.c
 table:
@@ -2436,13 +2436,13 @@ func TestExtendsCycleRedeclare(t *testing.T) {
 table:
   extends: [ data.tables.b ]
 columns:
-   - { name: x, type: _types.string, nullable: false }
+   - { name: x, type: _types.basics.string, nullable: false }
 `)
 	writeTableFixture(t, root, "b.yaml", `id: data.tables.b
 table:
   extends: [ data.tables.a ]
 columns:
-   - { name: x, type: _types.string, nullable: false }
+   - { name: x, type: _types.basics.string, nullable: false }
 `)
 	c := &Checker{root: root}
 	c.checkTables(&Schema{Targets: testTargets()})
@@ -2454,7 +2454,7 @@ columns:
 
 func TestExtendsScalarIsTypeErrorNotBaseOnly(t *testing.T) {
 	schema := &Schema{Targets: testTargets(), Fields: []Field{
-		{Name: "table", Type: "object", Fields: []Field{{Name: "extends", Type: "list<string>"}}},
+		{Name: "table", Type: "_types.structures.object", Fields: []Field{{Name: "extends", Type: "_types.structures.list<_types.basics.string>"}}},
 	}}
 	doc := map[string]any{"id": "data.tables.x", "table": map[string]any{"extends": "data.tables.base"}}
 	c := &Checker{}
@@ -2475,7 +2475,7 @@ func TestDoNotSpecificityUsesInheritedColumns(t *testing.T) {
 table:
   extends: [ data.tables.base ]
 columns:
-   - { name: code, type: _types.string, nullable: false }
+   - { name: code, type: _types.basics.string, nullable: false }
 `)
 	writeTableFixture(t, root, "child.yaml", `id: data.tables.child
 table:
@@ -2503,9 +2503,9 @@ func TestMissingBaseKeepsPhysicalCols(t *testing.T) {
 
 func TestPersistenceQueriesExist(t *testing.T) {
 	c := &Checker{}
-	fields := []Field{{Name: "persistence", Type: "object", Required: true, Fields: []Field{
-		{Name: "table", Type: "string"},
-		{Name: "tables", Type: "list<string>"},
+	fields := []Field{{Name: "persistence", Type: "_types.structures.object", Required: true, Fields: []Field{
+		{Name: "table", Type: "_types.basics.string"},
+		{Name: "tables", Type: "_types.structures.list<_types.basics.string>"},
 	}}}
 	doc := map[string]any{"persistence": map[string]any{
 		"table":   "data.tables.x",
@@ -2560,7 +2560,7 @@ func TestParamFamilyAcceptsFamilyKeysAndAliases(t *testing.T) {
 
 func TestValidateEnum(t *testing.T) {
 	c := &Checker{}
-	c.validateValue("weeks", Field{Type: "string", Enum: []any{"minutes", "hours", "days"}}, "retention.unit")
+	c.validateValue("weeks", Field{Type: "_types.basics.string", Enum: []any{"minutes", "hours", "days"}}, "retention.unit")
 	if !strings.Contains(strings.Join(c.errs, "\n"), `"weeks" not in enum`) {
 		t.Fatalf("enum value not checked: %v", c.errs)
 	}
@@ -2746,7 +2746,7 @@ func TestDefaultRules(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["columns"] = append(doc["columns"].([]any), map[string]any{
-		"name": "bad", "type": "_types.string", "default": 1,
+		"name": "bad", "type": "_types.basics.string", "default": 1,
 	})
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[default-type]") {
@@ -2756,7 +2756,7 @@ func TestDefaultRules(t *testing.T) {
 	c = &Checker{}
 	doc = minimalTableDoc()
 	doc["columns"] = append(doc["columns"].([]any), map[string]any{
-		"name": "both", "type": "_types.string", "default": "x", "default_sql": "now()",
+		"name": "both", "type": "_types.basics.string", "default": "x", "default_sql": "now()",
 	})
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[default-vs-default-sql]") {
@@ -2768,7 +2768,7 @@ func TestUniqueColumnNames(t *testing.T) {
 	c := &Checker{}
 	doc := minimalTableDoc()
 	doc["columns"] = append(doc["columns"].([]any), map[string]any{
-		"name": "code", "type": "_types.string",
+		"name": "code", "type": "_types.basics.string",
 	})
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.unique-names]") {
@@ -3270,15 +3270,15 @@ func TestRedundancySchema(t *testing.T) {
 	if !ok {
 		t.Fatal("columns.redundancy field missing in meta")
 	}
-	if redundancy.Type != "_types.list<_types.object>" {
-		t.Fatalf("redundancy type = %q, want _types.list<_types.object>", redundancy.Type)
+	if redundancy.Type != "_types.structures.list<_types.structures.object>" {
+		t.Fatalf("redundancy type = %q, want _types.structures.list<_types.structures.object>", redundancy.Type)
 	}
 	column, ok := contractspec.FindField(redundancy.ItemFields, "column")
-	if !ok || column.Type != "_types.string" || column.Pattern == "" || !column.Required {
+	if !ok || column.Type != "_types.basics.string" || column.Pattern == "" || !column.Required {
 		t.Fatalf("redundancy.column shape = %#v", column)
 	}
 	source, ok := contractspec.FindField(redundancy.ItemFields, "source")
-	if !ok || source.Type != "_types.boolean" || !source.Required {
+	if !ok || source.Type != "_types.basics.boolean" || !source.Required {
 		t.Fatalf("redundancy.source shape = %#v", source)
 	}
 
@@ -3426,19 +3426,19 @@ func TestTableIDPatternApplied(t *testing.T) {
 
 func TestValidateScalarAllowedAndBooleanConst(t *testing.T) {
 	c := &Checker{}
-	c.validateValue("x", Field{Type: "string", Allowed: []any{"a", "b"}}, "f")
+	c.validateValue("x", Field{Type: "_types.basics.string", Allowed: []any{"a", "b"}}, "f")
 	if !strings.Contains(strings.Join(c.errs, "\n"), `"x" not allowed`) {
 		t.Fatalf("scalar allowed not checked: %v", c.errs)
 	}
 
 	c = &Checker{}
-	c.validateValue(1, Field{Type: "integer", Allowed: []any{2, 3}}, "n")
+	c.validateValue(1, Field{Type: "_types.basics.integer", Allowed: []any{2, 3}}, "n")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "1 not allowed") {
 		t.Fatalf("numeric allowed not checked: %v", c.errs)
 	}
 
 	c = &Checker{}
-	c.validateValue(true, Field{Type: "boolean", Const: false}, "b")
+	c.validateValue(true, Field{Type: "_types.basics.boolean", Const: false}, "b")
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.const]") {
 		t.Fatalf("boolean const not checked: %v", c.errs)
 	}
@@ -3650,7 +3650,7 @@ func TestTableTextLengthLimits(t *testing.T) {
 	doc := minimalTableDoc()
 	doc["summary"] = strings.Repeat("a", tableSummaryMaxRunes+1)
 	doc["columns"] = []any{map[string]any{
-		"name": "code", "type": "_types.string", "comment": strings.Repeat("b", columnCommentMaxRunes+1),
+		"name": "code", "type": "_types.basics.string", "comment": strings.Repeat("b", columnCommentMaxRunes+1),
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	errs := entityErrs(c)
@@ -3667,7 +3667,7 @@ func TestTableTextLengthLimits(t *testing.T) {
 	doc = minimalTableDoc()
 	doc["summary"] = strings.Repeat("a", tableSummaryMaxRunes)
 	doc["columns"] = []any{map[string]any{
-		"name": "code", "type": "_types.string", "comment": strings.Repeat("b", columnCommentMaxRunes),
+		"name": "code", "type": "_types.basics.string", "comment": strings.Repeat("b", columnCommentMaxRunes),
 	}}
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if len(c.errs) != 0 {
@@ -3693,9 +3693,9 @@ func TestValidateListMapObject(t *testing.T) {
 	c := &Checker{}
 	f := Field{
 		Name: "x",
-		Type: "_types.list<_types.map<_types.object>>",
+		Type: "_types.structures.list<_types.structures.map<_types.structures.object>>",
 		ItemFields: []Field{
-			{Name: "id", Type: "_types.string", Required: true},
+			{Name: "id", Type: "_types.basics.string", Required: true},
 		},
 	}
 	c.validateValue([]any{map[string]any{"a": map[string]any{"id": "x"}}}, f, "x")
@@ -3711,12 +3711,12 @@ func TestValidateListMapObject(t *testing.T) {
 
 func TestValidateSetObject(t *testing.T) {
 	vt := testValueTypes()
-	f := Field{Name: "x", Type: "_types.set<_types.object>"}
+	f := Field{Name: "x", Type: "_types.structures.set<_types.structures.object>"}
 	if err := validateFieldTypes([]Field{f}, vt, false); err == nil {
 		t.Fatal("set<object> without unique_key must fail")
 	}
 	f.UniqueKey = "name"
-	f.ItemFields = []Field{{Name: "name", Type: "_types.string"}}
+	f.ItemFields = []Field{{Name: "name", Type: "_types.basics.string"}}
 	if err := validateFieldTypes([]Field{f}, vt, false); err != nil {
 		t.Fatalf("set<object> with unique_key rejected: %v", err)
 	}
@@ -3727,9 +3727,9 @@ func TestValidateSetObject(t *testing.T) {
 	c := &Checker{}
 	obj := Field{
 		Name:       "x",
-		Type:       "_types.set<_types.object>",
+		Type:       "_types.structures.set<_types.structures.object>",
 		UniqueKey:  "name",
-		ItemFields: []Field{{Name: "name", Type: "_types.string", Required: true}},
+		ItemFields: []Field{{Name: "name", Type: "_types.basics.string", Required: true}},
 	}
 	c.validateValue([]any{
 		map[string]any{"name": "a"},
@@ -3741,7 +3741,7 @@ func TestValidateSetObject(t *testing.T) {
 }
 
 func TestValidateArrayLen(t *testing.T) {
-	f := Field{Name: "x", Type: "_types.array<_types.string>", Len: 2}
+	f := Field{Name: "x", Type: "_types.structures.array<_types.basics.string>", Len: 2}
 	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err != nil {
 		t.Fatalf("array with len rejected: %v", err)
 	}
@@ -3759,9 +3759,9 @@ func TestValidateArrayLen(t *testing.T) {
 func TestValidateNestedSetObject(t *testing.T) {
 	f := Field{
 		Name:       "x",
-		Type:       "_types.list<_types.set<_types.object>>",
+		Type:       "_types.structures.list<_types.structures.set<_types.structures.object>>",
 		UniqueKey:  "name",
-		ItemFields: []Field{{Name: "name", Type: "_types.string", Required: true}},
+		ItemFields: []Field{{Name: "name", Type: "_types.basics.string", Required: true}},
 	}
 	c := &Checker{}
 	c.validateValue([]any{
@@ -3773,35 +3773,35 @@ func TestValidateNestedSetObject(t *testing.T) {
 }
 
 func TestValidateMapIntegerKeyPatterns(t *testing.T) {
-	f := Field{Name: "x", Type: "_types.map<_types.integer, _types.string>", KeyPatterns: []string{"^[0-9]+$"}}
+	f := Field{Name: "x", Type: "_types.structures.map<_types.basics.integer, _types.basics.string>", KeyPatterns: []string{"^[0-9]+$"}}
 	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "key_patterns only allowed") {
 		t.Fatalf("integer key with key_patterns must fail: %v", err)
 	}
 }
 
 func TestValidateMinLenExceedsMaxLen(t *testing.T) {
-	f := Field{Name: "x", Type: "_types.string", MinLen: 3, MaxLen: 2}
+	f := Field{Name: "x", Type: "_types.basics.string", MinLen: 3, MaxLen: 2}
 	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "min_len must not exceed max_len") {
 		t.Fatalf("min_len > max_len must fail: %v", err)
 	}
 }
 
 func TestValidateMaxLenZero(t *testing.T) {
-	f := Field{Name: "x", Type: "_types.string", MaxLen: 0}
+	f := Field{Name: "x", Type: "_types.basics.string", MaxLen: 0}
 	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "max_len must be a positive integer") {
 		t.Fatalf("max_len 0 must fail: %v", err)
 	}
 }
 
 func TestValidateMinItemsExceedsMaxItems(t *testing.T) {
-	f := Field{Name: "x", Type: "_types.list<_types.string>", MinItems: 3, MaxItems: 2}
+	f := Field{Name: "x", Type: "_types.structures.list<_types.basics.string>", MinItems: 3, MaxItems: 2}
 	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "min_items must not exceed max_items") {
 		t.Fatalf("min_items > max_items must fail: %v", err)
 	}
 }
 
 func TestValidateCollectionBoundsOnString(t *testing.T) {
-	f := Field{Name: "x", Type: "_types.string", MinItems: 1}
+	f := Field{Name: "x", Type: "_types.basics.string", MinItems: 1}
 	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "only allowed for list/set/map") {
 		t.Fatalf("min_items on string must fail: %v", err)
 	}
@@ -3810,10 +3810,10 @@ func TestValidateCollectionBoundsOnString(t *testing.T) {
 func TestValidateBooleanUniqueKey(t *testing.T) {
 	f := Field{
 		Name:       "x",
-		Type:       "_types.set<_types.object>",
+		Type:       "_types.structures.set<_types.structures.object>",
 		MinItems:   1,
 		UniqueKey:  "flag",
-		ItemFields: []Field{{Name: "flag", Type: "_types.boolean", Required: true}},
+		ItemFields: []Field{{Name: "flag", Type: "_types.basics.boolean", Required: true}},
 	}
 	if err := validateFieldTypes([]Field{f}, testValueTypes(), false); err == nil || !strings.Contains(err.Error(), "boolean unique_key is not allowed") {
 		t.Fatalf("boolean unique_key must fail: %v", err)

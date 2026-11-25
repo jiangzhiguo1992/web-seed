@@ -37,7 +37,7 @@ table:
 
 columns:
   - name: owner_table_name
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 1
     max_len: 64
@@ -45,12 +45,12 @@ columns:
     comment: "所有者物理表名；多态引用，不建外键"
 
   - name: owner_id
-    type: _types.id
+    type: _types.basics.id
     nullable: false
     comment: "所有者行 ID；与 owner_table_name 一起由服务层校验"
 
   - name: purpose
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 1
     max_len: 32
@@ -58,14 +58,14 @@ columns:
     comment: "用途：icon/avatar/attachment 等；区分同一 owner 的多种附件"
 
   - name: sort
-    type: _types.integer
+    type: _types.basics.integer
     nullable: false
     min: 0
     default: 0
     comment: "同一 owner+purpose 内的展示顺序"
 
   - name: object_key
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 1
     max_len: 512
@@ -73,26 +73,26 @@ columns:
     comment: "对象存储 key；不存 URL；全局唯一"
 
   - name: original_name
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 1
     max_len: 255
     comment: "原始文件名；仅展示/下载，不作为 key"
 
   - name: content_type
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 1
     max_len: 127
     comment: "MIME 类型；服务端检测后写入"
 
   - name: size_bytes
-    type: _types.byte_size
+    type: _types.basics.byte_size
     nullable: false
     comment: "对象大小（字节）"
 
   - name: sha256
-    type: _types.string
+    type: _types.basics.string
     nullable: true
     min_len: 64
     max_len: 64
@@ -100,13 +100,13 @@ columns:
     comment: "SHA-256 十六进制；完整性/去重校验，不唯一"
 
   - name: visibility
-    type: _types.integer
+    type: _types.basics.integer
     nullable: false
     default: 0
     comment: "访问级别整数码；映射 data.enums.attachment_visibility（0=private,1=public）"
 
   - name: replaces_id
-    type: _types.id
+    type: _types.basics.id
     nullable: true
     references: { column: data.tables.attachment.col.id, on_delete: no_action }
     comment: "被替换的旧附件 ID；用于更替链；旧行仍软删保留"

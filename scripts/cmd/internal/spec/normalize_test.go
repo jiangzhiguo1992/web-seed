@@ -39,9 +39,9 @@ func testNormalizeOptions(transport ...string) HTTPNormalizeOptions {
 
 func testResolve(name string) (map[string]any, error) {
 	switch name {
-	case "_types.integer":
+	case "_types.basics.integer":
 		return map[string]any{"type": "integer"}, nil
-	case "_types.string":
+	case "_types.basics.string":
 		return map[string]any{"type": "string"}, nil
 	}
 	return nil, fmt.Errorf("unknown type %s", name)
@@ -54,7 +54,7 @@ func TestNormalizeHTTPDocumentGrouped(t *testing.T) {
 				map[string]any{"name": "Content-Type", "value": "application/json", "required": true, "description": "body"},
 			},
 			"query": []any{
-				map[string]any{"name": "limit", "type": "_types.integer", "required": false, "description": "size", "to": "params.limit"},
+				map[string]any{"name": "limit", "type": "_types.basics.integer", "required": false, "description": "size", "to": "params.limit"},
 			},
 			"body": map[string]any{
 				"kind": "json",
@@ -123,7 +123,7 @@ func TestNormalizeHTTPDocumentHeaders(t *testing.T) {
 				map[string]any{"name": "Content-Type", "value": "application/json", "required": true, "description": "body"},
 				map[string]any{"name": "Accept", "value": "application/json", "required": false, "description": "accept"},
 			},
-			"body": map[string]any{"kind": "json", "type": "_types.string", "to": "params.input"},
+			"body": map[string]any{"kind": "json", "type": "_types.basics.string", "to": "params.input"},
 		},
 		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 	})
@@ -148,11 +148,11 @@ func TestNormalizeHTTPDocumentResponseHeaders(t *testing.T) {
 				"msg": "ok",
 				"headers": []any{
 					map[string]any{"name": "Content-Type", "value": "application/json", "required": true, "description": "body"},
-					map[string]any{"name": "Link", "type": "_types.string", "multiple": true, "required": false, "description": "link"},
-					map[string]any{"name": "ETag", "type": "_types.string", "required": false, "description": "etag"},
+					map[string]any{"name": "Link", "type": "_types.basics.string", "multiple": true, "required": false, "description": "link"},
+					map[string]any{"name": "ETag", "type": "_types.basics.string", "required": false, "description": "etag"},
 					map[string]any{"name": "X-Required", "value": "yes", "required": true, "description": "required"},
 				},
-				"body": map[string]any{"kind": "json", "type": "_types.string"},
+				"body": map[string]any{"kind": "json", "type": "_types.basics.string"},
 			},
 		},
 	})
@@ -181,7 +181,7 @@ func TestNormalizeHTTPDocumentHeaderRequiredDefaultsTrue(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request": map[string]any{
 			"headers": []any{
-				map[string]any{"name": "X-Trace", "type": "_types.string", "description": "trace"},
+				map[string]any{"name": "X-Trace", "type": "_types.basics.string", "description": "trace"},
 			},
 		},
 		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
@@ -200,7 +200,7 @@ func TestNormalizeHTTPDocumentQueryRequiredDefaultsTrue(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request": map[string]any{
 			"query": []any{
-				map[string]any{"name": "q", "type": "_types.string", "description": "query", "to": "params.q"},
+				map[string]any{"name": "q", "type": "_types.basics.string", "description": "query", "to": "params.q"},
 			},
 		},
 		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
@@ -227,7 +227,7 @@ func TestNormalizeHTTPDocumentAllowsOptionalContentType(t *testing.T) {
 					"headers": []any{
 						map[string]any{"name": "Content-Type", "value": "application/json", "required": false, "description": "body"},
 					},
-					"body": map[string]any{"kind": "json", "type": "_types.string", "to": "params.input"},
+					"body": map[string]any{"kind": "json", "type": "_types.basics.string", "to": "params.input"},
 				},
 				"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 			}},
@@ -250,7 +250,7 @@ func TestNormalizeHTTPDocumentRejectsLegacySchemaField(t *testing.T) {
 					"headers": []any{
 						map[string]any{"name": "Content-Type", "value": "application/json", "description": "body"},
 					},
-					"body": map[string]any{"kind": "json", "schema": "_types.string", "to": "params.input"},
+					"body": map[string]any{"kind": "json", "schema": "_types.basics.string", "to": "params.input"},
 				},
 				"response": map[string]any{"204": map[string]any{"msg": "ok"}},
 			}},
@@ -271,7 +271,7 @@ func TestNormalizeHTTPDocumentFormBody(t *testing.T) {
 			"body": map[string]any{
 				"kind": "form",
 				"fields": []any{
-					map[string]any{"name": "username", "type": "_types.string", "description": "name", "to": "params.input.username"},
+					map[string]any{"name": "username", "type": "_types.basics.string", "description": "name", "to": "params.input.username"},
 				},
 			},
 		},
@@ -317,8 +317,8 @@ func TestNormalizeHTTPDocumentRejectsTransportHeaders(t *testing.T) {
 			"response": map[string]any{
 				"200": map[string]any{
 					"msg":     "ok",
-					"headers": []any{map[string]any{"name": "Content-Length", "type": "_types.integer", "required": false, "description": "length"}},
-					"body":    map[string]any{"kind": "json", "type": "_types.string"},
+					"headers": []any{map[string]any{"name": "Content-Length", "type": "_types.basics.integer", "required": false, "description": "length"}},
+					"body":    map[string]any{"kind": "json", "type": "_types.basics.string"},
 				},
 			},
 		}},
@@ -337,7 +337,7 @@ func TestNormalizeHTTPDocumentAllowsUpgradeInsecureRequests(t *testing.T) {
 	doc := httpDoc(map[string]any{
 		"request": map[string]any{
 			"headers": []any{
-				map[string]any{"name": "Upgrade-Insecure-Requests", "type": "_types.string", "required": false, "description": "browser hint"},
+				map[string]any{"name": "Upgrade-Insecure-Requests", "type": "_types.basics.string", "required": false, "description": "browser hint"},
 			},
 		},
 		"response": map[string]any{"204": map[string]any{"msg": "ok"}},
@@ -361,7 +361,7 @@ func TestNormalizeHTTPDocumentMultipartBody(t *testing.T) {
 			"body": map[string]any{
 				"kind": "multipart",
 				"fields": []any{
-					map[string]any{"name": "nickname", "type": "_types.string", "required": true, "description": "name", "to": "params.input.nickname"},
+					map[string]any{"name": "nickname", "type": "_types.basics.string", "required": true, "description": "name", "to": "params.input.nickname"},
 					map[string]any{"name": "avatar", "kind": "file", "required": false, "description": "file", "to": "params.input.avatar"},
 				},
 			},

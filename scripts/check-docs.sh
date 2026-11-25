@@ -34,7 +34,15 @@ if ! command -v grep >/dev/null 2>&1; then
   exit 1
 fi
 if hits=$(grep -rnE '(^|[[:space:]])type: (object|array|map)([[:space:]]|$)' docs/playbooks 2>/dev/null || true); [[ -n "$hits" ]]; then
-  echo "check-docs: playbook uses bare schema kind (use _types.object/_types.array/_types.map):"
+  echo "check-docs: playbook uses bare schema kind (use _types.schemas.object/_types.schemas.array/_types.schemas.map):"
+  echo "$hits"
+  missing=1
+fi
+
+# _types 引用必须带命名空间：basics / structures / schemas。
+if hits=$(grep -rnE '_types\.[a-z]' docs contracts --include=*.md --include=*.yaml 2>/dev/null \
+  | grep -vE '_types\.(basics|structures|schemas)\.|_types\.yaml|_types\.\*|_types\.<|contracts/generated/' || true); [[ -n "$hits" ]]; then
+  echo "check-docs: unqualified _types reference (use _types.basics|structures|schemas.<name>):"
   echo "$hits"
   missing=1
 fi

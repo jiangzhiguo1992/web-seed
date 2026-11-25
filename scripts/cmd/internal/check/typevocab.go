@@ -1,11 +1,11 @@
 // typevocab.go 通用类型词汇校验。
 //
 // 契约里所有 type 值只允许两种来源：
-//   - _types.<name> / _types.list<...>（类型族、custom type、容器）
+//   - _types.<basics|structures|schemas>.<name>（类型族/自定义类型、容器、schema 节点判别键）
 //   - 已声明的外部引用：data.enums.* / data.entities.* / cap.services.*.schemas.* /
 //     data.tables.*.col.* / context.Context / error / time.*
 //
-// schema 节点的 type: _types.object|_types.array|_types.map 是判别键，由 schema 节点校验负责；
+// _types.schemas.object|array|map|scalar|ref 是 schema 节点判别键，由 schema 节点校验负责；
 // cap.protocols.http 是完整 OpenAPI 3.1，使用外部词汇，不参与本规则。
 package check
 
@@ -90,12 +90,15 @@ func (c *Checker) checkTypeRef(v any, path string) {
 	if strings.HasPrefix(s, "*") {
 		s = strings.TrimSpace(strings.TrimPrefix(s, "*"))
 	}
-	if strings.HasPrefix(s, "_types.list<") && strings.HasSuffix(s, ">") {
-		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "_types.list<"), ">"))
+	if strings.HasPrefix(s, "_types.structures.list<") && strings.HasSuffix(s, ">") {
+		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "_types.structures.list<"), ">"))
 		c.checkTypeRef(inner, path+".item")
 		return
 	}
-	if s == "_types.object" || s == "_types.array" || s == "_types.map" {
+	if class, name, ok := contractspec.SplitTypeRef(s); ok && class == contractspec.TypeClassSchemas {
+		if !knownSchemaKind(name) {
+			c.typeVocabularyf(path, s, "%s: unknown schema kind %s", path, s)
+		}
 		return
 	}
 	if strings.HasPrefix(s, "_types.") {
@@ -155,6 +158,15 @@ func (c *Checker) scanTypeRefs(v any, path string) {
 	}
 }
 
+// knownSchemaKind 是 SchemaNodeKind 支持的节点种类加通配；与 _meta 的 schemas 键一致。
+func knownSchemaKind(name string) bool {
+	switch name {
+	case "object", "array", "map", "scalar", "ref", "*":
+		return true
+	}
+	return false
+}
+
 // checkTypeVocabulary 扫描 contracts/ 下所有实例 YAML 的 type 键；例外见 _types.yaml type_vocabulary。
 func (c *Checker) checkTypeVocabulary() {
 	shared, err := contractspec.LoadSharedTypes(filepath.Join(c.root, "contracts", "_meta"))
@@ -174,6 +186,7 @@ func (c *Checker) checkTypeVocabulary() {
 		CustomTypes:    custom.CustomTypes,
 		TypeVocabulary: shared.TypeVocabulary,
 	}
+	c.nodeKinds = shared.Schemas
 	root := filepath.Join(c.root, "contracts")
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".yaml") {

@@ -82,7 +82,7 @@ func TestReferencesValidWithJoin(t *testing.T) {
 func TestReferencesTargetRejectsIntegerWidthMismatch(t *testing.T) {
 	c := referenceTestChecker(map[string]any{
 		"name":       "a_id",
-		"type":       "_types.integer",
+		"type":       "_types.basics.integer",
 		"bits":       32,
 		"references": map[string]any{"column": "data.tables.a.col.id", "on_delete": "cascade"},
 	}, []any{"data.tables.b.col.a_id"})

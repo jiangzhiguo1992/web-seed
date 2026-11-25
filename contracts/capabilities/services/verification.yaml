@@ -15,36 +15,36 @@ do_not:
 
 schemas:
   SendVerificationInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
-      - { name: account_id, schema: { type: _types.id }, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
-      - { name: target, schema: { type: _types.verification_target }, required: true, description: "验证码接收目标" }
+      - { name: account_id, schema: { type: _types.basics.id }, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
+      - { name: target, schema: { type: _types.basics.verification_target }, required: true, description: "验证码接收目标" }
       - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
     validation:
       - { rule: "input.purpose != \"register\" || input.account_id != null", message: "注册验证必须携带 pending account ID" }
   VerificationSent:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: id, schema: { type: _types.id }, required: true, description: "验证记录 ID" }
-      - { name: masked_target, schema: { type: _types.string }, required: true, description: "脱敏后的接收目标" }
-      - { name: expire_at, schema: { type: _types.timestamp }, required: true, description: "过期时间" }
+      - { name: id, schema: { type: _types.basics.id }, required: true, description: "验证记录 ID" }
+      - { name: masked_target, schema: { type: _types.basics.string }, required: true, description: "脱敏后的接收目标" }
+      - { name: expire_at, schema: { type: _types.basics.timestamp }, required: true, description: "过期时间" }
   VerifyCodeInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
-      - { name: account_id, schema: { type: _types.id }, nullable: true, description: "注册时必传；其他用途可省略" }
-      - { name: target, schema: { type: _types.verification_target }, required: true, description: "验证码接收目标" }
+      - { name: account_id, schema: { type: _types.basics.id }, nullable: true, description: "注册时必传；其他用途可省略" }
+      - { name: target, schema: { type: _types.basics.verification_target }, required: true, description: "验证码接收目标" }
       - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
-      - { name: code, schema: { type: _types.verification_code }, required: true, description: "验证码" }
+      - { name: code, schema: { type: _types.basics.verification_code }, required: true, description: "验证码" }
     validation:
       - { rule: "input.purpose != \"register\" || input.account_id != null", message: "注册验证必须携带 pending account ID" }
   VerificationResult:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: verified, schema: { type: _types.boolean }, required: true, description: "是否验证通过" }
-      - { name: verification_id, schema: { type: _types.id }, required: true, description: "验证记录 ID" }
-      - { name: consumed_at, schema: { type: _types.timestamp }, nullable: true, description: "验证码消费时间；未消费为 null" }
+      - { name: verified, schema: { type: _types.basics.boolean }, required: true, description: "是否验证通过" }
+      - { name: verification_id, schema: { type: _types.basics.id }, required: true, description: "验证记录 ID" }
+      - { name: consumed_at, schema: { type: _types.basics.timestamp }, nullable: true, description: "验证码消费时间；未消费为 null" }
 services:
   - name: send
     summary: "发送短信/邮件验证码"
@@ -66,8 +66,8 @@ services:
           - { name: target, value: params.input.target, description: "验证码接收目标" }
           - { name: purpose, value: params.input.purpose, description: "验证码用途" }
         output:
-          - { name: auth_id, type: _types.id, description: "验证目标认证绑定 ID" }
-          - { name: account_id, type: _types.id, description: "解析后的验证目标账号 ID" }
+          - { name: auth_id, type: _types.basics.id, description: "验证目标认证绑定 ID" }
+          - { name: account_id, type: _types.basics.id, description: "解析后的验证目标账号 ID" }
         errors:
           - platform.errors.AUTH_VERIFICATION_INVALID
           - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
@@ -107,7 +107,7 @@ services:
         summary: "生成验证码原文"
         input: [ ]
         output:
-          - { name: code, type: _types.string, description: "验证码原文；仅在本服务的步骤间传递" }
+          - { name: code, type: _types.basics.string, description: "验证码原文；仅在本服务的步骤间传递" }
         errors: [ ]
         rules: [ ]
         goto: hash_code
@@ -117,7 +117,7 @@ services:
         input:
           - { name: code, value: step.gen_code.code, description: "验证码原文" }
         output:
-          - { name: code_hash, type: _types.string, description: "验证码哈希" }
+          - { name: code_hash, type: _types.basics.string, description: "验证码哈希" }
         errors: [ ]
         rules: [ ]
         goto: render_content
@@ -130,7 +130,7 @@ services:
           - { name: target, value: params.input.target, description: "验证码接收目标" }
           - { name: purpose, value: params.input.purpose, description: "验证码用途" }
         output:
-          - { name: content, type: _types.string, description: "下发给用户的验证内容" }
+          - { name: content, type: _types.basics.string, description: "下发给用户的验证内容" }
         errors: [ ]
         rules: [ ]
         goto: new_id
@@ -139,7 +139,7 @@ services:
         summary: "生成新验证体 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.id, description: "新验证体 ID" }
+          - { name: id, type: _types.basics.id, description: "新验证体 ID" }
         errors: [ ]
         rules: [ ]
         goto: expire_at
@@ -148,7 +148,7 @@ services:
         summary: "计算验证码过期时间"
         input: [ ]
         output:
-          - { name: expire_at, type: _types.timestamp, description: "验证码过期时间" }
+          - { name: expire_at, type: _types.basics.timestamp, description: "验证码过期时间" }
         errors: [ ]
         rules: [ ]
         goto: now
@@ -157,7 +157,7 @@ services:
         summary: "取当前时间作为发送时间"
         input: [ ]
         output:
-          - { name: sent_at, type: _types.timestamp, description: "发送时间" }
+          - { name: sent_at, type: _types.basics.timestamp, description: "发送时间" }
         errors: [ ]
         rules: [ ]
         goto: status_sent
@@ -221,7 +221,7 @@ services:
           - { name: sent_at, value: step.now.sent_at, description: "发送时间" }
           - { name: status, value: step.status_sent.status, description: "目标状态：已发送" }
         output:
-          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
         query: data.queries.verification.mark_verification_sent
         goto: mark_sent_result
       - id: mark_sent_result
@@ -253,7 +253,7 @@ services:
           - { name: expire_at, value: step.expire_at.expire_at, description: "验证码过期时间" }
         output:
           - { name: verification, type: cap.services.verification.schemas.VerificationSent, description: "发送后的验证体" }
-          - { name: delivered, type: _types.boolean, description: "发送是否成功" }
+          - { name: delivered, type: _types.basics.boolean, description: "发送是否成功" }
         errors: [ ]
         rules: [ ]
         goto: send_result
@@ -320,8 +320,8 @@ services:
           - { name: account_id, value: params.input.account_id, description: "验证目标账号 ID" }
           - { name: target, value: params.input.target, description: "验证码接收目标" }
         output:
-          - { name: auth_id, type: _types.id, description: "验证目标认证绑定 ID" }
-          - { name: account_id, type: _types.id, description: "解析后的验证目标账号 ID" }
+          - { name: auth_id, type: _types.basics.id, description: "验证目标认证绑定 ID" }
+          - { name: account_id, type: _types.basics.id, description: "解析后的验证目标账号 ID" }
         errors: [ ]
         rules: [ ]
         goto: load_account
@@ -362,7 +362,7 @@ services:
         summary: "取当前时间作为消费时间"
         input: [ ]
         output:
-          - { name: consumed_at, type: _types.timestamp, description: "消费时间" }
+          - { name: consumed_at, type: _types.basics.timestamp, description: "消费时间" }
         errors: [ ]
         rules: [ ]
         goto: status_consumed
@@ -390,7 +390,7 @@ services:
         input:
           - { name: attempt_count, value: step.load_verification.row.attempt_count, description: "当前尝试次数" }
         output:
-          - { name: attempt_count, type: _types.integer, description: "递增后的尝试次数" }
+          - { name: attempt_count, type: _types.basics.integer, description: "递增后的尝试次数" }
         errors: [ ]
         rules: [ ]
         goto: request_ip
@@ -399,7 +399,7 @@ services:
         summary: "读取请求 IP"
         input: [ ]
         output:
-          - { name: request_ip, type: _types.string, description: "请求 IP" }
+          - { name: request_ip, type: _types.basics.string, description: "请求 IP" }
         errors: [ ]
         rules: [ ]
         goto: device_id
@@ -408,7 +408,7 @@ services:
         summary: "读取请求设备标识"
         input: [ ]
         output:
-          - { name: device_id, type: _types.string, description: "请求设备标识" }
+          - { name: device_id, type: _types.basics.string, description: "请求设备标识" }
         errors: [ ]
         rules: [ ]
         goto: location
@@ -417,7 +417,7 @@ services:
         summary: "读取请求位置"
         input: [ ]
         output:
-          - { name: location, type: _types.string, description: "请求位置" }
+          - { name: location, type: _types.basics.string, description: "请求位置" }
         errors: [ ]
         rules: [ ]
         goto: input_hash
@@ -427,7 +427,7 @@ services:
         input:
           - { name: code, value: params.input.code, description: "用户输入的验证码" }
         output:
-          - { name: input_hash, type: _types.string, description: "用户输入的哈希" }
+          - { name: input_hash, type: _types.basics.string, description: "用户输入的哈希" }
         errors: [ ]
         rules: [ ]
         goto: check
@@ -591,7 +591,7 @@ services:
           - { name: now, value: step.now.consumed_at, description: "消费时间" }
         output:
           - { name: result, type: cap.services.verification.schemas.VerificationResult, description: "校验结果" }
-          - { name: verified, type: _types.boolean, description: "是否验证通过" }
+          - { name: verified, type: _types.basics.boolean, description: "是否验证通过" }
         errors:
           - platform.errors.COMMON_INTERNAL
           - platform.errors.AUTH_VERIFICATION_INVALID
@@ -675,13 +675,13 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: verification_id, type: _types.id }
-      - { name: account_id, type: _types.id }
+      - { name: verification_id, type: _types.basics.id }
+      - { name: account_id, type: _types.basics.id }
       - { name: result, type: data.enums.verification_result }
-      - { name: request_ip, type: _types.string, nullable: true }
-      - { name: device_id, type: _types.string, nullable: true }
-      - { name: location, type: _types.string, nullable: true }
-      - { name: input_hash, type: _types.string }
+      - { name: request_ip, type: _types.basics.string, nullable: true }
+      - { name: device_id, type: _types.basics.string, nullable: true }
+      - { name: location, type: _types.basics.string, nullable: true }
+      - { name: input_hash, type: _types.basics.string }
     returns:
       - { name: err, type: error, value: "*" }
     steps:
@@ -709,8 +709,8 @@ services:
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: expired_rows, type: _types.integer, value: step.expire_stale.affected_rows }
-      - { name: revoked_rows, type: _types.integer, value: step.revoke_exhausted.affected_rows }
+      - { name: expired_rows, type: _types.basics.integer, value: step.expire_stale.affected_rows }
+      - { name: revoked_rows, type: _types.basics.integer, value: step.revoke_exhausted.affected_rows }
       - { name: err, type: error, value: "*" }
     steps:
       - id: now
@@ -718,7 +718,7 @@ services:
         summary: "取当前时间"
         input: [ ]
         output:
-          - { name: now, type: _types.timestamp, description: "当前时间" }
+          - { name: now, type: _types.basics.timestamp, description: "当前时间" }
         errors: [ ]
         rules: [ ]
         goto: max_attempts
@@ -727,7 +727,7 @@ services:
         summary: "取验证码尝试次数上限"
         input: [ ]
         output:
-          - { name: max_attempts, type: _types.integer, description: "尝试次数上限" }
+          - { name: max_attempts, type: _types.basics.integer, description: "尝试次数上限" }
         errors: [ ]
         rules: [ ]
         goto: status_expired
@@ -754,7 +754,7 @@ services:
         summary: "取单批更新上限"
         input: [ ]
         output:
-          - { name: limit, type: _types.integer, description: "单批更新上限" }
+          - { name: limit, type: _types.basics.integer, description: "单批更新上限" }
         errors: [ ]
         rules: [ ]
         goto: expire_stale
@@ -769,7 +769,7 @@ services:
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
         query: data.queries.verification.expire_stale_verifications
         goto: revoke_exhausted
       - id: revoke_exhausted
@@ -783,7 +783,7 @@ services:
           - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
         query: data.queries.verification.revoke_exhausted_verifications
         goto: $end
     used_by:
@@ -796,7 +796,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
       - { name: auth_type, type: data.enums.auth_type }
-      - { name: auth_id, type: _types.id }
+      - { name: auth_id, type: _types.basics.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:
@@ -856,7 +856,7 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.id }
+      - { name: account_id, type: _types.basics.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:

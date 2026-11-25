@@ -12,77 +12,77 @@ timestamp: RFC3339Nano
 level_field: level
 
 required:
-  - { name: time, type: _types.string, format: date-time }
-  - { name: level, type: _types.string, enum: [debug, info, warn, error] }
-  - { name: msg, type: _types.string }
+  - { name: time, type: _types.basics.string, format: date-time }
+  - { name: level, type: _types.basics.string, enum: [debug, info, warn, error] }
+  - { name: msg, type: _types.basics.string }
 
 fields:
   # ---------- 请求上下文 ----------
   - name: request_id
-    type: _types.string
+    type: _types.basics.string
     pii: false
     required_for: [http]
   - name: trace_id
-    type: _types.string
+    type: _types.basics.string
     pii: false
     required_for: [http]
   - name: span_id
-    type: _types.string
+    type: _types.basics.string
     pii: false
   - name: method
-    type: _types.string
+    type: _types.basics.string
     pii: false
     required_for: [http]
   - name: path
-    type: _types.string
+    type: _types.basics.string
     pii: false
     required_for: [http]
     note: "只记录路由模板，不记录真实参数"
   - name: status
-    type: _types.integer
+    type: _types.basics.integer
     pii: false
     required_for: [http]
   - name: duration_ms
-    type: _types.integer
+    type: _types.basics.integer
     pii: false
     required_for: [http]
   - name: bytes
-    type: _types.integer
+    type: _types.basics.integer
     pii: false
 
   # ---------- 身份 ----------
   - name: user_id
-    type: _types.string
+    type: _types.basics.string
     pii: true
     note: "仅记录哈希或 ID，不记录邮箱/手机号"
   - name: role
-    type: _types.string
+    type: _types.basics.string
     pii: false
   - name: app
-    type: _types.string
+    type: _types.basics.string
     pii: false
     required_for: [http, job]
 
   # ---------- 业务 ----------
   - name: module
-    type: _types.string
+    type: _types.basics.string
     pii: false
   - name: entity
-    type: _types.string
+    type: _types.basics.string
     pii: false
   - name: entity_id
-    type: _types.string
+    type: _types.basics.string
     pii: false
   - name: error_code
-    type: _types.string
+    type: _types.basics.string
     pii: false
     ref: platform.errors
   - name: job
-    type: _types.string
+    type: _types.basics.string
     pii: false
     required_for: [job]
   - name: attempt
-    type: _types.integer
+    type: _types.basics.integer
     pii: false
     required_for: [job]
 

@@ -34,18 +34,18 @@ table:
 
 columns:
   - name: number
-    type: _types.account_number
+    type: _types.basics.account_number
     nullable: false
     comment: "账号编号"
 
   - name: nickname
-    type: _types.account_nickname
+    type: _types.basics.account_nickname
     nullable: false
     sensitivity: pii
     comment: "昵称"
 
   - name: user_id
-    type: _types.id
+    type: _types.basics.id
     nullable: true
     redundancy:
       - { column: data.tables.account.col.user_id, source: true }

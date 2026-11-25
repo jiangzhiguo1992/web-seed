@@ -86,7 +86,7 @@ tables / entities / queries ──(type)──>  types
 
 ### 3.4 query 不写 SQL
 
-**选择**：只声明 `tables` / `params` / `returns` / `index_ref` / `caches` / `archive`。`params` 第一项必须是 `ctx context.Context`（生成器注入，SQL 参数从第二项开始）；`returns` 最后一项必须是 `{name: err, kind: error}`，不能省略。对象/对象列表批量参数用 `_types.object` / `_types.list<_types.object>` 加 `fields`（`name` / `type` / `required` / `nullable`）声明元素字段，checker 强制非空；不要把字段结构塞进 `_types.json`。
+**选择**：只声明 `tables` / `params` / `returns` / `index_ref` / `caches` / `archive`。`params` 第一项必须是 `ctx context.Context`（生成器注入，SQL 参数从第二项开始）；`returns` 最后一项必须是 `{name: err, kind: error}`，不能省略。对象/对象列表批量参数用 `_types.structures.object` / `_types.structures.list<_types.structures.object>` 加 `fields`（`name` / `type` / `required` / `nullable`）声明元素字段，checker 强制非空；不要把字段结构塞进 `_types.basics.json`。
 **理由**：SQL 语义 checker 无法验证；写进契约就是第二份真相，必然与 `.sql` 实现漂移。
 **代价**：SQL 质量靠 `EXPLAIN` 与评审。契约只保证"这个查询被设计过、用到的索引列前缀与登记列一致、缓存/归档引用与 storage 双向对齐"。
 
@@ -116,7 +116,7 @@ tables / entities / queries ──(type)──>  types
 
 时间列统一用 `timestamp`（应用层只处理 UTC），`datetime` 族不使用。**（`[评审]`）**
 
-实体 ID 与外键 ID 统一用 `_types.id`（integer，bits 64）；分页偏移、计数、状态码等非 ID 整数用 `_types.integer`（bits 32）。**（`[评审]`）**
+实体 ID 与外键 ID 统一用 `_types.basics.id`（integer，bits 64）；分页偏移、计数、状态码等非 ID 整数用 `_types.basics.integer`（bits 32）。**（`[评审]`）**
 
 ### 4.2 索引与冗余
 
@@ -129,7 +129,7 @@ tables / entities / queries ──(type)──>  types
 # 子表列：account 被硬删时级联删除本行
 columns:
   - name: account_id
-    type: _types.id
+    type: _types.basics.id
     nullable: false
     references: { column: data.tables.account.col.id, on_delete: cascade }
 ```

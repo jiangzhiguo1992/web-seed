@@ -169,9 +169,9 @@ paths:
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   X:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: id, schema: { type: _types.integer }, required: true, description: "id" }
+      - { name: id, schema: { type: _types.basics.integer }, required: true, description: "id" }
 services: []
 `)
 	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
@@ -316,14 +316,14 @@ topics:
     summary: "created"
     publish:
       payload:
-        type: _types.object
+        type: _types.schemas.object
         properties:
-          - { name: id, schema: { type: integer }, required: true, description: "id" }
+          - { name: id, schema: { type: _types.basics.integer }, required: true, description: "id" }
           - { name: account, schema: { ref: data.entities.account }, required: true, description: "account" }
           - name: attributes
             schema:
-              type: _types.map
-              values: { type: string }
+              type: _types.schemas.map
+              values: { type: _types.basics.string }
               min_items: 1
               max_items: 5
               key_patterns: [ '^[a-z][a-z0-9_]*$' ]
@@ -332,7 +332,7 @@ topics:
 `)
 	writeFixture(t, root, "contracts/data/entities/account.yaml", `id: data.entities.account
 fields:
-  - { name: id, json_name: id, type: _types.integer, description: "id" }
+  - { name: id, json_name: id, type: _types.basics.integer, description: "id" }
 `)
 	files, err := build(root)
 	if err != nil {
@@ -450,7 +450,7 @@ paths:
             - { name: Content-Type, required: true, value: text/plain, description: "body" }
           body:
             kind: text
-            type: _types.string
+            type: _types.basics.string
 `)
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas: {}
@@ -509,7 +509,7 @@ paths:
         body:
           kind: form
           fields:
-            - { name: username, type: _types.string, required: true, description: "name", to: params.input.username }
+            - { name: username, type: _types.basics.string, required: true, description: "name", to: params.input.username }
       response:
         "204":
           msg: "OK"
@@ -517,9 +517,9 @@ paths:
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   Input:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: username, schema: { type: _types.string }, required: true, description: "name" }
+      - { name: username, schema: { type: _types.basics.string }, required: true, description: "name" }
 services: []
 `)
 	writeFixture(t, root, "contracts/data/enums/account.yaml", `id: data.enums
@@ -778,9 +778,9 @@ paths:
 	writeFixture(t, root, "contracts/capabilities/services/x.yaml", `id: cap.services.x
 schemas:
   X:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: id, schema: { type: _types.integer }, required: true, description: "id" }
+      - { name: id, schema: { type: _types.basics.integer }, required: true, description: "id" }
 services: []
 `)
 	writeFixture(t, root, "contracts/platform/errors/x.yaml", `id: platform.errors.x
@@ -957,11 +957,11 @@ enums: []
 
 func TestRenderSchemaAnnotations(t *testing.T) {
 	obj := map[string]any{
-		"type": "_types.object",
+		"type": "_types.schemas.object",
 		"properties": []any{
 			map[string]any{
 				"name":        "id",
-				"schema":      map[string]any{"type": "string"},
+				"schema":      map[string]any{"type": "_types.basics.string"},
 				"description": "id",
 				"nullable":    true,
 				"read_only":   true,
@@ -982,7 +982,7 @@ func TestRenderSchemaAnnotations(t *testing.T) {
 		t.Fatalf("required aggregation lost: %#v", out)
 	}
 
-	list := map[string]any{"type": "_types.array", "items": map[string]any{"type": "string"}}
+	list := map[string]any{"type": "_types.schemas.array", "items": map[string]any{"type": "_types.basics.string"}}
 	out, err = renderSchemaNode(list, nil, nil, map[string]bool{}, testNodeKinds())
 	if err != nil {
 		t.Fatal(err)
@@ -992,7 +992,7 @@ func TestRenderSchemaAnnotations(t *testing.T) {
 		t.Fatalf("array items lost: %#v", item)
 	}
 
-	m := map[string]any{"type": "_types.map", "values": map[string]any{"type": "string"}}
+	m := map[string]any{"type": "_types.schemas.map", "values": map[string]any{"type": "_types.basics.string"}}
 	out, err = renderSchemaNode(m, nil, nil, map[string]bool{}, testNodeKinds())
 	if err != nil {
 		t.Fatal(err)

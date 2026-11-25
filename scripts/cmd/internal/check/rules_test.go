@@ -53,13 +53,13 @@ func TestTypeExpressionPatterns(t *testing.T) {
 			typ:  "cap.services",
 			path: []string{"services", "params", "type"},
 			accept: []string{
-				"_types.string", "*_types.string", "_types.list<_types.string>",
-				"data.enums.account_status", "_types.list<data.enums.account_status>",
+				"_types.basics.string", "*_types.basics.string", "_types.structures.list<_types.basics.string>",
+				"data.enums.account_status", "_types.structures.list<data.enums.account_status>",
 				"data.entities.account", "*data.entities.account",
 				"cap.services.account.schemas.AccountPage",
 				"*cap.services.account.schemas.AccountPage",
-				"_types.list<cap.services.account.schemas.AccountPage>",
-				"context.Context", "time.Duration", "_types.list<time.Duration>",
+				"_types.structures.list<cap.services.account.schemas.AccountPage>",
+				"context.Context", "time.Duration", "_types.structures.list<time.Duration>",
 			},
 			reject: []string{
 				"string", "List<string>", "data.tables.account", "@inline/1",
@@ -73,12 +73,12 @@ func TestTypeExpressionPatterns(t *testing.T) {
 			typ:  "data.entities",
 			path: []string{"fields", "type"},
 			accept: []string{
-				"_types.string", "*_types.timestamp", "data.enums.account_status",
-				"data.entities.account", "_types.list<data.entities.account>",
+				"_types.basics.string", "*_types.basics.timestamp", "data.enums.account_status",
+				"data.entities.account", "_types.structures.list<data.entities.account>",
 			},
 			reject: []string{
 				"string", "List<data.entities.account>", "data.tables.account",
-				"_types.list<data.enums.account_status>", "@inline/1",
+				"_types.structures.list<data.enums.account_status>", "@inline/1",
 				"data.enums.AccountStatus",
 			},
 		},
@@ -87,9 +87,9 @@ func TestTypeExpressionPatterns(t *testing.T) {
 			typ:  "data.queries",
 			path: []string{"queries", "params", "type"},
 			accept: []string{
-				"_types.string", "*_types.string", "_types.list<_types.string>",
+				"_types.basics.string", "*_types.basics.string", "_types.structures.list<_types.basics.string>",
 				"data.enums.account_status",
-				"_types.list<data.enums.account_status>", "context.Context",
+				"_types.structures.list<data.enums.account_status>", "context.Context",
 			},
 			reject: []string{
 				"string", "bigint", "List<string>", "data.tables.account",
@@ -165,13 +165,13 @@ func TestSoftZonesMarked(t *testing.T) {
 }
 
 func TestSoftFieldTypes(t *testing.T) {
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "string", Soft: true}}, testValueTypes(), false); err != nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "_types.basics.string", Soft: true}}, testValueTypes(), false); err != nil {
 		t.Fatalf("soft string field rejected: %v", err)
 	}
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "any", Soft: true}}, testValueTypes(), false); err != nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "_types.basics.any", Soft: true}}, testValueTypes(), false); err != nil {
 		t.Fatalf("soft any field rejected: %v", err)
 	}
-	if err := validateFieldTypes([]Field{{Name: "x", Type: "integer", Soft: true}}, testValueTypes(), false); err == nil {
+	if err := validateFieldTypes([]Field{{Name: "x", Type: "_types.basics.integer", Soft: true}}, testValueTypes(), false); err == nil {
 		t.Fatal("soft on integer field must fail")
 	}
 }
@@ -225,7 +225,7 @@ stability: draft
 do_not: []
 schemas:
   Filter:
-    type: _types.object
+    type: _types.schemas.object
     properties:
       - { name: status, schema: { ref: data.enums.x_status }, required: true, description: "status" }
 services:
@@ -273,7 +273,7 @@ topics:
     summary: "x"
     publish:
       payload:
-        type: _types.object
+        type: _types.schemas.object
         properties:
           - { name: status, schema: { ref: data.enums.x_status }, required: true, description: "status" }
       emitted_by: []

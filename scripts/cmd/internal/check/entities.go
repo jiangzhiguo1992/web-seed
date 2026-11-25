@@ -386,7 +386,7 @@ func (c *Checker) applyEntityFieldDefaults(e *entityInfo) {
 			if meta.primaryKey && typ == "integer" {
 				typ = "id"
 			}
-			typ = "_types." + typ
+			typ = "_types.basics." + typ
 			if meta.nullable && !f.HasNullable {
 				typ = "*" + typ
 			}
@@ -775,7 +775,7 @@ func (c *Checker) checkRelationFieldShape(f entityFieldInfo, where string) {
 		c.rulef("entity-field-variant", "%s: source.join.through requires table/from/to", where)
 	}
 	if _, ok := entityRef(f.Type); !ok || strings.Contains(f.Type, "*") {
-		c.rulef("entity-relation-type", "%s: relation type must be data.entities.* or _types.list<data.entities.*>, got %s", where, f.Type)
+		c.rulef("entity-relation-type", "%s: relation type must be data.entities.* or _types.structures.list<data.entities.*>, got %s", where, f.Type)
 	}
 }
 
@@ -1039,10 +1039,10 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 		}
 		expected[targetID][relationKey(e.ID, r.Name)] = entityRelationEntry{Entity: e.ID, Field: r.Name, Cardinality: inverseCardinality(card)}
 		if (card == "one_to_many" || card == "many_to_many") && !r.IsList {
-			c.rulef("entity-relation-arity", "%s: %s relation must use _types.list<data.entities.*>, got %s", where, card, r.Type)
+			c.rulef("entity-relation-arity", "%s: %s relation must use _types.structures.list<data.entities.*>, got %s", where, card, r.Type)
 		}
 		if card != "one_to_many" && card != "many_to_many" && r.IsList {
-			c.rulef("entity-relation-arity", "%s: _types.list<data.entities.*> requires one_to_many/many_to_many cardinality, got %s", where, card)
+			c.rulef("entity-relation-arity", "%s: _types.structures.list<data.entities.*> requires one_to_many/many_to_many cardinality, got %s", where, card)
 		}
 	}
 }
@@ -1145,7 +1145,7 @@ func (c *Checker) columnUnique(table, col string) bool {
 
 // resolvedColumnType 把列引用链解析为实际类型族；非引用/断链/成环时原样返回。
 func (c *Checker) resolvedColumnType(typ string) string {
-	typ = strings.TrimPrefix(typ, "_types.")
+	typ = strings.TrimPrefix(typ, "_types.basics.")
 	if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
 		return customType.Family
 	}

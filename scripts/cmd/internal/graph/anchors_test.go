@@ -98,7 +98,7 @@ topics:
     version: 1
     summary: "x"
     publish:
-      payload: { type: _types.integer }
+      payload: { type: _types.basics.integer }
       emitted_by: []
 
   - id: cap.events.x.activated
@@ -106,7 +106,7 @@ topics:
     version: 1
     summary: "x"
     publish:
-      payload: { type: _types.integer }
+      payload: { type: _types.basics.integer }
       emitted_by: []
 `)
 

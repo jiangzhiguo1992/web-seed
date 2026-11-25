@@ -16,10 +16,10 @@ data:
   submit:
     capability: cap.services.auth.login
     params:
-      auth_type: { from: form.auth_type, type: _types.string, enum: [pwd, phone, email], default: pwd }
-      identifier: { from: form.identifier, type: _types.string, required: true }
-      password: { from: form.password, type: _types.string, required: true, secret: true }
-      device_id: { from: device.id, type: _types.string }
+      auth_type: { from: form.auth_type, type: _types.basics.string, enum: [pwd, phone, email], default: pwd }
+      identifier: { from: form.identifier, type: _types.basics.string, required: true }
+      password: { from: form.password, type: _types.basics.string, required: true, secret: true }
+      device_id: { from: device.id, type: _types.basics.string }
 
 view_states:
   idle:
@@ -46,20 +46,20 @@ actions:
   send_code:
     capability: cap.services.verification.send
     params:
-      auth_type: { from: form.auth_type, type: _types.string, required: true }
-      target: { from: form.identifier, type: _types.string, required: true }
-      purpose: { from: form.purpose, type: _types.string, required: true }
-      account_id: { from: form.account_id, type: _types.id, optional: true }
+      auth_type: { from: form.auth_type, type: _types.basics.string, required: true }
+      target: { from: form.identifier, type: _types.basics.string, required: true }
+      purpose: { from: form.purpose, type: _types.basics.string, required: true }
+      account_id: { from: form.account_id, type: _types.basics.id, optional: true }
     ui: "secondary-button"
     label: "发送验证码"
   verify_code:
     capability: cap.services.verification.verify
     params:
-      auth_type: { from: form.auth_type, type: _types.string, required: true }
-      target: { from: form.identifier, type: _types.string, required: true }
-      purpose: { from: form.purpose, type: _types.string, required: true }
-      code: { from: form.code, type: _types.string, required: true, secret: true }
-      account_id: { from: form.account_id, type: _types.id, optional: true }
+      auth_type: { from: form.auth_type, type: _types.basics.string, required: true }
+      target: { from: form.identifier, type: _types.basics.string, required: true }
+      purpose: { from: form.purpose, type: _types.basics.string, required: true }
+      code: { from: form.code, type: _types.basics.string, required: true, secret: true }
+      account_id: { from: form.account_id, type: _types.basics.id, optional: true }
     ui: "primary-button"
     label: "校验验证码"
 

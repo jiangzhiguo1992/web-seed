@@ -28,24 +28,24 @@ table:
 
 columns:
   - name: account_id
-    type: _types.id
+    type: _types.basics.id
     nullable: true
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
   - name: code
-    type: _types.phone_code
+    type: _types.basics.phone_code
     nullable: false
     comment: "国际区号，例如 +86"
 
   - name: number
-    type: _types.phone_number
+    type: _types.basics.phone_number
     nullable: false
     sensitivity: pii
     comment: "手机号；只允许数字，与 code 拼成 E.164 快照"
 
   - name: operator
-    type: _types.string
+    type: _types.basics.string
     nullable: true
     max_len: 32
     comment: "运营商"

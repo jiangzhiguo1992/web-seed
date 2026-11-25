@@ -193,15 +193,15 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	}
 	const baseTableID = "data.tables.base"
 	columnName := firstExample(columnField.ItemFields, "name", "name")
-	columnType := defaultString(columnField.ItemFields, "type", "_types.string")
+	columnType := defaultString(columnField.ItemFields, "type", "_types.basics.string")
 	if columnTypeOverride != "" {
-		name := strings.TrimPrefix(columnTypeOverride, "_types.")
+		name := strings.TrimPrefix(columnTypeOverride, "_types.basics.")
 		_, familyOK := s.ValueTypes.TypeFamilies[name]
 		_, customOK := s.ValueTypes.CustomTypes[name]
 		if !familyOK && !customOK {
 			return nil, fmt.Errorf("RenderTable: unknown column type %q (not a family or custom type)", columnTypeOverride)
 		}
-		columnType = "_types." + name
+		columnType = "_types.basics." + name
 	}
 	columnParams, err := scaffoldFamilyParams(s, columnType)
 	if err != nil {
@@ -418,8 +418,8 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 			Name:        "Exists" + pascal(name),
 			Description: "TODO: 查询语义",
 			Tables:      []queryTableScaffold{{Table: tableID}},
-			Params:      []queryParamScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "_types.id", Column: tableID + ".col.id"}},
-			Returns:     []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "_types.boolean"}, {Name: "err", Kind: "error"}},
+			Params:      []queryParamScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "_types.basics.id", Column: tableID + ".col.id"}},
+			Returns:     []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "_types.basics.boolean"}, {Name: "err", Kind: "error"}},
 			Errors:      []string{},
 			IndexRef:    []queryIndexRefScaffold{{Index: tableID + ".pk", Columns: []string{"id"}}},
 			UsedBy:      []string{},
@@ -434,7 +434,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 }
 
 func scaffoldFamilyParams(s *Schema, columnType string) (map[string]any, error) {
-	columnType = strings.TrimPrefix(columnType, "_types.")
+	columnType = strings.TrimPrefix(columnType, "_types.basics.")
 	if _, custom := s.ValueTypes.CustomTypes[columnType]; custom {
 		return nil, nil
 	}
@@ -934,10 +934,10 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 		OwnerModule:   module,
 		Schemas: map[string]serviceSchemaScaffold{
 			"GetInput": {
-				Type: "_types.object",
+				Type: "_types.schemas.object",
 				Properties: []servicePropertyScaffold{{
 					Name:        "id",
-					Schema:      serviceSchemaScaffold{Type: "_types.id"},
+					Schema:      serviceSchemaScaffold{Type: "_types.basics.id"},
 					Required:    true,
 					Description: "TODO: 字段说明",
 				}},
@@ -948,7 +948,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 			Summary:    "TODO: 服务说明",
 			Visibility: "public",
 			Params:     []methodArgScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "input", Type: fileID + ".schemas.GetInput"}},
-			Returns:    []methodArgScaffold{{Name: "value", Type: "_types.any", Value: "step.load.value"}, {Name: "err", Type: "error", Value: "*"}},
+			Returns:    []methodArgScaffold{{Name: "value", Type: "_types.basics.any", Value: "step.load.value"}, {Name: "err", Type: "error", Value: "*"}},
 			TxMode:     "read_only",
 			Steps: []stepScaffold{
 				{
@@ -956,7 +956,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 					Kind:    "logic",
 					Summary: "TODO: 实现步骤",
 					Input:   []inputScaffold{{Name: "input", Value: "params.input", Description: "TODO: 入参用途"}},
-					Output:  []outputScaffold{{Name: "value", Type: "_types.any", Description: "TODO: 产出说明"}},
+					Output:  []outputScaffold{{Name: "value", Type: "_types.basics.any", Description: "TODO: 产出说明"}},
 					Errors:  []string{"platform.errors.COMMON_INTERNAL"},
 					Rules:   []ruleRefScaffold{},
 					Goto:    "$end",
@@ -1111,10 +1111,10 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 			Idempotent: false,
 			Publish: eventPublishScaffold{
 				Payload: eventPayloadScaffold{
-					Type: "_types.object",
+					Type: "_types.schemas.object",
 					Properties: []servicePropertyScaffold{{
 						Name:        "id",
-						Schema:      serviceSchemaScaffold{Type: "_types.id"},
+						Schema:      serviceSchemaScaffold{Type: "_types.basics.id"},
 						Required:    true,
 						Description: "TODO: id 说明",
 					}},
@@ -1274,7 +1274,7 @@ func RenderFieldValueWithTypes(f Field, vt ValueTypes) (any, error) {
 }
 
 func renderFieldValue(f Field, index int, vt ValueTypes) (any, error) {
-	typ := strings.ReplaceAll(f.Type, "_types.", "")
+	typ := BareTypeName(f.Type)
 	switch {
 	case typ == "object":
 		fields := f.Fields
@@ -1376,7 +1376,7 @@ func fieldInt(v any) (int, bool) {
 }
 
 func uniqueKeyValue(typ string, index int, vt ValueTypes) any {
-	original := strings.ReplaceAll(typ, "_types.", "")
+	original := BareTypeName(typ)
 	t := original
 	if ct, ok := vt.CustomTypes[t]; ok {
 		t = ct.Family

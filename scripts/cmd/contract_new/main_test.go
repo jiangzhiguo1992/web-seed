@@ -256,9 +256,9 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
-      - { name: exists, type: _types.boolean, value: step.load.exists }
+      - { name: exists, type: _types.basics.boolean, value: step.load.exists }
       - { name: err, type: error, value: "*" }
     steps:
       - id: load
@@ -267,7 +267,7 @@ services:
         input:
           - { name: id, value: params.id, description: "主键" }
         output:
-          - { name: exists, type: _types.boolean, description: "是否存在" }
+          - { name: exists, type: _types.basics.boolean, description: "是否存在" }
         errors: []
         query: data.queries.scaffold.exists_scaffold
         goto: note

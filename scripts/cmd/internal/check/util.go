@@ -26,8 +26,8 @@ func inList(list []any, s string) bool {
 	return false
 }
 
-// normalizeContractType 把契约写法 _types.list<T> / _types.<name> 归一为
-// checker 内部的 List<T> / <name>；指针前缀保留。用于 Go/SQL 类型槽位，
+// normalizeContractType 把契约写法 _types.structures.list<T> / _types.basics.<name>
+// 归一为 checker 内部的 List<T> / <name>；指针前缀保留。用于 Go/SQL 类型槽位，
 // schema 节点与列类型不走这里。
 func normalizeContractType(s string) string {
 	s = strings.TrimSpace(s)
@@ -35,11 +35,11 @@ func normalizeContractType(s string) string {
 	if strings.HasPrefix(s, "*") {
 		ptr, s = "*", strings.TrimSpace(strings.TrimPrefix(s, "*"))
 	}
-	if strings.HasPrefix(s, "_types.list<") && strings.HasSuffix(s, ">") {
-		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "_types.list<"), ">"))
+	if strings.HasPrefix(s, "_types.structures.list<") && strings.HasSuffix(s, ">") {
+		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "_types.structures.list<"), ">"))
 		return ptr + "List<" + normalizeContractType(inner) + ">"
 	}
-	return ptr + strings.TrimPrefix(s, "_types.")
+	return ptr + contractspec.BareTypeName(s)
 }
 
 func asMap(v any) (map[string]any, bool) {
@@ -104,8 +104,8 @@ func isColumnType(t string, ct ValueTypes) bool {
 	if isTableColumnType(t) {
 		return true
 	}
-	name := strings.TrimPrefix(t, "_types.")
-	if name == t {
+	name, ok := strings.CutPrefix(t, "_types.basics.")
+	if !ok {
 		return false
 	}
 	if _, ok := ct.TypeFamilies[name]; ok {

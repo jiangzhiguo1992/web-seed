@@ -889,7 +889,7 @@ func (c *Checker) arrayItemNode(node map[string]any) (map[string]any, bool) {
 		}
 		node = resolved
 	}
-	if typ, _ := node["type"].(string); typ != "_types.array" {
+	if typ, _ := node["type"].(string); typ != "_types.schemas.array" {
 		return nil, false
 	}
 	item, ok := schemaFromAny(node["items"])

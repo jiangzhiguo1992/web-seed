@@ -16,8 +16,8 @@ data:
     capability: cap.services.account.list
     params:
       status: { from: query.status, enum: cap.lifecycles.account.states.values, optional: true }
-      offset: { from: query.offset, type: _types.integer, default: 0 }
-      limit: { from: query.limit, type: _types.integer, default: 20 }
+      offset: { from: query.offset, type: _types.basics.integer, default: 0 }
+      limit: { from: query.limit, type: _types.basics.integer, default: 20 }
     cache:
       stale_time: 30s
       refetch_on_focus: false
@@ -48,7 +48,7 @@ actions:
   activate:
     capability: cap.services.account.activate
     params:
-      id: { from: row.id, type: _types.id, required: true }
+      id: { from: row.id, type: _types.basics.id, required: true }
     permission: platform.security.permissions.account_write
     available_when: { transitions: [cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate] }
     ui: "row-action"
@@ -56,8 +56,8 @@ actions:
   suspend:
     capability: cap.services.account.suspend
     params:
-      id: { from: row.id, type: _types.id, required: true }
-      reason: { from: form.reason, type: _types.string, required: true }
+      id: { from: row.id, type: _types.basics.id, required: true }
+      reason: { from: form.reason, type: _types.basics.string, required: true }
     permission: platform.security.permissions.account_write
     available_when: { transition: cap.lifecycles.account.transitions.suspend }
     ui: "row-action"
@@ -66,7 +66,7 @@ actions:
   delete:
     capability: cap.services.account.delete
     params:
-      id: { from: row.id, type: _types.id, required: true }
+      id: { from: row.id, type: _types.basics.id, required: true }
     permission: platform.security.permissions.account_delete
     available_when: { transition: cap.lifecycles.account.destroy }
     ui: "row-action"

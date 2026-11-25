@@ -16,12 +16,12 @@ topics:
     idempotent: true
     publish:
       payload:
-        type: _types.object
+        type: _types.schemas.object
         properties:
-          - { name: token_id, schema: { type: _types.id }, required: true, description: "令牌 ID" }
-          - { name: account_id, schema: { type: _types.id }, required: true, description: "账号 ID" }
+          - { name: token_id, schema: { type: _types.basics.id }, required: true, description: "令牌 ID" }
+          - { name: account_id, schema: { type: _types.basics.id }, required: true, description: "账号 ID" }
           - { name: account, schema: { ref: data.entities.account }, required: true, description: "账号实体" }
-          - { name: issued_at, schema: { type: _types.timestamp }, required: true, description: "签发时间" }
+          - { name: issued_at, schema: { type: _types.basics.timestamp }, required: true, description: "签发时间" }
       emitted_by:
         - cap.services.token.issue
     subscribe:

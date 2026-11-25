@@ -911,10 +911,10 @@ func applyPropertyAnnotations(prop, out map[string]any) {
 	}
 }
 
-// httpTypeResolver 把 _types.<name> 解析成 OpenAPI 标量 schema。
+// httpTypeResolver 把 _types.basics.<name> 解析成 OpenAPI 标量 schema。
 func httpTypeResolver(customTypes map[string]contractspec.CustomValueType) openapispec.TypeResolver {
 	return func(name string) (map[string]any, error) {
-		typ := strings.TrimPrefix(name, "_types.")
+		typ := strings.TrimPrefix(name, "_types.basics.")
 		if typ == "any" {
 			return map[string]any{}, nil
 		}
@@ -930,7 +930,7 @@ func httpTypeResolver(customTypes map[string]contractspec.CustomValueType) opena
 }
 
 func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueType) map[string]any {
-	typ = strings.TrimPrefix(typ, "_types.")
+	typ = strings.TrimPrefix(typ, "_types.basics.")
 	family := typ
 	var params map[string]any
 	if nt, ok := customTypes[typ]; ok {
@@ -1385,14 +1385,14 @@ func entitySchema(fields []any, enums map[string][]any, columns map[string]colum
 
 func typeSchema(typ string, enums map[string][]any, customTypes map[string]contractspec.CustomValueType) map[string]any {
 	typ = strings.TrimPrefix(strings.TrimSpace(typ), "*")
-	if strings.HasPrefix(typ, "_types.list<") && strings.HasSuffix(typ, ">") {
-		inner := strings.TrimSuffix(strings.TrimPrefix(typ, "_types.list<"), ">")
+	if strings.HasPrefix(typ, "_types.structures.list<") && strings.HasSuffix(typ, ">") {
+		inner := strings.TrimSuffix(strings.TrimPrefix(typ, "_types.structures.list<"), ">")
 		return map[string]any{"type": "array", "items": typeSchema(inner, enums, customTypes)}
 	}
 	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
 		return map[string]any{"type": "array", "items": typeSchema(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"), enums, customTypes)}
 	}
-	typ = strings.TrimPrefix(typ, "_types.")
+	typ = strings.TrimPrefix(typ, "_types.basics.")
 	if _, ok := customTypes[typ]; ok {
 		return scalarSchema(typ, customTypes)
 	}

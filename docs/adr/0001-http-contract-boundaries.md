@@ -1,7 +1,7 @@
 # ADR 0001：HTTP 契约的边界与验收模型
 
 - 状态：已采纳（mount、错误模型、audience、consumer、多 app、模板封闭化、错误闭包、覆盖率报告已实现；acceptance runner 待实现）
-- 修订：文末「2026-11-23 决策修订」「2026-11-23 JWT 认证决策」「2026-11-25 `_types.id` 决策」分别取代本文关于版本归属、`shared.yaml`、`_types.any`、`request.idempotency`、旧认证方案以及 `_types.positive_integer` 的结论。
+- 修订：文末「2026-11-23 决策修订」「2026-11-23 JWT 认证决策」「2026-11-25 `_types.basics.id` 决策」分别取代本文关于版本归属、`shared.yaml`、`_types.basics.any`、`request.idempotency`、旧认证方案以及 `_types.basics.positive_integer` 的结论。
 - 日期：2026-11-23
 - 关联：`contracts/capabilities/protocols/http/*.yaml`、`contracts/platform/http_conventions.yaml`、`contracts/_meta/cap.protocols.http.yaml`、`contracts/_meta/scenario.http.yaml`
 
@@ -171,7 +171,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 - 删除 `components` 源字段；`shared` 是唯一源，normalizer 拒绝任何源文件里的 `components`。生成的 OpenAPI `components` 是产物，不是契约。
 - `make contract-new` 的 `RenderHTTP` 同步改为新形状；否则脚手架会继续生成旧结构，这是“AI 漂移”的另一个入口。
 
-仍然保留的 `_types.any` 只有两处，且都是**多态叶子**：
+仍然保留的 `_types.basics.any` 只有两处，且都是**多态叶子**：
 
 - `request.body.type` / `response.body.type`：可以是类型 ID 字符串，也可以是匿名 object；`http-service-type` / `http-service-return` 负责语义。
 - `shared.*`：OpenAPI 组件片段；`http-components` / `http-shared` 负责逐项校验。
@@ -234,7 +234,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 - `quality-refs` 只校验 `required_scenarios` 存在、make 目标存在、`must_test.id` 唯一；不判断 gate 是否真的 blocking，也不执行命令。
 - `versioning-refs` 只校验 `api.current`、`detection.command` 与弃用头；不校验 `accepted_breaking_changes` 的语义。
-- `analytics-refs` 校验事件名/HTTP ref/page/forbidden，并校验 `common_properties` 的 forbidden/命名/重复、事件内 property 重名、`trigger: mount` 必须有 page、`trigger: api_success` 必须有 ref；`analytics-types` 校验 property.type 是标量 basic type、`data.types` 自定义类型或 `data.enums` 枚举名，拒绝 `_types.any` / `_types.json`；不校验 property 的值域约束是否与业务字段一致。值域映射刻意不建模：property 是事件载荷，不保证等于表列/实体字段；直接按名字映射会产生 `account_id(string)` vs 表列 `integer` 这类假阳性；能确定枚举来源的属性（如 `page.account_list_viewed.filter_status`）已改为 `data.enums.account_status`，其余保持事件载荷类型。
+- `analytics-refs` 校验事件名/HTTP ref/page/forbidden，并校验 `common_properties` 的 forbidden/命名/重复、事件内 property 重名、`trigger: mount` 必须有 page、`trigger: api_success` 必须有 ref；`analytics-types` 校验 property.type 是标量 basic type、`data.types` 自定义类型或 `data.enums` 枚举名，拒绝 `_types.basics.any` / `_types.basics.json`；不校验 property 的值域约束是否与业务字段一致。值域映射刻意不建模：property 是事件载荷，不保证等于表列/实体字段；直接按名字映射会产生 `account_id(string)` vs 表列 `integer` 这类假阳性；能确定枚举来源的属性（如 `page.account_list_viewed.filter_status`）已改为 `data.enums.account_status`，其余保持事件载荷类型。
 - `analytics-pii` 校验 forbidden 名单 snake_case、同一 property 在 common/event 中的 type/pii 一致、pii:true 不得出现在 forbidden，并要求 `pii: true` 的属性被 `log_fields.never_log` 覆盖（`pii: false` 不得命中 never_log）；不把 property 自动映射到表列 sensitivity，表列覆盖由 `log-field-refs` 单独校验。`session_id`/`account_id` 当前按非 PII 关联 ID 处理，合规要求变化时需显式改 `pii: true`。
 - `log-field-refs` 校验字段名与 `required_for` 枚举、`never_log` 条目格式/重复，并反查 `data/tables/*.yaml` 中 `sensitivity: pii|secret` 的列是否被 `never_log` 覆盖；不校验日志调用点是否真的使用这些字段。`never_log` 的 `*_body` 曾把 analytics 的 `has_body` 误判为正文，已将属性改名为 `has_payload`；同类布尔字段（如未来的 `has_token`）会命中 `*_token`，命名时必须避开敏感后缀。`TestNeverLogPatterns` 固定了当前 glob 语义：`*_token` 命中 `access_token` 但不命中 `token_type`，`*_email` 命中 `contact_email` 但不命中 `email_verified`。
 - `metric-shape` 只校验指标名唯一、kind、forbidden labels；不强制 counter/histogram 的命名后缀。
@@ -250,12 +250,12 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 1. **版本归属**：`mount.api_version`（必填，`v<数字>`）成为唯一版本源；生成器按 app 内 include 文件的版本派生 `servers: /<api_version>`，`mount.path` 与 `paths` 不写版本。`project.yaml` 的 `app.api_version` 已删除；同一 app 混版本会被 checker/generator 拒绝。在没有 v2 mount 的情况下，`admin_v2` app 与生成物一并移除，待 v2 契约重做后再加回。
 2. **共享组件**：删除 `protocols/http/shared.yaml`，HTTP 文件也不再保留 `shared`。平台级 securityScheme / schema / parameter / header / response 全部在 `platform/http_conventions.yaml` 的 `components`，由 `gen_openapi` 注入每个 api app；HTTP 文件只引用组件名，不再定义文件私有组件。
-3. **`_types.any` 退场**：`cap.protocols.http` 不再有 `_types.any`。`request` / `response` 都有独立 `headers`；path/query 参数是带 `name` / `type` / `description` / `to` 的对象列表；body 用 `kind` 区分 json/form/multipart/text/binary；body 类型必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
+3. **`_types.basics.any` 退场**：`cap.protocols.http` 不再有 `_types.basics.any`。`request` / `response` 都有独立 `headers`；path/query 参数是带 `name` / `type` / `description` / `to` 的对象列表；body 用 `kind` 区分 json/form/multipart/text/binary；body 类型必须是具名类型 ID，匿名 object 请求体被 `http-service-type` 拒绝。
 4. **客户端幂等键删除**：幂等键 header、OpenAPI components 与场景字段全部删除；幂等由 API 内部按业务语义决定，不由客户端传入的 header 控制。
 5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。HTTP 契约的 `request.headers` / `response.headers` 保留为独立字段，`Authorization` 通过 header 的 `auth: Bearer` 表达。
 6. **安全凭据注入**：`request.headers` 中的 `Authorization` 使用 `auth: Bearer`；认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
 7. **契约优先 HTTP 模型**：`request.headers` / `response.headers` 独立于 body；`Content-Type`、`Accept`、`Authorization` 等业务/表示层头在 headers 中声明；`Connection`、`Content-Length`、`Expect`、`Transfer-Encoding` 等传输层头不写进契约；`body.kind` 支持 json/form/multipart/text/binary；response 支持按状态声明 headers 与 body。生成器再把这些映射为 OpenAPI security/content/headers，契约阶段不以 OpenAPI 的字段形状为约束。
-8. **账号 ID 类型**：删除 `_types.account_id`，HTTP path 与认证注入的 `account_id` 改用 `_types.positive_integer`（`min: 1`）；普通 service/query 的账号 ID 仍是 `_types.integer`。
+8. **账号 ID 类型**：删除 `_types.basics.account_id`，HTTP path 与认证注入的 `account_id` 改用 `_types.basics.positive_integer`（`min: 1`）；普通 service/query 的账号 ID 仍是 `_types.basics.integer`。
 9. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发。
 
 同时参数级 `to` 的值统一写 `params.<service 参数路径>`（如 `params.input`、`params.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
@@ -285,12 +285,12 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 7. **operation 字段顺序**：固定为 `id` / `name` / `summary` / `service` / `request` / `response` / `used_by`；`used_by` 放最后，避免在 operation 主体中间打断请求/响应阅读。
 8. **认证方案名统一为 `Bearer`**：源契约 `auth: Bearer`，平台 `components.securitySchemes.Bearer` 同名；生成 OpenAPI 的 `security` 直接使用该名字，不再维护 `BearerAuth` 的额外映射。
 
-## 2026-11-25 `_types.id` 决策
+## 2026-11-25 `_types.basics.id` 决策
 
-第 8 条的 `_types.positive_integer` 已删除，账号 ID 不再区分 HTTP 与 service/query。统一规则：
+第 8 条的 `_types.basics.positive_integer` 已删除，账号 ID 不再区分 HTTP 与 service/query。统一规则：
 
-1. **单一 ID 类型**：实体 ID 与外键 ID 全部用 `_types.id`（integer，bits 64，0 可作为无值哨兵）；分页、计数、状态码等非 ID 整数继续用 `_types.integer`（bits 32）。
-2. **全链路覆盖**：表列、entity 字段（由来源列推断）、query/service/event 的 ID 参数和返回、HTTP path ID 参数、`contract-new` 骨架全部使用 `_types.id`。
+1. **单一 ID 类型**：实体 ID 与外键 ID 全部用 `_types.basics.id`（integer，bits 64，0 可作为无值哨兵）；分页、计数、状态码等非 ID 整数继续用 `_types.basics.integer`（bits 32）。
+2. **全链路覆盖**：表列、entity 字段（由来源列推断）、query/service/event 的 ID 参数和返回、HTTP path ID 参数、`contract-new` 骨架全部使用 `_types.basics.id`。
 3. **硬校验**：`reference-target` 比较 integer 列 bits；`query-param-column` 比较参数与列 bits；`service-input-type` 比较赋值两端的 integer bits。32 位类型不能绑定或赋给 64 位 ID。
-4. **HTTP 取舍**：HTTP path ID 使用 `_types.id` 后不再生成 `minimum: 1`；`0` 视为无效 ID，由查询返回未找到，而不是由 OpenAPI 层拒绝。
-5. **不引入 `id_positive`**：HTTP path 与 service/query 共用 `_types.id`，`0` 只作为 service 内部“无值”哨兵（如 auth 的 `binding_id`）。若未来需要路径层拒绝，必须单独设计请求约束类型，不得把哨兵语义塞回领域 ID。当前决定接受 OpenAPI 缺少 `minimum`，以保持单一 ID 类型。
+4. **HTTP 取舍**：HTTP path ID 使用 `_types.basics.id` 后不再生成 `minimum: 1`；`0` 视为无效 ID，由查询返回未找到，而不是由 OpenAPI 层拒绝。
+5. **不引入 `id_positive`**：HTTP path 与 service/query 共用 `_types.basics.id`，`0` 只作为 service 内部“无值”哨兵（如 auth 的 `binding_id`）。若未来需要路径层拒绝，必须单独设计请求约束类型，不得把哨兵语义塞回领域 ID。当前决定接受 OpenAPI 缺少 `minimum`，以保持单一 ID 类型。

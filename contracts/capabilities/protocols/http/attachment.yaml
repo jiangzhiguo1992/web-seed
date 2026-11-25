@@ -25,11 +25,11 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         query:
-          - { name: owner_table_name, type: _types.string, required: true, description: "所有者物理表名", to: params.owner_table_name }
-          - { name: owner_id, type: _types.id, required: true, description: "所有者行 ID", to: params.owner_id }
-          - { name: purpose, type: _types.string, required: false, description: "用途过滤", to: params.purpose }
-          - { name: offset, type: _types.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
-          - { name: limit, type: _types.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
+          - { name: owner_table_name, type: _types.basics.string, required: true, description: "所有者物理表名", to: params.owner_table_name }
+          - { name: owner_id, type: _types.basics.id, required: true, description: "所有者行 ID", to: params.owner_id }
+          - { name: purpose, type: _types.basics.string, required: false, description: "用途过滤", to: params.purpose }
+          - { name: offset, type: _types.basics.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
+          - { name: limit, type: _types.basics.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
           msg: "成功"
@@ -84,7 +84,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "附件 ID", to: params.id }
       response:
         200:
           msg: "成功"
@@ -109,7 +109,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "附件 ID", to: params.id }
       response:
         204:
           msg: "已删除"
@@ -136,7 +136,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "附件 ID", to: params.id }
       response:
         200:
           msg: "成功"
@@ -172,7 +172,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "附件 ID", to: params.id }
       response:
         200:
           msg: "成功"
@@ -203,7 +203,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "附件 ID", to: params.id }
       response:
         200:
           msg: "已标记失败"

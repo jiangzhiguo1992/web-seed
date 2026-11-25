@@ -422,7 +422,7 @@ func (c *Checker) checkQueryPagination(q *queryInfo) {
 
 func (c *Checker) checkPaginationParam(name string, p queryParam, where string) {
 	if normalizeContractType(p.Type) != "integer" {
-		c.rulef("query-pagination", "%s: %s must have type _types.integer", where, name)
+		c.rulef("query-pagination", "%s: %s must have type _types.basics.integer", where, name)
 	}
 	if !p.Nullable {
 		c.rulef("query-pagination", "%s: %s must set nullable:true", where, name)
@@ -495,7 +495,7 @@ func (c *Checker) checkQueryParamFields(p queryParam, where string) {
 	isObjectList := base == "List<object>"
 	if !isObject && !isObjectList {
 		if p.HasFields {
-			c.rulef("query-params", "%s: fields is only allowed for _types.object/_types.list<_types.object>, got %s", where, p.Type)
+			c.rulef("query-params", "%s: fields is only allowed for _types.structures.object/_types.structures.list<_types.structures.object>, got %s", where, p.Type)
 		}
 		return
 	}
@@ -527,7 +527,7 @@ func (c *Checker) checkQueryParamFields(p queryParam, where string) {
 func nonScalarFieldType(typ string) bool {
 	base := normalizeContractType(typ)
 	return base == "object" || base == "array" || base == "map" || base == "set" ||
-		strings.HasPrefix(base, "List<") || strings.HasPrefix(base, "_types.list")
+		strings.HasPrefix(base, "List<") || strings.HasPrefix(base, "_types.structures.list")
 }
 
 // isPaginationParam 标记保留分页参数名；其 default 形状由 checkQueryPagination 统一校验。

@@ -38,28 +38,28 @@ table:
 
 columns:
   - name: account_id
-    type: _types.id
+    type: _types.basics.id
     nullable: false
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "账号 ID；验证体不早于 account 存在，不建数据库外键"
 
   - name: auth_type
-    type: _types.integer
+    type: _types.basics.integer
     nullable: false
     comment: "认证方式整数码；映射 data.enums.auth_type；只允许 phone/email"
 
   - name: auth_id
-    type: _types.id
+    type: _types.basics.id
     nullable: false
     comment: "认证绑定 ID；auth_type=phone 指向 auth_phone，auth_type=email 指向 auth_email；不建外键"
 
   - name: purpose
-    type: _types.integer
+    type: _types.basics.integer
     nullable: false
     comment: "验证用途整数码；映射 data.enums.verification_purpose，例如注册/登录/重置密码"
 
   - name: code_hash
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 32
     max_len: 128
@@ -67,29 +67,29 @@ columns:
     comment: "验证码/令牌哈希；不存原文"
 
   - name: content
-    type: _types.string
+    type: _types.basics.string
     nullable: true
     max_len: 4096
     sensitivity: secret
     comment: "发送正文快照；可能含验证码原文，按 secret 管理，禁止进入日志/响应/事件"
 
   - name: sent_at
-    type: _types.timestamp
+    type: _types.basics.timestamp
     nullable: true
     comment: "实际发送时间；发送失败为空"
 
   - name: expire_at
-    type: _types.timestamp
+    type: _types.basics.timestamp
     nullable: false
     comment: "验证码过期时间；必须晚于 created_at"
 
   - name: consumed_at
-    type: _types.timestamp
+    type: _types.basics.timestamp
     nullable: true
     comment: "验证通过/消费时间；为空表示未使用"
 
   - name: attempt_count
-    type: _types.integer
+    type: _types.basics.integer
     nullable: false
     default: 0
     min: 0

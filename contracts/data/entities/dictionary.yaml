@@ -77,7 +77,7 @@ fields:
         to: data.tables.dictionary.col.id
 
   - name: Children
-    type: _types.list<data.entities.dictionary>
+    type: _types.structures.list<data.entities.dictionary>
     description: "直接子节点列表"
     source:
       join:

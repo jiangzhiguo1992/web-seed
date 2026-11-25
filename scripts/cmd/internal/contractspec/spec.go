@@ -31,11 +31,45 @@ type Schema struct {
 type SharedTypes struct {
 	ID             string                     `yaml:"id"`
 	Title          string                     `yaml:"title"`
-	TypeFamilies   map[string]ValueTypeFamily `yaml:"basic_types"`
+	TypeFamilies   map[string]ValueTypeFamily `yaml:"basics"`
 	Structures     map[string]Structure       `yaml:"structures"`
 	Schemas        map[string]SchemaKind      `yaml:"schemas"`
 	ParamTargets   map[string]string          `yaml:"param_targets"`
 	TypeVocabulary TypeVocabulary             `yaml:"type_vocabulary"`
+}
+
+// _types 引用的三个命名空间：basics=标量值域（含 data/types.yaml 自定义类型），
+// structures=字段树容器，schemas=schema 节点判别键。
+const (
+	TypeClassBasics     = "basics"
+	TypeClassStructures = "structures"
+	TypeClassSchemas    = "schemas"
+)
+
+// SplitTypeRef 把 `_types.<class>.<name>` 拆成命名空间与名称。
+// 形如 `_types.string` 的旧写法与未知命名空间一律返回 ok=false。
+func SplitTypeRef(ref string) (class, name string, ok bool) {
+	rest, found := strings.CutPrefix(ref, "_types.")
+	if !found {
+		return "", "", false
+	}
+	class, name, found = strings.Cut(rest, ".")
+	if !found || class == "" || name == "" {
+		return "", "", false
+	}
+	switch class {
+	case TypeClassBasics, TypeClassStructures, TypeClassSchemas:
+		return class, name, true
+	}
+	return "", "", false
+}
+
+// BareTypeName 去掉所有 _types 命名空间前缀，返回裸名；用于与内部枚举比较。
+func BareTypeName(ref string) string {
+	for _, class := range []string{TypeClassBasics, TypeClassStructures, TypeClassSchemas} {
+		ref = strings.ReplaceAll(ref, "_types."+class+".", "")
+	}
+	return ref
 }
 
 // TypeVocabulary 声明类型词汇审计的显式例外；例外之外的裸类型一律报错。
@@ -71,9 +105,10 @@ const customTypesRel = "contracts/data/types.yaml"
 
 // SchemaAlias 在字段规范的 types 列表中代表 schemas 下声明的全部节点种类。
 // 使用它可避免在每处 schema 槽位重复枚举 object/array/map/scalar/ref。
-const SchemaAlias = "_types.schema"
+const SchemaAlias = "_types.schemas.*"
 
-// SchemaNodeKind 返回 schema 节点的种类：ref 优先，其次由 type 的 struct/array/其他值决定。
+// SchemaNodeKind 返回 schema 节点的种类：ref 优先，其次由 type 的
+// `_types.schemas.object|array|map` 或 `_types.basics.*` 决定。
 func SchemaNodeKind(node map[string]any, kinds map[string]SchemaKind) (string, bool) {
 	_, hasRef := node["ref"]
 	typ, _ := node["type"].(string)
@@ -83,17 +118,20 @@ func SchemaNodeKind(node map[string]any, kinds map[string]SchemaKind) (string, b
 	if hasRef {
 		return "ref", kinds["ref"].Keys != nil
 	}
-	switch strings.TrimPrefix(typ, "_types.") {
+	switch typ {
 	case "":
 		return "", false
-	case "object":
+	case "_types.schemas.object":
 		return "object", kinds["object"].Keys != nil
-	case "array":
+	case "_types.schemas.array":
 		return "array", kinds["array"].Keys != nil
-	case "map":
+	case "_types.schemas.map":
 		return "map", kinds["map"].Keys != nil
 	default:
-		return "scalar", kinds["scalar"].Keys != nil
+		if class, _, ok := SplitTypeRef(typ); ok && class == TypeClassBasics {
+			return "scalar", kinds["scalar"].Keys != nil
+		}
+		return "", false
 	}
 }
 
@@ -128,7 +166,7 @@ func (t Targets) FileID(file string) string {
 }
 
 type ValueTypes struct {
-	TypeFamilies   map[string]ValueTypeFamily `yaml:"basic_types"`
+	TypeFamilies   map[string]ValueTypeFamily `yaml:"basics"`
 	CustomTypes    map[string]CustomValueType `yaml:"custom_types"`
 	Structures     map[string]Structure       `yaml:"structures"`
 	Schemas        map[string]SchemaKind      `yaml:"schemas"`
@@ -234,7 +272,7 @@ func LoadSchemaByType(root, typ string) (*Schema, string, error) {
 		return nil, "", fmt.Errorf("no meta schema for type %q under %s", typ, dir)
 	}
 	if needsSharedTypes(typ) && len(found.ValueTypes.TypeFamilies) == 0 {
-		return nil, "", fmt.Errorf("%s: missing %s (type_families is empty)", foundPath, filepath.Join(dir, "_types.yaml"))
+		return nil, "", fmt.Errorf("%s: missing %s (basics is empty)", foundPath, filepath.Join(dir, "_types.yaml"))
 	}
 	if needsSharedSchemas(typ) && len(found.NodeKinds) == 0 {
 		return nil, "", fmt.Errorf("%s: missing schemas (kinds is empty) in %s", foundPath, filepath.Join(dir, "_types.yaml"))
@@ -283,7 +321,7 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 		return nil, fmt.Errorf("%s: id must be meta.types, got %q", path, t.ID)
 	}
 	if len(t.TypeFamilies) == 0 {
-		return nil, fmt.Errorf("%s: basic_types must not be empty", path)
+		return nil, fmt.Errorf("%s: basics must not be empty", path)
 	}
 	if len(t.Structures) == 0 {
 		return nil, fmt.Errorf("%s: structures must not be empty", path)
@@ -402,7 +440,7 @@ var schemaNodeRequiredKeys = map[string][]string{
 }
 
 // validateStructures 校验 _types.structures：key 必须是已知容器，
-// 每个 param 的 type 必须命中 basic_types，required 与 default 互斥。
+// 每个 param 的 type 必须命中 _types.basics.* 或 _types.structures.*，required 与 default 互斥。
 func validateStructures(path string, structures map[string]Structure, families map[string]ValueTypeFamily) error {
 	if len(structures) == 0 {
 		return fmt.Errorf("%s: structures must not be empty", path)
@@ -450,11 +488,21 @@ func validateStructures(path string, structures map[string]Structure, families m
 			if p.Name != "" && p.Name != pname {
 				return fmt.Errorf("%s: structure %s param %s has mismatched name %q", path, name, pname, p.Name)
 			}
-			t := strings.TrimPrefix(p.Type, "_types.")
-			if _, ok := families[t]; !ok {
-				if _, ok := structures[t]; !ok && !strings.Contains(t, "<") {
-					return fmt.Errorf("%s: structure %s param %s has unknown type %q", path, name, pname, p.Type)
+			class, t, ok := SplitTypeRef(p.Type)
+			if !ok {
+				return fmt.Errorf("%s: structure %s param %s must be a _types.<class>.<name> reference, got %q", path, name, pname, p.Type)
+			}
+			switch class {
+			case TypeClassBasics:
+				if _, ok := families[t]; !ok {
+					return fmt.Errorf("%s: structure %s param %s has unknown basics type %q", path, name, pname, p.Type)
 				}
+			case TypeClassStructures:
+				if _, ok := structures[t]; !ok && !strings.Contains(t, "<") {
+					return fmt.Errorf("%s: structure %s param %s has unknown structure type %q", path, name, pname, p.Type)
+				}
+			default:
+				return fmt.Errorf("%s: structure %s param %s must not reference %s", path, name, pname, class)
 			}
 			if p.Required && p.Default != nil {
 				return fmt.Errorf("%s: structure %s param %s: required and default are mutually exclusive", path, name, pname)
@@ -490,7 +538,16 @@ func validateSchemas(path string, schemas map[string]SchemaKind) error {
 			return fmt.Errorf("%s: unknown schema %s (SchemaNodeKind supports object/array/map/scalar/ref)", path, name)
 		}
 	}
-	keyTypes := map[string]bool{"": true, "_types.string": true, "_types.boolean": true, "_types.integer": true, "_types.any": true, "_types.map": true, "_types.list<_types.object>": true, "_types.list<_types.string>": true}
+	keyTypes := map[string]bool{
+		"":                      true,
+		"_types.basics.string":  true,
+		"_types.basics.boolean": true,
+		"_types.basics.integer": true,
+		"_types.basics.any":     true,
+		"_types.structures.map": true,
+		"_types.structures.list<_types.structures.object>": true,
+		"_types.structures.list<_types.basics.string>":     true,
+	}
 	for name, kind := range schemas {
 		if strings.TrimSpace(kind.Description) == "" {
 			return fmt.Errorf("%s: schema %s missing description", path, name)
@@ -592,7 +649,7 @@ func validateSchemaKeys(path, where string, keys []Field, keyTypes map[string]bo
 				return fmt.Errorf("%s: %s key %s has invalid pattern %q: %w", path, where, key.Name, key.Pattern, err)
 			}
 		}
-		if key.UniqueKey != "" && strings.ReplaceAll(key.Type, "_types.", "") != "list<object>" {
+		if key.UniqueKey != "" && BareTypeName(key.Type) != "list<object>" {
 			return fmt.Errorf("%s: %s key %s: unique_key requires list<object>", path, where, key.Name)
 		}
 		if len(key.Types) > 1 && key.Default != nil {
@@ -648,15 +705,18 @@ func LoadSchema(path string) (*Schema, error) {
 	return &s, nil
 }
 
-// validateMetaFieldTypes 要求 _meta 字段规范的 type 统一写 _types.* 或 "*"。
+// validateMetaFieldTypes 要求 _meta 字段规范的 type 统一写
+// _types.<basics|structures|schemas>.<name> 或 "*"。
 // Unordered 是运行时注入的类型族参数，不参与检查。
 func validateMetaFieldTypes(fields []Field) error {
 	for _, f := range fields {
 		if f.Unordered {
 			continue
 		}
-		if f.Type != "" && f.Type != "*" && !strings.HasPrefix(f.Type, "_types.") {
-			return fmt.Errorf("field %s: meta type must be _types.* or \"*\", got %q", f.Name, f.Type)
+		if f.Type != "" && f.Type != "*" {
+			if _, _, ok := SplitTypeRef(f.Type); !ok {
+				return fmt.Errorf("field %s: meta type must be _types.<basics|structures|schemas>.<name> or \"*\", got %q", f.Name, f.Type)
+			}
 		}
 		if err := validateMetaFieldTypes(f.Fields); err != nil {
 			return err
@@ -691,7 +751,7 @@ func injectFamilyParams(s *Schema) {
 			if seen[name] {
 				continue
 			}
-			s.Fields[idx].ItemFields = append(s.Fields[idx].ItemFields, Field{Name: name, Type: "any", Required: false, Unordered: true})
+			s.Fields[idx].ItemFields = append(s.Fields[idx].ItemFields, Field{Name: name, Type: "_types.basics.any", Required: false, Unordered: true})
 			seen[name] = true
 		}
 	}

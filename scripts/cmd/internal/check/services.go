@@ -116,8 +116,8 @@ func (c *Checker) checkPageSchemas(types map[string]any, rel string) {
 			}
 		}
 		want := map[string]string{
-			"items": "_types.array", "offset": "_types.page_offset",
-			"limit": "_types.page_limit", "has_more": "_types.boolean",
+			"items": "_types.schemas.array", "offset": "_types.basics.page_offset",
+			"limit": "_types.basics.page_limit", "has_more": "_types.basics.boolean",
 		}
 		for field, typ := range want {
 			p := props[field]

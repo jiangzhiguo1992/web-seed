@@ -16,14 +16,14 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id, column: data.tables.verification_body.col.id }
-      - { name: account_id, type: _types.id, column: data.tables.verification_body.col.account_id }
+      - { name: id, type: _types.basics.id, column: data.tables.verification_body.col.id }
+      - { name: account_id, type: _types.basics.id, column: data.tables.verification_body.col.account_id }
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
       - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
-      - { name: auth_id, type: _types.id, column: data.tables.verification_body.col.auth_id }
-      - { name: code_hash, type: _types.string, column: data.tables.verification_body.col.code_hash }
-      - { name: content, type: _types.string, column: data.tables.verification_body.col.content, nullable: true }
-      - { name: expire_at, type: _types.timestamp, column: data.tables.verification_body.col.expire_at }
+      - { name: auth_id, type: _types.basics.id, column: data.tables.verification_body.col.auth_id }
+      - { name: code_hash, type: _types.basics.string, column: data.tables.verification_body.col.code_hash }
+      - { name: content, type: _types.basics.string, column: data.tables.verification_body.col.content, nullable: true }
+      - { name: expire_at, type: _types.basics.timestamp, column: data.tables.verification_body.col.expire_at }
     returns:
       - { name: row, kind: entity, entity: data.entities.verification_body }
       - { name: err, kind: error }
@@ -40,8 +40,8 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id, column: data.tables.verification_body.col.id }
-      - { name: sent_at, type: _types.timestamp, column: data.tables.verification_body.col.sent_at }
+      - { name: id, type: _types.basics.id, column: data.tables.verification_body.col.id }
+      - { name: sent_at, type: _types.basics.timestamp, column: data.tables.verification_body.col.sent_at }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -58,9 +58,9 @@ queries:
       - { table: data.tables.verification_body }
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.id, column: data.tables.verification_body.col.account_id }
+      - { name: account_id, type: _types.basics.id, column: data.tables.verification_body.col.account_id }
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
-      - { name: auth_id, type: _types.id, column: data.tables.verification_body.col.auth_id }
+      - { name: auth_id, type: _types.basics.id, column: data.tables.verification_body.col.auth_id }
       - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose }
     returns:
       - { name: row, kind: entity, entity: data.entities.verification_body }
@@ -77,8 +77,8 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id, column: data.tables.verification_body.col.id }
-      - { name: consumed_at, type: _types.timestamp, column: data.tables.verification_body.col.consumed_at }
+      - { name: id, type: _types.basics.id, column: data.tables.verification_body.col.id }
+      - { name: consumed_at, type: _types.basics.timestamp, column: data.tables.verification_body.col.consumed_at }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -96,8 +96,8 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id, column: data.tables.verification_body.col.id }
-      - { name: attempt_count, type: _types.integer, column: data.tables.verification_body.col.attempt_count }
+      - { name: id, type: _types.basics.id, column: data.tables.verification_body.col.id }
+      - { name: attempt_count, type: _types.basics.integer, column: data.tables.verification_body.col.attempt_count }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -114,7 +114,7 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id, column: data.tables.verification_body.col.id }
+      - { name: id, type: _types.basics.id, column: data.tables.verification_body.col.id }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -131,9 +131,9 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: now, type: _types.timestamp }
+      - { name: now, type: _types.basics.timestamp }
       - { name: status, type: data.enums.verification_status }
-      - { name: limit, type: _types.integer, nullable: true, default: 100 }
+      - { name: limit, type: _types.basics.integer, nullable: true, default: 100 }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -149,9 +149,9 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: max_attempts, type: _types.integer }
+      - { name: max_attempts, type: _types.basics.integer }
       - { name: status, type: data.enums.verification_status }
-      - { name: limit, type: _types.integer, nullable: true, default: 100 }
+      - { name: limit, type: _types.basics.integer, nullable: true, default: 100 }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -168,7 +168,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: auth_type, type: data.enums.auth_type, column: data.tables.verification_body.col.auth_type }
-      - { name: auth_id, type: _types.id, column: data.tables.verification_body.col.auth_id }
+      - { name: auth_id, type: _types.basics.id, column: data.tables.verification_body.col.auth_id }
       - { name: purpose, type: data.enums.verification_purpose, column: data.tables.verification_body.col.purpose, nullable: true }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
@@ -187,7 +187,7 @@ queries:
       - { table: data.tables.verification_body, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.id, column: data.tables.verification_body.col.account_id }
+      - { name: account_id, type: _types.basics.id, column: data.tables.verification_body.col.account_id }
       - { name: status, type: data.enums.verification_status, column: data.tables.verification_body.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -204,13 +204,13 @@ queries:
       - { table: data.tables.verification_action, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: verification_id, type: _types.id, column: data.tables.verification_action.col.verification_id }
-      - { name: account_id, type: _types.id, column: data.tables.verification_action.col.account_id }
+      - { name: verification_id, type: _types.basics.id, column: data.tables.verification_action.col.verification_id }
+      - { name: account_id, type: _types.basics.id, column: data.tables.verification_action.col.account_id }
       - { name: result, type: data.enums.verification_result, column: data.tables.verification_action.col.result }
-      - { name: request_ip, type: _types.string, column: data.tables.verification_action.col.request_ip, nullable: true }
-      - { name: device_id, type: _types.string, column: data.tables.verification_action.col.device_id, nullable: true }
-      - { name: location, type: _types.string, column: data.tables.verification_action.col.location, nullable: true }
-      - { name: input_hash, type: _types.string, column: data.tables.verification_action.col.input_hash }
+      - { name: request_ip, type: _types.basics.string, column: data.tables.verification_action.col.request_ip, nullable: true }
+      - { name: device_id, type: _types.basics.string, column: data.tables.verification_action.col.device_id, nullable: true }
+      - { name: location, type: _types.basics.string, column: data.tables.verification_action.col.location, nullable: true }
+      - { name: input_hash, type: _types.basics.string, column: data.tables.verification_action.col.input_hash }
     returns:
       - { name: row, kind: entity, entity: data.entities.verification_action }
       - { name: err, kind: error }

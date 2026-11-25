@@ -217,11 +217,11 @@ func TestColumnTypeSupportedRules(t *testing.T) {
 	}
 
 	c := &Checker{}
-	c.checkFamilyParams(map[string]any{"name": "payload", "type": "_types.any"}, "any", "x.yaml", 0, "payload", schema)
+	c.checkFamilyParams(map[string]any{"name": "payload", "type": "_types.basics.any"}, "any", "x.yaml", 0, "payload", schema)
 	mustContainRule(t, c.errs, "column-type-supported")
 
 	c = &Checker{}
-	c.checkFamilyParams(map[string]any{"name": "count", "type": "_types.integer", "unsigned": true}, "integer", "x.yaml", 0, "count", schema)
+	c.checkFamilyParams(map[string]any{"name": "count", "type": "_types.basics.integer", "unsigned": true}, "integer", "x.yaml", 0, "count", schema)
 	mustContainRule(t, c.errs, "column-type-supported")
 }
 
@@ -501,7 +501,7 @@ schema_version: 1
 stability: draft
 do_not: []
 schemas:
-  Foo: { type: _types.object, properties: {} }
+  Foo: { type: _types.schemas.object, properties: {} }
 services: []
 `
 		if err := os.WriteFile(filepath.Join(dir, name+".yaml"), []byte(body), 0o644); err != nil {

@@ -66,16 +66,16 @@ func TestPageActionTarget(t *testing.T) {
 
 func TestPageParams(t *testing.T) {
 	c := &Checker{pageParamTypes: map[string]map[string]string{
-		"cap.services.x.get": {"id": "_types.integer"},
+		"cap.services.x.get": {"id": "_types.basics.integer"},
 	}}
 	c.checkPageParams("x.yaml", "cap.services.x.get", map[string]any{
 		"params": map[string]any{
-			"bad": map[string]any{"type": "_types.string"},
-			"id":  map[string]any{"type": "_types.string"},
+			"bad": map[string]any{"type": "_types.basics.string"},
+			"id":  map[string]any{"type": "_types.basics.string"},
 		},
 	})
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"is not a parameter", "type _types.string does not match", "[page-params]"} {
+	for _, want := range []string{"is not a parameter", "type _types.basics.string does not match", "[page-params]"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
@@ -84,7 +84,7 @@ func TestPageParams(t *testing.T) {
 
 func TestPageParamEnumShape(t *testing.T) {
 	c := &Checker{pageParamTypes: map[string]map[string]string{
-		"cap.services.x.get": {"id": "_types.integer", "status": "_types.string"},
+		"cap.services.x.get": {"id": "_types.basics.integer", "status": "_types.basics.string"},
 	}}
 	c.checkPageParams("x.yaml", "cap.services.x.get", map[string]any{
 		"params": map[string]any{
@@ -178,7 +178,7 @@ events:
     trigger: api_success
     ref: cap.protocols.http.x.missing
     properties:
-      - { name: email, type: _types.string, pii: false }
+      - { name: email, type: _types.basics.string, pii: false }
 forbidden_properties: [email]
 provider: { default: ghost, options: [noop] }
 `)
@@ -380,11 +380,11 @@ stability: draft
 do_not: []
 naming: { pattern: "x", property_case: snake_case, id_policy: x }
 common_properties:
-  - { name: email, type: _types.string, pii: false }
-  - { name: email, type: _types.string, pii: false }
+  - { name: email, type: _types.basics.string, pii: false }
+  - { name: email, type: _types.basics.string, pii: false }
 events:
   - { name: page.x_viewed, description: "x", trigger: mount, properties: [] }
-  - { name: auth.login_succeeded, description: "x", trigger: api_success, properties: [ { name: x, type: _types.string, pii: false }, { name: x, type: _types.string, pii: false } ] }
+  - { name: auth.login_succeeded, description: "x", trigger: api_success, properties: [ { name: x, type: _types.basics.string, pii: false }, { name: x, type: _types.basics.string, pii: false } ] }
 forbidden_properties: [email]
 provider: { default: noop, options: [noop] }
 `)
@@ -400,7 +400,7 @@ provider: { default: noop, options: [noop] }
 
 func TestAnalyticsTypes(t *testing.T) {
 	root := t.TempDir()
-	writeCapFile(t, root, "contracts/_meta/_types.yaml", `basic_types:
+	writeCapFile(t, root, "contracts/_meta/_types.yaml", `basics:
   string: { description: "x" }
   integer: { description: "x" }
 `)
@@ -423,10 +423,10 @@ events:
     description: "x"
     trigger: click
     properties:
-      - { name: a, type: _types.string, pii: false }
+      - { name: a, type: _types.basics.string, pii: false }
       - { name: b, type: data.types.account_number, pii: false }
       - { name: c, type: data.enums.account_status, pii: false }
-      - { name: d, type: _types.ghost, pii: false }
+      - { name: d, type: _types.basics.ghost, pii: false }
       - { name: e, type: data.types.ghost, pii: false }
 forbidden_properties: []
 provider: { default: noop, options: [noop] }
@@ -434,7 +434,7 @@ provider: { default: noop, options: [noop] }
 	c := &Checker{root: root}
 	c.checkAnalytics()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"_types.ghost", "data.types.ghost"} {
+	for _, want := range []string{"_types.basics.ghost", "data.types.ghost"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
@@ -446,7 +446,7 @@ provider: { default: noop, options: [noop] }
 
 func TestAnalyticsAnyJSON(t *testing.T) {
 	root := t.TempDir()
-	writeCapFile(t, root, "contracts/_meta/_types.yaml", `basic_types:
+	writeCapFile(t, root, "contracts/_meta/_types.yaml", `basics:
   string: { description: "x" }
   any: { description: "x" }
   json: { description: "x" }
@@ -463,8 +463,8 @@ events:
     description: "x"
     trigger: click
     properties:
-      - { name: a, type: _types.any, pii: false }
-      - { name: b, type: _types.json, pii: false }
+      - { name: a, type: _types.basics.any, pii: false }
+      - { name: b, type: _types.basics.json, pii: false }
 forbidden_properties: []
 provider: { default: noop, options: [noop] }
 `)
@@ -478,7 +478,7 @@ provider: { default: noop, options: [noop] }
 
 func TestAnalyticsPII(t *testing.T) {
 	root := t.TempDir()
-	writeCapFile(t, root, "contracts/_meta/_types.yaml", `basic_types:
+	writeCapFile(t, root, "contracts/_meta/_types.yaml", `basics:
   string: { description: "x" }
 `)
 	writeCapFile(t, root, "contracts/platform/analytics/events.yaml", `schema_version: 1
@@ -488,13 +488,13 @@ stability: draft
 do_not: []
 naming: { pattern: "x", property_case: snake_case, id_policy: x }
 common_properties:
-  - { name: email, type: _types.string, pii: true }
+  - { name: email, type: _types.basics.string, pii: true }
 events:
   - name: auth.login_clicked
     description: "x"
     trigger: click
     properties:
-      - { name: email, type: _types.string, pii: false }
+      - { name: email, type: _types.basics.string, pii: false }
 forbidden_properties: [email, "Email Address"]
 provider: { default: noop, options: [noop] }
 `)
@@ -533,7 +533,7 @@ columns:
 
 func TestAnalyticsNeverLog(t *testing.T) {
 	root := t.TempDir()
-	writeCapFile(t, root, "contracts/_meta/_types.yaml", `basic_types:
+	writeCapFile(t, root, "contracts/_meta/_types.yaml", `basics:
   string: { description: "x" }
 `)
 	writeCapFile(t, root, "contracts/platform/observability/log_fields.yaml", `never_log: [secret_code]
@@ -545,14 +545,14 @@ stability: draft
 do_not: []
 naming: { pattern: "x", property_case: snake_case, id_policy: x }
 common_properties:
-  - { name: secret_code, type: _types.string, pii: true }
+  - { name: secret_code, type: _types.basics.string, pii: true }
 events:
   - name: auth.login_clicked
     description: "x"
     trigger: click
     properties:
-      - { name: other_pii, type: _types.string, pii: true }
-      - { name: secret_code, type: _types.string, pii: false }
+      - { name: other_pii, type: _types.basics.string, pii: true }
+      - { name: secret_code, type: _types.basics.string, pii: false }
 forbidden_properties: []
 provider: { default: noop, options: [noop] }
 `)

@@ -202,7 +202,7 @@ func TestServiceChainOutputAndParamUsage(t *testing.T) {
 func TestServiceNestedInputPath(t *testing.T) {
 	c := &Checker{methodTypeDefs: map[string]map[string]any{
 		"Filter": {
-			"type": "_types.object",
+			"type": "_types.schemas.object",
 			"properties": []any{
 				map[string]any{"name": "status", "schema": map[string]any{"type": "integer"}},
 			},
@@ -1309,40 +1309,40 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 	c := &Checker{
 		methodTypeDefs: map[string]map[string]any{
 			schemaPrefix + "DictionaryScalarInput": {
-				"type": "_types.object",
+				"type": "_types.schemas.object",
 				"properties": []any{map[string]any{
 					"name":   "items",
-					"schema": map[string]any{"type": "_types.array", "items": map[string]any{"type": "_types.string"}},
+					"schema": map[string]any{"type": "_types.schemas.array", "items": map[string]any{"type": "_types.basics.string"}},
 				}},
 			},
 			schemaPrefix + "DictionaryImportInput": {
-				"type": "_types.object",
+				"type": "_types.schemas.object",
 				"properties": []any{
 					map[string]any{
 						"name": "items",
 						"schema": map[string]any{
-							"type":  "_types.array",
+							"type":  "_types.schemas.array",
 							"items": map[string]any{"ref": schemaPrefix + "DictionaryImportItem"},
 						},
 					},
 				},
 			},
 			schemaPrefix + "DictionaryRefInput": {
-				"type": "_types.object",
+				"type": "_types.schemas.object",
 				"properties": []any{map[string]any{
 					"name":   "items",
 					"schema": map[string]any{"ref": schemaPrefix + "DictionaryImportItems"},
 				}},
 			},
 			schemaPrefix + "DictionaryImportItems": {
-				"type":  "_types.array",
+				"type":  "_types.schemas.array",
 				"items": map[string]any{"ref": schemaPrefix + "DictionaryImportItem"},
 			},
 			schemaPrefix + "DictionaryImportItem": {
-				"type": "_types.object",
+				"type": "_types.schemas.object",
 				"properties": []any{
-					map[string]any{"name": "parent_id", "schema": map[string]any{"type": "_types.id"}, "nullable": true},
-					map[string]any{"name": "code", "schema": map[string]any{"type": "_types.string"}, "required": true},
+					map[string]any{"name": "parent_id", "schema": map[string]any{"type": "_types.basics.id"}, "nullable": true},
+					map[string]any{"name": "code", "schema": map[string]any{"type": "_types.basics.string"}, "required": true},
 				},
 			},
 		},
@@ -1355,10 +1355,10 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 		Params: []queryParam{
 			{Name: "ctx", Type: "context.Context"},
 			{
-				Name: "items", Type: "_types.list<_types.object>", HasFields: true,
+				Name: "items", Type: "_types.structures.list<_types.schemas.object>", HasFields: true,
 				Fields: []queryParamField{
-					{Name: "parent_id", Type: "_types.id"},
-					{Name: "code", Type: "_types.string", Required: true},
+					{Name: "parent_id", Type: "_types.basics.id"},
+					{Name: "code", Type: "_types.basics.string", Required: true},
 				},
 			},
 		},
@@ -1373,8 +1373,8 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 
 	c.errs = nil
 	q.Params[1].Fields = []queryParamField{
-		{Name: "parent_id", Type: "_types.integer"},
-		{Name: "code", Type: "_types.string", Required: true},
+		{Name: "parent_id", Type: "_types.basics.integer"},
+		{Name: "code", Type: "_types.basics.string", Required: true},
 	}
 	c.checkQueryInput(map[string]any{"items": "params.input.items"}, q, q.ID, "f", "s", tc)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "does not match source") {
@@ -1382,7 +1382,7 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 	}
 
 	c.errs = nil
-	q.Params[1].Fields = []queryParamField{{Name: "code", Type: "_types.string", Required: true}}
+	q.Params[1].Fields = []queryParamField{{Name: "code", Type: "_types.basics.string", Required: true}}
 	c.checkQueryInput(map[string]any{"items": "params.input.items"}, q, q.ID, "f", "s", tc)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "from source schema is missing") {
 		t.Fatalf("missing source field not reported: %v", c.errs)
@@ -1401,7 +1401,7 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 
 	c.errs = nil
 	rawTC := stepTypeContext{doc: map[string]any{"params": []any{
-		map[string]any{"name": "raw", "type": "_types.list<_types.object>"},
+		map[string]any{"name": "raw", "type": "_types.structures.list<_types.schemas.object>"},
 	}}}
 	c.checkQueryInput(map[string]any{"items": "params.raw"}, q, q.ID, "f", "s", rawTC)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "requires a typed source service schema") {
@@ -1414,7 +1414,7 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 		stepIndex: map[string]int{"emit": 0},
 		steps:     []any{map[string]any{"id": "emit"}},
 		stepOutputs: []map[string]returnType{{
-			"items": {typ: "_types.list<_types.object>"},
+			"items": {typ: "_types.structures.list<_types.schemas.object>"},
 		}},
 	}
 	c.checkQueryInput(map[string]any{"items": "step.emit.items"}, q, q.ID, "f", "s", stepTC)
@@ -1427,8 +1427,8 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 		map[string]any{"name": "input", "type": schemaPrefix + "DictionaryRefInput"},
 	}}}
 	q.Params[1].Fields = []queryParamField{
-		{Name: "parent_id", Type: "_types.id"},
-		{Name: "code", Type: "_types.string", Required: true},
+		{Name: "parent_id", Type: "_types.basics.id"},
+		{Name: "code", Type: "_types.basics.string", Required: true},
 	}
 	c.checkQueryInput(map[string]any{"items": "params.input.items"}, q, q.ID, "f", "s", refTC)
 	if len(c.errs) != 0 {

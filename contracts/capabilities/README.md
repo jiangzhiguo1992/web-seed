@@ -220,13 +220,13 @@ dispatch 项：
 - operation 字段顺序固定为 `id` / `name` / `summary` / `service` / `request` / `response` / `used_by`；`used_by` 放最后。
 - `request.headers` 与 `response.headers` 是独立的 header 列表，不放在 body 下；`Authorization` 用 `auth: Bearer` 标记，`Content-Type` 用 `value` 标记；header/query/body/body.fields 的 `required` 省略为 true，可选项写 false；两个 headers 列表都必填，非 2xx/204 的 response headers 写 `[]`
 - 认证统一用 `Authorization` header：受保护 operation 写 `{ name: Authorization, required: true, description: ..., auth: Bearer }`；公开 operation 不写
-- `request.path` / `request.query` 是列表；path 每项写 `name` / `type` / `description` / `to`，query 每项写 `required`（省略为 true，可选项写 false）；`type` 只能是 `_types.*` 或 `data.enums.*`
+- `request.path` / `request.query` 是列表；path 每项写 `name` / `type` / `description` / `to`，query 每项写 `required`（省略为 true，可选项写 false）；`type` 只能是 `_types.basics.*` 或 `data.enums.*`
 - `body` 用 `kind` 区分编码：`json` / `form` / `multipart` / `text` / `binary`；`json/text/binary` 写 `type` + `to`，`form/multipart` 写 `fields`，每个 field 写 `to`；form 是 body 的一种编码，不是独立于 body 的字段，不能与 json 同时出现
 - `request.body` 按模板块状书写：`body:` 下依次写 `kind` / `type` / `to`；`required` 省略为 true
 - 有 body 时必须声明 `Content-Type` header，且 value 必须等于 `body.kind` 对应的媒体类型；响应 body 同理
 - `Connection` / `Content-Length` / `Expect` / `Transfer-Encoding` 等传输层头不写进 `headers`；名单由 `platform/http_conventions.transport_headers` 定义，checker 与 generator 统一读取
 - `Upgrade-Insecure-Requests` 等端到端浏览器 hint 不列入平台 header 目录；需要时按普通 header 声明。
-- `type` 直接写类型 ID：`data.entities.*` / `data.enums.*` / `cap.services.*.schemas.*` / `_types.*`，不写 `#/components/...`
+- `type` 直接写类型 ID：`data.entities.*` / `data.enums.*` / `cap.services.*.schemas.*` / `_types.basics.*`，不写 `#/components/...`
 - 平台级 header 语义、securityScheme、response、schema 统一定义在 `platform/http_conventions.yaml`；HTTP 文件不写私有 components
 
 **不要写**：权限、审计、限流（在 `platform/security/access.yaml`）、事务（在 service 项）。

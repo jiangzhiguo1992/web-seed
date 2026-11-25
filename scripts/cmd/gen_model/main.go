@@ -238,7 +238,7 @@ func parseColumnsInto(out map[string]columnSpec, raw any, customs map[string]con
 			continue
 		}
 		typ, _ := m["type"].(string)
-		typ = strings.TrimPrefix(typ, "_types.")
+		typ = strings.TrimPrefix(typ, "_types.basics.")
 		spec := columnSpec{}
 		if custom, ok := customs[typ]; ok {
 			spec.Custom = typ
@@ -380,7 +380,7 @@ func entityField(m map[string]any, tables map[string]map[string]columnSpec, prim
 	}
 	typ := strings.TrimPrefix(stringValue(m["type"]), "*")
 	pointer := strings.HasPrefix(stringValue(m["type"]), "*")
-	if strings.HasPrefix(typ, "data.entities.") || strings.HasPrefix(typ, "_types.list<data.entities.") {
+	if strings.HasPrefix(typ, "data.entities.") || strings.HasPrefix(typ, "_types.structures.list<data.entities.") {
 		return fieldSpec{}, false
 	}
 	nullable, hasNullable := m["nullable"].(bool)

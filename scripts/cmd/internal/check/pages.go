@@ -289,19 +289,19 @@ func (c *Checker) pageTypeCompatible(pageType, serviceType string) bool {
 	if pageType == serviceType {
 		return true
 	}
-	if strings.HasPrefix(serviceType, "data.enums.") && pageType == "_types.string" {
+	if strings.HasPrefix(serviceType, "data.enums.") && pageType == "_types.basics.string" {
 		return true
 	}
 	return false
 }
 
 func (c *Checker) pageBaseType(t string) string {
-	if !strings.HasPrefix(t, "_types.") {
+	name, ok := strings.CutPrefix(t, "_types.basics.")
+	if !ok {
 		return t
 	}
-	name := strings.TrimPrefix(t, "_types.")
 	if family := c.pageTypeFamilies[name]; family != "" {
-		return "_types." + family
+		return "_types.basics." + family
 	}
 	return t
 }

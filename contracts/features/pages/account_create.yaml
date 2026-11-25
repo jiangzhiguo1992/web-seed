@@ -15,9 +15,9 @@ data:
   submit:
     capability: cap.services.account.create
     params:
-      number: { from: form.number, type: _types.string, required: true }
-      nickname: { from: form.nickname, type: _types.string, required: true }
-      user_id: { from: form.user_id, type: _types.id, optional: true }
+      number: { from: form.number, type: _types.basics.string, required: true }
+      nickname: { from: form.nickname, type: _types.basics.string, required: true }
+      user_id: { from: form.user_id, type: _types.basics.id, optional: true }
 
 view_states:
   loading:
@@ -38,9 +38,9 @@ actions:
   submit:
     capability: cap.services.account.create
     params:
-      number: { from: form.number, type: _types.string, required: true }
-      nickname: { from: form.nickname, type: _types.string, required: true }
-      user_id: { from: form.user_id, type: _types.id, optional: true }
+      number: { from: form.number, type: _types.basics.string, required: true }
+      nickname: { from: form.nickname, type: _types.basics.string, required: true }
+      user_id: { from: form.user_id, type: _types.basics.id, optional: true }
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "创建"

@@ -346,7 +346,7 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 		if c.Name == "" || c.Type == "" {
 			return nil, fmt.Errorf("column name/type required")
 		}
-		c.Type = strings.TrimPrefix(c.Type, "_types.")
+		c.Type = strings.TrimPrefix(c.Type, "_types.basics.")
 		if nt, ok := customTypes[c.Type]; ok {
 			c.Type = nt.Family
 			applyCustomParams(&c, nt.Params)

@@ -28,30 +28,30 @@ table:
 
 columns:
   - name: account_id
-    type: _types.id
+    type: _types.basics.id
     nullable: true
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
   - name: username
-    type: _types.email_username
+    type: _types.basics.email_username
     nullable: false
     sensitivity: pii
     comment: "邮箱 @ 前的本地部分；小写归一"
 
   - name: domain
-    type: _types.email_domain
+    type: _types.basics.email_domain
     nullable: false
     comment: "完整域名，例如 example.com；小写归一"
 
   - name: entity
-    type: _types.string
+    type: _types.basics.string
     nullable: true
     max_len: 190
     comment: "邮箱服务商，例如 163、gmail等"
 
   - name: tld
-    type: _types.string
+    type: _types.basics.string
     nullable: true
     max_len: 32
     comment: "顶级域，例如 com"

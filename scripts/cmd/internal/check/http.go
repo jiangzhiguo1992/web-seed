@@ -1844,7 +1844,7 @@ func (c *Checker) serviceParamType(target serviceMeta, path string) (string, boo
 			}
 			return "", false
 		}
-		if t, _ := node["type"].(string); t == "_types.object" {
+		if t, _ := node["type"].(string); t == "_types.schemas.object" {
 			props = schemaPropertyMap(node["properties"])
 			continue
 		}
@@ -1856,10 +1856,10 @@ func (c *Checker) serviceParamType(target serviceMeta, path string) (string, boo
 // httpServiceFamily 把契约类型归一为可比较的类型族。
 func (c *Checker) httpServiceFamily(t string) string {
 	t = strings.TrimPrefix(strings.TrimSpace(t), "*")
-	if strings.HasPrefix(t, "_types.list<") {
+	if strings.HasPrefix(t, "_types.structures.list<") {
 		return "array"
 	}
-	t = strings.TrimPrefix(t, "_types.")
+	t = strings.TrimPrefix(t, "_types.basics.")
 	if custom, ok := c.valueTypes.CustomTypes[t]; ok {
 		return c.httpServiceFamily(custom.Family)
 	}

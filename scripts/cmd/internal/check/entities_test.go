@@ -980,19 +980,19 @@ func TestQueryReturnsShape(t *testing.T) {
 
 func TestListListStringMinItems(t *testing.T) {
 	c := &Checker{}
-	c.validateValue([]any{[]any{"a", "b"}}, Field{Type: "list<list<string>>", MinItems: 1}, "list")
+	c.validateValue([]any{[]any{"a", "b"}}, Field{Type: "_types.structures.list<_types.structures.list<_types.basics.string>>", MinItems: 1}, "list")
 	if len(c.errs) != 0 {
 		t.Fatalf("valid nested list reported: %v", c.errs)
 	}
 
 	c = &Checker{}
-	c.validateValue([]any{}, Field{Type: "list<list<string>>", MinItems: 1}, "list")
+	c.validateValue([]any{}, Field{Type: "_types.structures.list<_types.structures.list<_types.basics.string>>", MinItems: 1}, "list")
 	if !strings.Contains(entityErrs(c), "[schema.range]") {
 		t.Fatalf("min_items not reported: %v", c.errs)
 	}
 
 	c = &Checker{}
-	c.validateValue([]any{[]any{1}}, Field{Type: "list<list<string>>"}, "list")
+	c.validateValue([]any{[]any{1}}, Field{Type: "_types.structures.list<_types.structures.list<_types.basics.string>>"}, "list")
 	if !strings.Contains(entityErrs(c), "[schema.type]") {
 		t.Fatalf("non-string inner list not reported: %v", c.errs)
 	}
@@ -1214,14 +1214,14 @@ func TestQueryParamColumnIntegerBits(t *testing.T) {
 		},
 	}
 	q := &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.x"},
-		Params: []queryParam{{Name: "id", Type: "_types.integer", Column: "data.tables.x.col.id"}}}
+		Params: []queryParam{{Name: "id", Type: "_types.basics.integer", Column: "data.tables.x.col.id"}}}
 	c.checkQueryParamColumns(q)
 	if !strings.Contains(entityErrs(c), "integer bits 32 must equal column data.tables.x.col.id bits 64") {
 		t.Fatalf("integer width mismatch not reported: %v", c.errs)
 	}
 
 	c.errs = nil
-	q.Params[0].Type = "_types.id"
+	q.Params[0].Type = "_types.basics.id"
 	c.checkQueryParamColumns(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("matching integer width reported: %v", c.errs)
@@ -1278,13 +1278,13 @@ func TestEntityFieldDefaults(t *testing.T) {
 		{Name: "DeletedAt", SourceColumnRef: "data.tables.x.col.deleted_at", ColumnTable: "data.tables.x", Column: "deleted_at"},
 	}}
 	c.applyEntityFieldDefaults(e)
-	if e.Fields[0].JSONName != "id" || e.Fields[0].Type != "_types.string" || e.Fields[0].Description != "" {
+	if e.Fields[0].JSONName != "id" || e.Fields[0].Type != "_types.basics.string" || e.Fields[0].Description != "" {
 		t.Fatalf("only mechanical defaults should apply: %#v", e.Fields[0])
 	}
-	if e.Fields[1].Sensitivity != sensitivityPII || e.Fields[1].Type != "_types.string" || e.Fields[1].JSONName != "nickname" || e.Fields[1].Description != "" {
+	if e.Fields[1].Sensitivity != sensitivityPII || e.Fields[1].Type != "_types.basics.string" || e.Fields[1].JSONName != "nickname" || e.Fields[1].Description != "" {
 		t.Fatalf("sensitivity/type defaults not applied: %#v", e.Fields[1])
 	}
-	if e.Fields[2].Type != "*_types.timestamp" || e.Fields[2].JSONName != "deleted_at" || e.Fields[2].Description != "" {
+	if e.Fields[2].Type != "*_types.basics.timestamp" || e.Fields[2].JSONName != "deleted_at" || e.Fields[2].Description != "" {
 		t.Fatalf("nullable defaults not applied: %#v", e.Fields[2])
 	}
 }
@@ -1597,7 +1597,7 @@ func TestQueryReturnNullable(t *testing.T) {
 func TestEntityManyToManyThrough(t *testing.T) {
 	f := parseEntityField(map[string]any{
 		"name":        "Roles",
-		"type":        "_types.list<data.entities.role>",
+		"type":        "_types.structures.list<data.entities.role>",
 		"description": "roles",
 		"source": map[string]any{"join": map[string]any{
 			"from": "data.tables.user.col.id",
@@ -1642,8 +1642,8 @@ func TestEntityManyToManyThrough(t *testing.T) {
 func TestQueryObjectParamFields(t *testing.T) {
 	base := []queryParam{{Name: "ctx", Type: "context.Context"}}
 	valid := append(base, queryParam{
-		Name: "items", Type: "_types.list<_types.object>", HasFields: true,
-		Fields: []queryParamField{{Name: "code", Type: "_types.string", Required: true}},
+		Name: "items", Type: "_types.structures.list<_types.structures.object>", HasFields: true,
+		Fields: []queryParamField{{Name: "code", Type: "_types.basics.string", Required: true}},
 	})
 	c := &Checker{}
 	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: valid})
@@ -1652,7 +1652,7 @@ func TestQueryObjectParamFields(t *testing.T) {
 	}
 
 	c.errs = nil
-	missing := append(base, queryParam{Name: "items", Type: "_types.list<_types.object>"})
+	missing := append(base, queryParam{Name: "items", Type: "_types.structures.list<_types.structures.object>"})
 	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: missing})
 	if !strings.Contains(entityErrs(c), "must declare non-empty fields") {
 		t.Fatalf("missing fields not reported: %v", c.errs)
@@ -1660,8 +1660,8 @@ func TestQueryObjectParamFields(t *testing.T) {
 
 	c.errs = nil
 	badField := append(base, queryParam{
-		Name: "items", Type: "_types.list<_types.object>", HasFields: true,
-		Fields: []queryParamField{{Name: "code", Type: "_types.bogus"}},
+		Name: "items", Type: "_types.structures.list<_types.structures.object>", HasFields: true,
+		Fields: []queryParamField{{Name: "code", Type: "_types.basics.bogus"}},
 	})
 	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: badField})
 	if !strings.Contains(entityErrs(c), "cannot map to a type family") {
@@ -1670,8 +1670,8 @@ func TestQueryObjectParamFields(t *testing.T) {
 
 	c.errs = nil
 	notObject := append(base, queryParam{
-		Name: "items", Type: "_types.string", HasFields: true,
-		Fields: []queryParamField{{Name: "code", Type: "_types.string"}},
+		Name: "items", Type: "_types.basics.string", HasFields: true,
+		Fields: []queryParamField{{Name: "code", Type: "_types.basics.string"}},
 	})
 	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: notObject})
 	if !strings.Contains(entityErrs(c), "fields is only allowed") {
@@ -1680,8 +1680,8 @@ func TestQueryObjectParamFields(t *testing.T) {
 
 	c.errs = nil
 	nested := append(base, queryParam{
-		Name: "items", Type: "_types.list<_types.object>", HasFields: true,
-		Fields: []queryParamField{{Name: "nested", Type: "_types.object"}},
+		Name: "items", Type: "_types.structures.list<_types.structures.object>", HasFields: true,
+		Fields: []queryParamField{{Name: "nested", Type: "_types.structures.object"}},
 	})
 	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: nested})
 	if !strings.Contains(entityErrs(c), "must be scalar") {
@@ -1690,10 +1690,10 @@ func TestQueryObjectParamFields(t *testing.T) {
 
 	c.errs = nil
 	duplicate := append(base, queryParam{
-		Name: "items", Type: "_types.list<_types.object>", HasFields: true,
+		Name: "items", Type: "_types.structures.list<_types.structures.object>", HasFields: true,
 		Fields: []queryParamField{
-			{Name: "code", Type: "_types.string"},
-			{Name: "code", Type: "_types.string"},
+			{Name: "code", Type: "_types.basics.string"},
+			{Name: "code", Type: "_types.basics.string"},
 		},
 	})
 	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: duplicate})
@@ -1704,10 +1704,10 @@ func TestQueryObjectParamFields(t *testing.T) {
 
 func TestServiceTypesCompatibleBatchObject(t *testing.T) {
 	c := &Checker{}
-	if !c.serviceTypesCompatible("_types.array", "_types.list<_types.object>") {
+	if !c.serviceTypesCompatible("_types.structures.array", "_types.structures.list<_types.structures.object>") {
 		t.Fatal("typed array must feed a batch object param")
 	}
-	if c.serviceTypesCompatible("_types.string", "_types.list<_types.object>") {
+	if c.serviceTypesCompatible("_types.basics.string", "_types.structures.list<_types.structures.object>") {
 		t.Fatal("string accepted as batch object param")
 	}
 }

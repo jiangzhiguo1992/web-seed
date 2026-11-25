@@ -487,7 +487,7 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 			typ, _ := m["type"].(string)
 			pk, _ := m["primary_key"].(bool)
 			nullable, _ := m["nullable"].(bool)
-			if strings.TrimPrefix(typ, "_types.") != shape.typ {
+			if strings.TrimPrefix(typ, "_types.basics.") != shape.typ {
 				c.rulef("base-columns", "%s: base column %q must be %s, got %q", rel, n, shape.typ, typ)
 			}
 			if pk != shape.primary {
@@ -582,7 +582,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if t, _ := m["type"].(string); !isColumnType(t, schema.ValueTypes) {
 			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (type_families/custom_types %v or data.tables.<t>.col.<c>)", rel, i, name, t, valueTypeNames(schema.ValueTypes))
 		} else {
-			c.checkFamilyParams(m, strings.TrimPrefix(t, "_types."), rel, i, name, schema)
+			c.checkFamilyParams(m, strings.TrimPrefix(t, "_types.basics."), rel, i, name, schema)
 		}
 	}
 	constraintNames := map[string]bool{}
@@ -907,7 +907,7 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 	}
 	switch family {
 	case "any":
-		c.rulef("column-type-supported", "%s: columns[%d] (%s): _types.any has no deterministic DDL; use a concrete scalar", rel, i, name)
+		c.rulef("column-type-supported", "%s: columns[%d] (%s): _types.basics.any has no deterministic DDL; use a concrete scalar", rel, i, name)
 	case "integer":
 		if unsigned, _ := m["unsigned"].(bool); unsigned {
 			c.rulef("column-type-supported", "%s: columns[%d] (%s): PostgreSQL has no unsigned integer; use min 0", rel, i, name)

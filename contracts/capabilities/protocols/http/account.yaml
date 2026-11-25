@@ -25,8 +25,8 @@ paths:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         query:
           - { name: status, type: data.enums.account_status, required: false, description: "账号状态过滤", to: params.status }
-          - { name: offset, type: _types.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
-          - { name: limit, type: _types.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
+          - { name: offset, type: _types.basics.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
+          - { name: limit, type: _types.basics.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
           msg: "成功"
@@ -57,7 +57,7 @@ paths:
           msg: "已创建"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
-            - { name: Location, required: false, type: _types.string, description: "新账号资源地址" }
+            - { name: Location, required: false, type: _types.basics.string, description: "新账号资源地址" }
           body:
             kind: json
             type: data.entities.account
@@ -86,7 +86,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "账号 ID", to: params.id }
       response:
         200:
           msg: "成功"
@@ -115,7 +115,7 @@ paths:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "账号 ID", to: params.id }
         body:
           kind: json
           type: cap.services.account.schemas.UpdateAccountInput
@@ -156,7 +156,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "账号 ID", to: params.id }
       response:
         204:
           msg: "已删除"
@@ -187,7 +187,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "账号 ID", to: params.id }
       response:
         200:
           msg: "成功"
@@ -223,7 +223,7 @@ paths:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         path:
-          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.basics.id, description: "账号 ID", to: params.id }
         body:
           kind: json
           type: cap.services.account.schemas.SuspendAccountInput

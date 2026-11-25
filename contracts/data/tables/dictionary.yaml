@@ -37,13 +37,13 @@ table:
 
 columns:
   - name: parent_id
-    type: _types.id
+    type: _types.basics.id
     nullable: true
     references: { column: data.tables.dictionary.col.id, on_delete: restrict }
     comment: "父节点；顶级为 NULL"
 
   - name: code
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 1
     max_len: 64
@@ -51,14 +51,14 @@ columns:
     comment: "字典编码；全局唯一且创建后不可变"
 
   - name: name
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 1
     max_len: 100
     comment: "展示名；允许重复"
 
   - name: color
-    type: _types.string
+    type: _types.basics.string
     nullable: true
     min_len: 7
     max_len: 7
@@ -66,20 +66,20 @@ columns:
     comment: "展示颜色；#RRGGBB，为空表示使用默认样式"
 
   - name: sort
-    type: _types.integer
+    type: _types.basics.integer
     nullable: false
     min: 0
     default: 0
     comment: "同一父节点下的展示顺序；从 0 开始"
 
   - name: remark
-    type: _types.string
+    type: _types.basics.string
     nullable: true
     max_len: 500
     comment: "备注；仅用于说明，不参与业务判断"
 
   - name: extra
-    type: _types.json
+    type: _types.basics.json
     nullable: true
     comment: "扩展元数据；只放 UI/非关键信息，禁止承载业务状态"
 

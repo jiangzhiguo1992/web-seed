@@ -345,13 +345,12 @@ func (c *Checker) validateScalarNode(m map[string]any, path string) {
 		c.rulef("schema.non-empty", "%s.type: must not be empty", path)
 		return
 	}
-	if typ == "object" || typ == "array" || typ == "map" ||
-		typ == "_types.object" || typ == "_types.array" || typ == "_types.map" {
+	if typ == "_types.schemas.object" || typ == "_types.schemas.array" || typ == "_types.schemas.map" {
 		c.rulef("schema.type", "%s.type: %s must use its kind structure", path, typ)
 		return
 	}
-	if !strings.HasPrefix(typ, "_types.") {
-		c.rulef("schema.type", "%s.type: must be a _types.<name> reference, got %q", path, typ)
+	if class, _, ok := contractspec.SplitTypeRef(typ); !ok || class != contractspec.TypeClassBasics {
+		c.rulef("schema.type", "%s.type: must be a _types.basics.<name> reference, got %q", path, typ)
 		return
 	}
 	if c.valueType(typ) == "" {
@@ -406,7 +405,7 @@ func (c *Checker) validateSchemaKeyValues(m map[string]any, path string, keys []
 }
 
 // allowsSchemaKind 报告 kind 是否在允许列表内；空列表表示不限，
-// _types.schema 表示任意已声明的节点种类。
+// _types.schemas.* 表示任意已声明的节点种类。
 func allowsSchemaKind(allowed []string, kind string) bool {
 	if len(allowed) == 0 {
 		return true
@@ -415,19 +414,28 @@ func allowsSchemaKind(allowed []string, kind string) bool {
 		if k == kind || k == contractspec.SchemaAlias {
 			return true
 		}
+		if class, name, ok := contractspec.SplitTypeRef(k); ok && class == contractspec.TypeClassSchemas && name == kind {
+			return true
+		}
 	}
 	return false
 }
 
 // schemaKindAllowed 报告名称是否是 SchemaNodeKind 支持的节点种类；
-// _types.schema 代表 schemas 下声明的全部种类。
+// _types.schemas.* 代表 schemas 下声明的全部种类。
 func schemaKindAllowed(kind string, kinds map[string]contractspec.SchemaKind) bool {
 	if kind == contractspec.SchemaAlias {
 		return len(kinds) > 0
 	}
-	switch kind {
-	case "object", "array", "map", "scalar", "ref":
-		return true
+	if class, name, ok := contractspec.SplitTypeRef(kind); ok && class == contractspec.TypeClassSchemas {
+		if !knownSchemaKind(name) || name == "*" {
+			return false
+		}
+		if len(kinds) == 0 {
+			return true
+		}
+		_, declared := kinds[name]
+		return declared
 	}
 	return false
 }
@@ -499,7 +507,7 @@ func schemaLocalRefs(v any) []string {
 // valueType 返回标量类型对应的类型族；自定义类型解析到 family，
 // family 不存在时返回空，避免 schema 层把断链的 custom type 当成有效类型。
 func (c *Checker) valueType(typ string) string {
-	name := strings.TrimPrefix(typ, "_types.")
+	name := strings.TrimPrefix(typ, "_types.basics.")
 	if _, ok := c.valueTypes.TypeFamilies[name]; ok {
 		return name
 	}

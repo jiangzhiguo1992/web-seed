@@ -157,9 +157,9 @@ func (c *Checker) checkAnalytics() {
 func (c *Checker) analyticsTypes() map[string]bool {
 	out := map[string]bool{}
 	if types, err := loadYAML(filepath.Join(c.root, "contracts/_meta/_types.yaml")); err == nil {
-		basic, _ := asMap(types["basic_types"])
+		basic, _ := asMap(types["basics"])
 		for name := range basic {
-			out["_types."+name] = true
+			out["_types.basics."+name] = true
 		}
 	}
 	if custom, err := loadYAML(filepath.Join(c.root, "contracts/data/types.yaml")); err == nil {
@@ -189,7 +189,7 @@ func (c *Checker) checkAnalyticsPropertyType(where string, prop map[string]any, 
 	if typ == "" || len(types) == 0 {
 		return
 	}
-	if typ == "_types.any" || typ == "_types.json" {
+	if typ == "_types.basics.any" || typ == "_types.basics.json" {
 		c.rulef("analytics-types", "%s: property type %s must be a scalar type, not an untyped payload", where, typ)
 		return
 	}

@@ -188,7 +188,7 @@ func (c *Checker) columnBits(table, col string) (int, bool) {
 			return 0, false
 		}
 		typ, _ := decl["type"].(string)
-		typ = strings.TrimPrefix(typ, "_types.")
+		typ = strings.TrimPrefix(typ, "_types.basics.")
 		if custom, ok := c.valueTypes.CustomTypes[typ]; ok {
 			if custom.Family != "integer" {
 				return 0, false

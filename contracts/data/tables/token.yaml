@@ -30,13 +30,13 @@ table:
 
 columns:
   - name: account_id
-    type: _types.id
+    type: _types.basics.id
     nullable: false
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
   - name: user_id
-    type: _types.id
+    type: _types.basics.id
     nullable: true
     redundancy:
       - { column: data.tables.account.col.user_id, source: true }
@@ -44,12 +44,12 @@ columns:
     comment: "关联用户 ID"
 
   - name: device_id
-    type: _types.device_id
+    type: _types.basics.device_id
     nullable: true
     comment: "设备标识；多端登录时区分设备"
 
   - name: access_token_hash
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 32
     max_len: 128
@@ -57,7 +57,7 @@ columns:
     comment: "访问令牌哈希"
 
   - name: refresh_token_hash
-    type: _types.string
+    type: _types.basics.string
     nullable: false
     min_len: 32
     max_len: 128
@@ -65,27 +65,27 @@ columns:
     comment: "刷新令牌哈希"
 
   - name: access_expire_at
-    type: _types.timestamp
+    type: _types.basics.timestamp
     nullable: false
     comment: "访问令牌过期时间"
 
   - name: refresh_expire_at
-    type: _types.timestamp
+    type: _types.basics.timestamp
     nullable: false
     comment: "刷新令牌过期时间"
 
   - name: revoked_at
-    type: _types.timestamp
+    type: _types.basics.timestamp
     nullable: true
     comment: "吊销时间；为空表示未吊销"
 
   - name: revoke_reason
-    type: _types.integer
+    type: _types.basics.integer
     nullable: true
     comment: "吊销原因整数码；映射 data.enums.token_revoke_reason"
 
   - name: replaced_by_id
-    type: _types.id
+    type: _types.basics.id
     nullable: true
     comment: "轮换后新令牌 ID（旧→新的前向指针）；不是吊销者 ID"
 

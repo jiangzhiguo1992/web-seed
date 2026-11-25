@@ -1209,12 +1209,12 @@ func inverseCardinality(card string) string {
 	return card
 }
 
-// entityTypeID 从实体字段 type 提取目标 entity ID，兼容 *T、List<T> 与 _types.list<T>。
+// entityTypeID 从实体字段 type 提取目标 entity ID，兼容 *T、List<T> 与 _types.structures.list<T>。
 func entityTypeID(typ string) string {
 	typ = strings.TrimSpace(typ)
 	typ = strings.TrimPrefix(typ, "*")
-	if strings.HasPrefix(typ, "_types.list<") && strings.HasSuffix(typ, ">") {
-		typ = "List<" + strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(typ, "_types.list<"), ">")) + ">"
+	if strings.HasPrefix(typ, "_types.structures.list<") && strings.HasSuffix(typ, ">") {
+		typ = "List<" + strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(typ, "_types.structures.list<"), ">")) + ">"
 	}
 	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
 		typ = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"))

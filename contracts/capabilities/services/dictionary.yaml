@@ -13,61 +13,61 @@ do_not:
 
 schemas:
   DictionaryPage:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: items, schema: { type: _types.array, items: { ref: data.entities.dictionary } }, required: true, description: "分页项列表" }
-      - { name: offset, schema: { type: _types.page_offset }, required: true, description: "当前页偏移" }
-      - { name: limit, schema: { type: _types.page_limit }, required: true, description: "当前页大小" }
-      - { name: has_more, schema: { type: _types.boolean }, required: true, description: "是否还有下一页" }
+      - { name: items, schema: { type: _types.schemas.array, items: { ref: data.entities.dictionary } }, required: true, description: "分页项列表" }
+      - { name: offset, schema: { type: _types.basics.page_offset }, required: true, description: "当前页偏移" }
+      - { name: limit, schema: { type: _types.basics.page_limit }, required: true, description: "当前页大小" }
+      - { name: has_more, schema: { type: _types.basics.boolean }, required: true, description: "是否还有下一页" }
   CreateDictionaryInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: parent_id, schema: { type: _types.id }, nullable: true, description: "父节点 ID；顶级为空" }
-      - { name: code, schema: { type: _types.string }, required: true, description: "全局唯一编码" }
-      - { name: name, schema: { type: _types.string }, required: true, description: "展示名" }
-      - { name: color, schema: { type: _types.string }, nullable: true, description: "展示颜色 #RRGGBB" }
-      - { name: sort, schema: { type: _types.integer }, required: true, description: "排序" }
-      - { name: remark, schema: { type: _types.string }, nullable: true, description: "备注" }
-      - { name: extra, schema: { type: _types.json }, nullable: true, description: "扩展元数据" }
+      - { name: parent_id, schema: { type: _types.basics.id }, nullable: true, description: "父节点 ID；顶级为空" }
+      - { name: code, schema: { type: _types.basics.string }, required: true, description: "全局唯一编码" }
+      - { name: name, schema: { type: _types.basics.string }, required: true, description: "展示名" }
+      - { name: color, schema: { type: _types.basics.string }, nullable: true, description: "展示颜色 #RRGGBB" }
+      - { name: sort, schema: { type: _types.basics.integer }, required: true, description: "排序" }
+      - { name: remark, schema: { type: _types.basics.string }, nullable: true, description: "备注" }
+      - { name: extra, schema: { type: _types.basics.json }, nullable: true, description: "扩展元数据" }
   UpdateDictionaryInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: name, schema: { type: _types.string }, required: true, description: "展示名" }
-      - { name: color, schema: { type: _types.string }, nullable: true, description: "展示颜色 #RRGGBB" }
-      - { name: sort, schema: { type: _types.integer }, required: true, description: "排序" }
-      - { name: remark, schema: { type: _types.string }, nullable: true, description: "备注" }
-      - { name: extra, schema: { type: _types.json }, nullable: true, description: "扩展元数据" }
+      - { name: name, schema: { type: _types.basics.string }, required: true, description: "展示名" }
+      - { name: color, schema: { type: _types.basics.string }, nullable: true, description: "展示颜色 #RRGGBB" }
+      - { name: sort, schema: { type: _types.basics.integer }, required: true, description: "排序" }
+      - { name: remark, schema: { type: _types.basics.string }, nullable: true, description: "备注" }
+      - { name: extra, schema: { type: _types.basics.json }, nullable: true, description: "扩展元数据" }
   SetDictionaryStatusInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
       - { name: status, schema: { ref: data.enums.dictionary_status }, required: true, description: "目标状态" }
   MoveDictionaryInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: parent_id, schema: { type: _types.id }, nullable: true, description: "新父节点；null 表示移到顶级" }
+      - { name: parent_id, schema: { type: _types.basics.id }, nullable: true, description: "新父节点；null 表示移到顶级" }
   DictionaryImportItem:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: parent_id, schema: { type: _types.id }, nullable: true, description: "父节点 ID；null 表示顶级" }
-      - { name: code, schema: { type: _types.string }, required: true, description: "全局唯一编码" }
-      - { name: name, schema: { type: _types.string }, required: true, description: "展示名" }
-      - { name: color, schema: { type: _types.string }, nullable: true, description: "展示颜色 #RRGGBB" }
-      - { name: sort, schema: { type: _types.integer }, required: true, description: "排序" }
-      - { name: remark, schema: { type: _types.string }, nullable: true, description: "备注" }
-      - { name: extra, schema: { type: _types.json }, nullable: true, description: "扩展元数据" }
+      - { name: parent_id, schema: { type: _types.basics.id }, nullable: true, description: "父节点 ID；null 表示顶级" }
+      - { name: code, schema: { type: _types.basics.string }, required: true, description: "全局唯一编码" }
+      - { name: name, schema: { type: _types.basics.string }, required: true, description: "展示名" }
+      - { name: color, schema: { type: _types.basics.string }, nullable: true, description: "展示颜色 #RRGGBB" }
+      - { name: sort, schema: { type: _types.basics.integer }, required: true, description: "排序" }
+      - { name: remark, schema: { type: _types.basics.string }, nullable: true, description: "备注" }
+      - { name: extra, schema: { type: _types.basics.json }, nullable: true, description: "扩展元数据" }
   DictionaryImportInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
       - name: items
         schema:
-          type: _types.array
+          type: _types.schemas.array
           items: { ref: cap.services.dictionary.schemas.DictionaryImportItem }
         required: true
         description: "字典项数组"
   ImportResult:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: affected_rows, schema: { type: _types.integer }, required: true, description: "成功写入的行数" }
+      - { name: affected_rows, schema: { type: _types.basics.integer }, required: true, description: "成功写入的行数" }
 
 services:
   - name: list_roots
@@ -76,8 +76,8 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: offset, type: _types.page_offset }
-      - { name: limit, type: _types.page_limit }
+      - { name: offset, type: _types.basics.page_offset }
+      - { name: limit, type: _types.basics.page_limit }
     returns:
       - { name: page, type: cap.services.dictionary.schemas.DictionaryPage, value: step.paginate.page }
       - { name: err, type: error, value: "*" }
@@ -89,7 +89,7 @@ services:
           - { name: offset, value: params.offset, description: "分页偏移" }
           - { name: limit, value: params.limit, description: "分页大小" }
         output:
-          - { name: dictionaries, type: _types.list<data.entities.dictionary>, description: "顶级字典节点列表" }
+          - { name: dictionaries, type: _types.structures.list<data.entities.dictionary>, description: "顶级字典节点列表" }
         errors: [ ]
         query: data.queries.dictionary.list_root_dictionaries
         goto: paginate
@@ -114,9 +114,9 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: parent_id, type: _types.id }
-      - { name: offset, type: _types.page_offset }
-      - { name: limit, type: _types.page_limit }
+      - { name: parent_id, type: _types.basics.id }
+      - { name: offset, type: _types.basics.page_offset }
+      - { name: limit, type: _types.basics.page_limit }
     returns:
       - { name: page, type: cap.services.dictionary.schemas.DictionaryPage, value: step.paginate.page }
       - { name: err, type: error, value: "*" }
@@ -129,7 +129,7 @@ services:
           - { name: offset, value: params.offset, description: "分页偏移" }
           - { name: limit, value: params.limit, description: "分页大小" }
         output:
-          - { name: children, type: _types.list<data.entities.dictionary>, description: "子节点列表" }
+          - { name: children, type: _types.structures.list<data.entities.dictionary>, description: "子节点列表" }
         errors: [ ]
         query: data.queries.dictionary.list_dictionary_children
         goto: paginate
@@ -154,7 +154,7 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: code, type: _types.string }
+      - { name: code, type: _types.basics.string }
     returns:
       - { name: dictionary, type: data.entities.dictionary, value: step.get_dictionary.dictionary, nullable: true }
       - { name: err, type: error, value: "*" }
@@ -187,7 +187,7 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: dictionary, type: data.entities.dictionary, value: step.get_dictionary.dictionary, nullable: true }
       - { name: err, type: error, value: "*" }
@@ -231,7 +231,7 @@ services:
         summary: "生成新字典 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.id, description: "新字典 ID" }
+          - { name: id, type: _types.basics.id, description: "新字典 ID" }
         errors: [ ]
         rules: [ ]
         goto: status_enabled
@@ -265,7 +265,7 @@ services:
         input:
           - { name: code, value: params.input.code, description: "待创建字典编码" }
         output:
-          - { name: exists, type: _types.boolean, description: "query 返回的 exists" }
+          - { name: exists, type: _types.basics.boolean, description: "query 返回的 exists" }
         errors: [ ]
         query: data.queries.dictionary.exists_dictionary_code
         goto: check_code
@@ -341,7 +341,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
       - { name: input, type: cap.services.dictionary.schemas.UpdateDictionaryInput }
     returns:
       - { name: dictionary, type: data.entities.dictionary, value: step.update_dictionary.dictionary }
@@ -405,7 +405,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
       - { name: input, type: cap.services.dictionary.schemas.SetDictionaryStatusInput }
     returns:
       - { name: dictionary, type: data.entities.dictionary, value: step.set_dictionary_status.dictionary }
@@ -465,7 +465,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:
@@ -495,7 +495,7 @@ services:
         input:
           - { name: parent_id, value: params.id, description: "字典 ID" }
         output:
-          - { name: exists, type: _types.boolean, description: "query 返回的 exists" }
+          - { name: exists, type: _types.basics.boolean, description: "query 返回的 exists" }
         errors: [ ]
         query: data.queries.dictionary.exists_dictionary_children
         goto: check_children
@@ -541,7 +541,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
       - { name: input, type: cap.services.dictionary.schemas.MoveDictionaryInput }
     returns:
       - { name: dictionary, type: data.entities.dictionary, value: step.move_dictionary.dictionary }
@@ -651,7 +651,7 @@ services:
         input:
           - { name: items, value: params.input.items, description: "字典项数组" }
         output:
-          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
         errors:
           - platform.errors.DICTIONARY_CODE_TAKEN
           - platform.errors.DICTIONARY_PARENT_INVALID

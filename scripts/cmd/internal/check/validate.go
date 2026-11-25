@@ -100,8 +100,8 @@ func stringLeaf(expr typeExpr) bool {
 	return false
 }
 
-// parseTypeExpr 解析 Field.type：_types. 前缀可选，list<T>/map<T> 递归解析。
-// base 必须命中 basic_types 或 structures；struct 不接受泛型参数。
+// parseTypeExpr 解析 Field.type：必须是 _types.<basics|structures>.<name>，
+// list<T>/map<T> 递归解析；struct 不接受泛型参数。
 const maxTypeDepth = 8
 
 func defaultValueTypes() ValueTypes {
@@ -149,19 +149,25 @@ func parseTypeExprDepth(raw string, vt ValueTypes, depth int) (typeExpr, error) 
 	if s == "" {
 		return typeExpr{}, fmt.Errorf("empty type")
 	}
-	s = strings.TrimPrefix(s, "_types.")
-	if i := strings.Index(s, "<"); i >= 0 {
-		if !strings.HasSuffix(s, ">") {
+	class, name, ok := contractspec.SplitTypeRef(s)
+	if !ok {
+		return typeExpr{}, fmt.Errorf("type %q must be _types.<basics|structures|schemas>.<name>", raw)
+	}
+	if i := strings.Index(name, "<"); i >= 0 {
+		if class != contractspec.TypeClassStructures {
+			return typeExpr{}, fmt.Errorf("type %q: only _types.structures.* accepts type arguments", raw)
+		}
+		if !strings.HasSuffix(name, ">") {
 			return typeExpr{}, fmt.Errorf("malformed type %q", raw)
 		}
-		base := s[:i]
+		base := name[:i]
 		if _, ok := vt.Structures[base]; !ok {
 			return typeExpr{}, fmt.Errorf("unknown structure %q", base)
 		}
 		if base == "object" {
 			return typeExpr{}, fmt.Errorf("object must not take type arguments")
 		}
-		args, err := splitTypeArgs(s[i+1:len(s)-1], vt, depth+1)
+		args, err := splitTypeArgs(name[i+1:len(name)-1], vt, depth+1)
 		if err != nil {
 			return typeExpr{}, err
 		}
@@ -182,19 +188,26 @@ func parseTypeExprDepth(raw string, vt ValueTypes, depth int) (typeExpr, error) 
 		}
 		return typeExpr{Base: base, Args: args}, nil
 	}
-	if _, ok := vt.TypeFamilies[s]; ok {
-		return typeExpr{Base: s}, nil
-	}
-	if _, ok := vt.CustomTypes[s]; ok {
-		return typeExpr{Base: s}, nil
-	}
-	if _, ok := vt.Structures[s]; ok {
-		if s == "list" || s == "map" {
-			return typeExpr{}, fmt.Errorf("%s requires a type argument", s)
+	switch class {
+	case contractspec.TypeClassBasics:
+		if _, ok := vt.TypeFamilies[name]; ok {
+			return typeExpr{Base: name}, nil
 		}
-		return typeExpr{Base: s}, nil
+		if _, ok := vt.CustomTypes[name]; ok {
+			return typeExpr{Base: name}, nil
+		}
+		return typeExpr{}, fmt.Errorf("unknown basics type %q", raw)
+	case contractspec.TypeClassStructures:
+		if _, ok := vt.Structures[name]; ok {
+			if name == "list" || name == "map" {
+				return typeExpr{}, fmt.Errorf("%s requires a type argument", name)
+			}
+			return typeExpr{Base: name}, nil
+		}
+		return typeExpr{}, fmt.Errorf("unknown structure %q", raw)
+	default:
+		return typeExpr{}, fmt.Errorf("type %q is a schema node discriminator, not a field type", raw)
 	}
-	return typeExpr{}, fmt.Errorf("unknown type %q", raw)
 }
 
 func splitTypeArgs(inner string, vt ValueTypes, depth int) ([]typeExpr, error) {
@@ -232,9 +245,10 @@ func splitTypeArgs(inner string, vt ValueTypes, depth int) ([]typeExpr, error) {
 	return append(out, arg), nil
 }
 
-// normalizeTypeExpr 去掉 _types. 前缀，供 validateValue 的既有分支匹配。
+// normalizeTypeExpr 去掉全部 _types 命名空间前缀，返回裸类型表达式；
+// 供 validateValue 的既有分支按 "list<object>" 这类裸名匹配。
 func normalizeTypeExpr(s string) string {
-	return strings.ReplaceAll(s, "_types.", "")
+	return contractspec.BareTypeName(s)
 }
 
 func validateFieldTypes(fields []Field, vt ValueTypes, bootstrap bool) error {

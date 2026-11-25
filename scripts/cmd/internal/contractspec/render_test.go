@@ -190,11 +190,11 @@ func TestRenderQuery(t *testing.T) {
 		t.Fatalf("query ctx param not scaffolded: %#v", q["params"])
 	}
 	param, _ := params[1].(map[string]any)
-	if param["type"] != "_types.id" || param["column"] != "data.tables.account.col.id" {
+	if param["type"] != "_types.basics.id" || param["column"] != "data.tables.account.col.id" {
 		t.Fatalf("query id param must bind the 64-bit primary key: %#v", param)
 	}
 	ret, _ := returns[0].(map[string]any)
-	if ret["kind"] != "scalar" || ret["type"] != "_types.boolean" {
+	if ret["kind"] != "scalar" || ret["type"] != "_types.basics.boolean" {
 		t.Fatalf("query return shape not scaffolded: %#v", ret)
 	}
 	targets, _ := q["tables"].([]any)
@@ -272,7 +272,7 @@ func TestRenderTableDecimalFamilyParams(t *testing.T) {
 	}
 	cols, _ := doc["columns"].([]any)
 	first, _ := cols[0].(map[string]any)
-	if first["type"] != "_types.decimal" {
+	if first["type"] != "_types.basics.decimal" {
 		t.Fatalf("column type not overridden: %#v", first)
 	}
 	if first["precision"] != 19 {
@@ -351,8 +351,8 @@ func TestRenderTableFallbacks(t *testing.T) {
 		t.Fatalf("want one column: %#v", doc["columns"])
 	}
 	first, _ := cols[0].(map[string]any)
-	if first["type"] != "_types.string" {
-		t.Fatalf("column type fallback must be _types.string: %#v", first)
+	if first["type"] != "_types.basics.string" {
+		t.Fatalf("column type fallback must be _types.basics.string: %#v", first)
 	}
 }
 
@@ -660,10 +660,10 @@ func TestServiceInterfaceName(t *testing.T) {
 
 func TestRenderFieldValueListMapStruct(t *testing.T) {
 	v, err := RenderFieldValue(Field{
-		Type: "_types.list<_types.map<_types.object>>",
+		Type: "_types.structures.list<_types.structures.map<_types.structures.object>>",
 		ItemFields: []Field{
-			{Name: "id", Type: "_types.string"},
-			{Name: "count", Type: "_types.integer"},
+			{Name: "id", Type: "_types.basics.string"},
+			{Name: "count", Type: "_types.basics.integer"},
 		},
 	})
 	if err != nil {
@@ -688,8 +688,8 @@ func TestRenderFieldValueListMapStruct(t *testing.T) {
 
 func TestRenderFieldValueMapInteger(t *testing.T) {
 	v, err := RenderFieldValue(Field{
-		Type:       "_types.map<_types.integer, _types.object>",
-		ItemFields: []Field{{Name: "id", Type: "_types.string"}},
+		Type:       "_types.structures.map<_types.basics.integer, _types.structures.object>",
+		ItemFields: []Field{{Name: "id", Type: "_types.basics.string"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -706,8 +706,8 @@ func TestRenderFieldValueMapInteger(t *testing.T) {
 
 func TestRenderFieldValueListMapInteger(t *testing.T) {
 	v, err := RenderFieldValue(Field{
-		Type:       "_types.list<_types.map<_types.integer, _types.object>>",
-		ItemFields: []Field{{Name: "id", Type: "_types.string"}},
+		Type:       "_types.structures.list<_types.structures.map<_types.basics.integer, _types.structures.object>>",
+		ItemFields: []Field{{Name: "id", Type: "_types.basics.string"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -727,7 +727,7 @@ func TestRenderFieldValueListMapInteger(t *testing.T) {
 }
 
 func TestRenderFieldValueSet(t *testing.T) {
-	v, err := RenderFieldValue(Field{Type: "_types.set<_types.string>"})
+	v, err := RenderFieldValue(Field{Type: "_types.structures.set<_types.basics.string>"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -738,7 +738,7 @@ func TestRenderFieldValueSet(t *testing.T) {
 }
 
 func TestRenderFieldValueArray(t *testing.T) {
-	v, err := RenderFieldValue(Field{Type: "_types.array<_types.integer>"})
+	v, err := RenderFieldValue(Field{Type: "_types.structures.array<_types.basics.integer>"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -749,7 +749,7 @@ func TestRenderFieldValueArray(t *testing.T) {
 }
 
 func TestRenderFieldValueArrayLen(t *testing.T) {
-	v, err := RenderFieldValue(Field{Type: "_types.array<_types.integer>", Len: 3})
+	v, err := RenderFieldValue(Field{Type: "_types.structures.array<_types.basics.integer>", Len: 3})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -760,7 +760,7 @@ func TestRenderFieldValueArrayLen(t *testing.T) {
 }
 
 func TestRenderFieldValueListMinLen(t *testing.T) {
-	v, err := RenderFieldValue(Field{Type: "_types.list<_types.string>", MinItems: 2})
+	v, err := RenderFieldValue(Field{Type: "_types.structures.list<_types.basics.string>", MinItems: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -771,7 +771,7 @@ func TestRenderFieldValueListMinLen(t *testing.T) {
 }
 
 func TestRenderFieldValueListMinMax(t *testing.T) {
-	v, err := RenderFieldValue(Field{Type: "_types.list<_types.string>", MinItems: 2, MaxItems: 5})
+	v, err := RenderFieldValue(Field{Type: "_types.structures.list<_types.basics.string>", MinItems: 2, MaxItems: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -782,7 +782,7 @@ func TestRenderFieldValueListMinMax(t *testing.T) {
 }
 
 func TestRenderFieldValueSetDedup(t *testing.T) {
-	v, err := RenderFieldValue(Field{Type: "_types.set<_types.string>", MinItems: 2})
+	v, err := RenderFieldValue(Field{Type: "_types.structures.set<_types.basics.string>", MinItems: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -794,10 +794,10 @@ func TestRenderFieldValueSetDedup(t *testing.T) {
 
 func TestRenderFieldValueSetObjectDedup(t *testing.T) {
 	v, err := RenderFieldValue(Field{
-		Type:       "_types.set<_types.object>",
+		Type:       "_types.structures.set<_types.structures.object>",
 		MinItems:   2,
 		UniqueKey:  "name",
-		ItemFields: []Field{{Name: "name", Type: "_types.string", Required: true}},
+		ItemFields: []Field{{Name: "name", Type: "_types.basics.string", Required: true}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -815,10 +815,10 @@ func TestRenderFieldValueSetObjectDedup(t *testing.T) {
 
 func TestRenderFieldValueSetObjectIntegerKey(t *testing.T) {
 	v, err := RenderFieldValue(Field{
-		Type:       "_types.set<_types.object>",
+		Type:       "_types.structures.set<_types.structures.object>",
 		MinItems:   2,
 		UniqueKey:  "id",
-		ItemFields: []Field{{Name: "id", Type: "_types.integer", Required: true}},
+		ItemFields: []Field{{Name: "id", Type: "_types.basics.integer", Required: true}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -836,10 +836,10 @@ func TestRenderFieldValueSetObjectIntegerKey(t *testing.T) {
 
 func TestRenderFieldValueCustomIntegerKey(t *testing.T) {
 	v, err := RenderFieldValueWithTypes(Field{
-		Type:       "_types.set<_types.object>",
+		Type:       "_types.structures.set<_types.structures.object>",
 		MinItems:   2,
 		UniqueKey:  "id",
-		ItemFields: []Field{{Name: "id", Type: "_types.page_limit", Required: true}},
+		ItemFields: []Field{{Name: "id", Type: "_types.basics.page_limit", Required: true}},
 	}, ValueTypes{
 		CustomTypes: map[string]CustomValueType{
 			"page_limit": {Family: "integer"},
@@ -861,10 +861,10 @@ func TestRenderFieldValueCustomIntegerKey(t *testing.T) {
 
 func TestRenderFieldValueCustomDateKey(t *testing.T) {
 	v, err := RenderFieldValueWithTypes(Field{
-		Type:       "_types.set<_types.object>",
+		Type:       "_types.structures.set<_types.structures.object>",
 		MinItems:   2,
 		UniqueKey:  "at",
-		ItemFields: []Field{{Name: "at", Type: "_types.date_only", Required: true}},
+		ItemFields: []Field{{Name: "at", Type: "_types.basics.date_only", Required: true}},
 	}, ValueTypes{
 		CustomTypes: map[string]CustomValueType{
 			"date_only": {Family: "datetime", Params: map[string]any{"mode": "date"}},

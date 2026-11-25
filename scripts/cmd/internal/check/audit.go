@@ -39,6 +39,7 @@ func AuditTypeVocabulary(root string) (*TypeAudit, error) {
 			CustomTypes:    custom.CustomTypes,
 			TypeVocabulary: shared.TypeVocabulary,
 		},
+		nodeKinds: shared.Schemas,
 	}
 	report := &TypeAudit{Values: map[string]int{}}
 	contractsRoot := filepath.Join(root, "contracts")

@@ -16,37 +16,37 @@ do_not:
 
 schemas:
   AttachmentPage:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: items, schema: { type: _types.array, items: { ref: data.entities.attachment } }, required: true, description: "分页项列表" }
-      - { name: offset, schema: { type: _types.page_offset }, required: true, description: "当前页偏移" }
-      - { name: limit, schema: { type: _types.page_limit }, required: true, description: "当前页大小" }
-      - { name: has_more, schema: { type: _types.boolean }, required: true, description: "是否还有下一页" }
+      - { name: items, schema: { type: _types.schemas.array, items: { ref: data.entities.attachment } }, required: true, description: "分页项列表" }
+      - { name: offset, schema: { type: _types.basics.page_offset }, required: true, description: "当前页偏移" }
+      - { name: limit, schema: { type: _types.basics.page_limit }, required: true, description: "当前页大小" }
+      - { name: has_more, schema: { type: _types.basics.boolean }, required: true, description: "是否还有下一页" }
   CreateUploadInput:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: owner_table_name, schema: { type: _types.string }, required: true, description: "所有者物理表名" }
-      - { name: owner_id, schema: { type: _types.id }, required: true, description: "所有者行 ID" }
-      - { name: purpose, schema: { type: _types.string }, required: true, description: "用途：icon/avatar/attachment 等" }
-      - { name: sort, schema: { type: _types.integer }, required: true, description: "同一 owner+purpose 内的排序" }
-      - { name: original_name, schema: { type: _types.string }, required: true, description: "原始文件名" }
-      - { name: content_type, schema: { type: _types.string }, required: true, description: "MIME 类型" }
-      - { name: size_bytes, schema: { type: _types.byte_size }, required: true, description: "对象大小（字节）" }
-      - { name: sha256, schema: { type: _types.string }, nullable: true, description: "SHA-256 十六进制" }
+      - { name: owner_table_name, schema: { type: _types.basics.string }, required: true, description: "所有者物理表名" }
+      - { name: owner_id, schema: { type: _types.basics.id }, required: true, description: "所有者行 ID" }
+      - { name: purpose, schema: { type: _types.basics.string }, required: true, description: "用途：icon/avatar/attachment 等" }
+      - { name: sort, schema: { type: _types.basics.integer }, required: true, description: "同一 owner+purpose 内的排序" }
+      - { name: original_name, schema: { type: _types.basics.string }, required: true, description: "原始文件名" }
+      - { name: content_type, schema: { type: _types.basics.string }, required: true, description: "MIME 类型" }
+      - { name: size_bytes, schema: { type: _types.basics.byte_size }, required: true, description: "对象大小（字节）" }
+      - { name: sha256, schema: { type: _types.basics.string }, nullable: true, description: "SHA-256 十六进制" }
       - { name: visibility, schema: { ref: data.enums.attachment_visibility }, required: true, description: "访问级别" }
-      - { name: replaces_id, schema: { type: _types.id }, nullable: true, description: "被替换的旧附件 ID；新上传为 null" }
+      - { name: replaces_id, schema: { type: _types.basics.id }, nullable: true, description: "被替换的旧附件 ID；新上传为 null" }
   UploadTicket:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: attachment_id, schema: { type: _types.id }, required: true, description: "附件 ID" }
-      - { name: object_key, schema: { type: _types.string }, required: true, description: "对象存储 key" }
-      - { name: upload_url, schema: { type: _types.string }, required: true, description: "预签名上传 URL" }
-      - { name: expires_at, schema: { type: _types.timestamp }, required: true, description: "上传 URL 过期时间" }
+      - { name: attachment_id, schema: { type: _types.basics.id }, required: true, description: "附件 ID" }
+      - { name: object_key, schema: { type: _types.basics.string }, required: true, description: "对象存储 key" }
+      - { name: upload_url, schema: { type: _types.basics.string }, required: true, description: "预签名上传 URL" }
+      - { name: expires_at, schema: { type: _types.basics.timestamp }, required: true, description: "上传 URL 过期时间" }
   SignedURL:
-    type: _types.object
+    type: _types.schemas.object
     properties:
-      - { name: url, schema: { type: _types.string }, required: true, description: "预签名下载 URL" }
-      - { name: expires_at, schema: { type: _types.timestamp }, required: true, description: "下载 URL 过期时间" }
+      - { name: url, schema: { type: _types.basics.string }, required: true, description: "预签名下载 URL" }
+      - { name: expires_at, schema: { type: _types.basics.timestamp }, required: true, description: "下载 URL 过期时间" }
 
 services:
   - name: list
@@ -55,11 +55,11 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: owner_table_name, type: _types.string }
-      - { name: owner_id, type: _types.id }
-      - { name: purpose, type: _types.string, nullable: true }
-      - { name: offset, type: _types.page_offset }
-      - { name: limit, type: _types.page_limit }
+      - { name: owner_table_name, type: _types.basics.string }
+      - { name: owner_id, type: _types.basics.id }
+      - { name: purpose, type: _types.basics.string, nullable: true }
+      - { name: offset, type: _types.basics.page_offset }
+      - { name: limit, type: _types.basics.page_limit }
     returns:
       - { name: page, type: cap.services.attachment.schemas.AttachmentPage, value: step.paginate.page }
       - { name: err, type: error, value: "*" }
@@ -74,7 +74,7 @@ services:
           - { name: offset, value: params.offset, description: "分页偏移" }
           - { name: limit, value: params.limit, description: "分页大小" }
         output:
-          - { name: attachments, type: _types.list<data.entities.attachment>, description: "附件列表" }
+          - { name: attachments, type: _types.structures.list<data.entities.attachment>, description: "附件列表" }
         errors: [ ]
         query: data.queries.attachment.list_attachments
         goto: paginate
@@ -99,7 +99,7 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: attachment, type: data.entities.attachment, value: step.get_attachment.attachment, nullable: true }
       - { name: err, type: error, value: "*" }
@@ -133,7 +133,7 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: object_key, type: _types.string }
+      - { name: object_key, type: _types.basics.string }
     returns:
       - { name: attachment, type: data.entities.attachment, value: step.get_attachment_by_key.attachment, nullable: true }
       - { name: err, type: error, value: "*" }
@@ -176,7 +176,7 @@ services:
         summary: "生成新附件 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.id, description: "新附件 ID" }
+          - { name: id, type: _types.basics.id, description: "新附件 ID" }
         errors: [ ]
         rules: [ ]
         goto: new_object_key
@@ -187,7 +187,7 @@ services:
           - { name: owner_table_name, value: params.input.owner_table_name, description: "所有者物理表名" }
           - { name: owner_id, value: params.input.owner_id, description: "所有者行 ID" }
         output:
-          - { name: object_key, type: _types.string, description: "新对象 key" }
+          - { name: object_key, type: _types.basics.string, description: "新对象 key" }
         errors: [ ]
         rules: [ ]
         goto: status_uploading
@@ -263,8 +263,8 @@ services:
           - { name: content_type, value: params.input.content_type, description: "MIME 类型" }
           - { name: size_bytes, value: params.input.size_bytes, description: "对象大小" }
         output:
-          - { name: upload_url, type: _types.string, description: "预签名上传 URL" }
-          - { name: expires_at, type: _types.timestamp, description: "上传 URL 过期时间" }
+          - { name: upload_url, type: _types.basics.string, description: "预签名上传 URL" }
+          - { name: expires_at, type: _types.basics.timestamp, description: "上传 URL 过期时间" }
         errors: [ ]
         rules: [ ]
         goto: build_ticket
@@ -290,7 +290,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: attachment, type: data.entities.attachment, value: step.set_attachment_status.attachment }
       - { name: err, type: error, value: "*" }
@@ -405,7 +405,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: attachment, type: data.entities.attachment, value: step.set_attachment_status.attachment }
       - { name: err, type: error, value: "*" }
@@ -473,7 +473,7 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: signed, type: cap.services.attachment.schemas.SignedURL, value: step.build_signed.signed }
       - { name: err, type: error, value: "*" }
@@ -515,8 +515,8 @@ services:
           - { name: object_key, value: step.get_attachment.attachment.object_key, description: "对象 key" }
           - { name: visibility, value: step.get_attachment.attachment.visibility, description: "访问级别" }
         output:
-          - { name: url, type: _types.string, description: "下载 URL" }
-          - { name: expires_at, type: _types.timestamp, description: "下载 URL 过期时间" }
+          - { name: url, type: _types.basics.string, description: "下载 URL" }
+          - { name: expires_at, type: _types.basics.timestamp, description: "下载 URL 过期时间" }
         errors: [ ]
         rules: [ ]
         goto: build_signed
@@ -540,7 +540,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.id }
+      - { name: id, type: _types.basics.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:
@@ -597,7 +597,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: affected_rows, type: _types.integer, value: step.sum.affected_rows }
+      - { name: affected_rows, type: _types.basics.integer, value: step.sum.affected_rows }
       - { name: err, type: error, value: "*" }
     steps:
       - id: cutoff
@@ -605,7 +605,7 @@ services:
         summary: "计算 24 小时前的时间"
         input: [ ]
         output:
-          - { name: cutoff, type: _types.timestamp, description: "24 小时前的截止时间" }
+          - { name: cutoff, type: _types.basics.timestamp, description: "24 小时前的截止时间" }
         errors: [ ]
         rules: [ ]
         goto: status_deleted
@@ -625,7 +625,7 @@ services:
           - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
         output:
-          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
         errors: [ ]
         query: data.queries.attachment.soft_delete_stale_uploads
         goto: soft_delete_failed
@@ -636,7 +636,7 @@ services:
           - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
         output:
-          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
         errors: [ ]
         query: data.queries.attachment.soft_delete_stale_failed_uploads
         goto: sum
@@ -647,7 +647,7 @@ services:
           - { name: uploading_rows, value: step.soft_delete_stale.affected_rows, description: "stale uploading 行数" }
           - { name: failed_rows, value: step.soft_delete_failed.affected_rows, description: "stale failure 行数" }
         output:
-          - { name: affected_rows, type: _types.integer, description: "清理总行数" }
+          - { name: affected_rows, type: _types.basics.integer, description: "清理总行数" }
         errors: [ ]
         rules: [ ]
         goto: $end

@@ -95,7 +95,7 @@ make contract-new type=data.enums name=note_status module=notes
 make contract-new type=feature.pages name=note_list summary="备注列表页"
 ```
 
-`column_type` 可选；指定后第一列使用该类型族（生成 `_types.<name>`），并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
+`column_type` 可选；指定后第一列使用该类型族（生成 `_types.basics.<name>`），并自动带出该族的 required/default 扩展字段（例如 `decimal` 带 `precision` / `scale`）。
 
 生成后替换所有 `<...>` 占位符；**新表还必须同步在 `contracts/data/storage.yaml` 的 `tables.<engine>` 列表下登记条目**（每条都必须写 `description`：普通条目等于表 `summary`，归档条目说明归档用途；`retention` 按需写在条目内；归档另写 `archive_of` 条目并声明 `promotable`，不建表契约；`promotable:true` 的归档必须被某个 `archive.promotable:true` 的查询引用并写 `on_conflict`，查询侧的 `age_by` 必须与 storage 一致；只读穿透写 `archive.promotable:false` 且不写 `age_by`），否则 `contract-check` 会报 `[storage-registry]`；同时在 `table.entities` 列出映射实体；`table.references` / `table.referenced_by` / `model.includes` / `model.included_by` 由 `make gen-graph` 维护，不要手改，由 checker 双向校验。字段规范：`contracts/_meta/data.tables.yaml`；storage 条目：`contracts/_meta/data.storage.yaml`；类型族：`contracts/_meta/_types.yaml`；项目自定义类型：`contracts/data/types.yaml`。
 

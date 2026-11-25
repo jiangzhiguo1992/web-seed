@@ -30,7 +30,7 @@ func TestLoadSchemaByType(t *testing.T) {
 id: meta.data.tables
 type: data.tables
 fields:
-  - { name: id, type: _types.string }
+  - { name: id, type: _types.basics.string }
 `)
 	s, path, err := LoadSchemaByType(root, "data.tables")
 	if err != nil {
@@ -50,7 +50,7 @@ func TestLoadSchemaByTypeRequiresSharedTypes(t *testing.T) {
 id: meta.data.tables
 type: data.tables
 fields:
-  - { name: id, type: _types.string }
+  - { name: id, type: _types.basics.string }
 `)
 	if _, _, err := LoadSchemaByType(root, "data.tables"); err == nil {
 		t.Fatal("missing _types.yaml must fail for data.tables")
@@ -59,8 +59,8 @@ fields:
 
 func TestLoadSchemaByTypeDuplicate(t *testing.T) {
 	root := t.TempDir()
-	writeMeta(t, root, "a.yaml", "id: meta.a\ntype: data.tables\nfields:\n  - { name: id, type: _types.string }\n")
-	writeMeta(t, root, "b.yaml", "id: meta.b\ntype: data.tables\nfields:\n  - { name: id, type: _types.string }\n")
+	writeMeta(t, root, "a.yaml", "id: meta.a\ntype: data.tables\nfields:\n  - { name: id, type: _types.basics.string }\n")
+	writeMeta(t, root, "b.yaml", "id: meta.b\ntype: data.tables\nfields:\n  - { name: id, type: _types.basics.string }\n")
 	if _, _, err := LoadSchemaByType(root, "data.tables"); err == nil {
 		t.Fatal("duplicate meta type must fail")
 	}
@@ -73,7 +73,7 @@ func TestLoadSchemaRejectsUnknownField(t *testing.T) {
 id: meta.data.tables
 type: data.tables
 fields:
-  - { name: id, type: _types.string, requred: true }
+  - { name: id, type: _types.basics.string, requred: true }
 `
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func TestLoadSharedTypesSchemas(t *testing.T) {
 		t.Fatalf("empty struct item_fields: %v", err)
 	}
 
-	body = strings.Replace(string(shared), "\ntype_vocabulary:\n", "\n  bogus:\n    description: \"x\"\n    keys:\n      - { name: type, type: _types.string, required: true }\n\ntype_vocabulary:\n", 1)
+	body = strings.Replace(string(shared), "\ntype_vocabulary:\n", "\n  bogus:\n    description: \"x\"\n    keys:\n      - { name: type, type: _types.basics.string, required: true }\n\ntype_vocabulary:\n", 1)
 	writeMeta(t, root, "_types.yaml", body)
 	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown schema bogus") {
 		t.Fatalf("unknown schema kind: %v", err)
@@ -172,9 +172,9 @@ func TestLoadSharedTypesStructures(t *testing.T) {
 	}
 
 	idx := strings.Index(string(shared), "\nstructures:")
-	tail := strings.Replace(string(shared)[idx:], "type: _types.integer", "type: _types.bogus", 1)
+	tail := strings.Replace(string(shared)[idx:], "type: _types.basics.integer", "type: _types.basics.bogus", 1)
 	writeMeta(t, root, "_types.yaml", string(shared)[:idx]+tail)
-	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown type") {
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown basics type") {
 		t.Fatalf("unknown structure param type: %v", err)
 	}
 
@@ -183,5 +183,46 @@ func TestLoadSharedTypesStructures(t *testing.T) {
 	writeMeta(t, root, "_types.yaml", string(shared)[:idx]+tail)
 	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "does not allow param len") {
 		t.Fatalf("invalid list param: %v", err)
+	}
+}
+
+func TestSplitTypeRef(t *testing.T) {
+	cases := []struct {
+		ref   string
+		class string
+		name  string
+		ok    bool
+	}{
+		{"_types.basics.string", TypeClassBasics, "string", true},
+		{"_types.structures.list<_types.basics.string>", TypeClassStructures, "list<_types.basics.string>", true},
+		{"_types.schemas.*", TypeClassSchemas, "*", true},
+		{"_types.string", "", "", false},
+		{"_types.unknown.string", "", "", false},
+		{"data.entities.account", "", "", false},
+	}
+	for _, tc := range cases {
+		class, name, ok := SplitTypeRef(tc.ref)
+		if ok != tc.ok || class != tc.class || name != tc.name {
+			t.Fatalf("SplitTypeRef(%q) = (%q,%q,%v), want (%q,%q,%v)", tc.ref, class, name, ok, tc.class, tc.name, tc.ok)
+		}
+	}
+}
+
+func TestSchemaNodeKindRequiresNamespace(t *testing.T) {
+	kinds := map[string]SchemaKind{
+		"object": {Keys: []Field{{Name: "type"}}},
+		"array":  {Keys: []Field{{Name: "type"}}},
+		"map":    {Keys: []Field{{Name: "type"}}},
+		"scalar": {Keys: []Field{{Name: "type"}}},
+		"ref":    {Keys: []Field{{Name: "ref"}}},
+	}
+	if _, ok := SchemaNodeKind(map[string]any{"type": "_types.object"}, kinds); ok {
+		t.Fatal("legacy _types.object must not be a schema node kind")
+	}
+	if kind, ok := SchemaNodeKind(map[string]any{"type": "_types.schemas.object"}, kinds); !ok || kind != "object" {
+		t.Fatalf("qualified object node = (%q,%v)", kind, ok)
+	}
+	if kind, ok := SchemaNodeKind(map[string]any{"type": "_types.basics.string"}, kinds); !ok || kind != "scalar" {
+		t.Fatalf("qualified scalar node = (%q,%v)", kind, ok)
 	}
 }
