@@ -159,7 +159,7 @@ services:
           - { name: failed_login_count, type: _types.basics.integer.32, description: "密码绑定当前的连续失败次数；非密码认证时为 0" }
           - { name: auth_status, type: data.enums.auth_status, description: "命中的认证绑定状态" }
           - { name: password_hash, type: _types.basics.string, description: "密码哈希；非密码认证时为 null", nullable: true }
-          - { name: locked_until, type: _types.basics.timestamp.time, description: "密码绑定锁定截止时间", nullable: true }
+          - { name: locked_until, type: _types.basics.timestamp.long, description: "密码绑定锁定截止时间", nullable: true }
         errors:
           - platform.errors.AUTH_INVALID_CREDENTIALS
         rules: [ ]
@@ -1271,7 +1271,7 @@ services:
           - { name: max_attempts, value: step.load_policy.max_attempts, description: "最大连续失败次数" }
           - { name: lockout, value: step.load_policy.lockout, description: "锁定时长（秒）" }
         output:
-          - { name: lock_until, type: _types.basics.timestamp.time, description: "锁定截止时间" }
+          - { name: lock_until, type: _types.basics.timestamp.long, description: "锁定截止时间" }
         errors:
           - platform.errors.AUTH_LOCKED
         rules:

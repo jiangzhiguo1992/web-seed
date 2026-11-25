@@ -89,7 +89,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.auth_pwd.col.id }
-      - { name: lock_until, type: _types.basics.timestamp.time, column: data.tables.auth_pwd.col.locked_until, nullable: true }
+      - { name: lock_until, type: _types.basics.timestamp.long, column: data.tables.auth_pwd.col.locked_until, nullable: true }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }

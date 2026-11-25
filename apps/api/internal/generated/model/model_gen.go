@@ -5,7 +5,6 @@ package model
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 )
 
 // AccountStatus 账号状态
@@ -1017,8 +1016,8 @@ type authPwd struct {
 	AccountID        *int64     `json:"account_id"`
 	Username         string     `json:"username"`
 	passwordHash     string
-	FailedLoginCount int32      `json:"failed_login_count"`
-	LockedUntil      *time.Time `json:"locked_until"`
+	FailedLoginCount int32  `json:"failed_login_count"`
+	LockedUntil      *int64 `json:"locked_until"`
 }
 
 // Dictionary 是 data.entities.dictionary 的标量投影；关系字段按需加载。

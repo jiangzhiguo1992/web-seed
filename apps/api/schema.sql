@@ -134,7 +134,7 @@ CREATE TABLE "auth_pwd" (
   "username" VARCHAR(254) NOT NULL,
   "password_hash" VARCHAR(255) NOT NULL,
   "failed_login_count" INTEGER NOT NULL DEFAULT 0,
-  "locked_until" TIMESTAMPTZ(6),
+  "locked_until" TIMESTAMP(6),
   CONSTRAINT "ck_auth_pwd_username_lowercase" CHECK (username = lower(username)),
   CONSTRAINT "ck_auth_pwd_status" CHECK (status IN (1, 2)),
   CONSTRAINT "ck_auth_pwd_account_live" CHECK ((deleted_at IS NULL) = (account_id IS NOT NULL)),
