@@ -68,6 +68,8 @@ fields:
         required: true
         unique: true
         min_items: 1
+        generated: true
+        write: forbidden
         pattern: '^(data\.entities\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*|cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*|cap\.protocols\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*)$'
         description: "使用该枚举的 entity / service / event / http operation；由 make gen-graph 写入"
 
