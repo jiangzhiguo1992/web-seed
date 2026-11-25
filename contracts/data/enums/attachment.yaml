@@ -1,0 +1,38 @@
+# 附件域跨前后端枚举集合。
+
+id: data.enums.attachment
+summary: "附件域枚举集合"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "data.enums.attachment 只放附件自身的状态与访问级别；owner_table_name/purpose 是可扩展字符串，不是枚举"
+  - "attachment_status / attachment_visibility 的 code 删除后不得复用"
+
+enums:
+  - name: attachment_status
+    description: "附件状态"
+    go_type: AttachmentStatus
+    ts_type: AttachmentStatus
+    values:
+      - { value: uploading, code: 0, description: "上传中；对象尚未可用" }
+      - { value: available, code: 1, description: "可用；已完成上传" }
+      - { value: deleted, code: 2, description: "已软删；终态" }
+    used_by:
+      - cap.services.attachment.cleanup_stale_uploads
+      - cap.services.attachment.complete_upload
+      - cap.services.attachment.create_upload
+      - cap.services.attachment.delete
+      - data.entities.attachment
+
+  - name: attachment_visibility
+    description: "附件访问级别"
+    go_type: AttachmentVisibility
+    ts_type: AttachmentVisibility
+    values:
+      - { value: private, code: 0, description: "私有；只能通过签名 URL 访问" }
+      - { value: public, code: 1, description: "公开；可直接访问" }
+    used_by:
+      - cap.protocols.http.attachment.create_upload
+      - cap.services.attachment.create_upload
+      - data.entities.attachment

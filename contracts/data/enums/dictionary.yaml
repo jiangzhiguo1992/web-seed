@@ -8,15 +8,20 @@ stability: draft
 do_not:
   - "data.enums.dictionary 只放字典自身的状态码；业务枚举不要写进本文件"
   - "dictionary_status 的 code 删除后不得复用；历史数据仍引用旧 code"
-  - "dictionary_status 只表达开关状态；可编辑的字典选项放 dictionary 表，不在这里加值"
+  - "dictionary_status 只表达开关与软删状态；可编辑的字典选项放 dictionary 表，不在这里加值"
 
 enums:
   - name: dictionary_status
-    description: "字典与字典项状态"
+    description: "字典状态"
     go_type: DictionaryStatus
     ts_type: DictionaryStatus
     values:
       - { value: enabled, code: 0, description: "启用；可选择" }
       - { value: disabled, code: 1, description: "停用；不可选择" }
+      - { value: deleted, code: 2, description: "已软删；终态，不再读取" }
     used_by:
+      - cap.protocols.http.dictionary.set_status
+      - cap.services.dictionary.create
+      - cap.services.dictionary.delete
+      - cap.services.dictionary.set_status
       - data.entities.dictionary
