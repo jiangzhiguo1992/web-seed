@@ -70,7 +70,7 @@ fields:
         description: "入参"
         item_fields:
           - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: _types.basics.string, required: true, pattern: '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "_types.basics.* / _types.structures.list<> 或 data.*/cap.services 本地 schema；可带一层 * 或 _types.structures.list<>" }
+          - { name: type, type: _types.basics.string, required: true, pattern: &service_type '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "类型 ID；允许的引用与层数见 service-param-type" }
           - { name: nullable, type: _types.basics.boolean, required: false, description: "是否可空；调用方可省略" }
           - { name: default, type: _types.basics.any, required: false, description: "缺省值" }
 
@@ -80,7 +80,7 @@ fields:
         description: "返回值"
         item_fields:
           - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名" }
-          - { name: type, type: _types.basics.string, required: true, pattern: '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "_types.basics.* / _types.structures.list<> 或 data.*/cap.services 本地 schema；可带一层 * 或 _types.structures.list<>" }
+          - { name: type, type: _types.basics.string, required: true, pattern: &service_return_type '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "返回值类型；允许的引用与层数见 service-param-type" }
           - { name: value, type: _types.basics.string, required: true, pattern: '^(\*|(params|step)\.[a-z][a-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*|\[[0-9]+\])*)$', description: "返回值来源：params.<path> 或 step.<id>.<path>；err 固定写 *，表示错误可来自任意步骤" }
           - { name: nullable, type: _types.basics.boolean, required: false, description: "是否可空" }
 
@@ -118,7 +118,7 @@ fields:
             description: "本步暴露的产出"
             item_fields:
               - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
-              - { name: type, type: _types.basics.string, required: true, pattern: '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "_types.basics.* / _types.structures.list<> 或 data.*/cap.services 本地 schema；可带一层 * 或 _types.structures.list<>" }
+              - { name: type, type: _types.basics.string, required: true, pattern: *service_type, description: "类型 ID；允许的引用与层数见 service-param-type" }
               - { name: description, type: _types.basics.string, required: true, description: "这项产出的业务含义" }
               - { name: nullable, type: _types.basics.boolean, required: false, description: "是否可空" }
 
