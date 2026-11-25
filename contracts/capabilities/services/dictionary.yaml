@@ -6,21 +6,65 @@ owner_module: system
 schema_version: 1
 stability: draft
 do_not:
-  - "字典服务只读；字典维护写服务单独设计，不要在这里加写步骤"
   - "字典值只用于展示；不要按 code 做业务分支"
-  - "返回停用节点时由调用方过滤；服务不做隐式过滤"
+  - "读取服务必须过滤 deleted_at 非空的行；停用节点由调用方按 status 处理"
+  - "code 创建后不可变；更新只改展示字段"
+  - "import 的 items 是 JSON 边界；字段语义由 feature.rules.dictionary.import_items_shape 约束，不要在 handler 里另造字段"
+
+schemas:
+  DictionaryPage:
+    type: _types.object
+    properties:
+      - { name: items, schema: { type: _types.array, items: { ref: data.entities.dictionary } }, required: true, description: "分页项列表" }
+      - { name: offset, schema: { type: _types.page_offset }, required: true, description: "当前页偏移" }
+      - { name: limit, schema: { type: _types.page_limit }, required: true, description: "当前页大小" }
+      - { name: has_more, schema: { type: _types.boolean }, required: true, description: "是否还有下一页" }
+  CreateDictionaryInput:
+    type: _types.object
+    properties:
+      - { name: parent_id, schema: { type: _types.id }, nullable: true, description: "父节点 ID；顶级为空" }
+      - { name: code, schema: { type: _types.string }, required: true, description: "全局唯一编码" }
+      - { name: name, schema: { type: _types.string }, required: true, description: "展示名" }
+      - { name: color, schema: { type: _types.string }, nullable: true, description: "展示颜色 #RRGGBB" }
+      - { name: sort, schema: { type: _types.integer }, required: true, description: "排序" }
+      - { name: remark, schema: { type: _types.string }, nullable: true, description: "备注" }
+      - { name: extra, schema: { type: _types.json }, nullable: true, description: "扩展元数据" }
+  UpdateDictionaryInput:
+    type: _types.object
+    properties:
+      - { name: name, schema: { type: _types.string }, required: true, description: "展示名" }
+      - { name: color, schema: { type: _types.string }, nullable: true, description: "展示颜色 #RRGGBB" }
+      - { name: sort, schema: { type: _types.integer }, required: true, description: "排序" }
+      - { name: remark, schema: { type: _types.string }, nullable: true, description: "备注" }
+      - { name: extra, schema: { type: _types.json }, nullable: true, description: "扩展元数据" }
+  SetDictionaryStatusInput:
+    type: _types.object
+    properties:
+      - { name: status, schema: { ref: data.enums.dictionary_status }, required: true, description: "目标状态" }
+  MoveDictionaryInput:
+    type: _types.object
+    properties:
+      - { name: parent_id, schema: { type: _types.id }, nullable: true, description: "新父节点；null 表示移到顶级" }
+  DictionaryImportInput:
+    type: _types.object
+    properties:
+      - { name: items, schema: { type: _types.json }, required: true, description: "字典项 JSON 数组；每项字段见 feature.rules.dictionary.import_items_shape" }
+  ImportResult:
+    type: _types.object
+    properties:
+      - { name: affected_rows, schema: { type: _types.integer }, required: true, description: "成功写入的行数" }
 
 services:
   - name: list_roots
     summary: "分页列出顶级字典节点"
-    visibility: internal
+    visibility: public
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
       - { name: offset, type: _types.page_offset }
       - { name: limit, type: _types.page_limit }
     returns:
-      - { name: dictionaries, type: _types.list<data.entities.dictionary>, value: step.list_root_dictionaries.dictionaries }
+      - { name: page, type: cap.services.dictionary.schemas.DictionaryPage, value: step.paginate.page }
       - { name: err, type: error, value: "*" }
     steps:
       - id: list_root_dictionaries
@@ -33,20 +77,33 @@ services:
           - { name: dictionaries, type: _types.list<data.entities.dictionary>, description: "顶级字典节点列表" }
         errors: [ ]
         query: data.queries.dictionary.list_root_dictionaries
+        goto: paginate
+      - id: paginate
+        kind: logic
+        summary: "把字典列表包装成分页结果"
+        input:
+          - { name: dictionaries, value: step.list_root_dictionaries.dictionaries, description: "查询到的字典列表" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: page, type: cap.services.dictionary.schemas.DictionaryPage, description: "字典分页结果" }
+        errors: [ ]
+        rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.list
 
   - name: list_children
     summary: "按父节点列出子节点"
-    visibility: internal
+    visibility: public
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: parent_id, type: _types.integer }
+      - { name: parent_id, type: _types.id }
       - { name: offset, type: _types.page_offset }
       - { name: limit, type: _types.page_limit }
     returns:
-      - { name: children, type: _types.list<data.entities.dictionary>, value: step.list_dictionary_children.children }
+      - { name: page, type: cap.services.dictionary.schemas.DictionaryPage, value: step.paginate.page }
       - { name: err, type: error, value: "*" }
     steps:
       - id: list_dictionary_children
@@ -60,8 +117,21 @@ services:
           - { name: children, type: _types.list<data.entities.dictionary>, description: "子节点列表" }
         errors: [ ]
         query: data.queries.dictionary.list_dictionary_children
+        goto: paginate
+      - id: paginate
+        kind: logic
+        summary: "把子节点列表包装成分页结果"
+        input:
+          - { name: children, value: step.list_dictionary_children.children, description: "查询到的子节点列表" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: page, type: cap.services.dictionary.schemas.DictionaryPage, description: "子节点分页结果" }
+        errors: [ ]
+        rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.children
 
   - name: get
     summary: "按编码读取字典节点"
@@ -83,5 +153,518 @@ services:
           - { name: dictionary, type: data.entities.dictionary, description: "字典节点；不存在时为 null", nullable: true }
         errors: [ ]
         query: data.queries.dictionary.get_dictionary
+        goto: check
+      - id: check
+        kind: logic
+        summary: "软删行按不存在处理"
+        input:
+          - { name: dictionary, value: step.get_dictionary.dictionary, description: "查询到的字典节点" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_NOT_FOUND
+        rules:
+          - { rule: feature.rules.dictionary.deleted_cannot_modify }
         goto: $end
     used_by: []
+
+  - name: get_by_id
+    summary: "按 ID 读取字典节点"
+    visibility: public
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+    returns:
+      - { name: dictionary, type: data.entities.dictionary, value: step.get_dictionary.dictionary, nullable: true }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.get_dictionary_by_id"
+        input:
+          - { name: id, value: params.id, description: "字典 ID" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "字典节点；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.dictionary.get_dictionary_by_id
+        goto: check
+      - id: check
+        kind: logic
+        summary: "软删行按不存在处理"
+        input:
+          - { name: dictionary, value: step.get_dictionary.dictionary, description: "查询到的字典节点" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_NOT_FOUND
+        rules:
+          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        goto: $end
+    used_by:
+      - cap.protocols.http.dictionary.get
+
+  - name: create
+    summary: "创建字典节点"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: input, type: cap.services.dictionary.schemas.CreateDictionaryInput }
+    returns:
+      - { name: dictionary, type: data.entities.dictionary, value: step.create_dictionary.dictionary }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: new_id
+        kind: logic
+        summary: "生成新字典 ID"
+        input: [ ]
+        output:
+          - { name: id, type: _types.id, description: "新字典 ID" }
+        errors: [ ]
+        rules: [ ]
+        goto: status_enabled
+      - id: status_enabled
+        kind: logic
+        summary: "确定创建后的初始状态 enabled"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.dictionary_status, description: "初始状态 enabled" }
+        errors: [ ]
+        rules: [ ]
+        goto: validate
+      - id: validate
+        kind: logic
+        summary: "校验 code/name/color"
+        input:
+          - { name: code, value: params.input.code, description: "字典编码" }
+          - { name: name, value: params.input.name, description: "展示名" }
+          - { name: color, value: params.input.color, description: "展示颜色" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_INVALID
+        rules:
+          - { rule: feature.rules.dictionary.code_format }
+          - { rule: feature.rules.dictionary.name_length }
+          - { rule: feature.rules.dictionary.color_format }
+        goto: exists_code
+      - id: exists_code
+        kind: query
+        summary: "调用 data.queries.dictionary.exists_dictionary_code"
+        input:
+          - { name: code, value: params.input.code, description: "待创建字典编码" }
+        output:
+          - { name: exists, type: _types.boolean, description: "query 返回的 exists" }
+        errors: [ ]
+        query: data.queries.dictionary.exists_dictionary_code
+        goto: check_code
+      - id: check_code
+        kind: logic
+        summary: "编码已占用时拒绝创建"
+        input:
+          - { name: exists, value: step.exists_code.exists, description: "编码是否已被占用" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_CODE_TAKEN
+        rules:
+          - { rule: feature.rules.dictionary.code_unique }
+        goto: parent_branch
+      - id: parent_branch
+        kind: when
+        summary: "无父节点时直接创建；有父节点时先读取"
+        input:
+          - { name: parent_id, value: params.input.parent_id, description: "父节点 ID" }
+        output: [ ]
+        when:
+          - input: parent_id
+            expr: "input.parent_id == null"
+            goto: create_dictionary
+        goto: load_parent
+      - id: load_parent
+        kind: query
+        summary: "调用 data.queries.dictionary.get_dictionary_by_id"
+        input:
+          - { name: id, value: params.input.parent_id, description: "父节点 ID" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "父节点；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.dictionary.get_dictionary_by_id
+        goto: check_parent
+      - id: check_parent
+        kind: logic
+        summary: "父节点不存在或已软删时拒绝创建"
+        input:
+          - { name: parent, value: step.load_parent.dictionary, description: "父节点" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_PARENT_INVALID
+        rules:
+          - { rule: feature.rules.dictionary.parent_must_exist }
+        goto: create_dictionary
+      - id: create_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.create_dictionary"
+        lifecycles: [ cap.lifecycles.dictionary.create ]
+        input:
+          - { name: id, value: step.new_id.id, description: "新字典 ID" }
+          - { name: parent_id, value: params.input.parent_id, description: "父节点 ID；顶级为 null" }
+          - { name: code, value: params.input.code, description: "字典编码" }
+          - { name: name, value: params.input.name, description: "展示名" }
+          - { name: color, value: params.input.color, description: "展示颜色" }
+          - { name: sort, value: params.input.sort, description: "排序" }
+          - { name: remark, value: params.input.remark, description: "备注" }
+          - { name: extra, value: params.input.extra, description: "扩展元数据" }
+          - { name: status, value: step.status_enabled.status, description: "初始状态 enabled" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "query 返回的 dictionary" }
+        errors:
+          - platform.errors.DICTIONARY_CODE_TAKEN
+          - platform.errors.DICTIONARY_PARENT_INVALID
+          - platform.errors.DICTIONARY_INVALID
+        query: data.queries.dictionary.create_dictionary
+        goto: $end
+    used_by:
+      - cap.protocols.http.dictionary.create
+
+  - name: update
+    summary: "更新字典展示字段"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+      - { name: input, type: cap.services.dictionary.schemas.UpdateDictionaryInput }
+    returns:
+      - { name: dictionary, type: data.entities.dictionary, value: step.update_dictionary.dictionary }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.get_dictionary_by_id"
+        input:
+          - { name: id, value: params.id, description: "字典 ID" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "当前字典；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.dictionary.get_dictionary_by_id
+        goto: check
+      - id: check
+        kind: logic
+        summary: "不存在或已软删时按不存在处理"
+        input:
+          - { name: dictionary, value: step.get_dictionary.dictionary, description: "当前字典" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_NOT_FOUND
+        rules:
+          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        goto: validate
+      - id: validate
+        kind: logic
+        summary: "校验 name/color"
+        input:
+          - { name: name, value: params.input.name, description: "展示名" }
+          - { name: color, value: params.input.color, description: "展示颜色" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_INVALID
+        rules:
+          - { rule: feature.rules.dictionary.name_length }
+          - { rule: feature.rules.dictionary.color_format }
+        goto: update_dictionary
+      - id: update_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.update_dictionary"
+        input:
+          - { name: id, value: params.id, description: "字典 ID" }
+          - { name: name, value: params.input.name, description: "展示名" }
+          - { name: color, value: params.input.color, description: "展示颜色" }
+          - { name: sort, value: params.input.sort, description: "排序" }
+          - { name: remark, value: params.input.remark, description: "备注" }
+          - { name: extra, value: params.input.extra, description: "扩展元数据" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "query 返回的 dictionary" }
+        errors:
+          - platform.errors.DICTIONARY_INVALID
+        query: data.queries.dictionary.update_dictionary
+        goto: $end
+    used_by:
+      - cap.protocols.http.dictionary.update
+
+  - name: set_status
+    summary: "启用或停用字典"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+      - { name: input, type: cap.services.dictionary.schemas.SetDictionaryStatusInput }
+    returns:
+      - { name: dictionary, type: data.entities.dictionary, value: step.set_dictionary_status.dictionary }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.get_dictionary_by_id"
+        input:
+          - { name: id, value: params.id, description: "字典 ID" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "当前字典；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.dictionary.get_dictionary_by_id
+        goto: check
+      - id: check
+        kind: logic
+        summary: "不存在或已软删时按不存在处理"
+        input:
+          - { name: dictionary, value: step.get_dictionary.dictionary, description: "当前字典" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_NOT_FOUND
+        rules:
+          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        goto: validate
+      - id: validate
+        kind: logic
+        summary: "只允许启停，不允许通过 set_status 软删"
+        input:
+          - { name: status, value: params.input.status, description: "目标状态" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
+        rules:
+          - { rule: feature.rules.dictionary.status_toggle_only }
+        goto: set_dictionary_status
+      - id: set_dictionary_status
+        kind: query
+        summary: "调用 data.queries.dictionary.set_dictionary_status"
+        lifecycles: [ cap.lifecycles.dictionary.transitions.enable, cap.lifecycles.dictionary.transitions.disable ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.dictionary, values: [ enabled, disabled ] }
+        input:
+          - { name: id, value: params.id, description: "字典 ID" }
+          - { name: status, value: params.input.status, description: "目标状态" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "query 返回的 dictionary" }
+        errors:
+          - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
+        query: data.queries.dictionary.set_dictionary_status
+        goto: $end
+    used_by:
+      - cap.protocols.http.dictionary.set_status
+
+  - name: delete
+    summary: "软删字典"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+    returns:
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.get_dictionary_by_id"
+        input:
+          - { name: id, value: params.id, description: "字典 ID" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "当前字典；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.dictionary.get_dictionary_by_id
+        goto: check
+      - id: check
+        kind: logic
+        summary: "不存在或已软删时按不存在处理"
+        input:
+          - { name: dictionary, value: step.get_dictionary.dictionary, description: "当前字典" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_NOT_FOUND
+        rules:
+          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        goto: exists_children
+      - id: exists_children
+        kind: query
+        summary: "调用 data.queries.dictionary.exists_dictionary_children"
+        input:
+          - { name: parent_id, value: params.id, description: "字典 ID" }
+        output:
+          - { name: exists, type: _types.boolean, description: "query 返回的 exists" }
+        errors: [ ]
+        query: data.queries.dictionary.exists_dictionary_children
+        goto: check_children
+      - id: check_children
+        kind: logic
+        summary: "存在子节点时拒绝软删"
+        input:
+          - { name: exists, value: step.exists_children.exists, description: "是否存在子节点" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_HAS_CHILDREN
+        rules:
+          - { rule: feature.rules.dictionary.delete_requires_no_children }
+        goto: status_deleted
+      - id: status_deleted
+        kind: logic
+        summary: "确定软删后的目标状态 deleted"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.dictionary_status, description: "目标状态 deleted" }
+        errors: [ ]
+        rules: [ ]
+        goto: soft_delete_dictionary
+      - id: soft_delete_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.soft_delete_dictionary"
+        lifecycles: [ cap.lifecycles.dictionary.destroy ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.dictionary, values: [ enabled, disabled ] }
+        input:
+          - { name: id, value: params.id, description: "字典 ID" }
+          - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_HAS_CHILDREN
+        query: data.queries.dictionary.soft_delete_dictionary
+        goto: $end
+    used_by:
+      - cap.protocols.http.dictionary.delete
+
+  - name: move
+    summary: "移动字典节点"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+      - { name: input, type: cap.services.dictionary.schemas.MoveDictionaryInput }
+    returns:
+      - { name: dictionary, type: data.entities.dictionary, value: step.move_dictionary.dictionary }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.get_dictionary_by_id"
+        input:
+          - { name: id, value: params.id, description: "字典 ID" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "当前字典；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.dictionary.get_dictionary_by_id
+        goto: check
+      - id: check
+        kind: logic
+        summary: "不存在或已软删时按不存在处理"
+        input:
+          - { name: dictionary, value: step.get_dictionary.dictionary, description: "当前字典" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_NOT_FOUND
+        rules:
+          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        goto: parent_branch
+      - id: parent_branch
+        kind: when
+        summary: "无父节点时移到顶级；有父节点时先读取"
+        input:
+          - { name: parent_id, value: params.input.parent_id, description: "新父节点 ID；null 表示顶级" }
+        output: [ ]
+        when:
+          - input: parent_id
+            expr: "input.parent_id == null"
+            goto: move_dictionary
+        goto: load_parent
+      - id: load_parent
+        kind: query
+        summary: "调用 data.queries.dictionary.get_dictionary_by_id 读取新父节点"
+        input:
+          - { name: id, value: params.input.parent_id, description: "新父节点 ID" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "新父节点；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.dictionary.get_dictionary_by_id
+        goto: check_parent
+      - id: check_parent
+        kind: logic
+        summary: "新父节点必须存在且未软删"
+        input:
+          - { name: parent, value: step.load_parent.dictionary, description: "新父节点" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_PARENT_INVALID
+        rules:
+          - { rule: feature.rules.dictionary.parent_must_exist }
+        goto: validate_cycle
+      - id: validate_cycle
+        kind: logic
+        summary: "拒绝移动到自身或后代，避免环"
+        input:
+          - { name: id, value: params.id, description: "待移动节点 ID" }
+          - { name: parent_id, value: params.input.parent_id, description: "新父节点 ID" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_PARENT_INVALID
+        rules:
+          - { rule: feature.rules.dictionary.move_rejects_cycle }
+        goto: move_dictionary
+      - id: move_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.move_dictionary"
+        input:
+          - { name: id, value: params.id, description: "待移动节点 ID" }
+          - { name: parent_id, value: params.input.parent_id, description: "新父节点 ID；null 表示顶级" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "query 返回的 dictionary" }
+        errors:
+          - platform.errors.DICTIONARY_PARENT_INVALID
+        query: data.queries.dictionary.move_dictionary
+        goto: $end
+    used_by:
+      - cap.protocols.http.dictionary.move
+
+  - name: import
+    summary: "批量导入字典"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: input, type: cap.services.dictionary.schemas.DictionaryImportInput }
+    returns:
+      - { name: result, type: cap.services.dictionary.schemas.ImportResult, value: step.build_result.result }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: validate_import
+        kind: logic
+        summary: "校验 items 是合法的字典项数组"
+        input:
+          - { name: items, value: params.input.items, description: "字典项 JSON 数组" }
+        output: [ ]
+        errors:
+          - platform.errors.DICTIONARY_INVALID
+        rules:
+          - { rule: feature.rules.dictionary.import_items_shape }
+        goto: bulk_create_dictionaries
+      - id: bulk_create_dictionaries
+        kind: query
+        summary: "调用 data.queries.dictionary.bulk_create_dictionaries"
+        input:
+          - { name: items, value: params.input.items, description: "字典项 JSON 数组" }
+        output:
+          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
+        errors:
+          - platform.errors.DICTIONARY_CODE_TAKEN
+          - platform.errors.DICTIONARY_PARENT_INVALID
+          - platform.errors.DICTIONARY_INVALID
+        query: data.queries.dictionary.bulk_create_dictionaries
+        goto: build_result
+      - id: build_result
+        kind: logic
+        summary: "把写入行数包装成导入结果"
+        input:
+          - { name: affected_rows, value: step.bulk_create_dictionaries.affected_rows, description: "写入行数" }
+        output:
+          - { name: result, type: cap.services.dictionary.schemas.ImportResult, description: "导入结果" }
+        errors: [ ]
+        rules: [ ]
+        goto: $end
+    used_by:
+      - cap.protocols.http.dictionary.import

@@ -1,0 +1,577 @@
+# 附件读写服务。
+
+id: cap.services.attachment
+summary: "附件读写服务：上传票据、完成、下载签名、读取与软删"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "对象字节不经过 API；create_upload 只返回预签名上传 URL"
+  - "object_key 由服务端生成；不要接受客户端传入的 key"
+  - "owner_table_name + owner_id 是多态引用；必须由服务层校验所有者存在"
+  - "返回附件时只返回 object_key；下载签名 URL 由 get_download_url 生成，不落库"
+  - "visibility 必须由对象存储适配器按值执行 ACL/签名策略；不得只依赖数据库字段"
+
+schemas:
+  AttachmentPage:
+    type: _types.object
+    properties:
+      - { name: items, schema: { type: _types.array, items: { ref: data.entities.attachment } }, required: true, description: "分页项列表" }
+      - { name: offset, schema: { type: _types.page_offset }, required: true, description: "当前页偏移" }
+      - { name: limit, schema: { type: _types.page_limit }, required: true, description: "当前页大小" }
+      - { name: has_more, schema: { type: _types.boolean }, required: true, description: "是否还有下一页" }
+  CreateUploadInput:
+    type: _types.object
+    properties:
+      - { name: owner_table_name, schema: { type: _types.string }, required: true, description: "所有者物理表名" }
+      - { name: owner_id, schema: { type: _types.id }, required: true, description: "所有者行 ID" }
+      - { name: purpose, schema: { type: _types.string }, required: true, description: "用途：icon/avatar/attachment 等" }
+      - { name: sort, schema: { type: _types.integer }, required: true, description: "同一 owner+purpose 内的排序" }
+      - { name: original_name, schema: { type: _types.string }, required: true, description: "原始文件名" }
+      - { name: content_type, schema: { type: _types.string }, required: true, description: "MIME 类型" }
+      - { name: size_bytes, schema: { type: _types.byte_size }, required: true, description: "对象大小（字节）" }
+      - { name: sha256, schema: { type: _types.string }, nullable: true, description: "SHA-256 十六进制" }
+      - { name: visibility, schema: { ref: data.enums.attachment_visibility }, required: true, description: "访问级别" }
+      - { name: replaces_id, schema: { type: _types.id }, nullable: true, description: "被替换的旧附件 ID；新上传为 null" }
+  UploadTicket:
+    type: _types.object
+    properties:
+      - { name: attachment_id, schema: { type: _types.id }, required: true, description: "附件 ID" }
+      - { name: object_key, schema: { type: _types.string }, required: true, description: "对象存储 key" }
+      - { name: upload_url, schema: { type: _types.string }, required: true, description: "预签名上传 URL" }
+      - { name: expires_at, schema: { type: _types.timestamp }, required: true, description: "上传 URL 过期时间" }
+  SignedURL:
+    type: _types.object
+    properties:
+      - { name: url, schema: { type: _types.string }, required: true, description: "预签名下载 URL" }
+      - { name: expires_at, schema: { type: _types.timestamp }, required: true, description: "下载 URL 过期时间" }
+
+services:
+  - name: list
+    summary: "按所有者与用途列出附件"
+    visibility: public
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: owner_table_name, type: _types.string }
+      - { name: owner_id, type: _types.id }
+      - { name: purpose, type: _types.string, nullable: true }
+      - { name: offset, type: _types.page_offset }
+      - { name: limit, type: _types.page_limit }
+    returns:
+      - { name: page, type: cap.services.attachment.schemas.AttachmentPage, value: step.paginate.page }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: list_attachments
+        kind: query
+        summary: "调用 data.queries.attachment.list_attachments"
+        input:
+          - { name: owner_table_name, value: params.owner_table_name, description: "所有者物理表名" }
+          - { name: owner_id, value: params.owner_id, description: "所有者行 ID" }
+          - { name: purpose, value: params.purpose, description: "用途过滤；null 表示全部" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: attachments, type: _types.list<data.entities.attachment>, description: "附件列表" }
+        errors: [ ]
+        query: data.queries.attachment.list_attachments
+        goto: paginate
+      - id: paginate
+        kind: logic
+        summary: "把附件列表包装成分页结果"
+        input:
+          - { name: attachments, value: step.list_attachments.attachments, description: "查询到的附件列表" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: page, type: cap.services.attachment.schemas.AttachmentPage, description: "附件分页结果" }
+        errors: [ ]
+        rules: [ ]
+        goto: $end
+    used_by:
+      - cap.protocols.http.attachment.list
+
+  - name: get
+    summary: "按 ID 读取附件"
+    visibility: public
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+    returns:
+      - { name: attachment, type: data.entities.attachment, value: step.get_attachment.attachment, nullable: true }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_attachment
+        kind: query
+        summary: "调用 data.queries.attachment.get_attachment"
+        input:
+          - { name: id, value: params.id, description: "附件 ID" }
+        output:
+          - { name: attachment, type: data.entities.attachment, description: "附件；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.attachment.get_attachment
+        goto: check
+      - id: check
+        kind: logic
+        summary: "软删行按不存在处理"
+        input:
+          - { name: attachment, value: step.get_attachment.attachment, description: "查询到的附件" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_NOT_FOUND
+        rules:
+          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        goto: $end
+    used_by:
+      - cap.protocols.http.attachment.get
+
+  - name: get_by_key
+    summary: "按对象 key 读取附件"
+    visibility: internal
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: object_key, type: _types.string }
+    returns:
+      - { name: attachment, type: data.entities.attachment, value: step.get_attachment_by_key.attachment, nullable: true }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_attachment_by_key
+        kind: query
+        summary: "调用 data.queries.attachment.get_attachment_by_key"
+        input:
+          - { name: object_key, value: params.object_key, description: "对象存储 key" }
+        output:
+          - { name: attachment, type: data.entities.attachment, description: "附件；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.attachment.get_attachment_by_key
+        goto: check
+      - id: check
+        kind: logic
+        summary: "软删行按不存在处理"
+        input:
+          - { name: attachment, value: step.get_attachment_by_key.attachment, description: "查询到的附件" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_NOT_FOUND
+        rules:
+          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        goto: $end
+    used_by: []
+
+  - name: create_upload
+    summary: "创建附件元数据并返回预签名上传票据"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: input, type: cap.services.attachment.schemas.CreateUploadInput }
+    returns:
+      - { name: ticket, type: cap.services.attachment.schemas.UploadTicket, value: step.build_ticket.ticket }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: new_id
+        kind: logic
+        summary: "生成新附件 ID"
+        input: [ ]
+        output:
+          - { name: id, type: _types.id, description: "新附件 ID" }
+        errors: [ ]
+        rules: [ ]
+        goto: new_object_key
+      - id: new_object_key
+        kind: logic
+        summary: "生成对象存储 key"
+        input:
+          - { name: owner_table_name, value: params.input.owner_table_name, description: "所有者物理表名" }
+          - { name: owner_id, value: params.input.owner_id, description: "所有者行 ID" }
+        output:
+          - { name: object_key, type: _types.string, description: "新对象 key" }
+        errors: [ ]
+        rules: [ ]
+        goto: status_uploading
+      - id: status_uploading
+        kind: logic
+        summary: "确定初始状态 uploading"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.attachment_status, description: "初始状态 uploading" }
+        errors: [ ]
+        rules: [ ]
+        goto: validate
+      - id: validate
+        kind: logic
+        summary: "校验所有者表名、用途、大小与哈希"
+        input:
+          - { name: owner_table_name, value: params.input.owner_table_name, description: "所有者物理表名" }
+          - { name: purpose, value: params.input.purpose, description: "用途" }
+          - { name: size_bytes, value: params.input.size_bytes, description: "对象大小" }
+          - { name: sha256, value: params.input.sha256, description: "SHA-256" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN
+          - platform.errors.ATTACHMENT_INVALID
+        rules:
+          - { rule: feature.rules.attachment.owner_table_format }
+          - { rule: feature.rules.attachment.purpose_format }
+          - { rule: feature.rules.attachment.size_non_negative }
+          - { rule: feature.rules.attachment.sha256_format }
+          - { rule: feature.rules.attachment.object_key_unique }
+          - { rule: feature.rules.attachment.object_key_immutable }
+        goto: validate_owner
+      - id: validate_owner
+        kind: logic
+        summary: "校验 owner_table_name + owner_id 指向的业务行存在"
+        input:
+          - { name: owner_table_name, value: params.input.owner_table_name, description: "所有者物理表名" }
+          - { name: owner_id, value: params.input.owner_id, description: "所有者行 ID" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_OWNER_INVALID
+        rules:
+          - { rule: feature.rules.attachment.owner_must_exist }
+        goto: create_attachment
+      - id: create_attachment
+        kind: query
+        summary: "调用 data.queries.attachment.create_attachment"
+        lifecycles: [ cap.lifecycles.attachment.create ]
+        input:
+          - { name: id, value: step.new_id.id, description: "新附件 ID" }
+          - { name: owner_table_name, value: params.input.owner_table_name, description: "所有者物理表名" }
+          - { name: owner_id, value: params.input.owner_id, description: "所有者行 ID" }
+          - { name: purpose, value: params.input.purpose, description: "用途" }
+          - { name: sort, value: params.input.sort, description: "排序" }
+          - { name: object_key, value: step.new_object_key.object_key, description: "新对象 key" }
+          - { name: original_name, value: params.input.original_name, description: "原始文件名" }
+          - { name: content_type, value: params.input.content_type, description: "MIME 类型" }
+          - { name: size_bytes, value: params.input.size_bytes, description: "对象大小" }
+          - { name: sha256, value: params.input.sha256, description: "SHA-256" }
+          - { name: visibility, value: params.input.visibility, description: "访问级别" }
+          - { name: status, value: step.status_uploading.status, description: "初始状态 uploading" }
+          - { name: replaces_id, value: params.input.replaces_id, description: "被替换的旧附件 ID" }
+        output:
+          - { name: attachment, type: data.entities.attachment, description: "query 返回的 attachment" }
+        errors:
+          - platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN
+          - platform.errors.ATTACHMENT_OWNER_INVALID
+          - platform.errors.ATTACHMENT_INVALID
+        query: data.queries.attachment.create_attachment
+        goto: sign_upload
+      - id: sign_upload
+        kind: logic
+        summary: "签发预签名上传 URL"
+        input:
+          - { name: object_key, value: step.new_object_key.object_key, description: "对象 key" }
+          - { name: content_type, value: params.input.content_type, description: "MIME 类型" }
+          - { name: size_bytes, value: params.input.size_bytes, description: "对象大小" }
+        output:
+          - { name: upload_url, type: _types.string, description: "预签名上传 URL" }
+          - { name: expires_at, type: _types.timestamp, description: "上传 URL 过期时间" }
+        errors: [ ]
+        rules: [ ]
+        goto: build_ticket
+      - id: build_ticket
+        kind: logic
+        summary: "组装上传票据"
+        input:
+          - { name: attachment_id, value: step.create_attachment.attachment.id, description: "附件 ID" }
+          - { name: object_key, value: step.new_object_key.object_key, description: "对象 key" }
+          - { name: upload_url, value: step.sign_upload.upload_url, description: "上传 URL" }
+          - { name: expires_at, value: step.sign_upload.expires_at, description: "过期时间" }
+        output:
+          - { name: ticket, type: cap.services.attachment.schemas.UploadTicket, description: "上传票据" }
+        errors: [ ]
+        rules: [ ]
+        goto: $end
+    used_by:
+      - cap.protocols.http.attachment.create_upload
+
+  - name: complete_upload
+    summary: "完成上传，把附件置为 available"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+    returns:
+      - { name: attachment, type: data.entities.attachment, value: step.set_attachment_status.attachment }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_attachment
+        kind: query
+        summary: "调用 data.queries.attachment.get_attachment"
+        input:
+          - { name: id, value: params.id, description: "附件 ID" }
+        output:
+          - { name: attachment, type: data.entities.attachment, description: "附件；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.attachment.get_attachment
+        goto: check
+      - id: check
+        kind: logic
+        summary: "不存在或已软删时按不存在处理"
+        input:
+          - { name: attachment, value: step.get_attachment.attachment, description: "当前附件" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_NOT_FOUND
+        rules:
+          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        goto: check_status
+      - id: check_status
+        kind: logic
+        summary: "只有 uploading 可完成"
+        input:
+          - { name: status, value: step.get_attachment.attachment.status, description: "当前状态" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+        rules:
+          - { rule: feature.rules.attachment.uploading_only }
+        goto: verify_object
+      - id: verify_object
+        kind: logic
+        summary: "校验对象已上传且大小/类型与元数据一致"
+        input:
+          - { name: object_key, value: step.get_attachment.attachment.object_key, description: "对象 key" }
+          - { name: content_type, value: step.get_attachment.attachment.content_type, description: "声明的 MIME 类型" }
+          - { name: size_bytes, value: step.get_attachment.attachment.size_bytes, description: "声明的大小" }
+          - { name: sha256, value: step.get_attachment.attachment.sha256, description: "声明的 SHA-256；可为空" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_INVALID
+        rules:
+          - { rule: feature.rules.attachment.object_must_match_upload }
+          - { rule: feature.rules.attachment.sha256_must_match }
+        goto: status_available
+      - id: status_available
+        kind: logic
+        summary: "确定完成后的状态 available"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.attachment_status, description: "目标状态 available" }
+        errors: [ ]
+        rules: [ ]
+        goto: set_attachment_status
+      - id: set_attachment_status
+        kind: query
+        summary: "调用 data.queries.attachment.set_attachment_status"
+        lifecycles: [ cap.lifecycles.attachment.transitions.complete ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.attachment, values: [ uploading ] }
+        input:
+          - { name: id, value: params.id, description: "附件 ID" }
+          - { name: status, value: step.status_available.status, description: "目标状态 available" }
+        output:
+          - { name: attachment, type: data.entities.attachment, description: "query 返回的 attachment" }
+        errors:
+          - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+        query: data.queries.attachment.set_attachment_status
+        goto: status_deleted
+      - id: status_deleted
+        kind: logic
+        summary: "确定被替换旧附件的目标状态 deleted"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.attachment_status, description: "目标状态 deleted" }
+        errors: [ ]
+        rules: [ ]
+        goto: replace_branch
+      - id: replace_branch
+        kind: when
+        summary: "无 replaces_id 时结束；有则软删旧附件"
+        input:
+          - { name: replaces_id, value: step.get_attachment.attachment.replaces_id, description: "被替换的旧附件 ID" }
+        output: [ ]
+        when:
+          - input: replaces_id
+            expr: "input.replaces_id == null"
+            goto: $end
+        goto: soft_delete_old
+      - id: soft_delete_old
+        kind: query
+        summary: "软删被替换的旧附件"
+        lifecycles: [ cap.lifecycles.attachment.destroy ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available ] }
+        input:
+          - { name: id, value: step.get_attachment.attachment.replaces_id, description: "旧附件 ID" }
+          - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+        query: data.queries.attachment.soft_delete_attachment
+        goto: $end
+    used_by:
+      - cap.protocols.http.attachment.complete
+
+  - name: get_download_url
+    summary: "为可用附件签发下载 URL"
+    visibility: public
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+    returns:
+      - { name: signed, type: cap.services.attachment.schemas.SignedURL, value: step.build_signed.signed }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_attachment
+        kind: query
+        summary: "调用 data.queries.attachment.get_attachment"
+        input:
+          - { name: id, value: params.id, description: "附件 ID" }
+        output:
+          - { name: attachment, type: data.entities.attachment, description: "附件；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.attachment.get_attachment
+        goto: check
+      - id: check
+        kind: logic
+        summary: "不存在或已软删时按不存在处理"
+        input:
+          - { name: attachment, value: step.get_attachment.attachment, description: "当前附件" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_NOT_FOUND
+        rules:
+          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        goto: check_available
+      - id: check_available
+        kind: logic
+        summary: "只有 available 可以签发下载 URL"
+        input:
+          - { name: status, value: step.get_attachment.attachment.status, description: "当前状态" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+        rules:
+          - { rule: feature.rules.attachment.download_requires_available }
+        goto: sign_download
+      - id: sign_download
+        kind: logic
+        summary: "签发预签名下载 URL"
+        input:
+          - { name: object_key, value: step.get_attachment.attachment.object_key, description: "对象 key" }
+          - { name: visibility, value: step.get_attachment.attachment.visibility, description: "访问级别" }
+        output:
+          - { name: url, type: _types.string, description: "下载 URL" }
+          - { name: expires_at, type: _types.timestamp, description: "下载 URL 过期时间" }
+        errors: [ ]
+        rules:
+          - { rule: feature.rules.attachment.visibility_signature_policy }
+        goto: build_signed
+      - id: build_signed
+        kind: logic
+        summary: "组装下载签名结果"
+        input:
+          - { name: url, value: step.sign_download.url, description: "下载 URL" }
+          - { name: expires_at, value: step.sign_download.expires_at, description: "过期时间" }
+        output:
+          - { name: signed, type: cap.services.attachment.schemas.SignedURL, description: "下载签名" }
+        errors: [ ]
+        rules: [ ]
+        goto: $end
+    used_by:
+      - cap.protocols.http.attachment.download
+
+  - name: delete
+    summary: "软删附件"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+    returns:
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_attachment
+        kind: query
+        summary: "调用 data.queries.attachment.get_attachment"
+        input:
+          - { name: id, value: params.id, description: "附件 ID" }
+        output:
+          - { name: attachment, type: data.entities.attachment, description: "附件；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.attachment.get_attachment
+        goto: check
+      - id: check
+        kind: logic
+        summary: "不存在或已软删时按不存在处理"
+        input:
+          - { name: attachment, value: step.get_attachment.attachment, description: "当前附件" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_NOT_FOUND
+        rules:
+          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        goto: status_deleted
+      - id: status_deleted
+        kind: logic
+        summary: "确定软删后的状态 deleted"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.attachment_status, description: "目标状态 deleted" }
+        errors: [ ]
+        rules: [ ]
+        goto: soft_delete_attachment
+      - id: soft_delete_attachment
+        kind: query
+        summary: "调用 data.queries.attachment.soft_delete_attachment"
+        lifecycles: [ cap.lifecycles.attachment.destroy ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available ] }
+        input:
+          - { name: id, value: params.id, description: "附件 ID" }
+          - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+        query: data.queries.attachment.soft_delete_attachment
+        goto: $end
+    used_by:
+      - cap.protocols.http.attachment.delete
+
+  - name: cleanup_stale_uploads
+    summary: "软删长时间停留在 uploading 的附件"
+    visibility: internal
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+    returns:
+      - { name: affected_rows, type: _types.integer, value: step.soft_delete_stale.affected_rows }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: cutoff
+        kind: logic
+        summary: "计算 24 小时前的时间"
+        input: [ ]
+        output:
+          - { name: cutoff, type: _types.timestamp, description: "24 小时前的截止时间" }
+        errors: [ ]
+        rules: [ ]
+        goto: status_deleted
+      - id: status_deleted
+        kind: logic
+        summary: "确定清理目标状态 deleted"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.attachment_status, description: "目标状态 deleted" }
+        errors: [ ]
+        rules:
+          - { rule: feature.rules.attachment.cleanup_only_uploading }
+        goto: soft_delete_stale
+      - id: soft_delete_stale
+        kind: query
+        summary: "调用 data.queries.attachment.soft_delete_stale_uploads"
+        input:
+          - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
+          - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
+        output:
+          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
+        errors: [ ]
+        query: data.queries.attachment.soft_delete_stale_uploads
+        goto: $end
+    used_by:
+      - cap.events.attachment.cleanup_stale_uploads

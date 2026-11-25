@@ -48,8 +48,8 @@ schemas:
     type: _types.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
-      - { name: auth_id, schema: { type: _types.integer }, required: true, description: "认证绑定 ID" }
-      - { name: account_id, schema: { type: _types.integer }, required: true, description: "账号 ID" }
+      - { name: auth_id, schema: { type: _types.id }, required: true, description: "认证绑定 ID" }
+      - { name: account_id, schema: { type: _types.id }, required: true, description: "账号 ID" }
       - { name: status, schema: { ref: data.enums.auth_status }, required: true, description: "认证绑定状态" }
       - { name: masked_target, schema: { type: _types.string }, description: "脱敏后的接收目标" }
   AuthResult:
@@ -154,8 +154,8 @@ services:
           - { name: phone_row, value: step.get_auth_phone_by_number.row, description: "手机绑定行" }
           - { name: email_row, value: step.get_auth_email_by_username_domain.row, description: "邮箱绑定行" }
         output:
-          - { name: account_id, type: _types.integer, description: "命中的账号 ID" }
-          - { name: auth_pwd_id, type: _types.integer, description: "密码绑定 ID；手机/邮箱认证时为 null", nullable: true }
+          - { name: account_id, type: _types.id, description: "命中的账号 ID" }
+          - { name: auth_pwd_id, type: _types.id, description: "密码绑定 ID；手机/邮箱认证时为 null", nullable: true }
           - { name: failed_login_count, type: _types.integer, description: "密码绑定当前的连续失败次数；非密码认证时为 0" }
           - { name: auth_status, type: data.enums.auth_status, description: "命中的认证绑定状态" }
           - { name: password_hash, type: _types.string, description: "密码哈希；非密码认证时为 null", nullable: true }
@@ -239,7 +239,7 @@ services:
         input:
           - { name: id, value: step.load.auth_pwd_id, description: "密码绑定 ID；可能为 null" }
         output:
-          - { name: id, type: _types.integer, description: "非空的密码绑定 ID" }
+          - { name: id, type: _types.id, description: "非空的密码绑定 ID" }
         errors:
           - platform.errors.COMMON_INTERNAL
         rules: [ ]
@@ -354,7 +354,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.positive_integer }
+      - { name: account_id, type: _types.id }
       - { name: input, type: cap.services.auth.schemas.BindPasswordInput }
     returns:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
@@ -390,7 +390,7 @@ services:
           - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: username, value: params.input.username, description: "用户名；用于定位现有绑定" }
         output:
-          - { name: binding_id, type: _types.integer, description: "目标密码绑定 ID" }
+          - { name: binding_id, type: _types.id, description: "目标密码绑定 ID" }
           - { name: auth_type, type: data.enums.auth_type, description: "本服务的认证类型常量" }
         errors: [ ]
         rules: [ ]
@@ -599,7 +599,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.positive_integer }
+      - { name: account_id, type: _types.id }
       - { name: input, type: cap.services.auth.schemas.BindPhoneInput }
     returns:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
@@ -635,7 +635,7 @@ services:
           - { name: account_id, value: params.account_id, description: "账号 ID" }
           - { name: number, value: params.input.number, description: "手机号；用于定位现有绑定" }
         output:
-          - { name: binding_id, type: _types.integer, description: "现有手机绑定 ID；create 时为 0" }
+          - { name: binding_id, type: _types.id, description: "现有手机绑定 ID；create 时为 0" }
           - { name: auth_type, type: data.enums.auth_type, description: "本服务的认证类型常量" }
         errors: [ ]
         rules: [ ]
@@ -645,7 +645,7 @@ services:
         summary: "生成新的手机绑定 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.integer, description: "新手机绑定 ID" }
+          - { name: id, type: _types.id, description: "新手机绑定 ID" }
         errors: [ ]
         rules: [ ]
         goto: branch
@@ -836,7 +836,7 @@ services:
           - { name: existing_id, value: step.resolve.binding_id, description: "现有绑定 ID；create 时为 0" }
           - { name: new_id, value: step.new_id.id, description: "新绑定 ID" }
         output:
-          - { name: target_id, type: _types.integer, description: "最终读取的绑定 ID" }
+          - { name: target_id, type: _types.id, description: "最终读取的绑定 ID" }
         errors: [ ]
         rules: [ ]
         goto: load
@@ -889,7 +889,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.positive_integer }
+      - { name: account_id, type: _types.id }
       - { name: input, type: cap.services.auth.schemas.BindEmailInput }
     returns:
       - { name: binding, type: cap.services.auth.schemas.AuthBinding, value: step.to_binding.binding }
@@ -926,7 +926,7 @@ services:
           - { name: username, value: params.input.username, description: "用户名；用于定位现有绑定" }
           - { name: domain, value: params.input.domain, description: "邮箱域名；用于定位现有绑定" }
         output:
-          - { name: binding_id, type: _types.integer, description: "现有邮箱绑定 ID；create 时为 0" }
+          - { name: binding_id, type: _types.id, description: "现有邮箱绑定 ID；create 时为 0" }
           - { name: auth_type, type: data.enums.auth_type, description: "本服务的认证类型常量" }
         errors: [ ]
         rules: [ ]
@@ -936,7 +936,7 @@ services:
         summary: "生成新的邮箱绑定 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.integer, description: "新邮箱绑定 ID" }
+          - { name: id, type: _types.id, description: "新邮箱绑定 ID" }
         errors: [ ]
         rules: [ ]
         goto: branch
@@ -1135,7 +1135,7 @@ services:
           - { name: existing_id, value: step.resolve.binding_id, description: "现有绑定 ID；create 时为 0" }
           - { name: new_id, value: step.new_id.id, description: "新绑定 ID" }
         output:
-          - { name: target_id, type: _types.integer, description: "最终读取的绑定 ID" }
+          - { name: target_id, type: _types.id, description: "最终读取的绑定 ID" }
         errors: [ ]
         rules: [ ]
         goto: load
@@ -1188,8 +1188,8 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer }
-      - { name: auth_pwd_id, type: _types.integer, nullable: true }
+      - { name: account_id, type: _types.id }
+      - { name: auth_pwd_id, type: _types.id, nullable: true }
       - { name: login_at, type: _types.timestamp }
     returns:
       - { name: err, type: error, value: "*" }
@@ -1211,7 +1211,7 @@ services:
         input:
           - { name: id, value: params.auth_pwd_id, description: "密码绑定 ID；可能为 null" }
         output:
-          - { name: id, type: _types.integer, description: "非空的密码绑定 ID" }
+          - { name: id, type: _types.id, description: "非空的密码绑定 ID" }
         errors:
           - platform.errors.COMMON_INTERNAL
         rules: [ ]
@@ -1245,8 +1245,8 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer }
-      - { name: auth_pwd_id, type: _types.integer }
+      - { name: account_id, type: _types.id }
+      - { name: auth_pwd_id, type: _types.id }
       - { name: failed_login_count, type: _types.integer }
       - { name: login_at, type: _types.timestamp }
       - { name: reason, type: data.enums.login_failed_reason }
@@ -1308,7 +1308,7 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer }
+      - { name: account_id, type: _types.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:

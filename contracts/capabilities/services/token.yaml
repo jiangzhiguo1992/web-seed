@@ -45,7 +45,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer }
+      - { name: account_id, type: _types.id }
       - { name: device_id, type: _types.string, nullable: true }
     returns:
       - { name: tokens, type: cap.services.token.schemas.TokenPair, value: step.issue_tokens.tokens }
@@ -97,7 +97,7 @@ services:
         summary: "生成新令牌 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.integer, description: "新令牌 ID" }
+          - { name: id, type: _types.id, description: "新令牌 ID" }
         errors: [ ]
         rules: [ ]
         goto: create_token
@@ -271,7 +271,7 @@ services:
         summary: "生成新令牌 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.integer, description: "新令牌 ID" }
+          - { name: id, type: _types.id, description: "新令牌 ID" }
         errors: [ ]
         rules: [ ]
         goto: now
@@ -416,7 +416,7 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer }
+      - { name: account_id, type: _types.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:
@@ -611,8 +611,8 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: token_id, type: _types.integer }
-      - { name: account_id, type: _types.integer }
+      - { name: token_id, type: _types.id }
+      - { name: account_id, type: _types.id }
       - { name: issued_at, type: _types.timestamp }
     returns:
       - { name: err, type: error, value: "*" }

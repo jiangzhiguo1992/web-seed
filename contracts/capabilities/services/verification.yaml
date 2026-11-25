@@ -18,7 +18,7 @@ schemas:
     type: _types.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
-      - { name: account_id, schema: { type: _types.integer }, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
+      - { name: account_id, schema: { type: _types.id }, nullable: true, description: "注册时必传（先建 pending account）；其他用途可省略，由服务端按 target 解析" }
       - { name: target, schema: { type: _types.verification_target }, required: true, description: "验证码接收目标" }
       - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
     validation:
@@ -26,14 +26,14 @@ schemas:
   VerificationSent:
     type: _types.object
     properties:
-      - { name: id, schema: { type: _types.integer }, required: true, description: "验证记录 ID" }
+      - { name: id, schema: { type: _types.id }, required: true, description: "验证记录 ID" }
       - { name: masked_target, schema: { type: _types.string }, required: true, description: "脱敏后的接收目标" }
       - { name: expire_at, schema: { type: _types.timestamp }, required: true, description: "过期时间" }
   VerifyCodeInput:
     type: _types.object
     properties:
       - { name: auth_type, schema: { ref: data.enums.auth_type }, required: true, description: "认证类型" }
-      - { name: account_id, schema: { type: _types.integer }, nullable: true, description: "注册时必传；其他用途可省略" }
+      - { name: account_id, schema: { type: _types.id }, nullable: true, description: "注册时必传；其他用途可省略" }
       - { name: target, schema: { type: _types.verification_target }, required: true, description: "验证码接收目标" }
       - { name: purpose, schema: { ref: data.enums.verification_purpose }, required: true, description: "验证码用途" }
       - { name: code, schema: { type: _types.verification_code }, required: true, description: "验证码" }
@@ -43,7 +43,7 @@ schemas:
     type: _types.object
     properties:
       - { name: verified, schema: { type: _types.boolean }, required: true, description: "是否验证通过" }
-      - { name: verification_id, schema: { type: _types.integer }, required: true, description: "验证记录 ID" }
+      - { name: verification_id, schema: { type: _types.id }, required: true, description: "验证记录 ID" }
       - { name: consumed_at, schema: { type: _types.timestamp }, nullable: true, description: "验证码消费时间；未消费为 null" }
 services:
   - name: send
@@ -66,8 +66,8 @@ services:
           - { name: target, value: params.input.target, description: "验证码接收目标" }
           - { name: purpose, value: params.input.purpose, description: "验证码用途" }
         output:
-          - { name: auth_id, type: _types.integer, description: "验证目标认证绑定 ID" }
-          - { name: account_id, type: _types.integer, description: "解析后的验证目标账号 ID" }
+          - { name: auth_id, type: _types.id, description: "验证目标认证绑定 ID" }
+          - { name: account_id, type: _types.id, description: "解析后的验证目标账号 ID" }
         errors:
           - platform.errors.AUTH_VERIFICATION_INVALID
           - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
@@ -139,7 +139,7 @@ services:
         summary: "生成新验证体 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.integer, description: "新验证体 ID" }
+          - { name: id, type: _types.id, description: "新验证体 ID" }
         errors: [ ]
         rules: [ ]
         goto: expire_at
@@ -320,8 +320,8 @@ services:
           - { name: account_id, value: params.input.account_id, description: "验证目标账号 ID" }
           - { name: target, value: params.input.target, description: "验证码接收目标" }
         output:
-          - { name: auth_id, type: _types.integer, description: "验证目标认证绑定 ID" }
-          - { name: account_id, type: _types.integer, description: "解析后的验证目标账号 ID" }
+          - { name: auth_id, type: _types.id, description: "验证目标认证绑定 ID" }
+          - { name: account_id, type: _types.id, description: "解析后的验证目标账号 ID" }
         errors: [ ]
         rules: [ ]
         goto: load_account
@@ -675,8 +675,8 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: verification_id, type: _types.integer }
-      - { name: account_id, type: _types.integer }
+      - { name: verification_id, type: _types.id }
+      - { name: account_id, type: _types.id }
       - { name: result, type: data.enums.verification_result }
       - { name: request_ip, type: _types.string, nullable: true }
       - { name: device_id, type: _types.string, nullable: true }
@@ -796,7 +796,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
       - { name: auth_type, type: data.enums.auth_type }
-      - { name: auth_id, type: _types.integer }
+      - { name: auth_id, type: _types.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:
@@ -856,7 +856,7 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer }
+      - { name: account_id, type: _types.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:

@@ -14,7 +14,7 @@ schemas:
     properties:
       - { name: number, schema: { type: _types.account_number }, required: true, description: "账号编号" }
       - { name: nickname, schema: { type: _types.account_nickname }, required: true, description: "账号昵称" }
-      - { name: user_id, schema: { type: _types.integer }, nullable: true, description: "关联用户 ID" }
+      - { name: user_id, schema: { type: _types.id }, nullable: true, description: "关联用户 ID" }
   UpdateAccountInput:
     type: _types.object
     properties:
@@ -38,7 +38,7 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer }
+      - { name: id, type: _types.id }
     returns:
       - { name: account, type: data.entities.account, value: step.get_account.account }
       - { name: err, type: error, value: "*" }
@@ -122,7 +122,7 @@ services:
         summary: "生成新账号 ID"
         input: [ ]
         output:
-          - { name: id, type: _types.integer, description: "新账号 ID" }
+          - { name: id, type: _types.id, description: "新账号 ID" }
         errors: [ ]
         rules: [ ]
         goto: status_pending
@@ -204,7 +204,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer }
+      - { name: id, type: _types.id }
       - { name: input, type: cap.services.account.schemas.UpdateAccountInput }
     returns:
       - { name: account, type: data.entities.account, value: step.update_account.account }
@@ -255,7 +255,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer }
+      - { name: id, type: _types.id }
     returns:
       - { name: err, type: error, value: "*" }
     steps:
@@ -353,7 +353,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer }
+      - { name: id, type: _types.id }
     returns:
       - { name: account, type: data.entities.account, value: step.set_account_status.account }
       - { name: err, type: error, value: "*" }
@@ -451,7 +451,7 @@ services:
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer }
+      - { name: id, type: _types.id }
       - { name: input, type: cap.services.account.schemas.SuspendAccountInput }
     returns:
       - { name: account, type: data.entities.account, value: step.set_account_status.account }
@@ -530,7 +530,7 @@ services:
     tx_mode: none
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer }
+      - { name: account_id, type: _types.id }
       - { name: deleted_at, type: _types.timestamp }
     returns:
       - { name: err, type: error, value: "*" }
