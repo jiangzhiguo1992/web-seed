@@ -45,7 +45,7 @@ columns:
     comment: "昵称"
 
   - name: user_id
-    type: _types.integer
+    type: _types.id
     nullable: true
     redundancy:
       - { column: data.tables.account.col.user_id, source: true }

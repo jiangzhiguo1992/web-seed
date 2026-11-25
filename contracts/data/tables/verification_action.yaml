@@ -24,15 +24,13 @@ table:
 
 columns:
   - name: verification_id
-    type: _types.integer
+    type: _types.id
     nullable: false
-    bits: 64
     comment: "验证体 ID；不建外键，验证体清理后允许悬空"
 
   - name: account_id
-    type: _types.integer
+    type: _types.id
     nullable: false
-    bits: 64
     references: { column: data.tables.account.col.id, on_delete: no_action }
     comment: "账号 ID 快照；账号硬删后保留；验证体清理后仍可按账号追溯；不作为冗余副本声明"
 

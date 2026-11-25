@@ -1,0 +1,134 @@
+# 附件表。
+
+id: data.tables.attachment
+summary: "附件表"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "attachment 不存 URL 或签名地址；只存 object_key"
+  - "attachment 不存 OSS ACL/bucket policy/签名 TTL；这些属于配置"
+  - "attachment.owner_id 是多态引用，不建数据库外键；服务层必须校验 (owner_table_name, owner_id) 存在"
+  - "attachment.object_key 全局唯一；软删后不释放"
+  - "attachment.original_name 只用于展示/下载，不得用作 object_key"
+  - "附件替换必须软删旧行并插入新行；不要原地覆盖 object_key"
+  - "attachment.sha256 只用于完整性/去重校验；不加唯一索引"
+  - "attachment.visibility 只表达访问级别；对象存储 ACL/签名策略必须由适配器按值执行，不得只依赖数据库字段"
+
+table:
+  name: attachment
+  extends:
+    - data.tables.base
+  entities:
+    - data.entities.attachment
+  references:
+    - data.tables.attachment.col.id
+  referenced_by:
+    - data.tables.attachment.col.replaces_id
+  queries:
+    - data.queries.attachment.create_attachment
+    - data.queries.attachment.get_attachment
+    - data.queries.attachment.get_attachment_by_key
+    - data.queries.attachment.list_attachments
+    - data.queries.attachment.set_attachment_status
+    - data.queries.attachment.soft_delete_attachment
+    - data.queries.attachment.soft_delete_stale_uploads
+
+columns:
+  - name: owner_table_name
+    type: _types.string
+    nullable: false
+    min_len: 1
+    max_len: 64
+    pattern: '^[a-z][a-z0-9_]*$'
+    comment: "所有者物理表名；多态引用，不建外键"
+
+  - name: owner_id
+    type: _types.id
+    nullable: false
+    comment: "所有者行 ID；与 owner_table_name 一起由服务层校验"
+
+  - name: purpose
+    type: _types.string
+    nullable: false
+    min_len: 1
+    max_len: 32
+    pattern: '^[a-z][a-z0-9_]*$'
+    comment: "用途：icon/avatar/attachment 等；区分同一 owner 的多种附件"
+
+  - name: sort
+    type: _types.integer
+    nullable: false
+    min: 0
+    default: 0
+    comment: "同一 owner+purpose 内的展示顺序"
+
+  - name: object_key
+    type: _types.string
+    nullable: false
+    min_len: 1
+    max_len: 512
+    pattern: '^[A-Za-z0-9][A-Za-z0-9/_.-]*$'
+    comment: "对象存储 key；不存 URL；全局唯一"
+
+  - name: original_name
+    type: _types.string
+    nullable: false
+    min_len: 1
+    max_len: 255
+    comment: "原始文件名；仅展示/下载，不作为 key"
+
+  - name: content_type
+    type: _types.string
+    nullable: false
+    min_len: 1
+    max_len: 127
+    comment: "MIME 类型；服务端检测后写入"
+
+  - name: size_bytes
+    type: _types.byte_size
+    nullable: false
+    comment: "对象大小（字节）"
+
+  - name: sha256
+    type: _types.string
+    nullable: true
+    min_len: 64
+    max_len: 64
+    pattern: '^[a-f0-9]{64}$'
+    comment: "SHA-256 十六进制；完整性/去重校验，不唯一"
+
+  - name: visibility
+    type: _types.integer
+    nullable: false
+    default: 0
+    comment: "访问级别整数码；映射 data.enums.attachment_visibility（0=private,1=public）"
+
+  - name: replaces_id
+    type: _types.id
+    nullable: true
+    references: { column: data.tables.attachment.col.id, on_delete: no_action }
+    comment: "被替换的旧附件 ID；用于更替链；旧行仍软删保留"
+
+constraints: []
+
+indexes:
+  - name: uq_attachment_object_key
+    columns: [ object_key ]
+    unique: true
+    comment: "对象 key 全局唯一；软删后不释放"
+    used_by:
+      - data.queries.attachment.create_attachment
+      - data.queries.attachment.get_attachment_by_key
+
+  - name: idx_attachment_owner
+    columns: [ deleted_at, owner_table_name, owner_id, purpose, sort, id ]
+    comment: "按所有者与用途列出附件并保持顺序"
+    used_by:
+      - data.queries.attachment.list_attachments
+
+  - name: idx_attachment_stale_upload
+    columns: [ status, created_at ]
+    comment: "定位长时间停留在 uploading 的附件"
+    used_by:
+      - data.queries.attachment.soft_delete_stale_uploads

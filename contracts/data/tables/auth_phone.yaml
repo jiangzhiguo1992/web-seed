@@ -28,9 +28,8 @@ table:
 
 columns:
   - name: account_id
-    type: _types.integer
+    type: _types.id
     nullable: true
-    bits: 64
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 

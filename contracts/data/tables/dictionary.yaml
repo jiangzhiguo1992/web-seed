@@ -22,15 +22,23 @@ table:
   referenced_by:
     - data.tables.dictionary.col.parent_id
   queries:
+    - data.queries.dictionary.bulk_create_dictionaries
+    - data.queries.dictionary.create_dictionary
+    - data.queries.dictionary.exists_dictionary_children
+    - data.queries.dictionary.exists_dictionary_code
     - data.queries.dictionary.get_dictionary
+    - data.queries.dictionary.get_dictionary_by_id
     - data.queries.dictionary.list_dictionary_children
     - data.queries.dictionary.list_root_dictionaries
+    - data.queries.dictionary.move_dictionary
+    - data.queries.dictionary.set_dictionary_status
+    - data.queries.dictionary.soft_delete_dictionary
+    - data.queries.dictionary.update_dictionary
 
 columns:
   - name: parent_id
-    type: _types.integer
+    type: _types.id
     nullable: true
-    bits: 64
     references: { column: data.tables.dictionary.col.id, on_delete: restrict }
     comment: "父节点；顶级为 NULL"
 
@@ -64,6 +72,17 @@ columns:
     default: 0
     comment: "同一父节点下的展示顺序；从 0 开始"
 
+  - name: remark
+    type: _types.string
+    nullable: true
+    max_len: 500
+    comment: "备注；仅用于说明，不参与业务判断"
+
+  - name: extra
+    type: _types.json
+    nullable: true
+    comment: "扩展元数据；只放 UI/非关键信息，禁止承载业务状态"
+
 constraints: []
 
 indexes:
@@ -72,11 +91,15 @@ indexes:
     unique: true
     comment: "字典编码全局唯一；停用或软删后不释放"
     used_by:
+      - data.queries.dictionary.bulk_create_dictionaries
+      - data.queries.dictionary.create_dictionary
+      - data.queries.dictionary.exists_dictionary_code
       - data.queries.dictionary.get_dictionary
 
   - name: idx_dictionary_parent_sort
     columns: [ deleted_at, parent_id, sort, id ]
     comment: "按父节点列出子节点并保持展示顺序"
     used_by:
+      - data.queries.dictionary.exists_dictionary_children
       - data.queries.dictionary.list_dictionary_children
       - data.queries.dictionary.list_root_dictionaries

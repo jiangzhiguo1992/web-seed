@@ -38,9 +38,8 @@ table:
 
 columns:
   - name: account_id
-    type: _types.integer
+    type: _types.id
     nullable: false
-    bits: 64
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "账号 ID；验证体不早于 account 存在，不建数据库外键"
 
@@ -50,9 +49,8 @@ columns:
     comment: "认证方式整数码；映射 data.enums.auth_type；只允许 phone/email"
 
   - name: auth_id
-    type: _types.integer
+    type: _types.id
     nullable: false
-    bits: 64
     comment: "认证绑定 ID；auth_type=phone 指向 auth_phone，auth_type=email 指向 auth_email；不建外键"
 
   - name: purpose
