@@ -86,7 +86,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
       response:
         200:
           msg: "成功"
@@ -115,7 +115,7 @@ paths:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         path:
-          - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
         body:
           kind: json
           type: cap.services.account.schemas.UpdateAccountInput
@@ -156,7 +156,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
       response:
         204:
           msg: "已删除"
@@ -187,7 +187,7 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         path:
-          - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
       response:
         200:
           msg: "成功"
@@ -223,7 +223,7 @@ paths:
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
           - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
         path:
-          - { name: id, type: _types.positive_integer, description: "账号 ID", to: params.id }
+          - { name: id, type: _types.id, description: "账号 ID", to: params.id }
         body:
           kind: json
           type: cap.services.account.schemas.SuspendAccountInput
