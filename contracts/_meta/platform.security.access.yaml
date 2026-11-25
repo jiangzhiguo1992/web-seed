@@ -1,7 +1,7 @@
 # 入口访问策略；binding 目标必须是 service item。
 
 id: meta.platform.security.access
-type: platform.security.access
+contract: platform.security.access
 title: "入口访问策略"
 targets:
   dir: "contracts/platform/security"

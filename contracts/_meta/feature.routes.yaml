@@ -1,7 +1,7 @@
 # 路由与菜单契约；页面/权限/布局引用由 checker 校验。
 
 id: meta.feature.routes
-type: feature.routes
+contract: feature.routes
 title: "路由与菜单"
 targets:
   dir: "contracts/features"

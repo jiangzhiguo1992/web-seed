@@ -1,7 +1,7 @@
 # HTTP 信封、分页、header、状态码与平台组件约定。
 
 id: meta.platform.http_conventions
-type: platform.http_conventions
+contract: platform.http_conventions
 title: "HTTP 平台约定"
 targets:
   dir: "contracts/platform"

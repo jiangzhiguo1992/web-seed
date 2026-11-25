@@ -1,7 +1,7 @@
 # 业务规则：约束/不变量/策略。
 
 id: meta.feature.rules
-type: feature.rules
+contract: feature.rules
 title: "业务规则契约"
 targets:
   dir: "contracts/features/rules"

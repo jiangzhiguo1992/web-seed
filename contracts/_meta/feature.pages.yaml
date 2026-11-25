@@ -1,7 +1,7 @@
 # 页面契约；结构性引用由 checker 校验，UI/文案是软区。
 
 id: meta.feature.pages
-type: feature.pages
+contract: feature.pages
 title: "页面契约"
 targets:
   dir: "contracts/features/pages"

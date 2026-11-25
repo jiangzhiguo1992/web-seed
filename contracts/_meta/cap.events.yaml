@@ -1,7 +1,7 @@
 # 异步 topic、cron 与 dispatch。
 
 id: meta.cap.events
-type: cap.events
+contract: cap.events
 title: "异步事件与任务契约"
 targets:
   dir: "contracts/capabilities/events"

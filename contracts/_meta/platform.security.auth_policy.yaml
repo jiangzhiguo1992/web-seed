@@ -1,7 +1,7 @@
 # JWT 会话与密码/验证码策略。
 
 id: meta.platform.security.auth_policy
-type: platform.security.auth_policy
+contract: platform.security.auth_policy
 title: "认证与会话策略"
 targets:
   dir: "contracts/platform/security"

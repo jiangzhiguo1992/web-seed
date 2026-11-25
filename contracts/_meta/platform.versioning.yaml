@@ -1,7 +1,7 @@
 # API 版本、弃用与兼容策略。
 
 id: meta.platform.versioning
-type: platform.versioning
+contract: platform.versioning
 title: "版本与兼容策略"
 targets:
   dir: "contracts/platform"

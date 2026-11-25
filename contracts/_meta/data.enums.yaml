@@ -1,7 +1,7 @@
 # 跨前后端枚举；持久化为整数 code。
 
 id: meta.data.enums
-type: data.enums
+contract: data.enums
 title: "枚举集合契约"
 targets:
   dir: "contracts/data/enums"

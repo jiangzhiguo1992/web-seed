@@ -1,6 +1,6 @@
 # 契约字段规范（_meta）
 
-> **字段命名铁律**：`type` 只承载数据类型（`_types.basics.*` / `_types.structures.*` / `data.*` / `context.Context` / `error` / `time.*`）；schema 结构节点用 `type: _types.schemas.object|array|map` 判别，引用节点用 `ref`；`_meta` 顶层 `type` 是契约类型，`platform/http_conventions` 的 OpenAPI 原生 `type` 由 `type_vocabulary.exceptions` 覆盖。
+> **字段命名铁律**：`type` 只承载数据类型（`_types.basics.*` / `_types.structures.*` / `data.*` / `context.Context` / `error` / `time.*`）；schema 结构节点用 `kind: object|array|map` 判别，引用节点用 `type` 指向 entity/enum/本地 schema；`_meta` 的契约类型用 `contract`；`platform/http_conventions` 的 OpenAPI 原生类型用 `json_type`，由生成器还原为 `type`。任何非数据类型的值都不得占用 `type`。
 > 本目录是**契约的单一源**：字段树、值域、类型级规则与校验入口。
 > 不是业务契约：不登记 `contracts/index.yaml`，不进入 `generated/`。
 > `contracts/generated/` 只放机器生成物；人读生成视图在 `docs/contracts/generated/`。
@@ -49,7 +49,8 @@
 
 值类型与结构是 tables / entities / queries / services / events 共用的词汇，分两类注册：
 
-- `_meta/_types.yaml` 的 `basics` 定义标量族、参数与具体落型（`types.<variant>.{go,pg,ts}`）：`integer`/`float` 用 `bits` 枚举做 variant（`32`/`64`），其余族的 key 是族名本身（`string`/`boolean`/`decimal`/`money`/`datetime`/`timestamp`/`json`/`jsonpath`/`bytes`/`any`/`uuid`/`interval`/`network`/`bit`/`textsearch`/`xml`/`geometry`/`range`/`multirange`/`oid`/`pg_lsn`），禁止使用 `default`；`pg` 是兼容集合（含 `json`/`jsonb`、`numeric`/`decimal`/`money`、`date`/`time`/`timetz`、`uuid`、`interval`、`inet`/`cidr`/`macaddr`、`bit`/`varbit`、`tsvector`/`tsquery`、`xml`、几何/范围/多范围、`oid`/`reg*`、`pg_lsn`），参数化由生成器追加（`min_len`/`max_len`/`pattern`/`bits`/`precision`/...），`structures` 定义 `list`/`set`/`array`/`map`/`object` 五种容器（list/set/map 的集合大小参数是 `min_items`/`max_items`，array 用 `len`，map 另有 `key_patterns`；元素、map value 或 object field 的 `type` 可以是 `_types.basics.*` 或 `_types.structures.*`，递归包含类型族、自定义类型与容器），`schemas` 定义 `object`/`array`/`map`/`scalar`/`ref` 五种值域节点；这是元层，不随业务增长；
+- `_meta/_types.yaml` 的 `basics` 定义标量族、参数与具体落型（`types.<variant>.{go,pg,ts}`）：`integer`/`float` 用 `bits` 枚举做 variant（`32`/`64`），其余族的 key 是族名本身（`string`/`boolean`/`decimal`/`datetime`/`timestamp`/`json`/`bytes`/`any`/`bit`/`xml`/`geometry`），禁止使用 `default`；`pg` 是兼容集合（含 `json`/`jsonb`、`numeric`/`decimal`、`date`/`time`/`timetz`、`bit`/`varbit`、`tsvector`/`tsquery`、`xml`、几何），参数化由生成器追加（`min_len`/`max_len`/`pattern`/`bits`/`precision`/...），`structures` 定义 `list`/`set`/`array`/`map`/`object` 五种容器（list/set/map 的集合大小参数是 `min_items`/`max_items`，array 用 `len`，map 另有 `key_patterns`；元素、map value 或 object field 的 `type` 可以是 `_types.basics.*` 或 `_types.structures.*`，递归包含类型族、自定义类型与容器），`schemas` 定义 `object`/`array`/`map`/`scalar`/`ref` 五种值域节点；这是元层，不随业务增长；
+- `any` 是唯一没有 `types` 表的族：它没有确定性落型；实例写 `_types.basics.any` 即可。
 - `contracts/data/types.yaml` 的 `custom_types` 固定某个族的参数，供表列与 schema 标量复用；这是 data 层词汇，随项目开发增长；
 - **实例契约**（tables/entities/queries/services/events/pages/http）的 `type` 必须写具体类型：多变体族写 `_types.basics.integer.32` / `_types.basics.float.64`，单变体族写 `_types.basics.string`，自定义类型写 `_types.basics.id`；`_meta` 字段规范可写族名做形状约束。`Field.type` 统一写 `_types.basics.*` 或 `_types.structures.*`，泛型写 `_types.structures.list<_types.structures.object>` / `_types.structures.map<_types.basics.string>`，可嵌套到 `_types.structures.list<_types.structures.map<_types.structures.object>>`；`data.queries.params[].fields` 用字段树描述对象批量参数的元素结构（仅 `_types.structures.object` / `_types.structures.list<_types.structures.object>`，非空），不要用 `_types.basics.json` 代替；`list<map<object>>` 的 `item_fields` 描述 map value 的字段；`list<map>` 不合法，`map` 必须显式给出 value 类型；`map` 的 key 默认 `string`，可写 `_types.structures.map<_types.basics.integer.32, _types.structures.object>` 指定 `integer` key；`key_patterns` 是 string key 的正则列表，全部匹配；`_types.yaml` 自身也必须使用全限定名；
 - `structures.list` / `set` / `array` 声明 `fields.item`，`map` 声明 `fields.key` / `value`（均为 `type: "*"`、`required: true`），生成器与实现层统一使用这些名字；checker 按 `Field.type` 递归校验，不再为每个容器组合维护独立分支；`key_patterns` 是 AND 语义，多个正则必须同时匹配，且只允许 string key；
@@ -60,15 +61,15 @@
 
 ### 1.2 `_types.yaml` 的 `schemas`
 
-schema 节点只描述值域：`object`（`type: _types.schemas.object` + `properties`）、`array`（`type: _types.schemas.array` + `items`）、
-`map`（`type: _types.schemas.map` + `values`，键固定 string，另有 `min_items`/`max_items`/`key_patterns`/`validation`）、
+schema 节点只描述值域：`object`（`kind: object` + `properties`）、`array`（`kind: array` + `items`）、
+`map`（`kind: map` + `values`，键固定 string，另有 `min_items`/`max_items`/`key_patterns`/`validation`）、
 `scalar`（`type` 指向 `_types.basics.*`）、
-`ref`（`ref` 指向 entity / enum / 全限定本地 schema）。
+`ref`（`type` 指向 entity / enum / 全限定本地 schema）。
 
 - `object.properties[]` 是槽位条目：`name` + `schema` + `required`/`nullable`/`read_only`/`write_only`/`default`/`description`；
 - 三个正交轴：`required` 管键是否存在，`nullable` 管值是否可为 null，`read_only`/`write_only` 管方向；
 - 槽位键出现在节点位置报 `schema.slot-position`；
-- `_types.yaml` 用 `schemas.<name>.keys` 描述自身；判别键与结构键必须 `required: true`；
+- `_types.yaml` 用 `schemas.<kind>.keys` 描述自身；判别键与结构键必须 `required: true`；
 - `cap.events` 的 `topics[].publish.payload` 投影为 `Event<File><Topic>` component；生成物只保留标准 schema，不携带事件扩展键。
 - `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；平台级组件在 `platform/http_conventions.components`，HTTP 文件可声明私有组件并由 `gen_openapi` 合并。`request` 写 headers/path/query/body，headers 独立于 body；path/query/body/form 用 `to` 指向 service 参数，值域字段统一叫 `type`；`response` 是以三位状态码为键的 map，写 msg/headers/body/errors；operation 字段顺序固定为 id/name/summary/service/request/response/used_by；header/query/body/body.fields 的 `required` 省略为 true，可选项写 false；认证用 `Authorization` header 的 `auth: Bearer`，不再有 security/mapping 字段。
 - `mount` 必须声明 `api_version` / `path` / `audience`：`api_version` 是 `v<数字>`，与 `mount.path`、`paths` key 一起由生成器派生 `servers: /<api_version>`；`paths` 必填且至少一个 operation。
@@ -128,7 +129,7 @@ schema 节点只描述值域：`object`（`type: _types.schemas.object` + `prope
   `soft: true` 标记不做通用结构校验的 soft zone（领域规则仍可部分检查）。
 - 字段顺序以模板为准（`checkFieldOrder`）；新增字段只改 `_meta` 模板。
 - `contracts/**/*.yaml` 的文本字段必须双引号（`schema.quote`）；同一对象不得重复键。
-- 所有契约实例的 `type` 值必须是 `_types.basics.*` / `_types.structures.*` / `_types.schemas.*` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）。多变体 basics 族在实例里必须带具体 variant（缺 variant 报 `schema.type-concrete`）；裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部实例 YAML；同一文件/路径已有更精确的领域错误时不重复报。`_meta` 顶层 `type` 与 `platform/http_conventions` 的 OpenAPI 原生 `type` 由 `type_vocabulary.exceptions` 覆盖。
+- 所有契约实例的 `type` 值必须是 `_types.basics.*` / `_types.structures.*` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）；`_types.schemas.*` 只允许出现在字段规范的 `types` 节点种类列表里，不得作为 `type` 值。多变体 basics 族在实例里必须带具体 variant（缺 variant 报 `schema.type-concrete`）；裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部实例 YAML；同一文件/路径已有更精确的领域错误时不重复报。`_meta` 顶层 `contract` 与 `platform/http_conventions` 的 `json_type` 由 `type_vocabulary.exceptions` 覆盖。
 - 类型级 `rules` 的每条必须有 `implemented_by`，包含自身 ID，且每个 ID 都是 checker 实际输出的
   `[rule-id]`；反向检查所有非 `schema.*` 输出都必须被某条规则声明。
 - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；独立二进制也带完整映射。

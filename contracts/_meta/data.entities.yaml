@@ -1,7 +1,7 @@
 # 读模型字段树；实体是 Go 类型，不是表。
 
 id: meta.data.entities
-type: data.entities
+contract: data.entities
 title: "逻辑数据实体契约"
 targets:
   dir: "contracts/data/entities"

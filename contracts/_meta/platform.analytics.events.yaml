@@ -1,7 +1,7 @@
 # 埋点事件与属性；载荷不保证映射表列。
 
 id: meta.platform.analytics.events
-type: platform.analytics.events
+contract: platform.analytics.events
 title: "埋点事件与属性"
 targets:
   dir: "contracts/platform/analytics"

@@ -1,7 +1,7 @@
 # 服务与 steps；一个文件 = 一个 Go interface。
 
 id: meta.cap.services
-type: cap.services
+contract: cap.services
 title: "服务契约"
 targets:
   dir: "contracts/capabilities/services"

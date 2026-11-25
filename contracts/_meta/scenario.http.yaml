@@ -1,7 +1,7 @@
 # HTTP 验收场景：确定性请求 → 响应 → 持久数据。
 
 id: meta.scenario.http
-type: scenario.http
+contract: scenario.http
 title: "HTTP 验收场景"
 targets:
   dir: "contracts/scenarios/http"

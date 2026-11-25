@@ -1,7 +1,7 @@
 # service 的 HTTP 绑定（OpenAPI 3.1）。
 
 id: meta.cap.protocols.http
-type: cap.protocols.http
+contract: cap.protocols.http
 title: "HTTP 协议绑定契约"
 targets:
   dir: "contracts/capabilities/protocols/http"

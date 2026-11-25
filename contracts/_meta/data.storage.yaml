@@ -1,7 +1,7 @@
 # 存储事实单例：引擎、保留、归档、缓存。
 
 id: meta.data.storage
-type: data.storage
+contract: data.storage
 title: "存储拓扑契约"
 targets:
   dir: "contracts/data"

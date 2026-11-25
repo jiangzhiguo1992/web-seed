@@ -1,7 +1,7 @@
 # 角色与权限映射。
 
 id: meta.platform.security.roles
-type: platform.security.roles
+contract: platform.security.roles
 title: "角色与权限映射"
 targets:
   dir: "contracts/platform/security"

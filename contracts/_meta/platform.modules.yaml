@@ -1,7 +1,7 @@
 # 模块注册表；owner_module 的唯一来源。
 
 id: meta.platform.modules
-type: platform.modules
+contract: platform.modules
 title: "模块注册表"
 targets:
   dir: "contracts/platform"

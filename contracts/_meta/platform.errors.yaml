@@ -1,7 +1,7 @@
 # 错误码文件：全局约定 + 分域错误码 + 基础设施基线。
 
 id: meta.platform.errors
-type: platform.errors
+contract: platform.errors
 title: "错误码契约"
 targets:
   dir: "contracts/platform/errors"

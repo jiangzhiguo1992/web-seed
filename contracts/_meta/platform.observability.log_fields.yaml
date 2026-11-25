@@ -1,7 +1,7 @@
 # 日志字段与 PII 规则。
 
 id: meta.platform.observability.log_fields
-type: platform.observability.log_fields
+contract: platform.observability.log_fields
 title: "日志字段与 PII 规则"
 targets:
   dir: "contracts/platform/observability"

@@ -1,7 +1,7 @@
 # 测试策略与 CI 门槛。
 
 id: meta.platform.quality
-type: platform.quality
+contract: platform.quality
 title: "测试策略与门槛"
 targets:
   dir: "contracts/platform"

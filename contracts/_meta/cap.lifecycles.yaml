@@ -1,7 +1,7 @@
 # 状态机；subjects 声明共享该状态机的实体字段。
 
 id: meta.cap.lifecycles
-type: cap.lifecycles
+contract: cap.lifecycles
 title: "实体状态生命周期契约"
 targets:
   dir: "contracts/capabilities/lifecycles"

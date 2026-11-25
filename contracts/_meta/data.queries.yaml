@@ -1,7 +1,7 @@
 # 查询声明；不写 SQL。
 
 id: meta.data.queries
-type: data.queries
+contract: data.queries
 title: "数据查询契约"
 targets:
   dir: "contracts/data/queries"
