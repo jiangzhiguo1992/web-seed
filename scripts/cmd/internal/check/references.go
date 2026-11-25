@@ -6,6 +6,7 @@ package check
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // referenceDecl 是一条列级逻辑外键声明。
@@ -140,6 +141,12 @@ func (c *Checker) checkReferenceDecl(source, target, onDelete, where string) {
 	}
 	if c.resolvedColumnType(sourceMeta.typ) != c.resolvedColumnType(targetMeta.typ) {
 		c.rulef("reference-target", "%s: source %s type %s does not match target %s type %s", where, source, c.resolvedColumnType(sourceMeta.typ), target, c.resolvedColumnType(targetMeta.typ))
+	} else if c.resolvedColumnType(sourceMeta.typ) == "integer" {
+		sourceBits, sourceOK := c.columnBits(sourceTable, sourceCol)
+		targetBits, targetOK := c.columnBits(targetTable, targetCol)
+		if sourceOK && targetOK && sourceBits != targetBits {
+			c.rulef("reference-target", "%s: source %s integer bits %d must equal target %s bits %d", where, source, sourceBits, target, targetBits)
+		}
 	}
 	if onDelete == "set_null" && !sourceMeta.nullable {
 		c.rulef("reference-on-delete", "%s: set_null requires nullable source column %s", where, source)
@@ -158,6 +165,81 @@ func (c *Checker) columnStableUnique(table, col string) bool {
 		}
 	}
 	return false
+}
+
+// columnBits 返回 integer 列的有效位宽；非 integer 返回 false。
+// 位宽来自列声明的 bits、custom type 的固定参数或列引用目标；缺省 32。
+func (c *Checker) columnBits(table, col string) (int, bool) {
+	seen := map[string]bool{}
+	for {
+		key := table + ".col." + col
+		if seen[key] {
+			return 0, false
+		}
+		seen[key] = true
+		decl, ok := c.findColumnDecl(table, col, map[string]bool{})
+		if !ok {
+			switch col {
+			case "id":
+				return 64, true
+			case "status":
+				return 32, true
+			}
+			return 0, false
+		}
+		typ, _ := decl["type"].(string)
+		typ = strings.TrimPrefix(typ, "_types.")
+		if custom, ok := c.valueTypes.CustomTypes[typ]; ok {
+			if custom.Family != "integer" {
+				return 0, false
+			}
+			if bits, ok := toInt(custom.Params["bits"]); ok {
+				return bits, true
+			}
+			return 32, true
+		}
+		if typ == "integer" {
+			if bits, ok := toInt(decl["bits"]); ok {
+				return bits, true
+			}
+			return 32, true
+		}
+		nextTable, nextCol, ok := splitColumnRef(typ)
+		if !ok {
+			return 0, false
+		}
+		table, col = nextTable, nextCol
+	}
+}
+
+// findColumnDecl 在表自身与祖先中查找列声明；基类列不在这里返回。
+func (c *Checker) findColumnDecl(table, col string, seen map[string]bool) (map[string]any, bool) {
+	if seen[table] || table == c.baseID {
+		return nil, false
+	}
+	seen[table] = true
+	doc := c.tableDocs[table]
+	if doc == nil {
+		return nil, false
+	}
+	for _, raw := range asList(doc["columns"]) {
+		m, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		if name, _ := m["name"].(string); name == col {
+			return m, true
+		}
+	}
+	for _, parent := range extendsList(doc) {
+		if parent == c.baseID {
+			continue
+		}
+		if m, ok := c.findColumnDecl(parent, col, seen); ok {
+			return m, true
+		}
+	}
+	return nil, false
 }
 
 // checkReferenceJoins 对账 references 与 entity 关系字段的 join 列对。

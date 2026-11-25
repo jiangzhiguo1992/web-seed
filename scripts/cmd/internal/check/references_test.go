@@ -8,6 +8,11 @@ import (
 // referenceTestChecker 构造引用校验所需的最小物理表视图：
 // a 是被引用表（id 主键 + code 非唯一列），b 是声明 references 的子表。
 func referenceTestChecker(column map[string]any, referencedBy []any) *Checker {
+	if name, _ := column["name"].(string); strings.HasSuffix(name, "_id") {
+		if _, ok := column["bits"]; !ok {
+			column["bits"] = 64
+		}
+	}
 	outgoing := []any{}
 	if ref, ok := asMap(column["references"]); ok {
 		if target, _ := ref["column"].(string); target != "" {
@@ -71,6 +76,19 @@ func TestReferencesValidWithJoin(t *testing.T) {
 	c.checkReferences(referenceTestTables())
 	if len(c.errs) != 0 {
 		t.Fatalf("valid references reported: %v", c.errs)
+	}
+}
+
+func TestReferencesTargetRejectsIntegerWidthMismatch(t *testing.T) {
+	c := referenceTestChecker(map[string]any{
+		"name":       "a_id",
+		"type":       "_types.integer",
+		"bits":       32,
+		"references": map[string]any{"column": "data.tables.a.col.id", "on_delete": "cascade"},
+	}, []any{"data.tables.b.col.a_id"})
+	c.checkReferences(referenceTestTables())
+	if got := entityErrs(c); !strings.Contains(got, "integer bits 32 must equal target data.tables.a.col.id bits 64") || !strings.Contains(got, "[reference-target]") {
+		t.Fatalf("integer width mismatch not reported: %v", c.errs)
 	}
 }
 

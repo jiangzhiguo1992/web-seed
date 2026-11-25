@@ -20,6 +20,7 @@ var knownRuleIDs = map[string]bool{
 	"base-only":                   true,
 	"column-comment-length":       true,
 	"column-type":                 true,
+	"column-type-supported":       true,
 	"constraint-fields":           true,
 	"constraint-used-by":          true,
 	"default-type":                true,

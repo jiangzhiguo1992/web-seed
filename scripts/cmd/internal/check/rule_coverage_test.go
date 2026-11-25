@@ -200,6 +200,31 @@ func TestFamilyParamRules(t *testing.T) {
 	mustContainRule(t, c.errs, "family-decimal")
 }
 
+func TestColumnTypeSupportedRules(t *testing.T) {
+	schema := &Schema{
+		Fields: []Field{{Name: "columns", ItemFields: []Field{
+			{Name: "name"}, {Name: "type"}, {Name: "comment"}, {Name: "bits"}, {Name: "unsigned"}, {Name: "min"}, {Name: "max"},
+		}}},
+		ValueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{
+			"any": {},
+			"integer": {Params: map[string]Field{
+				"bits":     {Type: "integer"},
+				"unsigned": {Type: "boolean"},
+				"min":      {Type: "integer"},
+				"max":      {Type: "integer"},
+			}},
+		}},
+	}
+
+	c := &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "payload", "type": "_types.any"}, "any", "x.yaml", 0, "payload", schema)
+	mustContainRule(t, c.errs, "column-type-supported")
+
+	c = &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "count", "type": "_types.integer", "unsigned": true}, "integer", "x.yaml", 0, "count", schema)
+	mustContainRule(t, c.errs, "column-type-supported")
+}
+
 func TestEnumCodeLiteralRule(t *testing.T) {
 	c := &Checker{
 		enumCodes: map[string]map[int]bool{"data.enums.x": {1: true}},

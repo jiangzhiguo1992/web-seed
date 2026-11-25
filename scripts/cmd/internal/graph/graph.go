@@ -13,6 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/yourorg/web-seed/scripts/cmd/internal/check"
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
@@ -37,9 +38,11 @@ type Snapshot struct {
 	Tables      map[string]TableUsedBy
 	Entities    map[string]EntityUsedBy
 	Queries     map[string][]string // query ID → service item IDs
+	Enums       map[string][]string // enum ID → entity/capability IDs
 	TableFiles  map[string]string
 	EntityFiles map[string]string
 	QueryFiles  map[string][]string // query file → query IDs in item order
+	EnumFiles   map[string][]string // enum file → enum IDs in item order
 	Anchors     *Anchors
 }
 
@@ -338,6 +341,38 @@ func Compute(root string) (*Snapshot, error) {
 	return snap, nil
 }
 
+// AddEnums 计算枚举 used_by 并登记 enum 文件。
+// 只在完整仓库上调用：它需要 checker 解析 entity/capability 的引用。
+func (s *Snapshot) AddEnums(root string) error {
+	enumTarget, err := resolveTarget(root, "data.enums")
+	if err != nil {
+		return err
+	}
+	usedBy, err := check.EnumUsedBy(root)
+	if err != nil {
+		return err
+	}
+	files := map[string][]string{}
+	for _, f := range glob(root, filepath.Join(enumTarget.dir, enumTarget.glob)) {
+		doc, err := loadYAML(f)
+		if err != nil {
+			return err
+		}
+		relFile := rel(root, f)
+		var ids []string
+		for _, raw := range asList(doc["enums"]) {
+			m, _ := asMap(raw)
+			if name, _ := m["name"].(string); name != "" {
+				ids = append(ids, "data.enums."+name)
+			}
+		}
+		files[relFile] = ids
+	}
+	s.Enums = usedBy
+	s.EnumFiles = files
+	return nil
+}
+
 // Write 把 table.queries / model.queries / query.used_by / method.used_by.flows 写回文件。
 func (s *Snapshot) Write(root string) ([]string, error) {
 	var changed []string
@@ -396,6 +431,20 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 			usedBy[i] = s.Queries[qid]
 		}
 		ok, err := syncQueryUsedByFile(filepath.Join(root, file), usedBy)
+		if err != nil {
+			return changed, err
+		}
+		if ok {
+			changed = append(changed, file)
+		}
+	}
+	for _, file := range sortedQueryFiles(s.EnumFiles) {
+		ids := s.EnumFiles[file]
+		usedBy := make([][]string, len(ids))
+		for i, id := range ids {
+			usedBy[i] = s.Enums[id]
+		}
+		ok, err := syncEnumUsedByFile(filepath.Join(root, file), usedBy)
 		if err != nil {
 			return changed, err
 		}
@@ -475,6 +524,24 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 			want := s.Queries[qid]
 			if !sameSet(got[i], want) {
 				drift = append(drift, fmt.Sprintf("%s: %s.used_by must be %v, got %v", file, qid, want, got[i]))
+			}
+		}
+	}
+	for _, file := range sortedQueryFiles(s.EnumFiles) {
+		doc, err := loadYAML(filepath.Join(root, file))
+		if err != nil {
+			return nil, err
+		}
+		ids := s.EnumFiles[file]
+		got := enumItemUsedBy(doc)
+		if len(got) != len(ids) {
+			drift = append(drift, fmt.Sprintf("%s: enum count changed, run make gen-graph", file))
+			continue
+		}
+		for i, id := range ids {
+			want := s.Enums[id]
+			if !sameSet(got[i], want) {
+				drift = append(drift, fmt.Sprintf("%s: %s.used_by must be %v, got %v", file, id, want, got[i]))
 			}
 		}
 	}
@@ -605,7 +672,39 @@ func syncQueryUsedByFile(path string, usedBy [][]string) (bool, error) {
 	}
 	out := src
 	for i := len(usedBy) - 1; i >= 0; i-- {
-		out, err = applyListItemUsedBy(out, i, usedBy[i])
+		out, err = applyListItemUsedBy(out, "queries", "archive", i, usedBy[i])
+		if err != nil {
+			return false, fmt.Errorf("%s: %w", path, err)
+		}
+	}
+	return true, writeAtomic(path, out)
+}
+
+func syncEnumUsedByFile(path string, usedBy [][]string) (bool, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	doc := map[string]any{}
+	if err := yaml.Unmarshal(src, &doc); err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
+	}
+	got := enumItemUsedBy(doc)
+	if len(got) == len(usedBy) {
+		ok := true
+		for i := range got {
+			if !sameSet(got[i], usedBy[i]) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return false, nil
+		}
+	}
+	out := src
+	for i := len(usedBy) - 1; i >= 0; i-- {
+		out, err = applyListItemUsedBy(out, "enums", "values", i, usedBy[i])
 		if err != nil {
 			return false, fmt.Errorf("%s: %w", path, err)
 		}
@@ -670,6 +769,15 @@ func queryItemUsedBy(doc map[string]any) [][]string {
 	return out
 }
 
+func enumItemUsedBy(doc map[string]any) [][]string {
+	var out [][]string
+	for _, raw := range asList(doc["enums"]) {
+		m, _ := asMap(raw)
+		out = append(out, stringList(m["used_by"]))
+	}
+	return out
+}
+
 // applyNestedList 在 parentKey 指向的 mapping 内替换或插入 childKey 列表。
 func applyNestedList(src []byte, parentKey, afterKey, childKey string, values []string) ([]byte, error) {
 	var doc yaml.Node
@@ -693,8 +801,8 @@ func applyNestedList(src []byte, parentKey, afterKey, childKey string, values []
 	return insertLines(lines, mappingInsertLine(parent, afterKey, parentEnd), block), nil
 }
 
-// applyListItemUsedBy 在 queries[itemIndex] 的 item 内替换或插入 used_by。
-func applyListItemUsedBy(src []byte, itemIndex int, values []string) ([]byte, error) {
+// applyListItemUsedBy 在 parentKey[itemIndex] 的 item 内替换或插入 used_by。
+func applyListItemUsedBy(src []byte, parentKey, afterKey string, itemIndex int, values []string) ([]byte, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(src, &doc); err != nil {
 		return nil, err
@@ -703,13 +811,13 @@ func applyListItemUsedBy(src []byte, itemIndex int, values []string) ([]byte, er
 		return nil, fmt.Errorf("empty document")
 	}
 	root := doc.Content[0]
-	_, seqEnd, seq, ok := topLevelNode(root, "queries", totalLines(src))
+	_, seqEnd, seq, ok := topLevelNode(root, parentKey, totalLines(src))
 	if !ok || seq.Kind != yaml.SequenceNode || itemIndex >= len(seq.Content) {
-		return nil, fmt.Errorf("missing queries[%d]", itemIndex)
+		return nil, fmt.Errorf("missing %s[%d]", parentKey, itemIndex)
 	}
 	item := seq.Content[itemIndex]
 	if item.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("queries[%d] must be a mapping", itemIndex)
+		return nil, fmt.Errorf("%s[%d] must be a mapping", parentKey, itemIndex)
 	}
 	itemEnd := seqEnd
 	if itemIndex+1 < len(seq.Content) {
@@ -723,7 +831,7 @@ func applyListItemUsedBy(src []byte, itemIndex int, values []string) ([]byte, er
 	if found {
 		return replaceLines(lines, start, end, block), nil
 	}
-	return insertLines(lines, mappingInsertLine(item, "archive", itemEnd), block), nil
+	return insertLines(lines, mappingInsertLine(item, afterKey, itemEnd), block), nil
 }
 
 func topLevelNode(root *yaml.Node, key string, total int) (int, int, *yaml.Node, bool) {

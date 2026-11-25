@@ -72,6 +72,7 @@ entries:
       - "把 auth_id/auth_type/account_id 复制进动作表"
       - "用裸哈希存 input_hash"
       - "更新或软删历史动作"
+  - { id: data.tables.dictionary, path: data/tables/dictionary.yaml, summary: "字典表结构", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.account, path: data/entities/account.yaml, summary: "账号数据实体与关系", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: data.entities.token, path: data/entities/token.yaml, summary: "令牌数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.auth_pwd, path: data/entities/auth_pwd.yaml, summary: "密码认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
@@ -79,11 +80,14 @@ entries:
   - { id: data.entities.auth_email, path: data/entities/auth_email.yaml, summary: "邮箱认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.verification_body, path: data/entities/verification_body.yaml, summary: "验证体数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.verification_action, path: data/entities/verification_action.yaml, summary: "验证动作数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.entities.dictionary, path: data/entities/dictionary.yaml, summary: "字典数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.queries.account, path: data/queries/account.yaml, summary: "账号查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.token, path: data/queries/token.yaml, summary: "令牌查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.auth, path: data/queries/auth.yaml, summary: "认证查询集（密码/手机/邮箱）", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.verification, path: data/queries/verification.yaml, summary: "验证查询集（验证体与验证动作）", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.queries.dictionary, path: data/queries/dictionary.yaml, summary: "字典查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.enums.account, path: data/enums/account.yaml, summary: "账号域跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated+tested, stability: draft }
+  - { id: data.enums.dictionary, path: data/enums/dictionary.yaml, summary: "字典域枚举集合", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
 
   # ---------- capabilities ----------
   - id: cap.protocols.http.account
@@ -102,6 +106,7 @@ entries:
   - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：JWT 签发、刷新与校验", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.services.dictionary, path: capabilities/services/dictionary.yaml, summary: "字典读取服务", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.events.token, path: capabilities/events/token.yaml, summary: "令牌异步任务：过期标记与清理", consumers: [worker], enforcement: generated+tested, stability: draft }
   - { id: cap.events.verification, path: capabilities/events/verification.yaml, summary: "验证体异步任务：过期与超限清理", consumers: [worker], enforcement: generated+tested, stability: draft }
 
@@ -182,7 +187,7 @@ global_notes:
   - "领域事件由 cap.events 的 topics[].publish.emitted_by 与 topics[].subscribe 声明；service step 用 events 引用事件、用 dispatch 投递命令，不写 emits/event"
   - "services.steps 只能引用 data.queries / cap.services / cap.lifecycles / feature.rules / cap.events；不得引用 data.tables 或 business.*"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
-  - "table.queries / model.queries / query.used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
+  - "table.queries / model.queries / query.used_by / enums[].used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
   - "http operation 的 used_by 是校验字段：必须非空且精确等于页面引用；缺页面就补页面，不得用豁免清单"
   - "引擎分组与表级物理事实（tables.<engine>/caches/retention）只在 data/storage.yaml 声明；冗余列表直接写在 columns[].redundancy"
 

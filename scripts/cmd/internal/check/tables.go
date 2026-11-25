@@ -905,6 +905,14 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 	if isCustom {
 		family = customType.Family
 	}
+	switch family {
+	case "any":
+		c.rulef("column-type-supported", "%s: columns[%d] (%s): _types.any has no deterministic DDL; use a concrete scalar", rel, i, name)
+	case "integer":
+		if unsigned, _ := m["unsigned"].(bool); unsigned {
+			c.rulef("column-type-supported", "%s: columns[%d] (%s): PostgreSQL has no unsigned integer; use min 0", rel, i, name)
+		}
+	}
 	fam, ok := schema.ValueTypes.TypeFamilies[family]
 	if !ok {
 		if common != nil {

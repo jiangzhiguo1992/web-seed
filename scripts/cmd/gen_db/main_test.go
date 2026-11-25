@@ -181,3 +181,37 @@ func TestColumnTypeRejectsUnsigned(t *testing.T) {
 		t.Fatal("unsigned integer must be rejected for PostgreSQL")
 	}
 }
+
+// TestIntegerBitsDefaultMatchesGenerator 锁定类型元层与 DDL 生成器对 integer 默认位宽的一致解释：
+// 未写 bits 的列必须生成与声明默认一致的 PostgreSQL 类型；改任一侧而不同步会在这里失败。
+func TestIntegerBitsDefaultMatchesGenerator(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts", "_meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fam, ok := shared.TypeFamilies["integer"]
+	if !ok {
+		t.Fatal("integer family is missing")
+	}
+	bits, ok := fam.Params["bits"]
+	if !ok {
+		t.Fatal("integer.bits is missing")
+	}
+	if bits.Default == nil {
+		t.Fatal("integer.bits.default is missing")
+	}
+	def := intValue(bits.Default)
+	wantByBits := map[int]string{8: "SMALLINT", 16: "SMALLINT", 32: "INTEGER", 64: "BIGINT"}
+	want, ok := wantByBits[def]
+	if !ok {
+		t.Fatalf("integer.bits.default %d has no PostgreSQL mapping", def)
+	}
+	got, err := columnType(column{Name: "x", Type: "integer"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("integer default bits %d maps to %q, want %q", def, got, want)
+	}
+}

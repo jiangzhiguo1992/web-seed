@@ -28,6 +28,9 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
+	if err := snap.AddEnums(abs); err != nil {
+		fail(err)
+	}
 	if *check {
 		drift, err := snap.Check(abs)
 		if err != nil {

@@ -499,6 +499,35 @@ func enumTypeRef(typ string) (string, bool) {
 	return "", false
 }
 
+// EnumUsedBy 计算每个枚举 ID 的期望 used_by 集合，供 gen-graph 写回。
+// 过滤 enum-used-by 自身，避免生成前必须先手工对齐；其他契约错误仍然阻止生成。
+func EnumUsedBy(root string) (map[string][]string, error) {
+	c := &Checker{root: root, strictHTTP: true}
+	c.run()
+	var others []string
+	for _, e := range c.errs {
+		if strings.Contains(e, "[enum-used-by]") {
+			continue
+		}
+		others = append(others, e)
+	}
+	if len(others) > 0 {
+		return nil, fmt.Errorf("contracts invalid: %s", strings.Join(others, "; "))
+	}
+	out := map[string][]string{}
+	for id, usage := range c.enumUsages() {
+		set := map[string]bool{}
+		for entityID := range usage.entities {
+			set[entityID] = true
+		}
+		for capID := range usage.capabilities {
+			set[capID] = true
+		}
+		out[id] = sortedKeys(set)
+	}
+	return out, nil
+}
+
 // checkEnumUsedBy 要求 used_by 与 entity 字段和 capability 引用的并集完全一致。
 func (c *Checker) checkEnumUsedBy(rel string, i int, id string, m map[string]any, usage *enumUsage) {
 	raw, ok := m["used_by"]

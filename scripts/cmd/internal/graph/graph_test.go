@@ -321,6 +321,36 @@ func TestApplyNestedListReplacesAndInserts(t *testing.T) {
 	}
 }
 
+func TestSyncEnumUsedByFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "e.yaml")
+	src := "enums:\n  - name: x\n    values:\n      - { value: a, code: 0 }\n    used_by:\n      - data.entities.old\n"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := syncEnumUsedByFile(path, [][]string{{"data.entities.a", "data.entities.b"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("enum used_by drift not written")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "used_by:\n      - data.entities.a\n      - data.entities.b") {
+		t.Fatalf("used_by not replaced:\n%s", got)
+	}
+	changed, err = syncEnumUsedByFile(path, [][]string{{"data.entities.a", "data.entities.b"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Fatal("up-to-date enum rewritten")
+	}
+}
+
 func TestComputeRejectsUnknownReferenceTarget(t *testing.T) {
 	root := fixtureRoot(t)
 	writeFixture(t, root, "contracts/data/tables/b.yaml", `# table b

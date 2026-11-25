@@ -54,7 +54,7 @@
 - `structures.list` / `set` / `array` 声明 `fields.item`，`map` 声明 `fields.key` / `value`（均为 `type: "*"`、`required: true`），生成器与实现层统一使用这些名字；checker 按 `Field.type` 递归校验，不再为每个容器组合维护独立分支；`key_patterns` 是 AND 语义，多个正则必须同时匹配，且只允许 string key；
 - `list<object>` / `set<object>` / `array<object>` 必须声明 `item_fields`；空对象列表用 `list<any>`，不要用无字段的 `list<object>`；
 - `columns[].type` 必须是 `_types.<name>`（类型族或自定义类型）或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`；
-- schema 的 `scalar.type` 必须是 `_types.<name>`；entity 字段的 `type` 是 Go 类型，不加前缀；
+- schema 的 `scalar.type` 必须是 `_types.<name>`；entity 字段的 `type` 与表列共用 `_types.<name>` 值类型，可带一层 `*` 表示指针（等价 `nullable`），不写 Go 类型名；Go/TS 具体类型由类型族的 lowering 规则决定；
 - 新增族参数必须在 `_types.yaml` 的 `param_targets` 登记消费方（openapi/storage/runtime）；键必须是已声明参数，checker 会拒绝无消费方的参数。
 
 ### 1.2 `_types.yaml` 的 `schemas`
@@ -100,7 +100,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 | 命令 | 作用 |
 |---|---|
 | `make contract-new type=<type> name=<name> [module=...] [table=...] [service=...]` | 按 `_meta/<type>.yaml` 渲染最小骨架；`contract-new` 不支持的类型需手写 |
-| `make gen-graph` | 写回 `table.queries` / `model.queries` / `query.used_by` / 规则与生命周期锚点 |
+| `make gen-graph` | 写回 `table.queries` / `model.queries` / `query.used_by` / `enums[].used_by` / 规则与生命周期锚点 |
 | `make gen-graph-check` | 只校验生成字段是否最新 |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / 引用 / owner / 数据流 / 类型级规则 |
 | `make audit-types` | 审计全部契约 `type` 键：`_types.*` / 外部引用 / 显式例外，输出计数并以非零退出码报告裸类型 |
@@ -171,7 +171,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 
 - 不要重建 `contracts/_meta/schema/` 或 `templates/`；不要在 `_meta` 之外手写第二份字段模板。
 - 不要手写生成字段（`table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` /
-  `query.used_by` / `feature.rules.implemented_by` / 生命周期锚点 / `topics[].publish.emitted_by`）。
+  `query.used_by` / `enums[].used_by` / `feature.rules.implemented_by` / 生命周期锚点 / `topics[].publish.emitted_by`）。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`。
 - 不要在 checker 里解析 `CHECK expr` 的 SQL 语义；只校验可判定的字面量。

@@ -161,6 +161,7 @@ rules:
   - { id: family-length, text: "min_len <= max_len；fixed 为 true 时必须写 max_len，若写 min_len 必须等于 max_len", implemented_by: [ family-length ] }
   - { id: family-range, text: "min <= max；unsigned 的 min/default 不得为负；default 必须在范围内", implemented_by: [ family-range ] }
   - { id: family-decimal, text: "scale <= precision", implemented_by: [ family-decimal ] }
+  - { id: column-type-supported, text: "表列类型必须能被唯一引擎生成确定性 DDL：禁止 _types.any；PostgreSQL 不支持 unsigned integer", implemented_by: [ column-type-supported ] }
   - { id: index-live-only, text: "live_only 只有 unique 索引可设为 true；设为 true 时要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
   - { id: constraint-fields, text: "on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
   - { id: constraint-used-by, text: "constraints[].used_by 必须是非空去重的 data.queries.* 写查询 ID，且查询写本表", implemented_by: [ constraint-used-by ] }
@@ -175,7 +176,7 @@ rules:
   - { id: index-name-unique, text: "索引名同一 schema 内必须全局唯一", implemented_by: [ index-name-unique ] }
   - { id: redundant-group, text: "columns[].redundancy 每组必须恰好一个 source 且包含声明列自身；组内每列必须声明完全相同的列表；同一列不得跨组；列表不得重复列；基类列不得声明 redundancy", implemented_by: [ redundant-group ] }
   - { id: redundant-ref, text: "redundancy 的 column 必须是存在的物理表自声明列（继承列/基类列不允许）；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
-  - { id: reference-target, text: "references.column 必须是已存在的物理表列；源列必须是本表自声明列；目标列必须是目标表主键或全局唯一（live_only: false）的单列索引列；两端类型族一致", implemented_by: [ reference-target ] }
+  - { id: reference-target, text: "references.column 必须是已存在的物理表列；源列必须是本表自声明列；目标列必须是目标表主键或全局唯一（live_only: false）的单列索引列；两端类型族一致，integer 列的 bits 必须相等", implemented_by: [ reference-target ] }
   - { id: reference-on-delete, text: "on_delete 只约束硬删：cascade 级联删除、restrict 拒绝删除、set_null 置空、no_action 保留悬空；set_null 要求源列 nullable；软删不由此字段表达", implemented_by: [ reference-on-delete ] }
   - { id: reference-join, text: "references 与 entity 关系字段的 join 列对必须双向一致：每条 references 必须有同列对的 join，每个 join 必须有同列对的 references（列对比较不看 from/to 方向）", implemented_by: [ reference-join ] }
   - { id: default-type, text: "列 default 的 YAML 类型必须与列类型族兼容；字符串长度按本列声明的 min_len/max_len 校验（不展开 data.tables.*.col.* 引用）", implemented_by: [ default-type ] }

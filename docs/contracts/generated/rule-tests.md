@@ -156,6 +156,7 @@
 | data.tables | family-length | family-length | 0 | 1 |
 | data.tables | family-range | family-range | 1 | 1 |
 | data.tables | family-decimal | family-decimal | 1 | 1 |
+| data.tables | column-type-supported | column-type-supported | 2 | 1 |
 | data.tables | index-live-only | index-live-only | 1 | 0 |
 | data.tables | constraint-fields | constraint-fields | 1 | 0 |
 | data.tables | constraint-used-by | constraint-used-by | 1 | 0 |
@@ -170,7 +171,7 @@
 | data.tables | index-name-unique | index-name-unique | 1 | 0 |
 | data.tables | redundant-group | redundant-group | 1 | 0 |
 | data.tables | redundant-ref | redundant-ref | 2 | 0 |
-| data.tables | reference-target | reference-target | 1 | 0 |
+| data.tables | reference-target | reference-target | 2 | 0 |
 | data.tables | reference-on-delete | reference-on-delete | 1 | 0 |
 | data.tables | reference-join | reference-join | 1 | 0 |
 | data.tables | default-type | default-type | 1 | 0 |

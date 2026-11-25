@@ -18,7 +18,7 @@ basic_types:
   integer:
     description: "整数"
     params:
-      bits: { type: _types.integer, required: false, enum: [ 8, 16, 32, 64 ], default: 64, description: "位宽" }
+      bits: { type: _types.integer, required: false, enum: [ 8, 16, 32, 64 ], default: 32, description: "位宽" }
       unsigned: { type: _types.boolean, required: false, default: false, description: "无符号" }
       min: { type: _types.integer, required: false, description: "下限" }
       max: { type: _types.integer, required: false, description: "上限" }
@@ -46,9 +46,8 @@ basic_types:
       timezone: { type: _types.boolean, required: false, default: true, description: "带时区" }
       fractional_seconds: { type: _types.integer, required: false, default: 6, min: 0, max: 9, description: "小数秒精度" }
   json:
-    description: "JSON 文档"
-    params:
-      binary: { type: _types.boolean, required: false, default: false, description: "使用二进制 JSON 存储（引擎映射）" }
+    description: "JSON 文档；PostgreSQL 固定 JSONB"
+    params: { }
   bytes:
     description: "二进制"
     params:
@@ -295,4 +294,3 @@ param_targets:
   mode: storage
   timezone: storage
   fractional_seconds: storage
-  binary: storage

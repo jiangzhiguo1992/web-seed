@@ -105,7 +105,7 @@ make contract-new type=feature.pages name=note_list summary="备注列表页"
 make contract-check
 ```
 
-校验结构、ID、字段顺序（以 `_meta/<type>.yaml` 的 `fields` / `item_fields` 为准）、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`table.entities`（显式映射）与 `table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` / `query.used_by`（生成物）。不通过不要进入生成。
+校验结构、ID、字段顺序（以 `_meta/<type>.yaml` 的 `fields` / `item_fields` 为准）、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`table.entities`（显式映射）与 `table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` / `query.used_by` / `enums[].used_by`（生成物）。不通过不要进入生成。
 
 修改 `rules` 的 `implemented_by` 后，运行 `make gen-rule-ids` 更新 `rule_ids_gen.go`；`make contract-check` 会拒绝过期的生成文件。
 

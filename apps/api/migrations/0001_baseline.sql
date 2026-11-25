@@ -32,7 +32,7 @@ CREATE TABLE "auth_email" (
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "deleted_at" TIMESTAMPTZ(6),
-  "account_id" INTEGER,
+  "account_id" BIGINT,
   "username" VARCHAR(64) NOT NULL,
   "domain" VARCHAR(190) NOT NULL,
   "entity" VARCHAR(190),
@@ -63,7 +63,7 @@ CREATE TABLE "auth_phone" (
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "deleted_at" TIMESTAMPTZ(6),
-  "account_id" INTEGER,
+  "account_id" BIGINT,
   "code" VARCHAR(8) NOT NULL,
   "number" VARCHAR(32) NOT NULL,
   "operator" VARCHAR(32),
@@ -90,7 +90,7 @@ CREATE TABLE "auth_pwd" (
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "deleted_at" TIMESTAMPTZ(6),
-  "account_id" INTEGER,
+  "account_id" BIGINT,
   "username" VARCHAR(254) NOT NULL,
   "password_hash" VARCHAR(255) NOT NULL,
   "failed_login_count" INTEGER NOT NULL DEFAULT 0,
@@ -114,13 +114,40 @@ COMMENT ON COLUMN "auth_pwd"."locked_until" IS '锁定截止时间；为空表�
 CREATE UNIQUE INDEX "uq_auth_pwd_username" ON "auth_pwd" ("username");
 CREATE UNIQUE INDEX "uq_auth_pwd_account" ON "auth_pwd" ("account_id");
 
+CREATE TABLE "dictionary" (
+  "id" BIGINT NOT NULL,
+  "status" INTEGER NOT NULL DEFAULT 0,
+  "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
+  "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
+  "deleted_at" TIMESTAMPTZ(6),
+  "parent_id" BIGINT,
+  "code" VARCHAR(64) NOT NULL,
+  "name" VARCHAR(100) NOT NULL,
+  "color" VARCHAR(7),
+  "sort" INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY ("id")
+);
+COMMENT ON TABLE "dictionary" IS '字典表';
+COMMENT ON COLUMN "dictionary"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "dictionary"."status" IS '业务状态整数码；枚举映射在 entity 层';
+COMMENT ON COLUMN "dictionary"."created_at" IS '创建时间；数据库默认 now()';
+COMMENT ON COLUMN "dictionary"."updated_at" IS '更新时间；应用层写入';
+COMMENT ON COLUMN "dictionary"."deleted_at" IS '软删时间；应用层写入；为空表示未删除';
+COMMENT ON COLUMN "dictionary"."parent_id" IS '父节点；顶级为 NULL';
+COMMENT ON COLUMN "dictionary"."code" IS '字典编码；全局唯一且创建后不可变';
+COMMENT ON COLUMN "dictionary"."name" IS '展示名；允许重复';
+COMMENT ON COLUMN "dictionary"."color" IS '展示颜色；#RRGGBB，为空表示使用默认样式';
+COMMENT ON COLUMN "dictionary"."sort" IS '同一父节点下的展示顺序；从 0 开始';
+CREATE UNIQUE INDEX "uq_dictionary_code" ON "dictionary" ("code");
+CREATE INDEX "idx_dictionary_parent_sort" ON "dictionary" ("deleted_at", "parent_id", "sort", "id");
+
 CREATE TABLE "token" (
   "id" BIGINT NOT NULL,
   "status" INTEGER NOT NULL DEFAULT 0,
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "deleted_at" TIMESTAMPTZ(6),
-  "account_id" INTEGER NOT NULL,
+  "account_id" BIGINT NOT NULL,
   "user_id" INTEGER,
   "device_id" VARCHAR(128),
   "access_token_hash" VARCHAR(128) NOT NULL,
@@ -129,7 +156,7 @@ CREATE TABLE "token" (
   "refresh_expire_at" TIMESTAMPTZ(6) NOT NULL,
   "revoked_at" TIMESTAMPTZ(6),
   "revoke_reason" INTEGER,
-  "replaced_by_id" INTEGER,
+  "replaced_by_id" BIGINT,
   CONSTRAINT "ck_token_expire_order" CHECK (refresh_expire_at > access_expire_at),
   CONSTRAINT "ck_token_revoked_consistent" CHECK ((status = 1) = (revoked_at IS NOT NULL)),
   CONSTRAINT "ck_token_revoke_reason_consistent" CHECK ((status = 1) = (revoke_reason IS NOT NULL)),
@@ -163,8 +190,8 @@ CREATE TABLE "verification_action" (
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "deleted_at" TIMESTAMPTZ(6),
-  "verification_id" INTEGER NOT NULL,
-  "account_id" INTEGER NOT NULL,
+  "verification_id" BIGINT NOT NULL,
+  "account_id" BIGINT NOT NULL,
   "result" INTEGER NOT NULL,
   "request_ip" VARCHAR(45),
   "device_id" VARCHAR(128),
@@ -196,9 +223,9 @@ CREATE TABLE "verification_body" (
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "deleted_at" TIMESTAMPTZ(6),
-  "account_id" INTEGER NOT NULL,
+  "account_id" BIGINT NOT NULL,
   "auth_type" INTEGER NOT NULL,
-  "auth_id" INTEGER NOT NULL,
+  "auth_id" BIGINT NOT NULL,
   "purpose" INTEGER NOT NULL,
   "code_hash" VARCHAR(128) NOT NULL,
   "content" VARCHAR(4096),
@@ -241,6 +268,7 @@ CREATE INDEX "idx_verification_status_attempt" ON "verification_body" ("deleted_
 DROP TABLE IF EXISTS "verification_body";
 DROP TABLE IF EXISTS "verification_action";
 DROP TABLE IF EXISTS "token";
+DROP TABLE IF EXISTS "dictionary";
 DROP TABLE IF EXISTS "auth_pwd";
 DROP TABLE IF EXISTS "auth_phone";
 DROP TABLE IF EXISTS "auth_email";
