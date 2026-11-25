@@ -16,6 +16,7 @@ not_supported_topologies: [ sharding, multi-primary, cross-region, outbox ]
 
 tables:
   postgres:
+    - { table: data.tables.dictionary, description: "字典表" }
     - { table: data.tables.account, description: "账号主表" }
     - { table: data.tables.token, description: "令牌表" }
     - { table: data.tables.auth_pwd, description: "密码认证表" }

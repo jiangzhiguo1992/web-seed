@@ -111,3 +111,9 @@ custom_types:
     params:
       pattern: "^Bearer$"
       default: "Bearer"
+  money:
+    family: decimal
+    description: "金额；必须用 decimal 族，禁止 float"
+    params:
+      precision: 19
+      scale: 4

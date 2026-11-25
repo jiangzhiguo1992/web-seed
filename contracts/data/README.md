@@ -159,8 +159,9 @@ columns:
 | `table.queries` | `make gen-graph` | 使用本表的 query（`[强制: table-queries-generated]`，禁止手改） |
 | `model.queries` | `make gen-graph` | 返回本实体的 query（`[强制: entity-used-by]`，禁止手改） |
 | `queries[].used_by` | `make gen-graph` | 调用本 query 的 method（`[强制: query-used-by]`，禁止手改） |
+| `enums[].used_by` | `make gen-graph` | 使用本枚举的 entity / service / event / http operation 并集（`[强制: enum-used-by]`，禁止手改） |
 
-这七个字段都只记**直接关系**，不展开传递闭包；完整影响面用 `make contract-impact id=<id>` 查询（P2 未实现）。
+这八个字段都只记**直接关系**，不展开传递闭包；完整影响面用 `make contract-impact id=<id>` 查询（P2 未实现）。
 
 ### 4.4 保留策略是选择，不是枚举
 
@@ -205,7 +206,7 @@ indexes:
   returns:
     - { name: accounts, list: true, kind: entity, entity: data.entities.account }
   index_ref:
-    - { index: data.tables.account.idx_account_created_at_id, columns: [ created_at, id ] }
+    - { index: data.tables.account.idx_account_created_at_id, columns: [ deleted_at, created_at, id ] }
 ```
 
 返回值用 `kind` 区分：`scalar` / `affected_rows` / `entity` / `columns`；没有 `column` / `table`。`entity` 只写 entity、不能写 columns；`columns` 只在没有对应 entity 时使用，必须写列引用；`secret` 只有同模块可显式列出，跨模块禁止。`caches` / `archive` 引用 storage；`archive` 每项写 `{archive, promotable, age_by}`，`promotable` 必须与 storage 归档条目一致；`promotable:true` 时 `age_by` 必填且与 storage 一致，回迁时更新该列，避免再次被判定为冷数据；`promotable:false` 是只读穿透，禁止写 `age_by`。每个 `queries/<scope>.yaml` 只承载本 scope 的查询；其他组的普通业务查询不要写进来或引用本文件。

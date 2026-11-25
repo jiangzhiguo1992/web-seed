@@ -1,0 +1,87 @@
+# 字典读取服务。
+
+id: cap.services.dictionary
+summary: "字典读取服务"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "字典服务只读；字典维护写服务单独设计，不要在这里加写步骤"
+  - "字典值只用于展示；不要按 code 做业务分支"
+  - "返回停用节点时由调用方过滤；服务不做隐式过滤"
+
+services:
+  - name: list_roots
+    summary: "分页列出顶级字典节点"
+    visibility: internal
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: offset, type: _types.page_offset }
+      - { name: limit, type: _types.page_limit }
+    returns:
+      - { name: dictionaries, type: _types.list<data.entities.dictionary>, value: step.list_root_dictionaries.dictionaries }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: list_root_dictionaries
+        kind: query
+        summary: "调用 data.queries.dictionary.list_root_dictionaries"
+        input:
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: dictionaries, type: _types.list<data.entities.dictionary>, description: "顶级字典节点列表" }
+        errors: [ ]
+        query: data.queries.dictionary.list_root_dictionaries
+        goto: $end
+    used_by: []
+
+  - name: list_children
+    summary: "按父节点列出子节点"
+    visibility: internal
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: parent_id, type: _types.integer }
+      - { name: offset, type: _types.page_offset }
+      - { name: limit, type: _types.page_limit }
+    returns:
+      - { name: children, type: _types.list<data.entities.dictionary>, value: step.list_dictionary_children.children }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: list_dictionary_children
+        kind: query
+        summary: "调用 data.queries.dictionary.list_dictionary_children"
+        input:
+          - { name: parent_id, value: params.parent_id, description: "父节点 ID" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: children, type: _types.list<data.entities.dictionary>, description: "子节点列表" }
+        errors: [ ]
+        query: data.queries.dictionary.list_dictionary_children
+        goto: $end
+    used_by: []
+
+  - name: get
+    summary: "按编码读取字典节点"
+    visibility: internal
+    tx_mode: read_only
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: code, type: _types.string }
+    returns:
+      - { name: dictionary, type: data.entities.dictionary, value: step.get_dictionary.dictionary, nullable: true }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_dictionary
+        kind: query
+        summary: "调用 data.queries.dictionary.get_dictionary"
+        input:
+          - { name: code, value: params.code, description: "字典编码" }
+        output:
+          - { name: dictionary, type: data.entities.dictionary, description: "字典节点；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.dictionary.get_dictionary
+        goto: $end
+    used_by: []
