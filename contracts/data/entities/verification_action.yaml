@@ -57,3 +57,5 @@ fields:
       join:
         from: data.tables.verification_action.col.account_id
         to: data.tables.account.col.id
+
+validation: [ ]

@@ -113,7 +113,7 @@ fields:
 
   - name: validation
     type: _types.structures.list<_types.structures.object>
-    required: false
+    required: true
     description: "跨字段校验；不写 DDL 与业务规则"
     item_fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "校验名" }

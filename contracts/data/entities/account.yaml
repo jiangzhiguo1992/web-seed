@@ -82,3 +82,5 @@ fields:
       join:
         from: data.tables.account.col.id
         to: data.tables.auth_email.col.account_id
+
+validation: [ ]

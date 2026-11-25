@@ -85,3 +85,5 @@ fields:
       join:
         from: data.tables.attachment.col.replaces_id
         to: data.tables.attachment.col.id
+
+validation: [ ]

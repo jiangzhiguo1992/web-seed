@@ -78,3 +78,5 @@ fields:
       join:
         from: data.tables.token.col.account_id
         to: data.tables.account.col.id
+
+validation: [ ]

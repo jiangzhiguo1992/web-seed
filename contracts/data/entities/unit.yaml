@@ -86,3 +86,5 @@ fields:
       join:
         from: data.tables.unit.col.id
         to: data.tables.unit.col.parent_id
+
+validation: [ ]

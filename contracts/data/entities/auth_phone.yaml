@@ -52,3 +52,5 @@ fields:
       join:
         from: data.tables.auth_phone.col.account_id
         to: data.tables.account.col.id
+
+validation: [ ]

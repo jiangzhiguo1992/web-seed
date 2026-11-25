@@ -83,3 +83,5 @@ fields:
       join:
         from: data.tables.dictionary.col.id
         to: data.tables.dictionary.col.parent_id
+
+validation: [ ]
