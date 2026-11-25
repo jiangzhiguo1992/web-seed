@@ -506,7 +506,7 @@ func EnumUsedBy(root string) (map[string][]string, error) {
 	c.run()
 	var others []string
 	for _, e := range c.errs {
-		if strings.Contains(e, "[enum-used-by]") {
+		if isGeneratedDriftError(e) {
 			continue
 		}
 		others = append(others, e)
@@ -526,6 +526,23 @@ func EnumUsedBy(root string) (map[string][]string, error) {
 		out[id] = sortedKeys(set)
 	}
 	return out, nil
+}
+
+// isGeneratedDriftError 判断错误是否只是生成字段尚未写回；gen-graph 需要先写回再校验。
+func isGeneratedDriftError(e string) bool {
+	for _, rule := range []string{
+		"[enum-used-by]",
+		"[entity-included-by]",
+		"[entity-used-by]",
+		"[table-queries-generated]",
+		"[table-referenced-by]",
+		"[query-used-by]",
+	} {
+		if strings.Contains(e, rule) {
+			return true
+		}
+	}
+	return false
 }
 
 // checkEnumUsedBy 要求 used_by 与 entity 字段和 capability 引用的并集完全一致。

@@ -383,8 +383,8 @@ func (c *Checker) applyEntityFieldDefaults(e *entityInfo) {
 		}
 		if !f.HasType {
 			typ := normalizeContractType(meta.typ)
-			if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
-				typ = customType.Family
+			if meta.primaryKey && typ == "integer" {
+				typ = "id"
 			}
 			typ = "_types." + typ
 			if meta.nullable && !f.HasNullable {
@@ -458,7 +458,7 @@ func (c *Checker) checkEntities(schema *Schema) {
 		}
 	}
 
-	expectedIncluded := map[string]map[string]string{}
+	expectedIncluded := map[string]map[string]entityRelationEntry{}
 	for _, e := range c.entities {
 		c.checkEntityModel(e)
 		c.checkEntityOwnerModule(e)
@@ -487,46 +487,56 @@ func (c *Checker) checkEntities(schema *Schema) {
 	}
 }
 
-// entityIncludes 由关系字段推导本实体到目标的基数。
-func (c *Checker) entityIncludes(e *entityInfo) map[string]string {
-	out := map[string]string{}
+// entityIncludes 由关系字段推导本实体到目标的基数；key 是 (目标 entity, 本实体字段)。
+func (c *Checker) entityIncludes(e *entityInfo) map[string]entityRelationEntry {
+	out := map[string]entityRelationEntry{}
 	for i := range e.Fields {
 		f := &e.Fields[i]
 		if !f.IsRelation || f.TargetID == "" {
 			continue
 		}
 		if card := c.relationCardinality(f); card != "" {
-			out[f.TargetID] = card
+			out[relationKey(f.TargetID, f.Name)] = entityRelationEntry{Entity: f.TargetID, Field: f.Name, Cardinality: card}
 		}
 	}
 	return out
 }
 
 // checkEntityRelationIndex 对账 model.includes / model.included_by 的对象列表。
-func (c *Checker) checkEntityRelationIndex(e *entityInfo, model map[string]any, key string, want map[string]string) {
-	got := parseEntityRelationIndex(model[key])
+func (c *Checker) checkEntityRelationIndex(e *entityInfo, model map[string]any, key string, want map[string]entityRelationEntry) {
+	got, duplicate := parseEntityRelationIndex(model[key])
+	if duplicate {
+		c.rulef("entity-included-by", "%s: model.%s must not repeat (entity, field)", e.Rel, key)
+	}
 	if want == nil {
-		want = map[string]string{}
+		want = map[string]entityRelationEntry{}
 	}
 	if !sameRelationMap(got, want) {
 		c.rulef("entity-included-by", "%s: model.%s must be %v, got %v", e.Rel, key, formatRelationMap(want), formatRelationMap(got))
 	}
 }
 
-func parseEntityRelationIndex(raw any) map[string]string {
-	out := map[string]string{}
+func parseEntityRelationIndex(raw any) (map[string]entityRelationEntry, bool) {
+	out := map[string]entityRelationEntry{}
+	duplicate := false
 	for _, item := range asList(raw) {
 		m, _ := asMap(item)
 		entity, _ := m["entity"].(string)
+		field, _ := m["field"].(string)
 		card, _ := m["cardinality"].(string)
-		if entity != "" {
-			out[entity] = card
+		if entity == "" || field == "" {
+			continue
 		}
+		key := relationKey(entity, field)
+		if _, ok := out[key]; ok {
+			duplicate = true
+		}
+		out[key] = entityRelationEntry{Entity: entity, Field: field, Cardinality: card}
 	}
-	return out
+	return out, duplicate
 }
 
-func sameRelationMap(a, b map[string]string) bool {
+func sameRelationMap(a, b map[string]entityRelationEntry) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -538,7 +548,7 @@ func sameRelationMap(a, b map[string]string) bool {
 	return true
 }
 
-func formatRelationMap(m map[string]string) string {
+func formatRelationMap(m map[string]entityRelationEntry) string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -546,7 +556,8 @@ func formatRelationMap(m map[string]string) string {
 	sort.Strings(keys)
 	out := make([]string, 0, len(keys))
 	for _, k := range keys {
-		out = append(out, k+"("+m[k]+")")
+		v := m[k]
+		out = append(out, v.Entity+"."+v.Field+"("+v.Cardinality+")")
 	}
 	return "[" + strings.Join(out, ", ") + "]"
 }
@@ -955,8 +966,18 @@ func (c *Checker) checkEntityFieldMetadata(e *entityInfo) {
 	}
 }
 
-func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[string]string) {
-	seenCard := map[string]string{}
+// entityRelationEntry 是 model.includes / model.included_by 的一项。
+type entityRelationEntry struct {
+	Entity      string
+	Field       string
+	Cardinality string
+}
+
+func relationKey(entity, field string) string {
+	return entity + "\x00" + field
+}
+
+func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[string]entityRelationEntry) {
 	for i := range e.Fields {
 		r := &e.Fields[i]
 		if !r.IsRelation {
@@ -1013,14 +1034,10 @@ func (c *Checker) checkEntityRelations(e *entityInfo, expected map[string]map[st
 			c.rulef("entity-relation-cardinality", "%s: one side of join columns must be unique (PK or unique index), or source.join.through must be declared", where)
 			continue
 		}
-		if prev, ok := seenCard[targetID]; ok && prev != card {
-			c.rulef("entity-relation-cardinality", "%s: conflicting cardinalities to %s: %s and %s", where, targetID, prev, card)
-		}
-		seenCard[targetID] = card
 		if expected[targetID] == nil {
-			expected[targetID] = map[string]string{}
+			expected[targetID] = map[string]entityRelationEntry{}
 		}
-		expected[targetID][e.ID] = inverseCardinality(card)
+		expected[targetID][relationKey(e.ID, r.Name)] = entityRelationEntry{Entity: e.ID, Field: r.Name, Cardinality: inverseCardinality(card)}
 		if (card == "one_to_many" || card == "many_to_many") && !r.IsList {
 			c.rulef("entity-relation-arity", "%s: %s relation must use _types.list<data.entities.*>, got %s", where, card, r.Type)
 		}

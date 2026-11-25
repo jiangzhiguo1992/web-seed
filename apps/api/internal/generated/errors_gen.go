@@ -44,6 +44,17 @@ const (
 	AuthVerificationTargetInvalid    = 4004
 	AuthTokenInvalid                 = 5001
 	AuthTokenExpired                 = 5002
+	DictionaryNotFound               = 7001
+	DictionaryCodeTaken              = 7002
+	DictionaryInvalid                = 7003
+	DictionaryParentInvalid          = 7004
+	DictionaryIllegalTransition      = 7005
+	DictionaryHasChildren            = 7006
+	AttachmentNotFound               = 8001
+	AttachmentObjectKeyTaken         = 8002
+	AttachmentOwnerInvalid           = 8003
+	AttachmentInvalid                = 8004
+	AttachmentIllegalTransition      = 8005
 )
 
 // ErrorCatalog 以 platform.errors.<CODE> 为键索引错误目录。
@@ -83,4 +94,15 @@ var ErrorCatalog = map[string]ErrorCode{
 	"platform.errors.AUTH_VERIFICATION_TARGET_INVALID":    {BizCode: AuthVerificationTargetInvalid, Status: 422, Retryable: false},
 	"platform.errors.AUTH_TOKEN_INVALID":                  {BizCode: AuthTokenInvalid, Status: 401, Retryable: false},
 	"platform.errors.AUTH_TOKEN_EXPIRED":                  {BizCode: AuthTokenExpired, Status: 401, Retryable: true},
+	"platform.errors.DICTIONARY_NOT_FOUND":                {BizCode: DictionaryNotFound, Status: 404, Retryable: false},
+	"platform.errors.DICTIONARY_CODE_TAKEN":               {BizCode: DictionaryCodeTaken, Status: 409, Retryable: false},
+	"platform.errors.DICTIONARY_INVALID":                  {BizCode: DictionaryInvalid, Status: 422, Retryable: false},
+	"platform.errors.DICTIONARY_PARENT_INVALID":           {BizCode: DictionaryParentInvalid, Status: 422, Retryable: false},
+	"platform.errors.DICTIONARY_ILLEGAL_TRANSITION":       {BizCode: DictionaryIllegalTransition, Status: 409, Retryable: false},
+	"platform.errors.DICTIONARY_HAS_CHILDREN":             {BizCode: DictionaryHasChildren, Status: 409, Retryable: false},
+	"platform.errors.ATTACHMENT_NOT_FOUND":                {BizCode: AttachmentNotFound, Status: 404, Retryable: false},
+	"platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN":         {BizCode: AttachmentObjectKeyTaken, Status: 409, Retryable: false},
+	"platform.errors.ATTACHMENT_OWNER_INVALID":            {BizCode: AttachmentOwnerInvalid, Status: 422, Retryable: false},
+	"platform.errors.ATTACHMENT_INVALID":                  {BizCode: AttachmentInvalid, Status: 422, Retryable: false},
+	"platform.errors.ATTACHMENT_ILLEGAL_TRANSITION":       {BizCode: AttachmentIllegalTransition, Status: 409, Retryable: false},
 }

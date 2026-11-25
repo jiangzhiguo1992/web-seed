@@ -230,7 +230,7 @@ func TestWriteAndCheck(t *testing.T) {
 		t.Fatalf("table b queries not written:\n%s", b)
 	}
 	e1, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e1.yaml"))
-	if !strings.Contains(string(e1), "{ entity: data.entities.e2, cardinality: one_to_one }") {
+	if !strings.Contains(string(e1), "{ field: E2, entity: data.entities.e2, cardinality: one_to_one }") {
 		t.Fatalf("entity e1 includes not written:\n%s", e1)
 	}
 	if !strings.Contains(string(e1), "queries:\n    - data.queries.q.get_a") {
@@ -240,7 +240,7 @@ func TestWriteAndCheck(t *testing.T) {
 	if !strings.Contains(string(e2), "includes: []") {
 		t.Fatalf("entity e2 empty includes not written:\n%s", e2)
 	}
-	if !strings.Contains(string(e2), "{ entity: data.entities.e1, cardinality: one_to_one }") {
+	if !strings.Contains(string(e2), "{ entity: data.entities.e1, field: E2, cardinality: one_to_one }") {
 		t.Fatalf("entity e2 included_by not written:\n%s", e2)
 	}
 	q, _ := os.ReadFile(filepath.Join(root, "contracts/data/queries/q.yaml"))

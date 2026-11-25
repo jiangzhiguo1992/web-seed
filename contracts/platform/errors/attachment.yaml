@@ -1,0 +1,12 @@
+id: platform.errors.attachment
+summary: "附件错误码"
+schema_version: 1
+stability: draft
+do_not:
+  - "附件错误与账号/认证错误分开"
+errors:
+  - { code: ATTACHMENT_NOT_FOUND, biz_code: 8001, status: 404, retryable: false, i18n: errors.attachment.not_found, message: "附件不存在" }
+  - { code: ATTACHMENT_OBJECT_KEY_TAKEN, biz_code: 8002, status: 409, retryable: false, i18n: errors.attachment.object_key_taken, message: "对象 key 已被占用" }
+  - { code: ATTACHMENT_OWNER_INVALID, biz_code: 8003, status: 422, retryable: false, i18n: errors.attachment.owner_invalid, message: "附件所有者不存在或不可用" }
+  - { code: ATTACHMENT_INVALID, biz_code: 8004, status: 422, retryable: false, i18n: errors.attachment.invalid, message: "附件字段不合法" }
+  - { code: ATTACHMENT_ILLEGAL_TRANSITION, biz_code: 8005, status: 409, retryable: false, i18n: errors.attachment.illegal_transition, message: "当前状态不允许该操作" }

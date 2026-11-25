@@ -9,19 +9,12 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/yourorg/web-seed/apps/api/internal/generated/model"
 )
 
-// Account 是 data.entities.account 的标量投影；关系字段按需加载，当前不投影。
-type Account struct {
-	ID        int64
-	Status    int32
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt *time.Time
-	Number    string
-	Nickname  string
-	UserID    *int64
-}
+// Account 是 data.entities.account 的生成标量投影；关系字段按需加载，当前不投影。
+type Account = model.Account
 
 // Error 携带 platform.errors.* 错误码。
 type Error struct {

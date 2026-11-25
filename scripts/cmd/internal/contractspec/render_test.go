@@ -190,8 +190,8 @@ func TestRenderQuery(t *testing.T) {
 		t.Fatalf("query ctx param not scaffolded: %#v", q["params"])
 	}
 	param, _ := params[1].(map[string]any)
-	if param["type"] != "_types.integer" || param["column"] != "data.tables.account.col.id" {
-		t.Fatalf("query id param must bind the integer primary key: %#v", param)
+	if param["type"] != "_types.id" || param["column"] != "data.tables.account.col.id" {
+		t.Fatalf("query id param must bind the 64-bit primary key: %#v", param)
 	}
 	ret, _ := returns[0].(map[string]any)
 	if ret["kind"] != "scalar" || ret["type"] != "_types.boolean" {

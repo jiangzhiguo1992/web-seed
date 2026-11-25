@@ -853,6 +853,11 @@ func (c *Checker) checkWhenLiteral(typ string, value any, rel, stepID, name stri
 	}
 	family, ok := paramFamily(shape.base)
 	if !ok {
+		if fam := c.valueType(shape.base); fam != "" {
+			family, ok = fam, true
+		}
+	}
+	if !ok {
 		return
 	}
 	switch family {

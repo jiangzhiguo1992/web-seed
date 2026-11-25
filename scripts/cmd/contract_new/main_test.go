@@ -256,7 +256,7 @@ services:
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer }
+      - { name: id, type: _types.id }
     returns:
       - { name: exists, type: _types.boolean, value: step.load.exists }
       - { name: err, type: error, value: "*" }

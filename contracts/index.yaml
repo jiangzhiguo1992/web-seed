@@ -73,6 +73,7 @@ entries:
       - "用裸哈希存 input_hash"
       - "更新或软删历史动作"
   - { id: data.tables.dictionary, path: data/tables/dictionary.yaml, summary: "字典表结构", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.tables.attachment, path: data/tables/attachment.yaml, summary: "附件表结构", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.account, path: data/entities/account.yaml, summary: "账号数据实体与关系", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: data.entities.token, path: data/entities/token.yaml, summary: "令牌数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.auth_pwd, path: data/entities/auth_pwd.yaml, summary: "密码认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
@@ -81,13 +82,16 @@ entries:
   - { id: data.entities.verification_body, path: data/entities/verification_body.yaml, summary: "验证体数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.verification_action, path: data/entities/verification_action.yaml, summary: "验证动作数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.dictionary, path: data/entities/dictionary.yaml, summary: "字典数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.entities.attachment, path: data/entities/attachment.yaml, summary: "附件数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.queries.account, path: data/queries/account.yaml, summary: "账号查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.token, path: data/queries/token.yaml, summary: "令牌查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.auth, path: data/queries/auth.yaml, summary: "认证查询集（密码/手机/邮箱）", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.verification, path: data/queries/verification.yaml, summary: "验证查询集（验证体与验证动作）", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.dictionary, path: data/queries/dictionary.yaml, summary: "字典查询集", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.queries.attachment, path: data/queries/attachment.yaml, summary: "附件查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.enums.account, path: data/enums/account.yaml, summary: "账号域跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated+tested, stability: draft }
   - { id: data.enums.dictionary, path: data/enums/dictionary.yaml, summary: "字典域枚举集合", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: data.enums.attachment, path: data/enums/attachment.yaml, summary: "附件域枚举集合", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
 
   # ---------- capabilities ----------
   - id: cap.protocols.http.account
@@ -102,11 +106,17 @@ entries:
       - "响应 schema 缺少 additionalProperties: false"
       - "忘记 service 绑定到 cap.services"
   - { id: cap.protocols.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/验证码）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: cap.protocols.http.dictionary, path: capabilities/protocols/http/dictionary.yaml, summary: "字典 HTTP 接口", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: cap.protocols.http.attachment, path: capabilities/protocols/http/attachment.yaml, summary: "附件 HTTP 接口（预签名上传与下载）", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号服务：查询、创建、更新、状态转换与软删编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证服务：登录、认证绑定与账号注销编排", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：JWT 签发、刷新与校验", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
-  - { id: cap.services.dictionary, path: capabilities/services/dictionary.yaml, summary: "字典读取服务", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.services.dictionary, path: capabilities/services/dictionary.yaml, summary: "字典读写服务", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.lifecycles.dictionary, path: capabilities/lifecycles/dictionary.yaml, summary: "字典生命周期", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: cap.lifecycles.attachment, path: capabilities/lifecycles/attachment.yaml, summary: "附件生命周期", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: cap.services.attachment, path: capabilities/services/attachment.yaml, summary: "附件读写服务：上传票据、完成、下载签名、读取与软删", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: cap.events.attachment, path: capabilities/events/attachment.yaml, summary: "附件异步任务：清理 stale uploading", consumers: [worker], enforcement: generated+tested, stability: draft }
   - { id: cap.events.token, path: capabilities/events/token.yaml, summary: "令牌异步任务：过期标记与清理", consumers: [worker], enforcement: generated+tested, stability: draft }
   - { id: cap.events.verification, path: capabilities/events/verification.yaml, summary: "验证体异步任务：过期与超限清理", consumers: [worker], enforcement: generated+tested, stability: draft }
 
@@ -126,6 +136,8 @@ entries:
   - { id: cap.lifecycles.token, path: capabilities/lifecycles/token.yaml, summary: "令牌生命周期", consumers: [api], enforcement: tested, stability: draft }
   - { id: cap.lifecycles.verification, path: capabilities/lifecycles/verification.yaml, summary: "验证体生命周期", consumers: [api], enforcement: tested, stability: draft }
   - { id: feature.rules.account, path: features/rules/account.yaml, summary: "账号业务规则集", consumers: [api], enforcement: tested, stability: draft }
+  - { id: feature.rules.dictionary, path: features/rules/dictionary.yaml, summary: "字典业务规则集", consumers: [api, web/admin], enforcement: tested, stability: draft }
+  - { id: feature.rules.attachment, path: features/rules/attachment.yaml, summary: "附件业务规则集", consumers: [api, web/admin], enforcement: tested, stability: draft }
   - { id: feature.rules.auth, path: features/rules/auth.yaml, summary: "认证业务规则集（验证体）", consumers: [api], enforcement: tested, stability: draft }
   - { id: cap.events.account, path: capabilities/events/account.yaml, summary: "账号领域事件", consumers: [api, worker], enforcement: generated+tested, stability: draft }
 
@@ -144,6 +156,11 @@ entries:
   - { id: feature.pages.account_detail, path: features/pages/account_detail.yaml, summary: "账号详情页", consumers: [web/admin], enforcement: tested, stability: draft }
   - { id: feature.pages.account_create, path: features/pages/account_create.yaml, summary: "新建账号页", consumers: [web/admin], enforcement: tested, stability: draft }
   - { id: feature.pages.account_security, path: features/pages/account_security.yaml, summary: "账号认证安全页", consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.pages.dictionary_list, path: features/pages/dictionary_list.yaml, summary: "字典列表页", consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.pages.dictionary_create, path: features/pages/dictionary_create.yaml, summary: "新建字典页", consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.pages.dictionary_detail, path: features/pages/dictionary_detail.yaml, summary: "字典详情页", consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.pages.attachment_list, path: features/pages/attachment_list.yaml, summary: "附件列表页", consumers: [web/admin], enforcement: tested, stability: draft }
+  - { id: feature.pages.attachment_detail, path: features/pages/attachment_detail.yaml, summary: "附件详情页", consumers: [web/admin], enforcement: tested, stability: draft }
   - { id: feature.pages.current_account, path: features/pages/current_account.yaml, summary: "当前账号页", consumers: [web/admin], enforcement: tested, stability: draft }
   - { id: scenario.http.account, path: scenarios/http/account.yaml, summary: "账号 HTTP 验收场景", consumers: [api, tools], enforcement: generated+tested, stability: draft }
   - { id: feature.pages.login, path: features/pages/login.yaml, summary: "登录页", consumers: [web/admin], enforcement: tested, stability: draft }
@@ -159,6 +176,8 @@ entries:
   - { id: platform.errors.verification, path: platform/errors/verification.yaml, summary: "验证码错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.errors.token, path: platform/errors/token.yaml, summary: "令牌错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.errors.data_access, path: platform/errors/data_access.yaml, summary: "数据访问基础设施错误基线", consumers: [api, tools], enforcement: generated+tested, stability: draft }
+  - { id: platform.errors.dictionary, path: platform/errors/dictionary.yaml, summary: "字典错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
+  - { id: platform.errors.attachment, path: platform/errors/attachment.yaml, summary: "附件错误码", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.http_conventions, path: platform/http_conventions.yaml, summary: "信封、分页、header、状态码与平台 HTTP 组件", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: platform.quality, path: platform/quality.yaml, summary: "测试策略与门槛", consumers: [tools], enforcement: tested, stability: draft }
   - { id: platform.config.env, path: platform/config/env.json, summary: "环境变量 schema", consumers: [api, web/admin, ops], enforcement: tested, stability: draft }
@@ -205,14 +224,15 @@ orphan_whitelist:
 # enforcement 的机器可检证据：generated 必须是 Makefile 目标，tested 必须是存在的测试文件。
 enforcement_gates:
   generated:
-    data.tables: [make gen-db]
+    data.tables: [make gen-db, make gen-model]
     data.storage: [make gen-db]
-    data.types: [make gen-db, make gen-openapi]
-    data.entities: [make gen-openapi]
-    data.enums: [make gen-openapi]
+    data.types: [make gen-db, make gen-model, make gen-openapi]
+    data.entities: [make gen-model, make gen-openapi]
+    data.enums: [make gen-model, make gen-openapi]
     cap.services: [make gen-openapi]
     cap.protocols.http: [make gen-openapi]
     cap.events: [make gen-openapi]
+    cap.lifecycles: [make gen-graph]
     scenario.http: [make gen-scenarios]
     project: [make gen-openapi]
     platform.errors: [make gen-errors]

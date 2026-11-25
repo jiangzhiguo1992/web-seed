@@ -40,6 +40,21 @@
       "suspended": "账号已被封禁",
       "illegal_transition": "当前状态不允许该操作",
       "already_deleted": "账号已删除"
+    },
+    "dictionary": {
+      "not_found": "字典不存在",
+      "code_taken": "字典编码已被使用",
+      "invalid": "字典字段不合法",
+      "parent_invalid": "父节点不存在或不可用",
+      "illegal_transition": "当前状态不允许该操作",
+      "has_children": "字典存在子节点，不能删除"
+    },
+    "attachment": {
+      "not_found": "附件不存在",
+      "object_key_taken": "对象 key 已被占用",
+      "owner_invalid": "附件所有者不存在或不可用",
+      "invalid": "附件字段不合法",
+      "illegal_transition": "当前状态不允许该操作"
     }
   }
 }

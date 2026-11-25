@@ -418,7 +418,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 			Name:        "Exists" + pascal(name),
 			Description: "TODO: 查询语义",
 			Tables:      []queryTableScaffold{{Table: tableID}},
-			Params:      []queryParamScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "_types.integer", Column: tableID + ".col.id"}},
+			Params:      []queryParamScaffold{{Name: "ctx", Type: "context.Context"}, {Name: "id", Type: "_types.id", Column: tableID + ".col.id"}},
 			Returns:     []queryReturnScaffold{{Name: "exists", Kind: "scalar", Type: "_types.boolean"}, {Name: "err", Kind: "error"}},
 			Errors:      []string{},
 			IndexRef:    []queryIndexRefScaffold{{Index: tableID + ".pk", Columns: []string{"id"}}},
@@ -937,7 +937,7 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 				Type: "_types.object",
 				Properties: []servicePropertyScaffold{{
 					Name:        "id",
-					Schema:      serviceSchemaScaffold{Type: "_types.integer"},
+					Schema:      serviceSchemaScaffold{Type: "_types.id"},
 					Required:    true,
 					Description: "TODO: 字段说明",
 				}},
@@ -1114,7 +1114,7 @@ func RenderEvents(s *Schema, name, module, summary string) ([]byte, error) {
 					Type: "_types.object",
 					Properties: []servicePropertyScaffold{{
 						Name:        "id",
-						Schema:      serviceSchemaScaffold{Type: "_types.integer"},
+						Schema:      serviceSchemaScaffold{Type: "_types.id"},
 						Required:    true,
 						Description: "TODO: id 说明",
 					}},

@@ -9,7 +9,7 @@ targets: [opencode, claude, cursor]
 > 适用：任何对 `contracts/` 的改动。
 > 不适用：只改文档、只改实现（后者本身违规，见文末）。
 >
-> 状态：`make contract-check` 覆盖全部契约类型；`make gen` 已接入 DDL / OpenAPI / 错误文档。
+> 状态：`make contract-check` 覆盖全部契约类型；`make gen` 已接入 DDL / OpenAPI / 错误文档 / Go/TS 模型。
 
 ---
 
@@ -123,6 +123,7 @@ make gen
 make gen-openapi   # capabilities/protocols/http/* + apps/* → generated/openapi/<app>.yaml
 make gen-db        # data/tables/* → PostgreSQL schema.sql + migrations
 make gen-graph     # 结构化依赖 → used_by；graph/lineage 按需生成
+make gen-model     # data/entities + data/enums → Go/TS 模型
 ```
 
 > 生成物入库。**禁止手改** `contracts/generated/`、`apps/api/internal/generated/`、`apps/api/migrations/`。

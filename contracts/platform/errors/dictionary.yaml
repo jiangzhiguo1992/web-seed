@@ -1,0 +1,13 @@
+id: platform.errors.dictionary
+summary: "字典错误码"
+schema_version: 1
+stability: draft
+do_not:
+  - "字典错误与账号/认证错误分开，不要把通用校验塞进 DICTIONARY_*"
+errors:
+  - { code: DICTIONARY_NOT_FOUND, biz_code: 7001, status: 404, retryable: false, i18n: errors.dictionary.not_found, message: "字典不存在" }
+  - { code: DICTIONARY_CODE_TAKEN, biz_code: 7002, status: 409, retryable: false, i18n: errors.dictionary.code_taken, message: "字典编码已被使用" }
+  - { code: DICTIONARY_INVALID, biz_code: 7003, status: 422, retryable: false, i18n: errors.dictionary.invalid, message: "字典字段不合法" }
+  - { code: DICTIONARY_PARENT_INVALID, biz_code: 7004, status: 422, retryable: false, i18n: errors.dictionary.parent_invalid, message: "父节点不存在或不可用" }
+  - { code: DICTIONARY_ILLEGAL_TRANSITION, biz_code: 7005, status: 409, retryable: false, i18n: errors.dictionary.illegal_transition, message: "当前状态不允许该操作" }
+  - { code: DICTIONARY_HAS_CHILDREN, biz_code: 7006, status: 409, retryable: false, i18n: errors.dictionary.has_children, message: "字典存在子节点，不能删除" }

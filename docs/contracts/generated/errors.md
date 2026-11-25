@@ -41,6 +41,17 @@
 | `AUTH_VERIFICATION_TARGET_INVALID` | 4004 | 422 | false | `errors.auth.verification_target_invalid` | 验证目标格式不合法 |
 | `AUTH_TOKEN_INVALID` | 5001 | 401 | false | `errors.auth.token_invalid` | 令牌无效 |
 | `AUTH_TOKEN_EXPIRED` | 5002 | 401 | true | `errors.auth.token_expired` | 令牌已过期 |
+| `DICTIONARY_NOT_FOUND` | 7001 | 404 | false | `errors.dictionary.not_found` | 字典不存在 |
+| `DICTIONARY_CODE_TAKEN` | 7002 | 409 | false | `errors.dictionary.code_taken` | 字典编码已被使用 |
+| `DICTIONARY_INVALID` | 7003 | 422 | false | `errors.dictionary.invalid` | 字典字段不合法 |
+| `DICTIONARY_PARENT_INVALID` | 7004 | 422 | false | `errors.dictionary.parent_invalid` | 父节点不存在或不可用 |
+| `DICTIONARY_ILLEGAL_TRANSITION` | 7005 | 409 | false | `errors.dictionary.illegal_transition` | 当前状态不允许该操作 |
+| `DICTIONARY_HAS_CHILDREN` | 7006 | 409 | false | `errors.dictionary.has_children` | 字典存在子节点，不能删除 |
+| `ATTACHMENT_NOT_FOUND` | 8001 | 404 | false | `errors.attachment.not_found` | 附件不存在 |
+| `ATTACHMENT_OBJECT_KEY_TAKEN` | 8002 | 409 | false | `errors.attachment.object_key_taken` | 对象 key 已被占用 |
+| `ATTACHMENT_OWNER_INVALID` | 8003 | 422 | false | `errors.attachment.owner_invalid` | 附件所有者不存在或不可用 |
+| `ATTACHMENT_INVALID` | 8004 | 422 | false | `errors.attachment.invalid` | 附件字段不合法 |
+| `ATTACHMENT_ILLEGAL_TRANSITION` | 8005 | 409 | false | `errors.attachment.illegal_transition` | 当前状态不允许该操作 |
 
 ## 数据访问基线
 

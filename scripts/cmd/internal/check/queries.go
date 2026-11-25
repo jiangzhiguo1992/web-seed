@@ -440,7 +440,7 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 			continue
 		}
 		if p.Type != "" && p.Column == "" {
-			if _, _, _, ok := paramLogicalType(p.Type); !ok {
+			if _, _, _, ok := c.paramLogicalType(p.Type); !ok {
 				c.rulef("query-params", "%s: type %q cannot map to a type family or data.enums.*", pw, p.Type)
 			}
 		}
@@ -472,7 +472,7 @@ func (c *Checker) paramDefaultErrors(typ string, value any, where string) []stri
 	if value == nil {
 		return nil
 	}
-	family, array, enum, ok := paramLogicalType(typ)
+	family, array, enum, ok := c.paramLogicalType(typ)
 	if !ok {
 		return nil
 	}
@@ -544,20 +544,52 @@ func (c *Checker) checkQueryParamColumns(q *queryInfo) {
 		if normalizeSensitivity(meta.sensitivity) == sensitivitySecret && q.OwnerModule != c.tableOwners[t] {
 			c.rulef("query-sensitive-columns", "%s: param binds secret column %s outside module %s", where, col, c.tableOwners[t])
 		}
-		family, _, _, ok := paramLogicalType(p.Type)
+		family, _, _, ok := c.paramLogicalType(p.Type)
 		if !ok {
 			c.rulef("query-param-column", "%s: type %q cannot bind a column", where, p.Type)
 			continue
 		}
 		if !familyCompatible(family, c.resolvedColumnType(meta.typ)) {
 			c.rulef("query-param-column", "%s: type %s is not compatible with column %s (%s)", where, p.Type, p.Column, c.resolvedColumnType(meta.typ))
+			continue
+		}
+		if c.resolvedColumnType(meta.typ) == "integer" {
+			if paramBits, ok := c.paramBits(p.Type); ok {
+				if colBits, ok := c.columnBits(t, col); ok && paramBits != colBits {
+					c.rulef("query-param-column", "%s: type %s integer bits %d must equal column %s bits %d", where, p.Type, paramBits, p.Column, colBits)
+				}
+			}
 		}
 	}
 }
 
+// paramBits 返回参数类型的 integer 位宽；非 integer 类型返回 false。
+func (c *Checker) paramBits(typ string) (int, bool) {
+	base := normalizeContractType(typ)
+	if strings.HasPrefix(base, "List<") && strings.HasSuffix(base, ">") {
+		base = normalizeContractType(strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(base, "List<"), ">")))
+	}
+	if strings.HasPrefix(base, "data.enums.") {
+		return 32, true
+	}
+	if custom, ok := c.valueTypes.CustomTypes[base]; ok {
+		if custom.Family != "integer" {
+			return 0, false
+		}
+		if bits, ok := toInt(custom.Params["bits"]); ok {
+			return bits, true
+		}
+		return 32, true
+	}
+	if base == "integer" {
+		return 32, true
+	}
+	return 0, false
+}
+
 // paramLogicalType 把参数类型映射到列类型族；数组类型返回元素类型族。
 // data.enums.* 持久化为 integer，因此按 integer 列绑定。
-func paramLogicalType(typ string) (family string, array, enum, ok bool) {
+func (c *Checker) paramLogicalType(typ string) (family string, array, enum, ok bool) {
 	base := normalizeContractType(typ)
 	if strings.HasPrefix(base, "List<") && strings.HasSuffix(base, ">") {
 		array = true
@@ -565,6 +597,9 @@ func paramLogicalType(typ string) (family string, array, enum, ok bool) {
 	}
 	if strings.HasPrefix(base, "data.enums.") {
 		return "integer", array, true, true
+	}
+	if fam := c.valueType(base); fam != "" {
+		return fam, array, false, true
 	}
 	family, ok = paramFamily(base)
 	return family, array, false, ok
@@ -698,6 +733,9 @@ func (c *Checker) scalarReturnType(typ string) bool {
 	base := normalizeContractType(typ)
 	if strings.HasPrefix(base, "data.enums.") {
 		return true // 枚举存在性由 checkEnumRefs 全仓校验
+	}
+	if c.valueType(base) != "" {
+		return true
 	}
 	_, ok := paramFamily(base)
 	return ok

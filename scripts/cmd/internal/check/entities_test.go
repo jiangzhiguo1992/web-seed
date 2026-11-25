@@ -345,7 +345,7 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 	c := newChecker(true)
 	e := c.entities["data.entities.account"]
 	e.Fields = append(e.Fields, relationField("Notes", "List<data.entities.notes>", "data.tables.account", "id", "data.tables.notes", "account_id", "eager"))
-	c.checkEntityRelations(e, map[string]map[string]string{})
+	c.checkEntityRelations(e, map[string]map[string]entityRelationEntry{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid eager relation reported: %v", c.errs)
 	}
@@ -353,7 +353,7 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 	c = newChecker(true)
 	e = c.entities["data.entities.account"]
 	e.Fields = append(e.Fields, relationField("Notes", "data.entities.notes", "data.tables.account", "id", "data.tables.notes", "account_id", "eager"))
-	c.checkEntityRelations(e, map[string]map[string]string{})
+	c.checkEntityRelations(e, map[string]map[string]entityRelationEntry{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-arity]") {
 		t.Fatalf("one_to_many single type not reported: %v", c.errs)
 	}
@@ -361,7 +361,7 @@ func TestEntityRelationDirectionAndEager(t *testing.T) {
 	c = newChecker(true)
 	e = c.entities["data.entities.notes"]
 	e.Fields = append(e.Fields, relationField("Account", "data.entities.account", "data.tables.notes", "account_id", "data.tables.account", "id", "lazy"))
-	c.checkEntityRelations(e, map[string]map[string]string{})
+	c.checkEntityRelations(e, map[string]map[string]entityRelationEntry{})
 	if len(c.errs) != 0 {
 		t.Fatalf("valid many_to_one reported: %v", c.errs)
 	}
@@ -394,7 +394,7 @@ func TestEntityRelationJoinColumnTypeMismatch(t *testing.T) {
 	}
 	e := c.entities["data.entities.account"]
 	e.Fields = append(e.Fields, relationField("Notes", "data.entities.notes", "data.tables.account", "id", "data.tables.notes", "account_id", "lazy"))
-	c.checkEntityRelations(e, map[string]map[string]string{})
+	c.checkEntityRelations(e, map[string]map[string]entityRelationEntry{})
 	if !strings.Contains(entityErrs(c), "[entity-relation-via]") || !strings.Contains(entityErrs(c), "does not match") {
 		t.Fatalf("join column type mismatch not reported: %v", c.errs)
 	}
@@ -681,7 +681,7 @@ func TestEntityIncludes(t *testing.T) {
 		"data.tables.x": {"id": {primaryKey: true}},
 		"data.tables.y": {"x_id": {}},
 	}}
-	model := map[string]any{"includes": []any{map[string]any{"entity": "data.entities.y", "cardinality": "one_to_many"}}}
+	model := map[string]any{"includes": []any{map[string]any{"field": "Ys", "entity": "data.entities.y", "cardinality": "one_to_many"}}}
 	c.checkEntityRelationIndex(e, model, "includes", c.entityIncludes(e))
 	if len(c.errs) != 0 {
 		t.Fatalf("valid model.includes reported: %v", c.errs)
@@ -690,7 +690,7 @@ func TestEntityIncludes(t *testing.T) {
 	model = map[string]any{"includes": []any{map[string]any{"entity": "data.entities.z", "cardinality": "one_to_many"}}}
 	c.errs = nil
 	c.checkEntityRelationIndex(e, model, "includes", c.entityIncludes(e))
-	if got := entityErrs(c); !strings.Contains(got, "model.includes must be [data.entities.y(one_to_many)]") || !strings.Contains(got, "[entity-included-by]") {
+	if got := entityErrs(c); !strings.Contains(got, "model.includes must be [data.entities.y.Ys(one_to_many)]") || !strings.Contains(got, "[entity-included-by]") {
 		t.Fatalf("model.includes mismatch not reported: %v", c.errs)
 	}
 }
@@ -1184,12 +1184,47 @@ func TestRenderedQueryParamBindsIDColumn(t *testing.T) {
 	}
 	qm, _ := asMap(queries[0])
 	q := parseQuery(qm, "q.yaml", "data.queries.note", "notes")
-	c := &Checker{tableColumns: map[string]map[string]columnMeta{
-		"data.tables.note": {"id": {typ: "integer", primaryKey: true}},
-	}}
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.note": {"id": {typ: "integer", primaryKey: true}},
+		},
+		valueTypes: ValueTypes{
+			TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
+			CustomTypes: map[string]contractspec.CustomValueType{
+				"id": {Family: "integer", Params: map[string]any{"bits": 64}},
+			},
+		},
+	}
 	c.checkQueryParamColumns(q)
 	if len(c.errs) != 0 {
 		t.Fatalf("rendered query param must bind the integer id column: %v", c.errs)
+	}
+}
+
+func TestQueryParamColumnIntegerBits(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {"id": {typ: "integer", primaryKey: true}},
+		},
+		valueTypes: ValueTypes{
+			TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
+			CustomTypes: map[string]contractspec.CustomValueType{
+				"id": {Family: "integer", Params: map[string]any{"bits": 64}},
+			},
+		},
+	}
+	q := &queryInfo{ID: "q", File: "q.yaml", Targets: []string{"data.tables.x"},
+		Params: []queryParam{{Name: "id", Type: "_types.integer", Column: "data.tables.x.col.id"}}}
+	c.checkQueryParamColumns(q)
+	if !strings.Contains(entityErrs(c), "integer bits 32 must equal column data.tables.x.col.id bits 64") {
+		t.Fatalf("integer width mismatch not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[0].Type = "_types.id"
+	c.checkQueryParamColumns(q)
+	if len(c.errs) != 0 {
+		t.Fatalf("matching integer width reported: %v", c.errs)
 	}
 }
 

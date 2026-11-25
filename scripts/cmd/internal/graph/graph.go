@@ -24,8 +24,13 @@ type TableUsedBy struct {
 }
 
 type EntityRelation struct {
+	Field       string
 	Entity      string
 	Cardinality string
+}
+
+func relationKey(entity, field string) string {
+	return entity + "\x00" + field
 }
 
 type EntityUsedBy struct {
@@ -54,8 +59,8 @@ type tableSet struct {
 
 type entitySet struct {
 	queries    map[string]bool
-	includes   map[string]string
-	includedBy map[string]string
+	includes   map[string]EntityRelation
+	includedBy map[string]EntityRelation
 }
 
 // scanTarget 是 _meta targets 的扫描路径与 ID 模板。
@@ -212,7 +217,7 @@ func Compute(root string) (*Snapshot, error) {
 			continue
 		}
 		entityDocs[id] = doc
-		entities[id] = &entitySet{queries: map[string]bool{}, includes: map[string]string{}, includedBy: map[string]string{}}
+		entities[id] = &entitySet{queries: map[string]bool{}, includes: map[string]EntityRelation{}, includedBy: map[string]EntityRelation{}}
 		entityFiles[id] = rel(root, f)
 	}
 	// model.included_by：把关系字段的来源实体登记到目标实体。
@@ -237,8 +242,10 @@ func Compute(root string) (*Snapshot, error) {
 			if card == "" {
 				continue
 			}
-			target.includedBy[id] = inverseCardinality(card)
-			entities[id].includes[targetID] = card
+			fieldName, _ := field["name"].(string)
+			key := relationKey(targetID, fieldName)
+			target.includedBy[relationKey(id, fieldName)] = EntityRelation{Field: fieldName, Entity: id, Cardinality: inverseCardinality(card)}
+			entities[id].includes[key] = EntityRelation{Field: fieldName, Entity: targetID, Cardinality: card}
 		}
 	}
 	queryIDTemplate := contractspec.Targets{ID: queryTarget.id}
@@ -402,14 +409,14 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	}
 	for _, id := range sortedFileKeys(s.EntityFiles) {
 		file := s.EntityFiles[id]
-		ok, err := syncNestedRelationListFile(filepath.Join(root, file), "model", "tables", "includes", s.Entities[id].Includes)
+		ok, err := syncNestedRelationListFile(filepath.Join(root, file), "model", "tables", "includes", s.Entities[id].Includes, true)
 		if err != nil {
 			return changed, err
 		}
 		if ok {
 			changed = append(changed, file)
 		}
-		ok, err = syncNestedRelationListFile(filepath.Join(root, file), "model", "includes", "included_by", s.Entities[id].IncludedBy)
+		ok, err = syncNestedRelationListFile(filepath.Join(root, file), "model", "includes", "included_by", s.Entities[id].IncludedBy, false)
 		if err != nil {
 			return changed, err
 		}
@@ -575,8 +582,9 @@ func syncNestedListFile(path, parentKey, afterKey, childKey string, values []str
 	return true, writeAtomic(path, out)
 }
 
-// syncNestedRelationListFile 写入 {entity, cardinality} 对象列表；用 flow mapping 保持一行一项。
-func syncNestedRelationListFile(path, parentKey, afterKey, childKey string, values []EntityRelation) (bool, error) {
+// syncNestedRelationListFile 写入关系对象列表；用 flow mapping 保持一行一项。
+// fieldFirst=true 渲染 { field, entity, cardinality }（includes）；false 渲染 { entity, field, cardinality }（included_by）。
+func syncNestedRelationListFile(path, parentKey, afterKey, childKey string, values []EntityRelation, fieldFirst bool) (bool, error) {
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return false, err
@@ -590,7 +598,11 @@ func syncNestedRelationListFile(path, parentKey, afterKey, childKey string, valu
 	}
 	items := make([]string, len(values))
 	for i, v := range values {
-		items[i] = fmt.Sprintf("{ entity: %s, cardinality: %s }", v.Entity, v.Cardinality)
+		if fieldFirst {
+			items[i] = fmt.Sprintf("{ field: %s, entity: %s, cardinality: %s }", v.Field, v.Entity, v.Cardinality)
+		} else {
+			items[i] = fmt.Sprintf("{ entity: %s, field: %s, cardinality: %s }", v.Entity, v.Field, v.Cardinality)
+		}
 	}
 	out, err := applyNestedList(src, parentKey, afterKey, childKey, items)
 	if err != nil {
@@ -612,6 +624,7 @@ func nestedRelationListValue(doc map[string]any, parentKey, childKey string) ([]
 	for _, item := range asList(raw) {
 		m, _ := asMap(item)
 		out = append(out, EntityRelation{
+			Field:       stringValue(m["field"]),
 			Entity:      stringValue(m["entity"]),
 			Cardinality: stringValue(m["cardinality"]),
 		})
@@ -630,10 +643,10 @@ func sameRelations(a, b []EntityRelation) bool {
 	}
 	index := map[string]string{}
 	for _, r := range a {
-		index[r.Entity] = r.Cardinality
+		index[relationKey(r.Entity, r.Field)] = r.Cardinality
 	}
 	for _, r := range b {
-		if index[r.Entity] != r.Cardinality {
+		if index[relationKey(r.Entity, r.Field)] != r.Cardinality {
 			return false
 		}
 	}
@@ -643,7 +656,7 @@ func sameRelations(a, b []EntityRelation) bool {
 func formatRelations(values []EntityRelation) string {
 	out := make([]string, len(values))
 	for i, r := range values {
-		out[i] = r.Entity + "(" + r.Cardinality + ")"
+		out[i] = r.Entity + "." + r.Field + "(" + r.Cardinality + ")"
 	}
 	return "[" + strings.Join(out, ", ") + "]"
 }
@@ -1108,12 +1121,17 @@ func sortedKeys(set map[string]bool) []string {
 	return out
 }
 
-func sortedRelations(set map[string]string) []EntityRelation {
+func sortedRelations(set map[string]EntityRelation) []EntityRelation {
 	out := make([]EntityRelation, 0, len(set))
-	for entity, card := range set {
-		out = append(out, EntityRelation{Entity: entity, Cardinality: card})
+	for _, rel := range set {
+		out = append(out, rel)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Entity < out[j].Entity })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Entity != out[j].Entity {
+			return out[i].Entity < out[j].Entity
+		}
+		return out[i].Field < out[j].Field
+	})
 	return out
 }
 

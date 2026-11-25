@@ -40,6 +40,21 @@
       "phone_invalid": "Invalid phone number",
       "email_invalid": "Invalid email address",
       "weak_password": "Password is too weak"
+    },
+    "dictionary": {
+      "not_found": "Dictionary not found",
+      "code_taken": "Dictionary code already in use",
+      "invalid": "Invalid dictionary field",
+      "parent_invalid": "Parent dictionary not found or unavailable",
+      "illegal_transition": "Operation not allowed in current state",
+      "has_children": "Dictionary has children and cannot be deleted"
+    },
+    "attachment": {
+      "not_found": "Attachment not found",
+      "object_key_taken": "Object key already in use",
+      "owner_invalid": "Attachment owner not found or unavailable",
+      "invalid": "Invalid attachment field",
+      "illegal_transition": "Operation not allowed in current state"
     }
   }
 }

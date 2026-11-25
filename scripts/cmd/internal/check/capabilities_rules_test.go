@@ -1299,6 +1299,45 @@ func TestCheckWhenLiteralInteger(t *testing.T) {
 	}
 }
 
+func TestCheckWhenLiteralCustomID(t *testing.T) {
+	c := &Checker{valueTypes: ValueTypes{
+		TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
+		CustomTypes: map[string]contractspec.CustomValueType{
+			"id": {Family: "integer", Params: map[string]any{"bits": 64}},
+		},
+	}}
+	c.checkWhenLiteral("id", float64(1), "rel", "step", "field")
+	if len(c.errs) != 0 {
+		t.Fatalf("integral id literal reported: %v", c.errs)
+	}
+	c.errs = nil
+	c.checkWhenLiteral("id", "one", "rel", "step", "field")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-when-types]") {
+		t.Fatalf("string id literal not reported: %v", c.errs)
+	}
+}
+
+func TestServiceTypesCompatibleIntegerBits(t *testing.T) {
+	c := &Checker{valueTypes: ValueTypes{
+		TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
+		CustomTypes: map[string]contractspec.CustomValueType{
+			"id": {Family: "integer", Params: map[string]any{"bits": 64}},
+		},
+	}}
+	if c.serviceTypesCompatible("_types.integer", "_types.id") {
+		t.Fatal("32-bit integer accepted as 64-bit id")
+	}
+	if c.serviceTypesCompatible("_types.id", "_types.integer") {
+		t.Fatal("64-bit id accepted as 32-bit integer")
+	}
+	if !c.serviceTypesCompatible("_types.id", "_types.id") {
+		t.Fatal("matching id types rejected")
+	}
+	if !c.serviceTypesCompatible("_types.integer", "_types.integer") {
+		t.Fatal("matching integer types rejected")
+	}
+}
+
 func TestLifecycleRequiresCycle(t *testing.T) {
 	c := &Checker{}
 	c.checkLifecycleRequiresCycles(map[string][]string{

@@ -53,7 +53,7 @@
 | cap.services | service-step-shape | service-step-shape | 0 | 1 |
 | cap.services | service-when-shape | service-when-shape | 3 | 0 |
 | cap.services | service-when-refs | service-when-refs | 3 | 0 |
-| cap.services | service-when-types | service-when-types | 3 | 1 |
+| cap.services | service-when-types | service-when-types | 4 | 1 |
 | cap.services | service-goto | service-goto | 3 | 0 |
 | cap.services | service-cycle | service-cycle | 3 | 1 |
 | cap.services | service-input-format | service-input-format | 2 | 0 |

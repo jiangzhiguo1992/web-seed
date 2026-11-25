@@ -4,7 +4,7 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
-        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-scenarios gen-scenarios-check gen-check contract-new contract-check contract-graph contract-impact contract-compat contract-compat-baseline db-verify \
+        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-model gen-model-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-scenarios gen-scenarios-check gen-check contract-new contract-check contract-graph contract-impact contract-compat contract-compat-baseline db-verify \
         gen-rule-ids check-rule-ids gen-check-core test-rules audit-types dev api-dev web-dev compose-up compose-down doctor derive check-docs check-index
 
 help: ## 显示可用目标
@@ -49,6 +49,7 @@ typecheck: ## 前端类型检查
 gen: contract-check ## 重新生成契约产物
 	@echo "gen: 生成契约产物"
 	$(MAKE) gen-graph
+	$(MAKE) gen-model
 	$(MAKE) gen-errors
 	$(MAKE) gen-db
 	$(MAKE) gen-openapi
@@ -66,6 +67,7 @@ gen-check: ## 校验全部生成物最新
 
 gen-check-core: ## 校验除规则测试映射外的生成物
 	$(MAKE) gen-graph-check
+	$(MAKE) gen-model-check
 	$(MAKE) gen-errors-check
 	$(MAKE) gen-db-check
 	$(MAKE) gen-openapi-check
@@ -79,6 +81,12 @@ gen-db-check: ## 校验 PostgreSQL schema 与 migrations 是否为最新
 
 gen-graph: ## 按引用计算并写回 table/entity 的 used_by
 	cd scripts/cmd && go run ./gen_graph -root "$(CURDIR)"
+
+gen-model: ## data/entities + data/enums → Go/TS 模型
+	cd scripts/cmd && go run ./gen_model -root "$(CURDIR)"
+
+gen-model-check: ## 校验 Go/TS 模型是否为最新
+	cd scripts/cmd && go run ./gen_model -root "$(CURDIR)" -check
 
 gen-graph-check: ## 校验 used_by 是否最新（CI）
 	cd scripts/cmd && go run ./gen_graph -root "$(CURDIR)" -check

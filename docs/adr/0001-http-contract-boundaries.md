@@ -1,7 +1,7 @@
 # ADR 0001：HTTP 契约的边界与验收模型
 
 - 状态：已采纳（mount、错误模型、audience、consumer、多 app、模板封闭化、错误闭包、覆盖率报告已实现；acceptance runner 待实现）
-- 修订：文末「2026-11-23 决策修订」与「2026-11-23 JWT 认证决策」取代本文关于版本归属、`shared.yaml`、`_types.any`、`request.idempotency` 以及旧认证方案的结论。
+- 修订：文末「2026-11-23 决策修订」「2026-11-23 JWT 认证决策」「2026-11-25 `_types.id` 决策」分别取代本文关于版本归属、`shared.yaml`、`_types.any`、`request.idempotency`、旧认证方案以及 `_types.positive_integer` 的结论。
 - 日期：2026-11-23
 - 关联：`contracts/capabilities/protocols/http/*.yaml`、`contracts/platform/http_conventions.yaml`、`contracts/_meta/cap.protocols.http.yaml`、`contracts/_meta/scenario.http.yaml`
 
@@ -284,3 +284,13 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 6. **错误字段保持 `errors: list<string>`**：`errors` 是“该状态允许出现的错误 ID 集合”，不是响应体；统一信封由 `platform/http_conventions.components.schemas.ApiErrorResponse` 定义一次。源契约只引用 `platform.errors.*`，生成 OpenAPI 时投影为 `x-error-codes: [{code, biz_code, msg}]`，`msg` 仍由 `platform.errors` 单一源维护。把 `errors` 改成 `list<object>` 会复制 code/msg 并与 `platform.errors` 产生双源漂移，因此不采用。
 7. **operation 字段顺序**：固定为 `id` / `name` / `summary` / `service` / `request` / `response` / `used_by`；`used_by` 放最后，避免在 operation 主体中间打断请求/响应阅读。
 8. **认证方案名统一为 `Bearer`**：源契约 `auth: Bearer`，平台 `components.securitySchemes.Bearer` 同名；生成 OpenAPI 的 `security` 直接使用该名字，不再维护 `BearerAuth` 的额外映射。
+
+## 2026-11-25 `_types.id` 决策
+
+第 8 条的 `_types.positive_integer` 已删除，账号 ID 不再区分 HTTP 与 service/query。统一规则：
+
+1. **单一 ID 类型**：实体 ID 与外键 ID 全部用 `_types.id`（integer，bits 64，0 可作为无值哨兵）；分页、计数、状态码等非 ID 整数继续用 `_types.integer`（bits 32）。
+2. **全链路覆盖**：表列、entity 字段（由来源列推断）、query/service/event 的 ID 参数和返回、HTTP path ID 参数、`contract-new` 骨架全部使用 `_types.id`。
+3. **硬校验**：`reference-target` 比较 integer 列 bits；`query-param-column` 比较参数与列 bits；`service-input-type` 比较赋值两端的 integer bits。32 位类型不能绑定或赋给 64 位 ID。
+4. **HTTP 取舍**：HTTP path ID 使用 `_types.id` 后不再生成 `minimum: 1`；`0` 视为无效 ID，由查询返回未找到，而不是由 OpenAPI 层拒绝。
+5. **不引入 `id_positive`**：HTTP path 与 service/query 共用 `_types.id`，`0` 只作为 service 内部“无值”哨兵（如 auth 的 `binding_id`）。若未来需要路径层拒绝，必须单独设计请求约束类型，不得把哨兵语义塞回领域 ID。当前决定接受 OpenAPI 缺少 `minimum`，以保持单一 ID 类型。

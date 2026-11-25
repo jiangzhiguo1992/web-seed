@@ -10,7 +10,7 @@ CREATE TABLE "account" (
   "deleted_at" TIMESTAMPTZ(6),
   "number" VARCHAR(64) NOT NULL,
   "nickname" VARCHAR(100) NOT NULL,
-  "user_id" INTEGER,
+  "user_id" BIGINT,
   CONSTRAINT "ck_account_deleted_consistent" CHECK ((status = 3) = (deleted_at IS NOT NULL)),
   PRIMARY KEY ("id")
 );
@@ -25,6 +25,46 @@ COMMENT ON COLUMN "account"."nickname" IS '昵称';
 COMMENT ON COLUMN "account"."user_id" IS '关联用户 ID；不做数据库外键';
 CREATE UNIQUE INDEX "uq_account_number" ON "account" ("number");
 CREATE INDEX "idx_account_created_at_id" ON "account" ("deleted_at", "created_at", "id");
+
+CREATE TABLE "attachment" (
+  "id" BIGINT NOT NULL,
+  "status" INTEGER NOT NULL DEFAULT 0,
+  "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
+  "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
+  "deleted_at" TIMESTAMPTZ(6),
+  "owner_table_name" VARCHAR(64) NOT NULL,
+  "owner_id" BIGINT NOT NULL,
+  "purpose" VARCHAR(32) NOT NULL,
+  "sort" INTEGER NOT NULL DEFAULT 0,
+  "object_key" VARCHAR(512) NOT NULL,
+  "original_name" VARCHAR(255) NOT NULL,
+  "content_type" VARCHAR(127) NOT NULL,
+  "size_bytes" BIGINT NOT NULL,
+  "sha256" VARCHAR(64),
+  "visibility" INTEGER NOT NULL DEFAULT 0,
+  "replaces_id" BIGINT,
+  PRIMARY KEY ("id")
+);
+COMMENT ON TABLE "attachment" IS '附件表';
+COMMENT ON COLUMN "attachment"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "attachment"."status" IS '业务状态整数码；枚举映射在 entity 层';
+COMMENT ON COLUMN "attachment"."created_at" IS '创建时间；数据库默认 now()';
+COMMENT ON COLUMN "attachment"."updated_at" IS '更新时间；应用层写入';
+COMMENT ON COLUMN "attachment"."deleted_at" IS '软删时间；应用层写入；为空表示未删除';
+COMMENT ON COLUMN "attachment"."owner_table_name" IS '所有者物理表名；多态引用，不建外键';
+COMMENT ON COLUMN "attachment"."owner_id" IS '所有者行 ID；与 owner_table_name 一起由服务层校验';
+COMMENT ON COLUMN "attachment"."purpose" IS '用途：icon/avatar/attachment 等；区分同一 owner 的多种附件';
+COMMENT ON COLUMN "attachment"."sort" IS '同一 owner+purpose 内的展示顺序';
+COMMENT ON COLUMN "attachment"."object_key" IS '对象存储 key；不存 URL；全局唯一';
+COMMENT ON COLUMN "attachment"."original_name" IS '原始文件名；仅展示/下载，不作为 key';
+COMMENT ON COLUMN "attachment"."content_type" IS 'MIME 类型；服务端检测后写入';
+COMMENT ON COLUMN "attachment"."size_bytes" IS '对象大小（字节）';
+COMMENT ON COLUMN "attachment"."sha256" IS 'SHA-256 十六进制；完整性/去重校验，不唯一';
+COMMENT ON COLUMN "attachment"."visibility" IS '访问级别整数码；映射 data.enums.attachment_visibility（0=private,1=public）';
+COMMENT ON COLUMN "attachment"."replaces_id" IS '被替换的旧附件 ID；用于更替链；旧行仍软删保留';
+CREATE UNIQUE INDEX "uq_attachment_object_key" ON "attachment" ("object_key");
+CREATE INDEX "idx_attachment_owner" ON "attachment" ("deleted_at", "owner_table_name", "owner_id", "purpose", "sort", "id");
+CREATE INDEX "idx_attachment_stale_upload" ON "attachment" ("status", "created_at");
 
 CREATE TABLE "auth_email" (
   "id" BIGINT NOT NULL,
@@ -125,6 +165,8 @@ CREATE TABLE "dictionary" (
   "name" VARCHAR(100) NOT NULL,
   "color" VARCHAR(7),
   "sort" INTEGER NOT NULL DEFAULT 0,
+  "remark" VARCHAR(500),
+  "extra" JSONB,
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "dictionary" IS '字典表';
@@ -138,6 +180,8 @@ COMMENT ON COLUMN "dictionary"."code" IS '字典编码；全局唯一且创建�
 COMMENT ON COLUMN "dictionary"."name" IS '展示名；允许重复';
 COMMENT ON COLUMN "dictionary"."color" IS '展示颜色；#RRGGBB，为空表示使用默认样式';
 COMMENT ON COLUMN "dictionary"."sort" IS '同一父节点下的展示顺序；从 0 开始';
+COMMENT ON COLUMN "dictionary"."remark" IS '备注；仅用于说明，不参与业务判断';
+COMMENT ON COLUMN "dictionary"."extra" IS '扩展元数据；只放 UI/非关键信息，禁止承载业务状态';
 CREATE UNIQUE INDEX "uq_dictionary_code" ON "dictionary" ("code");
 CREATE INDEX "idx_dictionary_parent_sort" ON "dictionary" ("deleted_at", "parent_id", "sort", "id");
 
@@ -148,7 +192,7 @@ CREATE TABLE "token" (
   "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
   "deleted_at" TIMESTAMPTZ(6),
   "account_id" BIGINT NOT NULL,
-  "user_id" INTEGER,
+  "user_id" BIGINT,
   "device_id" VARCHAR(128),
   "access_token_hash" VARCHAR(128) NOT NULL,
   "refresh_token_hash" VARCHAR(128) NOT NULL,
@@ -272,4 +316,5 @@ DROP TABLE IF EXISTS "dictionary";
 DROP TABLE IF EXISTS "auth_pwd";
 DROP TABLE IF EXISTS "auth_phone";
 DROP TABLE IF EXISTS "auth_email";
+DROP TABLE IF EXISTS "attachment";
 DROP TABLE IF EXISTS "account";

@@ -144,7 +144,7 @@ func TestEntityRelationTargetRule(t *testing.T) {
 		ID: "data.entities.a", Rel: "a.yaml", Tables: []string{"data.tables.a"},
 		Fields: []entityFieldInfo{{Name: "B", IsRelation: true, Type: "data.entities.missing", TargetID: "data.entities.missing"}},
 	}
-	c.checkEntityRelations(e, map[string]map[string]string{})
+	c.checkEntityRelations(e, map[string]map[string]entityRelationEntry{})
 	mustContainRule(t, c.errs, "entity-relation-target")
 }
 
@@ -166,7 +166,7 @@ func TestEntityRelationCardinalityRule(t *testing.T) {
 			JoinToTable: "data.tables.b", JoinToColumn: "id",
 		}},
 	}
-	c.checkEntityRelations(e, map[string]map[string]string{})
+	c.checkEntityRelations(e, map[string]map[string]entityRelationEntry{})
 	mustContainRule(t, c.errs, "entity-relation-cardinality")
 }
 
@@ -573,7 +573,7 @@ model:
   extends: [data.entities.wrong]
   tables: [data.tables.` + name + `]
   includes: []
-  included_by: [ { entity: data.entities.x, cardinality: one_to_one } ]
+  included_by: [ { entity: data.entities.x, field: Missing, cardinality: one_to_one } ]
   queries: []
 fields: []
 `

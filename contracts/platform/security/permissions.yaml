@@ -13,6 +13,16 @@ naming:
   actions: [read, write, delete, manage]
 
 permissions:
+  # ---------- 字典 ----------
+  - { code: dictionary_read, resource: dictionary, action: "read", description: "查看字典" }
+  - { code: dictionary_write, resource: dictionary, action: "write", description: "创建与编辑字典" }
+  - { code: dictionary_delete, resource: dictionary, action: "delete", description: "删除字典" }
+
+  # ---------- 附件 ----------
+  - { code: attachment_read, resource: attachment, action: "read", description: "查看附件" }
+  - { code: attachment_write, resource: attachment, action: "write", description: "上传与替换附件" }
+  - { code: attachment_delete, resource: attachment, action: "delete", description: "删除附件" }
+
   # ---------- 账号 ----------
   - { code: account_read, resource: account, action: "read", description: "查看账号" }
   - { code: account_write, resource: account, action: "write", description: "创建与编辑账号" }
