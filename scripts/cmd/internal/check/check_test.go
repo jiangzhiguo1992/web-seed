@@ -62,8 +62,15 @@ func TestIsColumnType(t *testing.T) {
 
 func testValueTypes() ValueTypes {
 	return ValueTypes{
-		TypeFamilies: map[string]ValueTypeFamily{"string": {}, "integer": {}, "boolean": {}, "any": {}, "float": {}, "decimal": {}},
-		Structures:   map[string]contractspec.Structure{"object": {}, "list": {}, "set": {}, "array": {}, "map": {}},
+		TypeFamilies: map[string]ValueTypeFamily{
+			"string":  {Types: map[string]contractspec.ConcreteType{"string": {}}},
+			"integer": {Types: map[string]contractspec.ConcreteType{"8": {}, "16": {}, "32": {}, "64": {}}},
+			"boolean": {Types: map[string]contractspec.ConcreteType{"boolean": {}}},
+			"any":     {Types: map[string]contractspec.ConcreteType{"any": {}}},
+			"float":   {Types: map[string]contractspec.ConcreteType{"32": {}, "64": {}}},
+			"decimal": {Types: map[string]contractspec.ConcreteType{"decimal": {}}},
+		},
+		Structures: map[string]contractspec.Structure{"object": {}, "list": {}, "set": {}, "array": {}, "map": {}},
 	}
 }
 

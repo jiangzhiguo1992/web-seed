@@ -156,7 +156,7 @@ services:
         output:
           - { name: account_id, type: _types.basics.id, description: "命中的账号 ID" }
           - { name: auth_pwd_id, type: _types.basics.id, description: "密码绑定 ID；手机/邮箱认证时为 null", nullable: true }
-          - { name: failed_login_count, type: _types.basics.integer, description: "密码绑定当前的连续失败次数；非密码认证时为 0" }
+          - { name: failed_login_count, type: _types.basics.integer.32, description: "密码绑定当前的连续失败次数；非密码认证时为 0" }
           - { name: auth_status, type: data.enums.auth_status, description: "命中的认证绑定状态" }
           - { name: password_hash, type: _types.basics.string, description: "密码哈希；非密码认证时为 null", nullable: true }
           - { name: locked_until, type: _types.basics.timestamp, description: "密码绑定锁定截止时间", nullable: true }
@@ -1247,7 +1247,7 @@ services:
       - { name: ctx, type: context.Context }
       - { name: account_id, type: _types.basics.id }
       - { name: auth_pwd_id, type: _types.basics.id }
-      - { name: failed_login_count, type: _types.basics.integer }
+      - { name: failed_login_count, type: _types.basics.integer.32 }
       - { name: login_at, type: _types.basics.timestamp }
       - { name: reason, type: data.enums.login_failed_reason }
     returns:
@@ -1258,8 +1258,8 @@ services:
         summary: "读取密码登录锁定策略"
         input: [ ]
         output:
-          - { name: max_attempts, type: _types.basics.integer, description: "最大连续失败次数" }
-          - { name: lockout, type: _types.basics.integer, description: "锁定时长（秒）" }
+          - { name: max_attempts, type: _types.basics.integer.32, description: "最大连续失败次数" }
+          - { name: lockout, type: _types.basics.integer.32, description: "锁定时长（秒）" }
         errors: [ ]
         rules: [ ]
         goto: lock_until

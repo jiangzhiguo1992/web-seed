@@ -80,7 +80,7 @@ columns:
     comment: "吊销时间；为空表示未吊销"
 
   - name: revoke_reason
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     nullable: true
     comment: "吊销原因整数码；映射 data.enums.token_revoke_reason"
 

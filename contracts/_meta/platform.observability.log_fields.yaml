@@ -55,7 +55,7 @@ fields:
     description: "必填字段"
     item_fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
-      - { name: type, type: _types.basics.string, required: true, pattern: '^_types\.basics\.[a-z][a-z0-9_]*$', description: "类型 ID" }
+      - { name: type, type: _types.basics.string, required: true, pattern: '^_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?$', description: "类型 ID" }
       - { name: format, type: _types.basics.string, required: false, description: "值格式" }
       - { name: enum, type: _types.structures.list<_types.basics.string>, required: false, min_items: 1, description: "取值集合" }
   - name: fields
@@ -65,7 +65,7 @@ fields:
     description: "字段清单"
     item_fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
-      - { name: type, type: _types.basics.string, required: true, pattern: '^_types\.basics\.[a-z][a-z0-9_]*$', description: "类型 ID" }
+      - { name: type, type: _types.basics.string, required: true, pattern: '^_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?$', description: "类型 ID" }
       - { name: pii, type: _types.basics.boolean, required: true, description: "是否 PII" }
       - { name: required_for, type: _types.structures.list<_types.basics.string>, required: false, description: "必须出现的入口" }
       - { name: note, type: _types.basics.string, required: false, description: "说明" }

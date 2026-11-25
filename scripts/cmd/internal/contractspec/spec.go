@@ -64,11 +64,27 @@ func SplitTypeRef(ref string) (class, name string, ok bool) {
 	return "", "", false
 }
 
-// BareTypeName 去掉所有 _types 命名空间前缀，返回裸名；用于与内部枚举比较。
-func BareTypeName(ref string) string {
-	for _, class := range []string{TypeClassBasics, TypeClassStructures, TypeClassSchemas} {
-		ref = strings.ReplaceAll(ref, "_types."+class+".", "")
+// SplitBasicsRef 拆 `_types.basics.<family>[.<variant>]`。
+// 单变体族（types 只有 default）的引用不带 variant；多变体族必须带 variant。
+func SplitBasicsRef(ref string) (family, variant string, ok bool) {
+	rest, found := strings.CutPrefix(ref, "_types.basics.")
+	if !found || rest == "" {
+		return "", "", false
 	}
+	if i := strings.IndexByte(rest, '.'); i >= 0 {
+		return rest[:i], rest[i+1:], true
+	}
+	return rest, "", true
+}
+
+var basicsRefRe = regexp.MustCompile(`_types\.basics\.([a-z][a-z0-9_]*)(?:\.[a-z0-9_]+)?`)
+
+// BareTypeName 去掉所有 _types 命名空间前缀与 basics 变体后缀，返回类型族裸名；
+// 用于与内部枚举比较（integer.32 -> integer）。
+func BareTypeName(ref string) string {
+	ref = strings.ReplaceAll(ref, "_types.structures.", "")
+	ref = strings.ReplaceAll(ref, "_types.schemas.", "")
+	ref = basicsRefRe.ReplaceAllString(ref, "$1")
 	return ref
 }
 
@@ -192,8 +208,17 @@ type CustomValueType struct {
 // ValueTypeFamily 描述一个类型族及其允许的扩展字段。
 // Params 的 required 表示使用该族时必须声明该扩展字段。
 type ValueTypeFamily struct {
-	Description string           `yaml:"description"`
-	Params      map[string]Field `yaml:"params"`
+	Description string                  `yaml:"description"`
+	Params      map[string]Field        `yaml:"params"`
+	Types       map[string]ConcreteType `yaml:"types"`
+}
+
+// ConcreteType 是一个类型族在 Go / PostgreSQL / TypeScript 端的确定性落型。
+// pg 是兼容集合，具体参数化（varchar(n)/numeric(p,s)/timestamptz(6)）由生成器追加。
+type ConcreteType struct {
+	Go string   `yaml:"go"`
+	PG []string `yaml:"pg"`
+	TS string   `yaml:"ts"`
 }
 
 type Field struct {
@@ -512,7 +537,7 @@ func validateStructures(path string, structures map[string]Structure, families m
 	return nil
 }
 
-// validateSchemas 校验 _types.schemas：必须定义 struct/array/scalar/ref 四种节点，
+// validateSchemas 校验 _types.schemas：必须定义 object/array/map/scalar/ref 五种节点，
 // 判别键必填，struct 的 properties 必须有 item_fields，其他节点不得定义 properties。
 func validateSchemas(path string, schemas map[string]SchemaKind) error {
 	if len(schemas) == 0 {
@@ -757,13 +782,81 @@ func injectFamilyParams(s *Schema) {
 	}
 }
 
+var (
+	goConcreteRe = regexp.MustCompile(`^(\[\]byte|[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*)$`)
+	pgConcrete   = map[string]bool{
+		"smallint": true, "integer": true, "bigint": true, "smallserial": true, "serial": true, "bigserial": true,
+		"text": true, "varchar": true, "char": true, "character varying": true, "character": true, "bpchar": true, "name": true,
+		"numeric": true, "decimal": true, "money": true, "boolean": true, "real": true, "double precision": true,
+		"date": true, "time": true, "timetz": true, "timestamp": true, "timestamptz": true,
+		"json": true, "jsonb": true, "jsonpath": true, "bytea": true, "uuid": true, "interval": true,
+		"inet": true, "cidr": true, "macaddr": true, "macaddr8": true,
+		"bit": true, "varbit": true, "tsvector": true, "tsquery": true, "xml": true,
+		"point": true, "line": true, "lseg": true, "box": true, "path": true, "polygon": true, "circle": true,
+		"int4range": true, "int8range": true, "numrange": true, "tsrange": true, "tstzrange": true, "daterange": true,
+		"int4multirange": true, "int8multirange": true, "nummultirange": true, "tsmultirange": true, "tstzmultirange": true, "datemultirange": true,
+		"oid": true, "regproc": true, "regprocedure": true, "regoper": true, "regoperator": true, "regclass": true,
+		"regcollation": true, "regtype": true, "regrole": true, "regnamespace": true, "regconfig": true, "regdictionary": true,
+		"pg_lsn": true,
+	}
+	tsConcrete = map[string]bool{"string": true, "number": true, "boolean": true, "unknown": true}
+)
+
+// validateTypeFamilies 校验每个族的 types 落型：多变体族必须恰好覆盖 bits 枚举，
+// 单变体族必须恰好是 default；go/pg/ts 必须是已知的确定性类型名。
 func validateTypeFamilies(path string, families map[string]ValueTypeFamily) error {
 	for name, fam := range families {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(fam.Description) == "" {
 			return fmt.Errorf("%s: family %s must have a name and description", path, name)
 		}
+		if len(fam.Types) == 0 {
+			return fmt.Errorf("%s: family %s must declare types", path, name)
+		}
+		expected := []string{name}
+		if bits, ok := fam.Params["bits"]; ok && len(bits.Enum) > 0 {
+			expected = expected[:0]
+			for _, v := range bits.Enum {
+				expected = append(expected, fmt.Sprint(v))
+			}
+		}
+		for _, key := range expected {
+			if _, ok := fam.Types[key]; !ok {
+				return fmt.Errorf("%s: family %s missing concrete type %q", path, name, key)
+			}
+		}
+		for key := range fam.Types {
+			if !containsString(expected, key) {
+				return fmt.Errorf("%s: family %s has unexpected concrete type %q", path, name, key)
+			}
+		}
+		for key, ct := range fam.Types {
+			where := fmt.Sprintf("%s: family %s concrete type %q", path, name, key)
+			if !goConcreteRe.MatchString(ct.Go) {
+				return fmt.Errorf("%s: invalid go type %q", where, ct.Go)
+			}
+			if strings.TrimSpace(ct.TS) == "" || !tsConcrete[ct.TS] {
+				return fmt.Errorf("%s: invalid ts type %q", where, ct.TS)
+			}
+			if name != "any" && len(ct.PG) == 0 {
+				return fmt.Errorf("%s: pg must not be empty", where)
+			}
+			for _, pg := range ct.PG {
+				if !pgConcrete[pg] {
+					return fmt.Errorf("%s: invalid pg type %q", where, pg)
+				}
+			}
+		}
 	}
 	return nil
+}
+
+func containsString(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }
 
 func validateCustomTypes(path string, families map[string]ValueTypeFamily, customs map[string]CustomValueType) error {

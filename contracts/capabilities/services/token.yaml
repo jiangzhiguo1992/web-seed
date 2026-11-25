@@ -467,7 +467,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: affected_rows, type: _types.basics.integer, value: step.expire_tokens.affected_rows }
+      - { name: affected_rows, type: _types.basics.integer.32, value: step.expire_tokens.affected_rows }
       - { name: err, type: error, value: "*" }
     steps:
       - id: now
@@ -493,7 +493,7 @@ services:
         summary: "取单批更新上限"
         input: [ ]
         output:
-          - { name: limit, type: _types.basics.integer, description: "单批更新上限" }
+          - { name: limit, type: _types.basics.integer.32, description: "单批更新上限" }
         errors: [ ]
         rules: [ ]
         goto: expire_tokens
@@ -508,7 +508,7 @@ services:
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
         errors: [ ]
         query: data.queries.token.expire_tokens
         goto: $end
@@ -579,7 +579,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: affected_rows, type: _types.basics.integer, value: step.delete_expired_tokens.affected_rows }
+      - { name: affected_rows, type: _types.basics.integer.32, value: step.delete_expired_tokens.affected_rows }
       - { name: err, type: error, value: "*" }
     steps:
       - id: batch_limit
@@ -587,7 +587,7 @@ services:
         summary: "取单批删除上限"
         input: [ ]
         output:
-          - { name: limit, type: _types.basics.integer, description: "单批删除上限" }
+          - { name: limit, type: _types.basics.integer.32, description: "单批删除上限" }
         errors: [ ]
         rules: [ ]
         goto: delete_expired_tokens
@@ -597,7 +597,7 @@ services:
         input:
           - { name: limit, value: step.batch_limit.limit, description: "单批删除上限" }
         output:
-          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
         errors:
           - platform.errors.COMMON_INTERNAL
         query: data.queries.token.delete_expired_tokens

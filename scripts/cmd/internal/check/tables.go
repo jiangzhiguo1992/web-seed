@@ -487,7 +487,8 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 			typ, _ := m["type"].(string)
 			pk, _ := m["primary_key"].(bool)
 			nullable, _ := m["nullable"].(bool)
-			if strings.TrimPrefix(typ, "_types.basics.") != shape.typ {
+			family, _, isBasics := contractspec.SplitBasicsRef(typ)
+			if !isBasics || family != shape.typ {
 				c.rulef("base-columns", "%s: base column %q must be %s, got %q", rel, n, shape.typ, typ)
 			}
 			if pk != shape.primary {
@@ -582,7 +583,16 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if t, _ := m["type"].(string); !isColumnType(t, schema.ValueTypes) {
 			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (type_families/custom_types %v or data.tables.<t>.col.<c>)", rel, i, name, t, valueTypeNames(schema.ValueTypes))
 		} else {
-			c.checkFamilyParams(m, strings.TrimPrefix(t, "_types.basics."), rel, i, name, schema)
+			family, variant, isBasics := contractspec.SplitBasicsRef(t)
+			if !isBasics {
+				family = t
+			}
+			if isBasics && (family == "integer" || family == "float") && variant != "" {
+				if bits, ok := toInt(m["bits"]); ok && fmt.Sprint(bits) != variant {
+					c.rulef("family-params", "%s: columns[%d] (%s): bits %d does not match type variant %s", rel, i, name, bits, variant)
+				}
+			}
+			c.checkFamilyParams(m, family, rel, i, name, schema)
 		}
 	}
 	constraintNames := map[string]bool{}
@@ -857,6 +867,12 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 	sort.Strings(customTypeNames)
 	for _, name := range customTypeNames {
 		customType := schema.ValueTypes.CustomTypes[name]
+		if _, ok := schema.ValueTypes.Structures[name]; ok {
+			c.rulef("schema.types", "data.types.custom_types.%s: name collides with a structure", name)
+		}
+		if _, ok := schema.ValueTypes.Schemas[name]; ok {
+			c.rulef("schema.types", "data.types.custom_types.%s: name collides with a schema kind", name)
+		}
 		for pname := range customType.Params {
 			if pname == "default" {
 				continue

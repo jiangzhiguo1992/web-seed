@@ -15,8 +15,13 @@ func TestTypeVocabulary(t *testing.T) {
 	}
 	c.errs = nil
 	c.checkTypeRef("_types.basics.integer", "x")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.type-concrete]") {
+		t.Fatalf("family without variant not rejected in instance: %v", c.errs)
+	}
+	c.errs = nil
+	c.checkTypeRef("_types.basics.integer.32", "x")
 	if len(c.errs) != 0 {
-		t.Fatalf("_types reference rejected: %v", c.errs)
+		t.Fatalf("concrete basics reference rejected: %v", c.errs)
 	}
 	c.errs = nil
 	c.checkTypeRef("_types.structures.list<data.entities.account>", "x")
@@ -34,7 +39,7 @@ func TestTypeVocabulary(t *testing.T) {
 		c.errs = nil
 		c.checkTypeRef(typ, "x")
 		if len(c.errs) != 0 {
-			t.Fatalf("prefixed schema kind %s rejected: %v", typ, c.errs)
+			t.Fatalf("schema kind %s rejected: %v", typ, c.errs)
 		}
 	}
 }
@@ -157,7 +162,7 @@ func TestTypeVocabularyOpenAPIException(t *testing.T) {
 	c.checkTypeVocabulary()
 	joined := strings.Join(c.errs, "\n")
 	if strings.Contains(joined, "protocols/http") {
-		t.Fatalf("OpenAPI exception reported: %v", c.errs)
+		t.Fatalf("protocols/http exception reported: %v", c.errs)
 	}
 	if strings.Contains(joined, "generated") {
 		t.Fatalf("generated exception reported: %v", c.errs)

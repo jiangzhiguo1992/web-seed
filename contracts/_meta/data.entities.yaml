@@ -82,7 +82,7 @@ fields:
     description: "业务字段与关系字段"
     item_fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名" }
-      - { name: type, type: _types.basics.string, required: false, pattern: '^(\*?(_types\.basics\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*)|_types\.structures.list<data\.entities\.[a-z][a-z0-9_]*>)$', description: "标量：_types.basics.<name> 或 data.enums.*，可带 *；关系：data.entities.*（_types.structures.list<...> 表示一对多）" }
+      - { name: type, type: _types.basics.string, required: false, pattern: '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*)|_types\.structures.list<data\.entities\.[a-z][a-z0-9_]*>)$', description: "标量：_types.basics.<name> 或 data.enums.*，可带 *；关系：data.entities.*（_types.structures.list<...> 表示一对多）" }
       - { name: nullable, type: _types.basics.boolean, required: false, default: false, description: "是否为指针" }
       - { name: json_name, type: _types.basics.string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "JSON 字段名" }
       - { name: description, type: _types.basics.string, required: true, description: "字段语义；不从列 comment 继承" }

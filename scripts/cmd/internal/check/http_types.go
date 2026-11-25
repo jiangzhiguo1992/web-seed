@@ -3,18 +3,21 @@ package check
 
 import (
 	"fmt"
-	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 // httpTypeResolver 供 NormalizeHTTPDocument 解析 _types.basics.<name>。
 func (c *Checker) httpTypeResolver(name string) (map[string]any, error) {
-	typ := strings.TrimPrefix(name, "_types.basics.")
-	family := typ
+	family, _, ok := contractspec.SplitBasicsRef(name)
+	if !ok {
+		return nil, fmt.Errorf("unknown type %s", name)
+	}
 	params := map[string]any{}
-	if custom, ok := c.valueTypes.CustomTypes[typ]; ok {
+	if custom, ok := c.valueTypes.CustomTypes[family]; ok {
 		family = custom.Family
 		params = custom.Params
-	} else if _, ok := c.valueTypes.TypeFamilies[typ]; !ok {
+	} else if _, ok := c.valueTypes.TypeFamilies[family]; !ok {
 		return nil, fmt.Errorf("unknown type %s", name)
 	}
 	out := map[string]any{}

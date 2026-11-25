@@ -104,14 +104,14 @@ func isColumnType(t string, ct ValueTypes) bool {
 	if isTableColumnType(t) {
 		return true
 	}
-	name, ok := strings.CutPrefix(t, "_types.basics.")
+	family, _, ok := contractspec.SplitBasicsRef(t)
 	if !ok {
 		return false
 	}
-	if _, ok := ct.TypeFamilies[name]; ok {
+	if _, ok := ct.TypeFamilies[family]; ok {
 		return true
 	}
-	if _, ok := ct.CustomTypes[name]; ok {
+	if _, ok := ct.CustomTypes[family]; ok {
 		return true
 	}
 	return false

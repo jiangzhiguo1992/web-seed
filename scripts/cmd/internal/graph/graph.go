@@ -1094,7 +1094,7 @@ func returnsEntities(m map[string]any) []string {
 			continue
 		}
 		kind, _ := r["kind"].(string)
-		entity, _ := r["entity"].(string)
+		entity, _ := r["type"].(string)
 		if kind == "entity" && entity != "" {
 			out = append(out, entity)
 		}

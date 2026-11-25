@@ -124,12 +124,16 @@ func TestTypeRefNamespaceRequired(t *testing.T) {
 		ok  bool
 	}{
 		{"_types.basics.string", true},
+		{"_types.basics.integer", true},
+		{"_types.basics.integer.32", true},
+		{"_types.basics.integer.99", false},
+		{"_types.basics.string.default", false},
 		{"_types.structures.object", true},
 		{"_types.structures.list<_types.basics.string>", true},
 		{"_types.structures.map<_types.basics.integer, _types.structures.object>", true},
 		{"_types.string", false},
 		{"_types.object", false},
-		{"_types.schemas.object", false},
+		{"object", false},
 		{"_types.basics.list", false},
 		{"_types.structures.string", false},
 		{"_types.schemas.string", false},
@@ -142,5 +146,23 @@ func TestTypeRefNamespaceRequired(t *testing.T) {
 		if !tc.ok && err == nil {
 			t.Fatalf("%s: expected namespace error", tc.typ)
 		}
+	}
+}
+
+func TestConcreteVariantRequiredInInstance(t *testing.T) {
+	c := &Checker{valueTypes: testValueTypes()}
+	c.checkTypeRef("_types.basics.integer", "contracts/data/tables/x.yaml.columns[0].type")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "schema.type-concrete") {
+		t.Fatalf("family without variant accepted in instance: %v", c.errs)
+	}
+	c.errs = nil
+	c.checkTypeRef("_types.basics.integer", "contracts/_meta/data.tables.yaml.fields[0].type")
+	if len(c.errs) != 0 {
+		t.Fatalf("meta shape rejected: %v", c.errs)
+	}
+	c.errs = nil
+	c.checkTypeRef("_types.basics.integer.32", "contracts/data/tables/x.yaml.columns[0].type")
+	if len(c.errs) != 0 {
+		t.Fatalf("concrete variant rejected: %v", c.errs)
 	}
 }

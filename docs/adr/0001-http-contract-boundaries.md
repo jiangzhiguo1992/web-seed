@@ -255,7 +255,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 5. **平台链路头删除**：客户端链路头不再写入 HTTP 契约、不接收客户端值、不回传响应；服务端在收到请求时生成内部 request id，注入日志与下游调用。HTTP 契约的 `request.headers` / `response.headers` 保留为独立字段，`Authorization` 通过 header 的 `auth: Bearer` 表达。
 6. **安全凭据注入**：`request.headers` 中的 `Authorization` 使用 `auth: Bearer`；认证中间件校验 JWT，并把 `account_id` / `access_token` 注入同名 service 参数；HTTP 参数不得映射到这两个参数，避免“token 校验了但业务信任 body 里的账号 ID”。
 7. **契约优先 HTTP 模型**：`request.headers` / `response.headers` 独立于 body；`Content-Type`、`Accept`、`Authorization` 等业务/表示层头在 headers 中声明；`Connection`、`Content-Length`、`Expect`、`Transfer-Encoding` 等传输层头不写进契约；`body.kind` 支持 json/form/multipart/text/binary；response 支持按状态声明 headers 与 body。生成器再把这些映射为 OpenAPI security/content/headers，契约阶段不以 OpenAPI 的字段形状为约束。
-8. **账号 ID 类型**：删除 `_types.basics.account_id`，HTTP path 与认证注入的 `account_id` 改用 `_types.basics.positive_integer`（`min: 1`）；普通 service/query 的账号 ID 仍是 `_types.basics.integer`。
+8. **账号 ID 类型**：删除 `_types.basics.account_id`，HTTP path 与认证注入的 `account_id` 改用 `_types.basics.positive_integer`（`min: 1`）；普通 service/query 的账号 ID 仍是 `_types.basics.integer.32`。
 9. **JWT 认证**：见文末「2026-11-23 JWT 认证决策」；access/refresh 都是 JWT，通过响应体下发。
 
 同时参数级 `to` 的值统一写 `params.<service 参数路径>`（如 `params.input`、`params.status`），让 HTTP 绑定与 service 内部的 `params.*` 引用使用同一套语法。
@@ -289,7 +289,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 第 8 条的 `_types.basics.positive_integer` 已删除，账号 ID 不再区分 HTTP 与 service/query。统一规则：
 
-1. **单一 ID 类型**：实体 ID 与外键 ID 全部用 `_types.basics.id`（integer，bits 64，0 可作为无值哨兵）；分页、计数、状态码等非 ID 整数继续用 `_types.basics.integer`（bits 32）。
+1. **单一 ID 类型**：实体 ID 与外键 ID 全部用 `_types.basics.id`（integer，bits 64，0 可作为无值哨兵）；分页、计数、状态码等非 ID 整数继续用 `_types.basics.integer.32`（bits 32）。
 2. **全链路覆盖**：表列、entity 字段（由来源列推断）、query/service/event 的 ID 参数和返回、HTTP path ID 参数、`contract-new` 骨架全部使用 `_types.basics.id`。
 3. **硬校验**：`reference-target` 比较 integer 列 bits；`query-param-column` 比较参数与列 bits；`service-input-type` 比较赋值两端的 integer bits。32 位类型不能绑定或赋给 64 位 ID。
 4. **HTTP 取舍**：HTTP path ID 使用 `_types.basics.id` 后不再生成 `minimum: 1`；`0` 视为无效 ID，由查询返回未找到，而不是由 OpenAPI 层拒绝。

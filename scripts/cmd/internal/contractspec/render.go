@@ -195,13 +195,11 @@ func RenderTableWithColumnType(s *Schema, name, module, summary, columnTypeOverr
 	columnName := firstExample(columnField.ItemFields, "name", "name")
 	columnType := defaultString(columnField.ItemFields, "type", "_types.basics.string")
 	if columnTypeOverride != "" {
-		name := strings.TrimPrefix(columnTypeOverride, "_types.basics.")
-		_, familyOK := s.ValueTypes.TypeFamilies[name]
-		_, customOK := s.ValueTypes.CustomTypes[name]
-		if !familyOK && !customOK {
-			return nil, fmt.Errorf("RenderTable: unknown column type %q (not a family or custom type)", columnTypeOverride)
+		normalized, err := normalizeScaffoldColumnType(columnTypeOverride, s.ValueTypes)
+		if err != nil {
+			return nil, fmt.Errorf("RenderTable: %w", err)
 		}
-		columnType = "_types.basics." + name
+		columnType = normalized
 	}
 	columnParams, err := scaffoldFamilyParams(s, columnType)
 	if err != nil {
@@ -433,8 +431,59 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 	return append([]byte(header), b...), nil
 }
 
+// normalizeScaffoldColumnType 把 contract-new 的 column_type 归一为具体类型引用：
+// 单变体族用 _types.basics.<family>，多变体族用 family 的 bits 默认值。
+func normalizeScaffoldColumnType(raw string, vt ValueTypes) (string, error) {
+	ref := strings.TrimSpace(raw)
+	if !strings.HasPrefix(ref, "_types.basics.") {
+		ref = "_types.basics." + strings.TrimPrefix(ref, "_types.")
+	}
+	family, variant, ok := SplitBasicsRef(ref)
+	if !ok {
+		return "", fmt.Errorf("unknown column type %q (not a family or custom type)", raw)
+	}
+	if _, custom := vt.CustomTypes[family]; custom {
+		if variant != "" {
+			return "", fmt.Errorf("custom type %s does not take a variant", family)
+		}
+		return "_types.basics." + family, nil
+	}
+	fam, ok := vt.TypeFamilies[family]
+	if !ok {
+		return "", fmt.Errorf("unknown column type %q (not a family or custom type)", raw)
+	}
+	if variant == "" {
+		if len(fam.Types) == 1 {
+			if _, ok := fam.Types[family]; ok {
+				return "_types.basics." + family, nil
+			}
+		}
+		if bits, ok := fam.Params["bits"]; ok && bits.Default != nil {
+			variant = fmt.Sprint(bits.Default)
+		}
+		if variant == "" {
+			keys := make([]string, 0, len(fam.Types))
+			for key := range fam.Types {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			if len(keys) > 0 {
+				variant = keys[0]
+			}
+		}
+	}
+	if _, ok := fam.Types[variant]; !ok {
+		return "", fmt.Errorf("unknown variant %q for column type %s", variant, family)
+	}
+	return "_types.basics." + family + "." + variant, nil
+}
+
 func scaffoldFamilyParams(s *Schema, columnType string) (map[string]any, error) {
-	columnType = strings.TrimPrefix(columnType, "_types.basics.")
+	family, _, _ := SplitBasicsRef(columnType)
+	if family == "" {
+		family = columnType
+	}
+	columnType = family
 	if _, custom := s.ValueTypes.CustomTypes[columnType]; custom {
 		return nil, nil
 	}
@@ -683,7 +732,6 @@ type serviceSchemaScaffold struct {
 	Type       string                    `yaml:"type,omitempty"`
 	Properties []servicePropertyScaffold `yaml:"properties,omitempty"`
 	Items      *serviceSchemaScaffold    `yaml:"items,omitempty"`
-	Ref        string                    `yaml:"ref,omitempty"`
 	MinItems   *int                      `yaml:"min_items,omitempty"`
 	MaxItems   *int                      `yaml:"max_items,omitempty"`
 }

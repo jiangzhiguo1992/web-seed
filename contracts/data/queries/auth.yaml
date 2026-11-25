@@ -18,7 +18,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: username, type: _types.basics.string, column: data.tables.auth_pwd.col.username }
     returns:
-      - { name: row, kind: entity, entity: data.entities.auth_pwd }
+      - { name: row, kind: entity, type: data.entities.auth_pwd }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -38,7 +38,7 @@ queries:
       - { name: username, type: _types.basics.string, column: data.tables.auth_pwd.col.username }
       - { name: password_hash, type: _types.basics.string, column: data.tables.auth_pwd.col.password_hash }
     returns:
-      - { name: row, kind: entity, entity: data.entities.auth_pwd }
+      - { name: row, kind: entity, type: data.entities.auth_pwd }
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_USERNAME_TAKEN
@@ -108,7 +108,7 @@ queries:
       - { name: code, type: _types.basics.string, column: data.tables.auth_phone.col.code }
       - { name: number, type: _types.basics.string, column: data.tables.auth_phone.col.number }
     returns:
-      - { name: row, kind: entity, entity: data.entities.auth_phone }
+      - { name: row, kind: entity, type: data.entities.auth_phone }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -129,7 +129,7 @@ queries:
       - { name: number, type: _types.basics.string, column: data.tables.auth_phone.col.number }
       - { name: operator, type: _types.basics.string, column: data.tables.auth_phone.col.operator, nullable: true }
     returns:
-      - { name: row, kind: entity, entity: data.entities.auth_phone }
+      - { name: row, kind: entity, type: data.entities.auth_phone }
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_PHONE_TAKEN
@@ -148,7 +148,7 @@ queries:
       - { name: username, type: _types.basics.string, column: data.tables.auth_email.col.username }
       - { name: domain, type: _types.basics.string, column: data.tables.auth_email.col.domain }
     returns:
-      - { name: row, kind: entity, entity: data.entities.auth_email }
+      - { name: row, kind: entity, type: data.entities.auth_email }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -170,7 +170,7 @@ queries:
       - { name: entity, type: _types.basics.string, column: data.tables.auth_email.col.entity, nullable: true }
       - { name: tld, type: _types.basics.string, column: data.tables.auth_email.col.tld, nullable: true }
     returns:
-      - { name: row, kind: entity, entity: data.entities.auth_email }
+      - { name: row, kind: entity, type: data.entities.auth_email }
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_EMAIL_TAKEN
@@ -189,7 +189,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.auth_pwd.col.id }
     returns:
-      - { name: row, kind: entity, entity: data.entities.auth_pwd }
+      - { name: row, kind: entity, type: data.entities.auth_pwd }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -205,7 +205,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.auth_phone.col.id }
     returns:
-      - { name: row, kind: entity, entity: data.entities.auth_phone }
+      - { name: row, kind: entity, type: data.entities.auth_phone }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -221,7 +221,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.auth_email.col.id }
     returns:
-      - { name: row, kind: entity, entity: data.entities.auth_email }
+      - { name: row, kind: entity, type: data.entities.auth_email }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:

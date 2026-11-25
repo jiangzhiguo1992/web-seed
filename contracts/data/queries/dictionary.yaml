@@ -19,10 +19,10 @@ queries:
       - { table: data.tables.dictionary }
     params:
       - { name: ctx, type: context.Context }
-      - { name: offset, type: _types.basics.integer, nullable: true, default: 0 }
-      - { name: limit, type: _types.basics.integer, nullable: true, default: 20 }
+      - { name: offset, type: _types.basics.integer.32, nullable: true, default: 0 }
+      - { name: limit, type: _types.basics.integer.32, nullable: true, default: 20 }
     returns:
-      - { name: dictionaries, list: true, kind: entity, entity: data.entities.dictionary }
+      - { name: dictionaries, list: true, kind: entity, type: data.entities.dictionary }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -37,10 +37,10 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: parent_id, type: _types.basics.id, column: data.tables.dictionary.col.parent_id }
-      - { name: offset, type: _types.basics.integer, nullable: true, default: 0 }
-      - { name: limit, type: _types.basics.integer, nullable: true, default: 20 }
+      - { name: offset, type: _types.basics.integer.32, nullable: true, default: 0 }
+      - { name: limit, type: _types.basics.integer.32, nullable: true, default: 20 }
     returns:
-      - { name: children, list: true, kind: entity, entity: data.entities.dictionary }
+      - { name: children, list: true, kind: entity, type: data.entities.dictionary }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -56,7 +56,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: code, type: _types.basics.string, column: data.tables.dictionary.col.code }
     returns:
-      - { name: dictionary, kind: entity, entity: data.entities.dictionary, nullable: true }
+      - { name: dictionary, kind: entity, type: data.entities.dictionary, nullable: true }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -72,7 +72,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.dictionary.col.id, nullable: true }
     returns:
-      - { name: dictionary, kind: entity, entity: data.entities.dictionary, nullable: true }
+      - { name: dictionary, kind: entity, type: data.entities.dictionary, nullable: true }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -128,12 +128,12 @@ queries:
       - { name: code, type: _types.basics.string, column: data.tables.dictionary.col.code }
       - { name: name, type: _types.basics.string, column: data.tables.dictionary.col.name }
       - { name: color, type: _types.basics.string, column: data.tables.dictionary.col.color, nullable: true }
-      - { name: sort, type: _types.basics.integer, column: data.tables.dictionary.col.sort }
+      - { name: sort, type: _types.basics.integer.32, column: data.tables.dictionary.col.sort }
       - { name: remark, type: _types.basics.string, column: data.tables.dictionary.col.remark, nullable: true }
       - { name: extra, type: _types.basics.json, column: data.tables.dictionary.col.extra, nullable: true }
-      - { name: status, type: _types.basics.integer, column: data.tables.dictionary.col.status }
+      - { name: status, type: _types.basics.integer.32, column: data.tables.dictionary.col.status }
     returns:
-      - { name: dictionary, kind: entity, entity: data.entities.dictionary }
+      - { name: dictionary, kind: entity, type: data.entities.dictionary }
       - { name: err, kind: error }
     errors:
       - platform.errors.DICTIONARY_CODE_TAKEN
@@ -153,11 +153,11 @@ queries:
       - { name: id, type: _types.basics.id, column: data.tables.dictionary.col.id }
       - { name: name, type: _types.basics.string, column: data.tables.dictionary.col.name }
       - { name: color, type: _types.basics.string, column: data.tables.dictionary.col.color, nullable: true }
-      - { name: sort, type: _types.basics.integer, column: data.tables.dictionary.col.sort }
+      - { name: sort, type: _types.basics.integer.32, column: data.tables.dictionary.col.sort }
       - { name: remark, type: _types.basics.string, column: data.tables.dictionary.col.remark, nullable: true }
       - { name: extra, type: _types.basics.json, column: data.tables.dictionary.col.extra, nullable: true }
     returns:
-      - { name: dictionary, kind: entity, entity: data.entities.dictionary }
+      - { name: dictionary, kind: entity, type: data.entities.dictionary }
       - { name: err, kind: error }
     errors:
       - platform.errors.DICTIONARY_INVALID
@@ -173,9 +173,9 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.dictionary.col.id }
-      - { name: status, type: _types.basics.integer, column: data.tables.dictionary.col.status }
+      - { name: status, type: _types.basics.integer.32, column: data.tables.dictionary.col.status }
     returns:
-      - { name: dictionary, kind: entity, entity: data.entities.dictionary }
+      - { name: dictionary, kind: entity, type: data.entities.dictionary }
       - { name: err, kind: error }
     errors:
       - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
@@ -191,7 +191,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.dictionary.col.id }
-      - { name: status, type: _types.basics.integer, column: data.tables.dictionary.col.status }
+      - { name: status, type: _types.basics.integer.32, column: data.tables.dictionary.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -211,7 +211,7 @@ queries:
       - { name: id, type: _types.basics.id, column: data.tables.dictionary.col.id }
       - { name: parent_id, type: _types.basics.id, column: data.tables.dictionary.col.parent_id, nullable: true }
     returns:
-      - { name: dictionary, kind: entity, entity: data.entities.dictionary }
+      - { name: dictionary, kind: entity, type: data.entities.dictionary }
       - { name: err, kind: error }
     errors:
       - platform.errors.DICTIONARY_PARENT_INVALID
@@ -233,7 +233,7 @@ queries:
           - { name: code, type: _types.basics.string, required: true, description: "全局唯一编码" }
           - { name: name, type: _types.basics.string, required: true, description: "展示名" }
           - { name: color, type: _types.basics.string, nullable: true, description: "展示颜色 #RRGGBB" }
-          - { name: sort, type: _types.basics.integer, required: true, description: "排序" }
+          - { name: sort, type: _types.basics.integer.32, required: true, description: "排序" }
           - { name: remark, type: _types.basics.string, nullable: true, description: "备注" }
           - { name: extra, type: _types.basics.json, nullable: true, description: "扩展元数据" }
     returns:

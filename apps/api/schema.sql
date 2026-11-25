@@ -15,7 +15,7 @@ CREATE TABLE "account" (
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "account" IS '账号主表';
-COMMENT ON COLUMN "account"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "account"."id" IS '主键 integer.64；生成方式由实现决定';
 COMMENT ON COLUMN "account"."status" IS '业务状态整数码；枚举映射在 entity 层';
 COMMENT ON COLUMN "account"."created_at" IS '创建时间；数据库默认 now()';
 COMMENT ON COLUMN "account"."updated_at" IS '更新时间；应用层写入';
@@ -46,7 +46,7 @@ CREATE TABLE "attachment" (
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "attachment" IS '附件表';
-COMMENT ON COLUMN "attachment"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "attachment"."id" IS '主键 integer.64；生成方式由实现决定';
 COMMENT ON COLUMN "attachment"."status" IS '业务状态整数码；枚举映射在 entity 层';
 COMMENT ON COLUMN "attachment"."created_at" IS '创建时间；数据库默认 now()';
 COMMENT ON COLUMN "attachment"."updated_at" IS '更新时间；应用层写入';
@@ -84,7 +84,7 @@ CREATE TABLE "auth_email" (
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "auth_email" IS '邮箱认证表';
-COMMENT ON COLUMN "auth_email"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "auth_email"."id" IS '主键 integer.64；生成方式由实现决定';
 COMMENT ON COLUMN "auth_email"."status" IS '业务状态整数码；枚举映射在 entity 层';
 COMMENT ON COLUMN "auth_email"."created_at" IS '创建时间；数据库默认 now()';
 COMMENT ON COLUMN "auth_email"."updated_at" IS '更新时间；应用层写入';
@@ -112,7 +112,7 @@ CREATE TABLE "auth_phone" (
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "auth_phone" IS '手机号认证表';
-COMMENT ON COLUMN "auth_phone"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "auth_phone"."id" IS '主键 integer.64；生成方式由实现决定';
 COMMENT ON COLUMN "auth_phone"."status" IS '业务状态整数码；枚举映射在 entity 层';
 COMMENT ON COLUMN "auth_phone"."created_at" IS '创建时间；数据库默认 now()';
 COMMENT ON COLUMN "auth_phone"."updated_at" IS '更新时间；应用层写入';
@@ -141,7 +141,7 @@ CREATE TABLE "auth_pwd" (
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "auth_pwd" IS '密码认证表';
-COMMENT ON COLUMN "auth_pwd"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "auth_pwd"."id" IS '主键 integer.64；生成方式由实现决定';
 COMMENT ON COLUMN "auth_pwd"."status" IS '业务状态整数码；枚举映射在 entity 层';
 COMMENT ON COLUMN "auth_pwd"."created_at" IS '创建时间；数据库默认 now()';
 COMMENT ON COLUMN "auth_pwd"."updated_at" IS '更新时间；应用层写入';
@@ -170,7 +170,7 @@ CREATE TABLE "dictionary" (
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "dictionary" IS '字典表';
-COMMENT ON COLUMN "dictionary"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "dictionary"."id" IS '主键 integer.64；生成方式由实现决定';
 COMMENT ON COLUMN "dictionary"."status" IS '业务状态整数码；枚举映射在 entity 层';
 COMMENT ON COLUMN "dictionary"."created_at" IS '创建时间；数据库默认 now()';
 COMMENT ON COLUMN "dictionary"."updated_at" IS '更新时间；应用层写入';
@@ -208,7 +208,7 @@ CREATE TABLE "token" (
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "token" IS '令牌表';
-COMMENT ON COLUMN "token"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "token"."id" IS '主键 integer.64；生成方式由实现决定';
 COMMENT ON COLUMN "token"."status" IS '业务状态整数码；枚举映射在 entity 层';
 COMMENT ON COLUMN "token"."created_at" IS '创建时间；数据库默认 now()';
 COMMENT ON COLUMN "token"."updated_at" IS '更新时间；应用层写入';
@@ -227,6 +227,42 @@ CREATE UNIQUE INDEX "uq_token_access_hash" ON "token" ("access_token_hash");
 CREATE UNIQUE INDEX "uq_token_refresh_hash" ON "token" ("refresh_token_hash");
 CREATE INDEX "idx_token_account_status" ON "token" ("deleted_at", "account_id", "status");
 CREATE INDEX "idx_token_refresh_expire_at" ON "token" ("deleted_at", "refresh_expire_at");
+
+CREATE TABLE "unit" (
+  "id" BIGINT NOT NULL,
+  "status" INTEGER NOT NULL DEFAULT 0,
+  "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
+  "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT (now()),
+  "deleted_at" TIMESTAMPTZ(6),
+  "parent_id" BIGINT,
+  "code" VARCHAR(32) NOT NULL,
+  "name" VARCHAR(32) NOT NULL,
+  "dimension" VARCHAR(32) NOT NULL,
+  "rate" BIGINT,
+  "symbol" VARCHAR(8),
+  "step" INTEGER NOT NULL DEFAULT 1,
+  "sort" INTEGER NOT NULL DEFAULT 0,
+  "remark" VARCHAR(200),
+  PRIMARY KEY ("id")
+);
+COMMENT ON TABLE "unit" IS '计量单位表';
+COMMENT ON COLUMN "unit"."id" IS '主键 integer.64；生成方式由实现决定';
+COMMENT ON COLUMN "unit"."status" IS '业务状态整数码；枚举映射在 entity 层';
+COMMENT ON COLUMN "unit"."created_at" IS '创建时间；数据库默认 now()';
+COMMENT ON COLUMN "unit"."updated_at" IS '更新时间；应用层写入';
+COMMENT ON COLUMN "unit"."deleted_at" IS '软删时间；应用层写入；为空表示未删除';
+COMMENT ON COLUMN "unit"."parent_id" IS '父单位；顶级为 NULL';
+COMMENT ON COLUMN "unit"."code" IS '全局唯一编码；创建后不可变';
+COMMENT ON COLUMN "unit"."name" IS '展示名；允许重复';
+COMMENT ON COLUMN "unit"."dimension" IS '量纲；只有同量纲可换算';
+COMMENT ON COLUMN "unit"."rate" IS '1 个父单位 = rate 个本单位；根单位为 NULL';
+COMMENT ON COLUMN "unit"."symbol" IS '展示符号；如 元、kg';
+COMMENT ON COLUMN "unit"."step" IS '默认下单步长；单位只读，商品级差异不写回本表';
+COMMENT ON COLUMN "unit"."sort" IS '同量纲展示顺序；从 0 开始';
+COMMENT ON COLUMN "unit"."remark" IS '备注；仅用于说明';
+CREATE UNIQUE INDEX "uq_unit_code" ON "unit" ("code");
+CREATE INDEX "idx_unit_dimension_sort" ON "unit" ("deleted_at", "dimension", "sort", "id");
+CREATE INDEX "idx_unit_parent" ON "unit" ("parent_id");
 
 CREATE TABLE "verification_action" (
   "id" BIGINT NOT NULL,
@@ -248,7 +284,7 @@ CREATE TABLE "verification_action" (
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "verification_action" IS '验证动作（校验请求记录）';
-COMMENT ON COLUMN "verification_action"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "verification_action"."id" IS '主键 integer.64；生成方式由实现决定';
 COMMENT ON COLUMN "verification_action"."status" IS '业务状态整数码；枚举映射在 entity 层';
 COMMENT ON COLUMN "verification_action"."created_at" IS '创建时间；数据库默认 now()';
 COMMENT ON COLUMN "verification_action"."updated_at" IS '更新时间；应用层写入';
@@ -287,7 +323,7 @@ CREATE TABLE "verification_body" (
   PRIMARY KEY ("id")
 );
 COMMENT ON TABLE "verification_body" IS '验证体（一次性验证凭证与消息快照）';
-COMMENT ON COLUMN "verification_body"."id" IS '主键 integer（bits: 64）；生成方式由实现决定';
+COMMENT ON COLUMN "verification_body"."id" IS '主键 integer.64；生成方式由实现决定';
 COMMENT ON COLUMN "verification_body"."status" IS '业务状态整数码；枚举映射在 entity 层';
 COMMENT ON COLUMN "verification_body"."created_at" IS '创建时间；数据库默认 now()';
 COMMENT ON COLUMN "verification_body"."updated_at" IS '更新时间；应用层写入';

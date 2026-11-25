@@ -221,7 +221,7 @@ services:
           - { name: sent_at, value: step.now.sent_at, description: "发送时间" }
           - { name: status, value: step.status_sent.status, description: "目标状态：已发送" }
         output:
-          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
         query: data.queries.verification.mark_verification_sent
         goto: mark_sent_result
       - id: mark_sent_result
@@ -390,7 +390,7 @@ services:
         input:
           - { name: attempt_count, value: step.load_verification.row.attempt_count, description: "当前尝试次数" }
         output:
-          - { name: attempt_count, type: _types.basics.integer, description: "递增后的尝试次数" }
+          - { name: attempt_count, type: _types.basics.integer.32, description: "递增后的尝试次数" }
         errors: [ ]
         rules: [ ]
         goto: request_ip
@@ -709,8 +709,8 @@ services:
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: expired_rows, type: _types.basics.integer, value: step.expire_stale.affected_rows }
-      - { name: revoked_rows, type: _types.basics.integer, value: step.revoke_exhausted.affected_rows }
+      - { name: expired_rows, type: _types.basics.integer.32, value: step.expire_stale.affected_rows }
+      - { name: revoked_rows, type: _types.basics.integer.32, value: step.revoke_exhausted.affected_rows }
       - { name: err, type: error, value: "*" }
     steps:
       - id: now
@@ -727,7 +727,7 @@ services:
         summary: "取验证码尝试次数上限"
         input: [ ]
         output:
-          - { name: max_attempts, type: _types.basics.integer, description: "尝试次数上限" }
+          - { name: max_attempts, type: _types.basics.integer.32, description: "尝试次数上限" }
         errors: [ ]
         rules: [ ]
         goto: status_expired
@@ -754,7 +754,7 @@ services:
         summary: "取单批更新上限"
         input: [ ]
         output:
-          - { name: limit, type: _types.basics.integer, description: "单批更新上限" }
+          - { name: limit, type: _types.basics.integer.32, description: "单批更新上限" }
         errors: [ ]
         rules: [ ]
         goto: expire_stale
@@ -769,7 +769,7 @@ services:
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
         query: data.queries.verification.expire_stale_verifications
         goto: revoke_exhausted
       - id: revoke_exhausted
@@ -783,7 +783,7 @@ services:
           - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
         query: data.queries.verification.revoke_exhausted_verifications
         goto: $end
     used_by:

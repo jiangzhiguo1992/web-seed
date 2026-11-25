@@ -226,3 +226,27 @@ func TestSchemaNodeKindRequiresNamespace(t *testing.T) {
 		t.Fatalf("qualified scalar node = (%q,%v)", kind, ok)
 	}
 }
+
+func TestSharedTypesConcreteTypes(t *testing.T) {
+	root := t.TempDir()
+	shared, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeMeta(t, root, "_types.yaml", string(shared))
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err != nil {
+		t.Fatalf("valid _types.yaml rejected: %v", err)
+	}
+
+	body := strings.Replace(string(shared), "      64: { go: int64, pg: [ bigint, bigserial ], ts: number }\n", "", 1)
+	writeMeta(t, root, "_types.yaml", body)
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), `missing concrete type "64"`) {
+		t.Fatalf("missing concrete type: %v", err)
+	}
+
+	body = strings.Replace(string(shared), "pg: [ smallint ]", "pg: [ bogus ]", 1)
+	writeMeta(t, root, "_types.yaml", body)
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), `invalid pg type "bogus"`) {
+		t.Fatalf("invalid pg type: %v", err)
+	}
+}

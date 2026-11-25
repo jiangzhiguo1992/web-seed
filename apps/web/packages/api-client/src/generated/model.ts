@@ -96,6 +96,14 @@ export const TokenStatus = {
 
 export type TokenStatus = (typeof TokenStatus)[keyof typeof TokenStatus]
 
+export const UnitStatus = {
+  Enabled: "enabled",
+  Disabled: "disabled",
+  Deleted: "deleted",
+} as const
+
+export type UnitStatus = (typeof UnitStatus)[keyof typeof UnitStatus]
+
 export const VerificationPurpose = {
   Register: "register",
   Login: "login",
@@ -175,5 +183,22 @@ export interface Dictionary {
   sort: number
   remark?: string | null
   extra?: unknown
+}
+
+export interface Unit {
+  id: number
+  status: UnitStatus
+  created_at: string
+  updated_at: string
+  deleted_at?: string | null
+  parent_id?: number | null
+  code: string
+  name: string
+  dimension: string
+  rate?: number | null
+  symbol?: string | null
+  step: number
+  sort: number
+  remark?: string | null
 }
 

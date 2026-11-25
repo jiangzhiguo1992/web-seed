@@ -21,10 +21,10 @@ queries:
       - { name: owner_table_name, type: _types.basics.string, column: data.tables.attachment.col.owner_table_name }
       - { name: owner_id, type: _types.basics.id, column: data.tables.attachment.col.owner_id }
       - { name: purpose, type: _types.basics.string, column: data.tables.attachment.col.purpose, nullable: true }
-      - { name: offset, type: _types.basics.integer, nullable: true, default: 0 }
-      - { name: limit, type: _types.basics.integer, nullable: true, default: 20 }
+      - { name: offset, type: _types.basics.integer.32, nullable: true, default: 0 }
+      - { name: limit, type: _types.basics.integer.32, nullable: true, default: 20 }
     returns:
-      - { name: attachments, list: true, kind: entity, entity: data.entities.attachment }
+      - { name: attachments, list: true, kind: entity, type: data.entities.attachment }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -40,7 +40,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.attachment.col.id }
     returns:
-      - { name: attachment, kind: entity, entity: data.entities.attachment, nullable: true }
+      - { name: attachment, kind: entity, type: data.entities.attachment, nullable: true }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -60,7 +60,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: object_key, type: _types.basics.string, column: data.tables.attachment.col.object_key }
     returns:
-      - { name: attachment, kind: entity, entity: data.entities.attachment, nullable: true }
+      - { name: attachment, kind: entity, type: data.entities.attachment, nullable: true }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -78,17 +78,17 @@ queries:
       - { name: owner_table_name, type: _types.basics.string, column: data.tables.attachment.col.owner_table_name }
       - { name: owner_id, type: _types.basics.id, column: data.tables.attachment.col.owner_id }
       - { name: purpose, type: _types.basics.string, column: data.tables.attachment.col.purpose }
-      - { name: sort, type: _types.basics.integer, column: data.tables.attachment.col.sort }
+      - { name: sort, type: _types.basics.integer.32, column: data.tables.attachment.col.sort }
       - { name: object_key, type: _types.basics.string, column: data.tables.attachment.col.object_key }
       - { name: original_name, type: _types.basics.string, column: data.tables.attachment.col.original_name }
       - { name: content_type, type: _types.basics.string, column: data.tables.attachment.col.content_type }
       - { name: size_bytes, type: _types.basics.byte_size, column: data.tables.attachment.col.size_bytes }
       - { name: sha256, type: _types.basics.string, column: data.tables.attachment.col.sha256, nullable: true }
-      - { name: visibility, type: _types.basics.integer, column: data.tables.attachment.col.visibility }
-      - { name: status, type: _types.basics.integer, column: data.tables.attachment.col.status }
+      - { name: visibility, type: _types.basics.integer.32, column: data.tables.attachment.col.visibility }
+      - { name: status, type: _types.basics.integer.32, column: data.tables.attachment.col.status }
       - { name: replaces_id, type: _types.basics.id, column: data.tables.attachment.col.replaces_id, nullable: true }
     returns:
-      - { name: attachment, kind: entity, entity: data.entities.attachment }
+      - { name: attachment, kind: entity, type: data.entities.attachment }
       - { name: err, kind: error }
     errors:
       - platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN
@@ -106,9 +106,9 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.attachment.col.id }
-      - { name: status, type: _types.basics.integer, column: data.tables.attachment.col.status }
+      - { name: status, type: _types.basics.integer.32, column: data.tables.attachment.col.status }
     returns:
-      - { name: attachment, kind: entity, entity: data.entities.attachment }
+      - { name: attachment, kind: entity, type: data.entities.attachment }
       - { name: err, kind: error }
     errors:
       - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
@@ -125,7 +125,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id, column: data.tables.attachment.col.id, nullable: true }
-      - { name: status, type: _types.basics.integer, column: data.tables.attachment.col.status }
+      - { name: status, type: _types.basics.integer.32, column: data.tables.attachment.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -144,7 +144,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: cutoff, type: _types.basics.timestamp }
-      - { name: status, type: _types.basics.integer, column: data.tables.attachment.col.status }
+      - { name: status, type: _types.basics.integer.32, column: data.tables.attachment.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -161,7 +161,7 @@ queries:
     params:
       - { name: ctx, type: context.Context }
       - { name: cutoff, type: _types.basics.timestamp }
-      - { name: status, type: _types.basics.integer, column: data.tables.attachment.col.status }
+      - { name: status, type: _types.basics.integer.32, column: data.tables.attachment.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }

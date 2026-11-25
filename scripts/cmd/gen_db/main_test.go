@@ -2,6 +2,8 @@ package main
 
 import (
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -163,6 +165,8 @@ func TestTypeMapping(t *testing.T) {
 		{column{Type: "boolean"}, "BOOLEAN"},
 		{column{Type: "decimal", Precision: 10, Scale: 2}, "NUMERIC(10,2)"},
 		{column{Type: "json"}, "JSONB"},
+		{column{Type: "json", Kind: "json"}, "JSON"},
+		{column{Type: "money"}, "MONEY"},
 		{column{Type: "bytes"}, "BYTEA"},
 	}
 	for _, tc := range cases {
@@ -213,5 +217,48 @@ func TestIntegerBitsDefaultMatchesGenerator(t *testing.T) {
 	}
 	if got != want {
 		t.Fatalf("integer default bits %d maps to %q, want %q", def, got, want)
+	}
+}
+
+func TestTypeTableMatchesColumnType(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts", "_meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for family, fam := range shared.TypeFamilies {
+		for variant, ct := range fam.Types {
+			if family == "any" {
+				continue
+			}
+			col := column{Name: family + "." + variant, Type: family}
+			switch family {
+			case "integer", "float":
+				bits, err := strconv.Atoi(variant)
+				if err != nil {
+					t.Fatalf("%s.%s: variant is not bits", family, variant)
+				}
+				col.Bits = bits
+			case "string":
+				col.MaxLen = 32
+			case "decimal":
+				col.Precision, col.Scale = 19, 4
+			case "datetime":
+				col.Mode = "date"
+			case "timestamp":
+				col.TimezoneSet, col.Timezone = true, true
+			}
+			if len(ct.PG) > 0 && family != "integer" && family != "float" && family != "string" && family != "decimal" && family != "datetime" && family != "timestamp" && family != "json" && family != "bytes" && family != "any" {
+				col.Kind = ct.PG[0]
+			}
+			got, err := columnType(col)
+			if err != nil {
+				t.Fatalf("%s.%s: %v", family, variant, err)
+			}
+			base := strings.ToLower(strings.TrimSpace(strings.SplitN(got, "(", 2)[0]))
+			if !slices.Contains(ct.PG, base) {
+				t.Fatalf("%s.%s: %s is not in pg %v", family, variant, base, ct.PG)
+			}
+		}
 	}
 }

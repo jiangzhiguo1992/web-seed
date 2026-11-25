@@ -87,7 +87,7 @@ model:
 queries:
   - name: GetA
     returns:
-      - { name: e1, kind: entity, entity: data.entities.e1 }
+      - { name: e1, kind: entity, type: data.entities.e1 }
     tables: [ data.tables.a ]
     used_by: []
   - name: GetB
@@ -154,7 +154,7 @@ model:
 queries:
   - name: GetA
     returns:
-      - { name: e1, kind: entity, entity: data.entities.e1 }
+      - { name: e1, kind: entity, type: data.entities.e1 }
     tables: [ data.tables.a ]
     used_by: []
 `)

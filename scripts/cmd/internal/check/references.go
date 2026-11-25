@@ -6,7 +6,9 @@ package check
 import (
 	"fmt"
 	"sort"
-	"strings"
+	"strconv"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 // referenceDecl 是一条列级逻辑外键声明。
@@ -188,7 +190,10 @@ func (c *Checker) columnBits(table, col string) (int, bool) {
 			return 0, false
 		}
 		typ, _ := decl["type"].(string)
-		typ = strings.TrimPrefix(typ, "_types.basics.")
+		family, variant, isBasics := contractspec.SplitBasicsRef(typ)
+		if isBasics {
+			typ = family
+		}
 		if custom, ok := c.valueTypes.CustomTypes[typ]; ok {
 			if custom.Family != "integer" {
 				return 0, false
@@ -200,6 +205,9 @@ func (c *Checker) columnBits(table, col string) (int, bool) {
 		}
 		if typ == "integer" {
 			if bits, ok := toInt(decl["bits"]); ok {
+				return bits, true
+			}
+			if bits, err := strconv.Atoi(variant); err == nil {
 				return bits, true
 			}
 			return 32, true

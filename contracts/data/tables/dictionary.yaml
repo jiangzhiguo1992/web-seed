@@ -66,7 +66,7 @@ columns:
     comment: "展示颜色；#RRGGBB，为空表示使用默认样式"
 
   - name: sort
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     nullable: false
     min: 0
     default: 0

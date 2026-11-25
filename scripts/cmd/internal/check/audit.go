@@ -76,9 +76,10 @@ func AuditTypeVocabulary(root string) (*TypeAudit, error) {
 func walkTypeRefs(v any, path string, fn func(where, value string)) {
 	switch x := v.(type) {
 	case map[string]any:
+		_, hasKinds := x["types"]
 		for key, child := range x {
 			childPath := path + "." + key
-			if key == "type" {
+			if key == "type" && !hasKinds {
 				if s, ok := child.(string); ok {
 					fn(childPath, s)
 				}

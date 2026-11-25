@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -173,20 +174,25 @@ type table struct {
 }
 
 type column struct {
-	Name       string
-	Type       string
-	Nullable   bool
-	PrimaryKey bool
-	Default    any
-	DefaultSQL string
-	Bits       int
-	Unsigned   bool
-	MaxLen     int
-	MinLen     int
-	Fixed      bool
-	Precision  int
-	Scale      int
-	Comment    string
+	Name        string
+	Type        string
+	Kind        string
+	Mode        string
+	Timezone    bool
+	TimezoneSet bool
+	FracSeconds int
+	Nullable    bool
+	PrimaryKey  bool
+	Default     any
+	DefaultSQL  string
+	Bits        int
+	Unsigned    bool
+	MaxLen      int
+	MinLen      int
+	Fixed       bool
+	Precision   int
+	Scale       int
+	Comment     string
 }
 
 type check struct {
@@ -328,25 +334,37 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 	for _, item := range asList(raw) {
 		m, _ := asMap(item)
 		c := column{
-			Name:       stringValue(m["name"]),
-			Type:       stringValue(m["type"]),
-			Nullable:   boolValue(m["nullable"]),
-			PrimaryKey: boolValue(m["primary_key"]),
-			Default:    m["default"],
-			DefaultSQL: stringValue(m["default_sql"]),
-			Bits:       intValue(m["bits"]),
-			Unsigned:   boolValue(m["unsigned"]),
-			MaxLen:     intValue(m["max_len"]),
-			MinLen:     intValue(m["min_len"]),
-			Fixed:      boolValue(m["fixed"]),
-			Precision:  intValue(m["precision"]),
-			Scale:      intValue(m["scale"]),
-			Comment:    stringValue(m["comment"]),
+			Name:        stringValue(m["name"]),
+			Type:        stringValue(m["type"]),
+			Kind:        stringValue(m["kind"]),
+			Mode:        stringValue(m["mode"]),
+			Timezone:    boolValue(m["timezone"]),
+			FracSeconds: intValue(m["fractional_seconds"]),
+			Nullable:    boolValue(m["nullable"]),
+			PrimaryKey:  boolValue(m["primary_key"]),
+			Default:     m["default"],
+			DefaultSQL:  stringValue(m["default_sql"]),
+			Bits:        intValue(m["bits"]),
+			Unsigned:    boolValue(m["unsigned"]),
+			MaxLen:      intValue(m["max_len"]),
+			MinLen:      intValue(m["min_len"]),
+			Fixed:       boolValue(m["fixed"]),
+			Precision:   intValue(m["precision"]),
+			Scale:       intValue(m["scale"]),
+			Comment:     stringValue(m["comment"]),
 		}
 		if c.Name == "" || c.Type == "" {
 			return nil, fmt.Errorf("column name/type required")
 		}
-		c.Type = strings.TrimPrefix(c.Type, "_types.basics.")
+		if _, ok := m["timezone"]; ok {
+			c.TimezoneSet = true
+		}
+		if family, variant, ok := contractspec.SplitBasicsRef(c.Type); ok {
+			c.Type = family
+			if c.Bits == 0 && variant != "" {
+				c.Bits, _ = strconv.Atoi(variant)
+			}
+		}
 		if nt, ok := customTypes[c.Type]; ok {
 			c.Type = nt.Family
 			applyCustomParams(&c, nt.Params)
@@ -373,6 +391,15 @@ func applyCustomParams(c *column, params map[string]any) {
 			c.Precision = intValue(v)
 		case "scale":
 			c.Scale = intValue(v)
+		case "kind":
+			c.Kind = stringValue(v)
+		case "mode":
+			c.Mode = stringValue(v)
+		case "timezone":
+			c.Timezone = boolValue(v)
+			c.TimezoneSet = true
+		case "fractional_seconds":
+			c.FracSeconds = intValue(v)
 		case "default":
 			if c.Default == nil {
 				c.Default = v
@@ -482,6 +509,13 @@ func columnSQL(c column) (string, error) {
 	return strings.Join(parts, " "), nil
 }
 
+func defaultKind(kind, fallback string) string {
+	if kind == "" {
+		return fallback
+	}
+	return kind
+}
+
 func columnType(c column) (string, error) {
 	switch c.Type {
 	case "integer":
@@ -511,9 +545,35 @@ func columnType(c column) (string, error) {
 		}
 		return "TEXT", nil
 	case "timestamp":
-		return "TIMESTAMPTZ(6)", nil
+		prec := c.FracSeconds
+		if prec == 0 {
+			prec = 6
+		}
+		if !c.TimezoneSet || c.Timezone {
+			return fmt.Sprintf("TIMESTAMPTZ(%d)", prec), nil
+		}
+		return fmt.Sprintf("TIMESTAMP(%d)", prec), nil
 	case "datetime":
-		return "TIMESTAMP(6)", nil
+		mode := c.Mode
+		if mode == "" {
+			mode = "datetime"
+		}
+		switch mode {
+		case "date":
+			return "DATE", nil
+		case "time":
+			if c.Timezone {
+				return "TIMETZ(6)", nil
+			}
+			return "TIME(6)", nil
+		case "datetime":
+			if c.Timezone {
+				return "TIMESTAMPTZ(6)", nil
+			}
+			return "TIMESTAMP(6)", nil
+		default:
+			return "", fmt.Errorf("column %s: unsupported datetime mode %s", c.Name, mode)
+		}
 	case "boolean":
 		return "BOOLEAN", nil
 	case "float":
@@ -526,10 +586,39 @@ func columnType(c column) (string, error) {
 			return "", fmt.Errorf("column %s: decimal precision required", c.Name)
 		}
 		return fmt.Sprintf("NUMERIC(%d,%d)", c.Precision, c.Scale), nil
+	case "money":
+		return "MONEY", nil
 	case "json":
+		if c.Kind == "json" {
+			return "JSON", nil
+		}
 		return "JSONB", nil
+	case "jsonpath":
+		return "JSONPATH", nil
 	case "bytes":
 		return "BYTEA", nil
+	case "uuid":
+		return "UUID", nil
+	case "interval":
+		return "INTERVAL", nil
+	case "network":
+		return strings.ToUpper(defaultKind(c.Kind, "inet")), nil
+	case "bit":
+		return strings.ToUpper(defaultKind(c.Kind, "varbit")), nil
+	case "textsearch":
+		return strings.ToUpper(defaultKind(c.Kind, "tsvector")), nil
+	case "geometry":
+		return strings.ToUpper(defaultKind(c.Kind, "point")), nil
+	case "range":
+		return strings.ToUpper(defaultKind(c.Kind, "int4range")), nil
+	case "multirange":
+		return strings.ToUpper(defaultKind(c.Kind, "int4multirange")), nil
+	case "oid":
+		return strings.ToUpper(defaultKind(c.Kind, "oid")), nil
+	case "xml":
+		return "XML", nil
+	case "pg_lsn":
+		return "PG_LSN", nil
 	default:
 		return "", fmt.Errorf("column %s: unsupported type %s", c.Name, c.Type)
 	}

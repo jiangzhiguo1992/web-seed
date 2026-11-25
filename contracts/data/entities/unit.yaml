@@ -60,7 +60,7 @@ fields:
     source: { column: data.tables.unit.col.symbol }
 
   - name: Step
-    description: "默认下单步长"
+    description: "默认下单步长；单位只读"
     source: { column: data.tables.unit.col.step }
 
   - name: Sort

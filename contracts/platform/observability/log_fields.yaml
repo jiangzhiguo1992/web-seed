@@ -39,15 +39,15 @@ fields:
     required_for: [http]
     note: "只记录路由模板，不记录真实参数"
   - name: status
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     pii: false
     required_for: [http]
   - name: duration_ms
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     pii: false
     required_for: [http]
   - name: bytes
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     pii: false
 
   # ---------- 身份 ----------
@@ -82,7 +82,7 @@ fields:
     pii: false
     required_for: [job]
   - name: attempt
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     pii: false
     required_for: [job]
 

@@ -664,6 +664,62 @@ func (s *TokenStatus) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnitStatus 计量单位状态
+type UnitStatus int32
+
+const (
+	UnitStatusEnabled  UnitStatus = 0 // 启用；可参与换算
+	UnitStatusDisabled UnitStatus = 1 // 停用；不可选择
+	UnitStatusDeleted  UnitStatus = 2 // 已软删；终态
+)
+
+func (s UnitStatus) String() string {
+	switch s {
+	case UnitStatusEnabled:
+		return "enabled"
+	case UnitStatusDisabled:
+		return "disabled"
+	case UnitStatusDeleted:
+		return "deleted"
+	default:
+		return ""
+	}
+}
+
+func ParseUnitStatus(v string) (UnitStatus, error) {
+	switch v {
+	case "enabled":
+		return UnitStatusEnabled, nil
+	case "disabled":
+		return UnitStatusDisabled, nil
+	case "deleted":
+		return UnitStatusDeleted, nil
+	default:
+		return 0, fmt.Errorf("unknown UnitStatus %q", v)
+	}
+}
+
+func (s UnitStatus) MarshalJSON() ([]byte, error) {
+	name := s.String()
+	if name == "" {
+		return nil, fmt.Errorf("unknown UnitStatus %d", int32(s))
+	}
+	return json.Marshal(name)
+}
+
+func (s *UnitStatus) UnmarshalJSON(data []byte) error {
+	var v string
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	parsed, err := ParseUnitStatus(v)
+	if err != nil {
+		return err
+	}
+	*s = parsed
+	return nil
+}
+
 // VerificationPurpose 验证用途
 type VerificationPurpose int32
 
@@ -998,6 +1054,24 @@ type token struct {
 	RevokedAt        *time.Time         `json:"revoked_at"`
 	RevokeReason     *TokenRevokeReason `json:"revoke_reason"`
 	ReplacedByID     *int64             `json:"replaced_by_id"`
+}
+
+// Unit 是 data.entities.unit 的标量投影；关系字段按需加载。
+type Unit struct {
+	ID        int64      `json:"id"`
+	Status    UnitStatus `json:"status"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
+	ParentID  *int64     `json:"parent_id"`
+	Code      string     `json:"code"`
+	Name      string     `json:"name"`
+	Dimension string     `json:"dimension"`
+	Rate      *int64     `json:"rate"`
+	Symbol    *string    `json:"symbol"`
+	Step      int32      `json:"step"`
+	Sort      int32      `json:"sort"`
+	Remark    *string    `json:"remark"`
 }
 
 // verificationAction 是 data.entities.verification_action 的内部标量投影；关系字段按需加载。

@@ -3,8 +3,11 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func TestGeneratedFilesUpToDate(t *testing.T) {
@@ -25,7 +28,7 @@ func TestScalarMapping(t *testing.T) {
 		{"integer 64", columnSpec{Family: "integer", Bits: 64}, false, "int64", "number"},
 		{"integer 32", columnSpec{Family: "integer", Bits: 32}, false, "int32", "number"},
 		{"nullable string", columnSpec{Family: "string"}, true, "*string", "string | null"},
-		{"decimal", columnSpec{Family: "decimal", Precision: 19, Scale: 4}, false, "string", "string"},
+		{"decimal", columnSpec{Family: "decimal", Precision: 19, Scale: 4}, false, "decimal.Decimal", "string"},
 		{"timestamp", columnSpec{Family: "timestamp"}, false, "time.Time", "string"},
 		{"json", columnSpec{Family: "json"}, false, "json.RawMessage", "unknown"},
 		{"nullable json", columnSpec{Family: "json"}, true, "json.RawMessage", "unknown"},
@@ -99,5 +102,31 @@ func TestGeneratedModelRemovedAndRenamedFields(t *testing.T) {
 	}
 	if !strings.Contains(string(tsSrc), "owner_table_name") || !strings.Contains(string(tsSrc), "replaces_id") {
 		t.Fatal("generated TS missing renamed/new attachment fields")
+	}
+}
+
+func TestTypeTableMatchesScalarMapping(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts", "_meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for family, fam := range shared.TypeFamilies {
+		for variant, ct := range fam.Types {
+			spec := columnSpec{Family: family}
+			if family == "integer" || family == "float" {
+				bits, err := strconv.Atoi(variant)
+				if err != nil {
+					t.Fatalf("%s.%s: variant is not bits", family, variant)
+				}
+				spec.Bits = bits
+			}
+			if got := goScalar(spec, false); got != ct.Go {
+				t.Fatalf("%s.%s: goScalar = %q, want %q", family, variant, got, ct.Go)
+			}
+			if got := tsScalar(spec, false); got != ct.TS {
+				t.Fatalf("%s.%s: tsScalar = %q, want %q", family, variant, got, ct.TS)
+			}
+		}
 	}
 }

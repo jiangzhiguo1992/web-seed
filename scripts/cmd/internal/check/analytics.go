@@ -158,8 +158,23 @@ func (c *Checker) analyticsTypes() map[string]bool {
 	out := map[string]bool{}
 	if types, err := loadYAML(filepath.Join(c.root, "contracts/_meta/_types.yaml")); err == nil {
 		basic, _ := asMap(types["basics"])
-		for name := range basic {
-			out["_types.basics."+name] = true
+		for name, raw := range basic {
+			fam, _ := asMap(raw)
+			concrete, _ := asMap(fam["types"])
+			if len(concrete) == 0 {
+				out["_types.basics."+name] = true
+				continue
+			}
+			if len(concrete) == 1 {
+				if _, ok := concrete[name]; ok {
+					out["_types.basics."+name] = true
+					out["_types.basics."+name+"."+name] = true
+					continue
+				}
+			}
+			for variant := range concrete {
+				out["_types.basics."+name+"."+variant] = true
+			}
 		}
 	}
 	if custom, err := loadYAML(filepath.Join(c.root, "contracts/data/types.yaml")); err == nil {

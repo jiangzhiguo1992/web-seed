@@ -108,7 +108,7 @@ func testNodeKinds() map[string]contractspec.SchemaKind {
 		"array":  {Keys: []contractspec.Field{{Name: "type"}, {Name: "items"}}},
 		"map":    {Keys: []contractspec.Field{{Name: "type"}, {Name: "values"}}},
 		"scalar": {Keys: []contractspec.Field{{Name: "type"}}},
-		"ref":    {Keys: []contractspec.Field{{Name: "ref"}}},
+		"ref":    {Keys: []contractspec.Field{{Name: "type"}}},
 	}
 }
 

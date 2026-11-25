@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 const (
@@ -382,11 +384,13 @@ func (c *Checker) applyEntityFieldDefaults(e *entityInfo) {
 			continue
 		}
 		if !f.HasType {
-			typ := normalizeContractType(meta.typ)
-			if meta.primaryKey && typ == "integer" {
-				typ = "id"
+			typ := meta.typ
+			family := normalizeContractType(typ)
+			if meta.primaryKey && family == "integer" {
+				typ = "_types.basics.id"
+			} else if _, _, ok := contractspec.SplitBasicsRef(typ); !ok {
+				typ = "_types.basics." + family
 			}
-			typ = "_types.basics." + typ
 			if meta.nullable && !f.HasNullable {
 				typ = "*" + typ
 			}
@@ -1145,7 +1149,9 @@ func (c *Checker) columnUnique(table, col string) bool {
 
 // resolvedColumnType 把列引用链解析为实际类型族；非引用/断链/成环时原样返回。
 func (c *Checker) resolvedColumnType(typ string) string {
-	typ = strings.TrimPrefix(typ, "_types.basics.")
+	if family, _, ok := contractspec.SplitBasicsRef(typ); ok {
+		typ = family
+	}
 	if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
 		return customType.Family
 	}

@@ -914,13 +914,16 @@ func applyPropertyAnnotations(prop, out map[string]any) {
 // httpTypeResolver 把 _types.basics.<name> 解析成 OpenAPI 标量 schema。
 func httpTypeResolver(customTypes map[string]contractspec.CustomValueType) openapispec.TypeResolver {
 	return func(name string) (map[string]any, error) {
-		typ := strings.TrimPrefix(name, "_types.basics.")
-		if typ == "any" {
+		family, _, ok := contractspec.SplitBasicsRef(name)
+		if !ok {
+			return nil, fmt.Errorf("unknown type %s", name)
+		}
+		if family == "any" {
 			return map[string]any{}, nil
 		}
-		if _, ok := customTypes[typ]; !ok {
-			switch typ {
-			case "string", "boolean", "integer", "float", "decimal", "datetime", "timestamp", "json", "bytes":
+		if _, ok := customTypes[family]; !ok {
+			switch family {
+			case "string", "boolean", "integer", "float", "decimal", "money", "datetime", "timestamp", "json", "bytes", "uuid", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "oid", "pg_lsn":
 			default:
 				return nil, fmt.Errorf("unknown type %s", name)
 			}
@@ -930,10 +933,12 @@ func httpTypeResolver(customTypes map[string]contractspec.CustomValueType) opena
 }
 
 func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueType) map[string]any {
-	typ = strings.TrimPrefix(typ, "_types.basics.")
-	family := typ
+	family, _, _ := contractspec.SplitBasicsRef(typ)
 	var params map[string]any
-	if nt, ok := customTypes[typ]; ok {
+	if family == "" {
+		family = typ
+	}
+	if nt, ok := customTypes[family]; ok {
 		family = nt.Family
 		params = nt.Params
 	}
@@ -948,13 +953,17 @@ func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueTyp
 	case "timestamp", "datetime":
 		out["type"] = "string"
 		out["format"] = "date-time"
-	case "float", "decimal":
+	case "float", "decimal", "money":
 		out["type"] = "number"
 	case "json":
 		out["type"] = "object"
 	case "bytes":
 		out["type"] = "string"
 		out["format"] = "byte"
+	case "uuid", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
+		out["type"] = "string"
+	case "oid":
+		out["type"] = "integer"
 	default:
 		out["type"] = "object"
 	}
@@ -1392,7 +1401,10 @@ func typeSchema(typ string, enums map[string][]any, customTypes map[string]contr
 	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
 		return map[string]any{"type": "array", "items": typeSchema(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"), enums, customTypes)}
 	}
-	typ = strings.TrimPrefix(typ, "_types.basics.")
+	family, _, isBasics := contractspec.SplitBasicsRef(typ)
+	if isBasics {
+		typ = family
+	}
 	if _, ok := customTypes[typ]; ok {
 		return scalarSchema(typ, customTypes)
 	}
@@ -1405,10 +1417,14 @@ func typeSchema(typ string, enums map[string][]any, customTypes map[string]contr
 		return map[string]any{"type": "boolean"}
 	case "timestamp", "datetime":
 		return map[string]any{"type": "string", "format": "date-time"}
-	case "number", "float", "decimal":
+	case "number", "float", "decimal", "money":
 		return map[string]any{"type": "number"}
 	case "json":
 		return map[string]any{"type": "object"}
+	case "uuid", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
+		return map[string]any{"type": "string"}
+	case "oid":
+		return map[string]any{"type": "integer"}
 	}
 	if strings.HasPrefix(typ, "data.enums.") {
 		return map[string]any{"type": "string", "enum": enums[lastSegment(typ)]}

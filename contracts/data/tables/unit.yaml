@@ -75,7 +75,7 @@ columns:
     nullable: false
     min: 1
     default: 1
-    comment: "默认下单步长；商品级可覆盖"
+    comment: "默认下单步长；单位只读，商品级差异不写回本表"
 
   - name: sort
     type: _types.basics.integer.32

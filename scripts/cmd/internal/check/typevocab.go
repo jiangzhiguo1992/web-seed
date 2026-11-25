@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
@@ -89,6 +90,9 @@ func (c *Checker) checkTypeRef(v any, path string) {
 	}
 	if strings.HasPrefix(s, "*") {
 		s = strings.TrimSpace(strings.TrimPrefix(s, "*"))
+		if s == "" {
+			return
+		}
 	}
 	if strings.HasPrefix(s, "_types.structures.list<") && strings.HasSuffix(s, ">") {
 		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "_types.structures.list<"), ">"))
@@ -102,6 +106,18 @@ func (c *Checker) checkTypeRef(v any, path string) {
 		return
 	}
 	if strings.HasPrefix(s, "_types.") {
+		if class, name, ok := contractspec.SplitTypeRef(s); ok && class == contractspec.TypeClassBasics {
+			family, variant, hasVariant := splitBasicsName(name)
+			if !hasVariant && !isMetaContractPath(path) {
+				if _, custom := c.valueTypes.CustomTypes[family]; !custom {
+					if fam, ok := c.valueTypes.TypeFamilies[family]; ok && len(fam.Types) > 1 {
+						c.rulef("schema.type-concrete", "%s: %s must name a concrete variant (family %s declares %v)", path, s, family, sortedConcreteKeys(fam.Types))
+						return
+					}
+				}
+			}
+			_ = variant
+		}
 		if _, err := parseTypeExpr(s, c.valueTypes); err != nil {
 			c.typeVocabularyf(path, s, "%s: %v", path, err)
 		}
@@ -145,8 +161,9 @@ func (c *Checker) checkTypeRef(v any, path string) {
 func (c *Checker) scanTypeRefs(v any, path string) {
 	switch x := v.(type) {
 	case map[string]any:
+		_, hasKinds := x["types"]
 		for k, child := range x {
-			if k == "type" {
+			if k == "type" && !hasKinds {
 				c.checkTypeRef(child, path+".type")
 			}
 			c.scanTypeRefs(child, path+"."+k)
@@ -156,6 +173,19 @@ func (c *Checker) scanTypeRefs(v any, path string) {
 			c.scanTypeRefs(item, fmt.Sprintf("%s[%d]", path, i))
 		}
 	}
+}
+
+func isMetaContractPath(path string) bool {
+	return strings.HasPrefix(filepath.ToSlash(path), "contracts/_meta/")
+}
+
+func sortedConcreteKeys(m map[string]contractspec.ConcreteType) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // knownSchemaKind 是 SchemaNodeKind 支持的节点种类加通配；与 _meta 的 schemas 键一致。

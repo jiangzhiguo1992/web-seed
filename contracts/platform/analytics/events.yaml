@@ -27,7 +27,7 @@ events:
     trigger: mount
     page: feature.pages.account_list
     properties:
-      - { name: item_count, type: _types.basics.integer, pii: false }
+      - { name: item_count, type: _types.basics.integer.32, pii: false }
       - { name: filter_status, type: data.enums.account_status, pii: false }
 
   - name: page.login_viewed
@@ -61,7 +61,7 @@ events:
     properties:
       - { name: account_id, type: _types.basics.string, pii: false }
       - { name: has_payload, type: _types.basics.boolean, pii: false }
-      - { name: duration_ms, type: _types.basics.integer, pii: false }
+      - { name: duration_ms, type: _types.basics.integer.32, pii: false }
 
   - name: account.activated
     description: "账号激活成功"
@@ -151,7 +151,7 @@ events:
     properties:
       - { name: capability, type: _types.basics.string, pii: false }
       - { name: error_code, type: _types.basics.string, pii: false }
-      - { name: status, type: _types.basics.integer, pii: false }
+      - { name: status, type: _types.basics.integer.32, pii: false }
 
 forbidden_properties:
   - title

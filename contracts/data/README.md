@@ -116,7 +116,7 @@ tables / entities / queries ──(type)──>  types
 
 时间列统一用 `timestamp`（应用层只处理 UTC），`datetime` 族不使用。**（`[评审]`）**
 
-实体 ID 与外键 ID 统一用 `_types.basics.id`（integer，bits 64）；分页偏移、计数、状态码等非 ID 整数用 `_types.basics.integer`（bits 32）。**（`[评审]`）**
+实体 ID 与外键 ID 统一用 `_types.basics.id`（integer，bits 64）；分页偏移、计数、状态码等非 ID 整数用 `_types.basics.integer.32`（bits 32）。**（`[评审]`）**
 
 ### 4.2 索引与冗余
 

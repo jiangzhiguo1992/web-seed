@@ -58,7 +58,7 @@ columns:
     comment: "用途：icon/avatar/attachment 等；区分同一 owner 的多种附件"
 
   - name: sort
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     nullable: false
     min: 0
     default: 0
@@ -100,7 +100,7 @@ columns:
     comment: "SHA-256 十六进制；完整性/去重校验，不唯一"
 
   - name: visibility
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     nullable: false
     default: 0
     comment: "访问级别整数码；映射 data.enums.attachment_visibility（0=private,1=public）"

@@ -190,11 +190,19 @@ func parseTypeExprDepth(raw string, vt ValueTypes, depth int) (typeExpr, error) 
 	}
 	switch class {
 	case contractspec.TypeClassBasics:
-		if _, ok := vt.TypeFamilies[name]; ok {
-			return typeExpr{Base: name}, nil
+		family, variant, hasVariant := splitBasicsName(name)
+		if fam, ok := vt.TypeFamilies[family]; ok {
+			if hasVariant {
+				if _, ok := fam.Types[variant]; !ok {
+					return typeExpr{}, fmt.Errorf("unknown basics variant %q for family %s", variant, family)
+				}
+			}
+			return typeExpr{Base: family}, nil
 		}
-		if _, ok := vt.CustomTypes[name]; ok {
-			return typeExpr{Base: name}, nil
+		if !hasVariant {
+			if _, ok := vt.CustomTypes[name]; ok {
+				return typeExpr{Base: name}, nil
+			}
 		}
 		return typeExpr{}, fmt.Errorf("unknown basics type %q", raw)
 	case contractspec.TypeClassStructures:
@@ -208,6 +216,14 @@ func parseTypeExprDepth(raw string, vt ValueTypes, depth int) (typeExpr, error) 
 	default:
 		return typeExpr{}, fmt.Errorf("type %q is a schema node discriminator, not a field type", raw)
 	}
+}
+
+// splitBasicsName 把 basics 名称拆成 family 与 variant；自定义类型没有 variant。
+func splitBasicsName(name string) (family, variant string, has bool) {
+	if i := strings.IndexByte(name, '.'); i >= 0 {
+		return name[:i], name[i+1:], true
+	}
+	return name, "", false
 }
 
 func splitTypeArgs(inner string, vt ValueTypes, depth int) ([]typeExpr, error) {

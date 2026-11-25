@@ -20,7 +20,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: code, type: _types.basics.string, column: data.tables.unit.col.code }
     returns:
-      - { name: unit, kind: entity, entity: data.entities.unit, nullable: true }
+      - { name: unit, kind: entity, type: data.entities.unit, nullable: true }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -38,7 +38,7 @@ queries:
       - { name: offset, type: _types.basics.integer.32, nullable: true, default: 0 }
       - { name: limit, type: _types.basics.integer.32, nullable: true, default: 20 }
     returns:
-      - { name: units, list: true, kind: entity, entity: data.entities.unit }
+      - { name: units, list: true, kind: entity, type: data.entities.unit }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -56,7 +56,7 @@ queries:
       - { name: offset, type: _types.basics.integer.32, nullable: true, default: 0 }
       - { name: limit, type: _types.basics.integer.32, nullable: true, default: 20 }
     returns:
-      - { name: units, list: true, kind: entity, entity: data.entities.unit }
+      - { name: units, list: true, kind: entity, type: data.entities.unit }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:

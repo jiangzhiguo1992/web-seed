@@ -162,6 +162,7 @@ func (c *Checker) checkProjectApps() {
 
 // checkHTTPComponents 校验平台 HTTP 组件的外层结构；
 // schemas 在平台侧是普通 OpenAPI 对象，在文件侧必须是单一 source 溯源。
+
 func (c *Checker) checkHTTPComponents(components map[string]any, rel string, isPlatform bool) {
 	if components == nil {
 		return
@@ -1859,18 +1860,20 @@ func (c *Checker) httpServiceFamily(t string) string {
 	if strings.HasPrefix(t, "_types.structures.list<") {
 		return "array"
 	}
-	t = strings.TrimPrefix(t, "_types.basics.")
+	if family, _, ok := contractspec.SplitBasicsRef(t); ok {
+		t = family
+	}
 	if custom, ok := c.valueTypes.CustomTypes[t]; ok {
 		return c.httpServiceFamily(custom.Family)
 	}
 	switch t {
-	case "string", "timestamp", "datetime", "bytes":
+	case "string", "timestamp", "datetime", "bytes", "uuid", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
 		return "string"
-	case "integer":
+	case "integer", "oid":
 		return "integer"
 	case "boolean":
 		return "boolean"
-	case "float", "decimal", "number":
+	case "float", "decimal", "money", "number":
 		return "number"
 	case "json":
 		return "object"

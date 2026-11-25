@@ -51,7 +51,7 @@ columns:
     comment: "argon2id 口令哈希；新密码写入此列"
 
   - name: failed_login_count
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     nullable: false
     default: 0
     min: 0

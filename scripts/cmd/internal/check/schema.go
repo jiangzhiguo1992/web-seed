@@ -425,7 +425,7 @@ func allowsSchemaKind(allowed []string, kind string) bool {
 // _types.schemas.* 代表 schemas 下声明的全部种类。
 func schemaKindAllowed(kind string, kinds map[string]contractspec.SchemaKind) bool {
 	if kind == contractspec.SchemaAlias {
-		return len(kinds) > 0
+		return true
 	}
 	if class, name, ok := contractspec.SplitTypeRef(kind); ok && class == contractspec.TypeClassSchemas {
 		if !knownSchemaKind(name) || name == "*" {
@@ -507,7 +507,10 @@ func schemaLocalRefs(v any) []string {
 // valueType 返回标量类型对应的类型族；自定义类型解析到 family，
 // family 不存在时返回空，避免 schema 层把断链的 custom type 当成有效类型。
 func (c *Checker) valueType(typ string) string {
-	name := strings.TrimPrefix(typ, "_types.basics.")
+	name := typ
+	if family, _, ok := contractspec.SplitBasicsRef(typ); ok {
+		name = family
+	}
 	if _, ok := c.valueTypes.TypeFamilies[name]; ok {
 		return name
 	}

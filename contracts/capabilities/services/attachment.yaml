@@ -28,7 +28,7 @@ schemas:
       - { name: owner_table_name, schema: { type: _types.basics.string }, required: true, description: "所有者物理表名" }
       - { name: owner_id, schema: { type: _types.basics.id }, required: true, description: "所有者行 ID" }
       - { name: purpose, schema: { type: _types.basics.string }, required: true, description: "用途：icon/avatar/attachment 等" }
-      - { name: sort, schema: { type: _types.basics.integer }, required: true, description: "同一 owner+purpose 内的排序" }
+      - { name: sort, schema: { type: _types.basics.integer.32 }, required: true, description: "同一 owner+purpose 内的排序" }
       - { name: original_name, schema: { type: _types.basics.string }, required: true, description: "原始文件名" }
       - { name: content_type, schema: { type: _types.basics.string }, required: true, description: "MIME 类型" }
       - { name: size_bytes, schema: { type: _types.basics.byte_size }, required: true, description: "对象大小（字节）" }
@@ -597,7 +597,7 @@ services:
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: affected_rows, type: _types.basics.integer, value: step.sum.affected_rows }
+      - { name: affected_rows, type: _types.basics.integer.32, value: step.sum.affected_rows }
       - { name: err, type: error, value: "*" }
     steps:
       - id: cutoff
@@ -625,7 +625,7 @@ services:
           - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
         output:
-          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
         errors: [ ]
         query: data.queries.attachment.soft_delete_stale_uploads
         goto: soft_delete_failed
@@ -636,7 +636,7 @@ services:
           - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
         output:
-          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
         errors: [ ]
         query: data.queries.attachment.soft_delete_stale_failed_uploads
         goto: sum
@@ -647,7 +647,7 @@ services:
           - { name: uploading_rows, value: step.soft_delete_stale.affected_rows, description: "stale uploading 行数" }
           - { name: failed_rows, value: step.soft_delete_failed.affected_rows, description: "stale failure 行数" }
         output:
-          - { name: affected_rows, type: _types.basics.integer, description: "清理总行数" }
+          - { name: affected_rows, type: _types.basics.integer.32, description: "清理总行数" }
         errors: [ ]
         rules: [ ]
         goto: $end

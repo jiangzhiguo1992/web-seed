@@ -74,6 +74,7 @@ entries:
       - "更新或软删历史动作"
   - { id: data.tables.dictionary, path: data/tables/dictionary.yaml, summary: "字典表结构", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.tables.attachment, path: data/tables/attachment.yaml, summary: "附件表结构", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.tables.unit, path: data/tables/unit.yaml, summary: "计量单位表结构", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.account, path: data/entities/account.yaml, summary: "账号数据实体与关系", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: data.entities.token, path: data/entities/token.yaml, summary: "令牌数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.auth_pwd, path: data/entities/auth_pwd.yaml, summary: "密码认证数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
@@ -82,12 +83,14 @@ entries:
   - { id: data.entities.verification_body, path: data/entities/verification_body.yaml, summary: "验证体数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.verification_action, path: data/entities/verification_action.yaml, summary: "验证动作数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.dictionary, path: data/entities/dictionary.yaml, summary: "字典数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
+  - { id: data.entities.unit, path: data/entities/unit.yaml, summary: "计量单位实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.entities.attachment, path: data/entities/attachment.yaml, summary: "附件数据实体", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: data.queries.account, path: data/queries/account.yaml, summary: "账号查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.token, path: data/queries/token.yaml, summary: "令牌查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.auth, path: data/queries/auth.yaml, summary: "认证查询集（密码/手机/邮箱）", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.verification, path: data/queries/verification.yaml, summary: "验证查询集（验证体与验证动作）", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.dictionary, path: data/queries/dictionary.yaml, summary: "字典查询集", consumers: [api], enforcement: tested, stability: draft }
+  - { id: data.queries.unit, path: data/queries/unit.yaml, summary: "计量单位查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.queries.attachment, path: data/queries/attachment.yaml, summary: "附件查询集", consumers: [api], enforcement: tested, stability: draft }
   - { id: data.enums.account, path: data/enums/account.yaml, summary: "账号域跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated+tested, stability: draft }
   - { id: data.enums.system, path: data/enums/system.yaml, summary: "系统域跨端枚举集合", consumers: [api, web/admin, worker], enforcement: generated+tested, stability: draft }
@@ -112,6 +115,7 @@ entries:
   - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：JWT 签发、刷新与校验", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.services.verification, path: capabilities/services/verification.yaml, summary: "验证码服务：发送、校验与作废", consumers: [api], enforcement: generated+tested, stability: draft }
   - { id: cap.services.dictionary, path: capabilities/services/dictionary.yaml, summary: "字典读写服务", consumers: [api], enforcement: tested, stability: draft }
+  - { id: cap.services.unit, path: capabilities/services/unit.yaml, summary: "计量单位读取服务", consumers: [api], enforcement: tested, stability: draft }
   - { id: cap.lifecycles.dictionary, path: capabilities/lifecycles/dictionary.yaml, summary: "字典生命周期", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.lifecycles.attachment, path: capabilities/lifecycles/attachment.yaml, summary: "附件生命周期", consumers: [api, web/admin], enforcement: generated+tested, stability: draft }
   - { id: cap.services.attachment, path: capabilities/services/attachment.yaml, summary: "附件读写服务：上传票据、完成/失败、下载签名、读取与软删", consumers: [api], enforcement: tested, stability: draft }

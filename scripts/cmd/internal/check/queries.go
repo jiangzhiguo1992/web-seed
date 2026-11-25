@@ -237,7 +237,9 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		r := queryReturn{}
 		r.Name, _ = rm["name"].(string)
 		r.Kind, _ = rm["kind"].(string)
-		r.Entity, _ = rm["entity"].(string)
+		if r.Kind == "entity" {
+			r.Entity, _ = rm["type"].(string)
+		}
 		r.Type, _ = rm["type"].(string)
 		r.Columns = stringList(rm["columns"])
 		_, r.HasColumns = rm["columns"]
@@ -756,8 +758,8 @@ func (c *Checker) checkQueryReturns(q *queryInfo) {
 				c.rulef("query-returns", "%s: kind=entity requires entity", rw)
 				continue
 			}
-			if r.Type != "" || len(r.Columns) > 0 {
-				c.rulef("query-returns", "%s: kind=entity forbids type/columns", rw)
+			if len(r.Columns) > 0 {
+				c.rulef("query-returns", "%s: kind=entity forbids columns", rw)
 			}
 			e := c.entities[r.Entity]
 			if e == nil {

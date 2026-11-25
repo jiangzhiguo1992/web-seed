@@ -206,7 +206,7 @@ summary: "x"
 stability: draft
 do_not: []
 api: { current: v9 }
-contract: {}
+type: {}
 compatibility: {}
 deprecation: { headers: [ { name: Sunset } ] }
 detection: { command: "make missing" }

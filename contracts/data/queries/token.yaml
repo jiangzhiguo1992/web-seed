@@ -26,7 +26,7 @@ queries:
       - { name: access_expire_at, type: _types.basics.timestamp, column: data.tables.token.col.access_expire_at }
       - { name: refresh_expire_at, type: _types.basics.timestamp, column: data.tables.token.col.refresh_expire_at }
     returns:
-      - { name: row, kind: entity, entity: data.entities.token }
+      - { name: row, kind: entity, type: data.entities.token }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -46,7 +46,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: refresh_token_hash, type: _types.basics.string, column: data.tables.token.col.refresh_token_hash }
     returns:
-      - { name: row, kind: entity, entity: data.entities.token }
+      - { name: row, kind: entity, type: data.entities.token }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -67,7 +67,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: access_token_hash, type: _types.basics.string, column: data.tables.token.col.access_token_hash }
     returns:
-      - { name: row, kind: entity, entity: data.entities.token }
+      - { name: row, kind: entity, type: data.entities.token }
       - { name: err, kind: error }
     errors: [ ]
     index_ref:
@@ -128,7 +128,7 @@ queries:
       - { name: ctx, type: context.Context }
       - { name: now, type: _types.basics.timestamp }
       - { name: status, type: data.enums.token_status }
-      - { name: limit, type: _types.basics.integer, nullable: true, default: 100 }
+      - { name: limit, type: _types.basics.integer.32, nullable: true, default: 100 }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -146,7 +146,7 @@ queries:
       - data.tables.token.cache.access_token_hash
     params:
       - { name: ctx, type: context.Context }
-      - { name: limit, type: _types.basics.integer, nullable: true, default: 100 }
+      - { name: limit, type: _types.basics.integer.32, nullable: true, default: 100 }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }

@@ -626,7 +626,6 @@ func (c *Checker) schemaTypeName(schema map[string]any) (string, bool) {
 	if ref, _ := schema["$ref"].(string); ref != "" {
 		return resolveTypeRef(ref)
 	}
-	// cap.services / cap.events 的受限 schema DSL 用 ref 键。
 	if ref, _ := schema["ref"].(string); ref != "" {
 		return resolveTypeRef(ref)
 	}

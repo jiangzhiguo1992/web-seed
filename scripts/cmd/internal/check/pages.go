@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func (c *Checker) checkFeaturePages() {
@@ -296,11 +298,14 @@ func (c *Checker) pageTypeCompatible(pageType, serviceType string) bool {
 }
 
 func (c *Checker) pageBaseType(t string) string {
-	name, ok := strings.CutPrefix(t, "_types.basics.")
+	family, variant, ok := contractspec.SplitBasicsRef(t)
 	if !ok {
 		return t
 	}
-	if family := c.pageTypeFamilies[name]; family != "" {
+	if mapped := c.pageTypeFamilies[family]; mapped != "" {
+		return "_types.basics." + mapped
+	}
+	if variant != "" {
 		return "_types.basics." + family
 	}
 	return t

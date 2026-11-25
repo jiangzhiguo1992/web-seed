@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -238,7 +239,10 @@ func parseColumnsInto(out map[string]columnSpec, raw any, customs map[string]con
 			continue
 		}
 		typ, _ := m["type"].(string)
-		typ = strings.TrimPrefix(typ, "_types.basics.")
+		family, variant, isBasics := contractspec.SplitBasicsRef(typ)
+		if isBasics {
+			typ = family
+		}
 		spec := columnSpec{}
 		if custom, ok := customs[typ]; ok {
 			spec.Custom = typ
@@ -247,6 +251,9 @@ func parseColumnsInto(out map[string]columnSpec, raw any, customs map[string]con
 		} else {
 			spec.Family = typ
 			applyParams(&spec, m)
+			if spec.Bits == 0 && variant != "" {
+				spec.Bits, _ = strconv.Atoi(variant)
+			}
 		}
 		spec.Nullable, _ = m["nullable"].(bool)
 		spec.PrimaryKey, _ = m["primary_key"].(bool)
@@ -458,7 +465,14 @@ func entityField(m map[string]any, tables map[string]map[string]columnSpec, prim
 }
 
 func typeSpec(typ string, customs map[string]contractspec.CustomValueType) columnSpec {
+	family, variant, _ := contractspec.SplitBasicsRef(typ)
+	if family != "" {
+		typ = family
+	}
 	spec := columnSpec{Family: typ}
+	if variant != "" {
+		spec.Bits, _ = strconv.Atoi(variant)
+	}
 	if custom, ok := customs[typ]; ok {
 		spec.Custom = typ
 		spec.Family = custom.Family
@@ -494,14 +508,20 @@ func goScalar(spec columnSpec, nullable bool) string {
 		} else {
 			typ = "float64"
 		}
-	case "decimal":
-		typ = "string" // 精确小数用字符串，避免 float 精度丢失
+	case "decimal", "money":
+		typ = "decimal.Decimal"
 	case "timestamp", "datetime":
 		typ = "time.Time"
 	case "json":
 		typ = "json.RawMessage"
 	case "bytes":
 		typ = "[]byte"
+	case "uuid", "jsonpath", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
+		typ = "string"
+	case "interval":
+		typ = "time.Duration"
+	case "oid":
+		typ = "uint32"
 	case "any":
 		typ = "any"
 	default:
@@ -520,15 +540,15 @@ func tsScalar(spec columnSpec, nullable bool) string {
 		typ = "string"
 	case "boolean":
 		typ = "boolean"
-	case "integer", "float":
+	case "integer", "float", "oid":
 		typ = "number"
-	case "decimal":
+	case "decimal", "money":
 		typ = "string"
 	case "timestamp", "datetime":
 		typ = "string"
 	case "json", "any":
 		typ = "unknown"
-	case "bytes":
+	case "bytes", "uuid", "jsonpath", "interval", "network", "bit", "textsearch", "xml", "geometry", "range", "multirange", "pg_lsn":
 		typ = "string"
 	default:
 		typ = "unknown"
@@ -548,14 +568,17 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 	b.WriteString(header)
 	b.WriteString("\npackage model\n\n")
 	hasEnums := len(enums) > 0
-	hasJSON, hasTime := false, false
+	hasJSON, hasTime, hasDecimal := false, false, false
 	for _, e := range entities {
 		for _, f := range e.Fields {
 			if f.GoType == "json.RawMessage" {
 				hasJSON = true
 			}
-			if strings.Contains(f.GoType, "time.Time") {
+			if strings.Contains(f.GoType, "time.Time") || f.GoType == "time.Duration" {
 				hasTime = true
+			}
+			if strings.Contains(f.GoType, "decimal.Decimal") {
+				hasDecimal = true
 			}
 		}
 	}
@@ -568,6 +591,9 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 	}
 	if hasTime {
 		imports = append(imports, "\"time\"")
+	}
+	if hasDecimal {
+		imports = append(imports, "\"github.com/shopspring/decimal\"")
 	}
 	if len(imports) > 0 {
 		b.WriteString("import (\n")

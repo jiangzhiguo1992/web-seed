@@ -756,7 +756,7 @@ func TestQueryEntityAndColumnsSensitivity(t *testing.T) {
 
 	q.Returns[0].Columns = []string{"data.tables.account.col.id"}
 	c.checkQueryReturns(q)
-	if !strings.Contains(entityErrs(c), "kind=entity forbids type/columns") {
+	if !strings.Contains(entityErrs(c), "kind=entity forbids columns") {
 		t.Fatalf("entity columns not rejected: %v", c.errs)
 	}
 
@@ -1352,7 +1352,7 @@ func TestQueryDerivedIDAndReturns(t *testing.T) {
 	q := parseQuery(map[string]any{
 		"name": "GetAccount",
 		"returns": []any{
-			map[string]any{"name": "account", "kind": "entity", "entity": "data.entities.account"},
+			map[string]any{"name": "account", "kind": "entity", "type": "data.entities.account"},
 		},
 	}, "q.yaml", "data.queries.account", "account")
 	if q.ID != "data.queries.account.get_account" {

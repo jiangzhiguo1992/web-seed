@@ -26,7 +26,7 @@ schemas:
       - { name: code, schema: { type: _types.basics.string }, required: true, description: "全局唯一编码" }
       - { name: name, schema: { type: _types.basics.string }, required: true, description: "展示名" }
       - { name: color, schema: { type: _types.basics.string }, nullable: true, description: "展示颜色 #RRGGBB" }
-      - { name: sort, schema: { type: _types.basics.integer }, required: true, description: "排序" }
+      - { name: sort, schema: { type: _types.basics.integer.32 }, required: true, description: "排序" }
       - { name: remark, schema: { type: _types.basics.string }, nullable: true, description: "备注" }
       - { name: extra, schema: { type: _types.basics.json }, nullable: true, description: "扩展元数据" }
   UpdateDictionaryInput:
@@ -34,7 +34,7 @@ schemas:
     properties:
       - { name: name, schema: { type: _types.basics.string }, required: true, description: "展示名" }
       - { name: color, schema: { type: _types.basics.string }, nullable: true, description: "展示颜色 #RRGGBB" }
-      - { name: sort, schema: { type: _types.basics.integer }, required: true, description: "排序" }
+      - { name: sort, schema: { type: _types.basics.integer.32 }, required: true, description: "排序" }
       - { name: remark, schema: { type: _types.basics.string }, nullable: true, description: "备注" }
       - { name: extra, schema: { type: _types.basics.json }, nullable: true, description: "扩展元数据" }
   SetDictionaryStatusInput:
@@ -52,7 +52,7 @@ schemas:
       - { name: code, schema: { type: _types.basics.string }, required: true, description: "全局唯一编码" }
       - { name: name, schema: { type: _types.basics.string }, required: true, description: "展示名" }
       - { name: color, schema: { type: _types.basics.string }, nullable: true, description: "展示颜色 #RRGGBB" }
-      - { name: sort, schema: { type: _types.basics.integer }, required: true, description: "排序" }
+      - { name: sort, schema: { type: _types.basics.integer.32 }, required: true, description: "排序" }
       - { name: remark, schema: { type: _types.basics.string }, nullable: true, description: "备注" }
       - { name: extra, schema: { type: _types.basics.json }, nullable: true, description: "扩展元数据" }
   DictionaryImportInput:
@@ -67,7 +67,7 @@ schemas:
   ImportResult:
     type: _types.schemas.object
     properties:
-      - { name: affected_rows, schema: { type: _types.basics.integer }, required: true, description: "成功写入的行数" }
+      - { name: affected_rows, schema: { type: _types.basics.integer.32 }, required: true, description: "成功写入的行数" }
 
 services:
   - name: list_roots
@@ -651,7 +651,7 @@ services:
         input:
           - { name: items, value: params.input.items, description: "字典项数组" }
         output:
-          - { name: affected_rows, type: _types.basics.integer, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
         errors:
           - platform.errors.DICTIONARY_CODE_TAKEN
           - platform.errors.DICTIONARY_PARENT_INVALID

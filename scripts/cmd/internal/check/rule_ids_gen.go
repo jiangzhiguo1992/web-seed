@@ -191,6 +191,7 @@ var knownRuleIDs = map[string]bool{
 	"schema.stability":            true,
 	"schema.targets":              true,
 	"schema.type":                 true,
+	"schema.type-concrete":        true,
 	"schema.type-vocabulary":      true,
 	"schema.types":                true,
 	"schema.unique":               true,
