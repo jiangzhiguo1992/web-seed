@@ -37,9 +37,7 @@ apps:
     timeout_ms: 5000
     includes:
       - cap.protocols.http.account
-      - cap.protocols.http.attachment
       - cap.protocols.http.auth
-      - cap.protocols.http.dictionary
     generated:
       spec: generated/openapi/admin.yaml
       server: apps/api/internal/generated/openapi

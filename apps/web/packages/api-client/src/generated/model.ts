@@ -13,6 +13,7 @@ export const AttachmentStatus = {
   Uploading: "uploading",
   Available: "available",
   Deleted: "deleted",
+  UploadFailed: "upload_failed",
 } as const
 
 export type AttachmentStatus = (typeof AttachmentStatus)[keyof typeof AttachmentStatus]

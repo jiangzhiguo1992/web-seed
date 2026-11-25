@@ -1,14 +1,13 @@
-# 附件域跨前后端枚举集合。
+# 系统域跨端枚举集合；按 owner_module 聚合。
 
-id: data.enums.attachment
-summary: "附件域枚举集合"
+id: data.enums.system
+summary: "系统域跨端枚举集合"
 owner_module: system
 schema_version: 1
 stability: draft
 do_not:
-  - "data.enums.attachment 只放附件自身的状态与访问级别；owner_table_name/purpose 是可扩展字符串，不是枚举"
-  - "attachment_status / attachment_visibility 的 code 删除后不得复用"
-
+  - "data.enums.system 只放 system 模块跨端枚举；字典选项、上传用途等可扩展值放 dictionary/attachment 表"
+  - "attachment_status / attachment_visibility / dictionary_status 的 code 删除后不得复用"
 enums:
   - name: attachment_status
     description: "附件状态"
@@ -18,11 +17,13 @@ enums:
       - { value: uploading, code: 0, description: "上传中；对象尚未可用" }
       - { value: available, code: 1, description: "可用；已完成上传" }
       - { value: deleted, code: 2, description: "已软删；终态" }
+      - { value: upload_failed, code: 3, description: "上传失败；需新建附件重新上传" }
     used_by:
       - cap.services.attachment.cleanup_stale_uploads
       - cap.services.attachment.complete_upload
       - cap.services.attachment.create_upload
       - cap.services.attachment.delete
+      - cap.services.attachment.fail_upload
       - data.entities.attachment
 
   - name: attachment_visibility
@@ -33,6 +34,19 @@ enums:
       - { value: private, code: 0, description: "私有；只能通过签名 URL 访问" }
       - { value: public, code: 1, description: "公开；可直接访问" }
     used_by:
-      - cap.protocols.http.attachment.create_upload
       - cap.services.attachment.create_upload
       - data.entities.attachment
+
+  - name: dictionary_status
+    description: "字典状态"
+    go_type: DictionaryStatus
+    ts_type: DictionaryStatus
+    values:
+      - { value: enabled, code: 0, description: "启用；可选择" }
+      - { value: disabled, code: 1, description: "停用；不可选择" }
+      - { value: deleted, code: 2, description: "已软删；终态，不再读取" }
+    used_by:
+      - cap.services.dictionary.create
+      - cap.services.dictionary.delete
+      - cap.services.dictionary.set_status
+      - data.entities.dictionary

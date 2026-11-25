@@ -10,7 +10,7 @@ do_not:
   - "GetDictionary 按全局唯一的 code 读取；不要用 name 做查询键"
   - "字典写查询必须复用 uq_dictionary_code / idx_dictionary_parent_sort；不要为写路径新增重复索引"
   - "code 创建后不可变；UpdateDictionary 不得包含 code"
-  - "BulkCreateDictionaries.items 的项结构由 feature.rules.dictionary.import_items_shape 约束；SQL 不得依赖未声明字段"
+  - "BulkCreateDictionaries.items 的项结构由 params[].fields 强类型约束；SQL 不得依赖未声明字段"
 
 queries:
   - name: ListRootDictionaries
@@ -226,7 +226,16 @@ queries:
       - { table: data.tables.dictionary, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: items, type: _types.json }
+      - name: items
+        type: _types.list<_types.object>
+        fields:
+          - { name: parent_id, type: _types.id, nullable: true, description: "父节点 ID；null 表示顶级" }
+          - { name: code, type: _types.string, required: true, description: "全局唯一编码" }
+          - { name: name, type: _types.string, required: true, description: "展示名" }
+          - { name: color, type: _types.string, nullable: true, description: "展示颜色 #RRGGBB" }
+          - { name: sort, type: _types.integer, required: true, description: "排序" }
+          - { name: remark, type: _types.string, nullable: true, description: "备注" }
+          - { name: extra, type: _types.json, nullable: true, description: "扩展元数据" }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }

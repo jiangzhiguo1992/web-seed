@@ -7,14 +7,16 @@ schema_version: 1
 stability: draft
 do_not:
   - "附件 deleted 后不得恢复；如需重新上传必须新建附件行"
+  - "upload_failed 不得回到 uploading；失败后只能软删并新建附件"
   - "对象存储里的物理对象不随数据库软删消失；清理由保留期任务负责"
 
 subjects:
   - { entity: data.entities.attachment, field: status }
 states:
   values:
-    - { value: uploading, steps: [ cap.services.attachment.complete_upload.set_attachment_status, cap.services.attachment.complete_upload.soft_delete_old, cap.services.attachment.delete.soft_delete_attachment ] }
+    - { value: uploading, steps: [ cap.services.attachment.complete_upload.set_attachment_status, cap.services.attachment.complete_upload.soft_delete_old, cap.services.attachment.delete.soft_delete_attachment, cap.services.attachment.fail_upload.set_attachment_status ] }
     - { value: available, steps: [ cap.services.attachment.complete_upload.soft_delete_old, cap.services.attachment.delete.soft_delete_attachment ] }
+    - { value: upload_failed, steps: [ cap.services.attachment.complete_upload.soft_delete_old, cap.services.attachment.delete.soft_delete_attachment ] }
     - { value: deleted, steps: [] }
   initial: uploading
   final: [ deleted ]
@@ -35,3 +37,10 @@ transitions:
     requires: [ ]
     implemented_by:
       - cap.services.attachment.complete_upload.set_attachment_status
+  - name: fail
+    description: "标记上传失败"
+    from: [ uploading ]
+    to: upload_failed
+    requires: [ ]
+    implemented_by:
+      - cap.services.attachment.fail_upload.set_attachment_status

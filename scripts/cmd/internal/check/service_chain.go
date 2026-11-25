@@ -477,6 +477,12 @@ func (c *Checker) serviceTypesCompatible(src, dst string) bool {
 	if s.base == "any" || d.base == "any" {
 		return true
 	}
+	if s.base == d.base && s.array == d.array {
+		return true
+	}
+	if d.base == "object" && d.array && (s.base == "array" || (s.array && strings.HasPrefix(s.base, "cap.services."))) {
+		return true // 强类型数组/对象列表可赋给批量 object 参数
+	}
 	if s.array != d.array {
 		return false
 	}
@@ -611,6 +617,9 @@ func (c *Checker) checkQueryInput(input map[string]any, q *queryInfo, qid, rel, 
 		p := byName[name]
 		if p.Type != "" && !c.serviceTypesCompatible(src, p.Type) {
 			c.rulef("service-input-type", "%s: step %s query %s input %s type %s is not compatible with %s", rel, stepID, qid, name, src, p.Type)
+		}
+		if sourceNode, ok := c.inputPathSchema(tc.doc, value); ok {
+			c.checkBatchParamFields(sourceNode, p, fmt.Sprintf("%s: step %s query %s input %s", rel, stepID, qid, name))
 		}
 		if nullable, known := c.inputValueNullable(value, tc); known && nullable && !p.Nullable {
 			c.rulef("service-input-nullable", "%s: step %s query %s input %s source is nullable but target param is not", rel, stepID, qid, name)

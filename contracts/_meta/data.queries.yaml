@@ -90,6 +90,18 @@ fields:
           - { name: nullable, type: _types.boolean, required: false, default: false, description: "是否可空" }
           - { name: default, type: _types.any, required: false, description: "null 时的默认值" }
           - { name: description, type: _types.string, required: false, description: "参数说明" }
+          - name: fields
+            type: _types.list<_types.object>
+            required: false
+            min_items: 1
+            unique_key: name
+            description: "type 为 _types.object 或 _types.list<_types.object> 时的元素字段；其他类型禁止"
+            item_fields:
+              - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
+              - { name: type, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "字段类型" }
+              - { name: required, type: _types.boolean, required: false, default: false, description: "是否必传" }
+              - { name: nullable, type: _types.boolean, required: false, default: false, description: "是否可空" }
+              - { name: description, type: _types.string, required: false, description: "字段说明" }
       - name: returns
         type: _types.list<_types.object>
         required: true
@@ -121,7 +133,7 @@ rules:
   - { id: query-name-unique, text: "query.name 派生的项 ID（<文件 id>.<snake_case(name)>）必须全局唯一；改名即新 ID；同一 name 或 snake_case 冲突都不允许", implemented_by: [ query-name-unique ] }
   - { id: query-shape, text: "affected_rows 不得为列表，必须是唯一非 error 返回项；columns 返回也必须是唯一非 error 返回项；两者不得带互斥字段；nullable 只允许 scalar/entity/columns", implemented_by: [ query-shape ] }
   - { id: query-table-shape, text: "tables 非空、表 ID 不得重复、每张表必须存在、不得指向 data.tables.base；第一项为主表", implemented_by: [ query-table-shape ] }
-  - { id: query-params, text: "params 第一项必须是 ctx context.Context，ctx 不得绑定 column/expr/default/nullable；params 的 name 不得重复；未绑定 column 时 type 必须是 _types.* 或 data.enums.*；column/expr 互斥且 expr 非空；default 只在 nullable:true 时允许；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器", implemented_by: [ query-params ] }
+  - { id: query-params, text: "params 第一项必须是 ctx context.Context，ctx 不得绑定 column/expr/default/nullable；params 的 name 不得重复；未绑定 column 时 type 必须是 _types.* 或 data.enums.*；column/expr 互斥且 expr 非空；default 只在 nullable:true 时允许；type 为 _types.object/_types.list<_types.object> 时必须声明非空 fields（name/type/required/nullable），且 fields[].type 必须是标量（_types.* / data.enums.*），容器类型用新的对象参数表达；其他类型禁止 fields；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器", implemented_by: [ query-params ] }
   - { id: query-param-column, text: "params[].column 必须属于查询的 tables；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型；data.enums.* 按 integer 列校验；integer 参数的类型 bits 必须等于列 bits，_types.id=64）；ctx 不参与列绑定", implemented_by: [ query-param-column ] }
   - { id: query-pagination, text: "offset/limit 是保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；offset 默认 0，limit 默认必须为正数；list 返回必须同时声明两者", implemented_by: [ query-pagination ] }
   - { id: query-returns, text: "最后一项必须是 {name: err, kind: error} 且只能出现一次；name 必须唯一；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的实体必须存在且主表在 tables 中，且不得写 columns；kind=columns 必须有 columns；scalar.type 必须是 _types.* 或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }

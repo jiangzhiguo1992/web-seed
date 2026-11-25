@@ -805,3 +805,160 @@ func isBuiltinType(t string) bool {
 }
 
 // collectRefs 递归收集 map/list 中的 $ref 字符串。
+
+// inputPathSchema 解析 params.<path> 指向的 schema 节点；用于批量参数的字段交叉校验。
+// 只解析 object 属性路径，索引/数组元素路径返回 false。
+func (c *Checker) inputPathSchema(doc map[string]any, field string) (map[string]any, bool) {
+	path, ok := splitInputField(field)
+	if !ok {
+		return nil, false
+	}
+	segs, err := parseWhenPath(path)
+	if err != nil || len(segs) == 0 || segs[0].hasIndex {
+		return nil, false
+	}
+	root := segs[0]
+	var typ string
+	found := false
+	for _, raw := range asList(doc["params"]) {
+		pm, _ := asMap(raw)
+		if name, _ := pm["name"].(string); name == root.name {
+			typ, _ = pm["type"].(string)
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, false
+	}
+	node, ok := c.typeNode(typ)
+	if !ok {
+		return nil, false
+	}
+	for _, seg := range segs[1:] {
+		if seg.hasIndex {
+			return nil, false
+		}
+		node, ok = c.schemaFieldNode(node, seg.name)
+		if !ok {
+			return nil, false
+		}
+	}
+	return node, true
+}
+
+// typeNode 把类型名解析为 schema 节点；只处理 cap.services 本地 schema。
+func (c *Checker) typeNode(typ string) (map[string]any, bool) {
+	typ = strings.TrimPrefix(strings.TrimSpace(typ), "*")
+	if resolved, ok := resolveTypeRef(typ); ok {
+		typ = resolved
+	}
+	def := c.methodTypeDefs[typ]
+	if def == nil {
+		return nil, false
+	}
+	return def, true
+}
+
+// schemaFieldNode 取 object schema 的属性节点；ref 先解析。
+func (c *Checker) schemaFieldNode(node map[string]any, name string) (map[string]any, bool) {
+	if ref, _ := node["ref"].(string); ref != "" {
+		resolved, ok := c.typeNode(ref)
+		if !ok {
+			return nil, false
+		}
+		node = resolved
+	}
+	if props, ok := asList2(node["properties"]); ok {
+		for _, raw := range props {
+			prop, _ := asMap(raw)
+			if pn, _ := prop["name"].(string); pn == name {
+				return schemaFromAny(prop["schema"])
+			}
+		}
+	}
+	return nil, false
+}
+
+// arrayItemNode 取 array 的 items 节点；ref 先解析。
+func (c *Checker) arrayItemNode(node map[string]any) (map[string]any, bool) {
+	if typ, _ := node["type"].(string); typ != "_types.array" {
+		return nil, false
+	}
+	item, ok := schemaFromAny(node["items"])
+	if !ok {
+		return nil, false
+	}
+	if ref, _ := item["ref"].(string); ref != "" {
+		return c.typeNode(ref)
+	}
+	return item, true
+}
+
+// isBatchObjectParam 判断目标参数是否为 list<object> 批量参数。
+func isBatchObjectParam(typ string) bool {
+	shape, ok := parseTypeShape(typ)
+	return ok && shape.array && shape.base == "object"
+}
+
+// checkBatchParamFields 校验 list<object> 批量参数的 fields 与源 service schema 一致。
+// 源不是可解析的 array<object> 时不做断言，避免与既有路径错误重复。
+func (c *Checker) checkBatchParamFields(sourceNode map[string]any, p queryParam, where string) {
+	if !isBatchObjectParam(p.Type) {
+		return
+	}
+	item, ok := c.arrayItemNode(sourceNode)
+	if !ok {
+		c.rulef("service-input-type", "%s: source array item cannot be resolved to an object schema", where)
+		return
+	}
+	props, ok := asList2(item["properties"])
+	if !ok || len(props) == 0 {
+		c.rulef("service-input-type", "%s: source array item is not an object schema", where)
+		return
+	}
+	if len(p.Fields) == 0 {
+		return
+	}
+	src := map[string]struct {
+		typ      string
+		required bool
+	}{}
+	for _, raw := range props {
+		prop, _ := asMap(raw)
+		name, _ := prop["name"].(string)
+		schema, _ := schemaFromAny(prop["schema"])
+		if name == "" || schema == nil {
+			continue
+		}
+		typ, _ := c.schemaTypeName(schema)
+		required, _ := prop["required"].(bool)
+		src[name] = struct {
+			typ      string
+			required bool
+		}{typ: typ, required: required}
+	}
+	if len(src) == 0 {
+		return
+	}
+	seen := map[string]bool{}
+	for _, f := range p.Fields {
+		seen[f.Name] = true
+		got, ok := src[f.Name]
+		if !ok {
+			c.rulef("service-input-type", "%s: field %s does not exist in source schema", where, f.Name)
+			continue
+		}
+		if normalizeContractType(f.Type) != normalizeContractType(got.typ) {
+			c.rulef("service-input-type", "%s: field %s type %s does not match source %s", where, f.Name, f.Type, got.typ)
+		}
+		if f.Required != got.required {
+			c.rulef("service-input-type", "%s: field %s required=%t does not match source required=%t", where, f.Name, f.Required, got.required)
+		}
+	}
+	for name := range src {
+		if !seen[name] {
+			c.rulef("service-input-type", "%s: field %s from source schema is missing", where, name)
+		}
+	}
+}

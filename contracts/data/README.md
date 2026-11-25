@@ -86,7 +86,7 @@ tables / entities / queries ──(type)──>  types
 
 ### 3.4 query 不写 SQL
 
-**选择**：只声明 `tables` / `params` / `returns` / `index_ref` / `caches` / `archive`。`params` 第一项必须是 `ctx context.Context`（生成器注入，SQL 参数从第二项开始）；`returns` 最后一项必须是 `{name: err, kind: error}`，不能省略。
+**选择**：只声明 `tables` / `params` / `returns` / `index_ref` / `caches` / `archive`。`params` 第一项必须是 `ctx context.Context`（生成器注入，SQL 参数从第二项开始）；`returns` 最后一项必须是 `{name: err, kind: error}`，不能省略。对象/对象列表批量参数用 `_types.object` / `_types.list<_types.object>` 加 `fields`（`name` / `type` / `required` / `nullable`）声明元素字段，checker 强制非空；不要把字段结构塞进 `_types.json`。
 **理由**：SQL 语义 checker 无法验证；写进契约就是第二份真相，必然与 `.sql` 实现漂移。
 **代价**：SQL 质量靠 `EXPLAIN` 与评审。契约只保证"这个查询被设计过、用到的索引列前缀与登记列一致、缓存/归档引用与 storage 双向对齐"。
 

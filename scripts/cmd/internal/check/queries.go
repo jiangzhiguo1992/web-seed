@@ -12,6 +12,14 @@ import (
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
+type queryParamField struct {
+	Name        string
+	Type        string
+	Required    bool
+	Nullable    bool
+	Description string
+}
+
 type queryParam struct {
 	Name         string
 	Type         string
@@ -21,6 +29,8 @@ type queryParam struct {
 	Nullable     bool
 	HasDefault   bool
 	DefaultValue any
+	Fields       []queryParamField
+	HasFields    bool
 }
 
 type queryReturn struct {
@@ -200,6 +210,22 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		p.Nullable, _ = pm["nullable"].(bool)
 		if v, ok := pm["default"]; ok {
 			p.HasDefault, p.DefaultValue = true, v
+		}
+		if rawFields, ok := pm["fields"]; ok {
+			p.HasFields = true
+			for _, rawField := range asList(rawFields) {
+				fm, ok := asMap(rawField)
+				if !ok {
+					continue
+				}
+				f := queryParamField{}
+				f.Name, _ = fm["name"].(string)
+				f.Type, _ = fm["type"].(string)
+				f.Required, _ = fm["required"].(bool)
+				f.Nullable, _ = fm["nullable"].(bool)
+				f.Description, _ = fm["description"].(string)
+				p.Fields = append(p.Fields, f)
+			}
 		}
 		q.Params = append(q.Params, p)
 	}
@@ -458,7 +484,50 @@ func (c *Checker) checkQueryParams(q *queryInfo) {
 				c.rulef("query-params", "%s", msg)
 			}
 		}
+		c.checkQueryParamFields(p, pw)
 	}
+}
+
+// checkQueryParamFields 校验 object/list<object> 批量参数的元素字段。
+func (c *Checker) checkQueryParamFields(p queryParam, where string) {
+	base := normalizeContractType(p.Type)
+	isObject := base == "object"
+	isObjectList := base == "List<object>"
+	if !isObject && !isObjectList {
+		if p.HasFields {
+			c.rulef("query-params", "%s: fields is only allowed for _types.object/_types.list<_types.object>, got %s", where, p.Type)
+		}
+		return
+	}
+	if p.Column != "" || p.HasExpr || p.HasDefault {
+		c.rulef("query-params", "%s: object params must not bind column/expr/default", where)
+	}
+	if !p.HasFields || len(p.Fields) == 0 {
+		c.rulef("query-params", "%s: object params must declare non-empty fields", where)
+		return
+	}
+	seen := map[string]bool{}
+	for _, f := range p.Fields {
+		fw := fmt.Sprintf("%s.fields.%s", where, f.Name)
+		if f.Name == "" || seen[f.Name] {
+			c.rulef("query-params", "%s: duplicate or empty field name", fw)
+			continue
+		}
+		seen[f.Name] = true
+		if _, _, _, ok := c.paramLogicalType(f.Type); !ok {
+			c.rulef("query-params", "%s: field type %q cannot map to a type family or data.enums.*", fw, f.Type)
+		}
+		if nonScalarFieldType(f.Type) {
+			c.rulef("query-params", "%s: field type %q must be scalar; use a separate typed object param for nesting", fw, f.Type)
+		}
+	}
+}
+
+// nonScalarFieldType 判断 fields 中不允许的容器类型；fields 只描述一层对象元素。
+func nonScalarFieldType(typ string) bool {
+	base := normalizeContractType(typ)
+	return base == "object" || base == "array" || base == "map" || base == "set" ||
+		strings.HasPrefix(base, "List<") || strings.HasPrefix(base, "_types.list")
 }
 
 // isPaginationParam 标记保留分页参数名；其 default 形状由 checkQueryPagination 统一校验。
@@ -597,6 +666,9 @@ func (c *Checker) paramLogicalType(typ string) (family string, array, enum, ok b
 	}
 	if strings.HasPrefix(base, "data.enums.") {
 		return "integer", array, true, true
+	}
+	if base == "object" {
+		return "json", array, false, true
 	}
 	if fam := c.valueType(base); fam != "" {
 		return fam, array, false, true

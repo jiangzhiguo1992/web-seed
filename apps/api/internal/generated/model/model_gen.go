@@ -73,9 +73,10 @@ func (s *AccountStatus) UnmarshalJSON(data []byte) error {
 type AttachmentStatus int32
 
 const (
-	AttachmentStatusUploading AttachmentStatus = 0 // 上传中；对象尚未可用
-	AttachmentStatusAvailable AttachmentStatus = 1 // 可用；已完成上传
-	AttachmentStatusDeleted   AttachmentStatus = 2 // 已软删；终态
+	AttachmentStatusUploading    AttachmentStatus = 0 // 上传中；对象尚未可用
+	AttachmentStatusAvailable    AttachmentStatus = 1 // 可用；已完成上传
+	AttachmentStatusDeleted      AttachmentStatus = 2 // 已软删；终态
+	AttachmentStatusUploadFailed AttachmentStatus = 3 // 上传失败；需新建附件重新上传
 )
 
 func (s AttachmentStatus) String() string {
@@ -86,6 +87,8 @@ func (s AttachmentStatus) String() string {
 		return "available"
 	case AttachmentStatusDeleted:
 		return "deleted"
+	case AttachmentStatusUploadFailed:
+		return "upload_failed"
 	default:
 		return ""
 	}
@@ -99,6 +102,8 @@ func ParseAttachmentStatus(v string) (AttachmentStatus, error) {
 		return AttachmentStatusAvailable, nil
 	case "deleted":
 		return AttachmentStatusDeleted, nil
+	case "upload_failed":
+		return AttachmentStatusUploadFailed, nil
 	default:
 		return 0, fmt.Errorf("unknown AttachmentStatus %q", v)
 	}

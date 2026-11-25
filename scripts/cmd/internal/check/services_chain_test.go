@@ -1303,3 +1303,88 @@ func TestServiceRuleErrorsCovered(t *testing.T) {
 		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	mustContainRule(t, c.errs, "service-errors")
 }
+
+func TestBatchParamFieldsCrossCheck(t *testing.T) {
+	schemaPrefix := "cap.services.dictionary.schemas."
+	c := &Checker{
+		methodTypeDefs: map[string]map[string]any{
+			schemaPrefix + "DictionaryScalarInput": {
+				"type": "_types.object",
+				"properties": []any{map[string]any{
+					"name":   "items",
+					"schema": map[string]any{"type": "_types.array", "items": map[string]any{"type": "_types.string"}},
+				}},
+			},
+			schemaPrefix + "DictionaryImportInput": {
+				"type": "_types.object",
+				"properties": []any{
+					map[string]any{
+						"name": "items",
+						"schema": map[string]any{
+							"type":  "_types.array",
+							"items": map[string]any{"ref": schemaPrefix + "DictionaryImportItem"},
+						},
+					},
+				},
+			},
+			schemaPrefix + "DictionaryImportItem": {
+				"type": "_types.object",
+				"properties": []any{
+					map[string]any{"name": "parent_id", "schema": map[string]any{"type": "_types.id"}, "nullable": true},
+					map[string]any{"name": "code", "schema": map[string]any{"type": "_types.string"}, "required": true},
+				},
+			},
+		},
+		valueTypes: contractspec.ValueTypes{TypeFamilies: map[string]contractspec.ValueTypeFamily{
+			"string": {}, "integer": {},
+		}},
+	}
+	q := &queryInfo{
+		ID: "data.queries.dictionary.bulk_create_dictionaries",
+		Params: []queryParam{
+			{Name: "ctx", Type: "context.Context"},
+			{
+				Name: "items", Type: "_types.list<_types.object>", HasFields: true,
+				Fields: []queryParamField{
+					{Name: "parent_id", Type: "_types.id"},
+					{Name: "code", Type: "_types.string", Required: true},
+				},
+			},
+		},
+	}
+	tc := stepTypeContext{doc: map[string]any{"params": []any{
+		map[string]any{"name": "input", "type": schemaPrefix + "DictionaryImportInput"},
+	}}}
+	c.checkQueryInput(map[string]any{"items": "params.input.items"}, q, q.ID, "f", "s", tc)
+	if len(c.errs) != 0 {
+		t.Fatalf("matching fields reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[1].Fields = []queryParamField{
+		{Name: "parent_id", Type: "_types.integer"},
+		{Name: "code", Type: "_types.string", Required: true},
+	}
+	c.checkQueryInput(map[string]any{"items": "params.input.items"}, q, q.ID, "f", "s", tc)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "does not match source") {
+		t.Fatalf("field type mismatch not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	q.Params[1].Fields = []queryParamField{{Name: "code", Type: "_types.string", Required: true}}
+	c.checkQueryInput(map[string]any{"items": "params.input.items"}, q, q.ID, "f", "s", tc)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "from source schema is missing") {
+		t.Fatalf("missing source field not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	scalarTC := stepTypeContext{doc: map[string]any{"params": []any{
+		map[string]any{"name": "input", "type": schemaPrefix + "DictionaryScalarInput"},
+	}}}
+	q.Params[1].Fields = nil
+	q.Params[1].HasFields = false
+	c.checkQueryInput(map[string]any{"items": "params.input.items"}, q, q.ID, "f", "s", scalarTC)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "not an object schema") {
+		t.Fatalf("scalar array source not reported: %v", c.errs)
+	}
+}

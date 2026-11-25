@@ -1,7 +1,7 @@
 # 字典读取服务。
 
 id: cap.services.dictionary
-summary: "字典读取服务"
+summary: "字典读写服务"
 owner_module: system
 schema_version: 1
 stability: draft
@@ -9,7 +9,7 @@ do_not:
   - "字典值只用于展示；不要按 code 做业务分支"
   - "读取服务必须过滤 deleted_at 非空的行；停用节点由调用方按 status 处理"
   - "code 创建后不可变；更新只改展示字段"
-  - "import 的 items 是 JSON 边界；字段语义由 feature.rules.dictionary.import_items_shape 约束，不要在 handler 里另造字段"
+  - "import 的 items 由 DictionaryImportInput.items -> DictionaryImportItem 强类型约束；不要在 handler 里另造字段"
 
 schemas:
   DictionaryPage:
@@ -45,10 +45,25 @@ schemas:
     type: _types.object
     properties:
       - { name: parent_id, schema: { type: _types.id }, nullable: true, description: "新父节点；null 表示移到顶级" }
+  DictionaryImportItem:
+    type: _types.object
+    properties:
+      - { name: parent_id, schema: { type: _types.id }, nullable: true, description: "父节点 ID；null 表示顶级" }
+      - { name: code, schema: { type: _types.string }, required: true, description: "全局唯一编码" }
+      - { name: name, schema: { type: _types.string }, required: true, description: "展示名" }
+      - { name: color, schema: { type: _types.string }, nullable: true, description: "展示颜色 #RRGGBB" }
+      - { name: sort, schema: { type: _types.integer }, required: true, description: "排序" }
+      - { name: remark, schema: { type: _types.string }, nullable: true, description: "备注" }
+      - { name: extra, schema: { type: _types.json }, nullable: true, description: "扩展元数据" }
   DictionaryImportInput:
     type: _types.object
     properties:
-      - { name: items, schema: { type: _types.json }, required: true, description: "字典项 JSON 数组；每项字段见 feature.rules.dictionary.import_items_shape" }
+      - name: items
+        schema:
+          type: _types.array
+          items: { ref: cap.services.dictionary.schemas.DictionaryImportItem }
+        required: true
+        description: "字典项数组"
   ImportResult:
     type: _types.object
     properties:
@@ -57,7 +72,7 @@ schemas:
 services:
   - name: list_roots
     summary: "分页列出顶级字典节点"
-    visibility: public
+    visibility: internal
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -90,12 +105,11 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by:
-      - cap.protocols.http.dictionary.list
+    used_by: []
 
   - name: list_children
     summary: "按父节点列出子节点"
-    visibility: public
+    visibility: internal
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -130,8 +144,7 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by:
-      - cap.protocols.http.dictionary.children
+    used_by: []
 
   - name: get
     summary: "按编码读取字典节点"
@@ -162,14 +175,13 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_NOT_FOUND
-        rules:
-          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        rules: [ ]
         goto: $end
     used_by: []
 
   - name: get_by_id
     summary: "按 ID 读取字典节点"
-    visibility: public
+    visibility: internal
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -196,15 +208,13 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_NOT_FOUND
-        rules:
-          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        rules: [ ]
         goto: $end
-    used_by:
-      - cap.protocols.http.dictionary.get
+    used_by: []
 
   - name: create
     summary: "创建字典节点"
-    visibility: public
+    visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -264,8 +274,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_CODE_TAKEN
-        rules:
-          - { rule: feature.rules.dictionary.code_unique }
+        rules: [ ]
         goto: parent_branch
       - id: parent_branch
         kind: when
@@ -296,8 +305,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_PARENT_INVALID
-        rules:
-          - { rule: feature.rules.dictionary.parent_must_exist }
+        rules: [ ]
         goto: create_dictionary
       - id: create_dictionary
         kind: query
@@ -321,12 +329,11 @@ services:
           - platform.errors.DICTIONARY_INVALID
         query: data.queries.dictionary.create_dictionary
         goto: $end
-    used_by:
-      - cap.protocols.http.dictionary.create
+    used_by: []
 
   - name: update
     summary: "更新字典展示字段"
-    visibility: public
+    visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -354,8 +361,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_NOT_FOUND
-        rules:
-          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        rules: [ ]
         goto: validate
       - id: validate
         kind: logic
@@ -386,12 +392,11 @@ services:
           - platform.errors.DICTIONARY_INVALID
         query: data.queries.dictionary.update_dictionary
         goto: $end
-    used_by:
-      - cap.protocols.http.dictionary.update
+    used_by: []
 
   - name: set_status
     summary: "启用或停用字典"
-    visibility: public
+    visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -419,8 +424,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_NOT_FOUND
-        rules:
-          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        rules: [ ]
         goto: validate
       - id: validate
         kind: logic
@@ -430,8 +434,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
-        rules:
-          - { rule: feature.rules.dictionary.status_toggle_only }
+        rules: [ ]
         goto: set_dictionary_status
       - id: set_dictionary_status
         kind: query
@@ -448,12 +451,11 @@ services:
           - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
         query: data.queries.dictionary.set_dictionary_status
         goto: $end
-    used_by:
-      - cap.protocols.http.dictionary.set_status
+    used_by: []
 
   - name: delete
     summary: "软删字典"
-    visibility: public
+    visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -479,8 +481,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_NOT_FOUND
-        rules:
-          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        rules: [ ]
         goto: exists_children
       - id: exists_children
         kind: query
@@ -500,8 +501,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_HAS_CHILDREN
-        rules:
-          - { rule: feature.rules.dictionary.delete_requires_no_children }
+        rules: [ ]
         goto: status_deleted
       - id: status_deleted
         kind: logic
@@ -526,12 +526,11 @@ services:
           - platform.errors.DICTIONARY_HAS_CHILDREN
         query: data.queries.dictionary.soft_delete_dictionary
         goto: $end
-    used_by:
-      - cap.protocols.http.dictionary.delete
+    used_by: []
 
   - name: move
     summary: "移动字典节点"
-    visibility: public
+    visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -559,8 +558,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_NOT_FOUND
-        rules:
-          - { rule: feature.rules.dictionary.deleted_cannot_modify }
+        rules: [ ]
         goto: parent_branch
       - id: parent_branch
         kind: when
@@ -591,8 +589,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_PARENT_INVALID
-        rules:
-          - { rule: feature.rules.dictionary.parent_must_exist }
+        rules: [ ]
         goto: validate_cycle
       - id: validate_cycle
         kind: logic
@@ -603,8 +600,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_PARENT_INVALID
-        rules:
-          - { rule: feature.rules.dictionary.move_rejects_cycle }
+        rules: [ ]
         goto: move_dictionary
       - id: move_dictionary
         kind: query
@@ -618,12 +614,11 @@ services:
           - platform.errors.DICTIONARY_PARENT_INVALID
         query: data.queries.dictionary.move_dictionary
         goto: $end
-    used_by:
-      - cap.protocols.http.dictionary.move
+    used_by: []
 
   - name: import
     summary: "批量导入字典"
-    visibility: public
+    visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -636,18 +631,17 @@ services:
         kind: logic
         summary: "校验 items 是合法的字典项数组"
         input:
-          - { name: items, value: params.input.items, description: "字典项 JSON 数组" }
+          - { name: items, value: params.input.items, description: "字典项数组" }
         output: [ ]
         errors:
           - platform.errors.DICTIONARY_INVALID
-        rules:
-          - { rule: feature.rules.dictionary.import_items_shape }
+        rules: [ ]
         goto: bulk_create_dictionaries
       - id: bulk_create_dictionaries
         kind: query
         summary: "调用 data.queries.dictionary.bulk_create_dictionaries"
         input:
-          - { name: items, value: params.input.items, description: "字典项 JSON 数组" }
+          - { name: items, value: params.input.items, description: "字典项数组" }
         output:
           - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
         errors:
@@ -666,5 +660,4 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by:
-      - cap.protocols.http.dictionary.import
+    used_by: []

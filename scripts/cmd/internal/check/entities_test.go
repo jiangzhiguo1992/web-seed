@@ -1638,3 +1638,63 @@ func TestEntityManyToManyThrough(t *testing.T) {
 		t.Fatalf("wrong through target not reported: %v", c.errs)
 	}
 }
+
+func TestQueryObjectParamFields(t *testing.T) {
+	base := []queryParam{{Name: "ctx", Type: "context.Context"}}
+	valid := append(base, queryParam{
+		Name: "items", Type: "_types.list<_types.object>", HasFields: true,
+		Fields: []queryParamField{{Name: "code", Type: "_types.string", Required: true}},
+	})
+	c := &Checker{}
+	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: valid})
+	if len(c.errs) != 0 {
+		t.Fatalf("valid object param reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	missing := append(base, queryParam{Name: "items", Type: "_types.list<_types.object>"})
+	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: missing})
+	if !strings.Contains(entityErrs(c), "must declare non-empty fields") {
+		t.Fatalf("missing fields not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	badField := append(base, queryParam{
+		Name: "items", Type: "_types.list<_types.object>", HasFields: true,
+		Fields: []queryParamField{{Name: "code", Type: "_types.bogus"}},
+	})
+	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: badField})
+	if !strings.Contains(entityErrs(c), "cannot map to a type family") {
+		t.Fatalf("invalid field type not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	notObject := append(base, queryParam{
+		Name: "items", Type: "_types.string", HasFields: true,
+		Fields: []queryParamField{{Name: "code", Type: "_types.string"}},
+	})
+	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: notObject})
+	if !strings.Contains(entityErrs(c), "fields is only allowed") {
+		t.Fatalf("fields on scalar not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	nested := append(base, queryParam{
+		Name: "items", Type: "_types.list<_types.object>", HasFields: true,
+		Fields: []queryParamField{{Name: "nested", Type: "_types.object"}},
+	})
+	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: nested})
+	if !strings.Contains(entityErrs(c), "must be scalar") {
+		t.Fatalf("nested object field not reported: %v", c.errs)
+	}
+}
+
+func TestServiceTypesCompatibleBatchObject(t *testing.T) {
+	c := &Checker{}
+	if !c.serviceTypesCompatible("_types.array", "_types.list<_types.object>") {
+		t.Fatal("typed array must feed a batch object param")
+	}
+	if c.serviceTypesCompatible("_types.string", "_types.list<_types.object>") {
+		t.Fatal("string accepted as batch object param")
+	}
+}

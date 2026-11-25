@@ -61,6 +61,7 @@ var knownRuleIDs = map[string]bool{
 	"enum-do-not-specific":        true,
 	"enum-id":                     true,
 	"enum-key-order":              true,
+	"enum-owner-module":           true,
 	"enum-type-unique":            true,
 	"enum-used-by":                true,
 	"enum-values-unique":          true,

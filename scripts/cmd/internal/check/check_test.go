@@ -3819,3 +3819,32 @@ func TestValidateBooleanUniqueKey(t *testing.T) {
 		t.Fatalf("boolean unique_key must fail: %v", err)
 	}
 }
+
+func TestEnumOwnerModuleMatchesFile(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "data.enums")
+	writeCapFile(t, root, "contracts/data/enums/notes.yaml", `id: data.enums.notes
+summary: "备注域枚举"
+owner_module: other
+schema_version: 1
+stability: draft
+do_not:
+  - "data.enums.notes 的 value 删除后 code 不得复用"
+enums:
+  - name: note_status
+    description: "备注状态"
+    go_type: NoteStatus
+    ts_type: NoteStatus
+    values:
+      - { value: active, code: 0, description: "有效" }
+    used_by:
+      - data.entities.note
+`)
+	c := &Checker{root: root, entities: map[string]*entityInfo{
+		"data.entities.note": {ID: "data.entities.note", Fields: []entityFieldInfo{{Name: "Status", Type: "data.enums.note_status"}}},
+	}}
+	c.checkEnums(schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[enum-owner-module]") {
+		t.Fatalf("owner_module/file stem mismatch not reported: %v", c.errs)
+	}
+}

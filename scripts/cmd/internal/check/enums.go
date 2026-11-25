@@ -34,6 +34,11 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 		c.checkFieldOrder(rel, schema.Fields, orderRules{top: "enum-key-order", nested: "enum-key-order"})
 		c.checkTargetFileName(schema, filepath.Base(path), rel)
 		c.checkStability(doc, rel)
+		stem := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		owner, _ := doc["owner_module"].(string)
+		if owner != "" && owner != stem {
+			c.rulef("enum-owner-module", "%s: owner_module %s must equal file stem %s", rel, owner, stem)
+		}
 		fileID := schema.Targets.FileID(filepath.Base(path))
 		if id, ok := doc["id"].(string); ok && id != fileID {
 			c.rulef("enum-id", "%s: id must be %s", rel, fileID)

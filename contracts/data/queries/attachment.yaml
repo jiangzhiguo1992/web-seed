@@ -48,6 +48,7 @@ queries:
     used_by:
       - cap.services.attachment.complete_upload
       - cap.services.attachment.delete
+      - cap.services.attachment.fail_upload
       - cap.services.attachment.get
       - cap.services.attachment.get_download_url
 
@@ -115,6 +116,7 @@ queries:
       - { index: data.tables.attachment.pk, columns: [ id ] }
     used_by:
       - cap.services.attachment.complete_upload
+      - cap.services.attachment.fail_upload
 
   - name: SoftDeleteAttachment
     description: "软删附件并同步 status 与 deleted_at；id 为 null 时视为无替换目标"
@@ -137,6 +139,23 @@ queries:
 
   - name: SoftDeleteStaleUploads
     description: "软删超过 cutoff 仍停留在 uploading 的附件"
+    tables:
+      - { table: data.tables.attachment, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: cutoff, type: _types.timestamp }
+      - { name: status, type: _types.integer, column: data.tables.attachment.col.status }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.attachment.idx_attachment_stale_upload, columns: [ status, created_at ] }
+    used_by:
+      - cap.services.attachment.cleanup_stale_uploads
+
+  - name: SoftDeleteStaleFailedUploads
+    description: "软删超过 cutoff 仍停留在 upload_failed 的附件"
     tables:
       - { table: data.tables.attachment, write: true }
     params:

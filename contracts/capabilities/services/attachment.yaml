@@ -1,7 +1,7 @@
 # 附件读写服务。
 
 id: cap.services.attachment
-summary: "附件读写服务：上传票据、完成、下载签名、读取与软删"
+summary: "附件读写服务：上传票据、完成/失败、下载签名、读取与软删"
 owner_module: system
 schema_version: 1
 stability: draft
@@ -49,7 +49,7 @@ schemas:
 services:
   - name: list
     summary: "按所有者与用途列出附件"
-    visibility: public
+    visibility: internal
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -88,12 +88,11 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by:
-      - cap.protocols.http.attachment.list
+    used_by: []
 
   - name: get
     summary: "按 ID 读取附件"
-    visibility: public
+    visibility: internal
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -120,11 +119,9 @@ services:
         output: [ ]
         errors:
           - platform.errors.ATTACHMENT_NOT_FOUND
-        rules:
-          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        rules: [ ]
         goto: $end
-    used_by:
-      - cap.protocols.http.attachment.get
+    used_by: []
 
   - name: get_by_key
     summary: "按对象 key 读取附件"
@@ -155,14 +152,13 @@ services:
         output: [ ]
         errors:
           - platform.errors.ATTACHMENT_NOT_FOUND
-        rules:
-          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        rules: [ ]
         goto: $end
     used_by: []
 
   - name: create_upload
     summary: "创建附件元数据并返回预签名上传票据"
-    visibility: public
+    visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -217,8 +213,6 @@ services:
           - { rule: feature.rules.attachment.purpose_format }
           - { rule: feature.rules.attachment.size_non_negative }
           - { rule: feature.rules.attachment.sha256_format }
-          - { rule: feature.rules.attachment.object_key_unique }
-          - { rule: feature.rules.attachment.object_key_immutable }
         goto: validate_owner
       - id: validate_owner
         kind: logic
@@ -229,8 +223,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.ATTACHMENT_OWNER_INVALID
-        rules:
-          - { rule: feature.rules.attachment.owner_must_exist }
+        rules: [ ]
         goto: create_attachment
       - id: create_attachment
         kind: query
@@ -284,12 +277,11 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by:
-      - cap.protocols.http.attachment.create_upload
+    used_by: []
 
   - name: complete_upload
     summary: "完成上传，把附件置为 available"
-    visibility: public
+    visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -316,8 +308,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.ATTACHMENT_NOT_FOUND
-        rules:
-          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        rules: [ ]
         goto: check_status
       - id: check_status
         kind: logic
@@ -327,12 +318,11 @@ services:
         output: [ ]
         errors:
           - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
-        rules:
-          - { rule: feature.rules.attachment.uploading_only }
+        rules: [ ]
         goto: verify_object
       - id: verify_object
         kind: logic
-        summary: "校验对象已上传且大小/类型与元数据一致"
+        summary: "校验对象已上传、大小/类型与元数据一致，sha256 非空时内容哈希必须一致"
         input:
           - { name: object_key, value: step.get_attachment.attachment.object_key, description: "对象 key" }
           - { name: content_type, value: step.get_attachment.attachment.content_type, description: "声明的 MIME 类型" }
@@ -341,9 +331,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.ATTACHMENT_INVALID
-        rules:
-          - { rule: feature.rules.attachment.object_must_match_upload }
-          - { rule: feature.rules.attachment.sha256_must_match }
+        rules: [ ]
         goto: status_available
       - id: status_available
         kind: logic
@@ -394,7 +382,7 @@ services:
         summary: "软删被替换的旧附件"
         lifecycles: [ cap.lifecycles.attachment.destroy ]
         state_gate:
-          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available ] }
+          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available, upload_failed ] }
         input:
           - { name: id, value: step.get_attachment.attachment.replaces_id, description: "旧附件 ID" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
@@ -403,12 +391,78 @@ services:
           - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
         query: data.queries.attachment.soft_delete_attachment
         goto: $end
-    used_by:
-      - cap.protocols.http.attachment.complete
+    used_by: []
+
+  - name: fail_upload
+    summary: "标记上传失败"
+    visibility: public
+    tx_mode: required
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id }
+    returns:
+      - { name: attachment, type: data.entities.attachment, value: step.set_attachment_status.attachment }
+      - { name: err, type: error, value: "*" }
+    steps:
+      - id: get_attachment
+        kind: query
+        summary: "调用 data.queries.attachment.get_attachment"
+        input:
+          - { name: id, value: params.id, description: "附件 ID" }
+        output:
+          - { name: attachment, type: data.entities.attachment, description: "附件；不存在时为 null", nullable: true }
+        errors: [ ]
+        query: data.queries.attachment.get_attachment
+        goto: check
+      - id: check
+        kind: logic
+        summary: "不存在或已软删时按不存在处理"
+        input:
+          - { name: attachment, value: step.get_attachment.attachment, description: "当前附件" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_NOT_FOUND
+        rules: [ ]
+        goto: check_status
+      - id: check_status
+        kind: logic
+        summary: "只有 uploading 可以标记失败"
+        input:
+          - { name: status, value: step.get_attachment.attachment.status, description: "当前状态" }
+        output: [ ]
+        errors:
+          - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+        rules: [ ]
+        goto: status_failed
+      - id: status_failed
+        kind: logic
+        summary: "确定失败后的状态 upload_failed"
+        input: [ ]
+        output:
+          - { name: status, type: data.enums.attachment_status, description: "目标状态 upload_failed" }
+        errors: [ ]
+        rules: [ ]
+        goto: set_attachment_status
+      - id: set_attachment_status
+        kind: query
+        summary: "调用 data.queries.attachment.set_attachment_status"
+        lifecycles: [ cap.lifecycles.attachment.transitions.fail ]
+        state_gate:
+          - { lifecycle: cap.lifecycles.attachment, values: [ uploading ] }
+        input:
+          - { name: id, value: params.id, description: "附件 ID" }
+          - { name: status, value: step.status_failed.status, description: "目标状态 upload_failed" }
+        output:
+          - { name: attachment, type: data.entities.attachment, description: "query 返回的 attachment" }
+        errors:
+          - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+        query: data.queries.attachment.set_attachment_status
+        goto: $end
+    used_by: []
 
   - name: get_download_url
     summary: "为可用附件签发下载 URL"
-    visibility: public
+    visibility: internal
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -435,8 +489,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.ATTACHMENT_NOT_FOUND
-        rules:
-          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        rules: [ ]
         goto: check_available
       - id: check_available
         kind: logic
@@ -446,8 +499,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
-        rules:
-          - { rule: feature.rules.attachment.download_requires_available }
+        rules: [ ]
         goto: sign_download
       - id: sign_download
         kind: logic
@@ -459,8 +511,7 @@ services:
           - { name: url, type: _types.string, description: "下载 URL" }
           - { name: expires_at, type: _types.timestamp, description: "下载 URL 过期时间" }
         errors: [ ]
-        rules:
-          - { rule: feature.rules.attachment.visibility_signature_policy }
+        rules: [ ]
         goto: build_signed
       - id: build_signed
         kind: logic
@@ -473,12 +524,11 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by:
-      - cap.protocols.http.attachment.download
+    used_by: []
 
   - name: delete
     summary: "软删附件"
-    visibility: public
+    visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -504,8 +554,7 @@ services:
         output: [ ]
         errors:
           - platform.errors.ATTACHMENT_NOT_FOUND
-        rules:
-          - { rule: feature.rules.attachment.deleted_cannot_operate }
+        rules: [ ]
         goto: status_deleted
       - id: status_deleted
         kind: logic
@@ -521,7 +570,7 @@ services:
         summary: "调用 data.queries.attachment.soft_delete_attachment"
         lifecycles: [ cap.lifecycles.attachment.destroy ]
         state_gate:
-          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available ] }
+          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available, upload_failed ] }
         input:
           - { name: id, value: params.id, description: "附件 ID" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
@@ -530,17 +579,16 @@ services:
           - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
         query: data.queries.attachment.soft_delete_attachment
         goto: $end
-    used_by:
-      - cap.protocols.http.attachment.delete
+    used_by: []
 
   - name: cleanup_stale_uploads
-    summary: "软删长时间停留在 uploading 的附件"
+    summary: "软删长时间停留在 uploading 或 upload_failed 的附件"
     visibility: internal
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
     returns:
-      - { name: affected_rows, type: _types.integer, value: step.soft_delete_stale.affected_rows }
+      - { name: affected_rows, type: _types.integer, value: step.sum.affected_rows }
       - { name: err, type: error, value: "*" }
     steps:
       - id: cutoff
@@ -559,12 +607,11 @@ services:
         output:
           - { name: status, type: data.enums.attachment_status, description: "目标状态 deleted" }
         errors: [ ]
-        rules:
-          - { rule: feature.rules.attachment.cleanup_only_uploading }
+        rules: [ ]
         goto: soft_delete_stale
       - id: soft_delete_stale
         kind: query
-        summary: "调用 data.queries.attachment.soft_delete_stale_uploads"
+        summary: "软删 stale uploading"
         input:
           - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
@@ -572,6 +619,28 @@ services:
           - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
         errors: [ ]
         query: data.queries.attachment.soft_delete_stale_uploads
+        goto: soft_delete_failed
+      - id: soft_delete_failed
+        kind: query
+        summary: "软删 stale upload_failed"
+        input:
+          - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
+          - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
+        output:
+          - { name: affected_rows, type: _types.integer, description: "query 返回的 affected_rows" }
+        errors: [ ]
+        query: data.queries.attachment.soft_delete_stale_failed_uploads
+        goto: sum
+      - id: sum
+        kind: logic
+        summary: "汇总两类 stale 附件的清理行数"
+        input:
+          - { name: uploading_rows, value: step.soft_delete_stale.affected_rows, description: "stale uploading 行数" }
+          - { name: failed_rows, value: step.soft_delete_failed.affected_rows, description: "stale upload_failed 行数" }
+        output:
+          - { name: affected_rows, type: _types.integer, description: "清理总行数" }
+        errors: [ ]
+        rules: [ ]
         goto: $end
     used_by:
       - cap.events.attachment.cleanup_stale_uploads

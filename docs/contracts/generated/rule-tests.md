@@ -106,6 +106,7 @@
 | data.enums | enum-code-unique | enum-code-unique | 1 | 0 |
 | data.enums | enum-type-unique | enum-type-unique | 1 | 0 |
 | data.enums | enum-used-by | enum-used-by | 1 | 0 |
+| data.enums | enum-owner-module | enum-owner-module | 1 | 0 |
 | data.enums | enum-do-not-specific | enum-do-not-specific | 3 | 0 |
 | data.queries | query-key-order | query-key-order | 0 | 1 |
 | data.queries | query-name-unique | query-name-unique | 1 | 1 |
