@@ -75,7 +75,8 @@ fields:
           - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "订阅项名" }
           - { name: summary, type: _types.basics.string, required: true, description: "一句话说明" }
           - { name: service, type: _types.basics.string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "同步 handler service" }
-          - name: retry
+          - &event_retry
+            name: retry
             type: _types.structures.object
             required: false
             description: "重试与死信"
@@ -83,7 +84,8 @@ fields:
               - { name: max_attempts, type: _types.basics.integer, required: true, min: 1, description: "最大尝试次数" }
               - { name: backoff, type: _types.basics.string, required: true, enum: [ fixed, exponential ], description: "退避策略" }
               - { name: dead_letter, type: _types.basics.boolean, required: true, description: "是否进入死信" }
-          - name: concurrency
+          - &event_concurrency
+            name: concurrency
             type: _types.structures.object
             required: false
             description: "并发与分布式锁"
@@ -103,21 +105,8 @@ fields:
       - { name: service, type: _types.basics.string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "同步 handler service" }
       - { name: schedule, type: _types.basics.string, required: true, description: "5 字段 cron 表达式：分 时 日 月 周" }
       - { name: overlap, type: _types.basics.string, required: true, enum: [ allow, forbid ], description: "上一次未结束时是否允许启动下一次：allow=允许，forbid=跳过本次" }
-      - name: retry
-        type: _types.structures.object
-        required: false
-        description: "重试与死信"
-        fields:
-          - { name: max_attempts, type: _types.basics.integer, required: true, min: 1, description: "最大尝试次数" }
-          - { name: backoff, type: _types.basics.string, required: true, enum: [ fixed, exponential ], description: "退避策略" }
-          - { name: dead_letter, type: _types.basics.boolean, required: true, description: "是否进入死信" }
-      - name: concurrency
-        type: _types.structures.object
-        required: false
-        description: "并发与分布式锁"
-        fields:
-          - { name: key, type: _types.basics.string, soft: true, required: true, description: "并发键模板" }
-          - { name: ttl, type: _types.basics.string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁 TTL" }
+      - *event_retry
+      - *event_concurrency
 
   - name: dispatches
     type: _types.structures.list<_types.structures.object>
@@ -133,21 +122,8 @@ fields:
       - { name: emitted_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "投递该命令的 service 项；至少一个" }
       - { name: delay, type: _types.basics.string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "投递延迟" }
       - { name: timeout, type: _types.basics.string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "队列等待超时：入队后超过该时长未被消费则过期；不是执行超时" }
-      - name: retry
-        type: _types.structures.object
-        required: false
-        description: "重试与死信"
-        fields:
-          - { name: max_attempts, type: _types.basics.integer, required: true, min: 1, description: "最大尝试次数" }
-          - { name: backoff, type: _types.basics.string, required: true, enum: [ fixed, exponential ], description: "退避策略" }
-          - { name: dead_letter, type: _types.basics.boolean, required: true, description: "是否进入死信" }
-      - name: concurrency
-        type: _types.structures.object
-        required: false
-        description: "并发与分布式锁"
-        fields:
-          - { name: key, type: _types.basics.string, soft: true, required: true, description: "并发键模板" }
-          - { name: ttl, type: _types.basics.string, required: false, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁 TTL" }
+      - *event_retry
+      - *event_concurrency
 
 rules:
   - { id: event-structure, text: "topic.id 必须为 cap.events.<name> 且全局唯一；topic name 在文件内唯一且必须以 <file>. 开头；version >= 1；topic.publish.emitted_by 与 dispatch.emitted_by 必须指向存在的 cap.services.*；dispatch.emitted_by 至少一个；dispatch payload 字段必须与唯一消费者 service 的非 ctx 参数同名、required/nullable 一致且类型一致，不多不少", implemented_by: [ event-structure ] }
