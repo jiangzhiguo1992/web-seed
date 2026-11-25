@@ -311,27 +311,3 @@ schemas:
             required: true
             description: "违反规则时的错误文案"
 
-# 类型词汇审计的显式例外；例外之外 type 不是数据类型或 _types.* 未知一律失败。
-type_vocabulary:
-  exceptions:
-    - { path: contracts/generated, kind: dir, reason: "生成产物：OpenAPI 使用 JSON Schema 外部词汇" }
-
-# 每个类型族参数的消费方：openapi=生成到 OpenAPI，storage=仅存储层，runtime=业务运行时。
-param_targets:
-  min_len: openapi
-  max_len: openapi
-  pattern: openapi
-  min: openapi
-  max: openapi
-  default: openapi
-  fixed: storage
-  normalize: runtime
-  bits: storage
-  unsigned: storage
-  precision: storage
-  scale: storage
-  mode: storage
-  timezone: storage
-  fractional_seconds: storage
-  kind: storage
-  length: storage
