@@ -124,6 +124,122 @@ coverage:
       - code: ACCOUNT_NOT_FOUND
         status: 404
         covered: false
+  - operation: cap.protocols.http.attachment.complete
+    method: post
+    path: /attachment/admin/{id}/complete
+    service: cap.services.attachment.complete_upload
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ATTACHMENT_ILLEGAL_TRANSITION
+        status: 409
+        covered: false
+      - code: ATTACHMENT_INVALID
+        status: 422
+        covered: false
+      - code: ATTACHMENT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.attachment.create_upload
+    method: post
+    path: /attachment/admin
+    service: cap.services.attachment.create_upload
+    scenarios: 0
+    success_statuses:
+      - 201
+    covered_statuses: []
+    missing_statuses:
+      - 201
+    codes:
+      - code: ATTACHMENT_INVALID
+        status: 422
+        covered: false
+      - code: ATTACHMENT_OBJECT_KEY_TAKEN
+        status: 409
+        covered: false
+      - code: ATTACHMENT_OWNER_INVALID
+        status: 422
+        covered: false
+  - operation: cap.protocols.http.attachment.delete
+    method: delete
+    path: /attachment/admin/{id}
+    service: cap.services.attachment.delete
+    scenarios: 0
+    success_statuses:
+      - 204
+    covered_statuses: []
+    missing_statuses:
+      - 204
+    codes:
+      - code: ATTACHMENT_ILLEGAL_TRANSITION
+        status: 409
+        covered: false
+      - code: ATTACHMENT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.attachment.download
+    method: get
+    path: /attachment/admin/{id}/download
+    service: cap.services.attachment.get_download_url
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ATTACHMENT_ILLEGAL_TRANSITION
+        status: 409
+        covered: false
+      - code: ATTACHMENT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.attachment.fail
+    method: post
+    path: /attachment/admin/{id}/fail
+    service: cap.services.attachment.fail_upload
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ATTACHMENT_ILLEGAL_TRANSITION
+        status: 409
+        covered: false
+      - code: ATTACHMENT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.attachment.get
+    method: get
+    path: /attachment/admin/{id}
+    service: cap.services.attachment.get
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: ATTACHMENT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.attachment.list
+    method: get
+    path: /attachment/admin
+    service: cap.services.attachment.list
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes: []
   - operation: cap.protocols.http.auth.bind_email
     method: post
     path: /auth/bind/email
@@ -318,6 +434,150 @@ coverage:
         covered: false
       - code: AUTH_VERIFICATION_INVALID
         status: 422
+        covered: false
+  - operation: cap.protocols.http.dictionary.children
+    method: get
+    path: /dictionary/admin/{id}/children
+    service: cap.services.dictionary.list_children
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes: []
+  - operation: cap.protocols.http.dictionary.create
+    method: post
+    path: /dictionary/admin
+    service: cap.services.dictionary.create
+    scenarios: 0
+    success_statuses:
+      - 201
+    covered_statuses: []
+    missing_statuses:
+      - 201
+    codes:
+      - code: DICTIONARY_CODE_TAKEN
+        status: 409
+        covered: false
+      - code: DICTIONARY_INVALID
+        status: 422
+        covered: false
+      - code: DICTIONARY_PARENT_INVALID
+        status: 422
+        covered: false
+  - operation: cap.protocols.http.dictionary.delete
+    method: delete
+    path: /dictionary/admin/{id}
+    service: cap.services.dictionary.delete
+    scenarios: 0
+    success_statuses:
+      - 204
+    covered_statuses: []
+    missing_statuses:
+      - 204
+    codes:
+      - code: DICTIONARY_HAS_CHILDREN
+        status: 409
+        covered: false
+      - code: DICTIONARY_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.dictionary.get
+    method: get
+    path: /dictionary/admin/{id}
+    service: cap.services.dictionary.get_by_id
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: DICTIONARY_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.dictionary.import
+    method: post
+    path: /dictionary/admin/import
+    service: cap.services.dictionary.import
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: DICTIONARY_CODE_TAKEN
+        status: 409
+        covered: false
+      - code: DICTIONARY_INVALID
+        status: 422
+        covered: false
+      - code: DICTIONARY_PARENT_INVALID
+        status: 422
+        covered: false
+  - operation: cap.protocols.http.dictionary.list
+    method: get
+    path: /dictionary/admin
+    service: cap.services.dictionary.list_roots
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes: []
+  - operation: cap.protocols.http.dictionary.move
+    method: post
+    path: /dictionary/admin/{id}/move
+    service: cap.services.dictionary.move
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: DICTIONARY_NOT_FOUND
+        status: 404
+        covered: false
+      - code: DICTIONARY_PARENT_INVALID
+        status: 422
+        covered: false
+  - operation: cap.protocols.http.dictionary.set_status
+    method: post
+    path: /dictionary/admin/{id}/status
+    service: cap.services.dictionary.set_status
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: DICTIONARY_ILLEGAL_TRANSITION
+        status: 409
+        covered: false
+      - code: DICTIONARY_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.dictionary.update
+    method: patch
+    path: /dictionary/admin/{id}
+    service: cap.services.dictionary.update
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: DICTIONARY_INVALID
+        status: 422
+        covered: false
+      - code: DICTIONARY_NOT_FOUND
+        status: 404
         covered: false
 generated_from: contracts/scenarios/http
 scenarios:

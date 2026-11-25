@@ -236,7 +236,7 @@ HTTP 约束：
 - 响应 schema 由类型 ID 解析；object 默认封闭。
 - 每个 operation 必须有 `id` 与 `service`；`service` 只能指向 `public` 且未被异步任务引用的同步 service。
 - 每个文件必须有 `mount`：`api_version` / `path` / `audience`。
-- 每个 operation 必须有非空 `used_by`：`http-consumer` 校验它精确等于引用该 service 的 `feature.pages.*`。
+- 每个 operation 的 `used_by` 可选：省略表示 API-only；存在时 `http-consumer` 校验它精确等于引用该 service 的 `feature.pages.*`。
 - 错误闭包由脚本递归计算；`http-errors` 用该闭包校验每个 operation 的 `errors`。
 - `request.path` / `request.query` 的每个参数、`body.to` 或 form/multipart 的 field `to` 都必须写 `params.<service 参数路径>`；`to` 只用于契约校验与 handler 生成，不写入 OpenAPI。
 - service 必填非 ctx 参数必须全覆盖；`Authorization` 存在时 `account_id` / `access_token` 由认证中间件注入，HTTP 参数不得指向它们。

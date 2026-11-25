@@ -1687,6 +1687,19 @@ func TestQueryObjectParamFields(t *testing.T) {
 	if !strings.Contains(entityErrs(c), "must be scalar") {
 		t.Fatalf("nested object field not reported: %v", c.errs)
 	}
+
+	c.errs = nil
+	duplicate := append(base, queryParam{
+		Name: "items", Type: "_types.list<_types.object>", HasFields: true,
+		Fields: []queryParamField{
+			{Name: "code", Type: "_types.string"},
+			{Name: "code", Type: "_types.string"},
+		},
+	})
+	c.checkQueryParams(&queryInfo{ID: "q", File: "q.yaml", Params: duplicate})
+	if !strings.Contains(entityErrs(c), "duplicate or empty field name") {
+		t.Fatalf("duplicate field not reported: %v", c.errs)
+	}
 }
 
 func TestServiceTypesCompatibleBatchObject(t *testing.T) {

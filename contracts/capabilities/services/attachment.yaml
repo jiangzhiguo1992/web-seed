@@ -11,6 +11,8 @@ do_not:
   - "owner_table_name + owner_id 是多态引用；必须由服务层校验所有者存在"
   - "返回附件时只返回 object_key；下载签名 URL 由 get_download_url 生成，不落库"
   - "visibility 必须由对象存储适配器按值执行 ACL/签名策略；不得只依赖数据库字段"
+  - "fail_upload 不接收 failure_reason；失败原因由客户端日志/对象存储诊断，不要把自由文本写进契约"
+  - "failure 不提供重试转换；重试必须新建附件行，避免复用可能不完整的 object_key"
 
 schemas:
   AttachmentPage:
@@ -49,7 +51,7 @@ schemas:
 services:
   - name: list
     summary: "按所有者与用途列出附件"
-    visibility: internal
+    visibility: public
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -88,11 +90,12 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.attachment.list
 
   - name: get
     summary: "按 ID 读取附件"
-    visibility: internal
+    visibility: public
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -121,7 +124,8 @@ services:
           - platform.errors.ATTACHMENT_NOT_FOUND
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.attachment.get
 
   - name: get_by_key
     summary: "按对象 key 读取附件"
@@ -158,7 +162,7 @@ services:
 
   - name: create_upload
     summary: "创建附件元数据并返回预签名上传票据"
-    visibility: internal
+    visibility: public
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -277,11 +281,12 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.attachment.create_upload
 
   - name: complete_upload
     summary: "完成上传，把附件置为 available"
-    visibility: internal
+    visibility: public
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -382,7 +387,7 @@ services:
         summary: "软删被替换的旧附件"
         lifecycles: [ cap.lifecycles.attachment.destroy ]
         state_gate:
-          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available, upload_failed ] }
+          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available, failure ] }
         input:
           - { name: id, value: step.get_attachment.attachment.replaces_id, description: "旧附件 ID" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
@@ -391,7 +396,8 @@ services:
           - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
         query: data.queries.attachment.soft_delete_attachment
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.attachment.complete
 
   - name: fail_upload
     summary: "标记上传失败"
@@ -436,10 +442,10 @@ services:
         goto: status_failed
       - id: status_failed
         kind: logic
-        summary: "确定失败后的状态 upload_failed"
+        summary: "确定失败后的状态 failure"
         input: [ ]
         output:
-          - { name: status, type: data.enums.attachment_status, description: "目标状态 upload_failed" }
+          - { name: status, type: data.enums.attachment_status, description: "目标状态 failure" }
         errors: [ ]
         rules: [ ]
         goto: set_attachment_status
@@ -451,18 +457,19 @@ services:
           - { lifecycle: cap.lifecycles.attachment, values: [ uploading ] }
         input:
           - { name: id, value: params.id, description: "附件 ID" }
-          - { name: status, value: step.status_failed.status, description: "目标状态 upload_failed" }
+          - { name: status, value: step.status_failed.status, description: "目标状态 failure" }
         output:
           - { name: attachment, type: data.entities.attachment, description: "query 返回的 attachment" }
         errors:
           - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
         query: data.queries.attachment.set_attachment_status
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.attachment.fail
 
   - name: get_download_url
     summary: "为可用附件签发下载 URL"
-    visibility: internal
+    visibility: public
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -524,11 +531,12 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.attachment.download
 
   - name: delete
     summary: "软删附件"
-    visibility: internal
+    visibility: public
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -570,7 +578,7 @@ services:
         summary: "调用 data.queries.attachment.soft_delete_attachment"
         lifecycles: [ cap.lifecycles.attachment.destroy ]
         state_gate:
-          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available, upload_failed ] }
+          - { lifecycle: cap.lifecycles.attachment, values: [ uploading, available, failure ] }
         input:
           - { name: id, value: params.id, description: "附件 ID" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
@@ -579,10 +587,11 @@ services:
           - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
         query: data.queries.attachment.soft_delete_attachment
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.attachment.delete
 
   - name: cleanup_stale_uploads
-    summary: "软删长时间停留在 uploading 或 upload_failed 的附件"
+    summary: "软删长时间停留在 uploading 或 failure 的附件"
     visibility: internal
     tx_mode: required
     params:
@@ -622,7 +631,7 @@ services:
         goto: soft_delete_failed
       - id: soft_delete_failed
         kind: query
-        summary: "软删 stale upload_failed"
+        summary: "软删 stale failure"
         input:
           - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
@@ -636,7 +645,7 @@ services:
         summary: "汇总两类 stale 附件的清理行数"
         input:
           - { name: uploading_rows, value: step.soft_delete_stale.affected_rows, description: "stale uploading 行数" }
-          - { name: failed_rows, value: step.soft_delete_failed.affected_rows, description: "stale upload_failed 行数" }
+          - { name: failed_rows, value: step.soft_delete_failed.affected_rows, description: "stale failure 行数" }
         output:
           - { name: affected_rows, type: _types.integer, description: "清理总行数" }
         errors: [ ]

@@ -615,10 +615,14 @@ func (c *Checker) checkQueryInput(input map[string]any, q *queryInfo, qid, rel, 
 			continue // 路径错误由 checkServiceParamExpr 报出
 		}
 		p := byName[name]
-		if p.Type != "" && !c.serviceTypesCompatible(src, p.Type) {
+		sourceNode, hasSourceNode := c.inputPathSchema(tc.doc, value)
+		if p.Type != "" && !isBatchObjectParam(p.Type) && !c.serviceTypesCompatible(src, p.Type) {
 			c.rulef("service-input-type", "%s: step %s query %s input %s type %s is not compatible with %s", rel, stepID, qid, name, src, p.Type)
 		}
-		if sourceNode, ok := c.inputPathSchema(tc.doc, value); ok {
+		if isBatchObjectParam(p.Type) && !hasSourceNode {
+			c.rulef("service-input-type", "%s: step %s query %s input %s batch object param requires a typed source service schema", rel, stepID, qid, name)
+		}
+		if hasSourceNode {
 			c.checkBatchParamFields(sourceNode, p, fmt.Sprintf("%s: step %s query %s input %s", rel, stepID, qid, name))
 		}
 		if nullable, known := c.inputValueNullable(value, tc); known && nullable && !p.Nullable {

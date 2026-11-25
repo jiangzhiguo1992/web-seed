@@ -79,16 +79,16 @@ paths:
 
 本次新增三个 api app：`admin`（v1，管理端）、`admin_v2`（v2，复用同一组文件）、`user`（v1，只 include `auth`），验证了版本复用与多端 include。当前 `auth` 的 `mount.audience: [admin, user]`；账号管理只属于 `admin`。
 
-## 决策 4：`used_by` 非空且精确等于页面引用
+## 决策 4：`used_by` 与页面引用闭合（2026-11-25 调整：允许 API-only）
 
-不再使用 `unbound_operations` 豁免清单。每个 operation 的 `used_by` 必须非空，且精确等于引用其 service 的 `feature.pages.*` 集合（页面 `data.*.capability` 与 `actions.*.capability` 反查）。缺页面就补页面：
+不再使用 `unbound_operations` 豁免清单。`used_by` 是可选的：省略表示 API-only；一旦存在，必须精确等于引用其 service 的 `feature.pages.*` 集合（页面 `data.*.capability` 与 `actions.*.capability` 反查）。保留页面时仍按原规则闭合：
 
 - `auth.refresh` / `me` / `logout` → 新增 `feature.pages.current_account`（数据 `token.verify`，动作 `refresh` / `logout`）。
 - `auth.verification_send` / `verify` → 补到 `feature.pages.login` 的 `send_code`/`verify_code` 动作与验证码字段。
 - `auth.bind_password` / `bind_phone` / `bind_email` → 新增 `feature.pages.account_security`（数据 `account.get`，动作三个 bind）。
 - `account.get` 同时被 `account_detail` 与 `account_security` 引用。
 
-反向闭合：页面引用的每个 service 必须至少被一个 HTTP operation 暴露。当前 16 个 operation 全部有页面消费者，`contract-check` 通过。
+反向闭合：页面引用的每个 service 必须至少被一个 HTTP operation 暴露；API-only operation 不受页面反查约束。
 
 已知建模限制：同一 service 被多个 HTTP operation 绑定时，页面只能反查到 service，`used_by` 是两个 operation 的并集。当前没有这种绑定；`http-consumer` 现在直接拒绝同一 service 的多 operation 绑定，要求拆 service；若将来必须共享，再在页面 action 上增加显式 operation 字段。
 
@@ -160,14 +160,14 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 1. **结构不可判定**：脚本只能看到 `map[string]any`，无法知道 `paths.<p>.<method>` 下应该有哪些字段，只能靠 `http-shape` 事后遍历并报“未知字段”。AI 看到 `any` 也会认为“这里可以自由发挥”，于是漂移是设计的结果，不是执行失误。
 2. **语义藏在 x-***：`name/id/service/used_by` 被塞进 `x-contract-id`/`x-service`，normalizer 再拆出来。源文件看起来像 OpenAPI，实际语义靠隐式约定；AI 读源文件时看不到硬约束。
-3. **`used_by` 只写在 rules 文本里**：字段本身是 `set<string>`，没有 `required`/`min_items`，空列表在结构校验阶段合法，只能靠 `http-consumer` 事后报错。规则文本不是可执行约束。
+3. **`used_by` 的形状由字段属性约束**：可选；存在时由 `min_items: 1` 与 `pattern` 保证非空且只指向页面，精确集合由 `http-consumer` 校验。
 4. **`components` 是迁移逃生口**：它让源文件可以直接写 OpenAPI components，和 `shared` 形成两个源；normalizer 还要处理“二者不能共存”。有逃生口，AI 就会走。
 
 这次改为**封闭结构**：
 
 - `paths` 是 `map<path, object>`，对象只允许 `get/post/put/patch/delete/head/options`；每个 method 复用同一个 operation 节点（YAML anchor 只是写法，结构是固定的）。
 - operation 节点固定为 `id/name/service/summary/used_by/security/request/response`；`request` 固定为 `path/query/body`，参数用 `to` 指向 service 参数；`response` 的 key 固定为三位状态码。
-- `used_by` 的非空由字段属性 `required: true` + `min_items: 1` 保证；`http-consumer` 只保留“精确集合”这一条脚本规则。
+- `used_by` 可选；存在时由 `min_items: 1` 保证非空，`http-consumer` 只保留“精确集合”这一条脚本规则。
 - 删除 `components` 源字段；`shared` 是唯一源，normalizer 拒绝任何源文件里的 `components`。生成的 OpenAPI `components` 是产物，不是契约。
 - `make contract-new` 的 `RenderHTTP` 同步改为新形状；否则脚手架会继续生成旧结构，这是“AI 漂移”的另一个入口。
 
@@ -187,7 +187,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 | 版本只在 app | `project.yaml` + `http-version` | `http-version` |
 | operation 结构 | `paths` 固定 method + operation 字段 | `validateDoc` / `http-shape` |
 | `used_by` 非空 | 字段 `required` + `min_items` | 结构校验 |
-| `used_by` 精确集合 | 页面引用反查 | `http-consumer` |
+| `used_by` 精确集合 | 页面引用反查（省略表示 API-only） | `http-consumer` |
 | 错误码聚合 | service 错误闭包 | `service-errors` + `http-errors` |
 | 入参/出参映射 | 参数级 `to` + 类型 ID | `http-service-params` / `http-service-type` / `http-service-return` |
 | 基线错误 | `platform/http_conventions.error_responses` | `http-default-errors` |

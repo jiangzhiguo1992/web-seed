@@ -1425,8 +1425,8 @@ func (c *Checker) checkHTTPConsumer(rel, method, path, contractID, service strin
 			c.rulef("http-consumer", "%s %s %s: used_by %s does not reference service %s", rel, method, path, page, service)
 		}
 	}
-	if len(usedBy) == 0 {
-		c.rulef("http-consumer", "%s %s %s: operation %s must have at least one page in used_by", rel, method, path, contractID)
+	if len(usedBy) == 0 && len(expected) == 0 {
+		return
 	}
 	for page := range expected {
 		if !declared[page] {

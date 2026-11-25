@@ -2834,7 +2834,6 @@ paths:
       summary: "x"
       id: cap.protocols.http.x.open
       service: cap.services.x.open
-      used_by: []
       request: {}
       response:
         "204":
@@ -2845,7 +2844,6 @@ paths:
       summary: "x"
       id: cap.protocols.http.x.orphan
       service: cap.services.x.orphan
-      used_by: []
       request: {}
       response:
         "204":
@@ -2856,7 +2854,6 @@ paths:
       summary: "x"
       id: cap.protocols.http.x.missing
       service: cap.services.x.get
-      used_by: []
       request: {}
       response:
         "204":
@@ -2871,7 +2868,6 @@ paths:
 	}, map[string]bool{}, map[string]bool{})
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
-		"operation cap.protocols.http.x.orphan must have at least one page in used_by",
 		"missing used_by feature.pages.x",
 		"service cap.services.x.page_only is referenced by pages but has no http operation",
 		"[http-consumer]",

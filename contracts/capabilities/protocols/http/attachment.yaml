@@ -1,0 +1,224 @@
+id: cap.protocols.http.attachment
+summary: "附件 HTTP 接口（预签名上传、下载与失败回调）"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "对象字节不经过 API；上传使用 create_upload 返回的预签名 URL"
+  - "响应不得包含对象存储凭据或 ACL"
+  - "附件删除只做软删；不要物理删除对象存储中的字节"
+
+mount:
+  api_version: v1
+  path: /attachment
+  audience: [admin]
+
+paths:
+  /admin:
+    get:
+      id: cap.protocols.http.attachment.list
+      name: listAttachments
+      summary: "列出附件"
+      service: cap.services.attachment.list
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        query:
+          - { name: owner_table_name, type: _types.string, required: true, description: "所有者物理表名", to: params.owner_table_name }
+          - { name: owner_id, type: _types.id, required: true, description: "所有者行 ID", to: params.owner_id }
+          - { name: purpose, type: _types.string, required: false, description: "用途过滤", to: params.purpose }
+          - { name: offset, type: _types.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
+          - { name: limit, type: _types.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
+      response:
+        200:
+          msg: "成功"
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          body:
+            kind: json
+            type: cap.services.attachment.schemas.AttachmentPage
+
+    post:
+      id: cap.protocols.http.attachment.create_upload
+      name: createAttachmentUpload
+      summary: "创建附件并返回预签名上传票据"
+      service: cap.services.attachment.create_upload
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+        body:
+          kind: json
+          type: cap.services.attachment.schemas.CreateUploadInput
+          to: params.input
+      response:
+        201:
+          msg: "已创建"
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          body:
+            kind: json
+            type: cap.services.attachment.schemas.UploadTicket
+        409:
+          msg: "状态冲突"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN
+        422:
+          msg: "语义校验失败"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_INVALID
+            - platform.errors.ATTACHMENT_OWNER_INVALID
+
+  /admin/{id}:
+    get:
+      id: cap.protocols.http.attachment.get
+      name: getAttachment
+      summary: "获取附件"
+      service: cap.services.attachment.get
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        path:
+          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+      response:
+        200:
+          msg: "成功"
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          body:
+            kind: json
+            type: data.entities.attachment
+        404:
+          msg: "资源不存在"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_NOT_FOUND
+
+    delete:
+      id: cap.protocols.http.attachment.delete
+      name: deleteAttachment
+      summary: "删除附件（软删）"
+      service: cap.services.attachment.delete
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        path:
+          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+      response:
+        204:
+          msg: "已删除"
+          headers: []
+        404:
+          msg: "资源不存在"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_NOT_FOUND
+        409:
+          msg: "状态冲突"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+
+  /admin/{id}/complete:
+    post:
+      id: cap.protocols.http.attachment.complete
+      name: completeAttachmentUpload
+      summary: "完成附件上传"
+      service: cap.services.attachment.complete_upload
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        path:
+          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+      response:
+        200:
+          msg: "成功"
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          body:
+            kind: json
+            type: data.entities.attachment
+        404:
+          msg: "资源不存在"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_NOT_FOUND
+        409:
+          msg: "状态冲突"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+        422:
+          msg: "语义校验失败"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_INVALID
+
+  /admin/{id}/download:
+    get:
+      id: cap.protocols.http.attachment.download
+      name: getAttachmentDownloadURL
+      summary: "签发附件下载 URL"
+      service: cap.services.attachment.get_download_url
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        path:
+          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+      response:
+        200:
+          msg: "成功"
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          body:
+            kind: json
+            type: cap.services.attachment.schemas.SignedURL
+        404:
+          msg: "资源不存在"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_NOT_FOUND
+        409:
+          msg: "状态冲突"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
+
+  /admin/{id}/fail:
+    post:
+      id: cap.protocols.http.attachment.fail
+      name: failAttachmentUpload
+      summary: "标记附件上传失败"
+      service: cap.services.attachment.fail_upload
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        path:
+          - { name: id, type: _types.id, description: "附件 ID", to: params.id }
+      response:
+        200:
+          msg: "已标记失败"
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          body:
+            kind: json
+            type: data.entities.attachment
+        404:
+          msg: "附件不存在"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_NOT_FOUND
+        409:
+          msg: "当前状态不允许标记失败"
+          headers: []
+          errors:
+            - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION

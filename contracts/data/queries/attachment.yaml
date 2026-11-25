@@ -155,7 +155,7 @@ queries:
       - cap.services.attachment.cleanup_stale_uploads
 
   - name: SoftDeleteStaleFailedUploads
-    description: "软删超过 cutoff 仍停留在 upload_failed 的附件"
+    description: "软删超过 cutoff 仍停留在 failure 的附件"
     tables:
       - { table: data.tables.attachment, write: true }
     params:

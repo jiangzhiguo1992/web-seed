@@ -17,7 +17,7 @@ enums:
       - { value: uploading, code: 0, description: "上传中；对象尚未可用" }
       - { value: available, code: 1, description: "可用；已完成上传" }
       - { value: deleted, code: 2, description: "已软删；终态" }
-      - { value: upload_failed, code: 3, description: "上传失败；需新建附件重新上传" }
+      - { value: failure, code: 3, description: "上传失败；需新建附件重新上传" }
     used_by:
       - cap.services.attachment.cleanup_stale_uploads
       - cap.services.attachment.complete_upload
@@ -34,6 +34,7 @@ enums:
       - { value: private, code: 0, description: "私有；只能通过签名 URL 访问" }
       - { value: public, code: 1, description: "公开；可直接访问" }
     used_by:
+      - cap.protocols.http.attachment.create_upload
       - cap.services.attachment.create_upload
       - data.entities.attachment
 
@@ -46,6 +47,7 @@ enums:
       - { value: disabled, code: 1, description: "停用；不可选择" }
       - { value: deleted, code: 2, description: "已软删；终态，不再读取" }
     used_by:
+      - cap.protocols.http.dictionary.set_status
       - cap.services.dictionary.create
       - cap.services.dictionary.delete
       - cap.services.dictionary.set_status

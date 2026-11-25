@@ -882,6 +882,13 @@ func (c *Checker) schemaFieldNode(node map[string]any, name string) (map[string]
 
 // arrayItemNode 取 array 的 items 节点；ref 先解析。
 func (c *Checker) arrayItemNode(node map[string]any) (map[string]any, bool) {
+	if ref, _ := node["ref"].(string); ref != "" {
+		resolved, ok := c.typeNode(ref)
+		if !ok {
+			return nil, false
+		}
+		node = resolved
+	}
 	if typ, _ := node["type"].(string); typ != "_types.array" {
 		return nil, false
 	}

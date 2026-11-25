@@ -1327,6 +1327,17 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 					},
 				},
 			},
+			schemaPrefix + "DictionaryRefInput": {
+				"type": "_types.object",
+				"properties": []any{map[string]any{
+					"name":   "items",
+					"schema": map[string]any{"ref": schemaPrefix + "DictionaryImportItems"},
+				}},
+			},
+			schemaPrefix + "DictionaryImportItems": {
+				"type":  "_types.array",
+				"items": map[string]any{"ref": schemaPrefix + "DictionaryImportItem"},
+			},
 			schemaPrefix + "DictionaryImportItem": {
 				"type": "_types.object",
 				"properties": []any{
@@ -1386,5 +1397,41 @@ func TestBatchParamFieldsCrossCheck(t *testing.T) {
 	c.checkQueryInput(map[string]any{"items": "params.input.items"}, q, q.ID, "f", "s", scalarTC)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "not an object schema") {
 		t.Fatalf("scalar array source not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	rawTC := stepTypeContext{doc: map[string]any{"params": []any{
+		map[string]any{"name": "raw", "type": "_types.list<_types.object>"},
+	}}}
+	c.checkQueryInput(map[string]any{"items": "params.raw"}, q, q.ID, "f", "s", rawTC)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "requires a typed source service schema") {
+		t.Fatalf("untyped batch source not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	stepTC := stepTypeContext{
+		doc:       map[string]any{"params": []any{}},
+		stepIndex: map[string]int{"emit": 0},
+		steps:     []any{map[string]any{"id": "emit"}},
+		stepOutputs: []map[string]returnType{{
+			"items": {typ: "_types.list<_types.object>"},
+		}},
+	}
+	c.checkQueryInput(map[string]any{"items": "step.emit.items"}, q, q.ID, "f", "s", stepTC)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "requires a typed source service schema") {
+		t.Fatalf("untyped step output not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	refTC := stepTypeContext{doc: map[string]any{"params": []any{
+		map[string]any{"name": "input", "type": schemaPrefix + "DictionaryRefInput"},
+	}}}
+	q.Params[1].Fields = []queryParamField{
+		{Name: "parent_id", Type: "_types.id"},
+		{Name: "code", Type: "_types.string", Required: true},
+	}
+	c.checkQueryInput(map[string]any{"items": "params.input.items"}, q, q.ID, "f", "s", refTC)
+	if len(c.errs) != 0 {
+		t.Fatalf("ref array source reported: %v", c.errs)
 	}
 }

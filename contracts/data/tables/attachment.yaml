@@ -130,7 +130,7 @@ indexes:
 
   - name: idx_attachment_stale_upload
     columns: [ status, created_at ]
-    comment: "定位长时间停留在 uploading 或 upload_failed 的附件"
+    comment: "定位长时间停留在 uploading 或 failure 的附件"
     used_by:
       - data.queries.attachment.soft_delete_stale_uploads
       - data.queries.attachment.soft_delete_stale_failed_uploads

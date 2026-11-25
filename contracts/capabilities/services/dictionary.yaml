@@ -72,7 +72,7 @@ schemas:
 services:
   - name: list_roots
     summary: "分页列出顶级字典节点"
-    visibility: internal
+    visibility: public
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -105,11 +105,12 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.list
 
   - name: list_children
     summary: "按父节点列出子节点"
-    visibility: internal
+    visibility: public
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -144,11 +145,12 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.children
 
   - name: get
     summary: "按编码读取字典节点"
-    visibility: internal
+    visibility: public
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -181,7 +183,7 @@ services:
 
   - name: get_by_id
     summary: "按 ID 读取字典节点"
-    visibility: internal
+    visibility: public
     tx_mode: read_only
     params:
       - { name: ctx, type: context.Context }
@@ -210,11 +212,12 @@ services:
           - platform.errors.DICTIONARY_NOT_FOUND
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.get
 
   - name: create
     summary: "创建字典节点"
-    visibility: internal
+    visibility: public
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -329,11 +332,12 @@ services:
           - platform.errors.DICTIONARY_INVALID
         query: data.queries.dictionary.create_dictionary
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.create
 
   - name: update
     summary: "更新字典展示字段"
-    visibility: internal
+    visibility: public
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -392,11 +396,12 @@ services:
           - platform.errors.DICTIONARY_INVALID
         query: data.queries.dictionary.update_dictionary
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.update
 
   - name: set_status
     summary: "启用或停用字典"
-    visibility: internal
+    visibility: public
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -451,11 +456,12 @@ services:
           - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
         query: data.queries.dictionary.set_dictionary_status
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.set_status
 
   - name: delete
     summary: "软删字典"
-    visibility: internal
+    visibility: public
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -526,11 +532,12 @@ services:
           - platform.errors.DICTIONARY_HAS_CHILDREN
         query: data.queries.dictionary.soft_delete_dictionary
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.delete
 
   - name: move
     summary: "移动字典节点"
-    visibility: internal
+    visibility: public
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -614,11 +621,12 @@ services:
           - platform.errors.DICTIONARY_PARENT_INVALID
         query: data.queries.dictionary.move_dictionary
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.move
 
   - name: import
     summary: "批量导入字典"
-    visibility: internal
+    visibility: public
     tx_mode: required
     params:
       - { name: ctx, type: context.Context }
@@ -660,4 +668,5 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.import
