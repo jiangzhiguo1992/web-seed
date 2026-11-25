@@ -17,7 +17,7 @@ data:
     params:
       number: { from: form.number, type: _types.string, required: true }
       nickname: { from: form.nickname, type: _types.string, required: true }
-      user_id: { from: form.user_id, type: _types.integer, optional: true }
+      user_id: { from: form.user_id, type: _types.id, optional: true }
 
 view_states:
   loading:
@@ -40,7 +40,7 @@ actions:
     params:
       number: { from: form.number, type: _types.string, required: true }
       nickname: { from: form.nickname, type: _types.string, required: true }
-      user_id: { from: form.user_id, type: _types.integer, optional: true }
+      user_id: { from: form.user_id, type: _types.id, optional: true }
     permission: platform.security.permissions.account_write
     ui: "primary-button"
     label: "创建"

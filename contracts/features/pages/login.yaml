@@ -49,7 +49,7 @@ actions:
       auth_type: { from: form.auth_type, type: _types.string, required: true }
       target: { from: form.identifier, type: _types.string, required: true }
       purpose: { from: form.purpose, type: _types.string, required: true }
-      account_id: { from: form.account_id, type: _types.integer, optional: true }
+      account_id: { from: form.account_id, type: _types.id, optional: true }
     ui: "secondary-button"
     label: "发送验证码"
   verify_code:
@@ -59,7 +59,7 @@ actions:
       target: { from: form.identifier, type: _types.string, required: true }
       purpose: { from: form.purpose, type: _types.string, required: true }
       code: { from: form.code, type: _types.string, required: true, secret: true }
-      account_id: { from: form.account_id, type: _types.integer, optional: true }
+      account_id: { from: form.account_id, type: _types.id, optional: true }
     ui: "primary-button"
     label: "校验验证码"
 

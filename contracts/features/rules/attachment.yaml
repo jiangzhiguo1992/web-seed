@@ -1,0 +1,138 @@
+# 附件业务规则集。
+
+id: feature.rules.attachment
+summary: "附件业务规则集"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "附件只表达对象元数据；不要在这里写对象存储 ACL 或签名策略"
+  - "owner_table_name + owner_id 是多态引用，必须由服务层校验"
+rules:
+  - id: feature.rules.attachment.owner_table_format
+    kind: constraint
+    summary: "owner_table_name 只允许物理表名格式"
+    errors: [ platform.errors.ATTACHMENT_INVALID ]
+    entity: data.entities.attachment
+    field: owner_table_name
+    op: pattern
+    value: "^[a-z][a-z0-9_]*$"
+    implemented_by: [ cap.services.attachment.create_upload ]
+
+  - id: feature.rules.attachment.purpose_format
+    kind: constraint
+    summary: "purpose 只允许小写字母、数字和下划线"
+    errors: [ platform.errors.ATTACHMENT_INVALID ]
+    entity: data.entities.attachment
+    field: purpose
+    op: pattern
+    value: "^[a-z][a-z0-9_]*$"
+    implemented_by: [ cap.services.attachment.create_upload ]
+
+  - id: feature.rules.attachment.size_non_negative
+    kind: constraint
+    summary: "size_bytes 必须大于等于 0"
+    errors: [ platform.errors.ATTACHMENT_INVALID ]
+    entity: data.entities.attachment
+    field: size_bytes
+    op: ge
+    value: 0
+    implemented_by: [ cap.services.attachment.create_upload ]
+
+  - id: feature.rules.attachment.sha256_format
+    kind: constraint
+    summary: "sha256 为 64 位小写十六进制"
+    errors: [ platform.errors.ATTACHMENT_INVALID ]
+    entity: data.entities.attachment
+    field: sha256
+    op: pattern
+    value: "^[a-f0-9]{64}$"
+    implemented_by: [ cap.services.attachment.create_upload ]
+
+  - id: feature.rules.attachment.object_must_match_upload
+    kind: policy
+    summary: "complete_upload 必须校验对象已上传且大小/类型与元数据一致"
+    errors: [ platform.errors.ATTACHMENT_INVALID ]
+    implemented_by: [ cap.services.attachment.complete_upload ]
+    given: "对象存储中存在 object_key"
+    when: "完成上传"
+    then: "对象缺失或大小/类型不匹配时拒绝，返回 ATTACHMENT_INVALID"
+
+  - id: feature.rules.attachment.sha256_must_match
+    kind: policy
+    summary: "complete_upload 在 sha256 非空时必须校验对象内容哈希"
+    errors: [ platform.errors.ATTACHMENT_INVALID ]
+    implemented_by: [ cap.services.attachment.complete_upload ]
+    given: "附件元数据 sha256 非空"
+    when: "完成上传"
+    then: "对象内容哈希与 sha256 不一致时拒绝，返回 ATTACHMENT_INVALID"
+
+  - id: feature.rules.attachment.visibility_signature_policy
+    kind: policy
+    summary: "private 附件只能签发短期签名 URL；public 可签名或稳定 URL；实际 ACL 由存储适配器执行"
+    implemented_by: [ cap.services.attachment.get_download_url ]
+    given: "附件 visibility=private/public"
+    when: "签发下载 URL"
+    then: "private 必须使用短期签名 URL；public 可返回签名 URL 或稳定 URL；不得把 ACL 只存在数据库"
+
+  - id: feature.rules.attachment.object_key_unique
+    kind: policy
+    summary: "object_key 全局唯一；软删后不释放"
+    errors: [ platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN ]
+    implemented_by: [ cap.services.attachment.create_upload ]
+    given: "已存在同 object_key 的附件行（含软删）"
+    when: "创建上传"
+    then: "拒绝，返回 ATTACHMENT_OBJECT_KEY_TAKEN"
+
+  - id: feature.rules.attachment.owner_must_exist
+    kind: policy
+    summary: "owner_table_name + owner_id 必须指向存在的业务行"
+    errors: [ platform.errors.ATTACHMENT_OWNER_INVALID ]
+    implemented_by: [ cap.services.attachment.create_upload ]
+    given: "owner_table_name 是已注册物理表，owner_id 非 0"
+    when: "创建上传"
+    then: "所有者不存在时拒绝，返回 ATTACHMENT_OWNER_INVALID"
+
+  - id: feature.rules.attachment.object_key_immutable
+    kind: policy
+    summary: "object_key 创建后不可修改；替换必须新建附件行"
+    errors: [ platform.errors.ATTACHMENT_INVALID ]
+    implemented_by: [ cap.services.attachment.create_upload ]
+    given: "已存在的附件行"
+    when: "替换附件"
+    then: "新建附件行并写 replaces_id；不得原地改 object_key"
+
+  - id: feature.rules.attachment.uploading_only
+    kind: policy
+    summary: "只有 uploading 附件可以完成上传"
+    errors: [ platform.errors.ATTACHMENT_ILLEGAL_TRANSITION ]
+    implemented_by: [ cap.services.attachment.complete_upload ]
+    given: "status != uploading"
+    when: "complete_upload"
+    then: "拒绝，返回 ATTACHMENT_ILLEGAL_TRANSITION"
+
+  - id: feature.rules.attachment.download_requires_available
+    kind: policy
+    summary: "只有 status=available 的附件可以签发下载 URL"
+    errors: [ platform.errors.ATTACHMENT_ILLEGAL_TRANSITION ]
+    implemented_by: [ cap.services.attachment.get_download_url ]
+    given: "status != available"
+    when: "签发下载 URL"
+    then: "拒绝，返回 ATTACHMENT_ILLEGAL_TRANSITION"
+
+  - id: feature.rules.attachment.cleanup_only_uploading
+    kind: policy
+    summary: "定期清理只能软删超过保留期且仍为 uploading 的附件"
+    implemented_by: [ cap.services.attachment.cleanup_stale_uploads ]
+    given: "status=uploading 且 created_at 早于 cutoff"
+    when: "cleanup_stale_uploads"
+    then: "软删；不得触碰 available 附件"
+
+  - id: feature.rules.attachment.deleted_cannot_operate
+    kind: policy
+    summary: "已软删附件不可读取、不可完成、不可再次删除"
+    errors: [ platform.errors.ATTACHMENT_NOT_FOUND ]
+    implemented_by: [ cap.services.attachment.complete_upload, cap.services.attachment.delete, cap.services.attachment.get, cap.services.attachment.get_by_key, cap.services.attachment.get_download_url ]
+    given: "deleted_at != nil"
+    when: "get / complete / delete"
+    then: "按不存在处理，返回 ATTACHMENT_NOT_FOUND"

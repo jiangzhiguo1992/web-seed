@@ -15,7 +15,7 @@ data:
   account:
     capability: cap.services.account.get
     params:
-      id: { from: route.params.id, type: _types.integer, required: true }
+      id: { from: route.params.id, type: _types.id, required: true }
 
 view_states:
   loading:
@@ -36,7 +36,7 @@ actions:
   bind_password:
     capability: cap.services.auth.bind_password
     params:
-      account_id: { from: route.params.id, type: _types.integer, required: true }
+      account_id: { from: route.params.id, type: _types.id, required: true }
       action: { from: form.action, type: _types.string, required: true }
       username: { from: form.username, type: _types.string, optional: true }
       password: { from: form.password, type: _types.string, optional: true, secret: true }
@@ -46,7 +46,7 @@ actions:
   bind_phone:
     capability: cap.services.auth.bind_phone
     params:
-      account_id: { from: route.params.id, type: _types.integer, required: true }
+      account_id: { from: route.params.id, type: _types.id, required: true }
       action: { from: form.action, type: _types.string, required: true }
       code: { from: form.code, type: _types.string, optional: true }
       number: { from: form.phone, type: _types.string, optional: true }
@@ -56,7 +56,7 @@ actions:
   bind_email:
     capability: cap.services.auth.bind_email
     params:
-      account_id: { from: route.params.id, type: _types.integer, required: true }
+      account_id: { from: route.params.id, type: _types.id, required: true }
       action: { from: form.action, type: _types.string, required: true }
       username: { from: form.username, type: _types.string, optional: true }
       domain: { from: form.email, type: _types.string, optional: true }

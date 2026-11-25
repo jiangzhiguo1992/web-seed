@@ -48,7 +48,7 @@ actions:
   activate:
     capability: cap.services.account.activate
     params:
-      id: { from: row.id, type: _types.integer, required: true }
+      id: { from: row.id, type: _types.id, required: true }
     permission: platform.security.permissions.account_write
     available_when: { transitions: [cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate] }
     ui: "row-action"
@@ -56,7 +56,7 @@ actions:
   suspend:
     capability: cap.services.account.suspend
     params:
-      id: { from: row.id, type: _types.integer, required: true }
+      id: { from: row.id, type: _types.id, required: true }
       reason: { from: form.reason, type: _types.string, required: true }
     permission: platform.security.permissions.account_write
     available_when: { transition: cap.lifecycles.account.transitions.suspend }
@@ -66,7 +66,7 @@ actions:
   delete:
     capability: cap.services.account.delete
     params:
-      id: { from: row.id, type: _types.integer, required: true }
+      id: { from: row.id, type: _types.id, required: true }
     permission: platform.security.permissions.account_delete
     available_when: { transition: cap.lifecycles.account.destroy }
     ui: "row-action"

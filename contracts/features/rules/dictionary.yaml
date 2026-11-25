@@ -1,0 +1,100 @@
+# 字典业务规则集。
+
+id: feature.rules.dictionary
+summary: "字典业务规则集"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "字典只表达展示选项；不要在这里写业务分支规则"
+  - "name 允许重复；只有 code 全局唯一且不可变"
+rules:
+  - id: feature.rules.dictionary.code_format
+    kind: constraint
+    summary: "code 只允许小写字母、数字和下划线，且以字母开头"
+    errors: [ platform.errors.DICTIONARY_INVALID ]
+    entity: data.entities.dictionary
+    field: code
+    op: pattern
+    value: "^[a-z][a-z0-9_]*$"
+    implemented_by: [ cap.services.dictionary.create ]
+
+  - id: feature.rules.dictionary.name_length
+    kind: invariant
+    summary: "name 长度 1–100"
+    errors: [ platform.errors.DICTIONARY_INVALID ]
+    assert: "len(name) >= 1 && len(name) <= 100"
+    implemented_by: [ cap.services.dictionary.create, cap.services.dictionary.update ]
+
+  - id: feature.rules.dictionary.color_format
+    kind: constraint
+    summary: "color 为 #RRGGBB；为空表示使用默认样式"
+    errors: [ platform.errors.DICTIONARY_INVALID ]
+    entity: data.entities.dictionary
+    field: color
+    op: pattern
+    value: "^#[0-9A-Fa-f]{6}$"
+    implemented_by: [ cap.services.dictionary.create, cap.services.dictionary.update ]
+
+  - id: feature.rules.dictionary.code_unique
+    kind: policy
+    summary: "code 全局唯一；软删后也不释放"
+    errors: [ platform.errors.DICTIONARY_CODE_TAKEN ]
+    implemented_by: [ cap.services.dictionary.create ]
+    given: "已存在同 code 的字典行（含软删）"
+    when: "创建字典"
+    then: "拒绝，返回 DICTIONARY_CODE_TAKEN"
+
+  - id: feature.rules.dictionary.parent_must_exist
+    kind: policy
+    summary: "parent_id 为非空时必须指向未软删的字典节点"
+    errors: [ platform.errors.DICTIONARY_PARENT_INVALID ]
+    implemented_by: [ cap.services.dictionary.create, cap.services.dictionary.move ]
+    given: "parent_id 非空"
+    when: "创建子字典"
+    then: "父节点不存在或已软删时拒绝，返回 DICTIONARY_PARENT_INVALID"
+
+  - id: feature.rules.dictionary.import_items_shape
+    kind: policy
+    summary: "批量导入 items 必须是 {parent_id, code, name, color, sort, remark, extra} 对象数组"
+    errors: [ platform.errors.DICTIONARY_INVALID ]
+    implemented_by: [ cap.services.dictionary.import ]
+    given: "items 是 JSON 数组"
+    when: "批量导入字典"
+    then: "任一项缺 code/name 或字段越界时整体拒绝，返回 DICTIONARY_INVALID"
+
+  - id: feature.rules.dictionary.move_rejects_cycle
+    kind: policy
+    summary: "移动节点时不得指向自身或自己的后代，避免父子环"
+    errors: [ platform.errors.DICTIONARY_PARENT_INVALID ]
+    implemented_by: [ cap.services.dictionary.move ]
+    given: "parent_id 等于当前 id，或 parent 是当前节点的后代"
+    when: "移动字典节点"
+    then: "拒绝，返回 DICTIONARY_PARENT_INVALID"
+
+  - id: feature.rules.dictionary.delete_requires_no_children
+    kind: policy
+    summary: "存在未软删子节点时禁止软删父节点"
+    errors: [ platform.errors.DICTIONARY_HAS_CHILDREN ]
+    implemented_by: [ cap.services.dictionary.delete ]
+    given: "存在 parent_id = 当前 id 且 deleted_at 为空的子节点"
+    when: "软删字典"
+    then: "拒绝，返回 DICTIONARY_HAS_CHILDREN"
+
+  - id: feature.rules.dictionary.deleted_cannot_modify
+    kind: policy
+    summary: "已软删字典不可读取、不可修改、不可再次操作"
+    errors: [ platform.errors.DICTIONARY_NOT_FOUND ]
+    implemented_by: [ cap.services.dictionary.delete, cap.services.dictionary.get, cap.services.dictionary.get_by_id, cap.services.dictionary.move, cap.services.dictionary.set_status, cap.services.dictionary.update ]
+    given: "deleted_at != nil"
+    when: "update / set_status / delete"
+    then: "按不存在处理，返回 DICTIONARY_NOT_FOUND"
+
+  - id: feature.rules.dictionary.status_toggle_only
+    kind: policy
+    summary: "set_status 只允许 enabled/disabled；deleted 只能走软删"
+    errors: [ platform.errors.DICTIONARY_ILLEGAL_TRANSITION ]
+    implemented_by: [ cap.services.dictionary.set_status ]
+    given: "目标 status = deleted"
+    when: "set_status"
+    then: "拒绝，返回 DICTIONARY_ILLEGAL_TRANSITION"
