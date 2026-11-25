@@ -847,9 +847,6 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 			if strings.TrimSpace(def.Description) == "" {
 				c.rulef("schema.types", "types.type_families.%s.params.%s: description must not be empty", name, pname)
 			}
-			if _, ok := schema.ValueTypes.ParamTargets[pname]; !ok {
-				c.rulef("schema.types", "types.type_families.%s: param %s has no consumer target", name, pname)
-			}
 			if def.Pattern != "" {
 				if _, err := regexp.Compile(def.Pattern); err != nil {
 					c.rulef("schema.types", "types.type_families.%s.params.%s: invalid pattern: %v", name, pname, err)
@@ -872,14 +869,6 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 		}
 		if _, ok := schema.ValueTypes.Schemas[name]; ok {
 			c.rulef("schema.types", "data.types.custom_types.%s: name collides with a schema kind", name)
-		}
-		for pname := range customType.Params {
-			if pname == "default" {
-				continue
-			}
-			if _, ok := schema.ValueTypes.ParamTargets[pname]; !ok {
-				c.rulef("schema.types", "data.types.custom_types.%s: param %s has no consumer target", name, pname)
-			}
 		}
 		c.checkFamilyParams(customType.Params, customType.Family, "data.types.custom_types."+name, 0, name, schema)
 	}

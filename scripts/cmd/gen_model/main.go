@@ -517,7 +517,7 @@ func goScalar(spec columnSpec, nullable bool) string {
 	case "bytes":
 		typ = "[]byte"
 	case "bit":
-		typ = "big.Int"
+		typ = "pgtype.Bits"
 	case "xml":
 		typ = "etree.Document"
 	case "geometry":
@@ -543,13 +543,15 @@ func tsScalar(spec columnSpec, nullable bool) string {
 	case "integer", "float":
 		typ = "number"
 	case "decimal":
-		typ = "string"
+		typ = "number"
 	case "timestamp", "datetime":
 		typ = "string"
 	case "json", "any":
 		typ = "unknown"
-	case "bytes", "bit", "xml":
+	case "bytes":
 		typ = "string"
+	case "bit", "xml":
+		typ = "unknown"
 	case "geometry":
 		typ = "unknown"
 	default:
@@ -570,7 +572,7 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 	b.WriteString(header)
 	b.WriteString("\npackage model\n\n")
 	hasEnums := len(enums) > 0
-	hasJSON, hasTime, hasDecimal, hasBig, hasGeo, hasXML := false, false, false, false, false, false
+	hasJSON, hasTime, hasDecimal, hasBits, hasGeo, hasXML := false, false, false, false, false, false
 	for _, e := range entities {
 		for _, f := range e.Fields {
 			if f.GoType == "json.RawMessage" {
@@ -582,8 +584,8 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 			if strings.Contains(f.GoType, "decimal.Decimal") {
 				hasDecimal = true
 			}
-			if f.GoType == "big.Int" || f.GoType == "*big.Int" {
-				hasBig = true
+			if strings.Contains(f.GoType, "pgtype.Bits") {
+				hasBits = true
 			}
 			if strings.Contains(f.GoType, "geojson.Geometry") {
 				hasGeo = true
@@ -606,8 +608,8 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 	if hasDecimal {
 		imports = append(imports, "\"github.com/shopspring/decimal\"")
 	}
-	if hasBig {
-		imports = append(imports, "\"math/big\"")
+	if hasBits {
+		imports = append(imports, "\"github.com/jackc/pgx/v5/pgtype\"")
 	}
 	if hasGeo {
 		imports = append(imports, "\"github.com/twpayne/go-geom/encoding/geojson\"")
@@ -621,9 +623,6 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 			fmt.Fprintf(&b, "\t%s\n", imp)
 		}
 		b.WriteString(")\n\n")
-	}
-	if hasDecimal {
-		b.WriteString("func init() {\n\tdecimal.MarshalJSONWithoutQuotes = false\n}\n\n")
 	}
 
 	enumIDs := make([]string, 0, len(enums))

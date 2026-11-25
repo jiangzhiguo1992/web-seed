@@ -1895,10 +1895,8 @@ func (c *Checker) httpServiceFamily(t string) string {
 		return "integer"
 	case "boolean":
 		return "boolean"
-	case "float", "number":
+	case "float", "decimal", "number":
 		return "number"
-	case "decimal":
-		return "string"
 	case "json":
 		return "object"
 	}

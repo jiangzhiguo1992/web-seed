@@ -112,7 +112,7 @@ cors:
   max_age_seconds: 600
 
 # 平台级 HTTP 组件：直接使用 OpenAPI 3.1 components 形状，由 gen_openapi 注入每个 api app。
-# 平台 HTTP 组件直接使用 OpenAPI 3.1 词汇；type 由 type_vocabulary.exceptions 覆盖。
+# 平台 HTTP 组件直接使用 OpenAPI 3.1 词汇；OpenAPI 原生类型写 json_type。
 # HTTP 文件没有私有组件；所有引用都指向这里的组件名。
 components:
   schemas:

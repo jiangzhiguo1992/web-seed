@@ -42,14 +42,14 @@ basics:
       32: { go: float32, pg: [ real ], ts: number }
       64: { go: float64, pg: [ double precision ], ts: number }
   decimal:
-    description: "精确小数；Go 侧用 decimal.Decimal 承载，JSON 输出固定为字符串（gen_model 设 MarshalJSONWithoutQuotes=false），不使用 string 或 float"
+    description: "精确小数；Go 用 shopspring/decimal，JSON 为 number（超过 2^53 的整数需业务侧注意）"
     params:
       precision: { type: _types.basics.integer, required: true, min: 1, examples: [ 19 ], description: "总位数" }
       scale: { type: _types.basics.integer, required: false, default: 0, min: 0, description: "小数位数" }
       min: { type: _types.basics.decimal, required: false, description: "下限" }
       max: { type: _types.basics.decimal, required: false, description: "上限" }
     types:
-      decimal: { go: decimal.Decimal, pg: [ numeric, decimal ], ts: string }
+      decimal: { go: decimal.Decimal, pg: [ numeric, decimal ], ts: number }
   datetime:
     description: "日期/时间；mode 选择日期、时间或日期时间，timezone 控制时区"
     params:
@@ -79,19 +79,19 @@ basics:
     types:
       bytes: { go: "[]byte", pg: [ bytea ], ts: string }
   bit:
-    description: "位串；kind 选择定长 bit 或变长 varbit，length 指定位数；Go 用 big.Int 按数值位解释，前导 0 需按 length 补齐"
+    description: "位串；kind 选择定长 bit 或变长 varbit，length 指定位数；Go 用 pgx 的 pgtype.Bits 保留长度与前导 0"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ bit, varbit ], default: varbit, description: "位串类型" }
       length: { type: _types.basics.integer, required: false, min: 1, description: "位数；kind=bit 时应声明" }
     types:
-      bit: { go: big.Int, pg: [ bit, varbit ], ts: string }
+      bit: { go: pgtype.Bits, pg: [ bit, varbit ], ts: unknown }
   xml:
-    description: "XML 文档；Go 侧用 etree.Document 承载"
+    description: "XML 文档；Go 用 etree.Document，数据库由 repository 适配"
     params: { }
     types:
-      xml: { go: etree.Document, pg: [ xml ], ts: string }
+      xml: { go: etree.Document, pg: [ xml ], ts: unknown }
   geometry:
-    description: "几何类型；Go 侧用 geojson.Geometry 承载 GeoJSON；数据库侧由 repository 用 Decode/Encode + EWKB 适配"
+    description: "PostgreSQL 内置几何类型；Go 用 go-geom 的 geojson.Geometry，数据库文本格式由 repository 适配"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ point, line, lseg, box, path, polygon, circle ], default: point, description: "几何类型" }
     types:

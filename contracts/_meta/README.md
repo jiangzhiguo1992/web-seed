@@ -11,7 +11,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `_types.yaml` | 统一类型注册表：`basics`（标量族 + 参数）、`structures`（list/set/array/map/object）、`schemas`（object/array/map/scalar/ref 节点）、`param_targets`；项目级自定义类型在 `contracts/data/types.yaml`，与 `basics` 共用 `_types.basics.*` 命名空间 |
+| `_types.yaml` | 统一类型注册表：`basics`（标量族 + 参数）、`structures`（list/set/array/map/object）、`schemas`（object/array/map/scalar/ref 节点）；项目级自定义类型在 `contracts/data/types.yaml`，与 `basics` 共用 `_types.basics.*` 命名空间 |
 | `data.tables.yaml` | 表、列、约束、索引 |
 | `data.storage.yaml` | 存储拓扑单例：引擎、表级保留、缓存、归档 |
 | `data.enums.yaml` | 跨前后端枚举集合 |
@@ -57,7 +57,8 @@
 - `list<object>` / `set<object>` / `array<object>` 必须声明 `item_fields`；空对象列表用 `list<any>`，不要用无字段的 `list<object>`；
 - `columns[].type` 必须是 `_types.basics.<name>`（类型族或自定义类型）或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`；
 - schema 的 `scalar.type` 必须是 `_types.basics.<name>`；entity 字段的 `type` 与表列共用 `_types.basics.<name>` 值类型，可带一层 `*` 表示指针（等价 `nullable`），不写 Go 类型名；Go/TS 具体类型由类型族的 lowering 规则决定；
-- 新增族参数必须在 `_types.yaml` 的 `param_targets` 登记消费方（openapi/storage/runtime）；键必须是已声明参数，checker 会拒绝无消费方的参数。
+- `normalize` 由 `gen_openapi` 输出为 `x-normalize`，runtime 在写入前执行 lower/upper；`min_len`/`max_len`/`pattern`/`min`/`max`/`default` 由 OpenAPI 输出。
+- 新增族参数必须由生成器或检查器实际消费；消费点由 `TestTypeTableMatchesColumnType` / `TestTypeTableMatchesScalarMapping` 和生成器单测锁定，不再维护单独的消费方登记表。
 
 ### 1.2 `_types.yaml` 的 `schemas`
 
@@ -117,7 +118,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 
 `contract-check` 已接入 `lefthook` pre-commit（`contracts/**/*.yaml`）与 CI；CI 额外运行 `make audit-types` 输出类型词汇报告。
 
-例外清单只允许出现在 `_meta/_types.yaml` 的 `type_vocabulary.exceptions`（`contracts/_meta`、`contracts/generated`、`contracts/capabilities/protocols/http`、`contracts/index.yaml`、`contracts/project.yaml`），每条必须写 `kind` 与 `reason`；新增例外必须同时补审计测试。
+类型词汇审计只豁免 `contracts/generated`（机器生成产物）；其他目录一律按 `type` 只承载数据类型校验，没有可配置例外。
 
 ---
 
@@ -129,7 +130,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
   `soft: true` 标记不做通用结构校验的 soft zone（领域规则仍可部分检查）。
 - 字段顺序以模板为准（`checkFieldOrder`）；新增字段只改 `_meta` 模板。
 - `contracts/**/*.yaml` 的文本字段必须双引号（`schema.quote`）；同一对象不得重复键。
-- 所有契约实例的 `type` 值必须是 `_types.basics.*` / `_types.structures.*` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）；`_types.schemas.*` 只允许出现在字段规范的 `types` 节点种类列表里，不得作为 `type` 值。多变体 basics 族在实例里必须带具体 variant（缺 variant 报 `schema.type-concrete`）；裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部实例 YAML；同一文件/路径已有更精确的领域错误时不重复报。`_meta` 顶层 `contract` 与 `platform/http_conventions` 的 `json_type` 由 `type_vocabulary.exceptions` 覆盖。
+- 所有契约实例的 `type` 值必须是 `_types.basics.*` / `_types.structures.*` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）；`_types.schemas.*` 只允许出现在字段规范的 `types` 节点种类列表里，不得作为 `type` 值。多变体 basics 族在实例里必须带具体 variant（缺 variant 报 `schema.type-concrete`）；裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部实例 YAML；同一文件/路径已有更精确的领域错误时不重复报。`_meta` 顶层用 `contract`；`platform/http_conventions` 用 `json_type`，二者都不是 `type`，由专门规则校验。
 - 类型级 `rules` 的每条必须有 `implemented_by`，包含自身 ID，且每个 ID 都是 checker 实际输出的
   `[rule-id]`；反向检查所有非 `schema.*` 输出都必须被某条规则声明。
 - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；独立二进制也带完整映射。

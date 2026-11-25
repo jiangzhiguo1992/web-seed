@@ -61,6 +61,9 @@ func run(root string, check bool) error {
 		}
 	}
 	tables = filtered
+	if err := validatePGTypes(root, tables); err != nil {
+		return err
+	}
 	schemaSQL, migrationSQL, err := render(tables)
 	if err != nil {
 		return err
@@ -97,6 +100,36 @@ func run(root string, check bool) error {
 	fmt.Printf("generated %s\n", schemaPath)
 	fmt.Printf("generated %s\n", migrationPath)
 	fmt.Printf("generated %s\n", constraintErrorsPath)
+	return nil
+}
+
+// validatePGTypes 是 DDL 的硬约束：生成出的每个 PostgreSQL 类型都必须
+// 出现在 _types.yaml 某个 basics 族的 pg 兼容集合里；新增生成分支而未登记会直接失败。
+func validatePGTypes(root string, tables []table) error {
+	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts", "_meta"))
+	if err != nil {
+		return err
+	}
+	declared := map[string]bool{}
+	for _, fam := range shared.TypeFamilies {
+		for _, ct := range fam.Types {
+			for _, pg := range ct.PG {
+				declared[strings.ToLower(strings.TrimSpace(pg))] = true
+			}
+		}
+	}
+	for _, t := range tables {
+		for _, c := range t.Columns {
+			sqlType, err := columnType(c)
+			if err != nil {
+				return err
+			}
+			base := strings.ToLower(strings.TrimSpace(strings.SplitN(sqlType, "(", 2)[0]))
+			if !declared[base] {
+				return fmt.Errorf("%s.%s: PostgreSQL type %q is not declared in contracts/_meta/_types.yaml pg sets", t.ID, c.Name, base)
+			}
+		}
+	}
 	return nil
 }
 

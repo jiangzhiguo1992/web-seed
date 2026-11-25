@@ -191,7 +191,7 @@ func knownSchemaKind(name string) bool {
 	return false
 }
 
-// checkTypeVocabulary 扫描 contracts/ 下所有实例 YAML 的 type 键；例外见 _types.yaml type_vocabulary。
+// checkTypeVocabulary 扫描 contracts/ 下所有实例 YAML 的 type 键；只豁免 contracts/generated。
 func (c *Checker) checkTypeVocabulary() {
 	shared, err := contractspec.LoadSharedTypes(filepath.Join(c.root, "contracts", "_meta"))
 	if err != nil {
@@ -204,11 +204,10 @@ func (c *Checker) checkTypeVocabulary() {
 		return
 	}
 	c.valueTypes = ValueTypes{
-		TypeFamilies:   shared.TypeFamilies,
-		Structures:     shared.Structures,
-		Schemas:        shared.Schemas,
-		CustomTypes:    custom.CustomTypes,
-		TypeVocabulary: shared.TypeVocabulary,
+		TypeFamilies: shared.TypeFamilies,
+		Structures:   shared.Structures,
+		Schemas:      shared.Schemas,
+		CustomTypes:  custom.CustomTypes,
 	}
 	c.nodeKinds = shared.Schemas
 	root := filepath.Join(c.root, "contracts")
@@ -217,7 +216,7 @@ func (c *Checker) checkTypeVocabulary() {
 			return nil
 		}
 		rel := relPath(c.root, path)
-		if typeVocabularyExempt(rel, c.valueTypes.TypeVocabulary.Exceptions) {
+		if typeVocabularyExempt(rel) {
 			return nil
 		}
 		doc, err := loadYAML(path)
@@ -230,16 +229,7 @@ func (c *Checker) checkTypeVocabulary() {
 }
 
 // typeVocabularyExempt 判断契约路径是否命中显式例外清单。
-func typeVocabularyExempt(rel string, exceptions []contractspec.TypeVocabularyException) bool {
+func typeVocabularyExempt(rel string) bool {
 	rel = filepath.ToSlash(rel)
-	for _, ex := range exceptions {
-		p := filepath.ToSlash(ex.Path)
-		if ex.Kind == "file" && rel == p {
-			return true
-		}
-		if ex.Kind == "dir" && (rel == p || strings.HasPrefix(rel, p+"/")) {
-			return true
-		}
-	}
-	return false
+	return strings.HasPrefix(rel, "contracts/generated/")
 }

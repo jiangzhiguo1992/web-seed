@@ -19,7 +19,7 @@ type TypeAudit struct {
 	Invalid []string
 }
 
-// AuditTypeVocabulary 扫描 contracts/ 下所有非例外 YAML 的 type 键。
+// AuditTypeVocabulary 扫描 contracts/ 下所有非生成 YAML 的 type 键。
 // 它只做词汇校验，不检查 enum/entity/schema/column 是否存在，后者由 contract-check 负责。
 func AuditTypeVocabulary(root string) (*TypeAudit, error) {
 	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts/_meta"))
@@ -33,11 +33,10 @@ func AuditTypeVocabulary(root string) (*TypeAudit, error) {
 	c := &Checker{
 		root: root,
 		valueTypes: ValueTypes{
-			TypeFamilies:   shared.TypeFamilies,
-			Structures:     shared.Structures,
-			Schemas:        shared.Schemas,
-			CustomTypes:    custom.CustomTypes,
-			TypeVocabulary: shared.TypeVocabulary,
+			TypeFamilies: shared.TypeFamilies,
+			Structures:   shared.Structures,
+			Schemas:      shared.Schemas,
+			CustomTypes:  custom.CustomTypes,
 		},
 		nodeKinds: shared.Schemas,
 	}
@@ -48,7 +47,7 @@ func AuditTypeVocabulary(root string) (*TypeAudit, error) {
 			return nil
 		}
 		rel := relPath(root, path)
-		if typeVocabularyExempt(rel, shared.TypeVocabulary.Exceptions) {
+		if typeVocabularyExempt(rel) {
 			report.Exempt++
 			return nil
 		}

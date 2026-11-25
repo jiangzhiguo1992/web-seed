@@ -2511,24 +2511,6 @@ func TestRefValidationEntityPath(t *testing.T) {
 	}
 }
 
-func TestCustomTypeParamTarget(t *testing.T) {
-	root := t.TempDir()
-	schema := copyMeta(t, root, "data.tables")
-	if schema.ValueTypes.CustomTypes == nil {
-		schema.ValueTypes.CustomTypes = map[string]CustomValueType{}
-	}
-	schema.ValueTypes.CustomTypes["bad"] = CustomValueType{
-		Family:      "string",
-		Description: "bad",
-		Params:      map[string]any{"min_len": 1, "mystery": true},
-	}
-	c := &Checker{}
-	c.checkSharedTypes(schema)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "has no consumer target") {
-		t.Fatalf("unknown param target not reported: %v", c.errs)
-	}
-}
-
 func TestSchemaCycle(t *testing.T) {
 	c := &Checker{methodTypeDefs: map[string]map[string]any{
 		"cap.services.x.schemas.A": {"kind": "_types.schemas.object", "properties": []any{

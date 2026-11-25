@@ -28,7 +28,7 @@ func TestScalarMapping(t *testing.T) {
 		{"integer 64", columnSpec{Family: "integer", Bits: 64}, false, "int64", "number"},
 		{"integer 32", columnSpec{Family: "integer", Bits: 32}, false, "int32", "number"},
 		{"nullable string", columnSpec{Family: "string"}, true, "*string", "string | null"},
-		{"decimal", columnSpec{Family: "decimal", Precision: 19, Scale: 4}, false, "decimal.Decimal", "string"},
+		{"decimal", columnSpec{Family: "decimal", Precision: 19, Scale: 4}, false, "decimal.Decimal", "number"},
 		{"timestamp", columnSpec{Family: "timestamp"}, false, "time.Time", "string"},
 		{"json", columnSpec{Family: "json"}, false, "json.RawMessage", "unknown"},
 		{"nullable json", columnSpec{Family: "json"}, true, "json.RawMessage", "unknown"},
@@ -131,7 +131,7 @@ func TestTypeTableMatchesScalarMapping(t *testing.T) {
 	}
 }
 
-func TestRenderDecimalUsesQuotedJSON(t *testing.T) {
+func TestRenderDecimalUsesShopspring(t *testing.T) {
 	out, err := renderGo(nil, []entitySpec{{
 		ID:     "data.entities.x",
 		GoName: "X",
@@ -141,7 +141,7 @@ func TestRenderDecimalUsesQuotedJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(out), "decimal.MarshalJSONWithoutQuotes = false") {
-		t.Fatalf("decimal wire format not pinned to quoted string:\n%s", out)
+	if !strings.Contains(string(out), "github.com/shopspring/decimal") {
+		t.Fatalf("decimal field must use shopspring/decimal:\n%s", out)
 	}
 }

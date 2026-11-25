@@ -123,29 +123,10 @@ func TestLoadSharedTypesSchemas(t *testing.T) {
 		t.Fatalf("empty struct item_fields: %v", err)
 	}
 
-	body = strings.Replace(string(shared), "\ntype_vocabulary:\n", "\n  bogus:\n    description: \"x\"\n    keys:\n      - { name: type, type: _types.basics.string, required: true }\n\ntype_vocabulary:\n", 1)
+	body = strings.Replace(string(shared), "\nschemas:\n", "\nschemas:\n  bogus:\n    description: \"x\"\n    keys:\n      - { name: type, type: _types.basics.string, required: true }\n", 1)
 	writeMeta(t, root, "_types.yaml", body)
 	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown schema bogus") {
 		t.Fatalf("unknown schema kind: %v", err)
-	}
-}
-
-func TestSharedTypeVocabularyExceptions(t *testing.T) {
-	shared, err := LoadSharedTypes(filepath.Join("..", "..", "..", "..", "contracts", "_meta"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := map[string]string{
-		"contracts/generated": "dir",
-	}
-	if len(shared.TypeVocabulary.Exceptions) != len(want) {
-		t.Fatalf("exceptions = %#v", shared.TypeVocabulary.Exceptions)
-	}
-	for _, ex := range shared.TypeVocabulary.Exceptions {
-		kind, ok := want[ex.Path]
-		if !ok || kind != ex.Kind {
-			t.Fatalf("unexpected exception %#v", ex)
-		}
 	}
 }
 

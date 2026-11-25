@@ -976,11 +976,8 @@ func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueTyp
 	case "timestamp", "datetime":
 		out["type"] = "string"
 		out["format"] = "date-time"
-	case "float":
+	case "float", "decimal":
 		out["type"] = "number"
-	case "decimal":
-		out["type"] = "string"
-		out["format"] = "decimal"
 	case "json":
 		out["type"] = "object"
 	case "bytes":
@@ -1012,6 +1009,8 @@ func applyScalarParams(out map[string]any, params map[string]any) {
 			out["maximum"] = v
 		case "default":
 			out["default"] = v
+		case "normalize":
+			out["x-normalize"] = v
 		}
 	}
 }
@@ -1443,10 +1442,8 @@ func typeSchema(typ string, enums map[string][]any, customTypes map[string]contr
 		return map[string]any{"type": "boolean"}
 	case "timestamp", "datetime":
 		return map[string]any{"type": "string", "format": "date-time"}
-	case "number", "float":
+	case "number", "float", "decimal":
 		return map[string]any{"type": "number"}
-	case "decimal":
-		return map[string]any{"type": "string", "format": "decimal"}
 	case "json":
 		return map[string]any{"type": "object"}
 	case "bit", "xml":

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -169,6 +172,11 @@ func TestTypeMapping(t *testing.T) {
 		{column{Type: "json", Kind: "json"}, "JSON"},
 		{column{Type: "bytes"}, "BYTEA"},
 		{column{Type: "bit", Kind: "bit", Length: 8}, "BIT(8)"},
+		{column{Type: "string", Kind: "tsvector"}, "TSVECTOR"},
+		{column{Type: "json", Kind: "json"}, "JSON"},
+		{column{Type: "datetime", Mode: "date"}, "DATE"},
+		{column{Type: "datetime", Mode: "time", TimezoneSet: true, Timezone: true}, "TIMETZ(6)"},
+		{column{Type: "geometry", Kind: "polygon"}, "POLYGON"},
 	}
 	for _, tc := range cases {
 		got, err := columnType(tc.in)
@@ -259,6 +267,61 @@ func TestTypeTableMatchesColumnType(t *testing.T) {
 			base := strings.ToLower(strings.TrimSpace(strings.SplitN(got, "(", 2)[0]))
 			if !slices.Contains(ct.PG, base) {
 				t.Fatalf("%s.%s: %s is not in pg %v", family, variant, base, ct.PG)
+			}
+		}
+	}
+}
+
+// TestGeneratedSchemaTypesAreDeclared 直接扫描生成后的 DDL：
+// 列定义里出现的 PostgreSQL 类型必须属于 _types.yaml 某个 basics 族的 pg 集合。
+func TestGeneratedSchemaTypesAreDeclared(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts", "_meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared := map[string]bool{}
+	for _, fam := range shared.TypeFamilies {
+		for _, ct := range fam.Types {
+			for _, pg := range ct.PG {
+				declared[strings.ToLower(strings.TrimSpace(pg))] = true
+			}
+		}
+	}
+	columnRe := regexp.MustCompile(`^\s+"[^"]+"\s+([A-Z]+(?: [A-Z]+)*)`)
+	var sqlFiles []string
+	if err := filepath.Walk(filepath.Join(root, "apps/api"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && strings.HasSuffix(path, ".sql") {
+			rel, _ := filepath.Rel(root, path)
+			sqlFiles = append(sqlFiles, filepath.ToSlash(rel))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(sqlFiles)
+	for _, rel := range sqlFiles {
+		body, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(body), "\n") {
+			m := columnRe.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			typ := m[1]
+			for _, suffix := range []string{" NOT NULL", " NULL", " DEFAULT", " PRIMARY KEY", " REFERENCES", " UNIQUE", " CHECK"} {
+				if i := strings.Index(typ, suffix); i >= 0 {
+					typ = typ[:i]
+				}
+			}
+			typ = strings.ToLower(strings.TrimSpace(typ))
+			if !declared[typ] {
+				t.Errorf("%s column line uses undeclared PostgreSQL type %q: %s", rel, typ, strings.TrimSpace(line))
 			}
 		}
 	}

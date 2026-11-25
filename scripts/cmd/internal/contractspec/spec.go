@@ -29,13 +29,11 @@ type Schema struct {
 // SharedTypes 是 _meta/_types.yaml 的严格解析结果：类型族是元层词汇，
 // 由所有契约类型共享；项目级自定义类型在 contracts/data/types.yaml。
 type SharedTypes struct {
-	ID             string                     `yaml:"id"`
-	Title          string                     `yaml:"title"`
-	TypeFamilies   map[string]ValueTypeFamily `yaml:"basics"`
-	Structures     map[string]Structure       `yaml:"structures"`
-	Schemas        map[string]SchemaKind      `yaml:"schemas"`
-	ParamTargets   map[string]string          `yaml:"param_targets"`
-	TypeVocabulary TypeVocabulary             `yaml:"type_vocabulary"`
+	ID           string                     `yaml:"id"`
+	Title        string                     `yaml:"title"`
+	TypeFamilies map[string]ValueTypeFamily `yaml:"basics"`
+	Structures   map[string]Structure       `yaml:"structures"`
+	Schemas      map[string]SchemaKind      `yaml:"schemas"`
 }
 
 // _types 引用的三个命名空间：basics=标量值域（含 data/types.yaml 自定义类型），
@@ -86,17 +84,6 @@ func BareTypeName(ref string) string {
 	ref = strings.ReplaceAll(ref, "_types.schemas.", "")
 	ref = basicsRefRe.ReplaceAllString(ref, "$1")
 	return ref
-}
-
-// TypeVocabulary 声明类型词汇审计的显式例外；例外之外的裸类型一律报错。
-type TypeVocabulary struct {
-	Exceptions []TypeVocabularyException `yaml:"exceptions"`
-}
-
-type TypeVocabularyException struct {
-	Path   string `yaml:"path"`
-	Kind   string `yaml:"kind"`
-	Reason string `yaml:"reason"`
 }
 
 // Structure 是模板字段的数据结构声明：list/set/array/map/object。
@@ -185,20 +172,10 @@ func (t Targets) FileID(file string) string {
 }
 
 type ValueTypes struct {
-	TypeFamilies   map[string]ValueTypeFamily `yaml:"basics"`
-	CustomTypes    map[string]CustomValueType `yaml:"custom_types"`
-	Structures     map[string]Structure       `yaml:"structures"`
-	Schemas        map[string]SchemaKind      `yaml:"schemas"`
-	ParamTargets   map[string]string          `yaml:"param_targets"`
-	TypeVocabulary TypeVocabulary             `yaml:"type_vocabulary"`
-}
-
-// ParamTargetKinds 是 param_targets 允许的消费方：openapi=生成到 OpenAPI，
-// storage=仅存储层，runtime=业务运行时。
-var ParamTargetKinds = map[string]bool{
-	"openapi": true,
-	"storage": true,
-	"runtime": true,
+	TypeFamilies map[string]ValueTypeFamily `yaml:"basics"`
+	CustomTypes  map[string]CustomValueType `yaml:"custom_types"`
+	Structures   map[string]Structure       `yaml:"structures"`
+	Schemas      map[string]SchemaKind      `yaml:"schemas"`
 }
 
 // CustomValueType 是自定义值类型：一个类型族加上固定参数，供表列与 schema 共享。
@@ -363,59 +340,7 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 	if err := validateStructures(path, t.Structures, t.TypeFamilies); err != nil {
 		return nil, err
 	}
-	if err := validateParamTargets(path, t.TypeFamilies, t.ParamTargets); err != nil {
-		return nil, err
-	}
-	if err := validateTypeVocabulary(path, t.TypeVocabulary); err != nil {
-		return nil, err
-	}
 	return &t, nil
-}
-
-// validateTypeVocabulary 要求例外清单非空、路径相对、kind 合法且 reason 非空。
-func validateTypeVocabulary(path string, tv TypeVocabulary) error {
-	if len(tv.Exceptions) == 0 {
-		return fmt.Errorf("%s: type_vocabulary.exceptions must not be empty", path)
-	}
-	seen := map[string]bool{}
-	for i, ex := range tv.Exceptions {
-		if ex.Path == "" || filepath.IsAbs(ex.Path) || strings.Contains(ex.Path, "..") {
-			return fmt.Errorf("%s: type_vocabulary.exceptions[%d].path must be a relative path", path, i)
-		}
-		if ex.Kind != "dir" && ex.Kind != "file" {
-			return fmt.Errorf("%s: type_vocabulary.exceptions[%d].kind must be dir or file", path, i)
-		}
-		if strings.TrimSpace(ex.Reason) == "" {
-			return fmt.Errorf("%s: type_vocabulary.exceptions[%d].reason must not be empty", path, i)
-		}
-		key := ex.Kind + "\x00" + ex.Path
-		if seen[key] {
-			return fmt.Errorf("%s: type_vocabulary.exceptions[%d] duplicates %s %s", path, i, ex.Kind, ex.Path)
-		}
-		seen[key] = true
-	}
-	return nil
-}
-
-// validateParamTargets 校验 param_targets 的键必须是已声明参数，值必须是已知消费方。
-// "每个参数必须有消费方"由 checker 报 schema.types，保持错误分类不变。
-func validateParamTargets(path string, families map[string]ValueTypeFamily, targets map[string]string) error {
-	// default 是 custom_types 的通用参数，不属于任何 family 的 params。
-	known := map[string]bool{"default": true}
-	for _, fam := range families {
-		for name := range fam.Params {
-			known[name] = true
-		}
-	}
-	for name, target := range targets {
-		if !known[name] {
-			return fmt.Errorf("%s: param_targets.%s does not match any family param", path, name)
-		}
-		if !ParamTargetKinds[target] {
-			return fmt.Errorf("%s: param_targets.%s has invalid target %q (openapi/storage/runtime)", path, name, target)
-		}
-	}
-	return nil
 }
 
 // LoadCustomTypes 严格解析 contracts/data/types.yaml；文件缺失视为没有自定义类型。
@@ -713,7 +638,6 @@ func LoadSchema(path string) (*Schema, error) {
 			TypeFamilies: t.TypeFamilies,
 			Structures:   t.Structures,
 			Schemas:      t.Schemas,
-			ParamTargets: t.ParamTargets,
 		}
 		s.NodeKinds = t.Schemas
 		s.PropertyKeys = sharedObjectPropertyKeys(t.Schemas)

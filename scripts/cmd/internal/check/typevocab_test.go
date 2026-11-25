@@ -142,7 +142,7 @@ func TestTypeVocabularyCrossFileDuplicates(t *testing.T) {
 	}
 }
 
-func TestTypeVocabularyOpenAPIException(t *testing.T) {
+func TestTypeVocabularyGeneratedExempt(t *testing.T) {
 	root := t.TempDir()
 	copyMeta(t, root, "cap.services")
 	for _, item := range []struct{ path, body string }{

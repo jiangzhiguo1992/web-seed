@@ -9,7 +9,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestContractTypeFieldsAreDataTypes 是 type_vocabulary 的独立文本扫描：
+// TestContractTypeFieldsAreDataTypes 是独立文本扫描：
 // 只允许 type 承载数据类型；schema 结构判别必须是 _types.schemas.*，不能改用 kind。
 func TestContractTypeFieldsAreDataTypes(t *testing.T) {
 	root := repoRoot(t)
@@ -39,6 +39,9 @@ func TestContractTypeFieldsAreDataTypes(t *testing.T) {
 					if s, ok := child.(string); ok {
 						if key == "type" && !isDataTypeRef(s) {
 							t.Errorf("%s: type %q is not a data type", childWhere, s)
+						}
+						if key == "json_type" && rel != "contracts/platform/http_conventions.yaml" {
+							t.Errorf("%s: json_type is only allowed in contracts/platform/http_conventions.yaml", childWhere)
 						}
 					}
 					walk(child, childWhere)

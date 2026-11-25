@@ -1023,3 +1023,14 @@ func TestGeneratedSpecsValidateWithKinOpenAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestScalarParamsIncludeNormalize(t *testing.T) {
+	out := map[string]any{}
+	applyScalarParams(out, map[string]any{"normalize": "upper", "min_len": 1})
+	if out["x-normalize"] != "upper" {
+		t.Fatalf("normalize not emitted: %#v", out)
+	}
+	if out["minLength"] != 1 {
+		t.Fatalf("minLength not emitted: %#v", out)
+	}
+}
