@@ -73,12 +73,12 @@ basics:
     types:
       datetime: { go: time.Time, pg: [ date, time, timetz, timestamp, timestamptz ], ts: string }
   timestamp:
-    description: "绝对时间点；timezone 控制是否带时区，fractional_seconds 控制小数秒"
+    description: "绝对时间点；time 带时区（timestamptz），long 不带时区（timestamp），fractional_seconds 控制小数秒"
     params:
-      timezone: { type: _types.basics.boolean, required: false, default: true, description: "带时区" }
       fractional_seconds: { type: _types.basics.integer, required: false, default: 6, min: 0, max: 9, description: "小数秒精度" }
     types:
-      timestamp: { go: time.Time, pg: [ timestamp, timestamptz ], ts: string }
+      time: { go: time.Time, pg: [ timestamptz ], ts: string }
+      long: { go: int64, pg: [ timestamp ], ts: number }
   json:
     description: "JSON 文档；kind 选择 json 或 jsonb"
     params:
@@ -90,17 +90,9 @@ basics:
     params: { }
     types:
       xml: { go: "map[string]any", pg: [ xml ], ts: unknown }
-  geometry:
-    description: "PostgreSQL 内置几何类型；Go 用 go-geom 的 geojson.Geometry，数据库文本格式由 repository 适配"
-    params:
-      kind: { type: _types.basics.string, required: false, enum: [ point, line, lseg, box, path, polygon, circle ], default: point, description: "几何类型" }
-    types:
-      geometry: { go: geojson.Geometry, pg: [ point, line, lseg, box, path, polygon, circle ], ts: unknown }
   any:
-    description: "任意值；用于无法静态建模的字段；没有确定性存储落型"
+    description: "任意值；具体 apps 实现时再决定落型，契约不约束"
     params: { }
-    types:
-      any: { go: any, pg: [ ], ts: unknown }
 
 structures:
   list:
