@@ -116,6 +116,8 @@ tables / entities / queries ──(type)──>  types
 
 时间列统一用 `timestamp`（应用层只处理 UTC），`datetime` 族不使用。**（`[评审]`）**
 
+实体 ID 与外键 ID 统一用 `_types.id`（integer，bits 64）；分页偏移、计数、状态码等非 ID 整数用 `_types.integer`（bits 32）。**（`[评审]`）**
+
 ### 4.2 索引与冗余
 
 - **索引必须有查询**：`indexes[].used_by` 至少一个 `data.queries.*` 项，且该查询的 `tables` 包含本表（`[强制: index-used-by]`、`[强制: index-used-by-ref]`）。唯一索引也要写——插入与唯一性校验同样是使用方。没有查询的索引直接删除，不要写假 ID。
@@ -127,7 +129,7 @@ tables / entities / queries ──(type)──>  types
 # 子表列：account 被硬删时级联删除本行
 columns:
   - name: account_id
-    type: _types.integer
+    type: _types.id
     nullable: false
     references: { column: data.tables.account.col.id, on_delete: cascade }
 ```
@@ -151,8 +153,8 @@ columns:
 | 字段 | 谁写 | 含义 |
 |---|---|---|
 | `table.entities` | 手写 | 映射本表的 entity 集合（`[强制: table-entities]`） |
-| `model.includes` | `make gen-graph` | 本实体关系字段指向的 entity 及基数 `{entity, cardinality}`（`[强制: entity-included-by]`，禁止手改） |
-| `model.included_by` | `make gen-graph` | 通过关系字段指向本实体的 entity 及反向基数 `{entity, cardinality}`（`[强制: entity-included-by]`，禁止手改） |
+| `model.includes` | `make gen-graph` | 本实体每个关系字段指向的 entity 及基数 `{field, entity, cardinality}`（`[强制: entity-included-by]`，禁止手改） |
+| `model.included_by` | `make gen-graph` | 指向本实体的来源关系字段及反向基数 `{entity, field, cardinality}`（`[强制: entity-included-by]`，禁止手改） |
 | `table.references` | `make gen-graph` | 本表 `columns[].references` 的目标列（`[强制: table-referenced-by]`，禁止手改） |
 | `table.referenced_by` | `make gen-graph` | 指向本表列的 `references` 源列（`[强制: table-referenced-by]`，禁止手改） |
 | `indexes[].used_by` | 手写 | 使用该索引的 query（设计声明） |
@@ -228,7 +230,7 @@ indexes:
       to: data.tables.auth_pwd.col.account_id
 ```
 
-标量字段与关系字段互斥：标量写 `source.column/computed/soft`，关系写 `type` + `source.join.from/to`，两套键不得混用（`[强制: entity-field-variant]`）。多对多关系在 `source.join.through` 写中间表 `{table, from, to}`，中间表两列必须分别列级 `references` 到关系两端；关系基数由两端唯一索引与 `through` 推导（`[强制: entity-relation-cardinality]`），`model.includes` / `model.included_by` 由 `make gen-graph` 写入 `{entity, cardinality}`。实体不重复物理长度参数；统计口径不同时用 query 的 `returns`，不要把查询专属聚合塞进实体。
+标量字段与关系字段互斥：标量写 `source.column/computed/soft`，关系写 `type` + `source.join.from/to`，两套键不得混用（`[强制: entity-field-variant]`）。多对多关系在 `source.join.through` 写中间表 `{table, from, to}`，中间表两列必须分别列级 `references` 到关系两端；关系基数由两端唯一索引与 `through` 推导（`[强制: entity-relation-cardinality]`），`model.includes` / `model.included_by` 由 `make gen-graph` 写入 `{field, entity, cardinality}`。实体不重复物理长度参数；统计口径不同时用 query 的 `returns`，不要把查询专属聚合塞进实体。
 
 ---
 
