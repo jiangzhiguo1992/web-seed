@@ -1,0 +1,18 @@
+id: cap.events.attachment
+summary: "附件异步任务"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "cleanup_stale_uploads 只清理 uploading 且超过保留期的附件，不得软删 available 附件"
+  - "清理只软删元数据；对象字节清理由对象存储生命周期策略负责"
+
+crons:
+  - id: cap.events.attachment.cleanup_stale_uploads
+    name: cleanup_stale_uploads
+    summary: "软删超过 24 小时仍停留在 uploading 的附件"
+    service: cap.services.attachment.cleanup_stale_uploads
+    schedule: "*/30 * * * *"
+    overlap: forbid
+    retry: { max_attempts: 3, backoff: exponential, dead_letter: true }
+    concurrency: { key: attachment_cleanup_stale, ttl: 30m }
