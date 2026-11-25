@@ -32,8 +32,8 @@ queries:
       - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_pwd.col.id }
-      - { name: account_id, type: _types.integer, column: data.tables.auth_pwd.col.account_id }
+      - { name: id, type: _types.id, column: data.tables.auth_pwd.col.id }
+      - { name: account_id, type: _types.id, column: data.tables.auth_pwd.col.account_id }
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_pwd.col.status }
       - { name: username, type: _types.string, column: data.tables.auth_pwd.col.username }
       - { name: password_hash, type: _types.string, column: data.tables.auth_pwd.col.password_hash }
@@ -55,7 +55,7 @@ queries:
       - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_pwd.col.id }
+      - { name: id, type: _types.id, column: data.tables.auth_pwd.col.id }
       - { name: password_hash, type: _types.string, column: data.tables.auth_pwd.col.password_hash }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -72,7 +72,7 @@ queries:
       - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_pwd.col.id }
+      - { name: id, type: _types.id, column: data.tables.auth_pwd.col.id }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -88,7 +88,7 @@ queries:
       - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_pwd.col.id }
+      - { name: id, type: _types.id, column: data.tables.auth_pwd.col.id }
       - { name: lock_until, type: _types.timestamp, column: data.tables.auth_pwd.col.locked_until, nullable: true }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -122,8 +122,8 @@ queries:
       - { table: data.tables.auth_phone, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_phone.col.id }
-      - { name: account_id, type: _types.integer, column: data.tables.auth_phone.col.account_id }
+      - { name: id, type: _types.id, column: data.tables.auth_phone.col.id }
+      - { name: account_id, type: _types.id, column: data.tables.auth_phone.col.account_id }
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_phone.col.status }
       - { name: code, type: _types.string, column: data.tables.auth_phone.col.code }
       - { name: number, type: _types.string, column: data.tables.auth_phone.col.number }
@@ -162,8 +162,8 @@ queries:
       - { table: data.tables.auth_email, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_email.col.id }
-      - { name: account_id, type: _types.integer, column: data.tables.auth_email.col.account_id }
+      - { name: id, type: _types.id, column: data.tables.auth_email.col.id }
+      - { name: account_id, type: _types.id, column: data.tables.auth_email.col.account_id }
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_email.col.status }
       - { name: username, type: _types.string, column: data.tables.auth_email.col.username }
       - { name: domain, type: _types.string, column: data.tables.auth_email.col.domain }
@@ -187,7 +187,7 @@ queries:
       - { table: data.tables.auth_pwd }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_pwd.col.id }
+      - { name: id, type: _types.id, column: data.tables.auth_pwd.col.id }
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_pwd }
       - { name: err, kind: error }
@@ -203,7 +203,7 @@ queries:
       - { table: data.tables.auth_phone }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_phone.col.id }
+      - { name: id, type: _types.id, column: data.tables.auth_phone.col.id }
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_phone }
       - { name: err, kind: error }
@@ -219,7 +219,7 @@ queries:
       - { table: data.tables.auth_email }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_email.col.id }
+      - { name: id, type: _types.id, column: data.tables.auth_email.col.id }
     returns:
       - { name: row, kind: entity, entity: data.entities.auth_email }
       - { name: err, kind: error }
@@ -235,7 +235,7 @@ queries:
       - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer, column: data.tables.auth_pwd.col.account_id }
+      - { name: account_id, type: _types.id, column: data.tables.auth_pwd.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -251,7 +251,7 @@ queries:
       - { table: data.tables.auth_phone, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer, column: data.tables.auth_phone.col.account_id }
+      - { name: account_id, type: _types.id, column: data.tables.auth_phone.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -268,7 +268,7 @@ queries:
       - { table: data.tables.auth_email, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer, column: data.tables.auth_email.col.account_id }
+      - { name: account_id, type: _types.id, column: data.tables.auth_email.col.account_id }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -285,7 +285,7 @@ queries:
       - { table: data.tables.auth_phone, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_phone.col.id }
+      - { name: id, type: _types.id, column: data.tables.auth_phone.col.id }
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_phone.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -303,7 +303,7 @@ queries:
       - { table: data.tables.auth_email, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_email.col.id }
+      - { name: id, type: _types.id, column: data.tables.auth_email.col.id }
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_email.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }
@@ -321,7 +321,7 @@ queries:
       - { table: data.tables.auth_pwd, write: true }
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.auth_pwd.col.id }
+      - { name: id, type: _types.id, column: data.tables.auth_pwd.col.id }
       - { name: status, type: data.enums.auth_status, column: data.tables.auth_pwd.col.status }
     returns:
       - { name: affected_rows, kind: affected_rows }

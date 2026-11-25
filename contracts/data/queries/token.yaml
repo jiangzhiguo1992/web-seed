@@ -17,9 +17,9 @@ queries:
       - data.tables.token.cache.access_token_hash
     params:
       - { name: ctx, type: context.Context }
-      - { name: id, type: _types.integer, column: data.tables.token.col.id }
-      - { name: account_id, type: _types.integer, column: data.tables.token.col.account_id }
-      - { name: user_id, type: _types.integer, column: data.tables.token.col.user_id, nullable: true }
+      - { name: id, type: _types.id, column: data.tables.token.col.id }
+      - { name: account_id, type: _types.id, column: data.tables.token.col.account_id }
+      - { name: user_id, type: _types.id, column: data.tables.token.col.user_id, nullable: true }
       - { name: device_id, type: _types.string, column: data.tables.token.col.device_id, nullable: true }
       - { name: access_token_hash, type: _types.string, column: data.tables.token.col.access_token_hash }
       - { name: refresh_token_hash, type: _types.string, column: data.tables.token.col.refresh_token_hash }
@@ -86,7 +86,7 @@ queries:
       - { name: refresh_token_hash, type: _types.string, column: data.tables.token.col.refresh_token_hash }
       - { name: revoked_at, type: _types.timestamp, column: data.tables.token.col.revoked_at }
       - { name: revoke_reason, type: data.enums.token_revoke_reason, column: data.tables.token.col.revoke_reason }
-      - { name: replaced_by_id, type: _types.integer, column: data.tables.token.col.replaced_by_id, nullable: true }
+      - { name: replaced_by_id, type: _types.id, column: data.tables.token.col.replaced_by_id, nullable: true }
     returns:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
@@ -106,7 +106,7 @@ queries:
       - data.tables.token.cache.access_token_hash
     params:
       - { name: ctx, type: context.Context }
-      - { name: account_id, type: _types.integer, column: data.tables.token.col.account_id }
+      - { name: account_id, type: _types.id, column: data.tables.token.col.account_id }
       - { name: revoked_at, type: _types.timestamp, column: data.tables.token.col.revoked_at }
       - { name: revoke_reason, type: data.enums.token_revoke_reason, column: data.tables.token.col.revoke_reason }
     returns:

@@ -8,7 +8,9 @@ stability: draft
 do_not:
   - "ListRootDictionaries / ListDictionaryChildren 不写业务筛选；启用/停用由调用方按 status 处理"
   - "GetDictionary 按全局唯一的 code 读取；不要用 name 做查询键"
-  - "dictionary 查询集只读；字典维护写查询单独设计，不塞进本文件"
+  - "字典写查询必须复用 uq_dictionary_code / idx_dictionary_parent_sort；不要为写路径新增重复索引"
+  - "code 创建后不可变；UpdateDictionary 不得包含 code"
+  - "BulkCreateDictionaries.items 的项结构由 feature.rules.dictionary.import_items_shape 约束；SQL 不得依赖未声明字段"
 
 queries:
   - name: ListRootDictionaries
@@ -34,7 +36,7 @@ queries:
       - { table: data.tables.dictionary }
     params:
       - { name: ctx, type: context.Context }
-      - { name: parent_id, type: _types.integer, column: data.tables.dictionary.col.parent_id }
+      - { name: parent_id, type: _types.id, column: data.tables.dictionary.col.parent_id }
       - { name: offset, type: _types.integer, nullable: true, default: 0 }
       - { name: limit, type: _types.integer, nullable: true, default: 20 }
     returns:
@@ -61,3 +63,178 @@ queries:
       - { index: data.tables.dictionary.uq_dictionary_code, columns: [ code ] }
     used_by:
       - cap.services.dictionary.get
+
+  - name: GetDictionaryByID
+    description: "按 ID 读取字典节点；调用方判断 deleted_at"
+    tables:
+      - { table: data.tables.dictionary }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id, column: data.tables.dictionary.col.id, nullable: true }
+    returns:
+      - { name: dictionary, kind: entity, entity: data.entities.dictionary, nullable: true }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.dictionary.pk, columns: [ id ] }
+    used_by:
+      - cap.services.dictionary.create
+      - cap.services.dictionary.delete
+      - cap.services.dictionary.get_by_id
+      - cap.services.dictionary.move
+      - cap.services.dictionary.set_status
+      - cap.services.dictionary.update
+
+  - name: ExistsDictionaryCode
+    description: "判断 code 是否已被占用（含软删行）"
+    tables:
+      - { table: data.tables.dictionary }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: code, type: _types.string, column: data.tables.dictionary.col.code }
+    returns:
+      - { name: exists, kind: scalar, type: _types.boolean }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.dictionary.uq_dictionary_code, columns: [ code ] }
+    used_by:
+      - cap.services.dictionary.create
+
+  - name: ExistsDictionaryChildren
+    description: "判断是否存在未软删子节点"
+    tables:
+      - { table: data.tables.dictionary }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: parent_id, type: _types.id, column: data.tables.dictionary.col.parent_id }
+    returns:
+      - { name: exists, kind: scalar, type: _types.boolean }
+      - { name: err, kind: error }
+    errors: [ ]
+    index_ref:
+      - { index: data.tables.dictionary.idx_dictionary_parent_sort, columns: [ deleted_at, parent_id ] }
+    used_by:
+      - cap.services.dictionary.delete
+
+  - name: CreateDictionary
+    description: "创建字典节点并返回实体"
+    tables:
+      - { table: data.tables.dictionary, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id, column: data.tables.dictionary.col.id }
+      - { name: parent_id, type: _types.id, column: data.tables.dictionary.col.parent_id, nullable: true }
+      - { name: code, type: _types.string, column: data.tables.dictionary.col.code }
+      - { name: name, type: _types.string, column: data.tables.dictionary.col.name }
+      - { name: color, type: _types.string, column: data.tables.dictionary.col.color, nullable: true }
+      - { name: sort, type: _types.integer, column: data.tables.dictionary.col.sort }
+      - { name: remark, type: _types.string, column: data.tables.dictionary.col.remark, nullable: true }
+      - { name: extra, type: _types.json, column: data.tables.dictionary.col.extra, nullable: true }
+      - { name: status, type: _types.integer, column: data.tables.dictionary.col.status }
+    returns:
+      - { name: dictionary, kind: entity, entity: data.entities.dictionary }
+      - { name: err, kind: error }
+    errors:
+      - platform.errors.DICTIONARY_CODE_TAKEN
+      - platform.errors.DICTIONARY_PARENT_INVALID
+      - platform.errors.DICTIONARY_INVALID
+    index_ref:
+      - { index: data.tables.dictionary.uq_dictionary_code, columns: [ code ] }
+    used_by:
+      - cap.services.dictionary.create
+
+  - name: UpdateDictionary
+    description: "更新字典展示字段并返回实体；code 不在此查询中修改"
+    tables:
+      - { table: data.tables.dictionary, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id, column: data.tables.dictionary.col.id }
+      - { name: name, type: _types.string, column: data.tables.dictionary.col.name }
+      - { name: color, type: _types.string, column: data.tables.dictionary.col.color, nullable: true }
+      - { name: sort, type: _types.integer, column: data.tables.dictionary.col.sort }
+      - { name: remark, type: _types.string, column: data.tables.dictionary.col.remark, nullable: true }
+      - { name: extra, type: _types.json, column: data.tables.dictionary.col.extra, nullable: true }
+    returns:
+      - { name: dictionary, kind: entity, entity: data.entities.dictionary }
+      - { name: err, kind: error }
+    errors:
+      - platform.errors.DICTIONARY_INVALID
+    index_ref:
+      - { index: data.tables.dictionary.pk, columns: [ id ] }
+    used_by:
+      - cap.services.dictionary.update
+
+  - name: SetDictionaryStatus
+    description: "设置字典状态并返回实体"
+    tables:
+      - { table: data.tables.dictionary, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id, column: data.tables.dictionary.col.id }
+      - { name: status, type: _types.integer, column: data.tables.dictionary.col.status }
+    returns:
+      - { name: dictionary, kind: entity, entity: data.entities.dictionary }
+      - { name: err, kind: error }
+    errors:
+      - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
+    index_ref:
+      - { index: data.tables.dictionary.pk, columns: [ id ] }
+    used_by:
+      - cap.services.dictionary.set_status
+
+  - name: SoftDeleteDictionary
+    description: "软删字典并同步 status 与 deleted_at"
+    tables:
+      - { table: data.tables.dictionary, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id, column: data.tables.dictionary.col.id }
+      - { name: status, type: _types.integer, column: data.tables.dictionary.col.status }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
+    errors:
+      - platform.errors.DICTIONARY_HAS_CHILDREN
+    index_ref:
+      - { index: data.tables.dictionary.pk, columns: [ id ] }
+    used_by:
+      - cap.services.dictionary.delete
+
+  - name: MoveDictionary
+    description: "移动字典节点到新父节点；parent_id 为 null 表示移到顶级"
+    tables:
+      - { table: data.tables.dictionary, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: id, type: _types.id, column: data.tables.dictionary.col.id }
+      - { name: parent_id, type: _types.id, column: data.tables.dictionary.col.parent_id, nullable: true }
+    returns:
+      - { name: dictionary, kind: entity, entity: data.entities.dictionary }
+      - { name: err, kind: error }
+    errors:
+      - platform.errors.DICTIONARY_PARENT_INVALID
+    index_ref:
+      - { index: data.tables.dictionary.pk, columns: [ id ] }
+    used_by:
+      - cap.services.dictionary.move
+
+  - name: BulkCreateDictionaries
+    description: "批量创建字典节点；items 是 {parent_id, code, name, color, sort, remark, extra} 的 JSON 数组"
+    tables:
+      - { table: data.tables.dictionary, write: true }
+    params:
+      - { name: ctx, type: context.Context }
+      - { name: items, type: _types.json }
+    returns:
+      - { name: affected_rows, kind: affected_rows }
+      - { name: err, kind: error }
+    errors:
+      - platform.errors.DICTIONARY_CODE_TAKEN
+      - platform.errors.DICTIONARY_PARENT_INVALID
+      - platform.errors.DICTIONARY_INVALID
+    index_ref:
+      - { index: data.tables.dictionary.uq_dictionary_code, columns: [ code ] }
+    used_by:
+      - cap.services.dictionary.import
