@@ -13,7 +13,7 @@ basics:
       pattern: { type: _types.basics.string, required: false, description: "写入前校验正则" }
       normalize: { type: _types.basics.string, required: false, enum: [ lower, upper ], description: "写入前归一" }
     types:
-      string: { go: string, pg: [ text, varchar, char, character varying, character, bpchar, name ], ts: string }
+      string: { go: string, pg: [ text, varchar, char, character varying, character, bpchar, name, tsvector, tsquery ], ts: string }
   boolean:
     description: "布尔值"
     params: { }
@@ -43,13 +43,12 @@ basics:
   decimal:
     description: "精确小数；Go 侧用 decimal.Decimal 承载，不使用 string 或 float"
     params:
-      kind: { type: _types.basics.string, required: false, enum: [ numeric, money ], default: numeric, description: "数值类型" }
       precision: { type: _types.basics.integer, required: true, min: 1, examples: [ 19 ], description: "总位数" }
       scale: { type: _types.basics.integer, required: false, default: 0, min: 0, description: "小数位数" }
       min: { type: _types.basics.decimal, required: false, description: "下限" }
       max: { type: _types.basics.decimal, required: false, description: "上限" }
     types:
-      decimal: { go: decimal.Decimal, pg: [ numeric, decimal, money ], ts: string }
+      decimal: { go: decimal.Decimal, pg: [ numeric, decimal ], ts: string }
   datetime:
     description: "日期/时间；mode 选择日期、时间或日期时间，timezone 控制时区"
     params:
@@ -70,11 +69,6 @@ basics:
       kind: { type: _types.basics.string, required: false, enum: [ json, jsonb ], default: jsonb, description: "JSON 类型" }
     types:
       json: { go: json.RawMessage, pg: [ json, jsonb ], ts: unknown }
-  jsonpath:
-    description: "JSON 路径表达式"
-    params: { }
-    types:
-      jsonpath: { go: string, pg: [ jsonpath ], ts: string }
   bytes:
     description: "二进制"
     params:
@@ -83,73 +77,26 @@ basics:
       fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
     types:
       bytes: { go: "[]byte", pg: [ bytea ], ts: string }
-  any:
-    description: "任意值；用于无法静态建模的字段；没有确定性存储落型"
-    params: { }
-    types:
-      any: { go: any, pg: [ ], ts: unknown }
-  uuid:
-    description: "UUID"
-    params: { }
-    types:
-      uuid: { go: string, pg: [ uuid ], ts: string }
-  interval:
-    description: "时间间隔"
-    params: { }
-    types:
-      interval: { go: time.Duration, pg: [ interval ], ts: string }
-  network:
-    description: "网络地址；kind 选择 inet、cidr 或 MAC 类型"
-    params:
-      kind: { type: _types.basics.string, required: false, enum: [ inet, cidr, macaddr, macaddr8 ], default: inet, description: "网络类型" }
-    types:
-      network: { go: string, pg: [ inet, cidr, macaddr, macaddr8 ], ts: string }
   bit:
     description: "位串；kind 选择定长 bit 或变长 varbit"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ bit, varbit ], default: varbit, description: "位串类型" }
     types:
-      bit: { go: string, pg: [ bit, varbit ], ts: string }
-  textsearch:
-    description: "全文检索类型；kind 选择 tsvector 或 tsquery"
-    params:
-      kind: { type: _types.basics.string, required: false, enum: [ tsvector, tsquery ], default: tsvector, description: "检索类型" }
-    types:
-      textsearch: { go: string, pg: [ tsvector, tsquery ], ts: string }
+      bit: { go: big.Int, pg: [ bit, varbit ], ts: string }
   xml:
     description: "XML 文档"
     params: { }
     types:
-      xml: { go: string, pg: [ xml ], ts: string }
+      xml: { go: "[]byte", pg: [ xml ], ts: string }
   geometry:
     description: "几何类型；kind 选择 PostgreSQL 几何类型"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ point, line, lseg, box, path, polygon, circle ], default: point, description: "几何类型" }
     types:
-      geometry: { go: string, pg: [ point, line, lseg, box, path, polygon, circle ], ts: string }
-  range:
-    description: "范围类型；kind 选择 PostgreSQL 范围类型"
-    params:
-      kind: { type: _types.basics.string, required: false, enum: [ int4range, int8range, numrange, tsrange, tstzrange, daterange ], default: int4range, description: "范围类型" }
-    types:
-      range: { go: string, pg: [ int4range, int8range, numrange, tsrange, tstzrange, daterange ], ts: string }
-  multirange:
-    description: "多范围类型；kind 选择 PostgreSQL 多范围类型"
-    params:
-      kind: { type: _types.basics.string, required: false, enum: [ int4multirange, int8multirange, nummultirange, tsmultirange, tstzmultirange, datemultirange ], default: int4multirange, description: "多范围类型" }
-    types:
-      multirange: { go: string, pg: [ int4multirange, int8multirange, nummultirange, tsmultirange, tstzmultirange, datemultirange ], ts: string }
-  oid:
-    description: "对象标识；kind 选择 PostgreSQL OID/reg* 类型"
-    params:
-      kind: { type: _types.basics.string, required: false, enum: [ oid, regproc, regprocedure, regoper, regoperator, regclass, regcollation, regtype, regrole, regnamespace, regconfig, regdictionary ], default: oid, description: "OID 类型" }
-    types:
-      oid: { go: uint32, pg: [ oid, regproc, regprocedure, regoper, regoperator, regclass, regcollation, regtype, regrole, regnamespace, regconfig, regdictionary ], ts: number }
-  pg_lsn:
-    description: "PostgreSQL WAL 日志序列号"
+      geometry: { go: geom.T, pg: [ point, line, lseg, box, path, polygon, circle ], ts: string }
+  any:
+    description: "任意值；用于无法静态建模的字段；没有确定性存储落型，因此没有 types 表"
     params: { }
-    types:
-      pg_lsn: { go: string, pg: [ pg_lsn ], ts: string }
 
 structures:
   list:
@@ -189,11 +136,11 @@ schemas:
   object:
     description: "对象节点；properties 是属性条目"
     keys:
-      - name: type
+      - name: kind
         type: _types.basics.string
         required: true
-        const: _types.schemas.object
-        description: "固定为 _types.schemas.object"
+        const: object
+        description: "固定为 object"
       - name: properties
         type: _types.structures.list<_types.structures.object>
         required: true
@@ -245,11 +192,11 @@ schemas:
   array:
     description: "数组节点；items 是元素值域"
     keys:
-      - name: type
+      - name: kind
         type: _types.basics.string
         required: true
-        const: _types.schemas.array
-        description: "固定为 _types.schemas.array"
+        const: array
+        description: "固定为 array"
       - name: items
         types: [ _types.schemas.* ]
         required: true
@@ -279,11 +226,11 @@ schemas:
   map:
     description: "映射节点；键固定为 string（JSON 对象键），values 是值域；integer key 用 _types.structures.map，不进入 schema 节点"
     keys:
-      - name: type
+      - name: kind
         type: _types.basics.string
         required: true
-        const: _types.schemas.map
-        description: "固定为 _types.schemas.map"
+        const: map
+        description: "固定为 map"
       - name: values
         types: [ _types.schemas.* ]
         required: true
@@ -339,9 +286,9 @@ schemas:
             description: "违反规则时的错误文案"
 
   ref:
-    description: "引用节点；ref 指向 entity、enum 或全限定本地 schema"
+    description: "引用节点；type 指向 entity、enum 或全限定本地 schema"
     keys:
-      - name: ref
+      - name: type
         type: _types.basics.string
         required: true
         pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*)$'
@@ -363,12 +310,8 @@ schemas:
 # 类型词汇审计的显式例外；例外之外出现裸 object/array/map 或未知 _types.* 一律失败。
 type_vocabulary:
   exceptions:
-    - { path: contracts/_meta, kind: dir, reason: "契约元层：顶层 type 是契约类型，字段 type 由 _meta 校验" }
     - { path: contracts/generated, kind: dir, reason: "生成产物：OpenAPI 使用 JSON Schema 外部词汇" }
     - { path: contracts/capabilities/protocols/http, kind: dir, reason: "完整 OpenAPI 3.1：type: object/array 是外部词汇" }
-    - { path: contracts/platform/http_conventions.yaml, kind: file, reason: "平台 HTTP 组件：components 直接使用 OpenAPI 3.1 JSON Schema 词汇" }
-    - { path: contracts/index.yaml, kind: file, reason: "契约注册表：不含 schema 节点" }
-    - { path: contracts/project.yaml, kind: file, reason: "项目元数据：不含 schema 节点" }
 
 # 每个类型族参数的消费方：openapi=生成到 OpenAPI，storage=仅存储层，runtime=业务运行时。
 param_targets:
