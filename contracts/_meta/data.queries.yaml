@@ -118,7 +118,7 @@ fields:
       - { name: errors, type: _types.structures.set<_types.basics.string>, required: true, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "领域错误；无则写 []；不含输入/基础设施错误" }
       - name: index_ref
         type: _types.structures.list<_types.structures.object>
-        required: false
+        required: true
         min_items: 1
         unique_key: index
         description: "索引依赖；每项声明索引与实际使用的索引列前缀"
