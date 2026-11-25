@@ -11,77 +11,77 @@ targets:
 
 fields:
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     pattern: '^platform\.errors\.[a-z][a-z0-9_]*$'
     description: "契约 ID"
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     min_len: 1
     description: "一句话说明"
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
   - name: naming
-    type: _types.object
+    type: _types.structures.object
     required: false
     description: "错误码命名约定"
     fields:
-      - { name: pattern, type: _types.string, required: true, description: "错误码模式" }
-      - { name: common_prefix, type: _types.string, required: true, description: "公共错误前缀" }
-      - { name: max_total, type: _types.integer, required: true, min: 0, description: "错误码总数上限" }
+      - { name: pattern, type: _types.basics.string, required: true, description: "错误码模式" }
+      - { name: common_prefix, type: _types.basics.string, required: true, description: "公共错误前缀" }
+      - { name: max_total, type: _types.basics.integer, required: true, min: 0, description: "错误码总数上限" }
   - name: biz_code
-    type: _types.object
+    type: _types.structures.object
     required: false
     description: "业务码分配"
     fields:
-      - { name: success_code, type: _types.integer, required: true, description: "成功业务码" }
+      - { name: success_code, type: _types.basics.integer, required: true, description: "成功业务码" }
       - name: ranges
-        type: _types.map<_types.list<_types.integer>>
+        type: _types.structures.map<_types.structures.list<_types.basics.integer>>
         required: true
         key_patterns: [ '^[a-z][a-z0-9_]*$' ]
         description: "域 → 业务码区间"
   - name: order
-    type: _types.list<_types.string>
+    type: _types.structures.list<_types.basics.string>
     required: false
     unique: true
     description: "错误文件加载顺序"
   - name: mapping_rules
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: false
     description: "状态码映射规则"
     item_fields:
-      - { name: status, type: _types.integer, required: true, min: 100, max: 599, description: "HTTP 状态码" }
-      - { name: when, type: _types.string, required: true, description: "适用场景" }
+      - { name: status, type: _types.basics.integer, required: true, min: 100, max: 599, description: "HTTP 状态码" }
+      - { name: when, type: _types.basics.string, required: true, description: "适用场景" }
   - name: errors
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: false
     min_items: 1
     unique_key: code
     description: "错误码项"
     item_fields:
-      - { name: code, type: _types.string, required: true, pattern: '^[A-Z][A-Z0-9_]*$', description: "错误码" }
-      - { name: biz_code, type: _types.integer, required: true, min: 1, max: 9999, description: "业务码" }
-      - { name: status, type: _types.integer, required: true, min: 100, max: 599, description: "HTTP 状态码" }
-      - { name: retryable, type: _types.boolean, required: true, description: "是否可重试" }
-      - { name: i18n, type: _types.string, required: true, min_len: 1, description: "i18n key" }
-      - { name: message, type: _types.string, required: true, min_len: 1, description: "默认消息" }
+      - { name: code, type: _types.basics.string, required: true, pattern: '^[A-Z][A-Z0-9_]*$', description: "错误码" }
+      - { name: biz_code, type: _types.basics.integer, required: true, min: 1, max: 9999, description: "业务码" }
+      - { name: status, type: _types.basics.integer, required: true, min: 100, max: 599, description: "HTTP 状态码" }
+      - { name: retryable, type: _types.basics.boolean, required: true, description: "是否可重试" }
+      - { name: i18n, type: _types.basics.string, required: true, min_len: 1, description: "i18n key" }
+      - { name: message, type: _types.basics.string, required: true, min_len: 1, description: "默认消息" }
   - name: common_errors
-    type: _types.list<_types.string>
+    type: _types.structures.list<_types.basics.string>
     required: false
     unique: true
     min_items: 1

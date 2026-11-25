@@ -11,64 +11,64 @@ targets:
 
 fields:
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     const: platform.observability.metrics
     description: "契约 ID"
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
   - name: naming
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "命名规则"
     fields:
-      - { name: pattern, type: _types.string, required: true, description: "指标名模板" }
-      - { name: unit_suffixes, type: _types.list<_types.string>, required: true, min_items: 1, description: "允许的单位后缀" }
+      - { name: pattern, type: _types.basics.string, required: true, description: "指标名模板" }
+      - { name: unit_suffixes, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, description: "允许的单位后缀" }
   - name: metrics
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     min_items: 1
     description: "指标清单"
     item_fields:
-      - { name: name, type: _types.string, required: true, description: "指标名" }
-      - { name: kind, type: _types.string, required: true, description: "指标类型" }
-      - { name: labels, type: _types.list<_types.string>, required: true, description: "标签" }
-      - { name: buckets, type: _types.list<_types.float>, required: false, description: "直方图分桶" }
-      - { name: description, type: _types.string, required: true, description: "指标含义" }
+      - { name: name, type: _types.basics.string, required: true, description: "指标名" }
+      - { name: kind, type: _types.basics.string, required: true, description: "指标类型" }
+      - { name: labels, type: _types.structures.list<_types.basics.string>, required: true, description: "标签" }
+      - { name: buckets, type: _types.structures.list<_types.basics.float>, required: false, description: "直方图分桶" }
+      - { name: description, type: _types.basics.string, required: true, description: "指标含义" }
   - name: label_rules
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "标签规则"
     fields:
-      - { name: low_cardinality_only, type: _types.boolean, required: true, description: "是否只允许低基数标签" }
-      - { name: forbidden_labels, type: _types.list<_types.string>, required: true, description: "禁止标签" }
-      - { name: route_label, type: _types.string, required: true, description: "路由标签规则" }
+      - { name: low_cardinality_only, type: _types.basics.boolean, required: true, description: "是否只允许低基数标签" }
+      - { name: forbidden_labels, type: _types.structures.list<_types.basics.string>, required: true, description: "禁止标签" }
+      - { name: route_label, type: _types.basics.string, required: true, description: "路由标签规则" }
   - name: exporter
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "导出配置"
     fields:
-      - { name: default, type: _types.string, required: true, description: "默认导出器" }
-      - { name: options, type: _types.list<_types.string>, required: true, min_items: 1, description: "可选导出器" }
-      - { name: config_source, type: _types.string, required: true, description: "配置来源" }
+      - { name: default, type: _types.basics.string, required: true, description: "默认导出器" }
+      - { name: options, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, description: "可选导出器" }
+      - { name: config_source, type: _types.basics.string, required: true, description: "配置来源" }
 
 rules:
   - { id: metric-shape, text: "指标名唯一；labels 不得使用 label_rules.forbidden_labels；kind 只允许 counter/gauge/histogram；exporter.default 必须属于 exporter.options", implemented_by: [ metric-shape ] }

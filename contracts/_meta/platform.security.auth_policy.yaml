@@ -10,134 +10,134 @@ targets:
 
 fields:
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     const: platform.security.auth_policy
     description: "契约 ID"
 
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
 
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
 
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: token
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "JWT 策略：access/refresh 记录通过 token 表校验吊销与轮换"
     fields:
-      - { name: persistence, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "JWT 哈希与吊销记录的持久化表" }
-      - { name: storage, type: _types.string, required: true, enum: [ hash ], description: "JWT 只存哈希" }
-      - { name: hash_algorithm, type: _types.string, required: true, enum: [ sha256 ], description: "JWT 哈希算法" }
-      - { name: issuer, type: _types.string, required: true, pattern: '^[a-z][a-z0-9._-]*$', description: "iss claim 值" }
+      - { name: persistence, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "JWT 哈希与吊销记录的持久化表" }
+      - { name: storage, type: _types.basics.string, required: true, enum: [ hash ], description: "JWT 只存哈希" }
+      - { name: hash_algorithm, type: _types.basics.string, required: true, enum: [ sha256 ], description: "JWT 哈希算法" }
+      - { name: issuer, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9._-]*$', description: "iss claim 值" }
       - name: access
-        type: _types.object
+        type: _types.structures.object
         required: true
         description: "访问令牌"
         fields:
-          - { name: format, type: _types.string, required: true, const: jwt, description: "固定 JWT" }
-          - { name: algorithm, type: _types.string, required: true, enum: [ HS256, RS256, ES256 ], description: "签名算法" }
-          - { name: ttl, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
-          - { name: claims_required, type: _types.list<_types.string>, required: true, unique: true, min_items: 6, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims；固定为 iss/sub/aud/exp/iat/jti" }
-          - { name: audience, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, description: "允许的 audience" }
-          - { name: pii_in_token, type: _types.boolean, required: true, description: "是否允许 PII 进入 token" }
+          - { name: format, type: _types.basics.string, required: true, const: jwt, description: "固定 JWT" }
+          - { name: algorithm, type: _types.basics.string, required: true, enum: [ HS256, RS256, ES256 ], description: "签名算法" }
+          - { name: ttl, type: _types.basics.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
+          - { name: claims_required, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 6, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims；固定为 iss/sub/aud/exp/iat/jti" }
+          - { name: audience, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, description: "允许的 audience" }
+          - { name: pii_in_token, type: _types.basics.boolean, required: true, description: "是否允许 PII 进入 token" }
       - name: refresh
-        type: _types.object
+        type: _types.structures.object
         required: true
         description: "刷新令牌"
         fields:
-          - { name: format, type: _types.string, required: true, const: jwt, description: "固定 JWT" }
-          - { name: algorithm, type: _types.string, required: true, enum: [ HS256, RS256, ES256 ], description: "签名算法" }
-          - { name: ttl, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
-          - { name: claims_required, type: _types.list<_types.string>, required: true, unique: true, min_items: 6, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims；固定为 iss/sub/aud/exp/iat/jti" }
-          - { name: audience, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, description: "允许的 audience" }
-          - { name: pii_in_token, type: _types.boolean, required: true, description: "是否允许 PII 进入 token" }
-          - { name: rotation, type: _types.boolean, required: true, description: "每次刷新是否签发新 refresh JWT" }
-          - { name: reuse_detection, type: _types.boolean, required: true, description: "是否检测旧 refresh JWT 复用" }
-          - { name: storage, type: _types.string, required: true, enum: [ hash ], description: "refresh JWT 存储形态" }
-          - { name: table, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "refresh JWT 记录表" }
+          - { name: format, type: _types.basics.string, required: true, const: jwt, description: "固定 JWT" }
+          - { name: algorithm, type: _types.basics.string, required: true, enum: [ HS256, RS256, ES256 ], description: "签名算法" }
+          - { name: ttl, type: _types.basics.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
+          - { name: claims_required, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 6, pattern: '^[a-z][a-z0-9_]*$', description: "必须包含的 claims；固定为 iss/sub/aud/exp/iat/jti" }
+          - { name: audience, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, description: "允许的 audience" }
+          - { name: pii_in_token, type: _types.basics.boolean, required: true, description: "是否允许 PII 进入 token" }
+          - { name: rotation, type: _types.basics.boolean, required: true, description: "每次刷新是否签发新 refresh JWT" }
+          - { name: reuse_detection, type: _types.basics.boolean, required: true, description: "是否检测旧 refresh JWT 复用" }
+          - { name: storage, type: _types.basics.string, required: true, enum: [ hash ], description: "refresh JWT 存储形态" }
+          - { name: table, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "refresh JWT 记录表" }
       - name: revocation
-        type: _types.object
+        type: _types.structures.object
         required: true
         description: "撤销策略"
         fields:
-          - { name: strategy, type: _types.string, required: true, enum: [ none, refresh_token, server ], description: "none=完全无状态；refresh_token=只吊销 refresh；server=access/refresh 记录都校验" }
-          - { name: note, type: _types.string, required: true, description: "失效依赖账号状态与短 TTL 的说明" }
+          - { name: strategy, type: _types.basics.string, required: true, enum: [ none, refresh_token, server ], description: "none=完全无状态；refresh_token=只吊销 refresh；server=access/refresh 记录都校验" }
+          - { name: note, type: _types.basics.string, required: true, description: "失效依赖账号状态与短 TTL 的说明" }
 
   - name: password
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "密码策略"
     fields:
-      - { name: algorithm, type: _types.string, required: true, enum: [ argon2id ], description: "密码哈希算法" }
-      - { name: hash_field, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "密码哈希列" }
-      - { name: min_length, type: _types.integer, required: true, min: 1, description: "最小长度" }
-      - { name: require_mixed_case, type: _types.boolean, required: true, description: "是否要求大小写混合" }
-      - { name: max_attempts, type: _types.integer, required: true, min: 1, description: "最大失败次数" }
-      - { name: lockout, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁定时长" }
-      - { name: breach_check, type: _types.boolean, required: true, description: "是否检查泄露库" }
+      - { name: algorithm, type: _types.basics.string, required: true, enum: [ argon2id ], description: "密码哈希算法" }
+      - { name: hash_field, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "密码哈希列" }
+      - { name: min_length, type: _types.basics.integer, required: true, min: 1, description: "最小长度" }
+      - { name: require_mixed_case, type: _types.basics.boolean, required: true, description: "是否要求大小写混合" }
+      - { name: max_attempts, type: _types.basics.integer, required: true, min: 1, description: "最大失败次数" }
+      - { name: lockout, type: _types.basics.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁定时长" }
+      - { name: breach_check, type: _types.basics.boolean, required: true, description: "是否检查泄露库" }
 
   - name: verification
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "验证码策略"
     fields:
-      - { name: table, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "验证体表" }
+      - { name: table, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "验证体表" }
       - name: code
-        type: _types.object
+        type: _types.structures.object
         required: true
         description: "验证码形态"
         fields:
-          - { name: length, type: _types.integer, required: true, min: 1, description: "验证码长度" }
-          - { name: charset, type: _types.string, required: true, enum: [ digits, alphanumeric ], description: "字符集" }
-          - { name: storage, type: _types.string, required: true, enum: [ hash ], description: "存储形态" }
-          - { name: hash_algorithm, type: _types.string, required: true, enum: [ hmac-sha256, sha256 ], description: "哈希算法" }
-          - { name: secret_env, type: _types.string, required: true, pattern: '^[A-Z][A-Z0-9_]*$', description: "密钥环境变量名" }
-      - { name: ttl, type: _types.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
-      - { name: max_attempts, type: _types.integer, required: true, min: 1, description: "最大尝试次数" }
+          - { name: length, type: _types.basics.integer, required: true, min: 1, description: "验证码长度" }
+          - { name: charset, type: _types.basics.string, required: true, enum: [ digits, alphanumeric ], description: "字符集" }
+          - { name: storage, type: _types.basics.string, required: true, enum: [ hash ], description: "存储形态" }
+          - { name: hash_algorithm, type: _types.basics.string, required: true, enum: [ hmac-sha256, sha256 ], description: "哈希算法" }
+          - { name: secret_env, type: _types.basics.string, required: true, pattern: '^[A-Z][A-Z0-9_]*$', description: "密钥环境变量名" }
+      - { name: ttl, type: _types.basics.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
+      - { name: max_attempts, type: _types.basics.integer, required: true, min: 1, description: "最大尝试次数" }
       - name: target_normalization
-        type: _types.object
+        type: _types.structures.object
         required: true
         description: "目标归一化"
         fields:
-          - { name: phone, type: _types.string, required: true, enum: [ e164 ], description: "手机号归一化" }
-          - { name: email, type: _types.string, required: true, enum: [ lowercase ], description: "邮箱归一化" }
+          - { name: phone, type: _types.basics.string, required: true, enum: [ e164 ], description: "手机号归一化" }
+          - { name: email, type: _types.basics.string, required: true, enum: [ lowercase ], description: "邮箱归一化" }
 
   - name: mfa
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "MFA 策略"
     fields:
-      - { name: required_for_roles, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "强制 MFA 的角色码" }
-      - { name: methods, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, enum: [ totp ], description: "MFA 方法" }
-      - { name: recovery_codes, type: _types.integer, required: true, min: 0, description: "恢复码数量" }
+      - { name: required_for_roles, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "强制 MFA 的角色码" }
+      - { name: methods, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, enum: [ totp ], description: "MFA 方法" }
+      - { name: recovery_codes, type: _types.basics.integer, required: true, min: 0, description: "恢复码数量" }
 
   - name: authorization
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "授权模型"
     fields:
-      - { name: model, type: _types.string, required: true, description: "授权模型" }
-      - { name: note, type: _types.string, required: true, description: "模型说明" }
-      - { name: deny_by_default, type: _types.boolean, required: true, description: "是否默认拒绝" }
+      - { name: model, type: _types.basics.string, required: true, description: "授权模型" }
+      - { name: note, type: _types.basics.string, required: true, description: "模型说明" }
+      - { name: deny_by_default, type: _types.basics.boolean, required: true, description: "是否默认拒绝" }
 
 rules:
   - { id: auth-policy-jwt, text: "token.access/refresh 必须是 jwt，issuer 非空，claims_required 必须精确包含 iss/sub/aud/exp/iat/jti，pii_in_token 必须为 false，revocation.strategy=refresh_token 时 persistence/table 必须存在且一致", implemented_by: [ auth-policy-jwt ] }

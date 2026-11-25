@@ -11,61 +11,61 @@ targets:
 
 fields:
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     const: platform.architecture.go_arch
     description: "契约 ID"
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
   - name: layers
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     min_items: 1
     unique_key: name
     description: "分层清单"
     item_fields:
-      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "层名" }
-      - { name: in, type: _types.string, required: true, description: "目录 glob" }
+      - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "层名" }
+      - { name: in, type: _types.basics.string, required: true, description: "目录 glob" }
   - name: rules
-    type: _types.map<_types.object>
+    type: _types.structures.map<_types.structures.object>
     required: true
     key_patterns: [ '^[a-z][a-z0-9_]*$' ]
     description: "层依赖规则"
     item_fields:
-      - { name: may_depend_on, type: _types.list<_types.string>, required: false, description: "允许依赖的层" }
-      - { name: forbid, type: _types.list<_types.string>, required: false, description: "禁止依赖的层或路径" }
-      - { name: note, type: _types.string, required: false, description: "说明" }
+      - { name: may_depend_on, type: _types.structures.list<_types.basics.string>, required: false, description: "允许依赖的层" }
+      - { name: forbid, type: _types.structures.list<_types.basics.string>, required: false, description: "禁止依赖的层或路径" }
+      - { name: note, type: _types.basics.string, required: false, description: "说明" }
   - name: module_dependencies
-    type: _types.map<_types.list<_types.string>>
+    type: _types.structures.map<_types.structures.list<_types.basics.string>>
     required: true
     key_patterns: [ '^[a-z][a-z0-9_]*$' ]
     description: "模块级依赖覆盖"
   - name: forbidden_imports
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     description: "禁止导入"
     item_fields:
-      - { name: path, type: _types.string, required: true, description: "导入路径" }
-      - { name: in, type: _types.list<_types.string>, required: true, min_items: 1, description: "生效层" }
-      - { name: reason, type: _types.string, required: true, description: "禁止原因" }
+      - { name: path, type: _types.basics.string, required: true, description: "导入路径" }
+      - { name: in, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, description: "生效层" }
+      - { name: reason, type: _types.basics.string, required: true, description: "禁止原因" }
 
 rules:
   - { id: architecture-refs, text: "rules 的 key 必须是 layers 中的层；may_depend_on/forbid 中的层引用必须存在（glob 除外）；module_dependencies 的模块必须在 platform.modules 中；forbidden_imports.in 必须是层", implemented_by: [ architecture-refs ] }

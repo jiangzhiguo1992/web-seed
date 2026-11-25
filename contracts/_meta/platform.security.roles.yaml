@@ -10,59 +10,59 @@ targets:
 
 fields:
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     const: platform.security.roles
     description: "契约 ID"
 
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
 
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
 
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: roles
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     min_items: 1
     unique_key: code
     description: "角色列表"
     item_fields:
-      - { name: code, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "角色码；引用写作 platform.security.roles.<code>" }
-      - { name: name, type: _types.string, required: true, description: "展示名" }
-      - { name: description, type: _types.string, required: true, description: "角色说明" }
-      - { name: inherits, type: _types.list<_types.string>, required: true, unique: true, pattern: '^platform\.security\.roles\.[a-z][a-z0-9_]*$', description: "继承的角色 ID 列表" }
-      - { name: permissions, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^(\*|platform\.security\.permissions\.[a-z][a-z0-9_]*)$', description: "权限 ID 列表；* 表示全部" }
+      - { name: code, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "角色码；引用写作 platform.security.roles.<code>" }
+      - { name: name, type: _types.basics.string, required: true, description: "展示名" }
+      - { name: description, type: _types.basics.string, required: true, description: "角色说明" }
+      - { name: inherits, type: _types.structures.list<_types.basics.string>, required: true, unique: true, pattern: '^platform\.security\.roles\.[a-z][a-z0-9_]*$', description: "继承的角色 ID 列表" }
+      - { name: permissions, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^(\*|platform\.security\.permissions\.[a-z][a-z0-9_]*)$', description: "权限 ID 列表；* 表示全部" }
 
   - name: constraints
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "角色约束"
     fields:
-      - { name: max_inheritance_depth, type: _types.integer, required: true, min: 0, description: "最大继承深度" }
-      - { name: cycle_forbidden, type: _types.boolean, required: true, description: "是否禁止继承环" }
-      - { name: unknown_permission_forbidden, type: _types.boolean, required: true, description: "是否禁止未知权限" }
+      - { name: max_inheritance_depth, type: _types.basics.integer, required: true, min: 0, description: "最大继承深度" }
+      - { name: cycle_forbidden, type: _types.basics.boolean, required: true, description: "是否禁止继承环" }
+      - { name: unknown_permission_forbidden, type: _types.basics.boolean, required: true, description: "是否禁止未知权限" }
 
   - name: default_role
-    type: _types.string
+    type: _types.basics.string
     required: true
     pattern: '^platform\.security\.roles\.[a-z][a-z0-9_]*$'
     description: "默认角色 ID"

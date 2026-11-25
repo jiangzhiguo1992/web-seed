@@ -11,92 +11,92 @@ targets:
 
 fields:
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     const: platform.quality
     description: "契约 ID"
 
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
 
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
 
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: coverage
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "覆盖率门槛"
     fields:
       - name: api
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "API 覆盖率"
         fields:
-          - { name: line, type: _types.integer, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
-          - { name: packages, type: _types.list<_types.string>, required: true, min_items: 1, description: "统计包" }
+          - { name: line, type: _types.basics.integer, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
+          - { name: packages, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, description: "统计包" }
       - name: web
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "Web 覆盖率"
         fields:
-          - { name: line, type: _types.integer, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
-          - { name: packages, type: _types.list<_types.string>, required: true, min_items: 1, description: "统计包" }
-      - { name: exclude, type: _types.list<_types.string>, required: false, description: "排除模式" }
+          - { name: line, type: _types.basics.integer, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
+          - { name: packages, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, description: "统计包" }
+      - { name: exclude, type: _types.structures.list<_types.basics.string>, required: false, description: "排除模式" }
 
   - name: must_test
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     min_items: 1
     description: "必测项"
     item_fields:
-      - { name: id, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "必测项 ID" }
-      - { name: why, type: _types.string, required: true, description: "为什么必测" }
-      - { name: where, type: _types.string, required: true, description: "测试文件位置" }
+      - { name: id, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "必测项 ID" }
+      - { name: why, type: _types.basics.string, required: true, description: "为什么必测" }
+      - { name: where, type: _types.basics.string, required: true, description: "测试文件位置" }
 
   - name: e2e
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "端到端策略"
     fields:
-      - { name: tool, type: _types.string, required: true, description: "E2E 工具" }
-      - { name: required_scenarios, type: _types.list<_types.string>, required: true, min_items: 1, pattern: '^scenario\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "必跑验收场景" }
-      - { name: base_url_source, type: _types.string, required: true, description: "base URL 来源" }
+      - { name: tool, type: _types.basics.string, required: true, description: "E2E 工具" }
+      - { name: required_scenarios, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, pattern: '^scenario\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "必跑验收场景" }
+      - { name: base_url_source, type: _types.basics.string, required: true, description: "base URL 来源" }
 
   - name: forbidden
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "禁止项"
 
   - name: gates
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     min_items: 1
     unique_key: name
     description: "CI 门槛"
     item_fields:
-      - { name: name, type: _types.string, required: true, description: "门槛名" }
-      - { name: command, type: _types.string, required: true, description: "执行命令" }
-      - { name: blocking, type: _types.boolean, required: true, description: "是否阻断" }
-      - { name: note, type: _types.string, required: false, description: "说明" }
+      - { name: name, type: _types.basics.string, required: true, description: "门槛名" }
+      - { name: command, type: _types.basics.string, required: true, description: "执行命令" }
+      - { name: blocking, type: _types.basics.boolean, required: true, description: "是否阻断" }
+      - { name: note, type: _types.basics.string, required: false, description: "说明" }
 
 rules:
   - { id: quality-refs, text: "e2e.required_scenarios 必须指向已存在的 scenario.http.*；gates.command 为 make 目标时必须存在于 Makefile；must_test.id 唯一", implemented_by: [ quality-refs ] }

@@ -11,115 +11,115 @@ targets:
 
 fields:
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
     description: "契约 ID"
 
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
 
   - name: owner_module
-    type: _types.string
+    type: _types.basics.string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
     description: "所属模块"
 
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
 
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: model
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "Go 类型声明"
     fields:
-      - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名" }
-      - { name: extends, type: _types.set<_types.string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "实体基类" }
-      - { name: tables, type: _types.list<_types.string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "映射的物理表" }
+      - { name: name, type: _types.basics.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名" }
+      - { name: extends, type: _types.structures.set<_types.basics.string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "实体基类" }
+      - { name: tables, type: _types.structures.list<_types.basics.string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "映射的物理表" }
       - name: includes
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: true
         generated: true
         write: forbidden
         description: "本实体每个关系字段指向的 entity 及从本实体到目标实体的基数"
         item_fields:
-          - { name: field, type: _types.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "本实体的关系字段名" }
-          - { name: entity, type: _types.string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "目标 entity ID" }
-          - { name: cardinality, type: _types.string, required: true, enum: [ one_to_one, one_to_many, many_to_one, many_to_many ], description: "从本实体到目标实体的基数" }
+          - { name: field, type: _types.basics.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "本实体的关系字段名" }
+          - { name: entity, type: _types.basics.string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "目标 entity ID" }
+          - { name: cardinality, type: _types.basics.string, required: true, enum: [ one_to_one, one_to_many, many_to_one, many_to_many ], description: "从本实体到目标实体的基数" }
       - name: included_by
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: true
         generated: true
         write: forbidden
         description: "指向本实体的每个来源关系字段及从本实体到来源实体的反向基数"
         item_fields:
-          - { name: entity, type: _types.string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "来源 entity ID" }
-          - { name: field, type: _types.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "来源实体的关系字段名" }
-          - { name: cardinality, type: _types.string, required: true, enum: [ one_to_one, one_to_many, many_to_one, many_to_many ], description: "从本实体到来源实体的反向基数" }
-      - { name: queries, type: _types.set<_types.string>, required: true, unique: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "返回本实体的查询" }
+          - { name: entity, type: _types.basics.string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "来源 entity ID" }
+          - { name: field, type: _types.basics.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "来源实体的关系字段名" }
+          - { name: cardinality, type: _types.basics.string, required: true, enum: [ one_to_one, one_to_many, many_to_one, many_to_many ], description: "从本实体到来源实体的反向基数" }
+      - { name: queries, type: _types.structures.set<_types.basics.string>, required: true, unique: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "返回本实体的查询" }
 
   - name: fields
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     description: "业务字段与关系字段"
     item_fields:
-      - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名" }
-      - { name: type, type: _types.string, required: false, pattern: '^(\*?(_types\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*)|_types\.list<data\.entities\.[a-z][a-z0-9_]*>)$', description: "标量：_types.<name> 或 data.enums.*，可带 *；关系：data.entities.*（_types.list<...> 表示一对多）" }
-      - { name: nullable, type: _types.boolean, required: false, default: false, description: "是否为指针" }
-      - { name: json_name, type: _types.string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "JSON 字段名" }
-      - { name: description, type: _types.string, required: true, description: "字段语义；不从列 comment 继承" }
+      - { name: name, type: _types.basics.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 字段名" }
+      - { name: type, type: _types.basics.string, required: false, pattern: '^(\*?(_types\.basics\.[a-z][a-z0-9_]*|data\.(enums|entities)\.[a-z][a-z0-9_]*)|_types\.structures.list<data\.entities\.[a-z][a-z0-9_]*>)$', description: "标量：_types.basics.<name> 或 data.enums.*，可带 *；关系：data.entities.*（_types.structures.list<...> 表示一对多）" }
+      - { name: nullable, type: _types.basics.boolean, required: false, default: false, description: "是否为指针" }
+      - { name: json_name, type: _types.basics.string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "JSON 字段名" }
+      - { name: description, type: _types.basics.string, required: true, description: "字段语义；不从列 comment 继承" }
       - name: source
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "字段来源"
         fields:
-          - { name: column, type: _types.string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "来源物理列" }
-          - { name: computed, type: _types.string, soft: true, required: false, description: "计算/聚合表达式" }
-          - { name: soft, type: _types.string, soft: true, required: false, description: "外部输入或无法脚本化的来源" }
+          - { name: column, type: _types.basics.string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "来源物理列" }
+          - { name: computed, type: _types.basics.string, soft: true, required: false, description: "计算/聚合表达式" }
+          - { name: soft, type: _types.basics.string, soft: true, required: false, description: "外部输入或无法脚本化的来源" }
           - name: join
-            type: _types.object
+            type: _types.structures.object
             required: false
             description: "关系连接来源"
             fields:
-              - { name: from, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "本端连接列" }
-              - { name: to, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标端连接列" }
+              - { name: from, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "本端连接列" }
+              - { name: to, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "目标端连接列" }
               - name: through
-                type: _types.object
+                type: _types.structures.object
                 required: false
                 description: "多对多中间表；存在时关系基数为 many_to_many"
                 fields:
-                  - { name: table, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "中间表 ID" }
-                  - { name: from, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "中间表指向本端的列" }
-                  - { name: to, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "中间表指向目标端的列" }
-      - { name: sensitivity, type: _types.string, required: false, enum: [ public, pii, secret ], description: "敏感级别" }
+                  - { name: table, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "中间表 ID" }
+                  - { name: from, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "中间表指向本端的列" }
+                  - { name: to, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "中间表指向目标端的列" }
+      - { name: sensitivity, type: _types.basics.string, required: false, enum: [ public, pii, secret ], description: "敏感级别" }
 
   - name: validation
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: false
     description: "跨字段校验；不写 DDL 与业务规则"
     item_fields:
-      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "校验名" }
-      - { name: expr, type: _types.string, soft: true, required: true, description: "布尔表达式文本" }
-      - { name: on_violation, type: _types.string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "失败错误码" }
-      - { name: used_by, type: _types.set<_types.string>, required: true, unique: true, min_items: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "消费该不变量的 service 项 ID" }
+      - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "校验名" }
+      - { name: expr, type: _types.basics.string, soft: true, required: true, description: "布尔表达式文本" }
+      - { name: on_violation, type: _types.basics.string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "失败错误码" }
+      - { name: used_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "消费该不变量的 service 项 ID" }
 
 rules:
   - { id: entity-base-file, text: "基类契约固定位于 contracts/data/entities/_base.yaml，ID 固定为 data.entities.base", implemented_by: [ entity-base-file ] }
@@ -138,7 +138,7 @@ rules:
   - { id: entity-id, text: "ID 是所有实体的唯一主键：必须来自主表 id 列、非指针，且是唯一主键", implemented_by: [ entity-id ] }
   - { id: entity-field-variant, text: "字段二选一：标量字段必须有 source（column/computed/soft 三选一），不得写 source.join；关系字段必须有 type 和 source.join（from/to 必填），source 不得为空对象，且不得写 sensitivity", implemented_by: [ entity-field-variant ] }
   - { id: entity-field-source, text: "source 四选一：column 指向本实体表的列；computed 非空、指针类型、不引用 @params；soft 非空且必须显式 type；join 只用于关系字段且必须写 from/to，多对多另写 through(table/from/to)", implemented_by: [ entity-field-source ] }
-  - { id: entity-field-type, text: "来源列字段的 type 可省略，省略时按列类型+nullable 派生为 _types.*；computed/soft 必填；nullable 显式指针且必须与来源列 nullable 一致；* 前缀为兼容写法，与 nullable 互斥；枚举只能映射 integer 列；禁止列表字段和 data.tables.* 行类型", implemented_by: [ entity-field-type ] }
+  - { id: entity-field-type, text: "来源列字段的 type 可省略，省略时按列类型+nullable 派生为 _types.basics.*；computed/soft 必填；nullable 显式指针且必须与来源列 nullable 一致；* 前缀为兼容写法，与 nullable 互斥；枚举只能映射 integer 列；禁止列表字段和 data.tables.* 行类型", implemented_by: [ entity-field-type ] }
   - { id: entity-field-column, text: "source.column 必须存在且属于本实体的表；同一列不得被两个字段引用；多表合成的每张表至少被一个字段引用", implemented_by: [ entity-field-column ] }
   - { id: entity-field-sensitive, text: "sensitivity 省略时继承来源列，computed/soft 省略时默认 public；显式值不得低于来源列；secret 字段名必须小写开头", implemented_by: [ entity-field-sensitive ] }
   - { id: entity-field-json-name, text: "json_name 可省略，默认取 snake_case(name)；同一实体内 JSON 名必须唯一", implemented_by: [ entity-field-json-name ] }
@@ -150,5 +150,5 @@ rules:
   - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
   - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入", implemented_by: [ entity-used-by ] }
   - { id: entity-included-by, text: "model.includes 与 model.included_by 由 gen-graph 写入，禁止手改；每项是 {field, entity, cardinality}（included_by 的 field 是来源实体的关系字段）：includes 记录本实体每个关系字段到目标的基数，included_by 记录本实体到来源的反向基数；两侧必须互为反向且与关系字段、关联表唯一索引一致；(entity, field) 不得重复", implemented_by: [ entity-included-by ] }
-  - { id: entity-relation-arity, text: "关系基数必须与类型形状一致：one_to_many/many_to_many 用 _types.list<data.entities.*>，one_to_one/many_to_one 用单个 data.entities.*", implemented_by: [ entity-relation-arity ] }
+  - { id: entity-relation-arity, text: "关系基数必须与类型形状一致：one_to_many/many_to_many 用 _types.structures.list<data.entities.*>，one_to_one/many_to_one 用单个 data.entities.*", implemented_by: [ entity-relation-arity ] }
   - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

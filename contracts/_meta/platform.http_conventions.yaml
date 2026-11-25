@@ -11,169 +11,169 @@ targets:
 
 fields:
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     const: platform.http_conventions
     description: "契约 ID"
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
   - name: response
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "统一响应信封"
     fields:
-      - { name: success, type: _types.string, required: true, description: "成功信封" }
-      - { name: error, type: _types.string, required: true, description: "错误信封" }
-      - { name: error_msg, type: _types.string, required: true, description: "错误消息来源" }
-      - { name: raw, type: _types.string, required: true, description: "裸响应规则" }
+      - { name: success, type: _types.basics.string, required: true, description: "成功信封" }
+      - { name: error, type: _types.basics.string, required: true, description: "错误信封" }
+      - { name: error_msg, type: _types.basics.string, required: true, description: "错误消息来源" }
+      - { name: raw, type: _types.basics.string, required: true, description: "裸响应规则" }
       - name: empty
-        type: _types.object
+        type: _types.structures.object
         required: true
         description: "空响应"
         fields:
-          - { name: status, type: _types.integer, required: true, min: 100, max: 599, description: "空响应状态码" }
-          - { name: body, type: _types.string, required: true, description: "空响应说明" }
+          - { name: status, type: _types.basics.integer, required: true, min: 100, max: 599, description: "空响应状态码" }
+          - { name: body, type: _types.basics.string, required: true, description: "空响应说明" }
   - name: envelope
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "信封字段"
     fields:
-      - { name: success_code, type: _types.integer, required: true, description: "成功业务码" }
-      - { name: code, type: _types.string, required: true, description: "code 字段规则" }
-      - { name: msg, type: _types.string, required: true, description: "msg 字段规则" }
-      - { name: data, type: _types.string, required: true, description: "data 字段规则" }
-      - { name: generated_by, type: _types.string, required: true, description: "信封生成方式" }
+      - { name: success_code, type: _types.basics.integer, required: true, description: "成功业务码" }
+      - { name: code, type: _types.basics.string, required: true, description: "code 字段规则" }
+      - { name: msg, type: _types.basics.string, required: true, description: "msg 字段规则" }
+      - { name: data, type: _types.basics.string, required: true, description: "data 字段规则" }
+      - { name: generated_by, type: _types.basics.string, required: true, description: "信封生成方式" }
   - name: pagination
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "分页约定"
     fields:
-      - { name: style, type: _types.string, required: true, enum: [ offset ], description: "分页风格" }
+      - { name: style, type: _types.basics.string, required: true, enum: [ offset ], description: "分页风格" }
       - name: request
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: true
         min_items: 1
         description: "分页请求参数"
         item_fields:
-          - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: in, type: _types.string, required: true, enum: [ query ], description: "参数位置" }
-          - { name: required, type: _types.boolean, required: true, description: "是否必填" }
-          - { name: default, type: _types.integer, required: false, description: "默认值" }
-          - { name: min, type: _types.integer, required: false, description: "最小值" }
-          - { name: max, type: _types.integer, required: false, description: "最大值" }
+          - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
+          - { name: in, type: _types.basics.string, required: true, enum: [ query ], description: "参数位置" }
+          - { name: required, type: _types.basics.boolean, required: true, description: "是否必填" }
+          - { name: default, type: _types.basics.integer, required: false, description: "默认值" }
+          - { name: min, type: _types.basics.integer, required: false, description: "最小值" }
+          - { name: max, type: _types.basics.integer, required: false, description: "最大值" }
       - name: response
-        type: _types.object
+        type: _types.structures.object
         required: true
         description: "分页响应"
         fields:
-          - { name: shape, type: _types.string, required: true, description: "响应形状" }
-          - { name: ordering, type: _types.string, required: true, description: "稳定排序要求" }
+          - { name: shape, type: _types.basics.string, required: true, description: "响应形状" }
+          - { name: ordering, type: _types.basics.string, required: true, description: "稳定排序要求" }
   - name: headers
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "HTTP 头约定"
     fields:
       - name: request
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: true
         description: "请求头"
         item_fields:
-          - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "header 名" }
-          - { name: required, type: _types.boolean, required: true, description: "是否必填" }
-          - { name: note, type: _types.string, required: true, description: "说明" }
+          - { name: name, type: _types.basics.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "header 名" }
+          - { name: required, type: _types.basics.boolean, required: true, description: "是否必填" }
+          - { name: note, type: _types.basics.string, required: true, description: "说明" }
       - name: response
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: true
         description: "响应头"
         item_fields:
-          - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "header 名" }
-          - { name: required, type: _types.boolean, required: true, description: "是否必填" }
-          - { name: note, type: _types.string, required: true, description: "说明" }
+          - { name: name, type: _types.basics.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "header 名" }
+          - { name: required, type: _types.basics.boolean, required: true, description: "是否必填" }
+          - { name: note, type: _types.basics.string, required: true, description: "说明" }
   - name: status_codes
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "状态码登记"
     fields:
-      - { name: success, type: _types.list<_types.integer>, required: true, min_items: 1, description: "成功状态" }
-      - { name: client_error, type: _types.list<_types.integer>, required: true, min_items: 1, description: "客户端错误状态" }
-      - { name: server_error, type: _types.list<_types.integer>, required: true, min_items: 1, description: "服务端错误状态" }
-      - { name: forbidden_usage, type: _types.list<_types.string>, required: true, min_items: 1, description: "禁止用法" }
+      - { name: success, type: _types.structures.list<_types.basics.integer>, required: true, min_items: 1, description: "成功状态" }
+      - { name: client_error, type: _types.structures.list<_types.basics.integer>, required: true, min_items: 1, description: "客户端错误状态" }
+      - { name: server_error, type: _types.structures.list<_types.basics.integer>, required: true, min_items: 1, description: "服务端错误状态" }
+      - { name: forbidden_usage, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, description: "禁止用法" }
   - name: error_responses
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "平台基线错误响应"
     fields:
-      - { name: always, type: _types.list<_types.integer>, required: true, min_items: 1, description: "总是注入" }
-      - { name: secured, type: _types.list<_types.integer>, required: true, min_items: 1, description: "认证后注入" }
-      - { name: body, type: _types.list<_types.integer>, required: true, min_items: 1, description: "带 body 时注入" }
-      - { name: deprecated, type: _types.list<_types.integer>, required: true, min_items: 1, description: "弃用时注入" }
+      - { name: always, type: _types.structures.list<_types.basics.integer>, required: true, min_items: 1, description: "总是注入" }
+      - { name: secured, type: _types.structures.list<_types.basics.integer>, required: true, min_items: 1, description: "认证后注入" }
+      - { name: body, type: _types.structures.list<_types.basics.integer>, required: true, min_items: 1, description: "带 body 时注入" }
+      - { name: deprecated, type: _types.structures.list<_types.basics.integer>, required: true, min_items: 1, description: "弃用时注入" }
   - name: audiences
-    type: _types.list<_types.string>
+    type: _types.structures.list<_types.basics.string>
     required: true
     min_items: 1
     unique: true
     description: "调用端"
   - name: transport_headers
-    type: _types.list<_types.string>
+    type: _types.structures.list<_types.basics.string>
     required: true
     min_items: 1
     unique: true
     description: "传输层头"
   - name: body_types
-    type: _types.map<_types.string>
+    type: _types.structures.map<_types.basics.string>
     required: true
     key_patterns: [ '^[a-z][a-z0-9_]*$' ]
     description: "body kind → media type"
   - name: timeouts
-    type: _types.map<_types.string>
+    type: _types.structures.map<_types.basics.string>
     required: true
     key_patterns: [ '^[a-z][a-z0-9_]*$' ]
     description: "超时配置"
   - name: limits
-    type: _types.map<_types.integer>
+    type: _types.structures.map<_types.basics.integer>
     required: true
     key_patterns: [ '^[a-z][a-z0-9_]*$' ]
     description: "请求限制"
   - name: cors
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "CORS 约定"
     fields:
-      - { name: allowed_origins_source, type: _types.string, required: true, description: "允许来源" }
-      - { name: allow_credentials, type: _types.boolean, required: true, description: "是否允许凭据" }
-      - { name: max_age_seconds, type: _types.integer, required: true, min: 0, description: "预检缓存秒数" }
+      - { name: allowed_origins_source, type: _types.basics.string, required: true, description: "允许来源" }
+      - { name: allow_credentials, type: _types.basics.boolean, required: true, description: "是否允许凭据" }
+      - { name: max_age_seconds, type: _types.basics.integer, required: true, min: 0, description: "预检缓存秒数" }
   - name: components
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "OpenAPI 平台组件；值结构由 http-shared 校验"
     fields:
-      - { name: schemas, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "schema 组件" }
-      - { name: responses, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "response 组件" }
-      - { name: parameters, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "parameter 组件" }
-      - { name: examples, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "example 组件" }
-      - { name: requestBodies, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "requestBody 组件" }
-      - { name: headers, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "header 组件" }
-      - { name: securitySchemes, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "securityScheme 组件" }
-      - { name: links, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "link 组件" }
-      - { name: callbacks, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "callback 组件" }
-      - { name: pathItems, type: _types.map<_types.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "pathItem 组件" }
+      - { name: schemas, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "schema 组件" }
+      - { name: responses, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "response 组件" }
+      - { name: parameters, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "parameter 组件" }
+      - { name: examples, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "example 组件" }
+      - { name: requestBodies, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "requestBody 组件" }
+      - { name: headers, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "header 组件" }
+      - { name: securitySchemes, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "securityScheme 组件" }
+      - { name: links, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "link 组件" }
+      - { name: callbacks, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "callback 组件" }
+      - { name: pathItems, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "pathItem 组件" }
 
 rules: []

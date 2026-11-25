@@ -10,7 +10,7 @@
 
 | 文件 | 职责 |
 |---|---|
-| `_types.yaml` | 统一类型注册表：`basic_types`（标量族 + 参数）、`structures`（list/set/array/map/object）、`schemas`（object/array/map/scalar/ref 节点）、`param_targets`；项目级自定义类型在 `contracts/data/types.yaml` |
+| `_types.yaml` | 统一类型注册表：`basics`（标量族 + 参数）、`structures`（list/set/array/map/object）、`schemas`（object/array/map/scalar/ref 节点）、`param_targets`；项目级自定义类型在 `contracts/data/types.yaml`，与 `basics` 共用 `_types.basics.*` 命名空间 |
 | `data.tables.yaml` | 表、列、约束、索引 |
 | `data.storage.yaml` | 存储拓扑单例：引擎、表级保留、缓存、归档 |
 | `data.enums.yaml` | 跨前后端枚举集合 |
@@ -48,19 +48,19 @@
 
 值类型与结构是 tables / entities / queries / services / events 共用的词汇，分两类注册：
 
-- `_meta/_types.yaml` 的 `basic_types` 定义标量族与参数（`min_len`/`max_len`/`pattern`/`bits`/`precision`/...），`structures` 定义 `list`/`set`/`array`/`map`/`object` 五种容器（list/set/map 的集合大小参数是 `min_items`/`max_items`，array 用 `len`，map 另有 `key_patterns`；元素、map value 或 object field 的 `type` 可以是 `_types` 下任意已定义类型，递归包含 `basic_types`/`custom_types`/`structures`），`schemas` 定义 `object`/`array`/`map`/`scalar`/`ref` 五种值域节点；这是元层，不随业务增长；
+- `_meta/_types.yaml` 的 `basics` 定义标量族与参数（`min_len`/`max_len`/`pattern`/`bits`/`precision`/...），`structures` 定义 `list`/`set`/`array`/`map`/`object` 五种容器（list/set/map 的集合大小参数是 `min_items`/`max_items`，array 用 `len`，map 另有 `key_patterns`；元素、map value 或 object field 的 `type` 可以是 `_types.basics.*` 或 `_types.structures.*`，递归包含类型族、自定义类型与容器），`schemas` 定义 `object`/`array`/`map`/`scalar`/`ref` 五种值域节点；这是元层，不随业务增长；
 - `contracts/data/types.yaml` 的 `custom_types` 固定某个族的参数，供表列与 schema 标量复用；这是 data 层词汇，随项目开发增长；
-- `Field.type` 统一写 `_types.<name>`，泛型写 `_types.list<_types.object>` / `_types.map<_types.string>`，可嵌套到 `_types.list<_types.map<_types.object>>`；`data.queries.params[].fields` 用字段树描述对象批量参数的元素结构（仅 `_types.object` / `_types.list<_types.object>`，非空），不要用 `_types.json` 代替；`list<map<object>>` 的 `item_fields` 描述 map value 的字段；`list<map>` 不合法，`map` 必须显式给出 value 类型；`map` 的 key 默认 `string`，可写 `_types.map<_types.integer, _types.object>` 指定 `integer` key；`key_patterns` 是 string key 的正则列表，全部匹配；`_types.yaml` 自身是 bootstrap，允许裸名；
+- `Field.type` 统一写 `_types.basics.<name>` 或 `_types.structures.<name>`，泛型写 `_types.structures.list<_types.structures.object>` / `_types.structures.map<_types.basics.string>`，可嵌套到 `_types.structures.list<_types.structures.map<_types.structures.object>>`；`data.queries.params[].fields` 用字段树描述对象批量参数的元素结构（仅 `_types.structures.object` / `_types.structures.list<_types.structures.object>`，非空），不要用 `_types.basics.json` 代替；`list<map<object>>` 的 `item_fields` 描述 map value 的字段；`list<map>` 不合法，`map` 必须显式给出 value 类型；`map` 的 key 默认 `string`，可写 `_types.structures.map<_types.basics.integer, _types.structures.object>` 指定 `integer` key；`key_patterns` 是 string key 的正则列表，全部匹配；`_types.yaml` 自身也必须使用全限定名；
 - `structures.list` / `set` / `array` 声明 `fields.item`，`map` 声明 `fields.key` / `value`（均为 `type: "*"`、`required: true`），生成器与实现层统一使用这些名字；checker 按 `Field.type` 递归校验，不再为每个容器组合维护独立分支；`key_patterns` 是 AND 语义，多个正则必须同时匹配，且只允许 string key；
 - `list<object>` / `set<object>` / `array<object>` 必须声明 `item_fields`；空对象列表用 `list<any>`，不要用无字段的 `list<object>`；
-- `columns[].type` 必须是 `_types.<name>`（类型族或自定义类型）或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`；
-- schema 的 `scalar.type` 必须是 `_types.<name>`；entity 字段的 `type` 与表列共用 `_types.<name>` 值类型，可带一层 `*` 表示指针（等价 `nullable`），不写 Go 类型名；Go/TS 具体类型由类型族的 lowering 规则决定；
+- `columns[].type` 必须是 `_types.basics.<name>`（类型族或自定义类型）或 `data.tables.<t>.col.<c>`；表列不引用 `data.enums.*`；
+- schema 的 `scalar.type` 必须是 `_types.basics.<name>`；entity 字段的 `type` 与表列共用 `_types.basics.<name>` 值类型，可带一层 `*` 表示指针（等价 `nullable`），不写 Go 类型名；Go/TS 具体类型由类型族的 lowering 规则决定；
 - 新增族参数必须在 `_types.yaml` 的 `param_targets` 登记消费方（openapi/storage/runtime）；键必须是已声明参数，checker 会拒绝无消费方的参数。
 
 ### 1.2 `_types.yaml` 的 `schemas`
 
-schema 节点只描述值域：`object`（`type: _types.object` + `properties`）、`array`（`type: _types.array` + `items`）、
-`map`（`type: _types.map` + `values`，键固定 string，另有 `min_items`/`max_items`/`key_patterns`/`validation`）、
+schema 节点只描述值域：`object`（`type: _types.schemas.object` + `properties`）、`array`（`type: _types.schemas.array` + `items`）、
+`map`（`type: _types.schemas.map` + `values`，键固定 string，另有 `min_items`/`max_items`/`key_patterns`/`validation`）、
 `scalar`（`type` 指向 `_types` 的族或自定义类型）、
 `ref`（entity / enum / 全限定本地 schema）。
 
@@ -72,8 +72,8 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 - `cap.protocols.http` 使用完整 OpenAPI 3.1，但源契约的 operation 直接写类型 ID；平台级组件在 `platform/http_conventions.components`，HTTP 文件可声明私有组件并由 `gen_openapi` 合并。`request` 写 headers/path/query/body，headers 独立于 body；path/query/body/form 用 `to` 指向 service 参数，值域字段统一叫 `type`；`response` 是以三位状态码为键的 map，写 msg/headers/body/errors；operation 字段顺序固定为 id/name/summary/service/request/response/used_by；header/query/body/body.fields 的 `required` 省略为 true，可选项写 false；认证用 `Authorization` header 的 `auth: Bearer`，不再有 security/mapping 字段。
 - `mount` 必须声明 `api_version` / `path` / `audience`：`api_version` 是 `v<数字>`，与 `mount.path`、`paths` key 一起由生成器派生 `servers: /<api_version>`；`paths` 必填且至少一个 operation。
 - `cap.protocols.http` 的文件级 `mount` 承载 `path` 与 `audience`：`path` 是公共资源前缀（`/account`）；audience 段在 `paths`（`/admin`），`audience` 来自 `platform/http_conventions.audiences`；operation 的 `used_by` 可选：省略表示 API-only，存在时必须精确等于页面引用，错误按 platform.errors 的 status 分组、`COMMON_*` 不在 operation 重复；平台基线状态（含 body/deprecated）由 `error_responses` 注入。
-- 槽位字段的值域可整体写 `types: [ _types.schema ]`，即允许 `schemas` 下声明的全部节点种类；不要重复枚举 kind。
-- `map` 节点的键固定为 string（JSON/OpenAPI 对象键没有其他类型），因此没有 `key` 字段；需要 integer key 的 Go/SQL 容器用 `_types.map<_types.integer, T>`（`structures.map`），不要写进 schema 节点。
+- 槽位字段的值域可整体写 `types: [ _types.schemas.* ]`，即允许 `schemas` 下声明的全部节点种类；不要重复枚举 kind。
+- `map` 节点的键固定为 string（JSON/OpenAPI 对象键没有其他类型），因此没有 `key` 字段；需要 integer key 的 Go/SQL 容器用 `_types.structures.map<_types.basics.integer, T>`（`structures.map`），不要写进 schema 节点。
 - `map` 与 `array` 对齐：`values` 是值域，`min_items` / `max_items` 约束键数，`key_patterns` 约束键名（全部匹配），`validation` 校验映射级规则且只能引用 `value`；生成到 OpenAPI 为 `additionalProperties` / `minProperties` / `maxProperties` / `propertyNames`。
 
 ---
@@ -127,7 +127,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
   `soft: true` 标记不做通用结构校验的 soft zone（领域规则仍可部分检查）。
 - 字段顺序以模板为准（`checkFieldOrder`）；新增字段只改 `_meta` 模板。
 - `contracts/**/*.yaml` 的文本字段必须双引号（`schema.quote`）；同一对象不得重复键。
-- 所有契约实例的 `type` 值必须是 `_types.*` / `_types.list<...>` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）；`_types.object|_types.array|_types.map` 只允许作为 schema 节点判别键。裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部实例 YAML；同一文件/路径已有更精确的领域错误时不重复报。
+- 所有契约实例的 `type` 值必须是 `_types.basics.*` / `_types.structures.*` / `_types.schemas.*` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）；`_types.schemas.object|array|map` 只允许作为 schema 节点判别键。裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部实例 YAML；同一文件/路径已有更精确的领域错误时不重复报。
 - 类型级 `rules` 的每条必须有 `implemented_by`，包含自身 ID，且每个 ID 都是 checker 实际输出的
   `[rule-id]`；反向检查所有非 `schema.*` 输出都必须被某条规则声明。
 - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；独立二进制也带完整映射。
@@ -143,7 +143,7 @@ schema 节点只描述值域：`object`（`type: _types.object` + `properties`�
 | 键 | 用途 |
 |---|---|
 | `description` | 字段的准确含义；软区标记也写在这里 |
-| `required` / `type` / `types` / `enum` / `allowed` / `pattern` / `key_patterns` / `const` / `unique` / `unique_key` / `min` / `max` / `min_items` / `max_items` / `min_len` / `max_len` / `len` | 结构约束；`types` 是 schema 节点种类列表（与 `type` 互斥），可整体写 `[ _types.schema ]`；`key_patterns` 约束 string map 键；`min_items`/`max_items` 约束 list/set/map 的元素数；`min_len`/`max_len` 只约束 string 长度；`len` 只约束 array |
+| `required` / `type` / `types` / `enum` / `allowed` / `pattern` / `key_patterns` / `const` / `unique` / `unique_key` / `min` / `max` / `min_items` / `max_items` / `min_len` / `max_len` / `len` | 结构约束；`types` 是 schema 节点种类列表（与 `type` 互斥），可整体写 `[ _types.schemas.* ]`；`key_patterns` 约束 string map 键；`min_items`/`max_items` 约束 list/set/map 的元素数；`min_len`/`max_len` 只约束 string 长度；`len` 只约束 array |
 | `soft` | 无通用结构校验的 soft zone（领域规则仍可部分检查；只允许 `any`/`string`） |
 | `examples` | 骨架示例值；实体字段不支持 |
 | `fields` / `item_fields` | 嵌套对象 / 对象列表的字段树 |

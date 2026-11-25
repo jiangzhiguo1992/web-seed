@@ -11,73 +11,73 @@ targets:
 
 fields:
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     const: platform.environments
     description: "契约 ID"
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
   - name: environments
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     min_items: 1
     unique_key: name
     description: "环境清单"
     item_fields:
-      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "环境名" }
-      - { name: description, type: _types.string, required: true, description: "说明" }
-      - { name: api_base_url, type: _types.string, required: true, pattern: '^https?://[^[:space:]]+$', description: "API 基地址" }
-      - { name: web_base_url, type: _types.string, required: true, pattern: '^https?://[^[:space:]]+$', description: "Web 基地址" }
-      - { name: debug, type: _types.boolean, required: true, description: "是否开启调试" }
-      - { name: seed, type: _types.boolean, required: true, description: "是否允许种子数据" }
+      - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "环境名" }
+      - { name: description, type: _types.basics.string, required: true, description: "说明" }
+      - { name: api_base_url, type: _types.basics.string, required: true, pattern: '^https?://[^[:space:]]+$', description: "API 基地址" }
+      - { name: web_base_url, type: _types.basics.string, required: true, pattern: '^https?://[^[:space:]]+$', description: "Web 基地址" }
+      - { name: debug, type: _types.basics.boolean, required: true, description: "是否开启调试" }
+      - { name: seed, type: _types.basics.boolean, required: true, description: "是否允许种子数据" }
       - name: logging
-        type: _types.object
+        type: _types.structures.object
         required: true
         description: "日志配置"
         fields:
-          - { name: level, type: _types.string, required: true, enum: [ debug, info, warn, error ], description: "日志级别" }
-          - { name: format, type: _types.string, required: true, enum: [ json, text ], description: "日志格式" }
+          - { name: level, type: _types.basics.string, required: true, enum: [ debug, info, warn, error ], description: "日志级别" }
+          - { name: format, type: _types.basics.string, required: true, enum: [ json, text ], description: "日志格式" }
       - name: security
-        type: _types.object
+        type: _types.structures.object
         required: true
         description: "安全开关"
         fields:
-          - { name: require_https, type: _types.boolean, required: true, description: "是否强制 HTTPS" }
-          - { name: require_mfa, type: _types.boolean, required: false, description: "是否强制 MFA" }
+          - { name: require_https, type: _types.basics.boolean, required: true, description: "是否强制 HTTPS" }
+          - { name: require_mfa, type: _types.basics.boolean, required: false, description: "是否强制 MFA" }
   - name: differences
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     unique_key: key
     description: "显式环境差异"
     item_fields:
-      - { name: key, type: _types.string, required: true, description: "差异键" }
-      - { name: environments, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "发生差异的环境" }
-      - { name: note, type: _types.string, required: true, description: "说明" }
+      - { name: key, type: _types.basics.string, required: true, description: "差异键" }
+      - { name: environments, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "发生差异的环境" }
+      - { name: note, type: _types.basics.string, required: true, description: "说明" }
   - name: secrets_source
-    type: _types.map<_types.string>
+    type: _types.structures.map<_types.basics.string>
     required: true
     key_patterns: [ '^[a-z][a-z0-9_]*$' ]
     description: "环境 → 密钥来源"
   - name: never_committed
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     min_items: 1

@@ -11,132 +11,132 @@ targets:
 
 fields:
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     pattern: '^data\.queries\.[a-z][a-z0-9_]*$'
     description: "契约 ID"
 
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
 
   - name: owner_module
-    type: _types.string
+    type: _types.basics.string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
     description: "查询集归属模块"
 
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
 
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: queries
-    type: _types.list<_types.object>
+    type: _types.structures.list<_types.structures.object>
     required: true
     description: "查询项列表"
     item_fields:
-      - { name: name, type: _types.string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "方法名" }
-      - { name: description, type: _types.string, required: true, description: "查询语义说明" }
+      - { name: name, type: _types.basics.string, required: true, pattern: '^[A-Z][A-Za-z0-9]*$', description: "方法名" }
+      - { name: description, type: _types.basics.string, required: true, description: "查询语义说明" }
       - name: tables
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: true
         min_items: 1
         description: "读写的表；第一项为主表"
         item_fields:
-          - { name: table, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "表 ID" }
-          - { name: write, type: _types.boolean, required: false, default: false, description: "是否写该表" }
+          - { name: table, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "表 ID" }
+          - { name: write, type: _types.basics.boolean, required: false, default: false, description: "是否写该表" }
       - name: archive
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: false
         min_items: 1
         unique_key: archive
         description: "穿透归档；promotable:true 表示本查询命中归档时回迁热表（存储层行为，不改变 tables[].write）"
         item_fields:
-          - { name: archive, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.archive$', description: "归档引用" }
-          - { name: promotable, type: _types.boolean, required: true, description: "本查询是否回迁；必须与 storage 归档条目的 promotable 一致" }
-          - { name: age_by, type: _types.string, required: false, enum: [ created_at, updated_at ], description: "回迁时更新的年龄列；promotable:true 时必填且必须与 storage 一致" }
+          - { name: archive, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.archive$', description: "归档引用" }
+          - { name: promotable, type: _types.basics.boolean, required: true, description: "本查询是否回迁；必须与 storage 归档条目的 promotable 一致" }
+          - { name: age_by, type: _types.basics.string, required: false, enum: [ created_at, updated_at ], description: "回迁时更新的年龄列；promotable:true 时必填且必须与 storage 一致" }
       - name: caches
-        type: _types.list<_types.string>
+        type: _types.structures.list<_types.basics.string>
         required: false
         unique: true
         min_items: 1
         pattern: '^data\.tables\.[a-z][a-z0-9_]*\.cache\.[a-z][a-z0-9_]*(\+[a-z][a-z0-9_]*)*$'
         description: "缓存副本；读为读穿透，写为写后同步"
       - name: params
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: false
         description: "方法入参"
         item_fields:
-          - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: _types.string, required: true, pattern: '^(\*?(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*|context\.Context)|_types\.list<(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)>)$', description: "_types.*、data.enums.* 或 context.Context；_types.list<T> 表示数组" }
-          - { name: column, type: _types.string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "绑定列；数组参数绑定元素列" }
-          - { name: expr, type: _types.string, soft: true, required: false, description: "参数表达式；与 column 互斥" }
-          - { name: nullable, type: _types.boolean, required: false, default: false, description: "是否可空" }
-          - { name: default, type: _types.any, required: false, description: "null 时的默认值" }
-          - { name: description, type: _types.string, required: false, description: "参数说明" }
+          - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
+          - { name: type, type: _types.basics.string, required: true, pattern: '^(\*?(_types\.basics\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*|context\.Context)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*|_types\.structures\.object|data\.enums\.[a-z][a-z0-9_]*)>)$', description: "_types.basics.*、data.enums.* 或 context.Context；_types.structures.list<T> 表示数组" }
+          - { name: column, type: _types.basics.string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "绑定列；数组参数绑定元素列" }
+          - { name: expr, type: _types.basics.string, soft: true, required: false, description: "参数表达式；与 column 互斥" }
+          - { name: nullable, type: _types.basics.boolean, required: false, default: false, description: "是否可空" }
+          - { name: default, type: _types.basics.any, required: false, description: "null 时的默认值" }
+          - { name: description, type: _types.basics.string, required: false, description: "参数说明" }
           - name: fields
-            type: _types.list<_types.object>
+            type: _types.structures.list<_types.structures.object>
             required: false
             min_items: 1
             unique_key: name
-            description: "type 为 _types.object 或 _types.list<_types.object> 时的元素字段；其他类型禁止"
+            description: "type 为 _types.structures.object 或 _types.structures.list<_types.structures.object> 时的元素字段；其他类型禁止"
             item_fields:
-              - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
-              - { name: type, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "字段类型" }
-              - { name: required, type: _types.boolean, required: false, default: false, description: "是否必传" }
-              - { name: nullable, type: _types.boolean, required: false, default: false, description: "是否可空" }
-              - { name: description, type: _types.string, required: false, description: "字段说明" }
+              - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
+              - { name: type, type: _types.basics.string, required: true, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "字段类型" }
+              - { name: required, type: _types.basics.boolean, required: false, default: false, description: "是否必传" }
+              - { name: nullable, type: _types.basics.boolean, required: false, default: false, description: "是否可空" }
+              - { name: description, type: _types.basics.string, required: false, description: "字段说明" }
       - name: returns
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: true
         min_items: 1
         description: "结果形状"
         item_fields:
-          - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回字段名" }
-          - { name: list, type: _types.boolean, required: false, default: false, description: "是否为列表" }
-          - { name: kind, type: _types.string, required: true, enum: [ affected_rows, scalar, entity, columns, error ], description: "返回项类型" }
-          - { name: type, type: _types.string, required: false, pattern: '^(\*?(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*|context\.Context)|_types\.list<(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)>)$', description: "标量类型：_types.* 或 data.enums.*；_types.list<T> 表示数组" }
-          - { name: entity, type: _types.string, required: false, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "kind=entity 的实体 ID" }
-          - { name: columns, type: _types.list<_types.string>, required: false, unique: true, min_items: 1, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "kind=columns 的投影列；没有对应 entity 时使用" }
-          - { name: nullable, type: _types.boolean, required: false, description: "结果是否可空" }
-          - { name: description, type: _types.string, required: false, description: "返回字段说明" }
-      - { name: errors, type: _types.set<_types.string>, required: true, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "领域错误；无则写 []；不含输入/基础设施错误" }
+          - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回字段名" }
+          - { name: list, type: _types.basics.boolean, required: false, default: false, description: "是否为列表" }
+          - { name: kind, type: _types.basics.string, required: true, enum: [ affected_rows, scalar, entity, columns, error ], description: "返回项类型" }
+          - { name: type, type: _types.basics.string, required: false, pattern: '^(\*?(_types\.basics\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*|context\.Context)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*|_types\.structures\.object|data\.enums\.[a-z][a-z0-9_]*)>)$', description: "标量类型：_types.basics.* 或 data.enums.*；_types.structures.list<T> 表示数组" }
+          - { name: entity, type: _types.basics.string, required: false, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "kind=entity 的实体 ID" }
+          - { name: columns, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "kind=columns 的投影列；没有对应 entity 时使用" }
+          - { name: nullable, type: _types.basics.boolean, required: false, description: "结果是否可空" }
+          - { name: description, type: _types.basics.string, required: false, description: "返回字段说明" }
+      - { name: errors, type: _types.structures.set<_types.basics.string>, required: true, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "领域错误；无则写 []；不含输入/基础设施错误" }
       - name: index_ref
-        type: _types.list<_types.object>
+        type: _types.structures.list<_types.structures.object>
         required: false
         min_items: 1
         unique_key: index
         description: "索引依赖；每项声明索引与实际使用的索引列前缀"
         item_fields:
-          - { name: index, type: _types.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "索引 ID：data.tables.<t>.pk 或 indexes[].name" }
-          - { name: columns, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "查询使用的索引列，必须等于索引列的最左前缀且顺序一致" }
-      - { name: used_by, type: _types.set<_types.string>, required: true, unique: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "引用本查询的 service 项" }
+          - { name: index, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "索引 ID：data.tables.<t>.pk 或 indexes[].name" }
+          - { name: columns, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "查询使用的索引列，必须等于索引列的最左前缀且顺序一致" }
+      - { name: used_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "引用本查询的 service 项" }
 
 rules:
   - { id: query-key-order, text: "查询契约字段顺序必须与 _meta/data.queries.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ query-key-order ] }
   - { id: query-name-unique, text: "query.name 派生的项 ID（<文件 id>.<snake_case(name)>）必须全局唯一；改名即新 ID；同一 name 或 snake_case 冲突都不允许", implemented_by: [ query-name-unique ] }
   - { id: query-shape, text: "affected_rows 不得为列表，必须是唯一非 error 返回项；columns 返回也必须是唯一非 error 返回项；两者不得带互斥字段；nullable 只允许 scalar/entity/columns", implemented_by: [ query-shape ] }
   - { id: query-table-shape, text: "tables 非空、表 ID 不得重复、每张表必须存在、不得指向 data.tables.base；第一项为主表", implemented_by: [ query-table-shape ] }
-  - { id: query-params, text: "params 第一项必须是 ctx context.Context，ctx 不得绑定 column/expr/default/nullable；params 的 name 不得重复；未绑定 column 时 type 必须是 _types.* 或 data.enums.*；column/expr 互斥且 expr 非空；default 只在 nullable:true 时允许；type 为 _types.object/_types.list<_types.object> 时必须声明非空 fields（name/type/required/nullable），且 fields[].type 必须是标量（_types.* / data.enums.*），容器类型用新的对象参数表达；其他类型禁止 fields；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器", implemented_by: [ query-params ] }
-  - { id: query-param-column, text: "params[].column 必须属于查询的 tables；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型；data.enums.* 按 integer 列校验；integer 参数的类型 bits 必须等于列 bits，_types.id=64）；ctx 不参与列绑定", implemented_by: [ query-param-column ] }
+  - { id: query-params, text: "params 第一项必须是 ctx context.Context，ctx 不得绑定 column/expr/default/nullable；params 的 name 不得重复；未绑定 column 时 type 必须是 _types.basics.* 或 data.enums.*；column/expr 互斥且 expr 非空；default 只在 nullable:true 时允许；type 为 _types.structures.object/_types.structures.list<_types.structures.object> 时必须声明非空 fields（name/type/required/nullable），且 fields[].type 必须是标量（_types.basics.* / data.enums.*），容器类型用新的对象参数表达；其他类型禁止 fields；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器", implemented_by: [ query-params ] }
+  - { id: query-param-column, text: "params[].column 必须属于查询的 tables；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型；data.enums.* 按 integer 列校验；integer 参数的类型 bits 必须等于列 bits，_types.basics.id=64）；ctx 不参与列绑定", implemented_by: [ query-param-column ] }
   - { id: query-pagination, text: "offset/limit 是保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；offset 默认 0，limit 默认必须为正数；list 返回必须同时声明两者", implemented_by: [ query-pagination ] }
-  - { id: query-returns, text: "最后一项必须是 {name: err, kind: error} 且只能出现一次；name 必须唯一；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的实体必须存在且主表在 tables 中，且不得写 columns；kind=columns 必须有 columns；scalar.type 必须是 _types.* 或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
+  - { id: query-returns, text: "最后一项必须是 {name: err, kind: error} 且只能出现一次；name 必须唯一；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的实体必须存在且主表在 tables 中，且不得写 columns；kind=columns 必须有 columns；scalar.type 必须是 _types.basics.* 或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
   - { id: query-return-columns, text: "kind=columns 的 columns（data.tables.<t>.col.<c>）必须是查询表上的列", implemented_by: [ query-return-columns ] }
   - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回或绑定为参数；kind=columns 的 secret 只有同模块可显式列出；entity 默认投影由生成器排除 secret，computed secret 跨模块一律拒绝", implemented_by: [ query-sensitive-columns ] }
   - { id: query-errors, text: "errors 必须是存在的 platform.errors.*；[] 表示无领域错误", implemented_by: [ query-errors ] }

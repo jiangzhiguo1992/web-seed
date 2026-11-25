@@ -11,181 +11,181 @@ targets:
 
 fields:
   - name: id
-    type: _types.string
+    type: _types.basics.string
     required: true
     pattern: '^cap\.protocols\.http\.[a-z][a-z0-9_]*$'
     description: "契约 ID"
 
   - name: summary
-    type: _types.string
+    type: _types.basics.string
     required: true
     description: "一句话说明"
 
   - name: owner_module
-    type: _types.string
+    type: _types.basics.string
     required: true
     pattern: '^[a-z][a-z0-9_]*$'
     description: "所属模块"
 
   - name: schema_version
-    type: _types.integer
+    type: _types.basics.integer
     required: true
     const: 1
     description: "格式版本"
 
   - name: stability
-    type: _types.string
+    type: _types.basics.string
     required: true
     enum: [ stable, draft, deprecated ]
     default: draft
     description: "稳定度"
 
   - name: do_not
-    type: _types.set<_types.string>
+    type: _types.structures.set<_types.basics.string>
     required: true
     unique: true
     description: "实例级负向约束"
 
   - name: mount
-    type: _types.object
+    type: _types.structures.object
     required: true
     description: "文件级挂载：API 版本、公共资源前缀与调用端"
     fields:
-      - { name: api_version, type: _types.string, required: true, pattern: '^v[0-9]+$', description: "API 主版本；生成器据此派生 OpenAPI servers: /<api_version>" }
-      - { name: path, type: _types.string, required: true, pattern: '^/([A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$|^/$', description: "公共资源前缀，如 /account；audience 段写在 paths 里，不写 /account/admin" }
-      - { name: audience, type: _types.list<_types.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_-]*$', description: "调用端" }
+      - { name: api_version, type: _types.basics.string, required: true, pattern: '^v[0-9]+$', description: "API 主版本；生成器据此派生 OpenAPI servers: /<api_version>" }
+      - { name: path, type: _types.basics.string, required: true, pattern: '^/([A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+$|^/$', description: "公共资源前缀，如 /account；audience 段写在 paths 里，不写 /account/admin" }
+      - { name: audience, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_-]*$', description: "调用端" }
 
   - name: paths
-    type: _types.map<_types.object>
+    type: _types.structures.map<_types.structures.object>
     required: true
     min_items: 1
     key_patterns: [ '^/([A-Za-z0-9_{}.-]+/)*[A-Za-z0-9_{}.-]+$|^/$' ]
     description: "相对路径 → method → operation；完整 path = mount.path + key，版本由 servers 承载"
     item_fields:
       - name: get
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "GET operation"
         item_fields: &http_operation
-          - { name: id, type: _types.string, required: true, pattern: '^cap\.protocols\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "operation 契约 ID" }
-          - { name: name, type: _types.string, required: true, pattern: '^[a-z][A-Za-z0-9]*$', description: "OpenAPI operationId" }
-          - { name: summary, type: _types.string, required: true, description: "operation 说明" }
-          - { name: service, type: _types.string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "绑定的同步 public service" }
+          - { name: id, type: _types.basics.string, required: true, pattern: '^cap\.protocols\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "operation 契约 ID" }
+          - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][A-Za-z0-9]*$', description: "OpenAPI operationId" }
+          - { name: summary, type: _types.basics.string, required: true, description: "operation 说明" }
+          - { name: service, type: _types.basics.string, required: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "绑定的同步 public service" }
           - name: request
-            type: _types.object
+            type: _types.structures.object
             required: true
             description: "请求绑定；headers 独立于 body"
             fields:
               - name: headers
-                type: _types.list<_types.object>
+                type: _types.structures.list<_types.structures.object>
                 required: true
                 unique_key: name
                 description: "HTTP 请求头；Authorization 用 auth 标记，Content-Type 用 value 标记"
                 item_fields:
-                  - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "HTTP header 名" }
-                  - { name: required, type: _types.boolean, required: true, description: "是否必填" }
-                  - { name: auth, type: _types.string, required: false, enum: [ Bearer ], description: "认证方案" }
-                  - { name: value, type: _types.string, required: false, description: "固定值；与 type 二选一" }
-                  - { name: type, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID；与 value 二选一" }
-                  - { name: description, type: _types.string, required: true, description: "header 含义" }
-                  - { name: multiple, type: _types.boolean, required: false, description: "是否允许重复；如 Link" }
+                  - { name: name, type: _types.basics.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "HTTP header 名" }
+                  - { name: required, type: _types.basics.boolean, required: true, description: "是否必填" }
+                  - { name: auth, type: _types.basics.string, required: false, enum: [ Bearer ], description: "认证方案" }
+                  - { name: value, type: _types.basics.string, required: false, description: "固定值；与 type 二选一" }
+                  - { name: type, type: _types.basics.string, required: false, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID；与 value 二选一" }
+                  - { name: description, type: _types.basics.string, required: true, description: "header 含义" }
+                  - { name: multiple, type: _types.basics.boolean, required: false, description: "是否允许重复；如 Link" }
               - name: path
-                type: _types.list<_types.object>
+                type: _types.structures.list<_types.structures.object>
                 required: false
                 unique_key: name
                 description: "path 参数；每项必须写 name/type/description/to"
                 item_fields:
-                  - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "path 参数名，必须与路径中的 {name} 一致" }
-                  - { name: type, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID，不允许实体或匿名 object" }
-                  - { name: description, type: _types.string, required: true, description: "参数含义" }
-                  - { name: to, type: _types.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
+                  - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "path 参数名，必须与路径中的 {name} 一致" }
+                  - { name: type, type: _types.basics.string, required: true, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID，不允许实体或匿名 object" }
+                  - { name: description, type: _types.basics.string, required: true, description: "参数含义" }
+                  - { name: to, type: _types.basics.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
               - name: query
-                type: _types.list<_types.object>
+                type: _types.structures.list<_types.structures.object>
                 required: false
                 unique_key: name
                 description: "query 参数；每项必须写 name/type/required/description/to"
                 item_fields:
-                  - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "query 参数名" }
-                  - { name: type, type: _types.string, required: true, pattern: '^(_types\.[a-z][a-z0-9_]*(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID" }
-                  - { name: required, type: _types.boolean, required: true, description: "是否必填" }
-                  - { name: description, type: _types.string, required: true, description: "参数含义" }
-                  - { name: to, type: _types.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
+                  - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "query 参数名" }
+                  - { name: type, type: _types.basics.string, required: true, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID" }
+                  - { name: required, type: _types.basics.boolean, required: true, description: "是否必填" }
+                  - { name: description, type: _types.basics.string, required: true, description: "参数含义" }
+                  - { name: to, type: _types.basics.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
               - name: body
-                type: _types.object
+                type: _types.structures.object
                 required: false
                 description: "请求体；kind 决定媒体类型"
                 fields:
-                  - { name: kind, type: _types.string, required: true, enum: [ json, form, multipart, text, binary ], description: "body 编码类型" }
-                  - { name: required, type: _types.boolean, required: true, description: "是否必填" }
-                  - { name: type, type: _types.string, required: false, pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|_types\.[a-z][a-z0-9_]*)$', description: "json/text/binary 的类型 ID；form/multipart 不写" }
-                  - { name: to, type: _types.string, required: false, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "json/text/binary 对应的 service 参数路径" }
+                  - { name: kind, type: _types.basics.string, required: true, enum: [ json, form, multipart, text, binary ], description: "body 编码类型" }
+                  - { name: required, type: _types.basics.boolean, required: true, description: "是否必填" }
+                  - { name: type, type: _types.basics.string, required: false, pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|_types\.basics\.[a-z][a-z0-9_]*)$', description: "json/text/binary 的类型 ID；form/multipart 不写" }
+                  - { name: to, type: _types.basics.string, required: false, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "json/text/binary 对应的 service 参数路径" }
                   - name: fields
-                    type: _types.list<_types.object>
+                    type: _types.structures.list<_types.structures.object>
                     required: false
                     unique_key: name
                     description: "form/multipart 字段；每项写 name/required/description/to；text 字段写 type，file 字段不写"
                     item_fields:
-                      - { name: name, type: _types.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
-                      - { name: kind, type: _types.string, required: false, enum: [ text, file ], description: "multipart 文件字段用 file；默认 text" }
-                      - { name: type, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "text 字段类型 ID" }
-                      - { name: required, type: _types.boolean, required: true, description: "是否必填" }
-                      - { name: description, type: _types.string, required: true, description: "字段含义" }
-                      - { name: to, type: _types.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
+                      - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "字段名" }
+                      - { name: kind, type: _types.basics.string, required: false, enum: [ text, file ], description: "multipart 文件字段用 file；默认 text" }
+                      - { name: type, type: _types.basics.string, required: false, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "text 字段类型 ID" }
+                      - { name: required, type: _types.basics.boolean, required: true, description: "是否必填" }
+                      - { name: description, type: _types.basics.string, required: true, description: "字段含义" }
+                      - { name: to, type: _types.basics.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
           - name: response
-            type: _types.map<_types.object>
+            type: _types.structures.map<_types.structures.object>
             required: true
             key_patterns: [ '^[1-5][0-9]{2}$' ]
             description: "状态码 → 响应"
             item_fields:
-              - { name: msg, type: _types.string, required: true, description: "响应默认消息" }
+              - { name: msg, type: _types.basics.string, required: true, description: "响应默认消息" }
               - name: headers
-                type: _types.list<_types.object>
+                type: _types.structures.list<_types.structures.object>
                 required: true
                 unique_key: name
                 description: "HTTP 响应头"
                 item_fields:
-                  - { name: name, type: _types.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "HTTP header 名" }
-                  - { name: required, type: _types.boolean, required: true, description: "是否必填" }
-                  - { name: value, type: _types.string, required: false, description: "固定值；与 type 二选一" }
-                  - { name: type, type: _types.string, required: false, pattern: '^(_types\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID" }
-                  - { name: description, type: _types.string, required: true, description: "header 含义" }
-                  - { name: multiple, type: _types.boolean, required: false, description: "是否允许重复；如 Link" }
+                  - { name: name, type: _types.basics.string, required: true, pattern: '^[A-Za-z0-9_-]+$', description: "HTTP header 名" }
+                  - { name: required, type: _types.basics.boolean, required: true, description: "是否必填" }
+                  - { name: value, type: _types.basics.string, required: false, description: "固定值；与 type 二选一" }
+                  - { name: type, type: _types.basics.string, required: false, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*|data\.enums\.[a-z][a-z0-9_]*)$', description: "header 值类型 ID" }
+                  - { name: description, type: _types.basics.string, required: true, description: "header 含义" }
+                  - { name: multiple, type: _types.basics.boolean, required: false, description: "是否允许重复；如 Link" }
               - name: body
-                type: _types.object
+                type: _types.structures.object
                 required: false
                 description: "响应体；kind 决定媒体类型"
                 fields:
-                  - { name: kind, type: _types.string, required: true, enum: [ json, text, binary ], description: "响应体编码类型" }
-                  - { name: type, type: _types.string, required: true, pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|_types\.[a-z][a-z0-9_]*)$', description: "响应体类型 ID" }
-              - { name: errors, type: _types.list<_types.string>, required: false, unique: true, min_items: 1, pattern: '^platform\.errors\.', description: "业务错误 ID" }
-          - { name: used_by, type: _types.list<_types.string>, required: false, unique: true, min_items: 1, pattern: '^feature\.pages\.[a-z][a-z0-9_]*$', description: "页面消费者；API-only operation 可省略" }
+                  - { name: kind, type: _types.basics.string, required: true, enum: [ json, text, binary ], description: "响应体编码类型" }
+                  - { name: type, type: _types.basics.string, required: true, pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|_types\.basics\.[a-z][a-z0-9_]*)$', description: "响应体类型 ID" }
+              - { name: errors, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^platform\.errors\.', description: "业务错误 ID" }
+          - { name: used_by, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^feature\.pages\.[a-z][a-z0-9_]*$', description: "页面消费者；API-only operation 可省略" }
       - name: post
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "POST operation"
         item_fields: *http_operation
       - name: put
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "PUT operation"
         item_fields: *http_operation
       - name: patch
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "PATCH operation"
         item_fields: *http_operation
       - name: delete
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "DELETE operation"
         item_fields: *http_operation
       - name: head
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "HEAD operation"
         item_fields: *http_operation
       - name: options
-        type: _types.object
+        type: _types.structures.object
         required: false
         description: "OPTIONS operation"
         item_fields: *http_operation
