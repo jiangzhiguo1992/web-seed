@@ -17,15 +17,15 @@ token:
     format: jwt
     algorithm: HS256
     ttl: 15m
-    claims_required: [iss, sub, aud, exp, iat, jti]
-    audience: [admin, user]
+    claims_required: [ iss, sub, aud, exp, iat, jti ]
+    audience: [ admin, user ]
     pii_in_token: false
   refresh:
     format: jwt
     algorithm: HS256
     ttl: 30d
-    claims_required: [iss, sub, aud, exp, iat, jti]
-    audience: [admin, user]
+    claims_required: [ iss, sub, aud, exp, iat, jti ]
+    audience: [ admin, user ]
     pii_in_token: false
     rotation: true
     reuse_detection: true
@@ -59,8 +59,8 @@ verification:
     email: lowercase
 
 mfa:
-  required_for_roles: [admin]
-  methods: [totp]
+  required_for_roles: [ admin ]
+  methods: [ totp ]
   recovery_codes: 10
 
 authorization:

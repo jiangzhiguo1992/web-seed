@@ -16,7 +16,7 @@ data:
   submit:
     capability: cap.services.auth.login
     params:
-      auth_type: { from: form.auth_type, type: _types.basics.string, enum: [pwd, phone, email], default: pwd }
+      auth_type: { from: form.auth_type, type: _types.basics.string, enum: [ pwd, phone, email ], default: pwd }
       identifier: { from: form.identifier, type: _types.basics.string, required: true }
       password: { from: form.password, type: _types.basics.string, required: true, secret: true }
       device_id: { from: device.id, type: _types.basics.string }

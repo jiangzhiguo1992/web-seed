@@ -17,10 +17,10 @@ states:
   values:
     - { value: pending, steps: [ cap.services.verification.cleanup.expire_stale, cap.services.verification.cleanup.revoke_exhausted, cap.services.verification.revoke_by_account.revoke_active_verifications_by_account, cap.services.verification.revoke_by_auth.revoke_active_verifications_by_auth, cap.services.verification.send.mark_sent, cap.services.verification.send.revoke_old ] }
     - { value: sent, steps: [ cap.services.verification.cleanup.expire_stale, cap.services.verification.cleanup.revoke_exhausted, cap.services.verification.revoke_by_account.revoke_active_verifications_by_account, cap.services.verification.revoke_by_auth.revoke_active_verifications_by_auth, cap.services.verification.send.mark_failed, cap.services.verification.send.revoke_old, cap.services.verification.verify.consume ] }
-    - { value: consumed, steps: [] }
-    - { value: expired, steps: [] }
-    - { value: revoked, steps: [] }
-    - { value: failed, steps: [] }
+    - { value: consumed, steps: [ ] }
+    - { value: expired, steps: [ ] }
+    - { value: revoked, steps: [ ] }
+    - { value: failed, steps: [ ] }
   initial: pending
   final: [ consumed, expired, revoked, failed ]
 create:

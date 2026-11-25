@@ -90,7 +90,7 @@ columns:
     max_len: 200
     comment: "备注；仅用于说明"
 
-constraints: []
+constraints: [ ]
 
 indexes:
   - name: uq_unit_code

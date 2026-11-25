@@ -53,9 +53,9 @@ headers:
     - { name: Sunset, required: false, note: "弃用响应由 versioning 契约声明；不在 operation 里重复" }
 
 status_codes:
-  success: [200, 201, 202, 204]
-  client_error: [400, 401, 403, 404, 405, 409, 410, 413, 415, 422, 423, 429]
-  server_error: [500, 502, 503, 504]
+  success: [ 200, 201, 202, 204 ]
+  client_error: [ 400, 401, 403, 404, 405, 409, 410, 413, 415, 422, 423, 429 ]
+  server_error: [ 500, 502, 503, 504 ]
   forbidden_usage:
     - "200 表示错误"
     - "500 表示业务校验失败"
@@ -64,12 +64,12 @@ status_codes:
 # 平台基线错误响应：这些状态由中间件或框架产生，不写进单个 operation 的 codes。
 # 业务错误只写自己的 status + codes；生成器把基线与业务响应合并成 OpenAPI responses。
 error_responses:
-  always: [400, 405, 429, 500, 503]
-  secured: [401, 403]
-  body: [413, 415]
-  deprecated: [410]
+  always: [ 400, 405, 429, 500, 503 ]
+  secured: [ 401, 403 ]
+  body: [ 413, 415 ]
+  deprecated: [ 410 ]
 
-audiences: [admin, user]
+audiences: [ admin, user ]
 
 transport_headers:
   - Connection

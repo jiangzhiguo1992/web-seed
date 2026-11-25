@@ -10,7 +10,7 @@ do_not:
 mount:
   api_version: v1
   path: /dictionary
-  audience: [admin]
+  audience: [ admin ]
 
 paths:
   /admin:
@@ -60,12 +60,12 @@ paths:
             type: data.entities.dictionary
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_CODE_TAKEN
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_INVALID
             - platform.errors.DICTIONARY_PARENT_INVALID
@@ -95,12 +95,12 @@ paths:
             type: cap.services.dictionary.schemas.ImportResult
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_CODE_TAKEN
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_INVALID
             - platform.errors.DICTIONARY_PARENT_INVALID
@@ -128,7 +128,7 @@ paths:
             type: data.entities.dictionary
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
 
@@ -158,12 +158,12 @@ paths:
             type: data.entities.dictionary
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_INVALID
 
@@ -181,15 +181,15 @@ paths:
       response:
         204:
           msg: "已删除"
-          headers: []
+          headers: [ ]
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_HAS_CHILDREN
 
@@ -244,12 +244,12 @@ paths:
             type: data.entities.dictionary
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
 
@@ -280,11 +280,11 @@ paths:
             type: data.entities.dictionary
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_PARENT_INVALID

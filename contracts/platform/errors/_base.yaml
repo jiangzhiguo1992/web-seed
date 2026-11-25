@@ -20,16 +20,16 @@ naming:
 biz_code:
   success_code: 0
   ranges:
-    common: [1000, 1999]
-    account: [2000, 2999]
-    auth: [3000, 3999]
-    verification: [4000, 4999]
-    token: [5000, 5999]
-    data_access: [6000, 6999]
-    dictionary: [7000, 7999]
-    attachment: [8000, 8999]
+    common: [ 1000, 1999 ]
+    account: [ 2000, 2999 ]
+    auth: [ 3000, 3999 ]
+    verification: [ 4000, 4999 ]
+    token: [ 5000, 5999 ]
+    data_access: [ 6000, 6999 ]
+    dictionary: [ 7000, 7999 ]
+    attachment: [ 8000, 8999 ]
 
-order: [common, account, auth, verification, token, dictionary, attachment]
+order: [ common, account, auth, verification, token, dictionary, attachment ]
 
 mapping_rules:
   - { status: 400, when: "请求体/参数校验失败" }

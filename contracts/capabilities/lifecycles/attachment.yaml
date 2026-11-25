@@ -17,7 +17,7 @@ states:
     - { value: uploading, steps: [ cap.services.attachment.complete_upload.set_attachment_status, cap.services.attachment.complete_upload.soft_delete_old, cap.services.attachment.delete.soft_delete_attachment, cap.services.attachment.fail_upload.set_attachment_status ] }
     - { value: available, steps: [ cap.services.attachment.complete_upload.soft_delete_old, cap.services.attachment.delete.soft_delete_attachment ] }
     - { value: failure, steps: [ cap.services.attachment.complete_upload.soft_delete_old, cap.services.attachment.delete.soft_delete_attachment ] }
-    - { value: deleted, steps: [] }
+    - { value: deleted, steps: [ ] }
   initial: uploading
   final: [ deleted ]
 create:

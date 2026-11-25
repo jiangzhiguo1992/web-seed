@@ -10,7 +10,7 @@ do_not:
 mount:
   api_version: v1
   path: /account
-  audience: [admin]
+  audience: [ admin ]
 
 paths:
   /admin:
@@ -63,12 +63,12 @@ paths:
             type: data.entities.account
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NUMBER_TAKEN
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
             - platform.errors.ACCOUNT_NUMBER_INVALID
@@ -97,7 +97,7 @@ paths:
             type: data.entities.account
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
       used_by:
@@ -130,17 +130,17 @@ paths:
             type: data.entities.account
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
       used_by:
@@ -160,15 +160,15 @@ paths:
       response:
         204:
           msg: "已删除"
-          headers: []
+          headers: [ ]
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
@@ -198,12 +198,12 @@ paths:
             type: data.entities.account
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
@@ -238,12 +238,12 @@ paths:
             type: data.entities.account
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION

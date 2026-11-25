@@ -10,7 +10,7 @@ do_not:
 mount:
   api_version: v1
   path: /auth
-  audience: [admin, user]
+  audience: [ admin, user ]
 
 paths:
   /login:
@@ -37,18 +37,18 @@ paths:
             type: cap.services.auth.schemas.AuthResult
         401:
           msg: "未认证"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_INVALID_CREDENTIALS
             - platform.errors.AUTH_TOKEN_INVALID
         403:
           msg: "无权限"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_SUSPENDED
         423:
           msg: "认证锁定中，可稍后重试"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_LOCKED
       used_by:
@@ -78,7 +78,7 @@ paths:
             type: cap.services.verification.schemas.VerificationSent
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_EMAIL_INVALID
             - platform.errors.AUTH_PHONE_INVALID
@@ -111,13 +111,13 @@ paths:
             type: cap.services.verification.schemas.VerificationResult
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_VERIFICATION_EXPIRED
             - platform.errors.AUTH_VERIFICATION_INVALID
         423:
           msg: "认证锁定中，可稍后重试"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
       used_by:
@@ -147,7 +147,7 @@ paths:
             type: cap.services.token.schemas.RefreshResult
         401:
           msg: "未认证"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_TOKEN_EXPIRED
             - platform.errors.AUTH_TOKEN_INVALID
@@ -171,10 +171,10 @@ paths:
       response:
         204:
           msg: "已吊销"
-          headers: []
+          headers: [ ]
         401:
           msg: "未认证"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_TOKEN_INVALID
       used_by:
@@ -205,23 +205,23 @@ paths:
             type: cap.services.auth.schemas.AuthBinding
         401:
           msg: "未认证"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_INVALID_CREDENTIALS
         403:
           msg: "无权限"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_SUSPENDED
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.AUTH_USERNAME_TAKEN
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
             - platform.errors.AUTH_WEAK_PASSWORD
@@ -253,18 +253,18 @@ paths:
             type: cap.services.auth.schemas.AuthBinding
         403:
           msg: "无权限"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_SUSPENDED
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.AUTH_PHONE_TAKEN
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_PHONE_INVALID
             - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
@@ -296,18 +296,18 @@ paths:
             type: cap.services.auth.schemas.AuthBinding
         403:
           msg: "无权限"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_SUSPENDED
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.AUTH_EMAIL_TAKEN
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_EMAIL_INVALID
             - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
@@ -334,7 +334,7 @@ paths:
             type: data.entities.account
         401:
           msg: "未认证"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.AUTH_TOKEN_EXPIRED
             - platform.errors.AUTH_TOKEN_INVALID

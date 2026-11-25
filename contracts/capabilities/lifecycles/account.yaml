@@ -16,7 +16,7 @@ states:
     - { value: pending, steps: [ cap.services.account.activate.set_account_status, cap.services.account.delete.soft_delete_account ] }
     - { value: active, steps: [ cap.services.account.delete.soft_delete_account, cap.services.account.suspend.set_account_status ] }
     - { value: suspended, steps: [ cap.services.account.activate.set_account_status, cap.services.account.delete.soft_delete_account ] }
-    - { value: deleted, steps: [] }
+    - { value: deleted, steps: [ ] }
   initial: pending
   final: [ deleted ]
 create:

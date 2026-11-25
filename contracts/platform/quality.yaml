@@ -8,8 +8,8 @@ do_not:
   - "测试门槛只在本文件声明；CI 命令必须与 gates 对齐"
 
 coverage:
-  api: { line: 70, packages: [internal/modules, internal/platform] }
-  web: { line: 60, packages: [src/features, src/shared/lib] }
+  api: { line: 70, packages: [ internal/modules, internal/platform ] }
+  web: { line: 60, packages: [ src/features, src/shared/lib ] }
   exclude:
     - "**/generated/**"
     - "**/*.gen.go"

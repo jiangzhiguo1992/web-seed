@@ -176,4 +176,4 @@ fields:
       - { name: callbacks, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "callback 组件" }
       - { name: pathItems, type: _types.structures.map<_types.basics.any>, required: false, key_patterns: [ '^[A-Za-z0-9._-]+$' ], description: "pathItem 组件" }
 
-rules: []
+rules: [ ]

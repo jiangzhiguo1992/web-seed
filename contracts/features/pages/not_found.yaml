@@ -10,7 +10,7 @@ do_not:
 page: not_found
 route: null
 
-data: {}
+data: { }
 
 view_states:
   empty:

@@ -11,7 +11,7 @@ do_not:
 mount:
   api_version: v1
   path: /attachment
-  audience: [admin]
+  audience: [ admin ]
 
 paths:
   /admin:
@@ -63,12 +63,12 @@ paths:
             type: cap.services.attachment.schemas.UploadTicket
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_INVALID
             - platform.errors.ATTACHMENT_OWNER_INVALID
@@ -95,7 +95,7 @@ paths:
             type: data.entities.attachment
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
 
@@ -113,15 +113,15 @@ paths:
       response:
         204:
           msg: "已删除"
-          headers: []
+          headers: [ ]
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
 
@@ -147,17 +147,17 @@ paths:
             type: data.entities.attachment
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
         422:
           msg: "语义校验失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_INVALID
 
@@ -183,12 +183,12 @@ paths:
             type: cap.services.attachment.schemas.SignedURL
         404:
           msg: "资源不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
 
@@ -214,11 +214,11 @@ paths:
             type: data.entities.attachment
         404:
           msg: "附件不存在"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
         409:
           msg: "当前状态不允许标记失败"
-          headers: []
+          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION

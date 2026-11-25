@@ -111,7 +111,7 @@ columns:
     references: { column: data.tables.attachment.col.id, on_delete: no_action }
     comment: "被替换的旧附件 ID；用于更替链；旧行仍软删保留"
 
-constraints: []
+constraints: [ ]
 
 indexes:
   - name: uq_attachment_object_key

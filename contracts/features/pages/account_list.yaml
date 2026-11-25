@@ -50,7 +50,7 @@ actions:
     params:
       id: { from: row.id, type: _types.basics.id, required: true }
     permission: platform.security.permissions.account_write
-    available_when: { transitions: [cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate] }
+    available_when: { transitions: [ cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate ] }
     ui: "row-action"
     label: "激活"
   suspend:

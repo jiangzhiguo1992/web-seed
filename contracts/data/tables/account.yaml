@@ -15,7 +15,7 @@ table:
     - data.tables.base
   entities:
     - data.entities.account
-  references: []
+  references: [ ]
   referenced_by:
     - data.tables.token.col.account_id
     - data.tables.auth_pwd.col.account_id

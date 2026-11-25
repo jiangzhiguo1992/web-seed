@@ -18,9 +18,9 @@ scenarios:
         - platform.security.permissions.account_write
     given:
       clock: "2026-01-01T00:00:00Z"
-      id_seq: [1001]
+      id_seq: [ 1001 ]
       db:
-        data.tables.account: []
+        data.tables.account: [ ]
     when:
       body:
         number: "A-001"
@@ -52,8 +52,8 @@ scenarios:
               created_at: "2026-01-01T00:00:00Z"
               updated_at: "2026-01-01T00:00:00Z"
               deleted_at: null
-        changed: {}
-        removed: {}
+        changed: { }
+        removed: { }
         unchanged: strict
       events:
         - cap.events.account.created
@@ -67,9 +67,9 @@ scenarios:
         - platform.security.permissions.account_read
     given:
       clock: "2026-01-01T00:00:00Z"
-      id_seq: [1]
+      id_seq: [ 1 ]
       db:
-        data.tables.account: []
+        data.tables.account: [ ]
     when:
       query:
         offset: 0
@@ -81,14 +81,14 @@ scenarios:
           code: 0
           msg: "ok"
           data:
-            items: []
+            items: [ ]
             offset: 0
             limit: 20
             has_more: false
       db:
-        added: {}
-        changed: {}
-        removed: {}
+        added: { }
+        changed: { }
+        removed: { }
         unchanged: strict
 
   - name: get_not_found
@@ -100,9 +100,9 @@ scenarios:
         - platform.security.permissions.account_read
     given:
       clock: "2026-01-01T00:00:00Z"
-      id_seq: [1]
+      id_seq: [ 1 ]
       db:
-        data.tables.account: []
+        data.tables.account: [ ]
     when:
       path:
         id: 999
@@ -114,7 +114,7 @@ scenarios:
           msg: "账号不存在"
           data: null
       db:
-        added: {}
-        changed: {}
-        removed: {}
+        added: { }
+        changed: { }
+        removed: { }
         unchanged: strict

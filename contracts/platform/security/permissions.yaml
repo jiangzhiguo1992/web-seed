@@ -10,7 +10,7 @@ do_not:
 
 naming:
   pattern: "<resource>_<action>"
-  actions: [read, write, delete, manage]
+  actions: [ read, write, delete, manage ]
 
 permissions:
   # ---------- 字典 ----------
@@ -39,5 +39,5 @@ boundaries:
     example: "见 feature.rules.account.self_only"
 
   wildcard:
-    allowed_for: [platform.security.roles.admin]
+    allowed_for: [ platform.security.roles.admin ]
     note: "仅 admin 角色可使用 *"

@@ -13,7 +13,7 @@ level_field: level
 
 required:
   - { name: time, type: _types.basics.string, format: date-time }
-  - { name: level, type: _types.basics.string, enum: [debug, info, warn, error] }
+  - { name: level, type: _types.basics.string, enum: [ debug, info, warn, error ] }
   - { name: msg, type: _types.basics.string }
 
 fields:
@@ -21,31 +21,31 @@ fields:
   - name: request_id
     type: _types.basics.string
     pii: false
-    required_for: [http]
+    required_for: [ http ]
   - name: trace_id
     type: _types.basics.string
     pii: false
-    required_for: [http]
+    required_for: [ http ]
   - name: span_id
     type: _types.basics.string
     pii: false
   - name: method
     type: _types.basics.string
     pii: false
-    required_for: [http]
+    required_for: [ http ]
   - name: path
     type: _types.basics.string
     pii: false
-    required_for: [http]
+    required_for: [ http ]
     note: "只记录路由模板，不记录真实参数"
   - name: status
     type: _types.basics.integer.32
     pii: false
-    required_for: [http]
+    required_for: [ http ]
   - name: duration_ms
     type: _types.basics.integer.32
     pii: false
-    required_for: [http]
+    required_for: [ http ]
   - name: bytes
     type: _types.basics.integer.32
     pii: false
@@ -61,7 +61,7 @@ fields:
   - name: app
     type: _types.basics.string
     pii: false
-    required_for: [http, job]
+    required_for: [ http, job ]
 
   # ---------- 业务 ----------
   - name: module
@@ -80,11 +80,11 @@ fields:
   - name: job
     type: _types.basics.string
     pii: false
-    required_for: [job]
+    required_for: [ job ]
   - name: attempt
     type: _types.basics.integer.32
     pii: false
-    required_for: [job]
+    required_for: [ job ]
 
 never_log:
   - password

@@ -24,7 +24,7 @@ web:
 defaults:
   timezone: UTC
   locale: zh-CN
-  locales: [zh-CN, en]
+  locales: [ zh-CN, en ]
   currency: CNY
   id_strategy: integer
 
@@ -59,7 +59,7 @@ apps:
     kind: web
     description: "管理端前端"
     routes: feature.routes
-    packages: [api-client, ui-kit, design-tokens]
+    packages: [ api-client, ui-kit, design-tokens ]
 
 # derive 时由 scripts/derive.sh 读取并替换
 derive:

@@ -11,13 +11,13 @@ roles:
   - code: admin
     name: 管理员
     description: "全部权限"
-    inherits: []
-    permissions: ["*"]
+    inherits: [ ]
+    permissions: [ "*" ]
 
   - code: operator
     name: 运营
     description: "可管理账号，不可删除"
-    inherits: [platform.security.roles.viewer]
+    inherits: [ platform.security.roles.viewer ]
     permissions:
       - platform.security.permissions.account_read
       - platform.security.permissions.account_write
@@ -25,14 +25,14 @@ roles:
   - code: viewer
     name: 只读
     description: "仅查看"
-    inherits: []
+    inherits: [ ]
     permissions:
       - platform.security.permissions.account_read
 
   - code: auditor
     name: 审计员
     description: "只读 + 审计日志"
-    inherits: [platform.security.roles.viewer]
+    inherits: [ platform.security.roles.viewer ]
     permissions:
       - platform.security.permissions.audit_read
 

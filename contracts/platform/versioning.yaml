@@ -24,7 +24,7 @@ compatibility:
     - id: v1-http-redesign
       baseline: origin/main
       reason: "v1 从 Problem 信封/裸路径迁移到统一 code/message 信封 + mount/paths；v2 是迁移目标"
-      scope: ["v1"]
+      scope: [ "v1" ]
   breaking_changes:
     definition:
       - "删除或改名端点"
@@ -56,7 +56,7 @@ detection:
   baseline_command: make contract-compat-baseline
   tool: oasdiff
   baseline: origin/main
-  fail_on: [breaking]
+  fail_on: [ breaking ]
   note: "v2 需要独立的 mount.api_version: v2 文件；当前未提供 v2 契约，兼容检测只做 baseline 对比"
 
 client_requirements:

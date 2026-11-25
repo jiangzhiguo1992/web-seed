@@ -41,14 +41,14 @@ actions:
       id: { from: route.params.id, type: _types.basics.id, required: true }
       nickname: { from: form.nickname, type: _types.basics.string, required: true }
     permission: platform.security.permissions.account_write
-    available_when: { state_not: [deleted] }
+    available_when: { state_not: [ deleted ] }
     ui: "primary-button"
   activate:
     capability: cap.services.account.activate
     params:
       id: { from: route.params.id, type: _types.basics.id, required: true }
     permission: platform.security.permissions.account_write
-    available_when: { transitions: [cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate] }
+    available_when: { transitions: [ cap.lifecycles.account.transitions.activate, cap.lifecycles.account.transitions.reactivate ] }
   suspend:
     capability: cap.services.account.suspend
     params:

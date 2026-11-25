@@ -15,7 +15,7 @@ states:
   values:
     - { value: enabled, steps: [ cap.services.dictionary.delete.soft_delete_dictionary, cap.services.dictionary.set_status.set_dictionary_status ] }
     - { value: disabled, steps: [ cap.services.dictionary.delete.soft_delete_dictionary, cap.services.dictionary.set_status.set_dictionary_status ] }
-    - { value: deleted, steps: [] }
+    - { value: deleted, steps: [ ] }
   initial: enabled
   final: [ deleted ]
 create:

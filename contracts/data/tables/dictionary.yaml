@@ -83,7 +83,7 @@ columns:
     nullable: true
     comment: "扩展元数据；只放 UI/非关键信息，禁止承载业务状态"
 
-constraints: []
+constraints: [ ]
 
 indexes:
   - name: uq_dictionary_code

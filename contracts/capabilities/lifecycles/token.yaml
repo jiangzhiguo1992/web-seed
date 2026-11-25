@@ -15,8 +15,8 @@ subjects:
 states:
   values:
     - { value: active, steps: [ cap.services.token.expire.expire_tokens, cap.services.token.logout.revoke_token, cap.services.token.refresh.revoke_token, cap.services.token.revoke_by_account.revoke_tokens_by_account ] }
-    - { value: revoked, steps: [] }
-    - { value: expired, steps: [] }
+    - { value: revoked, steps: [ ] }
+    - { value: expired, steps: [ ] }
   initial: active
   final: [ revoked, expired ]
 create:

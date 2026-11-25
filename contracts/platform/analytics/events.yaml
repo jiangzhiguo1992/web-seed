@@ -34,25 +34,25 @@ events:
     description: "登录页曝光"
     trigger: mount
     page: feature.pages.login
-    properties: []
+    properties: [ ]
 
   - name: page.current_account_viewed
     description: "当前账号页曝光"
     trigger: mount
     page: feature.pages.current_account
-    properties: []
+    properties: [ ]
 
   - name: page.account_security_viewed
     description: "账号认证安全页曝光"
     trigger: mount
     page: feature.pages.account_security
-    properties: []
+    properties: [ ]
 
   # ---------- 动作 ----------
   - name: account.create_clicked
     description: "点击新建账号"
     trigger: click
-    properties: []
+    properties: [ ]
 
   - name: account.created
     description: "账号创建成功"
@@ -103,25 +103,25 @@ events:
     description: "刷新令牌成功"
     trigger: api_success
     ref: cap.protocols.http.auth.refresh
-    properties: []
+    properties: [ ]
 
   - name: auth.logged_out
     description: "退出登录"
     trigger: api_success
     ref: cap.protocols.http.auth.logout
-    properties: []
+    properties: [ ]
 
   - name: auth.verification_sent
     description: "验证码已发送"
     trigger: api_success
     ref: cap.protocols.http.auth.verification_send
-    properties: []
+    properties: [ ]
 
   - name: auth.verification_verified
     description: "验证码校验成功"
     trigger: api_success
     ref: cap.protocols.http.auth.verification_verify
-    properties: []
+    properties: [ ]
 
   - name: auth.password_bound
     description: "密码绑定变更成功"
@@ -162,4 +162,4 @@ forbidden_properties:
 
 provider:
   default: noop
-  options: [noop, console, http]
+  options: [ noop, console, http ]
