@@ -15,9 +15,9 @@ model:
   tables:
     - data.tables.token
   includes:
-    - { entity: data.entities.account, cardinality: many_to_one }
+    - { field: Account, entity: data.entities.account, cardinality: many_to_one }
   included_by:
-    - { entity: data.entities.account, cardinality: many_to_one }
+    - { entity: data.entities.account, field: Tokens, cardinality: many_to_one }
   queries:
     - data.queries.token.create_token
     - data.queries.token.get_token_by_access

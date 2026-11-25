@@ -15,17 +15,17 @@ model:
   tables:
     - data.tables.account
   includes:
-    - { entity: data.entities.auth_email, cardinality: one_to_one }
-    - { entity: data.entities.auth_phone, cardinality: one_to_one }
-    - { entity: data.entities.auth_pwd, cardinality: one_to_one }
-    - { entity: data.entities.token, cardinality: one_to_many }
+    - { field: AuthEmail, entity: data.entities.auth_email, cardinality: one_to_one }
+    - { field: AuthPhone, entity: data.entities.auth_phone, cardinality: one_to_one }
+    - { field: AuthPwd, entity: data.entities.auth_pwd, cardinality: one_to_one }
+    - { field: Tokens, entity: data.entities.token, cardinality: one_to_many }
   included_by:
-    - { entity: data.entities.auth_email, cardinality: one_to_one }
-    - { entity: data.entities.auth_phone, cardinality: one_to_one }
-    - { entity: data.entities.auth_pwd, cardinality: one_to_one }
-    - { entity: data.entities.token, cardinality: one_to_many }
-    - { entity: data.entities.verification_action, cardinality: one_to_many }
-    - { entity: data.entities.verification_body, cardinality: one_to_many }
+    - { entity: data.entities.auth_email, field: Account, cardinality: one_to_one }
+    - { entity: data.entities.auth_phone, field: Account, cardinality: one_to_one }
+    - { entity: data.entities.auth_pwd, field: Account, cardinality: one_to_one }
+    - { entity: data.entities.token, field: Account, cardinality: one_to_many }
+    - { entity: data.entities.verification_action, field: Account, cardinality: one_to_many }
+    - { entity: data.entities.verification_body, field: Account, cardinality: one_to_many }
   queries:
     - data.queries.account.create_account
     - data.queries.account.get_account

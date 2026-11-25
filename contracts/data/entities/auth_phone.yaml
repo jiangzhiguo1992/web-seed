@@ -15,9 +15,9 @@ model:
   tables:
     - data.tables.auth_phone
   includes:
-    - { entity: data.entities.account, cardinality: one_to_one }
+    - { field: Account, entity: data.entities.account, cardinality: one_to_one }
   included_by:
-    - { entity: data.entities.account, cardinality: one_to_one }
+    - { entity: data.entities.account, field: AuthPhone, cardinality: one_to_one }
   queries:
     - data.queries.auth.create_auth_phone
     - data.queries.auth.get_auth_phone_by_id
