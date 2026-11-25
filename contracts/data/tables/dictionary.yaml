@@ -1,0 +1,82 @@
+# 字典表。
+
+id: data.tables.dictionary
+summary: "字典表"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "dictionary.code 全局唯一且创建后不得修改；name 允许重复"
+  - "dictionary.parent_id 不得指向自身或形成环；层级只表达分组，不存 level/path"
+  - "软删父节点前必须先软删或迁移子节点；parent_id 不得悬空"
+  - "dictionary 的值只用于展示与选项，不得参与业务分支或校验；需要代码分支的值放 data.enums"
+
+table:
+  name: dictionary
+  extends:
+    - data.tables.base
+  entities:
+    - data.entities.dictionary
+  references:
+    - data.tables.dictionary.col.id
+  referenced_by:
+    - data.tables.dictionary.col.parent_id
+  queries:
+    - data.queries.dictionary.get_dictionary
+    - data.queries.dictionary.list_dictionary_children
+    - data.queries.dictionary.list_root_dictionaries
+
+columns:
+  - name: parent_id
+    type: _types.integer
+    nullable: true
+    bits: 64
+    references: { column: data.tables.dictionary.col.id, on_delete: restrict }
+    comment: "父节点；顶级为 NULL"
+
+  - name: code
+    type: _types.string
+    nullable: false
+    min_len: 1
+    max_len: 64
+    pattern: '^[a-z][a-z0-9_]*$'
+    comment: "字典编码；全局唯一且创建后不可变"
+
+  - name: name
+    type: _types.string
+    nullable: false
+    min_len: 1
+    max_len: 100
+    comment: "展示名；允许重复"
+
+  - name: color
+    type: _types.string
+    nullable: true
+    min_len: 7
+    max_len: 7
+    pattern: '^#[0-9A-Fa-f]{6}$'
+    comment: "展示颜色；#RRGGBB，为空表示使用默认样式"
+
+  - name: sort
+    type: _types.integer
+    nullable: false
+    min: 0
+    default: 0
+    comment: "同一父节点下的展示顺序；从 0 开始"
+
+constraints: []
+
+indexes:
+  - name: uq_dictionary_code
+    columns: [ code ]
+    unique: true
+    comment: "字典编码全局唯一；停用或软删后不释放"
+    used_by:
+      - data.queries.dictionary.get_dictionary
+
+  - name: idx_dictionary_parent_sort
+    columns: [ deleted_at, parent_id, sort, id ]
+    comment: "按父节点列出子节点并保持展示顺序"
+    used_by:
+      - data.queries.dictionary.list_dictionary_children
+      - data.queries.dictionary.list_root_dictionaries

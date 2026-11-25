@@ -32,6 +32,7 @@ columns:
   - name: account_id
     type: _types.integer
     nullable: false
+    bits: 64
     references: { column: data.tables.account.col.id, on_delete: cascade }
     comment: "关联账号"
 
@@ -87,6 +88,7 @@ columns:
   - name: replaced_by_id
     type: _types.integer
     nullable: true
+    bits: 64
     comment: "轮换后新令牌 ID（旧→新的前向指针）；不是吊销者 ID"
 
 constraints:
