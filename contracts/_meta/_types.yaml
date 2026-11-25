@@ -12,50 +12,144 @@ basics:
       fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
       pattern: { type: _types.basics.string, required: false, description: "写入前校验正则" }
       normalize: { type: _types.basics.string, required: false, enum: [ lower, upper ], description: "写入前归一" }
+    types:
+      string: { go: string, pg: [ text, varchar, char, character varying, character, bpchar, name ], ts: string }
   boolean:
     description: "布尔值"
     params: { }
+    types:
+      boolean: { go: bool, pg: [ boolean ], ts: boolean }
   integer:
-    description: "整数"
+    description: "整数；unsigned 只影响取值校验，不改变 Go/PG/TS 落型"
     params:
       bits: { type: _types.basics.integer, required: false, enum: [ 8, 16, 32, 64 ], default: 32, description: "位宽" }
       unsigned: { type: _types.basics.boolean, required: false, default: false, description: "无符号" }
       min: { type: _types.basics.integer, required: false, description: "下限" }
       max: { type: _types.basics.integer, required: false, description: "上限" }
+    types:
+      8: { go: int8, pg: [ smallint ], ts: number }
+      16: { go: int16, pg: [ smallint, smallserial ], ts: number }
+      32: { go: int32, pg: [ integer, serial ], ts: number }
+      64: { go: int64, pg: [ bigint, bigserial ], ts: number }
   float:
     description: "浮点数"
     params:
       bits: { type: _types.basics.integer, required: false, enum: [ 32, 64 ], default: 64, description: "位宽" }
       min: { type: _types.basics.float, required: false, description: "下限" }
       max: { type: _types.basics.float, required: false, description: "上限" }
+    types:
+      32: { go: float32, pg: [ real ], ts: number }
+      64: { go: float64, pg: [ double precision ], ts: number }
   decimal:
-    description: "精确小数"
+    description: "精确小数；Go 侧用 decimal.Decimal 承载，不使用 string 或 float"
     params:
+      kind: { type: _types.basics.string, required: false, enum: [ numeric, money ], default: numeric, description: "数值类型" }
       precision: { type: _types.basics.integer, required: true, min: 1, examples: [ 19 ], description: "总位数" }
       scale: { type: _types.basics.integer, required: false, default: 0, min: 0, description: "小数位数" }
       min: { type: _types.basics.decimal, required: false, description: "下限" }
       max: { type: _types.basics.decimal, required: false, description: "上限" }
+    types:
+      decimal: { go: decimal.Decimal, pg: [ numeric, decimal, money ], ts: string }
   datetime:
-    description: "日期/时间"
+    description: "日期/时间；mode 选择日期、时间或日期时间，timezone 控制时区"
     params:
       mode: { type: _types.basics.string, required: false, enum: [ date, time, datetime ], default: datetime, description: "模式" }
       timezone: { type: _types.basics.boolean, required: false, default: false, description: "带时区" }
+    types:
+      datetime: { go: time.Time, pg: [ date, time, timetz, timestamp, timestamptz ], ts: string }
   timestamp:
-    description: "绝对时间点"
+    description: "绝对时间点；timezone 控制是否带时区，fractional_seconds 控制小数秒"
     params:
       timezone: { type: _types.basics.boolean, required: false, default: true, description: "带时区" }
       fractional_seconds: { type: _types.basics.integer, required: false, default: 6, min: 0, max: 9, description: "小数秒精度" }
+    types:
+      timestamp: { go: time.Time, pg: [ timestamp, timestamptz ], ts: string }
   json:
-    description: "JSON 文档；PostgreSQL 固定 JSONB"
+    description: "JSON 文档；kind 选择 json 或 jsonb"
+    params:
+      kind: { type: _types.basics.string, required: false, enum: [ json, jsonb ], default: jsonb, description: "JSON 类型" }
+    types:
+      json: { go: json.RawMessage, pg: [ json, jsonb ], ts: unknown }
+  jsonpath:
+    description: "JSON 路径表达式"
     params: { }
+    types:
+      jsonpath: { go: string, pg: [ jsonpath ], ts: string }
   bytes:
     description: "二进制"
     params:
       min_len: { type: _types.basics.integer, required: false, min: 0, description: "最小长度" }
       max_len: { type: _types.basics.integer, required: false, min: 1, description: "最大长度" }
       fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
+    types:
+      bytes: { go: "[]byte", pg: [ bytea ], ts: string }
   any:
-    description: "任意值；用于无法静态建模的字段"
+    description: "任意值；用于无法静态建模的字段；没有确定性存储落型"
+    params: { }
+    types:
+      any: { go: any, pg: [ ], ts: unknown }
+  uuid:
+    description: "UUID"
+    params: { }
+    types:
+      uuid: { go: string, pg: [ uuid ], ts: string }
+  interval:
+    description: "时间间隔"
+    params: { }
+    types:
+      interval: { go: time.Duration, pg: [ interval ], ts: string }
+  network:
+    description: "网络地址；kind 选择 inet、cidr 或 MAC 类型"
+    params:
+      kind: { type: _types.basics.string, required: false, enum: [ inet, cidr, macaddr, macaddr8 ], default: inet, description: "网络类型" }
+    types:
+      network: { go: string, pg: [ inet, cidr, macaddr, macaddr8 ], ts: string }
+  bit:
+    description: "位串；kind 选择定长 bit 或变长 varbit"
+    params:
+      kind: { type: _types.basics.string, required: false, enum: [ bit, varbit ], default: varbit, description: "位串类型" }
+    types:
+      bit: { go: string, pg: [ bit, varbit ], ts: string }
+  textsearch:
+    description: "全文检索类型；kind 选择 tsvector 或 tsquery"
+    params:
+      kind: { type: _types.basics.string, required: false, enum: [ tsvector, tsquery ], default: tsvector, description: "检索类型" }
+    types:
+      textsearch: { go: string, pg: [ tsvector, tsquery ], ts: string }
+  xml:
+    description: "XML 文档"
+    params: { }
+    types:
+      xml: { go: string, pg: [ xml ], ts: string }
+  geometry:
+    description: "几何类型；kind 选择 PostgreSQL 几何类型"
+    params:
+      kind: { type: _types.basics.string, required: false, enum: [ point, line, lseg, box, path, polygon, circle ], default: point, description: "几何类型" }
+    types:
+      geometry: { go: string, pg: [ point, line, lseg, box, path, polygon, circle ], ts: string }
+  range:
+    description: "范围类型；kind 选择 PostgreSQL 范围类型"
+    params:
+      kind: { type: _types.basics.string, required: false, enum: [ int4range, int8range, numrange, tsrange, tstzrange, daterange ], default: int4range, description: "范围类型" }
+    types:
+      range: { go: string, pg: [ int4range, int8range, numrange, tsrange, tstzrange, daterange ], ts: string }
+  multirange:
+    description: "多范围类型；kind 选择 PostgreSQL 多范围类型"
+    params:
+      kind: { type: _types.basics.string, required: false, enum: [ int4multirange, int8multirange, nummultirange, tsmultirange, tstzmultirange, datemultirange ], default: int4multirange, description: "多范围类型" }
+    types:
+      multirange: { go: string, pg: [ int4multirange, int8multirange, nummultirange, tsmultirange, tstzmultirange, datemultirange ], ts: string }
+  oid:
+    description: "对象标识；kind 选择 PostgreSQL OID/reg* 类型"
+    params:
+      kind: { type: _types.basics.string, required: false, enum: [ oid, regproc, regprocedure, regoper, regoperator, regclass, regcollation, regtype, regrole, regnamespace, regconfig, regdictionary ], default: oid, description: "OID 类型" }
+    types:
+      oid: { go: uint32, pg: [ oid, regproc, regprocedure, regoper, regoperator, regclass, regcollation, regtype, regrole, regnamespace, regconfig, regdictionary ], ts: number }
+  pg_lsn:
+    description: "PostgreSQL WAL 日志序列号"
+    params: { }
+    types:
+      pg_lsn: { go: string, pg: [ pg_lsn ], ts: string }
 
 structures:
   list:
@@ -228,7 +322,7 @@ schemas:
       - name: type
         type: _types.basics.string
         required: true
-        pattern: '^_types\.basics\.[a-z][a-z0-9_]*$'
+        pattern: '^_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?$'
         description: "值类型引用 _types.basics.<name>"
       - name: validation
         type: _types.structures.list<_types.structures.object>
@@ -293,3 +387,4 @@ param_targets:
   mode: storage
   timezone: storage
   fractional_seconds: storage
+  kind: storage
