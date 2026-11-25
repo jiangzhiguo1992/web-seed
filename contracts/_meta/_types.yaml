@@ -4,6 +4,21 @@ id: meta.types
 title: "统一类型注册表"
 
 basics:
+  bytes:
+    description: "二进制"
+    params:
+      min_len: { type: _types.basics.integer, required: false, min: 0, description: "最小长度" }
+      max_len: { type: _types.basics.integer, required: false, min: 1, description: "最大长度" }
+      fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
+    types:
+      bytes: { go: "[]byte", pg: [ bytea ], ts: string }
+  bit:
+    description: "位串；kind 选择定长 bit 或变长 varbit，length 指定位数；Go 用 math/big.Int，按数值位解释，不保留前导 0"
+    params:
+      kind: { type: _types.basics.string, required: false, enum: [ bit, varbit ], default: varbit, description: "位串类型" }
+      length: { type: _types.basics.integer, required: false, min: 1, description: "位数；kind=bit 时应声明" }
+    types:
+      bit: { go: big.Int, pg: [ bit, varbit ], ts: number }
   string:
     description: "字符序列；kind 选择 text 或全文检索类型；varchar/char 由 max_len/fixed 表达"
     params:
@@ -75,21 +90,6 @@ basics:
     params: { }
     types:
       xml: { go: "map[string]any", pg: [ xml ], ts: unknown }
-  bytes:
-    description: "二进制"
-    params:
-      min_len: { type: _types.basics.integer, required: false, min: 0, description: "最小长度" }
-      max_len: { type: _types.basics.integer, required: false, min: 1, description: "最大长度" }
-      fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
-    types:
-      bytes: { go: "[]byte", pg: [ bytea ], ts: string }
-  bit:
-    description: "位串；kind 选择定长 bit 或变长 varbit，length 指定位数；Go 用 math/big.Int，按数值位解释，不保留前导 0"
-    params:
-      kind: { type: _types.basics.string, required: false, enum: [ bit, varbit ], default: varbit, description: "位串类型" }
-      length: { type: _types.basics.integer, required: false, min: 1, description: "位数；kind=bit 时应声明" }
-    types:
-      bit: { go: big.Int, pg: [ bit, varbit ], ts: number }
   geometry:
     description: "PostgreSQL 内置几何类型；Go 用 go-geom 的 geojson.Geometry，数据库文本格式由 repository 适配"
     params:
