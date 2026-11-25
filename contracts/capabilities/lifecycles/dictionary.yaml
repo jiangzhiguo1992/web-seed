@@ -1,0 +1,43 @@
+# 字典生命周期：创建、启停与软删。
+
+id: cap.lifecycles.dictionary
+summary: "字典生命周期"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "deleted 是终态；不要从 deleted 恢复"
+  - "父节点软删前必须先软删子节点；生命周期不表达父子约束"
+
+subjects:
+  - { entity: data.entities.dictionary, field: status }
+states:
+  values:
+    - { value: enabled, steps: [ cap.services.dictionary.delete.soft_delete_dictionary, cap.services.dictionary.set_status.set_dictionary_status ] }
+    - { value: disabled, steps: [ cap.services.dictionary.delete.soft_delete_dictionary, cap.services.dictionary.set_status.set_dictionary_status ] }
+    - { value: deleted, steps: [] }
+  initial: enabled
+  final: [ deleted ]
+create:
+  requires: [ ]
+  implemented_by:
+    - cap.services.dictionary.create.create_dictionary
+destroy:
+  requires: [ ]
+  implemented_by:
+    - cap.services.dictionary.delete.soft_delete_dictionary
+transitions:
+  - name: disable
+    description: "停用字典"
+    from: [ enabled ]
+    to: disabled
+    requires: [ ]
+    implemented_by:
+      - cap.services.dictionary.set_status.set_dictionary_status
+  - name: enable
+    description: "启用字典"
+    from: [ disabled ]
+    to: enabled
+    requires: [ ]
+    implemented_by:
+      - cap.services.dictionary.set_status.set_dictionary_status

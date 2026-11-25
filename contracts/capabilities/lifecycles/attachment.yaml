@@ -1,0 +1,37 @@
+# 附件生命周期：上传中、可用与软删。
+
+id: cap.lifecycles.attachment
+summary: "附件生命周期"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "附件 deleted 后不得恢复；如需重新上传必须新建附件行"
+  - "对象存储里的物理对象不随数据库软删消失；清理由保留期任务负责"
+
+subjects:
+  - { entity: data.entities.attachment, field: status }
+states:
+  values:
+    - { value: uploading, steps: [ cap.services.attachment.complete_upload.set_attachment_status, cap.services.attachment.complete_upload.soft_delete_old, cap.services.attachment.delete.soft_delete_attachment ] }
+    - { value: available, steps: [ cap.services.attachment.complete_upload.soft_delete_old, cap.services.attachment.delete.soft_delete_attachment ] }
+    - { value: deleted, steps: [] }
+  initial: uploading
+  final: [ deleted ]
+create:
+  requires: [ ]
+  implemented_by:
+    - cap.services.attachment.create_upload.create_attachment
+destroy:
+  requires: [ ]
+  implemented_by:
+    - cap.services.attachment.complete_upload.soft_delete_old
+    - cap.services.attachment.delete.soft_delete_attachment
+transitions:
+  - name: complete
+    description: "完成上传"
+    from: [ uploading ]
+    to: available
+    requires: [ ]
+    implemented_by:
+      - cap.services.attachment.complete_upload.set_attachment_status
