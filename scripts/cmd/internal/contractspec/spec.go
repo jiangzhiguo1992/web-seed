@@ -711,7 +711,7 @@ func injectFamilyParams(s *Schema) {
 }
 
 var (
-	goConcreteRe = regexp.MustCompile(`^(\[\]byte|[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*)$`)
+	goConcreteRe = regexp.MustCompile(`^(map\[string\](any|string)|\[\]byte|[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*)$`)
 	pgConcrete   = map[string]bool{
 		"smallint": true, "integer": true, "bigint": true, "smallserial": true, "serial": true, "bigserial": true,
 		"text": true, "varchar": true, "char": true, "character varying": true, "character": true, "bpchar": true, "name": true,

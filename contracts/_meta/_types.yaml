@@ -79,17 +79,17 @@ basics:
     types:
       bytes: { go: "[]byte", pg: [ bytea ], ts: string }
   bit:
-    description: "位串；kind 选择定长 bit 或变长 varbit，length 指定位数；Go 用 pgx 的 pgtype.Bits 保留长度与前导 0"
+    description: "位串；kind 选择定长 bit 或变长 varbit，length 指定位数；Go 用 math/big.Int，按数值位解释，不保留前导 0"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ bit, varbit ], default: varbit, description: "位串类型" }
       length: { type: _types.basics.integer, required: false, min: 1, description: "位数；kind=bit 时应声明" }
     types:
-      bit: { go: pgtype.Bits, pg: [ bit, varbit ], ts: unknown }
+      bit: { go: big.Int, pg: [ bit, varbit ], ts: number }
   xml:
-    description: "XML 文档；Go 用 etree.Document，数据库由 repository 适配"
+    description: "XML 文档；Go 用 map[string]any 表示，序列化由 repository 用 encoding/xml 适配"
     params: { }
     types:
-      xml: { go: etree.Document, pg: [ xml ], ts: unknown }
+      xml: { go: "map[string]any", pg: [ xml ], ts: unknown }
   geometry:
     description: "PostgreSQL 内置几何类型；Go 用 go-geom 的 geojson.Geometry，数据库文本格式由 repository 适配"
     params:

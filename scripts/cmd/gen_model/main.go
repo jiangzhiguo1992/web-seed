@@ -517,9 +517,9 @@ func goScalar(spec columnSpec, nullable bool) string {
 	case "bytes":
 		typ = "[]byte"
 	case "bit":
-		typ = "pgtype.Bits"
+		typ = "big.Int"
 	case "xml":
-		typ = "etree.Document"
+		typ = "map[string]any"
 	case "geometry":
 		typ = "geojson.Geometry"
 	case "any":
@@ -550,7 +550,9 @@ func tsScalar(spec columnSpec, nullable bool) string {
 		typ = "unknown"
 	case "bytes":
 		typ = "string"
-	case "bit", "xml":
+	case "bit":
+		typ = "number"
+	case "xml":
 		typ = "unknown"
 	case "geometry":
 		typ = "unknown"
@@ -564,7 +566,7 @@ func tsScalar(spec columnSpec, nullable bool) string {
 }
 
 func isNilable(typ string) bool {
-	return typ == "json.RawMessage" || typ == "[]byte" || typ == "any"
+	return typ == "json.RawMessage" || typ == "[]byte" || typ == "any" || strings.HasPrefix(typ, "map[")
 }
 
 func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) {
@@ -572,7 +574,7 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 	b.WriteString(header)
 	b.WriteString("\npackage model\n\n")
 	hasEnums := len(enums) > 0
-	hasJSON, hasTime, hasDecimal, hasBits, hasGeo, hasXML := false, false, false, false, false, false
+	hasJSON, hasTime, hasDecimal, hasBits, hasGeo := false, false, false, false, false
 	for _, e := range entities {
 		for _, f := range e.Fields {
 			if f.GoType == "json.RawMessage" {
@@ -584,14 +586,11 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 			if strings.Contains(f.GoType, "decimal.Decimal") {
 				hasDecimal = true
 			}
-			if strings.Contains(f.GoType, "pgtype.Bits") {
+			if strings.Contains(f.GoType, "big.Int") {
 				hasBits = true
 			}
 			if strings.Contains(f.GoType, "geojson.Geometry") {
 				hasGeo = true
-			}
-			if strings.Contains(f.GoType, "etree.Document") {
-				hasXML = true
 			}
 		}
 	}
@@ -609,13 +608,10 @@ func renderGo(enums map[string]enumSpec, entities []entitySpec) ([]byte, error) 
 		imports = append(imports, "\"github.com/shopspring/decimal\"")
 	}
 	if hasBits {
-		imports = append(imports, "\"github.com/jackc/pgx/v5/pgtype\"")
+		imports = append(imports, "\"math/big\"")
 	}
 	if hasGeo {
 		imports = append(imports, "\"github.com/twpayne/go-geom/encoding/geojson\"")
-	}
-	if hasXML {
-		imports = append(imports, "\"github.com/beevik/etree\"")
 	}
 	if len(imports) > 0 {
 		b.WriteString("import (\n")
