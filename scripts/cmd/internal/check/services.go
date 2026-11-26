@@ -414,7 +414,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		if err != nil {
 			continue
 		}
-		if !sameServiceType(src, rtyp) {
+		if !c.sameServiceType(src, rtyp) {
 			c.rulef("service-output-type", "%s: return %s type %s does not match source %s type %s", rel, rn, rtyp, value, src)
 		} else if nullable, known := c.inputValueNullable(value, tc); known && nullable != rnullable {
 			c.rulef("service-output-nullable", "%s: return %s nullability (nullable=%t) does not match source %s nullable=%t", rel, rn, rnullable, value, nullable)
@@ -902,7 +902,7 @@ func (c *Checker) checkStepOutputTarget(step map[string]any, target map[string]r
 			c.rulef("service-output", "%s: step %s %s has no return %s", rel, stepID, where, name)
 			continue
 		}
-		if !sameServiceType(typ, rt.typ) {
+		if !c.sameServiceType(typ, rt.typ) {
 			c.rulef("service-output-type", "%s: step %s output %s type %s does not match %s return type %s", rel, stepID, name, typ, where, rt.typ)
 			continue
 		}

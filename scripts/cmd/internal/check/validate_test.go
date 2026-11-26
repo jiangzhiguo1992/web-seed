@@ -167,6 +167,11 @@ func TestConcreteVariantRequiredEverywhere(t *testing.T) {
 		t.Fatalf("single-variant family rejected: %v", c.errs)
 	}
 	c.errs = nil
+	c.checkTypeRef("_types.basics.string.string", "contracts/data/tables/x.yaml.columns[0].type")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "single-variant family") {
+		t.Fatalf("explicit single-variant suffix accepted: %v", c.errs)
+	}
+	c.errs = nil
 	c.checkTypeRef("_types.basics.integer.32", "contracts/data/tables/x.yaml.columns[0].type")
 	if len(c.errs) != 0 {
 		t.Fatalf("concrete variant rejected: %v", c.errs)

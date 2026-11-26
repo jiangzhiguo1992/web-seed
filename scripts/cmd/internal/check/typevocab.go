@@ -103,16 +103,23 @@ func (c *Checker) checkTypeRef(v any, path string) {
 	if strings.HasPrefix(s, "_types.") {
 		if class, name, ok := contractspec.SplitTypeRef(s); ok && class == contractspec.TypeClassBasics {
 			family, _, hasVariant := splitBasicsName(name)
-			if !hasVariant {
-				if _, custom := c.valueTypes.CustomTypes[family]; !custom {
-					if fam, ok := c.valueTypes.TypeFamilies[family]; ok && len(fam.Types) > 0 {
+			if _, custom := c.valueTypes.CustomTypes[family]; !custom {
+				if fam, ok := c.valueTypes.TypeFamilies[family]; ok {
+					if !hasVariant {
 						// 单变体族的 variant 名就是族名，裸写无歧义；其余族必须写具体 variant。
 						if len(fam.Types) > 1 {
 							c.rulef("schema.type-concrete", "%s: %s must name a concrete variant (family %s declares %v)", path, s, family, sortedConcreteKeys(fam.Types))
 							return
 						}
-						if _, ok := fam.Types[family]; !ok {
-							c.rulef("schema.type-concrete", "%s: %s must name a concrete variant (family %s declares %v)", path, s, family, sortedConcreteKeys(fam.Types))
+						if len(fam.Types) == 1 {
+							if _, ok := fam.Types[family]; !ok {
+								c.rulef("schema.type-concrete", "%s: %s must name a concrete variant (family %s declares %v)", path, s, family, sortedConcreteKeys(fam.Types))
+								return
+							}
+						}
+					} else if len(fam.Types) == 1 {
+						if _, ok := fam.Types[family]; ok {
+							c.rulef("schema.type-concrete", "%s: %s must be written as _types.basics.%s (single-variant family)", path, s, family)
 							return
 						}
 					}
@@ -208,13 +215,13 @@ func (c *Checker) checkTypeVocabulary() {
 		c.rulef("schema.type-vocabulary", "load _types.yaml: %v", err)
 		return
 	}
-	custom, err := contractspec.LoadCustomTypes(c.root, shared.TypeFamilies, shared.CommonParams)
+	custom, err := contractspec.LoadCustomTypes(c.root, shared.TypeFamilies, shared.Commons.BasicsParams)
 	if err != nil {
 		c.rulef("schema.type-vocabulary", "load data/types.yaml: %v", err)
 		return
 	}
 	c.valueTypes = ValueTypes{
-		CommonParams: shared.CommonParams,
+		BasicsParams: shared.Commons.BasicsParams,
 		TypeFamilies: shared.TypeFamilies,
 		Structures:   shared.Structures,
 		Schemas:      shared.Schemas,

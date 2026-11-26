@@ -93,11 +93,11 @@ type entityDoc struct {
 
 func baseColumnMeta() map[string]columnMeta {
 	return map[string]columnMeta{
-		"id":         {typ: "integer", primaryKey: true},
-		"status":     {typ: "integer"},
-		"created_at": {typ: "timestamp"},
-		"updated_at": {typ: "timestamp"},
-		"deleted_at": {typ: "timestamp", nullable: true},
+		"id":         {typ: "_types.basics.id", primaryKey: true},
+		"status":     {typ: "_types.basics.integer.32"},
+		"created_at": {typ: "_types.basics.timestamp.long"},
+		"updated_at": {typ: "_types.basics.timestamp.long"},
+		"deleted_at": {typ: "_types.basics.timestamp.long", nullable: true},
 	}
 }
 
@@ -848,12 +848,19 @@ func (c *Checker) checkScalarField(e *entityInfo, f entityFieldInfo, where strin
 			}
 			cols[key] = f.Name
 			colType := c.resolvedColumnType(meta.typ)
+			baseFamily := c.valueType(base)
 			if enumRef {
 				if colType != "integer" {
 					c.rulef("entity-field-type", "%s: enum requires integer column, got %s", where, colType)
 				}
-			} else if baseFamily := c.valueType(base); !(baseFamily == colType || (baseFamily == "" && base == colType)) {
+			} else if !(baseFamily == colType || (baseFamily == "" && base == colType)) {
 				c.rulef("entity-field-type", "%s: type %s does not match column type %s", where, base, colType)
+			} else if baseFamily == "integer" {
+				if fieldBits, ok := c.typeIntegerBits(f.Type); ok {
+					if colBits, ok := c.columnBits(f.ColumnTable, f.Column); ok && fieldBits != colBits {
+						c.rulef("entity-field-type", "%s: type %s integer bits %d does not match column %s bits %d", where, f.Type, fieldBits, f.Column, colBits)
+					}
+				}
 			}
 			if pointer != meta.nullable {
 				c.rulef("entity-field-type", "%s: pointer type %q must match column nullable=%v", where, f.Type, meta.nullable)

@@ -1336,6 +1336,18 @@ func TestServiceTypesCompatibleIntegerBits(t *testing.T) {
 	if !c.serviceTypesCompatible("_types.basics.integer", "_types.basics.integer") {
 		t.Fatal("matching integer types rejected")
 	}
+	if c.serviceTypesCompatible("_types.basics.integer.32", "_types.basics.id") {
+		t.Fatal("integer.32 accepted as id (integer.64)")
+	}
+	if !c.serviceTypesCompatible("_types.basics.integer.64", "_types.basics.id") {
+		t.Fatal("integer.64 rejected as id (integer.64)")
+	}
+	if c.sameServiceType("_types.basics.integer.32", "_types.basics.integer.64") {
+		t.Fatal("sameServiceType treats integer.32 and integer.64 as equal")
+	}
+	if !c.sameServiceType("_types.basics.id", "_types.basics.integer.64") {
+		t.Fatal("sameServiceType does not resolve custom id to integer.64")
+	}
 }
 
 func TestLifecycleRequiresCycle(t *testing.T) {

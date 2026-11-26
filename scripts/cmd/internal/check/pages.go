@@ -286,15 +286,29 @@ func (c *Checker) checkPageParams(rel, service string, node map[string]any) {
 }
 
 func (c *Checker) pageTypeCompatible(pageType, serviceType string) bool {
-	pageType = c.pageBaseType(pageType)
-	serviceType = c.pageBaseType(serviceType)
-	if pageType == serviceType {
+	pbase, pbits, pok := c.pageTypeShape(pageType)
+	sbase, sbits, sok := c.pageTypeShape(serviceType)
+	if pbase == sbase {
+		if pbase == "_types.basics.integer" && pok && sok {
+			return pbits == sbits
+		}
 		return true
 	}
-	if strings.HasPrefix(serviceType, "data.enums.") && pageType == "_types.basics.string" {
+	if strings.HasPrefix(sbase, "data.enums.") && pbase == "_types.basics.string" {
 		return true
 	}
 	return false
+}
+
+// pageTypeShape 返回页面/服务类型的族名与 integer 位宽；非 integer 时 hasBits=false。
+func (c *Checker) pageTypeShape(t string) (base string, bits int, hasBits bool) {
+	base = c.pageBaseType(t)
+	if base == "_types.basics.integer" {
+		if b, ok := c.typeIntegerBits(t); ok {
+			return base, b, true
+		}
+	}
+	return base, 0, false
 }
 
 func (c *Checker) pageBaseType(t string) string {

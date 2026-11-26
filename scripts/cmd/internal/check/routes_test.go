@@ -586,3 +586,29 @@ func TestNeverLogPatterns(t *testing.T) {
 		}
 	}
 }
+
+func TestWebDepsUnknownField(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/platform/architecture/web_deps.json", `{
+  "layers": [ { "name": "app", "in": "src/app/**", "bogus": 1 } ],
+  "rules": [ { "from": "app", "mayDependOn": [], "bogus": 1 } ],
+  "generates": ["x"],
+  "forbiddenModules": [ { "name": "x", "from": { "path": "src/**", "bogus": 1 }, "bogus": 1 } ],
+  "bogus": 1
+}`)
+	c := &Checker{root: root}
+	c.checkWebDeps()
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		`web_deps has unknown field "bogus"`,
+		`layers[0] has unknown field "bogus"`,
+		`rules[0] has unknown field "bogus"`,
+		`forbiddenModules[0] has unknown field "bogus"`,
+		`forbiddenModules[0].from has unknown field "bogus"`,
+		"[schema.unknown-field]",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}

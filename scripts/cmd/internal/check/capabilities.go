@@ -347,7 +347,7 @@ func (c *Checker) checkCapabilities() {
 			case "scalar":
 				typ = r.Type
 			case "affected_rows":
-				typ = "integer"
+				typ = "_types.basics.integer.32"
 			}
 			if typ == "" {
 				typ = "any"

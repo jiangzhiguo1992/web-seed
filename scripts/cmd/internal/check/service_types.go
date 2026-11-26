@@ -659,7 +659,7 @@ func (c *Checker) schemaTypeName(schema map[string]any) (string, bool) {
 		return c.inlineType(schema)
 	}
 	if typ, _ := schema["type"].(string); typ != "" {
-		return normalizeContractType(typ), true
+		return typ, true
 	}
 	return "", false
 }
@@ -957,7 +957,7 @@ func (c *Checker) checkBatchParamFields(sourceNode map[string]any, p queryParam,
 			c.rulef("service-input-type", "%s: field %s does not exist in source schema", where, f.Name)
 			continue
 		}
-		if normalizeContractType(f.Type) != normalizeContractType(got.typ) {
+		if c.canonicalTypeRef(f.Type) != c.canonicalTypeRef(got.typ) {
 			c.rulef("service-input-type", "%s: field %s type %s does not match source %s", where, f.Name, f.Type, got.typ)
 		}
 		if f.Required != got.required {

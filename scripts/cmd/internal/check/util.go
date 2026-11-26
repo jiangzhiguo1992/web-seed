@@ -220,6 +220,30 @@ func (c *Checker) columnExists(table, col string) bool {
 	return ok
 }
 
+// canonicalTypeRef 归一类型引用：去指针/List 包装，basics 保留 variant，custom 解析为底层类型。
+// 与 normalizeContractType 不同，它不会丢掉 integer.32/64 的位宽信息。
+func (c *Checker) canonicalTypeRef(typ string) string {
+	s := strings.TrimSpace(typ)
+	for strings.HasPrefix(s, "*") {
+		s = strings.TrimSpace(strings.TrimPrefix(s, "*"))
+	}
+	if strings.HasPrefix(s, "_types.structures.list<") && strings.HasSuffix(s, ">") {
+		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "_types.structures.list<"), ">"))
+		return "List<" + c.canonicalTypeRef(inner) + ">"
+	}
+	if custom, ok := c.valueTypes.CustomTypes[contractspec.BareTypeName(s)]; ok {
+		if family, variant, ok := custom.Basics(); ok {
+			if variant == "" {
+				return family
+			}
+			return family + "." + variant
+		}
+	}
+	s = strings.ReplaceAll(s, "_types.basics.", "")
+	s = strings.ReplaceAll(s, "_types.structures.", "")
+	return s
+}
+
 // typeIntegerBits 返回契约类型引用的 integer 位宽；非 integer 返回 false。
 // 位宽只来自类型引用的 variant；自定义类型解析其 type。
 func (c *Checker) typeIntegerBits(typ string) (int, bool) {

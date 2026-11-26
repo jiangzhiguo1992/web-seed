@@ -812,8 +812,8 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 		c.rulef("schema.types", "types: type_families must not be empty")
 		return
 	}
-	for _, name := range sortedKeysOfFields(schema.ValueTypes.CommonParams) {
-		c.checkParamSpec("types.common_params", name, schema.ValueTypes.CommonParams[name])
+	for _, name := range sortedKeysOfFields(schema.ValueTypes.BasicsParams) {
+		c.checkParamSpec("types.commons.basics_params", name, schema.ValueTypes.BasicsParams[name])
 	}
 	for _, name := range familyNames(schema.ValueTypes) {
 		fam := schema.ValueTypes.TypeFamilies[name]

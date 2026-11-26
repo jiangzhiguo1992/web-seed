@@ -413,7 +413,7 @@ func (c *Checker) checkQueryPagination(q *queryInfo) {
 
 func (c *Checker) checkPaginationParam(name string, p queryParam, where string) {
 	if normalizeContractType(p.Type) != "integer" {
-		c.rulef("query-pagination", "%s: %s must have type _types.basics.integer", where, name)
+		c.rulef("query-pagination", "%s: %s must have an integer type (_types.basics.integer.32)", where, name)
 	}
 	if !p.Nullable {
 		c.rulef("query-pagination", "%s: %s must set nullable:true", where, name)

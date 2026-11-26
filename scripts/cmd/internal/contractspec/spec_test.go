@@ -278,8 +278,8 @@ func TestLoadCustomTypesRequiresConcreteType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := shared.CommonParams["default"]; !ok {
-		t.Fatal("common_params.default is not declared")
+	if _, ok := shared.Commons.BasicsParams["default"]; !ok {
+		t.Fatal("commons.basics_params.default is not declared")
 	}
 
 	write := func(body string) error {
@@ -290,7 +290,7 @@ func TestLoadCustomTypesRequiresConcreteType(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "types.yaml"), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		_, err := LoadCustomTypes(root, shared.TypeFamilies, shared.CommonParams)
+		_, err := LoadCustomTypes(root, shared.TypeFamilies, shared.Commons.BasicsParams)
 		return err
 	}
 
@@ -313,6 +313,9 @@ custom_types:
 	}
 	if err := write(strings.Replace(valid, "type: _types.basics.integer.64", "type: _types.basics.integer", 1)); err == nil || !strings.Contains(err.Error(), "requires a concrete variant") {
 		t.Fatalf("bare integer accepted: %v", err)
+	}
+	if err := write(strings.Replace(valid, "type: _types.basics.integer.64", "type: _types.basics.string.string", 1)); err == nil || !strings.Contains(err.Error(), "single-variant") {
+		t.Fatalf("explicit single-variant suffix accepted: %v", err)
 	}
 	if err := write(strings.Replace(valid, "type: _types.basics.integer.64", "family: integer", 1)); err == nil || !strings.Contains(err.Error(), "field family not found") {
 		t.Fatalf("legacy family key accepted: %v", err)

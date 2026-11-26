@@ -3,12 +3,12 @@
 id: meta.types
 title: "统一类型注册表"
 
-# 所有 basics 族共享的参数；族自身不得重复声明。
-common_params:
-  default:
-    type: _types.basics.any
-    required: false
-    description: "缺省值；值域必须与所属类型族兼容"
+commons:
+  basics_params:
+    default:
+      type: _types.basics.any
+      required: false
+      description: "缺省值；值域必须与所属类型族兼容"
 
 basics:
   bytes:

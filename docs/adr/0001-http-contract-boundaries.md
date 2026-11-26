@@ -242,7 +242,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 - `auth-policy-jwt` 只校验 JWT 字段（format/issuer/claims/audience/pii/revocation）与策略一致；不执行签名或验签。
 - `auth-policy-password` 只校验页面 `password.minLength`；不校验服务端哈希算法或复杂度规则。
 - `config.env` 用 JSON Schema 编译，并校验 `required` 含 APP_ENV/HTTP_ADDR、`additionalProperties: false`、APP_ENV/LOG_LEVEL 枚举与默认值、secret 字段为 string；不校验运行时真实值。
-- `web_deps` 校验层名唯一、`rules.from` 唯一、`mayDependOn`/`forbid` 不重叠、`generates` 非空；不执行 dependency-cruiser，不校验 `from.path`/`to.path` 正则。
+- `web_deps` 校验层名唯一、`rules.from` 唯一、`mayDependOn`/`forbid` 不重叠、`generates` 非空，并拒绝未声明的 JSON 字段；不执行 dependency-cruiser，不校验 `from.path`/`to.path` 正则。
 
 ## 2026-11-23 决策修订
 

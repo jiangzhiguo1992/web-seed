@@ -721,7 +721,7 @@ func loadCustomTypes(root string) (map[string]contractspec.CustomValueType, erro
 	if err != nil {
 		return nil, err
 	}
-	doc, err := contractspec.LoadCustomTypes(root, t.TypeFamilies, t.CommonParams)
+	doc, err := contractspec.LoadCustomTypes(root, t.TypeFamilies, t.Commons.BasicsParams)
 	if err != nil {
 		return nil, err
 	}

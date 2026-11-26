@@ -29,10 +29,15 @@ type Schema struct {
 
 // SharedTypes 是 _meta/_types.yaml 的严格解析结果：类型族是元层词汇，
 // 由所有契约类型共享；项目级自定义类型在 contracts/data/types.yaml。
+// Commons 是类型元层按类别共享的字段；当前只有 basics_params，后续可扩展。
+type Commons struct {
+	BasicsParams map[string]Field `yaml:"basics_params"`
+}
+
 type SharedTypes struct {
 	ID           string                     `yaml:"id"`
 	Title        string                     `yaml:"title"`
-	CommonParams map[string]Field           `yaml:"common_params"`
+	Commons      Commons                    `yaml:"commons"`
 	TypeFamilies map[string]ValueTypeFamily `yaml:"basics"`
 	Structures   map[string]Structure       `yaml:"structures"`
 	Schemas      map[string]SchemaKind      `yaml:"schemas"`
@@ -174,7 +179,7 @@ func (t Targets) FileID(file string) string {
 }
 
 type ValueTypes struct {
-	CommonParams map[string]Field           `yaml:"common_params"`
+	BasicsParams map[string]Field           `yaml:"basics_params"`
 	TypeFamilies map[string]ValueTypeFamily `yaml:"basics"`
 	CustomTypes  map[string]CustomValueType `yaml:"custom_types"`
 	Structures   map[string]Structure       `yaml:"structures"`
@@ -291,7 +296,7 @@ func LoadSchemaByType(root, typ string) (*Schema, string, error) {
 		return nil, "", fmt.Errorf("%s: missing schemas (kinds is empty) in %s", foundPath, filepath.Join(dir, "_types.yaml"))
 	}
 	if needsSharedTypes(typ) {
-		doc, err := LoadCustomTypes(root, found.ValueTypes.TypeFamilies, found.ValueTypes.CommonParams)
+		doc, err := LoadCustomTypes(root, found.ValueTypes.TypeFamilies, found.ValueTypes.BasicsParams)
 		if err != nil {
 			return nil, "", err
 		}
@@ -342,13 +347,13 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 	if err := validateTypeFamilies(path, t.TypeFamilies); err != nil {
 		return nil, err
 	}
-	if err := validateCommonParams(path, t.CommonParams, t.TypeFamilies); err != nil {
+	if err := validateBasicsParams(path, t.Commons.BasicsParams, t.TypeFamilies); err != nil {
 		return nil, err
 	}
 	for famName, fam := range t.TypeFamilies {
-		for pname := range t.CommonParams {
+		for pname := range t.Commons.BasicsParams {
 			if _, ok := fam.Params[pname]; ok {
-				return nil, fmt.Errorf("%s: family %s must not redeclare common param %s", path, famName, pname)
+				return nil, fmt.Errorf("%s: family %s must not redeclare basics param %s", path, famName, pname)
 			}
 		}
 	}
@@ -362,7 +367,7 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 }
 
 // LoadCustomTypes 严格解析 contracts/data/types.yaml；文件缺失视为没有自定义类型。
-func LoadCustomTypes(root string, families map[string]ValueTypeFamily, common map[string]Field) (*CustomTypesDoc, error) {
+func LoadCustomTypes(root string, families map[string]ValueTypeFamily, basicsParams map[string]Field) (*CustomTypesDoc, error) {
 	path := filepath.Join(root, customTypesRel)
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -394,7 +399,7 @@ func LoadCustomTypes(root string, families map[string]ValueTypeFamily, common ma
 	default:
 		return nil, fmt.Errorf("%s: stability must be stable/draft/deprecated, got %q", path, doc.Stability)
 	}
-	if err := validateCustomTypes(path, families, common, doc.CustomTypes); err != nil {
+	if err := validateCustomTypes(path, families, basicsParams, doc.CustomTypes); err != nil {
 		return nil, err
 	}
 	return &doc, nil
@@ -653,7 +658,7 @@ func LoadSchema(path string) (*Schema, error) {
 	// LoadSchemaByType 再对依赖类型族的契约类型强制要求它存在。
 	if t, err := LoadSharedTypes(filepath.Dir(path)); err == nil {
 		s.ValueTypes = ValueTypes{
-			CommonParams: t.CommonParams,
+			BasicsParams: t.Commons.BasicsParams,
 			TypeFamilies: t.TypeFamilies,
 			Structures:   t.Structures,
 			Schemas:      t.Schemas,
@@ -727,7 +732,7 @@ func injectFamilyParams(s *Schema) {
 			seen[name] = true
 		}
 	}
-	for name, def := range s.ValueTypes.CommonParams {
+	for name, def := range s.ValueTypes.BasicsParams {
 		if seen[name] {
 			continue
 		}
@@ -811,19 +816,19 @@ func containsString(list []string, want string) bool {
 	return false
 }
 
-func validateCommonParams(path string, params map[string]Field, families map[string]ValueTypeFamily) error {
+func validateBasicsParams(path string, params map[string]Field, families map[string]ValueTypeFamily) error {
 	for name, def := range params {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(def.Description) == "" {
-			return fmt.Errorf("%s: common param %s must have a name and description", path, name)
+			return fmt.Errorf("%s: basics param %s must have a name and description", path, name)
 		}
 		if def.Name != "" && def.Name != name {
-			return fmt.Errorf("%s: common param %s has mismatched name %q", path, name, def.Name)
+			return fmt.Errorf("%s: basics param %s has mismatched name %q", path, name, def.Name)
 		}
 		if err := validateBasicsRef(def.Type, families); err != nil {
-			return fmt.Errorf("%s: common param %s: %w", path, name, err)
+			return fmt.Errorf("%s: basics param %s: %w", path, name, err)
 		}
 		if def.Required && def.Default != nil {
-			return fmt.Errorf("%s: common param %s: required and default are mutually exclusive", path, name)
+			return fmt.Errorf("%s: basics param %s: required and default are mutually exclusive", path, name)
 		}
 	}
 	return nil
@@ -854,6 +859,11 @@ func validateBasicsRef(ref string, families map[string]ValueTypeFamily) error {
 		}
 		return fmt.Errorf("family %s requires a concrete variant (%s)", family, strings.Join(sortedTypeKeys(fam.Types), "/"))
 	}
+	if len(fam.Types) == 1 {
+		if _, ok := fam.Types[family]; ok {
+			return fmt.Errorf("family %s is single-variant; write _types.basics.%s without a variant", family, family)
+		}
+	}
 	if _, ok := fam.Types[variant]; !ok {
 		return fmt.Errorf("unknown variant %q for family %s", variant, family)
 	}
@@ -876,7 +886,7 @@ func sortedTypeKeys(types map[string]ConcreteType) []string {
 	return out
 }
 
-func validateCustomTypes(path string, families map[string]ValueTypeFamily, common map[string]Field, customs map[string]CustomValueType) error {
+func validateCustomTypes(path string, families map[string]ValueTypeFamily, basicsParams map[string]Field, customs map[string]CustomValueType) error {
 	for name, custom := range customs {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(custom.Description) == "" {
 			return fmt.Errorf("%s: custom type %s must have a name and description", path, name)
@@ -893,7 +903,7 @@ func validateCustomTypes(path string, families map[string]ValueTypeFamily, commo
 			if _, ok := fam.Params[pname]; ok {
 				continue
 			}
-			if _, ok := common[pname]; ok {
+			if _, ok := basicsParams[pname]; ok {
 				continue
 			}
 			return fmt.Errorf("%s: custom type %s param %s not allowed by type %s", path, name, pname, custom.Type)
@@ -905,7 +915,7 @@ func validateCustomTypes(path string, families map[string]ValueTypeFamily, commo
 				}
 			}
 		}
-		for pname, def := range common {
+		for pname, def := range basicsParams {
 			if def.Required {
 				if _, ok := custom.Params[pname]; !ok {
 					return fmt.Errorf("%s: custom type %s missing required param %s", path, name, pname)

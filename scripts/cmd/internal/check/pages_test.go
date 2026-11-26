@@ -3,6 +3,8 @@ package check
 import (
 	"strings"
 	"testing"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 func TestCheckFeaturePages(t *testing.T) {
@@ -159,5 +161,27 @@ analytics:
 	}
 	if strings.Contains(got, "page.x_viewed") && strings.Contains(got, "unknown analytics event page.x_viewed") {
 		t.Fatalf("declared event reported as unknown: %v", c.errs)
+	}
+}
+
+func TestPageTypeCompatibleIntegerWidth(t *testing.T) {
+	c := &Checker{
+		pageTypeFamilies: map[string]string{"page_limit": "integer", "id": "integer"},
+		valueTypes: ValueTypes{CustomTypes: map[string]contractspec.CustomValueType{
+			"id":         {Type: "_types.basics.integer.64"},
+			"page_limit": {Type: "_types.basics.integer.32"},
+		}},
+	}
+	if c.pageTypeCompatible("_types.basics.integer.32", "_types.basics.id") {
+		t.Fatal("integer.32 must not bind to id (integer.64)")
+	}
+	if !c.pageTypeCompatible("_types.basics.integer.64", "_types.basics.id") {
+		t.Fatal("integer.64 must bind to id")
+	}
+	if !c.pageTypeCompatible("_types.basics.page_limit", "_types.basics.integer.32") {
+		t.Fatal("page_limit (integer.32) must bind to integer.32")
+	}
+	if c.pageTypeCompatible("_types.basics.page_limit", "_types.basics.id") {
+		t.Fatal("page_limit (integer.32) must not bind to id (integer.64)")
 	}
 }

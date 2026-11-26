@@ -284,20 +284,9 @@ func inputExprRoot(expr string) (string, bool) {
 	return root, true
 }
 
-// sameServiceType 比较返回类型，忽略指针与 List<> 包装差异。
-func sameServiceType(a, b string) bool {
-	a = normalizeContractType(a)
-	b = normalizeContractType(b)
-	a = strings.TrimPrefix(strings.TrimSpace(a), "*")
-	b = strings.TrimPrefix(strings.TrimSpace(b), "*")
-	if a == b {
-		return true
-	}
-	if strings.HasPrefix(a, "List<") && strings.HasSuffix(a, ">") &&
-		strings.HasPrefix(b, "List<") && strings.HasSuffix(b, ">") {
-		return sameServiceType(a[5:len(a)-1], b[5:len(b)-1])
-	}
-	return false
+// sameServiceType 比较返回类型，忽略指针与 List<> 包装差异，但保留 integer 位宽与 custom 解析。
+func (c *Checker) sameServiceType(a, b string) bool {
+	return c.canonicalTypeRef(a) == c.canonicalTypeRef(b)
 }
 
 // outputRoot 返回 step 输出路径的根字段名。

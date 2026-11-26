@@ -489,6 +489,11 @@ func normalizeScaffoldColumnType(raw string, vt ValueTypes) (string, error) {
 	if _, ok := fam.Types[variant]; !ok {
 		return "", fmt.Errorf("unknown variant %q for column type %s", variant, family)
 	}
+	if len(fam.Types) == 1 {
+		if _, ok := fam.Types[family]; ok && variant == family {
+			return "_types.basics." + family, nil
+		}
+	}
 	return "_types.basics." + family + "." + variant, nil
 }
 
