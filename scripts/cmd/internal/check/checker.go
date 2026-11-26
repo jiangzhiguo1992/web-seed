@@ -68,6 +68,9 @@ type Checker struct {
 	methodReturns            map[string]map[string]returnType
 	methodTypeDefs           map[string]map[string]any
 	serviceQueries           map[string]map[string]bool
+	validationRefs           map[string]map[string]bool
+	constraintRefs           map[string]map[string]bool
+	constraintIDs            map[string]bool
 	serviceQueryClosure      map[string]map[string]bool
 	serviceErrorClosure      map[string]map[string]bool
 	pageParamTypes           map[string]map[string]string
@@ -192,6 +195,8 @@ func (c *Checker) run() {
 	c.checkEnumRefs(tableIDs, cols, enumValues)
 	c.checkCapabilityWrites(tableIDs)
 	c.checkEntities(entitySchema)
+	c.checkValidationRefs()
+	c.checkConstraintRefs()
 	c.checkQueries(querySchema)
 	c.checkQueryStorageRefs()
 	c.checkEntityUsedBy()

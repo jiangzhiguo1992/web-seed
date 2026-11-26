@@ -43,6 +43,10 @@ queries:
     errors:
       - platform.errors.AUTH_USERNAME_TAKEN
       - platform.errors.AUTH_INVALID_CREDENTIALS
+    constraints:
+      - data.tables.auth_pwd.ck_auth_pwd_account_live
+      - data.tables.auth_pwd.ck_auth_pwd_status
+      - data.tables.auth_pwd.ck_auth_pwd_username_lowercase
     index_ref:
       - { index: data.tables.auth_pwd.uq_auth_pwd_username, columns: [ username ] }
       - { index: data.tables.auth_pwd.uq_auth_pwd_account, columns: [ account_id ] }
@@ -133,6 +137,9 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_PHONE_TAKEN
+    constraints:
+      - data.tables.auth_phone.ck_auth_phone_account_live
+      - data.tables.auth_phone.ck_auth_phone_status
     index_ref:
       - { index: data.tables.auth_phone.uq_auth_phone_number, columns: [ code, number ] }
       - { index: data.tables.auth_phone.uq_auth_phone_account, columns: [ account_id ] }
@@ -175,6 +182,11 @@ queries:
     errors:
       - platform.errors.AUTH_EMAIL_TAKEN
       - platform.errors.AUTH_EMAIL_INVALID
+    constraints:
+      - data.tables.auth_email.ck_auth_email_account_live
+      - data.tables.auth_email.ck_auth_email_domain_lowercase
+      - data.tables.auth_email.ck_auth_email_status
+      - data.tables.auth_email.ck_auth_email_username_lowercase
     index_ref:
       - { index: data.tables.auth_email.uq_auth_email_username_domain, columns: [ username, domain ] }
       - { index: data.tables.auth_email.uq_auth_email_account, columns: [ account_id ] }
@@ -240,6 +252,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.auth_pwd.ck_auth_pwd_account_live
     index_ref:
       - { index: data.tables.auth_pwd.uq_auth_pwd_account, columns: [ account_id ] }
     used_by:
@@ -256,6 +270,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.auth_phone.ck_auth_phone_account_live
     index_ref:
       - { index: data.tables.auth_phone.uq_auth_phone_account, columns: [ account_id ] }
     used_by:
@@ -273,6 +289,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.auth_email.ck_auth_email_account_live
     index_ref:
       - { index: data.tables.auth_email.uq_auth_email_account, columns: [ account_id ] }
     used_by:
@@ -291,6 +309,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.auth_phone.ck_auth_phone_status
     index_ref:
       - { index: data.tables.auth_phone.pk, columns: [ id ] }
     used_by:
@@ -309,6 +329,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.auth_email.ck_auth_email_status
     index_ref:
       - { index: data.tables.auth_email.pk, columns: [ id ] }
     used_by:
@@ -327,6 +349,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.auth_pwd.ck_auth_pwd_status
     index_ref:
       - { index: data.tables.auth_pwd.pk, columns: [ id ] }
     used_by:

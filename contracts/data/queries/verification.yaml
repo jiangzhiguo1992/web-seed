@@ -29,6 +29,11 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
+    constraints:
+      - data.tables.verification_body.ck_verification_auth_type
+      - data.tables.verification_body.ck_verification_expire_order
+      - data.tables.verification_body.ck_verification_purpose_auth_type
+      - data.tables.verification_body.ck_verification_status
     index_ref:
       - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
@@ -47,6 +52,9 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.verification_body.ck_verification_sent_order
+      - data.tables.verification_body.ck_verification_status
     index_ref:
       - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
@@ -85,6 +93,10 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_VERIFICATION_INVALID
+    constraints:
+      - data.tables.verification_body.ck_verification_consumed_order
+      - data.tables.verification_body.ck_verification_consumed_status
+      - data.tables.verification_body.ck_verification_status
     index_ref:
       - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
@@ -103,6 +115,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.verification_body.ck_verification_status
     index_ref:
       - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
@@ -120,6 +134,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.verification_body.ck_verification_status
     index_ref:
       - { index: data.tables.verification_body.pk, columns: [ id ] }
     used_by:
@@ -138,6 +154,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.verification_body.ck_verification_status
     index_ref:
       - { index: data.tables.verification_body.idx_verification_expire_at, columns: [ deleted_at, expire_at ] }
     used_by:
@@ -156,6 +174,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.verification_body.ck_verification_status
     index_ref:
       - { index: data.tables.verification_body.idx_verification_status_attempt, columns: [ deleted_at, status, attempt_count ] }
     used_by:
@@ -175,6 +195,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.verification_body.ck_verification_status
     index_ref:
       - { index: data.tables.verification_body.idx_verification_auth_purpose, columns: [ deleted_at, auth_type, auth_id, purpose ] }
     used_by:
@@ -193,6 +215,8 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.verification_body.ck_verification_status
     index_ref:
       - { index: data.tables.verification_body.idx_verification_account_id, columns: [ account_id ] }
     used_by:
@@ -215,6 +239,11 @@ queries:
       - { name: row, kind: entity, type: data.entities.verification_action }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.verification_action.ck_verification_action_input
+      - data.tables.verification_action.ck_verification_action_no_soft_delete
+      - data.tables.verification_action.ck_verification_action_result
+      - data.tables.verification_action.ck_verification_action_status
     index_ref:
       - { index: data.tables.verification_action.pk, columns: [ id ] }
     used_by:

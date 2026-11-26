@@ -213,7 +213,7 @@ feature ──> capabilities ──> data
 | capabilities/events → capabilities/services | subscribe/crons/dispatches | `service` |
 | capabilities/events → capabilities/events | topic 嵌套 | `subscribe` |
 | capabilities/services → data | service 契约 | `steps[].queries[].query` / query `errors` |
-| data.queries → data.tables | 查询项 | `tables` / `index_ref` / `caches` / `archive` |
+| data.queries → data.tables | 查询项 | `tables` / `index_ref` / `constraints` / `caches` / `archive` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `source.join.from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities` / `table.references` / `table.referenced_by` / `table.queries`（生成物，checker 校验） |
 | data.entities → 上游（反向） | 实体文件 | `model.includes` / `model.included_by`（`{field, entity, cardinality}` 生成物）/ `model.queries`（生成物） |

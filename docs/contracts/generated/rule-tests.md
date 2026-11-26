@@ -94,6 +94,7 @@
 | data.entities | entity-relation-via | entity-relation-via | 1 | 0 |
 | data.entities | entity-relation-cardinality | entity-relation-cardinality | 1 | 1 |
 | data.entities | entity-validation | entity-validation | 1 | 0 |
+| data.entities | entity-validation-ref | entity-validation-ref | 2 | 0 |
 | data.entities | entity-validation-used-by | entity-validation-used-by | 1 | 0 |
 | data.entities | entity-used-by | entity-used-by | 1 | 0 |
 | data.entities | entity-included-by | entity-included-by | 1 | 1 |
@@ -158,6 +159,7 @@
 | data.tables | column-type-supported | column-type-supported | 3 | 1 |
 | data.tables | index-live-only | index-live-only | 1 | 0 |
 | data.tables | constraint-fields | constraint-fields | 1 | 0 |
+| data.tables | constraint-ref | constraint-ref | 2 | 0 |
 | data.tables | constraint-used-by | constraint-used-by | 1 | 0 |
 | data.tables | enum-code-literal | enum-code-literal | 1 | 1 |
 | data.tables | table-queries-generated | table-queries-generated | 1 | 1 |

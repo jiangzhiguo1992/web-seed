@@ -79,6 +79,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	c.tableDocs = map[string]map[string]any{}
 	c.objectNames = map[string]string{}
 	c.inheritedCols = map[string]map[string]bool{}
+	c.constraintIDs = map[string]bool{}
 
 	// 基类固定单例：路径/ID 写死，不通过 targets 配置。
 	if doc, err := loadYAML(filepath.Join(c.root, baseContractPath)); err != nil {
@@ -592,6 +593,10 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 				c.rulef("constraint-fields", "%s: constraints[%d] (%s): unknown error code %s", rel, i, name, code)
 			}
 		}
+		if c.constraintIDs == nil {
+			c.constraintIDs = map[string]bool{}
+		}
+		c.constraintIDs[id+"."+name] = true
 		c.checkConstraintUsedBy(m, id, rel, i, name)
 	}
 
@@ -632,25 +637,63 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 	c.checkDoNotSpecificity(doc, rel, strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel)), table, allCols, constraintNames, indexNames)
 }
 
-// checkConstraintUsedBy 校验约束的 used_by：查询存在且是写本表的查询。
+// checkConstraintUsedBy 对账 constraints[].used_by：它由 gen-graph 从
+// query.constraints[] 反向生成，这里只校验声明值自洽且与生成集合一致。
 func (c *Checker) checkConstraintUsedBy(m map[string]any, tableID, rel string, i int, name string) {
 	raw, present := m["used_by"]
-	if !present || raw == nil {
-		return // 缺失/空列表由 schema.required 与 min_items 报出
+	declared := stringSet(asList(raw))
+	if !present || len(declared) == 0 {
+		return // 缺失/空列表由 schema.required 与 schema.generated-range 报出
 	}
-	for _, x := range asList(raw) {
-		qid, ok := x.(string)
-		if !ok || qid == "" || !strings.HasPrefix(qid, "data.queries.") {
-			c.rulef("constraint-used-by", "%s: constraints[%d] (%s): used_by must be data.queries.* item IDs, got %v", rel, i, name, x)
+	bad := false
+	for qid := range declared {
+		if !strings.HasPrefix(qid, "data.queries.") {
+			c.rulef("constraint-used-by", "%s: constraints[%d] (%s): used_by must be data.queries.* item IDs, got %s", rel, i, name, qid)
+			bad = true
 			continue
 		}
 		q := c.queries[qid]
 		if q == nil {
 			c.rulef("constraint-used-by", "%s: constraints[%d] (%s): unknown query %s", rel, i, name, qid)
+			bad = true
 			continue
 		}
 		if !containsString(q.Writes, tableID) {
 			c.rulef("constraint-used-by", "%s: constraints[%d] (%s): query %s does not write table %s", rel, i, name, qid, tableID)
+			bad = true
+		}
+	}
+	if bad {
+		return
+	}
+	want := c.constraintRefs[tableID+"."+name]
+	if !sameSet(declared, want) {
+		c.rulef("constraint-used-by", "%s: constraints[%d] (%s): used_by must be %v, got %v", rel, i, name, sortedKeys(want), sortedKeys(declared))
+	}
+}
+
+// checkConstraintRefs 校验 query.constraints[] 指向写表上的已声明 ck_ 约束。
+func (c *Checker) checkConstraintRefs() {
+	for cid, queries := range c.constraintRefs {
+		idx := strings.Index(cid, ".ck_")
+		if idx < 0 || !strings.HasPrefix(cid, "data.tables.") {
+			c.rulef("constraint-ref", "malformed constraint ID %s", cid)
+			continue
+		}
+		tableID := cid[:idx]
+		if !c.constraintIDs[cid] {
+			c.rulef("constraint-ref", "%s: unknown constraint", cid)
+			continue
+		}
+		for qid := range queries {
+			q := c.queries[qid]
+			if q == nil {
+				c.rulef("constraint-ref", "%s: unknown query %s", cid, qid)
+				continue
+			}
+			if !containsString(q.Writes, tableID) {
+				c.rulef("constraint-ref", "%s: query %s does not write table %s", cid, qid, tableID)
+			}
 		}
 	}
 }

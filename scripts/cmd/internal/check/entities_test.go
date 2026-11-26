@@ -561,6 +561,7 @@ func TestEntityValidationUsedBy(t *testing.T) {
 		methodReturns:  map[string]map[string]returnType{"cap.services.x.get": {}},
 		serviceQueries: map[string]map[string]bool{"cap.services.x.get": {"data.queries.x.get": true}},
 		queryTables:    map[string]map[string]bool{"data.queries.x.get": {"data.tables.x": true}},
+		validationRefs: map[string]map[string]bool{"data.entities.x.v": {"cap.services.x.get": true}},
 	}
 	e := &entityInfo{ID: "data.entities.x", Rel: "x.yaml", Primary: "data.tables.x", Doc: map[string]any{
 		"validation": []any{map[string]any{

@@ -45,6 +45,8 @@ type Snapshot struct {
 	Entities    map[string]EntityUsedBy
 	Queries     map[string][]string // query ID → service item IDs
 	Enums       map[string][]string // enum ID → entity/capability IDs
+	Validations map[string][]string // validation ID → service item IDs
+	Constraints map[string][]string // constraint ID → query IDs
 	TableFiles  map[string]string
 	EntityFiles map[string]string
 	QueryFiles  map[string][]string // query file → query IDs in item order
@@ -151,6 +153,8 @@ func Compute(root string) (*Snapshot, error) {
 	entityFiles := map[string]string{}
 	queryFiles := map[string][]string{}
 	queryServices := map[string]map[string]bool{}
+	validationServices := map[string]map[string]bool{}
+	constraintQueries := map[string]map[string]bool{}
 
 	tableIDTemplate := contractspec.Targets{ID: tableTarget.id}
 	tableDocs := map[string]map[string]any{}
@@ -181,6 +185,16 @@ func Compute(root string) (*Snapshot, error) {
 			}
 		}
 		tableUnique[id] = unique
+	}
+	// constraints：先登记全部声明的约束，再接收 query.constraints 入边。
+	for id, doc := range tableDocs {
+		for _, raw := range asList(doc["constraints"]) {
+			m, _ := asMap(raw)
+			name, _ := m["name"].(string)
+			if name != "" {
+				constraintQueries[id+"."+name] = map[string]bool{}
+			}
+		}
 	}
 	// table.referenced_by：把每条列级 references 的源列登记到目标表。
 	for id, doc := range tableDocs {
@@ -228,6 +242,16 @@ func Compute(root string) (*Snapshot, error) {
 				return nil, fmt.Errorf("%s: model.tables %s is not a data.tables contract", entityFiles[id], table)
 			}
 			ts.entities[id] = true
+		}
+	}
+	// validation：先登记全部声明的校验，再接收 service step.validations 入边。
+	for id, doc := range entityDocs {
+		for _, raw := range asList(doc["validation"]) {
+			m, _ := asMap(raw)
+			name, _ := m["name"].(string)
+			if name != "" {
+				validationServices[id+"."+name] = map[string]bool{}
+			}
 		}
 	}
 	// model.included_by：把关系字段的来源实体登记到目标实体。
@@ -282,6 +306,16 @@ func Compute(root string) (*Snapshot, error) {
 			seenQueries[qid] = rel(root, f)
 			fileRel := rel(root, f)
 			queryFiles[fileRel] = append(queryFiles[fileRel], qid)
+			for _, rawC := range asList(m["constraints"]) {
+				cid, _ := rawC.(string)
+				if cid == "" {
+					continue
+				}
+				if constraintQueries[cid] == nil {
+					return nil, fmt.Errorf("%s: constraints %s is not a data.tables.*.ck_* constraint", fileRel, cid)
+				}
+				constraintQueries[cid][qid] = true
+			}
 			for _, t := range queryTableRefs(m) {
 				if ts := tables[t]; ts != nil {
 					ts.queries[qid] = true
@@ -323,6 +357,16 @@ func Compute(root string) (*Snapshot, error) {
 						qids = append(qids, qid)
 					}
 				}
+				for _, rawV := range asList(step["validations"]) {
+					vid, _ := rawV.(string)
+					if vid == "" {
+						continue
+					}
+					if validationServices[vid] == nil {
+						return nil, fmt.Errorf("%s: validations %s is not a data.entities.* validation", rel(root, f), vid)
+					}
+					validationServices[vid][serviceID] = true
+				}
 				for _, qid := range qids {
 					if queryServices[qid] == nil {
 						queryServices[qid] = map[string]bool{}
@@ -342,6 +386,8 @@ func Compute(root string) (*Snapshot, error) {
 		Tables:      map[string]TableUsedBy{},
 		Entities:    map[string]EntityUsedBy{},
 		Queries:     map[string][]string{},
+		Validations: map[string][]string{},
+		Constraints: map[string][]string{},
 		TableFiles:  tableFiles,
 		EntityFiles: entityFiles,
 		QueryFiles:  queryFiles,
@@ -354,6 +400,12 @@ func Compute(root string) (*Snapshot, error) {
 	}
 	for id, qs := range queryServices {
 		snap.Queries[id] = sortedKeys(qs)
+	}
+	for id, ss := range validationServices {
+		snap.Validations[id] = sortedKeys(ss)
+	}
+	for id, qs := range constraintQueries {
+		snap.Constraints[id] = sortedKeys(qs)
 	}
 	return snap, nil
 }
@@ -424,6 +476,27 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 			changed = append(changed, file)
 		}
 	}
+	for _, id := range sortedFileKeys(s.TableFiles) {
+		file := s.TableFiles[id]
+		doc, err := loadYAML(filepath.Join(root, file))
+		if err != nil {
+			return changed, err
+		}
+		for _, raw := range asList(doc["constraints"]) {
+			m, _ := asMap(raw)
+			name, _ := m["name"].(string)
+			if name == "" {
+				continue
+			}
+			ok, err := syncItemFieldBlock(filepath.Join(root, file), "constraints", "name", name, "used_by", s.Constraints[id+"."+name])
+			if err != nil {
+				return changed, err
+			}
+			if ok {
+				changed = append(changed, file)
+			}
+		}
+	}
 	for _, id := range sortedFileKeys(s.EntityFiles) {
 		file := s.EntityFiles[id]
 		ok, err := syncNestedRelationListFile(filepath.Join(root, file), "model", "tables", "includes", s.Entities[id].Includes, true)
@@ -446,6 +519,27 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 		}
 		if ok {
 			changed = append(changed, file)
+		}
+	}
+	for _, id := range sortedFileKeys(s.EntityFiles) {
+		file := s.EntityFiles[id]
+		doc, err := loadYAML(filepath.Join(root, file))
+		if err != nil {
+			return changed, err
+		}
+		for _, raw := range asList(doc["validation"]) {
+			m, _ := asMap(raw)
+			name, _ := m["name"].(string)
+			if name == "" {
+				continue
+			}
+			ok, err := syncItemFieldBlock(filepath.Join(root, file), "validation", "name", name, "used_by", s.Validations[id+"."+name])
+			if err != nil {
+				return changed, err
+			}
+			if ok {
+				changed = append(changed, file)
+			}
 		}
 	}
 	for _, file := range sortedQueryFiles(s.QueryFiles) {
@@ -515,6 +609,18 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		if !queriesPresent || !sameSet(got, want) {
 			drift = append(drift, fmt.Sprintf("%s: table.queries must be %v, got %v", file, want, got))
 		}
+		for _, raw := range asList(doc["constraints"]) {
+			m, _ := asMap(raw)
+			name, _ := m["name"].(string)
+			if name == "" {
+				continue
+			}
+			gotUsed := stringList(m["used_by"])
+			wantUsed := s.Constraints[id+"."+name]
+			if !sameSet(gotUsed, wantUsed) {
+				drift = append(drift, fmt.Sprintf("%s: constraints[%s].used_by must be %v, got %v", file, name, wantUsed, gotUsed))
+			}
+		}
 	}
 	for _, id := range sortedFileKeys(s.EntityFiles) {
 		file := s.EntityFiles[id]
@@ -536,6 +642,18 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		want := s.Entities[id].Queries
 		if !queriesPresent || !sameSet(got, want) {
 			drift = append(drift, fmt.Sprintf("%s: model.queries must be %v, got %v", file, want, got))
+		}
+		for _, raw := range asList(doc["validation"]) {
+			m, _ := asMap(raw)
+			name, _ := m["name"].(string)
+			if name == "" {
+				continue
+			}
+			gotUsed := stringList(m["used_by"])
+			wantUsed := s.Validations[id+"."+name]
+			if !sameSet(gotUsed, wantUsed) {
+				drift = append(drift, fmt.Sprintf("%s: validation[%s].used_by must be %v, got %v", file, name, wantUsed, gotUsed))
+			}
 		}
 	}
 	for _, file := range sortedQueryFiles(s.QueryFiles) {

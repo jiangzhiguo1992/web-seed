@@ -132,7 +132,7 @@ fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^ck_[a-z][a-z0-9_]*$', description: "约束名" }
       - { name: expr, type: _types.basics.string, soft: true, required: true, description: "CHECK 表达式" }
       - { name: on_violation, type: _types.basics.string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "违反约束时映射的错误码" }
-      - { name: used_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "依赖该约束的写查询 ID" }
+      - { name: used_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "依赖该约束的写查询 ID；至少一个，由 gen-graph 写入" }
 
   - name: indexes
     type: _types.structures.list<_types.structures.object>
@@ -165,7 +165,8 @@ rules:
   - { id: column-type-supported, text: "表列类型必须能被唯一引擎生成确定性 DDL：禁止 _types.basics.any；auto_increment 只允许 integer 列并选择 smallserial/serial/bigserial，且与 default/default_sql 互斥、要求 nullable:false", implemented_by: [ column-type-supported ] }
   - { id: index-live-only, text: "live_only 只有 unique 索引可设为 true；设为 true 时要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
   - { id: constraint-fields, text: "on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
-  - { id: constraint-used-by, text: "constraints[].used_by 必须是非空去重的 data.queries.* 写查询 ID，且查询写本表", implemented_by: [ constraint-used-by ] }
+  - { id: constraint-ref, text: "query.constraints[] 必须指向查询写表上的 ck_ 约束", implemented_by: [ constraint-ref ] }
+  - { id: constraint-used-by, text: "constraints[].used_by 必须等于 query.constraints[] 中引用本约束的查询集合；至少一个；由 gen-graph 写入，禁止手改", implemented_by: [ constraint-used-by ] }
   - { id: enum-code-literal, text: "表 CHECK 以 = / <> / != / IN / NOT IN 引用枚举列时，字面量必须是该枚举的 code；范围比较不校验", implemented_by: [ enum-code-literal ] }
   - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边；非空由字段 min_items 保证", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }

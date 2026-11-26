@@ -112,15 +112,15 @@ constraints:
     expr: "status IN (0, 1, 2, 3, 4, 5)"
     on_violation: platform.errors.COMMON_INTERNAL
     used_by:
-      - data.queries.verification.create_verification
-      - data.queries.verification.mark_verification_sent
       - data.queries.verification.consume_verification
-      - data.queries.verification.increment_verification_attempt
+      - data.queries.verification.create_verification
       - data.queries.verification.expire_stale_verifications
+      - data.queries.verification.increment_verification_attempt
+      - data.queries.verification.mark_verification_sent
+      - data.queries.verification.revoke_active_verifications_by_account
+      - data.queries.verification.revoke_active_verifications_by_auth
       - data.queries.verification.revoke_exhausted_verifications
       - data.queries.verification.set_verification_status
-      - data.queries.verification.revoke_active_verifications_by_auth
-      - data.queries.verification.revoke_active_verifications_by_account
 
   - name: ck_verification_expire_order
     expr: "expire_at > created_at"

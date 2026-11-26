@@ -528,6 +528,8 @@ func isGeneratedDriftError(e string) bool {
 		"[enum-used-by]",
 		"[entity-included-by]",
 		"[entity-used-by]",
+		"[entity-validation-used-by]",
+		"[constraint-used-by]",
 		"[table-entities]",
 		"[table-queries-generated]",
 		"[table-referenced-by]",

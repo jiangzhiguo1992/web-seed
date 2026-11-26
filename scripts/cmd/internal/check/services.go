@@ -194,7 +194,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		}
 		c.checkServiceStateGate(step, rel, stepID)
 		allowed := map[string]bool{
-			"id": true, "kind": true, "summary": true, "state_gate": true, "errors": true, "lifecycles": true, "goto": true,
+			"id": true, "kind": true, "summary": true, "state_gate": true, "errors": true, "lifecycles": true, "validations": true, "goto": true,
 		}
 		for _, field := range stepKindFields[kind] {
 			allowed[field] = true

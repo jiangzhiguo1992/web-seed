@@ -1186,42 +1186,95 @@ func (c *Checker) checkEntityValidation(e *entityInfo) {
 				c.rulef("entity-validation", "%s: unknown error code %s", where, code)
 			}
 		}
-		c.checkEntityValidationUsedBy(e, m, where)
+		c.checkEntityValidationUsedBy(e, m, where, name)
 	}
 }
 
-// checkEntityValidationUsedBy 要求 used_by 是消费该实体主表的 service。
-func (c *Checker) checkEntityValidationUsedBy(e *entityInfo, m map[string]any, where string) {
+// checkEntityValidationUsedBy 对账 validation.used_by：它由 gen-graph 从
+// service step 的 validations[] 反向生成，这里只校验声明值自洽且与生成集合一致。
+func (c *Checker) checkEntityValidationUsedBy(e *entityInfo, m map[string]any, where, name string) {
 	raw, present := m["used_by"]
-	if !present || raw == nil {
-		return // 缺失/空列表由 schema.required 与 min_items 报出
+	declared := stringSet(asList(raw))
+	if !present || len(declared) == 0 {
+		return // 缺失/空列表由 schema.required 与 schema.generated-range 报出
 	}
-	for _, x := range asList(raw) {
-		sid, ok := x.(string)
-		if !ok || !strings.HasPrefix(sid, "cap.services.") {
-			c.rulef("entity-validation-used-by", "%s: used_by must be cap.services.* item IDs, got %v", where, x)
+	bad := false
+	for sid := range declared {
+		if !strings.HasPrefix(sid, "cap.services.") {
+			c.rulef("entity-validation-used-by", "%s: used_by must be cap.services.* item IDs, got %s", where, sid)
+			bad = true
 			continue
 		}
 		if c.methodReturns != nil {
 			if _, found := c.methodReturns[sid]; !found {
 				c.rulef("entity-validation-used-by", "%s: unknown service %s", where, sid)
+				bad = true
 				continue
 			}
 		}
-		if c.serviceQueries == nil {
-			continue
-		}
-		ok = false
-		for qid := range c.serviceQueries[sid] {
-			if c.queryTables[qid][e.Primary] {
-				ok = true
-				break
-			}
-		}
-		if !ok {
+		if c.serviceQueries != nil && !c.serviceQueriesTable(sid, e.Primary) {
 			c.rulef("entity-validation-used-by", "%s: service %s does not query entity table %s", where, sid, e.Primary)
+			bad = true
 		}
 	}
+	if bad {
+		return
+	}
+	want := c.validationRefs[e.ID+"."+name]
+	if !sameSet(declared, want) {
+		c.rulef("entity-validation-used-by", "%s: used_by must be %v, got %v", where, sortedKeys(want), sortedKeys(declared))
+	}
+}
+
+// serviceQueriesTable 报告 service 项是否直接查询了指定表。
+func (c *Checker) serviceQueriesTable(sid, tableID string) bool {
+	for qid := range c.serviceQueries[sid] {
+		if c.queryTables[qid][tableID] {
+			return true
+		}
+	}
+	return false
+}
+
+// checkValidationRefs 校验 service step 的 validations[] 引用存在且服务查询主表。
+func (c *Checker) checkValidationRefs() {
+	for vid, services := range c.validationRefs {
+		e, _, ok := c.lookupValidation(vid)
+		if !ok {
+			c.rulef("entity-validation-ref", "unknown validation %s", vid)
+			continue
+		}
+		for sid := range services {
+			if c.methodReturns != nil {
+				if _, found := c.methodReturns[sid]; !found {
+					c.rulef("entity-validation-ref", "%s: unknown service %s", vid, sid)
+					continue
+				}
+			}
+			if !c.serviceQueriesTable(sid, e.Primary) {
+				c.rulef("entity-validation-ref", "%s: service %s does not query entity table %s", vid, sid, e.Primary)
+			}
+		}
+	}
+}
+
+// lookupValidation 解析 data.entities.<entity>.<name> 并确认校验项存在。
+func (c *Checker) lookupValidation(vid string) (*entityInfo, string, bool) {
+	parts := strings.Split(vid, ".")
+	if len(parts) != 4 || parts[0] != "data" || parts[1] != "entities" {
+		return nil, "", false
+	}
+	e := c.entities["data.entities."+parts[2]]
+	if e == nil {
+		return nil, "", false
+	}
+	for _, raw := range asList(e.Doc["validation"]) {
+		m, _ := asMap(raw)
+		if n, _ := m["name"].(string); n == parts[3] {
+			return e, n, true
+		}
+	}
+	return nil, "", false
 }
 
 // checkEntityUsedBy 在 query 解析完成后对账 model.queries。

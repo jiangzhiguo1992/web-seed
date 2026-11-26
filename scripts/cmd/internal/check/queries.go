@@ -73,6 +73,7 @@ type queryInfo struct {
 	Caches      []string
 	Archive     []queryArchiveRef
 	Errors      []string
+	Constraints []string
 	UsedBy      []string
 }
 
@@ -108,6 +109,7 @@ func (c *Checker) loadQueryIndex(schema *Schema) {
 	c.queryIDs = map[string]string{}
 	c.queryTables = map[string]map[string]bool{}
 	c.queryDupIDs = map[string]bool{}
+	c.constraintRefs = map[string]map[string]bool{}
 	if schema.Targets.Dir == "" || schema.Targets.Glob == "" {
 		return
 	}
@@ -142,6 +144,12 @@ func (c *Checker) loadQueryIndex(schema *Schema) {
 			c.queryOrder = append(c.queryOrder, q.ID)
 			c.queryIDs[q.ID] = rel
 			c.queryTables[q.ID] = q.tableSet()
+			for _, cid := range q.Constraints {
+				if c.constraintRefs[cid] == nil {
+					c.constraintRefs[cid] = map[string]bool{}
+				}
+				c.constraintRefs[cid][q.ID] = true
+			}
 		}
 	}
 }
@@ -193,6 +201,7 @@ func parseQuery(m map[string]any, rel, fileID, owner string) *queryInfo {
 		q.Archive = append(q.Archive, ref)
 	}
 	q.Errors = stringList(m["errors"])
+	q.Constraints = stringList(m["constraints"])
 	q.UsedBy = stringList(m["used_by"])
 	for _, raw := range asList(m["params"]) {
 		pm, ok := asMap(raw)

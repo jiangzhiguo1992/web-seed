@@ -104,7 +104,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 | 命令 | 作用 |
 |---|---|
 | `make contract-new type=<type> name=<name> [module=...] [table=...] [service=...]` | 按 `_meta/<type>.yaml` 渲染最小骨架；`contract-new` 不支持的类型需手写 |
-| `make gen-graph` | 写回 `table.queries` / `model.queries` / `query.used_by` / `enums[].used_by` / 规则与生命周期锚点 |
+| `make gen-graph` | 写回 `table.entities` / `table.queries` / `model.queries` / `query.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / 规则与生命周期锚点 |
 | `make gen-graph-check` | 只校验生成字段是否最新 |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / 引用 / owner / 数据流 / 类型级规则 |
 | `make audit-types` | 审计全部契约 `type` 键：`_types.*` / 外部引用 / 显式例外，输出计数并以非零退出码报告裸类型 |
@@ -179,7 +179,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 
 - 不要重建 `contracts/_meta/schema/` 或 `templates/`；不要在 `_meta` 之外手写第二份字段模板。
 - 不要手写生成字段（`table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` /
-  `query.used_by` / `enums[].used_by` / `feature.rules.implemented_by` / 生命周期锚点 / `topics[].publish.emitted_by`）。
+  `query.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / `feature.rules.implemented_by` / 生命周期锚点 / `topics[].publish.emitted_by`）。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`。
 - 不要在 checker 里解析 `CHECK expr` 的 SQL 语义；只校验可判定的字面量。

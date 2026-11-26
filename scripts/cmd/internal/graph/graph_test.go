@@ -51,6 +51,11 @@ table:
   extends: [ data.tables.base ]
   entities: [ data.entities.e1 ]
   queries: []
+constraints:
+  - name: ck_a_code
+    expr: "code IS NOT NULL"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by: []
 `)
 	writeFixture(t, root, "contracts/data/tables/b.yaml", `# table b
 id: data.tables.b
@@ -73,6 +78,11 @@ model:
   included_by: []
 fields:
   - { name: E2, type: data.entities.e2, source: { join: { from: data.tables.a.col.id, to: data.tables.b.col.id } }, description: "e2" }
+validation:
+  - name: v
+    expr: "id > 0"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by: []
 `)
 	writeFixture(t, root, "contracts/data/entities/e2.yaml", `# entity e2
 id: data.entities.e2
@@ -89,6 +99,7 @@ queries:
     returns:
       - { name: e1, kind: entity, type: data.entities.e1 }
     tables: [ data.tables.a ]
+    constraints: [ data.tables.a.ck_a_code ]
     used_by: []
   - name: GetB
     returns:
@@ -103,6 +114,7 @@ services:
       - id: load
         kind: logic
         query: data.queries.q.get_a
+        validations: [ data.entities.e1.v ]
 `)
 	return root
 }
@@ -124,6 +136,12 @@ func TestCompute(t *testing.T) {
 	}
 	if got := snap.Tables["data.tables.b"].Entities; len(got) != 1 || got[0] != "data.entities.e2" {
 		t.Fatalf("table b entities = %v", got)
+	}
+	if got := snap.Constraints["data.tables.a.ck_a_code"]; len(got) != 1 || got[0] != "data.queries.q.get_a" {
+		t.Fatalf("constraint used_by = %v", got)
+	}
+	if got := snap.Validations["data.entities.e1.v"]; len(got) != 1 || got[0] != "cap.services.x.get" {
+		t.Fatalf("validation used_by = %v", got)
 	}
 	if got := snap.Tables["data.tables.b"].References; len(got) != 1 || got[0] != "data.tables.a.col.id" {
 		t.Fatalf("table b references = %v", got)
@@ -228,6 +246,9 @@ func TestWriteAndCheck(t *testing.T) {
 	if !strings.Contains(string(a), "referenced_by:\n    - data.tables.b.col.account_id") {
 		t.Fatalf("table a referenced_by not written:\n%s", a)
 	}
+	if !strings.Contains(string(a), "used_by:\n      - data.queries.q.get_a") {
+		t.Fatalf("constraint used_by not written:\n%s", a)
+	}
 	b, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/b.yaml"))
 	if !strings.Contains(string(b), "references:\n    - data.tables.a.col.id") {
 		t.Fatalf("table b references not written:\n%s", b)
@@ -244,6 +265,9 @@ func TestWriteAndCheck(t *testing.T) {
 	}
 	if !strings.Contains(string(e1), "queries:\n    - data.queries.q.get_a") {
 		t.Fatalf("entity e1 queries not written:\n%s", e1)
+	}
+	if !strings.Contains(string(e1), "used_by:\n      - cap.services.x.get") {
+		t.Fatalf("validation used_by not written:\n%s", e1)
 	}
 	e2, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e2.yaml"))
 	if !strings.Contains(string(e2), "includes: []") {

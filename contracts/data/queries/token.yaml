@@ -29,6 +29,8 @@ queries:
       - { name: row, kind: entity, type: data.entities.token }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.token.ck_token_expire_order
     index_ref:
       - { index: data.tables.token.uq_token_access_hash, columns: [ access_token_hash ] }
       - { index: data.tables.token.uq_token_refresh_hash, columns: [ refresh_token_hash ] }
@@ -92,6 +94,10 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.AUTH_TOKEN_INVALID
+    constraints:
+      - data.tables.token.ck_token_replaced_by_self
+      - data.tables.token.ck_token_revoke_reason_consistent
+      - data.tables.token.ck_token_revoked_consistent
     index_ref:
       - { index: data.tables.token.uq_token_refresh_hash, columns: [ refresh_token_hash ] }
     used_by:
@@ -113,6 +119,9 @@ queries:
       - { name: affected_rows, kind: affected_rows }
       - { name: err, kind: error }
     errors: [ ]
+    constraints:
+      - data.tables.token.ck_token_revoke_reason_consistent
+      - data.tables.token.ck_token_revoked_consistent
     index_ref:
       - { index: data.tables.token.idx_token_account_status, columns: [ deleted_at, account_id, status ] }
     used_by:

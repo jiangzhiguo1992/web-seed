@@ -481,10 +481,15 @@ func TestConstraintShapeFromMeta(t *testing.T) {
 }
 
 func TestConstraintUsedBy(t *testing.T) {
-	c := &Checker{queries: map[string]*queryInfo{
-		"data.queries.x.read":  {ID: "data.queries.x.read", Targets: []string{"data.tables.x"}},
-		"data.queries.x.write": {ID: "data.queries.x.write", Targets: []string{"data.tables.x"}, Writes: []string{"data.tables.x"}},
-	}}
+	c := &Checker{
+		queries: map[string]*queryInfo{
+			"data.queries.x.read":  {ID: "data.queries.x.read", Targets: []string{"data.tables.x"}},
+			"data.queries.x.write": {ID: "data.queries.x.write", Targets: []string{"data.tables.x"}, Writes: []string{"data.tables.x"}},
+		},
+		constraintRefs: map[string]map[string]bool{
+			"data.tables.x.ck_x_code": {"data.queries.x.write": true},
+		},
+	}
 	doc := minimalTableDoc()
 	doc["constraints"] = []any{map[string]any{
 		"name": "ck_x_code", "expr": "code IS NOT NULL",
@@ -514,6 +519,17 @@ func TestConstraintUsedBy(t *testing.T) {
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown query") {
 		t.Fatalf("missing query accepted as constraint used_by: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.constraintRefs = map[string]map[string]bool{}
+	doc["constraints"] = []any{map[string]any{
+		"name": "ck_x_code", "expr": "code IS NOT NULL",
+		"used_by": []any{"data.queries.x.write"},
+	}}
+	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
+	if !strings.Contains(strings.Join(c.errs, "\n"), "used_by must be []") {
+		t.Fatalf("generated drift not reported: %v", c.errs)
 	}
 }
 

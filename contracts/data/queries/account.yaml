@@ -93,6 +93,8 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_NUMBER_TAKEN
+    constraints:
+      - data.tables.account.ck_account_deleted_consistent
     index_ref:
       - { index: data.tables.account.uq_account_number, columns: [ number ] }
     used_by:
@@ -132,6 +134,8 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    constraints:
+      - data.tables.account.ck_account_deleted_consistent
     index_ref:
       - { index: data.tables.account.pk, columns: [ id ] }
     used_by:
@@ -153,6 +157,8 @@ queries:
       - { name: err, kind: error }
     errors:
       - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
+    constraints:
+      - data.tables.account.ck_account_deleted_consistent
     index_ref:
       - { index: data.tables.account.pk, columns: [ id ] }
     used_by:

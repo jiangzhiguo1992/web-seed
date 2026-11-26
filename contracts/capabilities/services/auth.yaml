@@ -114,6 +114,8 @@ services:
           - { name: username, type: _types.basics.string, description: "邮箱本地部分" }
           - { name: domain, type: _types.basics.string, description: "邮箱域名" }
         errors: [ ]
+        validations:
+          - data.entities.auth_email.domain_parts
         rules: [ ]
         goto: get_auth_email_by_username_domain
       - id: get_auth_pwd_by_username
@@ -191,6 +193,8 @@ services:
           - platform.errors.AUTH_INVALID_CREDENTIALS
           - platform.errors.ACCOUNT_SUSPENDED
           - platform.errors.AUTH_LOCKED
+        validations:
+          - data.entities.auth_pwd.lock_consistency
         rules:
           - { rule: feature.rules.auth.auth_login_requires_verified }
           - { rule: feature.rules.auth.auth_login_rejects_pending_account }
@@ -992,6 +996,8 @@ services:
           - { name: tld, type: _types.basics.string, description: "顶级域" }
         errors:
           - platform.errors.AUTH_EMAIL_INVALID
+        validations:
+          - data.entities.auth_email.domain_parts
         rules: [ ]
         goto: replace_soft_delete
       - id: replace_soft_delete
@@ -1059,6 +1065,8 @@ services:
           - { name: tld, type: _types.basics.string, description: "顶级域" }
         errors:
           - platform.errors.AUTH_EMAIL_INVALID
+        validations:
+          - data.entities.auth_email.domain_parts
         rules: [ ]
         goto: create_auth_email
       - id: create_auth_email

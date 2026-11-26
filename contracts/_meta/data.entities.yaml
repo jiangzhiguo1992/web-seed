@@ -119,7 +119,7 @@ fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "校验名" }
       - { name: expr, type: _types.basics.string, soft: true, required: true, description: "布尔表达式文本" }
       - { name: on_violation, type: _types.basics.string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "失败错误码" }
-      - { name: used_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "消费该不变量的 service 项 ID" }
+      - { name: used_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "消费该不变量的 service 项 ID；至少一个，由 gen-graph 写入" }
 
 rules:
   - { id: entity-base-file, text: "基类契约固定位于 contracts/data/entities/_base.yaml，ID 固定为 data.entities.base", implemented_by: [ entity-base-file ] }
@@ -147,7 +147,8 @@ rules:
   - { id: entity-relation-via, text: "source.join.from 必须属于当前 entity 的表；source.join.to 必须属于关系字段 type 映射的表；两列类型族必须一致，且必须由列级 references 相连（一端引用另一端）；through 存在时，through.table 必须是物理表，through.from 必须引用 source.join.from，through.to 必须引用 source.join.to，且中间表两列都必须有列级 references", implemented_by: [ entity-relation-via ] }
   - { id: entity-relation-cardinality, text: "关系基数由关联表的 references/referenced_by 与唯一索引推断：两端唯一 one_to_one；from 唯一 one_to_many；to 唯一 many_to_one；through 存在 many_to_many；两端都不唯一且无 through 则不允许；不同关系字段可指向同一目标实体，各自独立推断基数", implemented_by: [ entity-relation-cardinality ] }
   - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；on_violation 必须存在", implemented_by: [ entity-validation ] }
-  - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
+  - { id: entity-validation-ref, text: "service step 的 validations[] 必须指向存在的 data.entities.<entity>.<name>，且该 service 必须查询本实体主表", implemented_by: [ entity-validation-ref ] }
+  - { id: entity-validation-used-by, text: "validation.used_by 必须等于 service steps 中引用本不变量 ID 的 service 项集合；至少一个；由 gen-graph 写入，禁止手改", implemented_by: [ entity-validation-used-by ] }
   - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入；非空由字段 min_items 保证", implemented_by: [ entity-used-by ] }
   - { id: entity-included-by, text: "model.includes 与 model.included_by 由 gen-graph 写入，禁止手改；每项是 {field, entity, cardinality}（included_by 的 field 是来源实体的关系字段）：includes 记录本实体每个关系字段到目标的基数，included_by 记录本实体到来源的反向基数；两侧必须互为反向且与关系字段、关联表唯一索引一致；(entity, field) 不得重复", implemented_by: [ entity-included-by ] }
   - { id: entity-relation-arity, text: "关系基数必须与类型形状一致：one_to_many/many_to_many 用 _types.structures.list<data.entities.*>，one_to_one/many_to_one 用单个 data.entities.*", implemented_by: [ entity-relation-arity ] }
