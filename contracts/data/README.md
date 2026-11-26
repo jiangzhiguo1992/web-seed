@@ -31,7 +31,7 @@ feature ──> capabilities ──> data
 | `queries/<scope>.yaml` | 能怎么读写 | 入参、返回、目标表、索引/缓存/归档引用 | 不是 SQL |
 | `enums/<module>.yaml` | 值是什么 | 跨端词汇：按 owner_module 拆分，integer `code` ↔ 名称 | 不是表约束 |
 | `storage.yaml` | 物理侧事实 | 引擎归属、扁平保留、缓存、归档（含能否回迁） | 不是部署配置，也不是索引或视图 |
-| `types.yaml` | 值类型叫什么 | 项目级标量约束：family + 固定参数 | 不是表结构，也不是枚举 |
+| `types.yaml` | 值类型叫什么 | 项目级标量约束：type + 固定参数 | 不是表结构，也不是枚举 |
 
 本项目固定 `supported_engines: [postgres]`：PostgreSQL 是唯一权威表引擎，Redis 只作为 `caches` 的非权威副本。
 
@@ -116,7 +116,7 @@ tables / entities / queries ──(type)──>  types
 
 时间列统一用 `timestamp`（应用层只处理 UTC），`datetime` 族不使用。**（`[评审]`）**
 
-实体 ID 与外键 ID 统一用 `_types.basics.id`（integer，bits 64）；分页偏移、计数、状态码等非 ID 整数用 `_types.basics.integer.32`（bits 32）。**（`[评审]`）**
+实体 ID 与外键 ID 统一用 `_types.basics.id`（对应 `_types.basics.integer.64`）；分页偏移、计数、状态码等非 ID 整数用 `_types.basics.integer.32`。**（`[评审]`）**
 
 ### 4.2 索引与冗余
 

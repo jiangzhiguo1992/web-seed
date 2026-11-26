@@ -6,11 +6,19 @@ schema_version: 1
 stability: draft
 do_not:
   - "值类型只表达值域约束，不承载表名、列名或业务规则"
-  - "params 只能引用所属 family 在 contracts/_meta/_types.yaml 声明的参数"
+  - "params 只能引用所属 type 在 contracts/_meta/_types.yaml 声明的参数"
 
 custom_types:
+  id:
+    type: _types.basics.integer.64
+    description: "实体 ID / 外键 ID；64 位有符号整数；0 可用作无值哨兵"
+  byte_size:
+    type: _types.basics.integer.64
+    description: "字节数；64 位非负整数"
+    params:
+      min: 0
   account_number:
-    family: string
+    type: _types.basics.string
     description: "账号编号"
     params:
       min_len: 4
@@ -18,108 +26,97 @@ custom_types:
       pattern: "^[A-Za-z0-9_-]+$"
       normalize: "upper"
   account_nickname:
-    family: string
+    type: _types.basics.string
     description: "账号昵称"
     params:
       min_len: 1
       max_len: 100
   account_suspend_reason:
-    family: string
+    type: _types.basics.string
     description: "账号封禁原因"
     params:
       min_len: 1
       max_len: 200
   auth_identifier:
-    family: string
+    type: _types.basics.string
     description: "登录标识：用户名、邮箱或手机号"
     params:
       min_len: 1
       max_len: 254
   auth_username:
-    family: string
+    type: _types.basics.string
     description: "密码认证用户名"
     params:
       min_len: 1
       max_len: 254
       normalize: "lower"
   email_username:
-    family: string
+    type: _types.basics.string
     description: "邮箱本地部分"
     params:
       min_len: 1
       max_len: 64
       normalize: "lower"
   email_domain:
-    family: string
+    type: _types.basics.string
     description: "邮箱域名"
     params:
       min_len: 1
       max_len: 190
       normalize: "lower"
   phone_code:
-    family: string
+    type: _types.basics.string
     description: "国际区号"
     params:
       min_len: 2
       max_len: 8
       pattern: "^\\+[0-9]{1,4}$"
   phone_number:
-    family: string
+    type: _types.basics.string
     description: "手机号"
     params:
       min_len: 1
       max_len: 32
       pattern: "^[0-9]{1,32}$"
   device_id:
-    family: string
+    type: _types.basics.string
     description: "设备标识"
     params:
       max_len: 128
   page_offset:
-    family: integer
+    type: _types.basics.integer.32
     description: "分页偏移"
     params:
       min: 0
       default: 0
   page_limit:
-    family: integer
+    type: _types.basics.integer.32
     description: "分页大小"
     params:
       min: 1
       max: 100
       default: 20
   verification_target:
-    family: string
+    type: _types.basics.string
     description: "验证码接收目标"
     params:
       min_len: 1
       max_len: 320
   verification_code:
-    family: string
+    type: _types.basics.string
     description: "验证码"
     params:
       min_len: 4
       max_len: 12
   token_type:
-    family: string
+    type: _types.basics.string
     description: "令牌类型"
     params:
       pattern: "^Bearer$"
       default: "Bearer"
   money:
-    family: decimal
+    type: _types.basics.decimal
     description: "金额；必须用 decimal 族，禁止 float"
     params:
       precision: 19
       scale: 4
-  id:
-    family: integer
-    description: "实体 ID / 外键 ID；64 位有符号整数；0 可用作无值哨兵"
-    params:
-      bits: 64
-  byte_size:
-    family: integer
-    description: "字节数；64 位非负整数"
-    params:
-      bits: 64
-      min: 0
