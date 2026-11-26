@@ -1,10 +1,10 @@
-# HTTP 验收场景：确定性请求 → 响应 → 持久数据。
+# HTTP 验收场景：绑定 features 的流程与页面，确定性请求 → 响应 → 持久数据。
 
 id: meta.scenario.http
 contract: scenario.http
 title: "HTTP 验收场景"
 targets:
-  dir: "contracts/scenarios/http"
+  dir: "contracts/features/scenarios/http"
   glob: "*.yaml"
   id: "scenario.http.<file>"
   naming: "snake_case"
@@ -48,6 +48,9 @@ fields:
     item_fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "场景名；项 ID 为 scenario.http.<file>.<name>" }
       - { name: summary, type: _types.basics.string, required: true, description: "场景说明" }
+      - { name: flow, type: _types.basics.string, required: true, pattern: '^feature\.flows\.[a-z][a-z0-9_]*$', description: "被测流程；必须存在" }
+      - { name: pages, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^feature\.pages\.[a-z][a-z0-9_]*$', description: "场景覆盖的页面；必须属于该流程且是 operation 的 used_by" }
+      - { name: rules, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^feature\.flows\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "场景显式覆盖的流程规则；必须属于该流程" }
       - { name: operation, type: _types.basics.string, required: true, pattern: '^cap\.protocols\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "被测 HTTP operation" }
       - name: actor
         type: _types.structures.object
@@ -99,6 +102,6 @@ fields:
           - { name: events, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "期望发出的领域事件" }
 
 rules:
-  - { id: scenario-structure, text: "id 必须由 targets 派生；场景 name 在文件内唯一；每个场景必须有 operation 与 then.unchanged: strict", implemented_by: [ scenario-structure ] }
-  - { id: scenario-refs, text: "operation 必须是已存在的 cap.protocols.http.*；then.response.status 必须在该 operation 的有效 responses 中；role/permissions/events 必须存在", implemented_by: [ scenario-refs ] }
-  - { id: scenario-db, text: "given.db 与 then.db 的表 ID 必须存在且属于该 operation 的 service 链；每个场景必须覆盖链上表；then.db 只允许链上写表", implemented_by: [ scenario-db ] }
+  - { id: scenario-structure, text: "id 必须由 targets 派生；场景 name 在文件内唯一；每个场景必须有 flow/pages/operation 与 then.unchanged: strict", implemented_by: [ scenario-structure ] }
+  - { id: scenario-refs, text: "flow 必须是已存在的 feature.flows.*；pages 必须存在且属于该 flow 的步骤页面；每个 page 必须是该 operation 的 used_by；rules 必须属于该 flow；operation 必须是已存在的 cap.protocols.http.*；then.response.status 必须在该 operation 的有效 responses 中；role/permissions/events 必须存在", implemented_by: [ scenario-refs ] }
+  - { id: scenario-db, text: "given.db 与 then.db 的表 ID 必须存在且属于该 operation 的 service 链；每个场景必须覆盖链上表；then.db 只允许链上写表；只有 features/scenarios/** 允许引用 data.*", implemented_by: [ scenario-db ] }

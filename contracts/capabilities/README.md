@@ -2,7 +2,7 @@
 
 > 本组回答四件事：模块能提供哪些**可调用单元**（services）、实体状态如何随时间变化（lifecycles）、
 > 哪些**异步事实与任务**存在（events）、这些能力如何通过协议暴露（protocols）。
-> 业务规则在 `features/rules`，持久化形状在 `data`，入口策略在 `platform/security/access.yaml`。
+> 业务规则在 `features/flows`，持久化形状在 `data`，入口策略在 `platform/security/access.yaml`。
 
 **本文件只写**组级心智模型、放错层的判据、以及无法机器校验的组级约束。
 
@@ -24,7 +24,7 @@ features ──> capabilities ──> data
 
 - **对上游**：`features` 通过 service ID 使用能力（`capability`），通过 `available_when` 引用状态机动作；页面不描述实现。
 - **对下游**：service 的 `kind: query` step 落到 `data.queries`；写表由 query 反推，service 不单独声明。
-- **不属于本组**：业务规则 → `features/rules`；表 / 索引 / 查询形状 → `data`；入口权限 / 审计 / 限流 → `platform/security/access.yaml`；HTTP 信封 / 状态码 / header → `platform/http_conventions.yaml`。
+- **不属于本组**：业务规则 → `features/flows`；表 / 索引 / 查询形状 → `data`；入口权限 / 审计 / 限流 → `platform/security/access.yaml`；HTTP 信封 / 状态码 / header → `platform/http_conventions.yaml`。
 
 ---
 
@@ -77,12 +77,12 @@ events ──service──> services（subscribe / cron / dispatch）
 
 ### 3.2 禁止边
 
-- protocol 直接引用 `data.queries` / `feature.rules`：对外入口只能是 service。
+- protocol 直接引用 `data.queries` / `feature.flows`：对外入口只能是 service。
 - `kind: query` 引用其他模块的 query；跨模块必须走 `kind: service`。`[评审]`
 - service 调用图成环。`[强制: service-cycle]`
 - 异步 handler 再被 HTTP 绑定。`[强制: async-service]`
 - lifecycle 动作锚不到 service step，或 step 不回引该动作。`[强制: lifecycle-anchors]`
-- 在 capabilities 声明业务规则或持久化形状；两层已分别归 `features/rules` 与 `data`。
+- 在 capabilities 声明业务规则或持久化形状；两层已分别归 `features/flows` 与 `data`。
 
 ### 3.3 跨组引用
 
@@ -93,7 +93,7 @@ events ──service──> services（subscribe / cron / dispatch）
 | 错误码 | `platform/errors/*.yaml` | service step `errors`；protocol 只投影，不维护文案 |
 | 实体字段校验 | `data/entities/*.yaml` | step `validations[]`；`used_by` 由 `gen-graph` 反推 |
 | 应用包含哪些 HTTP 文件 | `contracts/project.yaml` 的 `apps` | `includes: [cap.protocols.http.*]` |
-| 验收场景 | `contracts/scenarios/http/*.yaml` | 按 HTTP 文件分组 |
+| 验收场景 | `contracts/features/scenarios/http/*.yaml` | 按 HTTP 文件分组；绑定 features flow/pages |
 
 ---
 
@@ -118,7 +118,7 @@ events ──service──> services（subscribe / cron / dispatch）
 
 ### 4.2 lifecycles：一个状态机，不是一组零散状态
 
-- 状态机属于能力层（`cap.lifecycles`），业务规则属于 `features/rules`；features 下不再建状态机。
+- 状态机属于能力层（`cap.lifecycles`），业务规则属于 `features/flows`；features 下不再建状态机。
 - 一文件 = 一个状态机；`subjects[]` 可列出共享同一状态机的多个 `{entity, field}`，必须同枚举、同 `owner_module`；同一 `(entity, field)` 只能被一份契约声明。`[强制: lifecycle-subject]` `[强制: lifecycle-dimension]`
 - 所有状态必须从 `initial` 可达；`final` 必填（没有终态写 `[]`）；`destroy` 可从任意非终态销毁。`[强制: lifecycle-structure]` `[强制: lifecycle-exhaustive]`
 - 幂等转换用 `from` 自环表达，不单独维护幂等列表。

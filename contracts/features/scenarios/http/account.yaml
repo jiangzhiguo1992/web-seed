@@ -11,6 +11,12 @@ do_not:
 scenarios:
   - name: create_success
     summary: "创建账号成功"
+    flow: feature.flows.account
+    pages: [ feature.pages.account_create ]
+    rules:
+      - feature.flows.account.number_format
+      - feature.flows.account.number_unique
+      - feature.flows.account.nickname_length
     operation: cap.protocols.http.account.create
     actor:
       anonymous: false
@@ -60,6 +66,8 @@ scenarios:
 
   - name: list_empty
     summary: "空列表"
+    flow: feature.flows.account
+    pages: [ feature.pages.account_list ]
     operation: cap.protocols.http.account.list
     actor:
       anonymous: false
@@ -93,6 +101,8 @@ scenarios:
 
   - name: get_not_found
     summary: "账号不存在"
+    flow: feature.flows.account
+    pages: [ feature.pages.account_detail ]
     operation: cap.protocols.http.account.get
     actor:
       anonymous: false

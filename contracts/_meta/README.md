@@ -25,7 +25,7 @@
 | `scenario.http.yaml` | HTTP 验收场景（请求/响应/持久数据差异） |
 | `feature.pages.yaml` | 页面契约；data/actions.params 对齐 service 输入 |
 | `feature.routes.yaml` | 路由与菜单；route/page/permission/layout 引用 |
-| `feature.rules.yaml` | 可执行业务规则；所有规则都是 error，违反即阻止提交 |
+| `feature.flows.yaml` | 用户功能流程：跨页步骤 + 步骤绑定的规则 + 内嵌规则；所有规则都是 error，违反即阻止提交 |
 | `platform.modules.yaml` | 模块注册表（owner_module 来源） |
 | `platform.http_conventions.yaml` | HTTP 信封、分页、header、状态码与平台组件 |
 | `platform.errors.yaml` | 错误码文件（全局约定 + 分域错误 + 基础设施基线） |
@@ -114,9 +114,9 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 | `make gen-check` | 校验全部生成物最新 |
 | `make gen-rule-ids` | 从 checker 的 `rulef("...")` 重新生成 `rule_ids_gen.go` |
 | `make gen-rule-tests` | 生成 `docs/contracts/generated/rule-tests.md`（规则 → `implemented_by` → 测试直接引用数） |
-| `make gen-scenarios` | 把 `contracts/scenarios/http/*.yaml` 投影为 `contracts/generated/scenarios/manifest.yaml` |
+| `make gen-scenarios` | 把 `contracts/features/scenarios/http/*.yaml` 投影为 `contracts/generated/scenarios/manifest.yaml` |
 | `make gen-async` | 把 `contracts/capabilities/events/*.yaml` 投影为 `contracts/generated/async/manifest.yaml`（worker 重试/并发/调度策略） |
-| `make test-rules` | 运行 `feature.rules` 的 policy 行为断言骨架（`go test -tags rules`） |
+| `make test-rules` | 运行 `feature.flows` 的 policy 行为断言骨架（`go test -tags rules`） |
 
 `contract-check` 已接入 `lefthook` pre-commit（`contracts/**/*.yaml`）与 CI；CI 额外运行 `make audit-types` 输出类型词汇报告。
 
@@ -141,8 +141,8 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
   `[rule-id]`；反向检查所有非 `schema.*` 输出都必须被某条规则声明。
 - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；独立二进制也带完整映射。
 - `docs/contracts/generated/rule-tests.md` 由 `make gen-rule-tests` 生成，`refs` 为 0 表示该规则只有实现、没有测试直接断言；`make gen-check` 会阻止映射表过期，并按 `-max-zero` 阈值阻止新增未覆盖规则。
-- `feature.rules` 的 policy 规则在 `scripts/cmd/internal/check/rules_policy_test.go`（`make test-rules`）自动登记，并校验 `implemented_by`/`given`/`when`/`then`；业务行为断言由实现层补充。
-- `rules` 只允许出现在 `_meta`（`features/rules` 等领域规则集除外）；`do_not` 只允许出现在具体契约。
+- `feature.flows` 的 policy 规则在 `scripts/cmd/internal/check/rules_policy_test.go`（`make test-rules`）自动登记，并校验 `implemented_by` 与 `decision`（`when` 可解析、effect/target/error 合法）；业务行为断言由实现层补充。
+- `rules` 只允许出现在 `_meta`（`features/flows` 等领域规则集除外）；`do_not` 只允许出现在具体契约。
 - `generated: true` 字段必须同时 `write: forbidden`；由 `make gen-graph` 写入，checker 对账。
   `generated` 字段的 `min_items` 与手写字段一样生效；只有 `contract-new` 的骨架在生成阶段放宽（`relaxGeneratedFields`），入库实例不再豁免。`stability` 只表示定型状态，不豁免任何校验。
   新增 `constraints[]` / `validation[]` / `indexes[]` 项时必须先写 `used_by: []`（`contract-new` 骨架已带）；`gen-graph` 只写值、不补字段，字段完全缺失会先报 `schema.required`。
@@ -183,7 +183,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 
 - 不要重建 `contracts/_meta/schema/` 或 `templates/`；不要在 `_meta` 之外手写第二份字段模板。
 - 不要手写生成字段（`table.entities` / `table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` /
-  `query.used_by` / `services.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / `feature.rules.implemented_by` / 生命周期锚点与 `states.values[].steps` / `topics[].publish.emitted_by` / `dispatches[].emitted_by`）。
+  `query.used_by` / `services.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / `feature.flows.implemented_by` / 生命周期锚点与 `states.values[].steps` / `topics[].publish.emitted_by` / `dispatches[].emitted_by`）。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`。
 - 不要在 checker 里解析 `CHECK expr` 的 SQL 语义；只校验可判定的字面量。

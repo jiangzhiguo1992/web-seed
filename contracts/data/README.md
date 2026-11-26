@@ -17,7 +17,7 @@ feature ──> capabilities ──> data
 ```
 
 - 上游可以引用本层的三类事实：`data.queries`（service step）、`data.entities`（service `validations[]`、rules `constraint.entity`、lifecycle `subjects[]`）、`data.enums`（service / event / HTTP / 页面的类型引用）。
-- 本层不负责：业务不变量（`features/rules`）、写编排与跨模块调用（`capabilities/services`）、部署与运行时（`platform`）。
+- 本层不负责：业务不变量（`features/flows`）、写编排与跨模块调用（`capabilities/services`）、部署与运行时（`platform`）。
 - 表的写归属由 `owner_module` 决定；跨模块写必须走归属模块的 service，不直接写表（由 `cap.services` 的 `service-owner-write` 强制）。
 - 目录内只有五类实例契约，外加一份类型词汇表 `types.yaml`。没有第六类实例；表达力不足时先扩展本层字段或规则，不新增平行概念。
 
@@ -95,7 +95,7 @@ tables / entities / queries ──type──> types
 |---|---|---|
 | 单行/单表、DDL 可表达 | `tables` 的 `constraints` / `indexes` | 数据库能拒绝 |
 | 多列/多表的数据形状 | `entities` 的 `validation` | 需要联合判断，但仍属数据形状 |
-| 谁在什么条件下能做什么 | `features/rules` | 业务行为，不是数据形状 |
+| 谁在什么条件下能做什么 | `features/flows` | 业务行为，不是数据形状 |
 | 一次读写的输入/输出/表/索引 | `queries` | 只写形状，不写 SQL |
 | 引擎、保留、缓存、归档 | `storage.yaml` | 项目级物理事实 |
 | 项目级值域词汇 | `types.yaml` / `enums/` | 值域或跨端词汇 |
