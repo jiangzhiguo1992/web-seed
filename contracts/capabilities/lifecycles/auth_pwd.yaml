@@ -17,6 +17,7 @@ states:
     - { value: disabled, steps: [ cap.services.auth.bind_password.enable_pwd_status ] }
   initial: verified
   final: [ ]
+
 create:
   requires:
     - lifecycle: cap.lifecycles.account
@@ -33,6 +34,7 @@ destroy:
       on_violation: platform.errors.ACCOUNT_ALREADY_DELETED
   implemented_by:
     - cap.services.auth.revoke_all_for_account.soft_delete_auth_pwd_by_account
+
 transitions:
   - name: disable
     description: "停用密码认证"

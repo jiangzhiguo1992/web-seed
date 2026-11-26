@@ -102,7 +102,7 @@ fields:
 
   - name: transitions
     type: _types.structures.list<_types.structures.object>
-    required: false
+    required: true
     min_items: 1
     description: "状态转换；create/destroy 之外的合法转换"
     item_fields:

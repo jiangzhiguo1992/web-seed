@@ -20,6 +20,7 @@ states:
     - { value: disabled, steps: [ cap.services.auth.bind_email.enable_email_status, cap.services.auth.bind_phone.enable_phone_status ] }
   initial: unverified
   final: [ ]
+
 create:
   requires:
     - lifecycle: cap.lifecycles.account
@@ -42,6 +43,7 @@ destroy:
     - cap.services.auth.bind_phone.replace_soft_delete
     - cap.services.auth.revoke_all_for_account.soft_delete_auth_email_by_account
     - cap.services.auth.revoke_all_for_account.soft_delete_auth_phone_by_account
+
 transitions:
   - name: verify
     description: "验证码校验成功，置为已认证"

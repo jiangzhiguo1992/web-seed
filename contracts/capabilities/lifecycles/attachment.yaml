@@ -20,6 +20,7 @@ states:
     - { value: deleted, steps: [ ] }
   initial: uploading
   final: [ deleted ]
+
 create:
   requires: [ ]
   implemented_by:
@@ -29,6 +30,7 @@ destroy:
   implemented_by:
     - cap.services.attachment.complete_upload.soft_delete_old
     - cap.services.attachment.delete.soft_delete_attachment
+
 transitions:
   - name: complete
     description: "完成上传"
