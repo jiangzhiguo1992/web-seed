@@ -34,7 +34,7 @@
 | cap.protocols.http | http-headers | http-headers | 2 | 1 |
 | cap.protocols.http | http-retry-after | http-retry-after | 1 | 1 |
 | cap.protocols.http | http-service-type | http-service-type | 7 | 1 |
-| cap.protocols.http | http-service-params | http-service-params | 4 | 1 |
+| cap.protocols.http | http-service-params | http-service-params | 6 | 1 |
 | cap.protocols.http | http-service-return | http-service-return | 2 | 1 |
 | cap.protocols.http | http-errors | http-errors | 2 | 1 |
 | cap.services | service-id | service-id | 1 | 1 |

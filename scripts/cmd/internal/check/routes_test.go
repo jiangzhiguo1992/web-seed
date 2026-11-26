@@ -332,7 +332,7 @@ func TestWebDepsValid(t *testing.T) {
   "id": "platform.architecture.web_deps",
   "summary": "x",
   "stability": "draft",
-  "enforcement": "tested",
+  "enforcement": "generated+tested",
   "consumers": ["tools"],
   "generates": [".dependency-cruiser.js"],
   "do_not": [],
@@ -676,5 +676,56 @@ func TestWebDepsRequiredAndTypes(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
+	}
+}
+
+func TestWebDepsNullAndEmpty(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/platform/architecture/web_deps.json", `{
+  "id": "platform.architecture.web_deps",
+  "summary": "x",
+  "stability": "draft",
+  "enforcement": "tested",
+  "consumers": ["tools"],
+  "generates": ["x"],
+  "do_not": [],
+  "layers": null,
+  "rules": [ { "from": "app", "mayDependOn": null } ],
+  "forbiddenModules": [
+    { "name": "x", "from": null, "to": { "path": null, "pathNot": "" } }
+  ]
+}`)
+	c := &Checker{root: root}
+	c.checkWebDeps()
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		"web_deps.layers must be a list",
+		"rules[0].mayDependOn must be a list",
+		"forbiddenModules[0].from must be an object",
+		"forbiddenModules[0].to.path must be a non-empty string",
+		"forbiddenModules[0].to.pathNot must be a non-empty string",
+		"forbiddenModules[0].to requires path or pathNot",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+
+	writeCapFile(t, root, "contracts/platform/architecture/web_deps.json", `{
+  "id": "platform.architecture.web_deps",
+  "summary": "x",
+  "stability": "draft",
+  "enforcement": "tested",
+  "consumers": ["tools"],
+  "generates": ["x"],
+  "do_not": [],
+  "layers": [ { "name": "app", "in": "src/app/**" } ],
+  "rules": [],
+  "forbiddenModules": null
+}`)
+	c.errs = nil
+	c.checkWebDeps()
+	if got := strings.Join(c.errs, "\n"); !strings.Contains(got, "web_deps.forbiddenModules must be a list") {
+		t.Fatalf("null forbiddenModules not reported: %s", got)
 	}
 }

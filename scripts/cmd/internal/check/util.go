@@ -222,6 +222,7 @@ func (c *Checker) columnExists(table, col string) bool {
 
 // canonicalTypeRef 归一类型引用：去指针/List 包装，basics 保留 variant，custom 解析为底层类型。
 // 与 normalizeContractType 不同，它不会丢掉 integer.32/64 的位宽信息。
+// data.tables.*.col.* 是列引用而不是类型，保持原样，不做解析。
 func (c *Checker) canonicalTypeRef(typ string) string {
 	s := strings.TrimSpace(typ)
 	for strings.HasPrefix(s, "*") {

@@ -18,7 +18,7 @@ var (
 	webDepsForbidKeys  = map[string]bool{"name": true, "from": true, "to": true, "reason": true, "comment": true}
 	webDepsPathKeys    = map[string]bool{"path": true, "pathNot": true}
 	webDepsStability   = map[string]bool{"stable": true, "draft": true, "deprecated": true}
-	webDepsEnforcement = map[string]bool{"generated": true, "tested": true, "review-only": true}
+	webDepsEnforcement = map[string]bool{"generated": true, "tested": true, "generated+tested": true, "review-only": true}
 )
 
 func (c *Checker) checkWebDeps() {
@@ -48,7 +48,7 @@ func (c *Checker) checkWebDeps() {
 		c.rulef("schema.enum", "%s: web_deps.stability must be one of [stable draft deprecated], got %s", rel, stability)
 	}
 	if enforcement, ok := c.webDepsString(rel, top, doc, "enforcement", true); ok && !webDepsEnforcement[enforcement] {
-		c.rulef("schema.enum", "%s: web_deps.enforcement must be one of [generated tested review-only], got %s", rel, enforcement)
+		c.rulef("schema.enum", "%s: web_deps.enforcement must be one of [generated tested generated+tested review-only], got %s", rel, enforcement)
 	}
 	c.webDepsStrings(rel, top, doc, "consumers", true)
 	c.webDepsStrings(rel, top, doc, "do_not", true)

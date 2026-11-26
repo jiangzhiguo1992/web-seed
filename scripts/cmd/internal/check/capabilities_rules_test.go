@@ -3396,6 +3396,8 @@ func TestCanonicalTypeRef(t *testing.T) {
 		{"_types.basics.money", "decimal"},
 		{"data.enums.x", "data.enums.x"},
 		{"_types.schemas.object", "object"},
+		{"data.tables.x.col.id", "data.tables.x.col.id"},
+		{"_types.structures.map<_types.structures.list<_types.structures.set<_types.basics.id>>>", "map<List<set<integer.64>>>"},
 	}
 	for _, tc := range cases {
 		if got := c.canonicalTypeRef(tc.in); got != tc.want {
@@ -3413,5 +3415,136 @@ func TestCanonicalTypeRef(t *testing.T) {
 	}
 	if c.sameServiceType("_types.structures.set<_types.basics.id>", "_types.structures.set<_types.basics.integer.32>") {
 		t.Fatal("set of integer.64 must not equal set of integer.32")
+	}
+	if c.sameServiceType("data.tables.x.col.id", "_types.basics.id") {
+		t.Fatal("column ref must not equal a type ref")
+	}
+	if !c.sameServiceType(
+		"_types.structures.map<_types.structures.list<_types.structures.set<_types.basics.id>>>",
+		"_types.structures.map<_types.structures.list<_types.structures.set<_types.basics.integer.64>>>",
+	) {
+		t.Fatal("nested generic custom id must equal nested generic integer.64")
+	}
+}
+
+func TestHTTPIntegerBits(t *testing.T) {
+	c := &Checker{valueTypes: ValueTypes{
+		TypeFamilies: map[string]ValueTypeFamily{"integer": {}, "string": {}},
+		CustomTypes: map[string]contractspec.CustomValueType{
+			"id":          {Type: "_types.basics.integer.64"},
+			"page_offset": {Type: "_types.basics.integer.32"},
+		},
+	}}
+	cases := []struct {
+		httpType    string
+		serviceType string
+		mismatch    bool
+		httpBits    int
+		serviceBits int
+	}{
+		{"_types.basics.integer.32", "_types.basics.integer.64", true, 32, 64},
+		{"_types.basics.id", "_types.basics.integer.64", false, 64, 64},
+		{"_types.basics.page_offset", "_types.basics.integer.32", false, 32, 32},
+		{"_types.basics.page_offset", "_types.basics.id", true, 32, 64},
+		{"_types.basics.string", "_types.basics.integer.32", false, 0, 0},
+		{"_types.basics.integer.32", "_types.basics.timestamp.long", false, 0, 0},
+	}
+	for _, tc := range cases {
+		hb, sb, bad := c.httpIntegerBits(tc.httpType, tc.serviceType)
+		if hb != tc.httpBits || sb != tc.serviceBits || bad != tc.mismatch {
+			t.Fatalf("httpIntegerBits(%q, %q) = (%d,%d,%t), want (%d,%d,%t)", tc.httpType, tc.serviceType, hb, sb, bad, tc.httpBits, tc.serviceBits, tc.mismatch)
+		}
+	}
+}
+
+func TestHTTPQueryIntegerBits(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+mount: { api_version: v1, path: /x, audience: [admin] }
+paths:
+  /items:
+    get:
+      id: cap.protocols.http.x.get
+      name: getX
+      summary: "x"
+      service: cap.services.x.get
+      request:
+        query:
+          - { name: id, type: _types.basics.integer.32, required: true, description: "id", to: params.id }
+      response:
+        204: { msg: "OK" }
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root, valueTypes: ValueTypes{
+		TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
+		CustomTypes: map[string]contractspec.CustomValueType{
+			"id": {Type: "_types.basics.integer.64"},
+		},
+	}}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.get": {
+			visibility:     "public",
+			requiredParams: map[string]bool{"id": true},
+			paramDecls:     map[string]string{"id": "_types.basics.id"},
+		},
+	}, map[string]bool{}, map[string]bool{})
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, "[http-service-params]") || !strings.Contains(got, "integer bits 32") || !strings.Contains(got, "bits 64") {
+		t.Fatalf("query integer width mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPFormIntegerBits(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/capabilities/protocols/http/x.yaml", `id: cap.protocols.http.x
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: []
+mount: { api_version: v1, path: /, audience: [admin] }
+paths:
+  /x:
+    post:
+      id: cap.protocols.http.x.create
+      name: createX
+      service: cap.services.x.create
+      summary: "x"
+      used_by: [feature.pages.x]
+      request:
+        headers:
+          - { name: Content-Type, required: true, value: application/x-www-form-urlencoded, description: "body" }
+        body:
+          kind: form
+          fields:
+            - { name: sort, type: _types.basics.integer.64, required: true, description: "sort", to: params.input.sort }
+      response:
+        204: { msg: "OK" }
+`)
+	schema := copyMeta(t, root, "cap.protocols.http")
+	c := &Checker{root: root, valueTypes: ValueTypes{
+		TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
+		CustomTypes: map[string]contractspec.CustomValueType{
+			"id": {Type: "_types.basics.integer.64"},
+		},
+	}}
+	c.checkHTTPBindings(schema, map[string]serviceMeta{
+		"cap.services.x.create": {
+			visibility:     "public",
+			requiredParams: map[string]bool{"input": true},
+			paramDecls:     map[string]string{"input": "cap.services.x.schemas.Input"},
+			typeSchemas: map[string]map[string]any{
+				"cap.services.x.schemas.Input": {"properties": []any{
+					map[string]any{"name": "sort", "schema": map[string]any{"type": "_types.basics.integer.32"}, "required": true},
+				}},
+			},
+		},
+	}, map[string]bool{}, map[string]bool{})
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, "[http-service-params]") || !strings.Contains(got, "form field sort integer bits 64") || !strings.Contains(got, "bits 32") {
+		t.Fatalf("form integer width mismatch not reported: %v", c.errs)
 	}
 }

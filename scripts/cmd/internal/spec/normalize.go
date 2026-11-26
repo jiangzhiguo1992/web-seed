@@ -487,7 +487,12 @@ func normalizeRequest(request map[string]any, where string, resolve TypeResolver
 			if to == "" {
 				return nil, nil, nil, false, fmt.Errorf("%s: %s[%d].to required", where, section.name, i)
 			}
-			mappings = append(mappings, map[string]any{"from": name, "to": to})
+			// 保留 type 供 HTTP 绑定校验 integer 位宽；x-service-params 不进入生成物。
+			mapping := map[string]any{"from": name, "to": to}
+			if typ := source["type"]; typ != nil {
+				mapping["type"] = typ
+			}
+			mappings = append(mappings, mapping)
 			parameters = append(parameters, param)
 		}
 		serviceParams[section.name] = mappings
@@ -679,7 +684,12 @@ func normalizeRequestBody(body map[string]any, contentType, where string, resolv
 			if requiredFlag {
 				required = append(required, name)
 			}
-			mappings = append(mappings, map[string]any{"from": name, "to": to})
+			// 保留 type 供 HTTP 绑定校验 integer 位宽；x-service-params 不进入生成物。
+			mapping := map[string]any{"from": name, "to": to}
+			if typ := field["type"]; typ != nil {
+				mapping["type"] = typ
+			}
+			mappings = append(mappings, mapping)
 		}
 		schema := map[string]any{"type": "object", "additionalProperties": false, "properties": properties}
 		if len(required) > 0 {

@@ -1753,6 +1753,10 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 				httpFamily := c.httpSchemaFamily(prop, schemas)
 				if !familiesCompatible(httpFamily, c.httpServiceFamily(decl)) {
 					c.rulef("http-service-params", "%s %s %s: form field %s type differs from service field params.%s (%s)", rel, method, path, from, servicePath, decl)
+				} else if httpType, _ := entry["type"].(string); httpType != "" {
+					if hb, sb, bad := c.httpIntegerBits(httpType, decl); bad {
+						c.rulef("http-service-params", "%s %s %s: form field %s integer bits %d do not match service field params.%s (%s, bits %d)", rel, method, path, from, hb, servicePath, decl, sb)
+					}
 				}
 			}
 		}
@@ -1841,6 +1845,10 @@ func (c *Checker) checkHTTPRequest(rel, method, path string, op map[string]any, 
 			}
 			if !familiesCompatible(httpFamily, c.httpServiceFamily(decl)) {
 				c.rulef("http-service-params", "%s %s %s: %s parameter %s type differs from service field params.%s (%s)", rel, method, path, location, from, servicePath, decl)
+			} else if httpType, _ := entry["type"].(string); httpType != "" {
+				if hb, sb, bad := c.httpIntegerBits(httpType, decl); bad {
+					c.rulef("http-service-params", "%s %s %s: %s parameter %s integer bits %d do not match service field params.%s (%s, bits %d)", rel, method, path, location, from, hb, servicePath, decl, sb)
+				}
 			}
 		}
 	}
@@ -1928,6 +1936,19 @@ func (c *Checker) serviceParamType(target serviceMeta, path string) (string, boo
 		return "", false
 	}
 	return "", false
+}
+
+// httpIntegerBits 比较 HTTP 参数类型与 service 声明类型的 integer 位宽；非 integer 或无法解析时不返回 mismatch。
+func (c *Checker) httpIntegerBits(httpType, serviceType string) (httpBits, serviceBits int, mismatch bool) {
+	if c.httpServiceFamily(httpType) != "integer" || c.httpServiceFamily(serviceType) != "integer" {
+		return 0, 0, false
+	}
+	httpBits, httpOK := c.typeIntegerBits(httpType)
+	serviceBits, serviceOK := c.typeIntegerBits(serviceType)
+	if !httpOK || !serviceOK {
+		return 0, 0, false
+	}
+	return httpBits, serviceBits, httpBits != serviceBits
 }
 
 // httpServiceFamily 把契约类型归一为可比较的类型族。
