@@ -885,8 +885,8 @@ type eventsFileScaffold struct {
 type eventTopicScaffold struct {
 	ID         string               `yaml:"id"`
 	Name       string               `yaml:"name"`
-	Version    int                  `yaml:"version"`
 	Summary    string               `yaml:"summary"`
+	Version    int                  `yaml:"version"`
 	Idempotent bool                 `yaml:"idempotent"`
 	Publish    eventPublishScaffold `yaml:"publish"`
 }
@@ -908,8 +908,8 @@ type httpMountScaffold struct {
 }
 
 type httpResponseScaffold struct {
-	Msg     string `yaml:"msg"`
 	Headers []any  `yaml:"headers"`
+	Msg     string `yaml:"msg"`
 }
 
 type httpOperationScaffold struct {

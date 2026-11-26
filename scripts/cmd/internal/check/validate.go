@@ -698,16 +698,10 @@ func (c *Checker) validateMap(v any, f Field, expr typeExpr, path string) {
 }
 
 func (c *Checker) checkMapBounds(m map[string]any, f Field, path string) {
-	if f.Generated {
-		return
-	}
 	c.checkItemBounds(len(m), f, path)
 }
 
 func (c *Checker) checkSeqBounds(l []any, f Field, path string, isSet, isArray bool) {
-	if f.Generated {
-		return
-	}
 	if isArray {
 		if f.Len == nil {
 			c.rulef("schema.len", "%s: array requires len", path)
@@ -722,10 +716,15 @@ func (c *Checker) checkSeqBounds(l []any, f Field, path string, isSet, isArray b
 }
 
 // checkItemBounds 校验集合元素数：min_items/max_items 只约束 list/set/map。
+// generated 字段用独立 rule-id，让 gen-graph 在写回前跳过这类已知漂移。
 func (c *Checker) checkItemBounds(n int, f Field, path string) {
 	if f.MinItems != nil {
 		if min, ok := toInt(f.MinItems); ok && n < min {
-			c.rulef("schema.range", "%s: %d items < min_items %d", path, n, min)
+			if f.Generated {
+				c.rulef("schema.generated-range", "%s: %d items < min_items %d", path, n, min)
+			} else {
+				c.rulef("schema.range", "%s: %d items < min_items %d", path, n, min)
+			}
 		}
 	}
 	if f.MaxItems != nil {

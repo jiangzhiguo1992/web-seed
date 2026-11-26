@@ -10,8 +10,8 @@ do_not:
 naming:
   pattern: "<DOMAIN>_<REASON>"
   common_prefix: COMMON_
-  # 号段规划：每个域 1000；7000-7999 dictionary，8000-8999 attachment；
-  # 9000-9999 预留给后续存储/审计域。新增域时同步 order 与 ranges。
+  # 号段规划：每个域 1000；7000-7999 dictionary，8000-8999 attachment，
+  # 9000-9999 system。新增域时同步 order 与 ranges。
   # 当前 46 条；按 13 个域、每域约 15 条预留 200 条上限。
   max_total: 200
 
@@ -28,8 +28,9 @@ biz_code:
     data_access: [ 6000, 6999 ]
     dictionary: [ 7000, 7999 ]
     attachment: [ 8000, 8999 ]
+    system: [ 9000, 9999 ]
 
-order: [ common, account, auth, verification, token, dictionary, attachment ]
+order: [ common, account, auth, verification, token, dictionary, attachment, system ]
 
 mapping_rules:
   - { status: 400, when: "请求体/参数校验失败" }

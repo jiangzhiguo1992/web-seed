@@ -28,12 +28,11 @@ table:
   queries:
     - data.queries.attachment.create_attachment
     - data.queries.attachment.get_attachment
-    - data.queries.attachment.get_attachment_by_key
     - data.queries.attachment.list_attachments
     - data.queries.attachment.set_attachment_status
     - data.queries.attachment.soft_delete_attachment
-    - data.queries.attachment.soft_delete_stale_uploads
     - data.queries.attachment.soft_delete_stale_failed_uploads
+    - data.queries.attachment.soft_delete_stale_uploads
 
 columns:
   - name: owner_table_name
@@ -120,7 +119,6 @@ indexes:
     comment: "对象 key 全局唯一；软删后不释放"
     used_by:
       - data.queries.attachment.create_attachment
-      - data.queries.attachment.get_attachment_by_key
 
   - name: idx_attachment_owner
     columns: [ deleted_at, owner_table_name, owner_id, purpose, sort, id ]

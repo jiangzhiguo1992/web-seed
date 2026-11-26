@@ -714,10 +714,10 @@ func TestEntityUsedByQueries(t *testing.T) {
 		t.Fatalf("valid model.queries reported: %v", c.errs)
 	}
 
-	c.entities["data.entities.account"].Doc = map[string]any{"model": map[string]any{"queries": []any{}}}
+	c.entities["data.entities.account"].Doc = map[string]any{"model": map[string]any{"queries": []any{"data.queries.other.get"}}}
 	c.checkEntityUsedBy()
 	if !strings.Contains(entityErrs(c), "[entity-used-by]") {
-		t.Fatalf("missing model.queries not reported: %v", c.errs)
+		t.Fatalf("wrong model.queries not reported: %v", c.errs)
 	}
 }
 

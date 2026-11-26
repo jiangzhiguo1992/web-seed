@@ -1,7 +1,7 @@
 // Package graph 计算 query 入边并写回 table/model/query 的反向索引。
 //
-// table.entities 与 model.included_by 是显式映射，由 checker 校验；
-// gen-graph 维护生成物 table.queries、model.queries 与 query.used_by。
+// gen-graph 维护生成物 table.entities、table.references/referenced_by、table.queries、
+// model.includes/included_by/queries 与 query.used_by；checker 负责双向对账。
 package graph
 
 import (
@@ -18,6 +18,7 @@ import (
 )
 
 type TableUsedBy struct {
+	Entities     []string
 	Queries      []string
 	References   []string
 	ReferencedBy []string
@@ -52,6 +53,7 @@ type Snapshot struct {
 }
 
 type tableSet struct {
+	entities     map[string]bool
 	queries      map[string]bool
 	references   map[string]bool
 	referencedBy map[string]bool
@@ -166,7 +168,7 @@ func Compute(root string) (*Snapshot, error) {
 			continue
 		}
 		tableDocs[id] = doc
-		tables[id] = &tableSet{queries: map[string]bool{}, references: map[string]bool{}, referencedBy: map[string]bool{}}
+		tables[id] = &tableSet{entities: map[string]bool{}, queries: map[string]bool{}, references: map[string]bool{}, referencedBy: map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 		unique := map[string]bool{"id": true}
 		for _, raw := range asList(doc["indexes"]) {
@@ -219,6 +221,14 @@ func Compute(root string) (*Snapshot, error) {
 		entityDocs[id] = doc
 		entities[id] = &entitySet{queries: map[string]bool{}, includes: map[string]EntityRelation{}, includedBy: map[string]EntityRelation{}}
 		entityFiles[id] = rel(root, f)
+		model, _ := asMap(doc["model"])
+		for _, table := range stringList(model["tables"]) {
+			ts := tables[table]
+			if ts == nil {
+				return nil, fmt.Errorf("%s: model.tables %s is not a data.tables contract", entityFiles[id], table)
+			}
+			ts.entities[id] = true
+		}
 	}
 	// model.included_by：把关系字段的来源实体登记到目标实体。
 	for id, doc := range entityDocs {
@@ -337,7 +347,7 @@ func Compute(root string) (*Snapshot, error) {
 		QueryFiles:  queryFiles,
 	}
 	for id, ts := range tables {
-		snap.Tables[id] = TableUsedBy{Queries: sortedKeys(ts.queries), References: sortedKeys(ts.references), ReferencedBy: sortedKeys(ts.referencedBy)}
+		snap.Tables[id] = TableUsedBy{Entities: sortedKeys(ts.entities), Queries: sortedKeys(ts.queries), References: sortedKeys(ts.references), ReferencedBy: sortedKeys(ts.referencedBy)}
 	}
 	for id, es := range entities {
 		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries), Includes: sortedRelations(es.includes), IncludedBy: sortedRelations(es.includedBy)}
@@ -385,7 +395,14 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 	var changed []string
 	for _, id := range sortedFileKeys(s.TableFiles) {
 		file := s.TableFiles[id]
-		ok, err := syncNestedListFile(filepath.Join(root, file), "table", "entities", "references", s.Tables[id].References)
+		ok, err := syncNestedListFile(filepath.Join(root, file), "table", "extends", "entities", s.Tables[id].Entities)
+		if err != nil {
+			return changed, err
+		}
+		if ok {
+			changed = append(changed, file)
+		}
+		ok, err = syncNestedListFile(filepath.Join(root, file), "table", "entities", "references", s.Tables[id].References)
 		if err != nil {
 			return changed, err
 		}
@@ -477,6 +494,11 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		doc, err := loadYAML(filepath.Join(root, file))
 		if err != nil {
 			return nil, err
+		}
+		gotEntities, entitiesPresent := nestedListValue(doc, "table", "entities")
+		wantEntities := s.Tables[id].Entities
+		if !entitiesPresent || !sameSet(gotEntities, wantEntities) {
+			drift = append(drift, fmt.Sprintf("%s: table.entities must be %v, got %v", file, wantEntities, gotEntities))
 		}
 		gotRefsOut, refsOutPresent := nestedListValue(doc, "table", "references")
 		wantRefsOut := s.Tables[id].References

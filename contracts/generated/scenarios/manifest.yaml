@@ -497,6 +497,20 @@ coverage:
       - code: DICTIONARY_NOT_FOUND
         status: 404
         covered: false
+  - operation: cap.protocols.http.dictionary.get_by_code
+    method: get
+    path: /dictionary/admin/code/{code}
+    service: cap.services.dictionary.get
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: DICTIONARY_NOT_FOUND
+        status: 404
+        covered: false
   - operation: cap.protocols.http.dictionary.import
     method: post
     path: /dictionary/admin/import
@@ -579,6 +593,42 @@ coverage:
       - code: DICTIONARY_NOT_FOUND
         status: 404
         covered: false
+  - operation: cap.protocols.http.unit.get
+    method: get
+    path: /unit/admin/{code}
+    service: cap.services.unit.get
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes:
+      - code: UNIT_NOT_FOUND
+        status: 404
+        covered: false
+  - operation: cap.protocols.http.unit.list
+    method: get
+    path: /unit/admin
+    service: cap.services.unit.list
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes: []
+  - operation: cap.protocols.http.unit.list_children
+    method: get
+    path: /unit/admin/{id}/children
+    service: cap.services.unit.list_children
+    scenarios: 0
+    success_statuses:
+      - 200
+    covered_statuses: []
+    missing_statuses:
+      - 200
+    codes: []
 generated_from: contracts/scenarios/http
 scenarios:
   - id: scenario.http.account.create_success

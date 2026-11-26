@@ -169,7 +169,7 @@ func (c *Checker) checkEnumSchema(schema *Schema) {
 	}
 	if usedBy, ok := contractspec.FindField(enums.ItemFields, "used_by"); ok {
 		if normalizeTypeExpr(usedBy.Type) != "set<string>" || (usedBy.MinLen == nil && usedBy.MinItems == nil) {
-			c.rulef("schema.meta", "%s: enums.used_by must be set<string> with min_len", schema.ID)
+			c.rulef("schema.meta", "%s: enums.used_by must be set<string> with min_items", schema.ID)
 		}
 	}
 	values, ok := contractspec.FindField(enums.ItemFields, "values")
@@ -528,9 +528,11 @@ func isGeneratedDriftError(e string) bool {
 		"[enum-used-by]",
 		"[entity-included-by]",
 		"[entity-used-by]",
+		"[table-entities]",
 		"[table-queries-generated]",
 		"[table-referenced-by]",
 		"[query-used-by]",
+		"[schema.generated-range]",
 	} {
 		if strings.Contains(e, rule) {
 			return true
@@ -564,8 +566,9 @@ func (c *Checker) checkEnumUsedBy(rel string, i int, id string, m map[string]any
 	}
 	declared := stringSet(asList(raw))
 	if len(declared) == 0 {
-		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by must not be empty", rel, i, id)
-	} else if !sameSet(declared, expected) {
+		return // 空值由 schema.generated-range 报出
+	}
+	if !sameSet(declared, expected) {
 		c.rulef("enum-used-by", "%s: enums[%d] (%s): used_by must be %v, got %v", rel, i, id, sortedKeys(expected), sortedKeys(declared))
 	}
 }

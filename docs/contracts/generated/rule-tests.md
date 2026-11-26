@@ -22,6 +22,7 @@
 | cap.protocols.http | http-shape | http-shape | 1 | 1 |
 | cap.protocols.http | http-body-types | http-body-types | 1 | 1 |
 | cap.protocols.http | http-version | http-version | 2 | 1 |
+| cap.protocols.http | http-app-included | http-app-included | 1 | 0 |
 | cap.protocols.http | http-mount | http-mount | 1 | 1 |
 | cap.protocols.http | http-path-params | http-path-params | 1 | 1 |
 | cap.protocols.http | http-operation | http-operation | 2 | 1 |
@@ -46,7 +47,6 @@
 | cap.services | service-errors | service-errors | 3 | 0 |
 | cap.services | service-visibility | service-visibility | 1 | 1 |
 | cap.services | service-page-schema | service-page-schema | 1 | 0 |
-| cap.services | service-used | service-used | 2 | 1 |
 | cap.services | service-step-fields | service-step-fields | 0 | 1 |
 | cap.services | service-step-target | service-step-target | 0 | 1 |
 | cap.services | service-state-gate | service-state-gate | 1 | 0 |
@@ -105,7 +105,7 @@
 | data.enums | enum-values-unique | enum-values-unique | 0 | 1 |
 | data.enums | enum-code-unique | enum-code-unique | 1 | 0 |
 | data.enums | enum-type-unique | enum-type-unique | 1 | 0 |
-| data.enums | enum-used-by | enum-used-by | 2 | 0 |
+| data.enums | enum-used-by | enum-used-by | 1 | 0 |
 | data.enums | enum-owner-module | enum-owner-module | 1 | 0 |
 | data.enums | enum-do-not-specific | enum-do-not-specific | 3 | 0 |
 | data.queries | query-key-order | query-key-order | 0 | 1 |
@@ -127,7 +127,6 @@
 | data.queries | query-archive-ref | query-archive-ref | 1 | 1 |
 | data.queries | query-archive-used-by | query-archive-used-by | 1 | 1 |
 | data.queries | query-used-by | query-used-by | 1 | 1 |
-| data.queries | query-unused | query-unused | 1 | 1 |
 | data.queries | query-do-not-specific | query-do-not-specific | 1 | 1 |
 | data.storage | storage-registry | storage-registry | 2 | 0 |
 | data.storage | storage-entry-fields | storage-entry-fields | 1 | 1 |
@@ -183,8 +182,8 @@
 | feature.pages | page-params | page-params | 2 | 0 |
 | feature.pages | page-action-target | page-action-target | 1 | 0 |
 | feature.pages | page-limits | page-limits | 0 | 1 |
-| feature.pages | page-refs | page-refs | 1 | 1 |
-| feature.routes | route-structure | route-structure | 1 | 0 |
+| feature.pages | page-refs | page-refs | 2 | 1 |
+| feature.routes | route-structure | route-structure | 2 | 0 |
 | feature.routes | route-redirect | route-redirect | 1 | 0 |
 | feature.rules | rule-structure | rule-structure | 1 | 1 |
 | feature.rules | rule-value | rule-value | 1 | 0 |
@@ -201,6 +200,7 @@
 | platform.observability.metrics | metric-shape | metric-shape | 1 | 0 |
 | platform.quality | quality-refs | quality-refs | 1 | 0 |
 | platform.security.access | access-coverage | access-coverage | 1 | 1 |
+| platform.security.access | access-target | access-target | 1 | 0 |
 | platform.security.auth_policy | auth-policy-jwt | auth-policy-jwt | 1 | 0 |
 | platform.security.auth_policy | auth-policy-audience | auth-policy-audience | 1 | 0 |
 | platform.security.auth_policy | auth-policy-storage | auth-policy-storage | 1 | 0 |

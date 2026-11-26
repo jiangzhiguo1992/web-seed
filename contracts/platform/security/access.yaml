@@ -29,12 +29,14 @@ bindings:
   - { target: cap.services.dictionary.delete, permissions: [ platform.security.permissions.dictionary_delete ], audit: true }
   - { target: cap.services.attachment.list, permissions: [ platform.security.permissions.attachment_read ], rate_limit: { requests: 60, window_seconds: 60 } }
   - { target: cap.services.attachment.get, permissions: [ platform.security.permissions.attachment_read ] }
-  - { target: cap.services.attachment.get_by_key, permissions: [ platform.security.permissions.attachment_read ] }
   - { target: cap.services.attachment.create_upload, permissions: [ platform.security.permissions.attachment_write ], audit: true }
   - { target: cap.services.attachment.complete_upload, permissions: [ platform.security.permissions.attachment_write ], audit: true }
   - { target: cap.services.attachment.get_download_url, permissions: [ platform.security.permissions.attachment_read ] }
   - { target: cap.services.attachment.delete, permissions: [ platform.security.permissions.attachment_delete ], audit: true }
   - { target: cap.services.attachment.fail_upload, permissions: [ platform.security.permissions.attachment_write ], audit: true }
+  - { target: cap.services.unit.get, permissions: [ platform.security.permissions.unit_read ] }
+  - { target: cap.services.unit.list, permissions: [ platform.security.permissions.unit_read ], rate_limit: { requests: 60, window_seconds: 60 } }
+  - { target: cap.services.unit.list_children, permissions: [ platform.security.permissions.unit_read ] }
   - { target: cap.services.token.verify, rate_limit: { requests: 120, window_seconds: 60 } }
   - { target: cap.services.auth.bind_password, permissions: [ platform.security.permissions.account_write ], audit: true }
   - { target: cap.services.auth.bind_phone, permissions: [ platform.security.permissions.account_write ], audit: true }

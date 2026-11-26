@@ -248,6 +248,11 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not: []
+schemas:
+  ExistsResult:
+    kind: _types.schemas.object
+    properties:
+      - { name: exists, schema: { type: _types.basics.boolean }, required: true, description: "是否存在" }
 services:
   - name: get
     summary: "读取脚手架查询"
@@ -257,7 +262,7 @@ services:
       - { name: ctx, type: context.Context }
       - { name: id, type: _types.basics.id }
     returns:
-      - { name: exists, type: _types.basics.boolean, value: step.load.exists }
+      - { name: result, type: cap.services.scaffold.schemas.ExistsResult, value: step.wrap.result }
       - { name: err, type: error, value: "*" }
     steps:
       - id: load
@@ -269,6 +274,16 @@ services:
           - { name: exists, type: _types.basics.boolean, description: "是否存在" }
         errors: []
         query: data.queries.scaffold.exists_scaffold
+        goto: wrap
+      - id: wrap
+        kind: logic
+        summary: "包装结果"
+        input:
+          - { name: exists, value: step.load.exists, description: "是否存在" }
+        output:
+          - { name: result, type: cap.services.scaffold.schemas.ExistsResult, description: "结果" }
+        errors: []
+        rules: []
         goto: note
       - id: note
         kind: logic
@@ -285,13 +300,64 @@ services:
 		t.Fatal(err)
 	}
 
+	httpContract := `id: cap.protocols.http.scaffold
+summary: "脚手架 HTTP 接口"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "只用于脚手架校验；不要暴露写操作"
+mount:
+  api_version: v1
+  path: /scaffold
+  audience: [ admin ]
+paths:
+  /admin:
+    get:
+      id: cap.protocols.http.scaffold.get
+      name: getScaffold
+      summary: "读取脚手架查询"
+      service: cap.services.scaffold.get
+      request:
+        headers: []
+        query:
+          - { name: id, type: _types.basics.id, description: "主键", to: params.id }
+      response:
+        200:
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
+          body:
+            kind: json
+            type: cap.services.scaffold.schemas.ExistsResult
+`
+	if err := os.WriteFile(filepath.Join(tmp, "contracts/capabilities/protocols/http/scaffold.yaml"), []byte(httpContract), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	replaceFile := func(rel, old, new string) {
+		t.Helper()
+		path := filepath.Join(tmp, rel)
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), old) {
+			t.Fatalf("%s: fixture anchor %q not found", rel, old)
+		}
+		if err := os.WriteFile(path, []byte(strings.Replace(string(b), old, new, 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	replaceFile("contracts/project.yaml", "      - cap.protocols.http.account", "      - cap.protocols.http.account\n      - cap.protocols.http.scaffold")
+	replaceFile("contracts/platform/security/access.yaml", "bindings:\n", "bindings:\n  - { target: cap.services.scaffold.get, audit: true }\n")
+
 	indexPath := filepath.Join(tmp, "contracts/index.yaml")
 	indexBytes, err := os.ReadFile(indexPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	indexText := string(indexBytes)
-	indexText = strings.Replace(indexText, "\nglobal_notes:", "\n  - { id: data.queries.scaffold, path: data/queries/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: feature.rules.scaffold, path: features/rules/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: cap.services.scaffold, path: capabilities/services/scaffold.yaml, summary: \"x\", consumers: [api], enforcement: tested, stability: draft }\nglobal_notes:", 1)
+	indexText = strings.Replace(indexText, "\nglobal_notes:", "\n  - { id: data.queries.scaffold, path: data/queries/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: feature.rules.scaffold, path: features/rules/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: cap.services.scaffold, path: capabilities/services/scaffold.yaml, summary: \"x\", consumers: [api], enforcement: tested, stability: draft }\n  - { id: cap.protocols.http.scaffold, path: capabilities/protocols/http/scaffold.yaml, summary: \"x\", consumers: [api], enforcement: tested, stability: draft }\nglobal_notes:", 1)
 	if err := os.WriteFile(indexPath, []byte(indexText), 0o644); err != nil {
 		t.Fatal(err)
 	}

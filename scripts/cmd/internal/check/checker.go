@@ -186,6 +186,7 @@ func (c *Checker) run() {
 	c.checkConfigEnv()
 	c.checkWebDeps()
 	c.checkFeaturePages()
+	c.checkPageRouteBindings()
 	c.checkScenarioContracts()
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues)

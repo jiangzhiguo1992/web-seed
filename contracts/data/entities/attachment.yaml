@@ -23,7 +23,6 @@ model:
   queries:
     - data.queries.attachment.create_attachment
     - data.queries.attachment.get_attachment
-    - data.queries.attachment.get_attachment_by_key
     - data.queries.attachment.list_attachments
     - data.queries.attachment.set_attachment_status
 

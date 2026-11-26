@@ -110,6 +110,7 @@ entries:
   - { id: cap.protocols.http.auth, path: capabilities/protocols/http/auth.yaml, summary: "认证 HTTP 接口（登录/刷新/验证码）", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
   - { id: cap.protocols.http.attachment, path: capabilities/protocols/http/attachment.yaml, summary: "附件 HTTP 接口（上传、下载与失败回调）", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
   - { id: cap.protocols.http.dictionary, path: capabilities/protocols/http/dictionary.yaml, summary: "字典 HTTP 接口", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
+  - { id: cap.protocols.http.unit, path: capabilities/protocols/http/unit.yaml, summary: "计量单位 HTTP 接口", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
   - { id: cap.services.account, path: capabilities/services/account.yaml, summary: "账号服务：查询、创建、更新、状态转换与软删编排", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
   - { id: cap.services.auth, path: capabilities/services/auth.yaml, summary: "认证服务：登录、认证绑定与账号注销编排", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
   - { id: cap.services.token, path: capabilities/services/token.yaml, summary: "令牌服务：JWT 签发、刷新与校验", consumers: [ api ], enforcement: generated+tested, stability: draft }
@@ -176,6 +177,7 @@ entries:
   - { id: platform.errors.data_access, path: platform/errors/data_access.yaml, summary: "数据访问基础设施错误基线", consumers: [ api, tools ], enforcement: generated+tested, stability: draft }
   - { id: platform.errors.dictionary, path: platform/errors/dictionary.yaml, summary: "字典错误码", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
   - { id: platform.errors.attachment, path: platform/errors/attachment.yaml, summary: "附件错误码", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
+  - { id: platform.errors.system, path: platform/errors/system.yaml, summary: "系统基础资源错误码", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
   - { id: platform.http_conventions, path: platform/http_conventions.yaml, summary: "信封、分页、header、状态码与平台 HTTP 组件", consumers: [ api, web/admin ], enforcement: generated+tested, stability: draft }
   - { id: platform.quality, path: platform/quality.yaml, summary: "测试策略与门槛", consumers: [ tools ], enforcement: tested, stability: draft }
   - { id: platform.config.env, path: platform/config/env.json, summary: "环境变量 schema", consumers: [ api, web/admin, ops ], enforcement: tested, stability: draft }

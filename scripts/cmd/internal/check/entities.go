@@ -685,10 +685,6 @@ func (c *Checker) checkEntityBase(schema *Schema) {
 }
 
 func (c *Checker) checkEntityModel(e *entityInfo) {
-	if len(e.Tables) == 0 {
-		c.rulef("entity-table-shape", "%s: tables must not be empty", e.Rel)
-		return
-	}
 	for _, t := range e.Tables {
 		if t == c.baseID {
 			c.rulef("entity-table-shape", "%s: data.tables.base is not a physical table", e.Rel)
@@ -1198,7 +1194,7 @@ func (c *Checker) checkEntityValidation(e *entityInfo) {
 func (c *Checker) checkEntityValidationUsedBy(e *entityInfo, m map[string]any, where string) {
 	raw, present := m["used_by"]
 	if !present || raw == nil {
-		return // 缺失/空列表由 schema.required 与 min_len 报出
+		return // 缺失/空列表由 schema.required 与 min_items 报出
 	}
 	for _, x := range asList(raw) {
 		sid, ok := x.(string)
@@ -1256,6 +1252,9 @@ func (c *Checker) checkEntityUsedBy() {
 		wantQueries := expectedQueries[id]
 		if wantQueries == nil {
 			wantQueries = map[string]bool{}
+		}
+		if len(gotQueries) == 0 {
+			continue // 空值由 schema.generated-range 报出
 		}
 		if !sameSet(gotQueries, wantQueries) {
 			c.rulef("entity-used-by", "%s: model.queries must be %v, got %v", e.Rel, sortedKeys(wantQueries), sortedKeys(gotQueries))

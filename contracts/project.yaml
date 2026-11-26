@@ -40,6 +40,7 @@ apps:
       - cap.protocols.http.auth
       - cap.protocols.http.attachment
       - cap.protocols.http.dictionary
+      - cap.protocols.http.unit
     generated:
       spec: generated/openapi/admin.yaml
       server: apps/api/internal/generated/openapi

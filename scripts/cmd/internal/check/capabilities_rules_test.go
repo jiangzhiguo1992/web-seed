@@ -1436,8 +1436,8 @@ do_not: []
 topics:
   - id: cap.events.x.created
     name: x.created
-    version: 1
     summary: "x"
+    version: 1
     idempotent: false
     publish:
       payload:
@@ -1476,8 +1476,8 @@ do_not: []
 topics:
   - id: cap.events.x.created
     name: x.created
-    version: 1
     summary: "x"
+    version: 1
     idempotent: false
     publish:
       payload:
@@ -1531,30 +1531,6 @@ topics:
 	c.checkEventsDoc(schema, services, serviceIDs)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[async-service]") {
 		t.Fatalf("unknown subscribe service not reported: %v", c.errs)
-	}
-}
-
-func TestServiceUsedRule(t *testing.T) {
-	c := &Checker{}
-	c.checkServiceUsed("x.yaml", map[string]any{
-		"stability": "stable",
-		"services": []any{
-			map[string]any{"name": "internal_empty", "used_by": []any{}},
-		},
-	})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-used]") {
-		t.Fatalf("stable empty used_by not reported: %v", c.errs)
-	}
-
-	c = &Checker{}
-	c.checkServiceUsed("x.yaml", map[string]any{
-		"stability": "draft",
-		"services": []any{
-			map[string]any{"name": "scaffold", "used_by": []any{}},
-		},
-	})
-	if strings.Contains(strings.Join(c.errs, "\n"), "[service-used]") {
-		t.Fatalf("draft empty used_by must not be reported: %v", c.errs)
 	}
 }
 
@@ -1620,7 +1596,7 @@ dispatches:
 	c.errs = nil
 	writeCapFile(t, root, rel, strings.Replace(valid, "emitted_by: [ cap.services.x.issue ]", "emitted_by: [ ]", 1))
 	async = c.checkEventsDoc(schema, services, map[string]bool{"cap.services.x.send": true, "cap.services.x.issue": true})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "requires at least one emitted_by") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.generated-range]") {
 		t.Fatalf("empty dispatch emitted_by not reported: %v", c.errs)
 	}
 
@@ -1663,8 +1639,8 @@ do_not: []
 topics:
   - id: cap.events.x.created
     name: x.created
-    version: 1
     summary: "x"
+    version: 1
     idempotent: false
     publish:
       payload: { type: _types.basics.integer }
@@ -1701,8 +1677,8 @@ do_not: []
 topics:
   - id: cap.events.x.created
     name: x.created
-    version: 1
     summary: "x"
+    version: 1
     idempotent: false
     publish:
       payload: { type: _types.basics.integer }
@@ -1730,8 +1706,8 @@ do_not: []
 topics:
   - id: cap.events.x.created
     name: x.created
-    version: 1
     summary: "x"
+    version: 1
     idempotent: false
     publish:
       payload: { type: _types.basics.integer }

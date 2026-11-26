@@ -57,6 +57,52 @@ func (c *Checker) checkFeaturePages() {
 	}
 }
 
+// checkPageRouteBindings 校验 page.route 与 route.page 互指：
+// 页面指向的路由必须回指该页面，路由指向的页面必须回指该路由。
+func (c *Checker) checkPageRouteBindings() {
+	routePages := map[string]string{}
+	routesDoc, err := loadYAML(filepath.Join(c.root, "contracts/features/routes.yaml"))
+	if err == nil {
+		for _, raw := range asList(routesDoc["routes"]) {
+			item, _ := asMap(raw)
+			id, _ := item["id"].(string)
+			page, _ := item["page"].(string)
+			if id != "" && page != "" {
+				routePages[id] = page
+			}
+		}
+	}
+	schema, err := c.loadSchemaByType("feature.pages")
+	if err != nil {
+		return
+	}
+	pages := map[string]string{}
+	for _, file := range glob(c.root, filepath.Join(schema.Targets.Dir, schema.Targets.Glob)) {
+		doc, err := loadYAML(file)
+		if err != nil {
+			continue
+		}
+		rel := relPath(c.root, file)
+		id, _ := doc["id"].(string)
+		route, _ := doc["route"].(string)
+		if id == "" {
+			continue
+		}
+		pages[id] = route
+		if route == "" {
+			continue
+		}
+		if target, ok := routePages[route]; ok && target != id {
+			c.rulef("page-refs", "%s: route %s points to page %s, not %s", rel, route, target, id)
+		}
+	}
+	for route, page := range routePages {
+		if target, ok := pages[page]; ok && target != route {
+			c.rulef("route-structure", "contracts/features/routes.yaml: route %s points to page %s whose route is %q", route, page, target)
+		}
+	}
+}
+
 // analyticsEventNames 返回 platform.analytics.events 声明的全部事件名。
 func (c *Checker) analyticsEventNames() map[string]bool {
 	doc, err := loadYAML(filepath.Join(c.root, "contracts/platform/analytics/events.yaml"))

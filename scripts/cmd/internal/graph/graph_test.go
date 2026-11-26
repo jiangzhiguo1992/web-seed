@@ -119,6 +119,12 @@ func TestCompute(t *testing.T) {
 	if got := snap.Tables["data.tables.a"].ReferencedBy; len(got) != 1 || got[0] != "data.tables.b.col.account_id" {
 		t.Fatalf("table a referenced_by = %v", got)
 	}
+	if got := snap.Tables["data.tables.a"].Entities; len(got) != 1 || got[0] != "data.entities.e1" {
+		t.Fatalf("table a entities = %v", got)
+	}
+	if got := snap.Tables["data.tables.b"].Entities; len(got) != 1 || got[0] != "data.entities.e2" {
+		t.Fatalf("table b entities = %v", got)
+	}
 	if got := snap.Tables["data.tables.b"].References; len(got) != 1 || got[0] != "data.tables.a.col.id" {
 		t.Fatalf("table b references = %v", got)
 	}
@@ -228,6 +234,9 @@ func TestWriteAndCheck(t *testing.T) {
 	}
 	if !strings.Contains(string(b), "data.queries.q.get_b") {
 		t.Fatalf("table b queries not written:\n%s", b)
+	}
+	if !strings.Contains(string(b), "entities:\n    - data.entities.e2") {
+		t.Fatalf("table b entities not written:\n%s", b)
 	}
 	e1, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e1.yaml"))
 	if !strings.Contains(string(e1), "{ field: E2, entity: data.entities.e2, cardinality: one_to_one }") {

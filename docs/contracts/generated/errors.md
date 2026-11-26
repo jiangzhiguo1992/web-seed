@@ -52,6 +52,7 @@
 | `ATTACHMENT_OWNER_INVALID` | 8003 | 422 | false | `errors.attachment.owner_invalid` | 附件所有者不存在或不可用 |
 | `ATTACHMENT_INVALID` | 8004 | 422 | false | `errors.attachment.invalid` | 附件字段不合法 |
 | `ATTACHMENT_ILLEGAL_TRANSITION` | 8005 | 409 | false | `errors.attachment.illegal_transition` | 当前状态不允许该操作 |
+| `UNIT_NOT_FOUND` | 9001 | 404 | false | `errors.unit.not_found` | 计量单位不存在 |
 
 ## 数据访问基线
 

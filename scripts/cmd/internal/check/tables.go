@@ -636,7 +636,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 func (c *Checker) checkConstraintUsedBy(m map[string]any, tableID, rel string, i int, name string) {
 	raw, present := m["used_by"]
 	if !present || raw == nil {
-		return // 缺失/空列表由 schema.required 与 min_len 报出
+		return // 缺失/空列表由 schema.required 与 min_items 报出
 	}
 	for _, x := range asList(raw) {
 		qid, ok := x.(string)
@@ -656,7 +656,7 @@ func (c *Checker) checkConstraintUsedBy(m map[string]any, tableID, rel string, i
 }
 
 // checkIndexUsedBy 校验索引的 used_by：每个查询项存在且引用当前表。
-// 非空由 schema.required/min_len 保证；这里只做引用对账。
+// 非空由 schema.required/min_items 保证；这里只做引用对账。
 func (c *Checker) checkIndexUsedBy(m map[string]any, tableID, rel string, i int, name string) {
 	raw, present := m["used_by"]
 	if !present || raw == nil {

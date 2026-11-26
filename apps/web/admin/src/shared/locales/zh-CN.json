@@ -55,6 +55,9 @@
       "owner_invalid": "附件所有者不存在或不可用",
       "invalid": "附件字段不合法",
       "illegal_transition": "当前状态不允许该操作"
+    },
+    "unit": {
+      "not_found": "计量单位不存在"
     }
   }
 }

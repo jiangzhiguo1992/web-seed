@@ -28,6 +28,9 @@ permissions:
   - { code: account_write, resource: account, action: "write", description: "创建与编辑账号" }
   - { code: account_delete, resource: account, action: "delete", description: "删除账号" }
 
+  # ---------- 计量单位 ----------
+  - { code: unit_read, resource: unit, action: "read", description: "查看计量单位" }
+
   # ---------- 角色 ----------
   - { code: role_manage, resource: role, action: "manage", description: "管理角色与权限" }
 

@@ -1944,14 +1944,9 @@ func TestEnumUsedByShape(t *testing.T) {
 		t.Fatalf("used_by must be generated and write-forbidden")
 	}
 	c := &Checker{}
-	c.checkEnumUsedBy("x.yaml", 0, "data.enums.x", map[string]any{"used_by": []any{}}, &enumUsage{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[enum-used-by]") || !strings.Contains(strings.Join(c.errs, "\n"), "must not be empty") {
-		t.Fatalf("empty used_by must fail enum-used-by: %v", c.errs)
-	}
-	c.errs = nil
 	c.validateValue([]any{}, usedBy, "enums[].used_by")
-	if len(c.errs) != 0 {
-		t.Fatalf("generated used_by must relax min_items: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.generated-range]") {
+		t.Fatalf("empty generated used_by must fail min_items: %v", c.errs)
 	}
 	c.errs = nil
 	c.validateValue([]any{"bad.prefix"}, usedBy, "enums[].used_by")

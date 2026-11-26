@@ -40,7 +40,6 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 		c.checkPageSchemas(types, rel)
 	}
 	seen := map[string]bool{}
-	c.checkServiceUsed(rel, doc)
 	for _, raw := range asList(doc["services"]) {
 		item, _ := asMap(raw)
 		name, _ := item["name"].(string)
@@ -143,24 +142,10 @@ func (c *Checker) checkPageSchemas(types map[string]any, rel string) {
 	}
 }
 
-// checkServiceUsed 要求 stable 文件的 service 至少有一个使用点。
-func (c *Checker) checkServiceUsed(rel string, doc map[string]any) {
-	if stability, _ := doc["stability"].(string); stability != "stable" {
-		return
-	}
-	for _, raw := range asList(doc["services"]) {
-		item, _ := asMap(raw)
-		name, _ := item["name"].(string)
-		if rawUsed, ok := item["used_by"]; ok && len(asList(rawUsed)) == 0 {
-			c.rulef("service-used", "%s.%s: stable service has empty used_by", rel, name)
-		}
-	}
-}
-
 func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, serviceMeta map[string]serviceMeta, ruleIDs, eventIDs map[string]bool, lifecycleActions map[string]bool, typeNames map[string]bool) {
 	steps := asList(doc["steps"])
 	if len(steps) == 0 {
-		return // 空列表由 schema.min_len 报出
+		return // 空列表由 schema.min_items 报出
 	}
 	stepOutputs := make([]map[string]returnType, len(steps))
 	stepIndex := map[string]int{}
@@ -501,7 +486,7 @@ func (c *Checker) checkStepEvents(step map[string]any, input map[string]any, rel
 		return
 	}
 	if len(items) == 0 {
-		return // 空列表由 schema.min_len 报出
+		return // 空列表由 schema.min_items 报出
 	}
 	refs := make([]string, 0, len(items))
 	seen := map[string]bool{}

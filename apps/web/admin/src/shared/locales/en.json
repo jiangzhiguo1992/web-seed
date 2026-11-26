@@ -55,6 +55,9 @@
       "owner_invalid": "Attachment owner not found or unavailable",
       "invalid": "Invalid attachment field",
       "illegal_transition": "Operation not allowed in current state"
+    },
+    "unit": {
+      "not_found": "Unit not found"
     }
   }
 }

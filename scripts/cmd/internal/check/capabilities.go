@@ -590,6 +590,7 @@ func (c *Checker) checkCapabilities() {
 	}
 	jobServices := c.checkEventsDoc(eventSchema, serviceMetaByID, serviceItemIDs)
 	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, jobServices)
+	c.checkAccessTargets()
 }
 
 // computeServiceErrorClosure 递归计算每个 service 可能返回的完整错误集。

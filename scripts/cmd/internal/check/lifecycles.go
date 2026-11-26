@@ -232,7 +232,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 	checkImplementedBy := func(actionID string, action map[string]any) {
 		steps := stringList(action["implemented_by"])
 		if len(steps) == 0 {
-			c.rulef("lifecycle-anchors", "%s: %s requires implemented_by", rel, actionID)
+			return // 空值由 schema.generated-range 报出
 		}
 		got := map[string]bool{}
 		for _, step := range steps {
@@ -328,7 +328,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 		checkRequires(actionID, item)
 		impl := stringList(item["implemented_by"])
 		if len(impl) == 0 {
-			c.rulef("lifecycle-anchors", "%s: transition %s requires implemented_by", rel, name)
+			continue // 空值由 schema.generated-range 报出
 		}
 		for _, step := range impl {
 			checkStep(actionID, step)

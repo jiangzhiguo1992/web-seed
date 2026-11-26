@@ -58,7 +58,8 @@ func ValidateScaffold(root, typ string, doc []byte, fileName string) []string {
 }
 
 // relaxGeneratedFields 放宽 generated 字段的 required/min_items：
-// gen-graph 会在引用建立后填充这些字段。
+// gen-graph 会在引用建立后填充这些字段；只用于 contract-new 骨架，
+// 已入库实例仍然执行 min_items。
 func relaxGeneratedFields(fields []Field) []Field {
 	out := make([]Field, len(fields))
 	for i, f := range fields {

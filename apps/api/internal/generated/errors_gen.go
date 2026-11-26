@@ -55,6 +55,7 @@ const (
 	AttachmentOwnerInvalid           = 8003
 	AttachmentInvalid                = 8004
 	AttachmentIllegalTransition      = 8005
+	UnitNotFound                     = 9001
 )
 
 // ErrorCatalog 以 platform.errors.<CODE> 为键索引错误目录。
@@ -105,4 +106,5 @@ var ErrorCatalog = map[string]ErrorCode{
 	"platform.errors.ATTACHMENT_OWNER_INVALID":            {BizCode: AttachmentOwnerInvalid, Status: 422, Retryable: false},
 	"platform.errors.ATTACHMENT_INVALID":                  {BizCode: AttachmentInvalid, Status: 422, Retryable: false},
 	"platform.errors.ATTACHMENT_ILLEGAL_TRANSITION":       {BizCode: AttachmentIllegalTransition, Status: 409, Retryable: false},
+	"platform.errors.UNIT_NOT_FOUND":                      {BizCode: UnitNotFound, Status: 404, Retryable: false},
 }

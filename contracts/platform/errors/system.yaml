@@ -1,0 +1,8 @@
+id: platform.errors.system
+summary: "系统基础资源错误码"
+schema_version: 1
+stability: draft
+do_not:
+  - "只放跨模块的基础资源错误；具体业务分支错误放各自域文件"
+errors:
+  - { code: UNIT_NOT_FOUND, biz_code: 9001, status: 404, retryable: false, i18n: errors.unit.not_found, message: "计量单位不存在" }

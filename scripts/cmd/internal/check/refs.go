@@ -193,9 +193,13 @@ func (c *Checker) checkUsedBy(tableIDs map[string]string) {
 			if !ok {
 				continue // 缺失由 schema.required 报出
 			}
+			wantQueries := tableQueries[id]
 			gotQueries := stringSet(asList(raw))
-			if !sameSet(gotQueries, tableQueries[id]) {
-				c.rulef("table-queries-generated", "%s: table.queries mismatch: declared %v, actual %v", rel, sortedKeys(gotQueries), sortedKeys(tableQueries[id]))
+			if len(gotQueries) == 0 {
+				continue // 空值由 schema.generated-range 报出
+			}
+			if !sameSet(gotQueries, wantQueries) {
+				c.rulef("table-queries-generated", "%s: table.queries mismatch: declared %v, actual %v", rel, sortedKeys(gotQueries), sortedKeys(wantQueries))
 			}
 		}
 	}

@@ -104,8 +104,8 @@ func TestEntityNoBaseFields(t *testing.T) {
 }
 
 func TestEntityModelTableShape(t *testing.T) {
-	c := &Checker{}
-	c.checkEntityModel(&entityInfo{Rel: "x.yaml"})
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{}}
+	c.checkEntityModel(&entityInfo{Rel: "x.yaml", Tables: []string{"data.tables.missing"}})
 	mustContainRule(t, c.errs, "entity-table-shape")
 }
 
@@ -336,33 +336,10 @@ services:
 		c := &Checker{
 			root:       root,
 			queryOrder: []string{"data.queries.x"},
-			queries:    map[string]*queryInfo{"data.queries.x": {ID: "data.queries.x"}},
+			queries:    map[string]*queryInfo{"data.queries.x": {ID: "data.queries.x", UsedBy: []string{"cap.services.y.get"}}},
 		}
 		c.checkQueryUsedBy()
 		mustContainRule(t, c.errs, "query-used-by")
-	})
-
-	t.Run("query-unused", func(t *testing.T) {
-		root := t.TempDir()
-		dir := filepath.Join(root, "contracts/capabilities/services")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		body := `id: cap.services.x
-services:
-  - name: get
-    steps: []
-`
-		if err := os.WriteFile(filepath.Join(dir, "x.yaml"), []byte(body), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		c := &Checker{
-			root:       root,
-			queryOrder: []string{"data.queries.x"},
-			queries:    map[string]*queryInfo{"data.queries.x": {ID: "data.queries.x"}},
-		}
-		c.checkQueryUsedBy()
-		mustContainRule(t, c.errs, "query-unused")
 	})
 
 	t.Run("query-name-unique", func(t *testing.T) {
@@ -865,7 +842,7 @@ stability: draft
 do_not: []
 table:
   name: x
-  queries: []
+  queries: [ data.queries.other.q ]
   entities: []
   referenced_by: []
 columns: []

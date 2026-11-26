@@ -91,9 +91,6 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 			}
 		}
 		implemented := asList(item["implemented_by"])
-		if len(implemented) == 0 {
-			c.rulef("rule-structure", "%s: rule %s implemented_by must not be empty", rel, id)
-		}
 		for _, rawSvc := range implemented {
 			svc, _ := rawSvc.(string)
 			if !serviceIDs[svc] {

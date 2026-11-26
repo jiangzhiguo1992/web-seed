@@ -52,22 +52,6 @@ queries:
       - cap.services.attachment.get
       - cap.services.attachment.get_download_url
 
-  - name: GetAttachmentByKey
-    description: "按对象 key 读取附件"
-    tables:
-      - { table: data.tables.attachment }
-    params:
-      - { name: ctx, type: context.Context }
-      - { name: object_key, type: _types.basics.string, column: data.tables.attachment.col.object_key }
-    returns:
-      - { name: attachment, kind: entity, type: data.entities.attachment, nullable: true }
-      - { name: err, kind: error }
-    errors: [ ]
-    index_ref:
-      - { index: data.tables.attachment.uq_attachment_object_key, columns: [ object_key ] }
-    used_by:
-      - cap.services.attachment.get_by_key
-
   - name: CreateAttachment
     description: "创建附件元数据并返回实体；对象字节由客户端直传对象存储"
     tables:

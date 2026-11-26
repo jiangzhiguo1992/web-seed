@@ -26,6 +26,24 @@ func (c *Checker) permissionExists(id string) bool {
 	return c.permissionSet[id]
 }
 
+// checkAccessTargets 校验入口策略的 target 必须被至少一个 HTTP operation 暴露。
+func (c *Checker) checkAccessTargets() {
+	if c.httpOps == nil {
+		return // HTTP 契约未加载时由 http 规则报错，避免级联误报
+	}
+	exposed := map[string]bool{}
+	for _, op := range c.httpOps {
+		if op.Service != "" {
+			exposed[op.Service] = true
+		}
+	}
+	for target := range c.accessBindings {
+		if !exposed[target] {
+			c.rulef("access-target", "contracts/platform/security/access.yaml: %s is not exposed by any http operation", target)
+		}
+	}
+}
+
 func (c *Checker) checkAccess(serviceIDs map[string]bool) {
 	if schema, err := c.loadSchemaByType("platform.security.access"); err == nil {
 		c.checkRules(schema)

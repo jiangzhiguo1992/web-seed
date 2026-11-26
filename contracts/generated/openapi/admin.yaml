@@ -385,6 +385,36 @@ components:
         - msg
         - data
       type: object
+    ApiUnitPageResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/UnitPage'
+        msg:
+          type: string
+      required:
+        - code
+        - msg
+        - data
+      type: object
+    ApiUnitResponse:
+      additionalProperties: false
+      properties:
+        code:
+          const: 0
+          type: integer
+        data:
+          $ref: '#/components/schemas/Unit'
+        msg:
+          type: string
+      required:
+        - code
+        - msg
+        - data
+      type: object
     ApiUploadTicketResponse:
       additionalProperties: false
       properties:
@@ -1263,6 +1293,102 @@ components:
           type: string
       required:
         - reason
+      type: object
+    Unit:
+      additionalProperties: false
+      properties:
+        code:
+          description: 全局唯一编码；创建后不可变
+          type: string
+        created_at:
+          description: 创建时间
+          format: int64
+          type: integer
+        deleted_at:
+          description: 软删时间；为空表示未删除
+          format: int64
+          nullable: true
+          type: integer
+        dimension:
+          description: 量纲；只有同量纲可换算
+          type: string
+        id:
+          description: 实体唯一主键；来自主表 id 列（integer）
+          type: integer
+        name:
+          description: 展示名；允许重复
+          type: string
+        parent_id:
+          description: 父单位 ID；顶级为 null
+          nullable: true
+          type: integer
+        rate:
+          description: 1 个父单位 = rate 个本单位；根单位为 null
+          type: integer
+        remark:
+          description: 备注；仅用于说明
+          nullable: true
+          type: string
+        sort:
+          description: 同量纲展示顺序
+          type: integer
+        status:
+          description: 单位状态
+          enum:
+            - enabled
+            - disabled
+            - deleted
+          type: string
+        step:
+          description: 默认下单步长；单位只读
+          type: integer
+        symbol:
+          description: 展示符号；如 元、kg
+          nullable: true
+          type: string
+        updated_at:
+          description: 更新时间
+          format: int64
+          type: integer
+      required:
+        - id
+        - created_at
+        - updated_at
+        - status
+        - code
+        - name
+        - dimension
+        - rate
+        - step
+        - sort
+      type: object
+    UnitPage:
+      additionalProperties: false
+      properties:
+        has_more:
+          description: 是否还有下一页
+          type: boolean
+        items:
+          description: 分页项列表
+          items:
+            $ref: '#/components/schemas/Unit'
+          type: array
+        limit:
+          default: 20
+          description: 当前页大小
+          maximum: 100
+          minimum: 1
+          type: integer
+        offset:
+          default: 0
+          description: 当前页偏移
+          minimum: 0
+          type: integer
+      required:
+        - items
+        - offset
+        - limit
+        - has_more
       type: object
     UpdateAccountInput:
       additionalProperties: false
@@ -4399,6 +4525,89 @@ paths:
       security:
         - Bearer: []
       summary: 启用或停用字典
+  /dictionary/admin/code/{code}:
+    get:
+      operationId: getDictionaryByCode
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
+        - description: 字典编码
+          in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiDictionaryResponse'
+          description: 成功
+        400:
+          $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
+        401:
+          $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
+              msg: 未认证
+        403:
+          $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
+              msg: 无权限
+        404:
+          $ref: '#/components/responses/NotFound'
+          x-error-codes:
+            - biz_code: 7001
+              code: DICTIONARY_NOT_FOUND
+              msg: 字典不存在
+          x-response-msg: 资源不存在
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
+        429:
+          $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
+        500:
+          $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+              msg: 服务端错误
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
+      security:
+        - Bearer: []
+      summary: 按编码获取字典
   /dictionary/admin/import:
     post:
       operationId: importDictionaries
@@ -4504,5 +4713,274 @@ paths:
       security:
         - Bearer: []
       summary: 批量导入字典
+  /unit/admin:
+    get:
+      operationId: listUnits
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
+        - description: 量纲；省略表示全部
+          in: query
+          name: dimension
+          required: false
+          schema:
+            type: string
+        - description: 分页偏移；默认 0
+          in: query
+          name: offset
+          required: false
+          schema:
+            default: 0
+            minimum: 0
+            type: integer
+        - description: 分页大小；默认 20
+          in: query
+          name: limit
+          required: false
+          schema:
+            default: 20
+            maximum: 100
+            minimum: 1
+            type: integer
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiUnitPageResponse'
+          description: 成功
+        400:
+          $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
+        401:
+          $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
+              msg: 未认证
+        403:
+          $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
+              msg: 无权限
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
+        429:
+          $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
+        500:
+          $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+              msg: 服务端错误
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
+      security:
+        - Bearer: []
+      summary: 按量纲分页列出计量单位
+  /unit/admin/{code}:
+    get:
+      operationId: getUnit
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
+        - description: 单位编码
+          in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiUnitResponse'
+          description: 成功
+        400:
+          $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
+        401:
+          $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
+              msg: 未认证
+        403:
+          $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
+              msg: 无权限
+        404:
+          $ref: '#/components/responses/NotFound'
+          x-error-codes:
+            - biz_code: 9001
+              code: UNIT_NOT_FOUND
+              msg: 计量单位不存在
+          x-response-msg: 计量单位不存在
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
+        429:
+          $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
+        500:
+          $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+              msg: 服务端错误
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
+      security:
+        - Bearer: []
+      summary: 按编码获取计量单位
+  /unit/admin/{id}/children:
+    get:
+      operationId: listUnitChildren
+      parameters:
+        - description: 期望响应媒体类型
+          in: header
+          name: Accept
+          required: false
+          schema:
+            enum:
+              - application/json
+            type: string
+        - description: 父单位 ID
+          in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - description: 分页偏移；默认 0
+          in: query
+          name: offset
+          required: false
+          schema:
+            default: 0
+            minimum: 0
+            type: integer
+        - description: 分页大小；默认 20
+          in: query
+          name: limit
+          required: false
+          schema:
+            default: 20
+            maximum: 100
+            minimum: 1
+            type: integer
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiUnitPageResponse'
+          description: 成功
+        400:
+          $ref: '#/components/responses/BadRequest'
+          x-error-codes:
+            - biz_code: 1001
+              code: COMMON_BAD_REQUEST
+              msg: 请求参数不合法
+        401:
+          $ref: '#/components/responses/Unauthorized'
+          x-error-codes:
+            - biz_code: 1002
+              code: COMMON_UNAUTHORIZED
+              msg: 未认证
+        403:
+          $ref: '#/components/responses/Forbidden'
+          x-error-codes:
+            - biz_code: 1003
+              code: COMMON_FORBIDDEN
+              msg: 无权限
+        405:
+          $ref: '#/components/responses/MethodNotAllowed'
+          x-error-codes:
+            - biz_code: 1014
+              code: COMMON_METHOD_NOT_ALLOWED
+              msg: 方法不允许
+        429:
+          $ref: '#/components/responses/TooManyRequests'
+          x-error-codes:
+            - biz_code: 1006
+              code: COMMON_RATE_LIMITED
+              msg: 请求过于频繁
+        500:
+          $ref: '#/components/responses/Internal'
+          x-error-codes:
+            - biz_code: 1007
+              code: COMMON_INTERNAL
+              msg: 服务端错误
+            - biz_code: 1008
+              code: COMMON_AUDIT_FAILED
+              msg: 审计写入失败
+        503:
+          $ref: '#/components/responses/ServiceUnavailable'
+          x-error-codes:
+            - biz_code: 1009
+              code: COMMON_LOOP_EXHAUSTED
+              msg: 循环次数超过上限，请稍后重试
+            - biz_code: 1010
+              code: COMMON_UNAVAILABLE
+              msg: 服务暂不可用
+      security:
+        - Bearer: []
+      summary: 按父单位分页列出直接子单位
 servers:
   - url: /v1

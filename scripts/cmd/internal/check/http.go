@@ -588,6 +588,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	pagesByService := c.pageServices()
 	seenAudience := map[string]map[string]bool{}
 	httpVersions := map[string]string{}
+	declaredHTTP := map[string]bool{}
 	for _, file := range httpFiles {
 		doc, err := loadYAML(file)
 		if err != nil {
@@ -626,6 +627,9 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		}
 		fileID, _ := doc["id"].(string)
 		httpVersions[fileID] = mount.APIVersion
+		if fileID != "" {
+			declaredHTTP[fileID] = true
+		}
 		if seenAudience[fileID] == nil {
 			seenAudience[fileID] = map[string]bool{}
 		}
@@ -931,9 +935,11 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		}
 	}
 	if c.strictHTTP {
+		includedHTTP := map[string]bool{}
 		for appName, app := range apiApps {
 			appVersion := ""
 			for include := range app.Includes {
+				includedHTTP[include] = true
 				version := httpVersions[include]
 				switch {
 				case version == "":
@@ -950,6 +956,11 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if !seen[app.Audience] {
 					c.rulef("http-audience", "project.yaml: app %s (audience %s) includes %s but no operation targets that audience", appName, app.Audience, include)
 				}
+			}
+		}
+		for id := range declaredHTTP {
+			if !includedHTTP[id] {
+				c.rulef("http-app-included", "contracts/project.yaml: %s is not included by any api app", id)
 			}
 		}
 		for service, ops := range serviceOps {
