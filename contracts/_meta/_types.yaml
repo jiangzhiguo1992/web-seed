@@ -3,12 +3,19 @@
 id: meta.types
 title: "统一类型注册表"
 
+# 所有 basics 族共享的参数；族自身不得重复声明。
+common_params:
+  default:
+    type: _types.basics.any
+    required: false
+    description: "缺省值；值域必须与所属类型族兼容"
+
 basics:
   bytes:
     description: "二进制"
     params:
-      min_len: { type: _types.basics.integer, required: false, min: 0, description: "最小长度" }
-      max_len: { type: _types.basics.integer, required: false, min: 1, description: "最大长度" }
+      min_len: { type: _types.basics.integer.32, required: false, min: 0, description: "最小长度" }
+      max_len: { type: _types.basics.integer.32, required: false, min: 1, description: "最大长度" }
       fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
     types:
       bytes: { go: "[]byte", pg: [ bytea ], ts: string }
@@ -16,15 +23,15 @@ basics:
     description: "位串；kind 选择定长 bit 或变长 varbit，length 指定位数；Go 用 math/big.Int，按数值位解释，不保留前导 0"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ bit, varbit ], default: varbit, description: "位串类型" }
-      length: { type: _types.basics.integer, required: false, min: 1, description: "位数；kind=bit 时应声明" }
+      length: { type: _types.basics.integer.32, required: false, min: 1, description: "位数；kind=bit 时应声明" }
     types:
       bit: { go: big.Int, pg: [ bit, varbit ], ts: number }
   string:
     description: "字符序列；kind 选择 text 或全文检索类型；varchar/char 由 max_len/fixed 表达"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ text, tsvector, tsquery ], default: text, description: "字符存储类型" }
-      min_len: { type: _types.basics.integer, required: false, min: 0, description: "最小长度" }
-      max_len: { type: _types.basics.integer, required: false, min: 1, description: "最大长度" }
+      min_len: { type: _types.basics.integer.32, required: false, min: 0, description: "最小长度" }
+      max_len: { type: _types.basics.integer.32, required: false, min: 1, description: "最大长度" }
       fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
       pattern: { type: _types.basics.string, required: false, description: "写入前校验正则" }
       normalize: { type: _types.basics.string, required: false, enum: [ lower, upper ], description: "写入前归一" }
@@ -36,31 +43,29 @@ basics:
     types:
       boolean: { go: bool, pg: [ boolean ], ts: boolean }
   integer:
-    description: "整数；unsigned 只影响取值校验，不改变 Go/PG/TS 落型"
+    description: "整数；位宽由类型引用的 variant 决定（integer.8/16/32/64），unsigned 只影响取值校验，不改变 Go/PG/TS 落型"
     params:
-      bits: { type: _types.basics.integer, required: false, enum: [ 8, 16, 32, 64 ], default: 32, description: "位宽" }
       unsigned: { type: _types.basics.boolean, required: false, default: false, description: "无符号" }
-      min: { type: _types.basics.integer, required: false, description: "下限" }
-      max: { type: _types.basics.integer, required: false, description: "上限" }
+      min: { type: _types.basics.integer.64, required: false, description: "下限" }
+      max: { type: _types.basics.integer.64, required: false, description: "上限" }
     types:
       8: { go: int8, pg: [ smallint ], ts: number }
       16: { go: int16, pg: [ smallint, smallserial ], ts: number }
       32: { go: int32, pg: [ integer, serial ], ts: number }
       64: { go: int64, pg: [ bigint, bigserial ], ts: number }
   float:
-    description: "浮点数"
+    description: "浮点数；位宽由类型引用的 variant 决定（float.32/64）"
     params:
-      bits: { type: _types.basics.integer, required: false, enum: [ 32, 64 ], default: 64, description: "位宽" }
-      min: { type: _types.basics.float, required: false, description: "下限" }
-      max: { type: _types.basics.float, required: false, description: "上限" }
+      min: { type: _types.basics.float.64, required: false, description: "下限" }
+      max: { type: _types.basics.float.64, required: false, description: "上限" }
     types:
       32: { go: float32, pg: [ real ], ts: number }
       64: { go: float64, pg: [ double precision ], ts: number }
   decimal:
     description: "精确小数；Go 用 shopspring/decimal，JSON 为 number（超过 2^53 的整数需业务侧注意）"
     params:
-      precision: { type: _types.basics.integer, required: true, min: 1, examples: [ 19 ], description: "总位数" }
-      scale: { type: _types.basics.integer, required: false, default: 0, min: 0, description: "小数位数" }
+      precision: { type: _types.basics.integer.32, required: true, min: 1, examples: [ 19 ], description: "总位数" }
+      scale: { type: _types.basics.integer.32, required: false, default: 0, min: 0, description: "小数位数" }
       min: { type: _types.basics.decimal, required: false, description: "下限" }
       max: { type: _types.basics.decimal, required: false, description: "上限" }
     types:
@@ -75,7 +80,7 @@ basics:
   timestamp:
     description: "绝对时间点；time 带时区（timestamptz），long 不带时区（timestamp），fractional_seconds 控制小数秒"
     params:
-      fractional_seconds: { type: _types.basics.integer, required: false, default: 6, min: 0, max: 9, description: "小数秒精度" }
+      fractional_seconds: { type: _types.basics.integer.32, required: false, default: 6, min: 0, max: 9, description: "小数秒精度" }
     types:
       time: { go: time.Time, pg: [ timestamptz ], ts: string }
       long: { go: int64, pg: [ timestamp ], ts: number }
@@ -100,29 +105,29 @@ structures:
     fields:
       - { name: item, type: "*", required: true, description: "元素" }
     params:
-      min_items: { type: _types.basics.integer, required: false, min: 0, description: "最小元素数" }
-      max_items: { type: _types.basics.integer, required: false, min: 1, description: "最大元素数" }
+      min_items: { type: _types.basics.integer.32, required: false, min: 0, description: "最小元素数" }
+      max_items: { type: _types.basics.integer.32, required: false, min: 1, description: "最大元素数" }
   set:
     description: "无序、去重集合"
     fields:
       - { name: item, type: "*", required: true, description: "元素" }
     params:
-      min_items: { type: _types.basics.integer, required: false, min: 0, description: "最小元素数" }
-      max_items: { type: _types.basics.integer, required: false, min: 1, description: "最大元素数" }
+      min_items: { type: _types.basics.integer.32, required: false, min: 0, description: "最小元素数" }
+      max_items: { type: _types.basics.integer.32, required: false, min: 1, description: "最大元素数" }
   array:
     description: "定长有序数组；元素类型固定"
     fields:
       - { name: item, type: "*", required: true, description: "元素" }
     params:
-      len: { type: _types.basics.integer, required: true, min: 1, description: "数组长度" }
+      len: { type: _types.basics.integer.32, required: true, min: 1, description: "数组长度" }
   map:
     description: "键值映射；键固定为 string 或 integer"
     fields:
       - { name: key, type: "*", required: true, enum: [ string, integer ], description: "键；string 或 integer" }
       - { name: value, type: "*", required: true, description: "值；任意 _types 类型" }
     params:
-      min_items: { type: _types.basics.integer, required: false, min: 0, description: "最小键数" }
-      max_items: { type: _types.basics.integer, required: false, min: 1, description: "最大键数" }
+      min_items: { type: _types.basics.integer.32, required: false, min: 0, description: "最小键数" }
+      max_items: { type: _types.basics.integer.32, required: false, min: 1, description: "最大键数" }
       key_patterns: { type: _types.structures.list<_types.basics.string>, required: false, description: "string key 的正则列表；全部匹配" }
   object:
     description: "固定键对象；字段由 fields/item_fields 定义"
@@ -198,22 +203,22 @@ schemas:
         required: true
         description: "数组元素值域"
       - name: min_items
-        type: _types.basics.integer
+        type: _types.basics.integer.32
         min: 0
         description: "数组最小长度"
       - name: max_items
-        type: _types.basics.integer
+        type: _types.basics.integer.32
         min: 0
         description: "数组最大长度"
       - name: validation
         type: _types.structures.list<_types.structures.object>
         required: false
         description: "数组级校验规则"
-        item_fields:
+        item_fields: &value_validation
           - name: rule
             type: _types.basics.string
             required: true
-            description: "受限布尔表达式；引用 value"
+            description: "受限布尔表达式；array/map/scalar 引用 value，ref 可引用 value.<path>"
           - name: message
             type: _types.basics.string
             required: true
@@ -232,11 +237,11 @@ schemas:
         required: true
         description: "映射值域；键固定为 string"
       - name: min_items
-        type: _types.basics.integer
+        type: _types.basics.integer.32
         min: 0
         description: "映射最小键数"
       - name: max_items
-        type: _types.basics.integer
+        type: _types.basics.integer.32
         min: 0
         description: "映射最大键数"
       - name: key_patterns
@@ -249,15 +254,7 @@ schemas:
         type: _types.structures.list<_types.structures.object>
         required: false
         description: "映射级校验规则"
-        item_fields:
-          - name: rule
-            type: _types.basics.string
-            required: true
-            description: "受限布尔表达式；引用 value"
-          - name: message
-            type: _types.basics.string
-            required: true
-            description: "违反规则时的错误文案"
+        item_fields: *value_validation
 
   scalar:
     description: "标量节点；type 指向 _types.basics.*（类型族或 data/types.yaml 自定义类型）"
@@ -271,15 +268,7 @@ schemas:
         type: _types.structures.list<_types.structures.object>
         required: false
         description: "标量级校验规则"
-        item_fields:
-          - name: rule
-            type: _types.basics.string
-            required: true
-            description: "受限布尔表达式；引用 value"
-          - name: message
-            type: _types.basics.string
-            required: true
-            description: "违反规则时的错误文案"
+        item_fields: *value_validation
 
   ref:
     description: "引用节点；type 指向 entity、enum 或全限定本地 schema"
@@ -293,13 +282,5 @@ schemas:
         type: _types.structures.list<_types.structures.object>
         required: false
         description: "引用级校验规则"
-        item_fields:
-          - name: rule
-            type: _types.basics.string
-            required: true
-            description: "受限布尔表达式；引用 value 或 value.<path>"
-          - name: message
-            type: _types.basics.string
-            required: true
-            description: "违反规则时的错误文案"
+        item_fields: *value_validation
 
