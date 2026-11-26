@@ -111,8 +111,14 @@ func (c *Checker) checkStorage(tableIDs map[string]string, schema *Schema) {
 		return
 	}
 	supported := stringSet(asList(doc["supported_engines"]))
+	supportedCache := stringSet(asList(doc["supported_cache_engines"]))
 	notSupported := stringSet(asList(doc["not_supported_topologies"]))
 	for _, name := range sortedStringSetKeys(supported) {
+		if notSupported[name] {
+			c.rulef("storage-engine", "%s: %s cannot be both supported and not_supported", rel, name)
+		}
+	}
+	for _, name := range sortedStringSetKeys(supportedCache) {
 		if notSupported[name] {
 			c.rulef("storage-engine", "%s: %s cannot be both supported and not_supported", rel, name)
 		}
@@ -125,6 +131,13 @@ func (c *Checker) checkStorage(tableIDs map[string]string, schema *Schema) {
 	for _, engine := range sortedStringSetKeys(supported) {
 		if _, ok := rawTables[engine]; !ok {
 			c.rulef("storage-engine", "%s: tables.%s is required for supported engine", rel, engine)
+		}
+	}
+	if rawCaches, ok := asMap(doc["caches"]); ok {
+		for _, engine := range sortedAnyKeys(rawCaches) {
+			if !supportedCache[engine] {
+				c.rulef("storage-engine", "%s: caches.%s is not a supported cache engine", rel, engine)
+			}
 		}
 	}
 	entries, archives := c.checkStorageTables(rawTables, tableIDs, rel)

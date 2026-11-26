@@ -1,3 +1,5 @@
+# 认证 HTTP 接口。
+
 id: cap.protocols.http.auth
 summary: "认证 HTTP 接口"
 owner_module: account

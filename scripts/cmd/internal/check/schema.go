@@ -86,6 +86,7 @@ func (c *Checker) validateObjectNode(m map[string]any, path string) {
 		return // validateValue 的 list<object> 会报 must be list
 	}
 	names := map[string]bool{}
+	propSchemas := map[string]map[string]any{}
 	for i, item := range props {
 		pm, ok := asMap(item)
 		if !ok {
@@ -93,10 +94,138 @@ func (c *Checker) validateObjectNode(m map[string]any, path string) {
 		}
 		if name, _ := pm["name"].(string); name != "" {
 			names[name] = true
+			if schema, ok := asMap(pm["schema"]); ok {
+				propSchemas[name] = schema
+			}
 		}
 		c.validatePropertyExtras(pm, fmt.Sprintf("%s.properties[%d]", path, i))
 	}
 	c.validateNodeRules(m, "object", path, names)
+	c.validateObjectRuleLiterals(m, path, propSchemas)
+}
+
+// validateObjectRuleLiterals 校验 object 级 validation 中 input.<属性> 与字面量的比较：
+// 枚举字面量必须属于枚举；实体/对象/容器只能与 null 比较；可判定的标量类型必须匹配。
+// 这样 AI 在 schema.validation 里写错枚举值或类型时会在 contract-check 阶段失败。
+func (c *Checker) validateObjectRuleLiterals(m map[string]any, path string, props map[string]map[string]any) {
+	raw, ok := m["validation"]
+	if !ok {
+		return
+	}
+	list, ok := asList2(raw)
+	if !ok {
+		return
+	}
+	for i, item := range list {
+		vm, ok := asMap(item)
+		if !ok {
+			continue
+		}
+		rule, _ := vm["rule"].(string)
+		if strings.TrimSpace(rule) == "" {
+			continue
+		}
+		node, err := parseWhen(rule)
+		if err != nil {
+			continue // 语法错误已由 validateNodeRules 报出
+		}
+		where := fmt.Sprintf("%s.validation[%d]", path, i)
+		walkWhenCompares(node, func(cmp *whenNode) {
+			field, lit := cmp.left, cmp.right
+			if field.kind != "field" && lit.kind == "field" {
+				field, lit = lit, field
+			}
+			if field.kind != "field" || lit.kind != "literal" {
+				return
+			}
+			raw, _ := field.value.(string)
+			if !strings.HasPrefix(raw, "input.") {
+				return
+			}
+			name := strings.TrimPrefix(raw, "input.")
+			schema := props[name]
+			if schema == nil {
+				return // 未知属性已由 validateNodeRules 报出
+			}
+			c.checkObjectLiteral(schema, lit.value, where+"."+name)
+		})
+	}
+}
+
+// checkObjectLiteral 校验单个 schema 属性与字面量的兼容性。
+func (c *Checker) checkObjectLiteral(schema map[string]any, lit any, where string) {
+	if lit == nil {
+		return // null 比较不检查；可空性由业务规则决定
+	}
+	if kind, _ := schema["kind"].(string); kind != "" {
+		c.rulef("schema.validation", "%s: %s must be compared with null only", where, kind)
+		return
+	}
+	typ, _ := schema["type"].(string)
+	if typ == "" {
+		return
+	}
+	if strings.HasPrefix(typ, "data.entities.") || (strings.HasPrefix(typ, "cap.services.") && strings.Contains(typ, ".schemas.")) {
+		c.rulef("schema.validation", "%s: %s must be compared with null only", where, typ)
+		return
+	}
+	c.checkLiteral(typ, lit, where)
+}
+
+// checkLiteral 校验字面量与具体类型（含枚举、自定义类型）的兼容性。
+func (c *Checker) checkLiteral(typ string, lit any, where string) {
+	if lit == nil {
+		return
+	}
+	if strings.HasPrefix(typ, "data.enums.") {
+		value, ok := lit.(string)
+		if !ok {
+			c.rulef("schema.validation", "%s: enum %s requires a string literal, got %v", where, typ, lit)
+			return
+		}
+		if values := c.enumValues[typ]; values != nil && !values[value] {
+			c.rulef("schema.validation", "%s: %q is not a value of %s", where, value, typ)
+		}
+		return
+	}
+	if strings.HasPrefix(typ, "data.entities.") || (strings.HasPrefix(typ, "cap.services.") && strings.Contains(typ, ".schemas.")) {
+		c.rulef("schema.validation", "%s: %s must be compared with null only", where, typ)
+		return
+	}
+	expr, err := parseTypeExpr(typ, c.valueTypes)
+	if err != nil {
+		return // 类型语法错误由 schema.type 报出
+	}
+	if custom, ok := c.valueTypes.CustomTypes[expr.Base]; ok {
+		if family, _, ok := custom.Basics(); ok {
+			expr.Base = family
+		}
+	}
+	switch expr.Base {
+	case "list", "set", "array", "map", "object":
+		c.rulef("schema.validation", "%s: %s must be compared with null only", where, typ)
+		return
+	case "string":
+		if _, ok := lit.(string); !ok {
+			c.rulef("schema.validation", "%s: literal %v is not a string for %s", where, lit, typ)
+		}
+	case "integer":
+		if _, ok := toInt(lit); !ok {
+			c.rulef("schema.validation", "%s: literal %v is not an integer for %s", where, lit, typ)
+		}
+	case "float", "number", "decimal":
+		if _, ok := toFloat(lit); !ok {
+			c.rulef("schema.validation", "%s: literal %v is not a number for %s", where, lit, typ)
+		}
+	case "boolean":
+		if _, ok := lit.(bool); !ok {
+			c.rulef("schema.validation", "%s: literal %v is not a boolean for %s", where, lit, typ)
+		}
+	case "timestamp", "datetime", "bytes":
+		if _, ok := lit.(string); !ok {
+			c.rulef("schema.validation", "%s: literal %v is not a string for %s", where, lit, typ)
+		}
+	}
 }
 
 // validateNodeRules 校验节点级 validation：rule 可解析，字段引用符合 kind。
@@ -163,7 +292,36 @@ func (c *Checker) validateNodeRules(m map[string]any, kind, path string, names m
 		if kind == "ref" {
 			c.checkRefEnumRules(node, refPaths, where)
 		}
+		if kind != "object" {
+			c.checkValueRuleLiterals(m, kind, node, where)
+		}
 	}
+}
+
+// checkValueRuleLiterals 校验非 object 节点 validation 中 value 与字面量的比较：
+// scalar 按 type 校验；array/map/ref 的 value 只能与 null 比较。
+func (c *Checker) checkValueRuleLiterals(m map[string]any, kind string, node *whenNode, where string) {
+	walkWhenCompares(node, func(cmp *whenNode) {
+		field, lit := cmp.left, cmp.right
+		if field.kind != "field" && lit.kind == "field" {
+			field, lit = lit, field
+		}
+		if field.kind != "field" || lit.kind != "literal" {
+			return
+		}
+		if field.value != "value" {
+			return
+		}
+		switch kind {
+		case "scalar":
+			typ, _ := m["type"].(string)
+			c.checkLiteral(typ, lit.value, where)
+		case "array", "map", "ref":
+			if lit.value != nil {
+				c.rulef("schema.validation", "%s: %s must be compared with null only", where, kind)
+			}
+		}
+	})
 }
 
 // validatePropertyExtras 校验 properties 条目的额外不变量；通用字段规则由

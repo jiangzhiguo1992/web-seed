@@ -1,3 +1,5 @@
+# 字典 HTTP 接口。
+
 id: cap.protocols.http.dictionary
 summary: "字典 HTTP 接口"
 owner_module: system

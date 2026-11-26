@@ -1,3 +1,5 @@
+# 认证服务。
+
 id: cap.services.auth
 summary: "认证服务：登录、认证绑定与账号注销编排"
 owner_module: account

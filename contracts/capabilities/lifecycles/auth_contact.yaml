@@ -1,4 +1,4 @@
-# 手机/邮箱认证绑定生命周期：创建为 unverified，验证成功后 verified，可停用/启用。
+# 手机/邮箱认证绑定状态机。
 
 id: cap.lifecycles.auth_contact
 summary: "手机/邮箱认证绑定生命周期"

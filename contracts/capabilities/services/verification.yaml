@@ -1,3 +1,5 @@
+# 验证码服务。
+
 id: cap.services.verification
 summary: "验证码服务：发送、校验与作废"
 owner_module: account

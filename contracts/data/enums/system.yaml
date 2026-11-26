@@ -1,4 +1,4 @@
-# 系统域跨端枚举集合；按 owner_module 聚合。
+# 系统域跨端枚举集合。
 
 id: data.enums.system
 summary: "系统域跨端枚举集合"
@@ -6,7 +6,7 @@ owner_module: system
 schema_version: 1
 stability: draft
 do_not:
-  - "data.enums.system 只放 system 模块跨端枚举；字典选项、上传用途等可扩展值放 dictionary/attachment 表"
+  - "字典选项、上传用途等可扩展值放 dictionary/attachment 表，不要放进 data.enums.system"
 
 enums:
   - name: attachment_status

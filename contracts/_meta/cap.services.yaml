@@ -125,7 +125,7 @@ fields:
               - { name: nullable, type: _types.basics.boolean, required: false, description: "是否可空" }
 
           - { name: errors, type: _types.structures.set<_types.basics.string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误" }
-          - { name: validations, type: _types.structures.set<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^data\.entities\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "本步依赖的实体校验 ID；由 entity.validation.used_by 反向汇总" }
+          - { name: validations, type: _types.structures.set<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^data\.entities\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "本步依赖的实体校验 ID；gen-graph 据此生成 entity.validation.used_by" }
           - { name: query, type: _types.basics.string, required: false, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标查询；参数由本步 input 按同名映射" }
           - { name: service, type: _types.basics.string, required: false, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "目标服务项；参数由本步 input 按同名映射" }
 

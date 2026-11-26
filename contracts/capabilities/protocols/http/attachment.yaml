@@ -1,11 +1,12 @@
+# 附件 HTTP 接口。
+
 id: cap.protocols.http.attachment
 summary: "附件 HTTP 接口（预签名上传、下载与失败回调）"
 owner_module: system
 schema_version: 1
 stability: draft
 do_not:
-  - "对象字节不经过 API；上传使用 create_upload 返回的预签名 URL"
-  - "响应不得包含对象存储凭据或 ACL"
+  - "attachment 响应不得包含对象存储凭据或 ACL"
   - "附件删除只做软删；不要物理删除对象存储中的字节"
 
 mount:

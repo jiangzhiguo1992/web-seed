@@ -44,8 +44,16 @@ fields:
     required: true
     unique: true
     min_items: 1
-    pattern: '^[a-z][a-z0-9_-]*$'
+    pattern: '^[a-z][a-z0-9_]*$'
     description: "支持的权威存储引擎"
+
+  - name: supported_cache_engines
+    type: _types.structures.set<_types.basics.string>
+    required: true
+    unique: true
+    min_items: 1
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "支持的缓存引擎；caches 的键必须来自本列表"
 
   - name: not_supported_topologies
     type: _types.structures.set<_types.basics.string>
@@ -94,7 +102,7 @@ rules:
   - { id: storage-entry-description, text: "tables 每条必须有 description；普通条目 description 必须等于对应 data.tables 的 summary，归档条目必须写 archive_of，description 说明归档用途；archive_of 只允许出现在归档条目", implemented_by: [ storage-entry-description ] }
   - { id: storage-cache-key, text: "caches 的 key 是非空去重列名列表（account_id / col.account_id / 完整列引用），表由 cache_of 确定，每列必须属于该表（含继承列）；同一引擎内 (cache_of,key) 唯一，key 顺序参与比较；跨引擎同 (cache_of,key) 视为同一逻辑缓存", implemented_by: [ storage-cache-key ] }
   - { id: storage-cache-used-by, text: "storage.caches 的每个逻辑缓存必须至少被一个查询的 caches 有效引用（cache_of 在 query.tables 中）；未被引用或只有无效引用的缓存必须删除", implemented_by: [ storage-cache-used-by ] }
-  - { id: storage-engine, text: "storage.tables 的键必须在 supported_engines 中，且每个 supported_engine 都必须有对应条目列表；supported_engines 与 not_supported_topologies 不得有交集", implemented_by: [ storage-engine ] }
+  - { id: storage-engine, text: "storage.tables 的键必须在 supported_engines 中，且每个 supported_engine 都必须有对应条目列表；storage.caches 的键必须在 supported_cache_engines 中；supported_engines / supported_cache_engines 与 not_supported_topologies 不得有交集", implemented_by: [ storage-engine ] }
   - { id: storage-retention, text: "retention 是布尔开关；cache 条目必须写 retention:true；未开启（false/省略/非布尔）时禁止 unit 与 ttl", implemented_by: [ storage-retention ] }
   - { id: storage-duration, text: "retention:true 时表条目必须写 unit 和 ttl，cache 条目必须写 unit/cache_ttl；unit 只能是 minutes/hours/days；时长必须 >= 1", implemented_by: [ storage-duration ] }
   - { id: storage-ttl-bound, text: "cache_ttl 不得超过权威表条目的 ttl（若声明）", implemented_by: [ storage-ttl-bound ] }

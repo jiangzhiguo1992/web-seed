@@ -1,3 +1,5 @@
+# 账号领域异步任务。
+
 id: cap.events.account
 summary: "账号领域事件"
 owner_module: account

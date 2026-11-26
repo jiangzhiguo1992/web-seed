@@ -1,3 +1,5 @@
+# 附件上传清理任务。
+
 id: cap.events.attachment
 summary: "附件异步任务"
 owner_module: system

@@ -609,6 +609,7 @@ func TestStorageRegistryAndEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := `supported_engines: [postgres, mysql]
+supported_cache_engines: [redis]
 not_supported_topologies: [postgres, sharding]
 tables:
   postgres:
@@ -621,6 +622,8 @@ tables:
   mysql:
     - { table: data.tables.w }
   mongodb: []
+caches:
+  memcached: []
 `
 	if err := os.WriteFile(filepath.Join(dir, "storage.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -640,6 +643,7 @@ tables:
 		"tables.postgres[2]: duplicates data.tables.z",
 		"table data.tables.w is registered under both mysql and postgres",
 		"tables.mongodb is not a supported engine",
+		"caches.memcached is not a supported cache engine",
 		"postgres cannot be both supported and not_supported",
 		"[storage-registry]",
 		"[storage-engine]",
@@ -765,6 +769,12 @@ func TestStorageDocRequiresSupportedEngines(t *testing.T) {
 	c.validateDoc(map[string]any{"tables": map[string]any{}, "supported_engines": []any{}}, schema.Fields, "contracts/data/storage.yaml")
 	if got := entityErrs(c); !strings.Contains(got, "0 items < min_items 1") || !strings.Contains(got, "[schema.range]") {
 		t.Fatalf("empty supported_engines not reported: %v", c.errs)
+	}
+
+	c = &Checker{valueTypes: schema.ValueTypes}
+	c.validateDoc(map[string]any{"tables": map[string]any{}, "supported_engines": []any{"postgres"}}, schema.Fields, "contracts/data/storage.yaml")
+	if got := entityErrs(c); !strings.Contains(got, "missing required field \"supported_cache_engines\"") || !strings.Contains(got, "[schema.required]") {
+		t.Fatalf("missing supported_cache_engines not reported: %v", c.errs)
 	}
 }
 

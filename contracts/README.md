@@ -323,10 +323,10 @@ cap.lifecycles.account ─subjects(status)→ data.entities.account ─table→ 
 # 账号主表。表结构真相源，migrations 由本文件生成。
 
 id: data.tables.account
-summary: 账号主表
+summary: "账号主表"
 stability: stable
 do_not:                        # 只写实例级；通用约束见组 README 或 _base
-  - number 唯一索引必须全局唯一，不加 live_only
+  - "number 唯一索引必须全局唯一，不加 live_only"
 
 table:
   name: account                  # 物理表名；必须显式声明，本仓库保持单数
@@ -335,20 +335,19 @@ table:
 
 - 契约文件名与物理表名解耦：文件名决定契约 ID；物理表名必须显式声明；本仓库统一单数
 - `stability` 流转见 `contracts/_meta/README.md` §5.1：`stable` 只能用户手动设置/降级，生成器只产出 `draft`；`stable` 前必须替换 TODO 并跑 `make contract-check`
-- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` 等按完整 ID 匹配 `_meta/<type>.yaml`；`data.storage` 是单文件、无模板，由 `storage-*` 规则校验；`data.tables.base` / `data.entities.base` 由 checker 固定识别），实例文件无需声明 `type`
+- 类型由文件级 ID 推导（`data.tables.account` → `data.tables`；`data.enums` 等按完整 ID 匹配 `_meta/<type>.yaml`；`data.storage` 是单文件契约，字段树见 `_meta/data.storage.yaml`，由 `storage-*` 规则校验；`data.tables.base` / `data.entities.base` 由 checker 固定识别），实例文件无需声明 `type`
 - 生效元数据 = `_meta/<type>.yaml` + 继承的 `_base` 字段 + 文件字段覆盖
 - **通用约束不要复制到每个文件**：复制即漂移
 - **不写 `refs`**：依赖关系由图校验器从 `ref` / `capability` / `use` / `emits` / `column` / `target` 等结构化字段自动推导
 
 ### 4.2 拆分与行数
 
-| 类型 | 拆分单位 | 上限 |
+| 类型 | 拆分单位 | 建议上限 |
 |---|---|---|
 | `data/tables/*` | 一物理表一文件 | **不限** |
 | `data/entities/*` | 一逻辑实体一文件 | 150 |
 | `capabilities/services/*` | 一模块一文件（services + schemas；interface 名由 owner_module + file 派生） | 250 |
 | `capabilities/events/*` | 一模块一文件 | 120 |
-| `capabilities/events/*` | 一业务主体一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
 | `capabilities/lifecycles/*` | 一个状态机一文件 | 150 |
 | `features/rules/*` | 一规则集一文件 | 120 |
@@ -356,6 +355,8 @@ table:
 | `platform/**` | 一关注点一文件 | 150 |
 | `index.yaml` | 只放摘要 | 400 |
 | 各组 `README.md` | 规范正文（含图示与对照表） | 450 |
+
+行数是可读性建议，不是机器闸门；按业务内聚拆分，不为行数强行拆文件。
 
 ### 4.3 防过度拆分
 
@@ -431,6 +432,8 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | 产物 | 来源 | 用途 |
 |---|---|---|
 | `openapi/admin.yaml` | `capabilities/protocols/http/*.yaml` + `platform/http_conventions.yaml` 合并 | oapi-codegen / Swagger / `gen-client` 的输入 |
+| `scenarios/manifest.yaml` | `scenarios/http/*.yaml` 投影 | 实现侧验收 runner 的输入 |
+| `async/manifest.yaml` | `capabilities/events/*.yaml` 投影 | worker 重试、并发与调度策略的输入 |
 
 `db` 产物（`schema.sql`、`migrations/*.sql`）输出到 `apps/api/`，不在本目录。
 
@@ -443,7 +446,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | `manifest.json` | 删除设计 | `index.yaml` + `project.yaml` 已覆盖，无消费者 |
 | `inbound.yaml` | 删除设计 | `used_by.*` / `table.entities` / `model.included_by` 已是反向索引 |
 
-`make gen` 是聚合入口；`make gen-graph` 只写回 `table.queries` / `model.queries` / `query.used_by` 与规则、生命周期、事件锚点，不产出本目录文件。
+`make gen` 是聚合入口；`make gen-graph` 写回全部生成字段（完整清单见 `_meta/README.md` 的命令表），不产出本目录文件。
 
 ---
 
@@ -454,7 +457,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 契约不足 → 先改契约，再实现；禁止"先写代码后补契约"。
 `make gen` 是契约 → 产物，不是生成契约；新建契约用 `make contract-new`。
 
-### 5.1 生成器上限：4 个（已实现）
+### 5.1 生成器（已实现）
 
 | 生成器 | 输出 | 状态 |
 |---|---|---|
@@ -462,12 +465,15 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | errors | `platform/errors/*.yaml` → 错误码文档 | ✅ |
 | db | DDL / migrations / sqlc 输入 | ✅ `schema.sql` + `0001_baseline.sql`；增量 diff ⬜ P5 |
 | openapi | 合并 spec 并展开 service schemas | ✅ |
+| model | `data.entities` / `data.enums` → Go/TS 模型 | ✅ |
+| scenarios | `scenarios/http/*.yaml` → 验收场景清单 | ✅ |
+| async | `cap.events` → worker 异步清单 | ✅ |
 | features | 路由、页面骨架、类型 | ⬜ P2 |
 | platform | 配置校验、常量、CSS 变量 | ⬜ P2 |
 | rules/lifecycles | `feature.rules` / `cap.lifecycles` → 校验函数 / 生命周期 | ⬜ P2 |
 | service / usecase / handler / worker | apps 代码生成 | ⬜ P2 |
 
-已实现 4 个契约生成器；apps 代码生成属于实现层，不在契约阶段生成。
+apps 代码生成属于实现层，不在契约阶段生成。
 
 ### 5.2 反例优先
 
@@ -543,7 +549,7 @@ data/storage.yaml ──> 按引擎分组的表条目 + 表级物理事实
 
 ## 8. 当前阶段
 
-P2：契约与 `contract-check` 已可用，生成器待实现（逐项状态见 §5.1）。
+契约与 `contract-check` 已可用；契约产物生成器已覆盖 graph/errors/db/openapi/model/scenarios/async，apps 代码生成待实现（逐项状态见 §5.1）。
 
 `generated` / `tested` 是当前值，不是目标值：没有 gate 的契约只能声明 `review-only`，否则
 `contract-check` 报 `schema.enforcement`。data 层的 enforcement 见 `contracts/index.yaml`，进度见 `docs/guides/architecture.md`；命令入口见 `data/README.md §7`。

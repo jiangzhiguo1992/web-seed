@@ -197,6 +197,7 @@ entries:
   - { id: generated.openapi, path: generated/openapi/admin.yaml, summary: "管理端 v1 OpenAPI spec（代码生成输入）", consumers: [ api, tools ], enforcement: generated, stability: draft }
   - { id: generated.openapi.user, path: generated/openapi/user.yaml, summary: "用户端 v1 OpenAPI spec", consumers: [ api, tools ], enforcement: generated, stability: draft }
   - { id: generated.scenarios, path: generated/scenarios/manifest.yaml, summary: "HTTP 验收场景清单", consumers: [ api, tools ], enforcement: generated, stability: draft }
+  - { id: generated.async, path: generated/async/manifest.yaml, summary: "异步任务清单", consumers: [ worker, tools ], enforcement: generated, stability: draft }
 
 # 跨文件的坑：不属于任何单一契约，但 AI 最容易犯
 global_notes:

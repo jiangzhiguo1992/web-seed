@@ -7,8 +7,6 @@ schema_version: 1
 stability: draft
 do_not:
   - "本服务只读 unit；写入通过种子/管理迁移维护，不在运行时暴露 CRUD"
-  - "get 按全局唯一 code 读取；不要用 name 做查询键"
-  - "list 只按 dimension 过滤；跨量纲换算不在服务层完成"
 
 schemas:
   UnitPage:

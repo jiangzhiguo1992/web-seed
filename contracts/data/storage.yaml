@@ -1,17 +1,14 @@
-# 数据存储约束（项目级单例）。
+# 存储拓扑单例：引擎、缓存、保留与归档。
 
 id: data.storage
 summary: "数据存储约束"
 schema_version: 1
 stability: draft
 do_not:
-  - "未在 tables 或 caches 中登记的引擎与拓扑一律视为不支持，禁止自行引入"
-  - "Redis 只作为 caches 中的非权威副本；权威表数据只能落在 postgres"
-  - "引擎版本/连接池/部署副本/锁/迁移策略属于运行时配置，不要写进本契约"
-  - "不要给归档表建 data.tables 契约、实体或独立查询；能否回迁只在归档条目的 promotable 声明，冲突策略写在 on_conflict，回迁入口写在源表查询的 archive"
-  - "cache prefix 必须含项目命名空间；派生项目必须替换 web-seed 前缀，避免多项目共用一个 Redis 时 key 冲突"
+  - "data.storage.caches 的 prefix 必须含项目命名空间；派生项目必须替换 web-seed 前缀，避免多项目共用一个 Redis 时 key 冲突"
 
 supported_engines: [ postgres ]
+supported_cache_engines: [ redis ]
 not_supported_topologies: [ sharding, multi-primary, cross-region, outbox ]
 
 tables:

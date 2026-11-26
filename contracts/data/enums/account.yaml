@@ -1,12 +1,11 @@
-# 账号域跨前后端枚举集合；只放 account 模块跨端枚举。
+# 账号域跨端枚举集合。
 
 id: data.enums.account
 summary: "账号域跨端枚举集合"
 owner_module: account
 schema_version: 1
 stability: draft
-do_not:
-  - "表 CHECK 中的整数码必须与 data.enums.account 的对应 code 同步；改 code 前先改约束"
+do_not: []
 
 enums:
   - name: account_status

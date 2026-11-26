@@ -1,3 +1,5 @@
+# 令牌服务。
+
 id: cap.services.token
 summary: "JWT 令牌服务：签发、刷新、吊销与校验"
 owner_module: account

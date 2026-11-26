@@ -1,4 +1,4 @@
-# 验证动作表：校验请求的追加日志。
+# 验证动作表（追加日志）。
 
 id: data.tables.verification_action
 summary: "验证动作（校验请求记录）"

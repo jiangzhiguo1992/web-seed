@@ -15,7 +15,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/yourorg/web-seed/scripts/cmd/internal/check"
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
 )
@@ -72,7 +74,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; add the table entry to contracts/data/storage.yaml tables.<engine>; add retention inside the entry if needed; archive entries use archive_of; create an entity with model.tables referencing this table; add a query that reads/writes this table (table.queries is generated); make gen-graph; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: replace TODO; register in contracts/index.yaml; add the table entry to contracts/data/storage.yaml tables.<engine>; add retention inside the entry if needed; archive entries use archive_of; create an entity with model.tables referencing this table; add a query that reads/writes this table (table.queries is generated); make gen-graph; make contract-check")
 
 	case "data.entities":
 		tableSchema, err := loadTableSchema(abs)
@@ -87,7 +89,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: add business fields; add a query returning this entity (model.queries is generated); make gen-graph; register in contracts/index.yaml; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: add business fields; add a query returning this entity (model.queries is generated); make gen-graph; register in contracts/index.yaml; make contract-check")
 
 	case "data.queries":
 		tableSchema, err := loadTableSchema(abs)
@@ -102,7 +104,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace the EXISTS skeleton; reference it from a service step; register in contracts/index.yaml; make gen-graph; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: replace the EXISTS skeleton; reference it from a service step; register in contracts/index.yaml; make gen-graph; make contract-check")
 
 	case "data.enums":
 		b, err := contractspec.RenderEnumItem(schema, *name, *module)
@@ -116,35 +118,35 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; add services/steps/queries/rules; add permissions/audit/rate_limit to platform/security/access.yaml if needed; register in contracts/index.yaml; make gen-graph; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: replace TODO; add services/steps/queries/rules; add permissions/audit/rate_limit to platform/security/access.yaml if needed; register in contracts/index.yaml; make gen-graph; make contract-check")
 
 	case "feature.rules":
 		b, err := contractspec.RenderRule(schema, *name, *module, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; choose constraint/invariant/policy; reference the rule from a service step then run make gen-graph; implemented_by must be non-empty; register in contracts/index.yaml; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: replace TODO; choose constraint/invariant/policy; reference the rule from a service step then run make gen-graph; implemented_by must be non-empty; register in contracts/index.yaml; make contract-check")
 
 	case "feature.pages":
 		b, err := contractspec.RenderPage(schema, *name, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; set route to feature.routes.<name> after adding the route, or keep null; add data/actions/fields; register in contracts/index.yaml; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: replace TODO; set route to feature.routes.<name> after adding the route, or keep null; add data/actions/fields; register in contracts/index.yaml; make contract-check")
 
 	case "cap.lifecycles":
 		b, err := contractspec.RenderLifecycle(schema, *name, *module, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; fill subjects/states/create/destroy/transitions; step refs are maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: replace TODO; fill subjects/states/create/destroy/transitions; step refs are maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
 
 	case "cap.events":
 		b, err := contractspec.RenderEvents(schema, *name, *module, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; add topics (and optional jobs); emitted_by/consumers are maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: replace TODO; add topics (and optional jobs); emitted_by/consumers are maintained by make gen-graph; register in contracts/index.yaml; make contract-check")
 
 	case "cap.protocols.http":
 		if *service == "" {
@@ -157,11 +159,23 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace the 200 response schema; add components if needed; ensure the service exists and is public/sync; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: replace the 200 response schema; add components if needed; ensure the service exists and is public/sync; make contract-check")
 
 	default:
 		fail(fmt.Errorf("unsupported type: %s", *typ))
 	}
+}
+
+// writeScaffold 在落盘前用 checker 的骨架校验防止 contract-new 自身产出非法结构。
+func writeScaffold(root, typ, name, out string, b []byte, next string) {
+	fileName := name + ".yaml"
+	if out != "" {
+		fileName = filepath.Base(out)
+	}
+	if errs := check.ValidateScaffold(root, typ, b, fileName); len(errs) > 0 {
+		fail(fmt.Errorf("generated scaffold is invalid:\n%s", strings.Join(errs, "\n")))
+	}
+	writeOut(out, b, next)
 }
 
 func writeOut(out string, b []byte, next string) {

@@ -1,3 +1,5 @@
+# 令牌异步任务：过期标记与清理。
+
 id: cap.events.token
 summary: "令牌异步任务"
 owner_module: account

@@ -1,12 +1,11 @@
-# 项目级值类型词汇；类型族本身声明在 contracts/_meta/_types.yaml。
+# 项目级值类型词汇。
 
 id: data.types
 summary: "项目级值类型词汇"
 schema_version: 1
 stability: draft
 do_not:
-  - "值类型只表达值域约束，不承载表名、列名或业务规则"
-  - "params 只能引用所属 type 在 contracts/_meta/_types.yaml 声明的参数"
+  - "data.types 的值类型只表达值域约束，不承载表名、列名或业务规则"
 
 custom_types:
   id:

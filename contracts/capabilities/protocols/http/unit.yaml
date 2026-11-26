@@ -1,3 +1,5 @@
+# 计量单位 HTTP 接口。
+
 id: cap.protocols.http.unit
 summary: "计量单位 HTTP 接口"
 owner_module: system

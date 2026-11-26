@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -151,6 +153,8 @@ func (c *Checker) checkSchemaNodeOrder(n *yaml.Node, rel, path string, rules ord
 		switch {
 		case key == "items" && value.Kind == yaml.MappingNode:
 			c.checkSchemaNodeOrder(value, rel, path+".items", rules)
+		case key == "values" && value.Kind == yaml.MappingNode:
+			c.checkSchemaNodeOrder(value, rel, path+".values", rules)
 		case key == "properties" && value.Kind == yaml.SequenceNode:
 			for j, item := range value.Content {
 				if item.Kind == yaml.MappingNode {
@@ -185,46 +189,52 @@ func (c *Checker) checkPropertyOrder(n *yaml.Node, rel, path string, rules order
 	}
 }
 
-// schemaNodeKindFromYAML 从映射节点读取 ref/type，按标准 schema 语义判定节点种类。
+// schemaNodeKindFromYAML 从映射节点读取 kind/type，按契约 schema 语义判定节点种类。
+// 判别键与 contractspec.SchemaNodeKind 保持一致：kind 判别 object/array/map，
+// type 判别 scalar/ref；kind 与 type 同时出现时视为非法，交给 schema.type 报错。
 func schemaNodeKindFromYAML(n *yaml.Node, kinds map[string]SchemaKind) string {
 	if n == nil || n.Kind != yaml.MappingNode {
 		return ""
 	}
-	hasRef := false
-	typ := ""
+	kind, typ := "", ""
 	for i := 0; i+1 < len(n.Content); i += 2 {
 		switch n.Content[i].Value {
-		case "ref":
-			hasRef = true
+		case "kind":
+			kind = n.Content[i+1].Value
 		case "type":
 			typ = n.Content[i+1].Value
 		}
 	}
-	if hasRef && typ != "" {
+	if kind != "" && typ != "" {
 		return ""
 	}
-	kind := ""
-	switch normalizeTypeExpr(typ) {
+	kindName := ""
+	switch kind {
+	case "_types.schemas.object":
+		kindName = "object"
+	case "_types.schemas.array":
+		kindName = "array"
+	case "_types.schemas.map":
+		kindName = "map"
 	case "":
-		if hasRef {
-			kind = "ref"
+		if typ == "" {
+			return ""
 		}
-	case "object":
-		kind = "object"
-	case "array":
-		kind = "array"
-	case "map":
-		kind = "map"
+		if class, _, ok := contractspec.SplitTypeRef(typ); ok && class == contractspec.TypeClassBasics {
+			kindName = "scalar"
+		} else if strings.HasPrefix(typ, "data.") || (strings.HasPrefix(typ, "cap.services.") && strings.Contains(typ, ".schemas.")) {
+			kindName = "ref"
+		}
 	default:
-		kind = "scalar"
-	}
-	if kind == "" {
 		return ""
 	}
-	if _, ok := kinds[kind]; !ok {
+	if kindName == "" {
 		return ""
 	}
-	return kind
+	if _, ok := kinds[kindName]; !ok {
+		return ""
+	}
+	return kindName
 }
 
 // reportOrder 保留字面量 rulef 调用，供 gen_rule_ids 的 AST 扫描收集规则 ID。
