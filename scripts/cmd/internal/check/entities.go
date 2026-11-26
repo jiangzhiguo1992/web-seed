@@ -1199,21 +1199,27 @@ func (c *Checker) checkEntityValidationUsedBy(e *entityInfo, m map[string]any, w
 		return // 缺失/空列表由 schema.required 与 schema.generated-range 报出
 	}
 	bad := false
-	for sid := range declared {
-		if !strings.HasPrefix(sid, "cap.services.") {
-			c.rulef("entity-validation-used-by", "%s: used_by must be cap.services.* item IDs, got %s", where, sid)
+	for stepID := range declared {
+		if !strings.HasPrefix(stepID, "cap.services.") || strings.Count(stepID, ".") != 4 {
+			c.rulef("entity-validation-used-by", "%s: used_by must be cap.services.* step IDs, got %s", where, stepID)
 			bad = true
 			continue
 		}
+		if c.serviceStepIDs != nil && !c.serviceStepIDs[stepID] {
+			c.rulef("entity-validation-used-by", "%s: unknown step %s", where, stepID)
+			bad = true
+			continue
+		}
+		serviceID := c.serviceForStep(stepID)
 		if c.methodReturns != nil {
-			if _, found := c.methodReturns[sid]; !found {
-				c.rulef("entity-validation-used-by", "%s: unknown service %s", where, sid)
+			if _, found := c.methodReturns[serviceID]; !found {
+				c.rulef("entity-validation-used-by", "%s: unknown service %s", where, serviceID)
 				bad = true
 				continue
 			}
 		}
-		if c.serviceQueries != nil && !c.serviceQueriesTable(sid, e.Primary) {
-			c.rulef("entity-validation-used-by", "%s: service %s does not query entity table %s", where, sid, e.Primary)
+		if c.serviceQueries != nil && !c.serviceQueriesTable(serviceID, e.Primary) {
+			c.rulef("entity-validation-used-by", "%s: service %s for step %s does not query entity table %s", where, serviceID, stepID, e.Primary)
 			bad = true
 		}
 	}
@@ -1226,6 +1232,19 @@ func (c *Checker) checkEntityValidationUsedBy(e *entityInfo, m map[string]any, w
 	}
 }
 
+// serviceForStep 返回 step 所属 service 项；优先用 checkCapabilities 建立的索引。
+func (c *Checker) serviceForStep(stepID string) string {
+	if c.stepService != nil {
+		if sid := c.stepService[stepID]; sid != "" {
+			return sid
+		}
+	}
+	if i := strings.LastIndex(stepID, "."); i > 0 {
+		return stepID[:i]
+	}
+	return ""
+}
+
 // serviceQueriesTable 报告 service 项是否直接查询了指定表。
 func (c *Checker) serviceQueriesTable(sid, tableID string) bool {
 	for qid := range c.serviceQueries[sid] {
@@ -1236,23 +1255,28 @@ func (c *Checker) serviceQueriesTable(sid, tableID string) bool {
 	return false
 }
 
-// checkValidationRefs 校验 service step 的 validations[] 引用存在且服务查询主表。
+// checkValidationRefs 校验 service step 的 validations[] 引用存在且所属服务查询主表。
 func (c *Checker) checkValidationRefs() {
-	for vid, services := range c.validationRefs {
+	for vid, steps := range c.validationRefs {
 		e, _, ok := c.lookupValidation(vid)
 		if !ok {
 			c.rulef("entity-validation-ref", "unknown validation %s", vid)
 			continue
 		}
-		for sid := range services {
+		for stepID := range steps {
+			if c.serviceStepIDs != nil && !c.serviceStepIDs[stepID] {
+				c.rulef("entity-validation-ref", "%s: unknown step %s", vid, stepID)
+				continue
+			}
+			serviceID := c.serviceForStep(stepID)
 			if c.methodReturns != nil {
-				if _, found := c.methodReturns[sid]; !found {
-					c.rulef("entity-validation-ref", "%s: unknown service %s", vid, sid)
+				if _, found := c.methodReturns[serviceID]; !found {
+					c.rulef("entity-validation-ref", "%s: unknown service %s", vid, serviceID)
 					continue
 				}
 			}
-			if !c.serviceQueriesTable(sid, e.Primary) {
-				c.rulef("entity-validation-ref", "%s: service %s does not query entity table %s", vid, sid, e.Primary)
+			if !c.serviceQueriesTable(serviceID, e.Primary) {
+				c.rulef("entity-validation-ref", "%s: service %s for step %s does not query entity table %s", vid, serviceID, stepID, e.Primary)
 			}
 		}
 	}

@@ -561,12 +561,17 @@ func TestEntityValidationUsedBy(t *testing.T) {
 		methodReturns:  map[string]map[string]returnType{"cap.services.x.get": {}},
 		serviceQueries: map[string]map[string]bool{"cap.services.x.get": {"data.queries.x.get": true}},
 		queryTables:    map[string]map[string]bool{"data.queries.x.get": {"data.tables.x": true}},
-		validationRefs: map[string]map[string]bool{"data.entities.x.v": {"cap.services.x.get": true}},
+		serviceStepIDs: map[string]bool{"cap.services.x.get.load": true, "cap.services.x.missing.load": true},
+		stepService: map[string]string{
+			"cap.services.x.get.load":     "cap.services.x.get",
+			"cap.services.x.missing.load": "cap.services.x.missing",
+		},
+		validationRefs: map[string]map[string]bool{"data.entities.x.v": {"cap.services.x.get.load": true}},
 	}
 	e := &entityInfo{ID: "data.entities.x", Rel: "x.yaml", Primary: "data.tables.x", Doc: map[string]any{
 		"validation": []any{map[string]any{
 			"name": "v", "expr": "x > 0", "on_violation": "platform.errors.COMMON_INTERNAL",
-			"used_by": []any{"cap.services.x.get"},
+			"used_by": []any{"cap.services.x.get.load"},
 		}},
 	}}
 	c.checkEntityValidation(e)
@@ -577,7 +582,7 @@ func TestEntityValidationUsedBy(t *testing.T) {
 	c.errs = nil
 	e.Doc["validation"] = []any{map[string]any{
 		"name": "v", "expr": "x > 0", "on_violation": "platform.errors.COMMON_INTERNAL",
-		"used_by": []any{"cap.services.x.missing"},
+		"used_by": []any{"cap.services.x.missing.load"},
 	}}
 	c.checkEntityValidation(e)
 	if got := entityErrs(c); !strings.Contains(got, "unknown service") || !strings.Contains(got, "[entity-validation-used-by]") {
@@ -588,7 +593,7 @@ func TestEntityValidationUsedBy(t *testing.T) {
 	c.serviceQueries["cap.services.x.get"] = map[string]bool{}
 	e.Doc["validation"] = []any{map[string]any{
 		"name": "v", "expr": "x > 0", "on_violation": "platform.errors.COMMON_INTERNAL",
-		"used_by": []any{"cap.services.x.get"},
+		"used_by": []any{"cap.services.x.get.load"},
 	}}
 	c.checkEntityValidation(e)
 	if !strings.Contains(entityErrs(c), "does not query entity table") {
@@ -599,7 +604,7 @@ func TestEntityValidationUsedBy(t *testing.T) {
 	c.errCodeSet = map[string]bool{"COMMON_INTERNAL": true}
 	e.Doc["validation"] = []any{map[string]any{
 		"name": "v", "expr": "x > 0", "on_violation": "platform.errors.MISSING",
-		"used_by": []any{"cap.services.x.get"},
+		"used_by": []any{"cap.services.x.get.load"},
 	}}
 	c.checkEntityValidation(e)
 	if !strings.Contains(entityErrs(c), "[entity-validation]") {

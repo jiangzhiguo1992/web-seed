@@ -140,7 +140,7 @@ func TestCompute(t *testing.T) {
 	if got := snap.Constraints["data.tables.a.ck_a_code"]; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("constraint used_by = %v", got)
 	}
-	if got := snap.Validations["data.entities.e1.v"]; len(got) != 1 || got[0] != "cap.services.x.get" {
+	if got := snap.Validations["data.entities.e1.v"]; len(got) != 1 || got[0] != "cap.services.x.get.load" {
 		t.Fatalf("validation used_by = %v", got)
 	}
 	if got := snap.Tables["data.tables.b"].References; len(got) != 1 || got[0] != "data.tables.a.col.id" {
@@ -266,7 +266,7 @@ func TestWriteAndCheck(t *testing.T) {
 	if !strings.Contains(string(e1), "queries:\n    - data.queries.q.get_a") {
 		t.Fatalf("entity e1 queries not written:\n%s", e1)
 	}
-	if !strings.Contains(string(e1), "used_by:\n      - cap.services.x.get") {
+	if !strings.Contains(string(e1), "used_by:\n      - cap.services.x.get.load") {
 		t.Fatalf("validation used_by not written:\n%s", e1)
 	}
 	e2, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e2.yaml"))
@@ -294,6 +294,84 @@ func TestWriteAndCheck(t *testing.T) {
 	}
 	if len(changed) != 0 {
 		t.Fatalf("write is not idempotent: %v", changed)
+	}
+}
+
+func TestComputeCrossModuleValidation(t *testing.T) {
+	root := fixtureRoot(t)
+	writeFixture(t, root, "contracts/capabilities/services/other.yaml", `id: cap.services.other
+services:
+  - name: get
+    steps:
+      - id: load
+        kind: query
+        query: data.queries.q.get_a
+        validations: [ data.entities.e1.v ]
+`)
+	snap, err := Compute(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := snap.Validations["data.entities.e1.v"]
+	if len(got) != 2 || got[0] != "cap.services.other.get.load" || got[1] != "cap.services.x.get.load" {
+		t.Fatalf("cross-module validation step attribution = %v", got)
+	}
+}
+
+func TestWriteOrphanGeneratedUsedBy(t *testing.T) {
+	root := t.TempDir()
+	writeTargets(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	ensureDirs(t, root, "contracts/data/tables", "contracts/data/entities", "contracts/data/queries")
+	writeFixture(t, root, "contracts/data/tables/a.yaml", `id: data.tables.a
+table:
+  extends: [ data.tables.base ]
+  entities: [ data.entities.e1 ]
+constraints:
+  - name: ck_a_orphan
+    expr: "code IS NOT NULL"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by: []
+`)
+	writeFixture(t, root, "contracts/data/entities/e1.yaml", `id: data.entities.e1
+model:
+  name: e1
+  extends: [ data.entities.base ]
+  tables: [ data.tables.a ]
+  queries: []
+  included_by: []
+validation:
+  - name: v
+    expr: "id > 0"
+    on_violation: platform.errors.COMMON_INTERNAL
+    used_by: []
+`)
+	snap, err := Compute(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Constraints["data.tables.a.ck_a_orphan"]) != 0 {
+		t.Fatalf("orphan constraint must have empty used_by: %v", snap.Constraints["data.tables.a.ck_a_orphan"])
+	}
+	if len(snap.Validations["data.entities.e1.v"]) != 0 {
+		t.Fatalf("orphan validation must have empty used_by: %v", snap.Validations["data.entities.e1.v"])
+	}
+	if _, err := snap.Write(root); err != nil {
+		t.Fatal(err)
+	}
+	table, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/a.yaml"))
+	if !strings.Contains(string(table), "used_by: []") {
+		t.Fatalf("orphan constraint used_by not written:\n%s", table)
+	}
+	entity, _ := os.ReadFile(filepath.Join(root, "contracts/data/entities/e1.yaml"))
+	if !strings.Contains(string(entity), "used_by: []") {
+		t.Fatalf("orphan validation used_by not written:\n%s", entity)
+	}
+	drift, err := snap.Check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(drift) != 0 {
+		t.Fatalf("orphan generated used_by drift: %v", drift)
 	}
 }
 

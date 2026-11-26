@@ -142,6 +142,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 - `rules` 只允许出现在 `_meta`（`features/rules` 等领域规则集除外）；`do_not` 只允许出现在具体契约。
 - `generated: true` 字段必须同时 `write: forbidden`；由 `make gen-graph` 写入，checker 对账。
   `generated` 字段的 `min_items` 与手写字段一样生效；只有 `contract-new` 的骨架在生成阶段放宽（`relaxGeneratedFields`），入库实例不再豁免。`stability` 只表示定型状态，不豁免任何校验。
+  新增 `constraints[]` / `validation[]` 项时必须先写 `used_by: []`（`contract-new` 骨架已带）；`gen-graph` 只写值、不补字段，字段完全缺失会先报 `schema.required`。
 
 ---
 

@@ -912,6 +912,20 @@ func syncItemFieldBlock(path, listKey, itemKey, itemValue, field string, values 
 	}
 	itemStart := -1
 	for i := listStart + 1; i < len(lines); i++ {
+		if newLine, matched, err := syncFlowItemLine(lines[i], itemKey, itemValue, field, values); matched {
+			if err != nil {
+				return false, err
+			}
+			if newLine == lines[i] {
+				return false, nil
+			}
+			lines[i] = newLine
+			out := strings.Join(lines, "\n") + "\n"
+			if out == string(b) {
+				return false, nil
+			}
+			return true, os.WriteFile(path, []byte(out), 0o644)
+		}
 		trim := strings.TrimPrefix(lines[i], "  - ")
 		if strings.HasPrefix(trim, itemKey+": ") && strings.TrimSpace(strings.TrimPrefix(trim, itemKey+": ")) == itemValue {
 			itemStart = i
@@ -974,6 +988,200 @@ func syncItemFieldBlock(path, listKey, itemKey, itemValue, field string, values 
 		return false, nil
 	}
 	return true, os.WriteFile(path, []byte(out), 0o644)
+}
+
+// syncFlowItemLine 处理单行 flow mapping 列表项：- { name: x, used_by: [] }。
+// 找到 itemKey=itemValue 的项后，替换或插入 field；保留行内其他内容与缩进。
+func syncFlowItemLine(line, itemKey, itemValue, field string, values []string) (string, bool, error) {
+	open := strings.Index(line, "{")
+	if open < 0 || !strings.HasPrefix(strings.TrimSpace(line), "- {") {
+		return line, false, nil
+	}
+	close := flowClose(line, open)
+	if close < 0 {
+		return line, false, nil
+	}
+	body := line[open+1 : close]
+	entries := flowEntries(body)
+	matched := false
+	for _, e := range entries {
+		if e.key == itemKey && flowScalar(e.value) == itemValue {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return line, false, nil
+	}
+	rendered := renderFlowList(values)
+	for _, e := range entries {
+		if e.key == field {
+			newBody := body[:e.valueStart] + rendered + body[e.valueEnd:]
+			return line[:open+1] + newBody + line[close:], true, nil
+		}
+	}
+	trimmed := strings.TrimRight(body, " ")
+	trailing := body[len(trimmed):]
+	insert := field + ": " + rendered
+	if strings.TrimSpace(trimmed) != "" {
+		if strings.HasSuffix(strings.TrimSpace(trimmed), ",") {
+			insert = " " + insert
+		} else {
+			insert = ", " + insert
+		}
+	}
+	return line[:open+1] + trimmed + insert + trailing + line[close:], true, nil
+}
+
+// flowClose 返回与 open 处 { 匹配的 } 下标；支持嵌套与引号。
+func flowClose(s string, open int) int {
+	depth := 0
+	var quote byte
+	for i := open; i < len(s); i++ {
+		c := s[i]
+		if quote != 0 {
+			if quote == '"' && c == '\\' {
+				i++
+				continue
+			}
+			if c == quote {
+				if quote == '\'' && i+1 < len(s) && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				quote = 0
+			}
+			continue
+		}
+		switch c {
+		case '\'', '"':
+			quote = c
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+type flowEntry struct {
+	start, end           int
+	valueStart, valueEnd int
+	key, value           string
+}
+
+// flowEntries 按顶层逗号切分 flow mapping 内容，忽略嵌套 {} / [] 与引号内的逗号。
+func flowEntries(body string) []flowEntry {
+	var out []flowEntry
+	start := 0
+	depth := 0
+	var quote byte
+	for i := 0; i < len(body); i++ {
+		c := body[i]
+		if quote != 0 {
+			if quote == '"' && c == '\\' {
+				i++
+				continue
+			}
+			if c == quote {
+				if quote == '\'' && i+1 < len(body) && body[i+1] == '\'' {
+					i++
+					continue
+				}
+				quote = 0
+			}
+			continue
+		}
+		switch c {
+		case '\'', '"':
+			quote = c
+		case '{', '[':
+			depth++
+		case '}', ']':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				if e, ok := parseFlowEntry(body, start, i); ok {
+					out = append(out, e)
+				}
+				start = i + 1
+			}
+		}
+	}
+	if e, ok := parseFlowEntry(body, start, len(body)); ok {
+		out = append(out, e)
+	}
+	return out
+}
+
+func parseFlowEntry(body string, start, end int) (flowEntry, bool) {
+	depth := 0
+	var quote byte
+	colon := -1
+	for i := start; i < end; i++ {
+		c := body[i]
+		if quote != 0 {
+			if quote == '"' && c == '\\' {
+				i++
+				continue
+			}
+			if c == quote {
+				if quote == '\'' && i+1 < end && body[i+1] == '\'' {
+					i++
+					continue
+				}
+				quote = 0
+			}
+			continue
+		}
+		switch c {
+		case '\'', '"':
+			quote = c
+		case '{', '[':
+			depth++
+		case '}', ']':
+			if depth > 0 {
+				depth--
+			}
+		case ':':
+			if depth == 0 {
+				colon = i
+				i = end
+			}
+		}
+	}
+	if colon < 0 {
+		return flowEntry{}, false
+	}
+	key := strings.TrimSpace(body[start:colon])
+	if key == "" {
+		return flowEntry{}, false
+	}
+	valueStart := colon + 1
+	for valueStart < end && (body[valueStart] == ' ' || body[valueStart] == '\t') {
+		valueStart++
+	}
+	valueEnd := end
+	for valueEnd > valueStart && (body[valueEnd-1] == ' ' || body[valueEnd-1] == '\t') {
+		valueEnd--
+	}
+	return flowEntry{start: start, end: end, valueStart: valueStart, valueEnd: valueEnd, key: key, value: body[valueStart:valueEnd]}, true
+}
+
+func flowScalar(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 2 {
+		if (s[0] == '\'' && s[len(s)-1] == '\'') || (s[0] == '"' && s[len(s)-1] == '"') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
 }
 
 func sameLines(a, b []string) bool {

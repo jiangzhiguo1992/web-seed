@@ -357,6 +357,7 @@ func Compute(root string) (*Snapshot, error) {
 						qids = append(qids, qid)
 					}
 				}
+				stepID, _ := step["id"].(string)
 				for _, rawV := range asList(step["validations"]) {
 					vid, _ := rawV.(string)
 					if vid == "" {
@@ -365,7 +366,9 @@ func Compute(root string) (*Snapshot, error) {
 					if validationServices[vid] == nil {
 						return nil, fmt.Errorf("%s: validations %s is not a data.entities.* validation", rel(root, f), vid)
 					}
-					validationServices[vid][serviceID] = true
+					if stepID != "" {
+						validationServices[vid][serviceID+"."+stepID] = true
+					}
 				}
 				for _, qid := range qids {
 					if queryServices[qid] == nil {

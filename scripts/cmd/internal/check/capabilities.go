@@ -122,6 +122,8 @@ func payloadPropertyType(raw any) string {
 
 func (c *Checker) checkCapabilities() {
 	c.validationRefs = map[string]map[string]bool{}
+	c.serviceStepIDs = map[string]bool{}
+	c.stepService = map[string]string{}
 	serviceSchema, err := c.loadSchemaByType("cap.services")
 	if err != nil {
 		c.rulef("schema.load", "load cap.services schema: %v", err)
@@ -309,16 +311,6 @@ func (c *Checker) checkCapabilities() {
 						directWrites[id] = true
 					}
 				}
-				for _, rawV := range asList(step["validations"]) {
-					vid, _ := rawV.(string)
-					if vid == "" {
-						continue
-					}
-					if c.validationRefs[vid] == nil {
-						c.validationRefs[vid] = map[string]bool{}
-					}
-					c.validationRefs[vid][id] = true
-				}
 			}
 			c.serviceQueries[id] = stepQueries
 			for _, rawStep := range asList(item["steps"]) {
@@ -329,6 +321,18 @@ func (c *Checker) checkCapabilities() {
 				}
 				stepID := id + "." + sid
 				stepIDs[stepID] = true
+				c.serviceStepIDs[stepID] = true
+				c.stepService[stepID] = id
+				for _, rawV := range asList(step["validations"]) {
+					vid, _ := rawV.(string)
+					if vid == "" {
+						continue
+					}
+					if c.validationRefs[vid] == nil {
+						c.validationRefs[vid] = map[string]bool{}
+					}
+					c.validationRefs[vid][stepID] = true
+				}
 				for _, rawL := range asList(step["lifecycles"]) {
 					action, _ := rawL.(string)
 					if action != "" {

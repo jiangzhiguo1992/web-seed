@@ -62,4 +62,4 @@ validation:
     expr: "LockedUntil == nil || FailedLoginCount > 0"
     on_violation: platform.errors.AUTH_LOCKED
     used_by:
-      - cap.services.auth.login
+      - cap.services.auth.login.check

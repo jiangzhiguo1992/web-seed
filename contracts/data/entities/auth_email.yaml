@@ -62,5 +62,6 @@ validation:
     expr: "TLD == nil || Domain endsWith('.' + TLD)"
     on_violation: platform.errors.AUTH_EMAIL_INVALID
     used_by:
-      - cap.services.auth.bind_email
-      - cap.services.auth.login
+      - cap.services.auth.bind_email.email_parts
+      - cap.services.auth.bind_email.replace_email_parts
+      - cap.services.auth.login.split_identifier

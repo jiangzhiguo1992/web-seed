@@ -68,6 +68,8 @@ type Checker struct {
 	methodReturns            map[string]map[string]returnType
 	methodTypeDefs           map[string]map[string]any
 	serviceQueries           map[string]map[string]bool
+	serviceStepIDs           map[string]bool
+	stepService              map[string]string
 	validationRefs           map[string]map[string]bool
 	constraintRefs           map[string]map[string]bool
 	constraintIDs            map[string]bool
