@@ -110,6 +110,8 @@ func TestObjectValidationLiterals(t *testing.T) {
 		{name: "container null is allowed", rule: `input.tags != null`},
 		{name: "nested expression enum", rule: `(input.auth_type == "pwd" && input.password != null) || input.auth_type == "bogus"`, want: `"bogus" is not a value of data.enums.auth_type`},
 		{name: "nested expression valid", rule: `(input.auth_type == "pwd" || input.auth_type == "phone") && input.password != null`},
+		{name: "negated expression enum", rule: `!(input.auth_type == "bogus")`, want: `"bogus" is not a value of data.enums.auth_type`},
+		{name: "negated expression valid", rule: `!(input.auth_type != "pwd")`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

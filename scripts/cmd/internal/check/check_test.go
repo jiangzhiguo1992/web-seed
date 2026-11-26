@@ -685,6 +685,35 @@ func TestStorageCachePrefixNamespace(t *testing.T) {
 	}
 }
 
+func TestStorageCachePrefixNamespaceProjectFailure(t *testing.T) {
+	root := t.TempDir()
+	projectPath := filepath.Join(root, "contracts/project.yaml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(projectPath, []byte("project: [\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entries := map[string]*storageEntry{
+		"data.tables.x": {table: "data.tables.x", engine: "postgres"},
+	}
+	c := &Checker{
+		root: root,
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {"account_id": {typ: "integer"}},
+		},
+	}
+	c.checkStorageCaches(map[string]any{"caches": map[string]any{"redis": []any{
+		map[string]any{
+			"prefix": "other:token", "cache_of": "data.tables.x", "key": []any{"col.account_id"},
+			"retention": true, "unit": "days", "cache_ttl": 1,
+		},
+	}}}, entries, "contracts/data/storage.yaml")
+	if strings.Contains(strings.Join(c.errs, "\n"), "storage-cache-prefix") {
+		t.Fatalf("project load failure must not be reported as a prefix error: %v", c.errs)
+	}
+}
+
 func TestStorageCacheEntries(t *testing.T) {
 	entries := map[string]*storageEntry{
 		"data.tables.x": {table: "data.tables.x", engine: "mysql"},

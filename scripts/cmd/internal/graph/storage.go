@@ -70,7 +70,7 @@ func storageDescriptionDrift(root string, summaries map[string]string) ([]string
 }
 
 // syncStorageDescriptions 把普通条目的 description 写回表 summary；归档条目保持手写。
-// storage.yaml 的表格条目目前是一行 flow mapping；找不到对应行时明确失败，避免静默漏写。
+// 用 YAML 节点位置只替换 description 标量，支持 flow / block / 多行条目并保留其余排版。
 func syncStorageDescriptions(root string, summaries map[string]string) (bool, error) {
 	path := filepath.Join(root, storageRel)
 	src, err := os.ReadFile(path)
@@ -84,61 +84,180 @@ func syncStorageDescriptions(root string, summaries map[string]string) (bool, er
 	if err := yaml.Unmarshal(src, &doc); err != nil {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
-	pending := map[string]string{}
+	wanted := map[string]string{}
 	for _, entry := range storageNormalEntries(doc) {
 		if want := summaries[entry.table]; want != "" && entry.desc != want {
-			pending[entry.table] = want
+			wanted[entry.table] = want
 		}
 	}
-	if len(pending) == 0 {
+	if len(wanted) == 0 {
 		return false, nil
 	}
 
-	lines := strings.Split(string(src), "\n")
-	for i, line := range lines {
-		for table, summary := range pending {
-			if !strings.Contains(line, "table: "+table+",") && !strings.Contains(line, "table: "+table+" }") {
-				continue
-			}
-			updated, ok := replaceFlowDescription(line, summary)
-			if !ok {
-				return false, fmt.Errorf("%s: cannot locate description for %s on one line", storageRel, table)
-			}
-			lines[i] = updated
-			delete(pending, table)
-			break
-		}
+	var rootNode yaml.Node
+	if err := yaml.Unmarshal(src, &rootNode); err != nil {
+		return false, fmt.Errorf("%s: %w", path, err)
 	}
-	if len(pending) > 0 {
-		missing := make([]string, 0, len(pending))
-		for table := range pending {
+	var replacements []textReplacement
+	for _, entry := range storageDescriptionNodes(&rootNode) {
+		want, ok := wanted[entry.table]
+		if !ok {
+			continue
+		}
+		delete(wanted, entry.table)
+		if entry.value.Value == want {
+			continue
+		}
+		start, end, err := descriptionSpan(string(src), entry.key, entry.value)
+		if err != nil {
+			return false, fmt.Errorf("%s: tables entry %s: %w", storageRel, entry.table, err)
+		}
+		text := strconv.Quote(want)
+		if strings.Contains(string(src[start:end]), "\n") {
+			text += "\n" // 多行/块标量替换时连同后续内容行一起收成一行
+		}
+		replacements = append(replacements, textReplacement{start: start, end: end, text: text})
+	}
+	if len(wanted) > 0 {
+		missing := make([]string, 0, len(wanted))
+		for table := range wanted {
 			missing = append(missing, table)
 		}
 		sort.Strings(missing)
-		return false, fmt.Errorf("%s: cannot locate table entries %v", storageRel, missing)
+		return false, fmt.Errorf("%s: cannot locate description for normal entries %v", storageRel, missing)
 	}
-	out := []byte(strings.Join(lines, "\n"))
-	if err := writeAtomic(path, out); err != nil {
+	sort.Slice(replacements, func(i, j int) bool { return replacements[i].start > replacements[j].start })
+	out := string(src)
+	for _, r := range replacements {
+		out = out[:r.start] + r.text + out[r.end:]
+	}
+	if err := writeAtomic(path, []byte(out)); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-// replaceFlowDescription 替换一行 flow mapping 中的 description 标量，保留其余排版。
-func replaceFlowDescription(line, summary string) (string, bool) {
-	idx := strings.Index(line, "description:")
-	if idx < 0 {
-		return line, false
+type storageDescriptionNode struct {
+	table string
+	key   *yaml.Node
+	value *yaml.Node
+}
+
+type textReplacement struct {
+	start int
+	end   int
+	text  string
+}
+
+// storageDescriptionNodes 从 YAML AST 中取出普通条目的 description 键/值节点。
+func storageDescriptionNodes(root *yaml.Node) []storageDescriptionNode {
+	doc := root
+	if doc.Kind == yaml.DocumentNode {
+		if len(doc.Content) == 0 {
+			return nil
+		}
+		doc = doc.Content[0]
 	}
-	start := idx + len("description:")
-	for start < len(line) && (line[start] == ' ' || line[start] == '\t') {
-		start++
+	_, tables := mappingEntry(doc, "tables")
+	if tables == nil || tables.Kind != yaml.MappingNode {
+		return nil
 	}
-	end := flowScalarEnd(line, start)
-	if end < 0 {
-		return line, false
+	var out []storageDescriptionNode
+	for i := 0; i+1 < len(tables.Content); i += 2 {
+		seq := tables.Content[i+1]
+		if seq.Kind != yaml.SequenceNode {
+			continue
+		}
+		for _, entry := range seq.Content {
+			if entry.Kind != yaml.MappingNode {
+				continue
+			}
+			if _, archive := mappingEntry(entry, "archive_of"); archive != nil {
+				continue
+			}
+			_, tableNode := mappingEntry(entry, "table")
+			key, value := mappingEntry(entry, "description")
+			if tableNode == nil || tableNode.Value == "" || key == nil || value == nil {
+				continue
+			}
+			out = append(out, storageDescriptionNode{table: tableNode.Value, key: key, value: value})
+		}
 	}
-	return line[:idx] + "description: " + strconv.Quote(summary) + line[end:], true
+	return out
+}
+
+func mappingEntry(n *yaml.Node, key string) (*yaml.Node, *yaml.Node) {
+	if n == nil || n.Kind != yaml.MappingNode {
+		return nil, nil
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		if n.Content[i].Value == key {
+			return n.Content[i], n.Content[i+1]
+		}
+	}
+	return nil, nil
+}
+
+// descriptionSpan 返回 description 标量在源文件中的字节区间；块标量覆盖其内容行。
+func descriptionSpan(src string, key, value *yaml.Node) (int, int, error) {
+	if key == nil || value == nil || value.Line <= 0 || value.Column <= 0 {
+		return 0, 0, fmt.Errorf("description has no source position")
+	}
+	lines := strings.Split(src, "\n")
+	starts := lineStarts(src)
+	if value.Line > len(lines) || value.Line-1 >= len(starts) {
+		return 0, 0, fmt.Errorf("description line %d is outside the file", value.Line)
+	}
+	lineStart := starts[value.Line-1]
+	start := lineStart + value.Column - 1
+	if start < lineStart || start > len(src) {
+		return 0, 0, fmt.Errorf("description column %d is outside line %d", value.Column, value.Line)
+	}
+	block := value.Style == yaml.LiteralStyle || value.Style == yaml.FoldedStyle || strings.Contains(value.Value, "\n")
+	if !block {
+		end := lineStart + flowScalarEnd(lines[value.Line-1], value.Column-1)
+		if end > start && end <= len(src) {
+			return start, end, nil
+		}
+		// 未闭合的引号跨多行时，按块标量处理。
+	}
+	keyIndent := key.Column - 1
+	endLine := value.Line // line index after the description key (0-based)
+	for ; endLine < len(lines); endLine++ {
+		line := lines[endLine]
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if leadingSpaces(line) <= keyIndent {
+			break
+		}
+	}
+	end := len(src)
+	if endLine < len(lines) {
+		end = starts[endLine]
+	}
+	if end <= start {
+		return 0, 0, fmt.Errorf("description span is empty")
+	}
+	return start, end, nil
+}
+
+func lineStarts(src string) []int {
+	starts := []int{0}
+	for i := 0; i < len(src); i++ {
+		if src[i] == '\n' {
+			starts = append(starts, i+1)
+		}
+	}
+	return starts
+}
+
+func leadingSpaces(line string) int {
+	n := 0
+	for n < len(line) && line[n] == ' ' {
+		n++
+	}
+	return n
 }
 
 // flowScalarEnd 返回 flow mapping 中标量的结束位置（不含）。

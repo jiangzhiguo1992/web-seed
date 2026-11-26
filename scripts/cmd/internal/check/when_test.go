@@ -59,6 +59,20 @@ func TestEvalWhen(t *testing.T) {
 	}
 }
 
+// when 表达式只支持比较、&&、||、! 和括号；in / 三元等写法必须显式报错，
+// 不能被当成未知字段静默忽略。
+func TestWhenRejectsUnsupportedSyntax(t *testing.T) {
+	for _, expr := range []string{
+		`input.x in (1, 2)`,
+		`input.x in [1, 2]`,
+		`input.x ? 1 : 2`,
+	} {
+		if _, err := parseWhen(expr); err == nil {
+			t.Errorf("parseWhen(%q) must reject unsupported syntax", expr)
+		}
+	}
+}
+
 func TestWhenDiscriminatorValues(t *testing.T) {
 	n, err := parseWhen(`step.payment.method == "card" && step.payment.card_number != null`)
 	if err != nil {

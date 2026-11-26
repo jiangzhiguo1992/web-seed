@@ -25,23 +25,25 @@ type Field = contractspec.Field
 var baseColumns = []string{"id", "status", "created_at", "updated_at", "deleted_at"}
 
 type Checker struct {
-	root            string
-	errs            []string
-	tableOwners     map[string]string
-	baseID          string
-	inheritedCols   map[string]map[string]bool
-	declaredRuleIDs map[string]bool
-	queryIDs        map[string]string
-	queryTables     map[string]map[string]bool
-	tableIndexes    map[string][]tableIndex
-	tablePrimaryKey map[string][]string
-	cacheEntries    map[string]storageCacheEntry
-	archiveEntries  map[string]storageArchiveEntry
-	tableObjects    map[string]map[string]bool
-	objectNames     map[string]string
-	tableTargets    contractspec.Targets
-	entityTargets   contractspec.Targets
-	queryTargets    contractspec.Targets
+	root              string
+	errs              []string
+	projectNameValue  string
+	projectNameLoaded bool
+	tableOwners       map[string]string
+	baseID            string
+	inheritedCols     map[string]map[string]bool
+	declaredRuleIDs   map[string]bool
+	queryIDs          map[string]string
+	queryTables       map[string]map[string]bool
+	tableIndexes      map[string][]tableIndex
+	tablePrimaryKey   map[string][]string
+	cacheEntries      map[string]storageCacheEntry
+	archiveEntries    map[string]storageArchiveEntry
+	tableObjects      map[string]map[string]bool
+	objectNames       map[string]string
+	tableTargets      contractspec.Targets
+	entityTargets     contractspec.Targets
+	queryTargets      contractspec.Targets
 
 	// 实体与查询解析索引。
 	tableColumns             map[string]map[string]columnMeta

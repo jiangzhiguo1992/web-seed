@@ -14,9 +14,14 @@ import (
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
-// projectName 读取 contracts/project.yaml 的项目标识；缺失时返回空串，
-// 供 storage cache prefix 的命名空间校验使用。
+// projectName 读取 contracts/project.yaml 的项目标识；缺失时返回空串。
+// 项目文件本身的错误由 platform 单例检查报出，这里只做一次读取缓存，
+// 避免每个 cache 条目重复解析同一文件。
 func (c *Checker) projectName() string {
+	if c.projectNameLoaded {
+		return c.projectNameValue
+	}
+	c.projectNameLoaded = true
 	if c.root == "" {
 		return ""
 	}
@@ -26,6 +31,7 @@ func (c *Checker) projectName() string {
 	}
 	project, _ := asMap(doc["project"])
 	name, _ := project["name"].(string)
+	c.projectNameValue = name
 	return name
 }
 
