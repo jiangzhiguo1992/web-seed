@@ -51,6 +51,35 @@ func (c *Checker) checkScenarioItem(where string, sc map[string]any, roles map[s
 		c.rulef("scenario-refs", "%s: unknown operation %s", where, opID)
 		return
 	}
+	flowID, _ := sc["flow"].(string)
+	if flowID == "" {
+		c.rulef("scenario-refs", "%s: flow is required", where)
+	} else if !c.flowIDs[flowID] {
+		c.rulef("scenario-refs", "%s: unknown flow %s", where, flowID)
+	} else {
+		pages := asList(sc["pages"])
+		if len(pages) == 0 {
+			c.rulef("scenario-refs", "%s: pages must not be empty", where)
+		}
+		for _, rawPage := range pages {
+			page, _ := rawPage.(string)
+			if page == "" {
+				continue
+			}
+			if !c.flowPages[flowID][page] {
+				c.rulef("scenario-refs", "%s: page %s is not a step page of flow %s", where, page, flowID)
+			}
+			if !containsString(op.UsedBy, page) {
+				c.rulef("scenario-refs", "%s: page %s is not a used_by consumer of %s", where, page, opID)
+			}
+		}
+		for _, rawRule := range asList(sc["rules"]) {
+			ruleID, _ := rawRule.(string)
+			if ruleID != "" && !c.flowRules[flowID][ruleID] {
+				c.rulef("scenario-refs", "%s: rule %s is not declared in flow %s", where, ruleID, flowID)
+			}
+		}
+	}
 	actor, _ := asMap(sc["actor"])
 	if role, _ := actor["role"].(string); role != "" && !roles[role] {
 		c.rulef("scenario-refs", "%s: unknown role %s", where, role)

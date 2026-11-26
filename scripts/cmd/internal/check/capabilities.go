@@ -147,9 +147,9 @@ func (c *Checker) checkCapabilities() {
 		c.rulef("schema.load", "load cap.services schema: %v", err)
 		return
 	}
-	ruleSchema, err := c.loadSchemaByType("feature.rules")
+	ruleSchema, err := c.loadSchemaByType("feature.flows")
 	if err != nil {
-		c.rulef("schema.load", "load feature.rules schema: %v", err)
+		c.rulef("schema.load", "load feature.flows schema: %v", err)
 		return
 	}
 	lifecycleSchema, err := c.loadSchemaByType("cap.lifecycles")
@@ -420,7 +420,7 @@ func (c *Checker) checkCapabilities() {
 				continue
 			}
 			if ruleIDs[id] {
-				c.rulef("rule-id-unique", "%s: duplicate rule id %s", relPath(c.root, file), id)
+				c.rulef("flow-refs", "%s: duplicate rule id %s", relPath(c.root, file), id)
 			}
 			ruleIDs[id] = true
 			for _, rawErr := range asList(item["errors"]) {

@@ -143,7 +143,7 @@ func TestFieldPlacement(t *testing.T) {
 	writePlacementFile(t, root, "contracts/data/entities/x.yaml", "rules:\n  - { id: x }\n")
 	writePlacementFile(t, root, "contracts/data/entities/style_bad.yaml", "fields:\n  - { name: id, type: _types.basics.string }\n")
 	writePlacementFile(t, root, "contracts/data/entities/style_ok.yaml", "fields:\n  - name: id\n    type: _types.basics.string\n")
-	writePlacementFile(t, root, "contracts/features/rules/x.yaml", "rules:\n  - { id: x }\n")
+	writePlacementFile(t, root, "contracts/features/flows/x.yaml", "rules:\n  - { id: x }\n")
 	writePlacementFile(t, root, "contracts/platform/architecture/go_arch.yaml", "rules:\n  - { id: x }\n")
 	writePlacementFile(t, root, "contracts/platform/architecture/other.yaml", "rules:\n  - { id: x }\n")
 	writePlacementFile(t, root, "contracts/features/pages/nested.yaml", "page:\n  rules:\n    - x\n")
@@ -166,7 +166,7 @@ func TestFieldPlacement(t *testing.T) {
 	if strings.Contains(errs, "style_ok.yaml") {
 		t.Fatalf("block-style fields wrongly reported: %v", c.errs)
 	}
-	if strings.Contains(errs, "features/rules/x.yaml") || strings.Contains(errs, "architecture/go_arch.yaml") {
+	if strings.Contains(errs, "features/flows/x.yaml") || strings.Contains(errs, "architecture/go_arch.yaml") {
 		t.Fatalf("domain rules wrongly reported: %v", c.errs)
 	}
 }

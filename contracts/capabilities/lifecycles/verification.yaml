@@ -28,11 +28,10 @@ create:
   requires:
     - lifecycle: cap.lifecycles.account
       states: [ pending, active ]
-      rules: [ feature.rules.auth.verification_account_active ]
+      rules: [ feature.flows.auth.verification_account_active ]
       on_violation: platform.errors.AUTH_VERIFICATION_INVALID
   implemented_by:
     - cap.services.verification.send.create
-
 transitions:
   - name: send
     description: "验证体创建后标记为已发送"
@@ -41,7 +40,7 @@ transitions:
     requires:
       - lifecycle: cap.lifecycles.account
         states: [ pending, active ]
-        rules: [ feature.rules.auth.verification_account_active ]
+        rules: [ feature.flows.auth.verification_account_active ]
         on_violation: platform.errors.AUTH_VERIFICATION_INVALID
     implemented_by:
       - cap.services.verification.send.mark_sent
@@ -52,7 +51,7 @@ transitions:
     requires:
       - lifecycle: cap.lifecycles.account
         states: [ pending, active ]
-        rules: [ feature.rules.auth.verification_account_active ]
+        rules: [ feature.flows.auth.verification_account_active ]
         on_violation: platform.errors.AUTH_VERIFICATION_INVALID
     implemented_by:
       - cap.services.verification.verify.consume
@@ -80,7 +79,7 @@ transitions:
     requires:
       - lifecycle: cap.lifecycles.account
         states: [ pending, active ]
-        rules: [ feature.rules.auth.verification_account_active ]
+        rules: [ feature.flows.auth.verification_account_active ]
         on_violation: platform.errors.AUTH_VERIFICATION_INVALID
     implemented_by:
       - cap.services.verification.send.mark_failed

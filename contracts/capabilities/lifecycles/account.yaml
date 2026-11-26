@@ -26,7 +26,6 @@ destroy:
   requires: [ ]
   implemented_by:
     - cap.services.account.delete.soft_delete_account
-
 transitions:
   - name: activate
     description: "激活账号"

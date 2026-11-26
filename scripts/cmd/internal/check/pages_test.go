@@ -69,7 +69,7 @@ actions:
     permission: platform.security.permissions.account_read
     available_when: { transition: cap.lifecycles.x.destroy, state_not: [deleted] }
 fields:
-  - name: q
+  - name: status
     widget: string
     minLength: 1
     maxLength: 10

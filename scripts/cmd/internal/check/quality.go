@@ -140,7 +140,7 @@ func makeCommandTarget(command string) string {
 
 func (c *Checker) scenarioIDs() map[string]bool {
 	out := map[string]bool{}
-	files, _ := filepath.Glob(filepath.Join(c.root, "contracts/scenarios/http/*.yaml"))
+	files, _ := filepath.Glob(filepath.Join(c.root, "contracts/features/scenarios/http/*.yaml"))
 	for _, file := range files {
 		doc, err := loadYAML(file)
 		if err != nil {

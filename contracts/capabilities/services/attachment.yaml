@@ -180,10 +180,10 @@ services:
           - platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN
           - platform.errors.ATTACHMENT_INVALID
         rules:
-          - { rule: feature.rules.attachment.owner_table_format }
-          - { rule: feature.rules.attachment.purpose_format }
-          - { rule: feature.rules.attachment.size_non_negative }
-          - { rule: feature.rules.attachment.sha256_format }
+          - { rule: feature.flows.attachment.owner_table_format }
+          - { rule: feature.flows.attachment.purpose_format }
+          - { rule: feature.flows.attachment.size_non_negative }
+          - { rule: feature.flows.attachment.sha256_format }
         goto: validate_owner
       - id: validate_owner
         kind: logic

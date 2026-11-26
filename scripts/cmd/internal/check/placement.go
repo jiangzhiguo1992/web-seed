@@ -12,7 +12,7 @@ import (
 
 // 领域规则集本身以 rules 为内容，不属于“类型级规则清单”位置约束。
 var rulesAllowedPrefixes = []string{
-	"contracts/features/rules/",
+	"contracts/features/flows/",
 }
 
 var rulesAllowedFiles = map[string]bool{

@@ -1275,23 +1275,23 @@ func TestServiceRuleErrorsCovered(t *testing.T) {
 		"steps": []any{map[string]any{
 			"id": "run", "kind": "logic", "summary": "x", "goto": "$end",
 			"errors": []any{}, "output": []any{},
-			"rules": []any{map[string]any{"rule": "feature.rules.x.r"}},
+			"rules": []any{map[string]any{"rule": "feature.flows.x.r"}},
 		}},
 	}
 	meta := map[string]serviceMeta{"cap.services.x.run": {module: "x", visibility: "public", errors: map[string]bool{}}}
 	c := &Checker{
 		errCodeSet: map[string]bool{"A": true},
-		ruleErrors: map[string][]string{"feature.rules.x.r": {"platform.errors.A"}},
+		ruleErrors: map[string][]string{"feature.flows.x.r": {"platform.errors.A"}},
 	}
 	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
-		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		meta, map[string]bool{"feature.flows.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	mustContainRule(t, c.errs, "service-errors")
 
 	doc["steps"].([]any)[0].(map[string]any)["errors"] = []any{"platform.errors.A"}
 	meta["cap.services.x.run"] = serviceMeta{module: "x", visibility: "public", errors: map[string]bool{"platform.errors.A": true}}
 	c.errs = nil
 	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
-		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		meta, map[string]bool{"feature.flows.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	if len(c.errs) != 0 {
 		t.Fatalf("declared rule error reported: %v", c.errs)
 	}
@@ -1304,7 +1304,7 @@ func TestServiceRuleErrorsCovered(t *testing.T) {
 	})
 	c.errs = nil
 	c.checkServiceItem(doc, "f", "cap.services.x.run", "x",
-		meta, map[string]bool{"feature.rules.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
+		meta, map[string]bool{"feature.flows.x.r": true}, map[string]bool{}, map[string]bool{}, map[string]bool{})
 	mustContainRule(t, c.errs, "service-errors")
 }
 

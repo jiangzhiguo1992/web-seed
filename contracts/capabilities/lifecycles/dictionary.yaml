@@ -26,7 +26,6 @@ destroy:
   requires: [ ]
   implemented_by:
     - cap.services.dictionary.delete.soft_delete_dictionary
-
 transitions:
   - name: disable
     description: "停用字典"

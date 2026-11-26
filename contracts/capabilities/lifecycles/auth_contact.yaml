@@ -22,7 +22,7 @@ create:
   requires:
     - lifecycle: cap.lifecycles.account
       states: [ pending, active ]
-      rules: [ feature.rules.auth.auth_binding_rejects_suspended_account, feature.rules.auth.auth_binding_rejects_deleted_account ]
+      rules: [ feature.flows.auth.auth_binding_rejects_suspended_account, feature.flows.auth.auth_binding_rejects_deleted_account ]
       on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
   implemented_by:
     - cap.services.auth.bind_email.create_auth_email
@@ -33,14 +33,13 @@ destroy:
   requires:
     - lifecycle: cap.lifecycles.account
       states: [ pending, active, suspended ]
-      rules: [ feature.rules.auth.auth_binding_rejects_deleted_account ]
+      rules: [ feature.flows.auth.auth_binding_rejects_deleted_account ]
       on_violation: platform.errors.ACCOUNT_ALREADY_DELETED
   implemented_by:
     - cap.services.auth.bind_email.replace_soft_delete
     - cap.services.auth.bind_phone.replace_soft_delete
     - cap.services.auth.revoke_all_for_account.soft_delete_auth_email_by_account
     - cap.services.auth.revoke_all_for_account.soft_delete_auth_phone_by_account
-
 transitions:
   - name: verify
     description: "验证码校验成功，置为已认证"
@@ -49,7 +48,7 @@ transitions:
     requires:
       - lifecycle: cap.lifecycles.account
         states: [ pending, active ]
-        rules: [ feature.rules.auth.auth_binding_rejects_suspended_account, feature.rules.auth.auth_binding_rejects_deleted_account ]
+        rules: [ feature.flows.auth.auth_binding_rejects_suspended_account, feature.flows.auth.auth_binding_rejects_deleted_account ]
         on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.verification.verify.apply_email_verified
@@ -61,7 +60,7 @@ transitions:
     requires:
       - lifecycle: cap.lifecycles.account
         states: [ pending, active ]
-        rules: [ feature.rules.auth.auth_binding_rejects_suspended_account, feature.rules.auth.auth_binding_rejects_deleted_account ]
+        rules: [ feature.flows.auth.auth_binding_rejects_suspended_account, feature.flows.auth.auth_binding_rejects_deleted_account ]
         on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.auth.bind_email.disable_email_status
@@ -73,7 +72,7 @@ transitions:
     requires:
       - lifecycle: cap.lifecycles.account
         states: [ pending, active ]
-        rules: [ feature.rules.auth.auth_binding_rejects_suspended_account, feature.rules.auth.auth_binding_rejects_deleted_account ]
+        rules: [ feature.flows.auth.auth_binding_rejects_suspended_account, feature.flows.auth.auth_binding_rejects_deleted_account ]
         on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.auth.bind_email.enable_email_status

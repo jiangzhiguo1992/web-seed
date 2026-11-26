@@ -1,6 +1,6 @@
 // anchors.go 从 service steps 反向生成 rules/lifecycles/events 的实现锚点。
 //
-// 生成物：feature.rules.rules[].implemented_by、cap.lifecycles 的 create.services/destroy.services/
+// 生成物：feature.flows.rules[].implemented_by、cap.lifecycles 的 create.services/destroy.services/
 // transitions[].implemented_by、cap.events.topics[].emitted_by / consumers。
 // checker 负责结构，gen-graph 负责一致性。
 package graph
@@ -209,7 +209,7 @@ func computeAnchors(root string, serviceTarget scanTarget) (*Anchors, error) {
 	}
 
 	// 登记文件归属，供 Write 定位。
-	ruleTarget, err := resolveTarget(root, "feature.rules")
+	ruleTarget, err := resolveTarget(root, "feature.flows")
 	if err == nil {
 		for _, f := range glob(root, filepath.Join(ruleTarget.dir, ruleTarget.glob)) {
 			doc, err := loadYAML(f)
@@ -705,7 +705,7 @@ func syncItemField(path, listKey, itemKey, itemValue, field string, values []str
 	lines := strings.Split(text, "\n")
 	listStart := -1
 	for i, line := range lines {
-		if strings.TrimSpace(line) == listKey+":" {
+		if line == listKey+":" {
 			listStart = i
 			break
 		}
@@ -800,7 +800,7 @@ func syncItemNestedField(path, listKey, itemKey, itemValue, parentKey, field str
 	lines := strings.Split(text, "\n")
 	listStart := -1
 	for i, line := range lines {
-		if strings.TrimSpace(line) == listKey+":" {
+		if line == listKey+":" {
 			listStart = i
 			break
 		}
@@ -902,7 +902,7 @@ func syncItemFieldBlock(path, listKey, itemKey, itemValue, field string, values 
 	lines := strings.Split(text, "\n")
 	listStart := -1
 	for i, line := range lines {
-		if strings.TrimSpace(line) == listKey+":" {
+		if line == listKey+":" {
 			listStart = i
 			break
 		}

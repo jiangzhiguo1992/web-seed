@@ -204,8 +204,8 @@ func TestRuleValueValidation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := &Checker{}
-			c.checkRuleValue("contracts/features/rules/x.yaml", "feature.rules.x.r", tc.field, tc.op, tc.value)
-			got := strings.Contains(strings.Join(c.errs, "\n"), "[rule-value]")
+			c.checkRuleValue("contracts/features/flows/x.yaml", "feature.flows.x.r", tc.field, tc.op, tc.value)
+			got := strings.Contains(strings.Join(c.errs, "\n"), "[flow-rule-value]")
 			if got != tc.reject {
 				t.Fatalf("checkRuleValue(%s, %v) = %v, want reject=%v; errs=%v", tc.op, tc.value, got, tc.reject, c.errs)
 			}

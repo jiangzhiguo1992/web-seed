@@ -64,7 +64,7 @@ services:
           - platform.errors.ACCOUNT_NOT_FOUND
           - platform.errors.COMMON_FORBIDDEN
         rules:
-          - { rule: feature.rules.account.self_only }
+          - { rule: feature.flows.account.self_only }
         goto: $end
     used_by:
       - cap.protocols.http.account.get
@@ -148,8 +148,8 @@ services:
           - platform.errors.ACCOUNT_NUMBER_INVALID
           - platform.errors.ACCOUNT_NICKNAME_INVALID
         rules:
-          - { rule: feature.rules.account.number_format }
-          - { rule: feature.rules.account.nickname_length }
+          - { rule: feature.flows.account.number_format }
+          - { rule: feature.flows.account.nickname_length }
         goto: exists_account_number
       - id: exists_account_number
         kind: query
@@ -169,7 +169,7 @@ services:
         errors:
           - platform.errors.ACCOUNT_NUMBER_TAKEN
         rules:
-          - { rule: feature.rules.account.number_unique }
+          - { rule: feature.flows.account.number_unique }
         goto: create_account
       - id: create_account
         kind: query
@@ -234,9 +234,9 @@ services:
           - platform.errors.ACCOUNT_NICKNAME_INVALID
           - platform.errors.COMMON_FORBIDDEN
         rules:
-          - { rule: feature.rules.account.nickname_length }
-          - { rule: feature.rules.account.self_only }
-          - { rule: feature.rules.account.deleted_cannot_modify }
+          - { rule: feature.flows.account.nickname_length }
+          - { rule: feature.flows.account.self_only }
+          - { rule: feature.flows.account.deleted_cannot_modify }
         goto: update_account
       - id: update_account
         kind: query
@@ -282,9 +282,9 @@ services:
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
           - platform.errors.COMMON_INTERNAL
         rules:
-          - { rule: feature.rules.account.deleted_cannot_modify }
-          - { rule: feature.rules.account.delete_revokes_auth }
-          - { rule: feature.rules.account.deleted_status_consistent }
+          - { rule: feature.flows.account.deleted_cannot_modify }
+          - { rule: feature.flows.account.delete_revokes_auth }
+          - { rule: feature.flows.account.deleted_status_consistent }
         goto: revoke_auth
       - id: revoke_auth
         kind: service
@@ -380,7 +380,7 @@ services:
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
         rules:
-          - { rule: feature.rules.account.activate_requires_pending_or_suspended }
+          - { rule: feature.flows.account.activate_requires_pending_or_suspended }
         goto: target_status
       - id: target_status
         kind: logic
@@ -479,7 +479,7 @@ services:
           - platform.errors.ACCOUNT_ALREADY_DELETED
           - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
         rules:
-          - { rule: feature.rules.account.suspend_requires_active }
+          - { rule: feature.flows.account.suspend_requires_active }
         goto: target_status
       - id: target_status
         kind: logic

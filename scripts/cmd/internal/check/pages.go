@@ -53,6 +53,8 @@ func (c *Checker) checkFeaturePages() {
 		lifecycleID := pageLifecycleID(doc)
 		c.checkPageTransitionUI(rel, doc, lifecycleIDs)
 		c.checkPageAnalytics(rel, doc, eventNames)
+		c.checkPageActionLifecycle(rel, doc)
+		c.checkPageFieldRefs(rel, doc)
 		c.checkPageNode(rel, doc, lifecycleID, lifecycleIDs, lifecycleActions, lifecycleStates, serviceIDs, routeIDs)
 	}
 }

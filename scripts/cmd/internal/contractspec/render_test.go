@@ -524,7 +524,7 @@ func TestRenderEnumItemQuotesProse(t *testing.T) {
 }
 
 func TestRenderRule(t *testing.T) {
-	s := loadSchemaByType(t, "feature.rules")
+	s := loadSchemaByType(t, "feature.flows")
 	b, err := RenderRule(s, "invoice", "invoice", "发票规则")
 	if err != nil {
 		t.Fatal(err)
@@ -533,7 +533,7 @@ func TestRenderRule(t *testing.T) {
 	if err := yaml.Unmarshal(b, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["id"] != "feature.rules.invoice" {
+	if doc["id"] != "feature.flows.invoice" {
 		t.Fatalf("id = %v", doc["id"])
 	}
 	rules, _ := doc["rules"].([]any)

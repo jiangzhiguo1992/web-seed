@@ -23,10 +23,10 @@ test: test-api test-tools ## 运行测试（API + 契约工具）
 test-api: ## Go 测试
 	cd $(APP_API) && go test ./...
 
-test-tools: ## 契约工具测试（含 feature.rules policy 断言）
+test-tools: ## 契约工具测试（含 feature.flows policy 断言）
 	cd scripts/cmd && go test -tags rules ./...
 
-test-rules: ## feature.rules policy 行为断言（骨架）
+test-rules: ## feature.flows policy 行为断言（骨架）
 	cd scripts/cmd && go test -tags rules ./internal/check -run TestPolicy
 
 test-race: ## Go 竞态测试
@@ -121,7 +121,7 @@ gen-async: contract-check ## cap.events → contracts/generated/async/manifest.y
 gen-async-check: ## 校验异步任务清单是否最新
 	cd scripts/cmd && go run ./gen_async -root "$(CURDIR)" -check
 
-contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|feature.pages|cap.events|cap.protocols.http）
+contract-new: ## 生成契约骨架（data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.flows|feature.pages|cap.events|cap.protocols.http）
 	@type="$(type)" name="$(name)" module="$(module)" summary="$(summary)" column_type="$(column_type)" table="$(table)" service="$(service)" path="$(path)" http_method="$(http_method)" ./scripts/contract/scaffold.sh
 
 contract-check: ## 校验契约结构、引用与 used_by（全部类型）

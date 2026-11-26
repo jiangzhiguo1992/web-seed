@@ -1296,7 +1296,7 @@ func scaffoldRenderCases() []scaffoldRenderCase {
 		{"cap.lifecycles", true, func(s *contractspec.Schema) ([]byte, error) {
 			return contractspec.RenderLifecycle(s, "smoke", "smoke", "x")
 		}},
-		{"feature.rules", true, func(s *contractspec.Schema) ([]byte, error) {
+		{"feature.flows", true, func(s *contractspec.Schema) ([]byte, error) {
 			return contractspec.RenderRule(s, "smoke", "smoke", "x")
 		}},
 		{"feature.pages", true, func(s *contractspec.Schema) ([]byte, error) {

@@ -21,7 +21,7 @@ create:
   requires:
     - lifecycle: cap.lifecycles.account
       states: [ pending, active ]
-      rules: [ feature.rules.auth.auth_binding_rejects_suspended_account, feature.rules.auth.auth_binding_rejects_deleted_account ]
+      rules: [ feature.flows.auth.auth_binding_rejects_suspended_account, feature.flows.auth.auth_binding_rejects_deleted_account ]
       on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
   implemented_by:
     - cap.services.auth.bind_password.create_auth_pwd
@@ -29,11 +29,10 @@ destroy:
   requires:
     - lifecycle: cap.lifecycles.account
       states: [ pending, active, suspended ]
-      rules: [ feature.rules.auth.auth_binding_rejects_deleted_account ]
+      rules: [ feature.flows.auth.auth_binding_rejects_deleted_account ]
       on_violation: platform.errors.ACCOUNT_ALREADY_DELETED
   implemented_by:
     - cap.services.auth.revoke_all_for_account.soft_delete_auth_pwd_by_account
-
 transitions:
   - name: disable
     description: "停用密码认证"
@@ -42,7 +41,7 @@ transitions:
     requires:
       - lifecycle: cap.lifecycles.account
         states: [ pending, active ]
-        rules: [ feature.rules.auth.auth_binding_rejects_suspended_account, feature.rules.auth.auth_binding_rejects_deleted_account ]
+        rules: [ feature.flows.auth.auth_binding_rejects_suspended_account, feature.flows.auth.auth_binding_rejects_deleted_account ]
         on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.auth.bind_password.disable_pwd_status
@@ -53,7 +52,7 @@ transitions:
     requires:
       - lifecycle: cap.lifecycles.account
         states: [ pending, active ]
-        rules: [ feature.rules.auth.auth_binding_rejects_suspended_account, feature.rules.auth.auth_binding_rejects_deleted_account ]
+        rules: [ feature.flows.auth.auth_binding_rejects_suspended_account, feature.flows.auth.auth_binding_rejects_deleted_account ]
         on_violation: platform.errors.ACCOUNT_ILLEGAL_TRANSITION
     implemented_by:
       - cap.services.auth.bind_password.enable_pwd_status

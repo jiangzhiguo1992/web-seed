@@ -24,12 +24,11 @@ create:
   requires:
     - lifecycle: cap.lifecycles.account
       states: [ active ]
-      rules: [ feature.rules.auth.auth_token_requires_active_account ]
+      rules: [ feature.flows.auth.auth_token_requires_active_account ]
       on_violation: platform.errors.AUTH_TOKEN_INVALID
   implemented_by:
     - cap.services.token.issue.create_token
     - cap.services.token.refresh.create_token
-
 transitions:
   - name: revoke
     description: "主动吊销令牌"

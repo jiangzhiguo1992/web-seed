@@ -78,12 +78,12 @@ services:
           - platform.errors.AUTH_EMAIL_INVALID
           - platform.errors.COMMON_INTERNAL
         rules:
-          - { rule: feature.rules.auth.verification_target_normalization }
-          - { rule: feature.rules.auth.verification_no_enumeration }
-          - { rule: feature.rules.auth.verification_register_account }
-          - { rule: feature.rules.auth.verification_auth_binding }
-          - { rule: feature.rules.auth.verification_purpose_status }
-          - { rule: feature.rules.auth.verification_resend }
+          - { rule: feature.flows.auth.verification_target_normalization }
+          - { rule: feature.flows.auth.verification_no_enumeration }
+          - { rule: feature.flows.auth.verification_register_account }
+          - { rule: feature.flows.auth.verification_auth_binding }
+          - { rule: feature.flows.auth.verification_purpose_status }
+          - { rule: feature.flows.auth.verification_resend }
         goto: load_account
       - id: load_account
         kind: query
@@ -103,7 +103,7 @@ services:
         errors:
           - platform.errors.AUTH_VERIFICATION_INVALID
         rules:
-          - { rule: feature.rules.auth.verification_account_active }
+          - { rule: feature.flows.auth.verification_account_active }
         goto: gen_code
       - id: gen_code
         kind: logic
@@ -346,7 +346,7 @@ services:
         errors:
           - platform.errors.AUTH_VERIFICATION_INVALID
         rules:
-          - { rule: feature.rules.auth.verification_account_active }
+          - { rule: feature.flows.auth.verification_account_active }
         goto: load_verification
       - id: load_verification
         kind: query
@@ -447,13 +447,13 @@ services:
           - platform.errors.AUTH_VERIFICATION_EXPIRED
           - platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED
         rules:
-          - { rule: feature.rules.auth.verification_one_time }
-          - { rule: feature.rules.auth.verification_expiry }
-          - { rule: feature.rules.auth.verification_attempts }
-          - { rule: feature.rules.auth.verification_auth_binding }
-          - { rule: feature.rules.auth.verification_purpose_status }
-          - { rule: feature.rules.auth.verification_no_enumeration }
-          - { rule: feature.rules.auth.verification_register_account }
+          - { rule: feature.flows.auth.verification_one_time }
+          - { rule: feature.flows.auth.verification_expiry }
+          - { rule: feature.flows.auth.verification_attempts }
+          - { rule: feature.flows.auth.verification_auth_binding }
+          - { rule: feature.flows.auth.verification_purpose_status }
+          - { rule: feature.flows.auth.verification_no_enumeration }
+          - { rule: feature.flows.auth.verification_register_account }
         goto: record_branch
       - id: record_branch
         kind: when
@@ -599,9 +599,9 @@ services:
           - platform.errors.COMMON_INTERNAL
           - platform.errors.AUTH_VERIFICATION_INVALID
         rules:
-          - { rule: feature.rules.auth.verification_action_recorded }
-          - { rule: feature.rules.auth.verification_action_append_only }
-          - { rule: feature.rules.auth.verification_consumed_consistent }
+          - { rule: feature.flows.auth.verification_action_recorded }
+          - { rule: feature.flows.auth.verification_action_append_only }
+          - { rule: feature.flows.auth.verification_consumed_consistent }
         goto: status_verified
       - id: status_verified
         kind: logic
@@ -612,7 +612,7 @@ services:
         errors:
           - platform.errors.COMMON_INTERNAL
         rules:
-          - { rule: feature.rules.auth.verification_success_sets_verified }
+          - { rule: feature.flows.auth.verification_success_sets_verified }
         goto: require_verified
       - id: require_verified
         kind: when
@@ -832,7 +832,7 @@ services:
           - platform.errors.AUTH_VERIFICATION_TARGET_INVALID
           - platform.errors.COMMON_INTERNAL
         rules:
-          - { rule: feature.rules.auth.verification_auth_change }
+          - { rule: feature.flows.auth.verification_auth_change }
         goto: revoke_active_verifications_by_auth
       - id: revoke_active_verifications_by_auth
         kind: query

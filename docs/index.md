@@ -26,11 +26,12 @@
 | 改任何契约 | `playbooks/contract-change.md` | `_meta/README.md` → `_meta/<type>.yaml` → `index.yaml` → 目标文件 |
 | 新增 / 修改 API | `contract-change` + `add-endpoint`（P7） | `capabilities/README.md`、`capabilities/protocols/http/*.yaml`、`project.yaml`（apps） |
 | 新增表 / 迁移 | `contract-change` + `add-table`（P7） | `data/README.md`、`_meta/data.tables.yaml`、`data/tables/_base.yaml`、`data/tables/*.yaml`、`data/storage.yaml` |
-| 改业务规则 / 生命周期 | `contract-change` | `features/README.md`、`capabilities/lifecycles/*.yaml`、`capabilities/README.md` |
+| 改业务规则 / 跨页流程 | `contract-change` + `add-feature` | `features/README.md`、`features/flows/*.yaml`、`capabilities/services/*.yaml` |
+| 改生命周期 | `contract-change` | `capabilities/lifecycles/*.yaml`、`capabilities/README.md` |
 | 改存储引擎 | `contract-change` | `data/storage.yaml` |
-| 新增页面 | `contract-change` + `add-feature`（P7） | `features/README.md`、`features/pages/*.yaml`、`features/routes.yaml` |
+| 新增页面 | `contract-change` + `add-feature` | `features/README.md`、`features/pages/*.yaml`、`features/routes.yaml`、`features/flows/*.yaml` |
 | 改平台约定（错误码 / 权限 / 配置） | `contract-change` | `platform/README.md`、对应文件 |
-| 补 HTTP 验收场景 | `contract-change` | `_meta/scenario.http.yaml`、`scenarios/http/*.yaml` |
+| 补 HTTP 验收场景 | `contract-change` | `_meta/scenario.http.yaml`、`features/scenarios/http/*.yaml` |
 | 新增 API / Web 应用 | `contract-change` + `add-app`（P7） | `project.yaml`（apps 段） |
 | 派生新项目 | `rename-project`（P7） | `project.yaml` |
 
@@ -71,7 +72,7 @@ playbook 未覆盖的任务：**先写 playbook，再动手**。这是硬规则�
 - 改行为前先改契约，禁止"先写代码后补契约"
 - 新建契约用 `make contract-new`，改完跑 `make contract-check`；`make gen` 只负责契约 → 产物
 - 禁止手改 `generated/`、`apps/api/migrations/`
-- 禁止在 `features/**` 里引用 `data.*`，页面必须走 `capability`
+- `features/pages/**` 与 `features/flows/**` 禁止引用 `data.tables` / `data.queries` / `data.storage`；只有 `features/scenarios/**` 允许引用 `data.*`
 - 契约引用写 ID，且只写在结构化字段里（`ref` / `refs` / `capability` / `use` / `emits` / `x-*`）
 - 新增依赖必须说明"标准库/现有依赖为何不够"
 - 任务超出范围时先停下确认，不要顺手重构

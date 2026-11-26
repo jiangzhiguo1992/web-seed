@@ -72,15 +72,15 @@ make contract-impact id=<被修改的 ID>
 | 表结构 / 表级物理事实 | `contracts/data/tables/<file>.yaml` + `contracts/data/storage.yaml` 的 `tables.<engine>` 普通条目（`description` / `retention`）；归档用 `archive_of` 条目（`description` + `promotable` 标明能否回迁，能回迁时必须写 `on_conflict`） |
 | 查询 | `contracts/data/queries/<scope>.yaml` |
 | 枚举 | `contracts/data/enums/<module>.yaml` |
-| 实体 / 生命周期 / 规则 / 流程 | `contracts/capabilities/{services,lifecycles,events}/**` + `contracts/features/rules/**` |
-| 路由 / 页面 / 用户旅程 | `contracts/features/**` |
+| 实体 / 生命周期 / 事件 | `contracts/capabilities/{services,lifecycles,events}/**` |
+| 路由 / 页面 / 跨页流程 / 规则 / 验收场景 | `contracts/features/**` |
 | 错误码 / 权限 / 配置 / 环境 | `contracts/platform/**` |
 
 改的时候：
 
 - 引用写 **ID**，不写文件路径
 - 引用只写在结构化字段（`ref` / `refs` / `capability` / `use` / `emits` / `x-*`）
-- `features/**` **禁止**引用 `data.*`
+- `features/pages/**` 与 `features/flows/**` **禁止**引用 `data.tables` / `data.queries` / `data.storage`；`features/scenarios/**` 允许引用 `data.*` 做持久化断言
 - 未实现的能力用 `planned:<id>`，落地后替换
 - 新契约文件必须同步 `contracts/index.yaml`
 
@@ -152,7 +152,7 @@ make contract-check          # 结构 / ID / 约束 / 索引 / used_by
 make contract-compat        # enum append-only（默认对比 HEAD^1）
 make gen && git diff --exit-code   # 生成物是否同步
 make test-api                # 路由集合比对 + 响应 schema 校验
-make test-web                # client 覆盖断言 + 页面四态
+make test-web                # 前端测试（P1 未接入）
 ```
 
 任一失败都不允许提交。

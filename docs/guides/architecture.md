@@ -1,6 +1,6 @@
 # web-seed 架构设计与实施方案
 
-> **版本** v3.4 · **状态** P0/P1 完成；契约层已重构为四组（capabilities 内含 services/lifecycles/events/protocols，rules 在 features）；P2 进行中 · **更新** 2026-11-18
+> **版本** v3.4 · **状态** P0/P1 完成；契约层已重构为四组（capabilities 内含 services/lifecycles/events/protocols，flows 在 features）；P2 进行中 · **更新** 2026-11-26
 > **已定决策**：目录形态 `1A`（`apps/api` + `apps/web`）· UI `2A`（Tailwind + shadcn-vue）· 能力档 `3C`（全家桶，默认关闭）
 >
 > 本文是模板种子工程自身的架构设计与实施计划，不是派生项目的业务文档。
@@ -106,7 +106,7 @@
 - [ ] `platform/errors/*.yaml` + `platform/security/permissions.yaml` → 两端常量
 - [ ] `platform/config/env.json` → `.env.example`（`gen-env.sh`）
 - [ ] `platform/design/tokens.json` → CSS variables（`@theme`）
-- [ ] `capabilities/{lifecycles,events}/**` + `features/rules/**` → 生命周期常量 / 状态常量 + 断言 + 测试骨架
+- [ ] `capabilities/{lifecycles,events}/**` + `features/flows/**` → 生命周期常量 / 状态常量 + 断言 + 测试骨架
 - [ ] `features/**` → 路由表 + 页面骨架 + 类型
 - [ ] 结构化依赖 → 按需生成 graph；`lineage.md` → `docs/contracts/generated/lineage.md`
 - [x] `make gen` 幂等：连续两次生成结果一致
@@ -214,7 +214,7 @@
 |---|---|---|
 | `data/` | 物理表（含 `_base` 基类）、逻辑实体、查询、存储约束、冗余关系、逻辑外键、迁移规则（不感知业务） | `data/tables/*.yaml`（migrations 由此生成）+ `data/storage.yaml` |
 | `capabilities/` | 能力层：`services` 服务、`events` 异步事件与任务、`protocols` 协议绑定 | `capabilities/**` |
-| `features/` | 功能定义：路由、页面、业务规则 | `features/**` |
+| `features/` | 功能定义：路由、页面、流程（含业务规则）、验收场景 | `features/**` |
 | `platform/` | 横切：环境、版本、错误、枚举、HTTP 约定、质量、配置、架构、设计、观测、埋点、安全 | `platform/**` |
 
 `index.yaml` 是契约地图，`generated/` 是产物。详见 [`contracts/README.md`](../../contracts/README.md)。
@@ -232,8 +232,10 @@ capabilities/services/*.yaml ──> (P2) Go interface / usecase / handler
 capabilities/events/*.yaml ──> gen-async ──> generated/async/manifest.yaml（worker 重试/并发/调度策略；runtime worker 仍为 P2）
 capabilities/events/*.yaml ──> (P2) topic 常量 / payload 类型 / worker 注册表
 data/queries/*.yaml ──> (P2) queries/*.sql ──> sqlc
-capabilities/{lifecycles,events}/** + features/rules/** ──> (P2) 生命周期 / 常量 / 断言 / 测试骨架
-features/** ──> (P2) 路由 / 页面骨架 / 类型
+capabilities/{lifecycles,events}/** + features/flows/** ──> (P2) 生命周期 / 流程 / 常量 / 测试骨架；invariant.assert 与 policy.decision.when 已由 rulesdsl 执行
+features/routes.yaml + features/pages/*.yaml ──> (P2) 前端路由/页面骨架（暂不生成 apps 代码）
+features/flows/*.yaml invariant.assert 与 policy.decision.when ──> rulesdsl（checker 解析 + 测试执行）
+features/** ──> (P2) 流程步骤 / 类型 / 校验函数
 platform/** ──> (P2) 配置校验 / 常量 / CSS 变量
 
 结构化依赖 ──> 按需 graph + docs/contracts/generated/lineage.md
@@ -248,7 +250,7 @@ platform/** ──> (P2) 配置校验 / 常量 / CSS 变量
 - **唯一顺序**：`feature → capabilities → data`（单向链，无反向）
 - **锚点只在上游写**：`feature --capability--> capabilities`，`capabilities --implemented_by--> capabilities`，
   `capabilities --persists_via--> data`
-- **capabilities 内部按业务主体组织**：`services` 的 steps 引用 `feature.rules` / `cap.lifecycles` / `cap.events`；`implemented_by` / `emitted_by` 是反向锚点，不重复声明
+- **capabilities 内部按业务主体组织**：`services` 的 steps 引用 `feature.flows` / `cap.lifecycles` / `cap.events`；`implemented_by` / `emitted_by` 是反向锚点，不重复声明
 - 图校验禁止任何 `cap.*` → `business.*`（business 层已移除）；`services → lifecycles/rules/events` 是允许的同组边
 - 影响面：`make contract-impact id=<id>`
 
@@ -274,7 +276,7 @@ web-seed/
 │   ├── project.yaml                  #   项目元信息（derive 输入）
 │   ├── data/                         #   tables(_base) / entities / queries / storage
 │   ├── capabilities/                 #   services / lifecycles / events / protocols
-│   ├── features/                     #   routes / pages / flows
+│   ├── features/                     #   routes / pages / flows / scenarios
 │   ├── platform/                     #   环境/版本/错误/枚举/HTTP/质量/配置/架构/设计/观测/埋点/安全
 │   └── generated/                    #   openapi/admin.yaml（机器产物）
 ├── docs/

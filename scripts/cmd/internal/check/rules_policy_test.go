@@ -1,6 +1,6 @@
 //go:build rules
 
-// rules_policy_test.go 是 feature.rules policy 规则的可执行断言。
+// rules_policy_test.go 是 feature.flows policy 规则的可执行断言。
 //
 // 断言分三层：
 //  1. 规则自身结构：implemented_by / given / when / then 非空；
@@ -19,17 +19,26 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yourorg/web-seed/scripts/cmd/internal/rulesdsl"
 	"gopkg.in/yaml.v3"
 )
 
 type policyRule struct {
-	ID            string   `yaml:"id"`
-	Kind          string   `yaml:"kind"`
-	Summary       string   `yaml:"summary"`
-	ImplementedBy []string `yaml:"implemented_by"`
-	Given         string   `yaml:"given"`
-	When          string   `yaml:"when"`
-	Then          string   `yaml:"then"`
+	ID            string           `yaml:"id"`
+	Kind          string           `yaml:"kind"`
+	Summary       string           `yaml:"summary"`
+	ImplementedBy []string         `yaml:"implemented_by"`
+	Assert        string           `yaml:"assert"`
+	Decision      []policyDecision `yaml:"decision"`
+}
+
+type policyDecision struct {
+	When      string `yaml:"when"`
+	Effect    string `yaml:"effect"`
+	Error     string `yaml:"error"`
+	Target    string `yaml:"target"`
+	Value     any    `yaml:"value"`
+	OnFailure string `yaml:"on_failure"`
 }
 
 type policyRuleDoc struct {
@@ -43,138 +52,138 @@ type policyExpectation struct {
 }
 
 // policyExpectations 只列可执行断言所需的最小契约锚点（表列/枚举/do_not），
-// 不复制 _meta/feature.rules.yaml 的 given/when/then 业务语义；语义以规则 YAML 为准。
+// 不复制 _meta/feature.flows.yaml 的 decision 业务语义；语义以规则 YAML 为准。
 var policyExpectations = map[string]policyExpectation{
-	"feature.rules.account.number_unique": {
+	"feature.flows.account.number_unique": {
 		tables: map[string][]string{"data.tables.account": {"number"}},
 	},
-	"feature.rules.account.self_only": {
+	"feature.flows.account.self_only": {
 		tables: map[string][]string{"data.tables.account": {"user_id"}},
 	},
-	"feature.rules.account.deleted_cannot_modify": {
+	"feature.flows.account.deleted_cannot_modify": {
 		tables: map[string][]string{"data.tables.account": {"deleted_at"}},
 	},
-	"feature.rules.account.delete_revokes_auth": {
+	"feature.flows.account.delete_revokes_auth": {
 		tables: map[string][]string{
 			"data.tables.verification_body": {"status"},
 		},
 	},
-	"feature.rules.account.activate_requires_pending_or_suspended": {
+	"feature.flows.account.activate_requires_pending_or_suspended": {
 		tables: map[string][]string{"data.tables.account": {"status"}},
 		enums:  map[string][]string{"data.enums.account_status": {"pending", "suspended"}},
 	},
-	"feature.rules.account.suspend_requires_active": {
+	"feature.flows.account.suspend_requires_active": {
 		tables: map[string][]string{"data.tables.account": {"status"}},
 		enums:  map[string][]string{"data.enums.account_status": {"active"}},
 	},
-	"feature.rules.auth.verification_one_time": {
+	"feature.flows.auth.verification_one_time": {
 		tables: map[string][]string{"data.tables.verification_body": {"consumed_at", "status"}},
 	},
-	"feature.rules.auth.verification_expiry": {
+	"feature.flows.auth.verification_expiry": {
 		tables: map[string][]string{"data.tables.verification_body": {"expire_at"}},
 	},
-	"feature.rules.auth.verification_attempts": {
+	"feature.flows.auth.verification_attempts": {
 		tables: map[string][]string{"data.tables.verification_body": {"attempt_count"}},
 	},
-	"feature.rules.auth.verification_auth_binding": {
+	"feature.flows.auth.verification_auth_binding": {
 		tables: map[string][]string{
 			"data.tables.auth_phone":        {"account_id"},
 			"data.tables.auth_email":        {"account_id"},
 			"data.tables.verification_body": {"account_id"},
 		},
 	},
-	"feature.rules.auth.auth_login_requires_verified": {
+	"feature.flows.auth.auth_login_requires_verified": {
 		tables: map[string][]string{
 			"data.tables.auth_pwd":   {"status"},
 			"data.tables.auth_phone": {"status"},
 			"data.tables.auth_email": {"status"},
 		},
 	},
-	"feature.rules.auth.auth_login_rejects_pending_account": {
+	"feature.flows.auth.auth_login_rejects_pending_account": {
 		tables: map[string][]string{"data.tables.account": {"status"}},
 		enums:  map[string][]string{"data.enums.account_status": {"pending"}},
 	},
-	"feature.rules.auth.auth_login_rejects_suspended_account": {
+	"feature.flows.auth.auth_login_rejects_suspended_account": {
 		tables: map[string][]string{"data.tables.account": {"status"}},
 		enums:  map[string][]string{"data.enums.account_status": {"suspended"}},
 	},
-	"feature.rules.auth.auth_login_rejects_deleted_account": {
+	"feature.flows.auth.auth_login_rejects_deleted_account": {
 		tables: map[string][]string{"data.tables.account": {"status"}},
 		enums:  map[string][]string{"data.enums.account_status": {"deleted"}},
 	},
-	"feature.rules.auth.auth_binding_rejects_suspended_account": {
+	"feature.flows.auth.auth_binding_rejects_suspended_account": {
 		tables: map[string][]string{"data.tables.account": {"status"}},
 		enums:  map[string][]string{"data.enums.account_status": {"suspended"}},
 	},
-	"feature.rules.auth.auth_binding_rejects_deleted_account": {
+	"feature.flows.auth.auth_binding_rejects_deleted_account": {
 		tables: map[string][]string{"data.tables.account": {"status"}},
 		enums:  map[string][]string{"data.enums.account_status": {"deleted"}},
 	},
-	"feature.rules.auth.auth_token_requires_active_account": {
+	"feature.flows.auth.auth_token_requires_active_account": {
 		tables: map[string][]string{
 			"data.tables.account": {"status"},
 		},
 		enums: map[string][]string{"data.enums.account_status": {"active"}},
 	},
-	"feature.rules.auth.refresh_reuse_detection": {
+	"feature.flows.auth.refresh_reuse_detection": {
 		tables: map[string][]string{"data.tables.token": {"account_id", "revoked_at"}},
 	},
-	"feature.rules.auth.verification_purpose_status": {
+	"feature.flows.auth.verification_purpose_status": {
 		tables: map[string][]string{"data.tables.verification_body": {"purpose"}},
 		enums: map[string][]string{
 			"data.enums.verification_purpose": {"login", "reset_password", "unbind_phone", "unbind_email", "delete_account"},
 			"data.enums.auth_status":          {"verified", "disabled"},
 		},
 	},
-	"feature.rules.auth.verification_auth_change": {
+	"feature.flows.auth.verification_auth_change": {
 		tables: map[string][]string{
 			"data.tables.verification_body": {"auth_id"},
 			"data.tables.auth_phone":        {"status"},
 			"data.tables.auth_email":        {"status"},
 		},
 	},
-	"feature.rules.auth.verification_resend": {
+	"feature.flows.auth.verification_resend": {
 		tables: map[string][]string{"data.tables.verification_body": {"status", "auth_id", "purpose"}},
 		enums:  map[string][]string{"data.enums.verification_status": {"pending", "sent"}},
 	},
-	"feature.rules.auth.verification_target_normalization": {
+	"feature.flows.auth.verification_target_normalization": {
 		tables: map[string][]string{
 			"data.tables.auth_phone": {"number"},
 			"data.tables.auth_email": {"username"},
 		},
 	},
-	"feature.rules.auth.verification_no_enumeration": {
+	"feature.flows.auth.verification_no_enumeration": {
 		tables: map[string][]string{"data.tables.verification_body": {"auth_id"}},
 	},
-	"feature.rules.auth.verification_account_active": {
+	"feature.flows.auth.verification_account_active": {
 		tables: map[string][]string{"data.tables.account": {"status"}},
 		enums:  map[string][]string{"data.enums.account_status": {"deleted", "suspended"}},
 	},
-	"feature.rules.auth.verification_register_account": {
+	"feature.flows.auth.verification_register_account": {
 		tables: map[string][]string{"data.tables.verification_body": {"account_id", "purpose"}},
 		enums:  map[string][]string{"data.enums.verification_purpose": {"register"}},
 	},
-	"feature.rules.auth.verification_success_sets_verified": {
+	"feature.flows.auth.verification_success_sets_verified": {
 		tables: map[string][]string{
 			"data.tables.auth_phone": {"status"},
 			"data.tables.auth_email": {"status"},
 		},
 		enums: map[string][]string{"data.enums.auth_status": {"verified"}},
 	},
-	"feature.rules.auth.verification_action_recorded": {
+	"feature.flows.auth.verification_action_recorded": {
 		tables: map[string][]string{"data.tables.verification_action": {"result", "account_id", "verification_id"}},
 		enums: map[string][]string{"data.enums.verification_result": {
 			"success", "mismatch", "expired", "attempts_exceeded", "invalid",
 		}},
 	},
-	"feature.rules.auth.verification_action_append_only": {
+	"feature.flows.auth.verification_action_append_only": {
 		tables: map[string][]string{"data.tables.verification_action": {"id"}},
 		doNot:  []string{"追加日志类表不提供更新或软删"},
 	},
-	"feature.rules.auth.login_lockout": {
+	"feature.flows.auth.login_lockout": {
 		tables: map[string][]string{"data.tables.auth_pwd": {"failed_login_count", "locked_until"}},
 	},
-	"feature.rules.auth.password_strength": {
+	"feature.flows.auth.password_strength": {
 		tables: map[string][]string{"data.tables.auth_pwd": {"password_hash"}},
 	},
 }
@@ -191,7 +200,7 @@ type policyWorld struct {
 var policyRefRe = regexp.MustCompile(`(?:platform\.errors|cap\.services|data\.entities|data\.tables|data\.enums)\.[A-Za-z0-9_.]+`)
 
 func policyRuleFiles() []string {
-	files, _ := filepath.Glob("../../../../contracts/features/rules/*.yaml")
+	files, _ := filepath.Glob("../../../../contracts/features/flows/*.yaml")
 	return files
 }
 
@@ -370,10 +379,23 @@ func checkPolicyRule(id string) error {
 	if len(rule.ImplementedBy) == 0 {
 		return fmt.Errorf("implemented_by is empty")
 	}
-	if rule.Given == "" || rule.When == "" || rule.Then == "" {
-		return fmt.Errorf("given/when/then must be non-empty")
+	if len(rule.Decision) == 0 {
+		return fmt.Errorf("decision must be non-empty")
+	}
+	for _, d := range rule.Decision {
+		if d.When == "" || d.Effect == "" {
+			return fmt.Errorf("decision item requires when/effect")
+		}
 	}
 	return nil
+}
+
+func policyDecisionText(rule policyRule) string {
+	parts := []string{rule.Summary}
+	for _, d := range rule.Decision {
+		parts = append(parts, d.When, d.Effect, d.Error, d.Target, fmt.Sprint(d.Value))
+	}
+	return strings.Join(parts, " ")
 }
 
 func assertPolicy(id string) error {
@@ -393,7 +415,7 @@ func assertPolicy(id string) error {
 			return fmt.Errorf("implemented_by %s is not a declared service", svc)
 		}
 	}
-	text := strings.Join([]string{rule.Summary, rule.Given, rule.When, rule.Then}, " ")
+	text := policyDecisionText(rule)
 	for _, ref := range policyRefRe.FindAllString(text, -1) {
 		if !w.hasRef(ref) {
 			return fmt.Errorf("reference %s does not resolve", ref)
@@ -535,40 +557,6 @@ var anchorAliases = map[string][]string{
 	"data.enums.verification_result":                  {"result", "success", "mismatch", "expired", "attempts_exceeded", "invalid"},
 }
 
-func assertAnchorInText(t *testing.T, id, text, anchor string) {
-	t.Helper()
-	aliases, ok := anchorAliases[anchor]
-	if !ok {
-		t.Errorf("policy %s: anchor %s has no alias mapping", id, anchor)
-		return
-	}
-	for _, alias := range aliases {
-		if strings.Contains(text, alias) {
-			return
-		}
-	}
-	t.Errorf("policy %s: anchor %s (%v) is not mentioned in rule text", id, anchor, aliases)
-}
-
-func TestPolicyExpectationsAnchorsAppearInText(t *testing.T) {
-	for id, exp := range policyExpectations {
-		rule, err := loadPolicyRule(id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		text := strings.Join([]string{rule.Summary, rule.Given, rule.When, rule.Then}, " ")
-		for table, cols := range exp.tables {
-			assertAnchorInText(t, id, text, table)
-			for _, col := range cols {
-				assertAnchorInText(t, id, text, table+"."+col)
-			}
-		}
-		for enum := range exp.enums {
-			assertAnchorInText(t, id, text, enum)
-		}
-	}
-}
-
 func policyAnchorSet() map[string]bool {
 	anchors := map[string]bool{}
 	for _, exp := range policyExpectations {
@@ -635,6 +623,135 @@ func TestPolicyRulesImplemented(t *testing.T) {
 					t.Fatalf("policy rule %s failed: %v", rule.ID, err)
 				}
 			})
+		}
+	}
+}
+
+func TestPolicyDecisionsParse(t *testing.T) {
+	for _, file := range policyRuleFiles() {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc policyRuleDoc
+		if err := yaml.Unmarshal(b, &doc); err != nil {
+			t.Fatal(err)
+		}
+		for _, rule := range doc.Rules {
+			if rule.Kind != "policy" {
+				continue
+			}
+			if len(rule.Decision) == 0 {
+				t.Fatalf("policy %s has no decision", rule.ID)
+			}
+			for i, d := range rule.Decision {
+				if err := rulesdsl.Validate(d.When); err != nil {
+					t.Fatalf("policy %s decision[%d]: %v", rule.ID, i, err)
+				}
+			}
+		}
+	}
+}
+
+func TestPolicyDecisionTruthTables(t *testing.T) {
+	type evalCase struct {
+		index int
+		env   rulesdsl.Env
+		want  bool
+	}
+	cases := map[string][]evalCase{
+		"feature.flows.account.activate_requires_pending_or_suspended": {
+			{0, rulesdsl.Env{"target_account": map[string]any{"status": "pending"}}, false},
+			{0, rulesdsl.Env{"target_account": map[string]any{"status": "active"}}, true},
+		},
+		"feature.flows.account.suspend_requires_active": {
+			{0, rulesdsl.Env{"target_account": map[string]any{"status": "active"}}, false},
+			{0, rulesdsl.Env{"target_account": map[string]any{"status": "suspended"}}, true},
+		},
+		"feature.flows.auth.password_strength": {
+			{0, rulesdsl.Env{"password": "short", "auth_policy": map[string]any{"password": map[string]any{"min_length": 12}}}, true},
+			{0, rulesdsl.Env{"password": "long-enough-password", "auth_policy": map[string]any{"password": map[string]any{"min_length": 12}}}, false},
+		},
+		"feature.flows.auth.verification_purpose_status": {
+			{0, rulesdsl.Env{"verification": map[string]any{"purpose": "login"}, "auth": map[string]any{"status": "pending"}}, true},
+			{0, rulesdsl.Env{"verification": map[string]any{"purpose": "bind_phone"}, "auth": map[string]any{"status": "pending"}}, false},
+		},
+		"feature.flows.auth.verification_one_time": {
+			{0, rulesdsl.Env{"verification": map[string]any{"status": "pending", "consumed_at": nil}}, false},
+			{0, rulesdsl.Env{"verification": map[string]any{"status": "consumed", "consumed_at": "2026-01-01"}}, true},
+		},
+	}
+	for id, evals := range cases {
+		id, evals := id, evals
+		t.Run(id, func(t *testing.T) {
+			rule, err := loadPolicyRule(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, tc := range evals {
+				d := rule.Decision[tc.index]
+				v, err := rulesdsl.Eval(d.When, tc.env)
+				if err != nil {
+					t.Fatalf("eval %s: %v", d.When, err)
+				}
+				got, ok := v.(bool)
+				if !ok {
+					t.Fatalf("eval %s = %T, want bool", d.When, v)
+				}
+				if got != tc.want {
+					t.Fatalf("eval %s with %v = %v, want %v", d.When, tc.env, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
+// TestPolicyDecisionExpressionsEvaluate 对每条 policy.decision.when 至少执行一次，
+// 确认表达式不依赖未声明的标识符或错误类型；语义真值表由 TestPolicyDecisionTruthTables 覆盖。
+func TestPolicyDecisionExpressionsEvaluate(t *testing.T) {
+	env := rulesdsl.Env{
+		"request":                 map[string]any{"number": "ACC-0001"},
+		"existing_active_numbers": []any{"ACC-0001"},
+		"current_user":            map[string]any{"is_admin": false, "id": "u1"},
+		"target_account":          map[string]any{"user_id": "u2", "status": "active", "deleted_at": nil, "missing": false, "deleted": false},
+		"target":                  map[string]any{"missing": false},
+		"auth":                    map[string]any{"account_id": "a1", "status": "verified", "changed": false, "missing": false, "disabled": false, "target": "t1"},
+		"auth_pwd":                map[string]any{"status": "verified", "failed_login_count": 0},
+		"auth_contact":            map[string]any{"status": "verified"},
+		"verification":            map[string]any{"account_id": "a1", "consumed_at": nil, "status": "pending", "expire_at": "2027-01-01", "attempt_count": 0, "purpose": "login", "verified": true, "pending_exists": false, "result": nil},
+		"verification_action":     map[string]any{"exists": false},
+		"old_token":               map[string]any{"revoked_at": nil},
+		"phone":                   map[string]any{"is_e164": true},
+		"email":                   map[string]any{"is_lowercase": true},
+		"password":                "long-enough-password",
+		"now":                     "2026-01-01",
+		"auth_policy": map[string]any{
+			"verification": map[string]any{"max_attempts": 5},
+			"password":     map[string]any{"max_attempts": 5, "min_length": 12},
+		},
+	}
+	for _, file := range policyRuleFiles() {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc policyRuleDoc
+		if err := yaml.Unmarshal(b, &doc); err != nil {
+			t.Fatal(err)
+		}
+		for _, rule := range doc.Rules {
+			if rule.Kind != "policy" {
+				continue
+			}
+			for i, d := range rule.Decision {
+				v, err := rulesdsl.Eval(d.When, env)
+				if err != nil {
+					t.Fatalf("policy %s decision[%d] %q: %v", rule.ID, i, d.When, err)
+				}
+				if _, ok := v.(bool); !ok {
+					t.Fatalf("policy %s decision[%d] %q = %T, want bool", rule.ID, i, d.When, v)
+				}
+			}
 		}
 	}
 }

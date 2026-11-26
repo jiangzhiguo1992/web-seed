@@ -1,4 +1,4 @@
-// gen_scenarios 把 contracts/scenarios/http/*.yaml 投影为验收清单。
+// gen_scenarios 把 contracts/features/scenarios/http/*.yaml 投影为验收清单。
 //
 // 用法（在 scripts/cmd 下）：
 //
@@ -101,7 +101,7 @@ func build(root string) ([]byte, []coverageEntry, error) {
 			ops[id] = info
 		}
 	}
-	files, err := filepath.Glob(filepath.Join(root, "contracts/scenarios/http/*.yaml"))
+	files, err := filepath.Glob(filepath.Join(root, "contracts/features/scenarios/http/*.yaml"))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -139,7 +139,7 @@ func build(root string) ([]byte, []coverageEntry, error) {
 	coverage := buildCoverage(ops, out)
 	manifest := map[string]any{
 		"schema_version": 1,
-		"generated_from": "contracts/scenarios/http",
+		"generated_from": "contracts/features/scenarios/http",
 		"scenarios":      out,
 		"coverage":       coverage,
 	}

@@ -71,7 +71,7 @@ services:
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
         rules:
-          - { rule: feature.rules.auth.auth_token_requires_active_account }
+          - { rule: feature.flows.auth.auth_token_requires_active_account }
         goto: issue_tokens
       - id: issue_tokens
         kind: logic
@@ -202,7 +202,7 @@ services:
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
         rules:
-          - { rule: feature.rules.auth.refresh_reuse_detection }
+          - { rule: feature.flows.auth.refresh_reuse_detection }
         goto: $end
       - id: load_account
         kind: query
@@ -222,7 +222,7 @@ services:
         errors:
           - platform.errors.AUTH_TOKEN_INVALID
         rules:
-          - { rule: feature.rules.auth.auth_token_requires_active_account }
+          - { rule: feature.flows.auth.auth_token_requires_active_account }
         goto: validate
       - id: validate
         kind: logic
@@ -569,7 +569,7 @@ services:
           - platform.errors.AUTH_TOKEN_INVALID
           - platform.errors.AUTH_TOKEN_EXPIRED
         rules:
-          - { rule: feature.rules.auth.auth_token_requires_active_account }
+          - { rule: feature.flows.auth.auth_token_requires_active_account }
         goto: $end
     used_by:
       - cap.protocols.http.auth.me

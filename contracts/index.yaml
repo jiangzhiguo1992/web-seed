@@ -19,8 +19,8 @@ groups:
     description: "services / lifecycles / events / protocols。"
     layers: [ http, services, lifecycles, events ]
   features:
-    description: "路由、页面、业务规则。"
-    layers: [ routes, pages, rules ]
+    description: "路由、页面、流程（含业务规则）、验收场景。"
+    layers: [ routes, pages, flows, scenarios ]
   platform:
     description: "平台约定：环境、错误、架构、观测、安全等。"
     layers: [ environments, versioning, errors, http_conventions, quality, config, architecture, design, observability, analytics, security, modules ]
@@ -139,14 +139,14 @@ entries:
   - { id: cap.lifecycles.auth_contact, path: capabilities/lifecycles/auth_contact.yaml, summary: "手机/邮箱认证绑定生命周期", consumers: [ api ], enforcement: tested, stability: draft }
   - { id: cap.lifecycles.token, path: capabilities/lifecycles/token.yaml, summary: "令牌生命周期", consumers: [ api ], enforcement: tested, stability: draft }
   - { id: cap.lifecycles.verification, path: capabilities/lifecycles/verification.yaml, summary: "验证体生命周期", consumers: [ api ], enforcement: tested, stability: draft }
-  - { id: feature.rules.account, path: features/rules/account.yaml, summary: "账号业务规则集", consumers: [ api ], enforcement: tested, stability: draft }
-  - { id: feature.rules.dictionary, path: features/rules/dictionary.yaml, summary: "字典业务规则集", consumers: [ api ], enforcement: tested, stability: draft }
-  - { id: feature.rules.attachment, path: features/rules/attachment.yaml, summary: "附件业务规则集", consumers: [ api ], enforcement: tested, stability: draft }
-  - { id: feature.rules.auth, path: features/rules/auth.yaml, summary: "认证业务规则集（验证体）", consumers: [ api ], enforcement: tested, stability: draft }
   - { id: cap.events.account, path: capabilities/events/account.yaml, summary: "账号领域事件", consumers: [ api, worker ], enforcement: generated+tested, stability: draft }
 
   # ---------- features ----------
   - { id: feature.routes, path: features/routes.yaml, summary: "路由与菜单", consumers: [ web/admin ], enforcement: tested, stability: draft }
+  - { id: feature.flows.account, path: features/flows/account.yaml, summary: "账号功能流程：列表、创建、编辑、状态转换与删除", consumers: [ api, web/admin ], enforcement: tested, stability: draft }
+  - { id: feature.flows.auth, path: features/flows/auth.yaml, summary: "认证功能流程：登录、验证码、绑定与令牌刷新", consumers: [ api, web/admin ], enforcement: tested, stability: draft }
+  - { id: feature.flows.dictionary, path: features/flows/dictionary.yaml, summary: "字典业务规则流程（API-only）", consumers: [ api ], enforcement: tested, stability: draft }
+  - { id: feature.flows.attachment, path: features/flows/attachment.yaml, summary: "附件业务规则流程（API-only）", consumers: [ api ], enforcement: tested, stability: draft }
   - id: feature.pages.account_list
     path: features/pages/account_list.yaml
     summary: "账号列表页"
@@ -161,7 +161,7 @@ entries:
   - { id: feature.pages.account_create, path: features/pages/account_create.yaml, summary: "新建账号页", consumers: [ web/admin ], enforcement: tested, stability: draft }
   - { id: feature.pages.account_security, path: features/pages/account_security.yaml, summary: "账号认证安全页", consumers: [ web/admin ], enforcement: tested, stability: draft }
   - { id: feature.pages.current_account, path: features/pages/current_account.yaml, summary: "当前账号页", consumers: [ web/admin ], enforcement: tested, stability: draft }
-  - { id: scenario.http.account, path: scenarios/http/account.yaml, summary: "账号 HTTP 验收场景", consumers: [ api, tools ], enforcement: generated+tested, stability: draft }
+  - { id: scenario.http.account, path: features/scenarios/http/account.yaml, summary: "账号 HTTP 验收场景", consumers: [ api, tools, web/admin ], enforcement: generated+tested, stability: draft }
   - { id: feature.pages.login, path: features/pages/login.yaml, summary: "登录页", consumers: [ web/admin ], enforcement: tested, stability: draft }
   - { id: feature.pages.not_found, path: features/pages/not_found.yaml, summary: "404 页", consumers: [ web/admin ], enforcement: tested, stability: draft }
 
@@ -205,7 +205,7 @@ global_notes:
   - "data.entities 是读模型：字段必须投影回列，多表合成只读，JOIN 条件在 query；统计结果用 query.returns"
   - "data.entities 的字段名与表列名可能不同：entity 用 source.column 指明来源；method 返回 entity，不重复列映射"
   - "领域事件由 cap.events 的 topics[].publish.emitted_by 与 topics[].subscribe 声明；service step 用 events 引用事件、用 dispatch 投递命令，不写 emits/event"
-  - "services.steps 只能引用 data.queries / cap.services / cap.lifecycles / feature.rules / cap.events；不得引用 data.tables 或 business.*"
+  - "services.steps 只能引用 data.queries / cap.services / cap.lifecycles / feature.flows / cap.events；不得引用 data.tables 或 business.*"
   - "类型规则在 _meta/<type>.yaml 的 rules，通用指导在 <group>/README.md 或 <type>/_base.yaml，实例约束在正文 do_not"
   - "table.queries / model.queries / query.used_by / enums[].used_by 由 make gen-graph 写回，不要手改；CI 用 make gen-graph-check 校验漂移"
   - "http operation 的 used_by 是可选校验字段：省略表示 API-only；存在时必须精确等于页面引用，不得用豁免清单"
@@ -251,7 +251,7 @@ enforcement_gates:
     cap.protocols.http: [ scripts/cmd/internal/check/capabilities_rules_test.go ]
     feature.pages: [ scripts/cmd/internal/check/pages_test.go ]
     feature.routes: [ scripts/cmd/internal/check/routes_test.go ]
-    feature.rules: [ scripts/cmd/internal/check/rules_test.go ]
+    feature.flows: [ scripts/cmd/internal/check/flows_rules_test.go ]
     scenario.http: [ scripts/cmd/internal/check/scenario_test.go ]
     platform.environments: [ scripts/cmd/internal/check/routes_test.go ]
     platform.versioning: [ scripts/cmd/internal/check/routes_test.go ]

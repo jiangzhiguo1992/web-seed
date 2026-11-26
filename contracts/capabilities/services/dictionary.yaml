@@ -256,9 +256,9 @@ services:
         errors:
           - platform.errors.DICTIONARY_INVALID
         rules:
-          - { rule: feature.rules.dictionary.code_format }
-          - { rule: feature.rules.dictionary.name_length }
-          - { rule: feature.rules.dictionary.color_format }
+          - { rule: feature.flows.dictionary.code_format }
+          - { rule: feature.flows.dictionary.name_length }
+          - { rule: feature.flows.dictionary.color_format }
         goto: exists_code
       - id: exists_code
         kind: query
@@ -378,8 +378,8 @@ services:
         errors:
           - platform.errors.DICTIONARY_INVALID
         rules:
-          - { rule: feature.rules.dictionary.name_length }
-          - { rule: feature.rules.dictionary.color_format }
+          - { rule: feature.flows.dictionary.name_length }
+          - { rule: feature.flows.dictionary.color_format }
         goto: update_dictionary
       - id: update_dictionary
         kind: query

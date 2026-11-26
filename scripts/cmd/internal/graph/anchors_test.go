@@ -15,11 +15,11 @@ targets:
   glob: "*.yaml"
   id: "cap.services.<file>"
 `)
-	writeFixture(t, root, "contracts/_meta/feature.rules.yaml", `contract: feature.rules
+	writeFixture(t, root, "contracts/_meta/feature.flows.yaml", `contract: feature.flows
 targets:
-  dir: contracts/features/rules
+  dir: contracts/features/flows
   glob: "*.yaml"
-  id: "feature.rules.<file>"
+  id: "feature.flows.<file>"
 `)
 	writeFixture(t, root, "contracts/_meta/cap.lifecycles.yaml", `contract: cap.lifecycles
 targets:
@@ -40,7 +40,7 @@ services:
     steps:
       - id: create
         kind: logic
-        rules: [ { rule: feature.rules.x.r1 } ]
+        rules: [ { rule: feature.flows.x.r1 } ]
         lifecycles: [cap.lifecycles.x.create]
       - id: emit_created
         kind: events
@@ -49,7 +49,7 @@ services:
     steps:
       - id: transition
         kind: logic
-        rules: [ { rule: feature.rules.x.r1 } ]
+        rules: [ { rule: feature.flows.x.r1 } ]
         lifecycles: [cap.lifecycles.x.transitions.activate]
         state_gate:
           - { lifecycle: cap.lifecycles.x, values: [pending] }
@@ -68,9 +68,9 @@ services:
       - id: handle
         kind: logic
 `)
-	writeFixture(t, root, "contracts/features/rules/x.yaml", `id: feature.rules.x
+	writeFixture(t, root, "contracts/features/flows/x.yaml", `id: feature.flows.x
 rules:
-  - id: feature.rules.x.r1
+  - id: feature.flows.x.r1
     implemented_by: []
 `)
 	writeFixture(t, root, "contracts/capabilities/lifecycles/x.yaml", `id: cap.lifecycles.x
@@ -137,7 +137,7 @@ topics:
 	}
 
 	checks := map[string]string{
-		"contracts/features/rules/x.yaml": "implemented_by: [ cap.services.x.activate, cap.services.x.create ]",
+		"contracts/features/flows/x.yaml": "implemented_by: [ cap.services.x.activate, cap.services.x.create ]",
 	}
 	for file, want := range checks {
 		b, err := os.ReadFile(filepath.Join(root, file))

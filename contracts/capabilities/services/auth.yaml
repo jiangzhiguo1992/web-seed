@@ -198,11 +198,11 @@ services:
         validations:
           - data.entities.auth_pwd.lock_consistency
         rules:
-          - { rule: feature.rules.auth.auth_login_requires_verified }
-          - { rule: feature.rules.auth.auth_login_rejects_pending_account }
-          - { rule: feature.rules.auth.auth_login_rejects_suspended_account }
-          - { rule: feature.rules.auth.auth_login_rejects_deleted_account }
-          - { rule: feature.rules.auth.login_lockout }
+          - { rule: feature.flows.auth.auth_login_requires_verified }
+          - { rule: feature.flows.auth.auth_login_rejects_pending_account }
+          - { rule: feature.flows.auth.auth_login_rejects_suspended_account }
+          - { rule: feature.flows.auth.auth_login_rejects_deleted_account }
+          - { rule: feature.flows.auth.login_lockout }
         goto: now
       - id: now
         kind: logic
@@ -385,8 +385,8 @@ services:
           - platform.errors.ACCOUNT_SUSPENDED
           - platform.errors.ACCOUNT_ALREADY_DELETED
         rules:
-          - { rule: feature.rules.auth.auth_binding_rejects_suspended_account }
-          - { rule: feature.rules.auth.auth_binding_rejects_deleted_account }
+          - { rule: feature.flows.auth.auth_binding_rejects_suspended_account }
+          - { rule: feature.flows.auth.auth_binding_rejects_deleted_account }
         goto: resolve
       - id: resolve
         kind: logic
@@ -450,7 +450,7 @@ services:
         errors:
           - platform.errors.AUTH_WEAK_PASSWORD
         rules:
-          - { rule: feature.rules.auth.password_strength }
+          - { rule: feature.flows.auth.password_strength }
         goto: hash_create
       - id: hash_create
         kind: logic
@@ -484,7 +484,7 @@ services:
         errors:
           - platform.errors.AUTH_WEAK_PASSWORD
         rules:
-          - { rule: feature.rules.auth.password_strength }
+          - { rule: feature.flows.auth.password_strength }
         goto: hash_update
       - id: hash_update
         kind: logic
@@ -630,8 +630,8 @@ services:
           - platform.errors.ACCOUNT_SUSPENDED
           - platform.errors.ACCOUNT_ALREADY_DELETED
         rules:
-          - { rule: feature.rules.auth.auth_binding_rejects_suspended_account }
-          - { rule: feature.rules.auth.auth_binding_rejects_deleted_account }
+          - { rule: feature.flows.auth.auth_binding_rejects_suspended_account }
+          - { rule: feature.flows.auth.auth_binding_rejects_deleted_account }
         goto: resolve
       - id: resolve
         kind: logic
@@ -920,8 +920,8 @@ services:
           - platform.errors.ACCOUNT_SUSPENDED
           - platform.errors.ACCOUNT_ALREADY_DELETED
         rules:
-          - { rule: feature.rules.auth.auth_binding_rejects_suspended_account }
-          - { rule: feature.rules.auth.auth_binding_rejects_deleted_account }
+          - { rule: feature.flows.auth.auth_binding_rejects_suspended_account }
+          - { rule: feature.flows.auth.auth_binding_rejects_deleted_account }
         goto: resolve
       - id: resolve
         kind: logic
@@ -1285,7 +1285,7 @@ services:
         errors:
           - platform.errors.AUTH_LOCKED
         rules:
-          - { rule: feature.rules.auth.login_lockout }
+          - { rule: feature.flows.auth.login_lockout }
         goto: record_auth_pwd_login_failure
       - id: record_auth_pwd_login_failure
         kind: query

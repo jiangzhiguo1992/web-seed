@@ -67,7 +67,7 @@ pages、permissions、roles）标 `tested`。`tested` gate 对声明了 `_meta.r
 | 契约 + 闸门能保证 | 契约无法保证 | 靠什么补 |
 |---|---|---|
 | 接口形状不漂移 | 字段语义是否被正确理解 | `docs/reference/glossary.md` + review |
-| 状态转换穷举 | 业务规则是否被正确实现 | `features/rules` 的可执行用例 |
+| 状态转换穷举 | 业务规则是否被正确实现 | `features/flows` 的可执行用例 |
 | 表结构与迁移一致 | 事务边界与并发是否正确 | 集成测试 + race |
 | 前后端类型一致 | 性能是否退化 | 基准测试 |
 | 枚举、权限、错误码一致 | 契约本身是否写错 | review + 真实用例回归 |
@@ -111,10 +111,8 @@ contracts/
 ├── features/                 # ③ 功能契约（面向用户）
 │   ├── routes.yaml           #   路由、菜单、布局
 │   ├── pages/<page>.yaml     #   页面：数据源、四态、动作、字段
-│   └── rules/<subject>.yaml  #   业务规则（constraint / invariant / policy）
-│
-├── scenarios/                # ⑤ 验收场景（确定性请求 → 响应 → 持久数据）
-│   └── http/<file>.yaml      #   按 HTTP 文件分组；实现侧 runner 只读生成清单
+│   ├── flows/<flow>.yaml     #   跨页步骤 + 步骤绑定的规则 + 流程内嵌规则
+│   └── scenarios/http/<file>.yaml # 验收场景：绑定 flow/pages/rules，允许 data.*
 │
 ├── platform/                 # ④ 平台契约（工程约束）
 │   ├── environments.yaml     #   环境清单与差异
@@ -142,8 +140,7 @@ contracts/
 | `_meta/README.md` | 写 / 改任何契约字段前 |
 | `data/README.md` | 加表 / 写查询前 |
 | `capabilities/README.md` | 加 API / 生命周期 / 异步任务 / 跨模块 service 前 |
-| `features/README.md` | 改规则前 |
-| `features/README.md` | 加页面 / 用户旅程前 |
+| `features/README.md` | 改页面 / 流程 / 规则 / 验收场景前 |
 | `platform/README.md` | 改错误码 / 权限 / 配置 / 观测约定前 |
 
 ---
@@ -159,7 +156,7 @@ contracts/
 | 组 | 示例 |
 |---|---|
 | data | `data.tables.account`、`data.tables.account.col.number`、`data.tables.account.constraint.ck_account_deleted_consistent`、`data.enums.account_status`、`data.queries.account.get_account`、`data.storage`、`data.tables.base` |
-| capabilities | `cap.services.account.get`、`cap.lifecycles.account`、`cap.events.verification.purge_expired`、`feature.rules.account.number_format`、`cap.events.account.created`、`cap.protocols.http.account.create` |
+| capabilities | `cap.services.account.get`、`cap.lifecycles.account`、`cap.events.verification.purge_expired`、`feature.flows.account.number_format`、`cap.events.account.created`、`cap.protocols.http.account.create` |
 | features | `feature.routes.account_list`、`feature.pages.account_list` |
 | platform | `platform.errors.ACCOUNT_NOT_FOUND`、`platform.security.permissions.account_read`、`platform.security.roles.admin`、`platform.analytics.events.page.account_list_viewed` |
 
@@ -206,7 +203,7 @@ feature ──> capabilities ──> data
 | feature → capabilities | 页面契约 | `capability`（service）；页面动作的 `available_when`（lifecycle 动作） |
 | capabilities/protocols → capabilities/services | protocol operation | `service` |
 | capabilities/services → capabilities/services | service steps | `kind: service` + `service` |
-| capabilities/services → features/rules | service steps | `kind: logic/when` + `rules` |
+| capabilities/services → features/flows | service steps | `kind: logic/when` + `rules` |
 | capabilities/services → capabilities/lifecycles | service steps | `lifecycles[]`（create/destroy/transitions.<name>） |
 | capabilities/lifecycles → capabilities/services | lifecycle action | `implemented_by`（由 step.lifecycles 生成） |
 | capabilities/services → capabilities/events | service steps | `kind: events` + `events` |
@@ -227,7 +224,7 @@ capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，�
 |---|---|
 | `returns: data.tables.account.row` | `returns: data.entities.account` |
 | `emits: cap.events.*` | 由 `cap.events.*.publish.emitted_by` 声明；service 的 `kind: events` step 用 `events` 引用 topic 或 dispatch |
-| `service 条目声明 preconditions` | 由 `feature.rules.*.implemented_by` 声明；service 的 `kind: logic/when` step 用 `rules` 引用规则 |
+| `service 条目声明 preconditions` | 由 `feature.flows.*.implemented_by` 声明；service 的 `kind: logic/when` step 用 `rules` 引用规则 |
 
 理由：service 是规则的实现，**实现不反向声明"我实现了谁"**——那由 `implemented_by` / `emitted_by` 锚点。两处都写必然漂移。
 
@@ -261,7 +258,7 @@ feature.pages.account_list
   │    └─ kind=logic → data.queries.account.list_accounts
   └─ cap.protocols.http.account.create ─service→ cap.services.account.create
        ├─ kind=logic → data.queries.account.create_account
-       └─ rules → feature.rules.account.*
+       └─ rules → feature.flows.account.*
             └─ implemented_by → cap.services.account.create
 
 cap.lifecycles.account ─subjects(status)→ data.entities.account ─table→ data.tables.account
@@ -350,8 +347,9 @@ table:
 | `capabilities/events/*` | 一模块一文件 | 120 |
 | `capabilities/protocols/http/*` | 一模块一文件；>15 接口按子域再拆 | 200 |
 | `capabilities/lifecycles/*` | 一个状态机一文件 | 150 |
-| `features/rules/*` | 一规则集一文件 | 120 |
+| `features/flows/*` | 一功能流程一文件（步骤 + 规则） | 250 |
 | `features/pages/*` | 一页面一文件 | 150 |
+| `features/scenarios/http/*` | 一 HTTP 文件一文件 | 200 |
 | `platform/**` | 一关注点一文件 | 150 |
 | `index.yaml` | 只放摘要 | 400 |
 | 各组 `README.md` | 规范正文（含图示与对照表） | 450 |
@@ -383,7 +381,7 @@ table:
 | **实例级** | 契约正文 `do_not` | "account.status 使用 integer；枚举只在 entity"、"游标分页要有 tiebreaker" | 就近，只写本文件特有约束 |
 | **全局** | `index.yaml` 的 `global_notes` | "错误响应由生成器注入" | 跨文件坑，极少 |
 
-例外：`features/rules/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不是类型规则清单；除此以外具体契约禁止顶层 `rules`；嵌套的数据属性可以叫 `rules`，不视为契约规则。
+例外：`features/flows/*`、`platform/architecture/go_arch.yaml`、`platform/observability/log_fields.yaml` 的 `rules` 是领域规则集正文，不是类型规则清单；除此以外具体契约禁止顶层 `rules`；嵌套的数据属性可以叫 `rules`，不视为契约规则。
 
 **不建目录级 index 汇总约束**，原因：
 
@@ -432,7 +430,7 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | 产物 | 来源 | 用途 |
 |---|---|---|
 | `openapi/admin.yaml` | `capabilities/protocols/http/*.yaml` + `platform/http_conventions.yaml` 合并 | oapi-codegen / Swagger / `gen-client` 的输入 |
-| `scenarios/manifest.yaml` | `scenarios/http/*.yaml` 投影 | 实现侧验收 runner 的输入 |
+| `scenarios/manifest.yaml` | `features/scenarios/http/*.yaml` 投影 | 实现侧验收 runner 的输入 |
 | `async/manifest.yaml` | `capabilities/events/*.yaml` 投影 | worker 重试、并发与调度策略的输入 |
 
 `db` 产物（`schema.sql`、`migrations/*.sql`）输出到 `apps/api/`，不在本目录。
@@ -466,11 +464,12 @@ AI 读 YAML，人读 Markdown，单一源。手写视图必然与契约漂移。
 | db | DDL / migrations / sqlc 输入 | ✅ `schema.sql` + `0001_baseline.sql`；增量 diff ⬜ P5 |
 | openapi | 合并 spec 并展开 service schemas | ✅ |
 | model | `data.entities` / `data.enums` → Go/TS 模型 | ✅ |
-| scenarios | `scenarios/http/*.yaml` → 验收场景清单 | ✅ |
+| scenarios | `features/scenarios/http/*.yaml` → 验收场景清单 | ✅ |
 | async | `cap.events` → worker 异步清单 | ✅ |
-| features | 路由、页面骨架、类型 | ⬜ P2 |
+| web | `features/routes.yaml` + `features/pages/*.yaml` → 前端代码 | ⬜ P2（暂不生成 apps 代码） |
+| features | 流程/规则到校验函数、类型 | ⬜ P2 |
 | platform | 配置校验、常量、CSS 变量 | ⬜ P2 |
-| rules/lifecycles | `feature.rules` / `cap.lifecycles` → 校验函数 / 生命周期 | ⬜ P2 |
+| flows/lifecycles | `feature.flows` / `cap.lifecycles` → 校验函数 / 生命周期 | ⬜ P2 |
 | service / usecase / handler / worker | apps 代码生成 | ⬜ P2 |
 
 apps 代码生成属于实现层，不在契约阶段生成。

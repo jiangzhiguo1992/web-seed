@@ -1,10 +1,13 @@
-// rules.go 校验 feature.rules 文档与规则项。
+// rules.go 校验 feature.flows 文档与规则项。
 package check
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/rulesdsl"
 )
 
 func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, serviceIDs map[string]bool) {
@@ -14,7 +17,7 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 	fileID, _ := doc["id"].(string)
 	want := schema.Targets.FileID(filepath.Base(rel))
 	if fileID != want {
-		c.rulef("rule-id-unique", "%s: id %q must be %q", rel, fileID, want)
+		c.rulef("flow-refs", "%s: id %q must be %q", rel, fileID, want)
 	}
 	seen := map[string]bool{}
 	for _, raw := range asList(doc["rules"]) {
@@ -24,18 +27,18 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 			continue
 		}
 		if seen[id] {
-			c.rulef("rule-id-unique", "%s: duplicate rule id %s", rel, id)
+			c.rulef("flow-refs", "%s: duplicate rule id %s", rel, id)
 		}
 		seen[id] = true
 		if !strings.HasPrefix(id, fileID+".") {
-			c.rulef("rule-id-unique", "%s: rule id %s must start with %s.", rel, id, fileID)
+			c.rulef("flow-refs", "%s: rule id %s must start with %s.", rel, id, fileID)
 		}
 		kind, _ := item["kind"].(string)
 		var fieldInfo *entityFieldInfo
 		reject := func(fields ...string) {
 			for _, field := range fields {
 				if item[field] != nil {
-					c.rulef("rule-structure", "%s: %s %s must not declare %s", rel, kind, id, field)
+					c.rulef("flow-rule-structure", "%s: %s %s must not declare %s", rel, kind, id, field)
 				}
 			}
 		}
@@ -44,18 +47,18 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 			entityID, _ := item["entity"].(string)
 			field, _ := item["field"].(string)
 			if entityID == "" {
-				c.rulef("rule-structure", "%s: constraint %s requires entity", rel, id)
+				c.rulef("flow-rule-structure", "%s: constraint %s requires entity", rel, id)
 			} else if ent := c.entities[entityID]; ent == nil {
-				c.rulef("rule-structure", "%s: constraint %s unknown entity %s", rel, id, entityID)
+				c.rulef("flow-rule-structure", "%s: constraint %s unknown entity %s", rel, id, entityID)
 			} else if field != "" {
 				f := findEntityFieldByJSONName(ent, field)
 				if f == nil {
 					f = findEntityField(ent, field)
 				}
 				if f == nil && !isBaseColumn(field) {
-					c.rulef("rule-structure", "%s: constraint %s field %s not found on %s", rel, id, field, entityID)
+					c.rulef("flow-rule-structure", "%s: constraint %s field %s not found on %s", rel, id, field, entityID)
 				} else if f != nil && f.IsRelation {
-					c.rulef("rule-structure", "%s: constraint %s field %s must be scalar", rel, id, field)
+					c.rulef("flow-rule-structure", "%s: constraint %s field %s must be scalar", rel, id, field)
 				}
 				fieldInfo = f
 				if fieldInfo == nil {
@@ -66,20 +69,73 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 				}
 			}
 			if field == "" || item["op"] == nil || item["value"] == nil {
-				c.rulef("rule-structure", "%s: constraint %s requires field/op/value", rel, id)
+				c.rulef("flow-rule-structure", "%s: constraint %s requires field/op/value", rel, id)
 			} else {
 				c.checkRuleValue(rel, id, fieldInfo, item["op"], item["value"])
 			}
-			reject("assert", "given", "when", "then")
+			reject("assert", "decision", "given", "when", "then")
 		case "invariant":
 			if s, _ := item["assert"].(string); strings.TrimSpace(s) == "" {
-				c.rulef("rule-structure", "%s: invariant %s requires assert", rel, id)
+				c.rulef("flow-rule-structure", "%s: invariant %s requires assert", rel, id)
+			} else if err := rulesdsl.Validate(s); err != nil {
+				c.rulef("flow-rule-dsl", "%s: invariant %s assert is not executable: %v", rel, id, err)
 			}
-			reject("entity", "field", "op", "value", "given", "when", "then")
+			reject("entity", "field", "op", "value", "decision", "given", "when", "then")
 		case "policy":
-			reject("entity", "field", "op", "value", "assert")
+			reject("entity", "field", "op", "value", "assert", "given", "when", "then")
+			decisions := asList(item["decision"])
+			if len(decisions) == 0 {
+				c.rulef("policy-decision", "%s: policy %s requires non-empty decision", rel, id)
+			}
+			for i, rawDecision := range decisions {
+				decision, _ := asMap(rawDecision)
+				where := fmt.Sprintf("%s.decision[%d]", id, i)
+				when, _ := decision["when"].(string)
+				if strings.TrimSpace(when) == "" {
+					c.rulef("policy-decision", "%s: %s requires when", rel, where)
+				} else if err := rulesdsl.Validate(when); err != nil {
+					c.rulef("flow-rule-dsl", "%s: %s when is not executable: %v", rel, where, err)
+				}
+				effect, _ := decision["effect"].(string)
+				errorCode, _ := decision["error"].(string)
+				target, _ := decision["target"].(string)
+				value := decision["value"]
+				switch effect {
+				case "deny":
+					if errorCode == "" {
+						c.rulef("policy-decision", "%s: %s deny requires error", rel, where)
+					} else if !ruleDeclaresError(item, errorCode) {
+						c.rulef("policy-decision", "%s: %s error %s is not declared in rule.errors", rel, where, errorCode)
+					}
+				case "call":
+					if target == "" || !serviceIDs[target] {
+						c.rulef("policy-decision", "%s: %s call target %q is not a known cap.services.*", rel, where, target)
+					}
+				case "set", "normalize", "record", "create", "revoke":
+					if target == "" {
+						c.rulef("policy-decision", "%s: %s %s requires target", rel, where, effect)
+					}
+				case "forbid":
+					if target == "" {
+						c.rulef("policy-decision", "%s: %s forbid requires target", rel, where)
+					}
+					op, _ := value.(string)
+					if op != "update" && op != "delete" {
+						c.rulef("policy-decision", "%s: %s forbid value must be update or delete", rel, where)
+					}
+				case "allow":
+					if errorCode != "" || target != "" || value != nil {
+						c.rulef("policy-decision", "%s: %s allow must not declare error/target/value", rel, where)
+					}
+				default:
+					c.rulef("policy-decision", "%s: %s effect must be deny/allow/call/set/normalize/record/create/revoke/forbid", rel, where)
+				}
+				if onFailure, _ := decision["on_failure"].(string); onFailure != "" && onFailure != "rollback" && onFailure != "ignore" {
+					c.rulef("policy-decision", "%s: %s on_failure must be rollback or ignore", rel, where)
+				}
+			}
 		default:
-			c.rulef("rule-structure", "%s: rule %s kind must be constraint/invariant/policy", rel, id)
+			c.rulef("flow-rule-structure", "%s: rule %s kind must be constraint/invariant/policy", rel, id)
 		}
 		for _, rawErr := range asList(item["errors"]) {
 			code, _ := rawErr.(string)
@@ -87,14 +143,14 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 				continue
 			}
 			if !c.errorCodeDeclared(code) {
-				c.rulef("rule-structure", "%s: rule %s unknown error %s", rel, id, code)
+				c.rulef("flow-rule-structure", "%s: rule %s unknown error %s", rel, id, code)
 			}
 		}
 		implemented := asList(item["implemented_by"])
 		for _, rawSvc := range implemented {
 			svc, _ := rawSvc.(string)
 			if !serviceIDs[svc] {
-				c.rulef("rule-structure", "%s: rule %s unknown service %s", rel, id, svc)
+				c.rulef("flow-rule-structure", "%s: rule %s unknown service %s", rel, id, svc)
 			}
 		}
 	}
@@ -104,7 +160,7 @@ func (c *Checker) checkRuleDoc(doc map[string]any, rel string, schema *Schema, s
 func (c *Checker) checkRuleValue(rel, id string, f *entityFieldInfo, opValue, value any) {
 	op, _ := opValue.(string)
 	fail := func(format string, args ...any) {
-		c.rulef("rule-value", "%s: rule %s "+format, append([]any{rel, id}, args...)...)
+		c.rulef("flow-rule-value", "%s: rule %s "+format, append([]any{rel, id}, args...)...)
 	}
 	family := c.entityFieldFamily(f)
 	switch op {
@@ -192,6 +248,15 @@ func isScalarValue(v any) bool {
 	switch v.(type) {
 	case string, bool, int, int64, uint64, float64:
 		return true
+	}
+	return false
+}
+
+func ruleDeclaresError(rule map[string]any, code string) bool {
+	for _, raw := range asList(rule["errors"]) {
+		if declared, _ := raw.(string); declared == code {
+			return true
+		}
 	}
 	return false
 }

@@ -341,19 +341,19 @@ func TestRuleDocRuleIDUnique(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/feature.rules.yaml"))
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/feature.flows.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	c := &Checker{root: root}
 	c.checkRuleDoc(map[string]any{
-		"id": "feature.rules.wrong",
+		"id": "feature.flows.wrong",
 		"rules": []any{
-			map[string]any{"id": "feature.rules.wrong.a"},
-			map[string]any{"id": "feature.rules.wrong.a"},
+			map[string]any{"id": "feature.flows.wrong.a"},
+			map[string]any{"id": "feature.flows.wrong.a"},
 		},
-	}, "contracts/features/rules/x.yaml", schema, map[string]bool{})
-	mustContainRule(t, c.errs, "rule-id-unique")
+	}, "contracts/features/flows/x.yaml", schema, map[string]bool{})
+	mustContainRule(t, c.errs, "flow-refs")
 }
 
 func TestServiceStructuralRules(t *testing.T) {

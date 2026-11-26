@@ -94,7 +94,7 @@ paths:
 
 ## 决策 5：验收场景源在 contracts，清单在 contracts/generated
 
-- 源场景：`contracts/scenarios/http/<file>.yaml`（新类型 `scenario.http`）。
+- 源场景：`contracts/features/scenarios/http/<file>.yaml`（类型 `scenario.http`）。
 - 生成清单：`contracts/generated/scenarios/manifest.yaml`（`make gen-scenarios`），包含每个场景解析后的 `method/path/service/有效状态码/codes`，供实现侧 runner 读取。
 - 实现侧 runner 尚未实现：当前 `apps/api` 只有装配骨架，没有 handler/DB，无法在契约层伪造端到端执行。runner 落地时必须读生成清单，不得读源 YAML。
 - 不选 `scripts/`（工具不是真相）与 `apps/api/testdata`（实现拥有期望，测不出契约漂移）。
@@ -219,7 +219,7 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 - access 新增 `_meta/platform.security.access.yaml` 与 `access-coverage`：每个被 HTTP 暴露的 service 必须有 permissions/audit/rate_limit binding；补齐 token.refresh、token.verify、auth.bind_* 五个绑定。
 - `feature.routes`、`platform.environments`、`platform.security.access` 纳入 `checkPlatformContracts`；roles 增加继承环/深度/未知权限/默认角色校验。
 - `platform.http_conventions.status_codes` 由 `http-status` 脚本化；`*Page` schema 由 `service-page-schema` 强制 items/offset/limit/has_more。
-- 密码强度规则 `feature.rules.auth.password_strength` 接入 bind_password create/update step，`AUTH_WEAK_PASSWORD` 进入 HTTP 422。
+- 密码强度规则 `feature.flows.auth.password_strength` 接入 bind_password create/update step，`AUTH_WEAK_PASSWORD` 进入 HTTP 422。
 - `index.yaml` 的 enforcement 与 README 真相表对齐：无 checker/generator 的 platform 契约降为 `review-only`，不再宣称 tested/generated。
 
 ### 本轮边界

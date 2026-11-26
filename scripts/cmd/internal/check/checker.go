@@ -87,6 +87,10 @@ type Checker struct {
 	httpOps                  map[string]httpOpInfo
 	ruleIDSet                map[string]bool
 	ruleErrors               map[string][]string
+	flowIDs                  map[string]bool
+	flowPages                map[string]map[string]bool
+	flowRules                map[string]map[string]bool
+	flowStepActions          map[string]map[string]map[string]bool
 	lifecycleStates          map[string]map[string]bool
 	lifecycleActionStates    map[string]map[string]map[string]bool
 	lifecycleSubjectTables   map[string]map[string]bool
@@ -200,6 +204,8 @@ func (c *Checker) run() {
 	c.checkWebDeps()
 	c.checkFeaturePages()
 	c.checkPageRouteBindings()
+	c.checkFeatureFlows()
+	c.checkFeatureDataBoundary()
 	c.checkScenarioContracts()
 	c.checkUndeclaredRuleIDs()
 	c.checkEnumRefs(tableIDs, cols, enumValues)
@@ -282,14 +288,14 @@ func yamlKeyID(n *yaml.Node) (string, bool) {
 }
 
 var proseScalarFields = map[string]bool{
-	"action": true, "caution": true, "comment": true,
+	"caution": true, "comment": true,
 	"consistency": true, "description": true, "display_name": true,
 	"error": true, "error_copy_uniform": true, "explanation": true,
 	"generates": true, "handling": true, "id_policy": true, "instead": true,
 	"label": true, "message": true, "naming": true, "note": true,
-	"on_failure": true, "on_success": true, "ordering": true, "rationale": true,
+	"on_failure": true, "ordering": true, "rationale": true,
 	"rate_limit_hint": true, "reason": true, "route_label": true,
-	"semantics": true, "scope": true, "storage": true, "success": true,
+	"semantics": true, "storage": true,
 	"summary": true, "text": true, "title": true, "ui": true,
 	"when": true, "why": true,
 }

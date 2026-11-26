@@ -79,7 +79,7 @@ func TestScaffoldPassesStructureCheck(t *testing.T) {
 		{"cap.lifecycles", "scaffold_note.yaml", func(s *contractspec.Schema) ([]byte, error) {
 			return contractspec.RenderLifecycle(s, "scaffold_note", "account", "备注生命周期")
 		}},
-		{"feature.rules", "scaffold_note.yaml", func(s *contractspec.Schema) ([]byte, error) {
+		{"feature.flows", "scaffold_note.yaml", func(s *contractspec.Schema) ([]byte, error) {
 			return contractspec.RenderRule(s, "scaffold_note", "account", "备注规则")
 		}},
 		{"feature.pages", "scaffold_note.yaml", func(s *contractspec.Schema) ([]byte, error) {
@@ -109,7 +109,7 @@ func TestScaffoldPassesStructureCheck(t *testing.T) {
 	}
 }
 
-// TestScaffoldGenGraphSmoke 验证 gen-graph 能解析 contract-new 生成的 query / feature.rules 骨架。
+// TestScaffoldGenGraphSmoke 验证 gen-graph 能解析 contract-new 生成的 query / feature.flows 骨架。
 // 生成字段在无 service 引用时保持空列表，不应导致 graph 失败。
 func TestScaffoldGenGraphSmoke(t *testing.T) {
 	root, err := filepath.Abs("../../..")
@@ -133,7 +133,7 @@ func TestScaffoldGenGraphSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rs, _, err := contractspec.LoadSchemaByType(root, "feature.rules")
+	rs, _, err := contractspec.LoadSchemaByType(root, "feature.flows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestScaffoldGenGraphSmoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	rb = []byte(strings.ReplaceAll(string(rb), "TODO", "说明"))
-	if err := os.WriteFile(filepath.Join(tmp, "contracts/features/rules/scaffold.yaml"), rb, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "contracts/features/flows/scaffold.yaml"), rb, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -170,7 +170,7 @@ func TestScaffoldGenGraphSmoke(t *testing.T) {
 	}
 
 	var rdoc map[string]any
-	if b, err := os.ReadFile(filepath.Join(tmp, "contracts/features/rules/scaffold.yaml")); err != nil {
+	if b, err := os.ReadFile(filepath.Join(tmp, "contracts/features/flows/scaffold.yaml")); err != nil {
 		t.Fatal(err)
 	} else if err := yaml.Unmarshal(b, &rdoc); err != nil {
 		t.Fatal(err)
@@ -233,7 +233,7 @@ func TestScaffoldCheckRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rs, _, err := contractspec.LoadSchemaByType(root, "feature.rules")
+	rs, _, err := contractspec.LoadSchemaByType(root, "feature.flows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestScaffoldCheckRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	rb = []byte(strings.ReplaceAll(string(rb), "TODO", "说明"))
-	if err := os.WriteFile(filepath.Join(tmp, "contracts/features/rules/scaffold.yaml"), rb, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "contracts/features/flows/scaffold.yaml"), rb, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -297,7 +297,7 @@ services:
         errors:
           - platform.errors.COMMON_INTERNAL
         rules:
-          - { rule: feature.rules.scaffold.example }
+          - { rule: feature.flows.scaffold.example }
         goto: "$end"
 `
 	if err := os.WriteFile(filepath.Join(tmp, "contracts/capabilities/services/scaffold.yaml"), []byte(service), 0o644); err != nil {
@@ -361,7 +361,7 @@ paths:
 		t.Fatal(err)
 	}
 	indexText := string(indexBytes)
-	indexText = strings.Replace(indexText, "\nglobal_notes:", "\n  - { id: data.queries.scaffold, path: data/queries/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: feature.rules.scaffold, path: features/rules/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: cap.services.scaffold, path: capabilities/services/scaffold.yaml, summary: \"x\", consumers: [api], enforcement: tested, stability: draft }\n  - { id: cap.protocols.http.scaffold, path: capabilities/protocols/http/scaffold.yaml, summary: \"x\", consumers: [api], enforcement: tested, stability: draft }\nglobal_notes:", 1)
+	indexText = strings.Replace(indexText, "\nglobal_notes:", "\n  - { id: data.queries.scaffold, path: data/queries/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: feature.flows.scaffold, path: features/flows/scaffold.yaml, summary: \"x\", consumers: [tools], enforcement: tested, stability: draft }\n  - { id: cap.services.scaffold, path: capabilities/services/scaffold.yaml, summary: \"x\", consumers: [api], enforcement: tested, stability: draft }\n  - { id: cap.protocols.http.scaffold, path: capabilities/protocols/http/scaffold.yaml, summary: \"x\", consumers: [api], enforcement: tested, stability: draft }\nglobal_notes:", 1)
 	if err := os.WriteFile(indexPath, []byte(indexText), 0o644); err != nil {
 		t.Fatal(err)
 	}

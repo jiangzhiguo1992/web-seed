@@ -815,21 +815,43 @@ type methodArgScaffold struct {
 }
 
 type ruleFileScaffold struct {
-	ID            string         `yaml:"id"`
-	Summary       string         `yaml:"summary"`
-	OwnerModule   string         `yaml:"owner_module"`
-	SchemaVersion int            `yaml:"schema_version"`
-	Stability     string         `yaml:"stability"`
-	DoNot         []string       `yaml:"do_not"`
-	Rules         []ruleScaffold `yaml:"rules"`
+	ID            string             `yaml:"id"`
+	Summary       string             `yaml:"summary"`
+	OwnerModule   string             `yaml:"owner_module"`
+	SchemaVersion int                `yaml:"schema_version"`
+	Stability     string             `yaml:"stability"`
+	DoNot         []string           `yaml:"do_not"`
+	Scope         string             `yaml:"scope"`
+	Entry         string             `yaml:"entry,omitempty"`
+	Steps         []flowStepScaffold `yaml:"steps"`
+	Rules         []ruleScaffold     `yaml:"rules"`
+}
+
+type flowStepScaffold struct {
+	ID        string   `yaml:"id"`
+	Page      string   `yaml:"page"`
+	Action    string   `yaml:"action"`
+	Rules     []string `yaml:"rules"`
+	Next      string   `yaml:"next,omitempty"`
+	OnSuccess string   `yaml:"on_success,omitempty"`
 }
 
 type ruleScaffold struct {
-	ID            string   `yaml:"id"`
-	Kind          string   `yaml:"kind"`
-	Summary       string   `yaml:"summary"`
-	Errors        []string `yaml:"errors"`
-	ImplementedBy []string `yaml:"implemented_by"`
+	ID            string             `yaml:"id"`
+	Kind          string             `yaml:"kind"`
+	Summary       string             `yaml:"summary"`
+	Errors        []string           `yaml:"errors"`
+	Decision      []decisionScaffold `yaml:"decision"`
+	ImplementedBy []string           `yaml:"implemented_by"`
+}
+
+type decisionScaffold struct {
+	When      string `yaml:"when"`
+	Effect    string `yaml:"effect"`
+	Error     string `yaml:"error,omitempty"`
+	Target    string `yaml:"target,omitempty"`
+	Value     any    `yaml:"value,omitempty"`
+	OnFailure string `yaml:"on_failure,omitempty"`
 }
 
 type lifecycleFileScaffold struct {
@@ -1039,19 +1061,24 @@ func RenderService(s *Schema, name, module, summary string) ([]byte, error) {
 	return append([]byte(fmt.Sprintf("# %s\n\n", summary)), b...), nil
 }
 
-// RenderRule 生成 feature.rules 的最小 policy 骨架。
+// RenderRule 生成 feature.flows 的最小 policy 骨架。
 func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
-	if s == nil || s.Contract != "feature.rules" {
-		return nil, fmt.Errorf("RenderRule: want feature.rules schema")
+	if s == nil || s.Contract != "feature.flows" {
+		return nil, fmt.Errorf("RenderRule: want feature.flows schema")
 	}
 	if !validName(name) || !validName(module) {
 		return nil, fmt.Errorf("RenderRule: invalid name/module")
 	}
-	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "rules": true}, "feature.rules"); err != nil {
+	if err := requireSupported(s.Fields, map[string]bool{"id": true, "summary": true, "owner_module": true, "schema_version": true, "stability": true, "do_not": true, "scope": true, "entry": true, "steps": true, "rules": true}, "feature.flows"); err != nil {
 		return nil, err
 	}
+	if f, ok := FindField(s.Fields, "steps"); ok {
+		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "page": true, "action": true, "rules": true, "next": true, "on_success": true}, "feature.flows.steps"); err != nil {
+			return nil, err
+		}
+	}
 	if f, ok := FindField(s.Fields, "rules"); ok {
-		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "kind": true, "summary": true, "errors": true, "implemented_by": true}, "feature.rules.rules"); err != nil {
+		if err := requireSupported(f.ItemFields, map[string]bool{"id": true, "kind": true, "summary": true, "errors": true, "decision": true, "implemented_by": true}, "feature.flows.rules"); err != nil {
 			return nil, err
 		}
 	}
@@ -1063,11 +1090,17 @@ func RenderRule(s *Schema, name, module, summary string) ([]byte, error) {
 		Stability:     scaffoldStability,
 		DoNot:         []string{"TODO: 实例级负向约束"},
 		OwnerModule:   module,
+		Scope:         "api",
+		Steps:         []flowStepScaffold{},
 		Rules: []ruleScaffold{{
-			ID:            fileID + ".example",
-			Kind:          "policy",
-			Summary:       "TODO: 规则说明",
-			Errors:        []string{},
+			ID:      fileID + ".example",
+			Kind:    "policy",
+			Summary: "TODO: 规则说明",
+			Errors:  []string{},
+			Decision: []decisionScaffold{{
+				When:   "true",
+				Effect: "allow",
+			}},
 			ImplementedBy: []string{},
 		}},
 	}

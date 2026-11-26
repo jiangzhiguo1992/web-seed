@@ -26,6 +26,7 @@ type httpOpInfo struct {
 	Service  string
 	Statuses map[int]bool
 	Codes    map[string]bool
+	UsedBy   []string
 }
 
 // httpPolicy 是 platform/http_conventions.yaml 中与 HTTP 绑定相关的硬约束。
@@ -880,7 +881,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if serviceID != "" {
 					serviceOps[serviceID] = append(serviceOps[serviceID], method+" "+path)
 				}
-				info := httpOpInfo{Path: path, Method: method, Service: serviceID, Statuses: map[int]bool{}, Codes: map[string]bool{}}
+				info := httpOpInfo{Path: path, Method: method, Service: serviceID, Statuses: map[int]bool{}, Codes: map[string]bool{}, UsedBy: append([]string{}, meta.UsedBy...)}
 				for status, rawResp := range responses {
 					if n, err := strconv.Atoi(status); err == nil {
 						info.Statuses[n] = true

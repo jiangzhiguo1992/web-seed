@@ -24,7 +24,7 @@ import (
 
 func main() {
 	root := flag.String("root", "../..", "repo root")
-	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | cap.lifecycles | feature.rules | feature.pages | cap.events | cap.protocols.http")
+	typ := flag.String("type", "", "contract type: data.tables | data.enums | data.entities | data.queries | cap.services | cap.lifecycles | feature.flows | feature.pages | cap.events | cap.protocols.http")
 	name := flag.String("name", "", "snake_case name")
 	module := flag.String("module", "", "owner_module / query module (default: name)")
 	table := flag.String("table", "", "table stem (default: name)")
@@ -37,7 +37,7 @@ func main() {
 	flag.Parse()
 
 	if *typ == "" || *name == "" {
-		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.rules|feature.pages|cap.events|cap.protocols.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
+		fmt.Fprintln(os.Stderr, "usage: contract_new -type data.tables|data.enums|data.entities|data.queries|cap.services|cap.lifecycles|feature.flows|feature.pages|cap.events|cap.protocols.http -name <name> [-module <module>] [-table <table>] [-summary <text>] [-column-type <family>] [-out <file|auto>] [-service <cap.services.*.*>] [-path </x>] [-http-method get]")
 		os.Exit(2)
 	}
 	if *module == "" {
@@ -59,7 +59,7 @@ func main() {
 		fail(err)
 	}
 	switch *typ {
-	case "data.tables", "data.entities", "data.queries", "cap.services", "cap.lifecycles", "feature.rules", "feature.pages", "cap.events", "cap.protocols.http":
+	case "data.tables", "data.entities", "data.queries", "cap.services", "cap.lifecycles", "feature.flows", "feature.pages", "cap.events", "cap.protocols.http":
 		if *out == "auto" {
 			if schema.Targets.Dir == "" {
 				fail(fmt.Errorf("targets.dir is empty"))
@@ -120,12 +120,12 @@ func main() {
 		}
 		writeScaffold(abs, *typ, *name, *out, b, "next: replace TODO; add services/steps/queries/rules; add permissions/audit/rate_limit to platform/security/access.yaml if needed; register in contracts/index.yaml; make gen-graph; make contract-check")
 
-	case "feature.rules":
+	case "feature.flows":
 		b, err := contractspec.RenderRule(schema, *name, *module, *summary)
 		if err != nil {
 			fail(err)
 		}
-		writeScaffold(abs, *typ, *name, *out, b, "next: replace TODO; choose constraint/invariant/policy; reference the rule from a service step then run make gen-graph; implemented_by must be non-empty; register in contracts/index.yaml; make contract-check")
+		writeScaffold(abs, *typ, *name, *out, b, "next: replace TODO; choose constraint/invariant/policy; policy must replace the default decision; reference the rule from a service step then run make gen-graph; implemented_by must be non-empty; register in contracts/index.yaml; make contract-check")
 
 	case "feature.pages":
 		b, err := contractspec.RenderPage(schema, *name, *summary)

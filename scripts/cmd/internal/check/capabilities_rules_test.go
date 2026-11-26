@@ -163,7 +163,7 @@ fields:
   - {name: persistence, type: _types.basics.any, description: "persistence"}
   - {name: services, type: _types.basics.any, description: "services"}
 `)
-	for _, typ := range []string{"feature.rules", "cap.lifecycles", "cap.events", "cap.protocols.http"} {
+	for _, typ := range []string{"feature.flows", "cap.lifecycles", "cap.events", "cap.protocols.http"} {
 		writeCapFile(t, root, "contracts/_meta/"+typ+".yaml", "id: meta."+typ+"\ncontract: "+typ+`
 targets:
   dir: contracts/features/unused
@@ -397,19 +397,24 @@ transport_headers: []
 
 func TestCheckRuleDoc(t *testing.T) {
 	root := t.TempDir()
-	schema := copyMeta(t, root, "feature.rules")
+	schema := copyMeta(t, root, "feature.flows")
 	serviceIDs := map[string]bool{"cap.services.x.create": true}
-	rel := "contracts/features/rules/x.yaml"
-	valid := `id: feature.rules.x
+	rel := "contracts/features/flows/x.yaml"
+	valid := `id: feature.flows.x
 summary: "x"
 owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
 rules:
-  - id: feature.rules.x.r1
+  - id: feature.flows.x.r1
     kind: policy
     summary: "x"
+    errors: [platform.errors.COMMON_INTERNAL]
+    decision:
+      - when: "true"
+        effect: deny
+        error: platform.errors.COMMON_INTERNAL
     implemented_by: [cap.services.x.create]
 `
 	writeCapFile(t, root, rel, valid)
@@ -423,14 +428,14 @@ rules:
 		t.Fatalf("valid rule reported: %v", c.errs)
 	}
 
-	writeCapFile(t, root, rel, `id: feature.rules.x
+	writeCapFile(t, root, rel, `id: feature.flows.x
 summary: "x"
 owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
 rules:
-  - id: feature.rules.x.r2
+  - id: feature.flows.x.r2
     kind: constraint
     summary: "x"
     implemented_by: [cap.services.x.create]
@@ -441,18 +446,18 @@ rules:
 	}
 	c.errs = nil
 	c.checkRuleDoc(doc, rel, schema, serviceIDs)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[rule-structure]") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[flow-rule-structure]") {
 		t.Fatalf("constraint without field/op/value not reported: %v", c.errs)
 	}
 
-	writeCapFile(t, root, rel, `id: feature.rules.x
+	writeCapFile(t, root, rel, `id: feature.flows.x
 summary: "x"
 owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
 rules:
-  - id: feature.rules.x.r3
+  - id: feature.flows.x.r3
     kind: policy
     summary: "x"
     implemented_by: [cap.services.missing.create]
@@ -467,14 +472,14 @@ rules:
 		t.Fatalf("unknown service not reported: %v", c.errs)
 	}
 
-	writeCapFile(t, root, rel, `id: feature.rules.x
+	writeCapFile(t, root, rel, `id: feature.flows.x
 summary: "x"
 owner_module: x
 schema_version: 1
 stability: draft
 do_not: []
 rules:
-  - id: feature.rules.x.r4
+  - id: feature.flows.x.r4
     kind: policy
     summary: "x"
     on_violation: platform.errors.COMMON_INTERNAL
@@ -1368,7 +1373,7 @@ func TestLifecycleRequiresCycle(t *testing.T) {
 
 func TestLifecycleDimensionConflict(t *testing.T) {
 	root := t.TempDir()
-	for _, typ := range []string{"cap.services", "feature.rules", "cap.lifecycles", "cap.events", "cap.protocols.http"} {
+	for _, typ := range []string{"cap.services", "feature.flows", "cap.lifecycles", "cap.events", "cap.protocols.http"} {
 		copyMeta(t, root, typ)
 	}
 	body := func(id, summary string) string {
@@ -1993,7 +1998,7 @@ func TestLogicRulesValidated(t *testing.T) {
 		"steps": []any{map[string]any{
 			"id": "t", "kind": "logic", "summary": "x",
 			"lifecycles": []any{"cap.lifecycles.x.transitions.t"},
-			"rules":      []any{map[string]any{"rule": "feature.rules.x.missing"}},
+			"rules":      []any{map[string]any{"rule": "feature.flows.x.missing"}},
 			"output":     []any{},
 			"errors":     []any{},
 		}},
@@ -2001,7 +2006,7 @@ func TestLogicRulesValidated(t *testing.T) {
 	c.checkServiceItem(doc, "contracts/capabilities/services/x.yaml", "cap.services.x.get", "x",
 		map[string]serviceMeta{}, map[string]bool{}, map[string]bool{},
 		map[string]bool{"cap.lifecycles.x.transitions.t": true}, map[string]bool{})
-	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown rule feature.rules.x.missing") {
+	if !strings.Contains(strings.Join(c.errs, "\n"), "unknown rule feature.flows.x.missing") {
 		t.Fatalf("logic rule not validated: %v", c.errs)
 	}
 }
@@ -3029,7 +3034,7 @@ services:
   - name: child
     steps:
       - { id: a, kind: logic, errors: [platform.errors.CHILD], rules: [] }
-      - { id: b, kind: logic, errors: [], rules: [{ rule: feature.rules.x.rule }] }
+      - { id: b, kind: logic, errors: [], rules: [{ rule: feature.flows.x.rule }] }
   - name: parent_inherit
     steps:
       - { id: c, kind: service, service: cap.services.x.child }
