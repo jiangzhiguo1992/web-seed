@@ -1,0 +1,352 @@
+# 认证功能流程：验证体一次性消费、过期、尝试上限、重发、归属与动作日志。
+
+id: feature.flows.auth
+summary: "认证功能流程"
+owner_module: account
+schema_version: 1
+stability: draft
+do_not:
+  - "验证体规则只引用 data.entities.verification_body / verification_action，不引用物理表/查询"
+  - "不要在 handler 里手写验证码消费、重发或动作写入逻辑"
+  - "账号状态规则与 lifecycle requires 必须由 service step 真正执行，不能只声明"
+  - "密码强度只由 password_strength 规则约束，不在 handler 手写"
+scope: ui
+entry: feature.routes.login
+steps:
+  - id: send_code
+    page: feature.pages.login
+    action: send_code
+    rules:
+      - feature.flows.auth.verification_target_normalization
+      - feature.flows.auth.verification_no_enumeration
+      - feature.flows.auth.verification_register_account
+      - feature.flows.auth.verification_auth_binding
+      - feature.flows.auth.verification_purpose_status
+      - feature.flows.auth.verification_resend
+      - feature.flows.auth.verification_account_active
+    next: verify_code
+  - id: verify_code
+    page: feature.pages.login
+    action: verify_code
+    rules:
+      - feature.flows.auth.verification_one_time
+      - feature.flows.auth.verification_expiry
+      - feature.flows.auth.verification_attempts
+      - feature.flows.auth.verification_auth_binding
+      - feature.flows.auth.verification_purpose_status
+      - feature.flows.auth.verification_no_enumeration
+      - feature.flows.auth.verification_register_account
+      - feature.flows.auth.verification_account_active
+      - feature.flows.auth.verification_success_sets_verified
+      - feature.flows.auth.verification_action_recorded
+      - feature.flows.auth.verification_action_append_only
+      - feature.flows.auth.verification_consumed_consistent
+    next: login
+  - id: login
+    page: feature.pages.login
+    action: submit
+    rules:
+      - feature.flows.auth.auth_login_requires_verified
+      - feature.flows.auth.auth_login_rejects_pending_account
+      - feature.flows.auth.auth_login_rejects_suspended_account
+      - feature.flows.auth.auth_login_rejects_deleted_account
+      - feature.flows.auth.login_lockout
+    next: done
+    on_success: feature.routes.account_list
+  - id: bind_password
+    page: feature.pages.account_security
+    action: bind_password
+    rules:
+      - feature.flows.auth.password_strength
+      - feature.flows.auth.auth_binding_rejects_suspended_account
+      - feature.flows.auth.auth_binding_rejects_deleted_account
+    next: done
+  - id: bind_phone
+    page: feature.pages.account_security
+    action: bind_phone
+    rules:
+      - feature.flows.auth.auth_binding_rejects_suspended_account
+      - feature.flows.auth.auth_binding_rejects_deleted_account
+      - feature.flows.auth.verification_auth_change
+    next: done
+  - id: bind_email
+    page: feature.pages.account_security
+    action: bind_email
+    rules:
+      - feature.flows.auth.auth_binding_rejects_suspended_account
+      - feature.flows.auth.auth_binding_rejects_deleted_account
+      - feature.flows.auth.verification_auth_change
+    next: done
+  - id: refresh
+    page: feature.pages.current_account
+    action: refresh
+    rules:
+      - feature.flows.auth.auth_token_requires_active_account
+      - feature.flows.auth.refresh_reuse_detection
+    next: done
+rules:
+  - id: feature.flows.auth.verification_one_time
+    kind: policy
+    summary: "验证码只能消费一次"
+    errors: [ platform.errors.AUTH_VERIFICATION_INVALID ]
+    decision:
+      - when: "verification.consumed_at != nil || (verification.status != \"pending\" && verification.status != \"sent\")"
+        effect: deny
+        error: "platform.errors.AUTH_VERIFICATION_INVALID"
+    implemented_by: [ cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_expiry
+    kind: policy
+    summary: "过期验证码不可消费"
+    errors: [ platform.errors.AUTH_VERIFICATION_EXPIRED ]
+    decision:
+      - when: "verification.expire_at <= now"
+        effect: deny
+        error: "platform.errors.AUTH_VERIFICATION_EXPIRED"
+    implemented_by: [ cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_attempts
+    kind: policy
+    summary: "失败次数达到上限后作废验证码"
+    errors: [ platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED ]
+    decision:
+      - when: "verification.attempt_count >= auth_policy.verification.max_attempts"
+        effect: deny
+        error: "platform.errors.AUTH_VERIFICATION_ATTEMPTS_EXCEEDED"
+    implemented_by: [ cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_auth_binding
+    kind: policy
+    summary: "验证体的 account_id 必须与 auth_id 所属账号一致"
+    errors: [ platform.errors.AUTH_VERIFICATION_INVALID ]
+    decision:
+      - when: "auth.account_id != verification.account_id || auth.status == \"disabled\""
+        effect: deny
+        error: "platform.errors.AUTH_VERIFICATION_INVALID"
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.auth_login_requires_verified
+    kind: policy
+    summary: "只有已验证且未停用的认证记录可以登录"
+    errors: [ platform.errors.AUTH_INVALID_CREDENTIALS ]
+    decision:
+      - when: "auth_pwd.status != \"verified\" || auth_contact.status != \"verified\" || auth_contact.status == \"disabled\""
+        effect: deny
+        error: "platform.errors.AUTH_INVALID_CREDENTIALS"
+    implemented_by: [ cap.services.auth.login ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.auth_login_rejects_pending_account
+    kind: policy
+    summary: "待激活账号不可登录"
+    errors: [ platform.errors.AUTH_INVALID_CREDENTIALS ]
+    decision:
+      - when: "target_account.status == \"pending\""
+        effect: deny
+        error: "platform.errors.AUTH_INVALID_CREDENTIALS"
+    implemented_by: [ cap.services.auth.login ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.auth_login_rejects_suspended_account
+    kind: policy
+    summary: "封禁账号不可登录"
+    errors: [ platform.errors.ACCOUNT_SUSPENDED ]
+    decision:
+      - when: "target_account.status == \"suspended\""
+        effect: deny
+        error: "platform.errors.ACCOUNT_SUSPENDED"
+    implemented_by: [ cap.services.auth.login ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.auth_login_rejects_deleted_account
+    kind: policy
+    summary: "已删除账号不可登录"
+    errors: [ platform.errors.AUTH_INVALID_CREDENTIALS ]
+    decision:
+      - when: "target_account.status == \"deleted\" || target_account.missing"
+        effect: deny
+        error: "platform.errors.AUTH_INVALID_CREDENTIALS"
+    implemented_by: [ cap.services.auth.login ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.auth_binding_rejects_suspended_account
+    kind: policy
+    summary: "封禁账号不可变更认证绑定"
+    errors: [ platform.errors.ACCOUNT_SUSPENDED ]
+    decision:
+      - when: "target_account.status == \"suspended\""
+        effect: deny
+        error: "platform.errors.ACCOUNT_SUSPENDED"
+    implemented_by: [ cap.services.auth.bind_email, cap.services.auth.bind_password, cap.services.auth.bind_phone ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.auth_binding_rejects_deleted_account
+    kind: policy
+    summary: "已删除账号不可变更认证绑定"
+    errors: [ platform.errors.ACCOUNT_ALREADY_DELETED ]
+    decision:
+      - when: "target_account.status == \"deleted\""
+        effect: deny
+        error: "platform.errors.ACCOUNT_ALREADY_DELETED"
+    implemented_by: [ cap.services.auth.bind_email, cap.services.auth.bind_password, cap.services.auth.bind_phone ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.auth_token_requires_active_account
+    kind: policy
+    summary: "非 active 账号不可签发、刷新或使用 JWT"
+    errors: [ platform.errors.AUTH_TOKEN_INVALID ]
+    decision:
+      - when: "target_account.status != \"active\""
+        effect: deny
+        error: "platform.errors.AUTH_TOKEN_INVALID"
+    implemented_by: [ cap.services.token.issue, cap.services.token.refresh, cap.services.token.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.refresh_reuse_detection
+    kind: policy
+    summary: "复用已吊销 refresh JWT 时吊销账号全部 token 记录"
+    errors: [ platform.errors.AUTH_TOKEN_INVALID ]
+    decision:
+      - when: "old_token.revoked_at != nil"
+        effect: call
+        target: cap.services.token.revoke_by_account
+        on_failure: "rollback"
+      - when: "old_token.revoked_at != nil"
+        effect: deny
+        error: "platform.errors.AUTH_TOKEN_INVALID"
+    implemented_by: [ cap.services.token.refresh ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_purpose_status
+    kind: policy
+    summary: "登录/重置/解绑/注销要求认证记录已验证；注册/绑定/换绑允许未认证"
+    errors: [ platform.errors.AUTH_VERIFICATION_INVALID ]
+    decision:
+      - when: "(verification.purpose in [\"login\", \"reset_password\", \"unbind_phone\", \"unbind_email\", \"delete_account\"] && auth.status != \"verified\") || auth.status == \"disabled\""
+        effect: deny
+        error: "platform.errors.AUTH_VERIFICATION_INVALID"
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_auth_change
+    kind: policy
+    summary: "换绑/解绑/停用认证绑定时作废对应未消费验证体"
+    errors: [ platform.errors.COMMON_INTERNAL ]
+    decision:
+      - when: "auth.changed"
+        effect: call
+        target: cap.services.verification.revoke_by_auth
+        on_failure: "rollback"
+    implemented_by: [ cap.services.verification.revoke_by_auth ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_resend
+    kind: policy
+    summary: "重发前作废同一 auth_id+purpose 的旧验证码"
+    errors: [ platform.errors.COMMON_INTERNAL ]
+    decision:
+      - when: "verification.pending_exists"
+        effect: revoke
+        target: verification_body
+      - when: "verification.pending_exists"
+        effect: create
+        target: verification_body
+    implemented_by: [ cap.services.verification.send ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_target_normalization
+    kind: policy
+    summary: "target 用于解析 auth_id，写入前按 auth_type 归一化"
+    errors: [ platform.errors.AUTH_VERIFICATION_TARGET_INVALID ]
+    decision:
+      - when: "phone.is_e164 == false || email.is_lowercase == false"
+        effect: normalize
+        target: auth.target
+    implemented_by: [ cap.services.verification.send ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_no_enumeration
+    kind: policy
+    summary: "发送/校验失败不枚举账号或认证绑定是否存在"
+    errors: [ platform.errors.AUTH_VERIFICATION_INVALID ]
+    decision:
+      - when: "target.missing || auth.missing || auth.disabled"
+        effect: deny
+        error: "platform.errors.AUTH_VERIFICATION_INVALID"
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_account_active
+    kind: policy
+    summary: "验证体必须绑定未删除且未封禁账号"
+    errors: [ platform.errors.AUTH_VERIFICATION_INVALID ]
+    decision:
+      - when: "target_account.missing || target_account.deleted || target_account.status == \"deleted\" || target_account.status == \"suspended\""
+        effect: deny
+        error: "platform.errors.AUTH_VERIFICATION_INVALID"
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_register_account
+    kind: policy
+    summary: "注册验证必须携带 pending account ID"
+    errors: [ platform.errors.AUTH_VERIFICATION_INVALID ]
+    decision:
+      - when: "verification.purpose == \"register\" && verification.account_id == nil"
+        effect: deny
+        error: "platform.errors.AUTH_VERIFICATION_INVALID"
+    implemented_by: [ cap.services.verification.send, cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_success_sets_verified
+    kind: policy
+    summary: "验证成功后认证记录置为已认证"
+    errors: [ platform.errors.COMMON_INTERNAL ]
+    decision:
+      - when: "verification.purpose in [\"register\", \"bind_phone\", \"bind_email\", \"change_phone\", \"change_email\"] && verification.verified"
+        effect: set
+        target: auth.status
+        value: "verified"
+    implemented_by: [ cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_action_recorded
+    kind: policy
+    summary: "校验必须追加动作日志"
+    errors: [ platform.errors.COMMON_INTERNAL ]
+    decision:
+      - when: "verification.result != nil"
+        effect: record
+        target: verification_action
+    implemented_by: [ cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_action_append_only
+    kind: policy
+    summary: "验证动作只追加，不更新"
+    errors: [ platform.errors.COMMON_INTERNAL ]
+    decision:
+      - when: "verification_action.exists"
+        effect: forbid
+        target: verification_action
+        value: "update"
+      - when: "verification_action.exists"
+        effect: forbid
+        target: verification_action
+        value: "delete"
+    implemented_by: [ cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.verification_consumed_consistent
+    kind: invariant
+    summary: "consumed 状态当且仅当 consumed_at 非空"
+    errors: [ platform.errors.AUTH_VERIFICATION_INVALID ]
+    assert: "(status == \"consumed\") == (consumed_at != nil)"
+    implemented_by: [ cap.services.verification.verify ]
+    verified_by: [ scripts/cmd/internal/check/invariants_test.go ]
+  - id: feature.flows.auth.login_lockout
+    kind: policy
+    summary: "连续登录失败达到阈值后锁定一段时间"
+    errors: [ platform.errors.AUTH_LOCKED ]
+    decision:
+      - when: "auth_pwd.failed_login_count >= auth_policy.password.max_attempts"
+        effect: deny
+        error: "platform.errors.AUTH_LOCKED"
+      - when: "auth_pwd.failed_login_count >= auth_policy.password.max_attempts"
+        effect: call
+        target: cap.services.auth.record_login_failure
+        on_failure: "rollback"
+    implemented_by: [ cap.services.auth.login, cap.services.auth.record_login_failure ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]
+  - id: feature.flows.auth.password_strength
+    kind: policy
+    summary: "密码必须满足 auth_policy.password 的最小长度与复杂度"
+    errors: [ platform.errors.AUTH_WEAK_PASSWORD ]
+    decision:
+      - when: "len(password) < auth_policy.password.min_length"
+        effect: deny
+        error: "platform.errors.AUTH_WEAK_PASSWORD"
+    implemented_by: [ cap.services.auth.bind_password ]
+    verified_by: [ scripts/cmd/internal/check/rules_policy_test.go ]

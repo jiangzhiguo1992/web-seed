@@ -1,16 +1,18 @@
-# 附件业务规则集；只保留可脚本判定的字段级约束。
+# 附件功能流程；只保留可脚本判定的字段级约束。
 # 上传状态机、对象存在性、软删旧行等编排规则由 cap.services.attachment 的步骤与错误声明。
 
-id: feature.rules.attachment
-summary: "附件业务规则集"
+id: feature.flows.attachment
+summary: "附件功能流程"
 owner_module: system
 schema_version: 1
 stability: draft
 do_not:
   - "附件只表达对象元数据；不要在这里写对象存储 ACL 或签名策略"
   - "owner_table_name + owner_id 是多态引用，必须由服务层校验"
+scope: api
+steps: [ ]
 rules:
-  - id: feature.rules.attachment.owner_table_format
+  - id: feature.flows.attachment.owner_table_format
     kind: constraint
     summary: "owner_table_name 只允许物理表名格式"
     errors: [ platform.errors.ATTACHMENT_INVALID ]
@@ -20,7 +22,7 @@ rules:
     value: "^[a-z][a-z0-9_]*$"
     implemented_by: [ cap.services.attachment.create_upload ]
 
-  - id: feature.rules.attachment.purpose_format
+  - id: feature.flows.attachment.purpose_format
     kind: constraint
     summary: "purpose 只允许小写字母、数字和下划线"
     errors: [ platform.errors.ATTACHMENT_INVALID ]
@@ -30,7 +32,7 @@ rules:
     value: "^[a-z][a-z0-9_]*$"
     implemented_by: [ cap.services.attachment.create_upload ]
 
-  - id: feature.rules.attachment.size_non_negative
+  - id: feature.flows.attachment.size_non_negative
     kind: constraint
     summary: "size_bytes 必须大于等于 0"
     errors: [ platform.errors.ATTACHMENT_INVALID ]
@@ -40,7 +42,7 @@ rules:
     value: 0
     implemented_by: [ cap.services.attachment.create_upload ]
 
-  - id: feature.rules.attachment.sha256_format
+  - id: feature.flows.attachment.sha256_format
     kind: constraint
     summary: "sha256 为 64 位小写十六进制"
     errors: [ platform.errors.ATTACHMENT_INVALID ]

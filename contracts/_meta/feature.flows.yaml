@@ -1,0 +1,114 @@
+# 用户功能流程：跨页时序、页面步骤与业务规则。规则必须内嵌在流程中，由步骤引用。
+
+id: meta.feature.flows
+contract: feature.flows
+title: "用户功能流程契约"
+targets:
+  dir: "contracts/features/flows"
+  glob: "*.yaml"
+  id: "feature.flows.<file>"
+  naming: "snake_case"
+
+fields:
+  - name: id
+    type: _types.basics.string
+    required: true
+    pattern: '^feature\.flows\.[a-z][a-z0-9_]*$'
+    description: "契约 ID"
+
+  - name: summary
+    type: _types.basics.string
+    required: true
+    description: "一句话说明"
+
+  - name: owner_module
+    type: _types.basics.string
+    required: true
+    pattern: '^[a-z][a-z0-9_]*$'
+    description: "流程归属模块；按业务主体而非实现模块"
+
+  - name: schema_version
+    type: _types.basics.integer.32
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: stability
+    type: _types.basics.string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: do_not
+    type: _types.structures.set<_types.basics.string>
+    required: true
+    unique: true
+    description: "实例级负向约束"
+
+  - name: scope
+    type: _types.basics.string
+    required: false
+    enum: [ ui, api ]
+    description: "ui=有页面动作步骤；api=仅后端规则集；省略时按 steps 推断"
+
+  - name: entry
+    type: _types.basics.string
+    required: false
+    pattern: '^feature\.routes\.[a-z][a-z0-9_]*$'
+    description: "ui 流程的入口路由；api 流程不得声明"
+
+  - name: steps
+    type: _types.structures.list<_types.structures.object>
+    required: false
+    description: "用户操作步骤；ui 流程必须非空，api 流程必须为空"
+    item_fields:
+      - { name: id, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "步骤 ID；在本流程内唯一" }
+      - { name: page, type: _types.basics.string, required: true, pattern: '^feature\.pages\.[a-z][a-z0-9_]*$', description: "步骤所在页面" }
+      - { name: action, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "页面动作名；必须存在于该页面" }
+      - { name: rules, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^feature\.flows\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "解释该步骤的业务规则；必须属于本流程" }
+      - { name: next, type: _types.basics.string, required: false, pattern: '^([a-z][a-z0-9_]*|done)$', description: "下一步骤 ID；done 表示结束" }
+      - { name: on_success, type: _types.basics.string, required: false, pattern: '^feature\.routes\.[a-z][a-z0-9_]*$', description: "成功后跳转的路由" }
+
+  - name: rules
+    type: _types.structures.list<_types.structures.object>
+    required: true
+    min_items: 1
+    description: "流程内嵌的业务规则；每个 ui 规则必须被至少一个步骤引用"
+    item_fields:
+      - { name: id, type: _types.basics.string, required: true, pattern: '^feature\.flows\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "规则 ID" }
+      - { name: kind, type: _types.basics.string, required: true, enum: [ constraint, invariant, policy ], description: "constraint=字段级校验；invariant=断言；policy=决策表" }
+      - { name: summary, type: _types.basics.string, required: true, description: "一句话说明" }
+      - { name: errors, type: _types.structures.set<_types.basics.string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "违反规则时可能返回的错误码；实现该规则的 service 必须声明" }
+      - { name: entity, type: _types.basics.string, required: false, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "constraint 的实体" }
+      - { name: field, type: _types.basics.string, required: false, pattern: '^[a-z][a-zA-Z0-9_]*$', description: "constraint 的字段名（json_name）" }
+      - { name: op, type: _types.basics.string, required: false, enum: [ eq, ne, gt, ge, lt, le, in, not_in, pattern, min_len, max_len, required, not_null ], description: "constraint 的比较操作" }
+      - { name: value, type: _types.basics.any, required: false, description: "constraint 的期望值" }
+      - { name: assert, type: _types.basics.string, required: false, description: "invariant 的可执行表达式：字段路径、字符串/数字/布尔/null、len()、比较、in/not in、&&/||/!、括号" }
+      - name: decision
+        type: _types.structures.list<_types.structures.object>
+        required: false
+        min_items: 1
+        description: "policy 的决策表；每项由 rulesdsl 条件与结构化效果组成，按顺序执行"
+        item_fields:
+          - { name: when, type: _types.basics.string, required: true, description: "rulesdsl 条件表达式" }
+          - { name: effect, type: _types.basics.string, required: true, enum: [ deny, allow, call, set, normalize, record, create, revoke, forbid ], description: "命中时的效果" }
+          - { name: error, type: _types.basics.string, required: false, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "effect=deny 的错误码" }
+          - { name: target, type: _types.basics.string, required: false, description: "effect=call 为 cap.services.*；其他 effect 为逻辑字段/表名" }
+          - { name: value, type: _types.basics.any, required: false, description: "effect=set 的写入值；effect=forbid 的 update/delete" }
+          - { name: on_failure, type: _types.basics.string, required: false, enum: [ rollback, ignore ], description: "effect=call 失败时的处理" }
+      - { name: implemented_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该规则的 service 项；由 gen-graph 写入" }
+      - { name: verified_by, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^(scenario\.http\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*|scripts/cmd/internal/check/[a-z][a-z0-9_]*_test\.go)$', description: "验证该规则的 scenario 或测试文件；policy/invariant 必填，checker 校验关联真实存在（policy 需 policyExpectations 键，invariant 需 invariantAssertions 键）" }
+
+
+rules:
+  - { id: flow-structure, text: "id 必须由 targets 派生；scope=ui 必须有 entry 且 steps 非空；scope=api 必须 steps 为空且不得声明 entry；省略 scope 时 steps 非空视为 ui、空视为 api", implemented_by: [ flow-structure ] }
+  - { id: flow-step, text: "step id 在本流程内唯一；page 必须是存在的 feature.pages.*；action 必须是该页面声明的动作；rules 必须属于本流程；next 必须是本流程的 step id 或 done；on_success 必须是存在的 feature.routes.*；ui 步骤的 rules 非空由字段 min_items 保证", implemented_by: [ flow-step ] }
+  - { id: flow-rule-usage, text: "scope=ui 的流程中，每条规则必须被至少一个 step.rules 引用；scope=api 的流程不要求步骤引用", implemented_by: [ flow-rule-usage ] }
+  - { id: flow-rule-verified, text: "kind=policy/invariant 必须有 verified_by；scenario 引用必须存在且该场景 rules 包含此规则；测试文件引用必须存在，policy 需在 policyExpectations、invariant 需在 invariantAssertions 中有对应键", implemented_by: [ flow-rule-verified ] }
+  - { id: flow-refs, text: "entry 必须是存在的 feature.routes.*；步骤页面必须回指 route；规则 ID 必须以文件 ID 为前缀且全局唯一", implemented_by: [ flow-refs ] }
+  - { id: flow-rule-structure, text: "kind=constraint 必须有 entity/field/op/value 且不得有 assert/decision；entity 必须是存在的 data.entities.*，field 必须是该实体的非关系字段或基类列；kind=invariant 必须有 assert 且不得有 entity/field/op/value/decision；kind=policy 必须有非空 decision 且不得有 entity/field/op/value/assert；errors 必须是存在的 platform.errors.*；implemented_by 必须指向存在的 cap.services.*，非空由字段 min_items 保证", implemented_by: [ flow-rule-structure ] }
+  - { id: flow-rule-value, text: "constraint 的 op/value 必须可判定：pattern 为非空合法正则且字段为 string；in/not_in 为非空标量列表；min_len/max_len 为非负整数且字段为 string；required/not_null 为布尔；eq/ne 为标量；gt/ge/lt/le 为数字且字段为数值或时间", implemented_by: [ flow-rule-value ] }
+  - { id: flow-rule-dsl, text: "invariant.assert 与 policy.decision[].when 必须是 rulesdsl 可解析表达式；支持字段路径、字符串/数字/布尔/null、len()、比较、in/not in、&&/||/! 与括号", implemented_by: [ flow-rule-dsl ] }
+  - { id: policy-decision, text: "policy.decision[].effect 必须合法；deny 必须有 error 且在 rule.errors 中；call 的 target 必须是存在的 cap.services.*；set/normalize/record/create/revoke 必须有 target；forbid 必须有 target 与 value∈(update,delete)；allow 不得带 error/target", implemented_by: [ policy-decision ] }
+  - { id: flow-data-boundary, text: "features/pages 与 features/flows 不得引用 data.tables.* / data.queries.* / data.storage；只有 features/scenarios/** 允许引用 data.* 做持久化断言；flow.rules.constraint.entity 可引用 data.entities.*", implemented_by: [ flow-data-boundary ] }

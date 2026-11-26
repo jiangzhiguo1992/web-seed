@@ -1,16 +1,18 @@
-# 字典业务规则集；只保留可脚本判定的字段级约束与不变量。
+# 字典功能流程；只保留可脚本判定的字段级约束与不变量。
 # 父子存在性、软删子节点、移动环校验、批量导入等编排规则由 cap.services.dictionary 的步骤与错误声明。
 
-id: feature.rules.dictionary
-summary: "字典业务规则集"
+id: feature.flows.dictionary
+summary: "字典功能流程"
 owner_module: system
 schema_version: 1
 stability: draft
 do_not:
   - "字典只表达展示选项；不要在这里写业务分支规则"
   - "name 允许重复；只有 code 全局唯一且不可变"
+scope: api
+steps: [ ]
 rules:
-  - id: feature.rules.dictionary.code_format
+  - id: feature.flows.dictionary.code_format
     kind: constraint
     summary: "code 只允许小写字母、数字和下划线，且以字母开头"
     errors: [ platform.errors.DICTIONARY_INVALID ]
@@ -20,14 +22,15 @@ rules:
     value: "^[a-z][a-z0-9_]*$"
     implemented_by: [ cap.services.dictionary.create ]
 
-  - id: feature.rules.dictionary.name_length
+  - id: feature.flows.dictionary.name_length
     kind: invariant
     summary: "name 长度 1–100"
     errors: [ platform.errors.DICTIONARY_INVALID ]
     assert: "len(name) >= 1 && len(name) <= 100"
     implemented_by: [ cap.services.dictionary.create, cap.services.dictionary.update ]
+    verified_by: [ scripts/cmd/internal/check/invariants_test.go ]
 
-  - id: feature.rules.dictionary.color_format
+  - id: feature.flows.dictionary.color_format
     kind: constraint
     summary: "color 为 #RRGGBB；为空表示使用默认样式"
     errors: [ platform.errors.DICTIONARY_INVALID ]
