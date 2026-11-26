@@ -24,9 +24,9 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         query:
-          - { name: status, type: data.enums.account_status, required: false, description: "账号状态过滤", to: params.status }
-          - { name: offset, type: _types.basics.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
-          - { name: limit, type: _types.basics.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
+          - { name: status, required: false, type: data.enums.account_status, description: "账号状态过滤", to: params.status }
+          - { name: offset, required: false, type: _types.basics.page_offset, description: "分页偏移；默认 0", to: params.offset }
+          - { name: limit, required: false, type: _types.basics.page_limit, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
           headers:

@@ -508,3 +508,62 @@ func TestNormalizeHTTPDocumentRejectsComponents(t *testing.T) {
 		t.Fatalf("components not rejected: %v", err)
 	}
 }
+
+func TestNormalizeHTTPRequiredDefaults(t *testing.T) {
+	doc := httpDoc(map[string]any{
+		"request": map[string]any{
+			"headers": []any{
+				map[string]any{"name": "Content-Type", "value": "application/x-www-form-urlencoded", "description": "body"},
+				map[string]any{"name": "X-Trace", "value": "1", "description": "trace"},
+			},
+			"query": []any{
+				map[string]any{"name": "limit", "type": "_types.basics.integer", "description": "size", "to": "params.limit"},
+			},
+			"body": map[string]any{
+				"kind": "form",
+				"fields": []any{
+					map[string]any{"name": "username", "type": "_types.basics.string", "description": "name", "to": "params.input.username"},
+				},
+			},
+		},
+		"response": map[string]any{
+			"200": map[string]any{
+				"msg": "ok",
+				"headers": []any{
+					map[string]any{"name": "Content-Type", "value": "application/json", "description": "body"},
+					map[string]any{"name": "X-Total", "value": "1", "description": "total"},
+				},
+				"body": map[string]any{"kind": "json", "type": "_types.basics.string"},
+			},
+		},
+	})
+	if err := NormalizeHTTPDocument(doc, testResolve, false, testNormalizeOptions()); err != nil {
+		t.Fatal(err)
+	}
+	op := asMap(asMap(asMap(doc["paths"])["/x"])["post"])
+	for _, raw := range asList(op["parameters"]) {
+		param := asMap(raw)
+		name, _ := param["name"].(string)
+		if name != "X-Trace" && name != "limit" {
+			continue
+		}
+		if required, _ := param["required"].(bool); !required {
+			t.Fatalf("%s required must default to true: %v", name, param)
+		}
+	}
+
+	body := asMap(op["requestBody"])
+	if required, _ := body["required"].(bool); !required {
+		t.Fatalf("body required must default to true: %v", body)
+	}
+	schema := asMap(asMap(asMap(body["content"])["application/x-www-form-urlencoded"])["schema"])
+	if required := asList(schema["required"]); len(required) != 1 || required[0] != "username" {
+		t.Fatalf("form field required must default to true: %v", schema)
+	}
+
+	resp := asMap(asMap(op["responses"])["200"])
+	total := asMap(asMap(resp["headers"])["X-Total"])
+	if required, _ := total["required"].(bool); !required {
+		t.Fatalf("response header required must default to true: %v", total)
+	}
+}

@@ -24,8 +24,8 @@ paths:
           - { name: Authorization, auth: Bearer, description: "JWT access token" }
           - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
         query:
-          - { name: offset, type: _types.basics.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
-          - { name: limit, type: _types.basics.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
+          - { name: offset, required: false, type: _types.basics.page_offset, description: "分页偏移；默认 0", to: params.offset }
+          - { name: limit, required: false, type: _types.basics.page_limit, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
           headers:
@@ -196,8 +196,8 @@ paths:
         path:
           - { name: id, type: _types.basics.id, description: "父字典 ID", to: params.parent_id }
         query:
-          - { name: offset, type: _types.basics.page_offset, required: false, description: "分页偏移；默认 0", to: params.offset }
-          - { name: limit, type: _types.basics.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
+          - { name: offset, required: false, type: _types.basics.page_offset, description: "分页偏移；默认 0", to: params.offset }
+          - { name: limit, required: false, type: _types.basics.page_limit, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
           headers:
