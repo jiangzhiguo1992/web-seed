@@ -27,7 +27,7 @@ func TestColumnSQL(t *testing.T) {
 		{
 			name: "varchar",
 			col:  column{Name: "number", Type: "string", MaxLen: 64, Nullable: false},
-			want: `"number" VARCHAR(64) NOT NULL`,
+			want: `"number" TEXT NOT NULL CHECK (char_length("number") <= 64)`,
 		},
 		{
 			name: "text",
@@ -163,7 +163,7 @@ func TestTypeMapping(t *testing.T) {
 		want string
 	}{
 		{column{Type: "integer", Bits: 64}, "BIGINT"},
-		{column{Type: "string", MaxLen: 32}, "VARCHAR(32)"},
+		{column{Type: "string", MaxLen: 32}, "TEXT"},
 		{column{Type: "string", Kind: "tsvector"}, "TSVECTOR"},
 		{column{Type: "timestamp"}, "TIMESTAMPTZ(6)"},
 		{column{Type: "boolean"}, "BOOLEAN"},
@@ -188,9 +188,36 @@ func TestTypeMapping(t *testing.T) {
 	}
 }
 
-func TestColumnTypeRejectsUnsigned(t *testing.T) {
-	if _, err := columnType(column{Name: "count", Type: "integer", Bits: 64, Unsigned: true}); err == nil {
-		t.Fatal("unsigned integer must be rejected for PostgreSQL")
+func TestColumnSQLAutoIncrement(t *testing.T) {
+	cases := map[string]string{
+		"16": `"id" SMALLSERIAL NOT NULL`,
+		"32": `"id" SERIAL NOT NULL`,
+		"64": `"id" BIGSERIAL NOT NULL`,
+	}
+	for variant, want := range cases {
+		cols, err := parseColumns([]any{map[string]any{
+			"name":           "id",
+			"type":           "_types.basics.integer." + variant,
+			"auto_increment": true,
+			"nullable":       false,
+		}}, nil)
+		if err != nil {
+			t.Fatalf("integer.%s parse: %v", variant, err)
+		}
+		got, err := columnSQL(cols[0])
+		if err != nil {
+			t.Fatalf("integer.%s DDL: %v", variant, err)
+		}
+		if got != want {
+			t.Fatalf("integer.%s auto increment DDL = %q, want %q", variant, got, want)
+		}
+	}
+
+	if _, err := columnSQL(column{Name: "id", Type: "integer", Bits: 64, AutoIncrement: true, Default: 1}); err == nil {
+		t.Fatal("auto_increment with default must be rejected")
+	}
+	if _, err := columnType(column{Name: "id", Type: "integer", Bits: 8, AutoIncrement: true}); err == nil {
+		t.Fatal("integer.8 has no serial variant")
 	}
 }
 

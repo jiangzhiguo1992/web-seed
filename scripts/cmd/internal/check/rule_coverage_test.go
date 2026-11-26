@@ -203,15 +203,16 @@ func TestFamilyParamRules(t *testing.T) {
 func TestColumnTypeSupportedRules(t *testing.T) {
 	schema := &Schema{
 		Fields: []Field{{Name: "columns", ItemFields: []Field{
-			{Name: "name"}, {Name: "type"}, {Name: "comment"}, {Name: "bits"}, {Name: "unsigned"}, {Name: "min"}, {Name: "max"},
+			{Name: "name"}, {Name: "type"}, {Name: "comment"}, {Name: "bits"},
+			{Name: "auto_increment"}, {Name: "min"}, {Name: "max"},
 		}}},
 		ValueTypes: ValueTypes{TypeFamilies: map[string]ValueTypeFamily{
 			"any": {},
 			"integer": {Params: map[string]Field{
-				"bits":     {Type: "integer"},
-				"unsigned": {Type: "boolean"},
-				"min":      {Type: "integer"},
-				"max":      {Type: "integer"},
+				"bits":           {Type: "integer"},
+				"auto_increment": {Type: "_types.basics.boolean"},
+				"min":            {Type: "integer"},
+				"max":            {Type: "integer"},
 			}},
 		}},
 	}
@@ -221,8 +222,37 @@ func TestColumnTypeSupportedRules(t *testing.T) {
 	mustContainRule(t, c.errs, "column-type-supported")
 
 	c = &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "count", "type": "_types.basics.integer", "auto_increment": true}, "integer", "x.yaml", 0, "count", schema)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid integer auto_increment reported: %v", c.errs)
+	}
+
+	c = &Checker{}
+	c.checkFamilyParams(map[string]any{"name": "name", "type": "_types.basics.string", "auto_increment": true}, "string", "x.yaml", 0, "name", schema)
+	mustContainRule(t, c.errs, "family-params")
+
+	c = &Checker{}
 	c.checkFamilyParams(map[string]any{"name": "count", "type": "_types.basics.integer", "unsigned": true}, "integer", "x.yaml", 0, "count", schema)
+	mustContainRule(t, c.errs, "family-params")
+
+	c = &Checker{}
+	c.checkIntegerAutoIncrement(map[string]any{"auto_increment": true}, "_types.basics.integer.8", "x.yaml", 0, "count")
 	mustContainRule(t, c.errs, "column-type-supported")
+}
+
+func TestAutoIncrementConflicts(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		col  map[string]any
+	}{
+		{"default", map[string]any{"auto_increment": true, "default": 1}},
+		{"default_sql", map[string]any{"auto_increment": true, "default_sql": "nextval('x')"}},
+		{"nullable", map[string]any{"auto_increment": true, "nullable": true}},
+	} {
+		c := &Checker{}
+		c.checkDefaultExclusive(tc.col, "x.yaml", 0, tc.name)
+		mustContainRule(t, c.errs, "column-type-supported")
+	}
 }
 
 func TestEnumCodeLiteralRule(t *testing.T) {

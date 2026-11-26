@@ -3514,14 +3514,6 @@ func TestBaseIDMustBeInteger64(t *testing.T) {
 		t.Fatalf("base id type drift not reported: %v", c.errs)
 	}
 
-	doc := newDoc()
-	doc["columns"].([]any)[0].(map[string]any)["type"] = "_types.basics.integer.64"
-	doc["columns"].([]any)[0].(map[string]any)["unsigned"] = true
-	c = &Checker{root: root}
-	c.checkBaseTable(doc, schema, "contracts/data/tables/_base.yaml")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "base id must not be unsigned") {
-		t.Fatalf("base id unsigned not reported: %v", c.errs)
-	}
 }
 
 func TestBaseColumnsRejectRedundancy(t *testing.T) {

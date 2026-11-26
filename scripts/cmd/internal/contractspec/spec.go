@@ -113,6 +113,12 @@ type CustomTypesDoc struct {
 
 const customTypesRel = "contracts/data/types.yaml"
 
+// TableOnlyBasicsParams 是只允许出现在表列上的类型族参数。
+// 自定义类型、entity、query、service、event 都不得声明这些参数。
+var TableOnlyBasicsParams = map[string]bool{
+	"auto_increment": true,
+}
+
 // SchemaAlias 在字段规范的 types 列表中代表 schemas 下声明的全部节点种类。
 // 使用它可避免在每处 schema 槽位重复枚举 object/array/map/scalar/ref。
 const SchemaAlias = "_types.schemas.*"
@@ -744,10 +750,11 @@ func injectFamilyParams(s *Schema) {
 var (
 	goConcreteRe = regexp.MustCompile(`^(map\[string\](any|string)|\[\]byte|[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*)$`)
 	pgConcrete   = map[string]bool{
-		"smallint": true, "integer": true, "bigint": true, "smallserial": true, "serial": true, "bigserial": true,
-		"text": true, "varchar": true, "char": true, "character varying": true, "character": true, "bpchar": true, "name": true,
+		"smallint": true, "integer": true, "bigint": true,
+		"smallserial": true, "serial": true, "bigserial": true,
+		"text": true, "char": true,
 		"tsvector": true, "tsquery": true,
-		"numeric": true, "decimal": true, "boolean": true, "real": true, "double precision": true,
+		"numeric": true, "boolean": true, "real": true, "double precision": true,
 		"date": true, "time": true, "timetz": true, "timestamp": true, "timestamptz": true,
 		"json": true, "jsonb": true, "bytea": true,
 		"bit": true, "varbit": true, "xml": true,
@@ -900,6 +907,9 @@ func validateCustomTypes(path string, families map[string]ValueTypeFamily, basic
 		}
 		fam := families[family]
 		for pname := range custom.Params {
+			if TableOnlyBasicsParams[pname] {
+				return fmt.Errorf("%s: custom type %s param %s is table-only", path, name, pname)
+			}
 			if _, ok := fam.Params[pname]; ok {
 				continue
 			}

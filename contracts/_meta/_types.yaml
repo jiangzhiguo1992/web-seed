@@ -14,9 +14,9 @@ basics:
   bytes:
     description: "二进制"
     params:
+      fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
       min_len: { type: _types.basics.integer.32, required: false, min: 0, description: "最小长度" }
       max_len: { type: _types.basics.integer.32, required: false, min: 1, description: "最大长度" }
-      fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
     types:
       bytes: { go: "[]byte", pg: [ bytea ], ts: string }
   bit:
@@ -27,25 +27,25 @@ basics:
     types:
       bit: { go: big.Int, pg: [ bit, varbit ], ts: number }
   string:
-    description: "字符序列；kind 选择 text 或全文检索类型；varchar/char 由 max_len/fixed 表达"
+    description: "字符序列；kind 选择 text 或全文检索类型；fixed:true + max_len 用 char，其余用 text"
     params:
       kind: { type: _types.basics.string, required: false, enum: [ text, tsvector, tsquery ], default: text, description: "字符存储类型" }
+      fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
       min_len: { type: _types.basics.integer.32, required: false, min: 0, description: "最小长度" }
       max_len: { type: _types.basics.integer.32, required: false, min: 1, description: "最大长度" }
-      fixed: { type: _types.basics.boolean, required: false, default: false, description: "定长" }
       pattern: { type: _types.basics.string, required: false, description: "写入前校验正则" }
       normalize: { type: _types.basics.string, required: false, enum: [ lower, upper ], description: "写入前归一" }
     types:
-      string: { go: string, pg: [ text, varchar, char, character varying, character, bpchar, name, tsvector, tsquery ], ts: string }
+      string: { go: string, pg: [ text, char, tsvector, tsquery ], ts: string }
   boolean:
     description: "布尔值"
     params: { }
     types:
       boolean: { go: bool, pg: [ boolean ], ts: boolean }
   integer:
-    description: "整数；位宽由类型引用的 variant 决定（integer.8/16/32/64），unsigned 只影响取值校验，不改变 Go/PG/TS 落型"
+    description: "整数；位宽由类型引用的 variant 决定（integer.8/16/32/64），unsigned 不存在；auto_increment 只允许出现在表列，选择 PostgreSQL smallserial/serial/bigserial"
     params:
-      unsigned: { type: _types.basics.boolean, required: false, default: false, description: "无符号" }
+      auto_increment: { type: _types.basics.boolean, required: false, default: false, description: "PostgreSQL 自增（smallserial/serial/bigserial）；仅表列可用，与 default/default_sql 互斥且要求 nullable:false" }
       min: { type: _types.basics.integer.64, required: false, description: "下限" }
       max: { type: _types.basics.integer.64, required: false, description: "上限" }
     types:
@@ -69,7 +69,7 @@ basics:
       min: { type: _types.basics.decimal, required: false, description: "下限" }
       max: { type: _types.basics.decimal, required: false, description: "上限" }
     types:
-      decimal: { go: decimal.Decimal, pg: [ numeric, decimal ], ts: number }
+      decimal: { go: decimal.Decimal, pg: [ numeric ], ts: number }
   datetime:
     description: "日期/时间；mode 选择日期、时间或日期时间，timezone 带时区，time 不带时区"
     params:

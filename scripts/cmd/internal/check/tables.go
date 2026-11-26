@@ -505,11 +505,6 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 			}
 		}
 		c.checkDefaultExclusive(m, rel, i, n)
-		if n == "id" {
-			if unsigned, _ := m["unsigned"].(bool); unsigned {
-				c.rulef("base-columns", "%s: base id must not be unsigned", rel)
-			}
-		}
 	}
 	want := append([]string(nil), baseColumns...)
 	sort.Strings(names)
@@ -575,6 +570,7 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 			if !isBasics {
 				family = t
 			}
+			c.checkIntegerAutoIncrement(m, t, rel, i, name)
 			c.checkFamilyParams(m, family, rel, i, name, schema)
 		}
 	}
@@ -750,6 +746,17 @@ func (c *Checker) checkDoNotSpecificity(doc map[string]any, rel, stem string, ta
 
 // checkDefaultExclusive 校验列的 default 与 default_sql 互斥。
 func (c *Checker) checkDefaultExclusive(m map[string]any, rel string, index int, name string) {
+	if auto, _ := m["auto_increment"].(bool); auto {
+		if _, ok := m["default"]; ok {
+			c.rulef("column-type-supported", "%s: columns[%d] (%s): auto_increment must not declare default", rel, index, name)
+		}
+		if _, ok := m["default_sql"]; ok {
+			c.rulef("column-type-supported", "%s: columns[%d] (%s): auto_increment must not declare default_sql", rel, index, name)
+		}
+		if nullable, _ := m["nullable"].(bool); nullable {
+			c.rulef("column-type-supported", "%s: columns[%d] (%s): auto_increment requires nullable:false", rel, index, name)
+		}
+	}
 	if _, ok := m["default"]; !ok {
 		return
 	}
@@ -843,6 +850,11 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 			c.rulef("schema.types", "data.types.custom_types.%s: unknown type family %s", name, family)
 			continue
 		}
+		for pname := range customType.Params {
+			if contractspec.TableOnlyBasicsParams[pname] {
+				c.rulef("family-params", "data.types.custom_types.%s: param %q is table-only", name, pname)
+			}
+		}
 		c.checkFamilyParams(customType.Params, family, "data.types.custom_types."+name, 0, name, schema)
 	}
 }
@@ -902,6 +914,16 @@ func customTypeNames(vt ValueTypes) []string {
 	return out
 }
 
+// checkIntegerAutoIncrement 校验 integer.8 没有对应的 serial 落型。
+func (c *Checker) checkIntegerAutoIncrement(m map[string]any, t, rel string, i int, name string) {
+	if auto, _ := m["auto_increment"].(bool); !auto {
+		return
+	}
+	if _, variant, ok := contractspec.SplitBasicsRef(t); ok && variant == "8" {
+		c.rulef("column-type-supported", "%s: columns[%d] (%s): integer.8 has no serial variant", rel, i, name)
+	}
+}
+
 // checkFamilyParams 校验列上的类型族扩展字段：
 //   - 该族不允许的扩展字段直接报错；
 //   - required: true 的扩展字段必须出现；
@@ -917,10 +939,6 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 	switch family {
 	case "any":
 		c.rulef("column-type-supported", "%s: columns[%d] (%s): _types.basics.any has no deterministic DDL; use a concrete scalar", rel, i, name)
-	case "integer":
-		if unsigned, _ := m["unsigned"].(bool); unsigned {
-			c.rulef("column-type-supported", "%s: columns[%d] (%s): PostgreSQL has no unsigned integer; use min 0", rel, i, name)
-		}
 	}
 	fam, ok := schema.ValueTypes.TypeFamilies[family]
 	if !ok {
@@ -1009,14 +1027,6 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 			}
 		}
 		if family == "integer" {
-			if unsigned, _ := m["unsigned"].(bool); unsigned {
-				if v, ok := toInt(m["min"]); ok && v < 0 {
-					c.rulef("family-range", "%s: columns[%d] (%s): unsigned integer min must be >= 0", rel, i, name)
-				}
-				if v, ok := toInt(m["default"]); ok && v < 0 {
-					c.rulef("family-range", "%s: columns[%d] (%s): unsigned integer default must be >= 0", rel, i, name)
-				}
-			}
 			if def, ok := toInt(m["default"]); ok {
 				if min, ok := toInt(m["min"]); ok && def < min {
 					c.rulef("family-range", "%s: columns[%d] (%s): default %d < min %d", rel, i, name, def, min)

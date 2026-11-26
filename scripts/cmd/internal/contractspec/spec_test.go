@@ -311,6 +311,9 @@ custom_types:
 	if err := write(valid); err != nil {
 		t.Fatalf("valid custom types rejected: %v", err)
 	}
+	if err := write(strings.Replace(valid, "params: { min: 0, default: 0 }", "params: { auto_increment: true }", 1)); err == nil || !strings.Contains(err.Error(), "table-only") {
+		t.Fatalf("table-only param accepted in custom type: %v", err)
+	}
 	if err := write(strings.Replace(valid, "type: _types.basics.integer.64", "type: _types.basics.integer", 1)); err == nil || !strings.Contains(err.Error(), "requires a concrete variant") {
 		t.Fatalf("bare integer accepted: %v", err)
 	}

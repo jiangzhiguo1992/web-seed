@@ -207,26 +207,26 @@ type table struct {
 }
 
 type column struct {
-	Name        string
-	Type        string
-	Kind        string
-	Mode        string
-	Timezone    bool
-	TimezoneSet bool
-	FracSeconds int
-	Length      int
-	Nullable    bool
-	PrimaryKey  bool
-	Default     any
-	DefaultSQL  string
-	Bits        int
-	Unsigned    bool
-	MaxLen      int
-	MinLen      int
-	Fixed       bool
-	Precision   int
-	Scale       int
-	Comment     string
+	Name          string
+	Type          string
+	Kind          string
+	Mode          string
+	Timezone      bool
+	TimezoneSet   bool
+	FracSeconds   int
+	Length        int
+	Nullable      bool
+	PrimaryKey    bool
+	Default       any
+	DefaultSQL    string
+	Bits          int
+	AutoIncrement bool
+	MaxLen        int
+	MinLen        int
+	Fixed         bool
+	Precision     int
+	Scale         int
+	Comment       string
 }
 
 type check struct {
@@ -368,23 +368,23 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 	for _, item := range asList(raw) {
 		m, _ := asMap(item)
 		c := column{
-			Name:        stringValue(m["name"]),
-			Type:        stringValue(m["type"]),
-			Kind:        stringValue(m["kind"]),
-			Mode:        stringValue(m["mode"]),
-			Timezone:    boolValue(m["timezone"]),
-			FracSeconds: intValue(m["fractional_seconds"]),
-			Nullable:    boolValue(m["nullable"]),
-			PrimaryKey:  boolValue(m["primary_key"]),
-			Default:     m["default"],
-			DefaultSQL:  stringValue(m["default_sql"]),
-			Unsigned:    boolValue(m["unsigned"]),
-			MaxLen:      intValue(m["max_len"]),
-			MinLen:      intValue(m["min_len"]),
-			Fixed:       boolValue(m["fixed"]),
-			Precision:   intValue(m["precision"]),
-			Scale:       intValue(m["scale"]),
-			Comment:     stringValue(m["comment"]),
+			Name:          stringValue(m["name"]),
+			Type:          stringValue(m["type"]),
+			Kind:          stringValue(m["kind"]),
+			Mode:          stringValue(m["mode"]),
+			Timezone:      boolValue(m["timezone"]),
+			FracSeconds:   intValue(m["fractional_seconds"]),
+			Nullable:      boolValue(m["nullable"]),
+			PrimaryKey:    boolValue(m["primary_key"]),
+			Default:       m["default"],
+			DefaultSQL:    stringValue(m["default_sql"]),
+			AutoIncrement: boolValue(m["auto_increment"]),
+			MaxLen:        intValue(m["max_len"]),
+			MinLen:        intValue(m["min_len"]),
+			Fixed:         boolValue(m["fixed"]),
+			Precision:     intValue(m["precision"]),
+			Scale:         intValue(m["scale"]),
+			Comment:       stringValue(m["comment"]),
 		}
 		if c.Name == "" || c.Type == "" {
 			return nil, fmt.Errorf("column name/type required")
@@ -427,8 +427,6 @@ func applyTypeVariant(c *column, family, variant string) {
 func applyCustomParams(c *column, params map[string]any) {
 	for k, v := range params {
 		switch k {
-		case "unsigned":
-			c.Unsigned = boolValue(v)
 		case "min_len":
 			c.MinLen = intValue(v)
 		case "max_len":
@@ -541,9 +539,18 @@ func columnSQL(c column) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if c.AutoIncrement && c.Type != "integer" {
+		return "", fmt.Errorf("column %s: auto_increment requires an integer column", c.Name)
+	}
+	if c.AutoIncrement && (c.DefaultSQL != "" || c.Default != nil) {
+		return "", fmt.Errorf("column %s: auto_increment must not declare default", c.Name)
+	}
 	parts := []string{pgIdent(c.Name), typ}
 	if !c.Nullable {
 		parts = append(parts, "NOT NULL")
+	}
+	if c.Type == "string" && c.MaxLen > 0 && !c.Fixed && c.Kind != "tsvector" && c.Kind != "tsquery" {
+		parts = append(parts, fmt.Sprintf("CHECK (char_length(%s) <= %d)", pgIdent(c.Name), c.MaxLen))
 	}
 	if c.DefaultSQL != "" {
 		parts = append(parts, "DEFAULT ("+c.DefaultSQL+")")
@@ -567,12 +574,21 @@ func defaultKind(kind, fallback string) string {
 func columnType(c column) (string, error) {
 	switch c.Type {
 	case "integer":
-		if c.Unsigned {
-			return "", fmt.Errorf("column %s: PostgreSQL has no unsigned integer; use a range CHECK", c.Name)
-		}
 		bits := c.Bits
 		if bits == 0 {
 			bits = 32
+		}
+		if c.AutoIncrement {
+			switch bits {
+			case 16:
+				return "SMALLSERIAL", nil
+			case 32:
+				return "SERIAL", nil
+			case 64:
+				return "BIGSERIAL", nil
+			default:
+				return "", fmt.Errorf("column %s: integer.%d has no serial variant", c.Name, bits)
+			}
 		}
 		switch bits {
 		case 8, 16:
@@ -591,11 +607,8 @@ func columnType(c column) (string, error) {
 		case "tsquery":
 			return "TSQUERY", nil
 		}
-		if c.MaxLen > 0 {
-			if c.Fixed {
-				return fmt.Sprintf("CHAR(%d)", c.MaxLen), nil
-			}
-			return fmt.Sprintf("VARCHAR(%d)", c.MaxLen), nil
+		if c.Fixed && c.MaxLen > 0 {
+			return fmt.Sprintf("CHAR(%d)", c.MaxLen), nil
 		}
 		return "TEXT", nil
 	case "timestamp":

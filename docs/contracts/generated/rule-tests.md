@@ -153,11 +153,11 @@
 | data.tables | extends-conflict | extends-conflict | 3 | 0 |
 | data.tables | no-base-columns | no-base-columns | 3 | 0 |
 | data.tables | column-type | column-type | 1 | 0 |
-| data.tables | family-params | family-params | 1 | 1 |
+| data.tables | family-params | family-params | 3 | 1 |
 | data.tables | family-length | family-length | 0 | 1 |
 | data.tables | family-range | family-range | 1 | 1 |
 | data.tables | family-decimal | family-decimal | 1 | 1 |
-| data.tables | column-type-supported | column-type-supported | 2 | 1 |
+| data.tables | column-type-supported | column-type-supported | 3 | 1 |
 | data.tables | index-live-only | index-live-only | 1 | 0 |
 | data.tables | constraint-fields | constraint-fields | 1 | 0 |
 | data.tables | constraint-used-by | constraint-used-by | 1 | 0 |
