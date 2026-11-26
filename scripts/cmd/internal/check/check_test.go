@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
+	openapispec "github.com/yourorg/web-seed/scripts/cmd/internal/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -3954,5 +3955,58 @@ func TestServiceParamDescriptionInMeta(t *testing.T) {
 	}
 	if _, ok := contractspec.FindField(returns.ItemFields, "description"); !ok {
 		t.Fatal("services.returns.description missing")
+	}
+}
+
+func TestHTTPNormalizeFailureKeepsServiceSchemaEnums(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir()
+	copyTree(t, filepath.Join(root, "contracts"), filepath.Join(tmp, "contracts"))
+	httpFile := filepath.Join(tmp, "contracts/capabilities/protocols/http/attachment.yaml")
+	b, err := os.ReadFile(httpFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const contentType = `          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+`
+	if !strings.Contains(string(b), contentType) {
+		t.Fatalf("fixture Content-Type line not found")
+	}
+	if err := os.WriteFile(httpFile, []byte(strings.Replace(string(b), contentType, "", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs := Run(tmp)
+	joined := strings.Join(errs, "\n")
+	if !strings.Contains(joined, "[http-shape]") || !strings.Contains(joined, "requires Content-Type header") {
+		t.Fatalf("missing real http-shape error: %v", errs)
+	}
+	if strings.Contains(joined, "[enum-used-by]") {
+		t.Fatalf("service-schema enum usage was dropped:\n%s", joined)
+	}
+}
+
+func TestRawHTTPOpsSecuredStatuses(t *testing.T) {
+	doc := map[string]any{
+		"paths": map[string]any{"/x": map[string]any{"post": map[string]any{
+			"id": "cap.protocols.http.x.create",
+			"request": map[string]any{
+				"headers": []any{map[string]any{"name": "Authorization", "auth": "Bearer"}},
+				"body":    map[string]any{"kind": "json"},
+			},
+			"response": map[string]any{"201": map[string]any{}},
+		}}},
+	}
+	policy := httpPolicy{Secured: []int{401, 403}, Body: []int{201}}
+	ops := rawHTTPOps(doc, openapispec.HTTPMount{}, policy, "stable")
+	if len(ops) != 1 {
+		t.Fatalf("raw ops = %v", ops)
+	}
+	for _, status := range []int{201, 401, 403} {
+		if !ops[0].Statuses[status] {
+			t.Fatalf("status %d missing: %v", status, ops[0].Statuses)
+		}
 	}
 }

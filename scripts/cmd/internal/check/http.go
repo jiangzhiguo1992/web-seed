@@ -794,6 +794,12 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 				if op.Service == "" {
 					continue
 				}
+				if _, ok := serviceMeta[op.Service]; !ok {
+					continue
+				}
+				if jobServices[op.Service] {
+					continue
+				}
 				exposedServices[op.Service] = true
 				serviceOps[op.Service] = append(serviceOps[op.Service], op.Method+" "+op.Path)
 			}
@@ -1051,7 +1057,19 @@ func rawHTTPOps(doc map[string]any, mount openapispec.HTTPMount, policy httpPoli
 			for _, n := range policy.Always {
 				statuses[n] = true
 			}
-			if len(asList(op["security"])) > 0 {
+			secured := len(asList(op["security"])) > 0
+			if !secured {
+				if request, ok := asMap(op["request"]); ok {
+					for _, rawHeader := range asList(request["headers"]) {
+						header, _ := asMap(rawHeader)
+						if name, _ := header["name"].(string); strings.EqualFold(name, "Authorization") {
+							secured = true
+							break
+						}
+					}
+				}
+			}
+			if secured {
 				for _, n := range policy.Secured {
 					statuses[n] = true
 				}

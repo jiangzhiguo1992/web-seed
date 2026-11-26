@@ -80,6 +80,18 @@ func TestGeneratedRangeDriftFiltering(t *testing.T) {
 	if isGeneratedDriftError("[entity-validation-ref] data.entities.x.missing: unknown validation") {
 		t.Fatal("forward validation ref must not be filtered")
 	}
+	if !isGeneratedDriftError("[query-index-ref] query data.queries.x.get: index uq_x_name does not list the query in used_by") {
+		t.Fatal("index used_by drift must be treated as gen-graph drift")
+	}
+	if isGeneratedDriftError("[query-index-ref] query data.queries.x.get: index_ref table data.tables.y is not read by the query") {
+		t.Fatal("forward index_ref table must not be filtered")
+	}
+	if !isGeneratedDriftError("[query-index-used-by] query data.queries.x.get: index uq_x_name lists the query but index_ref does not") {
+		t.Fatal("reverse index used_by drift must be treated as gen-graph drift")
+	}
+	if !isGeneratedDriftError("[index-used-by-ref] x: indexes[0] (uq_x_name): unknown query data.queries.x.gone") {
+		t.Fatal("stale generated index used_by entry must be treated as gen-graph drift")
+	}
 }
 
 func TestValidationRefs(t *testing.T) {

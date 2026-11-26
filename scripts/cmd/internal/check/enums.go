@@ -340,7 +340,7 @@ func (c *Checker) collectHTTPEnumRefs(doc map[string]any, fileID string, service
 			if opID == "" {
 				continue
 			}
-			c.collectEnumRefs(op, func(enumID string) {
+			c.collectServiceEnumRefs(op, serviceSchemas, func(enumID string) {
 				rawEnums[opID] = append(rawEnums[opID], enumID)
 			})
 		}
@@ -557,6 +557,9 @@ func EnumUsedBy(root string) (map[string][]string, error) {
 
 // isGeneratedDriftError 判断错误是否只是生成字段尚未写回；gen-graph 需要先写回再校验。
 func isGeneratedDriftError(e string) bool {
+	if strings.Contains(e, "does not list the query in used_by") || strings.Contains(e, "lists the query but index_ref does not") {
+		return true
+	}
 	for _, rule := range []string{
 		"[enum-used-by]",
 		"[entity-included-by]",
@@ -567,6 +570,8 @@ func isGeneratedDriftError(e string) bool {
 		"[table-queries-generated]",
 		"[table-referenced-by]",
 		"[query-used-by]",
+		"[index-used-by-ref]",
+		"[query-index-used-by]",
 		"[schema.generated-range]",
 	} {
 		if strings.Contains(e, rule) {
