@@ -16,7 +16,7 @@
 | `quality.yaml` | 覆盖率门槛、必测路径、禁止项 | tested（quality-refs） |
 | `config/env.json` | 环境变量 schema | tested（JSON Schema + 环境枚举） |
 | `architecture/go_arch.yaml` | Go 分层与模块边界 | tested（architecture-refs） |
-| `architecture/web_deps.json` | 前端依赖方向 | tested（层引用与未知字段校验） |
+| `architecture/web_deps.json` | 前端依赖方向 | tested（字段类型、层引用与未知字段校验） |
 | `design/tokens.json` | 设计令牌 | review-only |
 | `observability/log_fields.yaml` | 日志字段、PII 规则 | tested（log-field-refs） |
 | `observability/metrics.yaml` | 指标名与标签 | tested（metric-shape） |

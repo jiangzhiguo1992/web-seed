@@ -1188,6 +1188,7 @@ func TestRenderedQueryParamBindsIDColumn(t *testing.T) {
 		tableColumns: map[string]map[string]columnMeta{
 			"data.tables.note": {"id": {typ: "integer", primaryKey: true}},
 		},
+		tableTypeFamilies: map[string]bool{"id": true, "integer": true},
 		valueTypes: ValueTypes{
 			TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
 			CustomTypes: map[string]contractspec.CustomValueType{
@@ -1206,6 +1207,7 @@ func TestQueryParamColumnIntegerBits(t *testing.T) {
 		tableColumns: map[string]map[string]columnMeta{
 			"data.tables.x": {"id": {typ: "integer", primaryKey: true}},
 		},
+		tableTypeFamilies: map[string]bool{"id": true, "integer": true},
 		valueTypes: ValueTypes{
 			TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
 			CustomTypes: map[string]contractspec.CustomValueType{
@@ -1709,5 +1711,40 @@ func TestServiceTypesCompatibleBatchObject(t *testing.T) {
 	}
 	if c.serviceTypesCompatible("_types.basics.string", "_types.structures.list<_types.structures.object>") {
 		t.Fatal("string accepted as batch object param")
+	}
+}
+
+func TestEntityFieldIntegerBits(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {
+				"id":   {typ: "_types.basics.id", primaryKey: true},
+				"sort": {typ: "_types.basics.integer.32"},
+			},
+		},
+		tableTypeFamilies: map[string]bool{"id": true, "integer": true},
+		valueTypes: ValueTypes{
+			TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
+			CustomTypes: map[string]contractspec.CustomValueType{
+				"id": {Type: "_types.basics.integer.64"},
+			},
+		},
+	}
+	e := &entityInfo{ID: "data.entities.x", Rel: "x.yaml", Tables: []string{"data.tables.x"}}
+	c.checkScalarField(e, scalarField("ID", "_types.basics.integer.32", "data.tables.x", "id"), "x.yaml: fields.ID", map[string]string{})
+	if !strings.Contains(entityErrs(c), "integer bits 32 does not match column id bits 64") {
+		t.Fatalf("integer width mismatch not reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkScalarField(e, scalarField("Sort", "_types.basics.integer.32", "data.tables.x", "sort"), "x.yaml: fields.Sort", map[string]string{})
+	if len(c.errs) != 0 {
+		t.Fatalf("matching integer width reported: %v", c.errs)
+	}
+
+	c.errs = nil
+	c.checkScalarField(e, scalarField("ID2", "_types.basics.id", "data.tables.x", "id"), "x.yaml: fields.ID2", map[string]string{})
+	if len(c.errs) != 0 {
+		t.Fatalf("id (integer.64) must match column id: %v", c.errs)
 	}
 }

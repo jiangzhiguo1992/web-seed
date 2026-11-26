@@ -3373,3 +3373,45 @@ tables:
 		t.Fatalf("missing not_supported_topologies reported: %v", c.errs)
 	}
 }
+
+func TestCanonicalTypeRef(t *testing.T) {
+	c := &Checker{valueTypes: ValueTypes{CustomTypes: map[string]contractspec.CustomValueType{
+		"id":         {Type: "_types.basics.integer.64"},
+		"page_limit": {Type: "_types.basics.integer.32"},
+		"money":      {Type: "_types.basics.decimal"},
+	}}}
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"_types.basics.id", "integer.64"},
+		{"*_types.basics.id", "integer.64"},
+		{"_types.structures.list<_types.basics.id>", "List<integer.64>"},
+		{"List<_types.basics.id>", "List<integer.64>"},
+		{"_types.structures.set<_types.basics.id>", "set<integer.64>"},
+		{"_types.structures.array<_types.basics.id>", "array<integer.64>"},
+		{"_types.structures.map<_types.basics.id>", "map<integer.64>"},
+		{"_types.basics.integer.32", "integer.32"},
+		{"_types.basics.page_limit", "integer.32"},
+		{"_types.basics.money", "decimal"},
+		{"data.enums.x", "data.enums.x"},
+		{"_types.schemas.object", "object"},
+	}
+	for _, tc := range cases {
+		if got := c.canonicalTypeRef(tc.in); got != tc.want {
+			t.Fatalf("canonicalTypeRef(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	if !c.sameServiceType("*_types.basics.id", "_types.basics.integer.64") {
+		t.Fatal("pointer id must equal integer.64")
+	}
+	if !c.sameServiceType("_types.structures.list<_types.basics.id>", "List<_types.basics.integer.64>") {
+		t.Fatal("list of custom id must equal List<integer.64>")
+	}
+	if !c.sameServiceType("_types.structures.map<_types.basics.id>", "_types.structures.map<_types.basics.integer.64>") {
+		t.Fatal("map of custom id must equal map of integer.64")
+	}
+	if c.sameServiceType("_types.structures.set<_types.basics.id>", "_types.structures.set<_types.basics.integer.32>") {
+		t.Fatal("set of integer.64 must not equal set of integer.32")
+	}
+}

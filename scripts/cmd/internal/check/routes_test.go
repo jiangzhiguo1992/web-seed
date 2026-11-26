@@ -328,10 +328,17 @@ func TestConfigEnvValid(t *testing.T) {
 func TestWebDepsValid(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/platform/architecture/web_deps.json", `{
+  "$comment": "x",
+  "id": "platform.architecture.web_deps",
+  "summary": "x",
+  "stability": "draft",
+  "enforcement": "tested",
+  "consumers": ["tools"],
+  "generates": [".dependency-cruiser.js"],
+  "do_not": [],
   "layers": [ { "name": "app", "in": "src/app/**" }, { "name": "shared", "in": "src/shared/**" } ],
   "rules": [ { "from": "app", "mayDependOn": ["shared"] } ],
-  "generates": [".dependency-cruiser.js"],
-  "forbiddenModules": [ { "name": "no-fetch" } ]
+  "forbiddenModules": [ { "name": "no-fetch", "from": { "path": "src/**" }, "to": { "path": "**/fetch" } } ]
 }`)
 	c := &Checker{root: root}
 	c.checkWebDeps()
@@ -358,10 +365,20 @@ func TestConfigEnvInvalid(t *testing.T) {
 func TestWebDepsInvalid(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/platform/architecture/web_deps.json", `{
+  "$comment": "x",
+  "id": "platform.architecture.web_deps",
+  "summary": "x",
+  "stability": "draft",
+  "enforcement": "tested",
+  "consumers": ["tools"],
+  "generates": ["x"],
+  "do_not": [],
   "layers": [ { "name": "app", "in": "src/app/**" } ],
   "rules": [ { "from": "app", "mayDependOn": ["missing"], "forbid": ["missing"] } ],
-  "generates": ["x"],
-  "forbiddenModules": [ { "name": "x" }, { "name": "x" } ]
+  "forbiddenModules": [
+    { "name": "x", "from": { "path": "src/**" }, "to": { "path": "src/x/**" } },
+    { "name": "x", "from": { "path": "src/**" }, "to": { "path": "src/y/**" } }
+  ]
 }`)
 	c := &Checker{root: root}
 	c.checkWebDeps()
@@ -590,10 +607,17 @@ func TestNeverLogPatterns(t *testing.T) {
 func TestWebDepsUnknownField(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/platform/architecture/web_deps.json", `{
+  "$comment": "x",
+  "id": "platform.architecture.web_deps",
+  "summary": "x",
+  "stability": "draft",
+  "enforcement": "tested",
+  "consumers": ["tools"],
+  "generates": ["x"],
+  "do_not": [],
   "layers": [ { "name": "app", "in": "src/app/**", "bogus": 1 } ],
   "rules": [ { "from": "app", "mayDependOn": [], "bogus": 1 } ],
-  "generates": ["x"],
-  "forbiddenModules": [ { "name": "x", "from": { "path": "src/**", "bogus": 1 }, "bogus": 1 } ],
+  "forbiddenModules": [ { "name": "x", "from": { "path": "src/**", "bogus": 1 }, "to": { "path": "src/x/**" }, "bogus": 1 } ],
   "bogus": 1
 }`)
 	c := &Checker{root: root}
@@ -606,6 +630,48 @@ func TestWebDepsUnknownField(t *testing.T) {
 		`forbiddenModules[0] has unknown field "bogus"`,
 		`forbiddenModules[0].from has unknown field "bogus"`,
 		"[schema.unknown-field]",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+func TestWebDepsRequiredAndTypes(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/platform/architecture/web_deps.json", `{
+  "stability": "ghost",
+  "enforcement": "nope",
+  "layers": [],
+  "rules": [ { "from": "" } ],
+  "generates": [],
+  "forbiddenModules": [
+    { "name": "x" },
+    { "name": "y", "from": {}, "to": { "path": "" } }
+  ]
+}`)
+	c := &Checker{root: root}
+	c.checkWebDeps()
+	got := strings.Join(c.errs, "\n")
+	for _, want := range []string{
+		`web_deps missing required field "id"`,
+		`web_deps missing required field "summary"`,
+		`web_deps missing required field "consumers"`,
+		`web_deps missing required field "do_not"`,
+		"web_deps.stability must be one of",
+		"web_deps.enforcement must be one of",
+		"web_deps.layers must not be empty",
+		`rules[0].from must be a non-empty string`,
+		"web_deps.generates must not be empty",
+		`forbiddenModules[0] missing required field "from"`,
+		`forbiddenModules[0] missing required field "to"`,
+		"forbiddenModules[1].from requires path or pathNot",
+		"forbiddenModules[1].to.path must be a non-empty string",
+		"forbiddenModules[1].to requires path or pathNot",
+		"[schema.required]",
+		"[schema.type]",
+		"[schema.enum]",
+		"[schema.range]",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)

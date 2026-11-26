@@ -735,8 +735,8 @@ func TestStorageDocShape(t *testing.T) {
 	}
 
 	doc["not_supported_topologies"] = []any{}
-	if got := validate(); !strings.Contains(got, "0 items < min_items 1") || !strings.Contains(got, "[schema.range]") {
-		t.Fatalf("empty not_supported_topologies list not reported: %s", got)
+	if got := validate(); strings.Contains(got, "not_supported_topologies") {
+		t.Fatalf("empty not_supported_topologies must be allowed: %s", got)
 	}
 }
 

@@ -227,9 +227,17 @@ func (c *Checker) canonicalTypeRef(typ string) string {
 	for strings.HasPrefix(s, "*") {
 		s = strings.TrimSpace(strings.TrimPrefix(s, "*"))
 	}
-	if strings.HasPrefix(s, "_types.structures.list<") && strings.HasSuffix(s, ">") {
-		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, "_types.structures.list<"), ">"))
-		return "List<" + c.canonicalTypeRef(inner) + ">"
+	for _, g := range []struct{ prefix, wrap string }{
+		{"_types.structures.list<", "List<"},
+		{"_types.structures.set<", "set<"},
+		{"_types.structures.array<", "array<"},
+		{"_types.structures.map<", "map<"},
+		{"List<", "List<"},
+	} {
+		if strings.HasPrefix(s, g.prefix) && strings.HasSuffix(s, ">") {
+			inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(s, g.prefix), ">"))
+			return g.wrap + c.canonicalTypeRef(inner) + ">"
+		}
 	}
 	if custom, ok := c.valueTypes.CustomTypes[contractspec.BareTypeName(s)]; ok {
 		if family, variant, ok := custom.Basics(); ok {
@@ -241,6 +249,7 @@ func (c *Checker) canonicalTypeRef(typ string) string {
 	}
 	s = strings.ReplaceAll(s, "_types.basics.", "")
 	s = strings.ReplaceAll(s, "_types.structures.", "")
+	s = strings.ReplaceAll(s, "_types.schemas.", "")
 	return s
 }
 
