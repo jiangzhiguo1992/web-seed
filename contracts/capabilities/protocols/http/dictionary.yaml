@@ -102,6 +102,31 @@ paths:
             - platform.errors.DICTIONARY_PARENT_INVALID
 
 
+  /admin/code/{code}:
+    get:
+      id: cap.protocols.http.dictionary.get_by_code
+      name: getDictionaryByCode
+      summary: "按编码获取字典"
+      service: cap.services.dictionary.get
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        path:
+          - { name: code, type: _types.basics.string, description: "字典编码", to: params.code }
+      response:
+        200:
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
+          body:
+            kind: json
+            type: data.entities.dictionary
+        404:
+          msg: "资源不存在"
+          errors:
+            - platform.errors.DICTIONARY_NOT_FOUND
+
   /admin/{id}:
     get:
       id: cap.protocols.http.dictionary.get

@@ -1,0 +1,86 @@
+id: cap.protocols.http.unit
+summary: "计量单位 HTTP 接口"
+owner_module: system
+schema_version: 1
+stability: draft
+do_not:
+  - "单位是只读参考数据；不要新增写入端点"
+  - "响应返回 data.entities.unit 或 UnitPage；不要暴露表行"
+
+mount:
+  api_version: v1
+  path: /unit
+  audience: [ admin ]
+
+paths:
+  /admin:
+    get:
+      id: cap.protocols.http.unit.list
+      name: listUnits
+      summary: "按量纲分页列出计量单位"
+      service: cap.services.unit.list
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        query:
+          - { name: dimension, required: false, type: _types.basics.string, description: "量纲；省略表示全部", to: params.dimension }
+          - { name: offset, required: false, type: _types.basics.page_offset, description: "分页偏移；默认 0", to: params.offset }
+          - { name: limit, required: false, type: _types.basics.page_limit, description: "分页大小；默认 20", to: params.limit }
+      response:
+        200:
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
+          body:
+            kind: json
+            type: cap.services.unit.schemas.UnitPage
+
+  /admin/{code}:
+    get:
+      id: cap.protocols.http.unit.get
+      name: getUnit
+      summary: "按编码获取计量单位"
+      service: cap.services.unit.get
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        path:
+          - { name: code, type: _types.basics.string, description: "单位编码", to: params.code }
+      response:
+        200:
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
+          body:
+            kind: json
+            type: data.entities.unit
+        404:
+          msg: "计量单位不存在"
+          errors:
+            - platform.errors.UNIT_NOT_FOUND
+
+  /admin/{id}/children:
+    get:
+      id: cap.protocols.http.unit.list_children
+      name: listUnitChildren
+      summary: "按父单位分页列出直接子单位"
+      service: cap.services.unit.list_children
+      request:
+        headers:
+          - { name: Authorization, auth: Bearer, description: "JWT access token" }
+          - { name: Accept, required: false, value: application/json, description: "期望响应媒体类型" }
+        path:
+          - { name: id, type: _types.basics.id, description: "父单位 ID", to: params.parent_id }
+        query:
+          - { name: offset, required: false, type: _types.basics.page_offset, description: "分页偏移；默认 0", to: params.offset }
+          - { name: limit, required: false, type: _types.basics.page_limit, description: "分页大小；默认 20", to: params.limit }
+      response:
+        200:
+          headers:
+            - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
+          body:
+            kind: json
+            type: cap.services.unit.schemas.UnitPage

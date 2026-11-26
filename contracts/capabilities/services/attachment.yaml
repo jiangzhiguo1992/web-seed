@@ -127,39 +127,6 @@ services:
     used_by:
       - cap.protocols.http.attachment.get
 
-  - name: get_by_key
-    summary: "按对象 key 读取附件"
-    visibility: internal
-    tx_mode: read_only
-    params:
-      - { name: ctx, type: context.Context }
-      - { name: object_key, type: _types.basics.string }
-    returns:
-      - { name: attachment, type: data.entities.attachment, value: step.get_attachment_by_key.attachment, nullable: true }
-      - { name: err, type: error, value: "*" }
-    steps:
-      - id: get_attachment_by_key
-        kind: query
-        summary: "调用 data.queries.attachment.get_attachment_by_key"
-        input:
-          - { name: object_key, value: params.object_key, description: "对象存储 key" }
-        output:
-          - { name: attachment, type: data.entities.attachment, description: "附件；不存在时为 null", nullable: true }
-        errors: [ ]
-        query: data.queries.attachment.get_attachment_by_key
-        goto: check
-      - id: check
-        kind: logic
-        summary: "软删行按不存在处理"
-        input:
-          - { name: attachment, value: step.get_attachment_by_key.attachment, description: "查询到的附件" }
-        output: [ ]
-        errors:
-          - platform.errors.ATTACHMENT_NOT_FOUND
-        rules: [ ]
-        goto: $end
-    used_by: []
-
   - name: create_upload
     summary: "创建附件元数据并返回预签名上传票据"
     visibility: public

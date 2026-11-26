@@ -179,7 +179,8 @@ services:
           - platform.errors.DICTIONARY_NOT_FOUND
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.dictionary.get_by_code
 
   - name: get_by_id
     summary: "按 ID 读取字典节点"

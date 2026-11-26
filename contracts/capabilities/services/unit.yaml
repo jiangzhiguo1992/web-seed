@@ -40,8 +40,19 @@ services:
           - { name: unit, type: data.entities.unit, description: "单位", nullable: true }
         errors: [ ]
         query: data.queries.unit.get_unit_by_code
+        goto: check
+      - id: check
+        kind: logic
+        summary: "不存在时返回 UNIT_NOT_FOUND"
+        input:
+          - { name: unit, value: step.load.unit, description: "查询到的单位" }
+        output: [ ]
+        errors:
+          - platform.errors.UNIT_NOT_FOUND
+        rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.unit.get
 
   - name: list
     summary: "按量纲分页列出计量单位"
@@ -50,8 +61,8 @@ services:
     params:
       - { name: ctx, type: context.Context }
       - { name: dimension, type: _types.basics.string, nullable: true }
-      - { name: offset, type: _types.basics.integer.32 }
-      - { name: limit, type: _types.basics.integer.32 }
+      - { name: offset, type: _types.basics.integer.32, nullable: true, default: 0 }
+      - { name: limit, type: _types.basics.integer.32, nullable: true, default: 20 }
     returns:
       - { name: page, type: cap.services.unit.schemas.UnitPage, value: step.paginate.page }
       - { name: err, type: error, value: "*" }
@@ -80,7 +91,8 @@ services:
         errors: [ ]
         rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.unit.list
 
   - name: list_children
     summary: "按父单位列出直接子单位"
@@ -89,10 +101,10 @@ services:
     params:
       - { name: ctx, type: context.Context }
       - { name: parent_id, type: _types.basics.id }
-      - { name: offset, type: _types.basics.integer.32 }
-      - { name: limit, type: _types.basics.integer.32 }
+      - { name: offset, type: _types.basics.integer.32, nullable: true, default: 0 }
+      - { name: limit, type: _types.basics.integer.32, nullable: true, default: 20 }
     returns:
-      - { name: units, type: _types.structures.list<data.entities.unit>, value: step.children.units }
+      - { name: page, type: cap.services.unit.schemas.UnitPage, value: step.paginate.page }
       - { name: err, type: error, value: "*" }
     steps:
       - id: children
@@ -106,5 +118,18 @@ services:
           - { name: units, type: _types.structures.list<data.entities.unit>, description: "直接子单位列表" }
         errors: [ ]
         query: data.queries.unit.list_unit_children
+        goto: paginate
+      - id: paginate
+        kind: logic
+        summary: "把子单位列表包装成分页结果"
+        input:
+          - { name: units, value: step.children.units, description: "查询到的子单位列表" }
+          - { name: offset, value: params.offset, description: "分页偏移" }
+          - { name: limit, value: params.limit, description: "分页大小" }
+        output:
+          - { name: page, type: cap.services.unit.schemas.UnitPage, description: "单位分页结果" }
+        errors: [ ]
+        rules: [ ]
         goto: $end
-    used_by: []
+    used_by:
+      - cap.protocols.http.unit.list_children
