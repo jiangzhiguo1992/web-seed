@@ -1,6 +1,7 @@
 package check
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -45,6 +46,27 @@ func TestConstraintRefs(t *testing.T) {
 	c.checkConstraintRefs()
 	if !strings.Contains(strings.Join(c.errs, "\n"), "does not write table data.tables.c") {
 		t.Fatalf("multi-table write referencing unwritten table not reported: %v", c.errs)
+	}
+}
+
+func TestMissingGeneratedUsedByIsRequired(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, err := loadSchema(filepath.Join(root, "contracts/_meta/data.tables.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := minimalTableDoc()
+	doc["constraints"] = []any{map[string]any{
+		"name": "ck_x", "expr": "x > 0", "on_violation": "platform.errors.COMMON_INTERNAL",
+	}}
+	c := &Checker{}
+	c.validateDoc(doc, schema.Fields, "contracts/data/tables/x.yaml")
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, `[schema.required]`) || !strings.Contains(got, `missing required field "used_by"`) {
+		t.Fatalf("missing generated used_by must stay required: %v", c.errs)
 	}
 }
 

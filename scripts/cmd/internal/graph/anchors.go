@@ -912,19 +912,35 @@ func syncItemFieldBlock(path, listKey, itemKey, itemValue, field string, values 
 	}
 	itemStart := -1
 	for i := listStart + 1; i < len(lines); i++ {
-		if newLine, matched, err := syncFlowItemLine(lines[i], itemKey, itemValue, field, values); matched {
+		if isFlowItemStart(lines[i]) {
+			joined := lines[i]
+			end := i
+			open := strings.Index(joined, "{")
+			for flowClose(joined, open) < 0 && end+1 < len(lines) {
+				end++
+				joined += "\n" + lines[end]
+			}
+			if flowClose(joined, open) < 0 {
+				return false, fmt.Errorf("%s: unterminated flow mapping starting at line %d", path, i+1)
+			}
+			newText, matched, err := syncFlowText(joined, itemKey, itemValue, field, values)
 			if err != nil {
 				return false, err
 			}
-			if newLine == lines[i] {
-				return false, nil
+			if matched {
+				if newText == joined {
+					return false, nil
+				}
+				replaced := strings.Split(newText, "\n")
+				lines = append(lines[:i], append(replaced, lines[end+1:]...)...)
+				out := strings.Join(lines, "\n") + "\n"
+				if out == string(b) {
+					return false, nil
+				}
+				return true, os.WriteFile(path, []byte(out), 0o644)
 			}
-			lines[i] = newLine
-			out := strings.Join(lines, "\n") + "\n"
-			if out == string(b) {
-				return false, nil
-			}
-			return true, os.WriteFile(path, []byte(out), 0o644)
+			i = end
+			continue
 		}
 		trim := strings.TrimPrefix(lines[i], "  - ")
 		if strings.HasPrefix(trim, itemKey+": ") && strings.TrimSpace(strings.TrimPrefix(trim, itemKey+": ")) == itemValue {
@@ -990,37 +1006,37 @@ func syncItemFieldBlock(path, listKey, itemKey, itemValue, field string, values 
 	return true, os.WriteFile(path, []byte(out), 0o644)
 }
 
-// syncFlowItemLine 处理单行 flow mapping 列表项：- { name: x, used_by: [] }。
-// 找到 itemKey=itemValue 的项后，替换或插入 field；保留行内其他内容与缩进。
-func syncFlowItemLine(line, itemKey, itemValue, field string, values []string) (string, bool, error) {
-	open := strings.Index(line, "{")
-	if open < 0 || !strings.HasPrefix(strings.TrimSpace(line), "- {") {
-		return line, false, nil
+// syncFlowText 处理 flow mapping 列表项（单行或多行）：- { name: x, used_by: [] }。
+// 找到 itemKey=itemValue 的项后，替换或插入 field；保留其他内容、缩进与行尾注释。
+func syncFlowText(text, itemKey, itemValue, field string, values []string) (string, bool, error) {
+	open := strings.Index(text, "{")
+	if open < 0 || !isFlowItemStart(text) {
+		return text, false, nil
 	}
-	close := flowClose(line, open)
+	close := flowClose(text, open)
 	if close < 0 {
-		return line, false, nil
+		return text, false, nil
 	}
-	body := line[open+1 : close]
+	body := text[open+1 : close]
 	entries := flowEntries(body)
 	matched := false
 	for _, e := range entries {
-		if e.key == itemKey && flowScalar(e.value) == itemValue {
+		if flowScalar(e.key) == itemKey && flowScalar(e.value) == itemValue {
 			matched = true
 			break
 		}
 	}
 	if !matched {
-		return line, false, nil
+		return text, false, nil
 	}
 	rendered := renderFlowList(values)
 	for _, e := range entries {
-		if e.key == field {
+		if flowScalar(e.key) == field {
 			newBody := body[:e.valueStart] + rendered + body[e.valueEnd:]
-			return line[:open+1] + newBody + line[close:], true, nil
+			return text[:open+1] + newBody + text[close:], true, nil
 		}
 	}
-	trimmed := strings.TrimRight(body, " ")
+	trimmed := strings.TrimRight(body, " \t\r\n")
 	trailing := body[len(trimmed):]
 	insert := field + ": " + rendered
 	if strings.TrimSpace(trimmed) != "" {
@@ -1030,7 +1046,16 @@ func syncFlowItemLine(line, itemKey, itemValue, field string, values []string) (
 			insert = ", " + insert
 		}
 	}
-	return line[:open+1] + trimmed + insert + trailing + line[close:], true, nil
+	return text[:open+1] + trimmed + insert + trailing + text[close:], true, nil
+}
+
+// isFlowItemStart 判断文本是否以列表项 + flow mapping 开始，允许 - 与 { 之间有空格。
+func isFlowItemStart(s string) bool {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "-") {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(s[1:]), "{")
 }
 
 // flowClose 返回与 open 处 { 匹配的 } 下标；支持嵌套与引号。
@@ -1164,11 +1189,11 @@ func parseFlowEntry(body string, start, end int) (flowEntry, bool) {
 		return flowEntry{}, false
 	}
 	valueStart := colon + 1
-	for valueStart < end && (body[valueStart] == ' ' || body[valueStart] == '\t') {
+	for valueStart < end && (body[valueStart] == ' ' || body[valueStart] == '\t' || body[valueStart] == '\n' || body[valueStart] == '\r') {
 		valueStart++
 	}
 	valueEnd := end
-	for valueEnd > valueStart && (body[valueEnd-1] == ' ' || body[valueEnd-1] == '\t') {
+	for valueEnd > valueStart && (body[valueEnd-1] == ' ' || body[valueEnd-1] == '\t' || body[valueEnd-1] == '\n' || body[valueEnd-1] == '\r') {
 		valueEnd--
 	}
 	return flowEntry{start: start, end: end, valueStart: valueStart, valueEnd: valueEnd, key: key, value: body[valueStart:valueEnd]}, true
