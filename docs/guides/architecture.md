@@ -406,7 +406,7 @@ apps:
 
 ### 5.4 数据层实现约定
 
-契约层规则（基类五列、枚举映射、唯一性、引擎分组、表达式索引）以 `contracts/data/README.md` 为准，本节只列实现侧约定：
+契约层规则（基类五列、枚举映射、唯一性、引擎分组、表达式索引）以 `contracts/_meta/data.*.yaml` 与 `contracts/data/{tables,entities}/_base.yaml` 为准；模块职责与放置判据见 `contracts/data/README.md`。本节只列实现侧约定：
 
 - 业务表可选 `version` 做乐观锁；不是基类字段
 - 软删默认过滤（`deleted_at IS NULL`），必须在 repo 层统一，禁止每处手写
