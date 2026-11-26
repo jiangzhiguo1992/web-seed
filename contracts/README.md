@@ -203,16 +203,16 @@ feature ──> capabilities ──> data
 
 | 边 | 写在 | 字段 |
 |---|---|---|
-| feature → capabilities | 页面契约 | `capability:` / `feature.rules.*` / `cap.lifecycles.*` |
+| feature → capabilities | 页面契约 | `capability`（service）；页面动作的 `available_when`（lifecycle 动作） |
 | capabilities/protocols → capabilities/services | protocol operation | `service` |
 | capabilities/services → capabilities/services | service steps | `kind: service` + `service` |
-| capabilities/services → features/rules | service steps | `kind: logic/transition` + `rules` |
-| capabilities/services → capabilities/lifecycles | service steps | `lifecycle`（create/destroy/transition） |
-| capabilities/lifecycles → capabilities/services | lifecycle action | `step` / `implemented_by`（由 step.lifecycle 生成） |
-| capabilities/services → capabilities/events | service steps | `kind: logic/transition` + `events` |
+| capabilities/services → features/rules | service steps | `kind: logic/when` + `rules` |
+| capabilities/services → capabilities/lifecycles | service steps | `lifecycles[]`（create/destroy/transitions.<name>） |
+| capabilities/lifecycles → capabilities/services | lifecycle action | `implemented_by`（由 step.lifecycles 生成） |
+| capabilities/services → capabilities/events | service steps | `kind: events` + `events` |
 | capabilities/events → capabilities/services | subscribe/crons/dispatches | `service` |
 | capabilities/events → capabilities/events | topic 嵌套 | `subscribe` |
-| capabilities/services → data | service 契约 | `steps[].queries[].query` / query `errors` |
+| capabilities/services → data | service 契约 | `steps[].query` / query `errors` |
 | data.queries → data.tables | 查询项 | `tables` / `index_ref` / `constraints` / `caches` / `archive` |
 | data.entities → data.tables | 实体 | `model.tables` / `source.column` / `type` + `source.join.from/to` |
 | data.tables → 上游（反向） | 表文件 | `table.entities` / `table.references` / `table.referenced_by` / `table.queries`（生成物，checker 校验） |
@@ -227,11 +227,11 @@ capabilities 契约内部按业务主体引用 `rules` / `states` / `events`，�
 |---|---|
 | `returns: data.tables.account.row` | `returns: data.entities.account` |
 | `emits: cap.events.*` | 由 `cap.events.*.publish.emitted_by` 声明；service 的 `kind: events` step 用 `events` 引用 topic 或 dispatch |
-| `x-preconditions: feature.rules.*` | 由 `feature.rules.*.implemented_by` 声明；service 的 `kind: logic/transition` step 引用规则 |
+| `service 条目声明 preconditions` | 由 `feature.rules.*.implemented_by` 声明；service 的 `kind: logic/when` step 用 `rules` 引用规则 |
 
 理由：service 是规则的实现，**实现不反向声明"我实现了谁"**——那由 `implemented_by` / `emitted_by` 锚点。两处都写必然漂移。
 
-capabilities 内部允许 `services → lifecycles/rules/events`：`kind: logic/transition` 的 `rules`、step 的 `lifecycle`、`kind: logic/transition` 的 `events`。这是同组内的业务依据，不是跨层引用。
+capabilities 内部允许 `services → lifecycles/rules/events`：`kind: logic/when` 的 `rules`、任意 kind 的 `lifecycles`、`kind: events` 的 `events`。这是同组内的业务依据，不是跨层引用。
 
 `lifecycles` / `rules` 允许引用 `data.entities.*` 作为业务主体（生命周期的 `subjects[].entity`、规则的实体），但禁止引用 `data.tables` / `data.queries` / `data.storage`。生命周期必须同时写 `subjects[].field`：一个契约描述一个状态机，`subjects[]` 可列出共享该状态机的多个实体状态字段（同枚举、同 `owner_module`）；同一 `(entity, field)` 只能被一份契约声明。`business.*` 已全部移除。
 

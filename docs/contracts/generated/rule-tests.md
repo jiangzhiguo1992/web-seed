@@ -144,8 +144,6 @@
 | data.storage | storage-archive-source | storage-archive-source | 1 | 0 |
 | data.storage | storage-archive-ref | storage-archive-ref | 1 | 0 |
 | data.tables | table-key-order | table-key-order | 0 | 1 |
-| data.tables | table-summary-length | table-summary-length | 1 | 1 |
-| data.tables | column-comment-length | column-comment-length | 1 | 1 |
 | data.tables | base-file | base-file | 2 | 0 |
 | data.tables | base-columns | base-columns | 1 | 0 |
 | data.tables | base-only | base-only | 2 | 0 |

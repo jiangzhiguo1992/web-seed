@@ -16,9 +16,11 @@
 ## 2. 引用方向
 
 ```
-features.pages ──capability──> capabilities（只能引用 service / HTTP operation / lifecycle）
+features.pages ──capability──> services（service ID）
+features.pages ──available_when──> cap.lifecycles（create / destroy / transitions.<name>）
 features.rules ──subject──> data.entities（业务主体）
-services ──kind=logic/transition──> features.rules / cap.lifecycles
+services ──kind=logic|when──> features.rules
+services ──lifecycles──> cap.lifecycles
 features ✗ data.tables / data.queries（禁止直接引用表或查询）
 ```
 

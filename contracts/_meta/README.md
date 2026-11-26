@@ -129,6 +129,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 - `_meta/<type>.yaml` 由 `KnownFields` 严格解析：拼错字段（如 `requred`）直接失败。
 - `_meta` 的 `pattern` / `key_patterns` 必须能编译且整体锚定（`^...$`），在加载期直接失败，避免退化为子串匹配；实例 schema 的 `key_patterns` 同样要求锚定。
 - 字段规范里的 `enum` / `const` / `default` / `examples` 值必须与字段类型兼容，并满足该字段的 `pattern` / `min_len` / `max_len` / `min` / `max`；`unique_key` 必须指向 string 字段；`unique` 只用于集合；`fields` 只用于 object。
+- `default` 只用于可省略字段；`required: true` 的字段不得声明 `default`（加载期直接拒绝）。`contract-new` 的必填字段骨架值由渲染器提供，不写在模板的 `default` 里。
 - 枚举兼容：`name` / `value` / `go_type` / `ts_type` / `code` 只能追加，不得删除或改名；`make contract-compat` 默认对比 `HEAD^1`，pre-commit 用 `make contract-compat-staged` 对比 index，CI 在完整历史 checkout 上执行。
 - 实例结构由 `fields` / `item_fields` 的 `required` / `type` / `enum` / `pattern` / `unique` /
   `unique_key` / `min` / `max` / `min_items` / `min_len` / `max_len` / `len` / `const` / `types` / `key_patterns` 校验；

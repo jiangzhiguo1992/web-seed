@@ -241,14 +241,14 @@ indexes:
 | 错误 | 为什么错 | 正确做法 |
 |---|---|---|
 | 手写 `migrations/*.sql` | 生成物，下次 `make gen-db` 被覆盖且 CI diff 失败 | 改 `tables/*.yaml`（`contracts/README.md` §6） |
-| 唯一索引不写 `used_by` | `[强制: index-used-by]` 直接拒绝 | 把插入 / 唯一性查询列进去 |
+| 唯一索引不写 `used_by` | `[强制: index-used-by-ref]` 直接拒绝 | 把插入 / 唯一性查询列进去 |
 | 软删表用全表唯一索引 | 删除后无法重建同值 | `live_only: true` |
 | 给 entity 加写形状 | 第二份写模型必然漂移 | 用 query + capability 表达 |
 | query 写 `statement` / `where` | 第二份真相，checker 无法验证 | 只写形状 |
 | 在表里声明引擎 | 引擎归属只在 `storage.tables.<engine>` | 登记到 `storage.yaml` 的引擎条目 |
 | 在表里写 `initial_rows` / seed | 字段不存在，生成器不识别 | 先扩展 `_meta/data.tables.yaml` 与生成器 |
 | 枚举值复用旧 `code` | 历史行仍引用旧码 | 新增 `code` |
-| `summary` / 列 `comment` 超长 | 超出 COMMENT 文本预算 | `summary` <= 2048、列 `comment` <= 1024（`[强制: table-summary-length]` / `[强制: column-comment-length]`） |
+| `summary` / 列 `comment` 超长 | 超出 COMMENT 文本预算 | `summary` <= 2048、列 `comment` <= 1024（模板 `max_len`，越界报 `[schema.len]`） |
 
 ---
 
