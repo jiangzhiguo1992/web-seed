@@ -149,16 +149,22 @@ func TestTypeRefNamespaceRequired(t *testing.T) {
 	}
 }
 
-func TestConcreteVariantRequiredInInstance(t *testing.T) {
+func TestConcreteVariantRequiredEverywhere(t *testing.T) {
 	c := &Checker{valueTypes: testValueTypes()}
-	c.checkTypeRef("_types.basics.integer", "contracts/data/tables/x.yaml.columns[0].type")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "schema.type-concrete") {
-		t.Fatalf("family without variant accepted in instance: %v", c.errs)
+	for _, path := range []string{
+		"contracts/data/tables/x.yaml.columns[0].type",
+		"contracts/_meta/data.tables.yaml.fields[0].type",
+	} {
+		c.errs = nil
+		c.checkTypeRef("_types.basics.integer", path)
+		if !strings.Contains(strings.Join(c.errs, "\n"), "schema.type-concrete") {
+			t.Fatalf("%s: family without variant accepted: %v", path, c.errs)
+		}
 	}
 	c.errs = nil
-	c.checkTypeRef("_types.basics.integer", "contracts/_meta/data.tables.yaml.fields[0].type")
+	c.checkTypeRef("_types.basics.string", "contracts/_meta/data.tables.yaml.fields[0].type")
 	if len(c.errs) != 0 {
-		t.Fatalf("meta shape rejected: %v", c.errs)
+		t.Fatalf("single-variant family rejected: %v", c.errs)
 	}
 	c.errs = nil
 	c.checkTypeRef("_types.basics.integer.32", "contracts/data/tables/x.yaml.columns[0].type")

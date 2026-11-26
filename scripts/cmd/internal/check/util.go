@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
@@ -217,6 +218,38 @@ func collectRefs(v any, fn func(string)) {
 func (c *Checker) columnExists(table, col string) bool {
 	_, ok := c.tableColumns[table][col]
 	return ok
+}
+
+// typeIntegerBits 返回契约类型引用的 integer 位宽；非 integer 返回 false。
+// 位宽只来自类型引用的 variant；自定义类型解析其 type。
+func (c *Checker) typeIntegerBits(typ string) (int, bool) {
+	base := strings.TrimSpace(typ)
+	for strings.HasPrefix(base, "*") {
+		base = strings.TrimSpace(strings.TrimPrefix(base, "*"))
+	}
+	if strings.HasPrefix(base, "_types.structures.list<") && strings.HasSuffix(base, ">") {
+		base = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(base, "_types.structures.list<"), ">"))
+	}
+	if custom, ok := c.valueTypes.CustomTypes[contractspec.BareTypeName(base)]; ok {
+		family, variant, ok := custom.Basics()
+		if !ok || family != "integer" || variant == "" {
+			return 0, false
+		}
+		bits, err := strconv.Atoi(variant)
+		return bits, err == nil
+	}
+	if base == "integer" {
+		return 32, true
+	}
+	family, variant, ok := contractspec.SplitBasicsRef(base)
+	if !ok || family != "integer" {
+		return 0, false
+	}
+	if variant == "" {
+		return 32, true
+	}
+	bits, err := strconv.Atoi(variant)
+	return bits, err == nil
 }
 
 // normalizeYAMLKeys 把 YAML 数字键等非字符串键统一转成字符串，供 map[string]any 消费。

@@ -123,6 +123,23 @@ analytics:
 	}
 }
 
+func TestProjectContractRejectsUnknownField(t *testing.T) {
+	root := t.TempDir()
+	for _, rel := range []string{
+		"contracts/_meta/_types.yaml",
+		"contracts/_meta/project.yaml",
+	} {
+		writeCapFile(t, root, rel, string(mustRead(t, filepath.Join("..", "..", "..", "..", rel))))
+	}
+	project := string(mustRead(t, filepath.Join("..", "..", "..", "..", "contracts/project.yaml")))
+	writeCapFile(t, root, "contracts/project.yaml", project+"\nbogus: 1\n")
+	c := &Checker{root: root}
+	c.checkPlatformContracts()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "contracts/project.yaml: unknown field \"bogus\"") {
+		t.Fatalf("project unknown field not reported: %v", c.errs)
+	}
+}
+
 func TestAuthPolicyProjectAudience(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/project.yaml", `apps:

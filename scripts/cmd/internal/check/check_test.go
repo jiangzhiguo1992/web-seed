@@ -3475,7 +3475,7 @@ func TestBaseColumnShapeRejectsDrift(t *testing.T) {
 	}
 	c.checkBaseTable(doc, &Schema{Targets: testTargets()}, "contracts/data/tables/_base.yaml")
 	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, `base column "id" must be integer`) {
+	if !strings.Contains(errs, `base column "id" must be _types.basics.integer.64`) {
 		t.Fatalf("base id type drift not reported: %v", c.errs)
 	}
 	if !strings.Contains(errs, `base column "deleted_at" nullable must be true`) {
@@ -3483,7 +3483,7 @@ func TestBaseColumnShapeRejectsDrift(t *testing.T) {
 	}
 }
 
-func TestBaseIDBitsMustBe64(t *testing.T) {
+func TestBaseIDMustBeInteger64(t *testing.T) {
 	root, err := filepath.Abs("../../../..")
 	if err != nil {
 		t.Fatal(err)
@@ -3496,11 +3496,11 @@ func TestBaseIDBitsMustBe64(t *testing.T) {
 		return map[string]any{
 			"id": "data.tables.base", "summary": "base", "schema_version": 1, "stability": "stable",
 			"columns": []any{
-				map[string]any{"name": "id", "type": "integer", "primary_key": true, "bits": 32},
-				map[string]any{"name": "status", "type": "integer", "default": 0},
-				map[string]any{"name": "created_at", "type": "timestamp"},
-				map[string]any{"name": "updated_at", "type": "timestamp"},
-				map[string]any{"name": "deleted_at", "type": "timestamp", "nullable": true},
+				map[string]any{"name": "id", "type": "_types.basics.integer.32", "primary_key": true},
+				map[string]any{"name": "status", "type": "_types.basics.integer.32", "default": 0},
+				map[string]any{"name": "created_at", "type": "_types.basics.timestamp.long"},
+				map[string]any{"name": "updated_at", "type": "_types.basics.timestamp.long"},
+				map[string]any{"name": "deleted_at", "type": "_types.basics.timestamp.long", "nullable": true},
 			},
 		}
 	}
@@ -3510,12 +3510,12 @@ func TestBaseIDBitsMustBe64(t *testing.T) {
 	if strings.Contains(errs, "unknown field") {
 		t.Fatalf("base test schema is incomplete: %v", c.errs)
 	}
-	if !strings.Contains(errs, `base id bits must be 64`) {
-		t.Fatalf("base id bits drift not reported: %v", c.errs)
+	if !strings.Contains(errs, `base column "id" must be _types.basics.integer.64`) {
+		t.Fatalf("base id type drift not reported: %v", c.errs)
 	}
 
 	doc := newDoc()
-	doc["columns"].([]any)[0].(map[string]any)["bits"] = 64
+	doc["columns"].([]any)[0].(map[string]any)["type"] = "_types.basics.integer.64"
 	doc["columns"].([]any)[0].(map[string]any)["unsigned"] = true
 	c = &Checker{root: root}
 	c.checkBaseTable(doc, schema, "contracts/data/tables/_base.yaml")

@@ -442,14 +442,15 @@ func (c *Checker) checkPhysicalTable(doc map[string]any, rel string, schema *Sch
 // baseColumnShape 固定基类 5 列的物理形状；基类漂移会改变所有表的 DDL。
 var baseColumnShape = map[string]struct {
 	typ      string
+	variant  string
 	primary  bool
 	nullable bool
 }{
-	"id":         {"integer", true, false},
-	"status":     {"integer", false, false},
-	"created_at": {"timestamp", false, false},
-	"updated_at": {"timestamp", false, false},
-	"deleted_at": {"timestamp", false, true},
+	"id":         {"integer", "64", true, false},
+	"status":     {"integer", "32", false, false},
+	"created_at": {"timestamp", "long", false, false},
+	"updated_at": {"timestamp", "long", false, false},
+	"deleted_at": {"timestamp", "long", false, true},
 }
 
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
@@ -487,9 +488,9 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 			typ, _ := m["type"].(string)
 			pk, _ := m["primary_key"].(bool)
 			nullable, _ := m["nullable"].(bool)
-			family, _, isBasics := contractspec.SplitBasicsRef(typ)
-			if !isBasics || family != shape.typ {
-				c.rulef("base-columns", "%s: base column %q must be %s, got %q", rel, n, shape.typ, typ)
+			family, variant, isBasics := contractspec.SplitBasicsRef(typ)
+			if !isBasics || family != shape.typ || variant != shape.variant {
+				c.rulef("base-columns", "%s: base column %q must be _types.basics.%s.%s, got %q", rel, n, shape.typ, shape.variant, typ)
 			}
 			if pk != shape.primary {
 				c.rulef("base-columns", "%s: base column %q primary_key must be %v", rel, n, shape.primary)
@@ -505,11 +506,6 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 		}
 		c.checkDefaultExclusive(m, rel, i, n)
 		if n == "id" {
-			if raw, ok := m["bits"]; ok {
-				if bits, ok := toInt(raw); !ok || bits != 64 {
-					c.rulef("base-columns", "%s: base id bits must be 64, got %v", rel, raw)
-				}
-			}
 			if unsigned, _ := m["unsigned"].(bool); unsigned {
 				c.rulef("base-columns", "%s: base id must not be unsigned", rel)
 			}
@@ -575,14 +571,9 @@ func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema
 		if t, _ := m["type"].(string); !isColumnType(t, schema.ValueTypes) {
 			c.rulef("column-type", "%s: columns[%d] (%s): unsupported type %q (type_families/custom_types %v or data.tables.<t>.col.<c>)", rel, i, name, t, valueTypeNames(schema.ValueTypes))
 		} else {
-			family, variant, isBasics := contractspec.SplitBasicsRef(t)
+			family, _, isBasics := contractspec.SplitBasicsRef(t)
 			if !isBasics {
 				family = t
-			}
-			if isBasics && (family == "integer" || family == "float") && variant != "" {
-				if bits, ok := toInt(m["bits"]); ok && fmt.Sprint(bits) != variant {
-					c.rulef("family-params", "%s: columns[%d] (%s): bits %d does not match type variant %s", rel, i, name, bits, variant)
-				}
 			}
 			c.checkFamilyParams(m, family, rel, i, name, schema)
 		}
@@ -821,33 +812,13 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 		c.rulef("schema.types", "types: type_families must not be empty")
 		return
 	}
+	for _, name := range sortedKeysOfFields(schema.ValueTypes.CommonParams) {
+		c.checkParamSpec("types.common_params", name, schema.ValueTypes.CommonParams[name])
+	}
 	for _, name := range familyNames(schema.ValueTypes) {
 		fam := schema.ValueTypes.TypeFamilies[name]
-		paramNames := make([]string, 0, len(fam.Params))
-		for pname := range fam.Params {
-			paramNames = append(paramNames, pname)
-		}
-		sort.Strings(paramNames)
-		for _, pname := range paramNames {
-			def := fam.Params[pname]
-			if strings.TrimSpace(pname) == "" {
-				c.rulef("schema.types", "types.type_families.%s: param name must not be empty", name)
-			}
-			def.Name = pname
-			if err := validateFieldTypes([]Field{def}, c.valueTypes, true); err != nil {
-				c.rulef("schema.types", "types.type_families.%s.params.%s: %v", name, pname, err)
-			}
-			if strings.TrimSpace(def.Description) == "" {
-				c.rulef("schema.types", "types.type_families.%s.params.%s: description must not be empty", name, pname)
-			}
-			if def.Pattern != "" {
-				if _, err := regexp.Compile(def.Pattern); err != nil {
-					c.rulef("schema.types", "types.type_families.%s.params.%s: invalid pattern: %v", name, pname, err)
-				}
-			}
-			if def.Default != nil {
-				c.validateValue(def.Default, def, fmt.Sprintf("types.type_families.%s.params.%s.default", name, pname))
-			}
+		for _, pname := range sortedKeysOfFields(fam.Params) {
+			c.checkParamSpec("types.type_families."+name+".params", pname, fam.Params[pname])
 		}
 	}
 	customTypeNames := make([]string, 0, len(schema.ValueTypes.CustomTypes))
@@ -863,8 +834,48 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 		if _, ok := schema.ValueTypes.Schemas[name]; ok {
 			c.rulef("schema.types", "data.types.custom_types.%s: name collides with a schema kind", name)
 		}
-		c.checkFamilyParams(customType.Params, customType.Family, "data.types.custom_types."+name, 0, name, schema)
+		family, _, ok := customType.Basics()
+		if !ok {
+			c.rulef("schema.types", "data.types.custom_types.%s: type must be _types.basics.<family>[.<variant>], got %q", name, customType.Type)
+			continue
+		}
+		if _, ok := schema.ValueTypes.TypeFamilies[family]; !ok {
+			c.rulef("schema.types", "data.types.custom_types.%s: unknown type family %s", name, family)
+			continue
+		}
+		c.checkFamilyParams(customType.Params, family, "data.types.custom_types."+name, 0, name, schema)
 	}
+}
+
+// checkParamSpec 校验一个共用的类型参数声明。
+func (c *Checker) checkParamSpec(where, pname string, def Field) {
+	if strings.TrimSpace(pname) == "" {
+		c.rulef("schema.types", "%s: param name must not be empty", where)
+	}
+	def.Name = pname
+	if err := validateFieldTypes([]Field{def}, c.valueTypes, true); err != nil {
+		c.rulef("schema.types", "%s.%s: %v", where, pname, err)
+	}
+	if strings.TrimSpace(def.Description) == "" {
+		c.rulef("schema.types", "%s.%s: description must not be empty", where, pname)
+	}
+	if def.Pattern != "" {
+		if _, err := regexp.Compile(def.Pattern); err != nil {
+			c.rulef("schema.types", "%s.%s: invalid pattern: %v", where, pname, err)
+		}
+	}
+	if def.Default != nil {
+		c.validateValue(def.Default, def, fmt.Sprintf("%s.%s.default", where, pname))
+	}
+}
+
+func sortedKeysOfFields(fields map[string]Field) []string {
+	out := make([]string, 0, len(fields))
+	for name := range fields {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func familyNames(ct ValueTypes) []string {
@@ -901,7 +912,7 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 	customType, isCustom := schema.ValueTypes.CustomTypes[t]
 	family := t
 	if isCustom {
-		family = customType.Family
+		family, _, _ = customType.Basics()
 	}
 	switch family {
 	case "any":

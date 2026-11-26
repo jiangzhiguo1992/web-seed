@@ -247,12 +247,17 @@ func parseColumnsInto(out map[string]columnSpec, raw any, customs map[string]con
 		spec := columnSpec{Variant: variant}
 		if custom, ok := customs[typ]; ok {
 			spec.Custom = typ
-			spec.Family = custom.Family
+			family, customVariant, _ := custom.Basics()
+			spec.Family = family
+			spec.Variant = customVariant
+			if customVariant != "" {
+				spec.Bits, _ = strconv.Atoi(customVariant)
+			}
 			applyParams(&spec, custom.Params)
 		} else {
 			spec.Family = typ
 			applyParams(&spec, m)
-			if spec.Bits == 0 && variant != "" {
+			if variant != "" {
 				spec.Bits, _ = strconv.Atoi(variant)
 			}
 		}
@@ -268,9 +273,6 @@ func parseColumnsInto(out map[string]columnSpec, raw any, customs map[string]con
 
 func applyParams(spec *columnSpec, params any) {
 	m, _ := asMap(params)
-	if v, ok := toInt(m["bits"]); ok {
-		spec.Bits = v
-	}
 	if v, ok := toInt(m["precision"]); ok {
 		spec.Precision = v
 	}
@@ -479,7 +481,12 @@ func typeSpec(typ string, customs map[string]contractspec.CustomValueType) colum
 	}
 	if custom, ok := customs[typ]; ok {
 		spec.Custom = typ
-		spec.Family = custom.Family
+		family, customVariant, _ := custom.Basics()
+		spec.Family = family
+		spec.Variant = customVariant
+		if customVariant != "" {
+			spec.Bits, _ = strconv.Atoi(customVariant)
+		}
 		applyParams(&spec, custom.Params)
 	}
 	if spec.Family == "integer" && spec.Bits == 0 {

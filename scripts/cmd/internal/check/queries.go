@@ -632,19 +632,7 @@ func (c *Checker) paramBits(typ string) (int, bool) {
 	if strings.HasPrefix(base, "data.enums.") {
 		return 32, true
 	}
-	if custom, ok := c.valueTypes.CustomTypes[base]; ok {
-		if custom.Family != "integer" {
-			return 0, false
-		}
-		if bits, ok := toInt(custom.Params["bits"]); ok {
-			return bits, true
-		}
-		return 32, true
-	}
-	if base == "integer" {
-		return 32, true
-	}
-	return 0, false
+	return c.typeIntegerBits(typ)
 }
 
 // paramLogicalType 把参数类型映射到列类型族；数组类型返回元素类型族。

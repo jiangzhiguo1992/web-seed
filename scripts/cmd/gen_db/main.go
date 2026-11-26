@@ -378,7 +378,6 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 			PrimaryKey:  boolValue(m["primary_key"]),
 			Default:     m["default"],
 			DefaultSQL:  stringValue(m["default_sql"]),
-			Bits:        intValue(m["bits"]),
 			Unsigned:    boolValue(m["unsigned"]),
 			MaxLen:      intValue(m["max_len"]),
 			MinLen:      intValue(m["min_len"]),
@@ -395,20 +394,12 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 		}
 		if family, variant, ok := contractspec.SplitBasicsRef(c.Type); ok {
 			c.Type = family
-			if family == "timestamp" && variant != "" {
-				c.TimezoneSet = true
-				c.Timezone = variant == "time"
-			}
-			if family == "datetime" && variant != "" {
-				c.TimezoneSet = true
-				c.Timezone = variant == "timezone"
-			}
-			if c.Bits == 0 && variant != "" {
-				c.Bits, _ = strconv.Atoi(variant)
-			}
+			applyTypeVariant(&c, family, variant)
 		}
 		if nt, ok := customTypes[c.Type]; ok {
-			c.Type = nt.Family
+			family, variant, _ := nt.Basics()
+			c.Type = family
+			applyTypeVariant(&c, family, variant)
 			applyCustomParams(&c, nt.Params)
 		}
 		out = append(out, c)
@@ -416,11 +407,26 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 	return out, nil
 }
 
+// applyTypeVariant 把类型引用的 variant 落到列的形状上；位宽只由 variant 决定。
+func applyTypeVariant(c *column, family, variant string) {
+	if variant == "" {
+		return
+	}
+	switch family {
+	case "timestamp":
+		c.TimezoneSet = true
+		c.Timezone = variant == "time"
+	case "datetime":
+		c.TimezoneSet = true
+		c.Timezone = variant == "timezone"
+	case "integer", "float":
+		c.Bits, _ = strconv.Atoi(variant)
+	}
+}
+
 func applyCustomParams(c *column, params map[string]any) {
 	for k, v := range params {
 		switch k {
-		case "bits":
-			c.Bits = intValue(v)
 		case "unsigned":
 			c.Unsigned = boolValue(v)
 		case "min_len":

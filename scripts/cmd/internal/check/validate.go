@@ -109,6 +109,11 @@ func defaultValueTypes() ValueTypes {
 	for _, name := range []string{"string", "boolean", "integer", "float", "decimal", "number", "datetime", "timestamp", "json", "bytes", "any"} {
 		fams[name] = contractspec.ValueTypeFamily{}
 	}
+	// 多变体族的 variant 是固定词汇：没有 _types.yaml 时也要能解析具体引用。
+	fams["integer"] = contractspec.ValueTypeFamily{Types: map[string]contractspec.ConcreteType{"8": {}, "16": {}, "32": {}, "64": {}}}
+	fams["float"] = contractspec.ValueTypeFamily{Types: map[string]contractspec.ConcreteType{"32": {}, "64": {}}}
+	fams["timestamp"] = contractspec.ValueTypeFamily{Types: map[string]contractspec.ConcreteType{"time": {}, "long": {}}}
+	fams["datetime"] = contractspec.ValueTypeFamily{Types: map[string]contractspec.ConcreteType{"timezone": {}, "time": {}}}
 	structs := map[string]contractspec.Structure{}
 	for _, name := range []string{"list", "set", "array", "map", "object"} {
 		structs[name] = contractspec.Structure{}

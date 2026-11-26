@@ -26,13 +26,14 @@ func AuditTypeVocabulary(root string) (*TypeAudit, error) {
 	if err != nil {
 		return nil, err
 	}
-	custom, err := contractspec.LoadCustomTypes(root, shared.TypeFamilies)
+	custom, err := contractspec.LoadCustomTypes(root, shared.TypeFamilies, shared.CommonParams)
 	if err != nil {
 		return nil, err
 	}
 	c := &Checker{
 		root: root,
 		valueTypes: ValueTypes{
+			CommonParams: shared.CommonParams,
 			TypeFamilies: shared.TypeFamilies,
 			Structures:   shared.Structures,
 			Schemas:      shared.Schemas,

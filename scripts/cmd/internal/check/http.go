@@ -1943,7 +1943,11 @@ func (c *Checker) httpServiceFamily(t string) string {
 		t = family
 	}
 	if custom, ok := c.valueTypes.CustomTypes[t]; ok {
-		return c.httpServiceFamily(custom.Family)
+		family, variant, _ := custom.Basics()
+		if family == "timestamp" && variant == "long" {
+			return "integer"
+		}
+		return c.httpServiceFamily(family)
 	}
 	switch t {
 	case "string", "timestamp", "datetime", "bytes", "bit", "xml":

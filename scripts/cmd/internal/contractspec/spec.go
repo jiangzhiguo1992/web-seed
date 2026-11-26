@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -31,6 +32,7 @@ type Schema struct {
 type SharedTypes struct {
 	ID           string                     `yaml:"id"`
 	Title        string                     `yaml:"title"`
+	CommonParams map[string]Field           `yaml:"common_params"`
 	TypeFamilies map[string]ValueTypeFamily `yaml:"basics"`
 	Structures   map[string]Structure       `yaml:"structures"`
 	Schemas      map[string]SchemaKind      `yaml:"schemas"`
@@ -172,17 +174,23 @@ func (t Targets) FileID(file string) string {
 }
 
 type ValueTypes struct {
+	CommonParams map[string]Field           `yaml:"common_params"`
 	TypeFamilies map[string]ValueTypeFamily `yaml:"basics"`
 	CustomTypes  map[string]CustomValueType `yaml:"custom_types"`
 	Structures   map[string]Structure       `yaml:"structures"`
 	Schemas      map[string]SchemaKind      `yaml:"schemas"`
 }
 
-// CustomValueType 是自定义值类型：一个类型族加上固定参数，供表列与 schema 共享。
+// CustomValueType 是自定义值类型：一个具体 basics 类型加上固定参数，供表列与 schema 共享。
 type CustomValueType struct {
-	Family      string         `yaml:"family"`
+	Type        string         `yaml:"type"`
 	Description string         `yaml:"description"`
 	Params      map[string]any `yaml:"params"`
+}
+
+// Basics 返回自定义类型引用的类型族与 variant；type 必须是 _types.basics.<family>[.<variant>]。
+func (c CustomValueType) Basics() (family, variant string, ok bool) {
+	return SplitBasicsRef(c.Type)
 }
 
 // ValueTypeFamily 描述一个类型族及其允许的扩展字段。
@@ -283,7 +291,7 @@ func LoadSchemaByType(root, typ string) (*Schema, string, error) {
 		return nil, "", fmt.Errorf("%s: missing schemas (kinds is empty) in %s", foundPath, filepath.Join(dir, "_types.yaml"))
 	}
 	if needsSharedTypes(typ) {
-		doc, err := LoadCustomTypes(root, found.ValueTypes.TypeFamilies)
+		doc, err := LoadCustomTypes(root, found.ValueTypes.TypeFamilies, found.ValueTypes.CommonParams)
 		if err != nil {
 			return nil, "", err
 		}
@@ -334,6 +342,16 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 	if err := validateTypeFamilies(path, t.TypeFamilies); err != nil {
 		return nil, err
 	}
+	if err := validateCommonParams(path, t.CommonParams, t.TypeFamilies); err != nil {
+		return nil, err
+	}
+	for famName, fam := range t.TypeFamilies {
+		for pname := range t.CommonParams {
+			if _, ok := fam.Params[pname]; ok {
+				return nil, fmt.Errorf("%s: family %s must not redeclare common param %s", path, famName, pname)
+			}
+		}
+	}
 	if err := validateSchemas(path, t.Schemas); err != nil {
 		return nil, err
 	}
@@ -344,7 +362,7 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 }
 
 // LoadCustomTypes 严格解析 contracts/data/types.yaml；文件缺失视为没有自定义类型。
-func LoadCustomTypes(root string, families map[string]ValueTypeFamily) (*CustomTypesDoc, error) {
+func LoadCustomTypes(root string, families map[string]ValueTypeFamily, common map[string]Field) (*CustomTypesDoc, error) {
 	path := filepath.Join(root, customTypesRel)
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -376,7 +394,7 @@ func LoadCustomTypes(root string, families map[string]ValueTypeFamily) (*CustomT
 	default:
 		return nil, fmt.Errorf("%s: stability must be stable/draft/deprecated, got %q", path, doc.Stability)
 	}
-	if err := validateCustomTypes(path, families, doc.CustomTypes); err != nil {
+	if err := validateCustomTypes(path, families, common, doc.CustomTypes); err != nil {
 		return nil, err
 	}
 	return &doc, nil
@@ -447,8 +465,8 @@ func validateStructures(path string, structures map[string]Structure, families m
 			}
 			switch class {
 			case TypeClassBasics:
-				if _, ok := families[t]; !ok {
-					return fmt.Errorf("%s: structure %s param %s has unknown basics type %q", path, name, pname, p.Type)
+				if err := validateBasicsRef(p.Type, families); err != nil {
+					return fmt.Errorf("%s: structure %s param %s: %w", path, name, pname, err)
 				}
 			case TypeClassStructures:
 				if _, ok := structures[t]; !ok && !strings.Contains(t, "<") {
@@ -492,12 +510,12 @@ func validateSchemas(path string, schemas map[string]SchemaKind) error {
 		}
 	}
 	keyTypes := map[string]bool{
-		"":                      true,
-		"_types.basics.string":  true,
-		"_types.basics.boolean": true,
-		"_types.basics.integer": true,
-		"_types.basics.any":     true,
-		"_types.structures.map": true,
+		"":                         true,
+		"_types.basics.string":     true,
+		"_types.basics.boolean":    true,
+		"_types.basics.integer.32": true,
+		"_types.basics.any":        true,
+		"_types.structures.map":    true,
 		"_types.structures.list<_types.structures.object>": true,
 		"_types.structures.list<_types.basics.string>":     true,
 	}
@@ -635,6 +653,7 @@ func LoadSchema(path string) (*Schema, error) {
 	// LoadSchemaByType 再对依赖类型族的契约类型强制要求它存在。
 	if t, err := LoadSharedTypes(filepath.Dir(path)); err == nil {
 		s.ValueTypes = ValueTypes{
+			CommonParams: t.CommonParams,
 			TypeFamilies: t.TypeFamilies,
 			Structures:   t.Structures,
 			Schemas:      t.Schemas,
@@ -708,6 +727,13 @@ func injectFamilyParams(s *Schema) {
 			seen[name] = true
 		}
 	}
+	for name, def := range s.ValueTypes.CommonParams {
+		if seen[name] {
+			continue
+		}
+		s.Fields[idx].ItemFields = append(s.Fields[idx].ItemFields, Field{Name: name, Type: def.Type, Required: def.Required, Unordered: true})
+		seen[name] = true
+	}
 }
 
 var (
@@ -724,8 +750,8 @@ var (
 	tsConcrete = map[string]bool{"string": true, "number": true, "boolean": true, "unknown": true}
 )
 
-// validateTypeFamilies 校验每个族的 types 落型：多变体族必须恰好覆盖 bits 枚举，
-// 单变体族必须恰好是 default；go/pg/ts 必须是已知的确定性类型名。
+// validateTypeFamilies 校验每个族的 types 落型：多变体族恰好覆盖全部 variant，
+// 单变体族的 key 必须是族名；go/pg/ts 必须是已知的确定性类型名。
 func validateTypeFamilies(path string, families map[string]ValueTypeFamily) error {
 	for name, fam := range families {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(fam.Description) == "" {
@@ -738,13 +764,8 @@ func validateTypeFamilies(path string, families map[string]ValueTypeFamily) erro
 			return fmt.Errorf("%s: family %s must declare types", path, name)
 		}
 		expected := []string{name}
-		if bits, ok := fam.Params["bits"]; ok && len(bits.Enum) > 0 {
-			expected = expected[:0]
-			for _, v := range bits.Enum {
-				expected = append(expected, fmt.Sprint(v))
-			}
-		} else if len(fam.Types) > 1 {
-			// 无 bits 枚举的多 variant 族（如 timestamp 的 time/long）以 types 的键为准。
+		if len(fam.Types) > 1 {
+			// 多 variant 族（integer/float/timestamp/datetime）以 types 的键为准。
 			expected = expected[:0]
 			for key := range fam.Types {
 				expected = append(expected, key)
@@ -790,7 +811,72 @@ func containsString(list []string, want string) bool {
 	return false
 }
 
-func validateCustomTypes(path string, families map[string]ValueTypeFamily, customs map[string]CustomValueType) error {
+func validateCommonParams(path string, params map[string]Field, families map[string]ValueTypeFamily) error {
+	for name, def := range params {
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(def.Description) == "" {
+			return fmt.Errorf("%s: common param %s must have a name and description", path, name)
+		}
+		if def.Name != "" && def.Name != name {
+			return fmt.Errorf("%s: common param %s has mismatched name %q", path, name, def.Name)
+		}
+		if err := validateBasicsRef(def.Type, families); err != nil {
+			return fmt.Errorf("%s: common param %s: %w", path, name, err)
+		}
+		if def.Required && def.Default != nil {
+			return fmt.Errorf("%s: common param %s: required and default are mutually exclusive", path, name)
+		}
+	}
+	return nil
+}
+
+// validateBasicsRef 要求引用具体到无歧义的类型：多变体族必须写 variant，
+// 单变体族可写族名；any 没有 variant。
+func validateBasicsRef(ref string, families map[string]ValueTypeFamily) error {
+	family, variant, ok := SplitBasicsRef(ref)
+	if !ok {
+		return fmt.Errorf("must be a _types.basics.<family>[.<variant>] reference, got %q", ref)
+	}
+	fam, ok := families[family]
+	if !ok {
+		return fmt.Errorf("unknown basics family %q", family)
+	}
+	if len(fam.Types) == 0 {
+		if variant != "" {
+			return fmt.Errorf("family %s has no concrete variant", family)
+		}
+		return nil
+	}
+	if variant == "" {
+		if len(fam.Types) == 1 {
+			if _, ok := fam.Types[family]; ok {
+				return nil
+			}
+		}
+		return fmt.Errorf("family %s requires a concrete variant (%s)", family, strings.Join(sortedTypeKeys(fam.Types), "/"))
+	}
+	if _, ok := fam.Types[variant]; !ok {
+		return fmt.Errorf("unknown variant %q for family %s", variant, family)
+	}
+	return nil
+}
+
+func sortedTypeKeys(types map[string]ConcreteType) []string {
+	out := make([]string, 0, len(types))
+	for key := range types {
+		out = append(out, key)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, aerr := strconv.Atoi(out[i])
+		b, berr := strconv.Atoi(out[j])
+		if aerr == nil && berr == nil {
+			return a < b
+		}
+		return out[i] < out[j]
+	})
+	return out
+}
+
+func validateCustomTypes(path string, families map[string]ValueTypeFamily, common map[string]Field, customs map[string]CustomValueType) error {
 	for name, custom := range customs {
 		if strings.TrimSpace(name) == "" || strings.TrimSpace(custom.Description) == "" {
 			return fmt.Errorf("%s: custom type %s must have a name and description", path, name)
@@ -798,17 +884,19 @@ func validateCustomTypes(path string, families map[string]ValueTypeFamily, custo
 		if _, ok := families[name]; ok {
 			return fmt.Errorf("%s: custom type %s collides with a family", path, name)
 		}
-		fam, ok := families[custom.Family]
-		if !ok {
-			return fmt.Errorf("%s: custom type %s uses unknown family %s", path, name, custom.Family)
+		family, err := resolveCustomFamily(custom.Type, families)
+		if err != nil {
+			return fmt.Errorf("%s: custom type %s: %w", path, name, err)
 		}
+		fam := families[family]
 		for pname := range custom.Params {
-			if pname == "default" {
+			if _, ok := fam.Params[pname]; ok {
 				continue
 			}
-			if _, ok := fam.Params[pname]; !ok {
-				return fmt.Errorf("%s: custom type %s param %s not allowed by family %s", path, name, pname, custom.Family)
+			if _, ok := common[pname]; ok {
+				continue
 			}
+			return fmt.Errorf("%s: custom type %s param %s not allowed by type %s", path, name, pname, custom.Type)
 		}
 		for pname, def := range fam.Params {
 			if def.Required {
@@ -817,8 +905,24 @@ func validateCustomTypes(path string, families map[string]ValueTypeFamily, custo
 				}
 			}
 		}
+		for pname, def := range common {
+			if def.Required {
+				if _, ok := custom.Params[pname]; !ok {
+					return fmt.Errorf("%s: custom type %s missing required param %s", path, name, pname)
+				}
+			}
+		}
 	}
 	return nil
+}
+
+// resolveCustomFamily 校验自定义类型的 type 引用并返回其族名。
+func resolveCustomFamily(ref string, families map[string]ValueTypeFamily) (string, error) {
+	if err := validateBasicsRef(ref, families); err != nil {
+		return "", err
+	}
+	family, _, _ := SplitBasicsRef(ref)
+	return family, nil
 }
 
 func FindField(fields []Field, name string) (Field, bool) {

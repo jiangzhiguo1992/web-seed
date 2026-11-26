@@ -1142,7 +1142,9 @@ func (c *Checker) resolvedColumnType(typ string) string {
 		typ = family
 	}
 	if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
-		return customType.Family
+		if family, _, ok := customType.Basics(); ok {
+			return family
+		}
 	}
 	seen := map[string]bool{}
 	for strings.HasPrefix(typ, "data.tables.") {

@@ -170,7 +170,7 @@ func (c *Checker) columnStableUnique(table, col string) bool {
 }
 
 // columnBits 返回 integer 列的有效位宽；非 integer 返回 false。
-// 位宽来自列声明的 bits、custom type 的固定参数或列引用目标；缺省 32。
+// 位宽来自列类型引用的 variant、custom type 的 type variant 或列引用目标；裸 integer 缺省 32。
 func (c *Checker) columnBits(table, col string) (int, bool) {
 	seen := map[string]bool{}
 	for {
@@ -195,22 +195,14 @@ func (c *Checker) columnBits(table, col string) (int, bool) {
 			typ = family
 		}
 		if custom, ok := c.valueTypes.CustomTypes[typ]; ok {
-			if custom.Family != "integer" {
-				return 0, false
-			}
-			if bits, ok := toInt(custom.Params["bits"]); ok {
-				return bits, true
-			}
-			return 32, true
+			return c.typeIntegerBits(custom.Type)
 		}
 		if typ == "integer" {
-			if bits, ok := toInt(decl["bits"]); ok {
-				return bits, true
+			if variant == "" {
+				return 32, true
 			}
-			if bits, err := strconv.Atoi(variant); err == nil {
-				return bits, true
-			}
-			return 32, true
+			bits, err := strconv.Atoi(variant)
+			return bits, err == nil
 		}
 		nextTable, nextCol, ok := splitColumnRef(typ)
 		if !ok {

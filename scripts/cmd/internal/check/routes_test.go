@@ -405,7 +405,7 @@ func TestAnalyticsTypes(t *testing.T) {
   integer: { description: "x" }
 `)
 	writeCapFile(t, root, "contracts/data/types.yaml", `custom_types:
-  account_number: { family: string, description: "x" }
+  account_number: { type: _types.basics.string, description: "x" }
 `)
 	writeCapFile(t, root, "contracts/data/enums/account.yaml", `enums:
   - name: account_status

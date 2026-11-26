@@ -15,7 +15,7 @@ func (c *Checker) httpTypeResolver(name string) (map[string]any, error) {
 	}
 	params := map[string]any{}
 	if custom, ok := c.valueTypes.CustomTypes[family]; ok {
-		family = custom.Family
+		family, _, _ = custom.Basics()
 		params = custom.Params
 	} else if _, ok := c.valueTypes.TypeFamilies[family]; !ok {
 		return nil, fmt.Errorf("unknown type %s", name)

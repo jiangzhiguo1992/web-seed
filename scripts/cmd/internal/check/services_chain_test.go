@@ -375,7 +375,7 @@ func TestServiceInputTypeCompatibility(t *testing.T) {
 	c := &Checker{valueTypes: contractspec.ValueTypes{
 		TypeFamilies: map[string]contractspec.ValueTypeFamily{"integer": {}},
 		CustomTypes: map[string]contractspec.CustomValueType{
-			"page_limit": {Family: "integer"},
+			"page_limit": {Type: "_types.basics.integer.32"},
 		},
 	}}
 	c.checkQueryInput(map[string]any{

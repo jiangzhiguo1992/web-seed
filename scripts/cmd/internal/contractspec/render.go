@@ -73,6 +73,7 @@ type entityScaffold struct {
 	DoNot         []string              `yaml:"do_not"`
 	Model         entityModelScaffold   `yaml:"model"`
 	Fields        []entityFieldScaffold `yaml:"fields"`
+	Validation    []any                 `yaml:"validation"`
 }
 
 type entityModelScaffold struct {
@@ -293,7 +294,7 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 	}
 	top := map[string]bool{
 		"id": true, "summary": true, "owner_module": true, "schema_version": true,
-		"stability": true, "do_not": true, "model": true, "fields": true,
+		"stability": true, "do_not": true, "model": true, "fields": true, "validation": true,
 	}
 	if err := requireSupported(s.Fields, top, "data.entities"); err != nil {
 		return nil, err
@@ -336,7 +337,8 @@ func RenderEntity(s *Schema, name, tableID, ownerModule, summary string) ([]byte
 			Queries:    []string{},
 			IncludedBy: []string{},
 		},
-		Fields: []entityFieldScaffold{},
+		Fields:     []entityFieldScaffold{},
+		Validation: []any{},
 	}
 	b, err := marshal2(doc)
 	if err != nil {
@@ -432,7 +434,7 @@ func RenderQuery(s *Schema, name, module, tableID, summary string) ([]byte, erro
 }
 
 // normalizeScaffoldColumnType 把 contract-new 的 column_type 归一为具体类型引用：
-// 单变体族用 _types.basics.<family>，多变体族用 family 的 bits 默认值。
+// 单变体族用 _types.basics.<family>，integer/float 默认 32/64，其余多变体族取首个 variant。
 func normalizeScaffoldColumnType(raw string, vt ValueTypes) (string, error) {
 	ref := strings.TrimSpace(raw)
 	if !strings.HasPrefix(ref, "_types.basics.") {
@@ -467,8 +469,11 @@ func normalizeScaffoldColumnType(raw string, vt ValueTypes) (string, error) {
 				return "_types.basics." + family, nil
 			}
 		}
-		if bits, ok := fam.Params["bits"]; ok && bits.Default != nil {
-			variant = fmt.Sprint(bits.Default)
+		switch family {
+		case "integer":
+			variant = "32"
+		case "float":
+			variant = "64"
 		}
 		if variant == "" {
 			keys := make([]string, 0, len(fam.Types))
@@ -1437,7 +1442,9 @@ func uniqueKeyValue(typ string, index int, vt ValueTypes) any {
 	original := BareTypeName(typ)
 	t := original
 	if ct, ok := vt.CustomTypes[t]; ok {
-		t = ct.Family
+		if family, _, ok := ct.Basics(); ok {
+			t = family
+		}
 	}
 	switch t {
 	case "integer", "number", "float", "decimal":

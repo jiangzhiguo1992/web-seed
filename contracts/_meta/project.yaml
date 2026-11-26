@@ -1,0 +1,106 @@
+# 项目元信息：derive 脚本与生成器共享的唯一输入。
+
+id: meta.project
+contract: project
+title: "项目元信息"
+targets:
+  dir: "contracts"
+  glob: "project.yaml"
+  id: "project"
+
+fields:
+  - name: id
+    type: _types.basics.string
+    required: true
+    const: project
+    description: "契约 ID"
+
+  - name: schema_version
+    type: _types.basics.integer.32
+    required: true
+    const: 1
+    description: "格式版本"
+
+  - name: stability
+    type: _types.basics.string
+    required: true
+    enum: [ stable, draft, deprecated ]
+    default: draft
+    description: "稳定度"
+
+  - name: project
+    type: _types.structures.object
+    required: true
+    description: "项目身份"
+    fields:
+      - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9-]*$', description: "项目标识" }
+      - { name: display_name, type: _types.basics.string, required: true, description: "展示名" }
+      - { name: description, type: _types.basics.string, required: true, description: "项目说明" }
+      - { name: version, type: _types.basics.string, required: true, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$', description: "语义版本" }
+      - { name: license, type: _types.basics.string, required: true, description: "许可证" }
+
+  - name: go
+    type: _types.structures.object
+    required: true
+    description: "Go 应用配置"
+    fields:
+      - { name: module, type: _types.basics.string, required: true, description: "Go module 路径" }
+      - { name: version, type: _types.basics.string, required: true, pattern: '^[0-9]+\.[0-9]+$', description: "Go 版本" }
+
+  - name: web
+    type: _types.structures.object
+    required: true
+    description: "Web 应用配置"
+    fields:
+      - { name: package_scope, type: _types.basics.string, required: true, pattern: '^@[a-z0-9-]+$', description: "npm scope" }
+      - { name: node_version, type: _types.basics.string, required: true, pattern: '^[0-9]+$', description: "Node 主版本" }
+      - { name: package_manager, type: _types.basics.string, required: true, enum: [ pnpm, npm, yarn ], description: "包管理器" }
+      - { name: package_manager_version, type: _types.basics.string, required: true, description: "包管理器版本" }
+
+  - name: defaults
+    type: _types.structures.object
+    required: true
+    description: "默认值"
+    fields:
+      - { name: timezone, type: _types.basics.string, required: true, description: "默认时区" }
+      - { name: locale, type: _types.basics.string, required: true, description: "默认 locale" }
+      - { name: locales, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, description: "支持的 locale" }
+      - { name: currency, type: _types.basics.string, required: true, description: "默认货币" }
+      - { name: id_strategy, type: _types.basics.string, required: true, enum: [ integer ], description: "ID 策略" }
+
+  - name: apps
+    type: _types.structures.map<_types.structures.object>
+    required: true
+    key_patterns: [ '^[a-z][a-z0-9-]*$' ]
+    description: "应用拓扑"
+    item_fields:
+      - { name: kind, type: _types.basics.string, required: true, enum: [ api, web ], description: "应用类型" }
+      - { name: description, type: _types.basics.string, required: true, description: "应用说明" }
+      - { name: audience, type: _types.basics.string, required: false, description: "API audience" }
+      - { name: timeout_ms, type: _types.basics.integer.32, required: false, min: 1, description: "请求超时毫秒" }
+      - { name: includes, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^cap\.protocols\.http\.[a-z][a-z0-9_]*$', description: "包含的 HTTP 契约" }
+      - name: generated
+        type: _types.structures.object
+        required: false
+        description: "生成物路径"
+        fields:
+          - { name: spec, type: _types.basics.string, required: false, description: "OpenAPI 输出路径" }
+          - { name: server, type: _types.basics.string, required: false, description: "server 输出目录" }
+          - { name: client, type: _types.basics.string, required: false, description: "client 输出目录" }
+      - { name: routes, type: _types.basics.string, required: false, description: "前端路由契约 ID" }
+      - { name: packages, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, description: "前端包列表" }
+
+  - name: derive
+    type: _types.structures.object
+    required: true
+    description: "derive 脚本输入"
+    fields:
+      - name: replace
+        type: _types.structures.list<_types.structures.object>
+        required: true
+        min_items: 1
+        description: "派生时的字符串替换"
+        item_fields:
+          - { name: from, type: _types.basics.string, required: true, description: "原文" }
+          - { name: to, type: _types.basics.string, required: true, description: "替换值" }
+      - { name: delete_after_derive, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, description: "derive 后删除的路径" }

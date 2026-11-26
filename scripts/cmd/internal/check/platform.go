@@ -1,5 +1,5 @@
-// platform.go 校验 platform 单例契约的字段规范与字段顺序。
-// 这些契约没有实例增长，targets 使用固定文件而不是 <file> 模板；
+// platform.go 校验无实例增长的单例契约（project + platform.*）的字段规范与字段顺序。
+// 这些契约 targets 使用固定文件而不是 <file> 模板；
 // 语义检查仍由 modules/access/errors 等领域文件负责。
 package check
 
@@ -10,6 +10,7 @@ import (
 )
 
 var platformSingletonTypes = []string{
+	"project",
 	"platform.environments",
 	"platform.modules",
 	"platform.quality",

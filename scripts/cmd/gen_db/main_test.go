@@ -194,37 +194,27 @@ func TestColumnTypeRejectsUnsigned(t *testing.T) {
 	}
 }
 
-// TestIntegerBitsDefaultMatchesGenerator 锁定类型元层与 DDL 生成器对 integer 默认位宽的一致解释：
-// 未写 bits 的列必须生成与声明默认一致的 PostgreSQL 类型；改任一侧而不同步会在这里失败。
-func TestIntegerBitsDefaultMatchesGenerator(t *testing.T) {
-	root := filepath.Join("..", "..", "..")
-	shared, err := contractspec.LoadSharedTypes(filepath.Join(root, "contracts", "_meta"))
-	if err != nil {
-		t.Fatal(err)
+// TestIntegerVariantMapsToPostgres 锁定类型引用的 variant 到 PostgreSQL 类型的映射；
+// 位宽只来自 variant，不再有列级 bits 参数。
+func TestIntegerVariantMapsToPostgres(t *testing.T) {
+	wantByVariant := map[string]string{
+		"8": "SMALLINT", "16": "SMALLINT", "32": "INTEGER", "64": "BIGINT",
 	}
-	fam, ok := shared.TypeFamilies["integer"]
-	if !ok {
-		t.Fatal("integer family is missing")
-	}
-	bits, ok := fam.Params["bits"]
-	if !ok {
-		t.Fatal("integer.bits is missing")
-	}
-	if bits.Default == nil {
-		t.Fatal("integer.bits.default is missing")
-	}
-	def := intValue(bits.Default)
-	wantByBits := map[int]string{8: "SMALLINT", 16: "SMALLINT", 32: "INTEGER", 64: "BIGINT"}
-	want, ok := wantByBits[def]
-	if !ok {
-		t.Fatalf("integer.bits.default %d has no PostgreSQL mapping", def)
-	}
-	got, err := columnType(column{Name: "x", Type: "integer"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != want {
-		t.Fatalf("integer default bits %d maps to %q, want %q", def, got, want)
+	for variant, want := range wantByVariant {
+		cols, err := parseColumns([]any{map[string]any{
+			"name": "x",
+			"type": "_types.basics.integer." + variant,
+		}}, nil)
+		if err != nil {
+			t.Fatalf("integer.%s parse: %v", variant, err)
+		}
+		got, err := columnType(cols[0])
+		if err != nil {
+			t.Fatalf("integer.%s DDL: %v", variant, err)
+		}
+		if got != want {
+			t.Fatalf("integer.%s maps to %q, want %q", variant, got, want)
+		}
 	}
 }
 

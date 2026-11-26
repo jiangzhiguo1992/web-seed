@@ -842,7 +842,7 @@ func TestRenderFieldValueCustomIntegerKey(t *testing.T) {
 		ItemFields: []Field{{Name: "id", Type: "_types.basics.page_limit", Required: true}},
 	}, ValueTypes{
 		CustomTypes: map[string]CustomValueType{
-			"page_limit": {Family: "integer"},
+			"page_limit": {Type: "_types.basics.integer.32"},
 		},
 	})
 	if err != nil {
@@ -867,7 +867,7 @@ func TestRenderFieldValueCustomDateKey(t *testing.T) {
 		ItemFields: []Field{{Name: "at", Type: "_types.basics.date_only", Required: true}},
 	}, ValueTypes{
 		CustomTypes: map[string]CustomValueType{
-			"date_only": {Family: "datetime", Params: map[string]any{"mode": "date"}},
+			"date_only": {Type: "_types.basics.datetime.timezone", Params: map[string]any{"mode": "date"}},
 		},
 	})
 	if err != nil {

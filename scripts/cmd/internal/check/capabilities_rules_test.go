@@ -1303,7 +1303,7 @@ func TestCheckWhenLiteralCustomID(t *testing.T) {
 	c := &Checker{valueTypes: ValueTypes{
 		TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
 		CustomTypes: map[string]contractspec.CustomValueType{
-			"id": {Family: "integer", Params: map[string]any{"bits": 64}},
+			"id": {Type: "_types.basics.integer.64"},
 		},
 	}}
 	c.checkWhenLiteral("id", float64(1), "rel", "step", "field")
@@ -1321,7 +1321,7 @@ func TestServiceTypesCompatibleIntegerBits(t *testing.T) {
 	c := &Checker{valueTypes: ValueTypes{
 		TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
 		CustomTypes: map[string]contractspec.CustomValueType{
-			"id": {Family: "integer", Params: map[string]any{"bits": 64}},
+			"id": {Type: "_types.basics.integer.64"},
 		},
 	}}
 	if c.serviceTypesCompatible("_types.basics.integer", "_types.basics.id") {
@@ -2533,7 +2533,7 @@ func TestCustomTypeParamConsistency(t *testing.T) {
 		schema.ValueTypes.CustomTypes = map[string]CustomValueType{}
 	}
 	schema.ValueTypes.CustomTypes["bad"] = CustomValueType{
-		Family:      "string",
+		Type:        "_types.basics.string",
 		Description: "bad",
 		Params:      map[string]any{"min_len": 10, "max_len": 5},
 	}
@@ -3246,8 +3246,8 @@ func TestCustomTypeNameCollision(t *testing.T) {
 	if schema.ValueTypes.CustomTypes == nil {
 		schema.ValueTypes.CustomTypes = map[string]CustomValueType{}
 	}
-	schema.ValueTypes.CustomTypes["object"] = CustomValueType{Family: "string", Description: "bad"}
-	schema.ValueTypes.CustomTypes["ref"] = CustomValueType{Family: "string", Description: "bad"}
+	schema.ValueTypes.CustomTypes["object"] = CustomValueType{Type: "_types.basics.string", Description: "bad"}
+	schema.ValueTypes.CustomTypes["ref"] = CustomValueType{Type: "_types.basics.string", Description: "bad"}
 	c := &Checker{}
 	c.checkSharedTypes(schema)
 	got := strings.Join(c.errs, "\n")

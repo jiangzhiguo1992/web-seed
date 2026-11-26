@@ -499,8 +499,8 @@ func (c *Checker) serviceTypesCompatible(src, dst string) bool {
 		return false
 	}
 	if sf == "integer" {
-		sb, sok := c.serviceTypeBits(s.base)
-		db, dok := c.serviceTypeBits(d.base)
+		sb, sok := c.serviceTypeBits(src)
+		db, dok := c.serviceTypeBits(dst)
 		if sok && dok && sb != db {
 			return false
 		}
@@ -508,24 +508,13 @@ func (c *Checker) serviceTypesCompatible(src, dst string) bool {
 	return true
 }
 
-// serviceTypeBits 返回以 integer 持久化的类型的位宽；非 integer 返回 false。
-func (c *Checker) serviceTypeBits(base string) (int, bool) {
-	if strings.HasPrefix(base, "data.enums.") {
+// serviceTypeBits 返回以 integer 持久化的原始类型引用的位宽；非 integer 返回 false。
+// 必须传原始引用而不是 parseTypeShape 的 base，否则 variant 已被剥离。
+func (c *Checker) serviceTypeBits(typ string) (int, bool) {
+	if strings.HasPrefix(normalizeContractType(typ), "data.enums.") {
 		return 32, true
 	}
-	if custom, ok := c.valueTypes.CustomTypes[base]; ok {
-		if custom.Family != "integer" {
-			return 0, false
-		}
-		if bits, ok := toInt(custom.Params["bits"]); ok {
-			return bits, true
-		}
-		return 32, true
-	}
-	if base == "integer" {
-		return 32, true
-	}
-	return 0, false
+	return c.typeIntegerBits(typ)
 }
 
 // computeServiceWriteClosure 在 service 调用图上传播写表能力（直接写或经调用间接写）。

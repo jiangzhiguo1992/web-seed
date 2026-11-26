@@ -150,9 +150,9 @@ func TestLoadSharedTypesStructures(t *testing.T) {
 	}
 
 	idx := strings.Index(string(shared), "\nstructures:")
-	tail := strings.Replace(string(shared)[idx:], "type: _types.basics.integer", "type: _types.basics.bogus", 1)
+	tail := strings.Replace(string(shared)[idx:], "type: _types.basics.integer.32", "type: _types.basics.bogus.32", 1)
 	writeMeta(t, root, "_types.yaml", string(shared)[:idx]+tail)
-	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown basics type") {
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), "unknown basics family") {
 		t.Fatalf("unknown structure param type: %v", err)
 	}
 
@@ -254,9 +254,9 @@ func TestSharedTypesConcreteTypes(t *testing.T) {
 		t.Fatalf("valid _types.yaml rejected: %v", err)
 	}
 
-	body := strings.Replace(string(shared), "      64: { go: int64, pg: [ bigint, bigserial ], ts: number }\n", "", 1)
+	body := strings.Replace(string(shared), "boolean: { go: bool, pg: [ boolean ], ts: boolean }", "bool: { go: bool, pg: [ boolean ], ts: boolean }", 1)
 	writeMeta(t, root, "_types.yaml", body)
-	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), `missing concrete type "64"`) {
+	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), `missing concrete type "boolean"`) {
 		t.Fatalf("missing concrete type: %v", err)
 	}
 
@@ -264,6 +264,58 @@ func TestSharedTypesConcreteTypes(t *testing.T) {
 	writeMeta(t, root, "_types.yaml", body)
 	if _, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta")); err == nil || !strings.Contains(err.Error(), `invalid pg type "bogus"`) {
 		t.Fatalf("invalid pg type: %v", err)
+	}
+}
+
+func TestLoadCustomTypesRequiresConcreteType(t *testing.T) {
+	root := t.TempDir()
+	sharedRaw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeMeta(t, root, "_types.yaml", string(sharedRaw))
+	shared, err := LoadSharedTypes(filepath.Join(root, "contracts/_meta"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := shared.CommonParams["default"]; !ok {
+		t.Fatal("common_params.default is not declared")
+	}
+
+	write := func(body string) error {
+		dir := filepath.Join(root, "contracts/data")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "types.yaml"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, err := LoadCustomTypes(root, shared.TypeFamilies, shared.CommonParams)
+		return err
+	}
+
+	valid := `id: data.types
+summary: "x"
+schema_version: 1
+stability: draft
+do_not: [ "x" ]
+custom_types:
+  id:
+    type: _types.basics.integer.64
+    description: "id"
+  page_offset:
+    type: _types.basics.integer.32
+    description: "offset"
+    params: { min: 0, default: 0 }
+`
+	if err := write(valid); err != nil {
+		t.Fatalf("valid custom types rejected: %v", err)
+	}
+	if err := write(strings.Replace(valid, "type: _types.basics.integer.64", "type: _types.basics.integer", 1)); err == nil || !strings.Contains(err.Error(), "requires a concrete variant") {
+		t.Fatalf("bare integer accepted: %v", err)
+	}
+	if err := write(strings.Replace(valid, "type: _types.basics.integer.64", "family: integer", 1)); err == nil || !strings.Contains(err.Error(), "field family not found") {
+		t.Fatalf("legacy family key accepted: %v", err)
 	}
 }
 

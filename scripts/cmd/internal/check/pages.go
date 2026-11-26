@@ -311,7 +311,7 @@ func (c *Checker) pageBaseType(t string) string {
 	return t
 }
 
-// loadPageTypeFamilies 读取 data.types.custom_types 的 family。
+// loadPageTypeFamilies 读取 data.types.custom_types 的 type 所属族。
 func (c *Checker) loadPageTypeFamilies() map[string]string {
 	out := map[string]string{}
 	doc, err := loadYAML(filepath.Join(c.root, "contracts/data/types.yaml"))
@@ -321,7 +321,8 @@ func (c *Checker) loadPageTypeFamilies() map[string]string {
 	custom, _ := asMap(doc["custom_types"])
 	for name, raw := range custom {
 		item, _ := asMap(raw)
-		if family, _ := item["family"].(string); family != "" {
+		typ, _ := item["type"].(string)
+		if family, _, ok := contractspec.SplitBasicsRef(typ); ok {
 			out[name] = family
 		}
 	}

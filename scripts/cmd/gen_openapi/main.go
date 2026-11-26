@@ -721,7 +721,7 @@ func loadCustomTypes(root string) (map[string]contractspec.CustomValueType, erro
 	if err != nil {
 		return nil, err
 	}
-	doc, err := contractspec.LoadCustomTypes(root, t.TypeFamilies)
+	doc, err := contractspec.LoadCustomTypes(root, t.TypeFamilies, t.CommonParams)
 	if err != nil {
 		return nil, err
 	}
@@ -962,7 +962,7 @@ func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueTyp
 		family = typ
 	}
 	if nt, ok := customTypes[family]; ok {
-		family = nt.Family
+		family, variant, _ = nt.Basics()
 		params = nt.Params
 	}
 	out := map[string]any{}

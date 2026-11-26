@@ -515,8 +515,10 @@ func (c *Checker) valueType(typ string) string {
 		return name
 	}
 	if customType, ok := c.valueTypes.CustomTypes[name]; ok {
-		if _, ok := c.valueTypes.TypeFamilies[customType.Family]; ok {
-			return customType.Family
+		if family, _, ok := customType.Basics(); ok {
+			if _, ok := c.valueTypes.TypeFamilies[family]; ok {
+				return family
+			}
 		}
 	}
 	return ""

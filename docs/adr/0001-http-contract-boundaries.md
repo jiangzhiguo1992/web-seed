@@ -289,8 +289,8 @@ checker 已实现：operation/status/role/permission/event 引用、表 ID 属�
 
 第 8 条的 `_types.basics.positive_integer` 已删除，账号 ID 不再区分 HTTP 与 service/query。统一规则：
 
-1. **单一 ID 类型**：实体 ID 与外键 ID 全部用 `_types.basics.id`（integer，bits 64，0 可作为无值哨兵）；分页、计数、状态码等非 ID 整数继续用 `_types.basics.integer.32`（bits 32）。
+1. **单一 ID 类型**：实体 ID 与外键 ID 全部用 `_types.basics.id`（对应 `_types.basics.integer.64`，0 可作为无值哨兵）；分页、计数、状态码等非 ID 整数继续用 `_types.basics.integer.32`。
 2. **全链路覆盖**：表列、entity 字段（由来源列推断）、query/service/event 的 ID 参数和返回、HTTP path ID 参数、`contract-new` 骨架全部使用 `_types.basics.id`。
-3. **硬校验**：`reference-target` 比较 integer 列 bits；`query-param-column` 比较参数与列 bits；`service-input-type` 比较赋值两端的 integer bits。32 位类型不能绑定或赋给 64 位 ID。
+3. **硬校验**：`reference-target` 比较 integer 列的类型 variant 位宽；`query-param-column` 比较参数与列的位宽；`service-input-type` 比较赋值两端的 integer 位宽。32 位类型不能绑定或赋给 64 位 ID。
 4. **HTTP 取舍**：HTTP path ID 使用 `_types.basics.id` 后不再生成 `minimum: 1`；`0` 视为无效 ID，由查询返回未找到，而不是由 OpenAPI 层拒绝。
 5. **不引入 `id_positive`**：HTTP path 与 service/query 共用 `_types.basics.id`，`0` 只作为 service 内部“无值”哨兵（如 auth 的 `binding_id`）。若未来需要路径层拒绝，必须单独设计请求约束类型，不得把哨兵语义塞回领域 ID。当前决定接受 OpenAPI 缺少 `minimum`，以保持单一 ID 类型。

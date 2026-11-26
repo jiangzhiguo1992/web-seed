@@ -1191,7 +1191,7 @@ func TestRenderedQueryParamBindsIDColumn(t *testing.T) {
 		valueTypes: ValueTypes{
 			TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
 			CustomTypes: map[string]contractspec.CustomValueType{
-				"id": {Family: "integer", Params: map[string]any{"bits": 64}},
+				"id": {Type: "_types.basics.integer.64"},
 			},
 		},
 	}
@@ -1209,7 +1209,7 @@ func TestQueryParamColumnIntegerBits(t *testing.T) {
 		valueTypes: ValueTypes{
 			TypeFamilies: map[string]ValueTypeFamily{"integer": {}},
 			CustomTypes: map[string]contractspec.CustomValueType{
-				"id": {Family: "integer", Params: map[string]any{"bits": 64}},
+				"id": {Type: "_types.basics.integer.64"},
 			},
 		},
 	}
