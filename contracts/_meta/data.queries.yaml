@@ -84,7 +84,7 @@ fields:
         description: "方法入参"
         item_fields:
           - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: _types.basics.string, required: true, pattern: '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.enums\.[a-z][a-z0-9_]*|context\.Context)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|_types\.structures\.object|data\.enums\.[a-z][a-z0-9_]*)>)$', description: "_types.basics.*、data.enums.* 或 context.Context；_types.structures.list<T> 表示数组" }
+          - { name: type, type: _types.basics.string, required: true, pattern: '^((\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.enums\.[a-z][a-z0-9_]*))|context\.Context|_types\.structures\.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|_types\.structures\.object|data\.enums\.[a-z][a-z0-9_]*)>)$', description: "_types.basics.*、data.enums.* 或裸 context.Context；_types.structures.list<T> 表示数组" }
           - { name: column, type: _types.basics.string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "绑定列；数组参数绑定元素列" }
           - { name: expr, type: _types.basics.string, soft: true, required: false, description: "参数表达式；与 column 互斥" }
           - { name: nullable, type: _types.basics.boolean, required: false, default: false, description: "是否可空" }
@@ -140,7 +140,7 @@ rules:
   - { id: query-return-columns, text: "kind=columns 的 columns（data.tables.<t>.col.<c>）必须是查询表上的列", implemented_by: [ query-return-columns ] }
   - { id: query-sensitive-columns, text: "sensitivity: secret 的列/字段不得被跨模块查询返回或绑定为参数；kind=columns 的 secret 只有同模块可显式列出；entity 默认投影由生成器排除 secret，computed secret 跨模块一律拒绝", implemented_by: [ query-sensitive-columns ] }
   - { id: query-errors, text: "errors 必须是存在的 platform.errors.*；[] 表示无领域错误", implemented_by: [ query-errors ] }
-  - { id: query-index-ref, text: "index_ref 每项必须指向查询表的 PK 或 indexes[].name；columns 非空、去重且必须等于该索引列的最左前缀（顺序一致，PK 列为 id）；显式索引必须在 index.used_by 中列出该查询", implemented_by: [ query-index-ref ] }
+  - { id: query-index-ref, text: "index_ref 每项必须指向查询表的 PK 或 indexes[].name；columns 非空、去重且必须等于该索引列的最左前缀（顺序一致，PK 列为 id）；显式索引的 used_by 必须包含该查询（由 gen-graph 写入）", implemented_by: [ query-index-ref ] }
   - { id: query-index-used-by, text: "index.used_by 的每个查询必须在 index_ref 中引用该索引", implemented_by: [ query-index-used-by ] }
   - { id: query-cache-ref, text: "query.caches 每项必须是 storage.caches 已登记的逻辑缓存（data.tables.<t>.cache.<k>[+<k>]），且 cache_of 在 query.tables 中", implemented_by: [ query-cache-ref ] }
   - { id: query-cache-keys, text: "读查询的每个缓存键列必须出现在 params[].column 或同表 index_ref[].columns 中；由 params 绑定全部缓存键时必须声明该缓存", implemented_by: [ query-cache-keys ] }

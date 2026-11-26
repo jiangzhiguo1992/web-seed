@@ -87,8 +87,8 @@ indexes:
     unique: true
     comment: "邮箱全局唯一；软删后不释放"
     used_by:
-      - data.queries.auth.get_auth_email_by_username_domain
       - data.queries.auth.create_auth_email
+      - data.queries.auth.get_auth_email_by_username_domain
 
   - name: uq_auth_email_account
     columns: [ account_id ]

@@ -81,7 +81,7 @@ gen-db: contract-check ## data/tables/* → PostgreSQL schema + migrations
 gen-db-check: ## 校验 PostgreSQL schema 与 migrations 是否为最新
 	cd scripts/cmd && go run ./gen_db -root "$(CURDIR)" -check
 
-gen-graph: ## 按引用计算并写回 table/entity 的 used_by
+gen-graph: ## 按引用写回生成字段（table/entity/query/service/constraint/index/enum/lifecycle/event）
 	cd scripts/cmd && go run ./gen_graph -root "$(CURDIR)"
 
 gen-model: ## data/entities + data/enums → Go/TS 模型

@@ -122,17 +122,17 @@ indexes:
     unique: true
     comment: "访问令牌哈希全局唯一查找"
     used_by:
-      - data.queries.token.get_token_by_access
       - data.queries.token.create_token
+      - data.queries.token.get_token_by_access
 
   - name: uq_token_refresh_hash
     columns: [ refresh_token_hash ]
     unique: true
     comment: "刷新令牌哈希全局唯一查找"
     used_by:
+      - data.queries.token.create_token
       - data.queries.token.get_token_by_refresh
       - data.queries.token.revoke_token
-      - data.queries.token.create_token
 
   - name: idx_token_account_status
     columns: [ deleted_at, account_id, status ]

@@ -710,6 +710,10 @@ func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) 
 	if typ == "" {
 		return
 	}
+	if err := validateContextErrorShape(typ); err != nil {
+		c.rulef("service-param-type", "%s: %v", where, err)
+		return
+	}
 	base, ok := parseServiceType(typ)
 	if !ok {
 		c.rulef("service-param-type", "%s: malformed type %s (only T, *T and one-level List<T> are allowed)", where, typ)
@@ -746,6 +750,24 @@ func (c *Checker) checkTypeName(v any, typeNames map[string]bool, where string) 
 	if !typeNames[base] {
 		c.rulef("service-ref", "%s: unknown type %s", where, base)
 	}
+}
+
+// validateContextErrorShape 拒绝 context.Context / error 的指针或列表包装：
+// 两者只能作为裸值出现在 params/returns 中。
+func validateContextErrorShape(typ string) error {
+	t := normalizeContractType(typ)
+	ptr := strings.HasPrefix(t, "*")
+	if ptr {
+		t = strings.TrimSpace(strings.TrimPrefix(t, "*"))
+	}
+	list := strings.HasPrefix(t, "List<") && strings.HasSuffix(t, ">")
+	if list {
+		t = strings.TrimSpace(t[len("List<") : len(t)-1])
+	}
+	if (t == "context.Context" || t == "error") && (ptr || list) {
+		return fmt.Errorf("%s must be a bare value, not pointer/list", t)
+	}
+	return nil
 }
 
 // parseServiceType 拆掉至多一层指针与一层 List<>，返回底层类型名。

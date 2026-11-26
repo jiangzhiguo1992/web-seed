@@ -617,11 +617,28 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		if want := schema.Targets.FileID(filepath.Base(rel)); doc["id"] != want {
 			c.rulef("http-file", "%s: id %q must be %q", rel, doc["id"], want)
 		}
+		fileStability, _ := doc["stability"].(string)
+		rawOps := rawHTTPOps(doc, mount, policy, fileStability)
 		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, openapispec.HTTPNormalizeOptions{TransportHeaders: policy.TransportHeaders, BodyTypes: policy.BodyTypes}); err != nil {
 			if strings.Contains(err.Error(), "transport-managed") {
 				c.rulef("http-headers", "%s: %v", rel, err)
 			} else {
 				c.rulef("http-shape", "%s: %v", rel, err)
+			}
+			// 归一化失败仍登记原始 operation 元数据，避免下游把“文件格式错误”
+			// 误报成“service 未暴露 / used_by 漏项 / operation 不存在”的级联错误。
+			fileID, _ := doc["id"].(string)
+			if fileID != "" {
+				httpVersions[fileID] = mount.APIVersion
+				declaredHTTP[fileID] = true
+				seenAudience[fileID] = map[string]bool{}
+				for _, audience := range mount.Audience {
+					seenAudience[fileID][audience] = true
+				}
+			}
+			for _, op := range rawOps {
+				c.httpOps[op.ID] = httpOpInfo{Path: op.Path, Method: op.Method, Service: op.Service, Statuses: op.Statuses}
+				c.addServiceUsedBy(op.Service, op.ID)
 			}
 			continue
 		}
@@ -768,9 +785,18 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 		}
 		rel := relPath(c.root, file)
 		opMeta := openapispec.CollectHTTPOperationMeta(doc)
-		fileAudience := openapispec.CollectHTTPMount(doc).Audience
+		mount := openapispec.CollectHTTPMount(doc)
+		fileAudience := mount.Audience
 		fileStability, _ := doc["stability"].(string)
+		rawOps := rawHTTPOps(doc, mount, policy, fileStability)
 		if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, openapispec.HTTPNormalizeOptions{TransportHeaders: policy.TransportHeaders, BodyTypes: policy.BodyTypes}); err != nil {
+			for _, op := range rawOps {
+				if op.Service == "" {
+					continue
+				}
+				exposedServices[op.Service] = true
+				serviceOps[op.Service] = append(serviceOps[op.Service], op.Method+" "+op.Path)
+			}
 			continue
 		}
 		fileID, _ := doc["id"].(string)
@@ -984,8 +1010,76 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 	}
 }
 
+type rawHTTPOperation struct {
+	ID       string
+	Service  string
+	Method   string
+	Path     string
+	Statuses map[int]bool
+}
+
+// rawHTTPOps 从源契约读取 operation 元数据；normalizer 失败时仍可用它登记
+// service/operation 的存在性，避免后续检查产生级联误报。
+func rawHTTPOps(doc map[string]any, mount openapispec.HTTPMount, policy httpPolicy, stability string) []rawHTTPOperation {
+	paths, _ := asMap(doc["paths"])
+	var out []rawHTTPOperation
+	for path, rawPath := range paths {
+		item, _ := asMap(rawPath)
+		for method, rawOp := range item {
+			switch method {
+			case "get", "post", "put", "patch", "delete", "head", "options":
+			default:
+				continue
+			}
+			op, _ := asMap(rawOp)
+			id, _ := op["id"].(string)
+			if id == "" {
+				if contract, ok := asMap(op["contract"]); ok {
+					id, _ = contract["id"].(string)
+				}
+			}
+			if id == "" {
+				continue
+			}
+			service, _ := op["service"].(string)
+			statuses := map[int]bool{}
+			for status := range asMapValue(op["response"]) {
+				if n, err := strconv.Atoi(status); err == nil {
+					statuses[n] = true
+				}
+			}
+			for _, n := range policy.Always {
+				statuses[n] = true
+			}
+			if len(asList(op["security"])) > 0 {
+				for _, n := range policy.Secured {
+					statuses[n] = true
+				}
+			}
+			if request, ok := asMap(op["request"]); ok && request["body"] != nil {
+				for _, n := range policy.Body {
+					statuses[n] = true
+				}
+			}
+			if stability == "deprecated" {
+				for _, n := range policy.Deprecated {
+					statuses[n] = true
+				}
+			}
+			out = append(out, rawHTTPOperation{
+				ID:       id,
+				Service:  service,
+				Method:   method,
+				Path:     strings.TrimSuffix(mount.Path, "/") + path,
+				Statuses: statuses,
+			})
+		}
+	}
+	return out
+}
+
 // applyHTTPRequiredDefaults 把省略的 required 按 true 补进内存文档。
-// HTTP 语义默认必填，源契约不必重复写 required: true；模板仍把该字段声明为必填。
+// HTTP 语义默认必填；模板把该字段声明为 optional + default:true，源契约无需重复写 required: true。
 func applyHTTPRequiredDefaults(doc map[string]any) {
 	paths, _ := asMap(doc["paths"])
 	for _, rawPath := range paths {

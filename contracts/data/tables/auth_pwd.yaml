@@ -88,8 +88,8 @@ indexes:
     unique: true
     comment: "登录名全局唯一；软删后不释放"
     used_by:
-      - data.queries.auth.get_auth_pwd_by_username
       - data.queries.auth.create_auth_pwd
+      - data.queries.auth.get_auth_pwd_by_username
 
   - name: uq_auth_pwd_account
     columns: [ account_id ]

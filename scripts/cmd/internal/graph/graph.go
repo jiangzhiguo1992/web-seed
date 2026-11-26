@@ -22,6 +22,7 @@ type TableUsedBy struct {
 	Queries      []string
 	References   []string
 	ReferencedBy []string
+	Indexes      map[string][]string
 }
 
 type EntityRelation struct {
@@ -59,6 +60,7 @@ type tableSet struct {
 	queries      map[string]bool
 	references   map[string]bool
 	referencedBy map[string]bool
+	indexUsedBy  map[string]map[string]bool
 }
 
 type entitySet struct {
@@ -172,7 +174,7 @@ func Compute(root string) (*Snapshot, error) {
 			continue
 		}
 		tableDocs[id] = doc
-		tables[id] = &tableSet{entities: map[string]bool{}, queries: map[string]bool{}, references: map[string]bool{}, referencedBy: map[string]bool{}}
+		tables[id] = &tableSet{entities: map[string]bool{}, queries: map[string]bool{}, references: map[string]bool{}, referencedBy: map[string]bool{}, indexUsedBy: map[string]map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 		unique := map[string]bool{"id": true}
 		for _, raw := range asList(doc["indexes"]) {
@@ -321,6 +323,20 @@ func Compute(root string) (*Snapshot, error) {
 					ts.queries[qid] = true
 				}
 			}
+			for _, rawRef := range asList(m["index_ref"]) {
+				ref, _ := asMap(rawRef)
+				index, _ := ref["index"].(string)
+				table, name, ok := splitTableIndexRef(index)
+				if !ok || name == "pk" {
+					continue
+				}
+				if ts := tables[table]; ts != nil {
+					if ts.indexUsedBy[name] == nil {
+						ts.indexUsedBy[name] = map[string]bool{}
+					}
+					ts.indexUsedBy[name][qid] = true
+				}
+			}
 			for _, e := range returnsEntities(m) {
 				if es := entities[e]; es != nil {
 					es.queries[qid] = true
@@ -396,7 +412,11 @@ func Compute(root string) (*Snapshot, error) {
 		QueryFiles:  queryFiles,
 	}
 	for id, ts := range tables {
-		snap.Tables[id] = TableUsedBy{Entities: sortedKeys(ts.entities), Queries: sortedKeys(ts.queries), References: sortedKeys(ts.references), ReferencedBy: sortedKeys(ts.referencedBy)}
+		indexes := map[string][]string{}
+		for name, qs := range ts.indexUsedBy {
+			indexes[name] = sortedKeys(qs)
+		}
+		snap.Tables[id] = TableUsedBy{Entities: sortedKeys(ts.entities), Queries: sortedKeys(ts.queries), References: sortedKeys(ts.references), ReferencedBy: sortedKeys(ts.referencedBy), Indexes: indexes}
 	}
 	for id, es := range entities {
 		snap.Entities[id] = EntityUsedBy{Queries: sortedKeys(es.queries), Includes: sortedRelations(es.includes), IncludedBy: sortedRelations(es.includedBy)}
@@ -492,6 +512,20 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 				continue
 			}
 			ok, err := syncItemFieldBlock(filepath.Join(root, file), "constraints", "name", name, "used_by", s.Constraints[id+"."+name])
+			if err != nil {
+				return changed, err
+			}
+			if ok {
+				changed = append(changed, file)
+			}
+		}
+		for _, raw := range asList(doc["indexes"]) {
+			m, _ := asMap(raw)
+			name, _ := m["name"].(string)
+			if name == "" {
+				continue
+			}
+			ok, err := syncItemFieldBlock(filepath.Join(root, file), "indexes", "name", name, "used_by", s.Tables[id].Indexes[name])
 			if err != nil {
 				return changed, err
 			}
@@ -622,6 +656,18 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 			wantUsed := s.Constraints[id+"."+name]
 			if !sameSet(gotUsed, wantUsed) {
 				drift = append(drift, fmt.Sprintf("%s: constraints[%s].used_by must be %v, got %v", file, name, wantUsed, gotUsed))
+			}
+		}
+		for _, raw := range asList(doc["indexes"]) {
+			m, _ := asMap(raw)
+			name, _ := m["name"].(string)
+			if name == "" {
+				continue
+			}
+			gotUsed := stringList(m["used_by"])
+			wantUsed := s.Tables[id].Indexes[name]
+			if !sameSet(gotUsed, wantUsed) {
+				drift = append(drift, fmt.Sprintf("%s: indexes[%s].used_by must be %v, got %v", file, name, wantUsed, gotUsed))
 			}
 		}
 	}
@@ -913,6 +959,15 @@ func splitTableColumnRef(ref string) (table, col string, ok bool) {
 		return "", "", false
 	}
 	return parts[0], parts[1], true
+}
+
+// splitTableIndexRef 拆 data.tables.<table>.pk 或 data.tables.<table>.<idx|uq>。
+func splitTableIndexRef(ref string) (table, name string, ok bool) {
+	parts := strings.Split(ref, ".")
+	if len(parts) != 4 || parts[0] != "data" || parts[1] != "tables" || parts[2] == "" || parts[3] == "" {
+		return "", "", false
+	}
+	return "data.tables." + parts[2], parts[3], true
 }
 
 // queryItemUsedBy 按 queries 列表顺序返回每项的 used_by。

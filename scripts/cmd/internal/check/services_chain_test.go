@@ -311,6 +311,10 @@ func TestServiceTypeGrammar(t *testing.T) {
 		{"map", "Map<integer>", "malformed type"},
 		{"unknown-data-type", "data.foo.bar", "unknown type"},
 		{"forbidden-data-tables", "data.tables.account", "data.tables.* is not a method type"},
+		{"pointer-context", "*context.Context", "must be a bare value"},
+		{"pointer-error", "*error", "must be a bare value"},
+		{"list-context", "List<context.Context>", "must be a bare value"},
+		{"list-error", "List<error>", "must be a bare value"},
 	}
 	for _, tc := range cases {
 		tc := tc

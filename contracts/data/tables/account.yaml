@@ -67,8 +67,8 @@ indexes:
     unique: true
     comment: "账号编号全局唯一；软删后不释放"
     used_by:
-      - data.queries.account.exists_account_number
       - data.queries.account.create_account
+      - data.queries.account.exists_account_number
 
   - name: idx_account_created_at_id
     columns: [ deleted_at, created_at, id ]

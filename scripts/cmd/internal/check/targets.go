@@ -3,11 +3,60 @@
 package check
 
 import (
+	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
+
+var targetNamingPatterns = map[string]*regexp.Regexp{
+	"snake_case": regexp.MustCompile(`^[a-z][a-z0-9_]*$`),
+}
+
+// checkTargets 校验 _meta 的 targets 声明是否可扫描、可派生 ID。
+// 所有按文件派生的契约类型共用；单文件契约不调用。
+func (c *Checker) checkTargets(schema *Schema) {
+	t := schema.Targets
+	where := schema.ID
+	if t.Dir == "" || t.Glob == "" {
+		c.rulef("schema.targets", "%s: targets.dir/glob must not be empty", where)
+	}
+	if t.ID == "" || !strings.Contains(t.ID, "<file>") {
+		c.rulef("schema.targets", "%s: targets.id must contain <file>", where)
+	}
+	if _, ok := targetNamingPatterns[t.Naming]; !ok {
+		c.rulef("schema.targets", "%s: targets.naming must be snake_case", where)
+	}
+	if t.Dir != "" {
+		if info, err := os.Stat(filepath.Join(c.root, t.Dir)); err != nil || !info.IsDir() {
+			c.rulef("schema.targets", "%s: targets.dir %q is not a directory", where, t.Dir)
+		}
+	}
+}
+
+// checkTargetFileName 校验实例文件名符合 targets.naming。
+func (c *Checker) checkTargetFileName(schema *Schema, file, rel string) {
+	re := targetNamingPatterns[schema.Targets.Naming]
+	if re != nil && !re.MatchString(strings.TrimSuffix(file, filepath.Ext(file))) {
+		c.rulef("schema.targets", "%s: file name %q does not match targets.naming %s", rel, file, schema.Targets.Naming)
+	}
+}
+
+// checkStability 拒绝 TODO/FIXME 占位符；draft 不豁免任何校验。
+func (c *Checker) checkStability(_ map[string]any, rel string) {
+	b, err := os.ReadFile(filepath.Join(c.root, rel))
+	if err != nil {
+		return
+	}
+	for _, marker := range []string{"TODO", "FIXME"} {
+		if strings.Contains(string(b), marker) {
+			c.rulef("schema.stability", "%s: contract contains %s placeholder; stability does not exempt", rel, marker)
+		}
+	}
+}
 
 func (c *Checker) tableFiles() []string {
 	return c.targetFiles(c.tableTargets, "contracts/data/tables")

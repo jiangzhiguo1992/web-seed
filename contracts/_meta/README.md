@@ -104,7 +104,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 | 命令 | 作用 |
 |---|---|
 | `make contract-new type=<type> name=<name> [module=...] [table=...] [service=...]` | 按 `_meta/<type>.yaml` 渲染最小骨架；`contract-new` 不支持的类型需手写 |
-| `make gen-graph` | 写回 `table.entities` / `table.queries` / `model.queries` / `query.used_by` / `service.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / 规则锚点 / 生命周期动作与 `states.values[].steps` / `topics[].publish.emitted_by` / `dispatches[].emitted_by` |
+| `make gen-graph` | 写回 `table.entities` / `table.queries` / `model.queries` / `query.used_by` / `service.used_by` / `constraints[].used_by` / `validation[].used_by` / `indexes[].used_by` / `enums[].used_by` / 规则锚点 / 生命周期动作与 `states.values[].steps` / `topics[].publish.emitted_by` / `dispatches[].emitted_by` |
 | `make gen-graph-check` | 只校验生成字段是否最新 |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / 引用 / owner / 数据流 / 类型级规则 / service.used_by 与 states.values[].steps 对账 |
 | `make audit-types` | 审计全部契约 `type` 键：`_types.*` / 外部引用 / 显式例外，输出计数并以非零退出码报告裸类型 |
@@ -129,14 +129,14 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 - `_meta/<type>.yaml` 由 `KnownFields` 严格解析：拼错字段（如 `requred`）直接失败。
 - `_meta` 的 `pattern` / `key_patterns` 必须能编译且整体锚定（`^...$`），在加载期直接失败，避免退化为子串匹配；实例 schema 的 `key_patterns` 同样要求锚定。
 - 字段规范里的 `enum` / `const` / `default` / `examples` 值必须与字段类型兼容，并满足该字段的 `pattern` / `min_len` / `max_len` / `min` / `max`；`unique_key` 必须指向 string 字段；`unique` 只用于集合；`fields` 只用于 object。
-- `default` 只用于可省略字段；`required: true` 的字段不得声明 `default`（加载期直接拒绝）。`contract-new` 的必填字段骨架值由渲染器提供，不写在模板的 `default` 里。
+- `default` 对可选字段是语义默认值；对 `required: true` 字段是 `contract-new` 的骨架值（checker 仍要求实例显式声明，不会用 default 补值）。
 - 枚举兼容：`name` / `value` / `go_type` / `ts_type` / `code` 只能追加，不得删除或改名；`make contract-compat` 默认对比 `HEAD^1`，pre-commit 用 `make contract-compat-staged` 对比 index，CI 在完整历史 checkout 上执行。
 - 实例结构由 `fields` / `item_fields` 的 `required` / `type` / `enum` / `pattern` / `unique` /
   `unique_key` / `min` / `max` / `min_items` / `min_len` / `max_len` / `len` / `const` / `types` / `key_patterns` 校验；
   `soft: true` 标记不做通用结构校验的 soft zone（领域规则仍可部分检查）。
 - 字段顺序以模板为准（`checkFieldOrder`）；新增字段只改 `_meta` 模板。
 - `contracts/**/*.yaml` 的文本字段必须双引号（`schema.quote`）；同一对象不得重复键。
-- `contracts/` 下所有 YAML（含 `_meta` 字段规范）的 `type` 值必须是 `_types.basics.*` / `_types.structures.*` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`）；`_types.schemas.*` 只允许出现在字段规范的 `types` 节点种类列表里，不得作为 `type` 值。多变体 basics 族必须带具体 variant（缺 variant 报 `schema.type-concrete`）；单变体族必须裸写（带冗余 variant 也报 `schema.type-concrete`）；裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部 YAML；同一文件/路径已有更精确的领域错误时不重复报。`_meta` 顶层用 `contract`；`platform/http_conventions` 用 `json_type`，二者都不是 `type`，由专门规则校验。
+- `contracts/` 下所有 YAML（含 `_meta` 字段规范）的 `type` 值必须是 `_types.basics.*` / `_types.structures.*` 或已声明外部引用（`data.enums.*` / `data.entities.*` / `cap.services.*.schemas.*` / `data.tables.*.col.*` / `context.Context` / `error` / `time.*`，其中 `context.Context` 与 `error` 只能裸值、不得指针或列表包装）；`_types.schemas.*` 只允许出现在字段规范的 `types` 节点种类列表里，不得作为 `type` 值。多变体 basics 族必须带具体 variant（缺 variant 报 `schema.type-concrete`）；单变体族必须裸写（带冗余 variant 也报 `schema.type-concrete`）；裸类型名报 `schema.type-vocabulary`，由 checker 扫描 `contracts/` 下全部 YAML；同一文件/路径已有更精确的领域错误时不重复报。`_meta` 顶层用 `contract`；`platform/http_conventions` 用 `json_type`，二者都不是 `type`，由专门规则校验。
 - 类型级 `rules` 的每条必须有 `implemented_by`，包含自身 ID，且每个 ID 都是 checker 实际输出的
   `[rule-id]`；反向检查所有非 `schema.*` 输出都必须被某条规则声明。
 - `rule_ids_gen.go` 由 `make gen-rule-ids` 从 `rulef("...")` 生成；独立二进制也带完整映射。
@@ -145,7 +145,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 - `rules` 只允许出现在 `_meta`（`features/rules` 等领域规则集除外）；`do_not` 只允许出现在具体契约。
 - `generated: true` 字段必须同时 `write: forbidden`；由 `make gen-graph` 写入，checker 对账。
   `generated` 字段的 `min_items` 与手写字段一样生效；只有 `contract-new` 的骨架在生成阶段放宽（`relaxGeneratedFields`），入库实例不再豁免。`stability` 只表示定型状态，不豁免任何校验。
-  新增 `constraints[]` / `validation[]` 项时必须先写 `used_by: []`（`contract-new` 骨架已带）；`gen-graph` 只写值、不补字段，字段完全缺失会先报 `schema.required`。
+  新增 `constraints[]` / `validation[]` / `indexes[]` 项时必须先写 `used_by: []`（`contract-new` 骨架已带）；`gen-graph` 只写值、不补字段，字段完全缺失会先报 `schema.required`。
 
 ---
 

@@ -56,6 +56,12 @@ constraints:
     expr: "code IS NOT NULL"
     on_violation: platform.errors.COMMON_INTERNAL
     used_by: []
+indexes:
+  - name: uq_a_code
+    columns: [ code ]
+    unique: true
+    comment: "code unique"
+    used_by: []
 `)
 	writeFixture(t, root, "contracts/data/tables/b.yaml", `# table b
 id: data.tables.b
@@ -100,6 +106,8 @@ queries:
       - { name: e1, kind: entity, type: data.entities.e1 }
     tables: [ data.tables.a ]
     constraints: [ data.tables.a.ck_a_code ]
+    index_ref:
+      - { index: data.tables.a.uq_a_code, columns: [ code ] }
     used_by: []
   - name: GetB
     returns:
@@ -139,6 +147,9 @@ func TestCompute(t *testing.T) {
 	}
 	if got := snap.Constraints["data.tables.a.ck_a_code"]; len(got) != 1 || got[0] != "data.queries.q.get_a" {
 		t.Fatalf("constraint used_by = %v", got)
+	}
+	if got := snap.Tables["data.tables.a"].Indexes["uq_a_code"]; len(got) != 1 || got[0] != "data.queries.q.get_a" {
+		t.Fatalf("index used_by = %v", got)
 	}
 	if got := snap.Validations["data.entities.e1.v"]; len(got) != 1 || got[0] != "cap.services.x.get.load" {
 		t.Fatalf("validation used_by = %v", got)
@@ -372,6 +383,28 @@ validation:
 	}
 	if len(drift) != 0 {
 		t.Fatalf("orphan generated used_by drift: %v", drift)
+	}
+}
+
+func TestWriteIndexUsedBy(t *testing.T) {
+	root := fixtureRoot(t)
+	snap, err := Compute(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := snap.Write(root); err != nil {
+		t.Fatal(err)
+	}
+	table, _ := os.ReadFile(filepath.Join(root, "contracts/data/tables/a.yaml"))
+	if !strings.Contains(string(table), "used_by:\n      - data.queries.q.get_a") {
+		t.Fatalf("index used_by not written:\n%s", table)
+	}
+	drift, err := snap.Check(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(drift) != 0 {
+		t.Fatalf("index used_by drift: %v", drift)
 	}
 }
 

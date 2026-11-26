@@ -85,7 +85,7 @@ tables / entities / queries ──type──> types
 | storage → table | storage | `table` / `cache_of` / `archive_of` |
 | table / entity / query → type | data | `type` |
 
-`indexes[].used_by` 是手写设计声明；其余反向索引字段（`table.entities` / `table.queries` / `model.queries` / `queries[].used_by` / `enums[].used_by` / `constraints[].used_by` / `validation[].used_by` 等）由 `make gen-graph` 写回，禁止手改；它们只记直接关系，不展开传递闭包。完整清单见 [`contracts/_meta/README.md`](../_meta/README.md)。
+`indexes[].used_by` 与其余反向索引字段（`table.entities` / `table.queries` / `model.queries` / `queries[].used_by` / `enums[].used_by` / `constraints[].used_by` / `validation[].used_by` 等）由 `make gen-graph` 写回，禁止手改；它们只记直接关系，不展开传递闭包。完整清单见 [`contracts/_meta/README.md`](../_meta/README.md)。
 
 ---
 

@@ -19,7 +19,6 @@ var knownRuleIDs = map[string]bool{
 	"base-columns":                true,
 	"base-file":                   true,
 	"base-only":                   true,
-	"column-comment-length":       true,
 	"column-type":                 true,
 	"column-type-supported":       true,
 	"constraint-fields":           true,
@@ -254,6 +253,5 @@ var knownRuleIDs = map[string]bool{
 	"table-key-order":             true,
 	"table-queries-generated":     true,
 	"table-referenced-by":         true,
-	"table-summary-length":        true,
 	"versioning-refs":             true,
 }

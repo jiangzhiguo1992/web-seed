@@ -70,9 +70,10 @@ fields:
         description: "入参"
         item_fields:
           - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "参数名" }
-          - { name: type, type: _types.basics.string, required: true, pattern: &service_type '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "类型 ID；允许的引用与层数见 service-param-type" }
+          - { name: type, type: _types.basics.string, required: true, pattern: &service_type '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|time\.[A-Za-z][A-Za-z0-9_]*)|context\.Context|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "类型 ID；允许的引用与层数见 service-param-type" }
           - { name: nullable, type: _types.basics.boolean, required: false, description: "是否可空；调用方可省略" }
           - { name: default, type: _types.basics.any, required: false, description: "缺省值" }
+          - { name: description, type: _types.basics.string, required: false, description: "参数说明" }
 
       - name: returns
         type: _types.structures.list<_types.structures.object>
@@ -80,9 +81,10 @@ fields:
         description: "返回值"
         item_fields:
           - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "返回名" }
-          - { name: type, type: _types.basics.string, required: true, pattern: &service_return_type '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|context\.Context|error|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "返回值类型；允许的引用与层数见 service-param-type" }
+          - { name: type, type: _types.basics.string, required: true, pattern: &service_return_type '^(\*?(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|time\.[A-Za-z][A-Za-z0-9_]*)|context\.Context|error|_types\.structures.list<(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.(enums|entities)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|time\.[A-Za-z][A-Za-z0-9_]*)>)$', description: "返回值类型；允许的引用与层数见 service-param-type" }
           - { name: value, type: _types.basics.string, required: true, pattern: '^(\*|(params|step)\.[a-z][a-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*|\[[0-9]+\])*)$', description: "返回值来源：params.<path> 或 step.<id>.<path>；err 固定写 *，表示错误可来自任意步骤" }
           - { name: nullable, type: _types.basics.boolean, required: false, description: "是否可空" }
+          - { name: description, type: _types.basics.string, required: false, description: "返回值说明" }
 
       - name: steps
         type: _types.structures.list<_types.structures.object>
@@ -182,7 +184,7 @@ rules:
   - { id: service-input-ref, text: "引用的 params/step 字段必须存在且可按静态类型解析", implemented_by: [ service-input-ref ] }
   - { id: service-input-order, text: "step.<id> 引用必须位于当前 step 之前，且通过 goto 可达", implemented_by: [ service-input-order ] }
   - { id: service-input-type, text: "input 值的静态类型必须与目标参数/payload 字段兼容（指针/List 结构与目标一致，类型族归一后比较，枚举按 integer；integer 位宽必须一致，_types.basics.id=64；_types.structures.array 且元素为 cap.services.*.schemas.* 时可赋给 _types.structures.list<_types.structures.object> 批量参数，目标 fields 必须与源元素 schema 的字段名/类型/required 完全一致）", implemented_by: [ service-input-type ] }
-  - { id: service-param-type, text: "params/returns/schemas 的 type 语法：只允许 _types.basics.*、_types.structures.list<>、data.enums.*、data.entities.*、cap.services.*.schemas.*、context.Context、error、time.*；指针与 _types.structures.list<> 各最多一层；data.tables.* 禁止", implemented_by: [ service-param-type ] }
+  - { id: service-param-type, text: "params/returns/schemas 的 type 语法：只允许 _types.basics.*、_types.structures.list<>、data.enums.*、data.entities.*、cap.services.*.schemas.*、context.Context、error、time.*；指针与 _types.structures.list<> 各最多一层；context.Context 与 error 只能裸写，不得指针或列表；data.tables.* 禁止", implemented_by: [ service-param-type ] }
   - { id: service-input-nullable, text: "可空的源不得赋给非 null 目标", implemented_by: [ service-input-nullable ] }
   - { id: service-input-name, text: "query/service 的 input name 必须是目标参数名且不得多余；events 的 input name 必须是 payload 字段名且不得多余；query/service 不得传 ctx", implemented_by: [ service-input-name ] }
   - { id: service-input-required, text: "query/service 必填参数（ctx 除外）与 events 必填 payload 字段必须全部出现", implemented_by: [ service-input-required ] }

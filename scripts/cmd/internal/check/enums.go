@@ -15,7 +15,7 @@ func (c *Checker) checkEnums(schema *Schema) map[string]map[string]bool {
 	c.enumCodes = map[string]map[int]bool{}
 	files := c.enumFiles(schema)
 	if len(files) == 0 {
-		c.rulef("schema.targets", "%s: targets.dir/glob must not be empty", schema.ID)
+		c.rulef("schema.targets", "%s: no contract files match %s/%s", schema.ID, schema.Targets.Dir, schema.Targets.Glob)
 		return map[string]map[string]bool{}
 	}
 	usages := c.enumUsages()
@@ -143,6 +143,7 @@ func (c *Checker) checkEnumDoNot(doc map[string]any, rel, setID string, enumName
 
 // checkEnumSchema 防止 meta 字段树被误删；硬校验依赖这些 required 字段。
 func (c *Checker) checkEnumSchema(schema *Schema) {
+	c.checkTargets(schema)
 	required := []string{"schema_version", "id", "summary", "stability"}
 	if schema.Targets.Dir != "" {
 		required = append(required, "owner_module")
@@ -319,7 +320,39 @@ func (c *Checker) collectHTTPEnumRefs(doc map[string]any, fileID string, service
 	if err != nil {
 		return
 	}
+	rawEnums := map[string][]string{}
+	rawPaths, _ := asMap(doc["paths"])
+	for _, rawPath := range rawPaths {
+		pathItem, _ := asMap(rawPath)
+		for method, rawOp := range pathItem {
+			switch method {
+			case "get", "post", "put", "patch", "delete", "head", "options":
+			default:
+				continue
+			}
+			op, _ := asMap(rawOp)
+			opID, _ := op["id"].(string)
+			if opID == "" {
+				if contract, ok := asMap(op["contract"]); ok {
+					opID, _ = contract["id"].(string)
+				}
+			}
+			if opID == "" {
+				continue
+			}
+			c.collectEnumRefs(op, func(enumID string) {
+				rawEnums[opID] = append(rawEnums[opID], enumID)
+			})
+		}
+	}
 	if err := openapispec.NormalizeHTTPDocument(doc, c.httpTypeResolver, c.strictHTTP, openapispec.HTTPNormalizeOptions{TransportHeaders: policy.TransportHeaders, BodyTypes: policy.BodyTypes}); err != nil {
+		// 归一化会就地改写文档；失败时用归一化前收集的原始 operation 枚举引用，
+		// 避免 enum.used_by 因文件级格式错误丢掉整组使用点。
+		for opID, enumIDs := range rawEnums {
+			for _, enumID := range enumIDs {
+				add(enumID, opID)
+			}
+		}
 		return
 	}
 	components, _ := asMap(doc["components"])

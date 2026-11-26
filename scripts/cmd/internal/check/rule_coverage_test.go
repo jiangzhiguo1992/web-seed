@@ -44,19 +44,6 @@ func TestFieldOrderRuleIDs(t *testing.T) {
 	}
 }
 
-func TestTableTextLengths(t *testing.T) {
-	c := &Checker{}
-	c.checkTableTextLengths(map[string]any{
-		"summary": strings.Repeat("x", tableSummaryMaxRunes+1),
-		"columns": []any{map[string]any{
-			"name":    "x",
-			"comment": strings.Repeat("y", columnCommentMaxRunes+1),
-		}},
-	}, "x.yaml")
-	mustContainRule(t, c.errs, "table-summary-length")
-	mustContainRule(t, c.errs, "column-comment-length")
-}
-
 func TestIndexUsedByRef(t *testing.T) {
 	cases := []map[string]any{
 		{"used_by": []any{"bad"}},

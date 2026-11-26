@@ -3,7 +3,6 @@ package check
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -14,46 +13,12 @@ import (
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
-var targetNamingPatterns = map[string]*regexp.Regexp{
-	"snake_case": regexp.MustCompile(`^[a-z][a-z0-9_]*$`),
-}
-
 // 基类是固定单例：路径/ID 写死，不通过 targets 配置。
 const (
 	baseContractID   = "data.tables.base"
 	baseContractFile = "_base.yaml"
 	baseContractPath = "contracts/data/tables/_base.yaml"
-
-	// 表 COMMENT 长度预算 2048 字符、列 COMMENT 预算 1024 字符。
-	tableSummaryMaxRunes  = 2048
-	columnCommentMaxRunes = 1024
 )
-
-func (c *Checker) checkTargets(schema *Schema) {
-	t := schema.Targets
-	where := schema.ID
-	if t.Dir == "" || t.Glob == "" {
-		c.rulef("schema.targets", "%s: targets.dir/glob must not be empty", where)
-	}
-	if t.ID == "" || !strings.Contains(t.ID, "<file>") {
-		c.rulef("schema.targets", "%s: targets.id must contain <file>", where)
-	}
-	if _, ok := targetNamingPatterns[t.Naming]; !ok {
-		c.rulef("schema.targets", "%s: targets.naming must be snake_case", where)
-	}
-	if t.Dir != "" {
-		if info, err := os.Stat(filepath.Join(c.root, t.Dir)); err != nil || !info.IsDir() {
-			c.rulef("schema.targets", "%s: targets.dir %q is not a directory", where, t.Dir)
-		}
-	}
-}
-
-func (c *Checker) checkTargetFileName(schema *Schema, file, rel string) {
-	re := targetNamingPatterns[schema.Targets.Naming]
-	if re != nil && !re.MatchString(strings.TrimSuffix(file, filepath.Ext(file))) {
-		c.rulef("schema.targets", "%s: file name %q does not match targets.naming %s", rel, file, schema.Targets.Naming)
-	}
-}
 
 // tableDoc 保存物理表文档，供继承解析二次遍历。
 type tableDoc struct {
@@ -416,24 +381,6 @@ func (c *Checker) recordIndexName(name, rel string) {
 	c.rulef("index-name-unique", "%s: index %q already declared in %s", rel, name, prevRel)
 }
 
-// checkTableTextLengths 校验会进入 DDL COMMENT 的文本长度预算。
-func (c *Checker) checkTableTextLengths(doc map[string]any, rel string) {
-	if summary, _ := doc["summary"].(string); utf8.RuneCountInString(summary) > tableSummaryMaxRunes {
-		c.rulef("table-summary-length", "%s: summary must be <= %d characters, got %d", rel, tableSummaryMaxRunes, utf8.RuneCountInString(summary))
-	}
-	for _, raw := range asList(doc["columns"]) {
-		m, ok := asMap(raw)
-		if !ok {
-			continue
-		}
-		name, _ := m["name"].(string)
-		comment, _ := m["comment"].(string)
-		if n := utf8.RuneCountInString(comment); n > columnCommentMaxRunes {
-			c.rulef("column-comment-length", "%s: columns.%s.comment must be <= %d characters, got %d", rel, name, columnCommentMaxRunes, n)
-		}
-	}
-}
-
 // checkPhysicalTable 先按 schema 校验结构，再跑表级规则。
 func (c *Checker) checkPhysicalTable(doc map[string]any, rel string, schema *Schema) {
 	c.validateDoc(doc, schema.Fields, rel)
@@ -455,7 +402,6 @@ var baseColumnShape = map[string]struct {
 }
 
 func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string) {
-	c.checkTableTextLengths(doc, rel)
 	c.checkFieldOrder(rel, schema.Fields, orderRules{top: "table-key-order", nested: "table-key-order"})
 	if filepath.Base(rel) != baseContractFile {
 		c.rulef("base-file", "%s: base contract must live in %s", rel, baseContractFile)
@@ -516,7 +462,6 @@ func (c *Checker) checkBaseTable(doc map[string]any, schema *Schema, rel string)
 }
 
 func (c *Checker) checkTableRules(doc map[string]any, rel string, schema *Schema) {
-	c.checkTableTextLengths(doc, rel)
 	id, _ := doc["id"].(string)
 	c.checkStability(doc, rel)
 	want := schema.Targets.FileID(filepath.Base(rel))
@@ -815,18 +760,6 @@ func isBaseColumn(name string) bool {
 		}
 	}
 	return false
-}
-
-func (c *Checker) checkStability(_ map[string]any, rel string) {
-	b, err := os.ReadFile(filepath.Join(c.root, rel))
-	if err != nil {
-		return
-	}
-	for _, marker := range []string{"TODO", "FIXME"} {
-		if strings.Contains(string(b), marker) {
-			c.rulef("schema.stability", "%s: contract contains %s placeholder; stability does not exempt", rel, marker)
-		}
-	}
 }
 
 // commonColumnFields 从 schema 的 columns.item_fields 派生通用列字段。

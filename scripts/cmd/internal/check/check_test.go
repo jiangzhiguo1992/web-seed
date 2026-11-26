@@ -1590,6 +1590,22 @@ enums:
 	}
 }
 
+func TestEnumSchemaTargetsChecked(t *testing.T) {
+	c := &Checker{root: t.TempDir()}
+	c.checkEnumSchema(&Schema{
+		ID: "meta.data.enums",
+		Targets: Targets{
+			Dir:    "contracts/data/enums",
+			Glob:   "*.yaml",
+			ID:     "data.enums.<file>",
+			Naming: "snake_case",
+		},
+	})
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.targets]") {
+		t.Fatalf("enum schema targets not checked: %v", c.errs)
+	}
+}
+
 func TestEnumCodeLiterals(t *testing.T) {
 	c := &Checker{
 		tableDocs: map[string]map[string]any{
@@ -3662,31 +3678,41 @@ func TestRetryAfterHeader(t *testing.T) {
 }
 
 func TestTableTextLengthLimits(t *testing.T) {
-	c := &Checker{}
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{root: root}
+	schema, err := c.loadSchemaByType("data.tables")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.valueTypes = schema.ValueTypes
 	doc := minimalTableDoc()
-	doc["summary"] = strings.Repeat("a", tableSummaryMaxRunes+1)
+	doc["summary"] = strings.Repeat("a", 2049)
 	doc["columns"] = []any{map[string]any{
-		"name": "code", "type": "_types.basics.string", "comment": strings.Repeat("b", columnCommentMaxRunes+1),
+		"name": "code", "type": "_types.basics.string", "nullable": false, "comment": strings.Repeat("b", 1025),
 	}}
-	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	errs := entityErrs(c)
+	c.validateDoc(doc, schema.Fields, "contracts/data/tables/x.yaml")
+	errs := strings.Join(c.errs, "\n")
 	for _, want := range []string{
-		"summary must be <= 2048 characters",
-		"columns.code.comment must be <= 1024 characters",
+		"summary: length 2049 must be <= 2048",
+		"columns[0].comment: length 1025 must be <= 1024",
 	} {
 		if !strings.Contains(errs, want) {
 			t.Fatalf("missing %q in:\n%s", want, errs)
 		}
 	}
 
-	c = &Checker{}
+	c = &Checker{root: root}
+	c.valueTypes = schema.ValueTypes
 	doc = minimalTableDoc()
-	doc["summary"] = strings.Repeat("a", tableSummaryMaxRunes)
+	doc["summary"] = strings.Repeat("a", 2048)
 	doc["columns"] = []any{map[string]any{
-		"name": "code", "type": "_types.basics.string", "comment": strings.Repeat("b", columnCommentMaxRunes),
+		"name": "code", "type": "_types.basics.string", "nullable": false, "comment": strings.Repeat("b", 1024),
 	}}
-	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
-	if len(c.errs) != 0 {
+	c.validateDoc(doc, schema.Fields, "contracts/data/tables/x.yaml")
+	if strings.Contains(strings.Join(c.errs, "\n"), "[schema.len]") {
 		t.Fatalf("boundary lengths reported: %v", c.errs)
 	}
 }
@@ -3862,5 +3888,71 @@ enums:
 	c.checkEnums(schema)
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[enum-owner-module]") {
 		t.Fatalf("owner_module/file stem mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestHTTPNormalizeFailureDoesNotCascade(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir()
+	copyTree(t, filepath.Join(root, "contracts"), filepath.Join(tmp, "contracts"))
+	httpFile := filepath.Join(tmp, "contracts/capabilities/protocols/http/account.yaml")
+	b, err := os.ReadFile(httpFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const contentType = `          - { name: Content-Type, value: application/json, description: "请求体媒体类型" }
+`
+	if !strings.Contains(string(b), contentType) {
+		t.Fatalf("fixture Content-Type line not found")
+	}
+	if err := os.WriteFile(httpFile, []byte(strings.Replace(string(b), contentType, "", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs := Run(tmp)
+	joined := strings.Join(errs, "\n")
+	if !strings.Contains(joined, "[http-shape]") || !strings.Contains(joined, "requires Content-Type header") {
+		t.Fatalf("missing real http-shape error: %v", errs)
+	}
+	for _, forbidden := range []string{
+		"has no http operation",
+		"without mount.api_version",
+		"[enum-used-by]",
+		"is not an effective response of cap.protocols.http.account",
+	} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("normalize failure cascaded into %q:\n%s", forbidden, joined)
+		}
+	}
+}
+
+func TestServiceParamDescriptionInMeta(t *testing.T) {
+	root, err := filepath.Abs("../../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, _, err := contractspec.LoadSchemaByType(root, "cap.services")
+	if err != nil {
+		t.Fatal(err)
+	}
+	services, ok := contractspec.FindField(schema.Fields, "services")
+	if !ok {
+		t.Fatal("services field missing")
+	}
+	params, ok := contractspec.FindField(services.ItemFields, "params")
+	if !ok {
+		t.Fatal("services.params missing")
+	}
+	if _, ok := contractspec.FindField(params.ItemFields, "description"); !ok {
+		t.Fatal("services.params.description missing")
+	}
+	returns, ok := contractspec.FindField(services.ItemFields, "returns")
+	if !ok {
+		t.Fatal("services.returns missing")
+	}
+	if _, ok := contractspec.FindField(returns.ItemFields, "description"); !ok {
+		t.Fatal("services.returns.description missing")
 	}
 }

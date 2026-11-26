@@ -18,7 +18,7 @@
 | cap.lifecycles | lifecycle-anchors | lifecycle-anchors | 4 | 1 |
 | cap.protocols.http | http-file | http-file | 1 | 1 |
 | cap.protocols.http | http-status | http-status | 1 | 1 |
-| cap.protocols.http | http-shape | http-shape | 1 | 1 |
+| cap.protocols.http | http-shape | http-shape | 2 | 1 |
 | cap.protocols.http | http-body-types | http-body-types | 1 | 1 |
 | cap.protocols.http | http-version | http-version | 2 | 1 |
 | cap.protocols.http | http-app-included | http-app-included | 1 | 0 |
@@ -106,7 +106,7 @@
 | data.enums | enum-values-unique | enum-values-unique | 0 | 1 |
 | data.enums | enum-code-unique | enum-code-unique | 1 | 0 |
 | data.enums | enum-type-unique | enum-type-unique | 1 | 0 |
-| data.enums | enum-used-by | enum-used-by | 1 | 0 |
+| data.enums | enum-used-by | enum-used-by | 2 | 0 |
 | data.enums | enum-owner-module | enum-owner-module | 1 | 0 |
 | data.enums | enum-do-not-specific | enum-do-not-specific | 3 | 0 |
 | data.queries | query-key-order | query-key-order | 0 | 1 |
