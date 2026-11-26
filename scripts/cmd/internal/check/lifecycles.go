@@ -127,6 +127,40 @@ func lifecycleStateValues(raw any) []string {
 	return out
 }
 
+// checkLifecycleStateSteps 对账 states.values[].steps：由 gen-graph 从 step.state_gate 反推。
+// 字段缺失由 schema.required 报出；这里只比较已声明值，避免重复报错。
+func (c *Checker) checkLifecycleStateSteps(rel, fileID string, rawValues any) {
+	declared := map[string]map[string]bool{}
+	present := map[string]bool{}
+	for _, raw := range asList(rawValues) {
+		item, ok := asMap(raw)
+		if !ok {
+			continue
+		}
+		state, _ := item["value"].(string)
+		rawSteps, ok := item["steps"]
+		if state == "" || !ok {
+			continue
+		}
+		present[state] = true
+		declared[state] = stringSet(asList(rawSteps))
+	}
+	states := make([]string, 0, len(present))
+	for state := range present {
+		states = append(states, state)
+	}
+	sort.Strings(states)
+	for _, state := range states {
+		want := c.lifecycleStateSteps[fileID][state]
+		if want == nil {
+			want = map[string]bool{}
+		}
+		if !sameSet(declared[state], want) {
+			c.rulef("lifecycle-anchors", "%s: states.values[%s].steps must be %v, got %v", rel, state, sortedKeys(want), sortedKeys(declared[state]))
+		}
+	}
+}
+
 // findEntityFieldByJSONName 按 json_name（snake_case）查实体字段。
 func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Schema, stepIDs map[string]bool, actionSteps map[string][]string, lifecycleStates map[string]map[string]bool) {
 	c.validateDoc(doc, schema.Fields, rel)
@@ -189,6 +223,7 @@ func (c *Checker) checkLifecycleDoc(doc map[string]any, rel string, schema *Sche
 
 	states, _ := asMap(doc["states"])
 	stateList := lifecycleStateValues(states["values"])
+	c.checkLifecycleStateSteps(rel, fileID, states["values"])
 	stateNames := map[string]bool{}
 	for _, name := range stateList {
 		if stateNames[name] {

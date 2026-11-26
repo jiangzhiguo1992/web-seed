@@ -145,3 +145,37 @@ func TestRenderDecimalUsesShopspring(t *testing.T) {
 		t.Fatalf("decimal field must use shopspring/decimal:\n%s", out)
 	}
 }
+
+func TestRenderEnumUsesContractTypes(t *testing.T) {
+	enums := map[string]enumSpec{
+		"data.enums.account": {
+			ID:     "data.enums.account",
+			GoType: "AccountState",
+			TSType: "AccountState",
+			Desc:   "账号状态",
+			Values: []enumValue{{Name: "active", Code: 1, Desc: "正常"}},
+		},
+	}
+	goSrc, err := renderGo(enums, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"type AccountState int32",
+		"AccountStateActive AccountState = 1",
+		"func ParseAccountState(",
+	} {
+		if !strings.Contains(string(goSrc), want) {
+			t.Fatalf("generated Go missing %q:\n%s", want, goSrc)
+		}
+	}
+	tsSrc := renderTS(enums, nil)
+	for _, want := range []string{
+		"export const AccountState = {",
+		"export type AccountState = (typeof AccountState)[keyof typeof AccountState]",
+	} {
+		if !strings.Contains(string(tsSrc), want) {
+			t.Fatalf("generated TS missing %q:\n%s", want, tsSrc)
+		}
+	}
+}

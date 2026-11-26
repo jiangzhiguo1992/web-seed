@@ -105,7 +105,7 @@ make contract-new type=feature.pages name=note_list summary="备注列表页"
 make contract-check
 ```
 
-校验结构、ID、字段顺序（以 `_meta/<type>.yaml` 的 `fields` / `item_fields` 为准）、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`table.entities` / `table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` / `query.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by`（以上为生成物），以及手写的 query `constraints` / service step `validations` 前向引用。不通过不要进入生成。
+校验结构、ID、字段顺序（以 `_meta/<type>.yaml` 的 `fields` / `item_fields` 为准）、`table.extends`、基类列、约束/索引命名与字段、`do_not` 具体性、`owner_module` 写归属、`table.entities` / `table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` / `query.used_by` / `service.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / 生命周期动作与 `states.values[].steps`（以上为生成物），以及手写的 query `constraints` / service step `validations` 前向引用。不通过不要进入生成。
 
 修改 `rules` 的 `implemented_by` 后，运行 `make gen-rule-ids` 更新 `rule_ids_gen.go`；`make contract-check` 会拒绝过期的生成文件。
 
@@ -149,6 +149,7 @@ make gen-model     # data/entities + data/enums → Go/TS 模型
 
 ```bash
 make contract-check          # 结构 / ID / 约束 / 索引 / used_by
+make contract-compat        # enum append-only（默认对比 HEAD^1）
 make gen && git diff --exit-code   # 生成物是否同步
 make test-api                # 路由集合比对 + 响应 schema 校验
 make test-web                # client 覆盖断言 + 页面四态
@@ -156,7 +157,16 @@ make test-web                # client 覆盖断言 + 页面四态
 
 任一失败都不允许提交。
 
-> `contract-graph` / `contract-impact` / `contract-compat` 尚未实现，命令会明确失败；当前闸门是 `contract-check` 与 `gen-check`。
+> `contract-graph` / `contract-impact` 尚未实现，命令会明确失败；`contract-compat` 已覆盖枚举名/value/go_type/ts_type/code 的 append-only 与 v2 OpenAPI 兼容；当前闸门是 `contract-check` 与 `gen-check`。
+
+枚举类型改名的影响：
+
+- `go_type` 决定生成的 Go 类型名、常量前缀（`<Type><Value>`）以及 `Parse<Type>` / `String` / `MarshalJSON` / `UnmarshalJSON` 方法名。
+- `ts_type` 决定生成的 TS `export const` 与 `export type` 名。
+- 改名不会改变 JSON wire 上的 value 字符串，但会破坏 `apps/api/internal/generated/model` 与 `apps/web/packages/api-client/src/generated/model.ts` 的消费者；前端编译/类型检查会暴露。
+- `contract-compat` 默认拒绝改名；确需改名必须按破坏性变更单独发布，并同步更新生成物与所有消费者；不要在同一 PR 里顺手改名。
+
+pre-commit 只对已暂存的枚举内容执行 append-only（基线 `HEAD`，不读工作区）；CI 默认用 PR merge commit 的第一父或 `GITHUB_BASE_REF` 的远端分支做基线；PR 事件拿不到远端 base 时直接失败并提示设置 `CONTRACT_BASELINE_REF`，只有非 PR 的初始提交/浅克隆才跳过。因此 CI 必须使用 `fetch-depth: 0`。
 
 ---
 

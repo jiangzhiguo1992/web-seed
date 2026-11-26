@@ -332,8 +332,16 @@ func (c *Checker) validateMapNode(m map[string]any, path string) {
 	}
 	c.checkNodeSeqBounds(m, path)
 	for i, pattern := range stringList(m["key_patterns"]) {
+		if pattern == "" {
+			c.rulef("schema.pattern", "%s.key_patterns[%d]: must not be empty", path, i)
+			continue
+		}
 		if _, err := regexp.Compile(pattern); err != nil {
 			c.rulef("schema.pattern", "%s.key_patterns[%d]: %v", path, i, err)
+			continue
+		}
+		if !strings.HasPrefix(pattern, "^") || !strings.HasSuffix(pattern, "$") {
+			c.rulef("schema.pattern", "%s.key_patterns[%d]: must be anchored with ^...$: %q", path, i, pattern)
 		}
 	}
 	c.validateNodeRules(m, "map", path, nil)

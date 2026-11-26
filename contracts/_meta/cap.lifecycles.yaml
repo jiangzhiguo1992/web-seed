@@ -86,7 +86,7 @@ fields:
           - { name: states, type: _types.structures.set<_types.basics.string>, required: true, min_items: 1, unique: true, pattern: '^[a-z][a-z0-9_]*$', description: "允许的前置状态集合" }
           - { name: rules, type: _types.structures.set<_types.basics.string>, required: false, unique: true, pattern: '^feature\.rules\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "解释该前置条件的 feature.rules ID" }
           - { name: on_violation, type: _types.basics.string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "前置条件不满足时的错误码" }
-      - { name: implemented_by, type: _types.structures.set<_types.basics.string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该动作的 step；事件由 step.events 声明" }
+      - { name: implemented_by, type: _types.structures.set<_types.basics.string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该动作的 step；由 gen-graph 写入" }
 
   - name: destroy
     type: _types.structures.object
@@ -98,7 +98,7 @@ fields:
         required: true
         description: "销毁前的跨维度状态前提；无前置写 []；列表内全部满足（AND）"
         item_fields: *lifecycle_requires
-      - { name: implemented_by, type: _types.structures.set<_types.basics.string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该动作的 step；事件由 step.events 声明" }
+      - { name: implemented_by, type: _types.structures.set<_types.basics.string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该动作的 step；由 gen-graph 写入" }
 
   - name: transitions
     type: _types.structures.list<_types.structures.object>
@@ -115,7 +115,7 @@ fields:
         required: true
         description: "跨维度前置状态；无前置写 []；列表内全部满足（AND）"
         item_fields: *lifecycle_requires
-      - { name: implemented_by, type: _types.structures.set<_types.basics.string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 step" }
+      - { name: implemented_by, type: _types.structures.set<_types.basics.string>, required: true, min_items: 1, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该转换的 step；由 gen-graph 写入" }
 
 rules:
   - { id: lifecycle-structure, text: "states.values[].value 唯一；initial/final 必须是已声明状态；transitions 的 from/to 必须是已声明状态；final 不得作为 transition 的 from；destroy 存在时 final 不得多于一个；destroy 与唯一 final 同时存在时 transition 不得指向该 final", implemented_by: [ lifecycle-structure ] }
@@ -124,4 +124,4 @@ rules:
   - { id: lifecycle-dimension, text: "同一 (entity, field) 组合只能被一个 lifecycle 契约声明；同一 lifecycle 内不得重复声明同一 (entity, field)", implemented_by: [ lifecycle-dimension ] }
   - { id: lifecycle-enum-coverage, text: "被 lifecycle 使用的 data.enums.*，每个枚举值必须至少被一个使用该枚举的 lifecycle states.values 声明；states.values 只允许该枚举的值", implemented_by: [ lifecycle-enum-coverage ] }
   - { id: lifecycle-requires, text: "requires[].states 必须非空且均为目标 lifecycle 的已声明状态；requires[].on_violation 必须是存在的 platform.errors.*；requires[].rules 必须指向存在的 feature.rules.*；lifecycle 必须是存在的 cap.lifecycles.* 且不能是自身；同一 action 内同一个 lifecycle 只能出现一次；按 lifecycle 文件聚合的 requires 图不得有环；列表内全部满足（AND）", implemented_by: [ lifecycle-requires ] }
-  - { id: lifecycle-anchors, text: "create.implemented_by/destroy.implemented_by 必须等于 step.lifecycles 反推出的 step 集合；transitions[].implemented_by 必须是存在的 cap.services.<file>.<service>.<step>，且 step 的 lifecycles 反向引用同一动作；动作发出的事件只在 step.events / cap.events.topics.emitted_by 声明", implemented_by: [ lifecycle-anchors ] }
+  - { id: lifecycle-anchors, text: "create.implemented_by/destroy.implemented_by 必须等于 step.lifecycles 反推出的 step 集合；transitions[].implemented_by 必须是存在的 cap.services.<file>.<service>.<step>，且 step 的 lifecycles 反向引用同一动作；states.values[].steps 必须等于 step.state_gate 反推出的 step 集合；以上生成字段由 gen-graph 写入，禁止手改；动作发出的事件只在 step.events / cap.events.topics.emitted_by 声明", implemented_by: [ lifecycle-anchors ] }

@@ -5,10 +5,7 @@ summary: "手机/邮箱认证绑定生命周期"
 owner_module: account
 schema_version: 1
 stability: draft
-do_not:
-  - "手机/邮箱创建后是 unverified，验证成功后才 verified"
-  - "验证成功只由 cap.services.verification.verify 写入"
-  - "unverified 只能销毁，不能停用；disable 只允许从 verified 出发"
+do_not: []
 
 subjects:
   - { entity: data.entities.auth_phone, field: status }

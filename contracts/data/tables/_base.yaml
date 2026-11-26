@@ -5,8 +5,6 @@ summary: "表结构基类"
 schema_version: 1
 stability: draft
 do_not:
-  - "本文件不是物理表：不生成 DDL、不建实体、不落存储"
-  - "不要给基类加业务字段"
   - "不建数据库外键：关系只写在 columns.references 与实体 source.join，由应用维护"
   - "追加日志类表不提供更新或软删，只允许按保留期清理"
 

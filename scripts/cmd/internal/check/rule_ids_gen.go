@@ -231,6 +231,7 @@ var knownRuleIDs = map[string]bool{
 	"service-step-target":         true,
 	"service-transaction":         true,
 	"service-unique":              true,
+	"service-used-by":             true,
 	"service-visibility":          true,
 	"service-when-refs":           true,
 	"service-when-shape":          true,

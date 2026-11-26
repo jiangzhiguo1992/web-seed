@@ -14,6 +14,13 @@ pre-commit:
         if echo "$changed" | grep -qE '^(contracts/.*\.yaml|scripts/cmd/.*\.go)$'; then
           make contract-check && make gen-check
         fi
+    contract-compat:
+      glob: "**/*"
+      run: |
+        changed=$(git diff --cached --name-only)
+        if echo "$changed" | grep -qE '^(contracts/data/enums/.*\.yaml|scripts/cmd/contract_compat/.*\.go|scripts/contract/compat\.sh)$'; then
+          make contract-compat-staged
+        fi
     contract-docs:
       glob: "contracts/**/*.md"
       run: ./scripts/check-docs.sh

@@ -70,6 +70,9 @@ type Checker struct {
 	serviceQueries           map[string]map[string]bool
 	serviceStepIDs           map[string]bool
 	stepService              map[string]string
+	serviceUsedBy            map[string]map[string]bool
+	serviceUsedByDeclared    map[string]map[string]bool
+	lifecycleStateSteps      map[string]map[string]map[string]bool
 	validationRefs           map[string]map[string]bool
 	constraintRefs           map[string]map[string]bool
 	constraintIDs            map[string]bool
@@ -369,9 +372,6 @@ func loadSchema(path string) (*Schema, error) {
 
 // validateSchemaMeta 校验 _meta 字段规范自身，避免拼写/类型错误把硬约束降级为无效文本。
 func validateSchemaMeta(s *Schema, path string) error {
-	if err := validatePatterns(s.Fields); err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
 	if err := validateFieldTypes(s.Fields, s.ValueTypes, false); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}

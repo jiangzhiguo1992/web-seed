@@ -6,7 +6,6 @@ owner_module: system
 schema_version: 1
 stability: draft
 do_not:
-  - "deleted 是终态；不要从 deleted 恢复"
   - "父节点软删前必须先软删子节点；生命周期不表达父子约束"
 
 subjects:

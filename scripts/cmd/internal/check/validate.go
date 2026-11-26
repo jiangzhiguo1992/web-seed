@@ -1,36 +1,13 @@
-// validate.go 通用 schema 校验与正则自检。
+// validate.go 通用 schema 校验。
 package check
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
-
-func validatePatterns(fields []Field) error {
-	for _, f := range fields {
-		if f.Pattern != "" {
-			if _, err := regexp.Compile(f.Pattern); err != nil {
-				return fmt.Errorf("field %s: invalid pattern %q: %w", f.Name, f.Pattern, err)
-			}
-		}
-		for _, pat := range f.KeyPatterns {
-			if _, err := regexp.Compile(pat); err != nil {
-				return fmt.Errorf("field %s: invalid key_patterns %q: %w", f.Name, pat, err)
-			}
-		}
-		if err := validatePatterns(f.Fields); err != nil {
-			return err
-		}
-		if err := validatePatterns(f.ItemFields); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 var schemaFieldTypes = map[string]bool{
 	"string": true, "integer": true, "number": true, "float": true, "decimal": true,
@@ -282,7 +259,7 @@ func validateFieldTypes(fields []Field, vt ValueTypes, bootstrap bool) error {
 			if f.Type != "" && typ != "map" {
 				return fmt.Errorf("field %s: type and types are mutually exclusive", f.Name)
 			}
-			if f.Const != nil || len(f.Enum) > 0 || len(f.Allowed) > 0 || f.Pattern != "" || f.Min != nil || f.Max != nil ||
+			if f.Const != nil || len(f.Enum) > 0 || f.Pattern != "" || f.Min != nil || f.Max != nil ||
 				f.MinItems != nil || f.MaxItems != nil || f.MinLen != nil || f.MaxLen != nil || f.Len != nil ||
 				f.Unique || f.UniqueKey != "" || f.Soft {
 				return fmt.Errorf("field %s: types only accepts required/description/default/key_patterns", f.Name)
@@ -404,6 +381,9 @@ func validateFieldTypes(fields []Field, vt ValueTypes, bootstrap bool) error {
 						return fmt.Errorf("field %s: min_len must not exceed max_len", f.Name)
 					}
 				}
+				if err := validateFieldConstraints(f, expr, vt); err != nil {
+					return err
+				}
 			}
 		}
 		if f.Default != nil && len(f.Enum) > 0 && !inList(f.Enum, fmt.Sprint(f.Default)) {
@@ -446,7 +426,172 @@ func validateFieldTypes(fields []Field, vt ValueTypes, bootstrap bool) error {
 	return nil
 }
 
-// validateFieldMarkers 校验 generated/write 成对出现：
+// validateFieldConstraints 校验字段规范里可判定的值约束，避免 enum/const/default/examples
+// 只在实例上生效、却在模板里写入与类型不兼容的值。
+func validateFieldConstraints(f Field, expr typeExpr, vt ValueTypes) error {
+	leaf := leafTypeExpr(expr)
+	if f.Unique {
+		switch expr.Base {
+		case "list", "set", "array":
+		default:
+			return fmt.Errorf("field %s: unique is only allowed for list/set/array", f.Name)
+		}
+		if containsObject(expr) && f.UniqueKey == "" {
+			return fmt.Errorf("field %s: unique list/set of objects requires unique_key", f.Name)
+		}
+	}
+	if f.UniqueKey != "" {
+		if child, ok := contractspec.FindField(f.ItemFields, f.UniqueKey); ok {
+			childExpr, err := parseTypeExpr(child.Type, vt)
+			if err != nil {
+				return fmt.Errorf("field %s: unique_key %s: %w", f.Name, f.UniqueKey, err)
+			}
+			if childExpr.Base != "string" {
+				return fmt.Errorf("field %s: unique_key %s must be a string field", f.Name, f.UniqueKey)
+			}
+		}
+	}
+	if len(f.Fields) > 0 && expr.Base != "object" {
+		return fmt.Errorf("field %s: fields is only allowed for object", f.Name)
+	}
+	for i, value := range f.Enum {
+		if !valueCompatible(leaf, value, vt) {
+			return fmt.Errorf("field %s: enum[%d] %v is not compatible with %s", f.Name, i, value, f.Type)
+		}
+	}
+	for i, value := range f.Examples {
+		if !valueCompatible(leaf, value, vt) {
+			return fmt.Errorf("field %s: examples[%d] %v is not compatible with %s", f.Name, i, value, f.Type)
+		}
+	}
+	if f.Const != nil {
+		if !valueCompatible(leaf, f.Const, vt) {
+			return fmt.Errorf("field %s: const %v is not compatible with %s", f.Name, f.Const, f.Type)
+		}
+		if len(f.Enum) > 0 && !inList(f.Enum, fmt.Sprint(f.Const)) {
+			return fmt.Errorf("field %s: const %v not in enum %v", f.Name, f.Const, f.Enum)
+		}
+	}
+	if f.Default != nil {
+		if !valueCompatible(leaf, f.Default, vt) {
+			return fmt.Errorf("field %s: default %v is not compatible with %s", f.Name, f.Default, f.Type)
+		}
+		if f.Const != nil && fmt.Sprint(f.Const) != fmt.Sprint(f.Default) {
+			return fmt.Errorf("field %s: const %v and default %v conflict", f.Name, f.Const, f.Default)
+		}
+	}
+	if leaf.Base == "integer" {
+		if f.Min != nil {
+			if _, ok := toInt(f.Min); !ok {
+				return fmt.Errorf("field %s: min must be an integer for integer type", f.Name)
+			}
+		}
+		if f.Max != nil {
+			if _, ok := toInt(f.Max); !ok {
+				return fmt.Errorf("field %s: max must be an integer for integer type", f.Name)
+			}
+		}
+	}
+	checkValue := func(value any) error {
+		switch leaf.Base {
+		case "string":
+			s, ok := value.(string)
+			if !ok {
+				return nil
+			}
+			if f.Pattern != "" && !match(f.Pattern, s) {
+				return fmt.Errorf("field %s: value %q does not match pattern %s", f.Name, s, f.Pattern)
+			}
+			n := utf8.RuneCountInString(s)
+			if min, ok := toInt(f.MinLen); ok && n < min {
+				return fmt.Errorf("field %s: value %q length %d < min_len %d", f.Name, s, n, min)
+			}
+			if max, ok := toInt(f.MaxLen); ok && n > max {
+				return fmt.Errorf("field %s: value %q length %d > max_len %d", f.Name, s, n, max)
+			}
+		case "integer", "number", "float", "decimal":
+			n, ok := toFloat(value)
+			if !ok {
+				return nil
+			}
+			if min, ok := toFloat(f.Min); ok && n < min {
+				return fmt.Errorf("field %s: value %v < min %v", f.Name, value, min)
+			}
+			if max, ok := toFloat(f.Max); ok && n > max {
+				return fmt.Errorf("field %s: value %v > max %v", f.Name, value, max)
+			}
+		}
+		return nil
+	}
+	for _, value := range f.Enum {
+		if err := checkValue(value); err != nil {
+			return err
+		}
+	}
+	for _, value := range f.Examples {
+		if err := checkValue(value); err != nil {
+			return err
+		}
+	}
+	if f.Const != nil {
+		if err := checkValue(f.Const); err != nil {
+			return err
+		}
+	}
+	if f.Default != nil {
+		if err := checkValue(f.Default); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// leafTypeExpr 返回集合约束实际作用的值类型：list/set/array 取元素，map 取 value。
+func leafTypeExpr(expr typeExpr) typeExpr {
+	switch expr.Base {
+	case "list", "set", "array":
+		if len(expr.Args) == 1 {
+			return expr.Args[0]
+		}
+	case "map":
+		if len(expr.Args) == 2 {
+			return expr.Args[1]
+		}
+	}
+	return expr
+}
+
+// valueCompatible 只校验能确定落型的标量；时间/JSON/字节等序列化形态由生成器负责，
+// 这里不引入第二套类型规则。
+func valueCompatible(expr typeExpr, v any, vt ValueTypes) bool {
+	switch expr.Base {
+	case "string":
+		_, ok := v.(string)
+		return ok
+	case "integer":
+		_, ok := toInt(v)
+		return ok
+	case "number", "float", "decimal":
+		_, ok := toFloat(v)
+		return ok
+	case "boolean":
+		_, ok := v.(bool)
+		return ok
+	case "any":
+		switch v.(type) {
+		case string, bool, int, int64, uint64, float64:
+			return true
+		}
+		return false
+	}
+	if custom, ok := vt.CustomTypes[expr.Base]; ok {
+		if family, _, ok := custom.Basics(); ok {
+			return valueCompatible(typeExpr{Base: family}, v, vt)
+		}
+	}
+	return true
+}
+
 // 生成字段必须标记为不可手写，write 只允许 forbidden。
 // validateMetaFields 校验字段规范自身：同层 name 唯一且非空，description 非空。
 // Unordered 是运行时注入的类型族参数，不在 _meta 中手写。
@@ -580,7 +725,6 @@ func (c *Checker) validateExpr(v any, f Field, expr typeExpr, path string) {
 		}
 		c.checkConst(v, f, path)
 		c.checkNumericEnum(fmt.Sprint(n), f, path)
-		c.checkNumericAllowed(fmt.Sprint(n), f, path)
 		c.checkIntRange(n, f, path)
 	case "number", "float", "decimal":
 		n, ok := toFloat(v)
@@ -590,7 +734,6 @@ func (c *Checker) validateExpr(v any, f Field, expr typeExpr, path string) {
 		}
 		c.checkConst(v, f, path)
 		c.checkNumericEnum(fmt.Sprint(n), f, path)
-		c.checkNumericAllowed(fmt.Sprint(n), f, path)
 		c.checkFloatRange(n, f, path)
 	case "boolean":
 		if _, ok := v.(bool); !ok {
@@ -738,9 +881,6 @@ func (c *Checker) checkScalar(s string, f Field, path string) {
 	if len(f.Enum) > 0 && !inList(f.Enum, s) {
 		c.rulef("schema.enum", "%s: %q not in enum %v", path, s, f.Enum)
 	}
-	if len(f.Allowed) > 0 && !inList(f.Allowed, s) {
-		c.rulef("schema.enum", "%s: %q not allowed (allowed: %v)", path, s, f.Allowed)
-	}
 	if f.MinLen != nil || f.MaxLen != nil {
 		n := utf8.RuneCountInString(s)
 		if min, ok := toInt(f.MinLen); ok && n < min {
@@ -768,12 +908,6 @@ func (c *Checker) checkConst(v any, f Field, path string) {
 func (c *Checker) checkNumericEnum(s string, f Field, path string) {
 	if len(f.Enum) > 0 && !inList(f.Enum, s) {
 		c.rulef("schema.enum", "%s: %s not in enum %v", path, s, f.Enum)
-	}
-}
-
-func (c *Checker) checkNumericAllowed(s string, f Field, path string) {
-	if len(f.Allowed) > 0 && !inList(f.Allowed, s) {
-		c.rulef("schema.enum", "%s: %s not allowed (allowed: %v)", path, s, f.Allowed)
 	}
 }
 

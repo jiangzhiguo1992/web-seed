@@ -4,7 +4,7 @@ SHELL := /bin/bash
 APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
-        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-model gen-model-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-scenarios gen-scenarios-check gen-async gen-async-check gen-check contract-new contract-check contract-graph contract-impact contract-compat contract-compat-baseline db-verify \
+        gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-model gen-model-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-scenarios gen-scenarios-check gen-async gen-async-check gen-check contract-new contract-check contract-graph contract-impact contract-compat contract-compat-staged contract-compat-baseline db-verify \
         gen-rule-ids check-rule-ids gen-check-core test-rules audit-types dev api-dev web-dev compose-up compose-down doctor derive check-docs check-index
 
 help: ## 显示可用目标
@@ -143,8 +143,11 @@ contract-impact: ## 影响面分析：make contract-impact id=<id>（P2）
 	@echo "contract-impact: 尚未实现（P2）"
 	@exit 1
 
-contract-compat: ## oasdiff 兼容检测（存在 v2 spec 时对比 v1）
+contract-compat: ## 兼容检测：enum append-only（name/value/type/code，默认 HEAD^1）+ v2 spec 对比 v1
 	./scripts/contract/compat.sh
+
+contract-compat-staged: ## pre-commit：只对 index 中的 enum 做 append-only（基线 HEAD）
+	CONTRACT_COMPAT_STAGED=1 ./scripts/contract/compat.sh
 
 contract-compat-baseline: ## oasdiff 与 origin/main 对比（一次性迁移/发布前手动跑）
 	CONTRACT_BASELINE_REF=origin/main ./scripts/contract/compat.sh

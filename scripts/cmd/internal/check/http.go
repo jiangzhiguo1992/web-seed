@@ -911,6 +911,7 @@ func (c *Checker) checkHTTPBindings(schema *Schema, serviceMeta map[string]servi
 					c.rulef("http-operation", "%s %s %s: x-service required", rel, method, path)
 					continue
 				}
+				c.addServiceUsedBy(serviceRef, contractID)
 				target, ok := serviceMeta[serviceRef]
 				if !ok {
 					c.rulef("http-operation", "%s %s %s: unknown service %s", rel, method, path, serviceRef)

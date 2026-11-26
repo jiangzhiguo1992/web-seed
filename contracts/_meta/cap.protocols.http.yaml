@@ -96,7 +96,7 @@ fields:
                 description: "path 参数；每项必须写 name/type/description/to"
                 item_fields:
                   - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "path 参数名，必须与路径中的 {name} 一致" }
-                  - { name: type, type: _types.basics.string, required: true, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID，不允许实体或匿名 object" }
+                  - { name: type, type: _types.basics.string, required: true, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID，不允许实体或匿名 object" }
                   - { name: description, type: _types.basics.string, required: true, description: "参数含义" }
                   - { name: to, type: _types.basics.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
               - name: query
@@ -107,7 +107,7 @@ fields:
                 item_fields:
                   - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "query 参数名" }
                   - { name: required, type: _types.basics.boolean, required: false, default: true, description: "是否必填；省略时默认 true" }
-                  - { name: type, type: _types.basics.string, required: true, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?(<[A-Za-z0-9_<>, ]+>)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID" }
+                  - { name: type, type: _types.basics.string, required: true, pattern: '^(_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?|data\.enums\.[a-z][a-z0-9_]*)$', description: "参数类型；只允许标量/枚举类型 ID" }
                   - { name: description, type: _types.basics.string, required: true, description: "参数含义" }
                   - { name: to, type: _types.basics.string, required: true, pattern: '^params\.[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$', description: "对应的 service 参数路径" }
               - name: body

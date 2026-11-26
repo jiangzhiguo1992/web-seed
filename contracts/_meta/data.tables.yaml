@@ -67,6 +67,8 @@ fields:
         required: true
         unique: true
         pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
+        generated: true
+        write: forbidden
         description: "映射本表的 entity ID 列表；由 gen-graph 写入"
       - name: references
         type: _types.structures.set<_types.basics.string>
@@ -75,7 +77,7 @@ fields:
         pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
         generated: true
         write: forbidden
-        description: "本表列引用的目标列"
+        description: "本表列引用的目标列；由 gen-graph 写入"
       - name: referenced_by
         type: _types.structures.set<_types.basics.string>
         required: true
@@ -83,7 +85,7 @@ fields:
         pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$'
         generated: true
         write: forbidden
-        description: "引用本表列的来源列"
+        description: "引用本表列的来源列；由 gen-graph 写入"
       - name: queries
         type: _types.structures.set<_types.basics.string>
         required: true
@@ -166,9 +168,9 @@ rules:
   - { id: index-live-only, text: "live_only 只有 unique 索引可设为 true；设为 true 时要求表存在 nullable 的 deleted_at 列", implemented_by: [ index-live-only ] }
   - { id: constraint-fields, text: "on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
   - { id: constraint-ref, text: "query.constraints[] 必须指向查询写表上的 ck_ 约束", implemented_by: [ constraint-ref ] }
-  - { id: constraint-used-by, text: "constraints[].used_by 必须等于 query.constraints[] 中引用本约束的查询集合；至少一个；由 gen-graph 写入，禁止手改", implemented_by: [ constraint-used-by ] }
+  - { id: constraint-used-by, text: "constraints[].used_by 必须等于 query.constraints[] 中引用本约束的查询集合；由 gen-graph 写入，禁止手改", implemented_by: [ constraint-used-by ] }
   - { id: enum-code-literal, text: "表 CHECK 以 = / <> / != / IN / NOT IN 引用枚举列时，字面量必须是该枚举的 code；范围比较不校验", implemented_by: [ enum-code-literal ] }
-  - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边；非空由字段 min_items 保证", implemented_by: [ table-queries-generated ] }
+  - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
   - { id: table-referenced-by, text: "table.references 与 table.referenced_by 由 gen-graph 生成，禁止手改；references 必须等于本表 columns[].references.column 的目标列集合，referenced_by 必须等于所有指向本表列的 references 源列集合；两侧互为反向且每项必须是存在的列引用", implemented_by: [ table-referenced-by ] }
   - { id: owner-write, text: "查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 service step 的 query 中", implemented_by: [ owner-write ] }

@@ -339,6 +339,11 @@ func (c *Checker) checkStorageFieldSubset(schema *Schema) {
 			c.rulef("schema.types", "data.storage: archive field %q is missing from _meta/data.storage.yaml", name)
 		}
 	}
+	for name := range tableKeys {
+		if !storageEntryFields[name] && !storageArchiveFields[name] {
+			c.rulef("schema.types", "data.storage: _meta/data.storage.yaml declares unknown table entry field %q", name)
+		}
+	}
 	caches, ok := contractspec.FindField(schema.Fields, "caches")
 	if !ok {
 		return
@@ -347,6 +352,11 @@ func (c *Checker) checkStorageFieldSubset(schema *Schema) {
 	for name := range storageCacheFields {
 		if !cacheKeys[name] {
 			c.rulef("schema.types", "data.storage: cache field %q is missing from _meta/data.storage.yaml", name)
+		}
+	}
+	for name := range cacheKeys {
+		if !storageCacheFields[name] {
+			c.rulef("schema.types", "data.storage: _meta/data.storage.yaml declares unknown cache field %q", name)
 		}
 	}
 }

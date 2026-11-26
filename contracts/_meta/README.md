@@ -104,9 +104,9 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 | 命令 | 作用 |
 |---|---|
 | `make contract-new type=<type> name=<name> [module=...] [table=...] [service=...]` | 按 `_meta/<type>.yaml` 渲染最小骨架；`contract-new` 不支持的类型需手写 |
-| `make gen-graph` | 写回 `table.entities` / `table.queries` / `model.queries` / `query.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / 规则与生命周期锚点 |
+| `make gen-graph` | 写回 `table.entities` / `table.queries` / `model.queries` / `query.used_by` / `service.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / 规则锚点 / 生命周期动作与 `states.values[].steps` / `topics[].publish.emitted_by` / `dispatches[].emitted_by` |
 | `make gen-graph-check` | 只校验生成字段是否最新 |
-| `make contract-check` | 结构 / ID / 约束 / 索引 / 引用 / owner / 数据流 / 类型级规则 |
+| `make contract-check` | 结构 / ID / 约束 / 索引 / 引用 / owner / 数据流 / 类型级规则 / service.used_by 与 states.values[].steps 对账 |
 | `make audit-types` | 审计全部契约 `type` 键：`_types.*` / 外部引用 / 显式例外，输出计数并以非零退出码报告裸类型 |
 | `make check-index` | 校验 index 全类型登记及 renderer/targets ID 一致 |
 | `make gen-model` | 生成 Go 模型（`apps/api/internal/generated/model`）与 TS 模型（`apps/web/packages/api-client/src/generated/model.ts`） |
@@ -127,8 +127,10 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 ## 4. 校验机制
 
 - `_meta/<type>.yaml` 由 `KnownFields` 严格解析：拼错字段（如 `requred`）直接失败。
-- `_meta` 的 `pattern` / `key_patterns` 必须整体锚定（`^...$`），由 `TestMetaPatternsAreAnchored` 兜底，避免退化为前缀匹配。
-- 实例结构由 `fields` / `item_fields` 的 `required` / `type` / `enum` / `allowed` / `pattern` / `unique` /
+- `_meta` 的 `pattern` / `key_patterns` 必须能编译且整体锚定（`^...$`），在加载期直接失败，避免退化为子串匹配；实例 schema 的 `key_patterns` 同样要求锚定。
+- 字段规范里的 `enum` / `const` / `default` / `examples` 值必须与字段类型兼容，并满足该字段的 `pattern` / `min_len` / `max_len` / `min` / `max`；`unique_key` 必须指向 string 字段；`unique` 只用于集合；`fields` 只用于 object。
+- 枚举兼容：`name` / `value` / `go_type` / `ts_type` / `code` 只能追加，不得删除或改名；`make contract-compat` 默认对比 `HEAD^1`，pre-commit 用 `make contract-compat-staged` 对比 index，CI 在完整历史 checkout 上执行。
+- 实例结构由 `fields` / `item_fields` 的 `required` / `type` / `enum` / `pattern` / `unique` /
   `unique_key` / `min` / `max` / `min_items` / `min_len` / `max_len` / `len` / `const` / `types` / `key_patterns` 校验；
   `soft: true` 标记不做通用结构校验的 soft zone（领域规则仍可部分检查）。
 - 字段顺序以模板为准（`checkFieldOrder`）；新增字段只改 `_meta` 模板。
@@ -151,7 +153,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 | 键 | 用途 |
 |---|---|
 | `description` | 字段的准确含义；软区标记也写在这里 |
-| `required` / `type` / `types` / `enum` / `allowed` / `pattern` / `key_patterns` / `const` / `unique` / `unique_key` / `min` / `max` / `min_items` / `max_items` / `min_len` / `max_len` / `len` | 结构约束；`types` 是 schema 节点种类列表（与 `type` 互斥），可整体写 `[ "*" ]`；`key_patterns` 约束 string map 键；`min_items`/`max_items` 约束 list/set/map 的元素数；`min_len`/`max_len` 只约束 string 长度；`len` 只约束 array |
+| `required` / `type` / `types` / `enum` / `pattern` / `key_patterns` / `const` / `unique` / `unique_key` / `min` / `max` / `min_items` / `max_items` / `min_len` / `max_len` / `len` | 结构约束；`types` 是 schema 节点种类列表（与 `type` 互斥），可整体写 `[ "*" ]`；`key_patterns` 约束 string map 键；`min_items`/`max_items` 约束 list/set/map 的元素数；`min_len`/`max_len` 只约束 string 长度；`len` 只约束 array |
 | `soft` | 无通用结构校验的 soft zone（领域规则仍可部分检查；只允许 `any`/`string`） |
 | `examples` | 骨架示例值；实体字段不支持 |
 | `fields` / `item_fields` | 嵌套对象 / 对象列表的字段树 |
@@ -179,8 +181,8 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 ## 6. 不要做的事
 
 - 不要重建 `contracts/_meta/schema/` 或 `templates/`；不要在 `_meta` 之外手写第二份字段模板。
-- 不要手写生成字段（`table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` /
-  `query.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / `feature.rules.implemented_by` / 生命周期锚点 / `topics[].publish.emitted_by`）。
+- 不要手写生成字段（`table.entities` / `table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` /
+  `query.used_by` / `services.used_by` / `constraints[].used_by` / `validation[].used_by` / `enums[].used_by` / `feature.rules.implemented_by` / 生命周期锚点与 `states.values[].steps` / `topics[].publish.emitted_by` / `dispatches[].emitted_by`）。
 - 不要只跑 `make gen` 而跳过 `make contract-check`。
 - 不要把硬约束只写进 `rules` 而不写 `implemented_by`。
 - 不要在 checker 里解析 `CHECK expr` 的 SQL 语义；只校验可判定的字面量。

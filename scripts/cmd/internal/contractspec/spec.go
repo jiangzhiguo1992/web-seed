@@ -228,7 +228,6 @@ type Field struct {
 	Required bool     `yaml:"required"`
 	Const    any      `yaml:"const"`
 	Enum     []any    `yaml:"enum"`
-	Allowed  []any    `yaml:"allowed"`
 	// Soft 标记无结构校验的 soft zone；当前只允许 type: any。
 	Soft bool `yaml:"soft"`
 	Min  any  `yaml:"min"`
@@ -369,7 +368,43 @@ func LoadSharedTypes(dir string) (*SharedTypes, error) {
 	if err := validateStructures(path, t.Structures, t.TypeFamilies); err != nil {
 		return nil, err
 	}
+	if err := validateSharedPatterns(path, &t); err != nil {
+		return nil, err
+	}
 	return &t, nil
+}
+
+// validateSharedPatterns 对 _types.yaml 自身的 pattern/key_patterns 执行同样的锚定校验；
+// 它不经过 _meta 字段树，必须单独覆盖。
+func validateSharedPatterns(path string, t *SharedTypes) error {
+	for name, def := range t.Commons.BasicsParams {
+		if err := validateFieldPattern(def, path+".commons.basics_params."+name); err != nil {
+			return err
+		}
+	}
+	for name, family := range t.TypeFamilies {
+		for param, def := range family.Params {
+			if err := validateFieldPattern(def, path+".basics."+name+".params."+param); err != nil {
+				return err
+			}
+		}
+	}
+	for name, structure := range t.Structures {
+		if err := validateFieldPatterns(structure.Fields, path+".structures."+name+".fields"); err != nil {
+			return err
+		}
+		for param, def := range structure.Params {
+			if err := validateFieldPattern(def, path+".structures."+name+".params."+param); err != nil {
+				return err
+			}
+		}
+	}
+	for name, kind := range t.Schemas {
+		if err := validateFieldPatterns(kind.Keys, path+".schemas."+name+".keys"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // LoadCustomTypes 严格解析 contracts/data/types.yaml；文件缺失视为没有自定义类型。
@@ -597,7 +632,7 @@ func validateSchemaKeys(path, where string, keys []Field, keyTypes map[string]bo
 			if key.Type != "" && key.Type != "map" {
 				return fmt.Errorf("%s: %s key %s: type and types are mutually exclusive", path, where, key.Name)
 			}
-			if key.Const != nil || len(key.Enum) > 0 || len(key.Allowed) > 0 || key.Pattern != "" || key.Min != nil || key.Max != nil ||
+			if key.Const != nil || len(key.Enum) > 0 || key.Pattern != "" || key.Min != nil || key.Max != nil ||
 				key.MinItems != nil || key.MaxItems != nil || key.MinLen != nil || key.MaxLen != nil || key.Len != nil ||
 				key.Unique || key.UniqueKey != "" || key.Soft {
 				return fmt.Errorf("%s: %s key %s: types only accepts required/description/default/key_patterns", path, where, key.Name)
@@ -683,8 +718,51 @@ func LoadSchema(path string) (*Schema, error) {
 	if err := validateMetaFieldTypes(s.Fields); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
+	if err := validateFieldPatterns(s.Fields, "fields"); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 	injectFamilyParams(&s)
 	return &s, nil
+}
+
+// validateFieldPatterns 校验字段规范与实例共用的正则约束：必须能编译且整体锚定。
+// 锚定缺失会退化为子串匹配，必须在这里拦住，不能只靠单测。
+func validateFieldPatterns(fields []Field, where string) error {
+	for _, f := range fields {
+		if err := validateFieldPattern(f, where+"."+f.Name); err != nil {
+			return err
+		}
+		if err := validateFieldPatterns(f.Fields, where+"."+f.Name+".fields"); err != nil {
+			return err
+		}
+		if err := validateFieldPatterns(f.ItemFields, where+"."+f.Name+".item_fields"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateFieldPattern(f Field, where string) error {
+	if f.Pattern != "" {
+		if _, err := regexp.Compile(f.Pattern); err != nil {
+			return fmt.Errorf("%s.pattern: %w", where, err)
+		}
+		if !strings.HasPrefix(f.Pattern, "^") || !strings.HasSuffix(f.Pattern, "$") {
+			return fmt.Errorf("%s.pattern must be anchored with ^...$: %q", where, f.Pattern)
+		}
+	}
+	for _, pattern := range f.KeyPatterns {
+		if pattern == "" {
+			return fmt.Errorf("%s.key_patterns must not contain empty regex", where)
+		}
+		if _, err := regexp.Compile(pattern); err != nil {
+			return fmt.Errorf("%s.key_patterns: %w", where, err)
+		}
+		if !strings.HasPrefix(pattern, "^") || !strings.HasSuffix(pattern, "$") {
+			return fmt.Errorf("%s.key_pattern must be anchored with ^...$: %q", where, pattern)
+		}
+	}
+	return nil
 }
 
 // validateMetaFieldTypes 要求 _meta 字段规范的 type 统一写
@@ -762,6 +840,15 @@ var (
 	tsConcrete = map[string]bool{"string": true, "number": true, "boolean": true, "unknown": true}
 )
 
+// typeFamilyVariants 是固定 variant 词汇：多变体族的键必须与这里完全一致，
+// 防止 AI 在 _types.yaml 里新增生成器无法确定性落型的 variant。
+var typeFamilyVariants = map[string][]string{
+	"integer":   {"8", "16", "32", "64"},
+	"float":     {"32", "64"},
+	"timestamp": {"time", "long"},
+	"datetime":  {"timezone", "time"},
+}
+
 // validateTypeFamilies 校验每个族的 types 落型：多变体族恰好覆盖全部 variant，
 // 单变体族的 key 必须是族名；go/pg/ts 必须是已知的确定性类型名。
 func validateTypeFamilies(path string, families map[string]ValueTypeFamily) error {
@@ -791,6 +878,18 @@ func validateTypeFamilies(path string, families map[string]ValueTypeFamily) erro
 		for key := range fam.Types {
 			if !containsString(expected, key) {
 				return fmt.Errorf("%s: family %s has unexpected concrete type %q", path, name, key)
+			}
+		}
+		if variants, fixed := typeFamilyVariants[name]; fixed {
+			for _, key := range variants {
+				if _, ok := fam.Types[key]; !ok {
+					return fmt.Errorf("%s: family %s missing variant %q", path, name, key)
+				}
+			}
+			for key := range fam.Types {
+				if !containsString(variants, key) {
+					return fmt.Errorf("%s: family %s has unknown variant %q (allowed: %s)", path, name, key, strings.Join(variants, "/"))
+				}
 			}
 		}
 		for key, ct := range fam.Types {

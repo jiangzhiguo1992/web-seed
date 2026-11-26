@@ -177,3 +177,122 @@ func TestConcreteVariantRequiredEverywhere(t *testing.T) {
 		t.Fatalf("concrete variant rejected: %v", c.errs)
 	}
 }
+
+func TestMetaFieldValueConstraints(t *testing.T) {
+	cases := []struct {
+		name  string
+		field Field
+		ok    bool
+	}{
+		{"integer default string", Field{Name: "n", Type: "_types.basics.integer.32", Default: "x"}, false},
+		{"integer default int", Field{Name: "n", Type: "_types.basics.integer.32", Default: 1}, true},
+		{"string enum int", Field{Name: "s", Type: "_types.basics.string", Enum: []any{1}}, false},
+		{"list string enum", Field{Name: "s", Type: "_types.structures.list<_types.basics.string>", Enum: []any{"a"}}, true},
+		{"boolean default string", Field{Name: "b", Type: "_types.basics.boolean", Default: "true"}, false},
+		{"const default conflict", Field{Name: "n", Type: "_types.basics.integer.32", Const: 1, Default: 2}, false},
+		{"const outside enum", Field{Name: "s", Type: "_types.basics.string", Const: "x", Enum: []any{"a"}}, false},
+		{"example wrong type", Field{Name: "s", Type: "_types.basics.string", Examples: []any{1}}, false},
+		{"unique on string", Field{Name: "s", Type: "_types.basics.string", Unique: true}, false},
+		{"unique object list without key", Field{
+			Name: "xs", Type: "_types.structures.list<_types.structures.object>", Unique: true,
+			ItemFields: []Field{{Name: "name", Type: "_types.basics.string"}},
+		}, false},
+		{"fields on string", Field{Name: "s", Type: "_types.basics.string", Fields: []Field{{Name: "x", Type: "_types.basics.string"}}}, false},
+		{"integer min float", Field{Name: "n", Type: "_types.basics.integer.32", Min: 1.5}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateFieldTypes([]Field{tc.field}, ValueTypes{}, false)
+			if tc.ok && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !tc.ok && err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestSchemaMapKeyPatternsAnchored(t *testing.T) {
+	c := &Checker{}
+	c.validateMapNode(map[string]any{"key_patterns": []any{"^[a-z]+"}}, "m")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "must be anchored") {
+		t.Fatalf("unanchored key_patterns accepted: %v", c.errs)
+	}
+}
+
+func TestServiceStepFieldSubsetDrift(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "..")
+	schema, _, err := contractspec.LoadSchemaByType(root, "cap.services")
+	if err != nil {
+		t.Fatal(err)
+	}
+	si := fieldIndex(schema.Fields, "services")
+	if si < 0 {
+		t.Fatal("services field missing")
+	}
+	ji := fieldIndex(schema.Fields[si].ItemFields, "steps")
+	if ji < 0 {
+		t.Fatal("steps field missing")
+	}
+	schema.Fields[si].ItemFields[ji].ItemFields = append(schema.Fields[si].ItemFields[ji].ItemFields, Field{Name: "bogus"})
+	c := &Checker{}
+	c.checkServiceStepFields(schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), `unknown field "bogus"`) {
+		t.Fatalf("step field drift not reported: %v", c.errs)
+	}
+}
+
+func TestStorageFieldSubsetDrift(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "..")
+	schema, _, err := contractspec.LoadSchemaByType(root, "data.storage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := fieldIndex(schema.Fields, "tables")
+	if i < 0 {
+		t.Fatal("tables field missing")
+	}
+	schema.Fields[i].ItemFields = append(schema.Fields[i].ItemFields, Field{Name: "bogus"})
+	c := &Checker{}
+	c.checkStorageFieldSubset(schema)
+	if !strings.Contains(strings.Join(c.errs, "\n"), `unknown table entry field "bogus"`) {
+		t.Fatalf("storage field drift not reported: %v", c.errs)
+	}
+}
+
+func fieldIndex(fields []Field, name string) int {
+	for i := range fields {
+		if fields[i].Name == name {
+			return i
+		}
+	}
+	return -1
+}
+
+func TestMetaFieldValueBounds(t *testing.T) {
+	cases := []struct {
+		name  string
+		field Field
+		ok    bool
+	}{
+		{"enum violates pattern", Field{Name: "s", Type: "_types.basics.string", Enum: []any{"a"}, Pattern: "^b$"}, false},
+		{"default too short", Field{Name: "s", Type: "_types.basics.string", Default: "a", MinLen: 2}, false},
+		{"default too long", Field{Name: "s", Type: "_types.basics.string", Default: "abc", MaxLen: 2}, false},
+		{"default below min", Field{Name: "n", Type: "_types.basics.integer.32", Default: 1, Min: 2}, false},
+		{"example above max", Field{Name: "n", Type: "_types.basics.integer.32", Examples: []any{5}, Max: 4}, false},
+		{"valid string", Field{Name: "s", Type: "_types.basics.string", Default: "ab", MinLen: 2, MaxLen: 3}, true},
+		{"valid integer", Field{Name: "n", Type: "_types.basics.integer.32", Default: 2, Min: 1, Max: 3}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateFieldTypes([]Field{tc.field}, ValueTypes{}, false)
+			if tc.ok && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !tc.ok && err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}

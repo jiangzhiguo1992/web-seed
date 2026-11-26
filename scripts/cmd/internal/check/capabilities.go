@@ -11,6 +11,21 @@ type returnType struct {
 	nullable bool
 }
 
+// addServiceUsedBy 记录一条指向 service 的入边：HTTP operation、异步任务或 kind=service step。
+// 放在共享文件，供 services/http/events 三个领域文件共同使用。
+func (c *Checker) addServiceUsedBy(serviceID, userID string) {
+	if serviceID == "" || userID == "" {
+		return
+	}
+	if c.serviceUsedBy == nil {
+		c.serviceUsedBy = map[string]map[string]bool{}
+	}
+	if c.serviceUsedBy[serviceID] == nil {
+		c.serviceUsedBy[serviceID] = map[string]bool{}
+	}
+	c.serviceUsedBy[serviceID][userID] = true
+}
+
 // lifecycleSubject 是一个状态维度：实体上的某个状态字段。
 type lifecycleSubject struct {
 	Entity    string
@@ -124,6 +139,9 @@ func (c *Checker) checkCapabilities() {
 	c.validationRefs = map[string]map[string]bool{}
 	c.serviceStepIDs = map[string]bool{}
 	c.stepService = map[string]string{}
+	c.serviceUsedBy = map[string]map[string]bool{}
+	c.serviceUsedByDeclared = map[string]map[string]bool{}
+	c.lifecycleStateSteps = map[string]map[string]map[string]bool{}
 	serviceSchema, err := c.loadSchemaByType("cap.services")
 	if err != nil {
 		c.rulef("schema.load", "load cap.services schema: %v", err)
@@ -153,6 +171,7 @@ func (c *Checker) checkCapabilities() {
 		c.checkRules(s)
 		c.checkTargets(s)
 	}
+	c.checkServiceStepFields(serviceSchema)
 
 	serviceFiles := glob(c.root, filepath.Join(serviceSchema.Targets.Dir, serviceSchema.Targets.Glob))
 	typeNames := map[string]bool{}
@@ -606,6 +625,7 @@ func (c *Checker) checkCapabilities() {
 	jobServices := c.checkEventsDoc(eventSchema, serviceMetaByID, serviceItemIDs)
 	c.checkHTTPBindings(httpSchema, serviceMetaByID, typeNames, jobServices)
 	c.checkAccessTargets()
+	c.checkServiceUsedBy()
 }
 
 // computeServiceErrorClosure 递归计算每个 service 可能返回的完整错误集。

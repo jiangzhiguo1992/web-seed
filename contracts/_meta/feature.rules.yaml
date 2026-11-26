@@ -61,7 +61,7 @@ fields:
       - { name: op, type: _types.basics.string, required: false, enum: [ eq, ne, gt, ge, lt, le, in, not_in, pattern, min_len, max_len, required, not_null ], description: "constraint 的比较操作" }
       - { name: value, type: _types.basics.any, required: false, description: "constraint 的期望值" }
       - { name: assert, type: _types.basics.string, soft: true, required: false, description: "invariant 的断言表达式" }
-      - { name: implemented_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该规则的 service 项" }
+      - { name: implemented_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "实现该规则的 service 项；由 gen-graph 写入" }
       - { name: given, type: _types.basics.string, soft: true, required: false, description: "policy 前置条件" }
       - { name: when, type: _types.basics.string, soft: true, required: false, description: "policy 触发场景" }
       - { name: then, type: _types.basics.string, soft: true, required: false, description: "policy 期望结果" }

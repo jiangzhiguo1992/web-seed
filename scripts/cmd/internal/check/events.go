@@ -60,10 +60,11 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 
 	asyncServices := map[string]bool{}
 	bound := map[string]bool{}
-	bind := func(rel, slot, name, svc, module string) {
+	bind := func(rel, slot, name, itemID, svc, module string) {
 		if svc == "" {
 			return
 		}
+		c.addServiceUsedBy(svc, itemID)
 		meta, ok := serviceMeta[svc]
 		if !ok {
 			c.rulef("async-service", "%s.%s: unknown service %s", rel, name, svc)
@@ -146,7 +147,11 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 					c.rulef("async-structure", "%s.%s: subscribe id %q must be %s", rel, subName, subID, fileID+"."+subName)
 				}
 				svc, _ := sub["service"].(string)
-				bind(rel, "subscribe", subName, svc, module)
+				itemID := subID
+				if itemID == "" {
+					itemID = fileID + "." + subName
+				}
+				bind(rel, "subscribe", subName, itemID, svc, module)
 			}
 		}
 
@@ -169,7 +174,11 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 				c.rulef("event-cron-schedule", "%s.%s: invalid cron schedule %q", rel, name, schedule)
 			}
 			svc, _ := item["service"].(string)
-			bind(rel, "cron", name, svc, module)
+			itemID := id
+			if itemID == "" {
+				itemID = fileID + "." + name
+			}
+			bind(rel, "cron", name, itemID, svc, module)
 		}
 
 		dispatchNames := map[string]bool{}
@@ -195,7 +204,11 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 			}
 			svc, _ := item["service"].(string)
 			c.checkDispatchConsumer(rel, name, item, serviceMeta)
-			bind(rel, "dispatch", name, svc, module)
+			itemID := id
+			if itemID == "" {
+				itemID = fileID + "." + name
+			}
+			bind(rel, "dispatch", name, itemID, svc, module)
 		}
 	}
 	return asyncServices

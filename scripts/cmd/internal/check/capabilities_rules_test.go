@@ -2320,7 +2320,8 @@ func TestValidateFieldTypesSchemaKinds(t *testing.T) {
 		{"types with pattern", Field{Name: "x", Types: []string{"_types.schemas.scalar"}, Pattern: "^a$"}, false},
 		{"types multi with default", Field{Name: "x", Types: []string{"_types.schemas.scalar", "_types.schemas.object"}, Default: 1}, false},
 		{"unique_key on non list", Field{Name: "x", Type: "_types.basics.string", UniqueKey: "name"}, false},
-		{"unique_key on list", Field{Name: "x", Type: "_types.structures.list<_types.structures.object>", UniqueKey: "name", ItemFields: []Field{{Name: "name"}}}, true},
+		{"unique_key on list", Field{Name: "x", Type: "_types.structures.list<_types.structures.object>", UniqueKey: "name", ItemFields: []Field{{Name: "name", Type: "_types.basics.string"}}}, true},
+		{"unique_key non string", Field{Name: "x", Type: "_types.structures.list<_types.structures.object>", UniqueKey: "name", ItemFields: []Field{{Name: "name", Type: "_types.basics.integer.32"}}}, false},
 	}
 	for _, tc := range cases {
 		err := validateFieldTypes([]Field{tc.field}, testValueTypes(), false)
@@ -3522,5 +3523,82 @@ paths:
 	got := strings.Join(c.errs, "\n")
 	if !strings.Contains(got, "[http-service-params]") || !strings.Contains(got, "form field sort integer bits 64") || !strings.Contains(got, "bits 32") {
 		t.Fatalf("form integer width mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestServiceUsedByMismatch(t *testing.T) {
+	c := &Checker{
+		serviceUsedBy: map[string]map[string]bool{
+			"cap.services.a.svc": {"cap.services.b.call": true},
+		},
+		serviceUsedByDeclared: map[string]map[string]bool{
+			"cap.services.a.svc": {"cap.services.b.other": true},
+		},
+	}
+	c.checkServiceUsedBy()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[service-used-by]") {
+		t.Fatalf("service.used_by mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestLifecycleStateStepsMismatch(t *testing.T) {
+	c := &Checker{
+		lifecycleStateSteps: map[string]map[string]map[string]bool{
+			"cap.lifecycles.x": {"active": {"cap.services.x.s.create": true}},
+		},
+	}
+	values := []any{map[string]any{"value": "active", "steps": []any{"cap.services.x.s.other"}}}
+	c.checkLifecycleStateSteps("x.yaml", "cap.lifecycles.x", values)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[lifecycle-anchors]") {
+		t.Fatalf("state steps mismatch not reported: %v", c.errs)
+	}
+}
+
+func TestServiceUsedByUnion(t *testing.T) {
+	c := &Checker{
+		serviceUsedBy: map[string]map[string]bool{
+			"cap.services.a.svc": {
+				"cap.protocols.http.x.get":     true,
+				"cap.events.x.created.consume": true,
+				"cap.services.b.call":          true,
+			},
+		},
+		serviceUsedByDeclared: map[string]map[string]bool{
+			"cap.services.a.svc": {
+				"cap.protocols.http.x.get":     true,
+				"cap.events.x.created.consume": true,
+				"cap.services.b.call":          true,
+			},
+		},
+	}
+	c.checkServiceUsedBy()
+	if len(c.errs) != 0 {
+		t.Fatalf("matching union rejected: %v", c.errs)
+	}
+}
+
+func TestLifecycleStateStepsOmittedWhenAllStatesAllowed(t *testing.T) {
+	c := &Checker{
+		lifecycleStates: map[string]map[string]bool{
+			"cap.lifecycles.x": {"a": true, "b": true},
+		},
+		lifecycleActionStates: map[string]map[string]map[string]bool{
+			"cap.lifecycles.x.create": {"cap.lifecycles.x": {"a": true, "b": true}},
+		},
+	}
+	step := map[string]any{"lifecycles": []any{"cap.lifecycles.x.create"}}
+	c.checkServiceStateGate(step, "x.yaml", "s")
+	if len(c.errs) != 0 {
+		t.Fatalf("omitted all-state gate rejected: %v", c.errs)
+	}
+	if len(c.lifecycleStateSteps) != 0 {
+		t.Fatalf("all-state gate must not produce state steps: %#v", c.lifecycleStateSteps)
+	}
+	c.checkLifecycleStateSteps("x.yaml", "cap.lifecycles.x", []any{
+		map[string]any{"value": "a", "steps": []any{}},
+		map[string]any{"value": "b", "steps": []any{}},
+	})
+	if len(c.errs) != 0 {
+		t.Fatalf("empty steps rejected: %v", c.errs)
 	}
 }

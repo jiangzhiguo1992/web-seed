@@ -6,7 +6,6 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "密码创建即 verified；不要在创建后再走一次验证"
   - "update 只改密码哈希，不改变 auth_status"
 
 subjects:

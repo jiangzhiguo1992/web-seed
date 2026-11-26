@@ -992,11 +992,11 @@ func TestStorageArchiveEntriesRequireAgeByColumn(t *testing.T) {
 	}
 }
 
-func TestValidateListAllowed(t *testing.T) {
+func TestValidateListEnum(t *testing.T) {
 	c := &Checker{}
-	c.validateValue([]any{"desc", "sideways"}, Field{Type: "_types.structures.list<_types.basics.string>", Allowed: []any{"asc", "desc"}}, "order")
-	if !strings.Contains(strings.Join(c.errs, "\n"), `"sideways" not allowed`) {
-		t.Fatalf("list item not checked against allowed: %v", c.errs)
+	c.validateValue([]any{"desc", "sideways"}, Field{Type: "_types.structures.list<_types.basics.string>", Enum: []any{"asc", "desc"}}, "order")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `"sideways" not in enum`) {
+		t.Fatalf("list item not checked against enum: %v", c.errs)
 	}
 }
 
@@ -3448,17 +3448,17 @@ func TestTableIDPatternApplied(t *testing.T) {
 	}
 }
 
-func TestValidateScalarAllowedAndBooleanConst(t *testing.T) {
+func TestValidateScalarEnumAndBooleanConst(t *testing.T) {
 	c := &Checker{}
-	c.validateValue("x", Field{Type: "_types.basics.string", Allowed: []any{"a", "b"}}, "f")
-	if !strings.Contains(strings.Join(c.errs, "\n"), `"x" not allowed`) {
-		t.Fatalf("scalar allowed not checked: %v", c.errs)
+	c.validateValue("x", Field{Type: "_types.basics.string", Enum: []any{"a", "b"}}, "f")
+	if !strings.Contains(strings.Join(c.errs, "\n"), `"x" not in enum`) {
+		t.Fatalf("scalar enum not checked: %v", c.errs)
 	}
 
 	c = &Checker{}
-	c.validateValue(1, Field{Type: "_types.basics.integer", Allowed: []any{2, 3}}, "n")
-	if !strings.Contains(strings.Join(c.errs, "\n"), "1 not allowed") {
-		t.Fatalf("numeric allowed not checked: %v", c.errs)
+	c.validateValue(1, Field{Type: "_types.basics.integer", Enum: []any{2, 3}}, "n")
+	if !strings.Contains(strings.Join(c.errs, "\n"), "1 not in enum") {
+		t.Fatalf("numeric enum not checked: %v", c.errs)
 	}
 
 	c = &Checker{}

@@ -152,7 +152,7 @@ columns:
 
 | 字段 | 谁写 | 含义 |
 |---|---|---|
-| `table.entities` | 手写 | 映射本表的 entity 集合（`[强制: table-entities]`） |
+| `table.entities` | `make gen-graph` | 映射本表的 entity 集合，由 `entity.model.tables` 反推（`[强制: table-entities]`，禁止手改） |
 | `model.includes` | `make gen-graph` | 本实体每个关系字段指向的 entity 及基数 `{field, entity, cardinality}`（`[强制: entity-included-by]`，禁止手改） |
 | `model.included_by` | `make gen-graph` | 指向本实体的来源关系字段及反向基数 `{entity, field, cardinality}`（`[强制: entity-included-by]`，禁止手改） |
 | `table.references` | `make gen-graph` | 本表 `columns[].references` 的目标列（`[强制: table-referenced-by]`，禁止手改） |
@@ -160,7 +160,7 @@ columns:
 | `indexes[].used_by` | 手写 | 使用该索引的 query（设计声明） |
 | `table.queries` | `make gen-graph` | 使用本表的 query（`[强制: table-queries-generated]`，禁止手改） |
 | `model.queries` | `make gen-graph` | 返回本实体的 query（`[强制: entity-used-by]`，禁止手改） |
-| `queries[].used_by` | `make gen-graph` | 调用本 query 的 method（`[强制: query-used-by]`，禁止手改） |
+| `queries[].used_by` | `make gen-graph` | 调用本 query 的 service 项（`[强制: query-used-by]`，禁止手改） |
 | `enums[].used_by` | `make gen-graph` | 使用本枚举的 entity / service / event / http operation 并集（`[强制: enum-used-by]`，禁止手改） |
 
 这八个字段都只记**直接关系**，不展开传递闭包；完整影响面用 `make contract-impact id=<id>` 查询（P2 未实现）。

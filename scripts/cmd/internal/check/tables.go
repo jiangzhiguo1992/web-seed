@@ -869,6 +869,12 @@ func (c *Checker) checkSharedTypes(schema *Schema) {
 			c.checkParamSpec("types.type_families."+name+".params", pname, fam.Params[pname])
 		}
 	}
+	for _, name := range structureNames(schema.ValueTypes) {
+		st := schema.ValueTypes.Structures[name]
+		for _, pname := range sortedKeysOfFields(st.Params) {
+			c.checkParamSpec("types.structures."+name+".params", pname, st.Params[pname])
+		}
+	}
 	customTypeNames := make([]string, 0, len(schema.ValueTypes.CustomTypes))
 	for name := range schema.ValueTypes.CustomTypes {
 		customTypeNames = append(customTypeNames, name)
@@ -934,6 +940,15 @@ func sortedKeysOfFields(fields map[string]Field) []string {
 func familyNames(ct ValueTypes) []string {
 	out := make([]string, 0, len(ct.TypeFamilies))
 	for k := range ct.TypeFamilies {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func structureNames(ct ValueTypes) []string {
+	out := make([]string, 0, len(ct.Structures))
+	for k := range ct.Structures {
 		out = append(out, k)
 	}
 	sort.Strings(out)

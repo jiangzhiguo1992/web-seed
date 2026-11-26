@@ -6,8 +6,6 @@ owner_module: account
 schema_version: 1
 stability: draft
 do_not:
-  - "auth_phone 同一账号只能绑定一个未删除的手机号"
-  - "uq_auth_phone_number 是全局唯一；软删也不释放手机号，重建同号会失败"
   - "软删时必须同时把 account_id 置 NULL；ck_auth_phone_account_live 会拒绝未置空的行"
 
 table:

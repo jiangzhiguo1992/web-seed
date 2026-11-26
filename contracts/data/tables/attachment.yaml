@@ -9,7 +9,6 @@ do_not:
   - "attachment 不存 URL 或签名地址；只存 object_key"
   - "attachment 不存 OSS ACL/bucket policy/签名 TTL；这些属于配置"
   - "attachment.owner_id 是多态引用，不建数据库外键；服务层必须校验 (owner_table_name, owner_id) 存在"
-  - "attachment.object_key 全局唯一；软删后不释放"
   - "attachment.original_name 只用于展示/下载，不得用作 object_key"
   - "附件替换必须软删旧行并插入新行；不要原地覆盖 object_key"
   - "attachment.sha256 只用于完整性/去重校验；不加唯一索引"

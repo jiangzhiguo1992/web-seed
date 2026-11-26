@@ -15,7 +15,7 @@
 | cap.lifecycles | lifecycle-dimension | lifecycle-dimension | 1 | 1 |
 | cap.lifecycles | lifecycle-enum-coverage | lifecycle-enum-coverage | 1 | 1 |
 | cap.lifecycles | lifecycle-requires | lifecycle-requires | 4 | 1 |
-| cap.lifecycles | lifecycle-anchors | lifecycle-anchors | 3 | 1 |
+| cap.lifecycles | lifecycle-anchors | lifecycle-anchors | 4 | 1 |
 | cap.protocols.http | http-file | http-file | 1 | 1 |
 | cap.protocols.http | http-status | http-status | 1 | 1 |
 | cap.protocols.http | http-shape | http-shape | 1 | 1 |
@@ -37,6 +37,7 @@
 | cap.protocols.http | http-service-params | http-service-params | 6 | 1 |
 | cap.protocols.http | http-service-return | http-service-return | 2 | 1 |
 | cap.protocols.http | http-errors | http-errors | 2 | 1 |
+| cap.services | service-used-by | service-used-by | 1 | 1 |
 | cap.services | service-id | service-id | 1 | 1 |
 | cap.services | service-signature | service-signature | 2 | 1 |
 | cap.services | service-unique | service-unique | 1 | 1 |

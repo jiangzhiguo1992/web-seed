@@ -394,12 +394,20 @@ func metaPatternViolations(schemas []*Schema) []string {
 	return out
 }
 
-// TestMetaGeneratedFieldsAreMarked 保证描述里声明由 gen-graph 写入的字段同时标记 generated/write。
+// TestMetaGeneratedFieldsAreMarked 保证生成字段同时标记 generated/write，并在 description 说明来源。
 func TestMetaGeneratedFieldsAreMarked(t *testing.T) {
 	for _, s := range loadMetaSchemas(t) {
 		walkMetaFields(s.Fields, func(f Field) {
-			if strings.Contains(f.Description, "gen-graph") && (!f.Generated || f.Write != "forbidden") {
-				t.Errorf("%s.%s: gen-graph field must set generated: true and write: forbidden", s.Contract, f.Name)
+			if f.Generated {
+				if f.Write != "forbidden" {
+					t.Errorf("%s.%s: generated field must set write: forbidden", s.Contract, f.Name)
+				}
+				if !strings.Contains(f.Description, "gen-graph") {
+					t.Errorf("%s.%s: generated field description must name gen-graph", s.Contract, f.Name)
+				}
+			}
+			if strings.Contains(f.Description, "gen-graph") && !f.Generated {
+				t.Errorf("%s.%s: gen-graph field must set generated: true", s.Contract, f.Name)
 			}
 		})
 	}
@@ -441,5 +449,71 @@ func TestFeatureRoutesPathPattern(t *testing.T) {
 		if re.MatchString(invalid) {
 			t.Errorf("invalid path accepted: %q", invalid)
 		}
+	}
+}
+
+func TestLoadSchemaRejectsUnanchoredPattern(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "contracts/_meta/x.yaml")
+	writeMeta(t, root, "x.yaml", `
+id: meta.x
+contract: x
+fields:
+  - { name: id, type: _types.basics.string, pattern: '^x' }
+`)
+	if _, err := LoadSchema(path); err == nil || !strings.Contains(err.Error(), "anchored") {
+		t.Fatalf("unanchored meta pattern accepted: %v", err)
+	}
+}
+
+func TestLoadSchemaRejectsAllowedKey(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "contracts/_meta/x.yaml")
+	writeMeta(t, root, "x.yaml", `
+id: meta.x
+contract: x
+fields:
+  - { name: id, type: _types.basics.string, allowed: [a] }
+`)
+	if _, err := LoadSchema(path); err == nil || !strings.Contains(err.Error(), "allowed") {
+		t.Fatalf("removed allowed key accepted: %v", err)
+	}
+}
+
+func TestSharedTypesRejectUnanchoredPattern(t *testing.T) {
+	dir := t.TempDir()
+	body, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := strings.Replace(string(body), "pattern: '^[a-z][a-z0-9_]*$'", "pattern: '^[a-z][a-z0-9_]*'", 1)
+	if bad == string(body) {
+		t.Fatal("fixture pattern not found")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "_types.yaml"), []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSharedTypes(dir); err == nil || !strings.Contains(err.Error(), "anchored") {
+		t.Fatalf("unanchored shared pattern accepted: %v", err)
+	}
+}
+
+func TestSharedTypesRejectUnknownVariant(t *testing.T) {
+	dir := t.TempDir()
+	body, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "_meta", "_types.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := strings.Replace(string(body),
+		"      64: { go: int64, pg: [ bigint, bigserial ], ts: number }",
+		"      64: { go: int64, pg: [ bigint, bigserial ], ts: number }\n      128: { go: int64, pg: [ bigint ], ts: number }", 1)
+	if bad == string(body) {
+		t.Fatal("fixture integer types not found")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "_types.yaml"), []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSharedTypes(dir); err == nil || !strings.Contains(err.Error(), "unknown variant") {
+		t.Fatalf("unknown variant accepted: %v", err)
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
 // stepKindFields 是每种 step kind 的专属字段；公共字段由 checkServiceItem 统一放行。
@@ -15,6 +17,97 @@ var stepKindFields = map[string][]string{
 	"logic":   {"input", "output", "rules"},
 	"events":  {"input", "output", "events"},
 	"when":    {"input", "output", "rules", "when"},
+}
+
+// checkServiceStepFields 保证 Go 侧 step 字段白名单与 _meta 的 steps.item_fields 同步：
+// 模板新增/删除字段而 checker 未同步时直接失败，避免硬字段静默失效。
+// addServiceUsedByDeclared 记录契约里手写的 service.used_by。
+func (c *Checker) addServiceUsedByDeclared(serviceID string, raw any) {
+	if serviceID == "" {
+		return
+	}
+	if c.serviceUsedByDeclared == nil {
+		c.serviceUsedByDeclared = map[string]map[string]bool{}
+	}
+	c.serviceUsedByDeclared[serviceID] = stringSet(asList(raw))
+}
+
+// checkServiceUsedBy 对账 service.used_by：由 gen-graph 从 HTTP/异步/服务调用反推出入边。
+func (c *Checker) checkServiceUsedBy() {
+	ids := make([]string, 0, len(c.serviceUsedByDeclared))
+	for id := range c.serviceUsedByDeclared {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, sid := range ids {
+		declared := c.serviceUsedByDeclared[sid]
+		if len(declared) == 0 {
+			continue // 空值由 schema.generated-range 报出
+		}
+		want := c.serviceUsedBy[sid]
+		if want == nil {
+			want = map[string]bool{}
+		}
+		if !sameSet(declared, want) {
+			c.rulef("service-used-by", "%s: service.used_by must be %v, got %v", sid, sortedKeys(want), sortedKeys(declared))
+		}
+	}
+}
+
+func (c *Checker) addLifecycleStateStep(lifecycleID, state, stepID string) {
+	if lifecycleID == "" || state == "" || stepID == "" {
+		return
+	}
+	if c.lifecycleStateSteps == nil {
+		c.lifecycleStateSteps = map[string]map[string]map[string]bool{}
+	}
+	if c.lifecycleStateSteps[lifecycleID] == nil {
+		c.lifecycleStateSteps[lifecycleID] = map[string]map[string]bool{}
+	}
+	if c.lifecycleStateSteps[lifecycleID][state] == nil {
+		c.lifecycleStateSteps[lifecycleID][state] = map[string]bool{}
+	}
+	c.lifecycleStateSteps[lifecycleID][state][stepID] = true
+}
+
+func (c *Checker) checkServiceStepFields(schema *Schema) {
+	services, ok := contractspec.FindField(schema.Fields, "services")
+	if !ok {
+		c.rulef("schema.types", "cap.services: fields.services is missing")
+		return
+	}
+	steps, ok := contractspec.FindField(services.ItemFields, "steps")
+	if !ok {
+		c.rulef("schema.types", "cap.services: services.item_fields.steps is missing")
+		return
+	}
+	want := map[string]bool{
+		"id": true, "kind": true, "summary": true, "state_gate": true,
+		"errors": true, "lifecycles": true, "validations": true, "goto": true,
+	}
+	for _, fields := range stepKindFields {
+		for _, name := range fields {
+			want[name] = true
+		}
+	}
+	got := fieldNameSet(steps.ItemFields)
+	for name := range want {
+		if !got[name] {
+			c.rulef("schema.types", "cap.services: _meta steps.item_fields is missing %q required by checker", name)
+		}
+	}
+	for name := range got {
+		if !want[name] {
+			c.rulef("schema.types", "cap.services: _meta steps.item_fields declares unknown field %q", name)
+		}
+	}
+	if kind, ok := contractspec.FindField(steps.ItemFields, "kind"); ok {
+		for _, raw := range kind.Enum {
+			if _, ok := stepKindFields[fmt.Sprint(raw)]; !ok {
+				c.rulef("schema.types", "cap.services: kind enum %v has no stepKindFields entry", raw)
+			}
+		}
+	}
 }
 
 const (
@@ -43,6 +136,7 @@ func (c *Checker) checkServiceDoc(doc map[string]any, rel string, schema *Schema
 	for _, raw := range asList(doc["services"]) {
 		item, _ := asMap(raw)
 		name, _ := item["name"].(string)
+		c.addServiceUsedByDeclared(fileID+"."+name, item["used_by"])
 		if seen[name] {
 			c.rulef("service-unique", "%s: duplicate service %s", rel, name)
 		}
@@ -192,7 +286,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 		if target, _ := step["goto"].(string); target != "" {
 			c.checkGoto(rel, stepID, target, allIndex, i)
 		}
-		c.checkServiceStateGate(step, rel, stepID)
+		c.checkServiceStateGateWithID(step, rel, stepID, id+"."+stepID)
 		allowed := map[string]bool{
 			"id": true, "kind": true, "summary": true, "state_gate": true, "errors": true, "lifecycles": true, "validations": true, "goto": true,
 		}
@@ -236,6 +330,7 @@ func (c *Checker) checkServiceItem(doc map[string]any, rel, id, module string, s
 			} else if target, ok := serviceMeta[ref]; !ok {
 				c.rulef("service-ref", "%s: step %s unknown service %s", rel, stepID, ref)
 			} else {
+				c.addServiceUsedBy(ref, id)
 				if !servicePublic(target, module) {
 					c.rulef("service-visibility", "%s: step %s cannot call internal %s from another module", rel, stepID, ref)
 				}
@@ -579,6 +674,10 @@ func (c *Checker) checkGoto(rel, stepID, target string, allIndex map[string]int,
 // transition 必须写且等于 transition.from；destroy 必须写且等于全部非终态；
 // create 可省略，写了必须等于全部状态。
 func (c *Checker) checkServiceStateGate(step map[string]any, rel, stepID string) {
+	c.checkServiceStateGateWithID(step, rel, stepID, stepID)
+}
+
+func (c *Checker) checkServiceStateGateWithID(step map[string]any, rel, stepID, fullStepID string) {
 	expected := map[string]map[string]bool{}
 	allAllowed := map[string]bool{}
 	for _, raw := range asList(step["lifecycles"]) {
@@ -640,6 +739,11 @@ func (c *Checker) checkServiceStateGate(step map[string]any, rel, stepID string)
 			c.rulef("service-state-gate", "%s: step %s state_gate for %s must be omitted when all states are allowed", rel, stepID, lifecycleID)
 		}
 		declared[lifecycleID] = values
+	}
+	for lifecycleID, values := range declared {
+		for state := range values {
+			c.addLifecycleStateStep(lifecycleID, state, fullStepID)
+		}
 	}
 	for lifecycleID, want := range expected {
 		got := declared[lifecycleID]

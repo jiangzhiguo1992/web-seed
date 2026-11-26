@@ -79,6 +79,6 @@ rules:
   - { id: enum-values-unique, text: "同一枚举的 values 不得重复", implemented_by: [ enum-values-unique ] }
   - { id: enum-code-unique, text: "同一枚举的 code 不得重复", implemented_by: [ enum-code-unique ] }
   - { id: enum-type-unique, text: "go_type / ts_type 在全部枚举文件中不得重复", implemented_by: [ enum-type-unique ] }
-  - { id: enum-used-by, text: "used_by 必须等于 entity 字段与具体 capability 使用点的并集：service 项、event topic/subscribe/cron/dispatch、http operation；非空由字段 min_items 保证；不统计物理表/query/feature；由 make gen-graph 写入，禁止手改", implemented_by: [ enum-used-by ] }
+  - { id: enum-used-by, text: "used_by 必须等于 entity 字段与具体 capability 使用点的并集：service 项、event topic/subscribe/cron/dispatch、http operation；不统计物理表/query/feature；由 make gen-graph 写入，禁止手改", implemented_by: [ enum-used-by ] }
   - { id: enum-owner-module, text: "文件 stem 必须等于 owner_module；data.enums.<module> 的文件只能放该模块的枚举", implemented_by: [ enum-owner-module ] }
   - { id: enum-do-not-specific, text: "do_not 每条必须含文件 ID data.enums.<file>、枚举 name 或 go_type/ts_type；通用规则放组 README，禁止复制", implemented_by: [ enum-do-not-specific ] }

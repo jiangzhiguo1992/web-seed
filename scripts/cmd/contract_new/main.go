@@ -72,7 +72,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; add the table entry to contracts/data/storage.yaml tables.<engine>; add retention/partition inside the entry if needed; archive entries use archive_of; add an entity mapping for this table (table.entities + entity.model.tables); make gen-graph; make contract-check")
+		writeOut(*out, b, "next: replace TODO; register in contracts/index.yaml; add the table entry to contracts/data/storage.yaml tables.<engine>; add retention inside the entry if needed; archive entries use archive_of; create an entity with model.tables referencing this table; make gen-graph writes table.entities; make contract-check")
 
 	case "data.entities":
 		tableSchema, err := loadTableSchema(abs)
@@ -87,7 +87,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		writeOut(*out, b, "next: add this entity to the table's table.entities; add business fields; run make gen-graph to refresh model.included_by from relation fields; register in contracts/index.yaml; make contract-check")
+		writeOut(*out, b, "next: add business fields; make gen-graph writes table.entities and model.included_by; register in contracts/index.yaml; make contract-check")
 
 	case "data.queries":
 		tableSchema, err := loadTableSchema(abs)
