@@ -11,8 +11,8 @@ do_not:
 topics:
   - id: cap.events.token.issued
     name: token.issued
-    version: 1
     summary: "令牌签发"
+    version: 1
     idempotent: true
     publish:
       payload:

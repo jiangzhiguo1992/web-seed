@@ -55,8 +55,8 @@ fields:
     item_fields:
       - { name: id, type: _types.basics.string, required: true, pattern: '^cap\.events\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "主题 ID" }
       - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "主题名，例如 account.created" }
-      - { name: version, type: _types.basics.integer.32, required: true, min: 1, description: "主题版本" }
       - { name: summary, type: _types.basics.string, required: true, description: "一句话说明" }
+      - { name: version, type: _types.basics.integer.32, required: true, min: 1, description: "主题版本" }
       - { name: idempotent, type: _types.basics.boolean, required: true, description: "消息是否可安全重复投递：true 时发布者可重试，消费方可按 payload 的业务键去重；不代表消费者自动幂等" }
       - name: publish
         type: _types.structures.object
