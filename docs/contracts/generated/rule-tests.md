@@ -133,7 +133,7 @@
 | data.storage | storage-entry-fields | storage-entry-fields | 1 | 1 |
 | data.storage | storage-cache-fields | storage-cache-fields | 1 | 0 |
 | data.storage | storage-archive-fields | storage-archive-fields | 1 | 1 |
-| data.storage | storage-cache-prefix | storage-cache-prefix | 1 | 1 |
+| data.storage | storage-cache-prefix | storage-cache-prefix | 2 | 1 |
 | data.storage | storage-entry-description | storage-entry-description | 1 | 0 |
 | data.storage | storage-cache-key | storage-cache-key | 1 | 0 |
 | data.storage | storage-cache-used-by | storage-cache-used-by | 1 | 1 |

@@ -116,7 +116,7 @@ fields:
           - { name: nullable, type: _types.basics.boolean, required: false, description: "结果是否可空" }
           - { name: description, type: _types.basics.string, required: false, description: "返回字段说明" }
       - { name: errors, type: _types.structures.set<_types.basics.string>, required: true, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "领域错误；无则写 []；不含输入/基础设施错误" }
-      - { name: constraints, type: _types.structures.set<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.ck_[a-z][a-z0-9_]*$', description: "本查询写入时依赖的表 CHECK 约束 ID；gen-graph 据此生成 constraint.used_by" }
+      - { name: constraints, type: _types.structures.set<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.ck_[a-z][a-z0-9_]*$', description: "本查询写入时依赖的表 CHECK 约束 ID；反向 constraint.used_by 按此字段写回" }
       - name: index_ref
         type: _types.structures.list<_types.structures.object>
         required: true

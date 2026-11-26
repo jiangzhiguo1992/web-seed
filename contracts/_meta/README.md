@@ -104,7 +104,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 | 命令 | 作用 |
 |---|---|
 | `make contract-new type=<type> name=<name> [module=...] [table=...] [service=...]` | 按 `_meta/<type>.yaml` 渲染最小骨架；`contract-new` 不支持的类型需手写 |
-| `make gen-graph` | 写回 `table.entities` / `table.references` / `table.referenced_by` / `table.queries` / `model.includes` / `model.included_by` / `model.queries` / `query.used_by` / `service.used_by` / `constraints[].used_by` / `validation[].used_by` / `indexes[].used_by` / `enums[].used_by` / 规则锚点 / 生命周期动作与 `states.values[].steps` / `topics[].publish.emitted_by` / `dispatches[].emitted_by` |
+| `make gen-graph` | 写回 `table.entities` / `table.references` / `table.referenced_by` / `table.queries` / `storage.tables[].description`（普通条目） / `model.includes` / `model.included_by` / `model.queries` / `query.used_by` / `service.used_by` / `constraints[].used_by` / `validation[].used_by` / `indexes[].used_by` / `enums[].used_by` / 规则锚点 / 生命周期动作与 `states.values[].steps` / `topics[].publish.emitted_by` / `dispatches[].emitted_by` |
 | `make gen-graph-check` | 只校验生成字段是否最新 |
 | `make contract-check` | 结构 / ID / 约束 / 索引 / 引用 / owner / 数据流 / 类型级规则 / service.used_by 与 states.values[].steps 对账 |
 | `make audit-types` | 审计全部契约 `type` 键：`_types.*` / 外部引用 / 显式例外，输出计数并以非零退出码报告裸类型 |

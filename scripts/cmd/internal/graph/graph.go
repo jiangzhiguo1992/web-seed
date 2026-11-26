@@ -1,7 +1,8 @@
 // Package graph 计算 query 入边并写回 table/model/query 的反向索引。
 //
 // gen-graph 维护生成物 table.entities、table.references/referenced_by、table.queries、
-// model.includes/included_by/queries 与 query.used_by；checker 负责双向对账。
+// model.includes/included_by/queries、query.used_by 与 storage 普通条目 description；
+// checker 负责双向对账。
 package graph
 
 import (
@@ -42,17 +43,18 @@ type EntityUsedBy struct {
 }
 
 type Snapshot struct {
-	Tables      map[string]TableUsedBy
-	Entities    map[string]EntityUsedBy
-	Queries     map[string][]string // query ID → service item IDs
-	Enums       map[string][]string // enum ID → entity/capability IDs
-	Validations map[string][]string // validation ID → service item IDs
-	Constraints map[string][]string // constraint ID → query IDs
-	TableFiles  map[string]string
-	EntityFiles map[string]string
-	QueryFiles  map[string][]string // query file → query IDs in item order
-	EnumFiles   map[string][]string // enum file → enum IDs in item order
-	Anchors     *Anchors
+	Tables         map[string]TableUsedBy
+	Entities       map[string]EntityUsedBy
+	Queries        map[string][]string // query ID → service item IDs
+	Enums          map[string][]string // enum ID → entity/capability IDs
+	Validations    map[string][]string // validation ID → service item IDs
+	Constraints    map[string][]string // constraint ID → query IDs
+	TableSummaries map[string]string   // table ID → summary；storage 普通条目的 description
+	TableFiles     map[string]string
+	EntityFiles    map[string]string
+	QueryFiles     map[string][]string // query file → query IDs in item order
+	EnumFiles      map[string][]string // enum file → enum IDs in item order
+	Anchors        *Anchors
 }
 
 type tableSet struct {
@@ -160,6 +162,7 @@ func Compute(root string) (*Snapshot, error) {
 
 	tableIDTemplate := contractspec.Targets{ID: tableTarget.id}
 	tableDocs := map[string]map[string]any{}
+	tableSummaries := map[string]string{}
 	tableUnique := map[string]map[string]bool{}
 	for _, f := range glob(root, filepath.Join(tableTarget.dir, tableTarget.glob)) {
 		if filepath.Base(f) == "_base.yaml" {
@@ -174,6 +177,9 @@ func Compute(root string) (*Snapshot, error) {
 			continue
 		}
 		tableDocs[id] = doc
+		if summary, _ := doc["summary"].(string); summary != "" {
+			tableSummaries[id] = summary
+		}
 		tables[id] = &tableSet{entities: map[string]bool{}, queries: map[string]bool{}, references: map[string]bool{}, referencedBy: map[string]bool{}, indexUsedBy: map[string]map[string]bool{}}
 		tableFiles[id] = rel(root, f)
 		unique := map[string]bool{"id": true}
@@ -401,15 +407,16 @@ func Compute(root string) (*Snapshot, error) {
 		return nil, err
 	}
 	snap := &Snapshot{
-		Anchors:     anchors,
-		Tables:      map[string]TableUsedBy{},
-		Entities:    map[string]EntityUsedBy{},
-		Queries:     map[string][]string{},
-		Validations: map[string][]string{},
-		Constraints: map[string][]string{},
-		TableFiles:  tableFiles,
-		EntityFiles: entityFiles,
-		QueryFiles:  queryFiles,
+		Anchors:        anchors,
+		Tables:         map[string]TableUsedBy{},
+		Entities:       map[string]EntityUsedBy{},
+		Queries:        map[string][]string{},
+		Validations:    map[string][]string{},
+		Constraints:    map[string][]string{},
+		TableSummaries: tableSummaries,
+		TableFiles:     tableFiles,
+		EntityFiles:    entityFiles,
+		QueryFiles:     queryFiles,
 	}
 	for id, ts := range tables {
 		indexes := map[string][]string{}
@@ -614,6 +621,13 @@ func (s *Snapshot) Write(root string) ([]string, error) {
 		}
 		changed = append(changed, files...)
 	}
+	ok, err := syncStorageDescriptions(root, s.TableSummaries)
+	if err != nil {
+		return changed, err
+	}
+	if ok {
+		changed = append(changed, storageRel)
+	}
 	return changed, nil
 }
 
@@ -748,6 +762,11 @@ func (s *Snapshot) Check(root string) ([]string, error) {
 		}
 		drift = append(drift, anchors...)
 	}
+	storageDrift, err := storageDescriptionDrift(root, s.TableSummaries)
+	if err != nil {
+		return nil, err
+	}
+	drift = append(drift, storageDrift...)
 	return drift, nil
 }
 

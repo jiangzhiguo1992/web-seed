@@ -655,6 +655,36 @@ caches:
 	}
 }
 
+func TestStorageCachePrefixNamespace(t *testing.T) {
+	root := t.TempDir()
+	projectPath := filepath.Join(root, "contracts/project.yaml")
+	if err := os.MkdirAll(filepath.Dir(projectPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(projectPath, []byte("project:\n  name: web-seed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entries := map[string]*storageEntry{
+		"data.tables.x": {table: "data.tables.x", engine: "postgres"},
+	}
+	c := &Checker{
+		root: root,
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.x": {"account_id": {typ: "integer"}},
+		},
+	}
+	c.checkStorageCaches(map[string]any{"caches": map[string]any{"redis": []any{
+		map[string]any{
+			"prefix": "other:token", "cache_of": "data.tables.x", "key": []any{"col.account_id"},
+			"retention": true, "unit": "days", "cache_ttl": 1,
+		},
+	}}}, entries, "contracts/data/storage.yaml")
+	got := entityErrs(c)
+	if !strings.Contains(got, "[storage-cache-prefix]") || !strings.Contains(got, "must start with \"web-seed:\"") {
+		t.Fatalf("cache prefix namespace not enforced: %v", c.errs)
+	}
+}
+
 func TestStorageCacheEntries(t *testing.T) {
 	entries := map[string]*storageEntry{
 		"data.tables.x": {table: "data.tables.x", engine: "mysql"},

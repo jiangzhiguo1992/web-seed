@@ -4,8 +4,7 @@ id: data.storage
 summary: "数据存储约束"
 schema_version: 1
 stability: draft
-do_not:
-  - "data.storage.caches 的 prefix 必须含项目命名空间；派生项目必须替换 web-seed 前缀，避免多项目共用一个 Redis 时 key 冲突"
+do_not: []
 
 supported_engines: [ postgres ]
 supported_cache_engines: [ redis ]

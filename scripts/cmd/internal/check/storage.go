@@ -14,6 +14,21 @@ import (
 	"github.com/yourorg/web-seed/scripts/cmd/internal/contractspec"
 )
 
+// projectName 读取 contracts/project.yaml 的项目标识；缺失时返回空串，
+// 供 storage cache prefix 的命名空间校验使用。
+func (c *Checker) projectName() string {
+	if c.root == "" {
+		return ""
+	}
+	doc, err := loadYAML(filepath.Join(c.root, "contracts/project.yaml"))
+	if err != nil {
+		return ""
+	}
+	project, _ := asMap(doc["project"])
+	name, _ := project["name"].(string)
+	return name
+}
+
 var storageNameRe = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // storageEntryFields 是普通表条目的字段集（storage-entry-fields）。
@@ -258,6 +273,9 @@ func (c *Checker) checkStorageCaches(doc map[string]any, entries map[string]*sto
 				c.rulef("storage-cache-prefix", "%s: prefix %q duplicates within engine %s", where, prefix, engine)
 			} else {
 				seenPrefix[prefix] = true
+				if project := c.projectName(); project != "" && !strings.HasPrefix(prefix, project+":") {
+					c.rulef("storage-cache-prefix", "%s: prefix %q must start with %q", where, prefix, project+":")
+				}
 			}
 			id, _ := entry["cache_of"].(string)
 			if id == "" {
