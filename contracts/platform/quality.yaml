@@ -29,8 +29,8 @@ must_test:
     why: "防止端点漂移"
     where: apps/api/internal/composition/*/routes_test.go
     status: planned
-  - id: feature_rules
-    why: "features/rules 每条规则至少一组用例"
+  - id: feature_flows
+    why: "features/flows 每条规则至少一组用例"
     where: apps/api/internal/modules/*/rules_test.go
     status: planned
   - id: page_states

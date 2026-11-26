@@ -65,5 +65,5 @@ mfa:
 
 authorization:
   model: rbac + resource_rule
-  note: "角色决定\"能不能做\"，features/rules 决定\"能不能对这个资源做\""
+  note: "角色决定\"能不能做\"，features/flows 决定\"能不能对这个资源做\""
   deny_by_default: true

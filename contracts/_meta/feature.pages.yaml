@@ -65,7 +65,7 @@ fields:
         key_patterns: [ '^[a-z][a-z0-9_]*$' ]
         description: "参数映射"
         item_fields: &page_param
-          - { name: from, type: _types.basics.string, required: true, description: "取值来源" }
+          - { name: from, type: _types.basics.string, required: true, pattern: '^(query|route\.params|form|row|device|user|page|auth)\.[a-z][a-zA-Z0-9_.]*$', description: "取值来源；只允许 query/route.params/form/row/device/user/page/auth 前缀" }
           - { name: type, type: _types.basics.string, required: false, description: "值类型" }
           - { name: enum, type: _types.basics.any, required: false, description: "枚举来源或字面量列表" }
           - { name: required, type: _types.basics.boolean, required: false, description: "是否必填" }
@@ -87,7 +87,7 @@ fields:
     description: "页面状态映射"
     item_fields:
       - { name: when, type: _types.basics.string, required: true, description: "状态条件表达式" }
-      - { name: ui, type: _types.basics.string, required: false, description: "UI 变体" }
+      - { name: ui, type: _types.basics.string, required: false, enum: &ui_variant [ skeleton-table, skeleton-detail, empty-state, error-panel, forbidden-panel, login-redirect, not_found_illustration, form, button_spinner, inline_alert, primary-button, secondary-button, danger-button, row-action, toast ], description: "UI 变体；必须在注册表内" }
       - { name: show, type: _types.basics.string, required: false, description: "展示字段" }
       - { name: note, type: _types.basics.string, required: false, description: "状态说明" }
       - { name: action, type: _types.basics.string, required: false, description: "状态动作名" }
@@ -115,11 +115,23 @@ fields:
           - { name: transition, type: _types.basics.string, required: false, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "单个 lifecycle 动作引用" }
           - { name: transitions, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^cap\.lifecycles\.[a-z][a-z0-9_]*\.(create|destroy|transitions\.[a-z][a-z0-9_]*)$', description: "多个 lifecycle 动作引用" }
           - { name: state_not, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "排除的状态" }
-      - { name: ui, type: _types.basics.string, required: false, description: "UI 变体" }
+          - { name: rules, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^feature\.flows\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "动作可用性依赖的流程规则；必须存在" }
+      - { name: ui, type: _types.basics.string, required: false, enum: *ui_variant, description: "UI 变体；必须在注册表内" }
       - { name: label, type: _types.basics.string, required: false, description: "按钮文案" }
       - { name: confirm, type: _types.basics.boolean, required: false, description: "是否二次确认" }
       - { name: danger, type: _types.basics.boolean, required: false, description: "是否危险动作" }
       - { name: on_success, type: _types.basics.string, required: false, description: "成功后的导航/动作" }
+      - name: on_error
+        type: _types.structures.list<_types.structures.object>
+        required: false
+        unique_key: error
+        description: "错误码到 UI 呈现的映射"
+        item_fields:
+          - { name: error, type: _types.basics.string, required: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "错误码" }
+          - { name: ui, type: _types.basics.string, required: true, enum: [ inline, toast, field, panel ], description: "错误呈现方式" }
+      - { name: success_ui, type: _types.basics.string, required: false, enum: [ none, toast, inline, navigate ], description: "成功反馈方式" }
+      - { name: invalidates, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "成功后需要刷新的本页 data key；不得引用 data.queries" }
+      - { name: pending, type: _types.basics.string, required: false, enum: [ none, disable, spinner, both ], description: "提交中的按钮状态" }
 
   - name: fields
     type: _types.structures.list<_types.structures.object>
@@ -205,3 +217,6 @@ rules:
   - { id: page-action-target, text: "actions.on_success 必须是 navigate(feature.routes.*) 或 close_and_redirect(feature.routes.*)，目标 route 必须存在", implemented_by: [ page-action-target ] }
   - { id: page-limits, text: "pagination.limit_default <= limit_max；fields.minLength <= maxLength", implemented_by: [ page-limits ] }
   - { id: page-refs, text: "route/capability/permission/enum 与 available_when 内的 transition/transitions/state_not 引用必须存在；page.route 指向的路由必须回指本页面；transition_ui.source 必须是已存在的 cap.lifecycles.*.transitions；analytics.page_view/actions 必须是已存在的埋点事件", implemented_by: [ page-refs ] }
+  - { id: page-action-lifecycle, text: "actions.on_error.error 必须是存在的 platform.errors.*；actions.invalidates 的每个 key 必须是本页 data 的 key；available_when.rules 必须是存在的 feature.flows.*.*，且该规则所在流程的步骤包含本页的该动作", implemented_by: [ page-action-lifecycle ] }
+  - { id: page-field-refs, text: "fields[].name 与 filters[].name 必须能在本页 data 引用的 service 返回字段或 action/data 参数中找到；不能凭空声明页面字段", implemented_by: [ page-field-refs ] }
+  - { id: page-field-sensitivity, text: "解析到 data.entities.* 的 secret 字段时，页面字段必须声明 secret: true（仅允许作为输入）；展示型 secret 字段直接报错", implemented_by: [ page-field-sensitivity ] }

@@ -45,6 +45,9 @@ actions:
     ui: "primary-button"
     label: "新建账号"
     on_success: "navigate(feature.routes.account_create)"
+    success_ui: toast
+    invalidates: [ list ]
+    pending: disable
   activate:
     capability: cap.services.account.activate
     params:

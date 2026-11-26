@@ -6,7 +6,7 @@ schema_version: 1
 stability: draft
 do_not:
   - "不要在本页收集密码/手机号/邮箱；认证信息由 auth 模块单独创建"
-  - "不要硬编码编号格式，引用 feature.rules.account.number_format"
+  - "不要硬编码编号格式，引用 feature.flows.account.number_format"
 
 page: account_create
 route: feature.routes.account_create

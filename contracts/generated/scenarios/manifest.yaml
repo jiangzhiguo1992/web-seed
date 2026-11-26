@@ -629,7 +629,7 @@ coverage:
     missing_statuses:
       - 200
     codes: []
-generated_from: contracts/scenarios/http
+generated_from: contracts/features/scenarios/http
 scenarios:
   - id: scenario.http.account.create_success
     operation: cap.protocols.http.account.create
@@ -659,6 +659,7 @@ scenarios:
         anonymous: false
         permissions:
           - platform.security.permissions.account_write
+      flow: feature.flows.account
       given:
         clock: "2026-01-01T00:00:00Z"
         db:
@@ -667,6 +668,12 @@ scenarios:
           - 1001
       name: create_success
       operation: cap.protocols.http.account.create
+      pages:
+        - feature.pages.account_create
+      rules:
+        - feature.flows.account.number_format
+        - feature.flows.account.number_unique
+        - feature.flows.account.nickname_length
       summary: 创建账号成功
       then:
         db:
@@ -727,6 +734,7 @@ scenarios:
         anonymous: false
         permissions:
           - platform.security.permissions.account_read
+      flow: feature.flows.account
       given:
         clock: "2026-01-01T00:00:00Z"
         db:
@@ -735,6 +743,8 @@ scenarios:
           - 1
       name: get_not_found
       operation: cap.protocols.http.account.get
+      pages:
+        - feature.pages.account_detail
       summary: 账号不存在
       then:
         db:
@@ -772,6 +782,7 @@ scenarios:
         anonymous: false
         permissions:
           - platform.security.permissions.account_read
+      flow: feature.flows.account
       given:
         clock: "2026-01-01T00:00:00Z"
         db:
@@ -780,6 +791,8 @@ scenarios:
           - 1
       name: list_empty
       operation: cap.protocols.http.account.list
+      pages:
+        - feature.pages.account_list
       summary: 空列表
       then:
         db:
