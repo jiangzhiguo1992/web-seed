@@ -131,9 +131,6 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 				}
 			}
 			subs := asList(item["subscribe"])
-			if len(emitters) == 0 && len(subs) == 0 {
-				c.rulef("event-orphan", "%s: topic %s is neither published nor subscribed", rel, id)
-			}
 			for _, rawSub := range subs {
 				sub, _ := asMap(rawSub)
 				subID, _ := sub["id"].(string)

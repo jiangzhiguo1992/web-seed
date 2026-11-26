@@ -72,7 +72,6 @@ var knownRuleIDs = map[string]bool{
 	"error-i18n-locale":           true,
 	"event-cron-schedule":         true,
 	"event-file-shape":            true,
-	"event-orphan":                true,
 	"event-structure":             true,
 	"extends-conflict":            true,
 	"extends-ref":                 true,

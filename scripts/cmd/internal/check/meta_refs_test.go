@@ -20,6 +20,8 @@ func TestReferenceListMinItems(t *testing.T) {
 		{"query.used_by", "data.queries", []string{"queries", "used_by"}, []bool{true, false}},
 		{"table.queries", "data.tables", []string{"table", "queries"}, []bool{false, false}},
 		{"service.used_by", "cap.services", []string{"services", "used_by"}, []bool{true, false}},
+		{"event.topic.emitted_by", "cap.events", []string{"topics", "publish", "emitted_by"}, []bool{true, false, false}},
+		{"event.dispatch.emitted_by", "cap.events", []string{"dispatches", "emitted_by"}, []bool{true, false}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

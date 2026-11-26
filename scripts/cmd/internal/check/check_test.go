@@ -156,20 +156,16 @@ func TestCheckStability(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "x.yaml"), []byte("# TODO\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	c := &Checker{root: dir}
-	c.checkStability(map[string]any{"stability": "stable"}, "x.yaml")
-	errs := strings.Join(c.errs, "\n")
-	if !strings.Contains(errs, "stable contract contains TODO") {
-		t.Fatalf("stable TODO not reported: %v", c.errs)
-	}
-	if !strings.Contains(errs, "[schema.stability]") {
-		t.Fatalf("stability rule id missing: %v", c.errs)
-	}
-
-	c = &Checker{}
-	c.checkStability(map[string]any{"stability": "deprecated"}, "x.yaml")
-	if len(c.errs) != 0 {
-		t.Fatalf("deprecated without history reported: %v", c.errs)
+	for _, stability := range []string{"draft", "stable", "deprecated"} {
+		c := &Checker{root: dir}
+		c.checkStability(map[string]any{"stability": stability}, "x.yaml")
+		errs := strings.Join(c.errs, "\n")
+		if !strings.Contains(errs, "contract contains TODO") {
+			t.Fatalf("%s TODO not reported: %v", stability, c.errs)
+		}
+		if !strings.Contains(errs, "[schema.stability]") {
+			t.Fatalf("stability rule id missing for %s: %v", stability, c.errs)
+		}
 	}
 }
 

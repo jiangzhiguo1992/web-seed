@@ -774,16 +774,14 @@ func isBaseColumn(name string) bool {
 	return false
 }
 
-func (c *Checker) checkStability(doc map[string]any, rel string) {
-	stability, _ := doc["stability"].(string)
-	if stability == "stable" {
-		b, err := os.ReadFile(filepath.Join(c.root, rel))
-		if err == nil {
-			for _, marker := range []string{"TODO", "FIXME"} {
-				if strings.Contains(string(b), marker) {
-					c.rulef("schema.stability", "%s: stable contract contains %s placeholder", rel, marker)
-				}
-			}
+func (c *Checker) checkStability(_ map[string]any, rel string) {
+	b, err := os.ReadFile(filepath.Join(c.root, rel))
+	if err != nil {
+		return
+	}
+	for _, marker := range []string{"TODO", "FIXME"} {
+		if strings.Contains(string(b), marker) {
+			c.rulef("schema.stability", "%s: contract contains %s placeholder; stability does not exempt", rel, marker)
 		}
 	}
 }

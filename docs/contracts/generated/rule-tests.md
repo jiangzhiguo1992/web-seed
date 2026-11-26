@@ -6,7 +6,6 @@
 |---|---|---|---|---|
 | cap.events | event-structure | event-structure | 1 | 1 |
 | cap.events | event-file-shape | event-file-shape | 2 | 1 |
-| cap.events | event-orphan | event-orphan | 1 | 1 |
 | cap.events | async-service | async-service | 3 | 1 |
 | cap.events | async-structure | async-structure | 1 | 1 |
 | cap.events | event-cron-schedule | event-cron-schedule | 1 | 1 |

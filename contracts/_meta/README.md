@@ -166,12 +166,12 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 
 | 状态 | 含义 | 进入条件 |
 |---|---|---|
-| `draft` | 正在编写 | 默认状态；允许 TODO/FIXME；**不豁免任何结构与引用校验** |
+| `draft` | 正在编写 | 默认状态；**不豁免任何校验，TODO/FIXME 同样报错** |
 | `stable` | 评审通过、无 TODO | 替换所有 TODO/FIXME，`make contract-check` 通过 |
 | `deprecated` | 已废弃 | 停止新增引用，准备移除 |
 
-`stable` 的进入与退出只能由**用户手动修改**（`contract-new` 只产出 `draft`）；`contract-check` 只能校验
-`stable` 不含 TODO/FIXME，不能识别修改者。`stability` 只影响这条 TODO 门槛，不影响任何其他规则。
+`stable` 的进入与退出只能由**用户手动修改**（`contract-new` 只产出 `draft`）；`contract-check` 无法识别修改者。
+`stability` 只表达成熟度，不改变任何校验的报错机制。
 
 ---
 

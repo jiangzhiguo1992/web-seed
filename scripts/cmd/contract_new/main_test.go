@@ -127,6 +127,7 @@ func TestScaffoldGenGraphSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	qb = []byte(strings.ReplaceAll(string(qb), "TODO", "说明"))
 	qb = []byte(strings.Replace(string(qb), "    params:", "    caches:\n      - data.tables.account.cache.id\n    params:", 1))
 	if err := os.WriteFile(filepath.Join(tmp, "contracts/data/queries/scaffold.yaml"), qb, 0o644); err != nil {
 		t.Fatal(err)
@@ -140,6 +141,7 @@ func TestScaffoldGenGraphSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rb = []byte(strings.ReplaceAll(string(rb), "TODO", "说明"))
 	if err := os.WriteFile(filepath.Join(tmp, "contracts/features/rules/scaffold.yaml"), rb, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -225,6 +227,7 @@ func TestScaffoldCheckRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	qb = []byte(strings.ReplaceAll(string(qb), "TODO", "说明"))
 	qb = []byte(strings.Replace(string(qb), "    params:", "    caches:\n      - data.tables.account.cache.id\n    params:", 1))
 	if err := os.WriteFile(filepath.Join(tmp, "contracts/data/queries/scaffold.yaml"), qb, 0o644); err != nil {
 		t.Fatal(err)
@@ -238,6 +241,7 @@ func TestScaffoldCheckRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rb = []byte(strings.ReplaceAll(string(rb), "TODO", "说明"))
 	if err := os.WriteFile(filepath.Join(tmp, "contracts/features/rules/scaffold.yaml"), rb, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -418,6 +422,7 @@ func TestFeaturePageScaffoldCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	page = []byte(strings.ReplaceAll(string(page), "TODO", "说明"))
 	pagePath := filepath.Join(tmp, "contracts/features/pages/smoke_page.yaml")
 	if err := os.WriteFile(pagePath, page, 0o644); err != nil {
 		t.Fatal(err)

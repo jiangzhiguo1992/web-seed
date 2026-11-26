@@ -1715,8 +1715,8 @@ topics:
 `)
 	c.errs = nil
 	c.checkEventsDoc(schema, services, serviceIDs)
-	if !strings.Contains(strings.Join(c.errs, "\n"), "[event-orphan]") {
-		t.Fatalf("orphan topic not reported: %v", c.errs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[schema.generated-range]") {
+		t.Fatalf("empty topic emitted_by not reported: %v", c.errs)
 	}
 }
 

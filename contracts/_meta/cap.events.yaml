@@ -64,7 +64,7 @@ fields:
         description: "发布侧：消息格式与发射者"
         fields:
           - { name: payload, types: [ _types.schemas.* ], required: true, description: "消息体；发布出参，也是订阅入参" }
-          - { name: emitted_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "发射该主题的服务项" }
+          - { name: emitted_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, generated: true, write: forbidden, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', description: "发射该主题的服务项；至少一个，由 gen-graph 写入" }
       - name: subscribe
         type: _types.structures.list<_types.structures.object>
         required: false
@@ -126,9 +126,8 @@ fields:
       - *event_concurrency
 
 rules:
-  - { id: event-structure, text: "topic.id 必须为 cap.events.<name> 且全局唯一；topic name 在文件内唯一且必须以 <file>. 开头；version >= 1；topic.publish.emitted_by 与 dispatch.emitted_by 必须指向存在的 cap.services.*；dispatch.emitted_by 非空由字段 min_items 保证；dispatch payload 字段必须与唯一消费者 service 的非 ctx 参数同名、required/nullable 一致且类型一致，不多不少", implemented_by: [ event-structure ] }
+  - { id: event-structure, text: "topic.id 必须为 cap.events.<name> 且全局唯一；topic name 在文件内唯一且必须以 <file>. 开头；version >= 1；topic.publish.emitted_by 与 dispatch.emitted_by 必须指向存在的 cap.services.*；两者的非空由字段 min_items 保证；dispatch payload 字段必须与唯一消费者 service 的非 ctx 参数同名、required/nullable 一致且类型一致，不多不少", implemented_by: [ event-structure ] }
   - { id: event-file-shape, text: "契约 ID 必须与 targets 派生一致；topics/crons/dispatches 至少一个非空；topic、subscribe、cron、dispatch 的 ID 共享 cap.events.* 空间且全局唯一", implemented_by: [ event-file-shape ] }
-  - { id: event-orphan, text: "topic 必须被发布或被订阅：publish.emitted_by 非空或 subscribe 非空", implemented_by: [ event-orphan ] }
   - { id: async-service, text: "subscribe.service / cron.service / dispatch.service 必须存在且与 events 文件的 owner_module 同模块；被异步任务引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service ] }
   - { id: async-structure, text: "subscribe/cron/dispatch 的 name 在文件内唯一；id 必须等于 <file-id>.<name>；同一 service 在同一槽内不得重复绑定", implemented_by: [ async-structure ] }
   - { id: event-cron-schedule, text: "cron 必须有合法的 5 字段表达式（分 时 日 月 周），支持 *、*/n、a-b、a-b/n、a,b,c 与数字，且各字段在取值范围内", implemented_by: [ event-cron-schedule ] }
