@@ -126,7 +126,7 @@ fields:
       - *event_concurrency
 
 rules:
-  - { id: event-structure, text: "topic.id 必须是 cap.events.<file>.<topic> 且全局唯一；topic name 在文件内唯一且必须以 <file>. 开头；version >= 1；topic.publish.emitted_by 与 dispatch.emitted_by 必须指向存在的 cap.services.*；dispatch payload 字段必须与唯一消费者 service 的非 ctx 参数同名、required/nullable 一致且类型一致，不多不少", implemented_by: [ event-structure ] }
+  - { id: event-structure, text: "topic.id 必须是 cap.events.<file>.<topic> 且全局唯一；topic name 在文件内唯一且必须以 <file>. 开头；version >= 1；topic.publish.emitted_by 与 dispatch.emitted_by 必须指向存在的 cap.services.*；topic.subscribe 的 handler 非 ctx 参数必须能在 topic.publish.payload 中找到同名且 required/nullable/类型一致（payload 可多出字段）；dispatch payload 字段必须与唯一消费者 service 的非 ctx 参数同名、required/nullable 一致且类型一致，不多不少", implemented_by: [ event-structure ] }
   - { id: event-file-shape, text: "契约 ID 必须与 targets 派生一致；topics/crons/dispatches 至少一个非空；topic、subscribe、cron、dispatch 的 ID 共享 cap.events.* 空间且全局唯一", implemented_by: [ event-file-shape ] }
   - { id: async-service, text: "subscribe.service / cron.service / dispatch.service 必须存在且与 events 文件的 owner_module 同模块；被异步任务引用的 service 不得被 cap.protocols.http 绑定", implemented_by: [ async-service ] }
   - { id: async-structure, text: "subscribe/cron/dispatch 的 name 在文件内唯一；id 必须等于 <file-id>.<name>；同一 service 在同一槽内不得重复绑定", implemented_by: [ async-structure ] }

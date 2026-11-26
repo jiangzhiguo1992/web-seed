@@ -266,7 +266,7 @@ services:
         input:
           - { name: code, value: params.input.code, description: "待创建字典编码" }
         output:
-          - { name: exists, type: _types.basics.boolean, description: "query 返回的 exists" }
+          - { name: exists, type: _types.basics.boolean }
         errors: [ ]
         query: data.queries.dictionary.exists_dictionary_code
         goto: check_code
@@ -326,7 +326,7 @@ services:
           - { name: extra, value: params.input.extra, description: "扩展元数据" }
           - { name: status, value: step.status_enabled.status, description: "初始状态 enabled" }
         output:
-          - { name: dictionary, type: data.entities.dictionary, description: "query 返回的 dictionary" }
+          - { name: dictionary, type: data.entities.dictionary }
         errors:
           - platform.errors.DICTIONARY_CODE_TAKEN
           - platform.errors.DICTIONARY_PARENT_INVALID
@@ -392,7 +392,7 @@ services:
           - { name: remark, value: params.input.remark, description: "备注" }
           - { name: extra, value: params.input.extra, description: "扩展元数据" }
         output:
-          - { name: dictionary, type: data.entities.dictionary, description: "query 返回的 dictionary" }
+          - { name: dictionary, type: data.entities.dictionary }
         errors:
           - platform.errors.DICTIONARY_INVALID
         query: data.queries.dictionary.update_dictionary
@@ -452,7 +452,7 @@ services:
           - { name: id, value: params.id, description: "字典 ID" }
           - { name: status, value: params.input.status, description: "目标状态" }
         output:
-          - { name: dictionary, type: data.entities.dictionary, description: "query 返回的 dictionary" }
+          - { name: dictionary, type: data.entities.dictionary }
         errors:
           - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
         query: data.queries.dictionary.set_dictionary_status
@@ -496,7 +496,7 @@ services:
         input:
           - { name: parent_id, value: params.id, description: "字典 ID" }
         output:
-          - { name: exists, type: _types.basics.boolean, description: "query 返回的 exists" }
+          - { name: exists, type: _types.basics.boolean }
         errors: [ ]
         query: data.queries.dictionary.exists_dictionary_children
         goto: check_children
@@ -617,7 +617,7 @@ services:
           - { name: id, value: params.id, description: "待移动节点 ID" }
           - { name: parent_id, value: params.input.parent_id, description: "新父节点 ID；null 表示顶级" }
         output:
-          - { name: dictionary, type: data.entities.dictionary, description: "query 返回的 dictionary" }
+          - { name: dictionary, type: data.entities.dictionary }
         errors:
           - platform.errors.DICTIONARY_PARENT_INVALID
         query: data.queries.dictionary.move_dictionary
@@ -652,7 +652,7 @@ services:
         input:
           - { name: items, value: params.input.items, description: "字典项数组" }
         output:
-          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32 }
         errors:
           - platform.errors.DICTIONARY_CODE_TAKEN
           - platform.errors.DICTIONARY_PARENT_INVALID

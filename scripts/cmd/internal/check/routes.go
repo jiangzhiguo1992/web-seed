@@ -59,8 +59,14 @@ func (c *Checker) checkFeatureRoutes() {
 		if layout, _ := item["layout"].(string); layout != "" && !layouts[layout] {
 			c.rulef("route-structure", "%s: unknown layout %s", where, layout)
 		}
-		if permission, _ := item["permission"].(string); permission != "" && !c.permissionExists(permission) {
+		permission, _ := item["permission"].(string)
+		if permission != "" && !c.permissionExists(permission) {
 			c.rulef("route-structure", "%s: unknown permission %s", where, permission)
+		}
+		if meta, _ := asMap(item["meta"]); meta != nil {
+			if public, _ := meta["public"].(bool); public && permission != "" {
+				c.rulef("route-structure", "%s: public route must not declare permission", where)
+			}
 		}
 	}
 	for i, raw := range asList(doc["redirects"]) {

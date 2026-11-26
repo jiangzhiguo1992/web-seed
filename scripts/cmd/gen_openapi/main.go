@@ -991,8 +991,12 @@ func scalarSchema(typ string, customTypes map[string]contractspec.CustomValueTyp
 	case "bytes":
 		out["type"] = "string"
 		out["format"] = "byte"
-	case "bit", "xml":
+	case "bit":
+		out["type"] = "integer"
+	case "xml":
 		out["type"] = "string"
+	case "any":
+		// 任意 JSON 值：不写 type，避免把多态叶子收窄成 object。
 	default:
 		out["type"] = "object"
 	}
@@ -1078,8 +1082,10 @@ func loadEntities(root string, enums map[string][]any, customTypes map[string]co
 }
 
 type columnMeta struct {
-	typ      string
-	nullable bool
+	typ         string
+	nullable    bool
+	sensitivity string
+	params      map[string]any
 }
 
 func loadEntityBaseFields(root string) ([]any, error) {
@@ -1116,12 +1122,74 @@ func loadTableColumns(root string) (map[string]columnMeta, error) {
 			name, _ := column["name"].(string)
 			typ, _ := column["type"].(string)
 			nullable, _ := column["nullable"].(bool)
+			sensitivity, _ := column["sensitivity"].(string)
+			params := map[string]any{}
+			for _, key := range []string{"min_len", "max_len", "pattern", "min", "max", "default", "normalize"} {
+				if value, ok := column[key]; ok {
+					params[key] = value
+				}
+			}
 			if name != "" && typ != "" {
-				out[id+".col."+name] = columnMeta{typ: typ, nullable: nullable}
+				out[id+".col."+name] = columnMeta{typ: typ, nullable: nullable, sensitivity: sensitivity, params: params}
 			}
 		}
 	}
+	if err := resolveColumnMetaRefs(out); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// resolveColumnMetaRefs 把列类型引用解析为目标列的类型；列自身 nullable 保持不变。
+func resolveColumnMetaRefs(columns map[string]columnMeta) error {
+	resolved := map[string]columnMeta{}
+	visiting := map[string]bool{}
+	var resolve func(ref string) (columnMeta, error)
+	resolve = func(ref string) (columnMeta, error) {
+		if meta, ok := resolved[ref]; ok {
+			return meta, nil
+		}
+		meta, ok := columns[ref]
+		if !ok {
+			return columnMeta{}, fmt.Errorf("column ref target %s not found", ref)
+		}
+		table, col, isRef := contractspec.SplitColumnRef(meta.typ)
+		if !isRef {
+			resolved[ref] = meta
+			return meta, nil
+		}
+		if visiting[ref] {
+			return columnMeta{}, fmt.Errorf("cyclic column ref at %s", ref)
+		}
+		visiting[ref] = true
+		target, err := resolve(table + ".col." + col)
+		if err != nil {
+			return columnMeta{}, err
+		}
+		delete(visiting, ref)
+		meta.typ = target.typ
+		params := map[string]any{}
+		for key, value := range target.params {
+			if key == "default" {
+				continue // default 是列属性，不是类型形状
+			}
+			params[key] = value
+		}
+		for key, value := range meta.params {
+			params[key] = value
+		}
+		meta.params = params
+		resolved[ref] = meta
+		return meta, nil
+	}
+	for ref := range columns {
+		meta, err := resolve(ref)
+		if err != nil {
+			return err
+		}
+		columns[ref] = meta
+	}
+	return nil
 }
 
 func mergeEntityFields(base, own []any) []any {
@@ -1371,11 +1439,20 @@ func entitySchema(fields []any, enums map[string][]any, columns map[string]colum
 		if f == nil {
 			continue
 		}
-		if sensitivity, _ := f["sensitivity"].(string); sensitivity == "secret" {
-			continue
-		}
 		source := asMap(f["source"])
 		if asMap(source["join"]) != nil {
+			continue
+		}
+		sensitivity, _ := f["sensitivity"].(string)
+		var column columnMeta
+		columnRef, _ := source["column"].(string)
+		if columnRef != "" {
+			column = columns[columnRef]
+		}
+		if sensitivity == "" {
+			sensitivity = column.sensitivity
+		}
+		if sensitivity == "secret" {
 			continue
 		}
 		name, _ := f["name"].(string)
@@ -1387,21 +1464,22 @@ func entitySchema(fields []any, enums map[string][]any, columns map[string]colum
 			continue
 		}
 		typ, _ := f["type"].(string)
+		derived := false
 		nullable, hasNullable := f["nullable"].(bool)
-		if typ == "" {
-			if ref, _ := source["column"].(string); ref != "" {
-				if column, ok := columns[ref]; ok {
-					typ = column.typ
-					if !hasNullable {
-						nullable = column.nullable
-					}
-				}
+		if typ == "" && column.typ != "" {
+			typ = column.typ
+			derived = true
+			if !hasNullable {
+				nullable = column.nullable
 			}
 		}
 		if typ == "" {
 			continue
 		}
 		sch := typeSchema(typ, enums, customTypes)
+		if derived && len(column.params) > 0 {
+			applyScalarParams(sch, column.params)
+		}
 		if nullable {
 			sch["nullable"] = true
 		} else {
@@ -1423,42 +1501,62 @@ func entitySchema(fields []any, enums map[string][]any, columns map[string]colum
 	return out
 }
 
+// genericArg 提取 `prefix<inner>` 的 inner；不匹配返回 false。
+func genericArg(typ, prefix string) (string, bool) {
+	if !strings.HasPrefix(typ, prefix+"<") || !strings.HasSuffix(typ, ">") {
+		return "", false
+	}
+	return typ[len(prefix)+1 : len(typ)-1], true
+}
+
+// splitGenericArgs 按顶层逗号拆分泛型实参，忽略嵌套 <> 内的逗号。
+func splitGenericArgs(inner string) []string {
+	var out []string
+	depth, start := 0, 0
+	for i, r := range inner {
+		switch r {
+		case '<':
+			depth++
+		case '>':
+			depth--
+		case ',':
+			if depth == 0 {
+				out = append(out, strings.TrimSpace(inner[start:i]))
+				start = i + 1
+			}
+		}
+	}
+	return append(out, strings.TrimSpace(inner[start:]))
+}
+
 func typeSchema(typ string, enums map[string][]any, customTypes map[string]contractspec.CustomValueType) map[string]any {
 	typ = strings.TrimPrefix(strings.TrimSpace(typ), "*")
-	if strings.HasPrefix(typ, "_types.structures.list<") && strings.HasSuffix(typ, ">") {
-		inner := strings.TrimSuffix(strings.TrimPrefix(typ, "_types.structures.list<"), ">")
-		return map[string]any{"type": "array", "items": typeSchema(inner, enums, customTypes)}
+	for _, container := range []string{"list", "set", "array"} {
+		if inner, ok := genericArg(typ, "_types.structures."+container); ok {
+			schema := map[string]any{"type": "array", "items": typeSchema(inner, enums, customTypes)}
+			if container == "set" {
+				schema["uniqueItems"] = true
+			}
+			return schema
+		}
+	}
+	if inner, ok := genericArg(typ, "_types.structures.map"); ok {
+		args := splitGenericArgs(inner)
+		value := args[len(args)-1]
+		return map[string]any{"type": "object", "additionalProperties": typeSchema(value, enums, customTypes)}
 	}
 	if strings.HasPrefix(typ, "List<") && strings.HasSuffix(typ, ">") {
 		return map[string]any{"type": "array", "items": typeSchema(strings.TrimSuffix(strings.TrimPrefix(typ, "List<"), ">"), enums, customTypes)}
 	}
 	family, variant, isBasics := contractspec.SplitBasicsRef(typ)
 	if isBasics {
-		typ = family
+		if family == "timestamp" && variant == "long" {
+			return map[string]any{"type": "integer", "format": "int64"}
+		}
+		return scalarSchema(family, customTypes)
 	}
 	if _, ok := customTypes[typ]; ok {
 		return scalarSchema(typ, customTypes)
-	}
-	switch typ {
-	case "string":
-		return map[string]any{"type": "string"}
-	case "integer":
-		return map[string]any{"type": "integer"}
-	case "boolean":
-		return map[string]any{"type": "boolean"}
-	case "timestamp":
-		if variant == "long" {
-			return map[string]any{"type": "integer", "format": "int64"}
-		}
-		return map[string]any{"type": "string", "format": "date-time"}
-	case "datetime":
-		return map[string]any{"type": "string", "format": "date-time"}
-	case "number", "float", "decimal":
-		return map[string]any{"type": "number"}
-	case "json":
-		return map[string]any{"type": "object"}
-	case "bit", "xml":
-		return map[string]any{"type": "string"}
 	}
 	if strings.HasPrefix(typ, "data.enums.") {
 		return map[string]any{"type": "string", "enum": enums[lastSegment(typ)]}
@@ -1466,7 +1564,7 @@ func typeSchema(typ string, enums map[string][]any, customTypes map[string]contr
 	if strings.HasPrefix(typ, "data.entities.") {
 		return map[string]any{"$ref": "#/components/schemas/" + pascal(lastSegment(typ))}
 	}
-	return map[string]any{"type": "object"}
+	return scalarSchema(typ, customTypes)
 }
 
 func lastSegment(ref string) string {

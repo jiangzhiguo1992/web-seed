@@ -112,6 +112,7 @@ func cloneColumnMeta(src map[string]columnMeta) map[string]columnMeta {
 // loadTableColumns 构建每张物理表的有效列（含继承），并记录物理表名。
 func (c *Checker) loadTableColumns(tableIDs map[string]string) {
 	c.tableColumns = map[string]map[string]columnMeta{}
+	c.tableColumns[c.baseID] = baseColumnMeta()
 	docs := map[string]map[string]any{}
 	for id, rel := range tableIDs {
 		if id == c.baseID {
@@ -384,7 +385,7 @@ func (c *Checker) applyEntityFieldDefaults(e *entityInfo) {
 			continue
 		}
 		if !f.HasType {
-			typ := meta.typ
+			typ := c.resolvedColumnTypeName(meta.typ)
 			family := normalizeContractType(typ)
 			if meta.primaryKey && family == "integer" {
 				typ = "_types.basics.id"
@@ -1139,18 +1140,42 @@ func (c *Checker) columnUnique(table, col string) bool {
 	return false
 }
 
+// resolvedColumnTypeName 把列引用链解析为最终列声明的类型串（可能是自定义类型）；
+// 非引用/断链/成环时原样返回。
+func (c *Checker) resolvedColumnTypeName(typ string) string {
+	seen := map[string]bool{}
+	for {
+		table, col, ok := contractspec.SplitColumnRef(typ)
+		if !ok {
+			return typ
+		}
+		if seen[typ] {
+			return typ
+		}
+		seen[typ] = true
+		meta, found := c.tableColumns[table][col]
+		if !found {
+			return typ
+		}
+		typ = meta.typ
+	}
+}
+
 // resolvedColumnType 把列引用链解析为实际类型族；非引用/断链/成环时原样返回。
 func (c *Checker) resolvedColumnType(typ string) string {
-	if family, _, ok := contractspec.SplitBasicsRef(typ); ok {
-		typ = family
-	}
-	if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
-		if family, _, ok := customType.Basics(); ok {
-			return family
-		}
-	}
 	seen := map[string]bool{}
-	for strings.HasPrefix(typ, "data.tables.") {
+	for {
+		if family, _, ok := contractspec.SplitBasicsRef(typ); ok {
+			typ = family
+		}
+		if customType, ok := c.valueTypes.CustomTypes[typ]; ok {
+			if family, _, ok := customType.Basics(); ok {
+				return family
+			}
+		}
+		if !strings.HasPrefix(typ, "data.tables.") {
+			return typ
+		}
 		if seen[typ] {
 			return typ
 		}
@@ -1165,7 +1190,6 @@ func (c *Checker) resolvedColumnType(typ string) string {
 		}
 		typ = meta.typ
 	}
-	return typ
 }
 
 func (c *Checker) checkEntityValidation(e *entityInfo) {

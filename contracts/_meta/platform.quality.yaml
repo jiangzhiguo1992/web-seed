@@ -100,4 +100,4 @@ fields:
       - { name: note, type: _types.basics.string, required: false, description: "说明" }
 
 rules:
-  - { id: quality-refs, text: "e2e.required_scenarios 必须指向已存在的 scenario.http.*；e2e.base_url_source 必须指向已存在的契约；coverage.api/web.packages 必须存在；gates.command 为 make 目标时必须存在于 Makefile；must_test.id 唯一；status=required 的 must_test.where 必须匹配至少一个文件（planned 豁免）", implemented_by: [ quality-refs ] }
+  - { id: quality-refs, text: "e2e.required_scenarios 必须指向已存在的 scenario.http.*；e2e.base_url_source 必须指向已存在的契约；coverage.api/web.packages 必须存在；gates.command 为 make 目标时必须存在于 Makefile，且至少一个 gate 为 blocking；must_test.id 唯一；status=required 的 must_test.where 必须匹配至少一个文件（planned 豁免）", implemented_by: [ quality-refs ] }

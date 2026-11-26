@@ -465,6 +465,8 @@ components:
       properties:
         content_type:
           description: MIME 类型
+          maxLength: 127
+          minLength: 1
           type: string
         created_at:
           description: 创建时间
@@ -480,18 +482,29 @@ components:
           type: integer
         object_key:
           description: 对象存储 key；不存 URL
+          maxLength: 512
+          minLength: 1
+          pattern: ^[A-Za-z0-9][A-Za-z0-9/_.-]*$
           type: string
         original_name:
           description: 原始文件名；仅展示/下载
+          maxLength: 255
+          minLength: 1
           type: string
         owner_id:
           description: 所有者行 ID
           type: integer
         owner_table_name:
           description: 所有者物理表名
+          maxLength: 64
+          minLength: 1
+          pattern: ^[a-z][a-z0-9_]*$
           type: string
         purpose:
           description: 用途：icon/avatar/attachment 等
+          maxLength: 32
+          minLength: 1
+          pattern: ^[a-z][a-z0-9_]*$
           type: string
         replaces_id:
           description: 被替换的旧附件 ID；无替换为 null
@@ -499,14 +512,19 @@ components:
           type: integer
         sha256:
           description: SHA-256 十六进制；完整性/去重校验
+          maxLength: 64
+          minLength: 64
           nullable: true
+          pattern: ^[a-f0-9]{64}$
           type: string
         size_bytes:
           description: 对象大小（字节）
           minimum: 0
           type: integer
         sort:
+          default: 0
           description: 同一 owner+purpose 内的展示顺序
+          minimum: 0
           type: integer
         status:
           description: 附件状态
@@ -828,10 +846,16 @@ components:
       properties:
         code:
           description: 字典编码；全局唯一且创建后不可变
+          maxLength: 64
+          minLength: 1
+          pattern: ^[a-z][a-z0-9_]*$
           type: string
         color:
           description: 展示颜色；#RRGGBB
+          maxLength: 7
+          minLength: 7
           nullable: true
+          pattern: ^#[0-9A-Fa-f]{6}$
           type: string
         created_at:
           description: 创建时间
@@ -851,6 +875,8 @@ components:
           type: integer
         name:
           description: 展示名；允许重复
+          maxLength: 100
+          minLength: 1
           type: string
         parent_id:
           description: 父节点 ID；顶级为 null
@@ -858,10 +884,13 @@ components:
           type: integer
         remark:
           description: 备注；仅用于说明
+          maxLength: 500
           nullable: true
           type: string
         sort:
+          default: 0
           description: 同一父节点下的展示顺序
+          minimum: 0
           type: integer
         status:
           description: 字典状态
@@ -1299,6 +1328,9 @@ components:
       properties:
         code:
           description: 全局唯一编码；创建后不可变
+          maxLength: 32
+          minLength: 1
+          pattern: ^[a-z][a-z0-9_]*$
           type: string
         created_at:
           description: 创建时间
@@ -1311,12 +1343,17 @@ components:
           type: integer
         dimension:
           description: 量纲；只有同量纲可换算
+          maxLength: 32
+          minLength: 1
+          pattern: ^[a-z][a-z0-9_]*$
           type: string
         id:
           description: 实体唯一主键；来自主表 id 列（integer）
           type: integer
         name:
           description: 展示名；允许重复
+          maxLength: 32
+          minLength: 1
           type: string
         parent_id:
           description: 父单位 ID；顶级为 null
@@ -1327,10 +1364,13 @@ components:
           type: integer
         remark:
           description: 备注；仅用于说明
+          maxLength: 200
           nullable: true
           type: string
         sort:
+          default: 0
           description: 同量纲展示顺序
+          minimum: 0
           type: integer
         status:
           description: 单位状态
@@ -1340,10 +1380,13 @@ components:
             - deleted
           type: string
         step:
+          default: 1
           description: 默认下单步长；单位只读
+          minimum: 1
           type: integer
         symbol:
           description: 展示符号；如 元、kg
+          maxLength: 8
           nullable: true
           type: string
         updated_at:

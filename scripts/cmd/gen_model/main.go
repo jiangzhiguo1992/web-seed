@@ -211,6 +211,7 @@ func loadTableColumns(root string, schema *contractspec.Schema) (map[string]map[
 		parseColumnsInto(cols, doc["columns"], schema.ValueTypes.CustomTypes)
 		return cols, nil
 	}
+	out["data.tables.base"] = baseCols
 	for id := range docs {
 		cols, err := resolve(id, map[string]bool{})
 		if err != nil {
@@ -218,7 +219,63 @@ func loadTableColumns(root string, schema *contractspec.Schema) (map[string]map[
 		}
 		out[id] = cols
 	}
+	if err := resolveColumnSpecRefs(out); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// resolveColumnSpecRefs 把列类型引用解析为目标列的类型形状；列自身属性保持不变。
+func resolveColumnSpecRefs(tables map[string]map[string]columnSpec) error {
+	resolved := map[string]columnSpec{}
+	visiting := map[string]bool{}
+	var resolve func(table, col string) (columnSpec, error)
+	resolve = func(table, col string) (columnSpec, error) {
+		key := table + ".col." + col
+		if spec, ok := resolved[key]; ok {
+			return spec, nil
+		}
+		cols, ok := tables[table]
+		if !ok {
+			return columnSpec{}, fmt.Errorf("column ref target %s.col.%s not found", table, col)
+		}
+		spec, ok := cols[col]
+		if !ok {
+			return columnSpec{}, fmt.Errorf("column ref target %s.col.%s not found", table, col)
+		}
+		targetTable, targetCol, isRef := contractspec.SplitColumnRef(spec.Family)
+		if !isRef {
+			resolved[key] = spec
+			return spec, nil
+		}
+		if visiting[key] {
+			return columnSpec{}, fmt.Errorf("cyclic column ref at %s.col.%s", table, col)
+		}
+		visiting[key] = true
+		target, err := resolve(targetTable, targetCol)
+		if err != nil {
+			return columnSpec{}, err
+		}
+		delete(visiting, key)
+		spec.Family = target.Family
+		spec.Variant = target.Variant
+		spec.Custom = target.Custom
+		spec.Bits = target.Bits
+		spec.Precision = target.Precision
+		spec.Scale = target.Scale
+		resolved[key] = spec
+		return spec, nil
+	}
+	for table, cols := range tables {
+		for col := range cols {
+			spec, err := resolve(table, col)
+			if err != nil {
+				return err
+			}
+			cols[col] = spec
+		}
+	}
+	return nil
 }
 
 func extends(doc map[string]any) []string {

@@ -120,6 +120,9 @@ func (c *Checker) checkStorage(tableIDs map[string]string, schema *Schema) {
 		return
 	}
 	if schema != nil {
+		if err := checkSingletonTargets(schema); err != nil {
+			c.rulef("schema.targets", "data.storage: %v", err)
+		}
 		c.validateDoc(doc, schema.Fields, rel)
 		c.checkFieldOrder(rel, schema.Fields, orderRules{})
 		c.checkStorageFieldSubset(schema)

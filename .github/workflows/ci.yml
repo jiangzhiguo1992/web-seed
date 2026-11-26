@@ -20,6 +20,10 @@ jobs:
           go vet ./...
           test -z "$(gofmt -l .)"
           go test ./...
+      - name: coverage gate
+        run: make coverage-api
+      - name: race gate
+        run: make test-race
 
   web:
     runs-on: ubuntu-latest

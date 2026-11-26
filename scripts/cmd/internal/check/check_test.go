@@ -2629,14 +2629,98 @@ func TestPersistenceQueriesExist(t *testing.T) {
 
 func TestResolvedColumnTypeFollowsReferences(t *testing.T) {
 	c := &Checker{tableColumns: map[string]map[string]columnMeta{
-		"data.tables.a": {"x": {typ: "data.tables.b.col.y"}, "loop": {typ: "data.tables.a.col.loop"}},
-		"data.tables.b": {"y": {typ: "integer"}},
+		"data.tables.a":    {"x": {typ: "data.tables.b.col.y"}, "loop": {typ: "data.tables.a.col.loop"}, "base_id": {typ: "data.tables.base.col.id"}},
+		"data.tables.b":    {"y": {typ: "integer"}},
+		"data.tables.base": {"id": {typ: "_types.basics.integer.64"}},
 	}}
 	if got := c.resolvedColumnType("data.tables.a.col.x"); got != "integer" {
 		t.Fatalf("chained reference = %q, want integer", got)
 	}
+	if got := c.resolvedColumnType("data.tables.a.col.base_id"); got != "integer" {
+		t.Fatalf("base reference = %q, want integer", got)
+	}
 	if got := c.resolvedColumnType("data.tables.a.col.loop"); got != "data.tables.a.col.loop" {
 		t.Fatalf("reference cycle must terminate with the ref, got %q", got)
+	}
+}
+
+func TestMetaRuleTextMustBeTrimmedAndUnique(t *testing.T) {
+	c := &Checker{}
+	c.checkRuleList([]Rule{
+		{ID: "base-only", Text: "  ", ImplementedBy: []string{"base-only"}},
+		{ID: "base-file", Text: "same text", ImplementedBy: []string{"base-file"}},
+		{ID: "base-columns", Text: "same text", ImplementedBy: []string{"base-columns"}},
+	}, "meta.x")
+	errs := strings.Join(c.errs, "\n")
+	if !strings.Contains(errs, "must have id and text") {
+		t.Fatalf("whitespace rule text not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, "duplicates rule text") {
+		t.Fatalf("duplicate rule text not reported: %v", c.errs)
+	}
+}
+
+func TestMetaEnumValuesMustBeUnique(t *testing.T) {
+	f := Field{Name: "x", Type: "_types.basics.string", Enum: []any{"a", "a"}}
+	err := validateFieldConstraints(f, typeExpr{Base: "string"}, ValueTypes{})
+	if err == nil || !strings.Contains(err.Error(), "duplicated") {
+		t.Fatalf("duplicate enum value not reported: %v", err)
+	}
+}
+
+func TestResolvedColumnTypeNameKeepsCustomType(t *testing.T) {
+	c := &Checker{
+		tableColumns: map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "data.tables.b.col.y"}, "loop": {typ: "data.tables.a.col.loop"}},
+			"data.tables.b": {"y": {typ: "_types.basics.account_number"}},
+		},
+		valueTypes: ValueTypes{CustomTypes: map[string]CustomValueType{
+			"account_number": {Type: "_types.basics.string"},
+		}},
+	}
+	if got := c.resolvedColumnTypeName("data.tables.a.col.x"); got != "_types.basics.account_number" {
+		t.Fatalf("chained type name = %q, want custom type", got)
+	}
+	if got := c.resolvedColumnType("data.tables.a.col.x"); got != "string" {
+		t.Fatalf("chained family = %q, want string", got)
+	}
+	if got := c.resolvedColumnTypeName("data.tables.a.col.loop"); got != "data.tables.a.col.loop" {
+		t.Fatalf("cycle must keep the ref, got %q", got)
+	}
+}
+
+func TestColumnRefChainsMustResolve(t *testing.T) {
+	c := &Checker{tableColumns: map[string]map[string]columnMeta{
+		"data.tables.a": {
+			"ok":        {typ: "data.tables.b.col.y"},
+			"loop":      {typ: "data.tables.a.col.loop"},
+			"missing":   {typ: "data.tables.b.col.nope"},
+			"to_any":    {typ: "data.tables.b.col.any"},
+			"bad_copy":  {typ: "data.tables.b.col.secret"},
+			"good_copy": {typ: "data.tables.b.col.secret", sensitivity: "secret"},
+		},
+		"data.tables.b": {
+			"y":      {typ: "_types.basics.integer.64"},
+			"any":    {typ: "_types.basics.any"},
+			"secret": {typ: "_types.basics.string", sensitivity: "secret"},
+		},
+	}}
+	c.checkColumnRefChains()
+	errs := strings.Join(c.errs, "\n")
+	if strings.Contains(errs, "data.tables.a.col.ok") || strings.Contains(errs, "data.tables.a.col.good_copy") {
+		t.Fatalf("valid chain reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, "[column-type] data.tables.a.col.loop") {
+		t.Fatalf("cycle not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, "data.tables.a.col.bad_copy: column type ref sensitivity") {
+		t.Fatalf("lower sensitivity not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, "data.tables.a.col.missing: column type ref target data.tables.b.col.nope not found") {
+		t.Fatalf("missing ref target not reported: %v", c.errs)
+	}
+	if !strings.Contains(errs, "data.tables.a.col.to_any: column type ref data.tables.b.col.any resolves to _types.basics.any") {
+		t.Fatalf("any ref target not reported: %v", c.errs)
 	}
 }
 
@@ -2861,6 +2945,17 @@ func TestDefaultRules(t *testing.T) {
 	c.checkTableRules(doc, "contracts/data/tables/x.yaml", minimalTableSchema())
 	if !strings.Contains(strings.Join(c.errs, "\n"), "[default-type]") {
 		t.Fatalf("default type not checked: %v", c.errs)
+	}
+
+	c = &Checker{
+		tableDocs: map[string]map[string]any{"data.tables.a": {"columns": []any{map[string]any{
+			"name": "ref", "type": "data.tables.b.col.x", "default": 1,
+		}}}},
+		tableColumns: map[string]map[string]columnMeta{"data.tables.b": {"x": {typ: "_types.basics.string"}}},
+	}
+	c.checkColumnRefDefaultTypes()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "[default-type]") {
+		t.Fatalf("ref default type not checked: %v", c.errs)
 	}
 
 	c = &Checker{}
@@ -3106,6 +3201,20 @@ func TestRedundancyValidation(t *testing.T) {
 		c.checkRedundancy(tables)
 		if !strings.Contains(strings.Join(c.errs, "\n"), "type/nullable") || !strings.Contains(strings.Join(c.errs, "\n"), "[redundant-ref]") {
 			t.Fatalf("type mismatch not reported: %v", c.errs)
+		}
+	})
+
+	t.Run("sensitivity downgrade", func(t *testing.T) {
+		c := newChecker(map[string]map[string]any{
+			"data.tables.a": {"columns": []any{col("x", equalGroup())}},
+			"data.tables.b": {"columns": []any{col("x", equalGroup())}},
+		}, map[string]map[string]columnMeta{
+			"data.tables.a": {"x": {typ: "string", sensitivity: "secret"}},
+			"data.tables.b": {"x": {typ: "string"}},
+		})
+		c.checkRedundancy(tables)
+		if !strings.Contains(strings.Join(c.errs, "\n"), "sensitivity") || !strings.Contains(strings.Join(c.errs, "\n"), "[redundant-ref]") {
+			t.Fatalf("sensitivity downgrade not reported: %v", c.errs)
 		}
 	})
 

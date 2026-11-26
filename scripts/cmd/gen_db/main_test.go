@@ -109,6 +109,9 @@ func TestLoadTablesInheritance(t *testing.T) {
 	for _, tbl := range tables {
 		byName[tbl.Name] = tbl
 	}
+	if _, ok := byName["base"]; !ok {
+		t.Fatal("base column lookup table missing")
+	}
 	account, ok := byName["account"]
 	if !ok {
 		t.Fatal("account table missing")
@@ -134,6 +137,103 @@ func TestLoadTablesInheritance(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("verification_action result constraint not loaded: %#v", action.Checks)
+	}
+}
+
+func TestColumnRefsFromContractFiles(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data/tables")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"_base.yaml": `id: data.tables.base
+columns:
+  - { name: id, type: _types.basics.integer.64, nullable: false, primary_key: true }
+`,
+		"source.yaml": `id: data.tables.source
+table: { name: source, extends: [ data.tables.base ] }
+columns:
+  - { name: code, type: _types.basics.string, nullable: false, max_len: 16 }
+`,
+		"ref.yaml": `id: data.tables.ref
+table: { name: ref, extends: [ data.tables.base ] }
+columns:
+  - { name: copy_code, type: data.tables.source.col.code, nullable: true }
+  - { name: base_id, type: data.tables.base.col.id, nullable: false }
+`,
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	targets := contractspec.Targets{Dir: "contracts/data/tables", Glob: "*.yaml", ID: "data.tables.<file>"}
+	tables, err := loadTables(root, targets, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables, err = resolveColumnRefs(tables)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ref table
+	for _, tbl := range tables {
+		if tbl.Name == "ref" {
+			ref = tbl
+		}
+	}
+	byName := map[string]column{}
+	for _, c := range ref.Columns {
+		byName[c.Name] = c
+	}
+	if got := byName["copy_code"]; got.Type != "string" || got.MaxLen != 16 || !got.Nullable {
+		t.Fatalf("source ref = %+v", got)
+	}
+	if got := byName["base_id"]; got.Type != "integer" || got.Bits != 64 || got.Nullable {
+		t.Fatalf("base ref = %+v", got)
+	}
+}
+
+func TestStorageArchiveEntriesStayOutsideTableContracts(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	schema, _, err := contractspec.LoadSchemaByType(root, "data.tables")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables, err := loadTables(root, schema.Targets, schema.ValueTypes.CustomTypes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tbl := range tables {
+		if strings.Contains(tbl.Name, "archive") {
+			t.Fatalf("archive table %s must not be a data.tables contract", tbl.Name)
+		}
+	}
+	engine, err := loadEngineTables(root, "postgres")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if engine["token_archive"] {
+		t.Fatal("archive entry must not enter the postgres DDL table set")
+	}
+	if !engine["data.tables.token"] {
+		t.Fatal("physical token table missing from postgres DDL table set")
+	}
+}
+
+func TestRenderIncludesIndexComments(t *testing.T) {
+	tables := []table{{
+		ID: "data.tables.account", Name: "account", Comment: "账号",
+		Columns: []column{{Name: "id", Type: "integer", Bits: 64, PrimaryKey: true}},
+		Indexes: []index{{Name: "uq_account_id", Columns: []string{"id"}, Unique: true, Comment: "账号主键唯一"}},
+	}}
+	schemaSQL, _, err := render(tables)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(schemaSQL), `COMMENT ON INDEX "uq_account_id" IS '账号主键唯一';`) {
+		t.Fatalf("index comment missing:\n%s", schemaSQL)
 	}
 }
 
@@ -185,6 +285,93 @@ func TestTypeMapping(t *testing.T) {
 		if got != tc.want {
 			t.Fatalf("columnType(%+v) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestColumnRefResolution(t *testing.T) {
+	tables := []table{
+		{
+			ID:      "data.tables.base",
+			Columns: []column{{Name: "id", Type: "integer", Bits: 64}},
+		},
+		{
+			ID:      "data.tables.source",
+			Columns: []column{{Name: "id", Type: "integer", Bits: 64}},
+		},
+		{
+			ID: "data.tables.sample",
+			Columns: []column{
+				{Name: "copy_id", Type: "data.tables.source.col.id", Nullable: true},
+				{Name: "base_id", Type: "data.tables.base.col.id", Nullable: true},
+			},
+		},
+	}
+	resolved, err := resolveColumnRefs(tables)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := columnType(resolved[1].Columns[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "BIGINT" {
+		t.Fatalf("column ref DDL type = %q, want BIGINT", got)
+	}
+	if !resolved[2].Columns[0].Nullable {
+		t.Fatal("column ref must keep its own nullable flag")
+	}
+	baseType, err := columnType(resolved[2].Columns[1])
+	if err != nil || baseType != "BIGINT" {
+		t.Fatalf("base column ref = %q, %v; want BIGINT", baseType, err)
+	}
+
+	cycle := []table{{
+		ID: "data.tables.cycle",
+		Columns: []column{
+			{Name: "a", Type: "data.tables.cycle.col.b"},
+			{Name: "b", Type: "data.tables.cycle.col.a"},
+		},
+	}}
+	if _, err := resolveColumnRefs(cycle); err == nil || !strings.Contains(err.Error(), "cyclic column ref") {
+		t.Fatalf("cycle must be rejected, got %v", err)
+	}
+}
+
+func TestBitLengthAndFractionalSecondsParsed(t *testing.T) {
+	cols, err := parseColumns([]any{
+		map[string]any{"name": "flags", "type": "_types.basics.bit", "kind": "bit", "length": 8},
+		map[string]any{"name": "at", "type": "_types.basics.timestamp.long", "fractional_seconds": 0},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bitType, err := columnType(cols[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bitType != "BIT(8)" {
+		t.Fatalf("bit length = %q, want BIT(8)", bitType)
+	}
+	tsType, err := columnType(cols[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tsType != "TIMESTAMP(0)" {
+		t.Fatalf("fractional_seconds 0 = %q, want TIMESTAMP(0)", tsType)
+	}
+}
+
+func TestIndexCommentRendered(t *testing.T) {
+	got, err := renderTable(table{
+		Name:    "sample",
+		Columns: []column{{Name: "id", Type: "integer", Bits: 64}},
+		Indexes: []index{{Name: "idx_sample_id", Columns: []string{"id"}, Comment: "索引用途"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `COMMENT ON INDEX "idx_sample_id" IS '索引用途';`) {
+		t.Fatalf("index comment missing: %s", got)
 	}
 }
 

@@ -69,6 +69,19 @@ func SplitTypeRef(ref string) (class, name string, ok bool) {
 	return "", "", false
 }
 
+// SplitColumnRef 拆列引用 `data.tables.<table>.col.<column>`。
+// 列引用只表达“类型同源”，不是外键；解析目标由各消费方按自己的表索引完成。
+func SplitColumnRef(ref string) (tableID, column string, ok bool) {
+	parts := strings.Split(ref, ".col.")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	if !strings.HasPrefix(parts[0], "data.tables.") || strings.Contains(parts[1], ".") {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
+}
+
 // SplitBasicsRef 拆 `_types.basics.<family>[.<variant>]`。
 // 单变体族（types 只有 default）的引用不带 variant；多变体族必须带 variant。
 func SplitBasicsRef(ref string) (family, variant string, ok bool) {

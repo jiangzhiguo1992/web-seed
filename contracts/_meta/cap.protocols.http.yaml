@@ -193,7 +193,7 @@ fields:
 rules:
   - { id: http-file, text: "文件 id 必须由 targets 派生", implemented_by: [ http-file ] }
   - { id: http-status, text: "response 的 status 必须落在 platform.http_conventions.status_codes 的 success/client_error/server_error 列表内；3xx 与未登记状态非法", implemented_by: [ http-status ] }
-  - { id: http-shape, text: "paths 必须是 path → method → operation；operation 字段顺序固定为 id/name/summary/service/request/response/used_by；request 只允许 headers/path/query/body；header/query/body/body.fields 的 required 省略为 true，可选项写 false；GET/HEAD 不得声明 request.body；response 的 key 是三位状态码，所有 response 必须写 msg；带 body 时必须同时在 headers 声明 Content-Type；204 不得声明 body/Content-Type；非 2xx 写 msg、空 headers 与非空 errors", implemented_by: [ http-shape ] }
+  - { id: http-shape, text: "paths 必须是 path → method → operation；request 只允许 headers/path/query/body；header/query/body/body.fields 的 required 省略为 true，可选项写 false；GET/HEAD 不得声明 request.body；response 的 key 是三位状态码，所有 response 必须写 msg；带 body 时必须同时在 headers 声明 Content-Type；204 不得声明 body/Content-Type；非 2xx 写 msg、空 headers 与非空 errors", implemented_by: [ http-shape ] }
   - { id: http-body-types, text: "request.body.kind 的 enum 必须与 platform.http_conventions.body_types 的键集合完全一致；response.body.kind 必须是该集合的非空子集；normalizer 只读取平台 body_types 映射，不在代码里维护第二份媒体类型表", implemented_by: [ http-body-types ] }
   - { id: http-version, text: "mount.api_version 必须是 v<数字>；mount.path 与 paths 的 key 不得以 /v<数字> 开头；生成器按 app 内各文件一致的 mount.api_version 派生 servers: /<version>，同一 app 不得混版本；project.yaml 的 api app 只校验 audience 与 timeout_ms", implemented_by: [ http-version ] }
   - { id: http-app-included, text: "每个 HTTP 契约文件必须被 project.yaml 至少一个 api app 的 includes 收录，否则不会生成 OpenAPI", implemented_by: [ http-app-included ] }

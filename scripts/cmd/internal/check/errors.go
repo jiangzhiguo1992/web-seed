@@ -172,6 +172,14 @@ func (c *Checker) checkErrorFiles() {
 		c.rulef("schema.required", "contracts/platform/errors/_base.yaml: naming is required")
 	}
 	maxTotal, _ := toInt(naming["max_total"])
+	commonPrefix, _ := naming["common_prefix"].(string)
+	mappingStatuses := map[int]bool{}
+	for _, raw := range asList(baseDoc["mapping_rules"]) {
+		item, _ := asMap(raw)
+		if status, ok := toInt(item["status"]); ok {
+			mappingStatuses[status] = true
+		}
+	}
 	order := stringList(baseDoc["order"])
 	if len(order) == 0 {
 		c.rulef("schema.required", "contracts/platform/errors/_base.yaml: order is required")
@@ -271,6 +279,12 @@ func (c *Checker) checkErrorFiles() {
 			}
 			if status, ok := toInt(m["status"]); ok {
 				c.errorStatus[code] = status
+				if len(mappingStatuses) > 0 && !mappingStatuses[status] {
+					c.rulef("error-naming", "%s: errors[%d] (%s): status %d is not in mapping_rules", rel, i, code, status)
+				}
+			}
+			if stem == "common" && commonPrefix != "" && !strings.HasPrefix(code, commonPrefix) {
+				c.rulef("error-naming", "%s: errors[%d] (%s): common error code must start with %s", rel, i, code, commonPrefix)
 			}
 			c.checkErrorI18n(rel, i, m)
 			if key, _ := m["i18n"].(string); key != "" {

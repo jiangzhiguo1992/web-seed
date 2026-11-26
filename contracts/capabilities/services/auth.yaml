@@ -126,7 +126,7 @@ services:
         input:
           - { name: username, value: params.input.identifier, description: "用户名" }
         output:
-          - { name: row, type: data.entities.auth_pwd, description: "query 返回的 row" }
+          - { name: row, type: data.entities.auth_pwd }
         query: data.queries.auth.get_auth_pwd_by_username
         goto: load
       - id: get_auth_phone_by_number
@@ -136,7 +136,7 @@ services:
           - { name: code, value: step.phone_code.code, description: "手机号区号" }
           - { name: number, value: params.input.identifier, description: "手机号" }
         output:
-          - { name: row, type: data.entities.auth_phone, description: "query 返回的 row" }
+          - { name: row, type: data.entities.auth_phone }
         query: data.queries.auth.get_auth_phone_by_number
         goto: load
       - id: get_auth_email_by_username_domain
@@ -146,7 +146,7 @@ services:
           - { name: username, value: step.split_identifier.username, description: "用户名" }
           - { name: domain, value: step.split_identifier.domain, description: "邮箱域名" }
         output:
-          - { name: row, type: data.entities.auth_email, description: "query 返回的 row" }
+          - { name: row, type: data.entities.auth_email }
         query: data.queries.auth.get_auth_email_by_username_domain
         goto: load
       - id: load
@@ -174,7 +174,7 @@ services:
         input:
           - { name: id, value: step.load.account_id, description: "认证绑定命中的账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check
       - id: check
@@ -372,7 +372,7 @@ services:
         input:
           - { name: id, value: params.account_id, description: "账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check_account
       - id: check_account
@@ -562,7 +562,7 @@ services:
         input:
           - { name: id, value: step.resolve.binding_id, description: "认证绑定 ID" }
         output:
-          - { name: row, type: data.entities.auth_pwd, description: "query 返回的 row" }
+          - { name: row, type: data.entities.auth_pwd }
         query: data.queries.auth.get_auth_pwd_by_id
         goto: to_binding
       - id: to_binding
@@ -617,7 +617,7 @@ services:
         input:
           - { name: id, value: params.account_id, description: "账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check_account
       - id: check_account
@@ -852,7 +852,7 @@ services:
         input:
           - { name: id, value: step.merge_id.target_id, description: "认证绑定 ID" }
         output:
-          - { name: row, type: data.entities.auth_phone, description: "query 返回的 row" }
+          - { name: row, type: data.entities.auth_phone }
         query: data.queries.auth.get_auth_phone_by_id
         goto: to_binding
       - id: to_binding
@@ -907,7 +907,7 @@ services:
         input:
           - { name: id, value: params.account_id, description: "账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check_account
       - id: check_account
@@ -1155,7 +1155,7 @@ services:
         input:
           - { name: id, value: step.merge_id.target_id, description: "认证绑定 ID" }
         output:
-          - { name: row, type: data.entities.auth_email, description: "query 返回的 row" }
+          - { name: row, type: data.entities.auth_email }
         query: data.queries.auth.get_auth_email_by_id
         goto: to_binding
       - id: to_binding

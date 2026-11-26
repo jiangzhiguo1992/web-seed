@@ -34,16 +34,23 @@ func (c *Checker) checkQuality() {
 		}
 	}
 	targets := makeTargets(filepath.Join(c.root, "Makefile"))
+	hasBlocking := false
 	for i, raw := range asList(doc["gates"]) {
-		if len(targets) == 0 {
-			break
-		}
 		gate, _ := asMap(raw)
+		if blocking, _ := gate["blocking"].(bool); blocking {
+			hasBlocking = true
+		}
+		if len(targets) == 0 {
+			continue
+		}
 		command, _ := gate["command"].(string)
 		target := makeCommandTarget(command)
 		if target != "" && !targets[target] {
 			c.rulef("quality-refs", "%s: gates[%d] command target %s is not in Makefile", rel, i, target)
 		}
+	}
+	if len(asList(doc["gates"])) > 0 && !hasBlocking {
+		c.rulef("quality-refs", "%s: gates must contain at least one blocking gate", rel)
 	}
 	seen := map[string]bool{}
 	for i, raw := range asList(doc["must_test"]) {

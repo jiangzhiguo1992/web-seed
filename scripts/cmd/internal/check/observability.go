@@ -68,6 +68,9 @@ func (c *Checker) checkLogFields() {
 			c.rulef("log-field-refs", "%s: fields[%d] duplicate %s", rel, i, name)
 		}
 		seen[name] = true
+		if pii, _ := item["pii"].(bool); !pii && matchesNeverLog(name, neverLog) {
+			c.rulef("log-field-refs", "%s: fields[%d] (%s): pii=false but is covered by never_log", rel, i, name)
+		}
 		for _, rawScope := range asList(item["required_for"]) {
 			scope, _ := rawScope.(string)
 			if scope != "" && !allowed[scope] {
@@ -132,6 +135,21 @@ func (c *Checker) checkMetrics() {
 		case "histogram":
 			if !hasUnitSuffix(name, unitSuffixes) {
 				c.rulef("metric-shape", "%s: histogram name must end with a unit suffix (%v)", where, sortedKeys(unitSuffixes))
+			}
+		}
+		buckets := asList(item["buckets"])
+		if len(buckets) > 0 {
+			if kind != "histogram" {
+				c.rulef("metric-shape", "%s: buckets are only allowed for histogram", where)
+			}
+			prev := 0.0
+			for j, rawBucket := range buckets {
+				value, ok := toFloat(rawBucket)
+				if !ok || value <= 0 || (j > 0 && value <= prev) {
+					c.rulef("metric-shape", "%s: buckets[%d] must be positive and strictly increasing", where, j)
+					break
+				}
+				prev = value
 			}
 		}
 		labels := map[string]bool{}

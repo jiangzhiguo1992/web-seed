@@ -59,7 +59,7 @@ services:
         input:
           - { name: id, value: params.account_id, description: "待签发令牌的账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check_account
       - id: check_account
@@ -170,7 +170,7 @@ services:
         input:
           - { name: refresh_token_hash, value: step.hash_old.refresh_token_hash, description: "待换新的刷新令牌哈希" }
         output:
-          - { name: row, type: data.entities.token, description: "query 返回的 row" }
+          - { name: row, type: data.entities.token }
         query: data.queries.token.get_token_by_refresh
         goto: check_reuse
       - id: check_reuse
@@ -210,7 +210,7 @@ services:
         input:
           - { name: id, value: step.load_old.row.account_id, description: "旧令牌归属账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check_account
       - id: check_account
@@ -383,7 +383,7 @@ services:
         input:
           - { name: refresh_token_hash, value: step.hash.refresh_token_hash, description: "待吊销的刷新令牌哈希" }
         output:
-          - { name: row, type: data.entities.token, description: "query 返回的 row" }
+          - { name: row, type: data.entities.token }
         query: data.queries.token.get_token_by_refresh
         goto: validate
       - id: validate
@@ -510,7 +510,7 @@ services:
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32 }
         errors: [ ]
         query: data.queries.token.expire_tokens
         goto: $end
@@ -544,7 +544,7 @@ services:
         input:
           - { name: access_token_hash, value: step.hash.access_token_hash, description: "待校验的访问令牌哈希" }
         output:
-          - { name: row, type: data.entities.token, description: "query 返回的 row" }
+          - { name: row, type: data.entities.token }
         query: data.queries.token.get_token_by_access
         goto: get_account
       - id: get_account
@@ -553,7 +553,7 @@ services:
         input:
           - { name: id, value: step.load_token.row.account_id, description: "令牌归属账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: verify
       - id: verify
@@ -599,7 +599,7 @@ services:
         input:
           - { name: limit, value: step.batch_limit.limit, description: "单批删除上限" }
         output:
-          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32 }
         errors:
           - platform.errors.COMMON_INTERNAL
         query: data.queries.token.delete_expired_tokens

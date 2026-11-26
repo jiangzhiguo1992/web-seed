@@ -50,6 +50,10 @@ func run(root string, check bool) error {
 	if err != nil {
 		return err
 	}
+	tables, err = resolveColumnRefs(tables)
+	if err != nil {
+		return err
+	}
 	postgresTables, err := loadEngineTables(root, "postgres")
 	if err != nil {
 		return err
@@ -207,26 +211,27 @@ type table struct {
 }
 
 type column struct {
-	Name          string
-	Type          string
-	Kind          string
-	Mode          string
-	Timezone      bool
-	TimezoneSet   bool
-	FracSeconds   int
-	Length        int
-	Nullable      bool
-	PrimaryKey    bool
-	Default       any
-	DefaultSQL    string
-	Bits          int
-	AutoIncrement bool
-	MaxLen        int
-	MinLen        int
-	Fixed         bool
-	Precision     int
-	Scale         int
-	Comment       string
+	Name           string
+	Type           string
+	Kind           string
+	Mode           string
+	Timezone       bool
+	TimezoneSet    bool
+	FracSeconds    int
+	FracSecondsSet bool
+	Length         int
+	Nullable       bool
+	PrimaryKey     bool
+	Default        any
+	DefaultSQL     string
+	Bits           int
+	AutoIncrement  bool
+	MaxLen         int
+	MinLen         int
+	Fixed          bool
+	Precision      int
+	Scale          int
+	Comment        string
 }
 
 type check struct {
@@ -241,6 +246,7 @@ type index struct {
 	Expression string
 	Unique     bool
 	LiveOnly   bool
+	Comment    string
 }
 
 func loadTables(root string, targets contractspec.Targets, customTypes map[string]contractspec.CustomValueType) ([]table, error) {
@@ -294,6 +300,8 @@ func loadTables(root string, targets contractspec.Targets, customTypes map[strin
 	if len(out) == 0 {
 		return nil, fmt.Errorf("no table contracts under %s", targets.Dir)
 	}
+	// 基类列也可被列类型引用；保留为只读解析入口，后续按 storage 过滤，不生成 DDL。
+	out = append(out, table{ID: "data.tables.base", Name: "base", Columns: append([]column(nil), baseCols...)})
 	return out, nil
 }
 
@@ -357,6 +365,7 @@ func parseTable(id string, doc map[string]any) (table, error) {
 			Expression: stringValue(m["expression"]),
 			Unique:     boolValue(m["unique"]),
 			LiveOnly:   boolValue(m["live_only"]),
+			Comment:    stringValue(m["comment"]),
 		}
 		t.Indexes = append(t.Indexes, idx)
 	}
@@ -374,6 +383,7 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 			Mode:          stringValue(m["mode"]),
 			Timezone:      boolValue(m["timezone"]),
 			FracSeconds:   intValue(m["fractional_seconds"]),
+			Length:        intValue(m["length"]),
 			Nullable:      boolValue(m["nullable"]),
 			PrimaryKey:    boolValue(m["primary_key"]),
 			Default:       m["default"],
@@ -391,6 +401,9 @@ func parseColumns(raw any, customTypes map[string]contractspec.CustomValueType) 
 		}
 		if _, ok := m["timezone"]; ok {
 			c.TimezoneSet = true
+		}
+		if _, ok := m["fractional_seconds"]; ok {
+			c.FracSecondsSet = true
 		}
 		if family, variant, ok := contractspec.SplitBasicsRef(c.Type); ok {
 			c.Type = family
@@ -446,12 +459,90 @@ func applyCustomParams(c *column, params map[string]any) {
 			c.TimezoneSet = true
 		case "fractional_seconds":
 			c.FracSeconds = intValue(v)
+			c.FracSecondsSet = true
+		case "length":
+			c.Length = intValue(v)
 		case "default":
 			if c.Default == nil {
 				c.Default = v
 			}
 		}
 	}
+}
+
+// resolveColumnRefs 把 data.tables.<t>.col.<c> 类型引用解析为目标列的确定性类型形状；
+// 引用列只继承类型与类型参数，不继承 nullable/default/comment/主键/自增。
+func resolveColumnRefs(tables []table) ([]table, error) {
+	byKey := map[string]column{}
+	for _, t := range tables {
+		for _, c := range t.Columns {
+			byKey[t.ID+".col."+c.Name] = c
+		}
+	}
+	resolved := map[string]column{}
+	visiting := map[string]bool{}
+	var resolve func(key string) (column, error)
+	resolve = func(key string) (column, error) {
+		if c, ok := resolved[key]; ok {
+			return c, nil
+		}
+		c, ok := byKey[key]
+		if !ok {
+			return column{}, fmt.Errorf("column ref target %s not found", key)
+		}
+		tableID, col, isRef := contractspec.SplitColumnRef(c.Type)
+		if !isRef {
+			resolved[key] = c
+			return c, nil
+		}
+		if visiting[key] {
+			return column{}, fmt.Errorf("cyclic column ref at %s", key)
+		}
+		visiting[key] = true
+		target, err := resolve(tableID + ".col." + col)
+		if err != nil {
+			return column{}, fmt.Errorf("column %s: %w", c.Name, err)
+		}
+		delete(visiting, key)
+		applyColumnType(&c, target)
+		resolved[key] = c
+		return c, nil
+	}
+	out := make([]table, len(tables))
+	for i, t := range tables {
+		out[i] = t
+		out[i].Columns = append([]column(nil), t.Columns...)
+		for j := range out[i].Columns {
+			c := out[i].Columns[j]
+			if _, _, ok := contractspec.SplitColumnRef(c.Type); !ok {
+				continue
+			}
+			rc, err := resolve(t.ID + ".col." + c.Name)
+			if err != nil {
+				return nil, err
+			}
+			out[i].Columns[j] = rc
+		}
+	}
+	return out, nil
+}
+
+// applyColumnType 把源列的 DDL 类型形状复制到引用列；列自身属性保持不变。
+func applyColumnType(dst *column, src column) {
+	dst.Type = src.Type
+	dst.Kind = src.Kind
+	dst.Mode = src.Mode
+	dst.Timezone = src.Timezone
+	dst.TimezoneSet = src.TimezoneSet
+	dst.FracSeconds = src.FracSeconds
+	dst.FracSecondsSet = src.FracSecondsSet
+	dst.Length = src.Length
+	dst.Bits = src.Bits
+	dst.MaxLen = src.MaxLen
+	dst.MinLen = src.MinLen
+	dst.Fixed = src.Fixed
+	dst.Precision = src.Precision
+	dst.Scale = src.Scale
 }
 
 func mergeColumns(cols []column) ([]column, error) {
@@ -530,6 +621,9 @@ func renderTable(t table) (string, error) {
 	}
 	for _, idx := range t.Indexes {
 		b.WriteString(renderIndex(t.Name, idx))
+		if idx.Comment != "" {
+			b.WriteString(fmt.Sprintf("COMMENT ON INDEX %s IS %s;\n", pgIdent(idx.Name), quoteString(idx.Comment)))
+		}
 	}
 	return b.String(), nil
 }
@@ -613,7 +707,7 @@ func columnType(c column) (string, error) {
 		return "TEXT", nil
 	case "timestamp":
 		prec := c.FracSeconds
-		if prec == 0 {
+		if !c.FracSecondsSet {
 			prec = 6
 		}
 		if !c.TimezoneSet || c.Timezone {

@@ -170,11 +170,11 @@
 | data.tables | index-used-by-ref | index-used-by-ref | 1 | 1 |
 | data.tables | index-name-unique | index-name-unique | 1 | 0 |
 | data.tables | redundant-group | redundant-group | 1 | 0 |
-| data.tables | redundant-ref | redundant-ref | 2 | 0 |
+| data.tables | redundant-ref | redundant-ref | 3 | 0 |
 | data.tables | reference-target | reference-target | 2 | 0 |
 | data.tables | reference-on-delete | reference-on-delete | 1 | 0 |
 | data.tables | reference-join | reference-join | 1 | 0 |
-| data.tables | default-type | default-type | 1 | 0 |
+| data.tables | default-type | default-type | 2 | 0 |
 | data.tables | default-vs-default-sql | default-vs-default-sql | 1 | 0 |
 | data.tables | physical-primary-key | physical-primary-key | 1 | 0 |
 | data.tables | do-not-specific | do-not-specific | 1 | 0 |
@@ -194,6 +194,7 @@
 | platform.architecture.go_arch | architecture-refs | architecture-refs | 1 | 0 |
 | platform.environments | environment-shape | environment-shape | 1 | 0 |
 | platform.errors | error-file-placement | error-file-placement | 1 | 0 |
+| platform.errors | error-naming | error-naming | 1 | 0 |
 | platform.errors | error-i18n-derivation | error-i18n-derivation | 1 | 0 |
 | platform.errors | error-i18n-locale | error-i18n-locale | 1 | 0 |
 | platform.observability.log_fields | log-field-refs | log-field-refs | 1 | 0 |
@@ -206,6 +207,7 @@
 | platform.security.auth_policy | auth-policy-storage | auth-policy-storage | 1 | 0 |
 | platform.security.auth_policy | auth-policy-mfa | auth-policy-mfa | 1 | 0 |
 | platform.security.auth_policy | auth-policy-password | auth-policy-password | 1 | 0 |
+| platform.security.auth_policy | auth-policy-hardening | auth-policy-hardening | 1 | 0 |
 | platform.security.permissions | permission-code-shape | permission-code-shape | 1 | 0 |
 | platform.security.roles | role-inheritance | role-inheritance | 1 | 0 |
 | platform.security.roles | role-permissions | role-permissions | 1 | 0 |

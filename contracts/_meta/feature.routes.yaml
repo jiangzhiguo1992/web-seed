@@ -101,5 +101,5 @@ fields:
       - { name: layout, type: _types.basics.string, required: true, description: "布局名" }
 
 rules:
-  - { id: route-structure, text: "id 必须为 feature.routes；route id/path/name 唯一；page 必须存在且回指本路由（page.route == route.id）；layout 必须在 layout 注册表中；permission 必须存在于 platform.security.permissions", implemented_by: [ route-structure ] }
+  - { id: route-structure, text: "id 必须为 feature.routes；route id/path/name 唯一；page 必须存在且回指本路由（page.route == route.id）；layout 必须在 layout 注册表中；permission 必须存在于 platform.security.permissions；meta.public:true 的路由不得声明 permission", implemented_by: [ route-structure ] }
   - { id: route-redirect, text: "redirects.from/to 与 not_found.layout 必须是合法路径/布局；not_found.page 必须存在", implemented_by: [ route-redirect ] }

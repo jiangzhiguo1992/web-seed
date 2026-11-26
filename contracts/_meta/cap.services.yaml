@@ -121,7 +121,7 @@ fields:
             item_fields:
               - { name: name, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "输出名" }
               - { name: type, type: _types.basics.string, required: true, pattern: *service_type, description: "类型 ID；允许的引用与层数见 service-param-type" }
-              - { name: description, type: _types.basics.string, required: true, description: "这项产出的业务含义" }
+              - { name: description, type: _types.basics.string, required: false, description: "这项产出的业务含义" }
               - { name: nullable, type: _types.basics.boolean, required: false, description: "是否可空" }
 
           - { name: errors, type: _types.structures.set<_types.basics.string>, required: false, unique: true, pattern: '^platform\.errors\.[A-Z][A-Z0-9_]*$', description: "步骤可产生的错误" }
@@ -171,7 +171,7 @@ rules:
   - { id: service-errors, text: "step.errors 必须是存在的 platform.errors.*；错误闭包按 step 递归：query 取 query.errors 与 step.errors；kind=service 未声明 errors 时取目标 service 的闭包，声明时只取声明集合（必须是目标子集）；logic/when 只取 step.errors，且其 rules[].rule 的 feature.rules.errors 必须被该 step 声明；events/其他 step 取 step.errors；事件不贡献同步错误；service 项不再声明 errors", implemented_by: [ service-errors ] }
   - { id: service-visibility, text: "cap.protocols.http.service 只能指向 visibility=public 且未被 `cap.events` 异步任务引用的 service；跨模块 kind=service 只能指向 visibility=public 的目标；internal 目标只能被同模块引用", implemented_by: [ service-visibility ] }
   - { id: service-page-schema, text: "schema 名以 Page 结尾时，properties 必须含 required 的 items(_types.structures.array)、offset(_types.basics.page_offset)、limit(_types.basics.page_limit)、has_more(_types.basics.boolean)", implemented_by: [ service-page-schema ] }
-  - { id: service-step-fields, text: "每个 kind 只允许公共字段、数据流字段与自身专属字段：query→query、service→service、events→events、logic→rules、when→when；query/service 是单值字符串 ID；lifecycles/validations 是任意 kind 都可带的标记；state_gate 是任意 kind 都可带的状态门禁；input 项必须写 name 与 value，output 项必须写 name/type/description", implemented_by: [ service-step-fields ] }
+  - { id: service-step-fields, text: "每个 kind 只允许公共字段、数据流字段与自身专属字段：query→query、service→service、events→events、logic→rules、when→when；query/service 是单值字符串 ID；lifecycles/validations 是任意 kind 都可带的标记；state_gate 是任意 kind 都可带的状态门禁；input 项必须写 name 与 value，output 项必须写 name/type", implemented_by: [ service-step-fields ] }
   - { id: service-step-target, text: "kind=query 必须有 query；kind=service 必须有 service；kind=events 必须有至少一个 events[].ref", implemented_by: [ service-step-target ] }
   - { id: service-state-gate, text: "state_gate 是 [{lifecycle, values}]；省略表示全部状态允许；每个 lifecycle 必须由本步 lifecycles 动作或 query/entity 输出触及且只能出现一次；写了则 lifecycle 与 state 必须存在、集合非空；transition step 在 from 不是全状态时必须写且等于 from；destroy step 在非终态不是全状态时必须写且等于全部非终态；全状态允许时禁止写；create 同样省略", implemented_by: [ service-state-gate ] }
   - { id: service-step-shape, text: "kind=events/when 的 output 必须为空；kind=logic 必须有 rules（可为空列表）与 output+errors；kind=when 必须有 when；events/rules 条目必须是对象，events 写 ref、rules 写 rule", implemented_by: [ service-step-shape ] }

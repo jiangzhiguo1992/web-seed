@@ -85,4 +85,4 @@ fields:
     description: "日志生成/校验规则"
 
 rules:
-  - { id: log-field-refs, text: "字段名唯一；required_for 只允许 http/job/worker/cli/test；never_log 条目必须是 snake_case 或 *suffix 形式；level_field 必须声明在 required 或 fields 中；所有 sensitivity: pii|secret 的表列必须被 never_log 覆盖", implemented_by: [ log-field-refs ] }
+  - { id: log-field-refs, text: "字段名唯一；required_for 只允许 http/job/worker/cli/test；never_log 条目必须是 snake_case 或 *suffix 形式；level_field 必须声明在 required 或 fields 中；所有 sensitivity: pii|secret 的表列必须被 never_log 覆盖；fields[].pii=false 的字段不得被 never_log 覆盖", implemented_by: [ log-field-refs ] }

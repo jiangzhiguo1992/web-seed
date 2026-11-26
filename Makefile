@@ -5,7 +5,7 @@ APP_API := apps/api
 
 .PHONY: help build build-api build-web test test-api test-tools test-web test-e2e lint lint-api lint-tools typecheck \
         gen gen-openapi gen-db gen-db-check gen-graph gen-graph-check gen-model gen-model-check gen-errors gen-errors-check gen-rule-tests gen-rule-tests-check gen-scenarios gen-scenarios-check gen-async gen-async-check gen-check contract-new contract-check contract-graph contract-impact contract-compat contract-compat-staged contract-compat-baseline db-verify \
-        gen-rule-ids check-rule-ids gen-check-core test-rules audit-types dev api-dev web-dev compose-up compose-down doctor derive check-docs check-index
+        gen-rule-ids check-rule-ids gen-check-core test-rules coverage-api audit-types dev api-dev web-dev compose-up compose-down doctor derive check-docs check-index
 
 help: ## 显示可用目标
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -31,6 +31,10 @@ test-rules: ## feature.rules policy 行为断言（骨架）
 
 test-race: ## Go 竞态测试
 	cd $(APP_API) && go test -race ./...
+
+coverage-api: ## API 覆盖率门槛（读取 platform.quality）
+	cd $(APP_API) && go test -coverprofile=coverage.out ./internal/modules/... ./internal/platform/...
+	cd scripts/cmd && go run ./coverage_check -root ../.. -profile ../../$(APP_API)/coverage.out -kind api
 
 test-web: ## 前端测试（P1 未接入）
 	@echo "web tests: 尚未配置（P7 接入 Vitest）"

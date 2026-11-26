@@ -42,6 +42,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	c.tableOwners = map[string]string{}
 	c.tableObjects = map[string]map[string]bool{}
 	c.tableDocs = map[string]map[string]any{}
+	c.tableRel = map[string]string{}
 	c.objectNames = map[string]string{}
 	c.inheritedCols = map[string]map[string]bool{}
 	c.constraintIDs = map[string]bool{}
@@ -91,6 +92,7 @@ func (c *Checker) checkTables(schema *Schema) (map[string]string, map[string]map
 	for _, td := range physical {
 		c.inheritedCols[td.id] = ancestors[td.id]
 		c.tableDocs[td.id] = td.doc
+		c.tableRel[td.id] = td.rel
 		c.checkPhysicalTable(td.doc, td.rel, schema)
 		c.collectTableObjects(td.doc, td.rel, td.id)
 		if owner, _ := td.doc["owner_module"].(string); owner != "" {
@@ -903,6 +905,71 @@ func customTypeNames(vt ValueTypes) []string {
 	return out
 }
 
+// checkColumnRefChains 校验列类型引用链最终落在具体值类型上；
+// 断链或成环会让生成器无法确定落型，必须在 contract-check 阶段报出。
+func (c *Checker) checkColumnRefChains() {
+	tables := make([]string, 0, len(c.tableColumns))
+	for table := range c.tableColumns {
+		tables = append(tables, table)
+	}
+	sort.Strings(tables)
+	for _, table := range tables {
+		cols := c.tableColumns[table]
+		names := make([]string, 0, len(cols))
+		for name := range cols {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			meta := cols[name]
+			typ := meta.typ
+			if _, _, ok := contractspec.SplitColumnRef(typ); !ok {
+				continue
+			}
+			seen := map[string]bool{}
+			cycle, missing := false, false
+			targetSensitivity := ""
+			for {
+				refTable, refCol, isRef := contractspec.SplitColumnRef(typ)
+				if !isRef {
+					break
+				}
+				if seen[typ] {
+					cycle = true
+					break
+				}
+				seen[typ] = true
+				target, found := c.tableColumns[refTable][refCol]
+				if !found {
+					c.rulef("column-type", "%s.col.%s: column type ref target %s not found", table, name, typ)
+					missing = true
+					break
+				}
+				if sensitivityRank(target.sensitivity) > sensitivityRank(targetSensitivity) {
+					targetSensitivity = target.sensitivity
+				}
+				typ = target.typ
+			}
+			if cycle {
+				c.rulef("column-type", "%s.col.%s: column type ref %s forms a cycle", table, name, meta.typ)
+				continue
+			}
+			if missing {
+				continue
+			}
+			if family, _, ok := contractspec.SplitBasicsRef(typ); ok {
+				typ = family
+			}
+			if typ == "any" {
+				c.rulef("column-type-supported", "%s.col.%s: column type ref %s resolves to _types.basics.any", table, name, meta.typ)
+			}
+			if sensitivityRank(meta.sensitivity) < sensitivityRank(targetSensitivity) {
+				c.rulef("column-type", "%s.col.%s: column type ref sensitivity %s must not be lower than target %s", table, name, normalizeSensitivity(meta.sensitivity), normalizeSensitivity(targetSensitivity))
+			}
+		}
+	}
+}
+
 // checkIntegerAutoIncrement 校验 integer.8 没有对应的 serial 落型。
 func (c *Checker) checkIntegerAutoIncrement(m map[string]any, t, rel string, i int, name string) {
 	if auto, _ := m["auto_increment"].(bool); !auto {
@@ -1036,7 +1103,7 @@ func (c *Checker) checkFamilyParams(m map[string]any, t, rel string, i int, name
 }
 
 // checkColumnDefaultType 校验字面量 default 的 YAML 类型与列类型族兼容。
-// 引用列（data.tables.<t>.col.<c>）的具体类型暂不递归展开。
+// 引用列的 default 在 loadTableColumns 之后由 checkColumnRefDefaultTypes 解析目标族再校验。
 // defaultMatchesType 判断 default 是否匹配类型族；不匹配时返回期望的类型描述。
 func defaultMatchesType(def any, t string) (bool, string) {
 	switch t {
@@ -1075,5 +1142,36 @@ func (c *Checker) checkColumnDefaultType(m map[string]any, t, rel string, i int,
 	}
 	if ok, want := defaultMatchesType(def, t); !ok {
 		c.rulef("default-type", "%s: columns[%d] (%s): default must be %s for type %s", rel, i, name, want, t)
+	}
+}
+
+// checkColumnRefDefaultTypes 在列引用可解析后校验引用列的 default 类型。
+func (c *Checker) checkColumnRefDefaultTypes() {
+	tables := make([]string, 0, len(c.tableDocs))
+	for table := range c.tableDocs {
+		tables = append(tables, table)
+	}
+	sort.Strings(tables)
+	for _, table := range tables {
+		doc := c.tableDocs[table]
+		for i, raw := range asList(doc["columns"]) {
+			m, _ := asMap(raw)
+			typ, _ := m["type"].(string)
+			if _, _, ok := contractspec.SplitColumnRef(typ); !ok {
+				continue
+			}
+			def, ok := m["default"]
+			if !ok || def == nil {
+				continue
+			}
+			name, _ := m["name"].(string)
+			if ok, want := defaultMatchesType(def, c.resolvedColumnType(typ)); !ok {
+				rel := c.tableRel[table]
+				if rel == "" {
+					rel = table
+				}
+				c.rulef("default-type", "%s: columns[%d] (%s): default must be %s for type %s", rel, i, name, want, typ)
+			}
+		}
 	}
 }

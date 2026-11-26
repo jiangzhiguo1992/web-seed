@@ -145,3 +145,4 @@ rules:
   - { id: auth-policy-storage, text: "token.persistence、token.refresh.table、verification.table 与 password.hash_field 指向的表/列必须存在；password.hash_field 必须 sensitivity: secret；verification.code.secret_env 必须在 platform/config/env.json 登记且 secret: true", implemented_by: [ auth-policy-storage ] }
   - { id: auth-policy-mfa, text: "mfa.required_for_roles 中的角色码必须存在于 platform.security.roles；角色契约不得再声明 mfa_required", implemented_by: [ auth-policy-mfa ] }
   - { id: auth-policy-password, text: "页面 password 字段的 minLength 不得低于 auth_policy.password.min_length", implemented_by: [ auth-policy-password ] }
+  - { id: auth-policy-hardening, text: "token.access.ttl 必须短于 token.refresh.ttl；password.lockout 与 verification.ttl 必须是正时长；authorization.deny_by_default 必须为 true", implemented_by: [ auth-policy-hardening ] }

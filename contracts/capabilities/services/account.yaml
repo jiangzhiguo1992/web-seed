@@ -51,7 +51,7 @@ services:
         input:
           - { name: id, value: params.id, description: "待读取的账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: load
       - id: load
@@ -90,7 +90,7 @@ services:
           - { name: offset, value: params.offset, description: "分页偏移" }
           - { name: limit, value: params.limit, description: "分页上限" }
         output:
-          - { name: accounts, type: _types.structures.list<data.entities.account>, description: "query 返回的 accounts" }
+          - { name: accounts, type: _types.structures.list<data.entities.account> }
         query: data.queries.account.list_accounts
         goto: paginate
       - id: paginate
@@ -157,7 +157,7 @@ services:
         input:
           - { name: number, value: params.input.number, description: "待创建账号的编号" }
         output:
-          - { name: exists, type: _types.basics.boolean, description: "query 返回的 exists" }
+          - { name: exists, type: _types.basics.boolean }
         query: data.queries.account.exists_account_number
         goto: check_unique
       - id: check_unique
@@ -182,7 +182,7 @@ services:
           - { name: user_id, value: params.input.user_id, description: "关联用户 ID" }
           - { name: status, value: step.status_pending.status, description: "初始状态 pending" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.create_account
         goto: emit_created
       - id: emit_created
@@ -218,7 +218,7 @@ services:
         input:
           - { name: id, value: params.id, description: "账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: validate
       - id: validate
@@ -245,7 +245,7 @@ services:
           - { name: id, value: params.id, description: "待更新账号 ID" }
           - { name: nickname, value: params.input.nickname, description: "新昵称" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.update_account
         goto: $end
     used_by:
@@ -267,7 +267,7 @@ services:
         input:
           - { name: id, value: params.id, description: "待删除账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check
       - id: check
@@ -366,7 +366,7 @@ services:
         input:
           - { name: id, value: params.id, description: "账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check
       - id: check
@@ -401,7 +401,7 @@ services:
           - { name: id, value: params.id, description: "待激活账号 ID" }
           - { name: status, value: step.target_status.status, description: "目标状态：激活" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.set_account_status
         goto: now
       - id: now
@@ -465,7 +465,7 @@ services:
         input:
           - { name: id, value: params.id, description: "账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check
       - id: check
@@ -500,7 +500,7 @@ services:
           - { name: id, value: params.id, description: "待封禁账号 ID" }
           - { name: status, value: step.target_status.status, description: "目标状态：封禁" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.set_account_status
         goto: now
       - id: now

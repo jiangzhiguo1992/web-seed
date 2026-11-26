@@ -48,6 +48,7 @@ type Checker struct {
 	// 实体与查询解析索引。
 	tableColumns             map[string]map[string]columnMeta
 	tableDocs                map[string]map[string]any
+	tableRel                 map[string]string
 	tableTypeFamilies        map[string]bool
 	entityDocs               []entityDoc
 	entityBaseDoc            map[string]any
@@ -166,6 +167,8 @@ func (c *Checker) run() {
 	}
 	tableIDs, cols := c.checkTables(tableSchema)
 	c.loadTableColumns(tableIDs)
+	c.checkColumnRefChains()
+	c.checkColumnRefDefaultTypes()
 	c.checkIndexLiveOnly(tableIDs)
 	c.checkStorage(tableIDs, storageSchema)
 	c.loadEntities(entitySchema)
@@ -337,14 +340,22 @@ func (c *Checker) checkRules(schema *Schema) {
 // checkRuleList 是 meta rules 的共用校验。
 func (c *Checker) checkRuleList(rules []Rule, where string) {
 	seen := map[string]bool{}
+	seenText := map[string]bool{}
 	for i, r := range rules {
-		if r.ID == "" || r.Text == "" {
+		text := strings.TrimSpace(r.Text)
+		if r.ID == "" || text == "" {
 			c.rulef("schema.rules", "%s: rules[%d] must have id and text", where, i)
 		}
 		if seen[r.ID] {
 			c.rulef("schema.rules", "%s: duplicate rule id %q", where, r.ID)
 		}
 		seen[r.ID] = true
+		if text != "" {
+			if seenText[text] {
+				c.rulef("schema.rules", "%s: rules[%d] duplicates rule text", where, i)
+			}
+			seenText[text] = true
+		}
 		c.checkImplementedBy(r.ID, fmt.Sprintf("%s: rules[%d]", where, i), r.ImplementedBy)
 	}
 }

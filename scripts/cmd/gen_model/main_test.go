@@ -46,6 +46,38 @@ func TestScalarMapping(t *testing.T) {
 	}
 }
 
+func TestResolveColumnSpecRefs(t *testing.T) {
+	tables := map[string]map[string]columnSpec{
+		"data.tables.base": {
+			"id": {Family: "integer", Bits: 64},
+		},
+		"data.tables.sample": {
+			"id":      {Family: "integer", Bits: 64},
+			"copy_id": {Family: "data.tables.sample.col.id", Nullable: true},
+			"base_id": {Family: "data.tables.base.col.id", Nullable: true},
+		},
+	}
+	if err := resolveColumnSpecRefs(tables); err != nil {
+		t.Fatal(err)
+	}
+	if got := tables["data.tables.sample"]["copy_id"]; got.Family != "integer" || got.Bits != 64 || !got.Nullable {
+		t.Fatalf("resolved ref = %+v", got)
+	}
+	if got := tables["data.tables.sample"]["base_id"]; got.Family != "integer" || got.Bits != 64 {
+		t.Fatalf("resolved base ref = %+v", got)
+	}
+
+	cycle := map[string]map[string]columnSpec{
+		"data.tables.cycle": {
+			"a": {Family: "data.tables.cycle.col.b"},
+			"b": {Family: "data.tables.cycle.col.a"},
+		},
+	}
+	if err := resolveColumnSpecRefs(cycle); err == nil || !strings.Contains(err.Error(), "cyclic column ref") {
+		t.Fatalf("cycle must be rejected, got %v", err)
+	}
+}
+
 func TestPascal(t *testing.T) {
 	for in, want := range map[string]string{
 		"pending":           "Pending",

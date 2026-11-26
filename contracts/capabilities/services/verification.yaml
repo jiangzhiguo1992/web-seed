@@ -91,7 +91,7 @@ services:
         input:
           - { name: id, value: step.resolve_auth_id.account_id, description: "验证目标账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check_account
       - id: check_account
@@ -210,7 +210,7 @@ services:
           - { name: content, value: step.render_content.content, description: "下发给用户的验证内容" }
           - { name: expire_at, value: step.expire_at.expire_at, description: "验证码过期时间" }
         output:
-          - { name: row, type: data.entities.verification_body, description: "query 返回的 row" }
+          - { name: row, type: data.entities.verification_body }
         query: data.queries.verification.create_verification
         goto: mark_sent
       - id: mark_sent
@@ -224,7 +224,7 @@ services:
           - { name: sent_at, value: step.now.sent_at, description: "发送时间" }
           - { name: status, value: step.status_sent.status, description: "目标状态：已发送" }
         output:
-          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32 }
         query: data.queries.verification.mark_verification_sent
         goto: mark_sent_result
       - id: mark_sent_result
@@ -334,7 +334,7 @@ services:
         input:
           - { name: id, value: step.resolve_auth_id.account_id, description: "验证目标账号 ID" }
         output:
-          - { name: account, type: data.entities.account, description: "query 返回的 account" }
+          - { name: account, type: data.entities.account }
         query: data.queries.account.get_account
         goto: check_account
       - id: check_account
@@ -357,7 +357,7 @@ services:
           - { name: auth_id, value: step.resolve_auth_id.auth_id, description: "验证目标认证绑定 ID" }
           - { name: purpose, value: params.input.purpose, description: "验证用途" }
         output:
-          - { name: row, type: data.entities.verification_body, description: "query 返回的 row" }
+          - { name: row, type: data.entities.verification_body }
         query: data.queries.verification.get_latest_verification
         goto: now
       - id: now
@@ -772,7 +772,7 @@ services:
           - { name: status, value: step.status_expired.status, description: "目标状态：已过期" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32 }
         query: data.queries.verification.expire_stale_verifications
         goto: revoke_exhausted
       - id: revoke_exhausted
@@ -786,7 +786,7 @@ services:
           - { name: status, value: step.status_revoked.status, description: "目标状态：已作废" }
           - { name: limit, value: step.batch_limit.limit, description: "单批更新上限" }
         output:
-          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32 }
         query: data.queries.verification.revoke_exhausted_verifications
         goto: $end
     used_by:

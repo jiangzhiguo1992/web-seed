@@ -166,8 +166,11 @@ func (c *Checker) checkRedundancyTypes(decl *redundancyDecl, metas map[string]co
 		if !ok {
 			continue
 		}
-		if c.resolvedColumnType(meta.typ) != c.resolvedColumnType(srcMeta.typ) || meta.nullable != srcMeta.nullable {
-			c.rulef("redundant-ref", "%s: copy %s type/nullable (%s, nullable=%v) must match source %s (%s, nullable=%v)", decl.owner, ref.column, c.resolvedColumnType(meta.typ), meta.nullable, sourceRef, c.resolvedColumnType(srcMeta.typ), srcMeta.nullable)
+		if c.resolvedColumnTypeName(meta.typ) != c.resolvedColumnTypeName(srcMeta.typ) || meta.nullable != srcMeta.nullable {
+			c.rulef("redundant-ref", "%s: copy %s type/nullable (%s, nullable=%v) must match source %s (%s, nullable=%v)", decl.owner, ref.column, c.resolvedColumnTypeName(meta.typ), meta.nullable, sourceRef, c.resolvedColumnTypeName(srcMeta.typ), srcMeta.nullable)
+		}
+		if sensitivityRank(meta.sensitivity) < sensitivityRank(srcMeta.sensitivity) {
+			c.rulef("redundant-ref", "%s: copy %s sensitivity %s must not be lower than source %s", decl.owner, ref.column, normalizeSensitivity(meta.sensitivity), normalizeSensitivity(srcMeta.sensitivity))
 		}
 	}
 }

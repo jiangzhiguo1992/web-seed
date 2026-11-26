@@ -454,10 +454,16 @@ func validateFieldConstraints(f Field, expr typeExpr, vt ValueTypes) error {
 	if len(f.Fields) > 0 && expr.Base != "object" {
 		return fmt.Errorf("field %s: fields is only allowed for object", f.Name)
 	}
+	enumSeen := map[string]bool{}
 	for i, value := range f.Enum {
 		if !valueCompatible(leaf, value, vt) {
 			return fmt.Errorf("field %s: enum[%d] %v is not compatible with %s", f.Name, i, value, f.Type)
 		}
+		key := fmt.Sprint(value)
+		if enumSeen[key] {
+			return fmt.Errorf("field %s: enum[%d] %v is duplicated", f.Name, i, value)
+		}
+		enumSeen[key] = true
 	}
 	for i, value := range f.Examples {
 		if !valueCompatible(leaf, value, vt) {

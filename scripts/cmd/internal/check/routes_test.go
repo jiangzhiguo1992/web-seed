@@ -30,6 +30,7 @@ routes:
     layout: default
     permission: platform.security.permissions.missing
     menu: null
+    meta: { public: true }
 redirects:
   - { from: /, to: /account }
 not_found: { page: feature.pages.missing, layout: default }
@@ -46,7 +47,7 @@ permissions: []
 	c := &Checker{root: root}
 	c.checkFeatureRoutes()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"unknown permission", "unknown not_found page", "[route-structure]", "[route-redirect]"} {
+	for _, want := range []string{"unknown permission", "public route must not declare permission", "unknown not_found page", "[route-structure]", "[route-redirect]"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
@@ -160,6 +161,24 @@ gates:
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
+	}
+
+	writeCapFile(t, root, "contracts/platform/quality.yaml", `schema_version: 1
+id: platform.quality
+summary: "x"
+stability: draft
+do_not: []
+coverage: {}
+must_test: [ { id: x } ]
+e2e: { required_scenarios: [scenario.http.x.missing] }
+forbidden: [x]
+gates:
+  - { name: x, command: "make present", blocking: false }
+`)
+	c.errs = nil
+	c.checkQuality()
+	if !strings.Contains(strings.Join(c.errs, "\n"), "at least one blocking gate") {
+		t.Fatalf("missing blocking gate not reported: %v", c.errs)
 	}
 }
 
@@ -530,7 +549,8 @@ provider: { default: noop, options: [noop] }
 
 func TestLogFieldsNeverLog(t *testing.T) {
 	root := t.TempDir()
-	writeCapFile(t, root, "contracts/platform/observability/log_fields.yaml", `fields: []
+	writeCapFile(t, root, "contracts/platform/observability/log_fields.yaml", `fields:
+  - { name: password, type: _types.basics.string, pii: false }
 never_log: [password, "*_hash", "Email Address"]
 `)
 	writeCapFile(t, root, "contracts/data/tables/x.yaml", `id: data.tables.x
@@ -541,7 +561,7 @@ columns:
 	c := &Checker{root: root}
 	c.checkLogFields()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"request_ip", "not covered", "must be snake_case"} {
+	for _, want := range []string{"request_ip", "not covered", "must be snake_case", "pii=false but is covered by never_log"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}

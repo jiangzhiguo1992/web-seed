@@ -215,7 +215,7 @@ services:
           - { name: status, value: step.status_uploading.status, description: "初始状态 uploading" }
           - { name: replaces_id, value: params.input.replaces_id, description: "被替换的旧附件 ID" }
         output:
-          - { name: attachment, type: data.entities.attachment, description: "query 返回的 attachment" }
+          - { name: attachment, type: data.entities.attachment }
         errors:
           - platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN
           - platform.errors.ATTACHMENT_OWNER_INVALID
@@ -324,7 +324,7 @@ services:
           - { name: id, value: params.id, description: "附件 ID" }
           - { name: status, value: step.status_available.status, description: "目标状态 available" }
         output:
-          - { name: attachment, type: data.entities.attachment, description: "query 返回的 attachment" }
+          - { name: attachment, type: data.entities.attachment }
         errors:
           - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
         query: data.queries.attachment.set_attachment_status
@@ -426,7 +426,7 @@ services:
           - { name: id, value: params.id, description: "附件 ID" }
           - { name: status, value: step.status_failed.status, description: "目标状态 failure" }
         output:
-          - { name: attachment, type: data.entities.attachment, description: "query 返回的 attachment" }
+          - { name: attachment, type: data.entities.attachment }
         errors:
           - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
         query: data.queries.attachment.set_attachment_status
@@ -592,7 +592,7 @@ services:
           - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
         output:
-          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32 }
         errors: [ ]
         query: data.queries.attachment.soft_delete_stale_uploads
         goto: soft_delete_failed
@@ -603,7 +603,7 @@ services:
           - { name: cutoff, value: step.cutoff.cutoff, description: "截止时间" }
           - { name: status, value: step.status_deleted.status, description: "目标状态 deleted" }
         output:
-          - { name: affected_rows, type: _types.basics.integer.32, description: "query 返回的 affected_rows" }
+          - { name: affected_rows, type: _types.basics.integer.32 }
         errors: [ ]
         query: data.queries.attachment.soft_delete_stale_failed_uploads
         goto: sum

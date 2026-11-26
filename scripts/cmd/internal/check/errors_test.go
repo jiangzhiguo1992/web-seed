@@ -59,6 +59,7 @@ do_not: []
 errors:
   - { code: COMMON_INTERNAL, biz_code: 1001, status: 500, retryable: true, i18n: x, message: "x" }
   - { code: COMMON_INTERNAL, biz_code: 1001, status: 500, retryable: true, i18n: x, message: "x" }
+  - { code: WRONG_INTERNAL, biz_code: 1002, status: 400, retryable: true, i18n: x, message: "x" }
 `)
 	writeCapFile(t, root, "contracts/platform/errors/data_access.yaml", `id: platform.errors.data_access
 summary: "x"
@@ -72,6 +73,9 @@ common_errors: [platform.errors.MISSING]
 	got := strings.Join(c.errs, "\n")
 	for _, want := range []string{
 		"duplicate \"COMMON_INTERNAL\"",
+		"[error-naming]",
+		"common error code must start with COMMON_",
+		"status 400 is not in mapping_rules",
 		"unknown common error platform.errors.MISSING",
 	} {
 		if !strings.Contains(got, want) {

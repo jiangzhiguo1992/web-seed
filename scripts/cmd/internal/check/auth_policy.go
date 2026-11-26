@@ -5,11 +5,37 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 var jwtRequiredClaims = map[string]bool{
 	"iss": true, "sub": true, "aud": true,
 	"exp": true, "iat": true, "jti": true,
+}
+
+// authTTLSeconds 解析认证策略中的正时长（s/m/h/d）。
+func authTTLSeconds(raw any) (int64, bool) {
+	value, _ := raw.(string)
+	if value == "" {
+		return 0, false
+	}
+	unit := value[len(value)-1]
+	number, err := strconv.ParseInt(value[:len(value)-1], 10, 64)
+	if err != nil || number <= 0 {
+		return 0, false
+	}
+	switch unit {
+	case 's':
+		return number, true
+	case 'm':
+		return number * 60, true
+	case 'h':
+		return number * 3600, true
+	case 'd':
+		return number * 86400, true
+	default:
+		return 0, false
+	}
 }
 
 func (c *Checker) checkAuthPolicy() {
@@ -53,6 +79,13 @@ func (c *Checker) checkAuthPolicy() {
 	if strategy != "none" && strategy != "refresh_token" && strategy != "server" {
 		c.rulef("auth-policy-jwt", "%s: token.revocation.strategy must be none/refresh_token/server, got %q", rel, strategy)
 	}
+	access, _ := asMap(token["access"])
+	refresh, _ := asMap(token["refresh"])
+	accessTTL, accessOK := authTTLSeconds(access["ttl"])
+	refreshTTL, refreshOK := authTTLSeconds(refresh["ttl"])
+	if accessOK && refreshOK && accessTTL >= refreshTTL {
+		c.rulef("auth-policy-hardening", "%s: token.access.ttl must be shorter than token.refresh.ttl", rel)
+	}
 	if strategy == "refresh_token" || strategy == "server" {
 		persistence, _ := token["persistence"].(string)
 		refresh, _ := asMap(token["refresh"])
@@ -95,6 +128,19 @@ func (c *Checker) checkAuthPolicy() {
 	}
 
 	password, _ := asMap(doc["password"])
+	if _, ok := authTTLSeconds(password["lockout"]); !ok {
+		c.rulef("auth-policy-hardening", "%s: password.lockout must be a positive duration", rel)
+	}
+	if verification, _ := asMap(doc["verification"]); verification != nil {
+		if _, ok := authTTLSeconds(verification["ttl"]); !ok {
+			c.rulef("auth-policy-hardening", "%s: verification.ttl must be a positive duration", rel)
+		}
+	}
+	if authorization, _ := asMap(doc["authorization"]); authorization != nil {
+		if deny, _ := authorization["deny_by_default"].(bool); !deny {
+			c.rulef("auth-policy-hardening", "%s: authorization.deny_by_default must be true", rel)
+		}
+	}
 	minLen, _ := toInt(password["min_length"])
 	if minLen > 0 {
 		for _, file := range c.featurePageFiles() {

@@ -158,7 +158,7 @@ rules:
   - { id: extends-ref, text: "table.extends 的每个父表必须存在；不得自成环，继承链必须最终到达 data.tables.base", implemented_by: [ extends-ref ] }
   - { id: extends-conflict, text: "多个父表提供同名列时，只有来源相同（钻石继承）才允许；来源不同必须解决冲突", implemented_by: [ extends-conflict ] }
   - { id: no-base-columns, text: "物理表不得重声明基类 5 列（id/status/created_at/updated_at/deleted_at）及祖先业务列", implemented_by: [ no-base-columns ] }
-  - { id: column-type, text: "列类型必须是 _types.basics.<name> 值类型引用，或 data.tables.<t>.col.<c> 列引用；表列不引用 data.enums.*", implemented_by: [ column-type ] }
+  - { id: column-type, text: "列类型必须是 _types.basics.<name> 值类型引用，或 data.tables.<t>.col.<c> 列引用；列引用链必须终止于具体值类型且不得成环，引用列的 sensitivity 不得低于目标列；表列不引用 data.enums.*", implemented_by: [ column-type ] }
   - { id: family-params, text: "列参数必须属于该类型族；table-only 参数不得出现在自定义类型；required 参数必须出现", implemented_by: [ family-params ] }
   - { id: family-length, text: "min_len <= max_len；fixed 为 true 时必须写 max_len，若写 min_len 必须等于 max_len", implemented_by: [ family-length ] }
   - { id: family-range, text: "min <= max；default 必须在范围内", implemented_by: [ family-range ] }
@@ -178,11 +178,11 @@ rules:
   - { id: index-used-by-ref, text: "index.used_by 由 gen-graph 写入，禁止手改；每项必须指向存在的 data.queries.* 项且该查询的 tables 包含当前表", implemented_by: [ index-used-by-ref ] }
   - { id: index-name-unique, text: "索引名同一 schema 内必须全局唯一", implemented_by: [ index-name-unique ] }
   - { id: redundant-group, text: "columns[].redundancy 每组必须恰好一个 source 且包含声明列自身；组内每列必须声明完全相同的列表；同一列不得跨组；列表不得重复列；基类列不得声明 redundancy", implemented_by: [ redundant-group ] }
-  - { id: redundant-ref, text: "redundancy 的 column 必须是存在的物理表自声明列（继承列/基类列不允许）；copy 与 source 的 type/nullable 必须一致", implemented_by: [ redundant-ref ] }
+  - { id: redundant-ref, text: "redundancy 的 column 必须是存在的物理表自声明列（继承列/基类列不允许）；copy 与 source 的 type/nullable 必须一致，copy 的 sensitivity 不得低于 source", implemented_by: [ redundant-ref ] }
   - { id: reference-target, text: "references.column 必须是已存在的物理表列；源列必须是本表自声明列；目标列必须是目标表主键或全局唯一（live_only: false）的单列索引列；两端类型族一致，integer 列的位宽（类型 variant）必须相等", implemented_by: [ reference-target ] }
   - { id: reference-on-delete, text: "on_delete 只约束硬删：cascade 级联删除、restrict 拒绝删除、set_null 置空、no_action 保留悬空；set_null 要求源列 nullable；软删不由此字段表达", implemented_by: [ reference-on-delete ] }
   - { id: reference-join, text: "references 与 entity 关系字段的 join 列对必须双向一致：每条 references 必须有同列对的 join，每个 join 必须有同列对的 references（列对比较不看 from/to 方向）", implemented_by: [ reference-join ] }
-  - { id: default-type, text: "列 default 的 YAML 类型必须与列类型族兼容；字符串长度按本列声明的 min_len/max_len 校验（不展开 data.tables.*.col.* 引用）", implemented_by: [ default-type ] }
+  - { id: default-type, text: "列 default 的 YAML 类型必须与列类型族兼容（列类型引用会解析到目标族）；字符串长度/范围按本列声明的 min_len/max_len/min/max 校验，不展开引用目标的长度/范围", implemented_by: [ default-type ] }
   - { id: default-vs-default-sql, text: "default 与 default_sql 互斥", implemented_by: [ default-vs-default-sql ] }
   - { id: physical-primary-key, text: "物理表不得声明 primary_key；主键统一由基类 id 提供", implemented_by: [ physical-primary-key ] }
   - { id: do-not-specific, text: "物理表 do_not 每条必须含本表标识（文件名、物理表名、列、约束或索引名）；通用规则上移组 README 或 _base", implemented_by: [ do-not-specific ] }

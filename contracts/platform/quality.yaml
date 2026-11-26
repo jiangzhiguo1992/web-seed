@@ -55,5 +55,6 @@ forbidden:
 gates:
   - { name: go-test, command: make test-api, blocking: true }
   - { name: go-race, command: make test-race, blocking: true }
+  - { name: api-coverage, command: make coverage-api, blocking: true }
   - { name: web-test, command: make test-web, blocking: false, note: "P7 接入 Vitest 后改为 true" }
   - { name: e2e, command: make test-e2e, blocking: false, note: "P4 接入 Playwright 后改为 true" }

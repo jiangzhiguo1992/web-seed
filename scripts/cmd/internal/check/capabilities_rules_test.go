@@ -1534,6 +1534,112 @@ topics:
 	}
 }
 
+func TestCheckEventSubscribePayload(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.events")
+	rel := "contracts/capabilities/events/x.yaml"
+	valid := `id: cap.events.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+topics:
+  - id: cap.events.x.created
+    name: x.created
+    summary: "x"
+    version: 1
+    idempotent: false
+    publish:
+      payload:
+        kind: _types.schemas.object
+        properties:
+          - { name: id, schema: { type: _types.basics.integer }, required: true, description: "id" }
+          - { name: extra, schema: { type: _types.basics.string }, description: "payload 可多出未被消费的字段" }
+      emitted_by: [ cap.services.x.emit ]
+    subscribe:
+      - id: cap.events.x.consume
+        name: consume
+        summary: "x"
+        service: cap.services.x.get
+      - id: cap.events.x.consume_second
+        name: consume_second
+        summary: "x"
+        service: cap.services.x.get2
+`
+	writeCapFile(t, root, rel, valid)
+	services := map[string]serviceMeta{
+		"cap.services.x.emit": {module: "x"},
+		"cap.services.x.get": {
+			module: "x", params: map[string]bool{"ctx": true, "id": true},
+			requiredParams: map[string]bool{"id": true},
+			paramDecls:     map[string]string{"id": "_types.basics.integer"},
+		},
+		"cap.services.x.get2": {
+			module: "x", params: map[string]bool{"ctx": true, "id": true},
+			requiredParams: map[string]bool{"id": true},
+			paramDecls:     map[string]string{"id": "_types.basics.integer"},
+		},
+	}
+	serviceIDs := map[string]bool{"cap.services.x.emit": true}
+	c := &Checker{root: root}
+	c.checkEventsDoc(schema, services, serviceIDs)
+	if len(c.errs) != 0 {
+		t.Fatalf("valid subscribe payload reported: %v", c.errs)
+	}
+
+	services["cap.services.x.get"] = serviceMeta{
+		module: "x", params: map[string]bool{"ctx": true, "missing": true},
+		requiredParams: map[string]bool{"missing": true},
+		paramDecls:     map[string]string{"missing": "_types.basics.string"},
+	}
+	c.errs = nil
+	c.checkEventsDoc(schema, services, serviceIDs)
+	if !strings.Contains(strings.Join(c.errs, "\n"), "consumer param missing has no payload field") {
+		t.Fatalf("subscribe param without payload field not reported: %v", c.errs)
+	}
+}
+
+func TestCheckEventSubscribeEntityPayload(t *testing.T) {
+	root := t.TempDir()
+	schema := copyMeta(t, root, "cap.events")
+	rel := "contracts/capabilities/events/x.yaml"
+	writeCapFile(t, root, rel, `id: cap.events.x
+summary: "x"
+owner_module: x
+schema_version: 1
+stability: draft
+do_not: []
+topics:
+  - id: cap.events.x.changed
+    name: x.changed
+    summary: "x"
+    version: 1
+    idempotent: false
+    publish:
+      payload: { type: data.entities.account }
+      emitted_by: [ cap.services.x.emit ]
+    subscribe:
+      - id: cap.events.x.consume
+        name: consume
+        summary: "x"
+        service: cap.services.x.get
+`)
+	services := map[string]serviceMeta{
+		"cap.services.x.emit": {module: "x"},
+		"cap.services.x.get": {
+			module: "x", params: map[string]bool{"ctx": true, "id": true},
+			requiredParams: map[string]bool{"id": true},
+			paramDecls:     map[string]string{"id": "_types.basics.integer"},
+		},
+	}
+	c := &Checker{root: root, entities: map[string]*entityInfo{"data.entities.account": {}}}
+	c.checkEventsDoc(schema, services, map[string]bool{"cap.services.x.emit": true})
+	if len(c.errs) != 0 {
+		t.Fatalf("entity payload subscribe must not be statically field-matched: %v", c.errs)
+	}
+}
+
 func TestCheckEventsDispatch(t *testing.T) {
 	root := t.TempDir()
 	schema := copyMeta(t, root, "cap.events")

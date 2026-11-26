@@ -147,6 +147,9 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 					c.rulef("async-structure", "%s.%s: subscribe id %q must be %s", rel, subName, subID, fileID+"."+subName)
 				}
 				svc, _ := sub["service"].(string)
+				if publish != nil {
+					c.checkPayloadConsumer(rel, subName, publish["payload"], svc, serviceMeta, false)
+				}
 				itemID := subID
 				if itemID == "" {
 					itemID = fileID + "." + subName
@@ -203,7 +206,7 @@ func (c *Checker) checkEventsDoc(schema *Schema, serviceMeta map[string]serviceM
 				}
 			}
 			svc, _ := item["service"].(string)
-			c.checkDispatchConsumer(rel, name, item, serviceMeta)
+			c.checkPayloadConsumer(rel, name, item["payload"], svc, serviceMeta, true)
 			itemID := id
 			if itemID == "" {
 				itemID = fileID + "." + name
@@ -274,17 +277,22 @@ func validCronField(field string, min, max int) bool {
 	return true
 }
 
-// checkDispatchConsumer 校验 dispatch payload 与唯一消费者 service 的参数一致。
-func (c *Checker) checkDispatchConsumer(rel, name string, item map[string]any, services map[string]serviceMeta) {
-	svc, _ := item["service"].(string)
+// checkPayloadConsumer 校验 payload 与消费者 service 参数；
+// exact=true（dispatch）要求字段完全一致，false（topic subscribe）允许 payload 多出字段。
+func (c *Checker) checkPayloadConsumer(rel, name string, payload any, svc string, services map[string]serviceMeta, exact bool) {
 	meta, ok := services[svc]
 	if !ok || meta.params == nil {
 		return
 	}
-	fields := eventPayloadFields(item["payload"])
+	fields := eventPayloadFields(payload)
+	if !exact && len(fields) == 0 {
+		return // payload 是实体引用等非内联 object 时无法静态展开字段
+	}
 	for field, f := range fields {
 		if !meta.params[field] {
-			c.rulef("event-structure", "%s.%s: payload field %s has no consumer param", rel, name, field)
+			if exact {
+				c.rulef("event-structure", "%s.%s: payload field %s has no consumer param", rel, name, field)
+			}
 			continue
 		}
 		if f.required != meta.requiredParams[field] {

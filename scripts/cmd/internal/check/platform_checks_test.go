@@ -140,6 +140,26 @@ func TestProjectContractRejectsUnknownField(t *testing.T) {
 	}
 }
 
+func TestAuthPolicyHardening(t *testing.T) {
+	root := t.TempDir()
+	writeCapFile(t, root, "contracts/platform/security/auth_policy.yaml", `token:
+  persistence: data.tables.token
+  issuer: web-seed
+  access: { format: jwt, ttl: 30d, audience: [admin], pii_in_token: false, claims_required: [iss, sub, aud, exp, iat, jti] }
+  refresh: { format: jwt, ttl: 15m, audience: [admin], pii_in_token: false, claims_required: [iss, sub, aud, exp, iat, jti], table: data.tables.token }
+  revocation: { strategy: server }
+password: { min_length: 12, lockout: 0m }
+verification: { ttl: nope }
+authorization: { deny_by_default: false }
+`)
+	c := &Checker{root: root}
+	c.checkAuthPolicy()
+	got := strings.Join(c.errs, "\n")
+	if !strings.Contains(got, "[auth-policy-hardening]") || !strings.Contains(got, "access.ttl must be shorter") || !strings.Contains(got, "password.lockout must be a positive duration") || !strings.Contains(got, "verification.ttl must be a positive duration") || !strings.Contains(got, "deny_by_default must be true") {
+		t.Fatalf("auth hardening not reported: %v", c.errs)
+	}
+}
+
 func TestAuthPolicyProjectAudience(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/project.yaml", `apps:
@@ -222,16 +242,16 @@ func TestMetricNaming(t *testing.T) {
 label_rules: { forbidden_labels: [] }
 metrics:
   - { name: bad_counter, kind: counter, labels: [], description: "x" }
-  - { name: bad_histogram, kind: histogram, labels: [], description: "x" }
+  - { name: bad_histogram, kind: histogram, labels: [], buckets: [1, 0], description: "x" }
   - { name: good_counter_total, kind: counter, labels: [], description: "x" }
-  - { name: good_duration_seconds, kind: histogram, labels: [], description: "x" }
+  - { name: good_duration_seconds, kind: histogram, labels: [], buckets: [0.1, 1], description: "x" }
   - { name: bad_histogram_total, kind: histogram, labels: [], description: "x" }
 exporter: { default: none, options: [none] }
 `)
 	c := &Checker{root: root}
 	c.checkMetrics()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"metrics[0]: counter name must end with _total", "metrics[1]: histogram name must end with a unit suffix", "metrics[4]: histogram name must end with a unit suffix"} {
+	for _, want := range []string{"metrics[0]: counter name must end with _total", "metrics[1]: histogram name must end with a unit suffix", "metrics[1]: buckets[1] must be positive and strictly increasing", "metrics[4]: histogram name must end with a unit suffix"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in %v", want, c.errs)
 		}

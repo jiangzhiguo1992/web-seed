@@ -24,7 +24,9 @@ COMMENT ON COLUMN "account"."number" IS '账号编号';
 COMMENT ON COLUMN "account"."nickname" IS '昵称';
 COMMENT ON COLUMN "account"."user_id" IS '关联用户 ID；不做数据库外键';
 CREATE UNIQUE INDEX "uq_account_number" ON "account" ("number");
+COMMENT ON INDEX "uq_account_number" IS '账号编号全局唯一；软删后不释放';
 CREATE INDEX "idx_account_created_at_id" ON "account" ("deleted_at", "created_at", "id");
+COMMENT ON INDEX "idx_account_created_at_id" IS '列表游标分页';
 
 CREATE TABLE "attachment" (
   "id" BIGINT NOT NULL,
@@ -63,8 +65,11 @@ COMMENT ON COLUMN "attachment"."sha256" IS 'SHA-256 十六进制；完整性/去
 COMMENT ON COLUMN "attachment"."visibility" IS '访问级别整数码；映射 data.enums.attachment_visibility（0=private,1=public）';
 COMMENT ON COLUMN "attachment"."replaces_id" IS '被替换的旧附件 ID；用于更替链；旧行仍软删保留';
 CREATE UNIQUE INDEX "uq_attachment_object_key" ON "attachment" ("object_key");
+COMMENT ON INDEX "uq_attachment_object_key" IS '对象 key 全局唯一；软删后不释放';
 CREATE INDEX "idx_attachment_owner" ON "attachment" ("deleted_at", "owner_table_name", "owner_id", "purpose", "sort", "id");
+COMMENT ON INDEX "idx_attachment_owner" IS '按所有者与用途列出附件并保持顺序';
 CREATE INDEX "idx_attachment_stale_upload" ON "attachment" ("status", "created_at");
+COMMENT ON INDEX "idx_attachment_stale_upload" IS '定位长时间停留在 uploading 或 failure 的附件';
 
 CREATE TABLE "auth_email" (
   "id" BIGINT NOT NULL,
@@ -95,7 +100,9 @@ COMMENT ON COLUMN "auth_email"."domain" IS '完整域名，例如 example.com；
 COMMENT ON COLUMN "auth_email"."entity" IS '邮箱服务商，例如 163、gmail等';
 COMMENT ON COLUMN "auth_email"."tld" IS '顶级域，例如 com';
 CREATE UNIQUE INDEX "uq_auth_email_username_domain" ON "auth_email" ("username", "domain");
+COMMENT ON INDEX "uq_auth_email_username_domain" IS '邮箱全局唯一；软删后不释放';
 CREATE UNIQUE INDEX "uq_auth_email_account" ON "auth_email" ("account_id");
+COMMENT ON INDEX "uq_auth_email_account" IS '账号绑定全局唯一；软删行 account_id 置 NULL 后释放';
 
 CREATE TABLE "auth_phone" (
   "id" BIGINT NOT NULL,
@@ -122,7 +129,9 @@ COMMENT ON COLUMN "auth_phone"."code" IS '国际区号，例如 +86';
 COMMENT ON COLUMN "auth_phone"."number" IS '手机号；只允许数字，与 code 拼成 E.164 快照';
 COMMENT ON COLUMN "auth_phone"."operator" IS '运营商';
 CREATE UNIQUE INDEX "uq_auth_phone_number" ON "auth_phone" ("code", "number");
+COMMENT ON INDEX "uq_auth_phone_number" IS '手机号全局唯一；软删后不释放';
 CREATE UNIQUE INDEX "uq_auth_phone_account" ON "auth_phone" ("account_id");
+COMMENT ON INDEX "uq_auth_phone_account" IS '账号绑定全局唯一；软删行 account_id 置 NULL 后释放';
 
 CREATE TABLE "auth_pwd" (
   "id" BIGINT NOT NULL,
@@ -152,7 +161,9 @@ COMMENT ON COLUMN "auth_pwd"."password_hash" IS 'argon2id 口令哈希；新密�
 COMMENT ON COLUMN "auth_pwd"."failed_login_count" IS '连续失败次数；成功登录后归零';
 COMMENT ON COLUMN "auth_pwd"."locked_until" IS '锁定截止时间；为空表示未锁定';
 CREATE UNIQUE INDEX "uq_auth_pwd_username" ON "auth_pwd" ("username");
+COMMENT ON INDEX "uq_auth_pwd_username" IS '登录名全局唯一；软删后不释放';
 CREATE UNIQUE INDEX "uq_auth_pwd_account" ON "auth_pwd" ("account_id");
+COMMENT ON INDEX "uq_auth_pwd_account" IS '账号绑定全局唯一；软删行 account_id 置 NULL 后释放';
 
 CREATE TABLE "dictionary" (
   "id" BIGINT NOT NULL,
@@ -183,7 +194,9 @@ COMMENT ON COLUMN "dictionary"."sort" IS '同一父节点下的展示顺序；�
 COMMENT ON COLUMN "dictionary"."remark" IS '备注；仅用于说明，不参与业务判断';
 COMMENT ON COLUMN "dictionary"."extra" IS '扩展元数据；只放 UI/非关键信息，禁止承载业务状态';
 CREATE UNIQUE INDEX "uq_dictionary_code" ON "dictionary" ("code");
+COMMENT ON INDEX "uq_dictionary_code" IS '字典编码全局唯一；停用或软删后不释放';
 CREATE INDEX "idx_dictionary_parent_sort" ON "dictionary" ("deleted_at", "parent_id", "sort", "id");
+COMMENT ON INDEX "idx_dictionary_parent_sort" IS '按父节点列出子节点并保持展示顺序';
 
 CREATE TABLE "token" (
   "id" BIGINT NOT NULL,
@@ -224,9 +237,13 @@ COMMENT ON COLUMN "token"."revoked_at" IS '吊销时间；为空表示未吊销'
 COMMENT ON COLUMN "token"."revoke_reason" IS '吊销原因整数码；映射 data.enums.token_revoke_reason';
 COMMENT ON COLUMN "token"."replaced_by_id" IS '轮换后新令牌 ID（旧→新的前向指针）；不是吊销者 ID';
 CREATE UNIQUE INDEX "uq_token_access_hash" ON "token" ("access_token_hash");
+COMMENT ON INDEX "uq_token_access_hash" IS '访问令牌哈希全局唯一查找';
 CREATE UNIQUE INDEX "uq_token_refresh_hash" ON "token" ("refresh_token_hash");
+COMMENT ON INDEX "uq_token_refresh_hash" IS '刷新令牌哈希全局唯一查找';
 CREATE INDEX "idx_token_account_status" ON "token" ("deleted_at", "account_id", "status");
+COMMENT ON INDEX "idx_token_account_status" IS '按账号与状态列出/吊销令牌';
 CREATE INDEX "idx_token_refresh_expire_at" ON "token" ("deleted_at", "refresh_expire_at");
+COMMENT ON INDEX "idx_token_refresh_expire_at" IS '过期令牌清理';
 
 CREATE TABLE "unit" (
   "id" BIGINT NOT NULL,
@@ -261,8 +278,11 @@ COMMENT ON COLUMN "unit"."step" IS '默认下单步长；单位只读，商品�
 COMMENT ON COLUMN "unit"."sort" IS '同量纲展示顺序；从 0 开始';
 COMMENT ON COLUMN "unit"."remark" IS '备注；仅用于说明';
 CREATE UNIQUE INDEX "uq_unit_code" ON "unit" ("code");
+COMMENT ON INDEX "uq_unit_code" IS '单位编码全局唯一；停用或软删后不释放';
 CREATE INDEX "idx_unit_dimension_sort" ON "unit" ("deleted_at", "dimension", "sort", "id");
+COMMENT ON INDEX "idx_unit_dimension_sort" IS '按量纲列出单位并保持展示顺序';
 CREATE INDEX "idx_unit_parent" ON "unit" ("parent_id");
+COMMENT ON INDEX "idx_unit_parent" IS '按父单位列出直接子单位';
 
 CREATE TABLE "verification_action" (
   "id" BIGINT NOT NULL,
@@ -339,9 +359,13 @@ COMMENT ON COLUMN "verification_body"."expire_at" IS '验证码过期时间；�
 COMMENT ON COLUMN "verification_body"."consumed_at" IS '验证通过/消费时间；为空表示未使用';
 COMMENT ON COLUMN "verification_body"."attempt_count" IS '校验失败次数；达到上限后作废';
 CREATE INDEX "idx_verification_auth_purpose" ON "verification_body" ("deleted_at", "auth_type", "auth_id", "purpose", "created_at");
+COMMENT ON INDEX "idx_verification_auth_purpose" IS '按认证绑定与用途查最新验证码、重发作废';
 CREATE INDEX "idx_verification_account_id" ON "verification_body" ("account_id");
+COMMENT ON INDEX "idx_verification_account_id" IS '账号软删时作废该账号未消费的验证体';
 CREATE INDEX "idx_verification_expire_at" ON "verification_body" ("deleted_at", "expire_at");
+COMMENT ON INDEX "idx_verification_expire_at" IS '清理过期验证体';
 CREATE INDEX "idx_verification_status_attempt" ON "verification_body" ("deleted_at", "status", "attempt_count");
+COMMENT ON INDEX "idx_verification_status_attempt" IS '作废尝试次数超限的验证体';
 
 -- +goose Down
 

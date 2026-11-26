@@ -33,6 +33,132 @@ func TestGeneratedOpenAPISeparatesSourceVocabulary(t *testing.T) {
 	}
 }
 
+func TestLoadTableColumnsResolvesContractRefs(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "contracts/data/tables")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"_base.yaml": `id: data.tables.base
+columns:
+  - { name: id, type: _types.basics.integer.64, nullable: false, primary_key: true }
+`,
+		"source.yaml": `id: data.tables.source
+columns:
+  - { name: code, type: _types.basics.string, nullable: false, max_len: 16, pattern: "^[a-z]+$" }
+`,
+		"ref.yaml": `id: data.tables.ref
+columns:
+  - { name: copy_code, type: data.tables.source.col.code, nullable: true }
+  - { name: base_id, type: data.tables.base.col.id, nullable: false }
+`,
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	columns, err := loadTableColumns(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyCode := columns["data.tables.ref.col.copy_code"]
+	if copyCode.typ != "_types.basics.string" || copyCode.params["max_len"] != 16 || copyCode.params["pattern"] != "^[a-z]+$" {
+		t.Fatalf("source ref = %+v", copyCode)
+	}
+	baseID := columns["data.tables.ref.col.base_id"]
+	if baseID.typ != "_types.basics.integer.64" {
+		t.Fatalf("base ref = %+v", baseID)
+	}
+}
+
+func TestTypeSchemaContainers(t *testing.T) {
+	set := typeSchema("_types.structures.set<_types.basics.string>", nil, nil)
+	if set["type"] != "array" || set["uniqueItems"] != true {
+		t.Fatalf("set schema = %#v", set)
+	}
+	mapping := typeSchema("_types.structures.map<_types.basics.string, _types.basics.integer.32>", nil, nil)
+	if mapping["type"] != "object" {
+		t.Fatalf("map schema = %#v", mapping)
+	}
+	values := asMap(mapping["additionalProperties"])
+	if values["type"] != "integer" {
+		t.Fatalf("map value schema = %#v", values)
+	}
+}
+
+func TestScalarSchemaPolymorphicTypes(t *testing.T) {
+	bit := scalarSchema("_types.basics.bit", nil)
+	if bit["type"] != "integer" {
+		t.Fatalf("bit schema = %#v, want integer", bit)
+	}
+	anyValue := scalarSchema("_types.basics.any", nil)
+	if len(anyValue) != 0 {
+		t.Fatalf("any schema = %#v, want unconstrained", anyValue)
+	}
+}
+
+func TestEntitySchemaInheritsColumnParams(t *testing.T) {
+	columns := map[string]columnMeta{
+		"data.tables.x.col.name": {
+			typ:    "_types.basics.string",
+			params: map[string]any{"min_len": 1, "max_len": 255, "pattern": "^[a-z]+$"},
+		},
+	}
+	fields := []any{map[string]any{"name": "Name", "source": map[string]any{"column": "data.tables.x.col.name"}}}
+	schema := entitySchema(fields, nil, columns, nil)
+	props, _ := schema["properties"].(map[string]any)
+	name, _ := props["name"].(map[string]any)
+	if name["minLength"] != 1 || name["maxLength"] != 255 || name["pattern"] != "^[a-z]+$" {
+		t.Fatalf("column params not projected: %#v", name)
+	}
+}
+
+func TestEntitySchemaExcludesInheritedSecretColumns(t *testing.T) {
+	columns := map[string]columnMeta{
+		"data.tables.x.col.secret_value": {typ: "_types.basics.string", sensitivity: "secret"},
+		"data.tables.x.col.public_value": {typ: "_types.basics.string"},
+	}
+	fields := []any{
+		map[string]any{"name": "SecretValue", "source": map[string]any{"column": "data.tables.x.col.secret_value"}},
+		map[string]any{"name": "PublicValue", "source": map[string]any{"column": "data.tables.x.col.public_value"}},
+	}
+	schema := entitySchema(fields, nil, columns, nil)
+	props, _ := schema["properties"].(map[string]any)
+	if _, ok := props["secret_value"]; ok {
+		t.Fatalf("inherited secret column leaked into schema: %#v", props)
+	}
+	if _, ok := props["public_value"]; !ok {
+		t.Fatalf("public column missing: %#v", props)
+	}
+}
+
+func TestResolveColumnMetaRefs(t *testing.T) {
+	columns := map[string]columnMeta{
+		"data.tables.sample.col.id":      {typ: "_types.basics.integer.64", params: map[string]any{"max_len": 10, "default": 5}},
+		"data.tables.sample.col.copy_id": {typ: "data.tables.sample.col.id", nullable: true, params: map[string]any{"default": 7}},
+	}
+	if err := resolveColumnMetaRefs(columns); err != nil {
+		t.Fatal(err)
+	}
+	got := columns["data.tables.sample.col.copy_id"]
+	if got.typ != "_types.basics.integer.64" || !got.nullable {
+		t.Fatalf("resolved column meta = %+v", got)
+	}
+	if got.params["max_len"] != 10 || got.params["default"] != 7 {
+		t.Fatalf("resolved params = %#v", got.params)
+	}
+
+	cycle := map[string]columnMeta{
+		"data.tables.cycle.col.a": {typ: "data.tables.cycle.col.b"},
+		"data.tables.cycle.col.b": {typ: "data.tables.cycle.col.a"},
+	}
+	if err := resolveColumnMetaRefs(cycle); err == nil || !strings.Contains(err.Error(), "cyclic column ref") {
+		t.Fatalf("cycle must be rejected, got %v", err)
+	}
+}
+
 func forbiddenSourceKey(v any) (string, bool) {
 	switch value := v.(type) {
 	case map[string]any:

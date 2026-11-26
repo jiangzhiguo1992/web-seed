@@ -133,6 +133,10 @@ func (c *Checker) checkReferenceDecl(source, target, onDelete, where string) {
 	if !ok {
 		return
 	}
+	if targetTable == c.baseID {
+		c.rulef("reference-target", "%s: target column %s must be a physical table column", where, target)
+		return
+	}
 	targetMeta, ok := c.tableColumns[targetTable][targetCol]
 	if !ok {
 		c.rulef("reference-target", "%s: target column %s not found", where, target)
