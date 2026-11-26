@@ -69,6 +69,12 @@ func (c *Checker) checkFeatureRoutes() {
 			}
 		}
 	}
+	if app, _ := doc["app"].(string); app != "" {
+		consumers := c.featureRouteConsumers()
+		if len(consumers) > 0 && !containsString(consumers, app) {
+			c.rulef("route-structure", "%s: app %s is not in contracts/index.yaml feature.routes.consumers", rel, app)
+		}
+	}
 	for i, raw := range asList(doc["redirects"]) {
 		item, _ := asMap(raw)
 		where := fmt.Sprintf("%s.redirects[%d]", rel, i)
@@ -87,6 +93,21 @@ func (c *Checker) checkFeatureRoutes() {
 			c.rulef("route-redirect", "%s: unknown not_found layout %s", rel, layout)
 		}
 	}
+}
+
+// featureRouteConsumers 读取 index.yaml 中 feature.routes 的消费者标签。
+func (c *Checker) featureRouteConsumers() []string {
+	doc, err := loadYAML(filepath.Join(c.root, "contracts/index.yaml"))
+	if err != nil {
+		return nil
+	}
+	for _, raw := range asList(doc["entries"]) {
+		entry, _ := asMap(raw)
+		if id, _ := entry["id"].(string); id == "feature.routes" {
+			return stringList(entry["consumers"])
+		}
+	}
+	return nil
 }
 
 // featurePageIDs 读取 feature.pages targets 下的页面 ID。

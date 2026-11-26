@@ -144,18 +144,20 @@ func TestAuthPolicyHardening(t *testing.T) {
 	root := t.TempDir()
 	writeCapFile(t, root, "contracts/platform/security/auth_policy.yaml", `token:
   persistence: data.tables.token
+  storage: hash
   issuer: web-seed
-  access: { format: jwt, ttl: 30d, audience: [admin], pii_in_token: false, claims_required: [iss, sub, aud, exp, iat, jti] }
-  refresh: { format: jwt, ttl: 15m, audience: [admin], pii_in_token: false, claims_required: [iss, sub, aud, exp, iat, jti], table: data.tables.token }
+  access: { format: jwt, algorithm: HS256, ttl: 30d, audience: [admin], pii_in_token: false, claims_required: [iss, sub, aud, exp, iat, jti] }
+  refresh: { format: jwt, algorithm: RS256, storage: none, ttl: 15m, audience: [admin], pii_in_token: false, claims_required: [iss, sub, aud, exp, iat, jti], rotation: false, reuse_detection: true, table: data.tables.token }
   revocation: { strategy: server }
 password: { min_length: 12, lockout: 0m }
 verification: { ttl: nope }
+mfa: { recovery_codes: 0 }
 authorization: { deny_by_default: false }
 `)
 	c := &Checker{root: root}
 	c.checkAuthPolicy()
 	got := strings.Join(c.errs, "\n")
-	if !strings.Contains(got, "[auth-policy-hardening]") || !strings.Contains(got, "access.ttl must be shorter") || !strings.Contains(got, "password.lockout must be a positive duration") || !strings.Contains(got, "verification.ttl must be a positive duration") || !strings.Contains(got, "deny_by_default must be true") {
+	if !strings.Contains(got, "[auth-policy-hardening]") || !strings.Contains(got, "access.ttl must be shorter") || !strings.Contains(got, "access.algorithm and token.refresh.algorithm must match") || !strings.Contains(got, "token.storage and token.refresh.storage must match") || !strings.Contains(got, "reuse_detection requires refresh.rotation") || !strings.Contains(got, "password.lockout must be a positive duration") || !strings.Contains(got, "verification.ttl must be a positive duration") || !strings.Contains(got, "mfa.recovery_codes must be greater than 0") || !strings.Contains(got, "deny_by_default must be true") {
 		t.Fatalf("auth hardening not reported: %v", c.errs)
 	}
 }

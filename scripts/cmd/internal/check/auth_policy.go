@@ -86,6 +86,21 @@ func (c *Checker) checkAuthPolicy() {
 	if accessOK && refreshOK && accessTTL >= refreshTTL {
 		c.rulef("auth-policy-hardening", "%s: token.access.ttl must be shorter than token.refresh.ttl", rel)
 	}
+	if accessAlg, _ := access["algorithm"].(string); accessAlg != "" {
+		if refreshAlg, _ := refresh["algorithm"].(string); refreshAlg != "" && accessAlg != refreshAlg {
+			c.rulef("auth-policy-hardening", "%s: token.access.algorithm and token.refresh.algorithm must match", rel)
+		}
+	}
+	if storage, _ := token["storage"].(string); storage != "" {
+		if refreshStorage, _ := refresh["storage"].(string); refreshStorage != "" && storage != refreshStorage {
+			c.rulef("auth-policy-hardening", "%s: token.storage and token.refresh.storage must match", rel)
+		}
+	}
+	if rotation, _ := refresh["rotation"].(bool); !rotation {
+		if reuse, _ := refresh["reuse_detection"].(bool); reuse {
+			c.rulef("auth-policy-hardening", "%s: refresh.reuse_detection requires refresh.rotation", rel)
+		}
+	}
 	if strategy == "refresh_token" || strategy == "server" {
 		persistence, _ := token["persistence"].(string)
 		refresh, _ := asMap(token["refresh"])
@@ -139,6 +154,11 @@ func (c *Checker) checkAuthPolicy() {
 	if authorization, _ := asMap(doc["authorization"]); authorization != nil {
 		if deny, _ := authorization["deny_by_default"].(bool); !deny {
 			c.rulef("auth-policy-hardening", "%s: authorization.deny_by_default must be true", rel)
+		}
+	}
+	if mfa, _ := asMap(doc["mfa"]); mfa != nil {
+		if codes, ok := toInt(mfa["recovery_codes"]); ok && codes <= 0 {
+			c.rulef("auth-policy-hardening", "%s: mfa.recovery_codes must be greater than 0", rel)
 		}
 	}
 	minLen, _ := toInt(password["min_length"])

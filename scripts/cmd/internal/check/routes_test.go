@@ -44,10 +44,13 @@ stability: draft
 do_not: []
 permissions: []
 `)
+	writeCapFile(t, root, "contracts/index.yaml", `entries:
+  - { id: feature.routes, consumers: [ web/other ] }
+`)
 	c := &Checker{root: root}
 	c.checkFeatureRoutes()
 	got := strings.Join(c.errs, "\n")
-	for _, want := range []string{"unknown permission", "public route must not declare permission", "unknown not_found page", "[route-structure]", "[route-redirect]"} {
+	for _, want := range []string{"unknown permission", "public route must not declare permission", "app web/admin is not in contracts/index.yaml", "unknown not_found page", "[route-structure]", "[route-redirect]"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("missing %q in:\n%s", want, got)
 		}
