@@ -546,6 +546,6 @@ data/storage.yaml ──> 按引擎分组的表条目 + 表级物理事实
 P2：契约与 `contract-check` 已可用，生成器待实现（逐项状态见 §5.1）。
 
 `generated` / `tested` 是当前值，不是目标值：没有 gate 的契约只能声明 `review-only`，否则
-`contract-check` 报 `schema.enforcement`。data 层已启用的闸门见 `data/README.md` §7。
+`contract-check` 报 `schema.enforcement`。data 层的 enforcement 见 `contracts/index.yaml`，进度见 `docs/guides/architecture.md`；命令入口见 `data/README.md §7`。
 
 `_meta/<type>.yaml` 是字段规范，不是实例契约，不登记 `index.yaml`，也不进入 `generated/`。

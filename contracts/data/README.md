@@ -16,9 +16,9 @@ data 在单向链末端，没有下游：
 feature ──> capabilities ──> data
 ```
 
-- 上游只通过两种锚点使用本层：capabilities 的 service 锚 `data.queries`；features.rules / cap.lifecycles 锚 `data.entities` 作为业务主体。
+- 上游可以引用本层的三类事实：`data.queries`（service step）、`data.entities`（service `validations[]`、rules `constraint.entity`、lifecycle `subjects[]`）、`data.enums`（service / event / HTTP / 页面的类型引用）。
 - 本层不负责：业务不变量（`features/rules`）、写编排与跨模块调用（`capabilities/services`）、部署与运行时（`platform`）。
-- 表的写归属由 `owner_module` 决定；跨模块写必须走归属模块的 service，不直接写表。`[评审]`
+- 表的写归属由 `owner_module` 决定；跨模块写必须走归属模块的 service，不直接写表（由 `cap.services` 的 `service-owner-write` 强制）。
 - 目录内只有五类实例契约，外加一份类型词汇表 `types.yaml`。没有第六类实例；表达力不足时先扩展本层字段或规则，不新增平行概念。
 
 ---
@@ -48,17 +48,22 @@ feature ──> capabilities ──> data
 
 ```text
 capabilities.services ──query─────────────> queries
+capabilities.services ──validations──────> entities
 features.rules / cap.lifecycles ──entity──> entities
+capabilities / features ──type────────────> enums
 ```
 
 数据层内部：
 
 ```text
 queries ──tables / index_ref──> tables
-queries ──returns─────────────> entities
-queries ──caches / archive────> storage
-entities ──source.column/join─> tables
-entities ──type───────────────> enums
+queries ──returns──> entities
+queries ──params/returns type──> enums
+queries ──caches / archive──> storage
+entities ──model.tables / source.column/join──> tables
+entities ──type / source.join──> entities
+entities ──type──> enums
+tables ──extends / references / redundancy──> tables
 storage ──table/cache_of/archive_of──> tables
 tables / entities / queries ──type──> types
 ```
@@ -66,16 +71,21 @@ tables / entities / queries ──type──> types
 | 边 | 写在 | 字段 |
 |---|---|---|
 | service → query | capabilities | `steps[].query` |
+| service → entity validation | capabilities | `steps[].validations[]` |
 | rule / lifecycle → entity | features / capabilities | `entity`（constraint）/ `subjects[].entity` |
+| capability / feature → enum | capabilities / features | 参数 / 返回 / schema 的类型；页面 `enum` |
 | query → table | queries | `tables` / `index_ref` |
 | query → entity | queries | `returns` |
+| query → enum | queries | `params[].type` / `returns[].type` |
 | query → storage | queries | `caches` / `archive` |
-| entity → table | entities | `source.column` / `source.join` |
+| entity → table | entities | `model.tables` / `source.column` / `source.join` |
+| entity → entity | entities | 关系字段 `type` / `source.join` |
 | entity → enum | entities | field `type` |
+| table → table | tables | `table.extends` / `columns[].references` / `columns[].redundancy` |
 | storage → table | storage | `table` / `cache_of` / `archive_of` |
 | table / entity / query → type | data | `type` |
 
-反向索引字段（`table.entities` / `table.queries` / `model.queries` / `queries[].used_by` / `enums[].used_by` 等）由 `make gen-graph` 写回，禁止手改；它们只记直接关系，不展开传递闭包。完整清单见 [`contracts/_meta/README.md`](../_meta/README.md)。
+`indexes[].used_by` 是手写设计声明；其余反向索引字段（`table.entities` / `table.queries` / `model.queries` / `queries[].used_by` / `enums[].used_by` / `constraints[].used_by` / `validation[].used_by` 等）由 `make gen-graph` 写回，禁止手改；它们只记直接关系，不展开传递闭包。完整清单见 [`contracts/_meta/README.md`](../_meta/README.md)。
 
 ---
 
@@ -99,7 +109,7 @@ tables / entities / queries ──type──> types
 
 | 选择 | 理由 | 代价 |
 |---|---|---|
-| 逻辑外键，不建数据库外键 | 引擎无关；迁移顺序自由 | 引用完整性靠应用/规则，漏写不会被子拒绝 |
+| 逻辑外键，不建数据库外键 | 引擎无关；迁移顺序自由 | 引用完整性靠应用/规则，漏写不会被数据库拒绝 |
 | 表存 integer code，不存 enum | 改枚举不触发迁移 | entity 漏映射就是裸整数；旧 code 不得复用 |
 | entity 是读模型 | 避免两份写模型漂移 | 写形状由 query + capability 约束 |
 | query 只写形状，不写 SQL | SQL 不可机验，写进契约就是第二真相 | SQL 质量靠 `EXPLAIN` 与 review |
@@ -117,7 +127,7 @@ tables / entities / queries ──type──> types
 - 引擎与物理事实只在 `storage.yaml`；表契约保持引擎无关。
 - 表达力不足时先扩展本层字段或规则，不新增平行契约类型。
 - 模块名用单数（`account`）；集合响应字段与动作名按语义保留复数（`accounts` / `listAccounts`）。`[评审]`
-- 时间列统一用 `_types.basics.timestamp` 族（应用层只处理 UTC）；不使用 `datetime` 族。`[评审]`
+- 时间列统一用 `_types.basics.timestamp.*`（具体 variant 按 `contracts/_meta/_types.yaml`；应用层只处理 UTC）；不使用 `datetime` 族。`[评审]`
 - 实体 ID 与外键 ID 统一用 `_types.basics.id`；分页偏移、计数、状态码等非 ID 整数用 `_types.basics.integer.32`。`[评审]`
 
 ---
