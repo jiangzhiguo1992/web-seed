@@ -28,9 +28,9 @@ paths:
           - { name: limit, type: _types.basics.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: cap.services.dictionary.schemas.DictionaryPage
@@ -51,21 +51,19 @@ paths:
           to: params.input
       response:
         201:
-          msg: "已创建"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
             - { name: Location, required: false, type: _types.basics.string, description: "新字典资源地址" }
+          msg: "已创建"
           body:
             kind: json
             type: data.entities.dictionary
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_CODE_TAKEN
         422:
           msg: "语义校验失败"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_INVALID
             - platform.errors.DICTIONARY_PARENT_INVALID
@@ -87,20 +85,18 @@ paths:
           to: params.input
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: cap.services.dictionary.schemas.ImportResult
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_CODE_TAKEN
         422:
           msg: "语义校验失败"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_INVALID
             - platform.errors.DICTIONARY_PARENT_INVALID
@@ -120,15 +116,14 @@ paths:
           - { name: id, type: _types.basics.id, description: "字典 ID", to: params.id }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.dictionary
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
 
@@ -150,20 +145,18 @@ paths:
           to: params.input
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.dictionary
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
         422:
           msg: "语义校验失败"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_INVALID
 
@@ -181,15 +174,12 @@ paths:
       response:
         204:
           msg: "已删除"
-          headers: [ ]
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_HAS_CHILDREN
 
@@ -210,9 +200,9 @@ paths:
           - { name: limit, type: _types.basics.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: cap.services.dictionary.schemas.DictionaryPage
@@ -236,20 +226,18 @@ paths:
           to: params.input
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.dictionary
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_ILLEGAL_TRANSITION
 
@@ -272,19 +260,17 @@ paths:
           to: params.input
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.dictionary
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_NOT_FOUND
         422:
           msg: "语义校验失败"
-          headers: [ ]
           errors:
             - platform.errors.DICTIONARY_PARENT_INVALID

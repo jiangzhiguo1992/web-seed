@@ -32,9 +32,9 @@ paths:
           - { name: limit, type: _types.basics.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: cap.services.attachment.schemas.AttachmentPage
@@ -55,20 +55,18 @@ paths:
           to: params.input
       response:
         201:
-          msg: "已创建"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "已创建"
           body:
             kind: json
             type: cap.services.attachment.schemas.UploadTicket
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_OBJECT_KEY_TAKEN
         422:
           msg: "语义校验失败"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_INVALID
             - platform.errors.ATTACHMENT_OWNER_INVALID
@@ -87,15 +85,14 @@ paths:
           - { name: id, type: _types.basics.id, description: "附件 ID", to: params.id }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.attachment
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
 
@@ -113,15 +110,12 @@ paths:
       response:
         204:
           msg: "已删除"
-          headers: [ ]
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
 
@@ -139,25 +133,22 @@ paths:
           - { name: id, type: _types.basics.id, description: "附件 ID", to: params.id }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.attachment
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
         422:
           msg: "语义校验失败"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_INVALID
 
@@ -175,20 +166,18 @@ paths:
           - { name: id, type: _types.basics.id, description: "附件 ID", to: params.id }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: cap.services.attachment.schemas.SignedURL
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION
 
@@ -206,19 +195,17 @@ paths:
           - { name: id, type: _types.basics.id, description: "附件 ID", to: params.id }
       response:
         200:
-          msg: "已标记失败"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "已标记失败"
           body:
             kind: json
             type: data.entities.attachment
         404:
           msg: "附件不存在"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_NOT_FOUND
         409:
           msg: "当前状态不允许标记失败"
-          headers: [ ]
           errors:
             - platform.errors.ATTACHMENT_ILLEGAL_TRANSITION

@@ -29,9 +29,9 @@ paths:
           - { name: limit, type: _types.basics.page_limit, required: false, description: "分页大小；默认 20", to: params.limit }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: cap.services.account.schemas.AccountPage
@@ -54,21 +54,19 @@ paths:
           to: params.input
       response:
         201:
-          msg: "已创建"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
             - { name: Location, required: false, type: _types.basics.string, description: "新账号资源地址" }
+          msg: "已创建"
           body:
             kind: json
             type: data.entities.account
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NUMBER_TAKEN
         422:
           msg: "语义校验失败"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
             - platform.errors.ACCOUNT_NUMBER_INVALID
@@ -89,15 +87,14 @@ paths:
           - { name: id, type: _types.basics.id, description: "账号 ID", to: params.id }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.account
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
       used_by:
@@ -122,25 +119,22 @@ paths:
           to: params.input
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.account
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
         422:
           msg: "语义校验失败"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NICKNAME_INVALID
       used_by:
@@ -160,15 +154,12 @@ paths:
       response:
         204:
           msg: "已删除"
-          headers: [ ]
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
@@ -190,20 +181,18 @@ paths:
           - { name: id, type: _types.basics.id, description: "账号 ID", to: params.id }
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.account
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
@@ -230,20 +219,18 @@ paths:
           to: params.input
       response:
         200:
-          msg: "成功"
           headers:
             - { name: Content-Type, value: application/json, description: "响应体媒体类型" }
+          msg: "成功"
           body:
             kind: json
             type: data.entities.account
         404:
           msg: "资源不存在"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_NOT_FOUND
         409:
           msg: "状态冲突"
-          headers: [ ]
           errors:
             - platform.errors.ACCOUNT_ALREADY_DELETED
             - platform.errors.ACCOUNT_ILLEGAL_TRANSITION
