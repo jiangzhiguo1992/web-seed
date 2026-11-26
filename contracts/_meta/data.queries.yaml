@@ -125,7 +125,7 @@ fields:
         item_fields:
           - { name: index, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.(pk|(idx|uq)_[a-z][a-z0-9_]*)$', description: "索引 ID：data.tables.<t>.pk 或 indexes[].name" }
           - { name: columns, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "查询使用的索引列，必须等于索引列的最左前缀且顺序一致" }
-      - { name: used_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "引用本查询的 service 项" }
+      - { name: used_by, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^cap\.services\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "引用本查询的 service 项；至少一个，由 gen-graph 写入" }
 
 rules:
   - { id: query-key-order, text: "查询契约字段顺序必须与 _meta/data.queries.yaml 的 fields 顺序一致；嵌套对象同序", implemented_by: [ query-key-order ] }
@@ -146,6 +146,5 @@ rules:
   - { id: query-cache-write, text: "写查询必须列出每个被写表的全部逻辑缓存（写同步项不要求键出现在 params/index_ref）", implemented_by: [ query-cache-write ] }
   - { id: query-archive-ref, text: "query.archive 每项是 {archive, promotable, age_by}：archive 必须是 storage 已声明的归档（data.tables.<t>.archive），源表在 query.tables 中；promotable 必须与 storage 条目一致；promotable:true 时 age_by 必填且与 storage 一致，false 时禁止 age_by", implemented_by: [ query-archive-ref ] }
   - { id: query-archive-used-by, text: "每个 storage promotable:true 的归档必须至少被一个 archive.promotable:true 的查询引用（回迁入口）；promotable:false 的归档不要求回迁入口", implemented_by: [ query-archive-used-by ] }
-  - { id: query-used-by, text: "query.used_by 必须等于 service steps 中引用本 query 的 service 项集合，由 gen-graph 写入，禁止手改", implemented_by: [ query-used-by ] }
-  - { id: query-unused, text: "query 必须被至少一个 service step 引用；used_by 不得为空", implemented_by: [ query-unused ] }
+  - { id: query-used-by, text: "query.used_by 必须等于 service steps 中引用本 query 的 service 项集合，由 gen-graph 写入，禁止手改；非空由字段 min_items 保证", implemented_by: [ query-used-by ] }
   - { id: query-do-not-specific, text: "do_not 每条必须含本查询集标识、owner_module 或任一 query 名；通用规则放组 README，禁止复制", implemented_by: [ query-do-not-specific ] }

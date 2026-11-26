@@ -67,6 +67,6 @@ fields:
       - { name: then, type: _types.basics.string, soft: true, required: false, description: "policy 期望结果" }
 
 rules:
-  - { id: rule-structure, text: "kind=constraint 必须有 entity/field/op/value 且不得有 assert/given/when/then；entity 必须是存在的 data.entities.*，field 必须是该实体的非关系字段或基类列；kind=invariant 必须有 assert 且不得有 entity/field/op/value/given/when/then；kind=policy 不得有 entity/field/op/value/assert；errors 必须是存在的 platform.errors.*；implemented_by 不得为空且必须指向存在的 cap.services.*", implemented_by: [ rule-structure ] }
+  - { id: rule-structure, text: "kind=constraint 必须有 entity/field/op/value 且不得有 assert/given/when/then；entity 必须是存在的 data.entities.*，field 必须是该实体的非关系字段或基类列；kind=invariant 必须有 assert 且不得有 entity/field/op/value/given/when/then；kind=policy 不得有 entity/field/op/value/assert；errors 必须是存在的 platform.errors.*；implemented_by 必须指向存在的 cap.services.*，非空由字段 min_items 保证", implemented_by: [ rule-structure ] }
   - { id: rule-value, text: "constraint 的 op/value 必须可判定：pattern 为非空合法正则且字段为 string；in/not_in 为非空标量列表；min_len/max_len 为非负整数且字段为 string；required/not_null 为布尔；eq/ne 为标量；gt/ge/lt/le 为数字且字段为数值或时间", implemented_by: [ rule-value ] }
   - { id: rule-id-unique, text: "规则 ID 全局唯一，且必须以文件 ID 为前缀", implemented_by: [ rule-id-unique ] }

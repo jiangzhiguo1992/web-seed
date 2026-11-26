@@ -53,7 +53,7 @@ fields:
     fields:
       - { name: name, type: _types.basics.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "Go 类型名" }
       - { name: extends, type: _types.structures.set<_types.basics.string>, required: true, unique: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "实体基类" }
-      - { name: tables, type: _types.structures.list<_types.basics.string>, required: true, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "映射的物理表" }
+      - { name: tables, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, unique: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "映射的物理表" }
       - name: includes
         type: _types.structures.list<_types.structures.object>
         required: true
@@ -74,7 +74,7 @@ fields:
           - { name: entity, type: _types.basics.string, required: true, pattern: '^data\.entities\.[a-z][a-z0-9_]*$', description: "来源 entity ID" }
           - { name: field, type: _types.basics.string, required: true, pattern: '^[A-Za-z][A-Za-z0-9]*$', description: "来源实体的关系字段名" }
           - { name: cardinality, type: _types.basics.string, required: true, enum: [ one_to_one, one_to_many, many_to_one, many_to_many ], description: "从本实体到来源实体的反向基数" }
-      - { name: queries, type: _types.structures.set<_types.basics.string>, required: true, unique: true, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "返回本实体的查询" }
+      - { name: queries, type: _types.structures.set<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$', generated: true, write: forbidden, description: "返回本实体的查询；至少一个，由 gen-graph 写入" }
 
   - name: fields
     type: _types.structures.list<_types.structures.object>
@@ -127,7 +127,7 @@ rules:
   - { id: entity-base-only, text: "model.extends 必须恰好是 [data.entities.base]", implemented_by: [ entity-base-only ] }
   - { id: entity-no-base-fields, text: "具体实体不得重声明基类字段；Status 允许用 data.enums.* 特化", implemented_by: [ entity-no-base-fields ] }
   - { id: entity-base-field-first, text: "重声明的基类字段（当前仅 Status）必须是 fields 第一项", implemented_by: [ entity-base-field-first ] }
-  - { id: entity-table-shape, text: "model.tables 非空、每张表必须存在、不得指向 data.tables.base；model.tables[0] 是主表", implemented_by: [ entity-table-shape ] }
+  - { id: entity-table-shape, text: "model.tables 每张表必须存在、不得指向 data.tables.base；model.tables[0] 是主表；非空由字段 min_items 保证", implemented_by: [ entity-table-shape ] }
   - { id: entity-table-covered, text: "每张物理表必须被至少一个 entity 映射", implemented_by: [ entity-table-covered ] }
   - { id: entity-name, text: "model.name 必须是合法 Go 标识符（非关键字）；首字母大写 public，小写 internal", implemented_by: [ entity-name ] }
   - { id: entity-field-name, text: "字段 name 必须是合法 Go 标识符（非关键字）；首字母大小写表达导出性", implemented_by: [ entity-field-name ] }
@@ -148,7 +148,7 @@ rules:
   - { id: entity-relation-cardinality, text: "关系基数由关联表的 references/referenced_by 与唯一索引推断：两端唯一 one_to_one；from 唯一 one_to_many；to 唯一 many_to_one；through 存在 many_to_many；两端都不唯一且无 through 则不允许；不同关系字段可指向同一目标实体，各自独立推断基数", implemented_by: [ entity-relation-cardinality ] }
   - { id: entity-validation, text: "validation.name 实体内唯一，ID 派生为 <entity-id>.<name>；on_violation 必须存在", implemented_by: [ entity-validation ] }
   - { id: entity-validation-used-by, text: "validation.used_by 必须是非空去重的 cap.services 项 ID，且该 service 的 step 引用了本实体主表的 query", implemented_by: [ entity-validation-used-by ] }
-  - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入", implemented_by: [ entity-used-by ] }
+  - { id: entity-used-by, text: "model.queries 必须等于 returns 本实体的 query 集合，由 gen-graph 写入；非空由字段 min_items 保证", implemented_by: [ entity-used-by ] }
   - { id: entity-included-by, text: "model.includes 与 model.included_by 由 gen-graph 写入，禁止手改；每项是 {field, entity, cardinality}（included_by 的 field 是来源实体的关系字段）：includes 记录本实体每个关系字段到目标的基数，included_by 记录本实体到来源的反向基数；两侧必须互为反向且与关系字段、关联表唯一索引一致；(entity, field) 不得重复", implemented_by: [ entity-included-by ] }
   - { id: entity-relation-arity, text: "关系基数必须与类型形状一致：one_to_many/many_to_many 用 _types.structures.list<data.entities.*>，one_to_one/many_to_one 用单个 data.entities.*", implemented_by: [ entity-relation-arity ] }
   - { id: entity-do-not-specific, text: "do_not 每条必须含本实体标识、契约 ID 或字段名；通用规则放组 README 或 _base，禁止复制", implemented_by: [ entity-do-not-specific ] }

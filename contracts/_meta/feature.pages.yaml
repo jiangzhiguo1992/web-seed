@@ -204,4 +204,4 @@ rules:
   - { id: page-params, text: "data/actions.params 的 key 必须是 capability 的 service 参数或对象字段；声明了 type 时必须与 service 字段类型一致；enum 必须是引用字符串或非空字符串列表；required 与 optional 不得同时声明", implemented_by: [ page-params ] }
   - { id: page-action-target, text: "actions.on_success 必须是 navigate(feature.routes.*) 或 close_and_redirect(feature.routes.*)，目标 route 必须存在", implemented_by: [ page-action-target ] }
   - { id: page-limits, text: "pagination.limit_default <= limit_max；fields.minLength <= maxLength", implemented_by: [ page-limits ] }
-  - { id: page-refs, text: "route/capability/permission/enum 与 available_when 内的 transition/transitions/state_not 引用必须存在；transition_ui.source 必须是已存在的 cap.lifecycles.*.transitions；analytics.page_view/actions 必须是已存在的埋点事件", implemented_by: [ page-refs ] }
+  - { id: page-refs, text: "route/capability/permission/enum 与 available_when 内的 transition/transitions/state_not 引用必须存在；page.route 指向的路由必须回指本页面；transition_ui.source 必须是已存在的 cap.lifecycles.*.transitions；analytics.page_view/actions 必须是已存在的埋点事件", implemented_by: [ page-refs ] }

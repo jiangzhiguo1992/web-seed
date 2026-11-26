@@ -158,7 +158,7 @@ fields:
                 fields:
                   - { name: kind, type: _types.basics.string, required: true, enum: [ json, text, binary ], description: "响应体编码类型" }
                   - { name: type, type: _types.basics.string, required: true, pattern: '^(data\.(entities|enums)\.[a-z][a-z0-9_]*|cap\.services\.[a-z][a-z0-9_]*\.schemas\.[A-Za-z][A-Za-z0-9]*|_types\.basics\.[a-z][a-z0-9_]*(\.[a-z0-9_]+)?)$', description: "响应体类型 ID" }
-          - { name: used_by, type: _types.structures.list<_types.basics.string>, required: false, unique: true, min_items: 1, pattern: '^feature\.pages\.[a-z][a-z0-9_]*$', description: "页面消费者；API-only operation 可省略" }
+          - { name: used_by, type: _types.structures.list<_types.basics.string>, required: false, unique: true, pattern: '^feature\.pages\.[a-z][a-z0-9_]*$', description: "页面消费者；API-only operation 可省略，也可写空列表" }
       - name: post
         type: _types.structures.object
         required: false
@@ -196,6 +196,7 @@ rules:
   - { id: http-shape, text: "paths 必须是 path → method → operation；operation 字段顺序固定为 id/name/summary/service/request/response/used_by；request 只允许 headers/path/query/body；header/query/body/body.fields 的 required 省略为 true，可选项写 false；GET/HEAD 不得声明 request.body；response 的 key 是三位状态码，所有 response 必须写 msg；带 body 时必须同时在 headers 声明 Content-Type；204 不得声明 body/Content-Type；非 2xx 写 msg、空 headers 与非空 errors", implemented_by: [ http-shape ] }
   - { id: http-body-types, text: "request.body.kind 的 enum 必须与 platform.http_conventions.body_types 的键集合完全一致；response.body.kind 必须是该集合的非空子集；normalizer 只读取平台 body_types 映射，不在代码里维护第二份媒体类型表", implemented_by: [ http-body-types ] }
   - { id: http-version, text: "mount.api_version 必须是 v<数字>；mount.path 与 paths 的 key 不得以 /v<数字> 开头；生成器按 app 内各文件一致的 mount.api_version 派生 servers: /<version>，同一 app 不得混版本；project.yaml 的 api app 只校验 audience 与 timeout_ms", implemented_by: [ http-version ] }
+  - { id: http-app-included, text: "每个 HTTP 契约文件必须被 project.yaml 至少一个 api app 的 includes 收录，否则不会生成 OpenAPI", implemented_by: [ http-app-included ] }
   - { id: http-mount, text: "每个文件必须有 mount：api_version/path/audience；mount.path 以 / 开头且只写公共资源前缀（如 /account，不写 /account/admin）；audience 段放在 paths 的 key 里（如 /admin）；paths 的 key 是相对路径且以 / 开头；拼接后的 path 全局唯一", implemented_by: [ http-mount ] }
   - { id: http-path-params, text: "paths 的 key 中每个 {name} 占位符必须是 [a-z][a-z0-9_]*，且与 request.path 的 name 一一对应；request.path 不得声明路径中不存在的参数", implemented_by: [ http-path-params ] }
   - { id: http-operation, text: "每个 operation 必须有全局唯一的 name、id、service；id 必须匹配当前文件且全局唯一；path+method 全局唯一；x-* 仅允许 x-contract-id/x-service/x-timeout-ms（由 normalizer 生成，生成 OpenAPI 前删除）；service 必须指向存在的 public 同步 service", implemented_by: [ http-operation ] }

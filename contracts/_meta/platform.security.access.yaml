@@ -84,3 +84,4 @@ fields:
 
 rules:
   - { id: access-coverage, text: "每个被 HTTP operation 暴露的 service 必须有 platform.security.access binding（permissions、audit 或 rate_limit 至少一项）", implemented_by: [ access-coverage ] }
+  - { id: access-target, text: "platform.security.access 的每个 target 必须被至少一个 HTTP operation 暴露；未暴露的 service 不应声明入口策略", implemented_by: [ access-target ] }

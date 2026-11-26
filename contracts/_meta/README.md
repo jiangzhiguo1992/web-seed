@@ -141,6 +141,7 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 - `feature.rules` 的 policy 规则在 `scripts/cmd/internal/check/rules_policy_test.go`（`make test-rules`）自动登记，并校验 `implemented_by`/`given`/`when`/`then`；业务行为断言由实现层补充。
 - `rules` 只允许出现在 `_meta`（`features/rules` 等领域规则集除外）；`do_not` 只允许出现在具体契约。
 - `generated: true` 字段必须同时 `write: forbidden`；由 `make gen-graph` 写入，checker 对账。
+  `generated` 字段的 `min_items` 与手写字段一样生效；只有 `contract-new` 的骨架在生成阶段放宽（`relaxGeneratedFields`），入库实例不再豁免。`stability` 只表示定型状态，不豁免任何校验。
 
 ---
 
@@ -165,12 +166,12 @@ schema 节点只描述值域：`object`（`kind: _types.schemas.object` + `prope
 
 | 状态 | 含义 | 进入条件 |
 |---|---|---|
-| `draft` | 正在编写 | 默认状态；允许 TODO/FIXME |
+| `draft` | 正在编写 | 默认状态；允许 TODO/FIXME；**不豁免任何结构与引用校验** |
 | `stable` | 评审通过、无 TODO | 替换所有 TODO/FIXME，`make contract-check` 通过 |
 | `deprecated` | 已废弃 | 停止新增引用，准备移除 |
 
 `stable` 的进入与退出只能由**用户手动修改**（`contract-new` 只产出 `draft`）；`contract-check` 只能校验
-`stable` 不含 TODO/FIXME，不能识别修改者。
+`stable` 不含 TODO/FIXME，不能识别修改者。`stability` 只影响这条 TODO 门槛，不影响任何其他规则。
 
 ---
 

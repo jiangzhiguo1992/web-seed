@@ -67,7 +67,7 @@ fields:
         required: true
         unique: true
         pattern: '^data\.entities\.[a-z][a-z0-9_]*$'
-        description: "映射本表的 entity ID 列表"
+        description: "映射本表的 entity ID 列表；由 gen-graph 写入"
       - name: references
         type: _types.structures.set<_types.basics.string>
         required: true
@@ -88,10 +88,11 @@ fields:
         type: _types.structures.set<_types.basics.string>
         required: true
         unique: true
+        min_items: 1
         pattern: '^data\.queries\.[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$'
         generated: true
         write: forbidden
-        description: "引用本表的查询"
+        description: "引用本表的查询；至少一个，由 gen-graph 写入"
 
   - name: columns
     type: _types.structures.list<_types.structures.object>
@@ -166,7 +167,7 @@ rules:
   - { id: constraint-fields, text: "on_violation 必须是存在的 platform.errors.*", implemented_by: [ constraint-fields ] }
   - { id: constraint-used-by, text: "constraints[].used_by 必须是非空去重的 data.queries.* 写查询 ID，且查询写本表", implemented_by: [ constraint-used-by ] }
   - { id: enum-code-literal, text: "表 CHECK 以 = / <> / != / IN / NOT IN 引用枚举列时，字面量必须是该枚举的 code；范围比较不校验", implemented_by: [ enum-code-literal ] }
-  - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边", implemented_by: [ table-queries-generated ] }
+  - { id: table-queries-generated, text: "table.queries 由 make gen-graph 写入，禁止手改；只记 query 直接入边；非空由字段 min_items 保证", implemented_by: [ table-queries-generated ] }
   - { id: table-entities, text: "table.entities 必须等于 model.tables 包含本表的 entity 集合；每个 entity 必须存在且确实映射本表", implemented_by: [ table-entities ] }
   - { id: table-referenced-by, text: "table.references 与 table.referenced_by 由 gen-graph 生成，禁止手改；references 必须等于本表 columns[].references.column 的目标列集合，referenced_by 必须等于所有指向本表列的 references 源列集合；两侧互为反向且每项必须是存在的列引用", implemented_by: [ table-referenced-by ] }
   - { id: owner-write, text: "查询用 tables[].write:true 标记写表；有写表的查询必须出现在某个 service step 的 query 中", implemented_by: [ owner-write ] }
