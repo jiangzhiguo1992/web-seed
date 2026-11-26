@@ -21,7 +21,7 @@ fields:
     description: "一句话说明"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -89,9 +89,9 @@ fields:
     fields:
       - { name: algorithm, type: _types.basics.string, required: true, enum: [ argon2id ], description: "密码哈希算法" }
       - { name: hash_field, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*\.col\.[a-z][a-z0-9_]*$', description: "密码哈希列" }
-      - { name: min_length, type: _types.basics.integer, required: true, min: 1, description: "最小长度" }
+      - { name: min_length, type: _types.basics.integer.32, required: true, min: 1, description: "最小长度" }
       - { name: require_mixed_case, type: _types.basics.boolean, required: true, description: "是否要求大小写混合" }
-      - { name: max_attempts, type: _types.basics.integer, required: true, min: 1, description: "最大失败次数" }
+      - { name: max_attempts, type: _types.basics.integer.32, required: true, min: 1, description: "最大失败次数" }
       - { name: lockout, type: _types.basics.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "锁定时长" }
       - { name: breach_check, type: _types.basics.boolean, required: true, description: "是否检查泄露库" }
 
@@ -106,13 +106,13 @@ fields:
         required: true
         description: "验证码形态"
         fields:
-          - { name: length, type: _types.basics.integer, required: true, min: 1, description: "验证码长度" }
+          - { name: length, type: _types.basics.integer.32, required: true, min: 1, description: "验证码长度" }
           - { name: charset, type: _types.basics.string, required: true, enum: [ digits, alphanumeric ], description: "字符集" }
           - { name: storage, type: _types.basics.string, required: true, enum: [ hash ], description: "存储形态" }
           - { name: hash_algorithm, type: _types.basics.string, required: true, enum: [ hmac-sha256, sha256 ], description: "哈希算法" }
           - { name: secret_env, type: _types.basics.string, required: true, pattern: '^[A-Z][A-Z0-9_]*$', description: "密钥环境变量名" }
       - { name: ttl, type: _types.basics.string, required: true, pattern: '^[1-9][0-9]*(s|m|h|d)$', description: "有效期" }
-      - { name: max_attempts, type: _types.basics.integer, required: true, min: 1, description: "最大尝试次数" }
+      - { name: max_attempts, type: _types.basics.integer.32, required: true, min: 1, description: "最大尝试次数" }
       - name: target_normalization
         type: _types.structures.object
         required: true
@@ -128,7 +128,7 @@ fields:
     fields:
       - { name: required_for_roles, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, pattern: '^[a-z][a-z0-9_]*$', description: "强制 MFA 的角色码" }
       - { name: methods, type: _types.structures.list<_types.basics.string>, required: true, unique: true, min_items: 1, enum: [ totp ], description: "MFA 方法" }
-      - { name: recovery_codes, type: _types.basics.integer, required: true, min: 0, description: "恢复码数量" }
+      - { name: recovery_codes, type: _types.basics.integer.32, required: true, min: 0, description: "恢复码数量" }
 
   - name: authorization
     type: _types.structures.object

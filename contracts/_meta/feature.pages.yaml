@@ -22,7 +22,7 @@ fields:
     description: "一句话说明"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -130,8 +130,8 @@ fields:
       - { name: widget, type: _types.basics.string, required: false, enum: [ text, string, integer, email, password, number, tel, url, date, datetime-local, time, search, textarea, select, checkbox, radio, hidden ], description: "输入/展示控件类型" }
       - { name: required, type: _types.basics.boolean, required: false, description: "是否必填" }
       - { name: optional, type: _types.basics.boolean, required: false, description: "是否可选" }
-      - { name: minLength, type: _types.basics.integer, required: false, min: 0, description: "最小长度" }
-      - { name: maxLength, type: _types.basics.integer, required: false, min: 0, description: "最大长度" }
+      - { name: minLength, type: _types.basics.integer.32, required: false, min: 0, description: "最小长度" }
+      - { name: maxLength, type: _types.basics.integer.32, required: false, min: 0, description: "最大长度" }
       - { name: label, type: _types.basics.string, required: false, description: "展示名" }
       - { name: enum, type: _types.basics.string, required: false, pattern: '^(data\.enums\.[a-z][a-z0-9_]*|cap\.lifecycles\.[a-z][a-z0-9_]*(\.states(\.values)?)?)$', description: "枚举来源" }
       - { name: render, type: _types.basics.string, required: false, enum: [ text, badge, code, heading, relative_time, link, date, boolean ], description: "渲染方式" }
@@ -155,8 +155,8 @@ fields:
     fields:
       - { name: style, type: _types.basics.string, required: true, enum: [ offset ], description: "分页风格" }
       - { name: param, type: _types.basics.string, required: true, enum: [ offset ], description: "分页参数名" }
-      - { name: limit_default, type: _types.basics.integer, required: false, min: 1, description: "默认页大小" }
-      - { name: limit_max, type: _types.basics.integer, required: false, min: 1, description: "最大页大小" }
+      - { name: limit_default, type: _types.basics.integer.32, required: false, min: 1, description: "默认页大小" }
+      - { name: limit_max, type: _types.basics.integer.32, required: false, min: 1, description: "最大页大小" }
 
   - name: empty_copy
     type: _types.structures.object

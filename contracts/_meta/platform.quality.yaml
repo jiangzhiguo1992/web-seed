@@ -22,7 +22,7 @@ fields:
     description: "一句话说明"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -50,14 +50,14 @@ fields:
         required: false
         description: "API 覆盖率"
         fields:
-          - { name: line, type: _types.basics.integer, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
+          - { name: line, type: _types.basics.integer.32, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
           - { name: packages, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, description: "统计包" }
       - name: web
         type: _types.structures.object
         required: false
         description: "Web 覆盖率"
         fields:
-          - { name: line, type: _types.basics.integer, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
+          - { name: line, type: _types.basics.integer.32, required: true, min: 0, max: 100, description: "行覆盖率百分比" }
           - { name: packages, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, description: "统计包" }
       - { name: exclude, type: _types.structures.list<_types.basics.string>, required: false, description: "排除模式" }
 

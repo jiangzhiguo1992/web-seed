@@ -28,7 +28,7 @@ fields:
     description: "归属模块"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"

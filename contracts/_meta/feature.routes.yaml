@@ -22,7 +22,7 @@ fields:
     description: "一句话说明"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -74,7 +74,7 @@ fields:
           - { name: group, type: _types.basics.string, required: true, description: "菜单分组" }
           - { name: label, type: _types.basics.string, required: true, description: "菜单文案" }
           - { name: icon, type: _types.basics.string, required: false, description: "图标名" }
-          - { name: order, type: _types.basics.integer, required: false, description: "排序" }
+          - { name: order, type: _types.basics.integer.32, required: false, description: "排序" }
       - name: meta
         type: _types.structures.object
         required: false

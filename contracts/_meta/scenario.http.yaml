@@ -22,7 +22,7 @@ fields:
     description: "一句话说明"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -63,7 +63,7 @@ fields:
         description: "前置状态"
         fields:
           - { name: clock, type: _types.basics.string, required: true, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$', description: "注入时钟 RFC3339 UTC" }
-          - { name: id_seq, type: _types.structures.list<_types.basics.integer>, required: true, unique: true, min_items: 1, description: "注入 ID 序列" }
+          - { name: id_seq, type: _types.structures.list<_types.basics.integer.32>, required: true, unique: true, min_items: 1, description: "注入 ID 序列" }
           - { name: db, type: _types.basics.any, soft: true, required: true, description: "表 ID → 行列表；必须覆盖链上所有读表" }
       - name: when
         type: _types.structures.object
@@ -84,7 +84,7 @@ fields:
             required: true
             description: "响应断言"
             fields:
-              - { name: status, type: _types.basics.integer, required: true, min: 100, max: 599, description: "HTTP 状态码" }
+              - { name: status, type: _types.basics.integer.32, required: true, min: 100, max: 599, description: "HTTP 状态码" }
               - { name: headers, type: _types.structures.map<_types.basics.any>, required: false, description: "响应头断言" }
               - { name: body, type: _types.basics.any, soft: true, required: false, description: "响应体精确断言" }
           - name: db

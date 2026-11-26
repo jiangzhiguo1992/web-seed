@@ -21,7 +21,7 @@ fields:
     description: "一句话说明"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -57,7 +57,7 @@ fields:
     required: true
     description: "角色约束"
     fields:
-      - { name: max_inheritance_depth, type: _types.basics.integer, required: true, min: 0, description: "最大继承深度" }
+      - { name: max_inheritance_depth, type: _types.basics.integer.32, required: true, min: 0, description: "最大继承深度" }
       - { name: cycle_forbidden, type: _types.basics.boolean, required: true, description: "是否禁止继承环" }
       - { name: unknown_permission_forbidden, type: _types.basics.boolean, required: true, description: "是否禁止未知权限" }
 

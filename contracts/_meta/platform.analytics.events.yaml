@@ -20,7 +20,7 @@ fields:
     required: true
     description: "一句话说明"
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"

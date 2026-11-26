@@ -28,7 +28,7 @@ fields:
     description: "枚举集合归属模块"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -61,7 +61,7 @@ fields:
         description: "枚举值列表"
         item_fields:
           - { name: value, type: _types.basics.string, required: true, pattern: '^[a-z][a-z0-9_]*$', description: "对外字符串值" }
-          - { name: code, type: _types.basics.integer, required: true, min: 0, max: 2147483647, description: "持久化整数码" }
+          - { name: code, type: _types.basics.integer.32, required: true, min: 0, max: 2147483647, description: "持久化整数码" }
           - { name: description, type: _types.basics.string, required: true, description: "枚举值说明" }
       - name: used_by
         type: _types.structures.set<_types.basics.string>

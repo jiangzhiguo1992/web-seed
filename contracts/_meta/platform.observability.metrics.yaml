@@ -20,7 +20,7 @@ fields:
     required: true
     description: "一句话说明"
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -51,7 +51,7 @@ fields:
       - { name: name, type: _types.basics.string, required: true, description: "指标名" }
       - { name: kind, type: _types.basics.string, required: true, description: "指标类型" }
       - { name: labels, type: _types.structures.list<_types.basics.string>, required: true, description: "标签" }
-      - { name: buckets, type: _types.structures.list<_types.basics.float>, required: false, description: "直方图分桶" }
+      - { name: buckets, type: _types.structures.list<_types.basics.float.64>, required: false, description: "直方图分桶" }
       - { name: description, type: _types.basics.string, required: true, description: "指标含义" }
   - name: label_rules
     type: _types.structures.object

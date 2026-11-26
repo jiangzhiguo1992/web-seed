@@ -20,7 +20,7 @@ fields:
     required: true
     description: "一句话说明"
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -55,7 +55,7 @@ fields:
     required: true
     description: "契约演进策略"
     fields:
-      - { name: schema_version, type: _types.basics.integer, required: true, const: 1, description: "契约格式版本" }
+      - { name: schema_version, type: _types.basics.integer.32, required: true, const: 1, description: "契约格式版本" }
       - { name: evolution, type: _types.basics.string, required: true, enum: [ additive_only ], description: "演进方式" }
   - name: compatibility
     type: _types.structures.object
@@ -94,7 +94,7 @@ fields:
           - { name: name, type: _types.basics.string, required: true, description: "header 名" }
           - { name: format, type: _types.basics.string, required: true, description: "header 值格式" }
           - { name: example, type: _types.basics.string, required: true, description: "示例值" }
-      - { name: min_window_days, type: _types.basics.integer, required: true, min: 0, description: "最短弃用窗口" }
+      - { name: min_window_days, type: _types.basics.integer.32, required: true, min: 0, description: "最短弃用窗口" }
       - { name: process, type: _types.structures.list<_types.basics.string>, required: true, min_items: 1, description: "弃用步骤" }
   - name: detection
     type: _types.structures.object

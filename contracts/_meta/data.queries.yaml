@@ -28,7 +28,7 @@ fields:
     description: "查询集归属模块"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -133,7 +133,7 @@ rules:
   - { id: query-shape, text: "affected_rows 不得为列表，必须是唯一非 error 返回项；columns 返回也必须是唯一非 error 返回项；两者不得带互斥字段；nullable 只允许 scalar/entity/columns", implemented_by: [ query-shape ] }
   - { id: query-table-shape, text: "tables 非空、表 ID 不得重复、每张表必须存在、不得指向 data.tables.base；第一项为主表", implemented_by: [ query-table-shape ] }
   - { id: query-params, text: "params 第一项必须是 ctx context.Context，ctx 不得绑定 column/expr/default/nullable；params 的 name 不得重复；未绑定 column 时 type 必须是 _types.basics.* 或 data.enums.*；column/expr 互斥且 expr 非空；default 只在 nullable:true 时允许；type 为 _types.structures.object/_types.structures.list<_types.structures.object> 时必须声明非空 fields（name/type/required/nullable），且 fields[].type 必须是标量（_types.basics.* / data.enums.*），容器类型用新的对象参数表达；其他类型禁止 fields；checker 校验可判定的标量 default 类型/数组外层，枚举值与数组元素交给生成器", implemented_by: [ query-params ] }
-  - { id: query-param-column, text: "params[].column 必须属于查询的 tables；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型；data.enums.* 按 integer 列校验；integer 参数的类型 bits 必须等于列 bits，_types.basics.id=64）；ctx 不参与列绑定", implemented_by: [ query-param-column ] }
+  - { id: query-param-column, text: "params[].column 必须属于查询的 tables；param.type 的类型族必须与列类型族兼容（数组参数校验元素类型；data.enums.* 按 integer 列校验；integer 参数的位宽（类型 variant）必须等于列的位宽，_types.basics.id=64）；ctx 不参与列绑定", implemented_by: [ query-param-column ] }
   - { id: query-pagination, text: "offset/limit 是保留分页参数名，出现时必须 type=integer、nullable:true、default 必填；offset 默认 0，limit 默认必须为正数；list 返回必须同时声明两者", implemented_by: [ query-pagination ] }
   - { id: query-returns, text: "最后一项必须是 {name: err, kind: error} 且只能出现一次；name 必须唯一；每项 kind 合法，kind 对应字段必须出现且互斥字段不得出现；kind=entity 的 type 必须是存在的实体且主表在 tables 中，且不得写 columns；kind=columns 必须有 columns；scalar.type 必须是 _types.basics.* 或 data.enums.*；同一 query 的 list 必须一致", implemented_by: [ query-returns ] }
   - { id: query-return-columns, text: "kind=columns 的 columns（data.tables.<t>.col.<c>）必须是查询表上的列", implemented_by: [ query-return-columns ] }

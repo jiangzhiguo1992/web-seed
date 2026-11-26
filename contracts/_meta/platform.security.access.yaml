@@ -22,7 +22,7 @@ fields:
     description: "一句话说明"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -71,13 +71,13 @@ fields:
         description: "限流"
         fields:
           - name: requests
-            type: _types.basics.integer
+            type: _types.basics.integer.32
             required: true
             min: 1
             description: "窗口内请求数"
 
           - name: window_seconds
-            type: _types.basics.integer
+            type: _types.basics.integer.32
             required: true
             min: 1
             description: "窗口秒数"

@@ -99,7 +99,7 @@ contracts/
 │   ├── queries/<scope>.yaml  #   读写形状：入参/返回/索引引用，不含 SQL
 │   ├── enums/<module>.yaml   #   跨端枚举：按 owner_module 拆分，integer code ↔ 名称
 │   ├── storage.yaml          #   单例：引擎归属 / 条目化的保留 / 归档 / 多 key 缓存
-│   └── types.yaml            #   单例：项目级值类型词汇（family + 固定参数）
+│   └── types.yaml            #   单例：项目级值类型词汇（type + 固定参数）
 │
 ├── capabilities/             # ② 能力层：services + lifecycles + events（topics/subscribe、crons、dispatches）+ protocols
 │   ├── services/<module>.yaml #   服务：services + schemas（interface 名由 owner_module + file 派生）

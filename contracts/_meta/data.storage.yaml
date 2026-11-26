@@ -21,7 +21,7 @@ fields:
     description: "一句话说明"
 
   - name: schema_version
-    type: _types.basics.integer
+    type: _types.basics.integer.32
     required: true
     const: 1
     description: "格式版本"
@@ -64,13 +64,13 @@ fields:
       - { name: description, type: _types.basics.string, required: true, description: "条目说明；普通条目必须等于表 summary，归档条目说明归档用途" }
       - { name: retention, type: _types.basics.boolean, required: false, description: "是否开启保留" }
       - { name: unit, type: _types.basics.string, required: false, enum: [ minutes, hours, days ], description: "保留时长单位" }
-      - { name: ttl, type: _types.basics.integer, required: false, min: 1, description: "过期时长" }
+      - { name: ttl, type: _types.basics.integer.32, required: false, min: 1, description: "过期时长" }
       - { name: archive_of, type: _types.basics.string, required: false, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "归档源表 ID" }
       - { name: promotable, type: _types.basics.boolean, required: false, description: "归档能否回迁" }
       - { name: on_conflict, type: _types.basics.string, required: false, enum: [ skip, overwrite, error ], description: "回迁冲突策略" }
       - { name: age_by, type: _types.basics.string, required: false, enum: [ created_at, updated_at ], description: "数据年龄列" }
       - { name: after_unit, type: _types.basics.string, required: false, enum: [ minutes, hours, days ], description: "归档阈值单位" }
-      - { name: after, type: _types.basics.integer, required: false, min: 1, description: "归档阈值" }
+      - { name: after, type: _types.basics.integer.32, required: false, min: 1, description: "归档阈值" }
 
   - name: caches
     type: _types.structures.map<_types.structures.list<_types.structures.object>>
@@ -83,7 +83,7 @@ fields:
       - { name: cache_of, type: _types.basics.string, required: true, pattern: '^data\.tables\.[a-z][a-z0-9_]*$', description: "权威表 ID" }
       - { name: retention, type: _types.basics.boolean, required: true, description: "缓存保留开关" }
       - { name: unit, type: _types.basics.string, required: false, enum: [ minutes, hours, days ], description: "缓存保留单位" }
-      - { name: cache_ttl, type: _types.basics.integer, required: false, min: 1, description: "缓存保留时长" }
+      - { name: cache_ttl, type: _types.basics.integer.32, required: false, min: 1, description: "缓存保留时长" }
 
 rules:
   - { id: storage-registry, text: "storage.tables 每个引擎条目是 map<list<object>>：table 必填、同引擎内不重复、覆盖每张物理表且只引用已存在的表；每张表只能出现在一个权威引擎下；基类不是物理表；caches 条目是 map<list<object>>，cache_of 必须引用已登记的权威表", implemented_by: [ storage-registry ] }

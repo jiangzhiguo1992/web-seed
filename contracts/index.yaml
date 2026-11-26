@@ -35,7 +35,7 @@ entries:
   - { id: data.tables.base, path: data/tables/_base.yaml, summary: "表结构基类（5 个基础字段）", consumers: [ tools ], enforcement: generated+tested, stability: draft }
   - { id: data.entities.base, path: data/entities/_base.yaml, summary: "实体字段基类（5 个基础字段）", consumers: [ tools ], enforcement: generated+tested, stability: draft }
   - { id: data.storage, path: data/storage.yaml, summary: "数据存储约束（引擎/表级保留/缓存/归档）", consumers: [ api, worker, ops ], enforcement: generated+tested, stability: draft }
-  - { id: data.types, path: data/types.yaml, summary: "项目级值类型词汇（family + 固定参数）", consumers: [ api, web/admin, worker, tools ], enforcement: generated+tested, stability: draft }
+  - { id: data.types, path: data/types.yaml, summary: "项目级值类型词汇（type + 固定参数）", consumers: [ api, web/admin, worker, tools ], enforcement: generated+tested, stability: draft }
   - id: data.tables.account
     path: data/tables/account.yaml
     summary: "账号主表结构"
